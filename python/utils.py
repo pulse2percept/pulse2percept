@@ -12,5 +12,9 @@ class Parameters(object):
         my_list = []
         for k, v in self.__dict__.items():
             my_list.append("%s : %s" % (k, v))
+        my_list.sort()
         my_str = "\n".join(my_list)
         return my_str
+
+    def __setattr(self, name, value):
+        self.__dict__[name] = values
