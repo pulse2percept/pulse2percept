@@ -9,5 +9,8 @@ class Parameters(object):
             self.__dict__[k] = v
 
     def __repr__(self):
-        for k, v in params.items():
-            print("%s : %s" % (k, v))
+        my_list = []
+        for k, v in self.__dict__.items():
+            my_list.append("%s : %s" % (k, v))
+        my_str = "\n".join(my_list)
+        return my_str
