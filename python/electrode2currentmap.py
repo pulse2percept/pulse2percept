@@ -56,7 +56,7 @@ class Electrode(object):
                                      np.arange(-self.sizey//2,
                                                self.sizey//2, self.sampling))
 
-        r = np.sqrt((gridx + self.x) ** 2 + (gridy + self.y) ** 2)
+        r = np.sqrt((gridx + self.x) ** 2 + (gridy + self.y) ** 2).T
         cspread = np.ones(r.shape)
         cspread[r > self.radius] = (alpha / (alpha + (r[r > self.radius] -
                                              self.radius) ** n))
@@ -72,5 +72,26 @@ class Electrode(object):
 
 
 class ElectrodeGrid(object):
-    def __init__(self):
-        pass
+    """
+    Represent a grid of electrodes
+    """
+    def __init__(self, radii, xs, ys, sizex, sizey, sampling=25,
+                 alpha=14000, n=1.69):
+
+        self.electrodes = []
+        for r, x, y in zip(radii, xs, ys):
+            self.electrodes.append(Electrode(r, x, y, sizex, sizey,
+                                             sampling=sampling, alpha=alpha,
+                                             n=n))
+        self.set_scale(alpha=alpha, n=n)
+
+    def set_scale(self, alpha=14000, n=1.69):
+        scale_list = []
+        for e in self.electrodes:
+            scale_list.append(e.scale_current(alpha, n))
+        self._scale = np.array(scale_list)
+
+    def get_scale(self):
+        return self._scale
+
+    scale = property(get_scale, set_scale)
