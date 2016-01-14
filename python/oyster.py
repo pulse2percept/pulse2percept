@@ -1,7 +1,15 @@
 import numpy as np
+import utils
 
-def jansonius(ang0,r,r0 = 4,center = np.array([15,2]),rot = 0*np.pi/180,
-              scale = 1,bs = -1.9, bi = .5):
+# contains the functions
+#   jansonius
+#   makeAxonMap
+#   cm2ecm
+#
+# Written 1/14/2016 by gmb
+
+def jansonius(nCells,nR,center = np.array([15,2]),rot = 0*np.pi/180,
+              scale = 1,bs = -1.9, bi = .5,r0 = 4, maxR = 45, angRange = 60):
     ''' Implements the model of retinal axonal pathways by generating a 
      matrix of (x,y) positions.  See:
      
@@ -20,8 +28,12 @@ def jansonius(ang0,r,r0 = 4,center = np.array([15,2]),rot = 0*np.pi/180,
     # 
     # bs = -1.9;          %superior 'b' parameter constant
     # bi = .5;            %inferior 'c' parameter constant
+    # angRange = 60       
 
-    
+    ang0 = np.hstack([np.linspace(angRange,180,nCells/2),
+                np.linspace(-180,angRange,nCells/2)]);
+                                 
+    r = np.linspace(r0,maxR,nR);
     # generate angle and radius matrices from vectors with meshgrid
     ang0mat,rmat = np.meshgrid(ang0,r)
     
@@ -74,12 +86,34 @@ def jansonius(ang0,r,r0 = 4,center = np.array([15,2]),rot = 0*np.pi/180,
     x = scale*(np.cos(rot)*(xmodel-center[0])+np.sin(rot)*(ymodel-center[1])) + center[0]
     y = scale*(-np.sin(rot)*(xmodel-center[0]) + np.cos(rot)*(ymodel-center[1])) + center[1]
     
- 
-    
-    return x,y
+    axon = utils.Parameters(x=x,y=y)
 
-def makeAxonStreaks(xg,yg,xa,ya,axon_lambda=1,min_weight = .001):
- 
+    
+    return axon
+
+def makeAxonMap(xg,yg,axon,axon_lambda=1,min_weight = .001):
+    '''
+    Generates a mapping of how each pixel in the retina space is affected
+    by stimulation of underlying ganglion cell axons.
+    Inputs:  
+             xg, yg  meshgrid of pixel locations in units of visual angle sp
+             axon  a structure containing fields x and y, containing the 
+                 positions of each axon.  Columns refer to different axons.  
+                 Axons are of different lengths; colunns turn in to NaNs when 
+                 axons end 
+             axon_lambda: space constant for how effective stimulation
+                 (or 'weight') falls off with distance from the pixel back along the 
+                 axon toward the optic disc (default 1 degree)
+             min_weight: minimum weight falloff.  default .001
+    Output:
+             axon_map:  structure containing the fields id and weight.
+                 id contains a list, for every pixel, of
+                 the index into the pixel in xg,yg space, along the underlying
+                 axonal pathway.
+                 weight is a list of corresponding weights.  
+    '''
+             
+             
     #initialize lists
     axon_xg = ()
     axon_yg = ()
@@ -91,7 +125,7 @@ def makeAxonStreaks(xg,yg,xa,ya,axon_lambda=1,min_weight = .001):
     for id in range(0,len(xg.flat)-1):
         
         #find the nearest axon to this pixel
-        d = (xa-xg.flat[id])**2+ (ya-yg.flat[id])**2        
+        d = (axon.x-xg.flat[id])**2+ (axon.y-yg.flat[id])**2        
         cur_ax_id = np.nanargmin(d) #index into the current axon   
         [axPosId0,axNum] = np.unravel_index(cur_ax_id,d.shape)  
         
@@ -106,20 +140,18 @@ def makeAxonStreaks(xg,yg,xa,ya,axon_lambda=1,min_weight = .001):
         axon_xg = axon_xg + ([cur_xg],)
         axon_yg = axon_yg + ([cur_yg],)
         axon_id = axon_id + ([id],)
-        
-        # plt.plot(xa[:axPosId0,axNum],ya[:axPosId0,axNum],'.-')    
-        
+                
         #now loop back along this nearest axon toward the optic disc         
         for axPosId in range(axPosId0-1,-1,-1):
             #increment the distance from the starting point
-            dist = dist + np.sqrt((xa[axPosId+1,axNum]-xa[axPosId,axNum])**2
-            + (ya[axPosId+1,axNum]-ya[axPosId,axNum])**2)
+            dist = dist + np.sqrt((axon.x[axPosId+1,axNum]-axon.x[axPosId,axNum])**2
+            + (axon.y[axPosId+1,axNum]-axon.y[axPosId,axNum])**2)
             
             weight = np.exp(-dist/axon_lambda)  # weight falls off exponentially as distance from axon cell body
     
             #find the nearest pixel to the current position along the axon
-            nearest_xg_id = np.abs(xg[0,:]-xa[axPosId,axNum]).argmin()
-            nearest_yg_id = np.abs(yg[:,0]-ya[axPosId,axNum]).argmin()
+            nearest_xg_id = np.abs(xg[0,:]-axon.x[axPosId,axNum]).argmin()
+            nearest_yg_id = np.abs(yg[:,0]-axon.y[axPosId,axNum]).argmin()
             nearest_xg =xg[0,nearest_xg_id]
             nearest_yg =yg[nearest_yg_id,0]                    
     
@@ -135,5 +167,29 @@ def makeAxonStreaks(xg,yg,xa,ya,axon_lambda=1,min_weight = .001):
                 #axon_xg[id].append(cur_xg)
                 #axon_yg[id].append(cur_yg)
                 axon_id[id].append(np.ravel_multi_index((nearest_yg_id,nearest_xg_id),xg.shape)) 
+            
+        #stick id and weight into a 'structure'    
+        axon_map = utils.Parameters(id = axon_id,weight = axon_weight)
                 
-    return axon_id, axon_weight
+    return axon_map
+    
+def cm2ecm(cm,axon_map):
+    '''
+    Converts a current map to an 'effective' current map, by passing the
+    map through a mapping of axon streaks.
+    
+    Inputs:
+        cm: current map, an image in retinal space
+        axon_map: output of 'makeAxonMap'
+        
+    Output:
+        ecm: effective current map, an image of the same size as the current 
+            map, where each pixel is the dot product of the pixel values in ecm
+            along the pixels in the list in axon_map, weighted by the weights
+            axon map.  
+    '''
+        
+    ecm = np.zeros(cm.shape)
+    for id in range(0,len(cm.flat)-1):
+        ecm.flat[id]= np.dot(cm.flat[axon_map.id[id]],axon_map.weight[id])    
+    return ecm
