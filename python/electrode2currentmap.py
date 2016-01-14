@@ -5,17 +5,66 @@ Functions for transforming electrode specification into a current map
 """
 import numpy as np
 
+
+
+class Retina():
+    """
+    Represent the retinal coordinate frame
+    """
+    def __init__(sizex=2000, sizey=2000, sampling=25):
+        """
+
+        """
+        self.sizex_micron = sizex  # micron
+        self.sizey_micron = sizey  # micron
+        self.sampling_micron = sampling # microns per grid-cell
+        self.size_micron = [self.sizex_micron, self.sizey_micron]
+        self.sizex_deg = micron2degrees(self.sizex_micron)
+        self.sizey_deg = micron2degrees(self.sizey_micron)
+        self.size_deg = [self.sizex_deg, self.sizey_deg]
+        self.sampling_deg = micron2degrees(sampling)
+
+    def micron2degrees(micron):
+        """
+        Transform a distance from microns to degrees
+
+        Based on http://retina.anatomy.upenn.edu/~rob/lance/units_space.html
+        """
+        deg = micron / 280
+        return deg
+
+    def degrees2microns(deg):
+        """
+        Transform a distance from degrees to microns
+
+        Based on http://retina.anatomy.upenn.edu/~rob/lance/units_space.html
+        """
+        microns = 280 * deg
+        return microns
+
+
+
+def set_size_degrees(self, alpha=14000, n=1.69):
+    self._scale = self.scale_current(alpha, n)
+
+def get_scale(self):
+    return self._scale
+
+scale = property(get_scale, set_scale)
+
+
 class Electrode(object):
     """
     Represent a circular, disc-like electrode.
     """
-    def __init__(self, radius, x, y, sizex, sizey, sampling=25,
-                 alpha=14000, n=1.69):
+    def __init__(self, retina, radius, x, y, alpha=14000, n=1.69):
         """
         Initialize an electrode object
 
         Parameters
         ----------
+        retina : a Retina object
+            The retina on which this electrode is placed
         radius : float
             The radius of the electrode (in microns).
         x : float
