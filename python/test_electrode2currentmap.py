@@ -7,12 +7,7 @@ def test_Electrode():
     sizex = 5000
     sizey = 2500
     sampling = 25
-    e1 = e2cm.Electrode(200, 0, 0, sizex, sizey, sampling=sampling)
-    npt.assert_(e1.scale.shape == (sizex//sampling, sizey//sampling))
-
-
-def test_ElectrodeGrid():
-    sizex = 5000
-    sizey = 2500
-    sampling = 25
-    eg1 = e2cm.ElectrodeGrid([200, 400])
+    retina = e2cm.Retina(sizex=sizex, sizey=sizey, sampling=sampling)
+    e1 = e2cm.Electrode(retina, 200, 0, 0)
+    npt.assert_(e1.scale.shape == (sizex // retina.sampling_deg,
+                                   sizey // retina.sampling_deg))
