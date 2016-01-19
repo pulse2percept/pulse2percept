@@ -4,9 +4,10 @@ Functions for transforming electrode specifications into a current map
 
 """
 import numpy as np
+import oyster
+import os
 
-
-def micron2degrees(micron):
+def micron2deg(micron):
     """
     Transform a distance from microns to degrees
 
@@ -16,7 +17,7 @@ def micron2degrees(micron):
     return deg
 
 
-def degrees2microns(deg):
+def deg2microns(deg):
     """
     Transform a distance from degrees to microns
 
@@ -30,18 +31,70 @@ class Retina():
     """
     Represent the retinal coordinate frame
     """
-    def __init__(self, sizex=2000, sizey=2000, sampling=25):
+    def __init__(self, xlo=-1000, xhi=1000, ylo=-1000, yhi=1000,
+                 sampling=25, axon_map=None, axon_lambda=2):
         """
         Initialize a retina
+
+        axon_map :
         """
-        self.sizex_micron = sizex  # micron
-        self.sizey_micron = sizey  # micron
-        self.sampling_micron = sampling  # microns per grid-cell
-        self.size_micron = [self.sizex_micron, self.sizey_micron]
-        self.sizex_deg = micron2degrees(self.sizex_micron)
-        self.sizey_deg = micron2degrees(self.sizey_micron)
-        self.size_deg = [self.sizex_deg, self.sizey_deg]
-        self.sampling_deg = micron2degrees(sampling)
+        [self.gridx, self.gridy] = np.meshgrid(np.arange(xlo, xhi,
+                                                         sampling),
+                                               np.arange(ylo, yhi,
+                                                         sampling))
+
+        if os.path.exists(axon_map):
+            axon_map = np.load(axon_map)
+            ## Verify that the file was created with a consistent grid:
+            axon_id = axon_map['axon_id']
+            axon_weight = axon_map['axon_weight']
+            xlo_am = axon_map['xlo'],
+            xhi_am = axon_map['xhi']
+            ylo_am = axon_map['ylo']
+            yhi_am = axon_map['yhi']
+            sampling_am = axon_map['sampling']
+            assert xlo == xlo_am
+            assert xhi == xhi_am
+            assert ylo == ylo_am
+            assert yhi == yhi_am
+            assert sampling_am == sampling
+
+        else:
+            print("Can't find file %s, generating"%axon_map)
+            axon_id, axon_weight = oyster.makeAxonMap(micron2deg(self.gridx),
+                                                      micron2deg(self.gridy),
+                                                      axon_lambda=axon_lambda)
+            ## Save the variables, together with metadata about the grid:
+            fname = axon_map
+            np.savez(fname, axon_id=axon_id, axon_weight=axon_weight, xlo=[xlo],
+                     xhi=[xhi], ylo=[ylo], yhi=[yhi], sampling=[sampling])
+
+        self.axon_id = axon_id
+        self.axon_weight = axon_weight
+
+    def cm2ecm(self, cm):
+        '''
+        Converts a current map to an 'effective' current map, by passing the
+        map through a mapping of axon streaks.
+
+        Inputs:
+            cm: current map, an image in retinal space
+            axon_id :
+            axon_map :
+            output of 'makeAxonMap'
+
+        Output:
+            ecm: effective current map, an image of the same size as the current
+                map, where each pixel is the dot product of the pixel values in ecm
+                along the pixels in the list in axon_map, weighted by the weights
+                axon map.
+        '''
+
+        ecm = np.zeros(cm.shape)
+        for id in range(0, len(cm.flat)):
+            ecm.flat[id] = np.dot(cm.flat[self.axon_id[id]],
+                                          self.axon_weight[id])
+        return ecm
 
 
 class Electrode(object):
