@@ -17,7 +17,7 @@ def micron2deg(micron):
     return deg
 
 
-def deg2microns(deg):
+def deg2micron(deg):
     """
     Transform a distance from degrees to microns
 
@@ -45,10 +45,10 @@ class Retina():
 
         if os.path.exists(axon_map):
             axon_map = np.load(axon_map)
-            ## Verify that the file was created with a consistent grid:
+            # Verify that the file was created with a consistent grid:
             axon_id = axon_map['axon_id']
             axon_weight = axon_map['axon_weight']
-            xlo_am = axon_map['xlo'],
+            xlo_am = axon_map['xlo']
             xhi_am = axon_map['xhi']
             ylo_am = axon_map['ylo']
             yhi_am = axon_map['yhi']
@@ -58,7 +58,6 @@ class Retina():
             assert ylo == ylo_am
             assert yhi == yhi_am
             assert sampling_am == sampling
-
         else:
             print("Can't find file %s, generating"%axon_map)
             axon_id, axon_weight = oyster.makeAxonMap(micron2deg(self.gridx),
@@ -66,14 +65,20 @@ class Retina():
                                                       axon_lambda=axon_lambda)
             ## Save the variables, together with metadata about the grid:
             fname = axon_map
-            np.savez(fname, axon_id=axon_id, axon_weight=axon_weight, xlo=[xlo],
-                     xhi=[xhi], ylo=[ylo], yhi=[yhi], sampling=[sampling])
+            np.savez(fname,
+                     axon_id=axon_id,
+                     axon_weight=axon_weight,
+                     xlo=[xlo],
+                     xhi=[xhi],
+                     ylo=[ylo],
+                     yhi=[yhi],
+                     sampling=[sampling])
 
         self.axon_id = axon_id
         self.axon_weight = axon_weight
 
     def cm2ecm(self, cm):
-        '''
+        """
         Converts a current map to an 'effective' current map, by passing the
         map through a mapping of axon streaks.
 
@@ -84,16 +89,17 @@ class Retina():
             output of 'makeAxonMap'
 
         Output:
+
             ecm: effective current map, an image of the same size as the current
-                map, where each pixel is the dot product of the pixel values in ecm
-                along the pixels in the list in axon_map, weighted by the weights
-                axon map.
-        '''
+            map, where each pixel is the dot product of the pixel values in ecm
+            along the pixels in the list in axon_map, weighted by the weights
+            axon map.
+        """
 
         ecm = np.zeros(cm.shape)
         for id in range(0, len(cm.flat)):
             ecm.flat[id] = np.dot(cm.flat[self.axon_id[id]],
-                                          self.axon_weight[id])
+                                  self.axon_weight[id])
         return ecm
 
 
@@ -101,14 +107,12 @@ class Electrode(object):
     """
     Represent a circular, disc-like electrode.
     """
-    def __init__(self, retina, radius, x, y, alpha=14000, n=1.69):
+    def __init__(self, radius, x, y):
         """
         Initialize an electrode object
 
         Parameters
         ----------
-        retina : a Retina object
-            The retina on which this electrode is placed
         radius : float
             The radius of the electrode (in microns).
         x : float
@@ -116,17 +120,13 @@ class Electrode(object):
         y : float
             The y location of the electrode (in microns).
         """
-        self.radius = micron2degrees(radius)
-        self.x = micron2degrees(x)
-        self.y = micron2degrees(y)
-        self.sizex = retina.sizex_deg
-        self.sizey = retina.sizey_deg
-        self.sampling = retina.sampling_deg
-        self.set_scale(alpha=alpha, n=n)
+        self.radius = radius
+        self.x = x
+        self.y = y
 
-    def scale_current(self, alpha=14000, n=1.69):
+    def current_map(self, xg, yg, current_amp=1, alpha=14000, n=1.69):
         """
-        Scaling factor applied to the current through an electrode, reflecting
+        The current map due to a current pulse through an electrode, reflecting
         the fall-off of the current as a function of distance from the
         electrode center. This is equation 2 in Nanduri et al [1]_.
 
@@ -144,35 +144,26 @@ class Electrode(object):
         Matthew R. Behrend, Masako Kuroda, Mark S. Humayun, and
         James D. Weiland (2008). IEEE Trans Biomed Eng 55.
         """
-        [gridx, gridy] = np.meshgrid(np.arange(-self.sizex//2,
-                                               self.sizex//2, self.sampling),
-                                     np.arange(-self.sizey//2,
-                                               self.sizey//2, self.sampling))
-
-        r = np.sqrt((gridx + self.x) ** 2 + (gridy + self.y) ** 2).T
+        r = np.sqrt((xg + self.x) ** 2 + (yg + self.y) ** 2).T
         cspread = np.ones(r.shape)
         cspread[r > self.radius] = (alpha / (alpha + (r[r > self.radius] -
                                              self.radius) ** n))
-        return cspread
-
-    def set_scale(self, alpha=14000, n=1.69):
-        self._scale = self.scale_current(alpha, n)
-
-    def get_scale(self):
-        return self._scale
-
-    scale = property(get_scale, set_scale)
+        return cspread * current_amp
 
 
-class CurrentMap(object):
+class ElectrodeGrid(object):
     """
     Represent a retina and grid of electrodes
     """
-    def __init__(self, retina, radii, xs, ys, sizex, sizey, sampling=25,
-                 alpha=14000, n=1.69):
-
+    def __init__(self, radii, xs, ys):
         self.electrodes = []
         for r, x, y in zip(radii, xs, ys):
-            self.electrodes.append(Electrode(retina, r, x, y, sizex, sizey,
-                                             sampling=sampling, alpha=alpha,
-                                             n=n))
+            self.electrodes.append(Electrode(r, x, y))
+
+    def current_map(self, xg, yg, current_amps, alpha=14000, n=1.69):
+        c = np.zeros((len(self.electrodes), xg.shape[0], xg.shape[1]))
+        for i in range(c.shape[0]):
+            c[i] = self.electrodes[i].current_map(xg, yg,
+                                                  current_amp=current_amps[i],
+                                                  alpha=alpha, n=n)
+        return np.sum(c, 0)
