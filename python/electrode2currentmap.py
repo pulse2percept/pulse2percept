@@ -7,6 +7,7 @@ import numpy as np
 import oyster
 import os
 
+
 def micron2deg(micron):
     """
     Transform a distance from microns to degrees
@@ -25,6 +26,25 @@ def deg2micron(deg):
     """
     microns = 280 * deg
     return microns
+
+
+class Stimulus(object):
+    """
+    Represent a pulse-train stimulus
+    """
+    def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,
+                 tsample=.001/100., current_amplitude=20):
+        """
+
+        """
+        self.time = np.arange(0, dur, tsample)  # Seconds
+        self.sampling_rate = 1 / tsample   # Hz
+        sawtooth = freq * np.mod(self.time, 1 / freq)
+        on = np.logical_and(sawtooth > (pulse_dur * freq),
+                            sawtooth < (2 * pulse_dur * freq))
+        off = sawtooth < pulse_dur * freq
+        self.amplitude = (current_amplitude *
+                          (on.astype(float) - off.astype(float)))
 
 
 class Electrode(object):
@@ -48,11 +68,12 @@ class Electrode(object):
         self.x = x
         self.y = y
 
-    def current_map(self, xg, yg, current_amp=1, alpha=14000, n=1.69):
+    def current_spread(self, xg, yg, alpha=14000, n=1.69):
         """
-        The current map due to a current pulse through an electrode, reflecting
-        the fall-off of the current as a function of distance from the
-        electrode center. This is equation 2 in Nanduri et al [1]_.
+
+        The current spread due to a current pulse through an electrode,
+        reflecting the fall-off of the current as a function of distance from
+        the electrode center. This is equation 2 in Nanduri et al [1]_.
 
         Parameters
         ----------
@@ -72,24 +93,23 @@ class Electrode(object):
         cspread = np.ones(r.shape)
         cspread[r > self.radius] = (alpha / (alpha + (r[r > self.radius] -
                                              self.radius) ** n))
-        return cspread * current_amp
+        return cspread
 
 
-class ElectrodeGrid(object):
+class ElectrodeArray(object):
     """
-    Represent a retina and grid of electrodes
+    Represent a retina and array of electrodes
     """
     def __init__(self, radii, xs, ys):
         self.electrodes = []
         for r, x, y in zip(radii, xs, ys):
             self.electrodes.append(Electrode(r, x, y))
 
-    def current_map(self, xg, yg, current_amps, alpha=14000, n=1.69):
+    def current_spread(self, xg, yg, alpha=14000, n=1.69):
         c = np.zeros((len(self.electrodes), xg.shape[0], xg.shape[1]))
         for i in range(c.shape[0]):
-            c[i] = self.electrodes[i].current_map(xg, yg,
-                                                  current_amp=current_amps[i],
-                                                  alpha=alpha, n=n)
+            c[i] = self.electrodes[i].current_spread(xg, yg,
+                                                     alpha=alpha, n=n)
         return np.sum(c, 0)
 
 
@@ -125,11 +145,11 @@ class Retina():
             assert yhi == yhi_am
             assert sampling_am == sampling
         else:
-            print("Can't find file %s, generating"%axon_map)
+            print("Can't find file %s, generating" % axon_map)
             axon_id, axon_weight = oyster.makeAxonMap(micron2deg(self.gridx),
                                                       micron2deg(self.gridy),
                                                       axon_lambda=axon_lambda)
-            ## Save the variables, together with metadata about the grid:
+            # Save the variables, together with metadata about the grid:
             fname = axon_map
             np.savez(fname,
                      axon_id=axon_id,
@@ -143,28 +163,47 @@ class Retina():
         self.axon_id = axon_id
         self.axon_weight = axon_weight
 
-    def cm2ecm(self, cm):
-        """
-        Converts a current map to an 'effective' current map, by passing the
-        map through a mapping of axon streaks.
 
-        Inputs:
-            cm: current map, an image in retinal space
-            axon_id :
-            axon_map :
-            output of 'makeAxonMap'
-
-        Output:
-
-            ecm: effective current map, an image of the same size as the current
-            map, where each pixel is the dot product of the pixel values in ecm
-            along the pixels in the list in axon_map, weighted by the weights
-            axon map.
+    def cm2ecm(self, current_spread):
         """
 
-        ecm = np.zeros(cm.shape)
-        for id in range(0, len(cm.flat)):
-            ecm.flat[id] = np.dot(cm.flat[self.axon_id[id]],
+        Converts a current spread map to an 'effective' current spread map, by
+        passing the map through a mapping of axon streaks.
+
+        Parameters
+        ----------
+        current_spread : the 2D spread map in retinal space
+
+        Returns
+        -------
+        ecm: effective current spread, a time-series of the same size as the
+        current map, where each pixel is the dot product of the pixel values in
+        ecm along the pixels in the list in axon_map, weighted by the weights
+        axon map.
+        """
+        ecs = np.zeros(current_spread.shape)
+        for id in range(0, len(current_spread.flat)):
+            ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
                                   self.axon_weight[id])
-        return ecm
 
+        return ecs
+
+    def ecm(self, electrode_array, stimuli, alpha=14000, n=1.69):
+        """
+        effective current map from an electrode array and stimuli through
+        these electrodes
+
+        Parameters
+        ----------
+        ElectrodeArray
+
+        stimuli : list of Stimulus objects
+
+        """
+        ecm = np.zeros(self.gridx.shape + (stimuli[0].amplitude.shape[-1], ))
+        for ii, e in enumerate(electrode_array.electrodes):
+            cs = e.current_spread(self.gridx, self.gridy, alpha=alpha, n=n)
+            ecs = self.cm2ecm(cs)
+            ecm += ecs[..., None] * stimuli[ii].amplitude
+
+        return ecm
