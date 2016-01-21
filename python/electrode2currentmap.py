@@ -163,7 +163,6 @@ class Retina():
         self.axon_id = axon_id
         self.axon_weight = axon_weight
 
-
     def cm2ecm(self, current_spread):
         """
 
