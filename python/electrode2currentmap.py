@@ -27,6 +27,72 @@ def deg2micron(deg):
     return microns
 
 
+class Electrode(object):
+    """
+    Represent a circular, disc-like electrode.
+    """
+    def __init__(self, radius, x, y):
+        """
+        Initialize an electrode object
+
+        Parameters
+        ----------
+        radius : float
+            The radius of the electrode (in microns).
+        x : float
+            The x coordinate of the electrode (in microns).
+        y : float
+            The y location of the electrode (in microns).
+        """
+        self.radius = radius
+        self.x = x
+        self.y = y
+
+    def current_map(self, xg, yg, current_amp=1, alpha=14000, n=1.69):
+        """
+        The current map due to a current pulse through an electrode, reflecting
+        the fall-off of the current as a function of distance from the
+        electrode center. This is equation 2 in Nanduri et al [1]_.
+
+        Parameters
+        ----------
+
+        alpha : a constant to do with the spatial fall-off.
+
+        n : a constant to do with the spatial fall-off (Default: 1.69, based on
+        Ahuja et al. [2]_)
+
+        .. [1]
+
+        .. [2] An In Vitro Model of a Retinal Prosthesis. Ashish K. Ahuja,
+        Matthew R. Behrend, Masako Kuroda, Mark S. Humayun, and
+        James D. Weiland (2008). IEEE Trans Biomed Eng 55.
+        """
+        r = np.sqrt((xg + self.x) ** 2 + (yg + self.y) ** 2).T
+        cspread = np.ones(r.shape)
+        cspread[r > self.radius] = (alpha / (alpha + (r[r > self.radius] -
+                                             self.radius) ** n))
+        return cspread * current_amp
+
+
+class ElectrodeGrid(object):
+    """
+    Represent a retina and grid of electrodes
+    """
+    def __init__(self, radii, xs, ys):
+        self.electrodes = []
+        for r, x, y in zip(radii, xs, ys):
+            self.electrodes.append(Electrode(r, x, y))
+
+    def current_map(self, xg, yg, current_amps, alpha=14000, n=1.69):
+        c = np.zeros((len(self.electrodes), xg.shape[0], xg.shape[1]))
+        for i in range(c.shape[0]):
+            c[i] = self.electrodes[i].current_map(xg, yg,
+                                                  current_amp=current_amps[i],
+                                                  alpha=alpha, n=n)
+        return np.sum(c, 0)
+
+
 class Retina():
     """
     Represent the retinal coordinate frame
@@ -102,68 +168,3 @@ class Retina():
                                   self.axon_weight[id])
         return ecm
 
-
-class Electrode(object):
-    """
-    Represent a circular, disc-like electrode.
-    """
-    def __init__(self, radius, x, y):
-        """
-        Initialize an electrode object
-
-        Parameters
-        ----------
-        radius : float
-            The radius of the electrode (in microns).
-        x : float
-            The x coordinate of the electrode (in microns).
-        y : float
-            The y location of the electrode (in microns).
-        """
-        self.radius = radius
-        self.x = x
-        self.y = y
-
-    def current_map(self, xg, yg, current_amp=1, alpha=14000, n=1.69):
-        """
-        The current map due to a current pulse through an electrode, reflecting
-        the fall-off of the current as a function of distance from the
-        electrode center. This is equation 2 in Nanduri et al [1]_.
-
-        Parameters
-        ----------
-
-        alpha : a constant to do with the spatial fall-off.
-
-        n : a constant to do with the spatial fall-off (Default: 1.69, based on
-        Ahuja et al. [2]_)
-
-        .. [1]
-
-        .. [2] An In Vitro Model of a Retinal Prosthesis. Ashish K. Ahuja,
-        Matthew R. Behrend, Masako Kuroda, Mark S. Humayun, and
-        James D. Weiland (2008). IEEE Trans Biomed Eng 55.
-        """
-        r = np.sqrt((xg + self.x) ** 2 + (yg + self.y) ** 2).T
-        cspread = np.ones(r.shape)
-        cspread[r > self.radius] = (alpha / (alpha + (r[r > self.radius] -
-                                             self.radius) ** n))
-        return cspread * current_amp
-
-
-class ElectrodeGrid(object):
-    """
-    Represent a retina and grid of electrodes
-    """
-    def __init__(self, radii, xs, ys):
-        self.electrodes = []
-        for r, x, y in zip(radii, xs, ys):
-            self.electrodes.append(Electrode(r, x, y))
-
-    def current_map(self, xg, yg, current_amps, alpha=14000, n=1.69):
-        c = np.zeros((len(self.electrodes), xg.shape[0], xg.shape[1]))
-        for i in range(c.shape[0]):
-            c[i] = self.electrodes[i].current_map(xg, yg,
-                                                  current_amp=current_amps[i],
-                                                  alpha=alpha, n=n)
-        return np.sum(c, 0)

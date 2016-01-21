@@ -38,8 +38,8 @@ def gamma(n, tau, t):
 
 
 class TemporalModel(object):
-    def __init__(self, Fs, tau1=.42/1000, tau2=45.25/1000, tau3=26.25/1000,
-                 e=2.25, beta=.6, asymptote=14, slope=.3, shift=47):
+    def __init__(self, Fs=.01/1000, tau1=.42/1000, tau2=45.25/1000, tau3=26.25/1000,
+                 e=8.73, beta=.6, asymptote=14, slope=3, shift=16):
         """
         A model of temporal integration from retina pixels
 
@@ -82,35 +82,40 @@ class TemporalModel(object):
         R1 = self.Fs * np.convolve(gamma(1, self.tau1, t), stim)
         return R1
 
-    def charge_accumulation(self, stim):
+    def charge_accumulation(self, fast_response, stim):
         t = np.arange(0, 8 * self.tau2, self.Fs)
-        rect_tsform = np.where(stim > 0, stim, 0)  # rectify
-        ca = self.Fs * np.cumsum(rect_tsform.astype(float))
+
+        # calculated accumulated charge        
+        rect_stim = np.where(stim> 0, stim, 0)  # rectify
+        ca = self.Fs * np.cumsum(rect_stim.astype(float))
         chargeaccumulated = (self.e * self.Fs *
                              np.convolve(gamma(1, self.tau2, t), ca))
-        R1 = self.fast_response(stim)
-        R1 = np.concatenate([R1, np.zeros(len(chargeaccumulated) -
-                             R1.shape[0])])
+      
+          
+        fast_response = np.concatenate([fast_response, np.zeros(len(chargeaccumulated) -
+                            fast_response.shape[0])])
 
-        R2 = R1 - chargeaccumulated
+        R2 = fast_response - chargeaccumulated
         ind = R2 < 0
         R2 = np.where(R2 > 0, R2, 0)  # rectify again
-
+        return R2
+        
+    def stationary_nonlinearity(self, fast_response_ca):
         # now we put in the stationary nonlinearity of Devyani's:
-        R2norm = R2 / R2.max()  # normalize
-        scale_factor = (self.asymptote / (1 + np.exp(-(R2 / self.slope) +
+        R2norm = fast_response_ca / fast_response_ca.max()  # normalize
+        scale_factor = (self.asymptote / (1 + np.exp(-(fast_response_ca / self.slope) +
                         self.shift)))
         R3 = R2norm * scale_factor  # scaling factor varies with original
         return R3
 
-    def slow_response(self, stim):
+    def slow_response(self, fast_response_ca_snl):
         # this is cropped as tightly as
         # possible for speed sake
         t = np.arange(0, self.tau3 * 8, self.Fs)
         G3 = gamma(3, self.tau3, t)
-        ca = self.charge_accumulation(stim)
-        conv = np.convolve(G3, ca)
-        conv = fftconvolve(G3, ca)
+ 
+       # conv = np.convolve(G3, fast_response_ca_snl)
+        conv = fftconvolve(G3, fast_response_ca_snl)
         R4 = self.Fs * conv
 
         return R4

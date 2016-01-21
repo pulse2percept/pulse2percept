@@ -81,3 +81,51 @@ built using relatively cheap hardware. See midterm and final exams for timeline
 - Low-resolution  inverse model : March 1
 
 - March 17th documentation and software testing complete
+
+
+
+#Descriptions of functions
+
+##electrode2currentmap
+
+Defines conversion parameters (micron2deg, deg2micron)
+
+Creates an object, Electrode that includes:
+        x and y position
+        a method (current_map) that creates a current map
+
+Creates an object, ElectrodeGrid
+        consists of a list of electrodes
+        creates a current map by summing across all the electrodes
+    
+
+Defines an object, Retina that includes:
+    the retinal grid in microns
+    loads or creates the oyster axon map
+
+    the object contains a method (cm2ecm) that takes the current map on the retina and turns it into an effective current
+        map by passing it through the axonal look up table
+    
+
+# oyster
+
+Defines a list of axon pathway (jansonius)
+
+Defines a mapping of how each pixel in the retina space is affected by the 
+underlying ganglion cell axons (makeAxonMap).
+
+#effectivecurrent2brightness
+
+Defines gamma function (gamma)
+Creates an object, TemporalModel that contains:
+    a list of parameters
+    Three methods, fast_response, charge_accumulation and slow_response that 
+represent the three stages of the Alan model
+    Returns brightness
+
+
+(Notes to do: 
+expand current_map to deal with time, 
+put the oyster model after inital current integratoin
+psychophysics function which can measure the brightness induced by prespecified pulses
+)
