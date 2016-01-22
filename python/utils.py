@@ -22,7 +22,7 @@ class Parameters(object):
 
 def sparseconv(v,a):
     """Returns the discrete, linear convolution of two one-dimensional sequences.
-       output is of length v
+       output is of length len(v) + len(a) -1 (same as the default for numpy.convolve)
        
        Runs faster than numpy.convolve if:
        (1) a is longer than v (v is typically the kernel, a is the input to the system)
@@ -35,7 +35,7 @@ def sparseconv(v,a):
     pos = np.where(a != 0)[0]
     
     # zero the output - same length as a
-    out = np.zeros(na)
+    out = np.zeros(na+nv-1)
 
     # loop through the indices in the output
     for i in range(0,na):
