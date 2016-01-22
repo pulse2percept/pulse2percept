@@ -28,25 +28,6 @@ def deg2micron(deg):
     return microns
 
 
-class Stimulus(object):
-    """
-    Represent a pulse-train stimulus
-    """
-    def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,
-                 tsample=.001/100., current_amplitude=20):
-        """
-
-        """
-        self.time = np.arange(0, dur, tsample)  # Seconds
-        self.sampling_rate = 1 / tsample   # Hz
-        sawtooth = freq * np.mod(self.time, 1 / freq)
-        on = np.logical_and(sawtooth > (pulse_dur * freq),
-                            sawtooth < (2 * pulse_dur * freq))
-        off = sawtooth < pulse_dur * freq
-        self.amplitude = (current_amplitude *
-                          (on.astype(float) - off.astype(float)))
-
-
 class Electrode(object):
     """
     Represent a circular, disc-like electrode.
@@ -111,6 +92,25 @@ class ElectrodeArray(object):
             c[i] = self.electrodes[i].current_spread(xg, yg,
                                                      alpha=alpha, n=n)
         return np.sum(c, 0)
+
+
+class Stimulus(object):
+    """
+    Represent a pulse-train stimulus
+    """
+    def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,
+                 tsample=.001/100., current_amplitude=20):
+        """
+
+        """
+        self.time = np.arange(0, dur, tsample)  # Seconds
+        self.sampling_rate = 1 / tsample   # Hz
+        sawtooth = freq * np.mod(self.time, 1 / freq)
+        on = np.logical_and(sawtooth > (pulse_dur * freq),
+                            sawtooth < (2 * pulse_dur * freq))
+        off = sawtooth < pulse_dur * freq
+        self.amplitude = (current_amplitude *
+                          (on.astype(float) - off.astype(float)))
 
 
 class Retina():
