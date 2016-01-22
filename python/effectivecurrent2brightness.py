@@ -24,7 +24,7 @@ def gamma(n, tau, t):
 
     flag = 0
     if t[0] == 0:
-        t = t[2:len(t)]
+        t = t[1:len(t)]
         flag = 1
 
     y = ((t/tau)  ** (n-1) *
