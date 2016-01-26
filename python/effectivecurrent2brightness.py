@@ -80,21 +80,21 @@ class TemporalModel(object):
         """
         t = np.arange(0, 20 * self.tau1, stimulus.tsample)
         R1 = stimulus.tsample * np.convolve(gamma(1, self.tau1, t),
-                                            stimulus.amplitude)
+                                            stimulus.data)
         return R1
 
     def charge_accumulation(self, fast_response, stimulus):
         t = np.arange(0, 8 * self.tau2, stimulus.tsample)
 
         # calculated accumulated charge
-        rect_amp = np.where(stimulus.amplitude > 0, stimulus.amplitude, 0)  # rectify
+        rect_amp = np.where(stimulus.data > 0, stimulus.data, 0)  # rectify
         ca = stimulus.tsample * np.cumsum(rect_amp.astype(float))
         chargeaccumulated = (self.e * stimulus.tsample *
                              np.convolve(gamma(1, self.tau2, t), ca))
 
-
-        fast_response = np.concatenate([fast_response, np.zeros(len(chargeaccumulated) -
-                            fast_response.shape[0])])
+        fast_response = np.concatenate([fast_response,
+                                        np.zeros(len(chargeaccumulated) -
+                                                 fast_response.shape[0])])
 
         R2 = fast_response - chargeaccumulated
         ind = R2 < 0
@@ -104,7 +104,8 @@ class TemporalModel(object):
     def stationary_nonlinearity(self, fast_response_ca):
         # now we put in the stationary nonlinearity of Devyani's:
         R2norm = fast_response_ca / fast_response_ca.max()  # normalize
-        scale_factor = (self.asymptote / (1 + np.exp(-(fast_response_ca / self.slope) +
+        scale_factor = (self.asymptote / (1 + np.exp(-(fast_response_ca /
+                        self.slope) +
                         self.shift)))
         R3 = R2norm * scale_factor  # scaling factor varies with original
         return R3
