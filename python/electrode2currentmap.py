@@ -108,6 +108,10 @@ class TimeSeries(object):
     def __getitem__(self, y):
         return TimeSeries(self.tsample, self.data[y])
 
+    def resample(self, factor):
+        TimeSeries.__init__(self, self.tsample * factor,
+                            self.data[..., ::factor])
+
 
 class Stimulus(TimeSeries):
     """
@@ -212,6 +216,9 @@ class Retina():
 
         stimuli : list of Stimulus objects
 
+        Returns
+        -------
+        A TimeSeries object
         """
         ecm = np.zeros(self.gridx.shape + (stimuli[0].data.shape[-1], ))
         for ii, e in enumerate(electrode_array.electrodes):
