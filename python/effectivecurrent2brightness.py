@@ -38,8 +38,9 @@ def gamma(n, tau, t):
 
 
 class TemporalModel(object):
-    def __init__(self, Fs=.01/1000, tau1=.42/1000, tau2=45.25/1000, tau3=26.25/1000,
-                 e=8.73, beta=.6, asymptote=14, slope=3, shift=16):
+    def __init__(self, tau1=.42/1000, tau2=45.25/1000,
+                 tau3=26.25/1000, e=8.73, beta=.6, asymptote=14, slope=3,
+                 shift=16):
         """
         A model of temporal integration from retina pixels
 
@@ -72,26 +73,26 @@ class TemporalModel(object):
         self.asymptote = asymptote
         self.slope = slope
         self.shift = shift
-        self.Fs = Fs
 
-    def fast_response(self, stim):
+    def fast_response(self, stimulus):
         """
         Fast response function
         """
-        t = np.arange(0, 20 * self.tau1, self.Fs)
-        R1 = self.Fs * np.convolve(gamma(1, self.tau1, t), stim)
+        t = np.arange(0, 20 * self.tau1, stimulus.tsample)
+        R1 = stimulus.tsample * np.convolve(gamma(1, self.tau1, t),
+                                            stimulus.amplitude)
         return R1
 
-    def charge_accumulation(self, fast_response, stim):
-        t = np.arange(0, 8 * self.tau2, self.Fs)
+    def charge_accumulation(self, fast_response, stimulus):
+        t = np.arange(0, 8 * self.tau2, stimulus.tsample)
 
-        # calculated accumulated charge        
-        rect_stim = np.where(stim> 0, stim, 0)  # rectify
-        ca = self.Fs * np.cumsum(rect_stim.astype(float))
-        chargeaccumulated = (self.e * self.Fs *
+        # calculated accumulated charge
+        rect_amp = np.where(stimulus.amplitude > 0, stimulus.amplitude, 0)  # rectify
+        ca = stimulus.tsample * np.cumsum(rect_amp.astype(float))
+        chargeaccumulated = (self.e * stimulus.tsample *
                              np.convolve(gamma(1, self.tau2, t), ca))
-      
-          
+
+
         fast_response = np.concatenate([fast_response, np.zeros(len(chargeaccumulated) -
                             fast_response.shape[0])])
 
@@ -99,7 +100,7 @@ class TemporalModel(object):
         ind = R2 < 0
         R2 = np.where(R2 > 0, R2, 0)  # rectify again
         return R2
-        
+
     def stationary_nonlinearity(self, fast_response_ca):
         # now we put in the stationary nonlinearity of Devyani's:
         R2norm = fast_response_ca / fast_response_ca.max()  # normalize
@@ -108,14 +109,14 @@ class TemporalModel(object):
         R3 = R2norm * scale_factor  # scaling factor varies with original
         return R3
 
-    def slow_response(self, fast_response_ca_snl):
+    def slow_response(self, fast_response_ca_snl, stimulus):
         # this is cropped as tightly as
         # possible for speed sake
-        t = np.arange(0, self.tau3 * 8, self.Fs)
+        t = np.arange(0, self.tau3 * 8, stimulus.tsample)
         G3 = gamma(3, self.tau3, t)
- 
+
        # conv = np.convolve(G3, fast_response_ca_snl)
         conv = fftconvolve(G3, fast_response_ca_snl)
-        R4 = self.Fs * conv
+        R4 = stimulus.tsample * conv
 
         return R4

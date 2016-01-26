@@ -99,11 +99,12 @@ class Stimulus(object):
     Represent a pulse-train stimulus
     """
     def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,
-                 tsample=.001/100., current_amplitude=20):
+                 tsample=.075/1000., current_amplitude=20):
         """
 
         """
-        self.time = np.arange(0, dur, tsample)  # Seconds
+        self.time = np.arange(tsample, dur, tsample)  # Seconds
+        self.tsample = tsample
         self.sampling_rate = 1 / tsample   # Hz
         sawtooth = freq * np.mod(self.time, 1 / freq)
         on = np.logical_and(sawtooth > (pulse_dur * freq),
