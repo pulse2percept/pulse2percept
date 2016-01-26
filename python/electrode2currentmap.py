@@ -99,19 +99,22 @@ class Stimulus(object):
     Represent a pulse-train stimulus
     """
     def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,
-                 tsample=.075/1000., current_amplitude=20):
+                 tsample=.075/1000., current_amplitude=20, current=None):
         """
 
         """
         self.time = np.arange(tsample, dur, tsample)  # Seconds
         self.tsample = tsample
         self.sampling_rate = 1 / tsample   # Hz
-        sawtooth = freq * np.mod(self.time, 1 / freq)
-        on = np.logical_and(sawtooth > (pulse_dur * freq),
+        if current is not None:
+            self.amplitude = current
+        else:
+            sawtooth = freq * np.mod(self.time, 1 / freq)
+            on = np.logical_and(sawtooth > (pulse_dur * freq),
                             sawtooth < (2 * pulse_dur * freq))
-        off = sawtooth < pulse_dur * freq
-        self.amplitude = (current_amplitude *
-                          (on.astype(float) - off.astype(float)))
+            off = sawtooth < pulse_dur * freq
+            self.amplitude = (current_amplitude *
+                             (on.astype(float) - off.astype(float)))
 
 
 class Retina():
@@ -206,4 +209,6 @@ class Retina():
             ecs = self.cm2ecm(cs)
             ecm += ecs[..., None] * stimuli[ii].amplitude
 
+        #return Stimulus(waveform=ecm, dur=stimuli[ii].dur,
+        #                tsample=stimuli[ii].tsample)
         return ecm
