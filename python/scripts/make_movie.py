@@ -14,10 +14,20 @@ ecm = r.ecm(ea, [s1])
 tm1 = ec2b.TemporalModel()
 sr = np.zeros(ecm.shape)
 
-for xx in range(ecm.shape[0]):
-    for yy in range(ecm.shape[1]):
-        s1.amplitude = ecm[xx, yy]
-        fr = tm1.fast_response(s1)
-        ca = tm1.charge_accumulation(fr, s1)
-        sn = tm1.stationary_nonlinearity(ca)
-        sr[xx, yy] = tm1.slow_response(sn, s1)[:ecm.shape[-1]]
+def do_it(xx, yy):
+    s1.amplitude = ecm[xx, yy]
+    fr = tm1.fast_response(s1)
+    ca = tm1.charge_accumulation(fr, s1)
+    sn = tm1.stationary_nonlinearity(ca)
+    return tm1.slow_response(sn, s1)[:ecm.shape[-1]]
+    
+test = True
+
+if test:
+    xx = yy = 0
+    sr[xx, yy] = do_it(xx, yy)
+
+else:
+    for xx in range(ecm.shape[0]):
+        for yy in range(ecm.shape[1]):
+            sr[xx, yy] = do_it(xx, yy)
