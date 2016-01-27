@@ -1,5 +1,4 @@
 import numpy as np
-import utils
 
 # contains the functions
 #   jansonius

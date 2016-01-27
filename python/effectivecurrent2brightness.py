@@ -9,7 +9,6 @@ Output: a vector of brightness over time
 from scipy.misc import factorial
 from scipy.signal import fftconvolve
 import numpy as np
-import matplotlib.pyplot as plt
 import utils
 
 
