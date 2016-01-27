@@ -6,6 +6,7 @@ Functions for transforming electrode specifications into a current map
 import numpy as np
 import oyster
 import os
+from utils import TimeSeries
 
 
 def micron2deg(micron):
@@ -92,25 +93,6 @@ class ElectrodeArray(object):
             c[i] = self.electrodes[i].current_spread(xg, yg,
                                                      alpha=alpha, n=n)
         return np.sum(c, 0)
-
-class TimeSeries(object):
-    def __init__(self, tsample, data):
-        """
-        Represent a time-series
-        """
-        self.data = data
-        self.tsample = tsample
-        self.sampling_rate = 1 / tsample
-        self.duration = self.data.shape[-1] * tsample
-        self.time = np.linspace(tsample, self.duration, tsample)
-        self.shape = data.shape
-
-    def __getitem__(self, y):
-        return TimeSeries(self.tsample, self.data[y])
-
-    def resample(self, factor):
-        TimeSeries.__init__(self, self.tsample * factor,
-                            self.data[..., ::factor])
 
 
 class Stimulus(TimeSeries):
