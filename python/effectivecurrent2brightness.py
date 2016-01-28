@@ -80,8 +80,10 @@ class TemporalModel(object):
         Fast response function
         """
         t = np.arange(0, 20 * self.tau1, stimulus.tsample)
-        R1 = stimulus.tsample * np.convolve(gamma(1, self.tau1, t),
-                                            stimulus.data)
+        g = gamma(1, self.tau1, t)
+        while len(g.shape) < len(stimulus.shape):
+            g = g[None, :]
+        R1 = stimulus.tsample * fftconvolve(g, stimulus.data)
         return TimeSeries(stimulus.tsample, R1)
 
     def charge_accumulation(self, fast_response, stimulus):
@@ -89,14 +91,18 @@ class TemporalModel(object):
 
         # calculated accumulated charge
         rect_amp = np.where(stimulus.data > 0, stimulus.data, 0)  # rectify
-        ca = stimulus.tsample * np.cumsum(rect_amp.astype(float))
-        chargeaccumulated = (self.e * stimulus.tsample *
-                             fftconvolve(gamma(1, self.tau2, t), ca))
+        ca = stimulus.tsample * np.cumsum(rect_amp.astype(float), axis=-1)
+        g = gamma(1, self.tau2, t)
+        while len(g.shape) < len(ca.data.shape):
+            g = g[None, :]
+        chargeaccumulated = (self.e * stimulus.tsample * fftconvolve(g, ca))
+        zero_pad = np.zeros(fast_response.shape[:-1] +
+                            (chargeaccumulated.shape[-1] -
+                             fast_response.shape[-1],))
 
         fast_response = TimeSeries(fast_response.tsample,
                                    np.concatenate([fast_response.data,
-                                            np.zeros(len(chargeaccumulated) -
-                                                     fast_response.shape[0])]))
+                                                   zero_pad], -1))
 
         R2 = fast_response.data - chargeaccumulated
         ind = R2 < 0
@@ -116,10 +122,9 @@ class TemporalModel(object):
         # this is cropped as tightly as
         # possible for speed sake
         t = np.arange(0, self.tau3 * 8, fast_response_ca_snl.tsample)
-        G3 = gamma(3, self.tau3, t)
-
-       # conv = np.convolve(G3, fast_response_ca_snl)
-        conv = fftconvolve(G3, fast_response_ca_snl.data)
-        R4 = fast_response_ca_snl.tsample * conv
-
-        return TimeSeries(fast_response_ca_snl.tsample, R4)
+        g = gamma(3, self.tau3, t)
+        while len(g.shape) < len(fast_response_ca_snl.data.shape):
+            g = g[None, :]
+        conv = fftconvolve(g, fast_response_ca_snl.data)
+        return TimeSeries(fast_response_ca_snl.tsample,
+                          fast_response_ca_snl.tsample * conv)

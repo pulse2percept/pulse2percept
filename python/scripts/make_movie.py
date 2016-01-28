@@ -14,22 +14,18 @@ ea = e2cm.ElectrodeArray([250, 100], [0, -800], [0, 800])
 r = e2cm.Retina(axon_map='../axon.npz')
 ecm = r.ecm(ea, [s1, s2])
 tm1 = ec2b.TemporalModel()
-sr = np.zeros(ecm.shape)
+#sr = np.zeros(ecm.shape)
+#xx = yy = 0
+fr = tm1.fast_response(ecm)
+ca = tm1.charge_accumulation(fr, ecm)
+sn = tm1.stationary_nonlinearity(ca)
+sr = tm1.slow_response(sn).data
 
-def do_it(xx, yy):
-    s1.amplitude = ecm[xx, yy]
-    fr = tm1.fast_response(s1)
-    ca = tm1.charge_accumulation(fr, s1)
-    sn = tm1.stationary_nonlinearity(ca)
-    return tm1.slow_response(sn, s1)[:ecm.shape[-1]]
-
-test = True
-
-if test:
-    xx = yy = 0
-    sr[xx, yy] = do_it(xx, yy)
-
-else:
-    for xx in range(ecm.shape[0]):
-        for yy in range(ecm.shape[1]):
-            sr[xx, yy] = do_it(xx, yy)
+# sr = TimeSeries(sn.tsample, sr)
+# sr.resample(25)
+# for i in range(sr.data.shape[-1]):
+#     fig, ax = plt.subplots(1)
+#     ax.matshow(sr.data[:, :, i], cmap='viridis', vmax=sr.data.max(),
+#                vmin=sr.data.min())
+#     fig.savefig('/Users/arokem/tmp/figures-tmp/fig%03d' % i)
+#     plt.close("all")
