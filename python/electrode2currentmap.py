@@ -6,6 +6,7 @@ Functions for transforming electrode specifications into a current map
 import numpy as np
 import oyster
 import os
+from utils import TimeSeries
 
 
 def micron2deg(micron):
@@ -94,28 +95,23 @@ class ElectrodeArray(object):
         return np.sum(c, 0)
 
 
-class Stimulus(object):
+class Stimulus(TimeSeries):
     """
     Represent a pulse-train stimulus
     """
     def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,
-                 tsample=.075/1000., current_amplitude=20, current=None):
+                 tsample=.075/1000., amplitude=20):
         """
 
         """
-        self.time = np.arange(tsample, dur, tsample)  # Seconds
-        self.tsample = tsample
-        self.sampling_rate = 1 / tsample   # Hz
-        if current is not None:
-            self.amplitude = current
-        else:
-            sawtooth = freq * np.mod(self.time, 1 / freq)
-            on = np.logical_and(sawtooth > (pulse_dur * freq),
+        time = np.arange(tsample, dur, tsample)  # Seconds
+        sawtooth = freq * np.mod(time, 1 / freq)
+        on = np.logical_and(sawtooth > (pulse_dur * freq),
                             sawtooth < (2 * pulse_dur * freq))
-            off = sawtooth < pulse_dur * freq
-            self.amplitude = (current_amplitude *
-                             (on.astype(float) - off.astype(float)))
-
+        off = sawtooth < pulse_dur * freq
+        data = (amplitude *
+               (on.astype(float) - off.astype(float)))
+        TimeSeries.__init__(self, tsample, data)
 
 class Retina():
     """
@@ -202,13 +198,15 @@ class Retina():
 
         stimuli : list of Stimulus objects
 
+        Returns
+        -------
+        A TimeSeries object
         """
-        ecm = np.zeros(self.gridx.shape + (stimuli[0].amplitude.shape[-1], ))
+        ecm = np.zeros(self.gridx.shape + (stimuli[0].data.shape[-1], ))
         for ii, e in enumerate(electrode_array.electrodes):
             cs = e.current_spread(self.gridx, self.gridy, alpha=alpha, n=n)
             ecs = self.cm2ecm(cs)
-            ecm += ecs[..., None] * stimuli[ii].amplitude
+            ecm += ecs[..., None] * stimuli[ii].data
 
-        #return Stimulus(waveform=ecm, dur=stimuli[ii].dur,
-        #                tsample=stimuli[ii].tsample)
-        return ecm
+        tsample = stimuli[ii].tsample
+        return TimeSeries(tsample, ecm)
