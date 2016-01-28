@@ -98,8 +98,9 @@ class Stimulus(object):
     """
     Represent a pulse-train stimulus
     """
-    def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,
-                 tsample=.075/1000., current_amplitude=20, current=None):
+    def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,interphase_dur=.075/1000., delay=0.,
+                 tsample=.005/1000., current_amplitude=20, 
+                 current=None, type='cathodicfirst'):
         """
 
         """
@@ -109,12 +110,36 @@ class Stimulus(object):
         if current is not None:
             self.amplitude = current
         else:
-            sawtooth = freq * np.mod(self.time, 1 / freq)
-            on = np.logical_and(sawtooth > (pulse_dur * freq),
-                            sawtooth < (2 * pulse_dur * freq))
-            off = sawtooth < pulse_dur * freq
-            self.amplitude = (current_amplitude *
-                             (on.astype(float) - off.astype(float)))
+            on=np.ones(round(pulse_dur / tsample))
+            gap=np.zeros(round(interphase_dur / tsample))
+            off=-1 * on
+            if type is 'cathodicfirst':
+                pulse=np.concatenate((on,gap), axis=0)
+                pulse=np.concatenate((pulse,off), axis=0)
+            if type is 'anodicfirst':
+                pulse=np.concatenate((off, gap), axis=0)
+                pulse=np.concatenate((pulse, on), axis=0)
+                
+            interpulsegap=np.zeros(round( (1/freq) / tsample)- len(pulse))
+            ppt=[]
+            for j in range(0, round(dur * freq)):                
+                ppt=np.concatenate((ppt, interpulsegap), axis=0)
+                ppt=np.concatenate((ppt, pulse), axis=0)
+                
+            if delay > 0:
+                ppt=np.concatenate(np.zeros(np.round(delay /tsample)), ppt)
+                
+                
+            self.amplitude = (current_amplitude * ppt)        
+        
+            
+                
+#            sawtooth = freq * np.mod(self.time, 1 / freq)
+#            on = np.logical_and(sawtooth > (pulse_dur * freq),
+#                            sawtooth < (2 * pulse_dur * freq))
+#            off = sawtooth < pulse_dur * freq
+#            self.amplitude = (current_amplitude *
+#                             (on.astype(float) - off.astype(float)))
 
 
 class Retina():

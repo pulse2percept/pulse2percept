@@ -6,7 +6,9 @@ import numpy as np
 import electrode2currentmap as e2cm
 import effectivecurrent2brightness as ec2b
 
-s1 = e2cm.Stimulus(freq=20, pulse_dur=0.075/1000., tsample=0.075/1000.)
+s1 = e2cm.Stimulus(freq=20, dur=0.5, pulse_dur=.075/1000.,interphase_dur=.075/1000., delay=0.,
+                 tsample=.075/1000., current_amplitude=20, 
+                 current=None, type='cathodicfirst')
 
 ea = e2cm.ElectrodeArray([250], [0], [0])
 r = e2cm.Retina(axon_map='../axon.npz')
