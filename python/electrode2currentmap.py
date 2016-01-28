@@ -99,19 +99,44 @@ class Stimulus(TimeSeries):
     """
     Represent a pulse-train stimulus
     """
-    def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,
-                 tsample=.075/1000., amplitude=20):
+
+    def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,interphase_dur=.075/1000., delay=0.,
+                 tsample=.005/1000., current_amplitude=20, 
+                 current=None, pulsetype='cathodicfirst', stimtype='pulsetrain'):
         """
 
         """
-        time = np.arange(tsample, dur, tsample)  # Seconds
-        sawtooth = freq * np.mod(time, 1 / freq)
-        on = np.logical_and(sawtooth > (pulse_dur * freq),
-                            sawtooth < (2 * pulse_dur * freq))
-        off = sawtooth < pulse_dur * freq
-        data = (amplitude *
-               (on.astype(float) - off.astype(float)))
-        TimeSeries.__init__(self, tsample, data)
+        # set up the individual pulses
+        on=np.ones(round(pulse_dur / tsample))
+        gap=np.zeros(round(interphase_dur / tsample))
+        off=-1 * on
+        if pulsetype == 'cathodicfirst':
+            pulse=np.concatenate((on,gap), axis=0)
+            pulse=np.concatenate((pulse,off), axis=0)
+            
+        elif pulsetype == 'anodicfirst':
+            pulse=np.concatenate((off, gap), axis=0)
+            pulse=np.concatenate((pulse, on), axis=0)
+            
+        else:
+            print('pulse not defined')
+       
+        # set up the sequence
+        if stimtype =='pulsetrain':
+           interpulsegap=np.zeros(round( (1/freq) / tsample)- len(pulse))
+           ppt=[]
+           for j in range(0, int(np.ceil(dur * freq))):                
+               ppt=np.concatenate((ppt, interpulsegap), axis=0)
+               ppt=np.concatenate((ppt, pulse), axis=0)
+                
+        if delay > 0:
+                ppt=np.concatenate((np.zeros(round(delay /tsample)), ppt), axis=0)
+       
+        data = (current_amplitude * ppt)  
+   
+        data=data[0:round(dur / tsample)]    
+        TimeSeries.__init__(self, tsample, data)     
+               
 
 class Retina():
     """
