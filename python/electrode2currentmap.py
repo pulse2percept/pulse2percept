@@ -6,6 +6,8 @@ Functions for transforming electrode specifications into a current map
 import numpy as np
 import oyster
 import os
+from utils import TimeSeries
+
 
 def micron2deg(micron):
     """
@@ -26,6 +28,115 @@ def deg2micron(deg):
     microns = 280 * deg
     return microns
 
+
+class Electrode(object):
+    """
+    Represent a circular, disc-like electrode.
+    """
+    def __init__(self, radius, x, y):
+        """
+        Initialize an electrode object
+
+        Parameters
+        ----------
+        radius : float
+            The radius of the electrode (in microns).
+        x : float
+            The x coordinate of the electrode (in microns).
+        y : float
+            The y location of the electrode (in microns).
+        """
+        self.radius = radius
+        self.x = x
+        self.y = y
+
+    def current_spread(self, xg, yg, alpha=14000, n=1.69):
+        """
+
+        The current spread due to a current pulse through an electrode,
+        reflecting the fall-off of the current as a function of distance from
+        the electrode center. This is equation 2 in Nanduri et al [1]_.
+
+        Parameters
+        ----------
+
+        alpha : a constant to do with the spatial fall-off.
+
+        n : a constant to do with the spatial fall-off (Default: 1.69, based on
+        Ahuja et al. [2]_)
+
+        .. [1]
+
+        .. [2] An In Vitro Model of a Retinal Prosthesis. Ashish K. Ahuja,
+        Matthew R. Behrend, Masako Kuroda, Mark S. Humayun, and
+        James D. Weiland (2008). IEEE Trans Biomed Eng 55.
+        """
+        r = np.sqrt((xg + self.x) ** 2 + (yg + self.y) ** 2).T
+        cspread = np.ones(r.shape)
+        cspread[r > self.radius] = (alpha / (alpha + (r[r > self.radius] -
+                                             self.radius) ** n))
+        return cspread
+
+
+class ElectrodeArray(object):
+    """
+    Represent a retina and array of electrodes
+    """
+    def __init__(self, radii, xs, ys):
+        self.electrodes = []
+        for r, x, y in zip(radii, xs, ys):
+            self.electrodes.append(Electrode(r, x, y))
+
+    def current_spread(self, xg, yg, alpha=14000, n=1.69):
+        c = np.zeros((len(self.electrodes), xg.shape[0], xg.shape[1]))
+        for i in range(c.shape[0]):
+            c[i] = self.electrodes[i].current_spread(xg, yg,
+                                                     alpha=alpha, n=n)
+        return np.sum(c, 0)
+
+
+class Stimulus(TimeSeries):
+    """
+    Represent a pulse-train stimulus
+    """
+
+    def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,interphase_dur=.075/1000., delay=0.,
+                 tsample=.005/1000., current_amplitude=20, 
+                 current=None, pulsetype='cathodicfirst', stimtype='pulsetrain'):
+        """
+
+        """
+        # set up the individual pulses
+        on=np.ones(round(pulse_dur / tsample))
+        gap=np.zeros(round(interphase_dur / tsample))
+        off=-1 * on
+        if pulsetype == 'cathodicfirst':
+            pulse=np.concatenate((on,gap), axis=0)
+            pulse=np.concatenate((pulse,off), axis=0)
+            
+        elif pulsetype == 'anodicfirst':
+            pulse=np.concatenate((off, gap), axis=0)
+            pulse=np.concatenate((pulse, on), axis=0)
+            
+        else:
+            print('pulse not defined')
+       
+        # set up the sequence
+        if stimtype =='pulsetrain':
+           interpulsegap=np.zeros(round( (1/freq) / tsample)- len(pulse))
+           ppt=[]
+           for j in range(0, int(np.ceil(dur * freq))):                
+               ppt=np.concatenate((ppt, interpulsegap), axis=0)
+               ppt=np.concatenate((ppt, pulse), axis=0)
+                
+        if delay > 0:
+                ppt=np.concatenate((np.zeros(round(delay /tsample)), ppt), axis=0)
+       
+        data = (current_amplitude * ppt)  
+   
+        data=data[0:round(dur / tsample)]    
+        TimeSeries.__init__(self, tsample, data)     
+               
 
 class Retina():
     """
@@ -59,11 +170,11 @@ class Retina():
             assert yhi == yhi_am
             assert sampling_am == sampling
         else:
-            print("Can't find file %s, generating"%axon_map)
+            print("Can't find file %s, generating" % axon_map)
             axon_id, axon_weight = oyster.makeAxonMap(micron2deg(self.gridx),
                                                       micron2deg(self.gridy),
                                                       axon_lambda=axon_lambda)
-            ## Save the variables, together with metadata about the grid:
+            # Save the variables, together with metadata about the grid:
             fname = axon_map
             np.savez(fname,
                      axon_id=axon_id,
@@ -77,93 +188,50 @@ class Retina():
         self.axon_id = axon_id
         self.axon_weight = axon_weight
 
-    def cm2ecm(self, cm):
-        """
-        Converts a current map to an 'effective' current map, by passing the
-        map through a mapping of axon streaks.
-
-        Inputs:
-            cm: current map, an image in retinal space
-            axon_id :
-            axon_map :
-            output of 'makeAxonMap'
-
-        Output:
-
-            ecm: effective current map, an image of the same size as the current
-            map, where each pixel is the dot product of the pixel values in ecm
-            along the pixels in the list in axon_map, weighted by the weights
-            axon map.
+    def cm2ecm(self, current_spread):
         """
 
-        ecm = np.zeros(cm.shape)
-        for id in range(0, len(cm.flat)):
-            ecm.flat[id] = np.dot(cm.flat[self.axon_id[id]],
+        Converts a current spread map to an 'effective' current spread map, by
+        passing the map through a mapping of axon streaks.
+
+        Parameters
+        ----------
+        current_spread : the 2D spread map in retinal space
+
+        Returns
+        -------
+        ecm: effective current spread, a time-series of the same size as the
+        current map, where each pixel is the dot product of the pixel values in
+        ecm along the pixels in the list in axon_map, weighted by the weights
+        axon map.
+        """
+        ecs = np.zeros(current_spread.shape)
+        for id in range(0, len(current_spread.flat)):
+            ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
                                   self.axon_weight[id])
-        return ecm
 
+        return ecs
 
-class Electrode(object):
-    """
-    Represent a circular, disc-like electrode.
-    """
-    def __init__(self, radius, x, y):
+    def ecm(self, electrode_array, stimuli, alpha=14000, n=1.69):
         """
-        Initialize an electrode object
+        effective current map from an electrode array and stimuli through
+        these electrodes
 
         Parameters
         ----------
-        radius : float
-            The radius of the electrode (in microns).
-        x : float
-            The x coordinate of the electrode (in microns).
-        y : float
-            The y location of the electrode (in microns).
+        ElectrodeArray
+
+        stimuli : list of Stimulus objects
+
+        Returns
+        -------
+        A TimeSeries object
         """
-        self.radius = radius
-        self.x = x
-        self.y = y
+        ecm = np.zeros(self.gridx.shape + (stimuli[0].data.shape[-1], ))
+        for ii, e in enumerate(electrode_array.electrodes):
+            cs = e.current_spread(self.gridx, self.gridy, alpha=alpha, n=n)
+            ecs = self.cm2ecm(cs)
+            ecm += ecs[..., None] * stimuli[ii].data
 
-    def current_map(self, xg, yg, current_amp=1, alpha=14000, n=1.69):
-        """
-        The current map due to a current pulse through an electrode, reflecting
-        the fall-off of the current as a function of distance from the
-        electrode center. This is equation 2 in Nanduri et al [1]_.
-
-        Parameters
-        ----------
-
-        alpha : a constant to do with the spatial fall-off.
-
-        n : a constant to do with the spatial fall-off (Default: 1.69, based on
-        Ahuja et al. [2]_)
-
-        .. [1]
-
-        .. [2] An In Vitro Model of a Retinal Prosthesis. Ashish K. Ahuja,
-        Matthew R. Behrend, Masako Kuroda, Mark S. Humayun, and
-        James D. Weiland (2008). IEEE Trans Biomed Eng 55.
-        """
-        r = np.sqrt((xg + self.x) ** 2 + (yg + self.y) ** 2).T
-        cspread = np.ones(r.shape)
-        cspread[r > self.radius] = (alpha / (alpha + (r[r > self.radius] -
-                                             self.radius) ** n))
-        return cspread * current_amp
-
-
-class ElectrodeGrid(object):
-    """
-    Represent a retina and grid of electrodes
-    """
-    def __init__(self, radii, xs, ys):
-        self.electrodes = []
-        for r, x, y in zip(radii, xs, ys):
-            self.electrodes.append(Electrode(r, x, y))
-
-    def current_map(self, xg, yg, current_amps, alpha=14000, n=1.69):
-        c = np.zeros((len(self.electrodes), xg.shape[0], xg.shape[1]))
-        for i in range(c.shape[0]):
-            c[i] = self.electrodes[i].current_map(xg, yg,
-                                                  current_amp=current_amps[i],
-                                                  alpha=alpha, n=n)
-        return np.sum(c, 0)
+        tsample = stimuli[ii].tsample
+        return TimeSeries(tsample, ecm)
