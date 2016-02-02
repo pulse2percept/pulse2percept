@@ -12,7 +12,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import utils
 from utils import TimeSeries
+conv = fftconvolve
 
+conv = utils.sparseconv
 
 def gamma(n, tau, t):
     """
@@ -81,9 +83,9 @@ class TemporalModel(object):
         """
         t = np.arange(0, 20 * self.tau1, stimulus.tsample)
         g = gamma(1, self.tau1, t)
-        while len(g.shape) < len(stimulus.shape):
-            g = g[None, :]
-        R1 = stimulus.tsample * fftconvolve(g, stimulus.data)
+        #while len(g.shape) < len(stimulus.shape):
+        #    g = g[None, :]
+        R1 = stimulus.tsample * conv(g, stimulus.data)
         return TimeSeries(stimulus.tsample, R1)
 
     def charge_accumulation(self, fast_response, stimulus):
@@ -93,9 +95,10 @@ class TemporalModel(object):
         rect_amp = np.where(stimulus.data > 0, stimulus.data, 0)  # rectify
         ca = stimulus.tsample * np.cumsum(rect_amp.astype(float), axis=-1)
         g = gamma(1, self.tau2, t)
-        while len(g.shape) < len(ca.data.shape):
-            g = g[None, :]
-        chargeaccumulated = (self.e * stimulus.tsample * fftconvolve(g, ca))
+        #while len(g.shape) < len(ca.data.shape):
+        #    g = g[None, :]
+        chargeaccumulated = (self.e * stimulus.tsample *
+                             conv(g, ca))
         zero_pad = np.zeros(fast_response.shape[:-1] +
                             (chargeaccumulated.shape[-1] -
                              fast_response.shape[-1],))
@@ -123,8 +126,8 @@ class TemporalModel(object):
         # possible for speed sake
         t = np.arange(0, self.tau3 * 8, fast_response_ca_snl.tsample)
         g = gamma(3, self.tau3, t)
-        while len(g.shape) < len(fast_response_ca_snl.data.shape):
-            g = g[None, :]
-        conv = fftconvolve(g, fast_response_ca_snl.data)
+        #while len(g.shape) < len(fast_response_ca_snl.data.shape):
+        #    g = g[None, :]
+        c = fftconvolve(g, fast_response_ca_snl.data)
         return TimeSeries(fast_response_ca_snl.tsample,
-                          fast_response_ca_snl.tsample * conv)
+                          fast_response_ca_snl.tsample * c)
