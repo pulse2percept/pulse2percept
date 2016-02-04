@@ -18,9 +18,10 @@ loc_file = pd.read_csv('../../data/Horsager_2011/DataSummary_Horsager2011.csv', 
 exp=['S05_A1_A2', 'S05_C1_D1', 'S05_C3_C2']
 
 for e in range(0, len(exp)):
-    s_vals=s_file['S05_A1_A2']
-sa = pd.Series([1,2,3],index=list('abc'))
-    s_vals = s_file.Series([1,2,3],index=list('abc'))
+    s_vals=s_file[s_file["Panel"]=='S05_A1_A2']
+    for s in range(0, len(s_vals)):
+        e1=s_vals[E1[s]]
+        
 
 s1 = e2cm.Stimulus(freq=20, dur=0.5, pulse_dur=.075/1000.,interphase_dur=.075/1000., delay=0.,
                  tsample=.075/1000., current_amplitude=20, 
