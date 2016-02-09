@@ -3,11 +3,11 @@ Utility functions for pulse2percept
 """
 import numpy as np
 
-#try:
-#    from numba import jit
-#    has_jit = True
-#except ImportError:
-#    has_jit = False
+try:
+    from numba import jit
+    has_jit = True
+except ImportError:
+    has_jit = False
 
 
 class Parameters(object):
@@ -69,5 +69,5 @@ def sparseconv(v, a):
 
     return out
 
-#if has_jit:
-#    sparseconv = jit(sparseconv)
+if has_jit:
+    sparseconv = jit(sparseconv)
