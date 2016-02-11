@@ -8,7 +8,8 @@ import effectivecurrent2brightness as ec2b
 from utils import TimeSeries
 import matplotlib.pyplot as plt
 
-# create  retina, should be larger than the elecrtrode array
+# create  retina, should be larger than the electrode array
+# x represents the rows
 r = e2cm.Retina(axon_map='../DornMovie.npz', 
                 sampling=25, xlo=-1500, xhi=1500, ylo=-2700, yhi=2700)
                 #'../axon.npz'

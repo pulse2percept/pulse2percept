@@ -74,7 +74,7 @@ class Electrode(object):
         Matthew R. Behrend, Masako Kuroda, Mark S. Humayun, and
         James D. Weiland (2008). IEEE Trans Biomed Eng 55.
         """
-        r = np.sqrt((xg + self.x) ** 2 + (yg + self.y) ** 2).T
+        r = np.sqrt((xg + self.x) ** 2 + (yg + self.y) ** 2)
         cspread = np.ones(r.shape)
         cspread[r > self.radius] = (alpha / (alpha + (r[r > self.radius] -
                                              self.radius) ** n))
@@ -237,9 +237,8 @@ class Retina():
 
         axon_map :
         """
-        [self.gridx, self.gridy] = np.meshgrid(np.arange(xlo, xhi,
-                                                         sampling),
-                                               np.arange(ylo, yhi,
+        [self.gridx, self.gridy] = np.meshgrid( np.arange(ylo, yhi,
+                                                         sampling), np.arange(xlo, xhi,
                                                          sampling))
 
         if os.path.exists(axon_map):
@@ -317,7 +316,6 @@ class Retina():
         A TimeSeries object
         """
         totalmax=0
-        totalmin=0
         for s in stimuli:
             totalmax=max([totalmax, np.max(s.data), np.abs(np.min(s.data)) ])
 
@@ -332,7 +330,7 @@ class Retina():
             cs = e.current_spread(self.gridx, self.gridy, alpha=alpha, n=n)
             ecs = dtype(info.max * self.cm2ecm(cs))
             
-            ecm += dtype(ecs[..., None] * stimuli[ii].data / info.max)
+            ecm += dtype(ecs[..., None] * stimuli[ii].data)
 
         tsample = stimuli[ii].tsample
         return TimeSeries(tsample, ecm)
