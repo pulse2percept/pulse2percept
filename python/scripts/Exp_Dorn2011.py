@@ -22,9 +22,9 @@ r = e2cm.Retina(axon_map='../DornMovie.npz',
 xlist=[]
 ylist=[]
 rlist=[]
-e_spacing=550
-for x in np.arange(-1375, 1376, e_spacing):
-    for y in np.arange(-2475, 2476, e_spacing):   
+e_spacing=525
+for x in np.arange(-1312, 1313, e_spacing):
+    for y in np.arange(-2362, 2364, e_spacing):   
         xlist.append(x)
         ylist.append(y)
         rlist.append(100)        
@@ -62,7 +62,8 @@ for o in np.arange(np.pi/180, 360*np.pi/180): # each orientation
             movie[:,:, fm_ct]=img
             fm_ct=fm_ct+1
             
-        movie=movie[:,:, :fm_ct-1]          
+        movie=movie[:,:, :fm_ct-1]     
+        boom
             
         pt=[]
         for rf in e_rf:
