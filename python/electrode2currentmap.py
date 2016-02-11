@@ -187,7 +187,7 @@ class Psycho2Pulsetrain(TimeSeries):
     """
 
     def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,interphase_dur=.075/1000., delay=0.,
-                 tsample=.005/1000., current_amplitude=20, 
+                 tsample=.005/1000., current_amplitude=20,
                  current=None, pulsetype='cathodicfirst', stimtype='pulsetrain'):
         """
         Ariel, do we need the variable current?
@@ -200,19 +200,19 @@ class Psycho2Pulsetrain(TimeSeries):
         if pulsetype == 'cathodicfirst':
             pulse=np.concatenate((on,gap), axis=0)
             pulse=np.concatenate((pulse,off), axis=0)
-            
+
         elif pulsetype == 'anodicfirst':
             pulse=np.concatenate((off, gap), axis=0)
             pulse=np.concatenate((pulse, on), axis=0)
-            
+
         else:
             print('pulse not defined')
-       
+
         # set up the sequence
         if stimtype =='pulsetrain':
            interpulsegap=np.zeros(round( (1/freq) / tsample)- len(pulse))
            ppt=[]
-           for j in range(0, int(np.ceil(dur * freq))):                
+           for j in range(0, int(np.ceil(dur * freq))):
                ppt=np.concatenate((ppt, interpulsegap), axis=0)
                ppt=np.concatenate((ppt, pulse), axis=0)               
         
@@ -237,9 +237,12 @@ class Retina():
 
         axon_map :
         """
-        [self.gridx, self.gridy] = np.meshgrid( np.arange(ylo, yhi,
-                                                         sampling), np.arange(xlo, xhi,
-                                                         sampling))
+
+        [self.gridx, self.gridy] = np.meshgrid(np.arange(xlo, xhi,
+                                                         sampling),
+                                               np.arange(ylo, yhi,
+                                                         sampling),
+                                               indexing='ij')
 
         if os.path.exists(axon_map):
             axon_map = np.load(axon_map)
