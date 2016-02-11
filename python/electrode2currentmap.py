@@ -103,9 +103,11 @@ def receptive_field(electrode, xg, yg, size):
         # TODO currently this is in units of the grid, needs to be converted to microns
         """
         rf=np.zeros(xg.shape)
-        rf[electrode.x-(size/2):electrode.x+(size/2), 
-           electrode.y-(size/2):electrode.y+(size/2)]=1
-                
+        ind=np.where((xg>electrode.x-(size/2)) & (xg<electrode.x+(size/2))
+         & (yg>electrode.y-(size/2)) & (yg<electrode.y+(size/2)))
+         
+        rf[ind]=1
+      
         return rf
     
 def retinalmovie2electrodtimeseries(rf, movie, fps=30):
@@ -115,7 +117,7 @@ def retinalmovie2electrodtimeseries(rf, movie, fps=30):
         rflum=np.zeros(movie.shape[-1])
         for f in range (0, movie.shape[-1]):
             tmp=rf * movie[:, :, f]
-            rflum[f]=np.sum(tmp)
+            rflum[f]=np.mean(tmp)
             
         return rflum
         
@@ -126,11 +128,20 @@ class Movie2Pulsetrain(TimeSeries):
 
     def __init__(self, rflum, fps=30.0, amplitude_transform='linear', amp_max=90, 
                  freq=20, pulse_dur=.075/1000.,interphase_dur=.075/1000., tsample=.005/1000.,
-                 current=None, pulsetype='cathodicfirst', stimtype='pulsetrain'):
+                 current=None, pulsetype='cathodicfirst', stimtype='pulsetrain', dtype=np.int8):
         """
         Ariel, do we need current here?
 
         """
+
+
+        info=np.iinfo(dtype)
+        if amp_max>info.max:
+            errorstr=('Cannot use current data type to represent the current range.' ,
+            'Increase the datatype or decrease the current range.')
+            raise ValueError(errorstr) 
+            
+
         # set up the individual pulses
         on=np.ones(round(pulse_dur / tsample))
         gap=np.zeros(round(interphase_dur / tsample))
@@ -164,7 +175,7 @@ class Movie2Pulsetrain(TimeSeries):
                                       scaledrflum)
         amp=intfunc(np.linspace(0, len(scaledrflum), len(ppt)))
         
-        data = (amp * ppt)  
+        data =dtype(amp * ppt)  
     
         TimeSeries.__init__(self, tsample, data)  
         
@@ -290,7 +301,7 @@ class Retina():
         return ecs
 
     
-    def ecm(self, electrode_array, stimuli, alpha=14000, n=1.69):
+    def ecm(self, electrode_array, stimuli, alpha=14000, n=1.69, dtype=np.int8):
         """
         effective current map from an electrode array and stimuli through
         these electrodes
@@ -305,14 +316,23 @@ class Retina():
         -------
         A TimeSeries object
         """
-        print(self.gridx.shape)
-        print((stimuli[0].data.shape[-1], ))
+        totalmax=0
+        totalmin=0
+        for s in stimuli:
+            totalmax=max([totalmax, np.max(s.data), np.abs(np.min(s.data)) ])
+
+        info=np.iinfo(dtype)
+        if totalmax>info.max:
+            errorstr=('Cannot use current data type to represent the current range.' ,
+            'Increase the datatype or decrease the current range.')
+            raise ValueError(errorstr) 
         
-        ecm = np.zeros(self.gridx.shape + (stimuli[0].data.shape[-1], ))
+        ecm = np.zeros(self.gridx.shape + (stimuli[0].data.shape[-1], ), dtype)
         for ii, e in enumerate(electrode_array.electrodes):
             cs = e.current_spread(self.gridx, self.gridy, alpha=alpha, n=n)
-            ecs = self.cm2ecm(cs)
-            ecm += ecs[..., None] * stimuli[ii].data
+            ecs = dtype(info.max * self.cm2ecm(cs))
+            
+            ecm += dtype(ecs[..., None] * stimuli[ii].data / info.max)
 
         tsample = stimuli[ii].tsample
         return TimeSeries(tsample, ecm)

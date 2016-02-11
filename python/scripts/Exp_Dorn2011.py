@@ -17,20 +17,22 @@ r = e2cm.Retina(axon_map='../DornMovie.npz',
 # covers 10.32 dva (6 electrodes) by 17.2 (10 electrodes) dva. 
 # 293 μm equals 1 degree
 # electrode spacing is done in microns
-e_spacing=550
+
 xlist=[]
 ylist=[]
 rlist=[]
+e_spacing=550
 for x in np.arange(-1375, 1376, e_spacing):
     for y in np.arange(-2475, 2476, e_spacing):   
         xlist.append(x)
         ylist.append(y)
         rlist.append(100)        
-e_all = e2cm.ElectrodeArray(xlist,ylist, rlist)
+e_all = e2cm.ElectrodeArray(rlist,xlist,ylist)
 
 e_rf=[]
+e_spacing=550
 for e in e_all.electrodes:
-    e_rf.append(e2cm.receptive_field(e, r.gridx, r.gridy,e_spacing/25))
+    e_rf.append(e2cm.receptive_field(e, r.gridx, r.gridy,e_spacing))
 
 
 # create movie
@@ -65,7 +67,7 @@ for o in np.arange(np.pi/180, 360*np.pi/180): # each orientation
         for rf in e_rf:
             rflum= e2cm.retinalmovie2electrodtimeseries(rf, movie) 
             pt.append(e2cm.Movie2Pulsetrain(rflum)) 
-                           
+              
         ecm = r.ecm(e_all, pt)
         tm1 = ec2b.TemporalModel()
         #sr = np.zeros(ecm.shape)
@@ -74,5 +76,6 @@ for o in np.arange(np.pi/180, 360*np.pi/180): # each orientation
         ca = tm1.charge_accumulation(fr, ecm)
         sn = tm1.stationary_nonlinearity(ca)
         sr = tm1.slow_response(sn).data
+        boom
         
     
