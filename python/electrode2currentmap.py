@@ -305,6 +305,9 @@ class Retina():
         -------
         A TimeSeries object
         """
+        print(self.gridx.shape)
+        print((stimuli[0].data.shape[-1], ))
+        
         ecm = np.zeros(self.gridx.shape + (stimuli[0].data.shape[-1], ))
         for ii, e in enumerate(electrode_array.electrodes):
             cs = e.current_spread(self.gridx, self.gridy, alpha=alpha, n=n)

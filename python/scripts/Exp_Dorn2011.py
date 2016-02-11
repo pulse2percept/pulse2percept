@@ -38,7 +38,7 @@ for e in e_all.electrodes:
 #res=[768 ,1024] # resolution of screen
 #pixperdeg=degscreen/res
 degscreen=[10.32, 17.2] # array visual angle, no need to simulate the whole movie
-res=[768/4 ,1024/4] # resolution of screen
+res=[e_rf[0].shape[0],e_rf[1].shape[1]] # resolution of screen
 
 fps=30
 
@@ -48,7 +48,7 @@ np.linspace(-degscreen[0]/2, degscreen[0]/2, res[0]));
 for o in np.arange(np.pi/180, 360*np.pi/180): # each orientation
     M=np.cos(o)*X +np.sin(o)*Y
     for sp in range (8,32): # each speed  
-        movie=np.zeros((res[0],res[1], np.ceil((60 /7)*30)))
+        movie=np.zeros((res[0],res[1], np.ceil((70/5)*30)))
         st=np.min(M)
         fm_ct=0
         while (st<np.max(M)):
@@ -59,8 +59,7 @@ for o in np.arange(np.pi/180, 360*np.pi/180): # each orientation
             movie[:,:, fm_ct]=img
             fm_ct=fm_ct+1
             
-        movie=movie[:,:, :fm_ct-1]  
-        movie=movie[0:r.gridx.shape[0],0:r.gridy.shape[1], :]         
+        movie=movie[:,:, :fm_ct-1]          
             
         pt=[]
         for rf in e_rf:
