@@ -81,7 +81,8 @@ class TemporalModel(object):
         """
         t = np.arange(0, 20 * self.tau1, stimulus.tsample)
         g = gamma(1, self.tau1, t)
-        R1 = stimulus.tsample * utils.sparseconv(g, stimulus.data)
+        tmp=stimulus.data /63.5
+        R1 = stimulus.tsample * utils.sparseconv(g, tmp)
         return TimeSeries(stimulus.tsample, R1)
 
     def charge_accumulation(self, fast_response, stimulus):

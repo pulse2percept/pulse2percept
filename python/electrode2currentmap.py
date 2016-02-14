@@ -331,9 +331,10 @@ class Retina():
         ecm = np.zeros(self.gridx.shape + (stimuli[0].data.shape[-1], ), dtype)
         for ii, e in enumerate(electrode_array.electrodes):
             cs = e.current_spread(self.gridx, self.gridy, alpha=alpha, n=n)
-            ecs = dtype(info.max * self.cm2ecm(cs))
-            
+            ecs = dtype(info.max /2 * self.cm2ecm(cs))
+            # need to scale so as to keep in int format, but the max current field can be larger
+            # then the max current on a given electrode so this is a hack, needs to be fixed eventually
             ecm += dtype(ecs[..., None] * stimuli[ii].data)
-
+            
         tsample = stimuli[ii].tsample
         return TimeSeries(tsample, ecm)
