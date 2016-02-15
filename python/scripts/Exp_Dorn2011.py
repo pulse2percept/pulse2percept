@@ -51,7 +51,7 @@ np.linspace(-degscreen[0]/2, degscreen[0]/2, res[0]));
 for o in np.arange(np.pi/180, 360*np.pi/180): # each orientation
     M=np.cos(o)*X +np.sin(o)*Y
     for sp in range (8,32): # each speed  
-        movie=np.zeros((res[0],res[1], np.ceil((70/5)*30)))
+        movie=np.zeros((res[0],res[1], int(np.ceil((70/5)*30))))
         st=np.min(M)
         fm_ct=0
         while (st<np.max(M)):
