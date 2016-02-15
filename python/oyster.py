@@ -1,5 +1,4 @@
 import numpy as np
-import utils
 
 # contains the functions
 #   jansonius
@@ -101,8 +100,7 @@ def jansonius(nCells, nR, center=np.array([15,2]),
     y = scale*(-np.sin(rot)*(xmodel-center[0]) + np.cos(rot)*
                (ymodel-center[1])) + center[1]
 
-    axon = utils.Parameters(x=x, y=y)
-    return axon
+    return x, y
 
 
 def makeAxonMap(xg, yg, axon_lambda=1, nCells=500, nR=801, min_weight=.001,
@@ -130,9 +128,9 @@ def makeAxonMap(xg, yg, axon_lambda=1, nCells=500, nR=801, min_weight=.001,
                  weight is a list of corresponding weights.
     '''
 
-    axon = jansonius(nCells, nR, center=center,
-                          rot=rot, scale=scale, bs=bs, bi=bi, r0=r0,
-                          maxR=maxR, angRange=angRange)
+    axon_x, axon_y = jansonius(nCells, nR, center=center,
+                               rot=rot, scale=scale, bs=bs, bi=bi, r0=r0,
+                               maxR=maxR, angRange=angRange)
 
     #initialize lists
     axon_xg = ()
@@ -145,7 +143,7 @@ def makeAxonMap(xg, yg, axon_lambda=1, nCells=500, nR=801, min_weight=.001,
     for id in range(0, len(xg.flat)):
 
         #find the nearest axon to this pixel
-        d = (axon.x-xg.flat[id])**2 + (axon.y-yg.flat[id])**2
+        d = (axon_x-xg.flat[id])**2 + (axon_y-yg.flat[id])**2
         cur_ax_id = np.nanargmin(d) #index into the current axon
         [axPosId0,axNum] = np.unravel_index(cur_ax_id,d.shape)
 
@@ -164,14 +162,14 @@ def makeAxonMap(xg, yg, axon_lambda=1, nCells=500, nR=801, min_weight=.001,
         #now loop back along this nearest axon toward the optic disc
         for axPosId in range(axPosId0-1, -1, -1):
             #increment the distance from the starting point
-            dist = dist + np.sqrt((axon.x[axPosId+1,axNum]-axon.x[axPosId,axNum])**2
-                    + (axon.y[axPosId+1,axNum]-axon.y[axPosId,axNum])**2)
+            dist = dist + np.sqrt((axon_x[axPosId+1,axNum]-axon_x[axPosId,axNum])**2
+                    + (axon_y[axPosId+1,axNum]-axon_y[axPosId,axNum])**2)
 
             weight = np.exp(-dist/axon_lambda)  # weight falls off exponentially as distance from axon cell body
 
             #find the nearest pixel to the current position along the axon
-            nearest_xg_id = np.abs(xg[0,:]-axon.x[axPosId,axNum]).argmin()
-            nearest_yg_id = np.abs(yg[:,0]-axon.y[axPosId,axNum]).argmin()
+            nearest_xg_id = np.abs(xg[0,:]-axon_x[axPosId,axNum]).argmin()
+            nearest_yg_id = np.abs(yg[:,0]-axon_y[axPosId,axNum]).argmin()
             nearest_xg =xg[0,nearest_xg_id]
             nearest_yg =yg[nearest_yg_id,0]
 
@@ -188,8 +186,5 @@ def makeAxonMap(xg, yg, axon_lambda=1, nCells=500, nR=801, min_weight=.001,
                 #axon_yg[id].append(cur_yg)
                 axon_id[id].append(np.ravel_multi_index((nearest_yg_id,
                                    nearest_xg_id),xg.shape))
-
-        #stick id and weight into a 'structure'
-        # axon_map = utils.Parameters(id = axon_id,weight = axon_weight)
 
     return list(axon_id), list(axon_weight)

@@ -9,7 +9,6 @@ from __future__ import print_function
 from scipy.misc import factorial
 from scipy.signal import fftconvolve
 import numpy as np
-import matplotlib.pyplot as plt
 import utils
 from utils import TimeSeries
 
