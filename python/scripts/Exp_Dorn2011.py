@@ -62,6 +62,7 @@ np.linspace(-degscreen[0]/2, degscreen[0]/2, res[0]));
 
 for o in np.arange(np.pi/180, 360*np.pi/180): # each orientation
     M=np.cos(o)*X +np.sin(o)*Y
+
  #   for sp in range (32:32): # DEBUG each speed, eventually 8:32  
     sp=8
     movie=np.zeros((res[0],res[1], int(np.ceil((70/5)*30))))
@@ -87,6 +88,7 @@ for o in np.arange(np.pi/180, 360*np.pi/180): # each orientation
     ecm = r.ecm(e_all, pt)
      
     tm1 = ec2b.TemporalModel()
+
         #sr = np.zeros(ecm.shape)
         #xx = yy = 0
     fr=np.zeros([e_rf[0].shape[0],e_rf[0].shape[1], len(pt[0].data)])
