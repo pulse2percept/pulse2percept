@@ -47,7 +47,7 @@ class TimeSeries(object):
                             self.data[..., ::factor])
 
 
-def sparseconv(v, a):
+def _sparseconv(v, a):
     """
     Returns the discrete, linear convolution of two one-dimensional sequences.
     output is of length len(v) + len(a) -1 (same as the default for numpy.convolve)
@@ -66,8 +66,28 @@ def sparseconv(v, a):
     # add shifted and scaled copies of v only where a is nonzero
     for p in pos:
         out[p:p + v_len] = out[p:p + v_len] + v * a[p]
-
     return out
 
 if has_jit:
-    sparseconv = jit(sparseconv)
+    _sparseconvj = jit(_sparseconv)
+    
+    
+def sparseconv(v, a, dojit):
+    """
+    Returns the discrete, linear convolution of two one-dimensional sequences.
+    output is of length len(v) + len(a) -1 (same as the default for numpy.convolve)
+
+    v is typically the kernel, a is the input to the system
+
+    Can run faster than numpy.convolve if:
+    (1) a is much longer than v
+    (2) a is sparse (has lots of zeros)
+    """
+    if dojit:
+        if not has_jit:
+            e_s = ("You do not have numba ", 
+                   "please run sparsconv with dojit=False")
+            raise ValueError(e_s)
+        return _sparseconvj(v, a)
+    else:
+        return _sparseconv(v, a)
