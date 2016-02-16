@@ -9,7 +9,7 @@ from utils import TimeSeries
 import matplotlib.pyplot as plt
 
 # import imp 
-# imp.reload(filename.py)
+# imp.reload(effectivecurrent2brightness.py)
 
 
 # create  retina, should be larger than the electrode array
@@ -64,7 +64,7 @@ for o in np.arange(np.pi/180, 360*np.pi/180): # each orientation
     M=np.cos(o)*X +np.sin(o)*Y
  #   for sp in range (32:32): # DEBUG each speed, eventually 8:32  
     sp=8
-    movie=np.zeros((res[0],res[1], np.ceil((70/5)*30)))
+    movie=np.zeros((res[0],res[1], int(np.ceil((70/5)*30))))
     st=np.min(M)
     fm_ct=1
     while (st<np.max(M)):
@@ -89,19 +89,18 @@ for o in np.arange(np.pi/180, 360*np.pi/180): # each orientation
     tm1 = ec2b.TemporalModel()
         #sr = np.zeros(ecm.shape)
         #xx = yy = 0
-    brightnessmovie=np.zeros([e_rf[0].shape[0],e_rf[0].shape[1], 3])
+    fr=np.zeros([e_rf[0].shape[0],e_rf[0].shape[1], len(pt[0].data)])
  
     #DEBUG for xx in range(ecm.shape[0]):
     #    for yy in range(ecm.shape[1]):
     for xx in range(ecm.shape[0]):
         for yy in range(ecm.shape[1]):
            
-            fr = tm1.fast_response(ecm[xx,yy])    
-            boom
-            ca = tm1.charge_accumulation(fr, ecm[xx,yy])
-            sn = tm1.stationary_nonlinearity(ca)
-            sr = tm1.slow_response(sn).data
-            brightnessmovie[xx,yy,:]=sr
+            fr[xx,yy, :] = tm1.fast_response(ecm[xx,yy], dojit=False).data[0:440000]    
+            #ca = tm1.charge_accumulation(fr, ecm[xx,yy])
+            #sn = tm1.stationary_nonlinearity(ca)
+            #sr = tm1.slow_response(sn).data
+            #brightnessmovie[xx,yy,:]=sr
 
         
     

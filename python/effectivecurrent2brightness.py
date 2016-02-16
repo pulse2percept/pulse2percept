@@ -75,14 +75,14 @@ class TemporalModel(object):
         self.slope = slope
         self.shift = shift
 
-    def fast_response(self, stimulus):
+    def fast_response(self, stimulus, dojit=True):
         """
         Fast response function
         """
         t = np.arange(0, 20 * self.tau1, stimulus.tsample)
         g = gamma(1, self.tau1, t)
-        tmp=stimulus.data /63.5
-        R1 = stimulus.tsample * utils.sparseconv(g, tmp)
+        tmp=stimulus.data.astype(float) /63.5
+        R1 = stimulus.tsample * utils.sparseconv(g, tmp, dojit)
         return TimeSeries(stimulus.tsample, R1)
 
     def charge_accumulation(self, fast_response, stimulus):
