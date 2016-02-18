@@ -186,12 +186,37 @@ class Psycho2Pulsetrain(TimeSeries):
     
     """
 
-    def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,interphase_dur=.075/1000., delay=0.,
-                 tsample=.005/1000., current_amplitude=20,
-                 current=None, pulsetype='cathodicfirst', stimtype='pulsetrain'):
+    def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,
+                 interphase_dur=.075/1000., delay=0., tsample=.005/1000., 
+                 current_amplitude=20, pulsetype='cathodicfirst', 
+                 stimtype='pulsetrain'):
         """
-        Ariel, do we need the variable current?
 
+        Parameters
+        ----------
+        freq : 
+        dur : float
+            Duration in seconds
+        
+        pulse_dur : float
+            Pulse duration in seconds
+        
+        interphase_duration : float
+            In seconds
+    
+        delay : float
+        
+        tsample : float
+            Sampling interval in seconds
+
+        current_amplitude : float
+            In XXX units? 
+        
+        pulsetype : string
+            {"cathodicfirst" | "anodicfirst"}
+        
+        stimtype : string
+            {"pulsetrain" | XXX other options?}
         """
         # set up the individual pulses
         on=np.ones(round(pulse_dur / tsample))
