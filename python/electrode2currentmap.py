@@ -235,11 +235,11 @@ class Psycho2Pulsetrain(TimeSeries):
 
         # set up the sequence
         if stimtype =='pulsetrain':
-           interpulsegap=np.zeros(round( (1/freq) / tsample)- len(pulse))
-           ppt=[]
-           for j in range(0, int(np.ceil(dur * freq))):
-               ppt=np.concatenate((ppt, interpulsegap), axis=0)
-               ppt=np.concatenate((ppt, pulse), axis=0)               
+            interpulsegap=np.zeros(round( (1/freq) / tsample)- len(pulse))
+            ppt=[]
+            for j in range(0, int(np.ceil(dur * freq))):
+                ppt=np.concatenate((ppt, interpulsegap), axis=0)
+                ppt=np.concatenate((ppt, pulse), axis=0)               
         
         if delay > 0:
                 ppt=np.concatenate((np.zeros(round(delay /tsample)), ppt), axis=0)
@@ -267,7 +267,8 @@ class Retina():
                                                          sampling),
                                                np.arange(ylo, yhi,
                                                          sampling),
-                                               indexing='ij')
+                                               indexing='ij'
+                                               )
 
         if os.path.exists(axon_map):
             axon_map = np.load(axon_map)
@@ -353,13 +354,14 @@ class Retina():
             'Increase the datatype or decrease the current range.')
             raise ValueError(errorstr) 
         
-        ecm = np.zeros(self.gridx.shape + (stimuli[0].data.shape[-1], ), dtype)
+        ecm = np.zeros(self.gridx.shape + (stimuli[0].data.shape[-1], ))#, dtype)
         for ii, e in enumerate(electrode_array.electrodes):
             cs = e.current_spread(self.gridx, self.gridy, alpha=alpha, n=n)
-            ecs = dtype(info.max /2 * self.cm2ecm(cs))
+            ecs = self.cm2ecm(cs)
+            #ecs = dtype(info.max / 2 * self.cm2ecm(cs))
             # need to scale so as to keep in int format, but the max current field can be larger
             # then the max current on a given electrode so this is a hack, needs to be fixed eventually
-            ecm += dtype(ecs[..., None] * stimuli[ii].data)
+            ecm += ecs[..., None] * stimuli[ii].data #dtype(ecs[..., None] * stimuli[ii].data)
             
         tsample = stimuli[ii].tsample
         return TimeSeries(tsample, ecm)
