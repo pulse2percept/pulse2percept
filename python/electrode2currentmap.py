@@ -328,11 +328,21 @@ class Retina():
 
         return ecs
 
+    def electrode_ecs(self, electrode_array, alpha=14000, n=1.69):
+        """ 
+        Gather effective electrode spreads per electrode
+        """
+        ecs_list = []
+        for e in electrode_array.electrodes:
+            cs = e.current_spread(self.gridx, self.gridy, alpha=alpha, n=n)
+            ecs = self.cm2ecm(cs)
+            ecs_list.append(ecs)
+        return ecs_list
     
-    def ecm(self, electrode_array, stimuli, alpha=14000, n=1.69, dtype=np.int8):
+    def ecm(self, x,  y, ecs_list, stimuli):
         """
         effective current map from an electrode array and stimuli through
-        these electrodes
+        these electrodes in one spatial position
 
         Parameters
         ----------
@@ -344,24 +354,9 @@ class Retina():
         -------
         A TimeSeries object
         """
-        totalmax=0
-        for s in stimuli:
-            totalmax=max([totalmax, np.max(s.data), np.abs(np.min(s.data)) ])
-
-        info=np.iinfo(dtype)
-        if totalmax>info.max:
-            errorstr=('Cannot use current data type to represent the current range.' ,
-            'Increase the datatype or decrease the current range.')
-            raise ValueError(errorstr) 
-        
-        ecm = np.zeros(self.gridx.shape + (stimuli[0].data.shape[-1], ))#, dtype)
-        for ii, e in enumerate(electrode_array.electrodes):
-            cs = e.current_spread(self.gridx, self.gridy, alpha=alpha, n=n)
-            ecs = self.cm2ecm(cs)
-            #ecs = dtype(info.max / 2 * self.cm2ecm(cs))
-            # need to scale so as to keep in int format, but the max current field can be larger
-            # then the max current on a given electrode so this is a hack, needs to be fixed eventually
-            ecm += ecs[..., None] * stimuli[ii].data #dtype(ecs[..., None] * stimuli[ii].data)
+        ecm = np.zeros(stimuli[0].data.shape[-1])
+        for ii, ecs in enumerate(ecs_list): 
+            ecm += ecs[x,y] * stimuli[ii].data
             
         tsample = stimuli[ii].tsample
         return TimeSeries(tsample, ecm)
