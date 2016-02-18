@@ -186,12 +186,37 @@ class Psycho2Pulsetrain(TimeSeries):
     
     """
 
-    def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,interphase_dur=.075/1000., delay=0.,
-                 tsample=.005/1000., current_amplitude=20,
-                 current=None, pulsetype='cathodicfirst', stimtype='pulsetrain'):
+    def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,
+                 interphase_dur=.075/1000., delay=0., tsample=.005/1000., 
+                 current_amplitude=20, pulsetype='cathodicfirst', 
+                 stimtype='pulsetrain'):
         """
-        Ariel, do we need the variable current?
 
+        Parameters
+        ----------
+        freq : 
+        dur : float
+            Duration in seconds
+        
+        pulse_dur : float
+            Pulse duration in seconds
+        
+        interphase_duration : float
+            In seconds
+    
+        delay : float
+        
+        tsample : float
+            Sampling interval in seconds
+
+        current_amplitude : float
+            In XXX units? 
+        
+        pulsetype : string
+            {"cathodicfirst" | "anodicfirst"}
+        
+        stimtype : string
+            {"pulsetrain" | XXX other options?}
         """
         # set up the individual pulses
         on=np.ones(round(pulse_dur / tsample))
@@ -210,11 +235,11 @@ class Psycho2Pulsetrain(TimeSeries):
 
         # set up the sequence
         if stimtype =='pulsetrain':
-           interpulsegap=np.zeros(round( (1/freq) / tsample)- len(pulse))
-           ppt=[]
-           for j in range(0, int(np.ceil(dur * freq))):
-               ppt=np.concatenate((ppt, interpulsegap), axis=0)
-               ppt=np.concatenate((ppt, pulse), axis=0)               
+            interpulsegap=np.zeros(round( (1/freq) / tsample)- len(pulse))
+            ppt=[]
+            for j in range(0, int(np.ceil(dur * freq))):
+                ppt=np.concatenate((ppt, interpulsegap), axis=0)
+                ppt=np.concatenate((ppt, pulse), axis=0)               
         
         if delay > 0:
                 ppt=np.concatenate((np.zeros(round(delay /tsample)), ppt), axis=0)
@@ -242,7 +267,8 @@ class Retina():
                                                          sampling),
                                                np.arange(ylo, yhi,
                                                          sampling),
-                                               indexing='ij')
+                                               indexing='ij'
+                                               )
 
         if os.path.exists(axon_map):
             axon_map = np.load(axon_map)
@@ -302,11 +328,21 @@ class Retina():
 
         return ecs
 
+    def electrode_ecs(self, electrode_array, alpha=14000, n=1.69):
+        """ 
+        Gather effective electrode spreads per electrode
+        """
+        ecs_list = []
+        for e in electrode_array.electrodes:
+            cs = e.current_spread(self.gridx, self.gridy, alpha=alpha, n=n)
+            ecs = self.cm2ecm(cs)
+            ecs_list.append(ecs)
+        return ecs_list
     
-    def ecm(self, electrode_array, stimuli, alpha=14000, n=1.69, dtype=np.int8):
+    def ecm(self, x,  y, ecs_list, stimuli):
         """
         effective current map from an electrode array and stimuli through
-        these electrodes
+        these electrodes in one spatial position
 
         Parameters
         ----------
@@ -318,23 +354,9 @@ class Retina():
         -------
         A TimeSeries object
         """
-        totalmax=0
-        for s in stimuli:
-            totalmax=max([totalmax, np.max(s.data), np.abs(np.min(s.data)) ])
-
-        info=np.iinfo(dtype)
-        if totalmax>info.max:
-            errorstr=('Cannot use current data type to represent the current range.' ,
-            'Increase the datatype or decrease the current range.')
-            raise ValueError(errorstr) 
-        
-        ecm = np.zeros(self.gridx.shape + (stimuli[0].data.shape[-1], ), dtype)
-        for ii, e in enumerate(electrode_array.electrodes):
-            cs = e.current_spread(self.gridx, self.gridy, alpha=alpha, n=n)
-            ecs = dtype(info.max /2 * self.cm2ecm(cs))
-            # need to scale so as to keep in int format, but the max current field can be larger
-            # then the max current on a given electrode so this is a hack, needs to be fixed eventually
-            ecm += dtype(ecs[..., None] * stimuli[ii].data)
+        ecm = np.zeros(stimuli[0].data.shape[-1])
+        for ii, ecs in enumerate(ecs_list): 
+            ecm += ecs[x,y] * stimuli[ii].data
             
         tsample = stimuli[ii].tsample
         return TimeSeries(tsample, ecm)
