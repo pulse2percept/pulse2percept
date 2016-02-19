@@ -263,12 +263,11 @@ class Retina():
         axon_map :
         """
 
-        [self.gridx, self.gridy] = np.meshgrid(np.arange(xlo, xhi,
+        self.gridx, self.gridy = np.meshgrid(np.arange(xlo, xhi,
                                                          sampling),
                                                np.arange(ylo, yhi,
                                                          sampling),
-                                               indexing='ij'
-                                               )
+                                               indexing='xy')
 
         if os.path.exists(axon_map):
             axon_map = np.load(axon_map)

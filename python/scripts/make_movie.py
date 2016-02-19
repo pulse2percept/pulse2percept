@@ -9,25 +9,25 @@ from utils import TimeSeries
 import matplotlib.pyplot as plt
 
 
-s1 = e2cm.Stimulus(freq=20, dur=0.5, pulse_dur=.075/1000.,interphase_dur=.075/1000., delay=0.,
+s1 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5, pulse_dur=.075/1000.,interphase_dur=.075/1000., delay=0.,
                  tsample=.075/1000., current_amplitude=20,
                  current=None, pulsetype='cathodicfirst')
 
-s2 = e2cm.Stimulus(freq=20, dur=0.5,
+s2 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5,
 
 pulse_dur=.075/1000.,interphase_dur=.075/1000., delay=9/1000,
                  tsample=.075/1000., current_amplitude=20,
                  current=None, pulsetype='cathodicfirst')
 
 
-plt.plot(s1.data)
+#plt.plot(s1.data)
 ea1 = e2cm.ElectrodeArray([250], [0], [0])
 ea2 = e2cm.ElectrodeArray([100, 100], [-200, 200], [200, -200])
 
 r = e2cm.Retina(axon_map='../axon.npz')
 ecm = r.ecm(ea2, [s1, s2])
 tm1 = ec2b.TemporalModel()
-#sr = np.zeros(ecm.shape)
+sr = np.zeros(ecm.shape)
 
 
 def do_it():

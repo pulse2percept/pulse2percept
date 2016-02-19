@@ -84,25 +84,21 @@ for o in np.arange(np.pi/180, 360*np.pi/180): # each orientation
         pt.append(e2cm.Movie2Pulsetrain(rflum)) 
     
           
-           
-    ecm = r.ecm(e_all, pt)
-     
+    ecs_list = r.electrode_ecs(e_all)        
     tm1 = ec2b.TemporalModel()
-
-        #sr = np.zeros(ecm.shape)
-        #xx = yy = 0
-    fr=np.zeros([e_rf[0].shape[0],e_rf[0].shape[1], len(pt[0].data)])
- 
+    #fr=np.zeros([e_rf[0].shape[0],e_rf[0].shape[1], len(pt[0].data)])
+    brightnessmovie = np.zeros(r.gridx.shape + (22176,))
     #DEBUG for xx in range(ecm.shape[0]):
     #    for yy in range(ecm.shape[1]):
-    for xx in range(ecm.shape[0]):
-        for yy in range(ecm.shape[1]):
-           
-            fr[xx,yy, :] = tm1.fast_response(ecm[xx,yy], dojit=False).data[0:440000]    
-            #ca = tm1.charge_accumulation(fr, ecm[xx,yy])
-            #sn = tm1.stationary_nonlinearity(ca)
-            #sr = tm1.slow_response(sn).data
-            #brightnessmovie[xx,yy,:]=sr
+    for xx in range(r.gridx.shape[0]):
+        for yy in range(r.gridx.shape[1]):
+            ecm = r.ecm(xx, yy, ecs_list, pt)
+            fr = tm1.fast_response(ecm, dojit=True)    
+            ca = tm1.charge_accumulation(fr, ecm)
+            sn = tm1.stationary_nonlinearity(ca)
+            sr = tm1.slow_response(sn)
+            sr.resample(25)
+            brightnessmovie[xx, yy, :] = sr.data
 
         
     
