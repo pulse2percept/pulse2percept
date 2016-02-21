@@ -74,7 +74,7 @@ class Electrode(object):
         Matthew R. Behrend, Masako Kuroda, Mark S. Humayun, and
         James D. Weiland (2008). IEEE Trans Biomed Eng 55.
         """
-        r = np.sqrt((xg + self.x) ** 2 + (yg + self.y) ** 2)
+        r = np.sqrt((xg - self.x) ** 2 + (yg - self.y) ** 2)
         cspread = np.ones(r.shape)
         cspread[r > self.radius] = (alpha / (alpha + (r[r > self.radius] -
                                              self.radius) ** n))
@@ -128,22 +128,16 @@ class Movie2Pulsetrain(TimeSeries):
 
     def __init__(self, rflum, fps=30.0, amplitude_transform='linear', amp_max=90, 
                  freq=20, pulse_dur=.075/1000.,interphase_dur=.075/1000., tsample=.005/1000.,
-                 current=None, pulsetype='cathodicfirst', stimtype='pulsetrain', dtype=np.int8):
+                 current=None, pulsetype='cathodicfirst', stimtype='pulsetrain'):
         """
         Ariel, do we need current here?
 
         """
 
-
-        info=np.iinfo(dtype)
-        if amp_max>info.max:
-            errorstr=('Cannot use current data type to represent the current range.' ,
-            'Increase the datatype or decrease the current range.')
-            raise ValueError(errorstr) 
             
 
         # set up the individual pulses
-        on=np.ones(round(pulse_dur / tsample))
+        on=np.ones(round(pulse_dur /tsample))
         gap=np.zeros(round(interphase_dur / tsample))
         off=-1 * on
         if pulsetype == 'cathodicfirst':
@@ -158,9 +152,9 @@ class Movie2Pulsetrain(TimeSeries):
        
        
         # set up the sequence
-        dur= len(rflum) / fps
+        dur= len(rflum) / fps # duration in secs
         if stimtype =='pulsetrain':
-           interpulsegap=np.zeros(round( (1/freq) / tsample)- len(pulse))
+           interpulsegap=np.zeros(round( (1/freq) / tsample)-len(pulse))
            ppt=[]
            for j in range(0, int(np.ceil(dur * freq))):                
                ppt=np.concatenate((ppt, interpulsegap), axis=0)
@@ -168,14 +162,12 @@ class Movie2Pulsetrain(TimeSeries):
          
         ppt=ppt[0:round(dur/tsample)]
        
-        delta = (amp_max-0)/(rflum.max()-rflum.min())
-        scaledrflum = delta*(rflum-rflum.min()) + 0
 
-        intfunc= interpolate.interp1d(np.linspace(0, len(scaledrflum),len(scaledrflum)),
-                                      scaledrflum)
-        amp=intfunc(np.linspace(0, len(scaledrflum), len(ppt)))
+        intfunc= interpolate.interp1d(np.linspace(0, len(rflum),len(rflum)),
+                                      rflum)
+        amp=intfunc(np.linspace(0, len(rflum), len(ppt)))
         
-        data =dtype(amp * ppt)  
+        data =amp * ppt  
     
         TimeSeries.__init__(self, tsample, data)  
         
@@ -263,11 +255,7 @@ class Retina():
         axon_map :
         """
 
-        self.gridx, self.gridy = np.meshgrid(np.arange(xlo, xhi,
-                                                         sampling),
-                                               np.arange(ylo, yhi,
-                                                         sampling),
-                                               indexing='xy')
+        self.gridx, self.gridy = np.meshgrid( np.arange(xlo, xhi, sampling),np.arange(ylo, yhi, sampling), indexing='xy')
 
         if os.path.exists(axon_map):
             axon_map = np.load(axon_map)
@@ -332,12 +320,15 @@ class Retina():
         Gather effective electrode spreads per electrode
         """
         ecs_list = []
+        cs_list = []
         for e in electrode_array.electrodes:
             cs = e.current_spread(self.gridx, self.gridy, alpha=alpha, n=n)
+            cs_list.append(cs)
             ecs = self.cm2ecm(cs)
             ecs_list.append(ecs)
-        return ecs_list
-    
+        return ecs_list, cs_list 
+
+        
     def ecm(self, x,  y, ecs_list, stimuli):
         """
         effective current map from an electrode array and stimuli through
