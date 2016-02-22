@@ -89,11 +89,8 @@ for o in np.arange(0, 2*np.pi, 2*np.pi/4): # each orientation
     tm1 = ec2b.TemporalModel()
     #fr=np.zeros([e_rf[0].shape[0],e_rf[0].shape[1], len(pt[0].data)])
 
-    brightnessmovie = np.zeros(r.gridx.shape + ((moviedur+1)*fps,))
-    #DEBUG for xx in range(ecm.shape[0]):
-    #    for yy in range(ecm.shape[1]):
-    for xx in range(r.gridx.shape[0]):
-        for yy in range(r.gridx.shape[1]):
+    for xx in range(r.gridx.shape[1]):
+        for yy in range(r.gridx.shape[0]):
             ecm = r.ecm(xx, yy, ecs_list, pt)
             fr = tm1.fast_response(ecm, dojit=False)    
             ca = tm1.charge_accumulation(fr, ecm)
@@ -103,8 +100,14 @@ for o in np.arange(0, 2*np.pi, 2*np.pi/4): # each orientation
             intfunc= interpolate.interp1d(np.linspace(0, len(sr.data),len(sr.data)),
                                       sr.data)
             
-            sr_rs=intfunc(np.linspace(0, len(sr.data), len(sr.data)*sr.tsample*fps))
-            brightnessmovie[xx, yy, :] = sr_rs
+            if xx==0 and yy==0:
+              sr_rs=intfunc(np.linspace(0, len(sr.data), len(sr.data)*sr.tsample*fps))
+              brightnessmovie = np.zeros(r.gridx.shape + (len(sr_rs),))  
+            
+            brightnessmovie[yy, xx, :] = sr_rs
+    filename='movie20160222_' + str(np.round(o,3)) +'.npy'
+    
+    boom
 
-    np.save('movie20160220.npy', brightnessmovie)      
+    np.save(filename, brightnessmovie)      
     

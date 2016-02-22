@@ -344,9 +344,9 @@ class Retina():
         -------
         A TimeSeries object
         """
-        ecm = np.zeros(stimuli[0].data.shape[-1])
+        ecm = np.zeros(stimuli[1].data.shape[0]) # time vector
         for ii, ecs in enumerate(ecs_list): 
-            ecm += ecs[x,y] * stimuli[ii].data
+            ecm += ecs[y,x] * stimuli[ii].data
             
         tsample = stimuli[ii].tsample
         return TimeSeries(tsample, ecm)
