@@ -107,7 +107,5 @@ for o in np.arange(0, 2*np.pi, 2*np.pi/4): # each orientation
             brightnessmovie[yy, xx, :] = sr_rs
     filename='movie20160222_' + str(np.round(o,3)) +'.npy'
     
-    boom
-
     np.save(filename, brightnessmovie)      
     
