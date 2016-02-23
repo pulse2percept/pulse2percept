@@ -16,8 +16,14 @@ def test_Retina_Electrodes():
                          sampling=sampling, axon_map=retina_file)
     npt.assert_equal(retina.gridx.shape, ((yhi - ylo) / sampling,
                                           (xhi - xlo) / sampling))
-    electrode = e2cm.Electrode(1, 0, 0)
-    ecs = electrode.current_spread(retina.gridx, retina.gridy)
+    electrode1 = e2cm.Electrode(1, 0, 0)
+    cs = electrode1.current_spread(retina.gridx, retina.gridy)
+    electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1])
+    npt.assert_equal(electrode1.x, electrode_array.electrodes[0].x)
+    npt.assert_equal(electrode1.y, electrode_array.electrodes[0].y)
+    npt.assert_equal(electrode1.radius, electrode_array.electrodes[0].radius)
+    ecs_list, cs_list = retina.electrode_ecs(electrode_array)
+    npt.assert_equal(cs, cs_list[0])
 
 
 def test_Movie2Pulsetrain():
