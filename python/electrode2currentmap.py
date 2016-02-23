@@ -322,7 +322,25 @@ class Retina():
 
     def electrode_ecs(self, electrode_array, alpha=14000, n=1.69):
         """
-        Gather effective electrode spreads per electrode
+        Gather current spread and effective current spread for each electrode
+
+        Parameters
+        ----------
+        electrode_array : ElectrodeArray class instance.
+        alpha : float
+            Current spread parameter
+        n : float
+            Current spread parameter
+
+        Returns
+        -------
+        ecs_list, cs_list : two lists containing the the effective current
+            spread and current spread for each electrode in the array
+            respectively.
+
+        See also
+        --------
+        Electrode.current_spread
         """
         ecs_list = []
         cs_list = []
