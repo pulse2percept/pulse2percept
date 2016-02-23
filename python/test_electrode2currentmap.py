@@ -48,20 +48,23 @@ def test_Movie2Pulsetrain():
 
 
 def test_Psycho2Pulsetrain():
-    freq=20
-    dur=0.5
-    pulse_dur=.075/1000.
-    interphase_dur=.075/1000.
-    delay=0.
-    tsample=.005/1000.
-    current_amplitude=20
-    pulsetype='cathodicfirst'
-    stimtype='pulsetrain'
-    p2pt = e2cm.Psycho2Pulsetrain(freq=freq, dur=dur, pulse_dur=pulse_dur,
-                                  interphase_dur=interphase_dur,
-                                  delay=delay,
-                                  tsample=tsample,
-                                  current_amplitude=current_amplitude,
-                                  pulsetype=pulsetype,
-                                  stimtype=stimtype)
-    npt.assert_equal(p2pt.shape[-1], round(dur / tsample))
+    freq = 20
+    dur = 0.5
+    pulse_dur = .075/1000.
+    interphase_dur = .075/1000.
+    delay = 0.
+    tsample = .005/1000.
+    current_amplitude = 20
+    stimtype = 'pulsetrain'
+    for dur in [1.0, 0.5]:
+        for pulsetype in ['cathodicfirst', 'anodicfirst']:
+            p2pt = e2cm.Psycho2Pulsetrain(freq=freq,
+                                          dur=dur,
+                                          pulse_dur=pulse_dur,
+                                          interphase_dur=interphase_dur,
+                                          delay=delay,
+                                          tsample=tsample,
+                                          current_amplitude=current_amplitude,
+                                          pulsetype=pulsetype,
+                                          stimtype=stimtype)
+            npt.assert_equal(p2pt.shape[-1], round(dur / tsample))
