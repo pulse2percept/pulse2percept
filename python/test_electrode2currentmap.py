@@ -5,7 +5,7 @@ import numpy.testing as npt
 import electrode2currentmap as e2cm
 
 
-def test_Retina():
+def test_Retina_Electrodes():
     retina_file = tempfile.NamedTemporaryFile().name
     sampling = 1
     xlo = -2
@@ -16,6 +16,8 @@ def test_Retina():
                          sampling=sampling, axon_map=retina_file)
     npt.assert_equal(retina.gridx.shape, ((yhi - ylo) / sampling,
                                           (xhi - xlo) / sampling))
+    electrode = e2cm.Electrode(1, 0, 0)
+    ecs = electrode.current_spread(retina.gridx, retina.gridy)
 
 
 def test_Movie2Pulsetrain():
@@ -29,7 +31,7 @@ def test_Movie2Pulsetrain():
     pulsetype = 'cathodicfirst'
     stimtype = 'pulsetrain'
     dtype = np.int8
-    rflum = np.zeros((10, 10, 100))
-    rflum[:, :, 50] = 1
+    rflum = np.zeros(100)
+    rflum[50] = 1
     m2pt = e2cm.Movie2Pulsetrain(rflum)
-    npt.assert_equal(m2pt.shape[:2], (10, 10))
+    npt.assert_equal(m2pt.shape[0], round((rflum.shape[-1] / fps) / tsample))

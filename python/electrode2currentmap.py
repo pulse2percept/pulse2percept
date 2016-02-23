@@ -108,7 +108,6 @@ def receptive_field(electrode, xg, yg, size):
                        (yg < electrode.y+(size/2)))
 
         rf[ind] = 1
-
         return rf
 
 def retinalmovie2electrodtimeseries(rf, movie, fps=30):
@@ -135,7 +134,7 @@ class Movie2Pulsetrain(TimeSeries):
         """
         Parameters
         ----------
-        rflum :
+        rflum : 1D array
 
         """
         info = np.iinfo(dtype)
@@ -160,7 +159,7 @@ class Movie2Pulsetrain(TimeSeries):
             print('pulse not defined')
 
         # set up the sequence
-        dur = len(rflum) / fps
+        dur = rflum.shape[-1] / fps
         if stimtype == 'pulsetrain':
             interpulsegap = np.zeros(round((1/freq) / tsample) - len(pulse))
             ppt = []
@@ -170,14 +169,14 @@ class Movie2Pulsetrain(TimeSeries):
 
         ppt = ppt[0:round(dur/tsample)]
 
-        delta = (amp_max-0)/(rflum.max()-rflum.min())
-        scaledrflum = delta*(rflum-rflum.min()) + 0
+        delta = (amp_max-0) / (rflum.max() - rflum.min())
+        scaledrflum = delta * (rflum-rflum.min())
 
-        intfunc = interpolate.interp1d(
-                            np.arange(0, scaledrflum.shape[-1]),
-                            scaledrflum)
+        intfunc = interpolate.interp1d(np.arange(scaledrflum.shape[-1]),
+                                       scaledrflum)
 
-        amp = intfunc(np.linspace(0, len(scaledrflum), len(ppt)))
+        amp = intfunc(np.linspace(0, scaledrflum.shape[-1]-1, ppt.shape[-1],
+                                  endpoint=False))
         data = dtype(amp * ppt)
         TimeSeries.__init__(self, tsample, data)
 
