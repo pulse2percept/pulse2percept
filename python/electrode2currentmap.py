@@ -121,6 +121,22 @@ def retinalmovie2electrodtimeseries(rf, movie, fps=30):
 
         return rflum
 
+def get_pulse(pulse_dur, tsample, interphase_dur, pulsetype):
+        on = np.ones(round(pulse_dur / tsample))
+        gap = np.zeros(round(interphase_dur / tsample))
+        off = -1 * on
+        if pulsetype == 'cathodicfirst':
+            pulse = np.concatenate((on, gap), axis=0)
+            pulse = np.concatenate((pulse, off), axis=0)
+
+        elif pulsetype == 'anodicfirst':
+            pulse = np.concatenate((off, gap), axis=0)
+            pulse = np.concatenate((pulse, on), axis=0)
+        else:
+            print('pulse not defined')
+        return pulse
+
+
 class Movie2Pulsetrain(TimeSeries):
     """
     Is used to create pulse-train stimulus based on luminance over time from
@@ -145,19 +161,7 @@ class Movie2Pulsetrain(TimeSeries):
             raise ValueError(errorstr)
 
         # set up the individual pulses
-        on = np.ones(round(pulse_dur / tsample))
-        gap = np.zeros(round(interphase_dur / tsample))
-        off = -1 * on
-        if pulsetype == 'cathodicfirst':
-            pulse = np.concatenate((on, gap), axis=0)
-            pulse = np.concatenate((pulse, off), axis=0)
-
-        elif pulsetype == 'anodicfirst':
-            pulse = np.concatenate((off, gap), axis=0)
-            pulse = np.concatenate((pulse, on), axis=0)
-        else:
-            print('pulse not defined')
-
+        pulse = get_pulse(pulse_dur, tsample, interphase_dur, pulsetype)
         # set up the sequence
         dur = rflum.shape[-1] / fps
         if stimtype == 'pulsetrain':
@@ -219,19 +223,7 @@ class Psycho2Pulsetrain(TimeSeries):
             {"pulsetrain" | XXX other options?}
         """
         # set up the individual pulses
-        on = np.ones(round(pulse_dur / tsample))
-        gap = np.zeros(round(interphase_dur / tsample))
-        off = -1 * on
-        if pulsetype == 'cathodicfirst':
-            pulse = np.concatenate((on, gap), axis=0)
-            pulse = np.concatenate((pulse, off), axis=0)
-
-        elif pulsetype == 'anodicfirst':
-            pulse = np.concatenate((off, gap), axis=0)
-            pulse = np.concatenate((pulse, on), axis=0)
-
-        else:
-            print('pulse not defined')
+        pulse = get_pulse(pulse_dur, tsample, interphase_dur, pulsetype)
 
         # set up the sequence
         if stimtype == 'pulsetrain':
