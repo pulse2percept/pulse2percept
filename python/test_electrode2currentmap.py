@@ -33,5 +33,35 @@ def test_Movie2Pulsetrain():
     dtype = np.int8
     rflum = np.zeros(100)
     rflum[50] = 1
-    m2pt = e2cm.Movie2Pulsetrain(rflum)
+    m2pt = e2cm.Movie2Pulsetrain(rflum,
+                                 fps=fps,
+                                 amplitude_transform=amplitude_transform,
+                                 amp_max=amp_max,
+                                 freq=freq,
+                                 pulse_dur=pulse_dur,
+                                 interphase_dur=interphase_dur,
+                                 tsample=tsample,
+                                 pulsetype=pulsetype,
+                                 stimtype=stimtype,
+                                 dtype=dtype)
     npt.assert_equal(m2pt.shape[0], round((rflum.shape[-1] / fps) / tsample))
+
+
+def test_Psycho2Pulsetrain():
+    freq=20
+    dur=0.5
+    pulse_dur=.075/1000.
+    interphase_dur=.075/1000.
+    delay=0.
+    tsample=.005/1000.
+    current_amplitude=20
+    pulsetype='cathodicfirst'
+    stimtype='pulsetrain'
+    p2pt = e2cm.Psycho2Pulsetrain(freq=freq, dur=dur, pulse_dur=pulse_dur,
+                                  interphase_dur=interphase_dur,
+                                  delay=delay,
+                                  tsample=tsample,
+                                  current_amplitude=current_amplitude,
+                                  pulsetype=pulsetype,
+                                  stimtype=stimtype)
+    npt.assert_equal(p2pt.shape[-1], round(dur / tsample))
