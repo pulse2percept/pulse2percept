@@ -98,13 +98,16 @@ class ElectrodeArray(object):
 
 def receptive_field(electrode, xg, yg, size):
         """
-        # TODO currently this is in units of the grid, needs to be converted to microns
+        # TODO currently this is in units of the grid, needs to be converted to
+        microns
         """
-        rf=np.zeros(xg.shape)
-        ind=np.where((xg>electrode.x-(size/2)) & (xg<electrode.x+(size/2))
-         & (yg>electrode.y-(size/2)) & (yg<electrode.y+(size/2)))
+        rf = np.zeros(xg.shape)
+        ind = np.where((xg > electrode.x-(size/2)) &
+                       (xg < electrode.x+(size/2)) &
+                       (yg > electrode.y-(size/2)) &
+                       (yg < electrode.y+(size/2)))
 
-        rf[ind]=1
+        rf[ind] = 1
 
         return rf
 
@@ -112,10 +115,10 @@ def retinalmovie2electrodtimeseries(rf, movie, fps=30):
         """
 
         """
-        rflum=np.zeros(movie.shape[-1])
-        for f in range (0, movie.shape[-1]):
-            tmp=rf * movie[:, :, f]
-            rflum[f]=np.mean(tmp)
+        rflum = np.zeros(movie.shape[-1])
+        for f in range(movie.shape[-1]):
+            tmp = rf * movie[:, :, f]
+            rflum[f] = np.mean(tmp)
 
         return rflum
 
@@ -186,7 +189,6 @@ class Psycho2Pulsetrain(TimeSeries):
     Is used to generate pulse trains to simulate psychophysical experiments.
 
     """
-
     def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,
                  interphase_dur=.075/1000., delay=0., tsample=.005/1000.,
                  current_amplitude=20, pulsetype='cathodicfirst',
@@ -220,35 +222,34 @@ class Psycho2Pulsetrain(TimeSeries):
             {"pulsetrain" | XXX other options?}
         """
         # set up the individual pulses
-        on=np.ones(round(pulse_dur / tsample))
-        gap=np.zeros(round(interphase_dur / tsample))
-        off=-1 * on
+        on = np.ones(round(pulse_dur / tsample))
+        gap = np.zeros(round(interphase_dur / tsample))
+        off = -1 * on
         if pulsetype == 'cathodicfirst':
-            pulse=np.concatenate((on,gap), axis=0)
-            pulse=np.concatenate((pulse,off), axis=0)
+            pulse = np.concatenate((on, gap), axis=0)
+            pulse = np.concatenate((pulse, off), axis=0)
 
         elif pulsetype == 'anodicfirst':
-            pulse=np.concatenate((off, gap), axis=0)
-            pulse=np.concatenate((pulse, on), axis=0)
+            pulse = np.concatenate((off, gap), axis=0)
+            pulse = np.concatenate((pulse, on), axis=0)
 
         else:
             print('pulse not defined')
 
         # set up the sequence
-        if stimtype =='pulsetrain':
-            interpulsegap=np.zeros(round( (1/freq) / tsample)- len(pulse))
-            ppt=[]
+        if stimtype == 'pulsetrain':
+            interpulsegap = np.zeros(round((1/freq) / tsample) - len(pulse))
+            ppt = []
             for j in range(0, int(np.ceil(dur * freq))):
-                ppt=np.concatenate((ppt, interpulsegap), axis=0)
-                ppt=np.concatenate((ppt, pulse), axis=0)
+                ppt = np.concatenate((ppt, interpulsegap), axis=0)
+                ppt = np.concatenate((ppt, pulse), axis=0)
 
         if delay > 0:
-                ppt=np.concatenate((np.zeros(round(delay /tsample)), ppt), axis=0)
+                ppt = np.concatenate((np.zeros(round(delay / tsample)), ppt),
+                                     axis=0)
 
-        ppt=ppt[0:round(dur/tsample)]
-
+        ppt = ppt[0:round(dur/tsample)]
         data = (current_amplitude * ppt)
-
         TimeSeries.__init__(self, tsample, data)
 
 
