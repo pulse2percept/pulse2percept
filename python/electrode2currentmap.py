@@ -150,7 +150,7 @@ class Movie2Pulsetrain(TimeSeries):
         gap = np.zeros(round(interphase_dur / tsample))
         off = -1 * on
         if pulsetype == 'cathodicfirst':
-            pulse = np.concatenate((on, absgap), axis=0)
+            pulse = np.concatenate((on, gap), axis=0)
             pulse = np.concatenate((pulse, off), axis=0)
 
         elif pulsetype == 'anodicfirst':
@@ -173,14 +173,12 @@ class Movie2Pulsetrain(TimeSeries):
         delta = (amp_max-0)/(rflum.max()-rflum.min())
         scaledrflum = delta*(rflum-rflum.min()) + 0
 
-        intfunc = interpolate.interp1d(np.linspace(0,
-                                       len(scaledrflum),
-                                       len(scaledrflum)),
-                                       scaledrflum)
+        intfunc = interpolate.interp1d(
+                            np.arange(0, scaledrflum.shape[-1]),
+                            scaledrflum)
+
         amp = intfunc(np.linspace(0, len(scaledrflum), len(ppt)))
-
         data = dtype(amp * ppt)
-
         TimeSeries.__init__(self, tsample, data)
 
 
@@ -265,9 +263,13 @@ class Retina():
         axon_map :
         """
 
-        self.gridx, self.gridy = np.meshgrid( np.arange(xlo, xhi, sampling),np.arange(ylo, yhi, sampling), indexing='xy')
+        self.gridx, self.gridy = np.meshgrid(np.arange(xlo, xhi,
+                                                       sampling),
+                                             np.arange(ylo, yhi,
+                                             sampling),
+                                             indexing='xy')
 
-        if os.path.exists(axon_map):
+        if axon_map is not None and os.path.exists(axon_map):
             axon_map = np.load(axon_map)
             # Verify that the file was created with a consistent grid:
             axon_id = axon_map['axon_id']
@@ -283,6 +285,8 @@ class Retina():
             assert yhi == yhi_am
             assert sampling_am == sampling
         else:
+            if axon_map is None:
+                axon_map = 'axons.npz'
             print("Can't find file %s, generating" % axon_map)
             axon_id, axon_weight = oyster.makeAxonMap(micron2deg(self.gridx),
                                                       micron2deg(self.gridy),
