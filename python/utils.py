@@ -70,9 +70,9 @@ def _sparseconv(v, a):
 
 if has_jit:
     _sparseconvj = jit(_sparseconv)
-    
-    
-def sparseconv(v, a, dojit):
+
+
+def sparseconv(v, a, dojit=True):
     """
     Returns the discrete, linear convolution of two one-dimensional sequences.
     output is of length len(v) + len(a) -1 (same as the default for numpy.convolve)
@@ -85,7 +85,7 @@ def sparseconv(v, a, dojit):
     """
     if dojit:
         if not has_jit:
-            e_s = ("You do not have numba ", 
+            e_s = ("You do not have numba ",
                    "please run sparsconv with dojit=False")
             raise ValueError(e_s)
         return _sparseconvj(v, a)

@@ -50,9 +50,7 @@ class Electrode(object):
         self.radius = radius
         self.x = x
         self.y = y
-        
-            
-        
+
     def current_spread(self, xg, yg, alpha=14000, n=1.69):
         """
 
@@ -100,148 +98,137 @@ class ElectrodeArray(object):
 
 def receptive_field(electrode, xg, yg, size):
         """
-        # TODO currently this is in units of the grid, needs to be converted to microns
+        # TODO currently this is in units of the grid, needs to be converted to
+        microns
         """
-        rf=np.zeros(xg.shape)
-        ind=np.where((xg>electrode.x-(size/2)) & (xg<electrode.x+(size/2))
-         & (yg>electrode.y-(size/2)) & (yg<electrode.y+(size/2)))
-         
-        rf[ind]=1
-      
+        rf = np.zeros(xg.shape)
+        ind = np.where((xg > electrode.x-(size/2)) &
+                       (xg < electrode.x+(size/2)) &
+                       (yg > electrode.y-(size/2)) &
+                       (yg < electrode.y+(size/2)))
+
+        rf[ind] = 1
         return rf
-    
+
 def retinalmovie2electrodtimeseries(rf, movie, fps=30):
         """
-                    
+
         """
-        rflum=np.zeros(movie.shape[-1])
-        for f in range (0, movie.shape[-1]):
-            tmp=rf * movie[:, :, f]
-            rflum[f]=np.mean(tmp)
-            
+        rflum = np.zeros(movie.shape[-1])
+        for f in range(movie.shape[-1]):
+            tmp = rf * movie[:, :, f]
+            rflum[f] = np.mean(tmp)
+
         return rflum
-        
-class Movie2Pulsetrain(TimeSeries):
-    """
-    Is used to create pulse-train stimulus based on luminance over time from a movie
-    """
 
-    def __init__(self, rflum, fps=30.0, amplitude_transform='linear', amp_max=90, 
-                 freq=20, pulse_dur=.075/1000.,interphase_dur=.075/1000., tsample=.005/1000.,
-                 current=None, pulsetype='cathodicfirst', stimtype='pulsetrain'):
-        """
-        Ariel, do we need current here?
-
-        """
-
-            
-
-        # set up the individual pulses
-        on=np.ones(round(pulse_dur /tsample))
-        gap=np.zeros(round(interphase_dur / tsample))
-        off=-1 * on
+def get_pulse(pulse_dur, tsample, interphase_dur, pulsetype):
+        on = np.ones(round(pulse_dur / tsample))
+        gap = np.zeros(round(interphase_dur / tsample))
+        off = -1 * on
         if pulsetype == 'cathodicfirst':
-            pulse=np.concatenate((on,gap), axis=0)
-            pulse=np.concatenate((pulse,off), axis=0)
-            
+            pulse = np.concatenate((on, gap), axis=0)
+            pulse = np.concatenate((pulse, off), axis=0)
+
         elif pulsetype == 'anodicfirst':
-            pulse=np.concatenate((off, gap), axis=0)
-            pulse=np.concatenate((pulse, on), axis=0) 
+            pulse = np.concatenate((off, gap), axis=0)
+            pulse = np.concatenate((pulse, on), axis=0)
         else:
             print('pulse not defined')
-       
-       
-        # set up the sequence
-        dur= len(rflum) / fps # duration in secs
-        if stimtype =='pulsetrain':
-           interpulsegap=np.zeros(round( (1/freq) / tsample)-len(pulse))
-           ppt=[]
-           for j in range(0, int(np.ceil(dur * freq))):                
-               ppt=np.concatenate((ppt, interpulsegap), axis=0)
-               ppt=np.concatenate((ppt, pulse), axis=0)
-         
-        ppt=ppt[0:round(dur/tsample)]
-       
+        return pulse
 
-        intfunc= interpolate.interp1d(np.linspace(0, len(rflum),len(rflum)),
-                                      rflum)
-        amp=intfunc(np.linspace(0, len(rflum), len(ppt)))
-        
-        data =amp * ppt  
-    
-        TimeSeries.__init__(self, tsample, data)  
-        
-        
+
+class Movie2Pulsetrain(TimeSeries):
+    """
+    Is used to create pulse-train stimulus based on luminance over time from
+    a movie
+    """
+    def __init__(self, rflum, fps=30.0, amplitude_transform='linear',
+                 amp_max=90, freq=20, pulse_dur=.075/1000.,
+                 interphase_dur=.075/1000., tsample=.005/1000.,
+                 pulsetype='cathodicfirst', stimtype='pulsetrain'):
+        """
+        Parameters
+        ----------
+        rflum : 1D array
+           Values between 0 and 1
+
+        """
+        # set up the individual pulses
+        pulse = get_pulse(pulse_dur, tsample, interphase_dur, pulsetype)
+        # set up the sequence
+        dur = rflum.shape[-1] / fps
+        if stimtype == 'pulsetrain':
+            interpulsegap = np.zeros(round((1 / freq) / tsample) - len(pulse))
+            ppt = []
+            for j in range(0, int(np.ceil(dur * freq))):
+                ppt = np.concatenate((ppt, interpulsegap), axis=0)
+                ppt = np.concatenate((ppt, pulse), axis=0)
+
+        ppt = ppt[0:round(dur/tsample)]
+        intfunc = interpolate.interp1d(np.linspace(0, len(rflum), len(rflum)),
+                                       rflum)
+
+        amp = intfunc(np.linspace(0, len(rflum), len(ppt)))
+        data = amp * ppt * amp_max
+        TimeSeries.__init__(self, tsample, data)
+
+
 class Psycho2Pulsetrain(TimeSeries):
     """
     Is used to generate pulse trains to simulate psychophysical experiments.
-    
-    """
 
+    """
     def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,
-                 interphase_dur=.075/1000., delay=0., tsample=.005/1000., 
-                 current_amplitude=20, pulsetype='cathodicfirst', 
+                 interphase_dur=.075/1000., delay=0., tsample=.005/1000.,
+                 current_amplitude=20, pulsetype='cathodicfirst',
                  stimtype='pulsetrain'):
         """
 
         Parameters
         ----------
-        freq : 
+        freq :
         dur : float
             Duration in seconds
-        
+
         pulse_dur : float
             Pulse duration in seconds
-        
+
         interphase_duration : float
             In seconds
-    
+
         delay : float
-        
+
         tsample : float
             Sampling interval in seconds
 
         current_amplitude : float
-            In XXX units? 
-        
+            In XXX units?
+
         pulsetype : string
             {"cathodicfirst" | "anodicfirst"}
-        
+
         stimtype : string
             {"pulsetrain" | XXX other options?}
         """
         # set up the individual pulses
-        on=np.ones(round(pulse_dur / tsample))
-        gap=np.zeros(round(interphase_dur / tsample))
-        off=-1 * on
-        if pulsetype == 'cathodicfirst':
-            pulse=np.concatenate((on,gap), axis=0)
-            pulse=np.concatenate((pulse,off), axis=0)
-
-        elif pulsetype == 'anodicfirst':
-            pulse=np.concatenate((off, gap), axis=0)
-            pulse=np.concatenate((pulse, on), axis=0)
-
-        else:
-            print('pulse not defined')
+        pulse = get_pulse(pulse_dur, tsample, interphase_dur, pulsetype)
 
         # set up the sequence
-        if stimtype =='pulsetrain':
-            interpulsegap=np.zeros(round( (1/freq) / tsample)- len(pulse))
-            ppt=[]
+        if stimtype == 'pulsetrain':
+            interpulsegap = np.zeros(round((1/freq) / tsample) - len(pulse))
+            ppt = []
             for j in range(0, int(np.ceil(dur * freq))):
-                ppt=np.concatenate((ppt, interpulsegap), axis=0)
-                ppt=np.concatenate((ppt, pulse), axis=0)               
-        
+                ppt = np.concatenate((ppt, interpulsegap), axis=0)
+                ppt = np.concatenate((ppt, pulse), axis=0)
+
         if delay > 0:
-                ppt=np.concatenate((np.zeros(round(delay /tsample)), ppt), axis=0)
-       
-        ppt=ppt[0:round(dur/tsample)] 
-       
-        data = (current_amplitude * ppt)  
-     
-        TimeSeries.__init__(self, tsample, data)     
-               
+                ppt = np.concatenate((np.zeros(round(delay / tsample)), ppt),
+                                     axis=0)
+
+        ppt = ppt[0:round(dur/tsample)]
+        data = (current_amplitude * ppt)
+        TimeSeries.__init__(self, tsample, data)
+
 
 class Retina():
     """
@@ -255,9 +242,13 @@ class Retina():
         axon_map :
         """
 
-        self.gridx, self.gridy = np.meshgrid( np.arange(xlo, xhi, sampling),np.arange(ylo, yhi, sampling), indexing='xy')
+        self.gridx, self.gridy = np.meshgrid(np.arange(xlo, xhi,
+                                                       sampling),
+                                             np.arange(ylo, yhi,
+                                             sampling),
+                                             indexing='xy')
 
-        if os.path.exists(axon_map):
+        if axon_map is not None and os.path.exists(axon_map):
             axon_map = np.load(axon_map)
             # Verify that the file was created with a consistent grid:
             axon_id = axon_map['axon_id']
@@ -273,6 +264,8 @@ class Retina():
             assert yhi == yhi_am
             assert sampling_am == sampling
         else:
+            if axon_map is None:
+                axon_map = 'axons.npz'
             print("Can't find file %s, generating" % axon_map)
             axon_id, axon_weight = oyster.makeAxonMap(micron2deg(self.gridx),
                                                       micron2deg(self.gridy),
@@ -316,8 +309,26 @@ class Retina():
         return ecs
 
     def electrode_ecs(self, electrode_array, alpha=14000, n=1.69):
-        """ 
-        Gather effective electrode spreads per electrode
+        """
+        Gather current spread and effective current spread for each electrode
+
+        Parameters
+        ----------
+        electrode_array : ElectrodeArray class instance.
+        alpha : float
+            Current spread parameter
+        n : float
+            Current spread parameter
+
+        Returns
+        -------
+        ecs_list, cs_list : two lists containing the the effective current
+            spread and current spread for each electrode in the array
+            respectively.
+
+        See also
+        --------
+        Electrode.current_spread
         """
         ecs_list = []
         cs_list = []
@@ -326,27 +337,30 @@ class Retina():
             cs_list.append(cs)
             ecs = self.cm2ecm(cs)
             ecs_list.append(ecs)
-        return ecs_list, cs_list 
+        return ecs_list, cs_list
 
-        
-    def ecm(self, x,  y, ecs_list, stimuli):
+
+    def ecm(self, i,  j, ecs_list, stimuli):
         """
         effective current map from an electrode array and stimuli through
         these electrodes in one spatial position
 
         Parameters
         ----------
-        ElectrodeArray
+        i, j : the spatial coordinates of the effective current map
 
-        stimuli : list of Stimulus objects
+        ecs_list : the list of effective current spreads for each electrode
+
+        stimuli : list of TimeSeries objects with the electrode stimulation
+            pulse trains.
 
         Returns
         -------
-        A TimeSeries object
+        A TimeSeries object with the effective current for this stimulus
         """
-        ecm = np.zeros(stimuli[1].data.shape[0]) # time vector
-        for ii, ecs in enumerate(ecs_list): 
-            ecm += ecs[y,x] * stimuli[ii].data
-            
+        ecm = np.zeros(stimuli[1].data.shape[0])  # time vector
+        for ii, ecs in enumerate(ecs_list):
+            ecm += ecs[j, i] * stimuli[ii].data
+
         tsample = stimuli[ii].tsample
         return TimeSeries(tsample, ecm)
