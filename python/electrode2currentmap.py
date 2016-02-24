@@ -145,43 +145,31 @@ class Movie2Pulsetrain(TimeSeries):
     def __init__(self, rflum, fps=30.0, amplitude_transform='linear',
                  amp_max=90, freq=20, pulse_dur=.075/1000.,
                  interphase_dur=.075/1000., tsample=.005/1000.,
-                 pulsetype='cathodicfirst', stimtype='pulsetrain',
-                 dtype=np.int8):
+                 pulsetype='cathodicfirst', stimtype='pulsetrain'):
         """
         Parameters
         ----------
         rflum : 1D array
+           Values between 0 and 1
 
         """
-        info = np.iinfo(dtype)
-        if amp_max > info.max:
-            errorstr = ('Cannot use current data type to represent the current',
-                        'range. Increase the datatype or decrease the current',
-                        'range.')
-            raise ValueError(errorstr)
-
         # set up the individual pulses
         pulse = get_pulse(pulse_dur, tsample, interphase_dur, pulsetype)
         # set up the sequence
         dur = rflum.shape[-1] / fps
         if stimtype == 'pulsetrain':
-            interpulsegap = np.zeros(round((1/freq) / tsample) - len(pulse))
+            interpulsegap = np.zeros(round((1 / freq) / tsample) - len(pulse))
             ppt = []
             for j in range(0, int(np.ceil(dur * freq))):
                 ppt = np.concatenate((ppt, interpulsegap), axis=0)
                 ppt = np.concatenate((ppt, pulse), axis=0)
 
         ppt = ppt[0:round(dur/tsample)]
+        intfunc = interpolate.interp1d(np.linspace(0, len(rflum), len(rflum)),
+                                       rflum)
 
-        delta = (amp_max-0) / (rflum.max() - rflum.min())
-        scaledrflum = delta * (rflum-rflum.min())
-
-        intfunc = interpolate.interp1d(np.arange(scaledrflum.shape[-1]),
-                                       scaledrflum)
-
-        amp = intfunc(np.linspace(0, scaledrflum.shape[-1]-1, ppt.shape[-1],
-                                  endpoint=False))
-        data = dtype(amp * ppt)
+        amp = intfunc(np.linspace(0, len(rflum), len(ppt)))
+        data = amp * ppt * amp_max
         TimeSeries.__init__(self, tsample, data)
 
 

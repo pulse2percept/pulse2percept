@@ -4,7 +4,6 @@ import numpy.testing as npt
 
 import electrode2currentmap as e2cm
 
-
 def test_Retina_Electrodes():
     retina_file = tempfile.NamedTemporaryFile().name
     sampling = 1
@@ -48,9 +47,9 @@ def test_Movie2Pulsetrain():
                                  interphase_dur=interphase_dur,
                                  tsample=tsample,
                                  pulsetype=pulsetype,
-                                 stimtype=stimtype,
-                                 dtype=dtype)
+                                 stimtype=stimtype)
     npt.assert_equal(m2pt.shape[0], round((rflum.shape[-1] / fps) / tsample))
+    npt.assert_(m2pt.data.max() < amp_max)
 
 
 def test_Psycho2Pulsetrain():
