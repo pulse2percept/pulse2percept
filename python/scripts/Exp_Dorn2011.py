@@ -96,14 +96,12 @@ for o in np.arange(0, 2*np.pi, 2*np.pi/4): # each orientation
             ca = tm1.charge_accumulation(fr, ecm)
             sn = tm1.stationary_nonlinearity(ca)
             sr = tm1.slow_response(sn)
-#            sr.data=sr.data[0:int(np.round((moviedur+1)/sr.tsample))]
             intfunc= interpolate.interp1d(np.linspace(0, len(sr.data),len(sr.data)),
                                       sr.data)
-            
+            sr_rs=intfunc(np.linspace(0, len(sr.data), len(sr.data)*sr.tsample*fps))
             if xx==0 and yy==0:
-              sr_rs=intfunc(np.linspace(0, len(sr.data), len(sr.data)*sr.tsample*fps))
               brightnessmovie = np.zeros(r.gridx.shape + (len(sr_rs),))  
-            
+           
             brightnessmovie[yy, xx, :] = sr_rs
     filename='movie20160222_' + str(np.round(o,3)) +'.npy'
     
