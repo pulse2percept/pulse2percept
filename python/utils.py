@@ -97,7 +97,7 @@ def sparseconv(v, a, dojit=True):
         return _sparseconv(v, a)
 
 
-def parfor(arr, func, n_jobs=1, *args, **kwargs):
+def parfor(arr, func, *args, n_jobs=1, **kwargs):
     """
     Parallel for loop for numpy arrays
 
