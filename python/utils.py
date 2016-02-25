@@ -2,6 +2,9 @@
 Utility functions for pulse2percept
 """
 import numpy as np
+from joblib import Parallel, delayed
+from itertools import product
+
 
 try:
     from numba import jit
@@ -91,3 +94,45 @@ def sparseconv(v, a, dojit=True):
         return _sparseconvj(v, a)
     else:
         return _sparseconv(v, a)
+
+
+def parfor(arr, func, n_jobs=1, *args, **kwargs):
+    """
+    Parallel for loop for numpy arrays
+
+    Parameters
+    ----------
+    arr : ndarray
+        Input array to operate on
+
+    func : callable
+        The function to apply to each item in the array. Must have the form:
+        func(arr, idx, *args, *kwargs) where arr is an ndarray and idx is an
+        index into that array (a tuple). The Return of `func` needs to be one
+        item (e.g. float, int) per input item.
+
+    n_jobs : integer, optional
+        The number of jobs to perform in parallel
+        Default: 1
+
+    args : list, optional
+        Positional arguments to `func`
+
+    kwargs : list, optional
+        Keyword arguments to `func`
+
+    Returns
+    -------
+    ndarray of identical shape to `arr`
+
+    Examples
+    --------
+    >>> def power_it(arr, idx, n=2):
+    ...     return arr[idx] ** n
+    >>> my_array = np.arange(100).reshape(10, 10)
+    >>> parfor(my_array, power_it, n=3, n_jobs=2)
+    """
+    idx = product(*(range(s) for s in arr.shape))
+    results = Parallel(n_jobs=n_jobs)(delayed(func)(arr, i, *args, **kwargs)
+                                      for i in idx)
+    return np.array(results).reshape(arr.shape)
