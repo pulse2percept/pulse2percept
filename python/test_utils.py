@@ -38,9 +38,11 @@ def test_sparseconv():
     outSparseconv = outSparseconv[0:len(t)]
     npt.assert_almost_equal(outConv, outSparseconv)
 
+
 # We define a function of the right form:
 def power_it(arr, idx, n=2):
     return arr[idx] ** n
+
 
 def test_parfor():
     my_array = np.arange(100).reshape(10, 10)
