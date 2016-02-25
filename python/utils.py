@@ -4,6 +4,7 @@ Utility functions for pulse2percept
 import numpy as np
 from joblib import Parallel, delayed
 from itertools import product
+import multiprocessing
 
 
 try:
@@ -112,7 +113,7 @@ def parfor(arr, func, n_jobs=1, *args, **kwargs):
         item (e.g. float, int) per input item.
 
     n_jobs : integer, optional
-        The number of jobs to perform in parallel
+        The number of jobs to perform in parallel. -1 to use all cpus
         Default: 1
 
     args : list, optional
@@ -132,6 +133,8 @@ def parfor(arr, func, n_jobs=1, *args, **kwargs):
     >>> my_array = np.arange(100).reshape(10, 10)
     >>> parfor(my_array, power_it, n=3, n_jobs=2)
     """
+    if n_jobs == -1:
+        n_jobs = multiprocessing.cpu_count()
     idx = product(*(range(s) for s in arr.shape))
     results = Parallel(n_jobs=n_jobs)(delayed(func)(arr, i, *args, **kwargs)
                                       for i in idx)

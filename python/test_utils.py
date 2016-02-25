@@ -47,3 +47,7 @@ def test_parfor():
     i, j = np.random.randint(0, 9, 2)
     npt.assert_equal(utils.parfor(my_array, power_it)[i, j],
                      power_it(my_array, (i, j)))
+    # Check the "all cpus on" option
+    i, j = np.random.randint(0, 9, 2)
+    npt.assert_equal(utils.parfor(my_array, power_it, n_jobs=-1)[i, j],
+                     power_it(my_array, (i, j)))
