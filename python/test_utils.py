@@ -53,3 +53,6 @@ def test_parfor():
     i, j = np.random.randint(0, 9, 2)
     npt.assert_equal(utils.parfor(my_array, power_it, n_jobs=-1)[i, j],
                      power_it(my_array, (i, j)))
+
+    my_array = np.arange(1000).reshape(10, 10, 10)
+    utils.parfor(my_array, power_it, n_jobs=2)
