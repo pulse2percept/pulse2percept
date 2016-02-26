@@ -55,4 +55,4 @@ def test_parfor():
                      power_it(my_array, (i, j)))
 
     my_array = np.arange(1000).reshape(10, 10, 10)
-    utils.parfor(my_array, power_it, n_jobs=2)
+    utils.parfor(my_array, power_it, n_jobs=2, axis=-1)
