@@ -73,3 +73,51 @@ def test_Psycho2Pulsetrain():
                                           pulsetype=pulsetype,
                                           stimtype=stimtype)
             npt.assert_equal(p2pt.shape[-1], round(dur / tsample))
+
+
+def test_Retina_ecm():
+    retina_file = tempfile.NamedTemporaryFile().name
+    sampling = 1
+    xlo = -2
+    xhi = 2
+    ylo = -3
+    yhi = 3
+    retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
+                         sampling=sampling, axon_map=retina_file)
+
+    s1 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5, pulse_dur=.075/1000.,
+                                interphase_dur=.075/1000., delay=0.,
+                                tsample=.075/1000., current_amplitude=20,
+                                pulsetype='cathodicfirst')
+
+
+    electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1])
+    ecs_list, cs_list = retina.electrode_ecs(electrode_array)
+    xx = yy = 0
+    # Smoke testing, feed the same stimulus through both electrodes
+    ecm = retina.ecm(xx, yy, ecs_list, [s1, s1])
+
+    fps = 30.0
+    amplitude_transform = 'linear'
+    amp_max = 90
+    freq = 20
+    pulse_dur = .075/1000.
+    interphase_dur = .075/1000.
+    tsample = .005/1000.
+    pulsetype = 'cathodicfirst'
+    stimtype = 'pulsetrain'
+    dtype = np.int8
+    rflum = np.zeros(100)
+    rflum[50] = 1
+    m2pt = e2cm.Movie2Pulsetrain(rflum,
+                                 fps=fps,
+                                 amplitude_transform=amplitude_transform,
+                                 amp_max=amp_max,
+                                 freq=freq,
+                                 pulse_dur=pulse_dur,
+                                 interphase_dur=interphase_dur,
+                                 tsample=tsample,
+                                 pulsetype=pulsetype,
+                                 stimtype=stimtype)
+    # Smoke testing, feed the same stimulus through both electrodes:
+    ecm = retina.ecm(xx, yy, ecs_list, [m2pt, m2pt])

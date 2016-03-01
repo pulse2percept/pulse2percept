@@ -358,7 +358,7 @@ class Retina():
         -------
         A TimeSeries object with the effective current for this stimulus
         """
-        ecm = np.zeros(stimuli[1].data.shape[0])  # time vector
+        ecm = np.zeros(stimuli[0].data.shape[0])  # time vector
         for ii, ecs in enumerate(ecs_list):
             ecm += ecs[j, i] * stimuli[ii].data
 
