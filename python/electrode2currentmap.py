@@ -239,7 +239,6 @@ class Retina():
         """
         Initialize a retina
 
-        axon_map :
         """
 
         self.gridx, self.gridy = np.meshgrid(np.arange(xlo, xhi,
@@ -258,11 +257,14 @@ class Retina():
             ylo_am = axon_map['ylo']
             yhi_am = axon_map['yhi']
             sampling_am = axon_map['sampling']
+            axon_lambda_am = axon_map['axon_lambda']
             assert xlo == xlo_am
             assert xhi == xhi_am
             assert ylo == ylo_am
             assert yhi == yhi_am
             assert sampling_am == sampling
+            assert axon_lambda_am == axon_lambda
+
         else:
             if axon_map is None:
                 axon_map = 'axons.npz'
@@ -279,7 +281,8 @@ class Retina():
                      xhi=[xhi],
                      ylo=[ylo],
                      yhi=[yhi],
-                     sampling=[sampling])
+                     sampling=[sampling],
+                     axon_lambda=[axon_lambda])
 
         self.axon_id = axon_id
         self.axon_weight = axon_weight
