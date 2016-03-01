@@ -122,3 +122,33 @@ class TemporalModel(object):
         c = fftconvolve(g, fast_response_ca_snl.data)
         return TimeSeries(fast_response_ca_snl.tsample,
                           fast_response_ca_snl.tsample * c)
+
+
+def pulse2percept(temporal_model, ecs_list, retina, stimuli,
+                  subsample_factor=767, dojit=True):
+    """
+    From pulses (stimuli) to percepts (spatio-temporal)
+
+    Parameters
+    ----------
+    temporal_model : emporalModel class instance.
+    ecs_list : list.
+    retina : a Retina class instance.
+    stimuli : list
+    subsample_factor : float/int, optional
+    dojit : bool, optional
+    """
+    for xx in range(retina.gridx.shape[1]):
+        for yy in range(retina.gridx.shape[0]):
+            ecm = retina.ecm(xx, yy, ecs_list, stimuli)
+            fr = temporal_model.fast_response(ecm, dojit=dojit)
+            ca = temporal_model.charge_accumulation(fr, ecm)
+            sn = temporal_model.stationary_nonlinearity(ca)
+            sr = temporal_model.slow_response(sn)
+            sr.resample(subsample_factor)
+            if xx == 0 and yy == 0:
+                bm = np.zeros(retina.gridx.shape +
+                              (sr.shape[0],))
+
+            bm[yy, xx, :] = sr.data
+            return TimeSeries(sr.tsample, bm)
