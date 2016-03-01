@@ -73,3 +73,24 @@ def test_Psycho2Pulsetrain():
                                           pulsetype=pulsetype,
                                           stimtype=stimtype)
             npt.assert_equal(p2pt.shape[-1], round(dur / tsample))
+
+
+def test_Retina_ecm():
+    retina_file = tempfile.NamedTemporaryFile().name
+    sampling = 1
+    xlo = -2
+    xhi = 2
+    ylo = -3
+    yhi = 3
+    retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
+                         sampling=sampling, axon_map=retina_file)
+
+    s1 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5, pulse_dur=.075/1000.,
+                                interphase_dur=.075/1000., delay=0.,
+                                tsample=.075/1000., current_amplitude=20,
+                                pulsetype='cathodicfirst')
+    electrode1 = e2cm.Electrode(1, 0, 0)
+    electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1])
+    ecs_list = retina.electrode_ecs(electrode_array)
+    xx = yy = 0
+    ecm = retina.ecm(xx, yy, ecs_list, [s1])
