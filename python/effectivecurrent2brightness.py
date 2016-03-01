@@ -124,10 +124,19 @@ class TemporalModel(object):
                           fast_response_ca_snl.tsample * c)
 
 
-def brightness_movie(temporal_model, ecs_list, retina, stimuli,
-                     subsample_factor=767, dojit=True):
+def pulse2percept(temporal_model, ecs_list, retina, stimuli,
+                  subsample_factor=767, dojit=True):
     """
+    From pulses (stimuli) to percepts (spatio-temporal)
 
+    Parameters
+    ----------
+    temporal_model : emporalModel class instance.
+    ecs_list : list.
+    retina : a Retina class instance.
+    stimuli : list
+    subsample_factor : float/int, optional
+    dojit : bool, optional
     """
     for xx in range(retina.gridx.shape[1]):
         for yy in range(retina.gridx.shape[0]):
