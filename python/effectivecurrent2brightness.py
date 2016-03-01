@@ -8,7 +8,6 @@ Output: a vector of brightness over time
 from __future__ import print_function
 from scipy.misc import factorial
 from scipy.signal import fftconvolve
-from scipy import interpolate
 import numpy as np
 import utils
 from utils import TimeSeries
