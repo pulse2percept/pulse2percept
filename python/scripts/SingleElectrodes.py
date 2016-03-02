@@ -7,13 +7,36 @@ import electrode2currentmap as e2cm
 import effectivecurrent2brightness as ec2b
 from scipy import interpolate
 from utils import TimeSeries
-
+import matplotlib.pyplot as plt
+from itertools import product
 import matplotlib
 matplotlib.use('Agg')
+import imp
+import utils
+imp.reload(utils)
 
-
+def calc_pixel(arr, idx, r, ecs_list, pt, tm, rs):
+     ecm = r.ecm(*idx, ecs_list, pt)
+     fr = tm.fast_response(ecm, dojit=False)    
+     ca = tm.charge_accumulation(fr, ecm)
+     sn = tm.stationary_nonlinearity(ca)
+     sr = tm.slow_response(sn)
+     sr.resample(rs)
+     return sr.data
+     
+def brightness(r, xx, yy, ecs_list, pt, tm, rs):
+    ecm = r.ecm(xx, yy, ecs_list, pt)
+    fr = tm.fast_response(ecm, dojit=False)    
+    ca = tm.charge_accumulation(fr, ecm)
+    sn = tm.stationary_nonlinearity(ca)
+    sr = tm.slow_response(sn)
+    sr.resample(rs)
+    return sr.data
+    
 # import imp 
 # imp.reload(effectivecurrent2brightness.py)
+
+fps=30 #fps for the final movie
 
 xlist=[]
 ylist=[]
@@ -28,7 +51,6 @@ for x in np.arange(-2362, 2364, e_spacing):
         
 e_all = e2cm.ElectrodeArray(rlist,xlist,ylist)
 
-    
 for al in np.arange(0,12, .5):
     print("loading or creating a retina" )
     retinaname='retina_1700x2900L' + str(al*10)
@@ -40,37 +62,37 @@ for al in np.arange(0,12, .5):
     for e in e_all.electrodes:
        e_rf.append(e2cm.receptive_field(e, r.gridx, r.gridy,e_spacing))
           
-    
+
     for ee in np.arange(0, len(xlist)): 
         print("Creating waveform for elecrodes" )
         pt=[]
         for ct, rf in enumerate(e_rf):
             if ct==ee:           
-                ptrain=e2cm.Psycho2Pulsetrain(current_amplitude=40, dur=0.25, pulse_dur=.45/1000.)
+                ptrain=e2cm.Psycho2Pulsetrain(current_amplitude=40, dur=0.25, pulse_dur=.45/1000., 
+                                               interphase_dur=.45/1000., tsample=.05/1000.)
             else:
-                ptrain=e2cm.Psycho2Pulsetrain(current_amplitude=0, dur=0.25, pulse_dur=.45/1000.)
+                ptrain=e2cm.Psycho2Pulsetrain(current_amplitude=40, dur=0.25, pulse_dur=.45/1000., 
+                                               interphase_dur=.45/1000., tsample=.05/1000.)
             pt.append(ptrain) 
             
             
         [ecs_list, cs_list]  = r.electrode_ecs(e_all)    
         tm1 = ec2b.TemporalModel()
-    #fr=np.zeros([e_rf[0].shape[0],e_rf[0].shape[1], len(pt[0].data)])
-        fps=30
-        for xx in range(r.gridx.shape[1]):
-            for yy in range(r.gridx.shape[0]):
-                ecm = r.ecm(xx, yy, ecs_list, pt)
-                fr = tm1.fast_response(ecm, dojit=False)    
-                ca = tm1.charge_accumulation(fr, ecm)
-                sn = tm1.stationary_nonlinearity(ca)
-                sr = tm1.slow_response(sn)
-                intfunc= interpolate.interp1d(np.linspace(0, len(sr.data),len(sr.data)),
-                                      sr.data)
-                sr_rs=intfunc(np.linspace(0, len(sr.data), len(sr.data)*sr.tsample*fps))
-                if xx==0 and yy==0:
-                    brightnessmovie = np.zeros(r.gridx.shape + (len(sr_rs),))  
-           
-                brightnessmovie[yy, xx, :] = sr_rs
-        filename='SE_' + retinaname + str(ee)      
+
+        rs=1/(fps*pt[0].tsample)                     
+        sr_tmp = brightness(r, 0, 0, ecs_list, pt, tm1, rs) 
+        brightness_movie = np.zeros((4, 4, sr_tmp.shape[0]))        
+
+        idx = list(product(*(range(s) for s in brightness_movie.shape[:-1])))
+
+      #  %%timeit
+       # ff = np.array([calc_pixel(brightness_movie, i, r, ecs_list, pt, tm1) for i in idx]).reshape(brightness_movie.shape)
+
+        #timeit
+        answer = utils.parfor(brightness_movie, calc_pixel, r, ecs_list, pt, tm1, n_jobs=10, axis=-1)
+
+      #  brightnessmovie[yy, xx, :] = sr_rs
+        filename='SE_' + retinaname + '_E' + str(ee)      
         np.save(filename, brightnessmovie)   
      #   moviefilename='singleelectrode_' + retinaname + str(ee)
      #   npy2movie(filename,moviefilename)
