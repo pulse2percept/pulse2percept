@@ -151,4 +151,4 @@ def pulse2percept(temporal_model, ecs_list, retina, stimuli,
                               (sr.shape[0],))
 
             bm[yy, xx, :] = sr.data
-            return TimeSeries(sr.tsample, bm)
+    return TimeSeries(sr.tsample, bm)
