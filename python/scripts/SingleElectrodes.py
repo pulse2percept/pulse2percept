@@ -9,32 +9,15 @@ from scipy import interpolate
 from utils import TimeSeries
 import matplotlib.pyplot as plt
 from itertools import product
+import utils
+import time
+
+
+
 import matplotlib
 matplotlib.use('Agg')
 import imp
-import utils
-imp.reload(utils)
-
-def calc_pixel(arr, idx, r, ecs_list, pt, tm, rs):
-     ecm = r.ecm(*idx, ecs_list, pt)
-     fr = tm.fast_response(ecm, dojit=False)    
-     ca = tm.charge_accumulation(fr, ecm)
-     sn = tm.stationary_nonlinearity(ca)
-     sr = tm.slow_response(sn)
-     sr.resample(rs)
-     return sr.data
-     
-def brightness(r, xx, yy, ecs_list, pt, tm, rs):
-    ecm = r.ecm(xx, yy, ecs_list, pt)
-    fr = tm.fast_response(ecm, dojit=False)    
-    ca = tm.charge_accumulation(fr, ecm)
-    sn = tm.stationary_nonlinearity(ca)
-    sr = tm.slow_response(sn)
-    sr.resample(rs)
-    return sr.data
     
-# import imp 
-# imp.reload(effectivecurrent2brightness.py)
 
 fps=30 #fps for the final movie
 
@@ -51,49 +34,51 @@ for x in np.arange(-2362, 2364, e_spacing):
         
 e_all = e2cm.ElectrodeArray(rlist,xlist,ylist)
 
-for al in np.arange(0,12, .5):
-    print("loading or creating a retina" )
+for al in np.arange(6,12, 2):
+    printstr='loading or creating a retina ' + str(al) + ' '+  time.strftime("%H:%M") 
+    print(printstr)
     retinaname='retina_1700x2900L' + str(al*10)
-    r = e2cm.Retina(axon_map=retinaname, 
+    r = e2cm.Retina(axon_map=retinaname + '.npz', 
                 sampling=25, ylo=-1700, yhi=1700, xlo=-2800, xhi=2800,axon_lambda=al)
-   
-    print("creating receptive fields" )    
+     
     e_rf=[]
     for e in e_all.electrodes:
        e_rf.append(e2cm.receptive_field(e, r.gridx, r.gridy,e_spacing))
           
 
-    for ee in np.arange(0, len(xlist)): 
-        print("Creating waveform for elecrodes" )
+    for ee in np.arange(0, len(xlist), 9): 
+        printstr='simulating a single electrode ' + str(ee) + ' ' +  time.strftime("%H:%M") 
+        print(printstr)
+    
         pt=[]
         for ct, rf in enumerate(e_rf):
             if ct==ee:           
-                ptrain=e2cm.Psycho2Pulsetrain(current_amplitude=40, dur=0.25, pulse_dur=.45/1000., 
-                                               interphase_dur=.45/1000., tsample=.05/1000.)
+                ptrain=e2cm.Psycho2Pulsetrain(current_amplitude=40, dur=0.25, pulse_dur=.5/1000., 
+                                               interphase_dur=.5/1000., tsample=.1/1000.)
             else:
-                ptrain=e2cm.Psycho2Pulsetrain(current_amplitude=40, dur=0.25, pulse_dur=.45/1000., 
-                                               interphase_dur=.45/1000., tsample=.05/1000.)
+                ptrain=e2cm.Psycho2Pulsetrain(current_amplitude=40, dur=0.25, pulse_dur=.5/1000., 
+                                               interphase_dur=.5/1000., tsample=.1/1000.)
             pt.append(ptrain) 
             
             
         [ecs_list, cs_list]  = r.electrode_ecs(e_all)    
         tm1 = ec2b.TemporalModel()
 
-        rs=1/(fps*pt[0].tsample)                     
-        sr_tmp = brightness(r, 0, 0, ecs_list, pt, tm1, rs) 
-        brightness_movie = np.zeros((4, 4, sr_tmp.shape[0]))        
+        rs=1/(fps*pt[0].tsample)  
+                
+        sr_tmp=ec2b.calc_pixel(0, 0, r, ecs_list, pt, tm1, rs, dojit=False) 
+        brightness_movie = np.zeros((r.gridx.shape[1], r.gridx.shape[0], sr_tmp.shape[0]))  
+        #brightness_movie = np.zeros((4, 4, sr_tmp.shape[0]))          
+        def parfor_calc_pixel(arr, idx, r, ecs_list, pt, tm, rs, dojit=False):            
+            sr=ec2b.calc_pixel(idx[0], idx[1], r, ecs_list, pt, tm, rs, dojit)           
+            return sr.data        
 
-        idx = list(product(*(range(s) for s in brightness_movie.shape[:-1])))
-
-      #  %%timeit
-       # ff = np.array([calc_pixel(brightness_movie, i, r, ecs_list, pt, tm1) for i in idx]).reshape(brightness_movie.shape)
-
-        #timeit
-        answer = utils.parfor(brightness_movie, calc_pixel, r, ecs_list, pt, tm1, n_jobs=10, axis=-1)
+        brightness_movie = utils.parfor(brightness_movie, parfor_calc_pixel, r, ecs_list, pt, tm1, rs, dojit=False, n_jobs=8, axis=-1)        
 
       #  brightnessmovie[yy, xx, :] = sr_rs
         filename='SE_' + retinaname + '_E' + str(ee)      
-        np.save(filename, brightnessmovie)   
+        np.save(filename, brightness_movie)   
+
      #   moviefilename='singleelectrode_' + retinaname + str(ee)
      #   npy2movie(filename,moviefilename)
 

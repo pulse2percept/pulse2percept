@@ -125,7 +125,7 @@ class TemporalModel(object):
 
 
 def pulse2percept(temporal_model, ecs_list, retina, stimuli,
-                  subsample_factor=767, dojit=True):
+                  fps=30, dojit=True):
     """
     From pulses (stimuli) to percepts (spatio-temporal)
 
@@ -138,17 +138,20 @@ def pulse2percept(temporal_model, ecs_list, retina, stimuli,
     subsample_factor : float/int, optional
     dojit : bool, optional
     """
+    rs=1/(fps*stimuli[0].tsample)  
     for xx in range(retina.gridx.shape[1]):
         for yy in range(retina.gridx.shape[0]):
-            ecm = retina.ecm(xx, yy, ecs_list, stimuli)
-            fr = temporal_model.fast_response(ecm, dojit=dojit)
-            ca = temporal_model.charge_accumulation(fr, ecm)
-            sn = temporal_model.stationary_nonlinearity(ca)
-            sr = temporal_model.slow_response(sn)
-            sr.resample(subsample_factor)
+            sr=calc_pixel(temporal_model, retina, xx, yy,ecs_list, stimuli, rs, dojit)
             if xx == 0 and yy == 0:
-                bm = np.zeros(retina.gridx.shape +
-                              (sr.shape[0],))
-
+                bm = np.zeros(retina.gridx.shape + (sr.shape[0],))
             bm[yy, xx, :] = sr.data
     return TimeSeries(sr.tsample, bm)
+    
+def calc_pixel(xx, yy, retina, ecs_list, stimuli, temporal_model, rs, dojit):
+    ecm = retina.ecm(xx, yy, ecs_list, stimuli)
+    fr = temporal_model.fast_response(ecm, dojit=dojit)
+    ca = temporal_model.charge_accumulation(fr, ecm)
+    sn = temporal_model.stationary_nonlinearity(ca)
+    sr = temporal_model.slow_response(sn)
+    sr.resample(rs)
+    return sr
