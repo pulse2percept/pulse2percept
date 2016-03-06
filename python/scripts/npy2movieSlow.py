@@ -30,12 +30,11 @@ def ani_frame():
     ax.get_yaxis().set_visible(False)
 
     im = ax.imshow(arr[:,:, 0],cmap='gray',interpolation='nearest')
-    
     tight_layout
 
 
 def update_img(mov, n):
-        tmp = mov[:,:, n]
+        tmp = arr[:,:, n]
         im.set_data(tmp)
         return im
         
