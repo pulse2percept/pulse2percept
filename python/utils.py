@@ -97,30 +97,25 @@ def sparseconv(v, a, dojit=True):
         return _sparseconv(v, a)
 
 
-def parfor(arr, func, *args, n_jobs=1, axis=None, **kwargs):
+def parfor(func, in_list, out_shape=None, n_jobs=1, func_args=[],
+           func_kwargs={}):
     """
     Parallel for loop for numpy arrays
 
     Parameters
     ----------
-    arr : ndarray
-        Input array to operate on
-
     func : callable
         The function to apply to each item in the array. Must have the form:
         func(arr, idx, *args, *kwargs) where arr is an ndarray and idx is an
         index into that array (a tuple). The Return of `func` needs to be one
         item (e.g. float, int) per input item.
 
+    in_list : list
+       All legitimate inputs to the function to operate over.
+
     n_jobs : integer, optional
         The number of jobs to perform in parallel. -1 to use all cpus
         Default: 1
-
-    axis : integer, optional
-        The axis to operate on. For example, -1 will operate on each pixel along
-        the last dimension. If set to None, the function operates on each array
-        element separately. This assumes that `func` knows how to do the
-        indexing
 
     args : list, optional
         Positional arguments to `func`
@@ -134,26 +129,17 @@ def parfor(arr, func, *args, n_jobs=1, axis=None, **kwargs):
 
     Examples
     --------
-    >>> def power_it(arr, idx, n=2):
-    ...     return arr[idx] ** n
-    >>> my_array1 = np.arange(100).reshape(10, 10)
-    >>> powers1 = parfor(my_array1, power_it, n=3, n_jobs=2)
-    >>> my_array2 = np.arange(1000).reshape(10, 10, 10)
-    >>> def power_reduce(arr, idx, n=2):
-    ...     return np.sum(arr[idx] ** n)
-    >>> powers2 = parfor(my_array2, power_it, n=2, n_jobs=2, axis=-1)
-    >>> powers1.shape
-    >>> powers2.shape
     """
     if n_jobs == -1:
         n_jobs = multiprocessing.cpu_count()
 
-    if axis is None:
-        idx = product(*(range(s) for s in arr.shape))
+    results = Parallel(n_jobs=n_jobs,
+                       backend="threading")(delayed(func)(in_element,
+                                                          *func_args,
+                                                          **func_kwargs)
+                                            for in_element in in_list)
 
+    if out_shape is not None:
+        return np.array(results).reshape(out_shape)
     else:
-        idx = product(*(range(s) for s in arr.shape[:-1]))
-
-    results = Parallel(n_jobs=n_jobs, backend="threading")(delayed(func)(arr, i, *args, **kwargs) for i in idx)
-
-    return np.array(results).reshape(arr.shape)
+        return results
