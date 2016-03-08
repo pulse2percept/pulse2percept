@@ -40,19 +40,18 @@ def test_sparseconv():
 
 
 # We define a function of the right form:
-def power_it(arr, idx, n=2):
-    return arr[idx] ** n
+def power_it(num, n=2):
+    return num ** n
 
 
 def test_parfor():
     my_array = np.arange(100).reshape(10, 10)
     i, j = np.random.randint(0, 9, 2)
-    npt.assert_equal(utils.parfor(my_array, power_it)[i, j],
-                     power_it(my_array, (i, j)))
-    # Check the "all cpus on" option
-    i, j = np.random.randint(0, 9, 2)
-    npt.assert_equal(utils.parfor(my_array, power_it, n_jobs=-1)[i, j],
-                     power_it(my_array, (i, j)))
+    my_list = list(my_array.ravel())
+    npt.assert_equal(utils.parfor(power_it, my_list,
+                                  out_shape=my_array.shape)[i, j],
+                     power_it(my_array[i, j]))
 
-    my_array = np.arange(1000).reshape(10, 10, 10)
-    utils.parfor(my_array, power_it, n_jobs=2, axis=-1)
+    # If it's not reshaped, the first item should be the item 0, 0:
+    npt.assert_equal(utils.parfor(power_it, my_list)[0],
+                     power_it(my_array[0, 0]))

@@ -125,7 +125,7 @@ class TemporalModel(object):
 
 
 def pulse2percept(temporal_model, ecs, retina, stimuli,
-                  fps=30, dojit=True):
+                  fps=30, dojit=True, n_jobs=-1, tol=1e-10):
     """
     From pulses (stimuli) to percepts (spatio-temporal)
 
@@ -139,18 +139,27 @@ def pulse2percept(temporal_model, ecs, retina, stimuli,
     dojit : bool, optional
     """
     rs = int(1 / (fps*stimuli[0].tsample))
+    ecs_list = []
+    idx_list = []
     for xx in range(retina.gridx.shape[1]):
         for yy in range(retina.gridx.shape[0]):
-            ecs_vector = ecs[yy, xx]
-            sr = calc_pixel(retina, ecs_vector, stimuli, temporal_model,
-                            rs, dojit)
-            if xx == 0 and yy == 0:
-                bm = np.zeros(retina.gridx.shape + (sr.shape[0],))
-            bm[yy, xx, :] = sr.data
-    return TimeSeries(sr.tsample, bm)
+            if np.all(ecs[yy, xx] < tol):
+                pass
+            else:
+                ecs_list.append(ecs[yy, xx])
+                idx_list.append([yy, xx])
+
+    sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs,
+                           func_args=[retina, stimuli, temporal_model,
+                                      rs, dojit])
+    bm = np.zeros(retina.gridx.shape + (sr_list[0].data.shape[-1], ))
+    idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
+    bm[idxer] = [sr.data for sr in sr_list]
+
+    return TimeSeries(sr_list[0].tsample, bm)
 
 
-def calc_pixel(retina, ecs_vector, stimuli, temporal_model, rs, dojit):
+def calc_pixel(ecs_vector, retina, stimuli, temporal_model, rs, dojit):
     ecm = retina.ecm(ecs_vector, stimuli)
     fr = temporal_model.fast_response(ecm, dojit=dojit)
     ca = temporal_model.charge_accumulation(fr, ecm)
