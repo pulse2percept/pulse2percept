@@ -230,7 +230,7 @@ class Psycho2Pulsetrain(TimeSeries):
         TimeSeries.__init__(self, tsample, data)
 
 
-class Retina():
+class Retina(object):
     """
     Represent the retinal coordinate frame
     """
@@ -239,8 +239,19 @@ class Retina():
         """
         Initialize a retina
 
+        Parameters
+        ----------
+        xlo, xhi : int
+           Extent of the retinal coverage (microns) in horizontal dimension
+        ylo, yhi :
+           Extent of the retinal coverage (microns) in vertical dimension
+        sampling : int
+            Microns per grid cell
+        axon_map : str
+           Full path to a file that encodes the axon map (see :mod:`oyster`)
+        axon_lambda : float
+            Constant that determines fall-off with axonal distance
         """
-
         self.gridx, self.gridy = np.meshgrid(np.arange(xlo, xhi,
                                                        sampling),
                                              np.arange(ylo, yhi,
@@ -333,26 +344,27 @@ class Retina():
         --------
         Electrode.current_spread
         """
-        ecs_list = []
-        cs_list = []
-        for e in electrode_array.electrodes:
-            cs = e.current_spread(self.gridx, self.gridy, alpha=alpha, n=n)
-            cs_list.append(cs)
-            ecs = self.cm2ecm(cs)
-            ecs_list.append(ecs)
-        return ecs_list, cs_list
+        ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
+                       len(electrode_array.electrodes)))
+
+        cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
+                       len(electrode_array.electrodes)))
+
+        for i, e in enumerate(electrode_array.electrodes):
+            cs[..., i] = e.current_spread(self.gridx, self.gridy,
+                                          alpha=alpha, n=n)
+            ecs[..., i] = self.cm2ecm(cs[..., i])
+        return ecs, cs
 
 
-    def ecm(self, i,  j, ecs_list, stimuli):
+    def ecm(self, ecs_vector, stimuli):
         """
-        effective current map from an electrode array and stimuli through
-        these electrodes in one spatial position
+        effective current map from the electrodes in one spatial location
+        ([x, y] index) and the stimuli through these electrodes.
 
         Parameters
         ----------
-        i, j : the spatial coordinates of the effective current map
-
-        ecs_list : the list of effective current spreads for each electrode
+        ecs_vector : 1D arrays
 
         stimuli : list of TimeSeries objects with the electrode stimulation
             pulse trains.
@@ -361,9 +373,10 @@ class Retina():
         -------
         A TimeSeries object with the effective current for this stimulus
         """
+        
         ecm = np.zeros(stimuli[0].data.shape[0])  # time vector
-        for ii, ecs in enumerate(ecs_list):
-            ecm += ecs[j, i] * stimuli[ii].data
+        for ii, ecs in enumerate(ecs_vector):
+            ecm += ecs * stimuli[ii].data
 
         tsample = stimuli[ii].tsample
         return TimeSeries(tsample, ecm)
