@@ -31,7 +31,7 @@ def test_Retina_Electrodes():
     npt.assert_equal(electrode1.y, electrode_array.electrodes[0].y)
     npt.assert_equal(electrode1.radius, electrode_array.electrodes[0].radius)
     ecs_list, cs_list = retina.electrode_ecs(electrode_array)
-    npt.assert_equal(cs, cs_list[0])
+    npt.assert_equal(cs, cs_list[..., 0])
 
 
 def test_Movie2Pulsetrain():
@@ -103,8 +103,9 @@ def test_Retina_ecm():
     electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1])
     ecs_list, cs_list = retina.electrode_ecs(electrode_array)
     xx = yy = 0
+    ecs_vector = ecs_list[yy, xx]
     # Smoke testing, feed the same stimulus through both electrodes
-    ecm = retina.ecm(xx, yy, ecs_list, [s1, s1])
+    ecm = retina.ecm(ecs_vector, [s1, s1])
 
     fps = 30.0
     amplitude_transform = 'linear'
@@ -129,4 +130,4 @@ def test_Retina_ecm():
                                  pulsetype=pulsetype,
                                  stimtype=stimtype)
     # Smoke testing, feed the same stimulus through both electrodes:
-    ecm = retina.ecm(xx, yy, ecs_list, [m2pt, m2pt])
+    ecm = retina.ecm(ecs_vector, [m2pt, m2pt])
