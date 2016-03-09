@@ -357,26 +357,21 @@ class Retina(object):
         return ecs, cs
 
 
-    def ecm(self, ecs_vector, stimuli):
-        """
-        effective current map from the electrodes in one spatial location
-        ([x, y] index) and the stimuli through these electrodes.
+def ecm(ecs_vector, stim_data, tsample):
+    """
+    effective current map from the electrodes in one spatial location
+    ([x, y] index) and the stimuli through these electrodes.
 
-        Parameters
-        ----------
-        ecs_vector : 1D arrays
+    Parameters
+    ----------
+    ecs_vector : 1D arrays
 
-        stimuli : list of TimeSeries objects with the electrode stimulation
-            pulse trains.
+    stimuli : list of TimeSeries objects with the electrode stimulation
+        pulse trains.
 
-        Returns
-        -------
-        A TimeSeries object with the effective current for this stimulus
-        """
-        
-        ecm = np.zeros(stimuli[0].data.shape[0])  # time vector
-        for ii, ecs in enumerate(ecs_vector):
-            ecm += ecs * stimuli[ii].data
-
-        tsample = stimuli[ii].tsample
-        return TimeSeries(tsample, ecm)
+    Returns
+    -------
+    A TimeSeries object with the effective current for this stimulus
+    """
+    ecm = np.sum(ecs_vector[:, None] * stim_data, 0)
+    return TimeSeries(tsample, ecm)

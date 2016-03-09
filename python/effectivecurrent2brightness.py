@@ -11,7 +11,8 @@ from scipy.signal import fftconvolve
 import numpy as np
 import utils
 from utils import TimeSeries
-
+import gc
+import electrode2currentmap as e2cm
 
 def gamma(n, tau, t):
     """
@@ -123,6 +124,12 @@ class TemporalModel(object):
         return TimeSeries(fast_response_ca_snl.tsample,
                           fast_response_ca_snl.tsample * c)
 
+    def model_cascade(self, ecm, dojit):
+        fr = self.fast_response(ecm, dojit=dojit)
+        ca = self.charge_accumulation(fr, ecm)
+        sn = self.stationary_nonlinearity(ca)
+        return self.slow_response(sn)
+
 
 def pulse2percept(temporal_model, ecs, retina, stimuli,
                   fps=30, dojit=True, n_jobs=-1, tol=1e-10):
@@ -149,21 +156,20 @@ def pulse2percept(temporal_model, ecs, retina, stimuli,
                 ecs_list.append(ecs[yy, xx])
                 idx_list.append([yy, xx])
 
+    stim_data = np.array([s.data for s in stimuli])
     sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs,
-                           func_args=[retina, stimuli, temporal_model,
-                                      rs, dojit])
+                           func_args=[stim_data, temporal_model,
+                                      rs, dojit, stimuli[0].tsample])
     bm = np.zeros(retina.gridx.shape + (sr_list[0].data.shape[-1], ))
     idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
     bm[idxer] = [sr.data for sr in sr_list]
-
     return TimeSeries(sr_list[0].tsample, bm)
 
 
-def calc_pixel(ecs_vector, retina, stimuli, temporal_model, rs, dojit):
-    ecm = retina.ecm(ecs_vector, stimuli)
-    fr = temporal_model.fast_response(ecm, dojit=dojit)
-    ca = temporal_model.charge_accumulation(fr, ecm)
-    sn = temporal_model.stationary_nonlinearity(ca)
-    sr = temporal_model.slow_response(sn)
+def calc_pixel(ecs_vector, stim_data, temporal_model, rs, dojit, tsample):
+    ecm = e2cm.ecm(ecs_vector, stim_data, tsample)
+    sr = temporal_model.model_cascade(ecm, dojit=dojit)
+    del temporal_model, ecm
+    gc.collect()
     sr.resample(rs)
     return sr
