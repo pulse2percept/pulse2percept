@@ -124,6 +124,12 @@ class TemporalModel(object):
         return TimeSeries(fast_response_ca_snl.tsample,
                           fast_response_ca_snl.tsample * c)
 
+    def model_cascade(self, ecm, dojit):
+        fr = self.fast_response(ecm, dojit=dojit)
+        ca = self.charge_accumulation(fr, ecm)
+        sn = self.stationary_nonlinearity(ca)
+        return self.slow_response(sn)
+
 
 def pulse2percept(temporal_model, ecs, retina, stimuli,
                   fps=30, dojit=True, n_jobs=-1, tol=1e-10):
@@ -163,10 +169,8 @@ def pulse2percept(temporal_model, ecs, retina, stimuli,
 
 def calc_pixel(ecs_vector, stim_data, temporal_model, rs, dojit, tsample):
     ecm = e2cm.ecm(ecs_vector, stim_data, tsample)
-    fr = temporal_model.fast_response(ecm, dojit=dojit)
-    ca = temporal_model.charge_accumulation(fr, ecm)
-    sn = temporal_model.stationary_nonlinearity(ca)
-    sr = temporal_model.slow_response(sn)
+    sr = temporal_model.model_cascade(ecm, dojit=dojit)
     sr.resample(rs)
+    del temporal_model, ecm
     gc.collect()
     return sr
