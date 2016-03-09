@@ -5,6 +5,7 @@ import numpy as np
 from joblib import Parallel, delayed
 from itertools import product
 import multiprocessing
+from joblib.pool import has_shareable_memory
 
 
 try:
@@ -133,12 +134,12 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, func_args=[],
     if n_jobs == -1:
         n_jobs = multiprocessing.cpu_count()
 
-    results = Parallel(n_jobs=n_jobs,
-                       backend="threading", 
-                       max_nbytes=1e6)(delayed(func)(in_element,
-                                                     *func_args,
-                                                     **func_kwargs)
-                                            for in_element in in_list)
+    p = Parallel(n_jobs=n_jobs, backend="multiprocessing", max_nbytes=1e6)
+    d = delayed(func)
+    d_l = []
+    for in_element in in_list:
+        d_l.append(d(in_element, *func_args, **func_kwargs))
+    results = p(d_l)
 
     if out_shape is not None:
         return np.array(results).reshape(out_shape)

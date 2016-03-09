@@ -163,14 +163,13 @@ def pulse2percept(temporal_model, ecs, retina, stimuli,
     bm = np.zeros(retina.gridx.shape + (sr_list[0].data.shape[-1], ))
     idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
     bm[idxer] = [sr.data for sr in sr_list]
-
     return TimeSeries(sr_list[0].tsample, bm)
 
 
 def calc_pixel(ecs_vector, stim_data, temporal_model, rs, dojit, tsample):
     ecm = e2cm.ecm(ecs_vector, stim_data, tsample)
     sr = temporal_model.model_cascade(ecm, dojit=dojit)
-    sr.resample(rs)
     del temporal_model, ecm
     gc.collect()
+    sr.resample(rs)
     return sr
