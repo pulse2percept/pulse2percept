@@ -105,7 +105,8 @@ def test_Retina_ecm():
     xx = yy = 0
     ecs_vector = ecs_list[yy, xx]
     # Smoke testing, feed the same stimulus through both electrodes
-    ecm = retina.ecm(ecs_vector, [s1, s1])
+    stim_data = np.array([s.data for s in  [s1, s1]])
+    ecm = e2cm.ecm(ecs_vector, stim_data, s1.tsample)
 
     fps = 30.0
     amplitude_transform = 'linear'
@@ -130,4 +131,5 @@ def test_Retina_ecm():
                                  pulsetype=pulsetype,
                                  stimtype=stimtype)
     # Smoke testing, feed the same stimulus through both electrodes:
-    ecm = retina.ecm(ecs_vector, [m2pt, m2pt])
+    stim_data = np.array([s.data for s in  [m2pt, m2pt]])
+    ecm = e2cm.ecm(ecs_vector, stim_data, m2pt.tsample)

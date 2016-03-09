@@ -97,7 +97,7 @@ def sparseconv(v, a, dojit=True):
         return _sparseconv(v, a)
 
 
-def parfor(func, in_list, out_shape=None, n_jobs=1, func_args=[],
+def parfor(func, in_list, out_shape=None, n_jobs=-1, func_args=[],
            func_kwargs={}):
     """
     Parallel for loop for numpy arrays
@@ -134,9 +134,10 @@ def parfor(func, in_list, out_shape=None, n_jobs=1, func_args=[],
         n_jobs = multiprocessing.cpu_count()
 
     results = Parallel(n_jobs=n_jobs,
-                       backend="threading")(delayed(func)(in_element,
-                                                          *func_args,
-                                                          **func_kwargs)
+                       backend="threading", 
+                       max_nbytes=1e6)(delayed(func)(in_element,
+                                                     *func_args,
+                                                     **func_kwargs)
                                             for in_element in in_list)
 
     if out_shape is not None:
