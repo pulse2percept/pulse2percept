@@ -318,10 +318,10 @@ class Retina(object):
         """
         ecs = np.zeros(current_spread.shape)
         for id in range(0, len(current_spread.flat)):
-           ecs.flat[id]  = np.dot(current_spread.flat[self.axon_id[id]],
+            ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
                                   self.axon_weight[id])
-        
-        ecs=ecs /ecs.max()
+
+        ecs = ecs / ecs.max()
 
         return ecs
 
@@ -350,12 +350,14 @@ class Retina(object):
         ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
                        len(electrode_array.electrodes)))
 
-        cs = ecs
+        cs =  np.zeros((self.gridx.shape[0], self.gridx.shape[1],
+                       len(electrode_array.electrodes)))
 
         for i, e in enumerate(electrode_array.electrodes):
             cs[..., i] = e.current_spread(self.gridx, self.gridy,
                                           alpha=alpha, n=n)
             ecs[..., i] = self.cm2ecm(cs[..., i])
+
         return ecs, cs
 
 

@@ -23,10 +23,12 @@ def test_brightness_movie():
     electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1])
     ecs, cs = retina.electrode_ecs(electrode_array)
     temporal_model = ec2b.TemporalModel()
+    fps = 30.
+    rs = int(1 / (fps * s1.tsample))
 
     # Smoke testing, feed the same stimulus through both electrodes:
     brightness_movie = ec2b.pulse2percept(temporal_model, ecs, retina,
-                                          [s1, s1])
+                                          [s1, s1], rs)
 
     fps = 30.0
     amplitude_transform = 'linear'
@@ -50,13 +52,12 @@ def test_brightness_movie():
                                  tsample=tsample,
                                  pulsetype=pulsetype,
                                  stimtype=stimtype)
-    fps = 30.
-    subsample_factor = 1 / (fps * m2pt.tsample)
+
+    rs = int(1 / (fps * m2pt.tsample))
     # Smoke testing, feed the same stimulus through both electrodes:
     brightness_movie = ec2b.pulse2percept(temporal_model, ecs, retina,
-                                          [m2pt, m2pt],
-                                          fps=fps)
+                                          [m2pt, m2pt], rs)
 
     npt.assert_almost_equal(brightness_movie.tsample,
-                            m2pt.tsample * subsample_factor,
+                            m2pt.tsample * rs,
                             decimal=4)

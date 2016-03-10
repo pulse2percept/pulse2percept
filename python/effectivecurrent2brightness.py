@@ -157,7 +157,7 @@ def pulse2percept(temporal_model, ecs, retina, stimuli,
                 idx_list.append([yy, xx])
                 # the current contributed by each electrode for that spatial location
 
-    stim_data = np.array([s.data for s in stimuli]) # pulse train for each electrode
+    stim_data = np.array([s.data for s in stimuli])  # pulse train for each electrode
     sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs,
                            func_args=[stim_data, temporal_model,
                                       rs,  stimuli[0].tsample, dojit])
