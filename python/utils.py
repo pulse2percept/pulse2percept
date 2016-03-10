@@ -133,6 +133,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, func_args=[],
     """
     if n_jobs == -1:
         n_jobs = multiprocessing.cpu_count()
+        n_jobs=n_jobs-1   
 
     p = Parallel(n_jobs=n_jobs, backend="multiprocessing", max_nbytes=1e6)
     d = delayed(func)

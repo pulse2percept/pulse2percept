@@ -132,7 +132,7 @@ class TemporalModel(object):
 
 
 def pulse2percept(temporal_model, ecs, retina, stimuli,
-                  fps=30, dojit=True, n_jobs=-1, tol=1e-10):
+                  rs, dojit=True, n_jobs=-1, tol=.05):
     """
     From pulses (stimuli) to percepts (spatio-temporal)
 
@@ -145,7 +145,7 @@ def pulse2percept(temporal_model, ecs, retina, stimuli,
     subsample_factor : float/int, optional
     dojit : bool, optional
     """
-    rs = int(1 / (fps*stimuli[0].tsample))
+
     ecs_list = []
     idx_list = []
     for xx in range(retina.gridx.shape[1]):
@@ -155,18 +155,19 @@ def pulse2percept(temporal_model, ecs, retina, stimuli,
             else:
                 ecs_list.append(ecs[yy, xx])
                 idx_list.append([yy, xx])
+                # the current contributed by each electrode for that spatial location
 
-    stim_data = np.array([s.data for s in stimuli])
+    stim_data = np.array([s.data for s in stimuli]) # pulse train for each electrode
     sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs,
                            func_args=[stim_data, temporal_model,
-                                      rs, dojit, stimuli[0].tsample])
+                                      rs,  stimuli[0].tsample, dojit])
     bm = np.zeros(retina.gridx.shape + (sr_list[0].data.shape[-1], ))
     idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
     bm[idxer] = [sr.data for sr in sr_list]
     return TimeSeries(sr_list[0].tsample, bm)
 
 
-def calc_pixel(ecs_vector, stim_data, temporal_model, rs, dojit, tsample):
+def calc_pixel(ecs_vector, stim_data, temporal_model, rs, tsample, dojit):
     ecm = e2cm.ecm(ecs_vector, stim_data, tsample)
     sr = temporal_model.model_cascade(ecm, dojit=dojit)
     del temporal_model, ecm
