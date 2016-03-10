@@ -1,3 +1,4 @@
+# -*effectivecurrent2brightness -*-
 """
 
 Functions for transforming electrode specifications into a current map
@@ -143,8 +144,8 @@ class Movie2Pulsetrain(TimeSeries):
     a movie
     """
     def __init__(self, rflum, fps=30.0, amplitude_transform='linear',
-                 amp_max=90, freq=20, pulse_dur=.075/1000.,
-                 interphase_dur=.075/1000., tsample=.005/1000.,
+                 amp_max=60, freq=20, pulse_dur=.5/1000.,
+                 interphase_dur=.5/1000., tsample=.25/1000.,
                  pulsetype='cathodicfirst', stimtype='pulsetrain'):
         """
         Parameters
@@ -317,8 +318,10 @@ class Retina(object):
         """
         ecs = np.zeros(current_spread.shape)
         for id in range(0, len(current_spread.flat)):
-            ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
+           ecs.flat[id]  = np.dot(current_spread.flat[self.axon_id[id]],
                                   self.axon_weight[id])
+        
+        ecs=ecs /ecs.max()
 
         return ecs
 
@@ -347,8 +350,7 @@ class Retina(object):
         ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
                        len(electrode_array.electrodes)))
 
-        cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
-                       len(electrode_array.electrodes)))
+        cs = ecs
 
         for i, e in enumerate(electrode_array.electrodes):
             cs[..., i] = e.current_spread(self.gridx, self.gridy,
