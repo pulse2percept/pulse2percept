@@ -330,8 +330,6 @@ class Retina(object):
             ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
                                   self.axon_weight[id])
 
-        ecs = ecs / ecs.max()
-
         return ecs
 
     def electrode_ecs(self, electrode_array, alpha=14000, n=1.69):
@@ -359,7 +357,8 @@ class Retina(object):
         ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
                        len(electrode_array.electrodes)))
 
-        cs =  np.zeros((self.gridx.shape[0], self.gridx.shape[1],
+
+        cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1], 
                        len(electrode_array.electrodes)))
 
         for i, e in enumerate(electrode_array.electrodes):
