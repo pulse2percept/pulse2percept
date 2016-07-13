@@ -146,3 +146,25 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, func_args=[],
         return np.array(results).reshape(out_shape)
     else:
         return results
+
+
+def mov2npy(movie_file, out_file):
+
+    # Don't import cv at module level. Instead we'll use this on python 2 sometimes...
+    try:
+        import cv
+    except ImportError:
+        e_s = "You do not have opencv installed. "
+        e_s += "You probably want to run this in Python 2"
+        raise ImportError(e_s)
+
+    capture = cv.CaptureFromFile(movie_file)
+    frames = []
+    img = cv.QueryFrame(capture)
+    while img is not None:
+        tmp = cv.CreateImage(cv.GetSize(img), 8, 3)
+        cv.CvtColor(img, tmp, cv.CV_BGR2RGB)
+        frames.append(np.asarray(cv.GetMat(tmp)))
+        img = cv.QueryFrame(capture)
+    frames = np.fliplr(np.rot90(np.mean(frames, -1).T, -1))
+    np.save(out_file, frames)

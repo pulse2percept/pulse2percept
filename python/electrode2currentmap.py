@@ -98,44 +98,53 @@ class ElectrodeArray(object):
 
 
 def receptive_field(electrode, xg, yg, size):
-        """
-        # TODO currently this is in units of the grid, needs to be converted to
-        microns
-        """
-        rf = np.zeros(xg.shape)
-        ind = np.where((xg > electrode.x-(size/2)) &
-                       (xg < electrode.x+(size/2)) &
-                       (yg > electrode.y-(size/2)) &
-                       (yg < electrode.y+(size/2)))
+    """
+    # TODO currently this is in units of the grid, needs to be converted to
+    microns
+    """
+    rf = np.zeros(xg.shape)
+    ind = np.where((xg > electrode.x-(size/2)) &
+                   (xg < electrode.x+(size/2)) &
+                   (yg > electrode.y-(size/2)) &
+                   (yg < electrode.y+(size/2)))
 
-        rf[ind] = 1
-        return rf
+    rf[ind] = 1
+    return rf
+
+
+def gaussian_receptive_field(electrode, xg, yg, sigma):
+    """ 
+    A Gaussian receptive field
+    """
+    amp = np.exp(-((xg - electrode.x)**2 + (yg - electrode.y)**2) / (2 * (sigma ** 2)))
+    return amp / np.sum(amp)
+
 
 def retinalmovie2electrodtimeseries(rf, movie, fps=30):
-        """
+    """
 
-        """
-        rflum = np.zeros(movie.shape[-1])
-        for f in range(movie.shape[-1]):
-            tmp = rf * movie[:, :, f]
-            rflum[f] = np.mean(tmp)
+    """
+    rflum = np.zeros(movie.shape[-1])
+    for f in range(movie.shape[-1]):
+        tmp = rf * movie[:, :, f]
+        rflum[f] = np.mean(tmp)
 
-        return rflum
+    return rflum
 
 def get_pulse(pulse_dur, tsample, interphase_dur, pulsetype):
-        on = np.ones(round(pulse_dur / tsample))
-        gap = np.zeros(round(interphase_dur / tsample))
-        off = -1 * on
-        if pulsetype == 'cathodicfirst':
-            pulse = np.concatenate((on, gap), axis=0)
-            pulse = np.concatenate((pulse, off), axis=0)
+    on = np.ones(round(pulse_dur / tsample))
+    gap = np.zeros(round(interphase_dur / tsample))
+    off = -1 * on
+    if pulsetype == 'cathodicfirst':
+        pulse = np.concatenate((on, gap), axis=0)
+        pulse = np.concatenate((pulse, off), axis=0)
 
-        elif pulsetype == 'anodicfirst':
-            pulse = np.concatenate((off, gap), axis=0)
-            pulse = np.concatenate((pulse, on), axis=0)
-        else:
-            print('pulse not defined')
-        return pulse
+    elif pulsetype == 'anodicfirst':
+        pulse = np.concatenate((off, gap), axis=0)
+        pulse = np.concatenate((pulse, on), axis=0)
+    else:
+        print('pulse not defined')
+    return pulse
 
 
 class Movie2Pulsetrain(TimeSeries):
@@ -318,9 +327,8 @@ class Retina(object):
         """
         ecs = np.zeros(current_spread.shape)
         for id in range(0, len(current_spread.flat)):
-           ecs.flat[id]  = np.dot(current_spread.flat[self.axon_id[id]],
+            ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
                                   self.axon_weight[id])
-        
 
         return ecs
 
@@ -349,13 +357,15 @@ class Retina(object):
         ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
                        len(electrode_array.electrodes)))
 
-        cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
+
+        cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1], 
                        len(electrode_array.electrodes)))
 
         for i, e in enumerate(electrode_array.electrodes):
             cs[..., i] = e.current_spread(self.gridx, self.gridy,
                                           alpha=alpha, n=n)
             ecs[..., i] = self.cm2ecm(cs[..., i])
+
         return ecs, cs
 
 
