@@ -9,7 +9,8 @@ import oyster
 import os
 from scipy import interpolate
 from utils import TimeSeries
-
+from scipy.misc import factorial
+from scipy.signal import fftconvolve
 
 def micron2deg(micron):
     """
@@ -30,12 +31,34 @@ def deg2micron(deg):
     microns = 280 * deg
     return microns
 
+def gamma(n, tau, t):
+    """
+    returns a gamma function from in [0, t]:
+
+    y = (t/theta).^(n-1).*exp(-t/theta)/(theta*factorial(n-1))
+
+    which is the result of an n stage leaky integrator.
+    """
+
+    flag = 0
+    if t[0] == 0:
+        t = t[1:len(t)]
+        flag = 1
+
+    y = ((t/tau)  ** (n-1) *
+        np.exp(-t / tau) /
+        (tau * factorial(n-1)))
+
+    if flag == 1:
+        y = np.concatenate([[0], y])
+
+    return y
 
 class Electrode(object):
     """
     Represent a circular, disc-like electrode.
     """
-    def __init__(self, radius, x, y):
+    def __init__(self, radius, x, y, l):
         """
         Initialize an electrode object
 
@@ -51,6 +74,7 @@ class Electrode(object):
         self.radius = radius
         self.x = x
         self.y = y
+        self.l = l
 
     def current_spread(self, xg, yg, alpha=14000, n=1.69):
         """
@@ -65,29 +89,38 @@ class Electrode(object):
         alpha : a constant to do with the spatial fall-off.
 
         n : a constant to do with the spatial fall-off (Default: 1.69, based on
-        Ahuja et al. [2]_)
-
-        .. [1]
-
-        .. [2] An In Vitro Model of a Retinal Prosthesis. Ashish K. Ahuja,
+        Ahuja et al. [2]  An In Vitro Model of a Retinal Prosthesis. Ashish K. Ahuja,
         Matthew R. Behrend, Masako Kuroda, Mark S. Humayun, and
         James D. Weiland (2008). IEEE Trans Biomed Eng 55.
+        
+        list: optional parameter describing the height of the array from the
+        retinal surface in microns
         """
         r = np.sqrt((xg - self.x) ** 2 + (yg - self.y) ** 2)
-        cspread = np.ones(r.shape)
-        cspread[r > self.radius] = (alpha / (alpha + (r[r > self.radius] -
-                                             self.radius) ** n))
+        l=np.ones(r.shape)*self.l
+        cspread = (alpha / (alpha + l** n)) # drop in current just due to lift
+        
+        d=((r- self.radius)**2 + self.l**2)**.5 # actual distance from the electrode 
+        cspread[r > self.radius] = (alpha / 
+        (alpha + d[r > self.radius] ** n))
         return cspread
 
+#       the old code
+#        r = np.sqrt((xg - self.x) ** 2 + (yg - self.y) ** 2)
+#        cspread = np.ones(r.shape)
+#        cspread[r > self.radius] = (alpha / (alpha + (r[r > self.radius] -
+#                                             self.radius) ** n))
+#        return cspread
+#        
 
 class ElectrodeArray(object):
     """
     Represent a retina and array of electrodes
     """
-    def __init__(self, radii, xs, ys):
+    def __init__(self, radii, xs, ys, ls):
         self.electrodes = []
-        for r, x, y in zip(radii, xs, ys):
-            self.electrodes.append(Electrode(r, x, y))
+        for r, x, y,l in zip(radii, xs, ys, ls):
+            self.electrodes.append(Electrode(r, x, y, l))
 
     def current_spread(self, xg, yg, alpha=14000, n=1.69):
         c = np.zeros((len(self.electrodes), xg.shape[0], xg.shape[1]))
@@ -98,10 +131,9 @@ class ElectrodeArray(object):
 
 
 def receptive_field(electrode, xg, yg, size):
-    """
-    # TODO currently this is in units of the grid, needs to be converted to
-    microns
-    """
+  
+# creates a map of the retina for each electrode
+ # where it's 1 under the electrode, 0 elsewhere
     rf = np.zeros(xg.shape)
     ind = np.where((xg > electrode.x-(size/2)) &
                    (xg < electrode.x+(size/2)) &
@@ -122,7 +154,7 @@ def gaussian_receptive_field(electrode, xg, yg, sigma):
 
 def retinalmovie2electrodtimeseries(rf, movie, fps=30):
     """
-
+    calculate the luminance over time for each electrodes receptive field
     """
     rflum = np.zeros(movie.shape[-1])
     for f in range(movie.shape[-1]):
@@ -145,7 +177,46 @@ def get_pulse(pulse_dur, tsample, interphase_dur, pulsetype):
     else:
         print('pulse not defined')
     return pulse
+    
+class AccumulatingVoltage(TimeSeries):
+    """
+   Models accumulating voltage on the electrode
+    """
+    def __init__(self, ptrain, tau=45.25/1000):
+                                    
+        # calculate accumulated charge
+        t = np.arange(0, 20 * tau, ptrain.tsample)
+        rectified = np.where(ptrain.data > 0, ptrain.data, 0)  # rectify
+        ca = ptrain.tsample * np.cumsum(rectified.astype(float), axis=-1)
+        g = gamma(1, tau, t)
+        chargeaccumulated = (ptrain.tsample *  fftconvolve(g, ca))
+        zero_pad = np.zeros(rectified.shape[:-1] +
+                            (chargeaccumulated.shape[-1] -
+                             rectified.shape[-1],))
 
+        ptrain_pad = TimeSeries(ptrain.tsample, np.concatenate([ptrain.data, zero_pad], -1))
+
+        ptrain_ca = ptrain_pad.data - chargeaccumulated
+        return TimeSeries(ptrain.tsample, ptrain_ca)
+        
+#        rect_amp = np.where(stimulus.data > 0, stimulus.data, 0)  # rectify
+#        ca = stimulus.tsample * np.cumsum(rect_amp.astype(float), axis=-1)
+#        g = gamma(1, self.tau2, t)
+#        chargeaccumulated = (self.e * stimulus.tsample *
+#                             fftconvolve(g, ca))
+#        zero_pad = np.zeros(fast_response.shape[:-1] +
+#                            (chargeaccumulated.shape[-1] -
+#                             fast_response.shape[-1],))
+#
+#        fast_response = TimeSeries(fast_response.tsample,
+#                                   np.concatenate([fast_response.data,
+#                                                   zero_pad], -1))
+#
+#        R2 = fast_response.data - chargeaccumulated
+#        R2 = np.where(R2 > 0, R2, 0)  # rectify again
+#        return TimeSeries(fast_response.tsample, R2)
+        
+        
 
 class Movie2Pulsetrain(TimeSeries):
     """
@@ -161,7 +232,6 @@ class Movie2Pulsetrain(TimeSeries):
         ----------
         rflum : 1D array
            Values between 0 and 1
-
         """
         # set up the individual pulses
         pulse = get_pulse(pulse_dur, tsample, interphase_dur, pulsetype)
@@ -181,7 +251,6 @@ class Movie2Pulsetrain(TimeSeries):
         amp = intfunc(np.linspace(0, len(rflum), len(ppt)))
         data = amp * ppt * amp_max
         TimeSeries.__init__(self, tsample, data)
-
 
 class Psycho2Pulsetrain(TimeSeries):
     """
@@ -324,7 +393,7 @@ class Retina(object):
         current map, where each pixel is the dot product of the pixel values in
         ecm along the pixels in the list in axon_map, weighted by the weights
         axon map.
-        """
+        """ 
         ecs = np.zeros(current_spread.shape)
         for id in range(0, len(current_spread.flat)):
             ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],

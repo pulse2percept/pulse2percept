@@ -102,7 +102,6 @@ class TemporalModel(object):
                                                    zero_pad], -1))
 
         R2 = fast_response.data - chargeaccumulated
-        ind = R2 < 0
         R2 = np.where(R2 > 0, R2, 0)  # rectify again
         return TimeSeries(fast_response.tsample, R2)
 

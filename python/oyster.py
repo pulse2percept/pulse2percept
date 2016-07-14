@@ -22,7 +22,6 @@ def jansonius(nCells, nR, center=np.array([15,2]),
     Center: 2 item array
         The location of the optic disk in dva.
 
-
     See:
 
     Jansonius et al., 2009, A mathematical description of nerve fiber bundle

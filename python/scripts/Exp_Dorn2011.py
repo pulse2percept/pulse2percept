@@ -11,56 +11,72 @@ from utils import TimeSeries
 import matplotlib.pyplot as plt
 import utils
 
+# relevant bits of Dorn paper
+# Surgeons were instructed to place the array centered
+#over the macula. 
+#Each of the 60 electrodes (in a 6 × 10 grid) were 200 μm 
+#in diameter
+# The array (along the diagonal) covered an area
+# of retina corresponding to about 20° in visual angle
+#  assuming 293 μm on the retina equates to 1° of visual angle.
+# a=1.72, sqrt((a*6)^2+(a*10)^2)=20
+# so the 10 side is 17.2 degrees
+# the 6 side is 10.32 degrees 
 
-fps=30
+
+# Create electrode array for the Argus 2
+# 293 μm equals 1 degree
+# electrode spacing is done in microns
+# when you include the radius of the electrode 
+# the electrode centers span +/- 2362 and +/- 1312
 
 xlist=[]
 ylist=[]
-rlist=[]
+rlist=[] #electrode radius, microns
+llist=[] # lift of electrode from retinal surface, microns
 e_spacing=525
- 
-# Create electrode array 
-# 293 μm equals 1 degree
-# electrode spacing is done in microns
- 
 for x in np.arange(-2362, 2364, e_spacing):  
     for y in np.arange(-1312, 1314, e_spacing):
         xlist.append(x)
         ylist.append(y)
-        rlist.append(100) 
+        rlist.append(100) # electrode radiues
+        llist.append(0) # electrode lift from retinal surface
         
-e_all = e2cm.ElectrodeArray(rlist,xlist,ylist)
+e_all = e2cm.ElectrodeArray(rlist,xlist,ylist,llist)
+del xlist, ylist, rlist, llist
 
-del xlist, ylist, rlist
-        
+# create retina, input variables include the sampling 
+# and how much of the retina is simulated, in microns   
+# (0,0 represents the fovea)   
 r = e2cm.Retina(axon_map='../retina_1700by2900L80.npz', 
-                sampling=25, ylo=-1700, yhi=1700, xlo=-2900, xhi=2900, axon_lambda=8)
-     
+                sampling=25, ylo=-1700, yhi=1700, xlo=-2900, xhi=2900, axon_lambda=8)     
+
 e_rf=[]
 for e in e_all.electrodes:
     e_rf.append(e2cm.receptive_field(e, r.gridx, r.gridy,e_spacing))
 
-
+[ecs_list, cs_list]  = r.electrode_ecs(e_all)    
+       
 # create movie
 # original screen was [52.74, 63.32]  visual angle
 # res=[768 ,1024] # resolution of screen
 #pixperdeg=degscreen/res
 # no need to simulate the whole movie, just match it to the electrode array
 # xhi+xlo/294 (microns per degree)
-
-degscreen=[13.31, 20.82] # array visual angle,
-res=[e_rf[0].shape[0],e_rf[1].shape[1]] # resolution of screen
-
 fps=30
-bar_width=6.7
+degscreen=[10.32+5, 17.2+5] # match to array visual angle,
+res=[e_rf[0].shape[0],e_rf[1].shape[1]] # resolution of screen
+fps=30
+# the bar is 1.4 inches in width at 12 inches, 
+# corresponds to 6.67 degrees visual angle
+bar_width=6.77 
 [X,Y]=np.meshgrid(np.linspace(-degscreen[1]/2, degscreen[1]/2, res[1]), 
 np.linspace(-degscreen[0]/2, degscreen[0]/2, res[0]));
 
-for o in np.arange(0, 2*np.pi, 2*np.pi/4): # each orientation
+for o in np.arange(0, 2*np.pi,1): #DEBUG 2*np.pi/4): # each orientation
     M=np.cos(o)*X +np.sin(o)*Y
-
  #   for sp in range (32:32): # DEBUG each speed, eventually 8:32  
-    for sp in np.arange(8, 20, 3):
+    for sp in np.arange(32, 32, 1): #(7.9, 31.6, 3):
         movie=np.zeros((res[0],res[1], int(np.ceil((70/5)*30))))
         st=np.min(M)
         fm_ct=1
@@ -70,23 +86,24 @@ for o in np.arange(0, 2*np.pi, 2*np.pi/4): # each orientation
             img[ind]=1    
             movie[:,:, fm_ct]=img
             fm_ct=fm_ct+1
-            st=st+(sp/fps)   
-         
+            st=st+(sp/fps)         
         movie=movie[:,:, 0:fm_ct-1]   
         moviedur=movie.shape[2]/fps
         del M, img
     
+        # create pulsetrain corresponding to the movie
         pt=[]
         for rf in e_rf:
-            rflum= e2cm.retinalmovie2electrodtimeseries(rf, movie) 
-        #plt.plot(rflum)
+            rflum= e2cm.retinalmovie2electrodtimeseries(rf, movie)         
             ptrain=e2cm.Movie2Pulsetrain(rflum)
-        #plt.plot(ptrain.data)
-            pt.append(ptrain) 
-     #   plt.plot(pt[ct].data)
+            ptrain=e2cm.AccumulatingVoltage(ptrain) 
+            pt.append(ptrain)
+            
+            #  plt.plot(rflum)  plt.plot(pt[ct].data)   plt.plot(ptrain.data)
+        boom
         del movie
           
-        [ecs_list, cs_list]  = r.electrode_ecs(e_all)    
+
         tm1 = ec2b.TemporalModel()
     
         rs=1/(fps*pt[0].tsample) 
