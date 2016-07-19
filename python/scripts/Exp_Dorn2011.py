@@ -11,6 +11,10 @@ from utils import TimeSeries
 import matplotlib.pyplot as plt
 import utils
 
+brightnessmovie=np.random.rand(100,200, 40)
+[onmovie, offmovie] = ec2b.onoffFiltering(brightnessmovie, np.array([5, 10])
+
+
 # relevant bits of Dorn paper
 # Surgeons were instructed to place the array centered
 #over the macula. 
@@ -55,7 +59,8 @@ e_rf=[]
 for e in e_all.electrodes:
     e_rf.append(e2cm.receptive_field(e, r.gridx, r.gridy,e_spacing))
 
-[ecs_list, cs_list]  = r.electrode_ecs(e_all)    
+[ecs_list, cs_list]  = r.electrode_ecs(e_all, integrationtype='maxrule')
+#THIS HAS A NORMALIZATION STEP IN THERE, DO WE WANT IT    
        
 # create movie
 # original screen was [52.74, 63.32]  visual angle
@@ -73,10 +78,10 @@ bar_width=6.77
 [X,Y]=np.meshgrid(np.linspace(-degscreen[1]/2, degscreen[1]/2, res[1]), 
 np.linspace(-degscreen[0]/2, degscreen[0]/2, res[0]));
 
-for o in np.arange(0, 2*np.pi,1): #DEBUG 2*np.pi/4): # each orientation
+for o in np.arange(0, 2*np.pi,2): #DEBUG 2*np.pi/4): # each orientation
     M=np.cos(o)*X +np.sin(o)*Y
  #   for sp in range (32:32): # DEBUG each speed, eventually 8:32  
-    for sp in np.arange(32, 32, 1): #(7.9, 31.6, 3):
+    for sp in np.arange(32, 33, 1): #(7.9, 31.6, 3):
         movie=np.zeros((res[0],res[1], int(np.ceil((70/5)*30))))
         st=np.min(M)
         fm_ct=1
@@ -96,27 +101,29 @@ for o in np.arange(0, 2*np.pi,1): #DEBUG 2*np.pi/4): # each orientation
         for rf in e_rf:
             rflum= e2cm.retinalmovie2electrodtimeseries(rf, movie)         
             ptrain=e2cm.Movie2Pulsetrain(rflum)
-            ptrain=e2cm.AccumulatingVoltage(ptrain) 
+            ptrain=e2cm.accumulatingvoltage(ptrain) 
             pt.append(ptrain)
             
             #  plt.plot(rflum)  plt.plot(pt[ct].data)   plt.plot(ptrain.data)
-        boom
+        
         del movie
-          
+        
 
-        tm1 = ec2b.TemporalModel()
+        tm = ec2b.TemporalModel()
     
-        rs=1/(fps*pt[0].tsample) 
+        rs=1/(fps*ptrain.tsample) 
     #fr=np.zeros([e_rf[0].shape[0],e_rf[0].shape[1], len(pt[0].data)])
 
-        sr_tmp=ec2b.calc_pixel(0, 0, r, ecs_list, pt, tm1, rs, dojit=False) 
+    # This seems obsolete
+        
+        sr_tmp=ec2b.calc_pixel(0, 0, r, ecs_list, pt, tm, rs, dojit=False) 
         brightness_movie = np.zeros((r.gridx.shape[0], r.gridx.shape[1], sr_tmp.shape[0]))
 
         def parfor_calc_pixel(arr, idx, r, ecs_list, pt, tm, rs, dojit=False):            
             sr=ec2b.calc_pixel(idx[1], idx[0], r, ecs_list, pt, tm, rs, dojit)           
             return sr.data     
   
-        brightness_movie = utils.parfor(brightness_movie, parfor_calc_pixel, r, ecs_list, pt, tm1, rs, dojit=False, n_jobs=1, axis=-1)        
+        brightness_movie = utils.parfor(brightness_movie, parfor_calc_pixel, r, ecs_list, pt, tm, rs, dojit=False, n_jobs=1, axis=-1)        
 
       #  brightnessmovie[yy, xx, :] = sr_rs
         filename='Bar_S' + str(sp) + '_O' + str(o)      

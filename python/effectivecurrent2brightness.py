@@ -8,35 +8,73 @@ Output: a vector of brightness over time
 from __future__ import print_function
 from scipy.misc import factorial
 from scipy.signal import fftconvolve
+from scipy.signal import convolve2d
 import numpy as np
 import utils
 from utils import TimeSeries
 import gc
 import electrode2currentmap as e2cm
 
-def gamma(n, tau, t):
+    
+def onoffFiltering(movie, n, sig=[.1, .25],amp=[.01, -0.005]):
     """
-    returns a gamma function from in [0, t]:
-
-    y = (t/theta).^(n-1).*exp(-t/theta)/(theta*factorial(n-1))
-
-    which is the result of an n stage leaky integrator.
+    From a movie to a version that is filtered by on and off cells
+    of sizes 
+    Parameters
+    ----------
+    movie: movie to be filtered
+    n : the sizes of the retinal ganglion cells (in μm, 293 μm equals 1 degree)
     """
+    onmovie = []
+    offmovie = []
+    pad = max(n*2)
+    for xx in range(movie.shape[-1]):
+        oldimg=movie[:, :, xx]
+        tmpimg=np.mean(np.mean(oldimg))*np.ones([oldimg.shape[0]+pad*2,oldimg.shape[1]+pad*2])
+        img = insertImg(tmpimg, oldimg)
+        filtImgOn=np.zeros([img.shape[0], img.shape[1]])
+        filtImgOff=np.zeros([img.shape[0], img.shape[1]])
+        
+        for i in range(n.shape[0]): 
+            [x,y] = np.meshgrid(np.linspace(-1,1,n[i]),np.linspace(-1,1,n[i]))   
+            rsq = x**2+y**2
+            dx = x[0,1]-x[0,0]    
+            on = np.exp(-rsq/(2*sig[0]**2))*(dx**2)/(2*np.pi*sig[0]**2)
+            off = np.exp(-rsq/(2*sig[1]**2))*(dx**2)/(2*np.pi*sig[1]**2)
+            filt = on-off
+            tmp = convolve2d(img,filt,'same')/n.shape[-1]
+            filtImgOn =    filtImgOn + np.max(tmp,0)
+            filtImgOff = filtImgOff + -np.min(tmp,0)
 
-    flag = 0
-    if t[0] == 0:
-        t = t[1:len(t)]
-        flag = 1
+        # Remove padding
+        nopad=np.zeros([img.shape[0]-pad*2, img.shape[1]-pad*2])
+        filtImgOn = insertImg(nopad,filtImgOn)
+        filtImgOff = insertImg(nopad,filtImgOff)
+        onmovie[:, :, xx]=filtImgOn
+        offmovie[:, :, xx]=filtImgOn
+        
+    return onmovie, offmovie
 
-    y = ((t/tau)  ** (n-1) *
-        np.exp(-t / tau) /
-        (tau * factorial(n-1)))
+def insertImg(img,testImg): 
+    """ insertImg(img,testImg)
+    Inserts testImg into the center of img.  
+    if testImg is larger than img, testImg is cropped and centered.
+    """
+    if testImg.shape[0]>img.shape[0]:
+       x0 = np.ceil([(testImg.shape[0]-img.shape[0])/2])+1
+       testImg = testImg[x0:(x0+img.shape[0]-1),:]
 
-    if flag == 1:
-        y = np.concatenate([[0], y])
 
-    return y
+    if testImg.shape[1]>img.shape[1]:
+       y0 = np.ceil([(testImg.shape[1]-img.shape[1])/2])+1
+       testImg = testImg[:,y0:y0+img.shape[1]-1]
 
+
+    x0 = np.ceil([(img.shape[1]-testImg.shape[1])/2])+1
+    y0 = np.ceil([(img.shape[0]-testImg.shape[0])/2])+1
+    img[y0:y0+testImg.shape[0],x0:x0+testImg.shape[1]] = testImg
+    
+    return img
 
 class TemporalModel(object):
     def __init__(self, tau1=.42/1000, tau2=45.25/1000,
@@ -80,7 +118,7 @@ class TemporalModel(object):
         Fast response function
         """
         t = np.arange(0, 20 * self.tau1, stimulus.tsample)
-        g = gamma(1, self.tau1, t)
+        g = e2cm.gamma(1, self.tau1, t)
         R1 = stimulus.tsample * utils.sparseconv(g, stimulus.data, dojit)
         return TimeSeries(stimulus.tsample, R1)
 
@@ -90,7 +128,7 @@ class TemporalModel(object):
         # calculated accumulated charge
         rect_amp = np.where(stimulus.data > 0, stimulus.data, 0)  # rectify
         ca = stimulus.tsample * np.cumsum(rect_amp.astype(float), axis=-1)
-        g = gamma(1, self.tau2, t)
+        g = e2cm.gamma(1, self.tau2, t)
         chargeaccumulated = (self.e * stimulus.tsample *
                              fftconvolve(g, ca))
         zero_pad = np.zeros(fast_response.shape[:-1] +
@@ -118,15 +156,17 @@ class TemporalModel(object):
         # this is cropped as tightly as
         # possible for speed sake
         t = np.arange(0, self.tau3 * 8, fast_response_ca_snl.tsample)
-        g = gamma(3, self.tau3, t)
+        g = e2cm.gamma(3, self.tau3, t)
         c = fftconvolve(g, fast_response_ca_snl.data)
         return TimeSeries(fast_response_ca_snl.tsample,
                           fast_response_ca_snl.tsample * c)
 
     def model_cascade(self, ecm, dojit):
         fr = self.fast_response(ecm, dojit=dojit)
-        ca = self.charge_accumulation(fr, ecm)
-        sn = self.stationary_nonlinearity(ca)
+       # ca = self.charge_accumulation(fr, ecm)
+       # this line deleted because charge accumulation now modeled at the 
+        # elecrode level as accumulated voltage
+        sn = self.stationary_nonlinearity(fr)
         return self.slow_response(sn)
 
 
@@ -137,7 +177,7 @@ def pulse2percept(temporal_model, ecs, retina, stimuli,
 
     Parameters
     ----------
-    temporal_model : emporalModel class instance.
+    temporal_model : temporalModel class instance.
     ecs : ndarray
     retina : a Retina class instance.
     stimuli : list
