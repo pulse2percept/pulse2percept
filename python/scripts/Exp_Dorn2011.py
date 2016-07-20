@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 import utils
 
 brightnessmovie=np.random.rand(100,200, 40)
-[onmovie, offmovie] = ec2b.onoffFiltering(brightnessmovie, np.array([5, 10])
-
+[onmovie, offmovie] = ec2b.onoffFiltering(brightnessmovie, np.array([5, 10]))
+boom
 
 # relevant bits of Dorn paper
 # Surgeons were instructed to place the array centered

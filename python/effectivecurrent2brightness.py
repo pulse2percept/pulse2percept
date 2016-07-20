@@ -25,9 +25,11 @@ def onoffFiltering(movie, n, sig=[.1, .25],amp=[.01, -0.005]):
     movie: movie to be filtered
     n : the sizes of the retinal ganglion cells (in μm, 293 μm equals 1 degree)
     """
-    onmovie = []
-    offmovie = []
-    pad = max(n*2)
+    onmovie = np.zeros([movie.shape[0], movie.shape[1], movie.shape[2]])
+    offmovie=onmovie
+    newfiltImgOn=np.zeros([movie.shape[0], movie.shape[1]])
+    newfiltImgOff=np.zeros([movie.shape[0], movie.shape[1]])
+    pad = max(n)*2
     for xx in range(movie.shape[-1]):
         oldimg=movie[:, :, xx]
         tmpimg=np.mean(np.mean(oldimg))*np.ones([oldimg.shape[0]+pad*2,oldimg.shape[1]+pad*2])
@@ -42,39 +44,44 @@ def onoffFiltering(movie, n, sig=[.1, .25],amp=[.01, -0.005]):
             on = np.exp(-rsq/(2*sig[0]**2))*(dx**2)/(2*np.pi*sig[0]**2)
             off = np.exp(-rsq/(2*sig[1]**2))*(dx**2)/(2*np.pi*sig[1]**2)
             filt = on-off
-            tmp = convolve2d(img,filt,'same')/n.shape[-1]
-            filtImgOn =    filtImgOn + np.max(tmp,0)
-            filtImgOff = filtImgOff + -np.min(tmp,0)
+            tmp_on = convolve2d(img,filt,'same')/n.shape[-1]
+            tmp_off=tmp_on
+            tmp_on= np.where(tmp_on>0, tmp_on, 0) 
+            tmp_off= -np.where(tmp_off<0, tmp_off, 0)
+             #   rectified = np.where(ptrain.data > 0, ptrain.data, 0)
+            filtImgOn =    filtImgOn+tmp_on/n.shape[0] 
+            filtImgOff =   filtImgOff+tmp_off/n.shape[0] 
 
         # Remove padding
         nopad=np.zeros([img.shape[0]-pad*2, img.shape[1]-pad*2])
-        filtImgOn = insertImg(nopad,filtImgOn)
-        filtImgOff = insertImg(nopad,filtImgOff)
-        onmovie[:, :, xx]=filtImgOn
-        offmovie[:, :, xx]=filtImgOn
+        newfiltImgOn[:,:] = insertImg(nopad,filtImgOn)
+        newfiltImgOff[:, :] = insertImg(nopad,filtImgOff)
+        onmovie[:, :, xx]=newfiltImgOn
+        offmovie[:, :, xx]=newfiltImgOff
         
-    return onmovie, offmovie
+    return (onmovie, offmovie)
 
-def insertImg(img,testImg): 
-    """ insertImg(img,testImg)
-    Inserts testImg into the center of img.  
-    if testImg is larger than img, testImg is cropped and centered.
+def insertImg(out_img,in_img): 
+    """ insertImg(out_img,in_img)
+    Inserts in_img into the center of out_img.  
+    if in_img is larger than out_img, in_img is cropped and centered.
     """
-    if testImg.shape[0]>img.shape[0]:
-       x0 = np.ceil([(testImg.shape[0]-img.shape[0])/2])+1
-       testImg = testImg[x0:(x0+img.shape[0]-1),:]
 
-
-    if testImg.shape[1]>img.shape[1]:
-       y0 = np.ceil([(testImg.shape[1]-img.shape[1])/2])+1
-       testImg = testImg[:,y0:y0+img.shape[1]-1]
-
-
-    x0 = np.ceil([(img.shape[1]-testImg.shape[1])/2])+1
-    y0 = np.ceil([(img.shape[0]-testImg.shape[0])/2])+1
-    img[y0:y0+testImg.shape[0],x0:x0+testImg.shape[1]] = testImg
+    if in_img.shape[0]>out_img.shape[0]:
+        x0 = np.floor([(in_img.shape[0]-out_img.shape[0])/2])
+        xend=x0+out_img.shape[0]    
+        in_img=in_img[x0:xend, :]
+       
+    if in_img.shape[1]>out_img.shape[1]:
+        y0 = np.floor([(in_img.shape[1]-out_img.shape[1])/2])   
+        yend=y0+out_img.shape[1]
+        in_img=in_img[:, y0:yend]
+       
+    x0 = np.floor([(out_img.shape[0]-in_img.shape[0])/2])
+    y0 = np.floor([(out_img.shape[1]-in_img.shape[1])/2])
+    out_img[x0:x0+in_img.shape[0], y0:y0+in_img.shape[1]] = in_img
     
-    return img
+    return out_img
 
 class TemporalModel(object):
     def __init__(self, tau1=.42/1000, tau2=45.25/1000,

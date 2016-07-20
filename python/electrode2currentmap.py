@@ -32,6 +32,28 @@ def deg2micron(deg):
     microns = 280 * deg
     return microns
 
+def gamma(n, tau, t):
+    """
+    returns a gamma function from in [0, t]:
+
+    y = (t/theta).^(n-1).*exp(-t/theta)/(theta*factorial(n-1))
+
+    which is the result of an n stage leaky integrator.
+    """
+
+    flag = 0
+    if t[0] == 0:
+        t = t[1:len(t)]
+        flag = 1
+
+    y = ((t/tau)  ** (n-1) *
+        np.exp(-t / tau) /
+        (tau * factorial(n-1)))
+
+    if flag == 1:
+        y = np.concatenate([[0], y])
+
+    return y
 
 class Electrode(object):
     """
@@ -168,7 +190,7 @@ def accumulatingvoltage(ptrain,tau=45.25/1000):
     t = np.arange(0, 20 * tau, ptrain.tsample)
     rectified = np.where(ptrain.data > 0, ptrain.data, 0)  # rectify
     ca = ptrain.tsample * np.cumsum(rectified.astype(float), axis=-1)
-    g = ec2b.gamma(1, tau, t)
+    g = gamma(1, tau, t)
     chargeaccumulated = (ptrain.tsample *  fftconvolve(g, ca))
     zero_pad = np.zeros(rectified.shape[:-1] +
         (chargeaccumulated.shape[-1] -  rectified.shape[-1],))
