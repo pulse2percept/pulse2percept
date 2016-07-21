@@ -358,6 +358,7 @@ class Retina(object):
                      sampling=[sampling],
                      axon_lambda=[axon_lambda])
 
+        self.sampling = sampling
         self.axon_id = axon_id
         self.axon_weight = axon_weight
 
@@ -380,10 +381,10 @@ class Retina(object):
         """ 
         ecs = np.zeros(current_spread.shape)
         for id in range(0, len(current_spread.flat)):
-            if integrationtype == 'dotproduct':
+            if integrationtype is 'dotproduct':
                 ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
                                   self.axon_weight[id])
-            elif integrationtype == 'maxrule':
+            elif integrationtype is 'maxrule':
                 ecs.flat[id] = np.max(np.multiply(current_spread.flat[self.axon_id[id]],
                                   self.axon_weight[id]))
             else:

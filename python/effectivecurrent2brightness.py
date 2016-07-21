@@ -18,7 +18,7 @@ import electrode2currentmap as e2cm
     
 def onoffFiltering(movie, n, sig=[.1, .25],amp=[.01, -0.005]):
     """
-    From a movie to a version that is filtered by on and off cells
+    From a movie to a version that is filtered by a collection on and off cells
     of sizes 
     Parameters
     ----------
@@ -26,7 +26,7 @@ def onoffFiltering(movie, n, sig=[.1, .25],amp=[.01, -0.005]):
     n : the sizes of the retinal ganglion cells (in μm, 293 μm equals 1 degree)
     """
     onmovie = np.zeros([movie.shape[0], movie.shape[1], movie.shape[2]])
-    offmovie=onmovie
+    offmovie = np.zeros([movie.shape[0], movie.shape[1], movie.shape[2]])
     newfiltImgOn=np.zeros([movie.shape[0], movie.shape[1]])
     newfiltImgOff=np.zeros([movie.shape[0], movie.shape[1]])
     pad = max(n)*2
@@ -61,6 +61,24 @@ def onoffFiltering(movie, n, sig=[.1, .25],amp=[.01, -0.005]):
         
     return (onmovie, offmovie)
 
+def onoffRecombine(onmovie, offmovie):
+    """
+    From a movie as filtered by on and off cells, 
+    to a recombined version that is either based on an electronic 
+    prosthetic (on + off) or recombined as might be done by a cortical
+    cell in normal vision (on-off) 
+    Parameters
+    ----------
+    movie: on and off movies to be recombined
+    combination : options are 'both' returns both prosthetic and normal vision, 'normal' and 'prosthetic'
+    """  
+
+    prostheticmovie=onmovie + offmovie
+    normalmovie=onmovie - offmovie
+    return (normalmovie, prostheticmovie)
+
+        
+    
 def insertImg(out_img,in_img): 
     """ insertImg(out_img,in_img)
     Inserts in_img into the center of out_img.  
