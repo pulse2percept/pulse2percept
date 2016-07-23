@@ -110,8 +110,7 @@ class TemporalModel(object):
         return self.slow_response(sn)
 
 
-def pulse2percept(temporal_model, ecs, retina, stimuli,
-                  rs, dojit=True, n_jobs=-1, tol=.05):
+def pulse2percept(temporal_model, ecs, retina, stimuli, rs, dojit=True, n_jobs=-1, tol=.05):
     """
     From pulses (stimuli) to percepts (spatio-temporal)
 
