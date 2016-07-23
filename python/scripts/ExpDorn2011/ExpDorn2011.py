@@ -8,21 +8,22 @@ import effectivecurrent2brightness as ec2b
 import npy2savedformats as n2sf
 import matplotlib.pyplot as plt
 import utils
+import importlib as imp
+#imp.reload(n2sf)
 
-# this code is based on the Dorn 2011 paper, where subjects had to guess
+# Recreation of the Dorn 2011 paper, where subjects had to guess
 # the direction of motion of a moving bar
 
 # Surgeons were instructed to place the array centered
-#over the macula. 
-#Each of the 60 electrodes (in a 6 × 10 grid) were 200 μm 
-#in diameter
+# over the macula. 
+# Each of the 60 electrodes (in a 6 × 10 grid) were 200 μm 
+# in diameter
 # The array (along the diagonal) covered an area
 # of retina corresponding to about 20° in visual angle
 #  assuming 293 μm on the retina equates to 1° of visual angle.
 # a=1.72, sqrt((a*6)^2+(a*10)^2)=20
 # so the 10 side is 17.2 degrees
 # the 6 side is 10.32 degrees 
-
 
 # Create electrode array for the Argus 2
 # 293 μm equals 1 degree
@@ -52,15 +53,12 @@ retinaname='1700by2900L80'
 r = e2cm.Retina(axon_map='../../retina/ret_' + retinaname+ '.npz', 
                 sampling=25, ylo=-1700, yhi=1700, xlo=-2900, xhi=2900, axon_lambda=8)     
     
-boom
-
 e_rf=[]
 for e in e_all.electrodes:
     e_rf.append(e2cm.receptive_field(e, r.gridx, r.gridy,e_spacing))
 
 [ecs_list, cs_list]  = r.electrode_ecs(e_all, integrationtype='maxrule')
-#THIS HAS A NORMALIZATION STEP IN THERE, DO WE WANT IT    
-       
+         
 # create movie
 # original screen was [52.74, 63.32]  visual angle
 # res=[768 ,1024] # resolution of screen
@@ -111,9 +109,8 @@ for o in np.arange(0, 2*np.pi,2): #DEBUG 2*np.pi/4): # each orientation
         tm = ec2b.TemporalModel()
     
         rs=1/(fps*ptrain.tsample) 
-    #fr=np.zeros([e_rf[0].shape[0],e_rf[0].shape[1], len(pt[0].data)])
-
-    # This seems obsolete
+        #fr=np.zeros([e_rf[0].shape[0],e_rf[0].shape[1], len(pt[0].data)])
+        # This seems obsolete
         
         sr_tmp=ec2b.calc_pixel(0, 0, r, ecs_list, pt, tm, rs, dojit=False) 
         brightness_movie = np.zeros((r.gridx.shape[0], r.gridx.shape[1], sr_tmp.shape[0]))
@@ -133,7 +130,6 @@ for o in np.arange(0, 2*np.pi,2): #DEBUG 2*np.pi/4): # each orientation
        # Information processing in the primate retina: circuitry and coding. 
        # Annual Review of Neuroscience 30:1-30
        # chose 30 different sizes fairly randomly
-        brightness_movie=np.random.rand(200, 200, 50)
         retinasizes=np.unique(np.ceil(np.array(np.linspace(5, 50, 15))/r.sampling))
         retinasizes = np.array([i for i in retinasizes if i >= 2])
         
@@ -147,3 +143,4 @@ for o in np.arange(0, 2*np.pi,2): #DEBUG 2*np.pi/4): # each orientation
         n2sf.savemoviefiles(filename + 'off', offmovie)
         n2sf.savemoviefiles(filename + 'normal', normalmovie) 
         n2sf.savemoviefiles(filename + 'prosthetic', prostheticmovie)
+        boom

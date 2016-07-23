@@ -391,7 +391,13 @@ class Retina(object):
                 print('pulse not defined')
 
         ecs = ecs / ecs.max()
-
+        
+        # this normalization is based on unit current on the retina producing 
+        # a max response of 1 based on axonal integration.
+        # means that response magnitudes don't change as you increase the 
+        # length of axonal integration or sampling of the retina
+        # Doesn't affect normalization over time, or responses as a function
+        # of the anount of current, 
         return ecs
 
     def electrode_ecs(self, electrode_array, alpha=14000, n=1.69, integrationtype='maxrule'):

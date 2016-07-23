@@ -8,25 +8,27 @@ https://ffmpeg.zeranoe.com/builds/win64/static/
 
 Used instructions from here with modifications:
 http://adaptivesamples.com/how-to-install-ffmpeg-on-windows/
-Didn't add the directory to the system path, instead it's path is explicitly 
+NOTE ... Didn't add the directory to the system path, instead it's path is explicitly 
 included in the program
-"""
+written Ione Fine 7/2016
+""" 
 
 import subprocess
 import numpy as np
 from PIL import Image
 import scipy.io as sio
+
+
         
 def savemoviefiles(filestr, data, path='savedImages/'):
-    
     np.save(path+filestr, data) # save as npy
     sio.savemat(path+filestr+'.mat', dict(mov=data))  # save as matfile
-    npy2movie(filestr, data) # save as avi
+    npy2movie(path+filestr+'.avi', data) # save as avi
 
-def npy2movie(filename, movie, rate=30, ffmpeg_path='../../../ffmpeg/bin/'):
-    
+def npy2movie(filename, movie, rate=30, ffmpegpath='../../../ffmpeg/bin/'):
+ 
 
-    cmdstring = ([ffmpeg_path + 'ffmpeg.exe'],
+    cmdstring = (ffmpegpath + 'ffmpeg.exe',
              '-y',
              '-r', '%d' % rate,
              '-f','image2pipe',
@@ -35,6 +37,7 @@ def npy2movie(filename, movie, rate=30, ffmpeg_path='../../../ffmpeg/bin/'):
              '-vcodec', 'libxvid',
              filename
              )
+    print(filename)
     p = subprocess.Popen(cmdstring, stdin=subprocess.PIPE, shell=False)
 
     for i in range(movie.shape[-1]):
