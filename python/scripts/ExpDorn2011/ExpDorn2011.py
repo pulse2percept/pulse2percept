@@ -11,25 +11,16 @@ import utils
 import importlib as imp
 #imp.reload(n2sf)
 
-# Recreation of the Dorn 2011 paper, where subjects had to guess
-# the direction of motion of a moving bar
+# Recreation of the Dorn 2013 paper, where subjects had to guess the direction of motion of a moving bar
 
-# Surgeons were instructed to place the array centered
-# over the macula. 
-# Each of the 60 electrodes (in a 6 × 10 grid) were 200 μm 
-# in diameter
-# The array (along the diagonal) covered an area
-# of retina corresponding to about 20° in visual angle
-#  assuming 293 μm on the retina equates to 1° of visual angle.
-# a=1.72, sqrt((a*6)^2+(a*10)^2)=20
-# so the 10 side is 17.2 degrees
-# the 6 side is 10.32 degrees 
+# Surgeons were instructed to place the array centered over the macula. 
+# Each of the 60 electrodes (in a 6 × 10 grid) were 200 μm in diameter
+# The array (along the diagonal) covered an area of retina corresponding to about 20° in visual angle  assuming 293 μm on the retina equates to 1° of visual angle.
+# a=1.72, sqrt((a*6)^2+(a*10)^2)=20 so the 10 side is 17.2 degrees, the 6 side is 10.32 degrees 
 
 # Create electrode array for the Argus 2
-# 293 μm equals 1 degree
-# electrode spacing is done in microns
-# when you include the radius of the electrode 
-# the electrode centers span +/- 2362 and +/- 1312
+# 293 μm equals 1 degree, electrode spacing is done in microns
+# when you include the radius of the electrode  the electrode centers span +/- 2362 and +/- 1312
 
 xlist=[]
 ylist=[]
@@ -46,8 +37,7 @@ for x in np.arange(-2362, 2364, e_spacing):
 e_all = e2cm.ElectrodeArray(rlist,xlist,ylist,llist)
 del xlist, ylist, rlist, llist
 
-# create retina, input variables include the sampling 
-# and how much of the retina is simulated, in microns   
+# create retina, input variables include the sampling and how much of the retina is simulated, in microns   
 # (0,0 represents the fovea) 
 retinaname='1700by2900L80'
 r = e2cm.Retina(axon_map='../../retina/ret_' + retinaname+ '.npz', 
@@ -57,14 +47,12 @@ e_rf=[]
 for e in e_all.electrodes:
     e_rf.append(e2cm.receptive_field(e, r.gridx, r.gridy,e_spacing))
 
-[ecs_list, cs_list]  = r.electrode_ecs(e_all, integrationtype='maxrule')
+[ecs, cs]  = r.electrode_ecs(e_all, integrationtype='maxrule')
          
 # create movie
-# original screen was [52.74, 63.32]  visual angle
-# res=[768 ,1024] # resolution of screen
-#pixperdeg=degscreen/res
-# no need to simulate the whole movie, just match it to the electrode array
-# xhi+xlo/294 (microns per degree)
+# original screen was [52.74, 63.32]  visual angle, res=[768 ,1024] # resolution of screen
+# pixperdeg=degscreen/res
+# no need to simulate the whole movie, just match it to the electrode array, xhi+xlo/294 (microns per degree)
 fps=30
 degscreen=[10.32+5, 17.2+5] # match to array visual angle,
 res=[e_rf[0].shape[0],e_rf[1].shape[1]] # resolution of screen
@@ -96,7 +84,7 @@ for o in np.arange(0, 2*np.pi,2): #DEBUG 2*np.pi/4): # each orientation
         # create pulsetrain corresponding to the movie
         pt=[]
         for rf in e_rf:
-            rflum= e2cm.retinalmovie2electrodtimeseries(rf, movie)         
+            rflum= e2cm.retinalmovie2electrodtimeseries(rf, movie)  
             ptrain=e2cm.Movie2Pulsetrain(rflum)
             ptrain=e2cm.accumulatingvoltage(ptrain) 
             pt.append(ptrain)
@@ -105,31 +93,29 @@ for o in np.arange(0, 2*np.pi,2): #DEBUG 2*np.pi/4): # each orientation
         
         del movie
         
-
         tm = ec2b.TemporalModel()
-    
-        rs=1/(fps*ptrain.tsample) 
+        
+        rs=(1/fps)*pt[0].tsample # factor by which movies resampled for presentation
+        brightness_movie = ec2b.pulse2percept(tm, ecs, r, pt, rs, dojit=False)
+        
+        #rs=1/(fps*ptrain.tsample) 
         #fr=np.zeros([e_rf[0].shape[0],e_rf[0].shape[1], len(pt[0].data)])
         # This seems obsolete
         
-        sr_tmp=ec2b.calc_pixel(0, 0, r, ecs_list, pt, tm, rs, dojit=False) 
-        brightness_movie = np.zeros((r.gridx.shape[0], r.gridx.shape[1], sr_tmp.shape[0]))
-
-        def parfor_calc_pixel(arr, idx, r, ecs_list, pt, tm, rs, dojit=False):            
-            sr=ec2b.calc_pixel(idx[1], idx[0], r, ecs_list, pt, tm, rs, dojit)           
-            return sr.data     
-  
-        brightness_movie = utils.parfor(brightness_movie, parfor_calc_pixel, r, ecs_list, pt, tm, rs, dojit=False, n_jobs=1, axis=-1)        
-                
+#        sr_tmp=ec2b.calc_pixel(0, r, ecs_list, pt, tm, prtrs) 
+#        brightness_movie = np.zeros((r.gridx.shape[0], r.gridx.shape[1], sr_tmp.shape[0]))
+#
+#        def parfor_calc_pixel(arr, idx, r, ecs_list, pt, tm, rs, dojit=False):            
+#            sr=ec2b.calc_pixel(idx[1], idx[0], r, ecs_list, pt, tm, rs, dojit)           
+#            return sr.data     
+#  
+#        brightness_movie = utils.parfor(brightness_movie, parfor_calc_pixel, r, ecs_list, pt, tm, rs, dojit=False, n_jobs=1, axis=-1)        
+#                
        # FILTERING BY ON OFF CELLS
-       # foveal vision is ~60 cpd. 293μm on the retina corresponds to 1 degree, so the smallest
-       # receptive field probably covers 293/60 ~=5μm, 
-       # we set the largest as being 10 times bigger than that
-       # numbers roughly based on 
-       # Field GD & Chichilnisky EJ (2007) 
-       # Information processing in the primate retina: circuitry and coding. 
-       # Annual Review of Neuroscience 30:1-30
-       # chose 30 different sizes fairly randomly
+       # foveal vision is ~60 cpd. 293μm on the retina corresponds to 1 degree, so the smallest receptive field probably covers 293/60 ~=5μm, 
+       # we set the largest as being 10 times bigger than that numbers roughly based on 
+       # Field GD & Chichilnisky EJ (2007) Information processing in the primate retina: circuitry and coding. Annual Review of Neuroscience 30:1-30
+       # Chose 30 different sizes fairly randomly
         retinasizes=np.unique(np.ceil(np.array(np.linspace(5, 50, 15))/r.sampling))
         retinasizes = np.array([i for i in retinasizes if i >= 2])
         

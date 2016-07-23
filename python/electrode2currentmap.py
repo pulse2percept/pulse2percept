@@ -390,6 +390,7 @@ class Retina(object):
             else:
                 print('pulse not defined')
 
+
         ecs = ecs / ecs.max()
         
         # this normalization is based on unit current on the retina producing 
@@ -398,6 +399,7 @@ class Retina(object):
         # length of axonal integration or sampling of the retina
         # Doesn't affect normalization over time, or responses as a function
         # of the anount of current, 
+
         return ecs
 
     def electrode_ecs(self, electrode_array, alpha=14000, n=1.69, integrationtype='maxrule'):
@@ -425,7 +427,8 @@ class Retina(object):
         ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
                        len(electrode_array.electrodes)))
 
-        cs =  np.zeros((self.gridx.shape[0], self.gridx.shape[1],
+
+        cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1], 
                        len(electrode_array.electrodes)))
 
         for i, e in enumerate(electrode_array.electrodes):
