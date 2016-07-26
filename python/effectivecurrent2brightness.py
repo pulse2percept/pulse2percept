@@ -8,34 +8,12 @@ Output: a vector of brightness over time
 from __future__ import print_function
 from scipy.misc import factorial
 from scipy.signal import fftconvolve
+from scipy.signal import convolve2d
 import numpy as np
 import utils
 from utils import TimeSeries
 import gc
 import electrode2currentmap as e2cm
-
-def gamma(n, tau, t):
-    """
-    returns a gamma function from in [0, t]:
-
-    y = (t/theta).^(n-1).*exp(-t/theta)/(theta*factorial(n-1))
-
-    which is the result of an n stage leaky integrator.
-    """
-
-    flag = 0
-    if t[0] == 0:
-        t = t[1:len(t)]
-        flag = 1
-
-    y = ((t/tau)  ** (n-1) *
-        np.exp(-t / tau) /
-        (tau * factorial(n-1)))
-
-    if flag == 1:
-        y = np.concatenate([[0], y])
-
-    return y
 
 
 class TemporalModel(object):
@@ -80,7 +58,7 @@ class TemporalModel(object):
         Fast response function
         """
         t = np.arange(0, 20 * self.tau1, stimulus.tsample)
-        g = gamma(1, self.tau1, t)
+        g = e2cm.gamma(1, self.tau1, t)
         R1 = stimulus.tsample * utils.sparseconv(g, stimulus.data, dojit)
         return TimeSeries(stimulus.tsample, R1)
 
@@ -90,7 +68,7 @@ class TemporalModel(object):
         # calculated accumulated charge
         rect_amp = np.where(stimulus.data > 0, stimulus.data, 0)  # rectify
         ca = stimulus.tsample * np.cumsum(rect_amp.astype(float), axis=-1)
-        g = gamma(1, self.tau2, t)
+        g = e2cm.gamma(1, self.tau2, t)
         chargeaccumulated = (self.e * stimulus.tsample *
                              fftconvolve(g, ca))
         zero_pad = np.zeros(fast_response.shape[:-1] +
@@ -102,7 +80,6 @@ class TemporalModel(object):
                                                    zero_pad], -1))
 
         R2 = fast_response.data - chargeaccumulated
-        ind = R2 < 0
         R2 = np.where(R2 > 0, R2, 0)  # rectify again
         return TimeSeries(fast_response.tsample, R2)
 
@@ -119,26 +96,27 @@ class TemporalModel(object):
         # this is cropped as tightly as
         # possible for speed sake
         t = np.arange(0, self.tau3 * 8, fast_response_ca_snl.tsample)
-        g = gamma(3, self.tau3, t)
+        g = e2cm.gamma(3, self.tau3, t)
         c = fftconvolve(g, fast_response_ca_snl.data)
         return TimeSeries(fast_response_ca_snl.tsample,
                           fast_response_ca_snl.tsample * c)
 
     def model_cascade(self, ecm, dojit):
         fr = self.fast_response(ecm, dojit=dojit)
-        ca = self.charge_accumulation(fr, ecm)
-        sn = self.stationary_nonlinearity(ca)
+        # ca = self.charge_accumulation(fr, ecm)
+        # this line deleted because charge accumulation now modeled at the 
+        # elecrode level as accumulated voltage
+        sn = self.stationary_nonlinearity(fr)
         return self.slow_response(sn)
 
 
-def pulse2percept(temporal_model, ecs, retina, stimuli,
-                  rs, dojit=True, n_jobs=-1, tol=.05):
+def pulse2percept(temporal_model, ecs, retina, stimuli, rs, dojit=True, n_jobs=-1, tol=.05):
     """
     From pulses (stimuli) to percepts (spatio-temporal)
 
     Parameters
     ----------
-    temporal_model : emporalModel class instance.
+    temporal_model : temporalModel class instance.
     ecs : ndarray
     retina : a Retina class instance.
     stimuli : list
@@ -167,10 +145,94 @@ def pulse2percept(temporal_model, ecs, retina, stimuli,
     return TimeSeries(sr_list[0].tsample, bm)
 
 
-def calc_pixel(ecs_vector, stim_data, temporal_model, rs, tsample, dojit):
+def calc_pixel(ecs_vector, stim_data, temporal_model, rs, tsample, dojit='False'):
     ecm = e2cm.ecm(ecs_vector, stim_data, tsample)
     sr = temporal_model.model_cascade(ecm, dojit=dojit)
     del temporal_model, ecm
     gc.collect()
     sr.resample(rs)
     return sr
+
+def onoffFiltering(movie, n, sig=[.1, .25],amp=[.01, -0.005]):
+    """
+    From a movie to a version that is filtered by a collection on and off cells
+    of sizes 
+    Parameters
+    ----------
+    movie: movie to be filtered
+    n : the sizes of the retinal ganglion cells (in μm, 293 μm equals 1 degree)
+    """
+    onmovie = np.zeros([movie.shape[0], movie.shape[1], movie.shape[2]])
+    offmovie = np.zeros([movie.shape[0], movie.shape[1], movie.shape[2]])
+    newfiltImgOn=np.zeros([movie.shape[0], movie.shape[1]])
+    newfiltImgOff=np.zeros([movie.shape[0], movie.shape[1]])
+    pad = max(n)*2
+    for xx in range(movie.shape[-1]):
+        oldimg=movie[:, :, xx]
+        tmpimg=np.mean(np.mean(oldimg))*np.ones([oldimg.shape[0]+pad*2,oldimg.shape[1]+pad*2])
+        img = insertImg(tmpimg, oldimg)
+        filtImgOn=np.zeros([img.shape[0], img.shape[1]])
+        filtImgOff=np.zeros([img.shape[0], img.shape[1]])
+        
+        for i in range(n.shape[0]): 
+            [x,y] = np.meshgrid(np.linspace(-1,1,n[i]),np.linspace(-1,1,n[i]))   
+            rsq = x**2+y**2
+            dx = x[0,1]-x[0,0]    
+            on = np.exp(-rsq/(2*sig[0]**2))*(dx**2)/(2*np.pi*sig[0]**2)
+            off = np.exp(-rsq/(2*sig[1]**2))*(dx**2)/(2*np.pi*sig[1]**2)
+            filt = on-off
+            tmp_on = convolve2d(img,filt,'same')/n.shape[-1]
+            tmp_off=tmp_on
+            tmp_on= np.where(tmp_on>0, tmp_on, 0) 
+            tmp_off= -np.where(tmp_off<0, tmp_off, 0)
+             #   rectified = np.where(ptrain.data > 0, ptrain.data, 0)
+            filtImgOn =    filtImgOn+tmp_on/n.shape[0] 
+            filtImgOff =   filtImgOff+tmp_off/n.shape[0] 
+
+        # Remove padding
+        nopad=np.zeros([img.shape[0]-pad*2, img.shape[1]-pad*2])
+        newfiltImgOn[:,:] = insertImg(nopad,filtImgOn)
+        newfiltImgOff[:, :] = insertImg(nopad,filtImgOff)
+        onmovie[:, :, xx]=newfiltImgOn
+        offmovie[:, :, xx]=newfiltImgOff
+        
+    return (onmovie, offmovie)
+
+def onoffRecombine(onmovie, offmovie):
+    """
+    From a movie as filtered by on and off cells, 
+    to a recombined version that is either based on an electronic 
+    prosthetic (on + off) or recombined as might be done by a cortical
+    cell in normal vision (on-off) 
+    Parameters
+    ----------
+    movie: on and off movies to be recombined
+    combination : options are 'both' returns both prosthetic and normal vision, 'normal' and 'prosthetic'
+    """  
+
+    prostheticmovie=onmovie + offmovie
+    normalmovie=onmovie - offmovie
+    return (normalmovie, prostheticmovie)
+
+
+def insertImg(out_img,in_img): 
+    """ insertImg(out_img,in_img)
+    Inserts in_img into the center of out_img.  
+    if in_img is larger than out_img, in_img is cropped and centered.
+    """
+
+    if in_img.shape[0]>out_img.shape[0]:
+        x0 = np.floor([(in_img.shape[0]-out_img.shape[0])/2])
+        xend=x0+out_img.shape[0]    
+        in_img=in_img[x0:xend, :]
+       
+    if in_img.shape[1]>out_img.shape[1]:
+        y0 = np.floor([(in_img.shape[1]-out_img.shape[1])/2])   
+        yend=y0+out_img.shape[1]
+        in_img=in_img[:, y0:yend]
+       
+    x0 = np.floor([(out_img.shape[0]-in_img.shape[0])/2])
+    y0 = np.floor([(out_img.shape[1]-in_img.shape[1])/2])
+    out_img[x0:x0+in_img.shape[0], y0:y0+in_img.shape[1]] = in_img
+    
+    return out_img
