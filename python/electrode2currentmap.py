@@ -113,7 +113,7 @@ def receptive_field(electrode, xg, yg, size):
 
 
 def gaussian_receptive_field(electrode, xg, yg, sigma):
-    """ 
+    """
     A Gaussian receptive field
     """
     amp = np.exp(-((xg - electrode.x)**2 + (yg - electrode.y)**2) / (2 * (sigma ** 2)))
@@ -168,7 +168,8 @@ class Movie2Pulsetrain(TimeSeries):
         # set up the sequence
         dur = rflum.shape[-1] / fps
         if stimtype == 'pulsetrain':
-            interpulsegap = np.zeros(round((1 / freq) / tsample) - len(pulse))
+            interpulsegap = np.zeros(round((1.0 / freq) / tsample) -
+                                     len(pulse))
             ppt = []
             for j in range(0, int(np.ceil(dur * freq))):
                 ppt = np.concatenate((ppt, interpulsegap), axis=0)
@@ -358,7 +359,7 @@ class Retina(object):
                        len(electrode_array.electrodes)))
 
 
-        cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1], 
+        cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
                        len(electrode_array.electrodes)))
 
         for i, e in enumerate(electrode_array.electrodes):
