@@ -17,8 +17,6 @@ import subprocess
 import numpy as np
 from PIL import Image
 import scipy.io as sio
-
-
         
 def savemoviefiles(filestr, data, path='savedImages/'):
     np.save(path+filestr, data) # save as npy
