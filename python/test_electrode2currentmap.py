@@ -24,9 +24,10 @@ def test_Retina_Electrodes():
                          sampling=sampling, axon_map=retina_file)
     npt.assert_equal(retina.gridx.shape, ((yhi - ylo) / sampling,
                                           (xhi - xlo) / sampling))
-    electrode1 = e2cm.Electrode(1, 0, 0)
+    electrode1 = e2cm.Electrode(1, 0, 0, 0)
     cs = electrode1.current_spread(retina.gridx, retina.gridy)
-    electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1])
+    electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1],
+                                          [0, 1])
     npt.assert_equal(electrode1.x, electrode_array.electrodes[0].x)
     npt.assert_equal(electrode1.y, electrode_array.electrodes[0].y)
     npt.assert_equal(electrode1.radius, electrode_array.electrodes[0].radius)
@@ -99,13 +100,13 @@ def test_Retina_ecm():
                                 tsample=.075/1000., current_amplitude=20,
                                 pulsetype='cathodicfirst')
 
-
-    electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1])
+    electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1],
+                                          [0, 1])
     ecs_list, cs_list = retina.electrode_ecs(electrode_array)
     xx = yy = 0
     ecs_vector = ecs_list[yy, xx]
     # Smoke testing, feed the same stimulus through both electrodes
-    stim_data = np.array([s.data for s in  [s1, s1]])
+    stim_data = np.array([s.data for s in [s1, s1]])
     ecm = e2cm.ecm(ecs_vector, stim_data, s1.tsample)
 
     fps = 30.0
