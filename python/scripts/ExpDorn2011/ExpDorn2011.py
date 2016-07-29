@@ -22,20 +22,24 @@ import importlib as imp
 # 293 μm equals 1 degree, electrode spacing is done in microns
 # when you include the radius of the electrode  the electrode centers span +/- 2362 and +/- 1312
 
+# based on Ahuja et al 2013. Factors affecting perceptual thresholds in Argus ii retinal prosthesis subjects
+# (figure 4, pdf is in retina folder) the mean height from the array should be  179.6 μm
+# with a range of ~50-750μm
+
 xlist=[]
 ylist=[]
 rlist=[] #electrode radius, microns
-llist=[] # lift of electrode from retinal surface, microns
+hlist=[] # lift of electrode from retinal surface, microns
 e_spacing=525 # spacing in microns
 for x in np.arange(-2362, 2364, e_spacing):  
     for y in np.arange(-1312, 1314, e_spacing):
         xlist.append(x)
         ylist.append(y)
         rlist.append(100) # electrode radiues
-        llist.append(0) # electrode lift from retinal surface
+        hlist.append(179.6) # electrode lift from retinal surface,
         
-e_all = e2cm.ElectrodeArray(rlist,xlist,ylist,llist)
-del xlist, ylist, rlist, llist
+e_all = e2cm.ElectrodeArray(rlist,xlist,ylist,hlist)
+del xlist, ylist, rlist, hlist
 
 # create retina, input variables include the sampling and how much of the retina is simulated, in microns   
 # (0,0 represents the fovea) 
@@ -47,8 +51,7 @@ e_rf=[]
 for e in e_all.electrodes:
     e_rf.append(e2cm.receptive_field(e, r.gridx, r.gridy,e_spacing))
 
-[ecs, cs]  = r.electrode_ecs(e_all, integrationtype='maxrule')
-         
+[ecs, cs]  = r.electrode_ecs(e_all, integrationtype='maxrule')      
 # create movie
 # original screen was [52.74, 63.32]  visual angle, res=[768 ,1024] # resolution of screen
 # pixperdeg=degscreen/res
@@ -129,4 +132,4 @@ for o in np.arange(0, 2*np.pi,2): #DEBUG 2*np.pi/4): # each orientation
         n2sf.savemoviefiles(filename + 'off', offmovie)
         n2sf.savemoviefiles(filename + 'normal', normalmovie) 
         n2sf.savemoviefiles(filename + 'prosthetic', prostheticmovie)
-        boom
+    

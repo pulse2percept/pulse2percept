@@ -59,7 +59,7 @@ class Electrode(object):
     """
     Represent a circular, disc-like electrode.
     """
-    def __init__(self, radius, x, y, l):
+    def __init__(self, radius, x, y, h):
         """
         Initialize an electrode object
 
@@ -75,7 +75,7 @@ class Electrode(object):
         self.radius = radius
         self.x = x
         self.y = y
-        self.l = l
+        self.h = h
 
     def current_spread(self, xg, yg, alpha=14000, n=1.69):
         """
@@ -98,10 +98,10 @@ class Electrode(object):
         retinal surface in microns
         """
         r = np.sqrt((xg - self.x) ** 2 + (yg - self.y) ** 2)
-        l=np.ones(r.shape)*self.l
-        cspread = (alpha / (alpha + l** n)) # drop in current just due to lift
+        h=np.ones(r.shape)*self.h
+        cspread = (alpha / (alpha + h** n)) # current values on the retina due to array being heigh
         
-        d=((r- self.radius)**2 + self.l**2)**.5 # actual distance from the electrode 
+        d=((r- self.radius)**2 + self.h**2)**.5 # actual distance from the electrode edge 
         cspread[r > self.radius] = (alpha / 
         (alpha + d[r > self.radius] ** n))
         return cspread
@@ -118,10 +118,10 @@ class ElectrodeArray(object):
     """
     Represent a retina and array of electrodes
     """
-    def __init__(self, radii, xs, ys, ls):
+    def __init__(self, radii, xs, ys, hs):
         self.electrodes = []
-        for r, x, y,l in zip(radii, xs, ys, ls):
-            self.electrodes.append(Electrode(r, x, y, l))
+        for r, x, y, h in zip(radii, xs, ys, hs):
+            self.electrodes.append(Electrode(r, x, y, h))
 
     def current_spread(self, xg, yg, alpha=14000, n=1.69):
         c = np.zeros((len(self.electrodes), xg.shape[0], xg.shape[1]))
@@ -390,7 +390,6 @@ class Retina(object):
                                   self.axon_weight[id]))
             else:
                 print('pulse not defined')
-
 
         ecs = ecs / ecs.max()
         
