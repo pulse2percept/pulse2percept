@@ -103,8 +103,9 @@ class TemporalModel(object):
 
     def model_cascade(self, ecm, dojit):
         fr = self.fast_response(ecm, dojit=dojit)
-        # ca = self.charge_accumulation(fr, ecm)
-        # this line deleted because charge accumulation now modeled at the 
+        if modelver == 'Nanduri':
+          ca = self.charge_accumulation(fr, ecm)
+        # this line shouldn't run if charge accumulation is modeled at the 
         # elecrode level as accumulated voltage
         sn = self.stationary_nonlinearity(fr)
         return self.slow_response(sn)
@@ -162,13 +163,13 @@ def onoffFiltering(movie, n, sig=[.1, .25],amp=[.01, -0.005]):
     movie: movie to be filtered
     n : the sizes of the retinal ganglion cells (in μm, 293 μm equals 1 degree)
     """
-    onmovie = np.zeros([movie.shape[0], movie.shape[1], movie.shape[2]])
-    offmovie = np.zeros([movie.shape[0], movie.shape[1], movie.shape[2]])
+    onmovie = np.zeros([movie.data.shape[0], movie.data.shape[1], movie.data.shape[2]])
+    offmovie = np.zeros([movie.data.shape[0], movie.data.shape[1], movie.data.shape[2]])
     newfiltImgOn=np.zeros([movie.shape[0], movie.shape[1]])
     newfiltImgOff=np.zeros([movie.shape[0], movie.shape[1]])
     pad = max(n)*2
     for xx in range(movie.shape[-1]):
-        oldimg=movie[:, :, xx]
+        oldimg=movie[:, :, xx].data
         tmpimg=np.mean(np.mean(oldimg))*np.ones([oldimg.shape[0]+pad*2,oldimg.shape[1]+pad*2])
         img = insertImg(tmpimg, oldimg)
         filtImgOn=np.zeros([img.shape[0], img.shape[1]])
