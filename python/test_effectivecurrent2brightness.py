@@ -20,7 +20,7 @@ def test_brightness_movie():
                                 tsample=.075/1000., current_amplitude=20,
                                 pulsetype='cathodicfirst')
 
-    electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1])
+    electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1], [0, 1])
     ecs, cs = retina.electrode_ecs(electrode_array)
     temporal_model = ec2b.TemporalModel()
     fps = 30.
