@@ -373,6 +373,8 @@ class Retina(object):
         ----------
         current_spread : the 2D spread map in retinal space
 
+	integrationtype : either 'dotproduct' or 'maxrule'
+
         Returns
         -------
         ecm: effective current spread, a time-series of the same size as the
