@@ -12,7 +12,7 @@ from scipy.signal import convolve2d
 import numpy as np
 import utils
 from utils import TimeSeries
-import gc
+# import gc
 import electrode2currentmap as e2cm
 
 
@@ -148,8 +148,8 @@ def pulse2percept(temporal_model, ecs, retina, stimuli, rs, dojit=True, n_jobs=-
 def calc_pixel(ecs_vector, stim_data, temporal_model, rs, tsample, dojit='False'):
     ecm = e2cm.ecm(ecs_vector, stim_data, tsample)
     sr = temporal_model.model_cascade(ecm, dojit=dojit)
-    del temporal_model, ecm
-    gc.collect()
+    # del temporal_model, ecm
+    # gc.collect()
     sr.resample(rs)
     return sr
 
