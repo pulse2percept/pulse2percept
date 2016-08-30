@@ -17,7 +17,7 @@ import electrode2currentmap as e2cm
 
 
 class TemporalModel(object):
-    def __init__(self, tau1=.42/1000, tau2=45.25/1000,
+    def __init__(self, tsample=.005/1000, tau1=.42/1000, tau2=45.25/1000,
                  tau3=26.25/1000, e=8.73, beta=.6, asymptote=14, slope=3,
                  shift=16):
         """
@@ -44,6 +44,7 @@ class TemporalModel(object):
         slope =.3
         shift =47
         """
+        self.tsample = tsample
         self.tau1 = tau1
         self.tau2 = tau2
         self.tau3 = tau3
@@ -53,35 +54,53 @@ class TemporalModel(object):
         self.slope = slope
         self.shift = shift
 
-    def fast_response(self, stimulus, dojit=True):
+        self._initialize()
+
+    def _initialize(self):
+        self._init_fast_response()
+        self._init_charge_accumulation()
+        self._init_slow_response()
+
+    def _init_fast_response(self):
+        # initialize fast_response
+        t = np.arange(0, 20 * self.tau1, self.tsample)
+        self.gamma_n1_tau1 = e2cm.gamma(1, self.tau1, t)
+
+    def _init_charge_accumulation(self):
+        t = np.arange(0, 8 * self.tau2, self.tsample)
+        self.gamma_n1_tau2 = e2cm.gamma(1, self.tau2, t)
+
+    def _init_slow_response(self):
+        t = np.arange(0, self.tau3 * 8, self.tsample)
+        self.gamma_n3_tau3 = e2cm.gamma(3, self.tau3, t)
+ 
+
+    def fast_response(self, stim, dojit=True):
         """
         Fast response function
         """
-        t = np.arange(0, 20 * self.tau1, stimulus.tsample)
-        g = e2cm.gamma(1, self.tau1, t)
-        R1 = stimulus.tsample * utils.sparseconv(g, stimulus.data, dojit)
-        return TimeSeries(stimulus.tsample, R1)
+        R1 = self.tsample * utils.sparseconv(self.gamma_n1_tau1,
+                                             stim.data,
+                                             dojit)
+        return TimeSeries(self.tsample, R1)
 
     def charge_accumulation(self, fast_response, stimulus):
-        t = np.arange(0, 8 * self.tau2, fast_response.tsample)
-
         # calculated accumulated charge
         rect_amp = np.where(stimulus.data > 0, stimulus.data, 0)  # rectify
-        ca = stimulus.tsample * np.cumsum(rect_amp.astype(float), axis=-1)
-        g = e2cm.gamma(1, self.tau2, t)
-        chargeaccumulated = (self.e * stimulus.tsample *
-                             fftconvolve(g, ca))
+        ca = self.tsample * np.cumsum(rect_amp.astype(float), axis=-1)
+        chargeaccumulated = (self.e * self.tsample *
+                             fftconvolve(self.gamma_n1_tau2, ca))
         zero_pad = np.zeros(fast_response.shape[:-1] +
                             (chargeaccumulated.shape[-1] -
                              fast_response.shape[-1],))
 
-        fast_response = TimeSeries(fast_response.tsample,
+        fast_response = TimeSeries(self.tsample,
                                    np.concatenate([fast_response.data,
                                                    zero_pad], -1))
 
         R2 = fast_response.data - chargeaccumulated
         R2 = np.where(R2 > 0, R2, 0)  # rectify again
-        return TimeSeries(fast_response.tsample, R2)
+        return TimeSeries(self.tsample, R2)
 
     def stationary_nonlinearity(self, fast_response_ca):
         # now we put in the stationary nonlinearity of Devyani's:
@@ -90,16 +109,14 @@ class TemporalModel(object):
                         self.slope) +
                         self.shift)))
         R3 = R2norm * scale_factor  # scaling factor varies with original
-        return TimeSeries(fast_response_ca.tsample, R3)
+        return TimeSeries(self.tsample, R3)
 
     def slow_response(self, fast_response_ca_snl):
         # this is cropped as tightly as
         # possible for speed sake
-        t = np.arange(0, self.tau3 * 8, fast_response_ca_snl.tsample)
-        g = e2cm.gamma(3, self.tau3, t)
-        c = fftconvolve(g, fast_response_ca_snl.data)
-        return TimeSeries(fast_response_ca_snl.tsample,
-                          fast_response_ca_snl.tsample * c)
+        c = fftconvolve(self.gamma_n3_tau3, fast_response_ca_snl.data)
+        return TimeSeries(self.tsample,
+                          self.tsample * c)
 
     def model_cascade(self, ecm, dojit):
         fr = self.fast_response(ecm, dojit=dojit)
