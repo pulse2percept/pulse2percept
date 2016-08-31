@@ -55,35 +55,62 @@ class TemporalModel(object):
         self.slope = slope
         self.shift = shift
 
-        self._initialize()
+        self._setup()
 
-    def _initialize(self):
-        self._init_fast_response()
-        self._init_charge_accumulation()
-        self._init_slow_response()
+    def _setup(self):
+        self._setup_fast_response()
+        self._setup_charge_accumulation()
+        self._setup_slow_response()
 
-    def _init_fast_response(self):
-        # initialize fast_response
+    def _setup_fast_response(self):
+        # Trade off memory for speed by pre-calculating gamma with tau1
         t = np.arange(0, 20 * self.tau1, self.tsample)
         self.gamma_n1_tau1 = e2cm.gamma(1, self.tau1, t)
 
-    def _init_charge_accumulation(self):
+    def _setup_charge_accumulation(self):
+        # Trade off memory for speed by pre-calculating gamma with tau2
         t = np.arange(0, 8 * self.tau2, self.tsample)
         self.gamma_n1_tau2 = e2cm.gamma(1, self.tau2, t)
 
-    def _init_slow_response(self):
+    def _setup_slow_response(self):
+        # Trade off memory for speed by pre-calculating gamma with tau3
         t = np.arange(0, 8 * self.tau3, self.tsample)
         self.gamma_n3_tau3 = e2cm.gamma(3, self.tau3, t)
  
 
-    def fast_response(self, stim, dojit=True):
+    def _fast_response(self, b1, dojit=True):
+        """Fast response function (Box 2) of the perceptual sensitivity model.
+
+        Convolve a stimulus `b1` with a temporal low-pass filter (1-stage gamma)
+        with time constant self.tau1.
+        This is Box 2 in Nanduri et al. (2012).
+        
+        Parameters
+        ----------
+        b1 : TimeSeries
+           Temporal signal to process, b1(r,t) in Nanduri et al. (2012).
+        dojit : bool, optional
+           If True (default), use numba just-in-time compilation.
+
+        Returns
+        -------
+        b2 : array
+           Fast response, b2(r,t) in Nanduri et al. (2012).
+
+        Notes
+        -----
+        The function utils.sparseconv can be much faster than np.convolve and
+        scipy.signals.fftconvolve if `b1` is sparse and much longer than the 
+        convolution kernel.
+
+        The gamma function is pre-calculated for speed-up.
+
+        The output is not converted to a TimeSeries object for speed-up.
+
         """
-        Fast response function
-        """
-        R1 = self.tsample * utils.sparseconv(self.gamma_n1_tau1,
-                                             stim.data,
-                                             dojit)
-        return TimeSeries(self.tsample, R1)
+        return self.tsample * utils.sparseconv(self.gamma_n1_tau1,
+                                               stim.data,
+                                               dojit)
 
     def charge_accumulation(self, fast_response, stimulus):
         # calculated accumulated charge
@@ -92,8 +119,7 @@ class TemporalModel(object):
         chargeaccumulated = (self.e * self.tsample *
                              fftconvolve(self.gamma_n1_tau2, ca))
         zero_pad = np.zeros(fast_response.shape[:-1] +
-                            (chargeaccumulated.shape[-1] -
-                             fast_response.shape[-1],))
+                            (chargeaccumulated.shape[-1] - fast_response.shape[-1],))
 
         fast_response = TimeSeries(self.tsample,
                                    np.concatenate([fast_response.data,
@@ -103,7 +129,34 @@ class TemporalModel(object):
         R2 = np.where(R2 > 0, R2, 0)  # rectify again
         return TimeSeries(self.tsample, R2)
 
-    def stationary_nonlinearity(self, fr):
+    def _stationary_nonlinearity(self, b3):
+        """Stationary nonlinearity of the perceptual sensitivity model (Box 4)
+
+        Nonlinearly rescale a temporal signal `b3` across space and time, based
+        on a sigmoidal function dependent on the maximum value of `b3`.
+        This is Box 4 in Nanduri et al. (2012).
+
+        The parameter values of the asymptote, slope, and shift of the logistic
+        function are given by self.asymptote, self.slope, and self.shift,
+        respectively.
+
+        Parameters
+        ----------
+        b3 : array
+           Temporal signal to process, b3(r,t) in Nanduri et al. (2012).
+
+        Returns
+        -------
+        b4 : array
+           Rescaled signal, b4(r,t) in Nanduri et al. (2012).
+
+        Notes
+        -----
+        The expit (logistic) function is used for speed-up.
+
+        The output is not converted to a TimeSeries object for speed-up.
+
+        """
         # now we put in the stationary nonlinearity of Devyani's
         # R2norm = fr.data / fr.data.max()
         # scale_factor = (self.asymptote / (1 + np.exp(-(fr.data /
@@ -112,27 +165,51 @@ class TemporalModel(object):
         # scale_factor = self.asymptote * expit(fr.data / self.slope - self.shift)
         # R3 = R2norm * scale_factor  # scaling factor varies with original
         # return TimeSeries(self.tsample, R3)
-        sn = fr.data * self.asymptote * expit((fr.data.max() - self.shift) / self.slope)
-        return TimeSeries(self.tsample, sn)
+
+        return b3 * self.asymptote * expit((b3.max() - self.shift) / self.slope)
 
 
-    def slow_response(self, fast_response_ca_snl):
-        # this is cropped as tightly as
-        # possible for speed sake
-        c = fftconvolve(self.gamma_n3_tau3, fast_response_ca_snl.data)
-        return TimeSeries(self.tsample,
-                          self.tsample * c)
+    def _slow_response(self, b4):
+        """Slow response function (Box 5) of the perceptual sensitivity model.
+
+        Convolve a stimulus `b4` with a low-pass filter (3-stage gamma)
+        with time constant self.tau3.
+        This is Box 5 in Nanduri et al. (2012).
+
+        Parameters
+        ----------
+        b4 : array
+           Temporal signal to process, b4(r,t) in Nanduri et al. (2012)
+
+        Returns
+        -------
+        b5 : array
+           Slow response, b5(r,t) in Nanduri et al. (2012).
+
+        Notes
+        -----
+        This is by far the most computationally involved part of the perceptual
+        sensitivity model.
+
+        The gamma kernel needs to be cropped as tightly as possible for speed
+        sake. fftconvolve already takes care of optimal kernel/data size.
+
+        The output is not converted to a TimeSeries object for speed-up.
+
+        """
+        retiurn self.tsample * fftconvolve(self.gamma_n3_tau3, b4)
 
     def model_cascade(self, ecm, dojit):
         # FIXME need to make sure ecm.tsample == self.tsample
         # Would it every vary within an experiment? across electrodes?
 
         fr = self.fast_response(ecm, dojit=dojit)
-        # ca = self.charge_accumulation(fr, ecm)
-        # this line deleted because charge accumulation now modeled at the 
-        # elecrode level as accumulated voltage
+        # # ca = self.charge_accumulation(fr, ecm)
+        # # this line deleted because charge accumulation now modeled at the 
+        # # elecrode level as accumulated voltage
         sn = self.stationary_nonlinearity(fr)
-        return self.slow_response(sn)
+        sr = self.slow_response(sn)
+        return TimeSeries(self.tsample, sr)
 
 
 def pulse2percept(temporal_model, ecs, retina, stimuli, rs, dojit=True, n_jobs=-1, tol=.05):
