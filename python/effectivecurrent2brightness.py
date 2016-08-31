@@ -104,14 +104,17 @@ class TemporalModel(object):
         return TimeSeries(self.tsample, R2)
 
     def stationary_nonlinearity(self, fr):
-        # now we put in the stationary nonlinearity of Devyani's:
-        R2norm = fr.data / fr.data.max()
-        # scale_factor = (self.asymptote / (1 + np.exp(-(fast_response_ca.data /
+        # now we put in the stationary nonlinearity of Devyani's
+        # R2norm = fr.data / fr.data.max()
+        # scale_factor = (self.asymptote / (1 + np.exp(-(fr.data /
         #                 self.slope) +
         #                 self.shift)))
-        scale_factor = self.asymptote * expit(fr.data / self.slope - self.shift)
-        R3 = R2norm * scale_factor  # scaling factor varies with original
-        return TimeSeries(self.tsample, R3)
+        # scale_factor = self.asymptote * expit(fr.data / self.slope - self.shift)
+        # R3 = R2norm * scale_factor  # scaling factor varies with original
+        # return TimeSeries(self.tsample, R3)
+        sn = fr.data * self.asymptote * expit((fr.data.max() - self.shift) / self.slope)
+        return TimeSeries(self.tsample, sn)
+
 
     def slow_response(self, fast_response_ca_snl):
         # this is cropped as tightly as
