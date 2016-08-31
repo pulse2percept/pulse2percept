@@ -78,7 +78,7 @@ class TemporalModel(object):
         self.gamma_n3_tau3 = e2cm.gamma(3, self.tau3, t)
  
 
-    def _fast_response(self, b1, dojit=True):
+    def fast_response(self, b1, dojit=True):
         """Fast response function (Box 2) of the perceptual sensitivity model.
 
         Convolve a stimulus `b1` with a temporal low-pass filter (1-stage gamma)
@@ -109,7 +109,7 @@ class TemporalModel(object):
 
         """
         return self.tsample * utils.sparseconv(self.gamma_n1_tau1,
-                                               stim.data,
+                                               b1.data,
                                                dojit)
 
     def charge_accumulation(self, fast_response, stimulus):
@@ -129,7 +129,7 @@ class TemporalModel(object):
         R2 = np.where(R2 > 0, R2, 0)  # rectify again
         return TimeSeries(self.tsample, R2)
 
-    def _stationary_nonlinearity(self, b3):
+    def stationary_nonlinearity(self, b3):
         """Stationary nonlinearity of the perceptual sensitivity model (Box 4)
 
         Nonlinearly rescale a temporal signal `b3` across space and time, based
@@ -165,11 +165,10 @@ class TemporalModel(object):
         # scale_factor = self.asymptote * expit(fr.data / self.slope - self.shift)
         # R3 = R2norm * scale_factor  # scaling factor varies with original
         # return TimeSeries(self.tsample, R3)
-
         return b3 * self.asymptote * expit((b3.max() - self.shift) / self.slope)
 
 
-    def _slow_response(self, b4):
+    def slow_response(self, b4):
         """Slow response function (Box 5) of the perceptual sensitivity model.
 
         Convolve a stimulus `b4` with a low-pass filter (3-stage gamma)
@@ -197,7 +196,7 @@ class TemporalModel(object):
         The output is not converted to a TimeSeries object for speed-up.
 
         """
-        retiurn self.tsample * fftconvolve(self.gamma_n3_tau3, b4)
+        return self.tsample * fftconvolve(self.gamma_n3_tau3, b4)
 
     def model_cascade(self, ecm, dojit):
         # FIXME need to make sure ecm.tsample == self.tsample
