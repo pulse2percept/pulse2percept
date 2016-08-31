@@ -9,6 +9,7 @@ from __future__ import print_function
 from scipy.misc import factorial
 from scipy.signal import fftconvolve
 from scipy.signal import convolve2d
+from scipy.special import expit
 import numpy as np
 import utils
 from utils import TimeSeries
@@ -71,7 +72,7 @@ class TemporalModel(object):
         self.gamma_n1_tau2 = e2cm.gamma(1, self.tau2, t)
 
     def _init_slow_response(self):
-        t = np.arange(0, self.tau3 * 8, self.tsample)
+        t = np.arange(0, 8 * self.tau3, self.tsample)
         self.gamma_n3_tau3 = e2cm.gamma(3, self.tau3, t)
  
 
@@ -102,12 +103,13 @@ class TemporalModel(object):
         R2 = np.where(R2 > 0, R2, 0)  # rectify again
         return TimeSeries(self.tsample, R2)
 
-    def stationary_nonlinearity(self, fast_response_ca):
+    def stationary_nonlinearity(self, fr):
         # now we put in the stationary nonlinearity of Devyani's:
-        R2norm = fast_response_ca.data / fast_response_ca.data.max()
-        scale_factor = (self.asymptote / (1 + np.exp(-(fast_response_ca.data /
-                        self.slope) +
-                        self.shift)))
+        R2norm = fr.data / fr.data.max()
+        # scale_factor = (self.asymptote / (1 + np.exp(-(fast_response_ca.data /
+        #                 self.slope) +
+        #                 self.shift)))
+        scale_factor = self.asymptote * expit(fr.data / self.slope - self.shift)
         R3 = R2norm * scale_factor  # scaling factor varies with original
         return TimeSeries(self.tsample, R3)
 
@@ -119,6 +121,9 @@ class TemporalModel(object):
                           self.tsample * c)
 
     def model_cascade(self, ecm, dojit):
+        # FIXME need to make sure ecm.tsample == self.tsample
+        # Would it every vary within an experiment? across electrodes?
+
         fr = self.fast_response(ecm, dojit=dojit)
         # ca = self.charge_accumulation(fr, ecm)
         # this line deleted because charge accumulation now modeled at the 
