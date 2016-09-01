@@ -1,4 +1,4 @@
-# -*effectivecurrent2brightness -*-
+# -*electrode2currentmap -*-
 """
 
 Functions for transforming electrode specifications into a current map
@@ -279,7 +279,10 @@ class Psycho2Pulsetrain(TimeSeries):
 
         # set up the sequence
         if stimtype == 'pulsetrain':
-            interpulsegap = np.zeros(round((1/freq) / tsample) - len(pulse))
+            # Warning: using a non-integer number instead of an integer will
+	    # result in an error in the future
+            interpulsegap = np.zeros(int(1/freq/tsample) - len(pulse))
+            # interpulsegap = np.zeros(round((1/freq) / tsample) - len(pulse))
             ppt = []
             for j in range(0, int(np.ceil(dur * freq))):
                 ppt = np.concatenate((ppt, interpulsegap), axis=0)
