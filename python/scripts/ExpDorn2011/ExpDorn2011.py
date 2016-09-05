@@ -27,8 +27,8 @@ import importlib as imp
 # with a range of ~50-750μm
 
 modelver='Nanduri' # this is the standard model based on the Nanduri 2012 paper. 
-# Alternative model is currently the Krishnan model which assumes that charge accumulation
-# occurs at the electrode, not neurally
+# Alternative model is currently the 'Krishnan' model which assumes that charge accumulation
+# occurs at the electrode, not neurally. The models are in fact metamers of each other,
 
 xlist=[]
 ylist=[]

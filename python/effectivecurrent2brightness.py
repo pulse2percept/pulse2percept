@@ -18,7 +18,7 @@ import electrode2currentmap as e2cm
 
 class TemporalModel(object):
     def __init__(self, tau1=.42/1000, tau2=45.25/1000,
-                 tau3=26.25/1000, e=8.73, beta=.6, asymptote=14, slope=3,
+                 tau3=26.25/1000, e=8.73,  asymptote=14, slope=3,
                  shift=16):
         """
         A model of temporal integration from retina pixels
@@ -32,23 +32,22 @@ class TemporalModel(object):
         between 38-57
 
         e = scaling factor for the effects of charge accumulation 2-3 for
-        threshold or 8-10 for suprathreshold
+        threshold or 8-10 for suprathreshold. If using the Krishnan model then e is 0.1118
 
-        tau3 = ??
+        tau3 = 26.25/1000
 
         parameters for a stationary nonlinearity providing a continuous
         function that nonlinearly rescales the response based on Nanduri et al
         2012, equation 3:
 
         asymptote = 14
-        slope =.3
-        shift =47
+        slope =3
+        shift =16
         """
         self.tau1 = tau1
         self.tau2 = tau2
         self.tau3 = tau3
         self.e = e
-        self.beta = beta
         self.asymptote = asymptote
         self.slope = slope
         self.shift = shift
@@ -86,9 +85,8 @@ class TemporalModel(object):
     def stationary_nonlinearity(self, fast_response_ca):
         # now we put in the stationary nonlinearity of Devyani's:
         R2norm = fast_response_ca.data / fast_response_ca.data.max()
-        scale_factor = (self.asymptote / (1 + np.exp(-(fast_response_ca.data /
-                        self.slope) +
-                        self.shift)))
+        scale_factor = self.asymptote / (1 + 
+        np.exp(-(fast_response_ca.data.max() - self.shift)/self.slope))
         R3 = R2norm * scale_factor  # scaling factor varies with original
         return TimeSeries(fast_response_ca.tsample, R3)
 
@@ -106,7 +104,7 @@ class TemporalModel(object):
         if modelver == 'Nanduri':
           ca = self.charge_accumulation(fr, ecm)
         # this line shouldn't run if charge accumulation is modeled at the 
-        # elecrode level as accumulated voltage
+        # electrode level as accumulated voltage
         sn = self.stationary_nonlinearity(fr)
         return self.slow_response(sn)
 
