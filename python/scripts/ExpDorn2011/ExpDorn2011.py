@@ -26,6 +26,10 @@ import importlib as imp
 # (figure 4, pdf is in retina folder) the mean height from the array should be  179.6 μm
 # with a range of ~50-750μm
 
+modelver='Nanduri' # this is the standard model based on the Nanduri 2012 paper. 
+# Alternative model is currently the 'Krishnan' model which assumes that charge accumulation
+# occurs at the electrode, not neurally. The models are in fact metamers of each other,
+
 xlist=[]
 ylist=[]
 rlist=[] #electrode radius, microns
@@ -46,7 +50,7 @@ del xlist, ylist, rlist, hlist
 retinaname='1700by2900L80'
 r = e2cm.Retina(axon_map='../../retina/ret_' + retinaname+ '.npz', 
                 sampling=25, ylo=-1700, yhi=1700, xlo=-2900, xhi=2900, axon_lambda=8)     
-    
+   
 e_rf=[]
 for e in e_all.electrodes:
     e_rf.append(e2cm.receptive_field(e, r.gridx, r.gridy,e_spacing))
@@ -89,7 +93,8 @@ for o in np.arange(0, 2*np.pi,2): #DEBUG 2*np.pi/4): # each orientation
         for rf in e_rf:
             rflum= e2cm.retinalmovie2electrodtimeseries(rf, movie)  
             ptrain=e2cm.Movie2Pulsetrain(rflum)
-            ptrain=e2cm.accumulatingvoltage(ptrain) 
+            if modelver == 'Krishnan':
+               ptrain=e2cm.accumulatingvoltage(ptrain)
             pt.append(ptrain)
             
             #  plt.plot(rflum)  plt.plot(pt[ct].data)   plt.plot(ptrain.data)
@@ -99,21 +104,8 @@ for o in np.arange(0, 2*np.pi,2): #DEBUG 2*np.pi/4): # each orientation
         tm = ec2b.TemporalModel()
         
         rs=(1/fps)*pt[0].tsample # factor by which movies resampled for presentation
-        brightness_movie = ec2b.pulse2percept(tm, ecs, r, pt, rs, dojit=False)
-        
-        #rs=1/(fps*ptrain.tsample) 
-        #fr=np.zeros([e_rf[0].shape[0],e_rf[0].shape[1], len(pt[0].data)])
-        # This seems obsolete
-        
-#        sr_tmp=ec2b.calc_pixel(0, r, ecs_list, pt, tm, prtrs) 
-#        brightness_movie = np.zeros((r.gridx.shape[0], r.gridx.shape[1], sr_tmp.shape[0]))
-#
-#        def parfor_calc_pixel(arr, idx, r, ecs_list, pt, tm, rs, dojit=False):            
-#            sr=ec2b.calc_pixel(idx[1], idx[0], r, ecs_list, pt, tm, rs, dojit)           
-#            return sr.data     
-#  
-#        brightness_movie = utils.parfor(brightness_movie, parfor_calc_pixel, r, ecs_list, pt, tm, rs, dojit=False, n_jobs=1, axis=-1)        
-#                
+        brightness_movie = ec2b.pulse2percept(tm, ecs, r, pt, rs, dojit=False, modelver)
+          
        # FILTERING BY ON OFF CELLS
        # foveal vision is ~60 cpd. 293μm on the retina corresponds to 1 degree, so the smallest receptive field probably covers 293/60 ~=5μm, 
        # we set the largest as being 10 times bigger than that numbers roughly based on 
@@ -122,7 +114,7 @@ for o in np.arange(0, 2*np.pi,2): #DEBUG 2*np.pi/4): # each orientation
         retinasizes=np.unique(np.ceil(np.array(np.linspace(5, 50, 15))/r.sampling))
         retinasizes = np.array([i for i in retinasizes if i >= 2])
         
-        [onmovie, offmovie] = ec2b.onoffFiltering(brightness_movie, retinasizes)
+        [onmovie, offmovie] = ec2b.onoffFiltering(brightness_movie.data, retinasizes)
         [normalmovie, prostheticmovie] =ec2b.onoffRecombine(onmovie, offmovie)   
 
         # save the various movies

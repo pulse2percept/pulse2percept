@@ -19,7 +19,7 @@ import electrode2currentmap as e2cm
 
 class TemporalModel(object):
     def __init__(self, tsample=.005/1000, tau1=.42/1000, tau2=45.25/1000,
-                 tau3=26.25/1000, e=8.73, beta=.6, asymptote=14, slope=3,
+                 tau3=26.25/1000, e=8.73, asymptote=14, slope=3,
                  shift=16):
         """
         A model of temporal integration from retina pixels
@@ -33,24 +33,23 @@ class TemporalModel(object):
         between 38-57
 
         e = scaling factor for the effects of charge accumulation 2-3 for
-        threshold or 8-10 for suprathreshold
+        threshold or 8-10 for suprathreshold. If using the Krishnan model then e is 0.1118
 
-        tau3 = ??
+        tau3 = 26.25/1000
 
         parameters for a stationary nonlinearity providing a continuous
         function that nonlinearly rescales the response based on Nanduri et al
         2012, equation 3:
 
         asymptote = 14
-        slope =.3
-        shift =47
+        slope =3
+        shift =16
         """
         self.tsample = tsample
         self.tau1 = tau1
         self.tau2 = tau2
         self.tau3 = tau3
         self.e = e
-        self.beta = beta
         self.asymptote = asymptote
         self.slope = slope
         self.shift = shift
@@ -203,9 +202,10 @@ class TemporalModel(object):
         # Would it every vary within an experiment? across electrodes?
 
         fr = self.fast_response(ecm, dojit=dojit)
-        # # ca = self.charge_accumulation(fr, ecm)
-        # # this line deleted because charge accumulation now modeled at the 
-        # # elecrode level as accumulated voltage
+        if modelver == 'Nanduri':
+          ca = self.charge_accumulation(fr, ecm)
+        # this line shouldn't run if charge accumulation is modeled at the 
+        # electrode level as accumulated voltage
         sn = self.stationary_nonlinearity(fr)
         sr = self.slow_response(sn)
         return TimeSeries(self.tsample, sr)
@@ -263,13 +263,13 @@ def onoffFiltering(movie, n, sig=[.1, .25],amp=[.01, -0.005]):
     movie: movie to be filtered
     n : the sizes of the retinal ganglion cells (in μm, 293 μm equals 1 degree)
     """
-    onmovie = np.zeros([movie.shape[0], movie.shape[1], movie.shape[2]])
-    offmovie = np.zeros([movie.shape[0], movie.shape[1], movie.shape[2]])
+    onmovie = np.zeros([movie.data.shape[0], movie.data.shape[1], movie.data.shape[2]])
+    offmovie = np.zeros([movie.data.shape[0], movie.data.shape[1], movie.data.shape[2]])
     newfiltImgOn=np.zeros([movie.shape[0], movie.shape[1]])
     newfiltImgOff=np.zeros([movie.shape[0], movie.shape[1]])
     pad = max(n)*2
     for xx in range(movie.shape[-1]):
-        oldimg=movie[:, :, xx]
+        oldimg=movie[:, :, xx].data
         tmpimg=np.mean(np.mean(oldimg))*np.ones([oldimg.shape[0]+pad*2,oldimg.shape[1]+pad*2])
         img = insertImg(tmpimg, oldimg)
         filtImgOn=np.zeros([img.shape[0], img.shape[1]])

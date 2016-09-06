@@ -19,10 +19,8 @@
 %stimulus parameters
 STIM.electrodeRAD = 260;
 %STIM.freq = 20;  %Hz
-STIM.dur = .5;
+STIM.dur = 1;
 STIM.pulsedur = .45/1000;  %sec
-STIM.amp = 5;   %30 uA
-
 STIM.tsample = .01/1000;
 
 t = 0:STIM.tsample:.5;
@@ -48,7 +46,8 @@ cspread(rad>STIM.electrodeRAD) = 2/pi*(asin(STIM.electrodeRAD./rad(rad>STIM.elec
 
 %%
 
-freqList = [10,20,40,80,160];
+freqList = [10,20,40,80,160 10,20,40,80,160];
+STIM.amp = [30 30 30 30 30 90 90 90 90 90];   %30 uA
 clear R
 for freqNum = 1:length(freqList)
     STIM.freq = freqList(freqNum);
@@ -71,7 +70,7 @@ for freqNum = 1:length(freqList)
 
     %convolve the stimulus with the ganglion cell impulse response
     R1 = STIM.tsample.*conv(G1,tsform);
-    R1 = R1(1:length(t)); %cut off end due to convolution
+    R1 = STIM.amp(freqNum).*R1(1:length(t)); %cut off end due to convolution
 
     subplot(5,1,2)
     plot(t,R1);title('R1');
@@ -120,26 +119,28 @@ for freqNum = 1:length(freqList)
     R(freqNum) = max(R4);
     freqNum
 end
+close all
+plot(freqList, R)
 
 %%
-
-ampList = 2000./fliplr(freqList);
-figure(2)
-clf
-
-scfac = 256/(R(end)*(ampList(end)').^p.beta);
-count =0;
-for i=1:length(ampList)
-    for j=1:length(freqList)
-        img = R(j)*(ampList(i)*cspread).^p.beta;
-
-        count = count+1;
-        subplot(length(ampList),length(freqList),count);
-        image(img*scfac)
-        colormap(gray(256));
-        axis equal
-        axis off
-        title(sprintf('%5.0f Hz, %5.0f uA',freqList(j),ampList(i)));
-    end
-end
-%%
+% 
+% ampList = 2000./fliplr(freqList);
+% figure(2)
+% clf
+% 
+% scfac = 256/(R(end)*(ampList(end)').^p.beta);
+% count =0;
+% for i=1:length(ampList)
+%     for j=1:length(freqList)
+%         img = R(j)*(ampList(i)*cspread).^p.beta;
+% 
+%         count = count+1;
+%         subplot(length(ampList),length(freqList),count);
+%         image(img*scfac)
+%         colormap(gray(256));
+%         axis equal
+%         axis off
+%         title(sprintf('%5.0f Hz, %5.0f uA',freqList(j),ampList(i)));
+%     end
+% end
+% %%
