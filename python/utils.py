@@ -52,7 +52,7 @@ class TimeSeries(object):
                             self.data[..., ::factor])
 
 
-def _sparseconv(v, a):
+def _sparseconv(v, a, mode):
     """
     Returns the discrete, linear convolution of two one-dimensional sequences.
     output is of length len(v) + len(a) -1 (same as the default for numpy.convolve)
@@ -63,6 +63,8 @@ def _sparseconv(v, a):
     (1) a is much longer than v
     (2) a is sparse (has lots of zeros)
     """
+    # v = asarray(v)
+    # a = asarray(a)
     v_len = v.shape[-1]
     a_len = a.shape[-1]
     out = np.zeros(a_len +  v_len - 1)
@@ -71,31 +73,72 @@ def _sparseconv(v, a):
     # add shifted and scaled copies of v only where a is nonzero
     for p in pos:
         out[p:p + v_len] = out[p:p + v_len] + v * a[p]
-    return out
+
+    if mode == 'full':
+        return out
+    elif mode == 'valid':
+        return _centered(out, a_len - v_len + 1)
+    elif mode == 'same':
+        return _centered(out, a_len)
+    else:
+        raise ValueError("Acceptable mode flags are 'valid',"
+                         " 'same', or 'full'.")
+
 
 if has_jit:
     _sparseconvj = jit(_sparseconv)
 
 
-def sparseconv(v, a, dojit=True):
+def sparseconv(kernel, data, dojit=True, mode='full'):
     """
     Returns the discrete, linear convolution of two one-dimensional sequences.
-    output is of length len(v) + len(a) -1 (same as the default for numpy.convolve)
-
-    v is typically the kernel, a is the input to the system
 
     Can run faster than numpy.convolve if:
-    (1) a is much longer than v
-    (2) a is sparse (has lots of zeros)
+    (1) `data` is much longer than `kernel`
+    (2) `data` is sparse (has lots of zeros)
+
+    Parameters
+    ----------
+    kernel : array_like
+        First input, typically the kernel.
+    data : array_like
+        Second input, typically the data array.
+    mode : str {'full', 'valid', 'same'}, optional
+        A string indicating the size of the output:
+
+	``full``
+	    The output is the full discrete linear convolution of the
+	    inputs. (Default)
+	``valid``
+	    The output consists only of those elements that do not rely
+	    on zero-padding.
+	``same``
+	    The output is the same size as `data`, centered with respect
+	    to the 'full' output.
+      
     """
     if dojit:
         if not has_jit:
             e_s = ("You do not have numba ",
                    "please run sparsconv with dojit=False")
             raise ValueError(e_s)
-        return _sparseconvj(v, a)
+        return _sparseconvj(kernel, data, mode)
     else:
-        return _sparseconv(v, a)
+        return _sparseconv(kernel, data, mode)
+
+
+def _centered(vec, newlen):
+    """
+    Returns the center `newlen` portion of a vector.
+
+    Adapted from scipy.signal.signaltools._centered:
+    https://github.com/scipy/scipy/blob/v0.18.0/scipy/signal/signaltools.py#L236-L243
+
+    """
+    currlen = vec.shape[-1]
+    startind = (currlen - newlen) // 2
+    endind = startind + newlen
+    return vec[startind:endind]
 
 
 def parfor(func, in_list, out_shape=None, n_jobs=-1, func_args=[],
