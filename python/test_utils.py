@@ -38,7 +38,7 @@ def test_sparseconv():
         conv = np.convolve(stim, G, mode=mode)
 
         # utils.sparseconv
-        sparse_conv = utils.sparseconv(G, stim, dojit=False, mode=mode)
+        sparse_conv = utils.sparseconv(G, stim, mode=mode, dojit=False)
 
         npt.assert_equal(conv.shape, sparse_conv.shape)
         npt.assert_almost_equal(conv, sparse_conv)

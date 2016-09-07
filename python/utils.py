@@ -55,7 +55,8 @@ class TimeSeries(object):
 def _sparseconv(v, a, mode):
     """
     Returns the discrete, linear convolution of two one-dimensional sequences.
-    output is of length len(v) + len(a) -1 (same as the default for numpy.convolve)
+    output is of length len(v) + len(a) -1 (same as the default for
+    numpy.convolve).
 
     v is typically the kernel, a is the input to the system
 
@@ -89,7 +90,7 @@ if has_jit:
     _sparseconvj = jit(_sparseconv)
 
 
-def sparseconv(kernel, data, dojit=True, mode='full'):
+def sparseconv(kernel, data, mode='full', dojit=True):
     """
     Returns the discrete, linear convolution of two one-dimensional sequences.
 
@@ -105,17 +106,19 @@ def sparseconv(kernel, data, dojit=True, mode='full'):
         Second input, typically the data array.
     mode : str {'full', 'valid', 'same'}, optional
         A string indicating the size of the output:
-
 	``full``
-	    The output is the full discrete linear convolution of the
-	    inputs. (Default)
+        The output is the full discrete linear convolution of the inputs.
+        (Default)
 	``valid``
-	    The output consists only of those elements that do not rely
-	    on zero-padding.
+        The output consists only of those elements that do not rely on
+        zero-padding.
 	``same``
-	    The output is the same size as `data`, centered with respect
-	    to the 'full' output.
-      
+        The output is the same size as `data`, centered with respect to the
+        'full' output.
+    dojit : boolean
+        A flag indicating whether to use numba's just-in-time compilation
+        option.
+
     """
     if dojit:
         if not has_jit:
@@ -176,7 +179,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, func_args=[],
     """
     if n_jobs == -1:
         n_jobs = multiprocessing.cpu_count()
-        n_jobs=n_jobs-1   
+        n_jobs = n_jobs - 1
 
     p = Parallel(n_jobs=n_jobs, backend="multiprocessing", max_nbytes=1e6)
     d = delayed(func)
