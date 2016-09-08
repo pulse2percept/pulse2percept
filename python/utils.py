@@ -39,9 +39,8 @@ class TimeSeries(object):
         """
         self.data = data
         self.tsample = tsample
-        self.sampling_rate = 1 / tsample
+        # self.sampling_rate = 1 / tsample
         self.duration = self.data.shape[-1] * tsample
-        self.time = np.linspace(tsample, self.duration, data.shape[-1])
         self.shape = data.shape
 
     def __getitem__(self, y):
@@ -120,12 +119,10 @@ def sparseconv(kernel, data, mode='full', dojit=True):
         option.
 
     """
-    if dojit:
-        if not has_jit:
-            e_s = ("You do not have numba ",
-                   "please run sparsconv with dojit=False")
-            raise ValueError(e_s)
-        return _sparseconvj(kernel, data, mode)
+    if dojit and not has_jit:
+        e_s = ("You do not have numba ",
+               "please run sparseconv with dojit=False")
+        raise ValueError(e_s)
     else:
         return _sparseconv(kernel, data, mode)
 
@@ -214,3 +211,24 @@ def mov2npy(movie_file, out_file):
         img = cv.QueryFrame(capture)
     frames = np.fliplr(np.rot90(np.mean(frames, -1).T, -1))
     np.save(out_file, frames)
+
+def memory_usage():
+    """Memory usage of the current process in kilobytes.
+
+    This works only on systems with a /proc file system
+    (like Linux).
+    http://stackoverflow.com/questions/897941/python-equivalent-of-phps-memory-get-usage/7669279
+    """
+    status = None
+    result = {'peak': 0, 'rss': 0}
+    try:
+        status = open('/proc/self/status')
+        for line in status:
+            parts = line.split()
+            key = parts[0][2:-1].lower()
+            if key in result:
+                result[key] = int(parts[1])
+    finally:
+        if status is not None:
+            status.close()
+    return result

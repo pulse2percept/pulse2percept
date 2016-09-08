@@ -6,20 +6,20 @@ Inputs: a vector of effective current over time
 Output: a vector of brightness over time
 """
 from __future__ import print_function
+import numpy as np
 from scipy.misc import factorial
 from scipy.signal import fftconvolve
 from scipy.signal import convolve2d
 from scipy.special import expit
-import numpy as np
+
+import electrode2currentmap as e2cm
 import utils
 from utils import TimeSeries
-# import gc
-import electrode2currentmap as e2cm
 
 
 class TemporalModel(object):
     def __init__(self, tsample=.005/1000, tau1=.42/1000, tau2=45.25/1000,
-                 tau3=26.25/1000, e=8.73, asymptote=14, slope=3,
+                 tau3=26.25/1000, epsilon=8.73, asymptote=14, slope=3,
                  shift=16):
         """
         A model of temporal integration from retina pixels
@@ -32,7 +32,7 @@ class TemporalModel(object):
         tau2 = 45.25/1000  integrator for charge accumulation, has values
         between 38-57
 
-        e = scaling factor for the effects of charge accumulation 2-3 for
+        epsilon = scaling factor for the effects of charge accumulation 2-3 for
         threshold or 8-10 for suprathreshold. If using the Krishnan model then e is 0.1118
 
         tau3 = 26.25/1000
@@ -49,7 +49,7 @@ class TemporalModel(object):
         self.tau1 = tau1
         self.tau2 = tau2
         self.tau3 = tau3
-        self.e = e
+        self.epsilon = epsilon
         self.asymptote = asymptote
         self.slope = slope
         self.shift = shift
@@ -57,33 +57,32 @@ class TemporalModel(object):
         self._setup()
 
     def _setup(self):
-        self._setup_fast_response()
-        self._setup_charge_accumulation()
-        self._setup_slow_response()
+        """Performs one-time setup calculations.
 
-    def _setup_fast_response(self):
-        # Trade off memory for speed by pre-calculating gamma with tau1
+        Gamma functions used as convolution kernels do not depend on input
+        data, hence can be calculated once, then re-used (trade off memory for
+        speed).
+        """
+        # gamma1 is used to calculate the fast response
         t = np.arange(0, 20 * self.tau1, self.tsample)
-        self.gamma_n1_tau1 = e2cm.gamma(1, self.tau1, t)
+        self.gamma1 = e2cm.gamma(1, self.tau1, t)
 
-    def _setup_charge_accumulation(self):
-        # Trade off memory for speed by pre-calculating gamma with tau2
+        # gamma2 is used to calculate charge accumulation
         t = np.arange(0, 8 * self.tau2, self.tsample)
-        self.gamma_n1_tau2 = e2cm.gamma(1, self.tau2, t)
+        self.gamma2 = e2cm.gamma(1, self.tau2, t)
 
-    def _setup_slow_response(self):
-        # Trade off memory for speed by pre-calculating gamma with tau3
+        # gamma3 is used to calculate the slow response
         t = np.arange(0, 8 * self.tau3, self.tsample)
-        self.gamma_n3_tau3 = e2cm.gamma(3, self.tau3, t)
- 
+        self.gamma3 = e2cm.gamma(3, self.tau3, t)
 
-    def fast_response(self, b1, dojit=True):
+
+    def _fast_response(self, b1, dojit=True):
         """Fast response function (Box 2) of the perceptual sensitivity model.
 
         Convolve a stimulus `b1` with a temporal low-pass filter (1-stage gamma)
         with time constant self.tau1.
         This is Box 2 in Nanduri et al. (2012).
-        
+
         Parameters
         ----------
         b1 : TimeSeries
@@ -99,7 +98,7 @@ class TemporalModel(object):
         Notes
         -----
         The function utils.sparseconv can be much faster than np.convolve and
-        scipy.signals.fftconvolve if `b1` is sparse and much longer than the 
+        scipy.signals.fftconvolve if `b1` is sparse and much longer than the
         convolution kernel.
 
         The gamma function is pre-calculated for speed-up.
@@ -107,28 +106,19 @@ class TemporalModel(object):
         The output is not converted to a TimeSeries object for speed-up.
 
         """
-        return self.tsample * utils.sparseconv(self.gamma_n1_tau1,
+        return self.tsample * utils.sparseconv(self.gamma1,
                                                b1.data,
-                                               dojit)
+                                               mode='same',
+                                               dojit=dojit)
 
-    def charge_accumulation(self, fast_response, stimulus):
-        # calculated accumulated charge
-        rect_amp = np.where(stimulus.data > 0, stimulus.data, 0)  # rectify
-        ca = self.tsample * np.cumsum(rect_amp.astype(float), axis=-1)
-        chargeaccumulated = (self.e * self.tsample *
-                             fftconvolve(self.gamma_n1_tau2, ca))
-        zero_pad = np.zeros(fast_response.shape[:-1] +
-                            (chargeaccumulated.shape[-1] - fast_response.shape[-1],))
+    def _charge_accumulation(self, fr, ecm):
+        ca = self.tsample * np.cumsum(np.maximum(0, ecm.data), axis=-1)
+        charge_acc = self.epsilon * self.tsample * fftconvolve(ca,
+                                                               self.gamma2,
+                                                               mode='same')
+        return np.maximum(0, fr - charge_acc)
 
-        fast_response = TimeSeries(self.tsample,
-                                   np.concatenate([fast_response.data,
-                                                   zero_pad], -1))
-
-        R2 = fast_response.data - chargeaccumulated
-        R2 = np.where(R2 > 0, R2, 0)  # rectify again
-        return TimeSeries(self.tsample, R2)
-
-    def stationary_nonlinearity(self, b3):
+    def _stationary_nonlinearity(self, b3):
         """Stationary nonlinearity of the perceptual sensitivity model (Box 4)
 
         Nonlinearly rescale a temporal signal `b3` across space and time, based
@@ -156,18 +146,10 @@ class TemporalModel(object):
         The output is not converted to a TimeSeries object for speed-up.
 
         """
-        # now we put in the stationary nonlinearity of Devyani's
-        # R2norm = fr.data / fr.data.max()
-        # scale_factor = (self.asymptote / (1 + np.exp(-(fr.data /
-        #                 self.slope) +
-        #                 self.shift)))
-        # scale_factor = self.asymptote * expit(fr.data / self.slope - self.shift)
-        # R3 = R2norm * scale_factor  # scaling factor varies with original
-        # return TimeSeries(self.tsample, R3)
-        return b3 * self.asymptote * expit((b3.max() - self.shift) / self.slope)
+        scale = expit((b3.max() - self.shift) / self.slope) * self.asymptote
+        return b3 / b3.max() * scale
 
-
-    def slow_response(self, b4):
+    def _slow_response(self, b4):
         """Slow response function (Box 5) of the perceptual sensitivity model.
 
         Convolve a stimulus `b4` with a low-pass filter (3-stage gamma)
@@ -195,20 +177,19 @@ class TemporalModel(object):
         The output is not converted to a TimeSeries object for speed-up.
 
         """
-        return self.tsample * fftconvolve(self.gamma_n3_tau3, b4)
+        return self.tsample * fftconvolve(b4, self.gamma3, mode='same')
 
     def model_cascade(self, ecm, dojit):
         # FIXME need to make sure ecm.tsample == self.tsample
-        # Would it every vary within an experiment? across electrodes?
+        modelver = 'Nanduri'
 
-        fr = self.fast_response(ecm, dojit=dojit)
+        resp = self._fast_response(ecm, dojit=dojit)
         if modelver == 'Nanduri':
-          ca = self.charge_accumulation(fr, ecm)
-        # this line shouldn't run if charge accumulation is modeled at the 
-        # electrode level as accumulated voltage
-        sn = self.stationary_nonlinearity(fr)
-        sr = self.slow_response(sn)
-        return TimeSeries(self.tsample, sr)
+            resp = self._charge_accumulation(resp, ecm)
+
+        resp = self._stationary_nonlinearity(resp)
+        resp = self._slow_response(resp)
+        return TimeSeries(self.tsample, resp)
 
 
 def pulse2percept(temporal_model, ecs, retina, stimuli, rs, dojit=True, n_jobs=-1, tol=.05):
@@ -234,9 +215,11 @@ def pulse2percept(temporal_model, ecs, retina, stimuli, rs, dojit=True, n_jobs=-
             else:
                 ecs_list.append(ecs[yy, xx])
                 idx_list.append([yy, xx])
-                # the current contributed by each electrode for that spatial location
+                # the current contributed by each electrode for that spatial
+                # location
 
-    stim_data = np.array([s.data for s in stimuli])  # pulse train for each electrode
+    # pulse train for each electrode
+    stim_data = np.array([s.data for s in stimuli])
     sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs,
                            func_args=[stim_data, temporal_model,
                                       rs,  stimuli[0].tsample, dojit])
@@ -246,18 +229,18 @@ def pulse2percept(temporal_model, ecs, retina, stimuli, rs, dojit=True, n_jobs=-
     return TimeSeries(sr_list[0].tsample, bm)
 
 
-def calc_pixel(ecs_vector, stim_data, temporal_model, rs, tsample, dojit='False'):
+def calc_pixel(ecs_vector, stim_data, temporal_model, resample_factor,
+               tsample, dojit='False'):
     ecm = e2cm.ecm(ecs_vector, stim_data, tsample)
     sr = temporal_model.model_cascade(ecm, dojit=dojit)
-    # del temporal_model, ecm
-    # gc.collect()
-    sr.resample(rs)
+    sr.resample(resample_factor)
     return sr
 
 def onoffFiltering(movie, n, sig=[.1, .25],amp=[.01, -0.005]):
     """
     From a movie to a version that is filtered by a collection on and off cells
-    of sizes 
+    of sizes
+
     Parameters
     ----------
     movie: movie to be filtered
