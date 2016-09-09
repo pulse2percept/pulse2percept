@@ -2,10 +2,10 @@
 Utility functions for pulse2percept
 """
 import numpy as np
-from joblib import Parallel, delayed
-from itertools import product
 import multiprocessing
-from joblib.pool import has_shareable_memory
+import joblib
+import dask
+import dask.multiprocessing
 
 
 try:
@@ -141,8 +141,8 @@ def _centered(vec, newlen):
     return vec[startind:endind]
 
 
-def parfor(func, in_list, out_shape=None, n_jobs=-1, func_args=[],
-           func_kwargs={}):
+def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
+           backend='threading', func_args=[], func_kwargs={}):
     """
     Parallel for loop for numpy arrays
 
@@ -161,15 +161,28 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, func_args=[],
         The number of jobs to perform in parallel. -1 to use all cpus
         Default: 1
 
-    args : list, optional
+    engine : str
+        {"dask", "joblib", "serial"}
+        The last one is useful for debugging -- runs the code without any
+        parallelization.
+
+    backend : str
+        What dask backend to use. Irrelevant for other engines.
+
+    func_args : list, optional
         Positional arguments to `func`
 
-    kwargs : list, optional
+    func_kwargs : list, optional
         Keyword arguments to `func`
 
     Returns
     -------
     ndarray of identical shape to `arr`
+
+    Notes
+    -----
+    Imported from pyAFQ (blob e20eaa0 from June 3, 2016):
+    https://github.com/arokem/pyAFQ/blob/master/AFQ/utils/parallel.py
 
     Examples
     --------
@@ -178,12 +191,29 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, func_args=[],
         n_jobs = multiprocessing.cpu_count()
         n_jobs = n_jobs - 1
 
-    p = Parallel(n_jobs=n_jobs, backend="multiprocessing", max_nbytes=1e6)
-    d = delayed(func)
-    d_l = []
-    for in_element in in_list:
-        d_l.append(d(in_element, *func_args, **func_kwargs))
-    results = p(d_l)
+    if engine == 'joblib':
+        p = joblib.Parallel(n_jobs=n_jobs, backend=backend)
+        d = joblib.delayed(func)
+        d_l = []
+        for in_element in in_list:
+            d_l.append(d(in_element, *func_args, **func_kwargs))
+        results = p(d_l)
+    elif engine == 'dask':
+        def partial(func, *args, **keywords):
+            def newfunc(in_arg):
+                return func(in_arg, *args, **keywords)
+            return newfunc
+        p = partial(func, *func_args, **func_kwargs)
+        d = [dask.delayed(p)(i) for i in in_list]
+        if backend == 'multiprocessing':
+            results = dask.compute(*d, get=dask.multiprocessing_get,
+                                   workers=n_jobs)
+        elif backend == 'threading':
+            results = dask.compute(*d, get=dask.threaded.get, workers=n_jobs)
+    elif engine == 'serial':
+        results = []
+        for in_element in in_list:
+            results.append(func(in_element, *func_args, **func_kwargs))
 
     if out_shape is not None:
         return np.array(results).reshape(out_shape)

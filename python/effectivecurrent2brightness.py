@@ -192,7 +192,8 @@ class TemporalModel(object):
         return TimeSeries(self.tsample, resp)
 
 
-def pulse2percept(temporal_model, ecs, retina, stimuli, rs, dojit=True, n_jobs=-1, tol=.05):
+def pulse2percept(temporal_model, ecs, retina, stimuli, rs, engine='joblib',
+                  dojit=True, n_jobs=-1, tol=.05):
     """
     From pulses (stimuli) to percepts (spatio-temporal)
 
@@ -220,9 +221,9 @@ def pulse2percept(temporal_model, ecs, retina, stimuli, rs, dojit=True, n_jobs=-
 
     # pulse train for each electrode
     stim_data = np.array([s.data for s in stimuli])
-    sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs,
-                           func_args=[stim_data, temporal_model,
-                                      rs,  stimuli[0].tsample, dojit])
+    sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs, engine=engine,
+                           func_args=[stim_data, temporal_model, rs,
+                                      stimuli[0].tsample, dojit])
     bm = np.zeros(retina.gridx.shape + (sr_list[0].data.shape[-1], ))
     idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
     bm[idxer] = [sr.data for sr in sr_list]
