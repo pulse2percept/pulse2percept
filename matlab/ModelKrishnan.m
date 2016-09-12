@@ -1,26 +1,28 @@
 function R4=ModelKrishnan(p, STIM, freqNum)
- STIM.freq = STIM.freqList(freqNum);
-    sawtooth = STIM.freq*mod(STIM.t,1/STIM.freq);
-    on  = sawtooth > STIM.pulsedur*STIM.freq & sawtooth < 2*STIM.pulsedur*STIM.freq;
-    off = sawtooth < STIM.pulsedur*STIM.freq;
-    STIM.tsform = on-off;
-    
-    % total charge in the system as a function of time
-    chargeacc=STIM.tsample*cumsum(max(STIM.tsform,0));
-    tmp = p.e*STIM.tsample*conv(p.G2,chargeacc);
-    STIM.chargeacc = tmp(1:length(STIM.t));
+if nargin<3,freqNum=1;end
 
-    t2 = 0:STIM.tsample:.30;
-p.G2k = Gamma(1, p.tau2k, t2);
+%% generate pulse train
+STIM.t = 0:STIM.tsample:STIM.dur;
+STIM.freq = STIM.freqList(freqNum);
+pulse = getSquarePulse(STIM.t, STIM.freq, STIM.ampList(freqNum), ...
+    STIM.pulsedur);
 
+
+%% charge accumulation
 % total charge in the system as a function of time
-chargeacc=STIM.tsample*cumsum(max(STIM.tsform,0));
-tmp = p.ek*STIM.tsample*conv(p.G2k,chargeacc);
+t2 = 0:STIM.tsample:.30;
+G2 = Gamma(1, p.tau2, t2);
+chargeacc=STIM.tsample*cumsum(max(pulse,0));
+tmp = p.epsilonK * STIM.tsample * conv(chargeacc,G2);
 STIM.chargeacc = tmp(1:length(STIM.t));
 
-%convolve the stimulus with the ganglion cell impulse response
-R1 = STIM.tsample.*conv(p.G1,STIM.tsform-STIM.chargeacc);
-R1 = STIM.amp(freqNum).*R1(1:length(STIM.t)); %cut off end due to convolution
+
+%% fast response
+% convolve the stimulus with the ganglion cell impulse response
+t1 = 0:STIM.tsample:.005;
+G1 = Gamma(1, p.tau1, t1);
+R1 = STIM.tsample.*conv(pulse-STIM.chargeacc, G1);
+R1 = R1(1:length(STIM.t)); %cut off end due to convolution
 
 %% stationary nonlinearity
 R3 = max(R1,0);
@@ -31,7 +33,9 @@ R3 = R3norm .* scFac ;
 
 %% slow convolution
 
-R4 =  STIM.tsample*conv(p.G3,R3);
-
+t3 = 0:STIM.tsample:p.tau3*10;
+G3 = Gamma(3,p.tau3,t3);
+R4 =  STIM.tsample*conv(R3,G3);
 R4 = R4(1:length(STIM.t));
+
 end
