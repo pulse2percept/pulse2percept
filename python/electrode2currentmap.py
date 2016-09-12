@@ -289,11 +289,11 @@ class Psycho2Pulsetrain(TimeSeries):
                 ppt = np.concatenate((ppt, pulse), axis=0)
 
         if delay > 0:
-                ppt = np.concatenate((np.zeros(round(delay / tsample)), ppt),
-                                     axis=0)
+            ppt = np.concatenate((np.zeros(round(delay / tsample)), ppt),
+                                 axis=0)
 
-	# Warning: using a non-integer number instead of an integer will result
-	# in an error in the future
+        # Warning: using a non-integer number instead of an integer will result
+        # in an error in the future
         # ppt = ppt[0:round(dur/tsample)]
         ppt = ppt[0:int(dur/tsample)]
         data = (current_amplitude * ppt)

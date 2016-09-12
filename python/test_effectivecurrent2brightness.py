@@ -5,6 +5,47 @@ import electrode2currentmap as e2cm
 import effectivecurrent2brightness as ec2b
 
 
+def test_nanduri_vs_krishnan():
+    """Test Nanduri vs Krishnan model
+
+    This test miakes sure the Nanduri and Krishnan model flavors give roughly
+    the same output. Note: Numerically the models might differ slightly.
+    """
+    # Choose some reasonable parameter values
+    tsample = 1e-5
+    tau1 = 4.2e-4
+    tau2 = 0.04525
+    tau3 = 0.02625
+    epsilon = 8.73
+    tol = 0.01
+
+    # Set up both models with the same parameter values
+    tm_nanduri = ec2b.TemporalModel(model='Nanduri', tsample=tsample,
+                                    tau1=tau1, tau2=tau2, tau3=tau3,
+                                    epsilon=epsilon)
+    tm_krishnan = ec2b.TemporalModel(model='Krishnan', tsample=tsample,
+                                     tau1=tau1, tau2=tau2, tau3=tau3,
+                                     epsilon=epsilon)
+
+    # Test a range of reasonable ampl/freq values
+    for freq in [5, 10, 20]:
+        for ampl in [10, 30, 50]:
+            # Define some arbitrary pulse train
+            pulse = e2cm.Psycho2Pulsetrain(freq=freq, dur=0.5, pulse_dur=4.5e-4,
+                                           interphase_dur=4.5e-4, delay=0,
+                                           tsample=tsample,
+                                           current_amplitude=ampl,
+                                           pulsetype='cathodicfirst')
+
+            # Apply both models to pulse train
+            out_nanduri = tm_nanduri.model_cascade(pulse, dojit=True)
+            out_krishnan = tm_krishnan.model_cascade(pulse, dojit=True)
+
+            # Make sure model output doesn't deviate too much
+            npt.assert_allclose(np.sum((out_nanduri.data -
+                                       out_krishnan.data)**2), 0, atol=tol)
+
+
 def test_brightness_movie():
     retina_file = tempfile.NamedTemporaryFile().name
     sampling = 1
