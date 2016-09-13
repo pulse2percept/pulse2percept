@@ -1,4 +1,4 @@
-import utils
+from pulse2percept import utils
 import numpy as np
 import numpy.testing as npt
 

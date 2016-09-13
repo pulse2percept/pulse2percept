@@ -13,7 +13,7 @@ from scipy.signal import convolve2d
 from scipy.special import expit
 
 import pulse2percept.electrode2currentmap as e2cm
-import pulse2percept.utils
+from pulse2percept import utils
 
 
 class TemporalModel(object):

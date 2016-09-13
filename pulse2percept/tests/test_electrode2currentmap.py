@@ -2,7 +2,7 @@ import tempfile
 import numpy as np
 import numpy.testing as npt
 
-import electrode2currentmap as e2cm
+import pulse2percept.electrode2currentmap as e2cm
 
 def test_TimeSeries():
     data_orig = np.zeros((10, 10, 1000))
