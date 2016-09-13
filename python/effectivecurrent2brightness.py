@@ -195,14 +195,12 @@ class TemporalModel(object):
         # rectify: np.maximum seems to be faster than np.where
         b3 = np.maximum(0, b3)
 
-        # avoid division by zero by having max > 0
-        b3max = np.maximum(1e-10, b3.max())
-
         # use expit (logistic) function for speedup
+        b3max = b3.max()
         scale = expit((b3max - self.shift) / self.slope) * self.asymptote
 
         # avoid division by zero
-        return b3 / b3max * scale
+        return b3 / (1e-10 + b3max) * scale
 
 
     def _slow_response(self, b4):
@@ -353,7 +351,7 @@ def pulse2percept(temporal_model, ecs, retina, stimuli, rs, engine='joblib',
 
 
 def calc_pixel(ecs_vector, stim_data, temporal_model, resample_factor,
-               tsample, dojit='False'):
+               tsample, dojit=False):
     ecm = e2cm.ecm(ecs_vector, stim_data, tsample)
     sr = temporal_model.model_cascade(ecm, dojit=dojit)
     sr.resample(resample_factor)
