@@ -80,15 +80,9 @@ class TemporalModel(object):
         self.shift = shift
 
         # perform onte-time setup calculations
-        self._setup()
-
-    def _setup(self):
-        """Performs one-time setup calculations.
-
-        Gamma functions used as convolution kernels do not depend on input
-        data, hence can be calculated once, then re-used (trade off memory for
-        speed).
-        """
+        # Gamma functions used as convolution kernels do not depend on input
+        # data, hence can be calculated once, then re-used (trade off memory
+        # for speed).
         # gamma1 is used to calculate the fast response
         t = np.arange(0, 20 * self.tau1, self.tsample)
         self.gamma1 = e2cm.gamma(1, self.tau1, t)
@@ -102,7 +96,7 @@ class TemporalModel(object):
         self.gamma3 = e2cm.gamma(3, self.tau3, t)
 
 
-    def _fast_response(self, b1, dojit=True):
+    def fast_response(self, b1, dojit=True):
         """Fast response function (Box 2)
 
         Convolve a stimulus `b1` with a temporal low-pass filter (1-stage gamma)
@@ -136,7 +130,7 @@ class TemporalModel(object):
         return self.tsample * conv[:b1.shape[-1]]
 
 
-    def _charge_accumulation(self, b2):
+    def charge_accumulation(self, b2):
         """Charge accumulation step (Box 3)
 
         Calculate the accumulated cathodic charge of a stimulus `b2`.
@@ -167,7 +161,7 @@ class TemporalModel(object):
         return self.epsilon * self.tsample * conv[:b2.shape[-1]]
 
 
-    def _stationary_nonlinearity(self, b3):
+    def stationary_nonlinearity(self, b3):
         """Stationary nonlinearity (Box 4)
 
         Nonlinearly rescale a temporal signal `b3` across space and time, based
@@ -203,7 +197,7 @@ class TemporalModel(object):
         return b3 / (1e-10 + b3max) * scale
 
 
-    def _slow_response(self, b4):
+    def slow_response(self, b4):
         """Slow response function (Box 5)
 
         Convolve a stimulus `b4` with a low-pass filter (3-stage gamma)
@@ -255,15 +249,15 @@ class TemporalModel(object):
         """
         if self.model == 'Nanduri':
             # Nanduri: first fast response, then charge accumulation
-            return self._cascade_nanduri(ecm, dojit)
+            return self.cascade_nanduri(ecm, dojit)
         elif self.model == 'Krishnan':
             # Krishnan: first charge accumulation, then fast response
-            return self._cascade_krishnan(ecm, dojit)
+            return self.cascade_krishnan(ecm, dojit)
         else:
             raise ValueError('Acceptable values for "model" are: '
                              '{"Nanduri", "Krishnan"}')
 
-    def _cascade_nanduri(self, ecm, dojit):
+    def cascade_nanduri(self, ecm, dojit):
         """Model cascade according to Nanduri et al. (2012).
 
         The 'Nanduri' model calculates the fast response first, followed by the
@@ -281,13 +275,13 @@ class TemporalModel(object):
             maximum value of this signal was used to represent the perceptual
             brightness of a particular location in space, B(r).
         """
-        resp = self._fast_response(ecm.data, dojit=dojit)
-        ca = self._charge_accumulation(ecm.data)
-        resp = self._stationary_nonlinearity(resp - ca)
-        resp = self._slow_response(resp)
+        resp = self.fast_response(ecm.data, dojit=dojit)
+        ca = self.charge_accumulation(ecm.data)
+        resp = self.stationary_nonlinearity(resp - ca)
+        resp = self.slow_response(resp)
         return utils.TimeSeries(self.tsample, resp)
 
-    def _cascade_krishnan(self, ecm, dojit):
+    def cascade_krishnan(self, ecm, dojit):
         """Model cascade according to Krishnan et al. (2015).
 
         The 'Krishnan' model calculates the current accumulation first,
@@ -305,10 +299,10 @@ class TemporalModel(object):
             maximum value of this signal was used to represent the perceptual
             brightness of a particular location in space, B(r).
         """ 
-        ca = self._charge_accumulation(ecm.data)
-        resp = self._fast_response(ecm.data - ca, dojit=dojit)
-        resp = self._stationary_nonlinearity(resp)
-        resp = self._slow_response(resp)
+        ca = self.charge_accumulation(ecm.data)
+        resp = self.fast_response(ecm.data - ca, dojit=dojit)
+        resp = self.stationary_nonlinearity(resp)
+        resp = self.slow_response(resp)
         return utils.TimeSeries(self.tsample, resp)
 
 

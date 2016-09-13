@@ -38,8 +38,8 @@ def test_nanduri_vs_krishnan():
                                            pulsetype='cathodicfirst')
 
             # Apply both models to pulse train
-            out_nanduri = tm_nanduri.model_cascade(pulse, dojit=True)
-            out_krishnan = tm_krishnan.model_cascade(pulse, dojit=True)
+            out_nanduri = tm_nanduri.model_cascade(pulse, dojit=False)
+            out_krishnan = tm_krishnan.model_cascade(pulse, dojit=False)
 
             # Make sure model output doesn't deviate too much
             npt.assert_allclose(np.sum((out_nanduri.data -
