@@ -12,8 +12,8 @@ from scipy.signal import fftconvolve
 from scipy.signal import convolve2d
 from scipy.special import expit
 
-import electrode2currentmap as e2cm
-import utils
+import pulse2percept.electrode2currentmap as e2cm
+import pulse2percept.utils
 
 
 class TemporalModel(object):
