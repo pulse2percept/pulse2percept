@@ -5,13 +5,14 @@ Functions for transforming electrode specifications into a current map
 
 """
 import numpy as np
-import oyster
 import os
 from scipy import interpolate
-from utils import TimeSeries
 from scipy.misc import factorial
 from scipy.signal import fftconvolve
-import effectivecurrent2brightness as ec2b
+
+from pulse2percept import oyster
+from pulse2percept.utils import TimeSeries
+
 
 def micron2deg(micron):
     """

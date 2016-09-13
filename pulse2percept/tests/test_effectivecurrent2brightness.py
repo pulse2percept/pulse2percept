@@ -1,8 +1,8 @@
 import tempfile
 import numpy as np
 import numpy.testing as npt
-import electrode2currentmap as e2cm
-import effectivecurrent2brightness as ec2b
+import pulse2percept.electrode2currentmap as e2cm
+import pulse2percept.effectivecurrent2brightness as ec2b
 
 
 def test_nanduri_vs_krishnan():
