@@ -8,8 +8,7 @@ https://ffmpeg.zeranoe.com/builds/win64/static/
 
 Used instructions from here with modifications:
 http://adaptivesamples.com/how-to-install-ffmpeg-on-windows/
-NOTE ... Didn't add the directory to the system path, instead it's path is explicitly 
-included in the program
+
 written Ione Fine 7/2016
 """ 
 
@@ -23,10 +22,10 @@ def savemoviefiles(filestr, data, path='savedImages/'):
     sio.savemat(path+filestr+'.mat', dict(mov=data))  # save as matfile
     npy2movie(path+filestr+'.avi', data) # save as avi
 
-def npy2movie(filename, movie, rate=30, ffmpegpath='../../../ffmpeg/bin/'):
+def npy2movie(filename, movie, rate=30):
  
 
-    cmdstring = (ffmpegpath + 'ffmpeg.exe',
+    cmdstring = ('ffmpeg.exe',
              '-y',
              '-r', '%d' % rate,
              '-f','image2pipe',
