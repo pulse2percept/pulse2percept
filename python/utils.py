@@ -2,10 +2,10 @@
 Utility functions for pulse2percept
 """
 import numpy as np
-from joblib import Parallel, delayed
-from itertools import product
 import multiprocessing
-from joblib.pool import has_shareable_memory
+import joblib
+import dask
+import dask.multiprocessing
 
 
 try:
@@ -39,9 +39,8 @@ class TimeSeries(object):
         """
         self.data = data
         self.tsample = tsample
-        self.sampling_rate = 1 / tsample
+        # self.sampling_rate = 1 / tsample
         self.duration = self.data.shape[-1] * tsample
-        self.time = np.linspace(tsample, self.duration, data.shape[-1])
         self.shape = data.shape
 
     def __getitem__(self, y):
@@ -52,10 +51,11 @@ class TimeSeries(object):
                             self.data[..., ::factor])
 
 
-def _sparseconv(v, a):
+def _sparseconv(v, a, mode):
     """
     Returns the discrete, linear convolution of two one-dimensional sequences.
-    output is of length len(v) + len(a) -1 (same as the default for numpy.convolve)
+    output is of length len(v) + len(a) -1 (same as the default for
+    numpy.convolve).
 
     v is typically the kernel, a is the input to the system
 
@@ -63,6 +63,8 @@ def _sparseconv(v, a):
     (1) a is much longer than v
     (2) a is sparse (has lots of zeros)
     """
+    # v = asarray(v)
+    # a = asarray(a)
     v_len = v.shape[-1]
     a_len = a.shape[-1]
     out = np.zeros(a_len +  v_len - 1)
@@ -71,35 +73,76 @@ def _sparseconv(v, a):
     # add shifted and scaled copies of v only where a is nonzero
     for p in pos:
         out[p:p + v_len] = out[p:p + v_len] + v * a[p]
-    return out
+
+    if mode == 'full':
+        return out
+    elif mode == 'valid':
+        return _centered(out, a_len - v_len + 1)
+    elif mode == 'same':
+        return _centered(out, a_len)
+    else:
+        raise ValueError("Acceptable mode flags are 'valid',"
+                         " 'same', or 'full'.")
+
 
 if has_jit:
     _sparseconvj = jit(_sparseconv)
 
 
-def sparseconv(v, a, dojit=True):
+def sparseconv(kernel, data, mode='full', dojit=True):
     """
     Returns the discrete, linear convolution of two one-dimensional sequences.
-    output is of length len(v) + len(a) -1 (same as the default for numpy.convolve)
-
-    v is typically the kernel, a is the input to the system
 
     Can run faster than numpy.convolve if:
-    (1) a is much longer than v
-    (2) a is sparse (has lots of zeros)
+    (1) `data` is much longer than `kernel`
+    (2) `data` is sparse (has lots of zeros)
+
+    Parameters
+    ----------
+    kernel : array_like
+        First input, typically the kernel.
+    data : array_like
+        Second input, typically the data array.
+    mode : str {'full', 'valid', 'same'}, optional
+        A string indicating the size of the output:
+	``full``
+        The output is the full discrete linear convolution of the inputs.
+        (Default)
+	``valid``
+        The output consists only of those elements that do not rely on
+        zero-padding.
+	``same``
+        The output is the same size as `data`, centered with respect to the
+        'full' output.
+    dojit : boolean
+        A flag indicating whether to use numba's just-in-time compilation
+        option.
+
     """
-    if dojit:
-        if not has_jit:
-            e_s = ("You do not have numba ",
-                   "please run sparsconv with dojit=False")
-            raise ValueError(e_s)
-        return _sparseconvj(v, a)
+    if dojit and not has_jit:
+        e_s = ("You do not have numba ",
+               "please run sparseconv with dojit=False")
+        raise ValueError(e_s)
     else:
-        return _sparseconv(v, a)
+        return _sparseconv(kernel, data, mode)
 
 
-def parfor(func, in_list, out_shape=None, n_jobs=-1, func_args=[],
-           func_kwargs={}):
+def _centered(vec, newlen):
+    """
+    Returns the center `newlen` portion of a vector.
+
+    Adapted from scipy.signal.signaltools._centered:
+    https://github.com/scipy/scipy/blob/v0.18.0/scipy/signal/signaltools.py#L236-L243
+
+    """
+    currlen = vec.shape[-1]
+    startind = (currlen - newlen) // 2
+    endind = startind + newlen
+    return vec[startind:endind]
+
+
+def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
+           backend='threading', func_args=[], func_kwargs={}):
     """
     Parallel for loop for numpy arrays
 
@@ -118,29 +161,59 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, func_args=[],
         The number of jobs to perform in parallel. -1 to use all cpus
         Default: 1
 
-    args : list, optional
+    engine : str
+        {"dask", "joblib", "serial"}
+        The last one is useful for debugging -- runs the code without any
+        parallelization.
+
+    backend : str
+        What dask backend to use. Irrelevant for other engines.
+
+    func_args : list, optional
         Positional arguments to `func`
 
-    kwargs : list, optional
+    func_kwargs : list, optional
         Keyword arguments to `func`
 
     Returns
     -------
     ndarray of identical shape to `arr`
 
+    Notes
+    -----
+    Imported from pyAFQ (blob e20eaa0 from June 3, 2016):
+    https://github.com/arokem/pyAFQ/blob/master/AFQ/utils/parallel.py
+
     Examples
     --------
     """
     if n_jobs == -1:
         n_jobs = multiprocessing.cpu_count()
-        n_jobs=n_jobs-1   
+        n_jobs = n_jobs - 1
 
-    p = Parallel(n_jobs=n_jobs, backend="multiprocessing", max_nbytes=1e6)
-    d = delayed(func)
-    d_l = []
-    for in_element in in_list:
-        d_l.append(d(in_element, *func_args, **func_kwargs))
-    results = p(d_l)
+    if engine == 'joblib':
+        p = joblib.Parallel(n_jobs=n_jobs, backend=backend)
+        d = joblib.delayed(func)
+        d_l = []
+        for in_element in in_list:
+            d_l.append(d(in_element, *func_args, **func_kwargs))
+        results = p(d_l)
+    elif engine == 'dask':
+        def partial(func, *args, **keywords):
+            def newfunc(in_arg):
+                return func(in_arg, *args, **keywords)
+            return newfunc
+        p = partial(func, *func_args, **func_kwargs)
+        d = [dask.delayed(p)(i) for i in in_list]
+        if backend == 'multiprocessing':
+            results = dask.compute(*d, get=dask.multiprocessing_get,
+                                   workers=n_jobs)
+        elif backend == 'threading':
+            results = dask.compute(*d, get=dask.threaded.get, workers=n_jobs)
+    elif engine == 'serial':
+        results = []
+        for in_element in in_list:
+            results.append(func(in_element, *func_args, **func_kwargs))
 
     if out_shape is not None:
         return np.array(results).reshape(out_shape)
@@ -168,3 +241,24 @@ def mov2npy(movie_file, out_file):
         img = cv.QueryFrame(capture)
     frames = np.fliplr(np.rot90(np.mean(frames, -1).T, -1))
     np.save(out_file, frames)
+
+def memory_usage():
+    """Memory usage of the current process in kilobytes.
+
+    This works only on systems with a /proc file system
+    (like Linux).
+    http://stackoverflow.com/questions/897941/python-equivalent-of-phps-memory-get-usage/7669279
+    """
+    status = None
+    result = {'peak': 0, 'rss': 0}
+    try:
+        status = open('/proc/self/status')
+        for line in status:
+            parts = line.split()
+            key = parts[0][2:-1].lower()
+            if key in result:
+                result[key] = int(parts[1])
+    finally:
+        if status is not None:
+            status.close()
+    return result

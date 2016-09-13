@@ -29,14 +29,19 @@ def test_sparseconv():
     # impulse reponse (kernel)
     G = np.exp(-tt/.005)
 
-    # np.convolve
-    outConv = np.convolve(stim, G)
-    outConv = outConv[0:len(t)]
 
-    # utils.sparseconv
-    outSparseconv = utils.sparseconv(G, stim, dojit=False)
-    outSparseconv = outSparseconv[0:len(t)]
-    npt.assert_almost_equal(outConv, outSparseconv)
+    # make sure sparseconv returns the same result as np.convolve
+    # for all modes
+    modes = ["full", "valid", "same"]
+    for mode in modes:
+        # np.convolve
+        conv = np.convolve(stim, G, mode=mode)
+
+        # utils.sparseconv
+        sparse_conv = utils.sparseconv(G, stim, mode=mode, dojit=False)
+
+        npt.assert_equal(conv.shape, sparse_conv.shape)
+        npt.assert_almost_equal(conv, sparse_conv)
 
 
 # We define a function of the right form:

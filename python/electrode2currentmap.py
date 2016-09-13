@@ -1,4 +1,4 @@
-# -*effectivecurrent2brightness -*-
+# -*electrode2currentmap -*-
 """
 
 Functions for transforming electrode specifications into a current map
@@ -279,17 +279,23 @@ class Psycho2Pulsetrain(TimeSeries):
 
         # set up the sequence
         if stimtype == 'pulsetrain':
-            interpulsegap = np.zeros(round((1/freq) / tsample) - len(pulse))
+            # Warning: using a non-integer number instead of an integer will
+            # result in an error in the future
+            interpulsegap = np.zeros(int(1/freq/tsample) - len(pulse))
+            # interpulsegap = np.zeros(round((1/freq) / tsample) - len(pulse))
             ppt = []
             for j in range(0, int(np.ceil(dur * freq))):
                 ppt = np.concatenate((ppt, interpulsegap), axis=0)
                 ppt = np.concatenate((ppt, pulse), axis=0)
 
         if delay > 0:
-                ppt = np.concatenate((np.zeros(round(delay / tsample)), ppt),
-                                     axis=0)
+            ppt = np.concatenate((np.zeros(round(delay / tsample)), ppt),
+                                 axis=0)
 
-        ppt = ppt[0:round(dur/tsample)]
+        # Warning: using a non-integer number instead of an integer will result
+        # in an error in the future
+        # ppt = ppt[0:round(dur/tsample)]
+        ppt = ppt[0:int(dur/tsample)]
         data = (current_amplitude * ppt)
         TimeSeries.__init__(self, tsample, data)
 
@@ -372,6 +378,8 @@ class Retina(object):
         Parameters
         ----------
         current_spread : the 2D spread map in retinal space
+
+	integrationtype : either 'dotproduct' or 'maxrule'
 
         Returns
         -------

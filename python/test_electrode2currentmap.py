@@ -82,7 +82,7 @@ def test_Psycho2Pulsetrain():
                                           current_amplitude=current_amplitude,
                                           pulsetype=pulsetype,
                                           stimtype=stimtype)
-            npt.assert_equal(p2pt.shape[-1], round(dur / tsample))
+            npt.assert_equal(p2pt.shape[-1], int(dur / tsample))
 
 
 def test_Retina_ecm():
