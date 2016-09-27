@@ -96,11 +96,11 @@ class TemporalModel(object):
         self.gamma3 = e2cm.gamma(3, self.tau3, t)
 
 
-    def fast_response(self, b1, dojit=True):
+    def fast_response(self, b1, dojit=True, usefft=False):
         """Fast response function (Box 2)
 
-        Convolve a stimulus `b1` with a temporal low-pass filter (1-stage gamma)
-        with time constant `self.tau1`.
+        Convolve a stimulus `b1` with a temporal low-pass filter (1-stage
+        gamma) with time constant `self.tau1`.
         This is Box 2 in Nanduri et al. (2012).
 
         Parameters
@@ -109,6 +109,8 @@ class TemporalModel(object):
            Temporal signal to process, b1(r,t) in Nanduri et al. (2012).
         dojit : bool, optional
            If True (default), use numba just-in-time compilation.
+        usefft : bool, optional
+           If False (default), use sparseconv, else fftconvolve.
 
         Returns
         -------
@@ -123,7 +125,12 @@ class TemporalModel(object):
 
         The output is not converted to a TimeSeries object for speedup.
         """
-        conv = utils.sparseconv(self.gamma1, b1, mode='full', dojit=dojit)
+        if usefft:
+            # In Krishnan model, b1 is no longer sparse. Run FFT instead.
+            conv = fftconvolve(b1, self.gamma1, mode='full')
+        else:
+            # In Nanduri model, b1 is sparse. Use sparseconv.
+            conv = utils.sparseconv(self.gamma1, b1, mode='full', dojit=dojit)
 
         # Cut off the tail of the convolution to make the output signal match
         # the dimensions of the input signal.
@@ -275,7 +282,7 @@ class TemporalModel(object):
             maximum value of this signal was used to represent the perceptual
             brightness of a particular location in space, B(r).
         """
-        resp = self.fast_response(ecm.data, dojit=dojit)
+        resp = self.fast_response(ecm.data, dojit=dojit, usefft=False)
         ca = self.charge_accumulation(ecm.data)
         resp = self.stationary_nonlinearity(resp - ca)
         resp = self.slow_response(resp)
@@ -298,9 +305,9 @@ class TemporalModel(object):
             Brightness response over time. In Nanduri et al. (2012), the
             maximum value of this signal was used to represent the perceptual
             brightness of a particular location in space, B(r).
-        """ 
+        """
         ca = self.charge_accumulation(ecm.data)
-        resp = self.fast_response(ecm.data - ca, dojit=dojit)
+        resp = self.fast_response(ecm.data - ca, dojit=dojit, usefft=True)
         resp = self.stationary_nonlinearity(resp)
         resp = self.slow_response(resp)
         return utils.TimeSeries(self.tsample, resp)
@@ -372,21 +379,21 @@ def onoffFiltering(movie, n, sig=[.1, .25],amp=[.01, -0.005]):
         img = insertImg(tmpimg, oldimg)
         filtImgOn=np.zeros([img.shape[0], img.shape[1]])
         filtImgOff=np.zeros([img.shape[0], img.shape[1]])
-        
-        for i in range(n.shape[0]): 
-            [x,y] = np.meshgrid(np.linspace(-1,1,n[i]),np.linspace(-1,1,n[i]))   
+
+        for i in range(n.shape[0]):
+            [x,y] = np.meshgrid(np.linspace(-1,1,n[i]),np.linspace(-1,1,n[i]))
             rsq = x**2+y**2
-            dx = x[0,1]-x[0,0]    
+            dx = x[0,1]-x[0,0]
             on = np.exp(-rsq/(2*sig[0]**2))*(dx**2)/(2*np.pi*sig[0]**2)
             off = np.exp(-rsq/(2*sig[1]**2))*(dx**2)/(2*np.pi*sig[1]**2)
             filt = on-off
             tmp_on = convolve2d(img,filt,'same')/n.shape[-1]
             tmp_off=tmp_on
-            tmp_on= np.where(tmp_on>0, tmp_on, 0) 
+            tmp_on= np.where(tmp_on>0, tmp_on, 0)
             tmp_off= -np.where(tmp_off<0, tmp_off, 0)
              #   rectified = np.where(ptrain.data > 0, ptrain.data, 0)
-            filtImgOn =    filtImgOn+tmp_on/n.shape[0] 
-            filtImgOff =   filtImgOff+tmp_off/n.shape[0] 
+            filtImgOn =    filtImgOn+tmp_on/n.shape[0]
+            filtImgOff =   filtImgOff+tmp_off/n.shape[0]
 
         # Remove padding
         nopad=np.zeros([img.shape[0]-pad*2, img.shape[1]-pad*2])
@@ -394,44 +401,44 @@ def onoffFiltering(movie, n, sig=[.1, .25],amp=[.01, -0.005]):
         newfiltImgOff[:, :] = insertImg(nopad,filtImgOff)
         onmovie[:, :, xx]=newfiltImgOn
         offmovie[:, :, xx]=newfiltImgOff
-        
+
     return (onmovie, offmovie)
 
 def onoffRecombine(onmovie, offmovie):
     """
-    From a movie as filtered by on and off cells, 
-    to a recombined version that is either based on an electronic 
+    From a movie as filtered by on and off cells,
+    to a recombined version that is either based on an electronic
     prosthetic (on + off) or recombined as might be done by a cortical
-    cell in normal vision (on-off) 
+    cell in normal vision (on-off)
     Parameters
     ----------
     movie: on and off movies to be recombined
     combination : options are 'both' returns both prosthetic and normal vision, 'normal' and 'prosthetic'
-    """  
+    """
 
     prostheticmovie=onmovie + offmovie
     normalmovie=onmovie - offmovie
     return (normalmovie, prostheticmovie)
 
 
-def insertImg(out_img,in_img): 
+def insertImg(out_img,in_img):
     """ insertImg(out_img,in_img)
-    Inserts in_img into the center of out_img.  
+    Inserts in_img into the center of out_img.
     if in_img is larger than out_img, in_img is cropped and centered.
     """
 
     if in_img.shape[0]>out_img.shape[0]:
         x0 = np.floor([(in_img.shape[0]-out_img.shape[0])/2])
-        xend=x0+out_img.shape[0]    
+        xend=x0+out_img.shape[0]
         in_img=in_img[x0:xend, :]
-       
+
     if in_img.shape[1]>out_img.shape[1]:
-        y0 = np.floor([(in_img.shape[1]-out_img.shape[1])/2])   
+        y0 = np.floor([(in_img.shape[1]-out_img.shape[1])/2])
         yend=y0+out_img.shape[1]
         in_img=in_img[:, y0:yend]
-       
+
     x0 = np.floor([(out_img.shape[0]-in_img.shape[0])/2])
     y0 = np.floor([(out_img.shape[1]-in_img.shape[1])/2])
     out_img[x0:x0+in_img.shape[0], y0:y0+in_img.shape[1]] = in_img
-    
+
     return out_img
