@@ -4,19 +4,20 @@ import numpy.testing as npt
 
 import pulse2percept.electrode2currentmap as e2cm
 
+
 def test_TimeSeries():
     data_orig = np.zeros((10, 10, 1000))
     ts1 = e2cm.TimeSeries(1, data_orig)
     resample_factor = 10
     ts1.resample(resample_factor)
     npt.assert_equal(ts1.data.shape[-1],
-                     data_orig.shape[-1]/resample_factor)
+                     data_orig.shape[-1] / resample_factor)
 
 
 def test_get_pulse():
     for pulse_type in ['cathodicfirst', 'anodicfirst']:
-        for pulse_dur in [0.25/1000, 0.45/1000, 0.65/1000]:
-            for interphase_dur in [0, 0.25/1000, 0.45/1000, 0.65/1000]:
+        for pulse_dur in [0.25 / 1000, 0.45 / 1000, 0.65 / 1000]:
+            for interphase_dur in [0, 0.25 / 1000, 0.45 / 1000, 0.65 / 1000]:
                 for tsample in [5e-6, 1e-5, 5e-5]:
                     # generate pulse
                     pulse = e2cm.get_pulse(pulse_dur, tsample,
@@ -42,13 +43,13 @@ def test_get_pulse():
                                          np.array([-1, 1]))
 
                     # make sure pulse order is correct
-                    idxMin = np.where(pulse == pulse.min())
-                    idxMax = np.where(pulse == pulse.max())
+                    idx_min = np.where(pulse == pulse.min())
+                    idx_max = np.where(pulse == pulse.max())
                     if pulse_type == 'cathodicfirst':
                         # cathodicfirst should have min first
-                        npt.assert_equal(idxMin[0] < idxMax[0], True)
+                        npt.assert_equal(idx_min[0] < idx_max[0], True)
                     else:
-                        npt.assert_equal(idxMin[0] < idxMax[0], False)
+                        npt.assert_equal(idx_min[0] < idx_max[0], False)
 
 
 def test_Retina_Electrodes():
@@ -78,9 +79,9 @@ def test_Movie2Pulsetrain():
     amplitude_transform = 'linear'
     amp_max = 90
     freq = 20
-    pulse_dur = .075/1000.
-    interphase_dur = .075/1000.
-    tsample = .005/1000.
+    pulse_dur = .075 / 1000.
+    interphase_dur = .075 / 1000.
+    tsample = .005 / 1000.
     pulsetype = 'cathodicfirst'
     stimtype = 'pulsetrain'
     dtype = np.int8
@@ -108,7 +109,7 @@ def test_Psycho2Pulsetrain():
     ampl = 20
     for freq in [10, 20]:
         for pulsetype in ['cathodicfirst', 'anodicfirst']:
-            for delay in [0, 10/1000]:
+            for delay in [0, 10 / 1000]:
                 for pulseorder in ['pulsefirst', 'gapfirst']:
                     p2pt = e2cm.Psycho2Pulsetrain(freq=freq,
                                                   dur=dur,
@@ -129,25 +130,25 @@ def test_Psycho2Pulsetrain():
                                      np.array([-ampl, 0, ampl]))
 
                     # make sure pulse type is correct
-                    idxMin = np.where(p2pt.data == p2pt.data.min())
-                    idxMax = np.where(p2pt.data == p2pt.data.max())
+                    idx_min = np.where(p2pt.data == p2pt.data.min())
+                    idx_max = np.where(p2pt.data == p2pt.data.max())
                     if pulsetype == 'cathodicfirst':
                         # cathodicfirst should have min first
-                        npt.assert_equal(idxMin[0] < idxMax[0], True)
+                        npt.assert_equal(idx_min[0] < idx_max[0], True)
                     else:
-                        npt.assert_equal(idxMin[0] < idxMax[0], False)
+                        npt.assert_equal(idx_min[0] < idx_max[0], False)
 
                     # make sure frequency is correct
                     single_pulse_dur = int(np.round(pdur / tsample))
                     num_pulses = int(np.round(dur * freq))
-                    npt.assert_equal(idxMax[0].shape[-1],
+                    npt.assert_equal(idx_max[0].shape[-1],
                                      num_pulses * single_pulse_dur)
-                    npt.assert_equal(idxMin[0].shape[-1],
+                    npt.assert_equal(idx_min[0].shape[-1],
                                      num_pulses * single_pulse_dur)
 
                     # make sure pulse order is correct
                     delay_dur = int(np.round(delay / tsample))
-                    envelope_dur = int(np.round((1/freq) / tsample))
+                    envelope_dur = int(np.round((1 / freq) / tsample))
                     if pulsetype == 'cathodicfirst':
                         val = p2pt.data.min()  # expect min first
                     else:
@@ -160,7 +161,6 @@ def test_Psycho2Pulsetrain():
                     npt.assert_equal(p2pt.data[idx0 + envelope_dur], val)
 
 
-
 def test_Retina_ecm():
     retina_file = tempfile.NamedTemporaryFile().name
     sampling = 1
@@ -171,9 +171,9 @@ def test_Retina_ecm():
     retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
                          sampling=sampling, axon_map=retina_file)
 
-    s1 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5, pulse_dur=.075/1000.,
-                                interphase_dur=.075/1000., delay=0.,
-                                tsample=.075/1000., current_amplitude=20,
+    s1 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5, pulse_dur=.075 / 1000.,
+                                interphase_dur=.075 / 1000., delay=0.,
+                                tsample=.075 / 1000., current_amplitude=20,
                                 pulsetype='cathodicfirst')
 
     electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1],
@@ -189,9 +189,9 @@ def test_Retina_ecm():
     amplitude_transform = 'linear'
     amp_max = 90
     freq = 20
-    pulse_dur = .075/1000.
-    interphase_dur = .075/1000.
-    tsample = .005/1000.
+    pulse_dur = .075 / 1000.
+    interphase_dur = .075 / 1000.
+    tsample = .005 / 1000.
     pulsetype = 'cathodicfirst'
     stimtype = 'pulsetrain'
     dtype = np.int8
@@ -208,5 +208,5 @@ def test_Retina_ecm():
                                  pulsetype=pulsetype,
                                  stimtype=stimtype)
     # Smoke testing, feed the same stimulus through both electrodes:
-    stim_data = np.array([s.data for s in  [m2pt, m2pt]])
+    stim_data = np.array([s.data for s in [m2pt, m2pt]])
     ecm = e2cm.ecm(ecs_vector, stim_data, m2pt.tsample)

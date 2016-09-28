@@ -46,7 +46,7 @@ def test_nanduri_vs_krishnan():
 
             # Make sure model output doesn't deviate too much
             npt.assert_allclose(np.sum((out_nanduri.data -
-                                       out_krishnan.data)**2), 0, atol=tol)
+                                        out_krishnan.data)**2), 0, atol=tol)
 
 
 def test_brightness_movie():
@@ -59,9 +59,9 @@ def test_brightness_movie():
     retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
                          sampling=sampling, axon_map=retina_file)
 
-    s1 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5, pulse_dur=.075/1000.,
-                                interphase_dur=.075/1000., delay=0.,
-                                tsample=.075/1000., current_amplitude=20,
+    s1 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5, pulse_dur=.075 / 1000.,
+                                interphase_dur=.075 / 1000., delay=0.,
+                                tsample=.075 / 1000., current_amplitude=20,
                                 pulsetype='cathodicfirst')
 
     electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1], [0, 1])
@@ -78,9 +78,9 @@ def test_brightness_movie():
     amplitude_transform = 'linear'
     amp_max = 90
     freq = 20
-    pulse_dur = .075/1000.
-    interphase_dur = .075/1000.
-    tsample = .005/1000.
+    pulse_dur = .075 / 1000.
+    interphase_dur = .075 / 1000.
+    tsample = .005 / 1000.
     pulsetype = 'cathodicfirst'
     stimtype = 'pulsetrain'
     dtype = np.int8
