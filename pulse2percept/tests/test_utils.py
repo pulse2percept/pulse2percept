@@ -11,6 +11,7 @@ def test_Parameters():
     my_params.tuple = (1, 2, 3)
     assert my_params.tuple == (1, 2, 3)
 
+
 def test_sparseconv():
     # time vector for stimulus (long)
     maxT = .5  # seconds
@@ -27,8 +28,7 @@ def test_sparseconv():
     ntt = len(tt)
 
     # impulse reponse (kernel)
-    G = np.exp(-tt/.005)
-
+    G = np.exp(-tt / .005)
 
     # make sure sparseconv returns the same result as np.convolve
     # for all modes

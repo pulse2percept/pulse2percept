@@ -67,6 +67,37 @@ machine learning algorithm.
 
 
 ##INSTALLATION
+
+###Prerequisites
+pulse2percept requires the following software installed for your platform:
+
+1. [Python](http://www.python.org) 2.7 or >= 3.4
+
+2. [NumPy](http://www.numpy.org)
+
+3. [SciPy](http://www.scipy.org)
+
+4. [JobLib](https://github.com/joblib/joblib)
+
+5. [Dask](https://github.com/dask/dask)
+
+
+### Development version
+
+Use the command:
+
+```
+$ git clone https://github.com/uwescience/pulse2percept.git
+$ cd pulse2percept
+$ python setup.py install
+```
+
+To test pulse2percept after installation, execute in Python:
+```
+>>> import pulse2percept
+```
+
+
 For Windows users you will need to install the ffmpeg codec. A good description 
 of how to do that is here
 http://adaptivesamples.com/how-to-install-ffmpeg-on-windows/

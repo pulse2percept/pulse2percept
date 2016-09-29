@@ -16,6 +16,7 @@ except ImportError:
 
 
 class Parameters(object):
+
     def __init__(self, **params):
         for k, v in params.items():
             self.__dict__[k] = v
@@ -33,6 +34,7 @@ class Parameters(object):
 
 
 class TimeSeries(object):
+
     def __init__(self, tsample, data):
         """
         Represent a time-series
@@ -67,7 +69,7 @@ def _sparseconv(v, a, mode):
     # a = asarray(a)
     v_len = v.shape[-1]
     a_len = a.shape[-1]
-    out = np.zeros(a_len +  v_len - 1)
+    out = np.zeros(a_len + v_len - 1)
 
     pos = np.where(a != 0)[0]
     # add shifted and scaled copies of v only where a is nonzero
@@ -105,13 +107,13 @@ def sparseconv(kernel, data, mode='full', dojit=True):
         Second input, typically the data array.
     mode : str {'full', 'valid', 'same'}, optional
         A string indicating the size of the output:
-	``full``
+        ``full``
         The output is the full discrete linear convolution of the inputs.
         (Default)
-	``valid``
+        ``valid``
         The output consists only of those elements that do not rely on
         zero-padding.
-	``same``
+        ``same``
         The output is the same size as `data`, centered with respect to the
         'full' output.
     dojit : boolean
@@ -132,7 +134,7 @@ def _centered(vec, newlen):
     Returns the center `newlen` portion of a vector.
 
     Adapted from scipy.signal.signaltools._centered:
-    https://github.com/scipy/scipy/blob/v0.18.0/scipy/signal/signaltools.py#L236-L243
+    github.com/scipy/scipy/blob/v0.18.0/scipy/signal/signaltools.py#L236-L243
 
     """
     currlen = vec.shape[-1]
@@ -222,8 +224,8 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
 
 
 def mov2npy(movie_file, out_file):
-
-    # Don't import cv at module level. Instead we'll use this on python 2 sometimes...
+    # Don't import cv at module level. Instead we'll use this on python 2
+    # sometimes...
     try:
         import cv
     except ImportError:
@@ -241,6 +243,7 @@ def mov2npy(movie_file, out_file):
         img = cv.QueryFrame(capture)
     frames = np.fliplr(np.rot90(np.mean(frames, -1).T, -1))
     np.save(out_file, frames)
+
 
 def memory_usage():
     """Memory usage of the current process in kilobytes.

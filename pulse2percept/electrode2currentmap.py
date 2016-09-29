@@ -33,6 +33,7 @@ def deg2micron(deg):
     microns = 280 * deg
     return microns
 
+
 def gamma(n, tau, t):
     """
     returns a gamma function from in [0, t]:
@@ -47,19 +48,21 @@ def gamma(n, tau, t):
         t = t[1:len(t)]
         flag = 1
 
-    y = ((t/tau)  ** (n-1) *
-        np.exp(-t / tau) /
-        (tau * factorial(n-1)))
+    y = ((t / tau) ** (n - 1) *
+         np.exp(-t / tau) /
+         (tau * factorial(n - 1)))
 
     if flag == 1:
         y = np.concatenate([[0], y])
 
     return y
 
+
 class Electrode(object):
     """
     Represent a circular, disc-like electrode.
     """
+
     def __init__(self, radius, x, y, h):
         """
         Initialize an electrode object
@@ -88,37 +91,35 @@ class Electrode(object):
         Parameters
         ----------
 
-        alpha : a constant to do with the spatial fall-off.
+        alpha : float
+            a constant to do with the spatial fall-off.
 
-        n : a constant to do with the spatial fall-off (Default: 1.69, based on
-        Ahuja et al. [2]  An In Vitro Model of a Retinal Prosthesis. Ashish K. Ahuja,
-        Matthew R. Behrend, Masako Kuroda, Mark S. Humayun, and
-        James D. Weiland (2008). IEEE Trans Biomed Eng 55.
-        
+        n : float
+            a constant to do with the spatial fall-off (Default: 1.69, based
+            on Ahuja et al. [2]  An In Vitro Model of a Retinal Prosthesis.
+            Ashish K. Ahuja, Matthew R. Behrend, Masako Kuroda, Mark S.
+            Humayun, and James D. Weiland (2008). IEEE Trans Biomed Eng 55.
+
         list: optional parameter describing the height of the array from the
         retinal surface in microns
         """
         r = np.sqrt((xg - self.x) ** 2 + (yg - self.y) ** 2)
-        h=np.ones(r.shape)*self.h
-        cspread = (alpha / (alpha + h** n)) # current values on the retina due to array being heigh
-        
-        d=((r- self.radius)**2 + self.h**2)**.5 # actual distance from the electrode edge 
-        cspread[r > self.radius] = (alpha / 
-        (alpha + d[r > self.radius] ** n))
+        h = np.ones(r.shape) * self.h
+        # current values on the retina due to array being heigh
+        cspread = (alpha / (alpha + h ** n))
+
+        # actual distance from the electrode edge
+        d = ((r - self.radius)**2 + self.h**2)**.5
+        cspread[r > self.radius] = (alpha /
+                                    (alpha + d[r > self.radius] ** n))
         return cspread
 
-#       the old code
-#        r = np.sqrt((xg - self.x) ** 2 + (yg - self.y) ** 2)
-#        cspread = np.ones(r.shape)
-#        cspread[r > self.radius] = (alpha / (alpha + (r[r > self.radius] -
-#                                             self.radius) ** n))
-#        return cspread
-#        
 
 class ElectrodeArray(object):
     """
     Represent a retina and array of electrodes
     """
+
     def __init__(self, radii, xs, ys, hs):
         self.electrodes = []
         for r, x, y, h in zip(radii, xs, ys, hs):
@@ -133,14 +134,14 @@ class ElectrodeArray(object):
 
 
 def receptive_field(electrode, xg, yg, size):
-  
-# creates a map of the retina for each electrode
- # where it's 1 under the electrode, 0 elsewhere
+
+    # creates a map of the retina for each electrode
+    # where it's 1 under the electrode, 0 elsewhere
     rf = np.zeros(xg.shape)
-    ind = np.where((xg > electrode.x-(size/2)) &
-                   (xg < electrode.x+(size/2)) &
-                   (yg > electrode.y-(size/2)) &
-                   (yg < electrode.y+(size/2)))
+    ind = np.where((xg > electrode.x - (size / 2)) &
+                   (xg < electrode.x + (size / 2)) &
+                   (yg > electrode.y - (size / 2)) &
+                   (yg < electrode.y + (size / 2)))
 
     rf[ind] = 1
     return rf
@@ -150,7 +151,8 @@ def gaussian_receptive_field(electrode, xg, yg, sigma):
     """
     A Gaussian receptive field
     """
-    amp = np.exp(-((xg - electrode.x)**2 + (yg - electrode.y)**2) / (2 * (sigma ** 2)))
+    amp = np.exp(-((xg - electrode.x)**2 + (yg - electrode.y) ** 2) /
+                 (2 * (sigma ** 2)))
     return amp / np.sum(amp)
 
 
@@ -165,52 +167,76 @@ def retinalmovie2electrodtimeseries(rf, movie, fps=30):
 
     return rflum
 
+
 def get_pulse(pulse_dur, tsample, interphase_dur, pulsetype):
+    """Returns a single biphasic pulse.
+
+    A single biphasic pulse with duration `pulse_dur` per phase,
+    separated by `interphase_dur` is returned.
+
+    Parameters
+    ----------
+    pulse_dur : float
+        Duration of single (positive or negative) pulse phase in seconds.
+    tsample : float
+        Sampling time step in seconds.
+    interphase_dur : float
+        Duration of inter-phase interval (between positive and negative
+        pulse) in seconds.
+    pulsetype : {'cathodicfirst', 'anodicfirst'}
+        A cathodic-first pulse has the negative phase first, whereas an
+        anodic-first pulse has the positive phase first.
+
+    """
     on = np.ones(round(pulse_dur / tsample))
     gap = np.zeros(round(interphase_dur / tsample))
     off = -1 * on
     if pulsetype == 'cathodicfirst':
-        pulse = np.concatenate((on, gap), axis=0)
-        pulse = np.concatenate((pulse, off), axis=0)
-
-    elif pulsetype == 'anodicfirst':
+        # cathodicfirst has negative current first
         pulse = np.concatenate((off, gap), axis=0)
         pulse = np.concatenate((pulse, on), axis=0)
+    elif pulsetype == 'anodicfirst':
+        pulse = np.concatenate((on, gap), axis=0)
+        pulse = np.concatenate((pulse, off), axis=0)
     else:
-        print('pulse not defined')
+        raise ValueError("Acceptable values for `pulsetype` are "
+                         "'anodicfirst' or 'cathodicfirst'")
     return pulse
-    
-def accumulatingvoltage(ptrain,tau=45.25/1000):
+
+
+def accumulatingvoltage(ptrain, tau=45.25 / 1000):
+    """Model's accumulating voltage on the electrode
+
+    General idea based on "On the Cause and Control of Residual Voltage
+    Generated by Electrical Stimulation of Neural Tissue
+    Ashwati Krishnan1 and Shawn K. Kelly2, Member, IEEE,2012
     """
-   Models accumulating voltage on the electrode
-   General idea based on "On the Cause and Control of Residual Voltage 
-   Generated by Electrical Stimulation of Neural Tissue
-   Ashwati Krishnan1 and Shawn K. Kelly2, Member, IEEE,2012
-    """
-   # calculate accumulated charge
+    # calculate accumulated charge
     t = np.arange(0, 20 * tau, ptrain.tsample)
     rectified = np.where(ptrain.data > 0, ptrain.data, 0)  # rectify
     ca = ptrain.tsample * np.cumsum(rectified.astype(float), axis=-1)
     g = gamma(1, tau, t)
-    chargeaccumulated = (ptrain.tsample *  fftconvolve(g, ca))
+    chargeaccumulated = (ptrain.tsample * fftconvolve(g, ca))
     zero_pad = np.zeros(rectified.shape[:-1] +
-        (chargeaccumulated.shape[-1] -  rectified.shape[-1],))
+                        (chargeaccumulated.shape[-1] - rectified.shape[-1],))
 
-    ptrain_pad = TimeSeries(ptrain.tsample, np.concatenate([ptrain.data, zero_pad], -1))
+    ptrain_pad = TimeSeries(
+        ptrain.tsample, np.concatenate([ptrain.data, zero_pad], -1))
 
     ptrain_ca = ptrain_pad.data - chargeaccumulated
-        
+
     return TimeSeries(ptrain.tsample, ptrain_ca)
-                
+
 
 class Movie2Pulsetrain(TimeSeries):
     """
     Is used to create pulse-train stimulus based on luminance over time from
     a movie
     """
+
     def __init__(self, rflum, fps=30.0, amplitude_transform='linear',
-                 amp_max=60, freq=20, pulse_dur=.5/1000.,
-                 interphase_dur=.5/1000., tsample=.25/1000.,
+                 amp_max=60, freq=20, pulse_dur=.5 / 1000.,
+                 interphase_dur=.5 / 1000., tsample=.25 / 1000.,
                  pulsetype='cathodicfirst', stimtype='pulsetrain'):
         """
         Parameters
@@ -230,7 +256,7 @@ class Movie2Pulsetrain(TimeSeries):
                 ppt = np.concatenate((ppt, interpulsegap), axis=0)
                 ppt = np.concatenate((ppt, pulse), axis=0)
 
-        ppt = ppt[0:round(dur/tsample)]
+        ppt = ppt[0:round(dur / tsample)]
         intfunc = interpolate.interp1d(np.linspace(0, len(rflum), len(rflum)),
                                        rflum)
 
@@ -238,73 +264,88 @@ class Movie2Pulsetrain(TimeSeries):
         data = amp * ppt * amp_max
         TimeSeries.__init__(self, tsample, data)
 
+
 class Psycho2Pulsetrain(TimeSeries):
     """
     Is used to generate pulse trains to simulate psychophysical experiments.
 
     """
-    def __init__(self, freq=20, dur=0.5, pulse_dur=.075/1000.,
-                 interphase_dur=.075/1000., delay=0., tsample=.005/1000.,
+
+    def __init__(self, freq=20, dur=0.5, pulse_dur=0.75/1000,
+                 interphase_dur=0.75/1000, delay=0., tsample=0.005/1000,
                  current_amplitude=20, pulsetype='cathodicfirst',
-                 stimtype='pulsetrain'):
+                 pulseorder='gapfirst'):
         """
 
         Parameters
         ----------
-        freq :
+        freq : float
+            Frequency of the pulse envelope in Hz.
+
         dur : float
-            Duration in seconds
+            Stimulus duration in seconds.
 
         pulse_dur : float
-            Pulse duration in seconds
+            Single-pulse duration in seconds.
 
         interphase_duration : float
-            In seconds
+            Single-pulse interphase duration (the time between the positive
+            and negative phase) in seconds.
 
         delay : float
+            Delay until stimulus on-set in seconds.
 
         tsample : float
-            Sampling interval in seconds
+            Sampling interval in seconds.
 
         current_amplitude : float
-            In XXX units?
+            Max amplitude of the pulse train in micro-amps.
 
         pulsetype : string
-            {"cathodicfirst" | "anodicfirst"}
+            Pulse type {"cathodicfirst" | "anodicfirst"}, where
+            'cathodicfirst' has the negative phase first.
 
-        stimtype : string
-            {"pulsetrain" | XXX other options?}
+        pulseorder : string
+            Pulse order {"gapfirst" | "pulsefirst"}, where
+            'pulsefirst' has the pulse first, followed by the gap.
         """
-        # set up the individual pulses
-        pulse = get_pulse(pulse_dur, tsample, interphase_dur, pulsetype)
+        # envelope size (single pulse + gap) given by `freq`
+        envelope_size = int(np.round((1 / freq) / tsample))
 
-        # set up the sequence
-        if stimtype == 'pulsetrain':
-            # Warning: using a non-integer number instead of an integer will
-            # result in an error in the future
-            interpulsegap = np.zeros(int(1/freq/tsample) - len(pulse))
-            # interpulsegap = np.zeros(round((1/freq) / tsample) - len(pulse))
-            ppt = []
-            for j in range(0, int(np.ceil(dur * freq))):
-                ppt = np.concatenate((ppt, interpulsegap), axis=0)
-                ppt = np.concatenate((ppt, pulse), axis=0)
+        # delay given by `delay`
+        delay_size = int(np.round(delay / tsample))
+        delay = np.zeros(delay_size)
 
-        if delay > 0:
-            ppt = np.concatenate((np.zeros(round(delay / tsample)), ppt),
-                                 axis=0)
+        # single pulse given by `pulse_dur`
+        pulse = current_amplitude * get_pulse(pulse_dur, tsample,
+                                              pulse_dur,
+                                              pulsetype)
+        pulse_size = pulse.size
 
-        # Warning: using a non-integer number instead of an integer will result
-        # in an error in the future
-        # ppt = ppt[0:round(dur/tsample)]
-        ppt = ppt[0:int(dur/tsample)]
-        data = (current_amplitude * ppt)
-        TimeSeries.__init__(self, tsample, data)
+        # then gap is used to fill up what's left
+        gap_size = envelope_size - delay_size - pulse_size
+        gap = np.zeros(gap_size)
+
+        pulse_train = []
+        for j in range(int(np.round(dur * freq))):
+            if pulseorder == 'pulsefirst':
+                pulse_train = np.concatenate((pulse_train, delay, pulse,
+                                              gap), axis=0)
+            elif pulseorder == 'gapfirst':
+                pulse_train = np.concatenate((pulse_train, delay, gap,
+                                              pulse), axis=0)
+            else:
+                raise ValueError("Acceptable values for `pulseorder` are "
+                                 "'pulsefirst' or 'gapfirst'")
+
+        TimeSeries.__init__(self, tsample, pulse_train)
 
 
 class Retina(object):
     """
     Represent the retinal coordinate frame
     """
+
     def __init__(self, xlo=-1000, xhi=1000, ylo=-1000, yhi=1000,
                  sampling=25, axon_map=None, axon_lambda=2):
         """
@@ -326,7 +367,7 @@ class Retina(object):
         self.gridx, self.gridy = np.meshgrid(np.arange(xlo, xhi,
                                                        sampling),
                                              np.arange(ylo, yhi,
-                                             sampling),
+                                                       sampling),
                                              indexing='xy')
 
         if axon_map is not None and os.path.exists(axon_map):
@@ -380,7 +421,7 @@ class Retina(object):
         ----------
         current_spread : the 2D spread map in retinal space
 
-	integrationtype : either 'dotproduct' or 'maxrule'
+        integrationtype : either 'dotproduct' or 'maxrule'
 
         Returns
         -------
@@ -388,30 +429,31 @@ class Retina(object):
         current map, where each pixel is the dot product of the pixel values in
         ecm along the pixels in the list in axon_map, weighted by the weights
         axon map.
-        """ 
+        """
         ecs = np.zeros(current_spread.shape)
         for id in range(0, len(current_spread.flat)):
             if integrationtype is 'dotproduct':
                 ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
-                                  self.axon_weight[id])
+                                      self.axon_weight[id])
             elif integrationtype is 'maxrule':
-                ecs.flat[id] = np.max(np.multiply(current_spread.flat[self.axon_id[id]],
-                                  self.axon_weight[id]))
+                cs = current_spread.flat[self.axon_id[id]]
+                ecs.flat[id] = np.max(np.multiply(cs, self.axon_weight[id]))
             else:
                 print('pulse not defined')
 
         ecs = ecs / ecs.max()
-        
-        # this normalization is based on unit current on the retina producing 
+
+        # this normalization is based on unit current on the retina producing
         # a max response of 1 based on axonal integration.
-        # means that response magnitudes don't change as you increase the 
+        # means that response magnitudes don't change as you increase the
         # length of axonal integration or sampling of the retina
         # Doesn't affect normalization over time, or responses as a function
-        # of the anount of current, 
+        # of the anount of current,
 
         return ecs
 
-    def electrode_ecs(self, electrode_array, alpha=14000, n=1.69, integrationtype='maxrule'):
+    def electrode_ecs(self, electrode_array, alpha=14000, n=1.69,
+                      integrationtype='maxrule'):
         """
         Gather current spread and effective current spread for each electrode
 
@@ -434,8 +476,7 @@ class Retina(object):
         Electrode.current_spread
         """
         ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
-                       len(electrode_array.electrodes)))
-
+                        len(electrode_array.electrodes)))
 
         cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
                        len(electrode_array.electrodes)))

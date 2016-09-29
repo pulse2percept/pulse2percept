@@ -17,9 +17,10 @@ from pulse2percept import utils
 
 
 class TemporalModel(object):
-    def __init__(self, model='Nanduri', tsample=5e-6, tau1=4.2e-4,
-                 tau2=4.525e-2, tau3=2.625e-2, epsilon=8.73, asymptote=14,
-                 slope=3, shift=16):
+
+    def __init__(self, model='Nanduri', tsample=0.005/1000,
+                 tau1=42/1000, tau2=45.25/1000, tau3=26.25/1000, epsilon=8.73,
+                 asymptote=14, slope=3, shift=16):
         """(Updated) Perceptual Sensitivity Model.
 
         A model of temporal integration from retina pixels.
@@ -95,12 +96,11 @@ class TemporalModel(object):
         t = np.arange(0, 8 * self.tau3, self.tsample)
         self.gamma3 = e2cm.gamma(3, self.tau3, t)
 
-
-    def fast_response(self, b1, dojit=True):
+    def fast_response(self, b1, dojit=True, usefft=False):
         """Fast response function (Box 2)
 
-        Convolve a stimulus `b1` with a temporal low-pass filter (1-stage gamma)
-        with time constant `self.tau1`.
+        Convolve a stimulus `b1` with a temporal low-pass filter (1-stage
+        gamma) with time constant `self.tau1`.
         This is Box 2 in Nanduri et al. (2012).
 
         Parameters
@@ -109,6 +109,8 @@ class TemporalModel(object):
            Temporal signal to process, b1(r,t) in Nanduri et al. (2012).
         dojit : bool, optional
            If True (default), use numba just-in-time compilation.
+        usefft : bool, optional
+           If False (default), use sparseconv, else fftconvolve.
 
         Returns
         -------
@@ -123,12 +125,16 @@ class TemporalModel(object):
 
         The output is not converted to a TimeSeries object for speedup.
         """
-        conv = utils.sparseconv(self.gamma1, b1, mode='full', dojit=dojit)
+        if usefft:
+            # In Krishnan model, b1 is no longer sparse. Run FFT instead.
+            conv = fftconvolve(b1, self.gamma1, mode='full')
+        else:
+            # In Nanduri model, b1 is sparse. Use sparseconv.
+            conv = utils.sparseconv(self.gamma1, b1, mode='full', dojit=dojit)
 
         # Cut off the tail of the convolution to make the output signal match
         # the dimensions of the input signal.
         return self.tsample * conv[:b1.shape[-1]]
-
 
     def charge_accumulation(self, b2):
         """Charge accumulation step (Box 3)
@@ -159,7 +165,6 @@ class TemporalModel(object):
         # Cut off the tail of the convolution to make the output signal match
         # the dimensions of the input signal
         return self.epsilon * self.tsample * conv[:b2.shape[-1]]
-
 
     def stationary_nonlinearity(self, b3):
         """Stationary nonlinearity (Box 4)
@@ -195,7 +200,6 @@ class TemporalModel(object):
 
         # avoid division by zero
         return b3 / (1e-10 + b3max) * scale
-
 
     def slow_response(self, b4):
         """Slow response function (Box 5)
@@ -275,7 +279,7 @@ class TemporalModel(object):
             maximum value of this signal was used to represent the perceptual
             brightness of a particular location in space, B(r).
         """
-        resp = self.fast_response(ecm.data, dojit=dojit)
+        resp = self.fast_response(ecm.data, dojit=dojit, usefft=False)
         ca = self.charge_accumulation(ecm.data)
         resp = self.stationary_nonlinearity(resp - ca)
         resp = self.slow_response(resp)
@@ -298,9 +302,9 @@ class TemporalModel(object):
             Brightness response over time. In Nanduri et al. (2012), the
             maximum value of this signal was used to represent the perceptual
             brightness of a particular location in space, B(r).
-        """ 
+        """
         ca = self.charge_accumulation(ecm.data)
-        resp = self.fast_response(ecm.data - ca, dojit=dojit)
+        resp = self.fast_response(ecm.data - ca, dojit=dojit, usefft=True)
         resp = self.stationary_nonlinearity(resp)
         resp = self.slow_response(resp)
         return utils.TimeSeries(self.tsample, resp)
@@ -351,7 +355,8 @@ def calc_pixel(ecs_vector, stim_data, temporal_model, resample_factor,
     sr.resample(resample_factor)
     return sr
 
-def onoffFiltering(movie, n, sig=[.1, .25],amp=[.01, -0.005]):
+
+def onoffFiltering(movie, n, sig=[.1, .25], amp=[.01, -0.005]):
     """
     From a movie to a version that is filtered by a collection on and off cells
     of sizes
@@ -361,77 +366,89 @@ def onoffFiltering(movie, n, sig=[.1, .25],amp=[.01, -0.005]):
     movie: movie to be filtered
     n : the sizes of the retinal ganglion cells (in μm, 293 μm equals 1 degree)
     """
-    onmovie = np.zeros([movie.data.shape[0], movie.data.shape[1], movie.data.shape[2]])
-    offmovie = np.zeros([movie.data.shape[0], movie.data.shape[1], movie.data.shape[2]])
-    newfiltImgOn=np.zeros([movie.shape[0], movie.shape[1]])
-    newfiltImgOff=np.zeros([movie.shape[0], movie.shape[1]])
-    pad = max(n)*2
+    on_movie = np.zeros(
+        [movie.data.shape[0], movie.data.shape[1], movie.data.shape[2]])
+    off_movie = np.zeros(
+        [movie.data.shape[0], movie.data.shape[1], movie.data.shape[2]])
+    new_filt_img_on = np.zeros([movie.shape[0], movie.shape[1]])
+    new_filt_img_off = np.zeros([movie.shape[0], movie.shape[1]])
+    pad = max(n) * 2
     for xx in range(movie.shape[-1]):
-        oldimg=movie[:, :, xx].data
-        tmpimg=np.mean(np.mean(oldimg))*np.ones([oldimg.shape[0]+pad*2,oldimg.shape[1]+pad*2])
+        oldimg = movie[:, :, xx].data
+        tmpimg = np.mean(np.mean(oldimg))
+        tmpimg *= np.ones([oldimg.shape[0] + pad * 2,
+                           oldimg.shape[1] + pad * 2])
         img = insertImg(tmpimg, oldimg)
-        filtImgOn=np.zeros([img.shape[0], img.shape[1]])
-        filtImgOff=np.zeros([img.shape[0], img.shape[1]])
-        
-        for i in range(n.shape[0]): 
-            [x,y] = np.meshgrid(np.linspace(-1,1,n[i]),np.linspace(-1,1,n[i]))   
-            rsq = x**2+y**2
-            dx = x[0,1]-x[0,0]    
-            on = np.exp(-rsq/(2*sig[0]**2))*(dx**2)/(2*np.pi*sig[0]**2)
-            off = np.exp(-rsq/(2*sig[1]**2))*(dx**2)/(2*np.pi*sig[1]**2)
-            filt = on-off
-            tmp_on = convolve2d(img,filt,'same')/n.shape[-1]
-            tmp_off=tmp_on
-            tmp_on= np.where(tmp_on>0, tmp_on, 0) 
-            tmp_off= -np.where(tmp_off<0, tmp_off, 0)
-             #   rectified = np.where(ptrain.data > 0, ptrain.data, 0)
-            filtImgOn =    filtImgOn+tmp_on/n.shape[0] 
-            filtImgOff =   filtImgOff+tmp_off/n.shape[0] 
+        filtImgOn = np.zeros([img.shape[0], img.shape[1]])
+        filtImgOff = np.zeros([img.shape[0], img.shape[1]])
+
+        for i in range(n.shape[0]):
+            [x, y] = np.meshgrid(np.linspace(-1, 1, n[i]),
+                                 np.linspace(-1, 1, n[i]))
+            rsq = x**2 + y**2
+            dx = x[0, 1] - x[0, 0]
+            on = np.exp(-rsq / (2 * sig[0]**2)) * \
+                (dx**2) / (2 * np.pi * sig[0]**2)
+            off = np.exp(-rsq / (2 * sig[1]**2)) * \
+                (dx**2) / (2 * np.pi * sig[1]**2)
+            filt = on - off
+            tmp_on = convolve2d(img, filt, 'same') / n.shape[-1]
+            tmp_off = tmp_on
+            tmp_on = np.where(tmp_on > 0, tmp_on, 0)
+            tmp_off = -np.where(tmp_off < 0, tmp_off, 0)
+            #   rectified = np.where(ptrain.data > 0, ptrain.data, 0)
+            filtImgOn = filtImgOn + tmp_on / n.shape[0]
+            filtImgOff = filtImgOff + tmp_off / n.shape[0]
 
         # Remove padding
-        nopad=np.zeros([img.shape[0]-pad*2, img.shape[1]-pad*2])
-        newfiltImgOn[:,:] = insertImg(nopad,filtImgOn)
-        newfiltImgOff[:, :] = insertImg(nopad,filtImgOff)
-        onmovie[:, :, xx]=newfiltImgOn
-        offmovie[:, :, xx]=newfiltImgOff
-        
-    return (onmovie, offmovie)
+        nopad = np.zeros([img.shape[0] - pad * 2, img.shape[1] - pad * 2])
+        new_filt_img_on[:, :] = insertImg(nopad, filtImgOn)
+        new_filt_img_off[:, :] = insertImg(nopad, filtImgOff)
+        on_movie[:, :, xx] = new_filt_img_on
+        off_movie[:, :, xx] = new_filt_img_off
 
-def onoffRecombine(onmovie, offmovie):
-    """
-    From a movie as filtered by on and off cells, 
-    to a recombined version that is either based on an electronic 
+    return (on_movie, off_movie)
+
+
+def onoffRecombine(on_movie, off_movie):
+    """(On-Off) and (On+Off) combinations from an input movie
+
+    From a movie as filtered by on and off cells,
+    to a recombined version that is either based on an electronic
     prosthetic (on + off) or recombined as might be done by a cortical
-    cell in normal vision (on-off) 
+    cell in normal vision (on-off)
+
     Parameters
     ----------
-    movie: on and off movies to be recombined
-    combination : options are 'both' returns both prosthetic and normal vision, 'normal' and 'prosthetic'
-    """  
+    on_movie : type?
+        input movie as parsed by on cells
+    off_movie : type?
+        input movie as parsed by off cells
 
-    prostheticmovie=onmovie + offmovie
-    normalmovie=onmovie - offmovie
+    """
+    prostheticmovie = on_movie + off_movie
+    normalmovie = on_movie - off_movie
     return (normalmovie, prostheticmovie)
 
 
-def insertImg(out_img,in_img): 
+def insertImg(out_img, in_img):
     """ insertImg(out_img,in_img)
-    Inserts in_img into the center of out_img.  
+    Inserts in_img into the center of out_img.
     if in_img is larger than out_img, in_img is cropped and centered.
     """
 
-    if in_img.shape[0]>out_img.shape[0]:
-        x0 = np.floor([(in_img.shape[0]-out_img.shape[0])/2])
-        xend=x0+out_img.shape[0]    
-        in_img=in_img[x0:xend, :]
-       
-    if in_img.shape[1]>out_img.shape[1]:
-        y0 = np.floor([(in_img.shape[1]-out_img.shape[1])/2])   
-        yend=y0+out_img.shape[1]
-        in_img=in_img[:, y0:yend]
-       
-    x0 = np.floor([(out_img.shape[0]-in_img.shape[0])/2])
-    y0 = np.floor([(out_img.shape[1]-in_img.shape[1])/2])
-    out_img[x0:x0+in_img.shape[0], y0:y0+in_img.shape[1]] = in_img
-    
+    if in_img.shape[0] > out_img.shape[0]:
+        x0 = np.floor([(in_img.shape[0] - out_img.shape[0]) / 2])
+        xend = x0 + out_img.shape[0]
+        in_img = in_img[x0:xend, :]
+
+    if in_img.shape[1] > out_img.shape[1]:
+        y0 = np.floor([(in_img.shape[1] - out_img.shape[1]) / 2])
+        yend = y0 + out_img.shape[1]
+        in_img = in_img[:, y0:yend]
+
+    x0 = np.floor([(out_img.shape[0] - in_img.shape[0]) / 2])
+    y0 = np.floor([(out_img.shape[1] - in_img.shape[1]) / 2])
+    out_img[x0:x0 + in_img.shape[0], y0:y0 + in_img.shape[1]] = in_img
+
     return out_img
