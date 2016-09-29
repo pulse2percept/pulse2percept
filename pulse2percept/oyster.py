@@ -148,7 +148,6 @@ def makeAxonMap(xg, yg, axon_lambda=1, nCells=500, nR=801, min_weight=.001,
 
     # loop through pixels as indexed into a single dimension
     for id in range(0, len(xg.flat)):
-
         # find the nearest axon to this pixel
         d = (axon_x - xg.flat[id])**2 + (axon_y - yg.flat[id])**2
         cur_ax_id = np.nanargmin(d)  # index into the current axon
@@ -191,10 +190,7 @@ def makeAxonMap(xg, yg, axon_lambda=1, nCells=500, nR=801, min_weight=.001,
                     cur_yg = nearest_yg
 
                     # append the list
-                    # axon_dist[id].append(dist)
-                    axon_weight[id].append(np.exp(-dist / axon_lambda))
-                    # axon_xg[id].append(cur_xg)
-                    # axon_yg[id].append(cur_yg)
+                    axon_weight[id].append(np.exp(weight))
                     axon_id[id].append(np.ravel_multi_index((nearest_yg_id,
                                                              nearest_xg_id),
                                                             xg.shape))
