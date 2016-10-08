@@ -19,7 +19,7 @@ from pulse2percept import utils
 class TemporalModel(object):
 
     def __init__(self, model='Nanduri', tsample=0.005/1000,
-                 tau1=42/1000, tau2=45.25/1000, tau3=26.25/1000, epsilon=8.73,
+                 tau1=[.42/1000, 14], tau2=45.25/1000, tau3=26.25/1000, epsilon=8.73,
                  asymptote=14, slope=3, shift=16):
         """(Updated) Perceptual Sensitivity Model.
 
@@ -50,8 +50,8 @@ class TemporalModel(object):
         tsample : float
             Sampling time step (seconds). Default: 5e-6 s.
         tau1 : float
-            Parameter for the fast leaky integrator, tends to be between 0.24 -
-            0.65 ms. Default: 4.2e-4 s.
+            Parameter for the fast leaky integrator for each layer, tends to be between 0.24 -
+            0.65 ms for ganglion. Default: 4.2e-4 s., 14-18 for bipolar. 
         tau2 : float
             Parameter for the charge accumulation, has values between 38 - 57
             ms. Default: 4.525e-2 s.
@@ -80,14 +80,17 @@ class TemporalModel(object):
         self.slope = slope
         self.shift = shift
 
-        # perform onte-time setup calculations
+        # perform one-time setup calculations
         # Gamma functions used as convolution kernels do not depend on input
         # data, hence can be calculated once, then re-used (trade off memory
         # for speed).
         # gamma1 is used to calculate the fast response
-        t = np.arange(0, 20 * self.tau1, self.tsample)
-        self.gamma1 = e2cm.gamma(1, self.tau1, t)
-
+        self.gamma1=[]
+        for i in range(0,len(self.tau1)):
+            t = np.arange(0, 20 * self.tau1[i], self.tsample)
+            g = e2cm.gamma(1, self.tau1[0], t)
+            self.gamma1.append(g)
+            
         # gamma2 is used to calculate charge accumulation
         t = np.arange(0, 8 * self.tau2, self.tsample)
         self.gamma2 = e2cm.gamma(1, self.tau2, t)
@@ -332,10 +335,14 @@ def pulse2percept(temporal_model, ecs, retina, stimuli, rs, engine='joblib',
             if np.all(ecs[yy, xx] < tol):
                 pass
             else:
-                ecs_list.append(ecs[yy, xx])
+                for l in range(ecs.shape[3]):
+                  ecs_list.append(ecs[yy, xx])
                 idx_list.append([yy, xx])
-                # the current contributed by each electrode for that spatial
-                # location
+                # ecs_list is a n x p list where n is the number of 
+                # layers being simulated, p is the number of pixels
+                # with a current value above tol (in either layer)
+                # each value in ecs is the current contributed by 
+                # each electrode for that spatial location
 
     # pulse train for each electrode
     stim_data = np.array([s.data for s in stimuli])
@@ -348,9 +355,9 @@ def pulse2percept(temporal_model, ecs, retina, stimuli, rs, engine='joblib',
     return utils.TimeSeries(sr_list[0].tsample, bm)
 
 
-def calc_pixel(ecs_vector, stim_data, temporal_model, resample_factor,
+def calc_pixel(ecs_list, stim_data, temporal_model, resample_factor,
                tsample, dojit=False):
-    ecm = e2cm.ecm(ecs_vector, stim_data, tsample)
+    ecm = e2cm.ecm(ecs_list, stim_data, tsample)
     sr = temporal_model.model_cascade(ecm, dojit=dojit)
     sr.resample(resample_factor)
     return sr
