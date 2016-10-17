@@ -30,47 +30,62 @@ import importlib as imp
 # (figure 4, pdf is in retina folder) the mean height from the array should be  179.6 μm
 # with a range of ~50-750μm
 
-modelver='Nanduri' # this is the standard model based on the Nanduri 2012 paper. 
 # Alternative model is currently the 'Krishnan' model which assumes that charge accumulation
-# occurs at the electrode, not neurally. The models are in fact metamers of each other,
-
+# occurs at the electrode, not neurally. The models are in fact metamers of each other if one is
+# only simulating the NFL
 xlist=[]
 ylist=[]
 rlist=[] #electrode radius, microns
 hlist=[] # lift of electrode from retinal surface, microns
 e_spacing=525 # spacing in microns
-for x in np.arange(-0, 500, e_spacing):  
-    for y in np.arange(-0, 500, e_spacing):
+for x in np.arange(-252, 500, e_spacing):  
+    for y in np.arange(-252, 500, e_spacing):
         xlist.append(x)
         ylist.append(y)
         rlist.append(100) # electrode radiues
-        hlist.append(179.6) 
-        # electrode lift from retinal surface, 
+        hlist.append(0); #179.6) # electrode lift from retinal surface,      
         # epiretinal array - distance to the ganglion layer
         # subretinal array - distance to the bipolar layer
-              
-e_all = e2cm.ElectrodeArray(rlist,xlist,ylist,hlist, ptype='subretinal')
-del xlist, ylist, rlist, hlist 
-      
+        # in Argus 1 179.6 is a good approx of height in a better patient
+e_all = e2cm.ElectrodeArray(rlist,xlist,ylist,hlist, ptype='epiretinal') 
+
+                
 # create retina, input variables include the sampling and how much of the retina is simulated, in microns   
 # (0,0 represents the fovea) 
-retinaname='SmallL80S150'
-r = e2cm.Retina(axon_map=None,sampling=150, ylo=-700, yhi=700, xlo=-500, xhi=500, axon_lambda=8)     
-   
-e_rf=[]
-for e in e_all.electrodes:
-    e_rf.append(e2cm.receptive_field(e, r.gridx, r.gridy,e_spacing))
-    
-    
-[ecs, cs]  = r.electrode_ecs(e_all, integrationtype='maxrule')      
+retinaname='SmallL80S75WL500'
+r = e2cm.Retina(axon_map=None,sampling=75, ylo=-500, yhi=500, xlo=-500, xhi=500, axon_lambda=8)     
 
-tm = ec2b.TemporalModel()
+# the effective current spread that incorporates axonal stimulation    
+    
 myout=[]
+d=.1
+fps=30
+pt=[]
+inl_out=[]
+nfl_out=[]
 
-rsample=(1/30)*tm.tsample
-for d in range(1, 40):
-    ptrain=e2cm.Psycho2Pulsetrain(current_amplitude=3, dur=.5, pulse_dur=d/1000.,interphase_dur=.45/1000, tsample=tm.tsample, freq=5)
-    tmp = ec2b.pulse2percept(tm, ecs, r, ptrain, rsample,  dojit=False)
-    myout.append(tmp)                  
+modelver='Krishnan' 
 
+tm = ec2b.TemporalModel(lweight= (1 / (3.16 * (10 ** 6))))
+#for d in [.1, .2, .45, .75, 1., 2., 4., 8., 16., 32.]:
+scFac =  2.41 * (10**3)
+# at 0 off the retinal surface a 0.45 pulse in the nfl gives a response of 1
+for d in [.1, .45, 1. ,2. ,4., 8., 16.]:
+    [ecs, cs]  = r.electrode_ecs(e_all)  
+    rsample=int(np.round((1/tm.tsample) / 30 )) # resampling of the output to fps
+    pt=e2cm.Psycho2Pulsetrain(tsample=tm.tsample, current_amplitude=100, dur=.6, pulse_dur=d/1000.,interphase_dur=.45/1000, freq=2)  
+    if modelver=='Krishnan':
+        ca = tm.tsample * np.cumsum(np.maximum(0, pt.data))
+        pt.data = pt.data - ca
+
+    inl_r = ec2b.pulse2percept(temporal_model=tm, ecs=ecs, retina=r, 
+                               ptrain=[pt], rsample=rsample,  dolayer='INL', dojit=False, engine='serial')
+    inl_out.append(np.max(inl_r.data) * scFac)
     
+    nfl_r = ec2b.pulse2percept(temporal_model=tm, ecs=ecs, retina=r,  
+                               ptrain=[pt], rsample=rsample, dolayer='NFL', dojit=False, engine='serial')
+    nfl_out.append(np.max(nfl_r.data) * scFac)
+#plt.plot(pt.data)
+    #myout.append(tmp)                  
+
+ 

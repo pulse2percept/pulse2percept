@@ -109,24 +109,24 @@ class Electrode(object):
         fovdist=np.sqrt(x**2+y**2)
         
         if ptype=='epiretinal':            
-          self.gh = h
+          self.h_nfl = h
           if fovdist<=600:
-              self.bh = h + 71.5
+              self.h_inl = h + 71.5
           elif fovdist<=1550:
-              self.bh = h + 139.75
+              self.h_inl = h + 139.75
           elif fovdist>1550:
-              self.bh = h + 119.075
+              self.h_inl = h + 119.075
         
         elif ptype=='subretinal':            
           if fovdist<=600:
-              self.bh = h + 23/2
-              self.gh = h + 83
+              self.h_inl = h + 23/2
+              self.h_nfl = h + 83
           elif fovdist<=1550:
-              self.bh = h + 37.5/2
-              self.gh = h + 158.5
+              self.h_inl = h + 37.5/2
+              self.h_nfl = h + 158.5
           elif fovdist>1550:
-              self.bh = h + 30.75/2
-              self.gh = h + 141.45
+              self.h_inl = h + 30.75/2
+              self.h_nfl = h + 141.45
               
     def current_spread(self, xg, yg, layer, alpha=14000, n=1.69):
         """
@@ -155,12 +155,12 @@ class Electrode(object):
         r = np.sqrt((xg - self.x) ** 2 + (yg - self.y) ** 2)
         # current values on the retina due to array being above the retinal surface
         if 'NFL' in layer: # nerve fiber layer, ganglion axons          
-            h = np.ones(r.shape) * self.gh          
+            h = np.ones(r.shape) * self.h_nfl          
            # actual distance from the electrode edge
-            d = ((r - self.radius)**2 + self.gh**2)**.5
+            d = ((r - self.radius)**2 + self.h_nfl**2)**.5
         elif 'INL' in layer:  # inner nuclear layer, containing the bipolars
-            h = np.ones(r.shape) * self.bh
-            d = ((r - self.radius)**2 + self.bh**2)**.5
+            h = np.ones(r.shape) * self.h_inl
+            d = ((r - self.radius)**2 + self.h_inl**2)**.5
         cspread = (alpha / (alpha + h ** n))
         cspread[r > self.radius] = (alpha /
                                     (alpha + d[r > self.radius] ** n))
@@ -292,15 +292,16 @@ class Movie2Pulsetrain(TimeSeries):
     a movie
     """
 
-    def __init__(self, rflum, fps=30.0, amplitude_transform='linear',
+    def __init__(self, rflum, tsample, fps=30.0, amplitude_transform='linear',
                  amp_max=60, freq=20, pulse_dur=.5 / 1000.,
-                 interphase_dur=.5 / 1000., tsample=.25 / 1000.,
+                 interphase_dur=.5 / 1000.,
                  pulsetype='cathodicfirst', stimtype='pulsetrain'):
         """
         Parameters
         ----------
         rflum : 1D array
            Values between 0 and 1
+        tsample : suggest TemporalModel.tsample
         """
         # set up the individual pulses
         pulse = get_pulse(pulse_dur, tsample, interphase_dur, pulsetype)
@@ -329,14 +330,16 @@ class Psycho2Pulsetrain(TimeSeries):
 
     """
 
-    def __init__(self, freq=20, dur=0.5, pulse_dur=0.75/1000,
-                 interphase_dur=0.75/1000, delay=0., tsample=0.005/1000,
+    def __init__(self, tsample, freq=20, dur=0.5, pulse_dur=0.45/1000,
+                 interphase_dur=0.45/1000, delay=0.45/1000, 
                  current_amplitude=20, pulsetype='cathodicfirst',
-                 pulseorder='gapfirst'):
+                 pulseorder='pulsefirst'):
         """
 
-        Parameters
+        tsample : float
+            Sampling interval in seconds parameters, suggest TemporalModel.tsample
         ----------
+        optional parameters
         freq : float
             Frequency of the pulse envelope in Hz.
 
@@ -353,8 +356,6 @@ class Psycho2Pulsetrain(TimeSeries):
         delay : float
             Delay until stimulus on-set in seconds.
 
-        tsample : float
-            Sampling interval in seconds.
 
         current_amplitude : float
             Max amplitude of the pulse train in micro-amps.
@@ -381,7 +382,7 @@ class Psycho2Pulsetrain(TimeSeries):
         pulse_size = pulse.size
 
         # then gap is used to fill up what's left
-        gap_size = envelope_size - delay_size - pulse_size
+        gap_size = envelope_size - (delay_size + pulse_size)
         gap = np.zeros(gap_size)
 
         pulse_train = []
@@ -469,7 +470,7 @@ class Retina(object):
         self.axon_id = axon_id
         self.axon_weight = axon_weight
 
-    def cm2ecm(self, current_spread, integrationtype):
+    def cm2ecm(self, current_spread):
         """
 
         Converts a current spread map to an 'effective' current spread map, by
@@ -478,8 +479,6 @@ class Retina(object):
         Parameters
         ----------
         current_spread : the 2D spread map in retinal space
-
-        integrationtype : either 'dotproduct' or 'maxrule'
 
         Returns
         -------
@@ -490,16 +489,9 @@ class Retina(object):
         """
         ecs = np.zeros(current_spread.shape)
         for id in range(0, len(current_spread.flat)):
-            if integrationtype is 'dotproduct':
-                ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
+            ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
                                       self.axon_weight[id])
-            elif integrationtype is 'maxrule':
-                cs = current_spread.flat[self.axon_id[id]]
-                ecs.flat[id] = np.max(np.multiply(cs, self.axon_weight[id]))
-            else:
-                print('pulse not defined')
-
-        ecs = ecs / ecs.max()
+        ecs = ecs * (current_spread.max() / ecs.max())
 
         # this normalization is based on unit current on the retina producing
         # a max response of 1 based on axonal integration.
@@ -510,7 +502,7 @@ class Retina(object):
 
         return ecs
 
-    def electrode_ecs(self, electrode_array, layers, alpha=14000, n=1.69,
+    def electrode_ecs(self, electrode_array, alpha=14000, n=1.69,
                       integrationtype='maxrule'):
         """
         Gather current spread and effective current spread for each electrode
@@ -519,6 +511,7 @@ class Retina(object):
         Parameters
         ----------
         electrode_array : ElectrodeArray class instance.
+
         alpha : float
             Current spread parameter
         n : float
@@ -526,35 +519,30 @@ class Retina(object):
 
         Returns
         -------
-        g_layer, b_layer : two arrays containing the the effective current
-            spread within the ganglion cell layer and the bipolar layer 
-            (currently equivalent to the calculated curent spread)
+        ecs : contains n arrays containing the the effective current
+            spread within various layers 
             for each electrode in the array respectively.
 
         See also
         --------
         Electrode.current_spread
         """
-        cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
-            len(layers),    
-            len(electrode_array.electrodes)))
-        ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
-            len(layers),
-            len(electrode_array.electrodes)))
-                        
-        for l in range(0,len(layers)):                
-            for i, e in enumerate(electrode_array.electrodes):
-                cs[..., l, i] = e.current_spread(self.gridx, self.gridy, layers[l],
-                                          alpha=alpha, n=n)
-                if layers[l]=='NFL':
-                   ecs[..., l, i] = self.cm2ecm(cs[..., l,i], integrationtype)
-                else:
-                   ecs[...,l,i]=cs[..., l, i] 
 
+        cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
+                            2, len(electrode_array.electrodes)))
+        ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1], 
+                            2, len(electrode_array.electrodes)))
+                
+        for i, e in enumerate(electrode_array.electrodes):
+                cs[..., 0, i] = e.current_spread(self.gridx, self.gridy, layer='INL', alpha=alpha, n=n)
+                ecs[..., 0, i]=cs[..., 0, i] 
+                cs[..., 1, i] = e.current_spread(self.gridx, self.gridy, layer='NFL', alpha=alpha, n=n)
+                ecs[:, :, 1, i] = self.cm2ecm(cs[..., 1, i])
+        
         return ecs, cs 
 
 
-def ecm(ecs_list, stim_data, tsample):
+def ecm(ecs_item, ptrain_data, tsample):
     """
     effective current map from the electrodes in one spatial location
     ([x, y] index) and the stimuli through these electrodes.
@@ -570,5 +558,6 @@ def ecm(ecs_list, stim_data, tsample):
     -------
     A TimeSeries object with the effective current for this stimulus
     """
-    ecm = np.sum(ecs_list[:, None] * stim_data, 0)
+
+    ecm = np.sum(ecs_item[:,:,None] * ptrain_data, 1)
     return TimeSeries(tsample, ecm)
