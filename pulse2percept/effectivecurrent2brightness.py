@@ -18,8 +18,10 @@ from pulse2percept import utils
 
 class TemporalModel(object):
 
-    def __init__(self, model='Krishnan', tsample=0.01/1000, tau_nfl=.42/1000, tau_inl=18./1000, lweight=205, tau2=45.25/1000, tau3=26.25/1000, epsilon=8.73,
+
+    def __init__(self, model='Krishnan', tsample=0.005/1000, tau_nfl=.42/1000, tau_inl=18./1000, lweight=(1 / (3.16 * (10 ** 6))), tau2=45.25/1000, tau3=26.25/1000, epsilon=8.73,
                  asymptote=14., slope=3., shift=16.):
+
         """(Updated) Perceptual Sensitivity Model.
 
         A model of temporal integration from retina pixels.
@@ -281,35 +283,6 @@ class TemporalModel(object):
         return self.tsample * conv[:b4.shape[-1]]
 
     def model_cascade(self, ecm, dolayer, dojit):
-        """Executes the whole cascade of the perceptual sensitivity model.
-
-        The order of the cascade stages depend on the model flavor: either
-        'Nanduri' or 'Krishnan'.
-
-        Parameters
-        ----------
-        ecm : TimeSeries
-            Effective current
-
-        Returns
-        -------
-        b5 : TimeSeries
-            Brightness response over time. In Nanduri et al. (2012), the
-            maximum value of this signal was used to represent the perceptual
-            brightness of a particular location in space, B(r).
-        """
-        
-        if self.model == 'Nanduri':
-            # Nanduri: first fast response, then charge accumulation
-            return self.cascade_nanduri(ecm, dolayer, dojit)
-        elif self.model == 'Krishnan':
-            # Krishnan: first charge accumulation, then fast response
-            return self.cascade_krishnan(ecm, dolayer, dojit)
-        else:
-            raise ValueError('Acceptable values for "model" are: '
-                             '{"Nanduri", "Krishnan"}')
-
-    def cascade_nanduri(self, ecm, dolayer, dojit):
         """Model cascade according to Nanduri et al. (2012).
 
         The 'Nanduri' model calculates the fast response first, followed by the
@@ -327,14 +300,17 @@ class TemporalModel(object):
             maximum value of this signal was used to represent the perceptual
             brightness of a particular location in space, B(r).
         """ 
+        ca=0
         if 'INL' in dolayer:
-            ca = self.charge_accumulation(ecm[0].data)
+            if self.model=='Nanduri':
+                ca = self.charge_accumulation(ecm[0].data)
             resp_inl = (self.fast_response_inl(ecm[0].data, dojit=dojit, usefft=True) - ca)
         else:
             resp_inl=np.zeros((ecm[0].data.shape)) 
                
         if 'NFL' in dolayer:
-            ca = self.charge_accumulation(ecm[1].data)
+            if self.model=='Nanduri':
+                ca = self.charge_accumulation(ecm[1].data)
             resp_nfl = self.fast_response_nfl(ecm[1].data, dojit=dojit, usefft=False) - ca
         else:
             resp_nfl=np.zeros((ecm[1].data.shape)) 
@@ -344,42 +320,6 @@ class TemporalModel(object):
         resp = self.stationary_nonlinearity(resp)      
         resp = self.slow_response(resp)
         return utils.TimeSeries(self.tsample, resp)
-
-    def cascade_krishnan(self, ecm, dolayer, dojit):
-        """Model cascade according to Krishnan et al. (2015).
-
-        The 'Krishnan' model calculates the current accumulation first,
-        followed by the fast response.
-
-        Parameters
-        ----------
-        ecm : TimeSeries
-            Effective current
-
-        Returns
-        -------
-        b5 : TimeSeries
-            Brightness response over time. In Nanduri et al. (2012), the
-            maximum value of this signal was used to represent the perceptual
-            brightness of a particular location in space, B(r).
-        """
-        if 'INL' in dolayer:
-            resp_inl = self.fast_response_inl(ecm[0].data, dojit=dojit, usefft=True)
-        else:
-            resp_inl=np.zeros((ecm[0].data.shape)) 
-            
-        if 'NFL' in dolayer:
-            resp_nfl = self.fast_response_nfl(ecm.data[1], dojit=dojit, usefft=True)
-        else:
-            resp_nfl=np.zeros((ecm[1].data.shape)) 
-        
-
-        resp = (self.lweight * resp_inl) + resp_nfl
-
-        resp = self.stationary_nonlinearity(resp)
-        resp = self.slow_response(resp)
-        return utils.TimeSeries(self.tsample, resp)
-
 
 def pulse2percept(temporal_model, ecs, retina, ptrain, rsample, dolayer, engine='joblib',
                   dojit=True, n_jobs=-1, tol=.05):
@@ -411,7 +351,15 @@ def pulse2percept(temporal_model, ecs, retina, ptrain, rsample, dolayer, engine=
                 # each electrode for that spatial location
 
     # pulse train for each electrode
+    if temporal_model.model=='Krishnan':
+        for p in range(len(ptrain)): 
+            ca = temporal_model.tsample * np.cumsum(np.maximum(0, ptrain[p].data))
+            tmp = fftconvolve(ca, temporal_model.gamma2, mode='full')
+            conv_ca= temporal_model.epsilon * temporal_model.tsample * tmp[:ptrain[p].shape[-1]]
+            ptrain[p].data = ptrain[p].data - conv_ca
+
     ptrain_data = np.array([p.data for p in ptrain])
+    
     sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs, engine=engine,
                            func_args=[ptrain_data, temporal_model, rsample, dolayer, dojit])
     bm = np.zeros(retina.gridx.shape + (sr_list[0].data.shape[-1], ))
