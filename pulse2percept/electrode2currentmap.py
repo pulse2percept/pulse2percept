@@ -63,7 +63,7 @@ class Electrode(object):
     Represent a circular, disc-like electrode.
     """
 
-    def __init__(self, radius, x, y, h):
+    def __init__(self, radius, x, y, h, ptype):
         """
         Initialize an electrode object
 
@@ -72,25 +72,76 @@ class Electrode(object):
         radius : float
             The radius of the electrode (in microns).
         x : float
-            The x coordinate of the electrode (in microns).
+            The x coordinate of the electrode (in microns) from the fovea
         y : float
-            The y location of the electrode (in microns).
+            The y location of the electrode (in microns) from the fovea
+        h : float
+            The height of the electrode from the retinal surface 
+              epiretinal array - distance to the ganglion layer
+             subretinal array - distance to the bipolar layer
+             
+        Estimates of layer thickness based on:
+        LoDuca et al. Am J. Ophthalmology 2011
+        Thickness Mapping of Retinal Layers by Spectral Domain Optical Coherence Tomography
+        Note that this is for normal retinal, so may overestimate thickness.
+        Thickness from their paper (averaged across quadrants):
+          0-600 um radius (from fovea)
+            Layer 1. (Nerve fiber layer) = 4
+            Layer 2. (Ganglion cell bodies + inner plexiform) = 56
+            Layer 3. (Bipolar bodies, inner nuclear layer) = 23
+          600-1550 um radius
+            Layer 1. 34
+            Layer 2. 87
+            Layer 3. 37.5
+          1550-3000 um radius
+            Layer 1. 45.5
+            Layer 2. 58.2
+            Layer 3. 30.75
+        
+        We place our ganglion axon surface on the inner side of the nerve fiber layer
+        We place our bipolar surface 1/2 way through the inner nuclear layer
+        So for an epiretinal array the bipolar layer is L1+L2+(.5*L3)
+                
         """
         self.radius = radius
         self.x = x
         self.y = y
-        self.h = h
-
-    def current_spread(self, xg, yg, alpha=14000, n=1.69):
+        fovdist=np.sqrt(x**2+y**2)
+        
+        if ptype=='epiretinal':            
+          self.h_nfl = h
+          if fovdist<=600:
+              self.h_inl = h + 71.5
+          elif fovdist<=1550:
+              self.h_inl = h + 139.75
+          elif fovdist>1550:
+              self.h_inl = h + 119.075
+        
+        elif ptype=='subretinal':            
+          if fovdist<=600:
+              self.h_inl = h + 23/2
+              self.h_nfl = h + 83
+          elif fovdist<=1550:
+              self.h_inl = h + 37.5/2
+              self.h_nfl = h + 158.5
+          elif fovdist>1550:
+              self.h_inl = h + 30.75/2
+              self.h_nfl = h + 141.45
+              
+    def current_spread(self, xg, yg, layer, alpha=14000, n=1.69):
         """
 
         The current spread due to a current pulse through an electrode,
         reflecting the fall-off of the current as a function of distance from
-        the electrode center. This is equation 2 in Nanduri et al [1]_.
-
+        the electrode center. This can be calculated for any layer in the retina
+        Based on equation 2 in Nanduri et al [1]_.
+        
         Parameters
         ----------
-
+        xg and yg defining the retinal grid
+        layers describing which layers of the retina are simulated
+            'NFL': nerve fiber layer, ganglion axons
+            'INL': inner nuclear layer, containing the bipolars
         alpha : float
             a constant to do with the spatial fall-off.
 
@@ -99,19 +150,21 @@ class Electrode(object):
             on Ahuja et al. [2]  An In Vitro Model of a Retinal Prosthesis.
             Ashish K. Ahuja, Matthew R. Behrend, Masako Kuroda, Mark S.
             Humayun, and James D. Weiland (2008). IEEE Trans Biomed Eng 55.
-
-        list: optional parameter describing the height of the array from the
-        retinal surface in microns
+    
         """
         r = np.sqrt((xg - self.x) ** 2 + (yg - self.y) ** 2)
-        h = np.ones(r.shape) * self.h
-        # current values on the retina due to array being heigh
+        # current values on the retina due to array being above the retinal surface
+        if 'NFL' in layer: # nerve fiber layer, ganglion axons          
+            h = np.ones(r.shape) * self.h_nfl          
+           # actual distance from the electrode edge
+            d = ((r - self.radius)**2 + self.h_nfl**2)**.5
+        elif 'INL' in layer:  # inner nuclear layer, containing the bipolars
+            h = np.ones(r.shape) * self.h_inl
+            d = ((r - self.radius)**2 + self.h_inl**2)**.5
         cspread = (alpha / (alpha + h ** n))
-
-        # actual distance from the electrode edge
-        d = ((r - self.radius)**2 + self.h**2)**.5
         cspread[r > self.radius] = (alpha /
                                     (alpha + d[r > self.radius] ** n))
+
         return cspread
 
 
@@ -120,17 +173,22 @@ class ElectrodeArray(object):
     Represent a retina and array of electrodes
     """
 
-    def __init__(self, radii, xs, ys, hs):
+    def __init__(self, radii, xs, ys, hs, ptype):
         self.electrodes = []
         for r, x, y, h in zip(radii, xs, ys, hs):
-            self.electrodes.append(Electrode(r, x, y, h))
+            self.electrodes.append(Electrode(r, x, y, h, ptype))
 
-    def current_spread(self, xg, yg, alpha=14000, n=1.69):
-        c = np.zeros((len(self.electrodes), xg.shape[0], xg.shape[1]))
-        for i in range(c.shape[0]):
-            c[i] = self.electrodes[i].current_spread(xg, yg,
-                                                     alpha=alpha, n=n)
-        return np.sum(c, 0)
+#    def current_spread(self, xg, yg, layers, alpha=14000, n=1.69):
+#        
+#        BOOM WAH!
+#        # this is the part that is broken. Somehow the the info about layers 
+#        # needs to be included in the ElectrodeArray object 
+#        c = np.zeros((len(self.electrodes), xg.shape[0], xg.shape[1]))
+#              
+#        for i in range(c.shape[0]):
+#            c[i] = self.electrodes[i].current_spread(xg, yg, layers[l],
+#                                                     alpha=alpha, n=n, layers[l])
+#        return np.sum(c, 0)
 
 
 def receptive_field(electrode, xg, yg, size):
@@ -234,15 +292,16 @@ class Movie2Pulsetrain(TimeSeries):
     a movie
     """
 
-    def __init__(self, rflum, fps=30.0, amplitude_transform='linear',
+    def __init__(self, rflum, tsample, fps=30.0, amplitude_transform='linear',
                  amp_max=60, freq=20, pulse_dur=.5 / 1000.,
-                 interphase_dur=.5 / 1000., tsample=.25 / 1000.,
+                 interphase_dur=.5 / 1000.,
                  pulsetype='cathodicfirst', stimtype='pulsetrain'):
         """
         Parameters
         ----------
         rflum : 1D array
            Values between 0 and 1
+        tsample : suggest TemporalModel.tsample
         """
         # set up the individual pulses
         pulse = get_pulse(pulse_dur, tsample, interphase_dur, pulsetype)
@@ -271,14 +330,16 @@ class Psycho2Pulsetrain(TimeSeries):
 
     """
 
-    def __init__(self, freq=20, dur=0.5, pulse_dur=0.75/1000,
-                 interphase_dur=0.75/1000, delay=0., tsample=0.005/1000,
+    def __init__(self, tsample, freq=20, dur=0.5, pulse_dur=0.45/1000,
+                 interphase_dur=0.45/1000, delay=0.45/1000, 
                  current_amplitude=20, pulsetype='cathodicfirst',
-                 pulseorder='gapfirst'):
+                 pulseorder='pulsefirst'):
         """
 
-        Parameters
+        tsample : float
+            Sampling interval in seconds parameters, suggest TemporalModel.tsample
         ----------
+        optional parameters
         freq : float
             Frequency of the pulse envelope in Hz.
 
@@ -295,8 +356,6 @@ class Psycho2Pulsetrain(TimeSeries):
         delay : float
             Delay until stimulus on-set in seconds.
 
-        tsample : float
-            Sampling interval in seconds.
 
         current_amplitude : float
             Max amplitude of the pulse train in micro-amps.
@@ -323,7 +382,7 @@ class Psycho2Pulsetrain(TimeSeries):
         pulse_size = pulse.size
 
         # then gap is used to fill up what's left
-        gap_size = envelope_size - delay_size - pulse_size
+        gap_size = envelope_size - (delay_size + pulse_size)
         gap = np.zeros(gap_size)
 
         pulse_train = []
@@ -411,7 +470,7 @@ class Retina(object):
         self.axon_id = axon_id
         self.axon_weight = axon_weight
 
-    def cm2ecm(self, current_spread, integrationtype):
+    def cm2ecm(self, current_spread):
         """
 
         Converts a current spread map to an 'effective' current spread map, by
@@ -420,8 +479,6 @@ class Retina(object):
         Parameters
         ----------
         current_spread : the 2D spread map in retinal space
-
-        integrationtype : either 'dotproduct' or 'maxrule'
 
         Returns
         -------
@@ -432,16 +489,9 @@ class Retina(object):
         """
         ecs = np.zeros(current_spread.shape)
         for id in range(0, len(current_spread.flat)):
-            if integrationtype is 'dotproduct':
-                ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
+            ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
                                       self.axon_weight[id])
-            elif integrationtype is 'maxrule':
-                cs = current_spread.flat[self.axon_id[id]]
-                ecs.flat[id] = np.max(np.multiply(cs, self.axon_weight[id]))
-            else:
-                print('pulse not defined')
-
-        ecs = ecs / ecs.max()
+        ecs = ecs * (current_spread.max() / ecs.max())
 
         # this normalization is based on unit current on the retina producing
         # a max response of 1 based on axonal integration.
@@ -456,10 +506,12 @@ class Retina(object):
                       integrationtype='maxrule'):
         """
         Gather current spread and effective current spread for each electrode
+        within both the bipolar and the ganglion cell layer
 
         Parameters
         ----------
         electrode_array : ElectrodeArray class instance.
+
         alpha : float
             Current spread parameter
         n : float
@@ -467,36 +519,37 @@ class Retina(object):
 
         Returns
         -------
-        ecs_list, cs_list : two lists containing the the effective current
-            spread and current spread for each electrode in the array
-            respectively.
+        ecs : contains n arrays containing the the effective current
+            spread within various layers 
+            for each electrode in the array respectively.
 
         See also
         --------
         Electrode.current_spread
         """
-        ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
-                        len(electrode_array.electrodes)))
 
         cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
-                       len(electrode_array.electrodes)))
-
+                            2, len(electrode_array.electrodes)))
+        ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1], 
+                            2, len(electrode_array.electrodes)))
+                
         for i, e in enumerate(electrode_array.electrodes):
-            cs[..., i] = e.current_spread(self.gridx, self.gridy,
-                                          alpha=alpha, n=n)
-            ecs[..., i] = self.cm2ecm(cs[..., i], integrationtype)
+                cs[..., 0, i] = e.current_spread(self.gridx, self.gridy, layer='INL', alpha=alpha, n=n)
+                ecs[..., 0, i]=cs[..., 0, i] 
+                cs[..., 1, i] = e.current_spread(self.gridx, self.gridy, layer='NFL', alpha=alpha, n=n)
+                ecs[:, :, 1, i] = self.cm2ecm(cs[..., 1, i])
+        
+        return ecs, cs 
 
-        return ecs, cs
 
-
-def ecm(ecs_vector, stim_data, tsample):
+def ecm(ecs_item, ptrain_data, tsample):
     """
     effective current map from the electrodes in one spatial location
     ([x, y] index) and the stimuli through these electrodes.
 
     Parameters
     ----------
-    ecs_vector : 1D arrays
+    ecs_list: nlayer x npixels (over threshold) arrays
 
     stimuli : list of TimeSeries objects with the electrode stimulation
         pulse trains.
@@ -505,5 +558,6 @@ def ecm(ecs_vector, stim_data, tsample):
     -------
     A TimeSeries object with the effective current for this stimulus
     """
-    ecm = np.sum(ecs_vector[:, None] * stim_data, 0)
+
+    ecm = np.sum(ecs_item[:,:,None] * ptrain_data, 1)
     return TimeSeries(tsample, ecm)
