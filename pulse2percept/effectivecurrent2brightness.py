@@ -7,9 +7,7 @@ Output: a vector of brightness over time
 """
 from __future__ import print_function
 import numpy as np
-#from scipy.misc import factorial
 from scipy.signal import fftconvolve
-#from scipy.signal import convolve2d
 from scipy.special import expit
 
 import pulse2percept.electrode2currentmap as e2cm
@@ -33,8 +31,8 @@ class TemporalModel(object):
 
         The model comes in two flavors: 'Nanduri' implements the model cascade
         as described in Fig. 6 of Nanduri et al. (2012). Effective current is
-        first convolved with a fast gamma function (tau_nfl), before the response
-        is adjusted based on accumulated cathodic charge (tau2).
+        first convolved with a fast gamma function (tau_nfl), before the
+        response is adjusted based on accumulated cathodic charge (tau2).
         'Krishnan' inverts this logic, where effective current is first
         adjusted based on accumulated cathodic charge, and then convolved with
         a fast gamma function.
@@ -52,8 +50,9 @@ class TemporalModel(object):
         tsample : float
             Sampling time step (seconds). Default: 5e-6 s.
         tau1 : float
-            Parameter for the fast leaky integrator for each layer, tends to be between 0.24 -
-            0.65 ms for ganglion. Default: 4.2e-4 s., 14-18 for bipolar.
+            Parameter for the fast leaky integrator for each layer, tends to be
+            between 0.24 - 0.65 ms for ganglion cells, 14 - 18 ms for bipolar
+            cells. Default: 4.2e-4 s.
         tau2 : float
             Parameter for the charge accumulation, has values between 38 - 57
             ms. Default: 4.525e-2 s.
@@ -88,7 +87,8 @@ class TemporalModel(object):
         # Gamma functions used as convolution kernels do not depend on input
         # data, hence can be calculated once, then re-used (trade off memory
         # for speed).
-        # gamma_nfl and gamma_inl are used to calculate the fast response in bipolar and ganglion cells respectively
+        # gamma_nfl and gamma_inl are used to calculate the fast response in
+        # bipolar and ganglion cells respectively
 
         self.gamma_nfl = []
         t = np.arange(0, 10 * self.tau_nfl, self.tsample)
@@ -136,12 +136,13 @@ class TemporalModel(object):
         The output is not converted to a TimeSeries object for speedup.
         """
 
-        if usefft:  # In Krishnan model, b1 is no longer sparse. Run FFT instead.
+        if usefft:  # In Krishnan model, b1 is no longer sparse (run FFT)
             conv = self.tsample * fftconvolve(b1, self.gamma_inl, mode='full')
         else:  # In Nanduri model, b1 is sparse. Use sparseconv.
-            conv = self.tsample * utils.sparseconv(self.gamma_inl, b1, mode='full', dojit=dojit)
-            # Cut off the tail of the convolution to make the output signal match
-            # the dimensions of the input signal.
+            conv = self.tsample * utils.sparseconv(self.gamma_inl, b1,
+                                                   mode='full', dojit=dojit)
+            # Cut off the tail of the convolution to make the output signal
+            # match the dimensions of the input signal.
 
         # return self.tsample * conv[:, b1.shape[-1]]
         return self.tsample * conv[:b1.shape[-1]]
@@ -176,12 +177,13 @@ class TemporalModel(object):
         The output is not converted to a TimeSeries object for speedup.
         """
 
-        if usefft:  # In Krishnan model, b1 is no longer sparse. Run FFT instead.
+        if usefft:  # In Krishnan model, b1 is no longer sparse (use FFT)
             conv = self.tsample * fftconvolve(b1, self.gamma_nfl, mode='full')
         else:  # In Nanduri model, b1 is sparse. Use sparseconv.
-            conv = self.tsample * utils.sparseconv(self.gamma_nfl, b1, mode='full', dojit=dojit)
-            # Cut off the tail of the convolution to make the output signal match
-            # the dimensions of the input signal.
+            conv = self.tsample * utils.sparseconv(self.gamma_nfl, b1,
+                                                   mode='full', dojit=dojit)
+            # Cut off the tail of the convolution to make the output signal
+            # match the dimensions of the input signal.
 
         return self.tsample * conv[:b1.shape[-1]]
 
@@ -324,16 +326,16 @@ class TemporalModel(object):
         return utils.TimeSeries(self.tsample, resp)
 
 
-def pulse2percept(temporal_model, ecs, retina, ptrain, rsample, dolayer,
+def pulse2percept(tm, ecs, retina, ptrain, rsample, dolayer,
                   engine='joblib', dojit=True, n_jobs=-1, tol=.05):
     """
     From pulses (stimuli) to percepts (spatio-temporal)
 
     Parameters
     ----------
-    temporal_model : temporalModel class instance.
+    tm : TemporalModel class instance.
     ecs : ndarray
-    retina : a Retina class instance.
+    retina : Retina class instance.
     stimuli : list
     subsample_factor : float/int, optional
     dojit : bool, optional
@@ -354,17 +356,17 @@ def pulse2percept(temporal_model, ecs, retina, ptrain, rsample, dolayer,
                 # each electrode for that spatial location
 
     # pulse train for each electrode
-    if temporal_model.model == 'Krishnan':
+    if tm.model == 'Krishnan':
         for p in range(len(ptrain)):
-            ca = temporal_model.tsample * np.cumsum(np.maximum(0, ptrain[p].data))
-            tmp = fftconvolve(ca, temporal_model.gamma2, mode='full')
-            conv_ca = temporal_model.epsilon * temporal_model.tsample * tmp[:ptrain[p].shape[-1]]
+            ca = tm.tsample * np.cumsum(np.maximum(0, ptrain[p].data))
+            tmp = fftconvolve(ca, tm.gamma2, mode='full')
+            conv_ca = tm.epsilon * tm.tsample * tmp[:ptrain[p].shape[-1]]
             ptrain[p].data = ptrain[p].data - conv_ca
 
     ptrain_data = np.array([p.data for p in ptrain])
 
     sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs, engine=engine,
-                           func_args=[ptrain_data, temporal_model, rsample,
+                           func_args=[ptrain_data, tm, rsample,
                                       dolayer, dojit])
     bm = np.zeros(retina.gridx.shape + (sr_list[0].data.shape[-1], ))
     idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
@@ -372,10 +374,10 @@ def pulse2percept(temporal_model, ecs, retina, ptrain, rsample, dolayer,
     return utils.TimeSeries(sr_list[0].tsample, bm)
 
 
-def calc_pixel(ecs_item, ptrain_data, temporal_model, resample, dolayer,
+def calc_pixel(ecs_item, ptrain_data, tm, resample, dolayer,
                dojit=False):
-    ecm = e2cm.ecm(ecs_item, ptrain_data, temporal_model.tsample)
+    ecm = e2cm.ecm(ecs_item, ptrain_data, tm.tsample)
     # converts the current map to one that includes axon streaks
-    sr = temporal_model.model_cascade(ecm, dolayer, dojit=dojit)
+    sr = tm.model_cascade(ecm, dolayer, dojit=dojit)
     sr.resample(resample)
     return sr

@@ -82,7 +82,8 @@ class Electrode(object):
 
         Estimates of layer thickness based on:
         LoDuca et al. Am J. Ophthalmology 2011
-        Thickness Mapping of Retinal Layers by Spectral Domain Optical Coherence Tomography
+        Thickness Mapping of Retinal Layers by Spectral Domain Optical
+        Coherence Tomography
         Note that this is for normal retinal, so may overestimate thickness.
         Thickness from their paper (averaged across quadrants):
           0-600 um radius (from fovea)
@@ -98,7 +99,8 @@ class Electrode(object):
             Layer 2. 58.2
             Layer 3. 30.75
 
-        We place our ganglion axon surface on the inner side of the nerve fiber layer
+        We place our ganglion axon surface on the inner side of the nerve fiber
+        layer
         We place our bipolar surface 1/2 way through the inner nuclear layer
         So for an epiretinal array the bipolar layer is L1+L2+(.5*L3)
 
@@ -133,8 +135,9 @@ class Electrode(object):
 
         The current spread due to a current pulse through an electrode,
         reflecting the fall-off of the current as a function of distance from
-        the electrode center. This can be calculated for any layer in the retina
-        Based on equation 2 in Nanduri et al [1]_.
+        the electrode center. This can be calculated for any layer in the
+        retina.
+        Based on equation 2 in Nanduri et al [1].
 
         Parameters
         ----------
@@ -153,10 +156,11 @@ class Electrode(object):
 
         """
         r = np.sqrt((xg - self.x) ** 2 + (yg - self.y) ** 2)
-        # current values on the retina due to array being above the retinal surface
+        # current values on the retina due to array being above the retinal
+        # surface
         if 'NFL' in layer:  # nerve fiber layer, ganglion axons
             h = np.ones(r.shape) * self.h_nfl
-           # actual distance from the electrode edge
+            # actual distance from the electrode edge
             d = ((r - self.radius)**2 + self.h_nfl**2)**.5
         elif 'INL' in layer:  # inner nuclear layer, containing the bipolars
             h = np.ones(r.shape) * self.h_inl
@@ -191,7 +195,8 @@ class ElectrodeArray(object):
 #
 #        for i in range(c.shape[0]):
 #            c[i] = self.electrodes[i].current_spread(xg, yg, layers[l],
-#                                                     alpha=alpha, n=n, layers[l])
+#                                                     alpha=alpha, n=n,
+#                                                     layers[l])
 #        return np.sum(c, 0)
 
 
@@ -341,7 +346,7 @@ class Psycho2Pulsetrain(TimeSeries):
         """
 
         tsample : float
-            Sampling interval in seconds parameters, suggest TemporalModel.tsample
+            Sampling interval in seconds parameters, use TemporalModel.tsample.
         ----------
         optional parameters
         freq : float
@@ -538,9 +543,11 @@ class Retina(object):
                         2, len(electrode_array.electrodes)))
 
         for i, e in enumerate(electrode_array.electrodes):
-            cs[..., 0, i] = e.current_spread(self.gridx, self.gridy, layer='INL', alpha=alpha, n=n)
+            cs[..., 0, i] = e.current_spread(self.gridx, self.gridy,
+                                             layer='INL', alpha=alpha, n=n)
             ecs[..., 0, i] = cs[..., 0, i]
-            cs[..., 1, i] = e.current_spread(self.gridx, self.gridy, layer='NFL', alpha=alpha, n=n)
+            cs[..., 1, i] = e.current_spread(self.gridx, self.gridy,
+                                             layer='NFL', alpha=alpha, n=n)
             ecs[:, :, 1, i] = self.cm2ecm(cs[..., 1, i])
 
         return ecs, cs

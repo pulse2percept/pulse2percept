@@ -90,7 +90,6 @@ def test_brightness_movie():
     tsample = .005 / 1000.
     pulsetype = 'cathodicfirst'
     stimtype = 'pulsetrain'
-    dtype = np.int8
     rflum = np.zeros(100)
     rflum[50] = 1
     m2pt = e2cm.Movie2Pulsetrain(rflum,
