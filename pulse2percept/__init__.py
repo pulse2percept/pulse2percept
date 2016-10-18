@@ -4,5 +4,3 @@ from . import files
 from . import utils
 from . import electrode2currentmap
 from . import effectivecurrent2brightness
-
-
