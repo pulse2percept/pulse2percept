@@ -381,7 +381,7 @@ class Psycho2Pulsetrain(TimeSeries):
         stim_size = int(np.round(1.0 * dur / tsample))
 
         # Envelope size (single pulse + gap) given by `freq`
-        envelope_size = int(np.round(1.0 / freq / tsample))
+        envelope_size = int(np.round(1.0 / float(freq) / tsample))
 
         # Delay given by `delay`
         delay_size = int(np.round(1.0 * delay / tsample))

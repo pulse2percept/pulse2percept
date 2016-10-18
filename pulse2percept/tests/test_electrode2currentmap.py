@@ -136,7 +136,6 @@ def test_Psycho2Pulsetrain():
                                                   current_amplitude=ampl,
                                                   pulsetype=pulsetype,
                                                   pulseorder=pulseorder)
-                    print((freq, pulsetype, delay, p2pt.data.size))
 
                     # make sure length is correct
                     npt.assert_equal(p2pt.data.size,
@@ -155,12 +154,12 @@ def test_Psycho2Pulsetrain():
                     else:
                         npt.assert_equal(idx_min[0] < idx_max[0], False)
 
-                    print(p2pt.data[-10:])
-                    # make sure frequency is correct
-                    # need to trim size if `freq` is not a nice number
-                    single_pulse_dur = int(np.round(pdur / tsample))
+                    # Make sure frequency is correct
+                    # Need to trim size if `freq` is not a nice number
+                    envelope_size = int(np.round(1.0 / float(freq) / tsample))
+                    single_pulse_dur = int(np.round(1.0 * pdur / tsample))
                     num_pulses = int(np.floor(dur * freq))  # round down
-                    trim_sz = int(np.round(num_pulses / freq / tsample)) + 1
+                    trim_sz = envelope_size * num_pulses
                     idx_min = np.where(p2pt.data[:trim_sz] == p2pt.data.min())
                     idx_max = np.where(p2pt.data[:trim_sz] == p2pt.data.max())
                     npt.assert_equal(idx_max[0].shape[-1],
