@@ -2,7 +2,7 @@ sudo: false
 
 env:
   global:
-    - CONDA_DEPS="pip flake8 numpy scipy numba joblib dask pillow" PIP_DEPS="pytest coveralls pytest-cov"
+    - CONDA_DEPS="pip flake8 numpy scipy numba joblib dask" PIP_DEPS="pytest coveralls pytest-cov pillow"
 
 matrix:
   include:
