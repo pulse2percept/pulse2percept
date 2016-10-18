@@ -63,15 +63,33 @@ def test_Retina_Electrodes():
                          sampling=sampling, axon_map=retina_file)
     npt.assert_equal(retina.gridx.shape, ((yhi - ylo) / sampling,
                                           (xhi - xlo) / sampling))
-    electrode1 = e2cm.Electrode(1, 0, 0, 0)
-    cs = electrode1.current_spread(retina.gridx, retina.gridy)
+    electrode1 = e2cm.Electrode(1, 0, 0, 0, ptype='epiretinal')
+
+    # Calculate current spread for all retinal layers
+    retinal_layers = ['INL', 'NFL']
+    cs = dict()
+    ecs = dict()
+    for layer in retinal_layers:
+        cs[layer] = electrode1.current_spread(retina.gridx, retina.gridy,
+                                              layer=layer)
+        ecs[layer] = retina.cm2ecm(cs[layer])
+
     electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1],
-                                          [0, 1])
+                                          [0, 1], ptype='epiretinal')
     npt.assert_equal(electrode1.x, electrode_array.electrodes[0].x)
     npt.assert_equal(electrode1.y, electrode_array.electrodes[0].y)
     npt.assert_equal(electrode1.radius, electrode_array.electrodes[0].radius)
     ecs_list, cs_list = retina.electrode_ecs(electrode_array)
-    npt.assert_equal(cs, cs_list[..., 0])
+    print(ecs_list.shape)
+
+    # Make sure cs_list has an entry for every layer
+    npt.assert_equal(cs_list.shape[-2], len(retinal_layers))
+    npt.assert_equal(ecs_list.shape[-2], len(retinal_layers))
+
+    # Make sure manually generated current spreads match object
+    for i, e in enumerate(retinal_layers):
+        # last index: electrode, second-to-last: layer
+        npt.assert_equal(cs[e], cs_list[..., i, 0])
 
 
 def test_Movie2Pulsetrain():
@@ -177,7 +195,7 @@ def test_Retina_ecm():
                                 pulsetype='cathodicfirst')
 
     electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1],
-                                          [0, 1])
+                                          [0, 1], ptype='epiretinal')
     ecs_list, cs_list = retina.electrode_ecs(electrode_array)
     xx = yy = 0
     ecs_vector = ecs_list[yy, xx]

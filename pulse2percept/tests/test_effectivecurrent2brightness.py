@@ -8,7 +8,7 @@ import pulse2percept.effectivecurrent2brightness as ec2b
 def test_nanduri_vs_krishnan():
     """Test Nanduri vs Krishnan model
 
-    This test miakes sure the Nanduri and Krishnan model flavors give roughly
+    This test makes sure the Nanduri and Krishnan model flavors give roughly
     the same output. Note: Numerically the models might differ slightly.
     """
     # Choose some reasonable parameter values
@@ -21,10 +21,10 @@ def test_nanduri_vs_krishnan():
 
     # Set up both models with the same parameter values
     tm_nanduri = ec2b.TemporalModel(model='Nanduri', tsample=tsample,
-                                    tau1=tau1, tau2=tau2, tau3=tau3,
+                                    tau_nfl=tau1, tau2=tau2, tau3=tau3,
                                     epsilon=epsilon)
     tm_krishnan = ec2b.TemporalModel(model='Krishnan', tsample=tsample,
-                                     tau1=tau1, tau2=tau2, tau3=tau3,
+                                     tau_nfl=tau1, tau2=tau2, tau3=tau3,
                                      epsilon=epsilon)
 
     # Test a range of reasonable ampl/freq values
@@ -41,8 +41,14 @@ def test_nanduri_vs_krishnan():
                                                pulsetype=type)
 
             # Apply both models to pulse train
-            out_nanduri = tm_nanduri.model_cascade(pulse, dojit=False)
-            out_krishnan = tm_krishnan.model_cascade(pulse, dojit=False)
+            out_nanduri = tm_nanduri.model_cascade([pulse, pulse], ['FNL'],
+                                                   dojit=False)
+
+            # For Krishnan, need to accumulate voltage (which usually happens
+            # in pulse2percept)
+            pulse.data -= tm_krishnan.charge_accumulation(pulse.data)
+            out_krishnan = tm_krishnan.model_cascade([pulse, pulse], ['FNL'],
+                                                     dojit=False)
 
             # Make sure model output doesn't deviate too much
             npt.assert_allclose(np.sum((out_nanduri.data -
@@ -64,7 +70,8 @@ def test_brightness_movie():
                                 tsample=.075 / 1000., current_amplitude=20,
                                 pulsetype='cathodicfirst')
 
-    electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1], [0, 1])
+    electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1], [0, 1],
+                                          ptype='epiretinal')
     ecs, cs = retina.electrode_ecs(electrode_array)
     temporal_model = ec2b.TemporalModel()
     fps = 30.
@@ -72,7 +79,7 @@ def test_brightness_movie():
 
     # Smoke testing, feed the same stimulus through both electrodes:
     brightness_movie = ec2b.pulse2percept(temporal_model, ecs, retina,
-                                          [s1, s1], rs)
+                                          [s1, s1], rs, dolayer='INL')
 
     fps = 30.0
     amplitude_transform = 'linear'
@@ -100,7 +107,7 @@ def test_brightness_movie():
     rs = int(1 / (fps * m2pt.tsample))
     # Smoke testing, feed the same stimulus through both electrodes:
     brightness_movie = ec2b.pulse2percept(temporal_model, ecs, retina,
-                                          [m2pt, m2pt], rs)
+                                          [m2pt, m2pt], rs, dolayer='INL')
 
     npt.assert_almost_equal(brightness_movie.tsample,
                             m2pt.tsample * rs,
