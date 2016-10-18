@@ -178,52 +178,52 @@ def test_Psycho2Pulsetrain():
                     npt.assert_equal(p2pt.data[idx0 + envelope_dur], val)
 
 
-# FIXME: What is this test trying to do??
-# def test_Retina_ecm():
-#     retina_file = tempfile.NamedTemporaryFile().name
-#     sampling = 1
-#     xlo = -2
-#     xhi = 2
-#     ylo = -3
-#     yhi = 3
-#     retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
-#                          sampling=sampling, axon_map=retina_file)
+def test_Retina_ecm():
+    retina_file = tempfile.NamedTemporaryFile().name
+    sampling = 1
+    xlo = -2
+    xhi = 2
+    ylo = -3
+    yhi = 3
+    retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
+                         sampling=sampling, axon_map=retina_file)
 
-#     s1 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5, pulse_dur=.075 / 1000.,
-#                                 interphase_dur=.075 / 1000., delay=0.,
-#                                 tsample=.075 / 1000., current_amplitude=20,
-#                                 pulsetype='cathodicfirst')
+    s1 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5, pulse_dur=.075 / 1000.,
+                                interphase_dur=.075 / 1000., delay=0.,
+                                tsample=.075 / 1000., current_amplitude=20,
+                                pulsetype='cathodicfirst')
 
-#     electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1],
-#                                           [0, 1], ptype='epiretinal')
-#     ecs_list, cs_list = retina.electrode_ecs(electrode_array)
-#     xx = yy = 0
-#     ecs_vector = ecs_list[yy, xx]
-#     # Smoke testing, feed the same stimulus through both electrodes
-#     stim_data = np.array([s.data for s in [s1, s1]])
-#     ecm = e2cm.ecm(ecs_vector, stim_data, s1.tsample)
+    electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1],
+                                          [0, 1], ptype='epiretinal')
+    ecs_list, cs_list = retina.electrode_ecs(electrode_array)
+    xx = yy = 0
+    ecs_vector = ecs_list[yy, xx]
+    # Smoke testing, feed the same stimulus through both electrodes
+    stim_data = np.array([s.data for s in [s1, s1]])
+    ecm = e2cm.ecm(ecs_vector, stim_data, s1.tsample)
 
-#     fps = 30.0
-#     amplitude_transform = 'linear'
-#     amp_max = 90
-#     freq = 20
-#     pulse_dur = .075 / 1000.
-#     interphase_dur = .075 / 1000.
-#     tsample = .005 / 1000.
-#     pulsetype = 'cathodicfirst'
-#     stimtype = 'pulsetrain'
-#     rflum = np.zeros(100)
-#     rflum[50] = 1
-#     m2pt = e2cm.Movie2Pulsetrain(rflum,
-#                                  fps=fps,
-#                                  amplitude_transform=amplitude_transform,
-#                                  amp_max=amp_max,
-#                                  freq=freq,
-#                                  pulse_dur=pulse_dur,
-#                                  interphase_dur=interphase_dur,
-#                                  tsample=tsample,
-#                                  pulsetype=pulsetype,
-#                                  stimtype=stimtype)
-#     # Smoke testing, feed the same stimulus through both electrodes:
-#     stim_data = np.array([s.data for s in [m2pt, m2pt]])
-#     ecm = e2cm.ecm(ecs_vector, stim_data, m2pt.tsample)
+    fps = 30.0
+    amplitude_transform = 'linear'
+    amp_max = 90
+    freq = 20
+    pulse_dur = .075 / 1000.
+    interphase_dur = .075 / 1000.
+    tsample = .005 / 1000.
+    pulsetype = 'cathodicfirst'
+    stimtype = 'pulsetrain'
+    rflum = np.zeros(100)
+    rflum[50] = 1
+    m2pt = e2cm.Movie2Pulsetrain(rflum,
+                                 fps=fps,
+                                 amplitude_transform=amplitude_transform,
+                                 amp_max=amp_max,
+                                 freq=freq,
+                                 pulse_dur=pulse_dur,
+                                 interphase_dur=interphase_dur,
+                                 tsample=tsample,
+                                 pulsetype=pulsetype,
+                                 stimtype=stimtype)
+    # Smoke testing, feed the same stimulus through both electrodes to
+    # make sure the code runs
+    stim_data = np.array([s.data for s in [m2pt, m2pt]])
+    ecm = e2cm.ecm(ecs_vector, stim_data, m2pt.tsample)
