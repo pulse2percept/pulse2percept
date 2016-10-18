@@ -14,7 +14,6 @@ written Ione Fine 7/2016
 
 import subprocess
 import numpy as np
-from PIL import Image
 import scipy.io as sio
 
 
@@ -25,7 +24,7 @@ def savemoviefiles(filestr, data, path='savedImages/'):
 
 
 def npy2movie(filename, movie, rate=30):
-
+    from PIL import Image
     cmdstring = ('ffmpeg.exe',
                  '-y',
                  '-r', '%d' % rate,
