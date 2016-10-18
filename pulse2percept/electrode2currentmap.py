@@ -377,21 +377,31 @@ class Psycho2Pulsetrain(TimeSeries):
             Pulse order {"gapfirst" | "pulsefirst"}, where
             'pulsefirst' has the pulse first, followed by the gap.
         """
-        # envelope size (single pulse + gap) given by `freq`
-        envelope_size = int(np.round((1 / freq) / tsample))
+        # Stimulus size given by `dur`
+        stim_size = int(np.round(1.0 * dur / tsample))
 
-        # delay given by `delay`
-        delay_size = int(np.round(delay / tsample))
+        # Envelope size (single pulse + gap) given by `freq`
+        envelope_size = int(np.round(1.0 / freq / tsample))
+
+        # Delay given by `delay`
+        delay_size = int(np.round(1.0 * delay / tsample))
+        if delay_size < 0:
+            raise ValueError("Delay must fit within 1/freq interval.")
         delay = np.zeros(delay_size)
 
-        # single pulse given by `pulse_dur`
+        # Single pulse given by `pulse_dur`
         pulse = current_amplitude * get_pulse(pulse_dur, tsample,
                                               pulse_dur,
                                               pulsetype)
         pulse_size = pulse.size
+        if pulse_size < 0:
+            raise ValueError("Single pulse must fit within 1/freq interval.")
 
-        # then gap is used to fill up what's left
+        # Then gap is used to fill up what's left
         gap_size = envelope_size - (delay_size + pulse_size)
+        if gap_size < 0:
+            raise ValueError("Pulse and delay must fit within 1/freq "
+                             "interval.")
         gap = np.zeros(gap_size)
 
         pulse_train = []
@@ -405,6 +415,16 @@ class Psycho2Pulsetrain(TimeSeries):
             else:
                 raise ValueError("Acceptable values for `pulseorder` are "
                                  "'pulsefirst' or 'gapfirst'")
+
+        # If `freq` is not a nice number, the resulting pulse train might not
+        # have the desired length
+        if pulse_train.size < stim_size:
+            fill_size = stim_size - pulse_train.shape[-1]
+            pulse_train = np.concatenate((pulse_train, np.zeros(fill_size)),
+                                         axis=0)
+
+        # Trim to correct length (takes care of too long arrays, too)
+        pulse_train = pulse_train[:stim_size]
 
         TimeSeries.__init__(self, tsample, pulse_train)
 

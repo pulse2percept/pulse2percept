@@ -29,7 +29,7 @@ class Parameters(object):
         my_str = "\n".join(my_list)
         return my_str
 
-    def __setattr(self, name, value):
+    def __setattr(self, name, values):
         self.__dict__[name] = values
 
 
