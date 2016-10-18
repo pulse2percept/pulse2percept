@@ -1,7 +1,7 @@
 from setuptools import find_packages, setup
 import os
 
-# Get version and release info, which is all stored in pulse2perecpt/version.py
+# Get version and release info, which is all stored in pulse2percept/version.py
 ver_file = os.path.join('pulse2percept', 'version.py')
 with open(ver_file) as f:
     exec(f.read())
