@@ -3,4 +3,3 @@ scipy
 numba
 joblib
 dask
-pillow
