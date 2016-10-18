@@ -32,7 +32,7 @@ install:
 - python setup.py install --record installed_files.txt
 
 script:
-- flake8 --ignore N802,N806 `find . -name \*.py | grep -v setup.py | grep -v /doc/`
+- flake8 --ignore N802,N806 `find . -name \*.py | grep -v setup.py | grep -v /doc/ | grep -v /scripts/`
 
 - mkdir for_test
 - cd for_test
