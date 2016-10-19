@@ -63,15 +63,33 @@ def test_Retina_Electrodes():
                          sampling=sampling, axon_map=retina_file)
     npt.assert_equal(retina.gridx.shape, ((yhi - ylo) / sampling,
                                           (xhi - xlo) / sampling))
-    electrode1 = e2cm.Electrode(1, 0, 0, 0)
-    cs = electrode1.current_spread(retina.gridx, retina.gridy)
+    electrode1 = e2cm.Electrode(1, 0, 0, 0, ptype='epiretinal')
+
+    # Calculate current spread for all retinal layers
+    retinal_layers = ['INL', 'NFL']
+    cs = dict()
+    ecs = dict()
+    for layer in retinal_layers:
+        cs[layer] = electrode1.current_spread(retina.gridx, retina.gridy,
+                                              layer=layer)
+        ecs[layer] = retina.cm2ecm(cs[layer])
+
     electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1],
-                                          [0, 1])
+                                          [0, 1], ptype='epiretinal')
     npt.assert_equal(electrode1.x, electrode_array.electrodes[0].x)
     npt.assert_equal(electrode1.y, electrode_array.electrodes[0].y)
     npt.assert_equal(electrode1.radius, electrode_array.electrodes[0].radius)
     ecs_list, cs_list = retina.electrode_ecs(electrode_array)
-    npt.assert_equal(cs, cs_list[..., 0])
+    print(ecs_list.shape)
+
+    # Make sure cs_list has an entry for every layer
+    npt.assert_equal(cs_list.shape[-2], len(retinal_layers))
+    npt.assert_equal(ecs_list.shape[-2], len(retinal_layers))
+
+    # Make sure manually generated current spreads match object
+    for i, e in enumerate(retinal_layers):
+        # last index: electrode, second-to-last: layer
+        npt.assert_equal(cs[e], cs_list[..., i, 0])
 
 
 def test_Movie2Pulsetrain():
@@ -84,7 +102,6 @@ def test_Movie2Pulsetrain():
     tsample = .005 / 1000.
     pulsetype = 'cathodicfirst'
     stimtype = 'pulsetrain'
-    dtype = np.int8
     rflum = np.zeros(100)
     rflum[50] = 1
     m2pt = e2cm.Movie2Pulsetrain(rflum,
@@ -102,12 +119,11 @@ def test_Movie2Pulsetrain():
 
 
 def test_Psycho2Pulsetrain():
-    freq = 20
     dur = 0.5
-    pdur = 7.5e-5
+    pdur = 0.45 / 1000
     tsample = 5e-6
     ampl = 20
-    for freq in [10, 20]:
+    for freq in [8, 13.8, 20]:
         for pulsetype in ['cathodicfirst', 'anodicfirst']:
             for delay in [0, 10 / 1000]:
                 for pulseorder in ['pulsefirst', 'gapfirst']:
@@ -122,7 +138,7 @@ def test_Psycho2Pulsetrain():
                                                   pulseorder=pulseorder)
 
                     # make sure length is correct
-                    npt.assert_equal(p2pt.shape[-1],
+                    npt.assert_equal(p2pt.data.size,
                                      int(np.round(dur / tsample)))
 
                     # make sure amplitude is correct
@@ -138,9 +154,14 @@ def test_Psycho2Pulsetrain():
                     else:
                         npt.assert_equal(idx_min[0] < idx_max[0], False)
 
-                    # make sure frequency is correct
-                    single_pulse_dur = int(np.round(pdur / tsample))
-                    num_pulses = int(np.round(dur * freq))
+                    # Make sure frequency is correct
+                    # Need to trim size if `freq` is not a nice number
+                    envelope_size = int(np.round(1.0 / float(freq) / tsample))
+                    single_pulse_dur = int(np.round(1.0 * pdur / tsample))
+                    num_pulses = int(np.floor(dur * freq))  # round down
+                    trim_sz = envelope_size * num_pulses
+                    idx_min = np.where(p2pt.data[:trim_sz] == p2pt.data.min())
+                    idx_max = np.where(p2pt.data[:trim_sz] == p2pt.data.max())
                     npt.assert_equal(idx_max[0].shape[-1],
                                      num_pulses * single_pulse_dur)
                     npt.assert_equal(idx_min[0].shape[-1],
@@ -177,13 +198,13 @@ def test_Retina_ecm():
                                 pulsetype='cathodicfirst')
 
     electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1],
-                                          [0, 1])
+                                          [0, 1], ptype='epiretinal')
     ecs_list, cs_list = retina.electrode_ecs(electrode_array)
     xx = yy = 0
     ecs_vector = ecs_list[yy, xx]
     # Smoke testing, feed the same stimulus through both electrodes
     stim_data = np.array([s.data for s in [s1, s1]])
-    ecm = e2cm.ecm(ecs_vector, stim_data, s1.tsample)
+    e2cm.ecm(ecs_vector, stim_data, s1.tsample)
 
     fps = 30.0
     amplitude_transform = 'linear'
@@ -194,7 +215,6 @@ def test_Retina_ecm():
     tsample = .005 / 1000.
     pulsetype = 'cathodicfirst'
     stimtype = 'pulsetrain'
-    dtype = np.int8
     rflum = np.zeros(100)
     rflum[50] = 1
     m2pt = e2cm.Movie2Pulsetrain(rflum,
@@ -207,6 +227,7 @@ def test_Retina_ecm():
                                  tsample=tsample,
                                  pulsetype=pulsetype,
                                  stimtype=stimtype)
-    # Smoke testing, feed the same stimulus through both electrodes:
+    # Smoke testing, feed the same stimulus through both electrodes to
+    # make sure the code runs
     stim_data = np.array([s.data for s in [m2pt, m2pt]])
-    ecm = e2cm.ecm(ecs_vector, stim_data, m2pt.tsample)
+    e2cm.ecm(ecs_vector, stim_data, m2pt.tsample)

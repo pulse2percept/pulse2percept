@@ -76,13 +76,14 @@ class Electrode(object):
         y : float
             The y location of the electrode (in microns) from the fovea
         h : float
-            The height of the electrode from the retinal surface 
+            The height of the electrode from the retinal surface
               epiretinal array - distance to the ganglion layer
              subretinal array - distance to the bipolar layer
-             
+
         Estimates of layer thickness based on:
         LoDuca et al. Am J. Ophthalmology 2011
-        Thickness Mapping of Retinal Layers by Spectral Domain Optical Coherence Tomography
+        Thickness Mapping of Retinal Layers by Spectral Domain Optical
+        Coherence Tomography
         Note that this is for normal retinal, so may overestimate thickness.
         Thickness from their paper (averaged across quadrants):
           0-600 um radius (from fovea)
@@ -97,45 +98,47 @@ class Electrode(object):
             Layer 1. 45.5
             Layer 2. 58.2
             Layer 3. 30.75
-        
-        We place our ganglion axon surface on the inner side of the nerve fiber layer
+
+        We place our ganglion axon surface on the inner side of the nerve fiber
+        layer
         We place our bipolar surface 1/2 way through the inner nuclear layer
         So for an epiretinal array the bipolar layer is L1+L2+(.5*L3)
-                
+
         """
         self.radius = radius
         self.x = x
         self.y = y
-        fovdist=np.sqrt(x**2+y**2)
-        
-        if ptype=='epiretinal':            
-          self.h_nfl = h
-          if fovdist<=600:
-              self.h_inl = h + 71.5
-          elif fovdist<=1550:
-              self.h_inl = h + 139.75
-          elif fovdist>1550:
-              self.h_inl = h + 119.075
-        
-        elif ptype=='subretinal':            
-          if fovdist<=600:
-              self.h_inl = h + 23/2
-              self.h_nfl = h + 83
-          elif fovdist<=1550:
-              self.h_inl = h + 37.5/2
-              self.h_nfl = h + 158.5
-          elif fovdist>1550:
-              self.h_inl = h + 30.75/2
-              self.h_nfl = h + 141.45
-              
+        fovdist = np.sqrt(x**2 + y**2)
+
+        if ptype == 'epiretinal':
+            self.h_nfl = h
+            if fovdist <= 600:
+                self.h_inl = h + 71.5
+            elif fovdist <= 1550:
+                self.h_inl = h + 139.75
+            elif fovdist > 1550:
+                self.h_inl = h + 119.075
+
+        elif ptype == 'subretinal':
+            if fovdist <= 600:
+                self.h_inl = h + 23 / 2
+                self.h_nfl = h + 83
+            elif fovdist <= 1550:
+                self.h_inl = h + 37.5 / 2
+                self.h_nfl = h + 158.5
+            elif fovdist > 1550:
+                self.h_inl = h + 30.75 / 2
+                self.h_nfl = h + 141.45
+
     def current_spread(self, xg, yg, layer, alpha=14000, n=1.69):
         """
 
         The current spread due to a current pulse through an electrode,
         reflecting the fall-off of the current as a function of distance from
-        the electrode center. This can be calculated for any layer in the retina
-        Based on equation 2 in Nanduri et al [1]_.
-        
+        the electrode center. This can be calculated for any layer in the
+        retina.
+        Based on equation 2 in Nanduri et al [1].
+
         Parameters
         ----------
         xg and yg defining the retinal grid
@@ -150,17 +153,22 @@ class Electrode(object):
             on Ahuja et al. [2]  An In Vitro Model of a Retinal Prosthesis.
             Ashish K. Ahuja, Matthew R. Behrend, Masako Kuroda, Mark S.
             Humayun, and James D. Weiland (2008). IEEE Trans Biomed Eng 55.
-    
+
         """
         r = np.sqrt((xg - self.x) ** 2 + (yg - self.y) ** 2)
-        # current values on the retina due to array being above the retinal surface
-        if 'NFL' in layer: # nerve fiber layer, ganglion axons          
-            h = np.ones(r.shape) * self.h_nfl          
-           # actual distance from the electrode edge
+        # current values on the retina due to array being above the retinal
+        # surface
+        if 'NFL' in layer:  # nerve fiber layer, ganglion axons
+            h = np.ones(r.shape) * self.h_nfl
+            # actual distance from the electrode edge
             d = ((r - self.radius)**2 + self.h_nfl**2)**.5
         elif 'INL' in layer:  # inner nuclear layer, containing the bipolars
             h = np.ones(r.shape) * self.h_inl
             d = ((r - self.radius)**2 + self.h_inl**2)**.5
+        else:
+            s = "Layer %s not found. Acceptable values for `layer` are " \
+                "'NFL' or 'INL'." % layer
+            raise ValueError(s)
         cspread = (alpha / (alpha + h ** n))
         cspread[r > self.radius] = (alpha /
                                     (alpha + d[r > self.radius] ** n))
@@ -179,15 +187,16 @@ class ElectrodeArray(object):
             self.electrodes.append(Electrode(r, x, y, h, ptype))
 
 #    def current_spread(self, xg, yg, layers, alpha=14000, n=1.69):
-#        
+#
 #        BOOM WAH!
-#        # this is the part that is broken. Somehow the the info about layers 
-#        # needs to be included in the ElectrodeArray object 
+#        # this is the part that is broken. Somehow the the info about layers
+#        # needs to be included in the ElectrodeArray object
 #        c = np.zeros((len(self.electrodes), xg.shape[0], xg.shape[1]))
-#              
+#
 #        for i in range(c.shape[0]):
 #            c[i] = self.electrodes[i].current_spread(xg, yg, layers[l],
-#                                                     alpha=alpha, n=n, layers[l])
+#                                                     alpha=alpha, n=n,
+#                                                     layers[l])
 #        return np.sum(c, 0)
 
 
@@ -330,14 +339,14 @@ class Psycho2Pulsetrain(TimeSeries):
 
     """
 
-    def __init__(self, tsample, freq=20, dur=0.5, pulse_dur=0.45/1000,
-                 interphase_dur=0.45/1000, delay=0.45/1000, 
+    def __init__(self, tsample, freq=20, dur=0.5, pulse_dur=0.45 / 1000,
+                 interphase_dur=0.45 / 1000, delay=0.45 / 1000,
                  current_amplitude=20, pulsetype='cathodicfirst',
                  pulseorder='pulsefirst'):
         """
 
         tsample : float
-            Sampling interval in seconds parameters, suggest TemporalModel.tsample
+            Sampling interval in seconds parameters, use TemporalModel.tsample.
         ----------
         optional parameters
         freq : float
@@ -368,21 +377,31 @@ class Psycho2Pulsetrain(TimeSeries):
             Pulse order {"gapfirst" | "pulsefirst"}, where
             'pulsefirst' has the pulse first, followed by the gap.
         """
-        # envelope size (single pulse + gap) given by `freq`
-        envelope_size = int(np.round((1 / freq) / tsample))
+        # Stimulus size given by `dur`
+        stim_size = int(np.round(1.0 * dur / tsample))
 
-        # delay given by `delay`
-        delay_size = int(np.round(delay / tsample))
+        # Envelope size (single pulse + gap) given by `freq`
+        envelope_size = int(np.round(1.0 / float(freq) / tsample))
+
+        # Delay given by `delay`
+        delay_size = int(np.round(1.0 * delay / tsample))
+        if delay_size < 0:
+            raise ValueError("Delay must fit within 1/freq interval.")
         delay = np.zeros(delay_size)
 
-        # single pulse given by `pulse_dur`
+        # Single pulse given by `pulse_dur`
         pulse = current_amplitude * get_pulse(pulse_dur, tsample,
                                               pulse_dur,
                                               pulsetype)
         pulse_size = pulse.size
+        if pulse_size < 0:
+            raise ValueError("Single pulse must fit within 1/freq interval.")
 
-        # then gap is used to fill up what's left
+        # Then gap is used to fill up what's left
         gap_size = envelope_size - (delay_size + pulse_size)
+        if gap_size < 0:
+            raise ValueError("Pulse and delay must fit within 1/freq "
+                             "interval.")
         gap = np.zeros(gap_size)
 
         pulse_train = []
@@ -396,6 +415,16 @@ class Psycho2Pulsetrain(TimeSeries):
             else:
                 raise ValueError("Acceptable values for `pulseorder` are "
                                  "'pulsefirst' or 'gapfirst'")
+
+        # If `freq` is not a nice number, the resulting pulse train might not
+        # have the desired length
+        if pulse_train.size < stim_size:
+            fill_size = stim_size - pulse_train.shape[-1]
+            pulse_train = np.concatenate((pulse_train, np.zeros(fill_size)),
+                                         axis=0)
+
+        # Trim to correct length (takes care of too long arrays, too)
+        pulse_train = pulse_train[:stim_size]
 
         TimeSeries.__init__(self, tsample, pulse_train)
 
@@ -490,7 +519,7 @@ class Retina(object):
         ecs = np.zeros(current_spread.shape)
         for id in range(0, len(current_spread.flat)):
             ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
-                                      self.axon_weight[id])
+                                  self.axon_weight[id])
         ecs = ecs * (current_spread.max() / ecs.max())
 
         # this normalization is based on unit current on the retina producing
@@ -520,7 +549,7 @@ class Retina(object):
         Returns
         -------
         ecs : contains n arrays containing the the effective current
-            spread within various layers 
+            spread within various layers
             for each electrode in the array respectively.
 
         See also
@@ -529,17 +558,19 @@ class Retina(object):
         """
 
         cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
-                            2, len(electrode_array.electrodes)))
-        ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1], 
-                            2, len(electrode_array.electrodes)))
-                
+                       2, len(electrode_array.electrodes)))
+        ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
+                        2, len(electrode_array.electrodes)))
+
         for i, e in enumerate(electrode_array.electrodes):
-                cs[..., 0, i] = e.current_spread(self.gridx, self.gridy, layer='INL', alpha=alpha, n=n)
-                ecs[..., 0, i]=cs[..., 0, i] 
-                cs[..., 1, i] = e.current_spread(self.gridx, self.gridy, layer='NFL', alpha=alpha, n=n)
-                ecs[:, :, 1, i] = self.cm2ecm(cs[..., 1, i])
-        
-        return ecs, cs 
+            cs[..., 0, i] = e.current_spread(self.gridx, self.gridy,
+                                             layer='INL', alpha=alpha, n=n)
+            ecs[..., 0, i] = cs[..., 0, i]
+            cs[..., 1, i] = e.current_spread(self.gridx, self.gridy,
+                                             layer='NFL', alpha=alpha, n=n)
+            ecs[:, :, 1, i] = self.cm2ecm(cs[..., 1, i])
+
+        return ecs, cs
 
 
 def ecm(ecs_item, ptrain_data, tsample):
@@ -559,5 +590,5 @@ def ecm(ecs_item, ptrain_data, tsample):
     A TimeSeries object with the effective current for this stimulus
     """
 
-    ecm = np.sum(ecs_item[:,:,None] * ptrain_data, 1)
+    ecm = np.sum(ecs_item[:, :, None] * ptrain_data, 1)
     return TimeSeries(tsample, ecm)
