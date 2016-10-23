@@ -14,6 +14,8 @@ def jansonius(nCells, nR, center=np.array([15, 2]),
     """Implements the model of retinal axonal pathways by generating a
     matrix of (x,y) positions.
 
+    Assumes that the fovea is at [0, 0]
+
     Parameters
     ----------
     nCells : int

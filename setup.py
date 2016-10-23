@@ -1,6 +1,5 @@
+from setuptools import find_packages, setup
 import os
-from setuptools import setup, find_packages
-PACKAGES = find_packages()
 
 # Get version and release info, which is all stored in pulse2percept/version.py
 ver_file = os.path.join('pulse2percept', 'version.py')
@@ -20,8 +19,7 @@ opts = dict(name=NAME,
             author_email=AUTHOR_EMAIL,
             platforms=PLATFORMS,
             version=VERSION,
-            packages=PACKAGES,
-            package_data=PACKAGE_DATA,
+            packages=find_packages(),
             requires=REQUIRES)
 
 
