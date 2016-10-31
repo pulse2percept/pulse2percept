@@ -55,7 +55,7 @@ def gamma(n, tau, t):
     if flag == 1:
         y = np.concatenate([[0], y])
     
-    y = y / (np.sum(y) * (t[1]-t[0])) # normalizes so max doesn't change
+    y = y / (np.sum(y) * (t[1]-t[0])) # normalizes so area doesn't change
     
     return y
 

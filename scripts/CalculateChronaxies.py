@@ -14,6 +14,12 @@ import matplotlib.pyplot as plt
 import importlib as imp
 #imp.reload(n2sf)
 
+def findampval(amp, ecs, retina, rsample, whichlayer):                                
+    pt=e2cm.Psycho2Pulsetrain(tsample=tm.tsample, current_amplitude=amp,dur=.6, delay=10/1000, 
+                              pulse_dur=pd / 1000,interphase_dur=10/1000, freq=2)    
+    resp =  ec2b.pulse2percept(tm, ecs,r, [pt], rsample=rsample,  dolayer=whichlayer, dojit=True, engine='serial')   
+    return (( (np.max(resp.data)*1000) - 67.89) ** 2)
+       
 xlist=[]
 ylist=[]
 rlist=[] #electrode radius, microns
@@ -54,26 +60,27 @@ rsample=int(np.round((1/tm.tsample) / 60 )) # resampling of the output to fps
 
 [ecs, cs]  = r.electrode_ecs(e_all)  
 
-inl_max = []
-nfl_max = []
+inl_amp = []
+nfl_amp = []
 for pd in [.01, .02, .04, .08, .16, .32, .64, 1.28, 2.56, 5.12, 10.24, 20.48]:
-    pt=e2cm.Psycho2Pulsetrain(tsample=tm.tsample, current_amplitude=120,dur=.6, delay=10/1000, 
-                              pulse_dur=pd / 1000,interphase_dur=10/1000, freq=2)
-    
-    inl_r = ec2b.pulse2percept(tm, ecs, r, [pt], rsample=rsample, dolayer='INL', dojit=False, engine='serial')
-    inl_max.append(np.max(inl_r))
-    print(np.max(inl_r))
-    nfl_r = ec2b.pulse2percept(tm, ecs, r, [pt], rsample=rsample, dolayer='NFL', dojit=False, engine='serial')
-    nfl_max.append(np.max(nfl_r))
-    print(np.max(nfl_r))
-    
+    xamp=120
+    dolayer='INL'
+    tmp=minimize(findampval, xamp, args=(ecs, r,  rsample, 'INL', ))
+    inl_amp.append(tmp.x) 
+    print(pd)
+    print('minimized inl layer')
+    print(tmp.x)
+    dolayer='NFL'
+    tmp=minimize(findampval, xamp, args=(ecs, r,  rsample, 'NFL', ))
+    inl_amp.append(tmp.x)
+    print('minimized nfl layer')
+    print(tmp.x)
+
 #inl_r = ec2b.pulse2percept(tm, ecs, r, [pt_2], rsample=rsample, dolayer='INL', dojit=False, engine='serial')
 #def pulse2percept(tm, ecs, retina, ptrain, rsample, dolayer,
-#                  engine='joblib', dojit=True, n_jobs=-1, tol=.05):
-                            
+#                  engine='joblib', dojit=True, n_jobs=-1, tol=.05):                           
 #inl_r = ec2b.pulse2percept(tm, ecs, r, [pt_2], rsample=rsample, dolayer='INL', dojit=False, engine='serial')
 #
-
 #omparenflinl(.636, ecs, r, [pt_2], [pt_01], rsample, False, 'serial')
 #myout=minimize(comparenflinl, x0, args=(ecs, r, [pt_2], [pt_01], rsample, False, 'serial', ))
                 

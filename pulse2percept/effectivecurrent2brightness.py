@@ -61,7 +61,7 @@ class TemporalModel(object):
         epsilon : float
             Scaling factor for the effects of charge accumulation, has values
             2-3 for threshold or 8-10 for suprathreshold. Default: 8.73. If all the gammas are
-            normalized gotes to 8.617
+            normalized goes to 8.617
         asymptote : float
             Asymptote of the logistic function in the stationary nonlinearity
             stage. Default: 14.
@@ -283,8 +283,11 @@ class TemporalModel(object):
 
         # here we are converting from current  - where a cathodic (effective) stimulus is negative
         # to a vague concept of neuronal response, where positive implies a neuronal response
-        # There is a rectification here because we assume that the  
-        resp = (self.lweight * np.maximum(-resp_inl, 0)) + np.maximum(-resp_nfl, 0)
+        # There is a rectification here because we assume that the anodic part of the pulse is ineffective 
+        # which is wrong    
+        respC = (self.lweight * np.maximum(-resp_inl, 0)) + np.maximum(-resp_nfl, 0)
+        respA = 0.5 * ((self.lweight * np.maximum(resp_inl, 0)) + np.maximum(resp_nfl, 0) )
+        resp = respC + respA
         resp = self.stationary_nonlinearity(resp)
         resp = self.slow_response(resp)
         return utils.TimeSeries(self.tsample, resp)
