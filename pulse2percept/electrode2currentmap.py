@@ -54,9 +54,10 @@ def gamma(n, tau, t):
 
     if flag == 1:
         y = np.concatenate([[0], y])
-
+    
+    y = y / (np.sum(y) * (t[1]-t[0])) # normalizes so max doesn't change
+    
     return y
-
 
 class Electrode(object):
     """
@@ -377,7 +378,9 @@ class Psycho2Pulsetrain(TimeSeries):
             Pulse order {"gapfirst" | "pulsefirst"}, where
             'pulsefirst' has the pulse first, followed by the gap.
         """
-        # Stimulus size given by `dur`
+#pt_2=e2cm.Psycho2Pulsetrain(tsample=tm.tsample, current_amplitude=14, dur=.6, delay=.1, pulse_dur=2/1000.,interphase_dur=100/1000, freq=2) 
+  
+      # Stimulus size given by `dur`
         stim_size = int(np.round(1.0 * dur / tsample))
 
         # Envelope size (single pulse + gap) given by `freq`
@@ -385,13 +388,14 @@ class Psycho2Pulsetrain(TimeSeries):
 
         # Delay given by `delay`
         delay_size = int(np.round(1.0 * delay / tsample))
+        
         if delay_size < 0:
             raise ValueError("Delay must fit within 1/freq interval.")
         delay = np.zeros(delay_size)
 
         # Single pulse given by `pulse_dur`
         pulse = current_amplitude * get_pulse(pulse_dur, tsample,
-                                              pulse_dur,
+                                              interphase_dur,
                                               pulsetype)
         pulse_size = pulse.size
         if pulse_size < 0:
@@ -499,7 +503,7 @@ class Retina(object):
         self.axon_id = axon_id
         self.axon_weight = axon_weight
 
-    def cm2ecm(self, current_spread):
+    def cm2ecm(self, cs):
         """
 
         Converts a current spread map to an 'effective' current spread map, by
@@ -516,11 +520,17 @@ class Retina(object):
         ecm along the pixels in the list in axon_map, weighted by the weights
         axon map.
         """
-        ecs = np.zeros(current_spread.shape)
-        for id in range(0, len(current_spread.flat)):
-            ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
+        ecs = np.zeros(cs.shape)
+        for id in range(0, len(cs.flat)):
+            ecs.flat[id] = np.dot(cs.flat[self.axon_id[id]],
                                   self.axon_weight[id])
-        ecs = ecs * (current_spread.max() / ecs.max())
+       
+        # normalize so the response under the electrode in the ecs map
+        # is equal to cs                            
+        maxloc=np.where(cs==np.max(cs))        
+        scFac=np.max(cs) / ecs[maxloc[0][0], maxloc[1][0]]                                  
+        ecs = ecs * scFac
+
 
         # this normalization is based on unit current on the retina producing
         # a max response of 1 based on axonal integration.

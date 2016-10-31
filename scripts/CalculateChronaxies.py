@@ -14,36 +14,6 @@ import matplotlib.pyplot as plt
 import importlib as imp
 #imp.reload(n2sf)
 
-def comparenflinl(ll, ecs, retina, pt_inl, pt_nfl, rsample, dolayer, engine='joblib', dojit=True, n_jobs=-1, tol=.05):    
-    tm = ec2b.TemporalModel(lweight=ll)                             
-    inl_r =  ec2b.pulse2percept(tm, ecs,r, pt_inl, rsample=rsample,  dolayer='INL', dojit=False, engine='serial')
-    
-    nfl_r =  ec2b.pulse2percept(tm, ecs, r, pt_nfl, rsample=rsample, dolayer='NFL', dojit=False, engine='serial')
-    print(ll)
-    print(np.max(inl_r.data))
-    print(np.max(nfl_r.data))
-    return (np.max(10*inl_r.data)-np.max(10*nfl_r.data)) ** 2
-    
-# Recreation of the Dorn 2013 paper, where subjects had to guess the direction of motion of a moving bar
-
-# Surgeons were instructed to place the array centered over the macula (0, 0). 
-# Each of the 60 electrodes (in a 6 × 10 grid) were 200 μm in diameter
-# The array (along the diagonal) covered an area of retina corresponding to 
-#about 20° in visual angle  assuming 293 μm on the retina equates to 1° of 
-#visual angle. a=1.72, sqrt((a*6)^2+(a*10)^2)=20 so the 10 side is 17.2 degrees, 
-#the 6 side is 10.32 degrees 
-
-# Create electrode array for the Argus 2
-# 293 μm equals 1 degree, electrode spacing is done in microns
-# when you include the radius of the electrode  the electrode centers span +/- 2362 and +/- 1312
-
-# based on Ahuja et al 2013. Factors affecting perceptual thresholds in Argus ii retinal prosthesis subjects
-# (figure 4, pdf is in retina folder) the mean height from the array should be  179.6 μm
-# with a range of ~50-750μm
-
-# Alternative model is currently the 'Krishnan' model which assumes that charge accumulation
-# occurs at the electrode, not neurally. The models are in fact metamers of each other if one is
-# only simulating the NFL
 xlist=[]
 ylist=[]
 rlist=[] #electrode radius, microns
@@ -77,7 +47,6 @@ nfl_out=[]
 
 modelver='Krishnan' 
 
-
 #for d in [.1, .2, .45, .75, 1., 2., 4., 8., 16., 32.]:
 tm = ec2b.TemporalModel() 
 rsample=int(np.round((1/tm.tsample) / 60 )) # resampling of the output to fps
@@ -85,15 +54,26 @@ rsample=int(np.round((1/tm.tsample) / 60 )) # resampling of the output to fps
 
 [ecs, cs]  = r.electrode_ecs(e_all)  
 
-pt_01=e2cm.Psycho2Pulsetrain(tsample=tm.tsample, current_amplitude=120,dur=.6, delay=10/1000, pulse_dur=.1/1000.,interphase_dur=10/1000, freq=2)
-pt_2=e2cm.Psycho2Pulsetrain(tsample=tm.tsample, current_amplitude=120, dur=.6, delay=10/1000, pulse_dur=2/1000.,interphase_dur=10/1000, freq=2) 
+inl_max = []
+nfl_max = []
+for pd in [.01, .02, .04, .08, .16, .32, .64, 1.28, 2.56, 5.12, 10.24, 20.48]:
+    pt=e2cm.Psycho2Pulsetrain(tsample=tm.tsample, current_amplitude=120,dur=.6, delay=10/1000, 
+                              pulse_dur=pd / 1000,interphase_dur=10/1000, freq=2)
+    
+    inl_r = ec2b.pulse2percept(tm, ecs, r, [pt], rsample=rsample, dolayer='INL', dojit=False, engine='serial')
+    inl_max.append(np.max(inl_r))
+    print(np.max(inl_r))
+    nfl_r = ec2b.pulse2percept(tm, ecs, r, [pt], rsample=rsample, dolayer='NFL', dojit=False, engine='serial')
+    nfl_max.append(np.max(nfl_r))
+    print(np.max(nfl_r))
+    
+#inl_r = ec2b.pulse2percept(tm, ecs, r, [pt_2], rsample=rsample, dolayer='INL', dojit=False, engine='serial')
 #def pulse2percept(tm, ecs, retina, ptrain, rsample, dolayer,
 #                  engine='joblib', dojit=True, n_jobs=-1, tol=.05):
                             
-
 #inl_r = ec2b.pulse2percept(tm, ecs, r, [pt_2], rsample=rsample, dolayer='INL', dojit=False, engine='serial')
 #
 
-comparenflinl(.636, ecs, r, [pt_2], [pt_01], rsample, False, 'serial')
+#omparenflinl(.636, ecs, r, [pt_2], [pt_01], rsample, False, 'serial')
 #myout=minimize(comparenflinl, x0, args=(ecs, r, [pt_2], [pt_01], rsample, False, 'serial', ))
                 
