@@ -17,10 +17,10 @@ from pulse2percept import utils
 class TemporalModel(object):
 
     def __init__(self, model='Krishnan', tsample=0.005 / 1000,
-                 tau_nfl=.42 / 1000, tau_inl=18./1000,
+                 tau_nfl=0.42 / 1000, tau_inl=18.0 / 1000,
                  lweight=0.636, tau2=45.25 / 1000,
                  tau3=26.25 / 1000, epsilon=8.617,
-                 asymptote=14., slope=3., shift=16.):
+                 asymptote=14.0, slope=3.0, shift=16.0):
         """(Updated) Perceptual Sensitivity Model.
 
         A model of temporal integration from retina pixels.
@@ -60,19 +60,19 @@ class TemporalModel(object):
             Parameter for the slow leaky integrator. Default: 2.625e-2.
         epsilon : float
             Scaling factor for the effects of charge accumulation, has values
-            2-3 for threshold or 8-10 for suprathreshold. Default: 8.73. If all the gammas are
-            normalized goes to 8.617
+            2-3 for threshold or 8-10 for suprathreshold. Default: 8.73.
+            If all the gammas are normalized goes to 8.617
         asymptote : float
             Asymptote of the logistic function in the stationary nonlinearity
             stage. Default: 14.
         slope : float
             Slope of the logistic function in the stationary nonlinearity
-            stage. Default: 3. In normalized units of perceptual response perhaps should be
-            2.98
+            stage. Default: 3. In normalized units of perceptual response
+            perhaps should be 2.98
         shift : float
             Shift of the logistic function in the stationary nonlinearity
-            stage. Default: 16. In normalized units of perceptual response perhaps should be
-            15.9
+            stage. Default: 16. In normalized units of perceptual response
+            perhaps should be 15.9
         """
         self.model = model
         self.tsample = tsample
@@ -96,7 +96,7 @@ class TemporalModel(object):
         self.gamma_inl = []
         t = np.arange(0, 10 * self.tau_inl, self.tsample)
         self.gamma_inl = e2cm.gamma(1, self.tau_inl, t)
-        
+
         self.gamma_nfl = []
         t = np.arange(0, 10 * self.tau_nfl, self.tsample)
         self.gamma_nfl = e2cm.gamma(1, self.tau_nfl, t)
@@ -148,7 +148,7 @@ class TemporalModel(object):
             # match the dimensions of the input signal.
 
         # return self.tsample * conv[:, b1.shape[-1]]
-        return conv[:b1.shape[-1]] 
+        return conv[:b1.shape[-1]]
 
     def charge_accumulation(self, b2):
         """Charge accumulation step (Box 3)
@@ -174,7 +174,7 @@ class TemporalModel(object):
         # np.maximum seems to be faster than np.where
         ca = self.tsample * np.cumsum(np.maximum(0, b2), axis=-1)
 
-        conv = fftconvolve(ca, self.gamma2, mode='full') 
+        conv = fftconvolve(ca, self.gamma2, mode='full')
 
         # Cut off the tail of the convolution to make the output signal match
         # the dimensions of the input signal
@@ -244,7 +244,7 @@ class TemporalModel(object):
 
         # Cut off the tail of the convolution to make the output signal match
         # the dimensions of the input signal.
-        return self.tsample * conv[:b4.shape[-1]] 
+        return self.tsample * conv[:b4.shape[-1]]
 
     def model_cascade(self, ecm, dolayer, dojit):
         """Model cascade according to Nanduri et al. (2012).
@@ -268,25 +268,30 @@ class TemporalModel(object):
         if 'INL' in dolayer:
             if self.model == 'Nanduri':
                 ca = self.charge_accumulation(ecm[0].data)
-            resp_inl = (self.fast_response(ecm[0].data, self.gamma_inl, dojit=dojit,
-                                               usefft=True) + ca)
+            resp_inl = (self.fast_response(ecm[0].data, self.gamma_inl,
+                                           dojit=dojit,
+                                           usefft=True) + ca)
         else:
             resp_inl = np.zeros((ecm[0].data.shape))
 
         if 'NFL' in dolayer:
             if self.model == 'Nanduri':
                 ca = self.charge_accumulation(ecm[1].data)
-            resp_nfl = self.fast_response(ecm[1].data, self.gamma_nfl, dojit=dojit,
-                                              usefft=False) + ca
+            resp_nfl = self.fast_response(ecm[1].data, self.gamma_nfl,
+                                          dojit=dojit,
+                                          usefft=False) + ca
         else:
             resp_nfl = np.zeros((ecm[1].data.shape))
 
-        # here we are converting from current  - where a cathodic (effective) stimulus is negative
-        # to a vague concept of neuronal response, where positive implies a neuronal response
-        # There is a rectification here because we assume that the anodic part of the pulse is ineffective 
-        # which is wrong    
-        respC = (self.lweight * np.maximum(-resp_inl, 0)) + np.maximum(-resp_nfl, 0)
-        respA = 0.5 * ((self.lweight * np.maximum(resp_inl, 0)) + np.maximum(resp_nfl, 0) )
+        # here we are converting from current  - where a cathodic (effective)
+        # stimulus is negative to a vague concept of neuronal response, where
+        # positive implies a neuronal response
+        # There is a rectification here because we assume that the anodic part
+        # of the pulse is ineffective which is wrong
+        respC = self.lweight * np.maximum(-resp_inl, 0) + \
+            np.maximum(-resp_nfl, 0)
+        respA = 0.5 * (self.lweight * np.maximum(resp_inl, 0) +
+                       np.maximum(resp_nfl, 0))
         resp = respC + respA
         resp = self.stationary_nonlinearity(resp)
         resp = self.slow_response(resp)
@@ -327,9 +332,9 @@ def pulse2percept(tm, ecs, retina, ptrain, rsample, dolayer,
         for p in range(len(ptrain)):
             ca = tm.tsample * np.cumsum(np.maximum(0, ptrain[p].data))
             tmp = fftconvolve(ca, tm.gamma2, mode='full')
-            conv_ca = tm.epsilon * tm.tsample * tmp[:ptrain[p].shape[-1]] 
+            conv_ca = tm.epsilon * tm.tsample * tmp[:ptrain[p].shape[-1]]
             ptrain[p].data = ptrain[p].data + conv_ca
-            
+
     ptrain_data = np.array([p.data for p in ptrain])
 
     sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs, engine=engine,
