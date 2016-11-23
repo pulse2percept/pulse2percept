@@ -55,6 +55,8 @@ def gamma(n, tau, t):
     if flag == 1:
         y = np.concatenate([[0], y])
 
+    y = y / (np.sum(y) * (t[1] - t[0]))  # normalizes so area doesn't change
+
     return y
 
 
@@ -385,13 +387,14 @@ class Psycho2Pulsetrain(TimeSeries):
 
         # Delay given by `delay`
         delay_size = int(np.round(1.0 * delay / tsample))
+
         if delay_size < 0:
             raise ValueError("Delay must fit within 1/freq interval.")
         delay = np.zeros(delay_size)
 
         # Single pulse given by `pulse_dur`
         pulse = current_amplitude * get_pulse(pulse_dur, tsample,
-                                              pulse_dur,
+                                              interphase_dur,
                                               pulsetype)
         pulse_size = pulse.size
         if pulse_size < 0:
@@ -499,7 +502,7 @@ class Retina(object):
         self.axon_id = axon_id
         self.axon_weight = axon_weight
 
-    def cm2ecm(self, current_spread):
+    def cm2ecm(self, cs):
         """
 
         Converts a current spread map to an 'effective' current spread map, by
@@ -516,11 +519,16 @@ class Retina(object):
         ecm along the pixels in the list in axon_map, weighted by the weights
         axon map.
         """
-        ecs = np.zeros(current_spread.shape)
-        for id in range(0, len(current_spread.flat)):
-            ecs.flat[id] = np.dot(current_spread.flat[self.axon_id[id]],
+        ecs = np.zeros(cs.shape)
+        for id in range(0, len(cs.flat)):
+            ecs.flat[id] = np.dot(cs.flat[self.axon_id[id]],
                                   self.axon_weight[id])
-        ecs = ecs * (current_spread.max() / ecs.max())
+
+        # normalize so the response under the electrode in the ecs map
+        # is equal to cs
+        maxloc = np.where(cs == np.max(cs))
+        scFac = np.max(cs) / ecs[maxloc[0][0], maxloc[1][0]]
+        ecs = ecs * scFac
 
         # this normalization is based on unit current on the retina producing
         # a max response of 1 based on axonal integration.
@@ -592,3 +600,16 @@ def ecm(ecs_item, ptrain_data, tsample):
 
     ecm = np.sum(ecs_item[:, :, None] * ptrain_data, 1)
     return TimeSeries(tsample, ecm)
+
+
+def distance2threshold(el_dist):
+    """Converts electrode distance (um) to threshold (uA)
+
+    Based on linear regression of data presented in Fig. 7b of
+    deBalthasar et al. (2008). Relationship is linear in log-log space.
+    """
+
+    slope = 1.5863261730600329
+    intercept = -4.2496180725811659
+
+    return np.exp(np.log(el_dist) * slope + intercept)

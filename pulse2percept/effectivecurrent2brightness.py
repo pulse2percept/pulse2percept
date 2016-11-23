@@ -16,72 +16,56 @@ from pulse2percept import utils
 
 class TemporalModel(object):
 
-    def __init__(self, model='Krishnan', tsample=0.005 / 1000,
-                 tau_nfl=.42 / 1000, tau_inl=18. / 1000,
-                 lweight=(1 / (3.16 * (10 ** 6))), tau2=45.25 / 1000,
-                 tau3=26.25 / 1000, epsilon=8.73,
-                 asymptote=14., slope=3., shift=16.):
-        """(Updated) Perceptual Sensitivity Model.
+    def __init__(self, tsample=0.005 / 1000,
+                 tau_nfl=0.42 / 1000, tau_inl=18.0 / 1000,
+                 tau_ca=45.25 / 1000, tau_slow=26.25 / 1000,
+                 lweight=0.636, epsilon=8.617,
+                 asymptote=1.0, slope=3.0, shift=15.0,
+                 scale_slow=521.0):
+        """Temporal Sensitivity Model
 
         A model of temporal integration from retina pixels.
-        The model transforms the effective current into brightness for a single
-        point in space. The model is based on Horsager et al. (2009), was
-        adapted by Nanduri et al. (2012), and contains some novel features as
-        well.
-
-        The model comes in two flavors: 'Nanduri' implements the model cascade
-        as described in Fig. 6 of Nanduri et al. (2012). Effective current is
-        first convolved with a fast gamma function (tau_nfl), before the
-        response is adjusted based on accumulated cathodic charge (tau2).
-        'Krishnan' inverts this logic, where effective current is first
-        adjusted based on accumulated cathodic charge, and then convolved with
-        a fast gamma function.
-        The two model flavors are mathematically equivalent.
 
         Parameters
         ----------
-        model : str {'Nanduri', 'Krishnan'}
-            A string indicating which flavor of the model to use.
-            Default: 'Nanduri'.
-        ``Nanduri``
-            Fast leaky integrator first, then charge accumulation.
-        ``Krishnan``
-            Charge accumulation first, then fast leaky integrator.
         tsample : float
             Sampling time step (seconds). Default: 5e-6 s.
         tau1 : float
             Parameter for the fast leaky integrator for each layer, tends to be
             between 0.24 - 0.65 ms for ganglion cells, 14 - 18 ms for bipolar
             cells. Default: 4.2e-4 s.
-        tau2 : float
+        tau_ca : float
             Parameter for the charge accumulation, has values between 38 - 57
             ms. Default: 4.525e-2 s.
-        tau3 : float
+        tau_slow : float
             Parameter for the slow leaky integrator. Default: 2.625e-2.
         epsilon : float
             Scaling factor for the effects of charge accumulation, has values
             2-3 for threshold or 8-10 for suprathreshold. Default: 8.73.
+            If all the gammas are normalized goes to 8.617
         asymptote : float
             Asymptote of the logistic function in the stationary nonlinearity
             stage. Default: 14.
         slope : float
             Slope of the logistic function in the stationary nonlinearity
-            stage. Default: 3.
+            stage. Default: 3. In normalized units of perceptual response
+            perhaps should be 2.98
         shift : float
             Shift of the logistic function in the stationary nonlinearity
-            stage. Default: 16.
+            stage. Default: 16. In normalized units of perceptual response
+            perhaps should be 15.9
         """
-        self.model = model
         self.tsample = tsample
         self.tau_nfl = tau_nfl
         self.tau_inl = tau_inl
-        self.tau2 = tau2
-        self.tau3 = tau3
+        self.tau_ca = tau_ca
+        self.tau_slow = tau_slow
         self.epsilon = epsilon
         self.asymptote = asymptote
         self.slope = slope
         self.shift = shift
         self.lweight = lweight
+        self.scale_slow = scale_slow
 
         # perform one-time setup calculations
         # Gamma functions used as convolution kernels do not depend on input
@@ -90,28 +74,25 @@ class TemporalModel(object):
         # gamma_nfl and gamma_inl are used to calculate the fast response in
         # bipolar and ganglion cells respectively
 
-        self.gamma_nfl = []
+        t = np.arange(0, 8 * self.tau_inl, self.tsample)
+        self.gamma_inl = e2cm.gamma(1, self.tau_inl, t)
+
         t = np.arange(0, 10 * self.tau_nfl, self.tsample)
         self.gamma_nfl = e2cm.gamma(1, self.tau_nfl, t)
 
-        self.gamma_inl = []
-        t = np.arange(0, 10 * self.tau_inl, self.tsample)
-        self.gamma_inl = e2cm.gamma(1, self.tau_inl, t)
+        # gamma_ca is used to calculate charge accumulation
+        t = np.arange(0, 6 * self.tau_ca, self.tsample)
+        self.gamma_ca = e2cm.gamma(1, self.tau_ca, t)
 
-        # gamma2 is used to calculate charge accumulation
-        t = np.arange(0, 8 * self.tau2, self.tsample)
-        self.gamma2 = e2cm.gamma(1, self.tau2, t)
+        # gamma_slow is used to calculate the slow response
+        t = np.arange(0, 10 * self.tau_slow, self.tsample)
+        self.gamma_slow = e2cm.gamma(3, self.tau_slow, t)
 
-        # gamma3 is used to calculate the slow response
-        t = np.arange(0, 8 * self.tau3, self.tsample)
-        self.gamma3 = e2cm.gamma(3, self.tau3, t)
-
-    def fast_response_inl(self, b1, dojit=True, usefft=False):
+    def fast_response(self, b1, gamma, dojit=True, usefft=False):
         """Fast response function (Box 2) for the bipolar layer
 
         Convolve a stimulus `b1` with a temporal low-pass filter (1-stage
         gamma) with time constant `self.tau_inl` ~ 14ms representing bipolars.
-
 
         Parameters
         ----------
@@ -137,62 +118,22 @@ class TemporalModel(object):
         """
 
         if usefft:  # In Krishnan model, b1 is no longer sparse (run FFT)
-            conv = self.tsample * fftconvolve(b1, self.gamma_inl, mode='full')
+            conv = self.tsample * fftconvolve(b1, gamma, mode='full')
         else:  # In Nanduri model, b1 is sparse. Use sparseconv.
-            conv = self.tsample * utils.sparseconv(self.gamma_inl, b1,
+            conv = self.tsample * utils.sparseconv(gamma, b1,
                                                    mode='full', dojit=dojit)
             # Cut off the tail of the convolution to make the output signal
             # match the dimensions of the input signal.
 
         # return self.tsample * conv[:, b1.shape[-1]]
-        return self.tsample * conv[:b1.shape[-1]]
-
-    def fast_response_nfl(self, b1, dojit=True, usefft=False):
-        """Fast response function (Box 2)
-
-        Convolve a stimulus `b1` with a temporal low-pass filter (1-stage
-        gamma) with time constant `self.tau1` ~0.42
-        This is Box 2 in Nanduri et al. (2012).
-
-        Parameters
-        ----------
-        b1 : array
-           Temporal signal to process, b1(r,t) in Nanduri et al. (2012).
-        dojit : bool, optional
-           If True (default), use numba just-in-time compilation.
-        usefft : bool, optional
-           If False (default), use sparseconv, else fftconvolve.
-
-        Returns
-        -------
-        b2 : array
-           Fast response, b2(r,t) in Nanduri et al. (2012).
-
-        Notes
-        -----
-        The function utils.sparseconv can be much faster than np.convolve and
-        scipy.signals.fftconvolve if `b1` is sparse and much longer than the
-        convolution kernel.
-
-        The output is not converted to a TimeSeries object for speedup.
-        """
-
-        if usefft:  # In Krishnan model, b1 is no longer sparse (use FFT)
-            conv = self.tsample * fftconvolve(b1, self.gamma_nfl, mode='full')
-        else:  # In Nanduri model, b1 is sparse. Use sparseconv.
-            conv = self.tsample * utils.sparseconv(self.gamma_nfl, b1,
-                                                   mode='full', dojit=dojit)
-            # Cut off the tail of the convolution to make the output signal
-            # match the dimensions of the input signal.
-
-        return self.tsample * conv[:b1.shape[-1]]
+        return conv[:b1.shape[-1]]
 
     def charge_accumulation(self, b2):
         """Charge accumulation step (Box 3)
 
         Calculate the accumulated cathodic charge of a stimulus `b2`.
         This accumulated charge is then convolved with a one-stage gamma
-        function of time constant `self.tau2`.
+        function of time constant `self.tau_ca`.
 
         Parameters
         ----------
@@ -211,7 +152,7 @@ class TemporalModel(object):
         # np.maximum seems to be faster than np.where
         ca = self.tsample * np.cumsum(np.maximum(0, b2), axis=-1)
 
-        conv = fftconvolve(ca, self.gamma2, mode='full')
+        conv = fftconvolve(ca, self.gamma_ca, mode='full')
 
         # Cut off the tail of the convolution to make the output signal match
         # the dimensions of the input signal
@@ -241,22 +182,21 @@ class TemporalModel(object):
         Notes
         -----
         Conversion to TimeSeries is avoided for the sake of speedup.
+        (np.sum(y) * (t[1]-t[0]))
         """
-        # rectify: np.maximum seems to be faster than np.where
-        b3 = np.maximum(0, b3)
 
         # use expit (logistic) function for speedup
         b3max = b3.max()
         scale = expit((b3max - self.shift) / self.slope) * self.asymptote
 
         # avoid division by zero
-        return b3 / (1e-10 + b3max) * scale
+        return b3 / (b3max + np.finfo(float).eps) * scale
 
     def slow_response(self, b4):
         """Slow response function (Box 5)
 
         Convolve a stimulus `b4` with a low-pass filter (3-stage gamma)
-        with time constant self.tau3.
+        with time constant self.tau_slow.
         This is Box 5 in Nanduri et al. (2012).
 
         Parameters
@@ -278,11 +218,11 @@ class TemporalModel(object):
         """
         # No need to zero-pad: fftconvolve already takes care of optimal
         # kernel/data size
-        conv = fftconvolve(b4, self.gamma3, mode='full')
+        conv = fftconvolve(b4, self.gamma_slow, mode='full')
 
         # Cut off the tail of the convolution to make the output signal match
         # the dimensions of the input signal.
-        return self.tsample * conv[:b4.shape[-1]]
+        return self.scale_slow * self.tsample * conv[:b4.shape[-1]]
 
     def model_cascade(self, ecm, dolayer, dojit):
         """Model cascade according to Nanduri et al. (2012).
@@ -302,32 +242,37 @@ class TemporalModel(object):
             maximum value of this signal was used to represent the perceptual
             brightness of a particular location in space, B(r).
         """
-        ca = 0
         if 'INL' in dolayer:
-            if self.model == 'Nanduri':
-                ca = self.charge_accumulation(ecm[0].data)
-            resp_inl = (self.fast_response_inl(ecm[0].data, dojit=dojit,
-                                               usefft=True) - ca)
+            resp_inl = self.fast_response(ecm[0].data, self.gamma_inl,
+                                          dojit=dojit,
+                                          usefft=True)
         else:
             resp_inl = np.zeros((ecm[0].data.shape))
 
         if 'NFL' in dolayer:
-            if self.model == 'Nanduri':
-                ca = self.charge_accumulation(ecm[1].data)
-            resp_nfl = self.fast_response_nfl(ecm[1].data, dojit=dojit,
-                                              usefft=False) - ca
+            resp_nfl = self.fast_response(ecm[1].data, self.gamma_nfl,
+                                          dojit=dojit,
+                                          usefft=False)
         else:
             resp_nfl = np.zeros((ecm[1].data.shape))
 
-        resp = (self.lweight * resp_inl) + resp_nfl
-
+        # here we are converting from current  - where a cathodic (effective)
+        # stimulus is negative to a vague concept of neuronal response, where
+        # positive implies a neuronal response
+        # There is a rectification here because we assume that the anodic part
+        # of the pulse is ineffective which is wrong
+        respC = self.lweight * np.maximum(-resp_inl, 0) + \
+            np.maximum(-resp_nfl, 0)
+        respA = self.lweight * np.maximum(resp_inl, 0) + \
+            np.maximum(resp_nfl, 0)
+        resp = respC + 0.5 * respA
         resp = self.stationary_nonlinearity(resp)
         resp = self.slow_response(resp)
         return utils.TimeSeries(self.tsample, resp)
 
 
 def pulse2percept(tm, ecs, retina, ptrain, rsample, dolayer,
-                  engine='joblib', dojit=True, n_jobs=-1, tol=.05):
+                  engine='joblib', dojit=True, n_jobs=-1, tol=0.05):
     """
     From pulses (stimuli) to percepts (spatio-temporal)
 
@@ -341,6 +286,9 @@ def pulse2percept(tm, ecs, retina, ptrain, rsample, dolayer,
     dojit : bool, optional
     """
 
+    # `ecs_list` is a pixel by `n` list where `n` is the number of layers
+    # being simulated. Each value in `ecs_list` is the current contributed
+    # by each electrode for that spatial location
     ecs_list = []
     idx_list = []
     for xx in range(retina.gridx.shape[1]):
@@ -350,18 +298,13 @@ def pulse2percept(tm, ecs, retina, ptrain, rsample, dolayer,
             else:
                 ecs_list.append(ecs[yy, xx])
                 idx_list.append([yy, xx])
-                # ecs_list is a pix by n list where n is the number of
-                # layers being simulated
-                # each value in ecs is the current contributed by
-                # each electrode for that spatial location
 
     # pulse train for each electrode
-    if tm.model == 'Krishnan':
-        for p in range(len(ptrain)):
-            ca = tm.tsample * np.cumsum(np.maximum(0, ptrain[p].data))
-            tmp = fftconvolve(ca, tm.gamma2, mode='full')
-            conv_ca = tm.epsilon * tm.tsample * tmp[:ptrain[p].shape[-1]]
-            ptrain[p].data = ptrain[p].data - conv_ca
+    for p in range(len(ptrain)):
+        ca = tm.tsample * np.cumsum(np.maximum(0, -ptrain[p].data))
+        tmp = fftconvolve(ca, tm.gamma_ca, mode='full')
+        conv_ca = tm.epsilon * tm.tsample * tmp[:ptrain[p].shape[-1]]
+        ptrain[p].data = ptrain[p].data + conv_ca
 
     ptrain_data = np.array([p.data for p in ptrain])
 
@@ -381,3 +324,26 @@ def calc_pixel(ecs_item, ptrain_data, tm, resample, dolayer,
     sr = tm.model_cascade(ecm, dolayer, dojit=dojit)
     sr.resample(resample)
     return sr
+
+
+def get_brightest_frame(resp):
+    """Return brightest frame of a brightness movie
+
+    This function returns the frame of a brightness movie that contains the
+    brightest element.
+
+    Parameters
+    ----------
+    resp : TimeSeries
+        The brightness movie as a TimeSeries object.
+    """
+    # Find brightest element
+    idx_px = resp.data.argmax()
+
+    # Find frame that contains brightest pixel using `unravel`, which maps
+    # the flat index `idx_px` onto the high-dimensional indices (x,y,z).
+    # What we want is index `z` (i.e., the frame index), given by the last
+    # element in the return argument.
+    idx_frame = np.unravel_index(idx_px, resp.shape)[-1]
+
+    return utils.TimeSeries(resp.tsample, resp.data[..., idx_frame])
