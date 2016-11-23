@@ -600,3 +600,16 @@ def ecm(ecs_item, ptrain_data, tsample):
 
     ecm = np.sum(ecs_item[:, :, None] * ptrain_data, 1)
     return TimeSeries(tsample, ecm)
+
+
+def distance2threshold(el_dist):
+    """Converts electrode distance (um) to threshold (uA)
+
+    Based on linear regression of data presented in Fig. 7b of
+    deBalthasar et al. (2008). Relationship is linear in log-log space.
+    """
+
+    slope = 1.5863261730600329
+    intercept = -4.2496180725811659
+
+    return np.exp(np.log(el_dist) * slope + intercept)
