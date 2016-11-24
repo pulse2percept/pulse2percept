@@ -107,12 +107,14 @@ class Electrode(object):
         So for an epiretinal array the bipolar layer is L1+L2+(.5*L3)
 
         """
-        assert r > 0
+        assert r >= 0
         assert h >= 0
 
         self.r = r
         self.x = x
         self.y = y
+        self.ptype = ptype
+
         fovdist = np.sqrt(x**2 + y**2)
 
         if ptype == 'epiretinal':
