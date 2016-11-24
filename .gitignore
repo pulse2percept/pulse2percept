@@ -5,3 +5,4 @@
 build/
 dist/
 pulse2percept.egg-info/
+*.eps

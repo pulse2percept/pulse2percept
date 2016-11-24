@@ -203,7 +203,65 @@ class ElectrodeArray(object):
             self.electrodes.append(Electrode(r, x, y, h, ptype))
 
 
-# class ArgusI(ElectrodeArray):
+class ArgusI(ElectrodeArray):
+
+    def __init__(self, x_center=0, y_center=0, h=0, rot=0 * np.pi / 180):
+        """Create an ArgusI array on the retina
+
+        This function creates an ArgusI array and places it on the retina
+        such that the center of the array is located at
+        [`x_center`, `y_center`] (microns) and the array is rotated by
+        rotation angle `rot` (radians).
+
+        The array is oriented as shown in Fig. 1 of Horsager et al. (2009):
+        y       A1 B1 C1 D1                     260 520 260 520
+        ^       A2 B2 C2 D2   where electrode   520 260 520 260
+        |       A3 B3 C3 D3   diameters are:    260 520 260 520
+        -->x    A4 B4 C4 D4                     520 260 520 260
+
+        Parameters
+        ----------
+        x_center : float
+            x coordinate of the array center (um)
+        y_center : float
+            y coordinate of the array center (um)
+        h : float
+            Distance of the array to the retinal surface (um)
+        rot : float
+            Rotation angle of the array (rad). Positive values denote
+            counter-clock-wise rotations.
+
+        """
+        # Alternating electrode sizes, arranged in checkerboard pattern
+        r_arr = np.array([260, 520, 260, 520]) / 2.0
+        r_arr = np.concatenate((r_arr, r_arr[::-1], r_arr, r_arr[::-1]),
+                               axis=0)
+
+        # For now, all electrodes have the same height
+        h_arr = np.ones_like(r_arr) * h
+
+        # Equally spaced electrodes
+        e_spacing = 800  # um
+        x_arr = np.arange(0, 4) * e_spacing - 1.5 * e_spacing
+        x_arr, y_arr = np.meshgrid(x_arr, x_arr, sparse=False)
+
+        # Rotation matrix
+        R = np.array([np.cos(rot), np.sin(rot),
+                      -np.sin(rot), np.cos(rot)]).reshape((2, 2))
+
+        # Rotate the array
+        xy = np.vstack((x_arr.flatten(), y_arr.flatten()))
+        xy = np.matmul(R, xy)
+        x_arr = xy[0, :]
+        y_arr = xy[1, :]
+
+        # Apply offset
+        x_arr += x_center
+        y_arr += y_center
+
+        self.electrodes = []
+        for r, x, y, h in zip(r_arr, x_arr, y_arr, h_arr):
+            self.electrodes.append(Electrode(r, x, y, h, 'epiretinal'))
 
 
 def receptive_field(electrode, xg, yg, size):

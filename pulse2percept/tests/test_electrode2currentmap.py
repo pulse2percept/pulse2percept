@@ -45,6 +45,27 @@ def test_ElectrodeArray():
                       [3, 4, 5], [6], 'epiretinal')
 
 
+def test_ArgusI():
+    # Create an ArgusI and make sure location is correct
+    for x in [0, -100, 200]:
+        for y in [0, -200, 400]:
+            for r in [0, 30, 45, 60]:
+                rot = r * np.pi / 180
+                argus = e2cm.ArgusI(x, y, h=0, rot=rot)
+
+                # Coordinates of first electrode
+                xy = np.array([-1200, -1200]).T
+
+                # Rotate
+                R = np.array([np.cos(rot), -np.sin(rot),
+                              np.sin(rot), np.cos(rot)]).reshape((2, 2))
+                xy = np.matmul(R, xy)
+
+                # Then off-set: Make sure first electrode is placed correctly
+                npt.assert_equal(argus.electrodes[0].x, xy[0] + x)
+                npt.assert_equal(argus.electrodes[0].y, xy[1] + y)
+
+
 def test_TimeSeries():
     data_orig = np.zeros((10, 10, 1000))
     ts1 = e2cm.TimeSeries(1, data_orig)
