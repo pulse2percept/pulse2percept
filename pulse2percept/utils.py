@@ -3,10 +3,6 @@ Utility functions for pulse2percept
 """
 import numpy as np
 import multiprocessing
-import joblib
-import dask
-import dask.multiprocessing
-
 
 try:
     from numba import jit
@@ -194,6 +190,13 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         n_jobs = n_jobs - 1
 
     if engine == 'joblib':
+        try:
+            import joblib
+        except ImportError:
+            err = "You do not have `joblib` installed. Consider setting"
+            err += "`engine` to 'serial' or 'dask'."
+            raise ImportError(err)
+
         p = joblib.Parallel(n_jobs=n_jobs, backend=backend)
         d = joblib.delayed(func)
         d_l = []
@@ -201,6 +204,14 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
             d_l.append(d(in_element, *func_args, **func_kwargs))
         results = p(d_l)
     elif engine == 'dask':
+        try:
+            import dask
+            import dask.multiprocessing
+        except ImportError:
+            err = "You do not have `dask` installed. Consider setting"
+            err += "`engine` to 'serial' or 'joblib'."
+            raise ImportError(err)
+
         def partial(func, *args, **keywords):
             def newfunc(in_arg):
                 return func(in_arg, *args, **keywords)

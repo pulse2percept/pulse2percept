@@ -46,11 +46,11 @@ def npy2movie(filename, movie, rate=30):
 
 
 def scale(inarray, newmin=0, newmax=1):
-    '''Scales an image such that its lowest value attains newmin and
-    it’s highest value attains newmax.
+    """Scales an image such that its lowest value attains newmin and
+    it's highest value attains newmax.
     written by Ione Fine, based on code from Rick Anthony
     6/5/2015
-    '''
+    """
 
     oldmin = inarray.min()
     oldmax = inarray.max()
