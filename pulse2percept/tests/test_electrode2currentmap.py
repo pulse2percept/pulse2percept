@@ -5,6 +5,46 @@ import numpy.testing as npt
 import pulse2percept.electrode2currentmap as e2cm
 
 
+def test_Electrode():
+    num_pts = 10
+    r = np.linspace(1, 1000, num_pts)
+    x = np.linspace(-1000, 1000, num_pts)
+    y = np.linspace(-2000, 2000, num_pts)
+    h = np.linspace(0, 1000, num_pts)
+    t = ['subretinal', 'epiretinal'] * (num_pts // 2)
+
+    for rr, xx, yy, hh, tt in zip(r, x, y, h, t):
+        e = e2cm.Electrode(rr, xx, yy, hh, tt)
+        npt.assert_equal(e.r, rr)
+        npt.assert_equal(e.x, xx)
+        npt.assert_equal(e.y, yy)
+        npt.assert_equal(e.h, hh)
+        npt.assert_equal(e.ptype, tt)
+
+
+def test_ElectrodeArray():
+    # Make sure ElectrodeArray can accept ints, floats, lists, np.arrays
+    implants = [None] * 4
+    implants[0] = e2cm.ElectrodeArray([0], [1], [2], [3],
+                                      ptype='epiretinal')
+    implants[1] = e2cm.ElectrodeArray(0, 1, 2, 3,
+                                      ptype='epiretinal')
+    implants[2] = e2cm.ElectrodeArray(0.0, [1], 2.0, [3],
+                                      ptype='epiretinal')
+    implants[3] = e2cm.ElectrodeArray(np.array([0]), [1], [2], [[3]],
+                                      ptype='epiretinal')
+    for arr in implants:
+        npt.assert_equal(arr.electrodes[0].r, 0)
+        npt.assert_equal(arr.electrodes[0].x, 1)
+        npt.assert_equal(arr.electrodes[0].y, 2)
+        npt.assert_equal(arr.electrodes[0].h, 3)
+        npt.assert_equal(arr.electrodes[0].ptype, 'epiretinal')
+
+    # However, all input arguments must have the same number of elements
+    npt.assert_raises(AssertionError, e2cm.ElectrodeArray, [0], [1, 2],
+                      [3, 4, 5], [6], 'epiretinal')
+
+
 def test_TimeSeries():
     data_orig = np.zeros((10, 10, 1000))
     ts1 = e2cm.TimeSeries(1, data_orig)

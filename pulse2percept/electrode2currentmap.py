@@ -65,13 +65,13 @@ class Electrode(object):
     Represent a circular, disc-like electrode.
     """
 
-    def __init__(self, radius, x, y, h, ptype):
+    def __init__(self, r, x, y, h, ptype):
         """
         Initialize an electrode object
 
         Parameters
         ----------
-        radius : float
+        r : float
             The radius of the electrode (in microns).
         x : float
             The x coordinate of the electrode (in microns) from the fovea
@@ -107,7 +107,10 @@ class Electrode(object):
         So for an epiretinal array the bipolar layer is L1+L2+(.5*L3)
 
         """
-        self.radius = radius
+        assert r > 0
+        assert h >= 0
+
+        self.r = r
         self.x = x
         self.y = y
         fovdist = np.sqrt(x**2 + y**2)
@@ -163,17 +166,17 @@ class Electrode(object):
         if 'NFL' in layer:  # nerve fiber layer, ganglion axons
             h = np.ones(r.shape) * self.h_nfl
             # actual distance from the electrode edge
-            d = ((r - self.radius)**2 + self.h_nfl**2)**.5
+            d = ((r - self.r)**2 + self.h_nfl**2)**.5
         elif 'INL' in layer:  # inner nuclear layer, containing the bipolars
             h = np.ones(r.shape) * self.h_inl
-            d = ((r - self.radius)**2 + self.h_inl**2)**.5
+            d = ((r - self.r)**2 + self.h_inl**2)**.5
         else:
             s = "Layer %s not found. Acceptable values for `layer` are " \
                 "'NFL' or 'INL'." % layer
             raise ValueError(s)
         cspread = (alpha / (alpha + h ** n))
-        cspread[r > self.radius] = (alpha /
-                                    (alpha + d[r > self.radius] ** n))
+        cspread[r > self.r] = (alpha /
+                               (alpha + d[r > self.r] ** n))
 
         return cspread
 
@@ -182,24 +185,23 @@ class ElectrodeArray(object):
     """
     Represent a retina and array of electrodes
     """
+    import operator
 
     def __init__(self, radii, xs, ys, hs, ptype):
+        # Make it so the constructor can accept either floats, lists, or
+        # numpy arrays, and `zip` works regardless.
+        radii = np.array([radii]).flatten()
+        xs = np.array([xs]).flatten()
+        ys = np.array([ys]).flatten()
+        hs = np.array([hs]).flatten()
+        assert radii.size == xs.size == ys.size == hs.size
+
         self.electrodes = []
         for r, x, y, h in zip(radii, xs, ys, hs):
             self.electrodes.append(Electrode(r, x, y, h, ptype))
 
-#    def current_spread(self, xg, yg, layers, alpha=14000, n=1.69):
-#
-#        BOOM WAH!
-#        # this is the part that is broken. Somehow the the info about layers
-#        # needs to be included in the ElectrodeArray object
-#        c = np.zeros((len(self.electrodes), xg.shape[0], xg.shape[1]))
-#
-#        for i in range(c.shape[0]):
-#            c[i] = self.electrodes[i].current_spread(xg, yg, layers[l],
-#                                                     alpha=alpha, n=n,
-#                                                     layers[l])
-#        return np.sum(c, 0)
+
+# class ArgusI(ElectrodeArray):
 
 
 def receptive_field(electrode, xg, yg, size):
