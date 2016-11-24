@@ -57,13 +57,13 @@ def test_ArgusI():
                 xy = np.array([-1200, -1200]).T
 
                 # Rotate
-                R = np.array([np.cos(rot), -np.sin(rot),
-                              np.sin(rot), np.cos(rot)]).reshape((2, 2))
+                R = np.array([np.cos(rot), np.sin(rot),
+                              -np.sin(rot), np.cos(rot)]).reshape((2, 2))
                 xy = np.matmul(R, xy)
 
                 # Then off-set: Make sure first electrode is placed correctly
-                npt.assert_equal(argus.electrodes[0].x, xy[0] + x)
-                npt.assert_equal(argus.electrodes[0].y, xy[1] + y)
+                npt.assert_almost_equal(argus.electrodes[0].x, xy[0] + x)
+                npt.assert_almost_equal(argus.electrodes[0].y, xy[1] + y)
 
 
 def test_TimeSeries():
