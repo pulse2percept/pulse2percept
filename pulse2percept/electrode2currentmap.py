@@ -8,7 +8,6 @@ import numpy as np
 from os.path import exists
 from scipy import interpolate
 from scipy.misc import factorial
-from scipy.signal import fftconvolve
 
 from pulse2percept import oyster
 from pulse2percept.utils import TimeSeries

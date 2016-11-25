@@ -1,4 +1,3 @@
-import tempfile
 import numpy as np
 import numpy.testing as npt
 import pulse2percept.electrode2currentmap as e2cm
