@@ -8,7 +8,7 @@ import numpy as np
 # Written 1/14/2016 by gmb
 
 
-def jansonius(nCells, nR, center=np.array([15, 2]),
+def jansonius(nCells=500, nR=801, center=np.array([15, 2]),
               rot=0 * np.pi / 180, scale=1, bs=-1.9, bi=.5, r0=4,
               maxR=45, angRange=60):
     """Implements the model of retinal axonal pathways by generating a
@@ -108,10 +108,7 @@ def jansonius(nCells, nR, center=np.array([15, 2]),
     return x, y
 
 
-def makeAxonMap(xg, yg, axon_lambda=1, nCells=500, nR=801, min_weight=.001,
-                center=np.array([15, 2]),
-                rot=0 * np.pi / 180, scale=1, bs=-1.9, bi=.5, r0=4,
-                maxR=45, angRange=60):
+def makeAxonMap(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=.001):
     """Retinal axon map
 
     Generates a mapping of how each pixel in the retina space is affected
@@ -137,10 +134,6 @@ def makeAxonMap(xg, yg, axon_lambda=1, nCells=500, nR=801, min_weight=.001,
         space
 
     """
-    axon_x, axon_y = jansonius(nCells, nR, center=center,
-                               rot=rot, scale=scale, bs=bs, bi=bi, r0=r0,
-                               maxR=maxR, angRange=angRange)
-
     # initialize lists
     axon_xg = ()
     axon_yg = ()
@@ -151,7 +144,7 @@ def makeAxonMap(xg, yg, axon_lambda=1, nCells=500, nR=801, min_weight=.001,
     # loop through pixels as indexed into a single dimension
     for id in range(0, len(xg.flat)):
         # find the nearest axon to this pixel
-        d = (axon_x - xg.flat[id])**2 + (axon_y - yg.flat[id])**2
+        d = (jan_x - xg.flat[id])**2 + (jan_y - yg.flat[id])**2
         cur_ax_id = np.nanargmin(d)  # index into the current axon
         [axPosId0, axNum] = np.unravel_index(cur_ax_id, d.shape)
 
@@ -170,16 +163,16 @@ def makeAxonMap(xg, yg, axon_lambda=1, nCells=500, nR=801, min_weight=.001,
         # now loop back along this nearest axon toward the optic disc
         for axPosId in range(axPosId0 - 1, -1, -1):
             # increment the distance from the starting point
-            ax = (axon_x[axPosId + 1, axNum] - axon_x[axPosId, axNum])**2
-            ay = (axon_y[axPosId + 1, axNum] - axon_y[axPosId, axNum])**2
+            ax = (jan_x[axPosId + 1, axNum] - jan_x[axPosId, axNum])**2
+            ay = (jan_y[axPosId + 1, axNum] - jan_y[axPosId, axNum])**2
             dist += np.sqrt(ax ** 2 + ay ** 2)
 
             # weight falls off exponentially as distance from axon cell body
             weight = np.exp(-dist / axon_lambda)
 
             # find the nearest pixel to the current position along the axon
-            nearest_xg_id = np.abs(xg[0, :] - axon_x[axPosId, axNum]).argmin()
-            nearest_yg_id = np.abs(yg[:, 0] - axon_y[axPosId, axNum]).argmin()
+            nearest_xg_id = np.abs(xg[0, :] - jan_x[axPosId, axNum]).argmin()
+            nearest_yg_id = np.abs(yg[:, 0] - jan_y[axPosId, axNum]).argmin()
             nearest_xg = xg[0, nearest_xg_id]
             nearest_yg = yg[nearest_yg_id, 0]
 

@@ -194,7 +194,7 @@ def test_Psycho2Pulsetrain():
                                                   interphase_dur=pdur,
                                                   delay=delay,
                                                   tsample=tsample,
-                                                  current_amplitude=ampl,
+                                                  amp=ampl,
                                                   pulsetype=pulsetype,
                                                   pulseorder=pulseorder)
 
@@ -255,7 +255,7 @@ def test_Retina_ecm():
 
     s1 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5, pulse_dur=.075 / 1000.,
                                 interphase_dur=.075 / 1000., delay=0.,
-                                tsample=.075 / 1000., current_amplitude=20,
+                                tsample=.075 / 1000., amp=20,
                                 pulsetype='cathodicfirst')
 
     electrode_array = e2cm.ElectrodeArray([1, 1], [0, 1], [0, 1],

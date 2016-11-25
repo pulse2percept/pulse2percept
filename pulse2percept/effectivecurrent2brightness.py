@@ -304,7 +304,7 @@ def pulse2percept(tm, ecs, retina, ptrain, rsample, dolayer,
         ca = tm.tsample * np.cumsum(np.maximum(0, -ptrain[p].data))
         tmp = fftconvolve(ca, tm.gamma_ca, mode='full')
         conv_ca = tm.epsilon * tm.tsample * tmp[:ptrain[p].shape[-1]]
-        ptrain[p].data = ptrain[p].data + conv_ca
+        ptrain[p].data += conv_ca
 
     ptrain_data = np.array([p.data for p in ptrain])
 

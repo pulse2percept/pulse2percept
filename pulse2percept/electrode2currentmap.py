@@ -5,7 +5,7 @@ Functions for transforming electrode specifications into a current map
 
 """
 import numpy as np
-import os
+from os.path import exists
 from scipy import interpolate
 from scipy.misc import factorial
 from scipy.signal import fftconvolve
@@ -379,9 +379,9 @@ class Psycho2Pulsetrain(TimeSeries):
 
     """
 
-    def __init__(self, tsample, freq=20, dur=0.5, pulse_dur=0.45 / 1000,
-                 interphase_dur=0.45 / 1000, delay=0.45 / 1000,
-                 current_amplitude=20, pulsetype='cathodicfirst',
+    def __init__(self, tsample, freq=20, amp=20, dur=0.5, delay=0,
+                 pulse_dur=0.45 / 1000, interphase_dur=0.45 / 1000,
+                 pulsetype='cathodicfirst',
                  pulseorder='pulsefirst'):
         """
 
@@ -406,7 +406,7 @@ class Psycho2Pulsetrain(TimeSeries):
             Delay until stimulus on-set in seconds.
 
 
-        current_amplitude : float
+        amp : float
             Max amplitude of the pulse train in micro-amps.
 
         pulsetype : string
@@ -420,6 +420,10 @@ class Psycho2Pulsetrain(TimeSeries):
         # Stimulus size given by `dur`
         stim_size = int(np.round(1.0 * dur / tsample))
 
+        if freq == 0 or amp == 0:
+            TimeSeries.__init__(self, tsample, np.zeros(stim_size))
+            return
+
         # Envelope size (single pulse + gap) given by `freq`
         envelope_size = int(np.round(1.0 / float(freq) / tsample))
 
@@ -431,9 +435,9 @@ class Psycho2Pulsetrain(TimeSeries):
         delay = np.zeros(delay_size)
 
         # Single pulse given by `pulse_dur`
-        pulse = current_amplitude * get_pulse(pulse_dur, tsample,
-                                              interphase_dur,
-                                              pulsetype)
+        pulse = amp * get_pulse(pulse_dur, tsample,
+                                interphase_dur,
+                                pulsetype)
         pulse_size = pulse.size
         if pulse_size < 0:
             raise ValueError("Single pulse must fit within 1/freq interval.")
@@ -476,8 +480,8 @@ class Retina(object):
     """
 
     def __init__(self, xlo=-1000, xhi=1000, ylo=-1000, yhi=1000,
-                 sampling=25, axon_map=None, axon_lambda=2,
-                 rot=0 * np.pi / 180):
+                 sampling=25, axon_lambda=2, rot=0 * np.pi / 180,
+                 loadpath='../'):
         """
         Initialize a retina
 
@@ -494,14 +498,22 @@ class Retina(object):
         axon_lambda : float
             Constant that determines fall-off with axonal distance
         """
-        self.gridx, self.gridy = np.meshgrid(np.arange(xlo, xhi,
-                                                       sampling),
-                                             np.arange(ylo, yhi,
-                                                       sampling),
+        # Include endpoints in meshgrid
+        num_x = (xhi - xlo) / sampling + 1
+        num_y = (yhi - ylo) / sampling + 1
+        self.gridx, self.gridy = np.meshgrid(np.linspace(xlo, xhi, num_x),
+                                             np.linspace(ylo, yhi, num_y),
                                              indexing='xy')
 
-        if axon_map is not None and os.path.exists(axon_map):
-            axon_map = np.load(axon_map)
+        # Create descriptive filename based on input args
+        filename = "%sretina_s%d_l%.1f_rot%.1f_%dx%d.npz" \
+            % (loadpath, sampling, axon_lambda, rot / np.pi * 180,
+               xhi - xlo, yhi - ylo)
+
+        # Check if such a file already exists. If so, load parameters and
+        # make sure they are the same as specified above. Else, create new.
+        if exists(filename):
+            axon_map = np.load(filename)
             # Verify that the file was created with a consistent grid:
             axon_id = axon_map['axon_id']
             axon_weight = axon_map['axon_weight']
@@ -517,25 +529,33 @@ class Retina(object):
             assert yhi == yhi_am
             assert sampling_am == sampling
             assert axon_lambda_am == axon_lambda
+
+            if 'jan_x' in axon_map and 'jan_y' in axon_map:
+                jan_x = axon_map['jan_x']
+                jan_y = axon_map['jan_y']
+            else:
+                jan_x = None
+                jan_y = None
+
             if 'rot' in axon_map:
                 rot_am = axon_map['rot']
                 assert rot == rot_am
             else:
                 assert rot == 0
-
         else:
-            if axon_map is None:
-                axon_map = 'axons.npz'
-            print("Can't find file %s, generating" % axon_map)
+            print("Can't find file '%s', generating..." % filename)
+            jan_x, jan_y = oyster.jansonius(rot=rot)
             axon_id, axon_weight = oyster.makeAxonMap(micron2deg(self.gridx),
                                                       micron2deg(self.gridy),
-                                                      axon_lambda=axon_lambda,
-                                                      rot=rot)
+                                                      jan_x, jan_y,
+                                                      axon_lambda=axon_lambda)
+
             # Save the variables, together with metadata about the grid:
-            fname = axon_map
-            np.savez(fname,
+            np.savez(filename,
                      axon_id=axon_id,
                      axon_weight=axon_weight,
+                     jan_x=jan_x,
+                     jan_y=jan_y,
                      xlo=[xlo],
                      xhi=[xhi],
                      ylo=[ylo],
@@ -545,9 +565,12 @@ class Retina(object):
                      rot=[rot])
 
         self.axon_lambda = axon_lambda
+        self.rot = rot
         self.sampling = sampling
         self.axon_id = axon_id
         self.axon_weight = axon_weight
+        self.jan_x = jan_x
+        self.jan_y = jan_y
 
     def cm2ecm(self, cs):
         """
