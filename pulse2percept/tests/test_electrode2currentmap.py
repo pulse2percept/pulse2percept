@@ -114,16 +114,15 @@ def test_get_pulse():
 
 
 def test_Retina_Electrodes():
-    retina_file = tempfile.NamedTemporaryFile().name
     sampling = 1
     xlo = -2
     xhi = 2
     ylo = -3
     yhi = 3
     retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
-                         sampling=sampling, axon_map=retina_file)
-    npt.assert_equal(retina.gridx.shape, ((yhi - ylo) / sampling,
-                                          (xhi - xlo) / sampling))
+                         sampling=sampling, loadpath='')
+    npt.assert_equal(retina.gridx.shape, ((yhi - ylo) / sampling + 1,
+                                          (xhi - xlo) / sampling + 1))
     electrode1 = e2cm.Electrode(1, 0, 0, 0, ptype='epiretinal')
 
     # Calculate current spread for all retinal layers
@@ -244,14 +243,13 @@ def test_Psycho2Pulsetrain():
 
 
 def test_Retina_ecm():
-    retina_file = tempfile.NamedTemporaryFile().name
     sampling = 1
     xlo = -2
     xhi = 2
     ylo = -3
     yhi = 3
     retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
-                         sampling=sampling, axon_map=retina_file)
+                         sampling=sampling, loadpath='')
 
     s1 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5, pulse_dur=.075 / 1000.,
                                 interphase_dur=.075 / 1000., delay=0.,

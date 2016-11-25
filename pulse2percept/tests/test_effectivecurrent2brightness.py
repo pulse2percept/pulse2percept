@@ -6,14 +6,13 @@ import pulse2percept.effectivecurrent2brightness as ec2b
 
 
 def test_brightness_movie():
-    retina_file = tempfile.NamedTemporaryFile().name
     sampling = 1
     xlo = -2
     xhi = 2
     ylo = -3
     yhi = 3
     retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
-                         sampling=sampling, axon_map=retina_file)
+                         sampling=sampling, loadpath='')
 
     s1 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5, pulse_dur=.075 / 1000.,
                                 interphase_dur=.075 / 1000., delay=0.,
