@@ -80,6 +80,8 @@ class Electrode(object):
             The height of the electrode from the retinal surface
               epiretinal array - distance to the ganglion layer
              subretinal array - distance to the bipolar layer
+        ptype : str
+            Electrode type, {'epiretinal', 'subretinal'}
 
         Estimates of layer thickness based on:
         LoDuca et al. Am J. Ophthalmology 2011
@@ -124,7 +126,6 @@ class Electrode(object):
                 self.h_inl = h + 139.75
             elif fovdist > 1550:
                 self.h_inl = h + 119.075
-
         elif ptype == 'subretinal':
             if fovdist <= 600:
                 self.h_inl = h + 23 / 2
@@ -135,6 +136,10 @@ class Electrode(object):
             elif fovdist > 1550:
                 self.h_inl = h + 30.75 / 2
                 self.h_nfl = h + 141.45
+        else:
+            e_s = "Acceptable values for `ptype` are: 'epiretinal', "
+            e_s += "'subretinal'."
+            raise ValueError(e_s)
 
     def current_spread(self, xg, yg, layer, alpha=14000, n=1.69):
         """
@@ -183,12 +188,42 @@ class Electrode(object):
 
 
 class ElectrodeArray(object):
-    """
-    Represent a retina and array of electrodes
-    """
-    import operator
 
     def __init__(self, radii, xs, ys, hs, ptype):
+        """Create an ElectrodeArray on the retina
+
+        This function creates an electrode array and places it on the retina.
+        Lists should specify, for each electrode, its size (`radii`),
+        location on the retina (`xs` and `ys`), and distance to the retina
+        (`hs`). The type of electrode array is specified by `ptype`.
+
+        Parameters
+        ----------
+        radii : array_like
+            List of electrode radii.
+        xs : array_like
+            List of x-coordinates for the center of the electrodes
+        ys : array_like
+            List of y-coordinates for the center of the electrodes
+        hs : array_like
+            List of electrode heights (distance from the retinal surface)
+        ptype : string
+            Array type, {'epiretinal', 'subretinal'}
+
+        Examples
+        --------
+        A single electrode with radius 100um, sitting at retinal location
+        (0, 0), 10um away from the retina, of type 'epiretinal':
+        >>> from pulse2percept import electrode2currentmap as e2cm
+        >>> implant = e2cm.ElectrodeArray(100, 0, 0, 10, 'epiretinal')
+
+        An array with two electrodes of size 100um, one sitting at
+        (-100, -100), the other sitting at (0, 0), with 0 distance from the
+        retina, of type 'subretinal':
+        >>> implant = e2cm.ElectrodeArray([100, 100], [-100, 0], [-100, 0],
+                                          [0, 0], 'subretinal')
+
+        """
         # Make it so the constructor can accept either floats, lists, or
         # numpy arrays, and `zip` works regardless.
         radii = np.array([radii]).flatten()
@@ -224,8 +259,9 @@ class ArgusI(ElectrodeArray):
             x coordinate of the array center (um)
         y_center : float
             y coordinate of the array center (um)
-        h : float
-            Distance of the array to the retinal surface (um)
+        h : float || array_like
+            Distance of the array to the retinal surface (um). Either a list
+            with 16 entries or a scalar.
         rot : float
             Rotation angle of the array (rad). Positive values denote
             counter-clock-wise rotations.
@@ -236,8 +272,14 @@ class ArgusI(ElectrodeArray):
         r_arr = np.concatenate((r_arr, r_arr[::-1], r_arr, r_arr[::-1]),
                                axis=0)
 
-        # For now, all electrodes have the same height
-        h_arr = np.ones_like(r_arr) * h
+        if isinstance(h, list):
+            h_arr = np.array(h).flatten()
+            if h_arr.size != len(r_arr):
+                e_s = "If `h` is a list, it must have 16 entries."
+                raise ValueError(e_s)
+        else:
+            # All electrodes have the same height
+            h_arr = np.ones_like(r_arr) * h
 
         # Equally spaced electrodes
         e_spacing = 800  # um

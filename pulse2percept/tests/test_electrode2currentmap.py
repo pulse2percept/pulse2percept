@@ -46,23 +46,35 @@ def test_ElectrodeArray():
 
 def test_ArgusI():
     # Create an ArgusI and make sure location is correct
-    for x in [0, -100, 200]:
-        for y in [0, -200, 400]:
-            for r in [0, 30, 45, 60]:
-                rot = r * np.pi / 180
-                argus = e2cm.ArgusI(x, y, h=0, rot=rot)
+    for htype in ['float', 'list']:
+        for x in [0, -100, 200]:
+            for y in [0, -200, 400]:
+                for r in [0, -30, 45, 60, -90]:
+                    # Height `h` can either be a float or a list
+                    if htype == 'float':
+                        h = 100
+                    else:
+                        h = np.ones(16) * 20
 
-                # Coordinates of first electrode
-                xy = np.array([-1200, -1200]).T
+                    # Convert rotation angle to rad
+                    rot = r * np.pi / 180
+                    argus = e2cm.ArgusI(x, y, h=0, rot=rot)
 
-                # Rotate
-                R = np.array([np.cos(rot), np.sin(rot),
-                              -np.sin(rot), np.cos(rot)]).reshape((2, 2))
-                xy = np.matmul(R, xy)
+                    # Coordinates of first electrode
+                    xy = np.array([-1200, -1200]).T
 
-                # Then off-set: Make sure first electrode is placed correctly
-                npt.assert_almost_equal(argus.electrodes[0].x, xy[0] + x)
-                npt.assert_almost_equal(argus.electrodes[0].y, xy[1] + y)
+                    # Rotate
+                    R = np.array([np.cos(rot), np.sin(rot),
+                                  -np.sin(rot), np.cos(rot)]).reshape((2, 2))
+                    xy = np.matmul(R, xy)
+
+                    # Then off-set: Make sure first electrode is placed
+                    # correctly
+                    npt.assert_almost_equal(argus.electrodes[0].x, xy[0] + x)
+                    npt.assert_almost_equal(argus.electrodes[0].y, xy[1] + y)
+
+    # `h` must have the right dimensions
+    npt.assert_raises(ValueError, e2cm.ArgusI, -100, 10, h=np.zeros(5))
 
 
 def test_TimeSeries():
