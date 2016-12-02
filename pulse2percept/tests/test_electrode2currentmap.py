@@ -58,7 +58,7 @@ def test_ArgusI():
 
                     # Convert rotation angle to rad
                     rot = r * np.pi / 180
-                    argus = e2cm.ArgusI(x, y, h=0, rot=rot)
+                    argus = e2cm.ArgusI(x, y, h=h, rot=rot)
 
                     # Coordinates of first electrode
                     xy = np.array([-1200, -1200]).T

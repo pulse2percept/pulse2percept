@@ -19,9 +19,8 @@ class TemporalModel(object):
     def __init__(self, tsample=0.005 / 1000,
                  tau_nfl=0.42 / 1000, tau_inl=18.0 / 1000,
                  tau_ca=45.25 / 1000, tau_slow=26.25 / 1000,
-                 lweight=0.636, epsilon=8.617,
-                 asymptote=1.0, slope=3.0, shift=15.0,
-                 scale_slow=521.0):
+                 lweight=0.636, scale_slow=1150.0,
+                 asymptote=1.0, slope=3.0, shift=15.0):
         """Temporal Sensitivity Model
 
         A model of temporal integration from retina pixels.
@@ -39,10 +38,6 @@ class TemporalModel(object):
             ms. Default: 4.525e-2 s.
         tau_slow : float
             Parameter for the slow leaky integrator. Default: 2.625e-2.
-        epsilon : float
-            Scaling factor for the effects of charge accumulation, has values
-            2-3 for threshold or 8-10 for suprathreshold. Default: 8.73.
-            If all the gammas are normalized goes to 8.617
         asymptote : float
             Asymptote of the logistic function in the stationary nonlinearity
             stage. Default: 14.
@@ -60,7 +55,6 @@ class TemporalModel(object):
         self.tau_inl = tau_inl
         self.tau_ca = tau_ca
         self.tau_slow = tau_slow
-        self.epsilon = epsilon
         self.asymptote = asymptote
         self.slope = slope
         self.shift = shift
@@ -127,36 +121,6 @@ class TemporalModel(object):
 
         # return self.tsample * conv[:, b1.shape[-1]]
         return conv[:b1.shape[-1]]
-
-    def charge_accumulation(self, b2):
-        """Charge accumulation step (Box 3)
-
-        Calculate the accumulated cathodic charge of a stimulus `b2`.
-        This accumulated charge is then convolved with a one-stage gamma
-        function of time constant `self.tau_ca`.
-
-        Parameters
-        ----------
-        b2 : array
-            Temporal signal to process, b2(r,t) in Nanduri et al. (2012).
-
-        Returns
-        -------
-        charge_accum : array
-            Accumulated charge over time.
-
-        Notes
-        -----
-        The output is not converted to a TimeSeries object for speedup.
-        """
-        # np.maximum seems to be faster than np.where
-        ca = self.tsample * np.cumsum(np.maximum(0, b2), axis=-1)
-
-        conv = fftconvolve(ca, self.gamma_ca, mode='full')
-
-        # Cut off the tail of the convolution to make the output signal match
-        # the dimensions of the input signal
-        return self.epsilon * self.tsample * conv[:b2.shape[-1]]
 
     def stationary_nonlinearity(self, b3):
         """Stationary nonlinearity (Box 4)
@@ -272,6 +236,7 @@ class TemporalModel(object):
 
 
 def pulse2percept(tm, ecs, retina, ptrain, rsample, dolayer,
+                  scale_charge=42.1,
                   engine='joblib', dojit=True, n_jobs=-1, tol=0.05):
     """
     From pulses (stimuli) to percepts (spatio-temporal)
@@ -281,8 +246,12 @@ def pulse2percept(tm, ecs, retina, ptrain, rsample, dolayer,
     tm : TemporalModel class instance.
     ecs : ndarray
     retina : Retina class instance.
-    stimuli : list
-    subsample_factor : float/int, optional
+    ptrain : list
+    rsample : float/int, optional
+    dolayer : str
+    scale_charge : float
+        Scaling factor applied to charge accumulation (used to be called
+        epsilon). Default: 42.1.
     dojit : bool, optional
     """
 
@@ -300,11 +269,18 @@ def pulse2percept(tm, ecs, retina, ptrain, rsample, dolayer,
                 idx_list.append([yy, xx])
 
     # pulse train for each electrode
-    for p in range(len(ptrain)):
-        ca = tm.tsample * np.cumsum(np.maximum(0, -ptrain[p].data))
+    for i, p in enumerate(ptrain):
+        ca = tm.tsample * np.cumsum(np.maximum(0, -p.data))
         tmp = fftconvolve(ca, tm.gamma_ca, mode='full')
-        conv_ca = tm.epsilon * tm.tsample * tmp[:ptrain[p].shape[-1]]
-        ptrain[p].data += conv_ca
+        conv_ca = scale_charge * tm.tsample * tmp[:p.shape[-1]]
+
+        # negative elements first
+        idx = np.where(p.data <= 0)[0]
+        ptrain[i].data[idx] = np.minimum(p.data[idx] + conv_ca[idx], 0)
+
+        # then positive elements
+        idx = np.where(p.data > 0)[0]
+        ptrain[i].data[idx] = np.maximum(p.data[idx] - conv_ca[idx], 0)
 
     ptrain_data = np.array([p.data for p in ptrain])
 
