@@ -64,24 +64,32 @@ class Electrode(object):
     Represent a circular, disc-like electrode.
     """
 
-    def __init__(self, r, x, y, h, ptype):
-        """
-        Initialize an electrode object
+    def __init__(self, etype, radius, x_center, y_center, height, name=None):
+        """Create an electrode on the retina
+
+        This function creates an electrode of type `etype` and places it
+        on the retina at location (`xs`, `ys`) in microns. The electrode has
+        radius `radius` (microns) and sits a distance `height` away from the
+        retinal surface.
+        The coordinate system is anchored around the fovea at (0, 0).
 
         Parameters
         ----------
-        r : float
+        etype : str
+            Electrode type, {'epiretinal', 'subretinal'}
+        radius : float
             The radius of the electrode (in microns).
-        x : float
-            The x coordinate of the electrode (in microns) from the fovea
-        y : float
+        x_center : float
+            The x coordinate of the electrode center (in microns) from the
+            fovea.
+        y_center : float
             The y location of the electrode (in microns) from the fovea
-        h : float
+        height : float
             The height of the electrode from the retinal surface
               epiretinal array - distance to the ganglion layer
              subretinal array - distance to the bipolar layer
-        ptype : str
-            Electrode type, {'epiretinal', 'subretinal'}
+        name : string
+            Electrode name
 
         Estimates of layer thickness based on:
         LoDuca et al. Am J. Ophthalmology 2011
@@ -103,39 +111,40 @@ class Electrode(object):
             Layer 3. 30.75
 
         We place our ganglion axon surface on the inner side of the nerve fiber
-        layer
-        We place our bipolar surface 1/2 way through the inner nuclear layer
-        So for an epiretinal array the bipolar layer is L1+L2+(.5*L3)
+        layer.
+        We place our bipolar surface 1/2 way through the inner nuclear layer.
+        So for an epiretinal array the bipolar layer is L1+L2+(.5*L3).
 
         """
-        assert r >= 0
-        assert h >= 0
+        assert radius >= 0
+        assert height >= 0
 
-        self.r = r
-        self.x = x
-        self.y = y
-        self.ptype = ptype
+        self.etype = etype
+        self.radius = radius
+        self.x_center = x_center
+        self.y_center = y_center
+        self.name = name
 
-        fovdist = np.sqrt(x**2 + y**2)
+        fovdist = np.sqrt(x_center ** 2 + y_center ** 2)
 
-        if ptype == 'epiretinal':
-            self.h_nfl = h
+        if etype == 'epiretinal':
+            self.h_nfl = height
             if fovdist <= 600:
-                self.h_inl = h + 71.5
+                self.h_inl = height + 71.5
             elif fovdist <= 1550:
-                self.h_inl = h + 139.75
+                self.h_inl = height + 139.75
             elif fovdist > 1550:
-                self.h_inl = h + 119.075
-        elif ptype == 'subretinal':
+                self.h_inl = height + 119.075
+        elif etype == 'subretinal':
             if fovdist <= 600:
-                self.h_inl = h + 23 / 2
-                self.h_nfl = h + 83
+                self.h_inl = height + 23 / 2
+                self.h_nfl = height + 83
             elif fovdist <= 1550:
-                self.h_inl = h + 37.5 / 2
-                self.h_nfl = h + 158.5
+                self.h_inl = height + 37.5 / 2
+                self.h_nfl = height + 158.5
             elif fovdist > 1550:
-                self.h_inl = h + 30.75 / 2
-                self.h_nfl = h + 141.45
+                self.h_inl = height + 30.75 / 2
+                self.h_nfl = height + 141.45
         else:
             e_s = "Acceptable values for `ptype` are: 'epiretinal', "
             e_s += "'subretinal'."
@@ -166,75 +175,143 @@ class Electrode(object):
             Humayun, and James D. Weiland (2008). IEEE Trans Biomed Eng 55.
 
         """
-        r = np.sqrt((xg - self.x) ** 2 + (yg - self.y) ** 2)
+        r = np.sqrt((xg - self.x_center) ** 2 + (yg - self.y_center) ** 2)
         # current values on the retina due to array being above the retinal
         # surface
         if 'NFL' in layer:  # nerve fiber layer, ganglion axons
             h = np.ones(r.shape) * self.h_nfl
             # actual distance from the electrode edge
-            d = ((r - self.r)**2 + self.h_nfl**2)**.5
+            d = ((r - self.radius)**2 + self.h_nfl**2)**.5
         elif 'INL' in layer:  # inner nuclear layer, containing the bipolars
             h = np.ones(r.shape) * self.h_inl
-            d = ((r - self.r)**2 + self.h_inl**2)**.5
+            d = ((r - self.radius)**2 + self.h_inl**2)**.5
         else:
             s = "Layer %s not found. Acceptable values for `layer` are " \
                 "'NFL' or 'INL'." % layer
             raise ValueError(s)
         cspread = (alpha / (alpha + h ** n))
-        cspread[r > self.r] = (alpha /
-                               (alpha + d[r > self.r] ** n))
+        cspread[r > self.radius] = (alpha /
+                                    (alpha + d[r > self.radius] ** n))
 
         return cspread
 
 
 class ElectrodeArray(object):
 
-    def __init__(self, radii, xs, ys, hs, ptype):
+    def __init__(self, etype, radii, xs, ys, hs, names=None):
         """Create an ElectrodeArray on the retina
 
-        This function creates an electrode array and places it on the retina.
-        Lists should specify, for each electrode, its size (`radii`),
-        location on the retina (`xs` and `ys`), and distance to the retina
-        (`hs`). The type of electrode array is specified by `ptype`.
+        This function creates an electrode array of type `etype` and places it
+        on the retina. Lists should specify, for each electrode, its size
+        (`radii`), location on the retina (`xs` and `ys`), distance to the
+        retina (height, `hs`), and a string identifier (`names`, optional).
+
+        Array location should be given in microns, where the fovea is located
+        at (0, 0).
+
+        Single electrodes in the array can be addressed by index (integer)
+        or name.
 
         Parameters
         ----------
+        etype : string
+            Electrode type, {'epiretinal', 'subretinal'}
         radii : array_like
             List of electrode radii.
         xs : array_like
-            List of x-coordinates for the center of the electrodes
+            List of x-coordinates for the center of the electrodes (microns).
         ys : array_like
-            List of y-coordinates for the center of the electrodes
+            List of y-coordinates for the center of the electrodes (microns).
         hs : array_like
             List of electrode heights (distance from the retinal surface)
-        ptype : string
-            Array type, {'epiretinal', 'subretinal'}
+        names : array_like, optional
+            List of names (string identifiers) for each eletrode.
+            Default: None.
 
         Examples
         --------
-        A single electrode with radius 100um, sitting at retinal location
-        (0, 0), 10um away from the retina, of type 'epiretinal':
+        A single epiretinal electrode called 'A1', with radius 100um, sitting
+        at retinal location (0, 0), 10um away from the retina:
         >>> from pulse2percept import electrode2currentmap as e2cm
-        >>> implant = e2cm.ElectrodeArray(100, 0, 0, 10, 'epiretinal')
+        >>> implant = e2cm.ElectrodeArray('epiretinal', 100, 0, 0, 10, 'A1')
 
         An array with two electrodes of size 100um, one sitting at
         (-100, -100), the other sitting at (0, 0), with 0 distance from the
         retina, of type 'subretinal':
-        >>> implant = e2cm.ElectrodeArray([100, 100], [-100, 0], [-100, 0],
-                                          [0, 0], 'subretinal')
+        >>> implant = e2cm.ElectrodeArray('subretinal', [100, 100], [-100, 0],
+                                          [-100, 0], [0, 0])
+
+        Get access to the second electrode in the array:
+        >>> my_electrode = implant[1]
+
+        Get access to the electrode with name 'A1' in the array:
+        >>> my_electrode = implant['A1']
 
         """
         # Make it so the constructor can accept either floats, lists, or
         # numpy arrays, and `zip` works regardless.
-        radii = np.array([radii]).flatten()
-        xs = np.array([xs]).flatten()
-        ys = np.array([ys]).flatten()
-        hs = np.array([hs]).flatten()
+        radii = np.array([radii], dtype=np.float32).flatten()
+        xs = np.array([xs], dtype=np.float32).flatten()
+        ys = np.array([ys], dtype=np.float32).flatten()
+        hs = np.array([hs], dtype=np.float32).flatten()
+        names = np.array([names], dtype=np.str).flatten()
         assert radii.size == xs.size == ys.size == hs.size
 
+        if names.size != radii.size:
+            # If not every electrode has a name, replace with None's
+            names = np.array([None] * radii.size)
+
+        self.num_electrodes = names.size
+        self.names = names
         self.electrodes = []
-        for r, x, y, h in zip(radii, xs, ys, hs):
-            self.electrodes.append(Electrode(r, x, y, h, ptype))
+        for r, x, y, h, n in zip(radii, xs, ys, hs, names):
+            self.electrodes.append(Electrode(etype, r, x, y, h, n))
+
+    def __getitem__(self, item):
+        """Return the electrode specified by `item`
+
+        Parameters
+        ----------
+        item : int|string
+            If `item` is an integer, returns the `item`-th electrode in the
+            array. If `item` is a string, returns the electrode with string
+            identifier `item`.
+        """
+        try:
+            # Is `item` an integer?
+            return self.electrodes[item]
+        except:
+            # If `item` is a valid string identifier, return valid index.
+            # Else return None
+            try:
+                return self.electrodes[self.get_index(item)]
+            except:
+                print("None")
+                return None
+
+    def get_index(self, name):
+        """Returns the index of an electrode called `name`
+
+        This function searches the electrode array for an electrode with
+        string identifier `name`. If found, the index of that electrode is
+        returned, else None.
+
+        Parameters
+        ----------
+        name : str
+            An electrode name (string identifier).
+
+        Returns
+        -------
+        A valid electrode index or None.
+        """
+        try:
+            # Is `name` a valid electrode name?
+            idx = self.names.tolist().index(name)
+            return idx
+        except:
+            # Else: `name` could not be found.
+            return None
 
 
 class ArgusI(ElectrodeArray):
@@ -253,6 +330,9 @@ class ArgusI(ElectrodeArray):
         |       A3 B3 C3 D3   diameters are:    260 520 260 520
         -->x    A4 B4 C4 D4                     520 260 520 260
 
+        Electrode order is: A1, A2, A3, A4, B1, B2, ..., D4.
+        An electrode can be addressed by index (integer) or name.
+
         Parameters
         ----------
         x_center : float
@@ -266,11 +346,25 @@ class ArgusI(ElectrodeArray):
             Rotation angle of the array (rad). Positive values denote
             counter-clock-wise rotations.
 
+        Examples
+        --------
+        Create an ArgusI array centered on the fovea, at 100um distance from
+        the retina:
+        >>> from pulse2percept import electrode2currentmap as e2cm
+        >>> argus = e2cm.ArgusI(x_center=0, y_center=0, h=100, rot=0)
+
+        Get access to electrode 'B1':
+        >>> my_electrode = argus['B1']
+
         """
         # Alternating electrode sizes, arranged in checkerboard pattern
         r_arr = np.array([260, 520, 260, 520]) / 2.0
         r_arr = np.concatenate((r_arr, r_arr[::-1], r_arr, r_arr[::-1]),
                                axis=0)
+
+        # Standard Argus I names: A1, A2, A3, A4, B1, B2, ...
+        # Shortcut: Use `chr` to go from int to char
+        names = [chr(i) + str(j) for i in range(65, 69) for j in range(1, 5)]
 
         if isinstance(h, list):
             h_arr = np.array(h).flatten()
@@ -300,9 +394,11 @@ class ArgusI(ElectrodeArray):
         x_arr += x_center
         y_arr += y_center
 
+        self.num_electrodes = len(names)
+        self.names = np.array(names, dtype=np.str)
         self.electrodes = []
-        for r, x, y, h in zip(r_arr, x_arr, y_arr, h_arr):
-            self.electrodes.append(Electrode(r, x, y, h, 'epiretinal'))
+        for r, x, y, h, n in zip(r_arr, x_arr, y_arr, h_arr, names):
+            self.electrodes.append(Electrode('epiretinal', r, x, y, h, n))
 
 
 def receptive_field(electrode, xg, yg, size):
@@ -551,10 +647,15 @@ class Retina(object):
             % (loadpath, sampling, axon_lambda, rot / np.pi * 180,
                xhi - xlo, yhi - ylo)
 
+        # Bool whether we need to create a new retina
+        need_new_retina = True
+
         # Check if such a file already exists. If so, load parameters and
         # make sure they are the same as specified above. Else, create new.
         if exists(filename):
+            need_new_retina = False
             axon_map = np.load(filename)
+
             # Verify that the file was created with a consistent grid:
             axon_id = axon_map['axon_id']
             axon_weight = axon_map['axon_weight']
@@ -564,27 +665,34 @@ class Retina(object):
             yhi_am = axon_map['yhi']
             sampling_am = axon_map['sampling']
             axon_lambda_am = axon_map['axon_lambda']
-            assert xlo == xlo_am
-            assert xhi == xhi_am
-            assert ylo == ylo_am
-            assert yhi == yhi_am
-            assert sampling_am == sampling
-            assert axon_lambda_am == axon_lambda
 
             if 'jan_x' in axon_map and 'jan_y' in axon_map:
                 jan_x = axon_map['jan_x']
                 jan_y = axon_map['jan_y']
             else:
-                jan_x = None
-                jan_y = None
+                jan_x = jan_y = None
+
+            # If any of the dimensions don't match, we need a new retina
+            need_new_retina |= xlo != xlo_am
+            need_new_retina |= xhi != xhi_am
+            need_new_retina |= ylo != ylo_am
+            need_new_retina |= yhi != yhi_am
+            need_new_retina |= sampling != sampling_am
+            need_new_retina |= axon_lambda != axon_lambda_am
 
             if 'rot' in axon_map:
                 rot_am = axon_map['rot']
-                assert rot == rot_am
+                need_new_retina |= rot != rot_am
             else:
-                assert rot == 0
-        else:
-            print("Can't find file '%s', generating..." % filename)
+                # Backwards compatibility for older retina object files that
+                # did not have `rot`
+                need_new_retina |= rot != 0
+
+        # At this point we know whether we need to generate a new retina:
+        if need_new_retina:
+            info_str = "File '%s' doesn't exist " % filename
+            info_str += "or has outdated parameter values, generating..."
+            print(info_str)
             jan_x, jan_y = oyster.jansonius(rot=rot)
             axon_id, axon_weight = oyster.makeAxonMap(micron2deg(self.gridx),
                                                       micron2deg(self.gridy),
@@ -723,4 +831,7 @@ def distance2threshold(el_dist):
     slope = 1.5863261730600329
     intercept = -4.2496180725811659
 
-    return np.exp(np.log(el_dist) * slope + intercept)
+    if el_dist > 0:
+        return np.exp(np.log(el_dist) * slope + intercept)
+    else:
+        return np.exp(intercept)

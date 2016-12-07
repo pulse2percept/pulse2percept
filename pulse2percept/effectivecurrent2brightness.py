@@ -235,16 +235,17 @@ class TemporalModel(object):
         return utils.TimeSeries(self.tsample, resp)
 
 
-def pulse2percept(tm, ecs, retina, ptrain, rsample, dolayer,
-                  scale_charge=42.1,
-                  engine='joblib', dojit=True, n_jobs=-1, tol=0.05):
+# def pulse2percept(tm, implant, retina, ptrain, rsample, dolayer,
+def pulse2percept(ptrain, implant, dolayer, retina, tm=None,
+                  rsample=30, scale_charge=42.1, tol=0.05, use_ecs=True,
+                  engine='joblib', dojit=True, n_jobs=-1):
     """
     From pulses (stimuli) to percepts (spatio-temporal)
 
     Parameters
     ----------
     tm : TemporalModel class instance.
-    ecs : ndarray
+    implant : ElectrodeArray
     retina : Retina class instance.
     ptrain : list
     rsample : float/int, optional
@@ -254,19 +255,8 @@ def pulse2percept(tm, ecs, retina, ptrain, rsample, dolayer,
         epsilon). Default: 42.1.
     dojit : bool, optional
     """
-
-    # `ecs_list` is a pixel by `n` list where `n` is the number of layers
-    # being simulated. Each value in `ecs_list` is the current contributed
-    # by each electrode for that spatial location
-    ecs_list = []
-    idx_list = []
-    for xx in range(retina.gridx.shape[1]):
-        for yy in range(retina.gridx.shape[0]):
-            if np.all(ecs[yy, xx] < tol):
-                pass
-            else:
-                ecs_list.append(ecs[yy, xx])
-                idx_list.append([yy, xx])
+    if tm is None:
+        tm = TemporalModel(ptrain[0].tsample)
 
     # pulse train for each electrode
     for i, p in enumerate(ptrain):
@@ -281,8 +271,26 @@ def pulse2percept(tm, ecs, retina, ptrain, rsample, dolayer,
         # then positive elements
         idx = np.where(p.data > 0)[0]
         ptrain[i].data[idx] = np.maximum(p.data[idx] - conv_ca[idx], 0)
-
     ptrain_data = np.array([p.data for p in ptrain])
+
+    # Derive the effective current spread
+    if use_ecs:
+        ecs, _ = retina.electrode_ecs(implant)
+    else:
+        _, ecs = retina.electrode_ecs(implant)
+
+    # `ecs_list` is a pixel by `n` list where `n` is the number of layers
+    # being simulated. Each value in `ecs_list` is the current contributed
+    # by each electrode for that spatial location
+    ecs_list = []
+    idx_list = []
+    for xx in range(retina.gridx.shape[1]):
+        for yy in range(retina.gridx.shape[0]):
+            if np.all(ecs[yy, xx] < tol):
+                pass
+            else:
+                ecs_list.append(ecs[yy, xx])
+                idx_list.append([yy, xx])
 
     sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs, engine=engine,
                            func_args=[ptrain_data, tm, rsample,
