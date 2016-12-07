@@ -111,6 +111,63 @@ def test_ArgusI():
     npt.assert_equal(argus['A2'], argus[4])
 
 
+def test_ArgusII():
+    # Create an ArgusII and make sure location is correct
+    for htype in ['float', 'list']:
+        for x in [0, -100, 200]:
+            for y in [0, -200, 400]:
+                for r in [0, -30, 45, 60, -90]:
+                    # Height `h` can either be a float or a list
+                    if htype == 'float':
+                        h = 100
+                    else:
+                        h = np.ones(60) * 20
+
+                    # Convert rotation angle to rad
+                    rot = r * np.pi / 180
+                    argus = e2cm.ArgusII(x, y, h=h, rot=rot)
+
+                    # Coordinates of first electrode
+                    xy = np.array([-2362.5, -1312.5]).T
+
+                    # Rotate
+                    R = np.array([np.cos(rot), np.sin(rot),
+                                  -np.sin(rot), np.cos(rot)]).reshape((2, 2))
+                    xy = np.matmul(R, xy)
+
+                    # Then off-set: Make sure first electrode is placed
+                    # correctly
+                    npt.assert_almost_equal(argus['A1'].x_center,
+                                            xy[0] + x)
+                    npt.assert_almost_equal(argus['A1'].y_center,
+                                            xy[1] + y)
+
+                    # Make sure array center is still (x,y)
+                    y_center = argus['F1'].y_center + \
+                        (argus['A10'].y_center - argus['F1'].y_center) / 2
+                    npt.assert_almost_equal(y_center, y)
+                    x_center = argus['A1'].x_center + \
+                        (argus['F10'].x_center - argus['A1'].x_center) / 2
+                    npt.assert_almost_equal(x_center, x)
+
+    # `h` must have the right dimensions
+    npt.assert_raises(ValueError, e2cm.ArgusII, -100, 10, h=np.zeros(5))
+
+    # Indexing must work for both integers and electrode names
+    argus = e2cm.ArgusII()
+    for idx, name in zip(range(60), argus.names):
+        npt.assert_equal(argus[idx], argus[name])
+        npt.assert_equal(argus[idx].name, name)
+    npt.assert_equal(argus[60], None)
+    npt.assert_equal(argus["unlikely name for an electrode"], None)
+
+    # Indexing must have the right order
+    npt.assert_equal(argus.get_index('A2'), 1)
+    npt.assert_equal(argus['A2'], argus[1])
+    npt.assert_equal(argus.get_index('B1'), 10)
+    npt.assert_equal(argus['B1'], argus[10])
+
+
 def test_TimeSeries():
     data_orig = np.zeros((10, 10, 1000))
     ts1 = e2cm.TimeSeries(1, data_orig)

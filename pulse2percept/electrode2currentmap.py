@@ -405,6 +405,96 @@ class ArgusI(ElectrodeArray):
             self.electrodes.append(Electrode(self.etype, r, x, y, h, n))
 
 
+class ArgusII(ElectrodeArray):
+
+    def __init__(self, x_center=0, y_center=0, h=0, rot=0 * np.pi / 180):
+        """Create an ArgusII array on the retina
+
+        This function creates an ArgusII array and places it on the retina
+        such that the center of the array is located at
+        [`x_center`, `y_center`] (microns) and the array is rotated by
+        rotation angle `rot` (radians).
+
+        The array is oriented upright in the visual field, such that an
+        array with center (0,0) has the top three rows lie in the lower
+        retina (upper visual field), as shown below:
+                A1 A2 A3 A4 A5 A6 A7 A8 A9 A10
+        y       B1 B2 B3 B4 B5 B6 B7 B8 B9 B10  
+        ^       C1 C2 C3 C4 C5 C6 C7 C8 C9 C10
+        |       D1 D2 D3 D4 D5 D6 D7 D8 D9 D10
+        -->x    E1 E2 E3 E4 E5 E6 E7 E8 E9 E10
+                F1 F2 F3 F4 F5 F6 F7 F8 F9 F10
+
+        Electrode order is: A1, A2, ..., A10, B1, B2, ..., F10.
+        An electrode can be addressed by index (integer) or name.
+
+        Parameters
+        ----------
+        x_center : float
+            x coordinate of the array center (um)
+        y_center : float
+            y coordinate of the array center (um)
+        h : float || array_like
+            Distance of the array to the retinal surface (um). Either a list
+            with 60 entries or a scalar.
+        rot : float
+            Rotation angle of the array (rad). Positive values denote
+            counter-clock-wise rotations.
+
+        Examples
+        --------
+        Create an ArgusII array centered on the fovea, at 100um distance from
+        the retina:
+        >>> from pulse2percept import electrode2currentmap as e2cm
+        >>> argus = e2cm.ArgusII(x_center=0, y_center=0, h=100, rot=0)
+
+        Get access to electrode 'E7':
+        >>> my_electrode = argus['E7']
+
+        """
+        # Electrodes are 200um in diameter
+        r_arr = np.ones(60) * 100.0
+
+        # Standard ArgusII names: A1, A2, ..., A10, B1, ..., F10
+        names = [chr(i) + str(j) for i in range(65, 71) for j in range(1, 11)]
+
+        if isinstance(h, list):
+            h_arr = np.array(h).flatten()
+            if h_arr.size != len(r_arr):
+                e_s = "If `h` is a list, it must have 60 entries."
+                raise ValueError(e_s)
+        else:
+            # All electrodes have the same height
+            h_arr = np.ones_like(r_arr) * h
+
+        # Equally spaced electrodes
+        e_spacing = 525  # um
+        x_arr = np.arange(10) * e_spacing - 4.5 * e_spacing
+        y_arr = np.arange(6) * e_spacing - 2.5 * e_spacing
+        x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
+
+        # Rotation matrix
+        R = np.array([np.cos(rot), np.sin(rot),
+                      -np.sin(rot), np.cos(rot)]).reshape((2, 2))
+
+        # Rotate the array
+        xy = np.vstack((x_arr.flatten(), y_arr.flatten()))
+        xy = np.matmul(R, xy)
+        x_arr = xy[0, :]
+        y_arr = xy[1, :]
+
+        # Apply offset
+        x_arr += x_center
+        y_arr += y_center
+
+        self.etype = 'epiretinal'
+        self.num_electrodes = len(names)
+        self.names = np.array(names, dtype=np.str)
+        self.electrodes = []
+        for r, x, y, h, n in zip(r_arr, x_arr, y_arr, h_arr, names):
+            self.electrodes.append(Electrode(self.etype, r, x, y, h, n))
+
+
 def receptive_field(electrode, xg, yg, size):
 
     # creates a map of the retina for each electrode
