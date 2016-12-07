@@ -110,3 +110,51 @@ def test_debalthasar_threshold():
 
     # Make sure that all "threshold" currents give roughly the same brightness
     npt.assert_almost_equal(np.var(bright), 0, decimal=1)
+
+
+def test_parse_pulse_trains():
+    # Specify pulse trains in a number of different ways and make sure they
+    # are all identical after parsing
+
+    # Create some implants
+    argus = e2cm.ArgusI()
+    simple = e2cm.ElectrodeArray('subretinal', 0, 0, 0, 0)
+
+    pt_zero = TimeSeries(1, np.zeros(1000))
+    pt_nonzero = TimeSeries(1, np.random.rand(1000))
+
+    # Test 1
+    # ------
+    # Specify wrong number of pulse trains
+    npt.assert_raises(ValueError, ec2b.parse_pulse_trains, pt_nonzero, argus)
+    npt.assert_raises(ValueError, ec2b.parse_pulse_trains, [pt_nonzero], argus)
+    npt.assert_raises(ValueError, ec2b.parse_pulse_trains,
+                      [pt_nonzero] * (argus.num_electrodes - 1), argus)
+    npt.assert_raises(ValueError, ec2b.parse_pulse_trains, [pt_nonzero] * 2,
+                      simple)
+
+    # Test 2
+    # ------
+    # Send non-zero pulse train to specific electrode
+    el_name = 'B3'
+    el_idx = argus.get_index(el_name)
+
+    # Specify a list of 16 pulse trains (one for each electrode)
+    pt0_in = [pt_zero] * argus.num_electrodes
+    pt0_in[el_idx] = pt_nonzero
+    pt0_out = ec2b.parse_pulse_trains(pt0_in, argus)
+
+    # Specify a dict with non-zero pulse trains
+    pt1_in = {el_name: pt_nonzero}
+    pt1_out = ec2b.parse_pulse_trains(pt1_in, argus)
+
+    # Make sure the two give the same result
+    for p0, p1 in zip(pt0_out, pt1_out):
+        npt.assert_equal(p0, p1)
+
+    # Test 3
+    # ------
+    # Smoke testing
+    ec2b.parse_pulse_trains([pt_zero] * argus.num_electrodes, argus)
+    ec2b.parse_pulse_trains(pt_zero, simple)
+    ec2b.parse_pulse_trains([pt_zero], simple)

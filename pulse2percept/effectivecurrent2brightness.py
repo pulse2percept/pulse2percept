@@ -236,42 +236,91 @@ class TemporalModel(object):
 
 
 # def pulse2percept(tm, implant, retina, ptrain, rsample, dolayer,
-def pulse2percept(ptrain, implant, dolayer, retina, tm=None,
+def pulse2percept(stim, implant, dolayer, retina=None, tm=None,
                   rsample=30, scale_charge=42.1, tol=0.05, use_ecs=True,
                   engine='joblib', dojit=True, n_jobs=-1):
-    """
-    From pulses (stimuli) to percepts (spatio-temporal)
+    """Transforms an input stimulus to a percept
+
+    This function passes an input stimulus `stim` to a retinal `implant`,
+    which is placed on a simulated `retina`, and produces a predicted percept
+    by means of the temporal model `tm`.
 
     Parameters
     ----------
-    tm : TemporalModel class instance.
-    implant : ElectrodeArray
-    retina : Retina class instance.
-    ptrain : list
-    rsample : float/int, optional
+    stim : utils.TimeSeries|list|dict
+        There are several ways to specify an input stimulus:
+        - For a single-electrode array, pass a single pulse train; i.e., a
+          single utils.TimeSeries object.
+        - For a multi-electrode array, pass a list of pulse trains; i.e., one
+          pulse train per electrode.
+        - For a multi-electrode array, specify all electrodes that should
+          receive non-zero pulse trains by name.
+    implant : e2cm.ElectrodeArray
+        An ElectrodeArray object that describes the implant.
     dolayer : str
+        Which retinal layer to simulate:
+        - 'NFL': nerve fiber layer (to be used with epiretinal implants)
+        - 'INL': inner nuclear layer (to be used with subretinal implants)
+    retina : e2cm.Retina
+        A Retina object specyfing the geometry of the retina.
+    tm : ec2b.TemporalModel
+        A model of temporal sensitivity.
+    rsample : int
     scale_charge : float
         Scaling factor applied to charge accumulation (used to be called
         epsilon). Default: 42.1.
-    dojit : bool, optional
+    tol : float
+    use_ecs : bool
+    engine : str
+    dojit : bool
+    n_jobs : int
+
+    Returns
+    -------
+    A brightness movie depicting the predicted percept, running at `rsample`
+    frames per second.
+
+    Examples
+    --------
+    Stimulate a single-electrode array:
+    >>> implant = e2cm.ElectrodeArray('subretinal', 0, 0, 0, 0)
+    >>> stim = e2cm.Psycho2Pulsetrain(tsample=5e-6, freq=50, amp=20)
+    >>> ec2b.pulse2percept(stim, implant)
+
+    Stimulate a single electrode ('C3') of an Argus I array centered on the
+    fovea:
+    >>> implant = e2cm.ArgusI()
+    >>> stim = {'C3': e2cm.Psycho2Pulsetrain(tsample=5e-6, freq=50, amp=20)}
+    >>> ec2b.pulse2percept(stim, implant)
+
+
+
     """
+    # Parse `stim` (either single pulse train or a list/dict of pulse trains),
+    # and generate a list of pulse trains, one for each electrode
+    pt_list = parse_pulse_trains(stim, implant)
+
+    # Apply charge accumulation
+    for i, p in enumerate(pt_list):
+        ca = tm.tsample * np.cumsum(np.maximum(0, -p))
+        tmp = fftconvolve(ca, tm.gamma_ca, mode='full')
+        conv_ca = scale_charge * tm.tsample * tmp[:p.size]
+
+        # negative elements first
+        idx = np.where(p <= 0)[0]
+        pt_list[i][idx] = np.minimum(p[idx] + conv_ca[idx], 0)
+
+        # then positive elements
+        idx = np.where(p > 0)[0]
+        pt_list[i][idx] = np.maximum(p[idx] - conv_ca[idx], 0)
+
+    # Generate a standard temporal model if necessary
     if tm is None:
         tm = TemporalModel(ptrain[0].tsample)
 
-    # pulse train for each electrode
-    for i, p in enumerate(ptrain):
-        ca = tm.tsample * np.cumsum(np.maximum(0, -p.data))
-        tmp = fftconvolve(ca, tm.gamma_ca, mode='full')
-        conv_ca = scale_charge * tm.tsample * tmp[:p.shape[-1]]
-
-        # negative elements first
-        idx = np.where(p.data <= 0)[0]
-        ptrain[i].data[idx] = np.minimum(p.data[idx] + conv_ca[idx], 0)
-
-        # then positive elements
-        idx = np.where(p.data > 0)[0]
-        ptrain[i].data[idx] = np.maximum(p.data[idx] - conv_ca[idx], 0)
-    ptrain_data = np.array([p.data for p in ptrain])
+    # Generate a retina if necessary
+    if retina is None:
+        retina = e2cm.Retina()
 
     # Derive the effective current spread
     if use_ecs:
@@ -293,21 +342,75 @@ def pulse2percept(ptrain, implant, dolayer, retina, tm=None,
                 idx_list.append([yy, xx])
 
     sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs, engine=engine,
-                           func_args=[ptrain_data, tm, rsample,
-                                      dolayer, dojit])
+                           func_args=[pt_list, tm, rsample, dolayer, dojit])
     bm = np.zeros(retina.gridx.shape + (sr_list[0].data.shape[-1], ))
     idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
     bm[idxer] = [sr.data for sr in sr_list]
     return utils.TimeSeries(sr_list[0].tsample, bm)
 
 
-def calc_pixel(ecs_item, ptrain_data, tm, resample, dolayer,
+def calc_pixel(ecs_item, pt, tm, resample, dolayer,
                dojit=False):
-    ecm = e2cm.ecm(ecs_item, ptrain_data, tm.tsample)
+    ecm = e2cm.ecm(ecs_item, pt, tm.tsample)
     # converts the current map to one that includes axon streaks
     sr = tm.model_cascade(ecm, dolayer, dojit=dojit)
     sr.resample(resample)
     return sr
+
+
+def parse_pulse_trains(stim, implant):
+    """Parse input stimulus and convert to list of pulse trains
+
+    Parameters
+    ----------
+    stim : utils.TimeSeries|list|dict
+        There are several ways to specify an input stimulus:
+        * For a single-electrode array, pass a single pulse train; i.e., a
+          single utils.TimeSeries object.
+        * For a multi-electrode array, pass a list of pulse trains; i.e., one
+          pulse train per electrode.
+        * For a multi-electrode array, specify all electrodes that should
+          receive non-zero pulse trains by name.
+    implant : e2cm.ElectrodeArray
+        An ElectrodeArray object that describes the implant.
+
+    Returns
+    -------
+    A list of pulse trains; one pulse train per electrode.
+    """
+    # Parse input stimulus
+    if isinstance(stim, utils.TimeSeries):
+        # `stim` is a single object: This is only allowed if the implant
+        # has only one electrode
+        if implant.num_electrodes > 1:
+            e_s = "More than 1 electrode given, use a list of pulse trains"
+            raise ValueError(e_s)
+        pt = [stim.data]
+    elif isinstance(stim, dict):
+        # `stim` is a dictionary: Look up electrode names and assign pulse
+        # trains, fill the rest with zeros
+
+        # Get right size from first dict element, then generate all zeros
+        idx0 = list(stim.keys())[0]
+        pt = [np.zeros_like(stim[idx0].data)] * implant.num_electrodes
+
+        # Iterate over dictionary and assign non-zero pulse trains to
+        # corresponding electrodes
+        for key, value in stim.items():
+            el_idx = implant.get_index(key)
+            if el_idx is not None:
+                pt[el_idx] = value.data
+            else:
+                e_s = "Could not find electrode with name '%s'" % key
+                raise ValueError(e_s)
+    else:
+        # Else, `stim` must be a list of pulse trains, one for each electrode
+        if len(stim) != implant.num_electrodes:
+            e_s = "Number of pulse trains must match number of electrodes"
+            raise ValueError(e_s)
+        pt = [s.data for s in stim]
+
+    return np.array(pt)
 
 
 def get_brightest_frame(resp):
