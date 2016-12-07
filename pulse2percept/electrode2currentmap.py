@@ -261,6 +261,7 @@ class ElectrodeArray(object):
             # If not every electrode has a name, replace with None's
             names = np.array([None] * radii.size)
 
+        self.etype = etype
         self.num_electrodes = names.size
         self.names = names
         self.electrodes = []
@@ -324,13 +325,15 @@ class ArgusI(ElectrodeArray):
         [`x_center`, `y_center`] (microns) and the array is rotated by
         rotation angle `rot` (radians).
 
-        The array is oriented as shown in Fig. 1 of Horsager et al. (2009):
+        The array is oriented in the visual field as shown in Fig. 1 of
+        Horsager et al. (2009); that is, if placed in (0,0), the top two
+        rows will lie in the lower retina (upper visual field):
         y       A1 B1 C1 D1                     260 520 260 520
         ^       A2 B2 C2 D2   where electrode   520 260 520 260
         |       A3 B3 C3 D3   diameters are:    260 520 260 520
         -->x    A4 B4 C4 D4                     520 260 520 260
 
-        Electrode order is: A1, A2, A3, A4, B1, B2, ..., D4.
+        Electrode order is: A1, B1, C1, D1, A2, B2, ..., D4.
         An electrode can be addressed by index (integer) or name.
 
         Parameters
@@ -362,9 +365,9 @@ class ArgusI(ElectrodeArray):
         r_arr = np.concatenate((r_arr, r_arr[::-1], r_arr, r_arr[::-1]),
                                axis=0)
 
-        # Standard Argus I names: A1, A2, A3, A4, B1, B2, ...
+        # Standard Argus I names: A1, B1, C1, D1, A1, B2, ..., D4
         # Shortcut: Use `chr` to go from int to char
-        names = [chr(i) + str(j) for i in range(65, 69) for j in range(1, 5)]
+        names = [chr(i) + str(j) for j in range(1, 5) for i in range(65, 69)]
 
         if isinstance(h, list):
             h_arr = np.array(h).flatten()
@@ -394,11 +397,12 @@ class ArgusI(ElectrodeArray):
         x_arr += x_center
         y_arr += y_center
 
+        self.etype = 'epiretinal'
         self.num_electrodes = len(names)
         self.names = np.array(names, dtype=np.str)
         self.electrodes = []
         for r, x, y, h, n in zip(r_arr, x_arr, y_arr, h_arr, names):
-            self.electrodes.append(Electrode('epiretinal', r, x, y, h, n))
+            self.electrodes.append(Electrode(self.etype, r, x, y, h, n))
 
 
 def receptive_field(electrode, xg, yg, size):

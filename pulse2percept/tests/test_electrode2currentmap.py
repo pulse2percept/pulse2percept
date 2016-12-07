@@ -80,10 +80,18 @@ def test_ArgusI():
 
                     # Then off-set: Make sure first electrode is placed
                     # correctly
-                    npt.assert_almost_equal(argus.electrodes[0].x_center,
+                    npt.assert_almost_equal(argus['A1'].x_center,
                                             xy[0] + x)
-                    npt.assert_almost_equal(argus.electrodes[0].y_center,
+                    npt.assert_almost_equal(argus['A1'].y_center,
                                             xy[1] + y)
+
+                    # Make sure array center is still (x,y)
+                    y_center = argus['D1'].y_center + \
+                        (argus['A4'].y_center - argus['D1'].y_center) / 2
+                    npt.assert_almost_equal(y_center, y)
+                    x_center = argus['A1'].x_center + \
+                        (argus['D4'].x_center - argus['A1'].x_center) / 2
+                    npt.assert_almost_equal(x_center, x)
 
     # `h` must have the right dimensions
     npt.assert_raises(ValueError, e2cm.ArgusI, -100, 10, h=np.zeros(5))
@@ -95,6 +103,12 @@ def test_ArgusI():
         npt.assert_equal(argus[idx].name, name)
     npt.assert_equal(argus[16], None)
     npt.assert_equal(argus["unlikely name for an electrode"], None)
+
+    # Indexing must have the right order
+    npt.assert_equal(argus.get_index('B1'), 1)
+    npt.assert_equal(argus['B1'], argus[1])
+    npt.assert_equal(argus.get_index('A2'), 4)
+    npt.assert_equal(argus['A2'], argus[4])
 
 
 def test_TimeSeries():

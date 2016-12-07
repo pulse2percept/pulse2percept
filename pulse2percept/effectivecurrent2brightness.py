@@ -235,8 +235,7 @@ class TemporalModel(object):
         return utils.TimeSeries(self.tsample, resp)
 
 
-# def pulse2percept(tm, implant, retina, ptrain, rsample, dolayer,
-def pulse2percept(stim, implant, dolayer, retina=None, tm=None,
+def pulse2percept(stim, implant, tm=None, retina=None,
                   rsample=30, scale_charge=42.1, tol=0.05, use_ecs=True,
                   engine='joblib', dojit=True, n_jobs=-1):
     """Transforms an input stimulus to a percept
@@ -257,14 +256,10 @@ def pulse2percept(stim, implant, dolayer, retina=None, tm=None,
           receive non-zero pulse trains by name.
     implant : e2cm.ElectrodeArray
         An ElectrodeArray object that describes the implant.
-    dolayer : str
-        Which retinal layer to simulate:
-        - 'NFL': nerve fiber layer (to be used with epiretinal implants)
-        - 'INL': inner nuclear layer (to be used with subretinal implants)
-    retina : e2cm.Retina
-        A Retina object specyfing the geometry of the retina.
     tm : ec2b.TemporalModel
         A model of temporal sensitivity.
+    retina : e2cm.Retina
+        A Retina object specyfing the geometry of the retina.
     rsample : int
     scale_charge : float
         Scaling factor applied to charge accumulation (used to be called
@@ -292,10 +287,11 @@ def pulse2percept(stim, implant, dolayer, retina=None, tm=None,
     >>> implant = e2cm.ArgusI()
     >>> stim = {'C3': e2cm.Psycho2Pulsetrain(tsample=5e-6, freq=50, amp=20)}
     >>> ec2b.pulse2percept(stim, implant)
-
-
-
     """
+    # Check type to avoid backwards compatibility issues
+    if not isinstance(implant, e2cm.ElectrodeArray):
+        raise TypeError("`implant` must be of type ec2b.ElectrodeArray")
+
     # Parse `stim` (either single pulse train or a list/dict of pulse trains),
     # and generate a list of pulse trains, one for each electrode
     pt_list = parse_pulse_trains(stim, implant)
@@ -303,10 +299,23 @@ def pulse2percept(stim, implant, dolayer, retina=None, tm=None,
     # Generate a standard temporal model if necessary
     if tm is None:
         tm = TemporalModel(pt_list[0].tsample)
+    elif not isinstance(tm, TemporalModel):
+        raise TypeError("`tm` must be of type ec2b.TemporalModel")
 
     # Generate a retina if necessary
     if retina is None:
-        retina = e2cm.Retina()
+        # Make sure implant fits on retina
+        round_to = 500  # round to nearest (microns)
+        cspread = 500  # expected current spread (microns)
+        xs = [a.x_center for a in implant]
+        ys = [a.y_center for a in implant]
+        xlo = np.floor((np.min(xs) - cspread) / round_to) * round_to
+        xhi = np.ceil((np.max(xs) + cspread) / round_to) * round_to
+        ylo = np.floor((np.min(ys) - cspread) / round_to) * round_to
+        yhi = np.ceil((np.max(ys) + cspread) / round_to) * round_to
+        retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi)
+    elif not isinstance(retina, e2cm.Retina):
+        raise TypeError("`retina` object must be of type e2cm.Retina")
 
     # Derive the effective current spread
     if use_ecs:
@@ -341,6 +350,15 @@ def pulse2percept(stim, implant, dolayer, retina=None, tm=None,
         idx = np.where(p.data > 0)[0]
         pt_list[i].data[idx] = np.maximum(p.data[idx] - conv_ca[idx], 0)
     pt_arr = np.array([p.data for p in pt_list])
+
+    # Which layer to simulate is given by implant type
+    if implant.etype == 'epiretinal':
+        dolayer = 'NFL'  # nerve fiber layer
+    elif implant.etype == 'subretinal':
+        dolayer = 'INL'  # inner nuclear layer
+    else:
+        e_s = "Supported electrode types are 'epiretinal', 'subretinal'"
+        raise ValueError(e_s)
 
     sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs, engine=engine,
                            func_args=[pt_arr, tm, rsample, dolayer, dojit])

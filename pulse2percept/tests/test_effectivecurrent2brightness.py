@@ -5,6 +5,32 @@ import pulse2percept.effectivecurrent2brightness as ec2b
 from pulse2percept.utils import TimeSeries
 
 
+def test_pulse2percept():
+    # All ways to break the function call
+    retina = e2cm.Retina(xlo=0, xhi=0, ylo=0, yhi=0)
+    implant = e2cm.ElectrodeArray('epiretinal', 0, 0, 0, 0)
+    electrode = e2cm.Electrode('epiretinal', 0, 0, 0, 0)
+    pt = TimeSeries(0.001, np.ones(1000))
+    tm = ec2b.TemporalModel()
+
+    # Ways to break the function call (not including invalid pulse
+    # trains, which are tested further down)
+    fl_dummy = 10.2
+    engine = 'serial'
+    dojit = False
+    npt.assert_raises(TypeError, ec2b.pulse2percept, pt, implant, retina,
+                      fl_dummy, fl_dummy, fl_dummy, True, engine, dojit)
+    npt.assert_raises(TypeError, ec2b.pulse2percept, pt, electrode,
+                      tm, retina, fl_dummy, fl_dummy, fl_dummy, True,
+                      engine, dojit)
+    npt.assert_raises(TypeError, ec2b.pulse2percept, pt, implant,
+                      retina, retina, fl_dummy, fl_dummy, fl_dummy,
+                      True, engine, dojit)
+
+    # Smoke testing
+    ec2b.pulse2percept(pt, implant, tm, retina, engine=engine, dojit=dojit)
+
+
 def test_brightness_movie():
     sampling = 1
     xlo = -2
@@ -26,7 +52,7 @@ def test_brightness_movie():
     rs = int(1 / (fps * s1.tsample))
 
     # Smoke testing, feed the same stimulus through both electrodes:
-    resp = ec2b.pulse2percept([s1, s1], implant, 'INL', retina, tm, rs,
+    resp = ec2b.pulse2percept([s1, s1], implant, tm, retina, rs,
                               engine='serial', dojit=True, tol=1e-6)
 
     fps = 30.0
@@ -53,7 +79,7 @@ def test_brightness_movie():
 
     rs = int(1 / (fps * m2pt.tsample))
     # Smoke testing, feed the same stimulus through both electrodes:
-    resp = ec2b.pulse2percept([m2pt, m2pt], implant, 'INL', retina, tm, rs,
+    resp = ec2b.pulse2percept([m2pt, m2pt], implant, tm, retina, rs,
                               engine='serial', dojit=True, tol=1e-6)
 
     npt.assert_almost_equal(resp.tsample,
@@ -89,7 +115,7 @@ def test_debalthasar_threshold():
     tm = ec2b.TemporalModel(tsample)
 
     # Single-pixel retina
-    retina = e2cm.Retina(sampling=50, xlo=0, xhi=0, ylo=0, yhi=0)
+    retina = e2cm.Retina(xlo=0, xhi=0, ylo=0, yhi=0)
 
     bright = []
     for dist in np.linspace(150, 1000, 10):
@@ -101,7 +127,7 @@ def test_debalthasar_threshold():
         pt = get_baltha_pulse(distance2threshold(dist), tsample)
 
         # Run the model
-        resp = ec2b.pulse2percept([pt], implant, 'NFL', retina, tm,
+        resp = ec2b.pulse2percept([pt], implant, tm, retina,
                                   use_ecs=False, engine='serial', dojit=True,
                                   rsample=30, tol=1e-6)
 

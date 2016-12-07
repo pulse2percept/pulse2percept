@@ -45,6 +45,7 @@ class TimeSeries(object):
         return TimeSeries(self.tsample, self.data[y])
 
     def resample(self, factor):
+        factor = int(factor)
         TimeSeries.__init__(self, self.tsample * factor,
                             self.data[..., ::factor])
 
