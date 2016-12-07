@@ -150,7 +150,7 @@ def test_parse_pulse_trains():
 
     # Make sure the two give the same result
     for p0, p1 in zip(pt0_out, pt1_out):
-        npt.assert_equal(p0, p1)
+        npt.assert_equal(p0.data, p1.data)
 
     # Test 3
     # ------

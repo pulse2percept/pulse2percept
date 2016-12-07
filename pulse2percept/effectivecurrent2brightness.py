@@ -300,23 +300,9 @@ def pulse2percept(stim, implant, dolayer, retina=None, tm=None,
     # and generate a list of pulse trains, one for each electrode
     pt_list = parse_pulse_trains(stim, implant)
 
-    # Apply charge accumulation
-    for i, p in enumerate(pt_list):
-        ca = tm.tsample * np.cumsum(np.maximum(0, -p))
-        tmp = fftconvolve(ca, tm.gamma_ca, mode='full')
-        conv_ca = scale_charge * tm.tsample * tmp[:p.size]
-
-        # negative elements first
-        idx = np.where(p <= 0)[0]
-        pt_list[i][idx] = np.minimum(p[idx] + conv_ca[idx], 0)
-
-        # then positive elements
-        idx = np.where(p > 0)[0]
-        pt_list[i][idx] = np.maximum(p[idx] - conv_ca[idx], 0)
-
     # Generate a standard temporal model if necessary
     if tm is None:
-        tm = TemporalModel(ptrain[0].tsample)
+        tm = TemporalModel(pt_list[0].tsample)
 
     # Generate a retina if necessary
     if retina is None:
@@ -341,8 +327,23 @@ def pulse2percept(stim, implant, dolayer, retina=None, tm=None,
                 ecs_list.append(ecs[yy, xx])
                 idx_list.append([yy, xx])
 
+    # Apply charge accumulation
+    for i, p in enumerate(pt_list):
+        ca = tm.tsample * np.cumsum(np.maximum(0, -p.data))
+        tmp = fftconvolve(ca, tm.gamma_ca, mode='full')
+        conv_ca = scale_charge * tm.tsample * tmp[:p.data.size]
+
+        # negative elements first
+        idx = np.where(p.data <= 0)[0]
+        pt_list[i].data[idx] = np.minimum(p.data[idx] + conv_ca[idx], 0)
+
+        # then positive elements
+        idx = np.where(p.data > 0)[0]
+        pt_list[i].data[idx] = np.maximum(p.data[idx] - conv_ca[idx], 0)
+    pt_arr = np.array([p.data for p in pt_list])
+
     sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs, engine=engine,
-                           func_args=[pt_list, tm, rsample, dolayer, dojit])
+                           func_args=[pt_arr, tm, rsample, dolayer, dojit])
     bm = np.zeros(retina.gridx.shape + (sr_list[0].data.shape[-1], ))
     idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
     bm[idxer] = [sr.data for sr in sr_list]
@@ -385,21 +386,23 @@ def parse_pulse_trains(stim, implant):
         if implant.num_electrodes > 1:
             e_s = "More than 1 electrode given, use a list of pulse trains"
             raise ValueError(e_s)
-        pt = [stim.data]
+        pt = [stim]
     elif isinstance(stim, dict):
         # `stim` is a dictionary: Look up electrode names and assign pulse
         # trains, fill the rest with zeros
 
         # Get right size from first dict element, then generate all zeros
         idx0 = list(stim.keys())[0]
-        pt = [np.zeros_like(stim[idx0].data)] * implant.num_electrodes
+        pt_zero = utils.TimeSeries(stim[idx0].tsample,
+                                   np.zeros_like(stim[idx0].data))
+        pt = [pt_zero] * implant.num_electrodes
 
         # Iterate over dictionary and assign non-zero pulse trains to
         # corresponding electrodes
         for key, value in stim.items():
             el_idx = implant.get_index(key)
             if el_idx is not None:
-                pt[el_idx] = value.data
+                pt[el_idx] = value
             else:
                 e_s = "Could not find electrode with name '%s'" % key
                 raise ValueError(e_s)
@@ -408,9 +411,9 @@ def parse_pulse_trains(stim, implant):
         if len(stim) != implant.num_electrodes:
             e_s = "Number of pulse trains must match number of electrodes"
             raise ValueError(e_s)
-        pt = [s.data for s in stim]
+        pt = stim
 
-    return np.array(pt)
+    return pt
 
 
 def get_brightest_frame(resp):
