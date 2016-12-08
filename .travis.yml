@@ -39,7 +39,7 @@ script:
 
 - mkdir for_test
 - cd for_test
-- py.test --pyargs pulse2percept.tests --cov-report term-missing --cov=pulse2percept --doctest-modules
+- py.test --pyargs pulse2percept --cov-report term-missing --cov=pulse2percept --doctest-modules
 
 after_success:
 - coveralls
