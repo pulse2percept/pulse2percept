@@ -311,6 +311,7 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     >>> implant = e2cm.ElectrodeArray('subretinal', 0, 0, 0, 0)
     >>> stim = e2cm.Psycho2Pulsetrain(tsample=5e-6, freq=50, amp=20)
     >>> resp = pulse2percept(stim, implant) # doctest: +ELLIPSIS
+    ...
 
     Stimulate a single electrode ('C3') of an Argus I array centered on the
     fovea:
