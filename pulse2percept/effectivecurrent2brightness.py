@@ -19,8 +19,8 @@ class TemporalModel(object):
     def __init__(self, tsample=0.005 / 1000,
                  tau_nfl=0.42 / 1000, tau_inl=18.0 / 1000,
                  tau_ca=45.25 / 1000, tau_slow=26.25 / 1000,
-                 lweight=0.636, scale_slow=1150.0,
-                 asymptote=1.0, slope=3.0, shift=15.0):
+                 scale_slow=1150.0, lweight=0.636, aweight=0.5,
+                 slope=3.0, shift=15.0):
         """Temporal Sensitivity Model
 
         A model of temporal integration from retina pixels.
@@ -29,18 +29,34 @@ class TemporalModel(object):
         ----------
         tsample : float
             Sampling time step (seconds). Default: 5e-6 s.
-        tau1 : float
-            Parameter for the fast leaky integrator for each layer, tends to be
-            between 0.24 - 0.65 ms for ganglion cells, 14 - 18 ms for bipolar
-            cells. Default: 4.2e-4 s.
+        tau_nfl : float
+            Time decay constant for the fast leaky integrater of the nerve
+            fiber layer (NFL); i.e., ganglion cell layer.
+            This is only important in combination with epiretinal electrode
+            arrays. Default: 45.25 / 1000 s.
+        tau_inl : float
+            Time decay constant for the fast leaky integrater of the inner
+            nuclear layer (INL); i.e., bipolar cell layer.
+            This is only important in combination with subretinal electrode
+            arrays. Default: 18.0 / 1000 s.
         tau_ca : float
-            Parameter for the charge accumulation, has values between 38 - 57
-            ms. Default: 4.525e-2 s.
+            Time decay constant for the charge accumulation, has values
+            between 38 - 57 ms. Default: 45.25 / 1000 s.
         tau_slow : float
-            Parameter for the slow leaky integrator. Default: 2.625e-2.
-        asymptote : float
-            Asymptote of the logistic function in the stationary nonlinearity
-            stage. Default: 14.
+            Time decay constant for the slow leaky integrator.
+            Default: 26.25 / 1000 s.
+        scale_slow : float
+            Scaling factor applied to the output of the cascade, to make
+            output values interpretable brightness values >= 0.
+            Default: 1150.0
+        lweight : float
+            Relative weight applied to responses from bipolar cells (weight
+            of ganglion cells is 1).
+            Default: 0.636.
+        aweight : float
+            Relative weight applied to anodic charges (weight of cathodic
+            charges is 1).
+            Default: 0.5.
         slope : float
             Slope of the logistic function in the stationary nonlinearity
             stage. Default: 3. In normalized units of perceptual response
@@ -55,10 +71,10 @@ class TemporalModel(object):
         self.tau_inl = tau_inl
         self.tau_ca = tau_ca
         self.tau_slow = tau_slow
-        self.asymptote = asymptote
         self.slope = slope
         self.shift = shift
         self.lweight = lweight
+        self.aweight = aweight
         self.scale_slow = scale_slow
 
         # perform one-time setup calculations
@@ -110,16 +126,13 @@ class TemporalModel(object):
 
         The output is not converted to a TimeSeries object for speedup.
         """
-
         if usefft:  # In Krishnan model, b1 is no longer sparse (run FFT)
             conv = self.tsample * fftconvolve(b1, gamma, mode='full')
-        else:  # In Nanduri model, b1 is sparse. Use sparseconv.
+        else:
             conv = self.tsample * utils.sparseconv(gamma, b1,
                                                    mode='full', dojit=dojit)
             # Cut off the tail of the convolution to make the output signal
             # match the dimensions of the input signal.
-
-        # return self.tsample * conv[:, b1.shape[-1]]
         return conv[:b1.shape[-1]]
 
     def stationary_nonlinearity(self, b3):
@@ -148,10 +161,9 @@ class TemporalModel(object):
         Conversion to TimeSeries is avoided for the sake of speedup.
         (np.sum(y) * (t[1]-t[0]))
         """
-
         # use expit (logistic) function for speedup
         b3max = b3.max()
-        scale = expit((b3max - self.shift) / self.slope) * self.asymptote
+        scale = expit((b3max - self.shift) / self.slope)
 
         # avoid division by zero
         return b3 / (b3max + np.finfo(float).eps) * scale
@@ -229,7 +241,7 @@ class TemporalModel(object):
             np.maximum(-resp_nfl, 0)
         respA = self.lweight * np.maximum(resp_inl, 0) + \
             np.maximum(resp_nfl, 0)
-        resp = respC + 0.5 * respA
+        resp = respC + self.aweight * respA
         resp = self.stationary_nonlinearity(resp)
         resp = self.slow_response(resp)
         return utils.TimeSeries(self.tsample, resp)
@@ -261,14 +273,32 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     retina : e2cm.Retina
         A Retina object specyfing the geometry of the retina.
     rsample : int
+        Resampling factor. For example, a resampling factor of 3 keeps
+        only every third frame.
+        Default: 30 frames per second.
     scale_charge : float
         Scaling factor applied to charge accumulation (used to be called
         epsilon). Default: 42.1.
     tol : float
+        Ignore pixels whose effective current is smaller than tol.
+        Default: 0.05.
     use_ecs : bool
+        Flag whether to use effective current spread (True) or regular
+        current spread, unaffected by axon pathways (False).
+        Default: True.
     engine : str
+        Which computational backend to use:
+        - 'serial': Single-core computation
+        - 'joblib': Parallelization via joblib (requires `pip install joblib`)
+        - 'dask': Parallelization via dask (requires `pip install dask`)
+        Default: joblib.
     dojit : bool
+        Whether to use just-in-time (JIT) compilation to speed up computation.
+        Default: True.
     n_jobs : int
+        Number of cores (threads) to run the model on in parallel. Specify -1
+        to use as many cores as possible.
+        Default: -1.
 
     Returns
     -------
@@ -313,7 +343,8 @@ def pulse2percept(stim, implant, tm=None, retina=None,
         xhi = np.ceil((np.max(xs) + cspread) / round_to) * round_to
         ylo = np.floor((np.min(ys) - cspread) / round_to) * round_to
         yhi = np.ceil((np.max(ys) + cspread) / round_to) * round_to
-        retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi)
+        retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
+                             save_data=False)
     elif not isinstance(retina, e2cm.Retina):
         raise TypeError("`retina` object must be of type e2cm.Retina")
 
@@ -386,10 +417,14 @@ def parse_pulse_trains(stim, implant):
         There are several ways to specify an input stimulus:
         * For a single-electrode array, pass a single pulse train; i.e., a
           single utils.TimeSeries object.
-        * For a multi-electrode array, pass a list of pulse trains; i.e., one
-          pulse train per electrode.
+        * For a multi-electrode array, pass a list of pulse trains, where
+          every pulse train is a utils.TimeSeries object; i.e., one pulse
+          train per electrode.
         * For a multi-electrode array, specify all electrodes that should
-          receive non-zero pulse trains by name.
+          receive non-zero pulse trains by name in a dictionary. The key
+          of each element is the electrode name, the value is a pulse train.
+          Example: stim = {'E1': pt, 'B3': pt}, where 'E1' and 'B3' are
+          electrode names, and `pt` is a utils.TimeSeries object.
     implant : e2cm.ElectrodeArray
         An ElectrodeArray object that describes the implant.
 

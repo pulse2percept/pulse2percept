@@ -716,27 +716,42 @@ class Retina(object):
     """
 
     def __init__(self, xlo=-1000, xhi=1000, ylo=-1000, yhi=1000,
-                 sampling=25, axon_lambda=2, rot=0 * np.pi / 180,
-                 loadpath='../'):
-        """
-        Initialize a retina
+                 sampling=25, axon_lambda=2.0, rot=0 * np.pi / 180,
+                 loadpath='../', save_data=True):
+        """Generates a retina
+
+        This function generates the coordinate system for the retina
+        and an axon map. As this can take a while, the function will
+        first look for an already existing file in the directory `loadpath`
+        that was automatically created from an earlier call to this function.
 
         Parameters
         ----------
-        xlo, xhi : int
-           Extent of the retinal coverage (microns) in horizontal dimension
-        ylo, yhi :
-           Extent of the retinal coverage (microns) in vertical dimension
-        sampling : int
-            Microns per grid cell
-        axon_map : str
-           Full path to a file that encodes the axon map (see :mod:`oyster`)
+        xlo, xhi : float
+           Extent of the retinal coverage (microns) in horizontal dimension.
+           Default: xlo=-1000, xhi=1000.
+        ylo, yhi : float
+           Extent of the retinal coverage (microns) in vertical dimension.
+           Default: ylo=-1000, ylo=1000.
+        sampling : float
+            Microns per grid cell. Default: 25 microns.
         axon_lambda : float
-            Constant that determines fall-off with axonal distance
+            Constant that determines fall-off with axonal distance.
+            Default: 2.
+        rot : float
+            Rotation angle (rad). Default: 0.
+        loadpath : str
+            Relative path where to look for existing retina file.
+            Default: '../'
+        save_data : bool
+            Whether to save the data to a new retina file (True) or not
+            (False). The file name is automatically generated from all
+            specified input arguments.
+            Default: True.
         """
         # Include endpoints in meshgrid
-        num_x = (xhi - xlo) / sampling + 1
-        num_y = (yhi - ylo) / sampling + 1
+        num_x = int((xhi - xlo) / sampling + 1)
+        num_y = int((yhi - ylo) / sampling + 1)
         self.gridx, self.gridy = np.meshgrid(np.linspace(xlo, xhi, num_x),
                                              np.linspace(ylo, yhi, num_y),
                                              indexing='xy')
@@ -799,18 +814,19 @@ class Retina(object):
                                                       axon_lambda=axon_lambda)
 
             # Save the variables, together with metadata about the grid:
-            np.savez(filename,
-                     axon_id=axon_id,
-                     axon_weight=axon_weight,
-                     jan_x=jan_x,
-                     jan_y=jan_y,
-                     xlo=[xlo],
-                     xhi=[xhi],
-                     ylo=[ylo],
-                     yhi=[yhi],
-                     sampling=[sampling],
-                     axon_lambda=[axon_lambda],
-                     rot=[rot])
+            if save_data:
+                np.savez(filename,
+                         axon_id=axon_id,
+                         axon_weight=axon_weight,
+                         jan_x=jan_x,
+                         jan_y=jan_y,
+                         xlo=[xlo],
+                         xhi=[xhi],
+                         ylo=[ylo],
+                         yhi=[yhi],
+                         sampling=[sampling],
+                         axon_lambda=[axon_lambda],
+                         rot=[rot])
 
         self.axon_lambda = axon_lambda
         self.rot = rot

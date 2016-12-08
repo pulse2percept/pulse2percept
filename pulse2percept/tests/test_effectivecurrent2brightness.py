@@ -8,7 +8,7 @@ from pulse2percept.utils import TimeSeries
 
 def test_pulse2percept():
     # All ways to break the function call
-    retina = e2cm.Retina(xlo=0, xhi=0, ylo=0, yhi=0)
+    retina = e2cm.Retina(xlo=0, xhi=0, ylo=0, yhi=0, save_data=False)
     implant = e2cm.ElectrodeArray('epiretinal', 0, 0, 0, 0)
     electrode = e2cm.Electrode('epiretinal', 0, 0, 0, 0)
     pt = TimeSeries(0.001, np.ones(1000))
@@ -42,7 +42,7 @@ def test_brightness_movie():
     ylo = -3
     yhi = 3
     retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
-                         sampling=sampling, loadpath='')
+                         sampling=sampling, save_data=False)
 
     s1 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5, pulse_dur=.075 / 1000.,
                                 interphase_dur=.075 / 1000., delay=0.,
@@ -119,7 +119,7 @@ def test_debalthasar_threshold():
     tm = ec2b.TemporalModel(tsample)
 
     # Single-pixel retina
-    retina = e2cm.Retina(xlo=0, xhi=0, ylo=0, yhi=0)
+    retina = e2cm.Retina(xlo=0, xhi=0, ylo=0, yhi=0, save_data=False)
 
     bright = []
     for dist in np.linspace(150, 1000, 10):

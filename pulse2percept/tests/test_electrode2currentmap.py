@@ -225,7 +225,7 @@ def test_Retina_Electrodes():
     ylo = -3
     yhi = 3
     retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
-                         sampling=sampling, loadpath='')
+                         sampling=sampling, save_data=False)
     npt.assert_equal(retina.gridx.shape, ((yhi - ylo) / sampling + 1,
                                           (xhi - xlo) / sampling + 1))
     electrode1 = e2cm.Electrode('epiretinal', 1, 0, 0, 0)
@@ -356,7 +356,7 @@ def test_Retina_ecm():
     ylo = -3
     yhi = 3
     retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
-                         sampling=sampling, loadpath='')
+                         sampling=sampling, save_data=False)
 
     s1 = e2cm.Psycho2Pulsetrain(freq=20, dur=0.5, pulse_dur=.075 / 1000.,
                                 interphase_dur=.075 / 1000., delay=0.,
