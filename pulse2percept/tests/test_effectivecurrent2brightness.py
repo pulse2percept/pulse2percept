@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.testing as npt
+import pytest
 import pulse2percept.electrode2currentmap as e2cm
 import pulse2percept.effectivecurrent2brightness as ec2b
 from pulse2percept.utils import TimeSeries
@@ -18,14 +19,17 @@ def test_pulse2percept():
     fl_dummy = 10.2
     engine = 'serial'
     dojit = False
-    npt.assert_raises(TypeError, ec2b.pulse2percept, pt, implant, retina,
-                      fl_dummy, fl_dummy, fl_dummy, True, engine, dojit)
-    npt.assert_raises(TypeError, ec2b.pulse2percept, pt, electrode,
-                      tm, retina, fl_dummy, fl_dummy, fl_dummy, True,
-                      engine, dojit)
-    npt.assert_raises(TypeError, ec2b.pulse2percept, pt, implant,
-                      retina, retina, fl_dummy, fl_dummy, fl_dummy,
-                      True, engine, dojit)
+    with pytest.raises(TypeError) as e_info:
+        ec2b.pulse2percept(pt, implant, retina,
+                           fl_dummy, fl_dummy, fl_dummy, True, engine, dojit)
+    with pytest.raises(TypeError) as e_info:
+        ec2b.pulse2percept(pt, electrode,
+                           tm, retina, fl_dummy, fl_dummy, fl_dummy, True,
+                           engine, dojit)
+    with pytest.raises(TypeError) as e_info:
+        ec2b.pulse2percept(pt, implant,
+                           retina, retina, fl_dummy, fl_dummy, fl_dummy,
+                           True, engine, dojit)
 
     # Smoke testing
     ec2b.pulse2percept(pt, implant, tm, retina, engine=engine, dojit=dojit)
@@ -152,12 +156,15 @@ def test_parse_pulse_trains():
     # Test 1
     # ------
     # Specify wrong number of pulse trains
-    npt.assert_raises(ValueError, ec2b.parse_pulse_trains, pt_nonzero, argus)
-    npt.assert_raises(ValueError, ec2b.parse_pulse_trains, [pt_nonzero], argus)
-    npt.assert_raises(ValueError, ec2b.parse_pulse_trains,
-                      [pt_nonzero] * (argus.num_electrodes - 1), argus)
-    npt.assert_raises(ValueError, ec2b.parse_pulse_trains, [pt_nonzero] * 2,
-                      simple)
+    with pytest.raises(ValueError) as e_info:
+        ec2b.parse_pulse_trains(pt_nonzero, argus)
+    with pytest.raises(ValueError) as e_info:
+        ec2b.parse_pulse_trains([pt_nonzero], argus)
+    with pytest.raises(ValueError) as e_info:
+        ec2b.parse_pulse_trains([pt_nonzero] * (argus.num_electrodes - 1),
+                                argus)
+    with pytest.raises(ValueError) as e_info:
+        ec2b.parse_pulse_trains([pt_nonzero] * 2, simple)
 
     # Test 2
     # ------

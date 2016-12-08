@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.testing as npt
+import pytest
 
 import pulse2percept.electrode2currentmap as e2cm
 
@@ -39,8 +40,8 @@ def test_ElectrodeArray():
         npt.assert_equal(arr.electrodes[0].etype, 'epiretinal')
 
     # However, all input arguments must have the same number of elements
-    npt.assert_raises(AssertionError, e2cm.ElectrodeArray, 'epiretinal', [0],
-                      [1, 2], [3, 4, 5], [6])
+    with pytest.raises(AssertionError) as e_info:
+        e2cm.ElectrodeArray('epiretinal', [0], [1, 2], [3, 4, 5], [6])
 
     # Make sure electrodes can be addressed by index
     vals = range(5)
@@ -94,7 +95,8 @@ def test_ArgusI():
                     npt.assert_almost_equal(x_center, x)
 
     # `h` must have the right dimensions
-    npt.assert_raises(ValueError, e2cm.ArgusI, -100, 10, h=np.zeros(5))
+    with pytest.raises(ValueError) as e_info:
+        e2cm.ArgusI(-100, 10, h=np.zeros(5))
 
     # Indexing must work for both integers and electrode names
     argus = e2cm.ArgusI()
@@ -151,7 +153,8 @@ def test_ArgusII():
                     npt.assert_almost_equal(x_center, x)
 
     # `h` must have the right dimensions
-    npt.assert_raises(ValueError, e2cm.ArgusII, -100, 10, h=np.zeros(5))
+    with pytest.raises(ValueError) as e_info:
+        e2cm.ArgusII(-100, 10, h=np.zeros(5))
 
     # Indexing must work for both integers and electrode names
     argus = e2cm.ArgusII()
