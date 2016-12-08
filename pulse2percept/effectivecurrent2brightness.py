@@ -249,7 +249,7 @@ class TemporalModel(object):
 
 def pulse2percept(stim, implant, tm=None, retina=None,
                   rsample=30, scale_charge=42.1, tol=0.05, use_ecs=True,
-                  engine='joblib', dojit=True, n_jobs=-1):
+                  engine='joblib', dojit=True, n_jobs=-1, verbose=True):
     """Transforms an input stimulus to a percept
 
     This function passes an input stimulus `stim` to a retinal `implant`,
@@ -299,6 +299,9 @@ def pulse2percept(stim, implant, tm=None, retina=None,
         Number of cores (threads) to run the model on in parallel. Specify -1
         to use as many cores as possible.
         Default: -1.
+    verbose : bool
+        Flag whether to produce output (True) or suppress it (False).
+        Default: True.
 
     Returns
     -------
@@ -310,8 +313,7 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     Stimulate a single-electrode array:
     >>> implant = e2cm.ElectrodeArray('subretinal', 0, 0, 0, 0)
     >>> stim = e2cm.Psycho2Pulsetrain(tsample=5e-6, freq=50, amp=20)
-    >>> resp = pulse2percept(stim, implant) # doctest: +ELLIPSIS
-    ...
+    >>> resp = pulse2percept(stim, implant, verbose=False)
 
     Stimulate a single electrode ('C3') of an Argus I array centered on the
     fovea:
@@ -345,7 +347,7 @@ def pulse2percept(stim, implant, tm=None, retina=None,
         ylo = np.floor((np.min(ys) - cspread) / round_to) * round_to
         yhi = np.ceil((np.max(ys) + cspread) / round_to) * round_to
         retina = e2cm.Retina(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
-                             save_data=False)
+                             save_data=False, verbose=verbose)
     elif not isinstance(retina, e2cm.Retina):
         raise TypeError("`retina` object must be of type e2cm.Retina")
 
