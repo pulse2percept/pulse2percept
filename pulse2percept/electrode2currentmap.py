@@ -555,8 +555,8 @@ def get_pulse(pulse_dur, tsample, interphase_dur, pulsetype):
         anodic-first pulse has the positive phase first.
 
     """
-    on = np.ones(round(pulse_dur / tsample))
-    gap = np.zeros(round(interphase_dur / tsample))
+    on = np.ones(int(round(pulse_dur / tsample)))
+    gap = np.zeros(int(round(interphase_dur / tsample)))
     off = -1 * on
     if pulsetype == 'cathodicfirst':
         # cathodicfirst has negative current first
@@ -593,7 +593,7 @@ class Movie2Pulsetrain(TimeSeries):
         # set up the sequence
         dur = rflum.shape[-1] / fps
         if stimtype == 'pulsetrain':
-            interpulsegap = np.zeros(round((1.0 / freq) / tsample) -
+            interpulsegap = np.zeros(int(round((1.0 / freq) / tsample)) -
                                      len(pulse))
             ppt = []
             for j in range(0, int(np.ceil(dur * freq))):
