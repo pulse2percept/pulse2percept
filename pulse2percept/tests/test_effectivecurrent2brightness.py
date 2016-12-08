@@ -19,14 +19,14 @@ def test_pulse2percept():
     fl_dummy = 10.2
     engine = 'serial'
     dojit = False
-    with pytest.raises(TypeError) as e_info:
+    with pytest.raises(TypeError):
         ec2b.pulse2percept(pt, implant, retina,
                            fl_dummy, fl_dummy, fl_dummy, True, engine, dojit)
-    with pytest.raises(TypeError) as e_info:
+    with pytest.raises(TypeError):
         ec2b.pulse2percept(pt, electrode,
                            tm, retina, fl_dummy, fl_dummy, fl_dummy, True,
                            engine, dojit)
-    with pytest.raises(TypeError) as e_info:
+    with pytest.raises(TypeError):
         ec2b.pulse2percept(pt, implant,
                            retina, retina, fl_dummy, fl_dummy, fl_dummy,
                            True, engine, dojit)
@@ -156,14 +156,14 @@ def test_parse_pulse_trains():
     # Test 1
     # ------
     # Specify wrong number of pulse trains
-    with pytest.raises(ValueError) as e_info:
+    with pytest.raises(ValueError):
         ec2b.parse_pulse_trains(pt_nonzero, argus)
-    with pytest.raises(ValueError) as e_info:
+    with pytest.raises(ValueError):
         ec2b.parse_pulse_trains([pt_nonzero], argus)
-    with pytest.raises(ValueError) as e_info:
+    with pytest.raises(ValueError):
         ec2b.parse_pulse_trains([pt_nonzero] * (argus.num_electrodes - 1),
                                 argus)
-    with pytest.raises(ValueError) as e_info:
+    with pytest.raises(ValueError):
         ec2b.parse_pulse_trains([pt_nonzero] * 2, simple)
 
     # Test 2

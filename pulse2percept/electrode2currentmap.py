@@ -270,6 +270,9 @@ class ElectrodeArray(object):
         for r, x, y, h, n in zip(radii, xs, ys, hs, names):
             self.electrodes.append(Electrode(etype, r, x, y, h, n))
 
+    def __iter__(self):
+        return iter(self.electrodes)
+
     def __getitem__(self, item):
         """Return the electrode specified by `item`
 

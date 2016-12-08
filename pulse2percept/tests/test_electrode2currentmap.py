@@ -40,7 +40,7 @@ def test_ElectrodeArray():
         npt.assert_equal(arr.electrodes[0].etype, 'epiretinal')
 
     # However, all input arguments must have the same number of elements
-    with pytest.raises(AssertionError) as e_info:
+    with pytest.raises(AssertionError):
         e2cm.ElectrodeArray('epiretinal', [0], [1, 2], [3, 4, 5], [6])
 
     # Make sure electrodes can be addressed by index
@@ -95,7 +95,7 @@ def test_ArgusI():
                     npt.assert_almost_equal(x_center, x)
 
     # `h` must have the right dimensions
-    with pytest.raises(ValueError) as e_info:
+    with pytest.raises(ValueError):
         e2cm.ArgusI(-100, 10, h=np.zeros(5))
 
     # Indexing must work for both integers and electrode names
@@ -153,7 +153,7 @@ def test_ArgusII():
                     npt.assert_almost_equal(x_center, x)
 
     # `h` must have the right dimensions
-    with pytest.raises(ValueError) as e_info:
+    with pytest.raises(ValueError):
         e2cm.ArgusII(-100, 10, h=np.zeros(5))
 
     # Indexing must work for both integers and electrode names
