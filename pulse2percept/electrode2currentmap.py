@@ -233,19 +233,21 @@ class ElectrodeArray(object):
         A single epiretinal electrode called 'A1', with radius 100um, sitting
         at retinal location (0, 0), 10um away from the retina:
         >>> from pulse2percept import electrode2currentmap as e2cm
-        >>> implant = e2cm.ElectrodeArray('epiretinal', 100, 0, 0, 10, 'A1')
+        >>> implant1 = e2cm.ElectrodeArray('epiretinal', 100, 0, 0, 10, 'A1')
 
         An array with two electrodes of size 100um, one sitting at
         (-100, -100), the other sitting at (0, 0), with 0 distance from the
         retina, of type 'subretinal':
-        >>> implant = e2cm.ElectrodeArray('subretinal', [100, 100], [-100, 0],
-                                          [-100, 0], [0, 0])
-
-        Get access to the second electrode in the array:
-        >>> my_electrode = implant[1]
+        >>> implant2 = e2cm.ElectrodeArray('subretinal', [100, 100], [-100, 0],
+        ...                                [-100, 0], [0, 0])
 
         Get access to the electrode with name 'A1' in the array:
-        >>> my_electrode = implant['A1']
+        >>> my_electrode = implant1['A1']
+
+        Get access to the second electrode in the array:
+        >>> my_electrode = implant2[1]
+
+
 
         """
         # Make it so the constructor can accept either floats, lists, or
