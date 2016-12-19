@@ -553,30 +553,57 @@ class ArgusII(ElectrodeArray):
             self.electrodes.append(Electrode(self.etype, r, x, y, h, n))
 
 
-def receptive_field(electrode, xg, yg, size):
+def receptive_field(electrode, xg, yg, rftype='square', size=None):
+    """An electrode's receptive field
 
-    # creates a map of the retina for each electrode
-    # where it's 1 under the electrode, 0 elsewhere
-    rf = np.zeros(xg.shape)
-    ind = np.where((xg > electrode.x - (size / 2)) &
-                   (xg < electrode.x + (size / 2)) &
-                   (yg > electrode.y - (size / 2)) &
-                   (yg < electrode.y + (size / 2)))
+    Parameters
+    ----------
+    electrode : Electrode
+        An Electrode object describing the electrode.
+    xg : array_like
+        Array of all x coordinates
+    yg : array_like
+        Array of all y coordinates
+    rftype : {'square', 'gaussian'}
+        The type of receptive field.
+        - 'square': A simple square box receptive field with side length
+                    `size`.
+        - 'gaussian': A Gaussian receptive field where the weight drops off
+                      as a function of distance from the electrode center.
+                      The standard deviation of the Gaussian is `size`.
+    size : float, optional
+        Parameter describing the size of the receptive field. For square
+        receptive fields, this corresponds to the side length of the square.
+        For Gaussian receptive fields, this corresponds to the standard
+        deviation of the Gaussian.
+        Default: electrode.radius
+    """
+    if size is None:
+        size = electrode.radius
 
-    rf[ind] = 1
+    if rftype == 'square':
+        # Create a map of the retina for each electrode
+        # where it's 1 under the electrode, 0 elsewhere
+        rf = np.zeros(xg.shape).astype(np.float32)
+        ind = np.where((xg > electrode.x - (size / 2)) &
+                       (xg < electrode.x + (size / 2)) &
+                       (yg > electrode.y - (size / 2)) &
+                       (yg < electrode.y + (size / 2)))
+        rf[ind] = 1.0
+    elif rftype == 'gaussian':
+        # Create a map of the retina where the weight drops of as a function
+        # of distance from the electrode center
+        dist = (xg - electrode.x_center) ** 2 + (yg - electrode.y_center) ** 2
+        rf = np.exp(-dist / (2 * size ** 2))
+        rf /= np.sum(rf)
+    else:
+        e_s = "Acceptable values for `rftype` are 'square' or 'gaussian'"
+        raise ValueError(e_s)
+
     return rf
 
 
-def gaussian_receptive_field(electrode, xg, yg, sigma):
-    """
-    A Gaussian receptive field
-    """
-    amp = np.exp(-((xg - electrode.x)**2 + (yg - electrode.y) ** 2) /
-                 (2 * (sigma ** 2)))
-    return amp / np.sum(amp)
-
-
-def retinalmovie2electrodtimeseries(rf, movie, fps=30):
+def retinalmovie2electrodtimeseries(rf, movie):
     """
     calculate the luminance over time for each electrodes receptive field
     """
@@ -622,6 +649,121 @@ def get_pulse(pulse_dur, tsample, interphase_dur, pulsetype):
         raise ValueError("Acceptable values for `pulsetype` are "
                          "'anodicfirst' or 'cathodicfirst'")
     return pulse
+
+
+class Image2Pulsetrain(TimeSeries):
+    """Converts an image into a series of pulse trains
+
+    This function creates an input stimulus from an RGB or grayscale image.
+    Requires `scikit-image`.
+
+    Parameters
+    ----------
+    img : str|array_like
+        An input image, either a valid filename (string) or a numpy array
+        (row x col x channels).
+    implant : ElectrodeArray
+        An ElectrodeArray object that describes the implant.
+    coding : {'amplitude', 'frequency'}, optional
+        A string describing the coding scheme:
+        - 'amplitude': Image intensity is linearly converted to a current
+                       amplitude between `valrange[0]` and `valrange[1]`.
+                       Frequency is held constant at `const_freq`.
+        - 'frequency': Image intensity is linearly converted to a pulse
+                       frequency between `valrange[0]` and `valrange[1]`.
+                       Amplitude is held constant at `const_amp`.
+        Default: 'amplitude'
+    valrange : list, optional
+    const_amp : float, optional
+    const_freq : float, optional
+    rftype : {'square', 'gaussian'}, optional
+    rfsize : float, optional
+    tsample : float, optional
+        Sampling time step (seconds). Default: 0.005 / 1000 seconds.
+    dur : float, optional
+        Stimulus duration (seconds). Default: 0.5 seconds.
+    pulsedur : float, optional
+    interphasedur : float, optional
+    pulsetype: {'cathodicfirst', 'anodicfirst'}, optional
+
+    """
+
+    # TODO: Default RF size could be half of the electrode gap?
+    def __init__(self, img, implant, coding='amplitude', valrange=[0, 50],
+                 const_amp=20, const_freq=20, rftype='gaussian', rfsize=None,
+                 tsample=0.005 / 1000, dur=0.5, pulsedur=0.5 / 1000.,
+                 interphasedur=0.5 / 1000., pulsetype='cathodicfirst'):
+        try:
+            from skimage.io import imread
+            from skimage.transform import resize
+            from skimage.color import rgb2gray
+        except ImportError:
+            raise ImportError("You do not have scikit-image installed.")
+
+        # Make sure range of values is valid
+        assert len(valrange) == 2 and valrange[1] > valrange[0]
+
+        if isinstance(img, str):
+            # Load image from filename
+            img_large = imread(img, as_grey=True).astype(np.float32)
+        else:
+            # Convert image to grayscale
+            img_large = rgb2gray(np.array(img)).astype(np.float32)
+
+        # Maximize contrast
+        img_large -= img_large.min()
+        img_large /= img_large.max()
+
+        # Center the image on the implant
+        xyr = np.array([[e.x_center, e.y_center, e.radius] for e in implant])
+        xlo = np.min(xyr[:, 0] - xyr[:, 2])
+        xhi = np.max(xyr[:, 0] + xyr[:, 2])
+        ylo = np.min(xyr[:, 1] - xyr[:, 2])
+        yhi = np.max(xyr[:, 1] + xyr[:, 2])
+
+        # Resize the image accordingly and flip up down
+        img_resize = resize(img_large, (yhi - ylo, xhi - xlo))
+        img_resize = np.flipud(img_resize)
+
+        # Make a grid that has the image's coordinates on the retina
+        yg = np.linspace(ylo, yhi, img_resize.shape[0])
+        xg = np.linspace(xlo, xhi, img_resize.shape[1])
+        yg, xg = np.meshgrid(yg, xg)
+
+        # For each electrode, find the stimulation strength (magnitude)
+        magn = []
+        for e in implant:
+            rf = receptive_field(e, xg, yg, rftype, rfsize)
+            magn.append(np.mean(rf * img_resize))
+        magn = np.array(magn)
+
+        # Normalize to valrange
+        magn = (magn - magn.min()) / (magn.max() - magn.min())
+        magn = magn * np.diff(valrange) + valrange[0]
+
+        # Map magnitude to either freq or amp of pulse train
+        pulses = []
+        for m in magn:
+            if coding == 'amplitude':
+                # Map magnitude to amplitude
+                amp = m
+                freq = const_freq
+            elif coding == 'frequency':
+                # Map magnitude to frequency
+                amp = const_amp
+                freq = m
+            else:
+                e_s = "Acceptable values for `coding` are 'amplitude' or"
+                e_s += "'frequency'."
+                raise ValueError(e_s)
+
+            pt = Psycho2Pulsetrain(tsample, freq=freq, amp=amp, dur=dur,
+                                   pulse_dur=pulsedur,
+                                   interphase_dur=interphasedur,
+                                   pulsetype=pulsetype)
+            pulses.append(pt)
+
+        return pulses
 
 
 class Movie2Pulsetrain(TimeSeries):
@@ -993,19 +1135,3 @@ def ecm(ecs_item, ptrain_data, tsample):
 
     ecm = np.sum(ecs_item[:, :, None] * ptrain_data, 1)
     return TimeSeries(tsample, ecm)
-
-
-def distance2threshold(el_dist):
-    """Converts electrode distance (um) to threshold (uA)
-
-    Based on linear regression of data presented in Fig. 7b of
-    deBalthasar et al. (2008). Relationship is linear in log-log space.
-    """
-
-    slope = 1.5863261730600329
-    intercept = -4.2496180725811659
-
-    if el_dist > 0:
-        return np.exp(np.log(el_dist) * slope + intercept)
-    else:
-        return np.exp(intercept)
