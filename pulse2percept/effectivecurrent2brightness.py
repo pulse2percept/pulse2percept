@@ -268,38 +268,38 @@ def pulse2percept(stim, implant, tm=None, retina=None,
           receive non-zero pulse trains by name.
     implant : e2cm.ElectrodeArray
         An ElectrodeArray object that describes the implant.
-    tm : ec2b.TemporalModel
+    tm : ec2b.TemporalModel, optional
         A model of temporal sensitivity.
-    retina : e2cm.Retina
+    retina : e2cm.Retina, optional
         A Retina object specyfing the geometry of the retina.
-    rsample : int
+    rsample : int, optional
         Resampling factor. For example, a resampling factor of 3 keeps
         only every third frame.
         Default: 30 frames per second.
-    scale_charge : float
+    scale_charge : float, optional
         Scaling factor applied to charge accumulation (used to be called
         epsilon). Default: 42.1.
-    tol : float
+    tol : float, optional
         Ignore pixels whose effective current is smaller than tol.
         Default: 0.05.
-    use_ecs : bool
+    use_ecs : bool, optional
         Flag whether to use effective current spread (True) or regular
         current spread, unaffected by axon pathways (False).
         Default: True.
-    engine : str
+    engine : str, optional
         Which computational backend to use:
         - 'serial': Single-core computation
         - 'joblib': Parallelization via joblib (requires `pip install joblib`)
         - 'dask': Parallelization via dask (requires `pip install dask`)
         Default: joblib.
-    dojit : bool
+    dojit : bool, optional
         Whether to use just-in-time (JIT) compilation to speed up computation.
         Default: True.
-    n_jobs : int
+    n_jobs : int, optional
         Number of cores (threads) to run the model on in parallel. Specify -1
         to use as many cores as possible.
         Default: -1.
-    verbose : bool
+    verbose : bool, optional
         Flag whether to produce output (True) or suppress it (False).
         Default: True.
 
