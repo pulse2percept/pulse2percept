@@ -58,3 +58,35 @@ def scale(inarray, newmin=0, newmax=1):
     delta = (newmax - newmin) / (oldmax - oldmin)
     outarray = delta * (inarray - oldmin) + newmin
     return outarray
+
+
+def find_files_like(datapath, pattern):
+    """Finds files in a folder whose name matches a pattern
+
+    This function looks for files in folder `datapath` that match a regular
+    expression `pattern`.
+
+    Parameters
+    ----------
+    datapath : str
+        Path to search
+    pattern : str
+        A valid regular expression pattern
+
+    Examples
+    --------
+    # Find all '.npz' files in parent dir
+    >>> files = find_files_like('..', '.*\.npz$')
+    """
+    # No need to import these at module level
+    from os import listdir
+    import re
+
+    # Traverse file list and look for `pattern`
+    filenames = []
+    pattern = re.compile(pattern)
+    for file in listdir(datapath):
+        if pattern.search(file):
+            filenames.append(file)
+
+    return filenames

@@ -75,14 +75,3 @@ def test_randomly():
     # Make sure every element was visited once
     npt.assert_equal(shuffled_idx, np.arange(len(sequence)).tolist())
     npt.assert_equal(shuffled_val.sort(), sequence.sort())
-
-
-def test_find_files_like():
-    # Not sure how to check a valid pattern match, because we
-    # don't know in which directory the test suite is
-    # executed... so smoke test
-    utils.find_files_like(".", ".*")
-
-    # Or fail to find an unlikely file name
-    files = utils.find_files_like(".", "theresnowaythisexists\.xyz")
-    npt.assert_equal(files, [])
