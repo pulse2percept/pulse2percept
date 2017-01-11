@@ -702,7 +702,7 @@ class Psycho2Pulsetrain(TimeSeries):
                              "interval.")
         gap = np.zeros(gap_size)
 
-        pulse_train = []
+        pulse_train = np.array([])
         for j in range(int(np.round(dur * freq))):
             if pulseorder == 'pulsefirst':
                 pulse_train = np.concatenate((pulse_train, delay, pulse,
