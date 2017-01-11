@@ -59,3 +59,19 @@ def test_parfor():
     # If it's not reshaped, the first item should be the item 0, 0:
     npt.assert_equal(utils.parfor(power_it, my_list)[0],
                      power_it(my_array[0, 0]))
+
+
+def test_randomly():
+    # Generate a list of integers
+    sequence = np.arange(100).tolist()
+
+    # Iterate the sequence in random order
+    shuffled_idx = []
+    shuffled_val = []
+    for idx, value in enumerate(utils.randomly(sequence)):
+        shuffled_idx.append(idx)
+        shuffled_val.append(value)
+
+    # Make sure every element was visited once
+    npt.assert_equal(shuffled_idx, np.arange(len(sequence)).tolist())
+    npt.assert_equal(shuffled_val.sort(), sequence.sort())

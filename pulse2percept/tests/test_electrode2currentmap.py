@@ -100,9 +100,10 @@ def test_ArgusI():
 
     # Indexing must work for both integers and electrode names
     argus = e2cm.ArgusI()
-    for idx, name in zip(range(16), argus.names):
-        npt.assert_equal(argus[idx], argus[name])
-        npt.assert_equal(argus[idx].name, name)
+    for idx, electrode in enumerate(argus):
+        name = electrode.name
+        npt.assert_equal(electrode, argus[idx])
+        npt.assert_equal(electrode, argus[name])
     npt.assert_equal(argus[16], None)
     npt.assert_equal(argus["unlikely name for an electrode"], None)
 
@@ -158,9 +159,10 @@ def test_ArgusII():
 
     # Indexing must work for both integers and electrode names
     argus = e2cm.ArgusII()
-    for idx, name in zip(range(60), argus.names):
-        npt.assert_equal(argus[idx], argus[name])
-        npt.assert_equal(argus[idx].name, name)
+    for idx, electrode in enumerate(argus):
+        name = electrode.name
+        npt.assert_equal(electrode, argus[idx])
+        npt.assert_equal(electrode, argus[name])
     npt.assert_equal(argus[60], None)
     npt.assert_equal(argus["unlikely name for an electrode"], None)
 

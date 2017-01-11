@@ -10,7 +10,7 @@ from scipy import interpolate
 from scipy.misc import factorial
 
 from pulse2percept import oyster
-from pulse2percept.utils import TimeSeries
+from pulse2percept.utils import TimeSeries, randomly
 
 
 def micron2deg(micron):
@@ -91,6 +91,26 @@ class Electrode(object):
         name : string
             Electrode name
 
+        """
+        assert radius >= 0
+        assert height >= 0
+
+        self.etype = etype
+        self.radius = radius
+        self.x_center = x_center
+        self.y_center = y_center
+        self.name = name
+        self.set_height(height)
+
+    def set_height(self, height):
+        """Sets the electrode-to-retina distance
+
+        This function sets the electrode-to-retina distance according to
+        `height`. For an epiretinal device, we calculate the distance to
+        the ganglion cell layer (layer thickness depends on retinal location).
+        For a subretinal device, we calculate the distance to the bipolar
+        layer (layer thickness again depends on retinal location).
+
         Estimates of layer thickness based on:
         LoDuca et al. Am J. Ophthalmology 2011
         Thickness Mapping of Retinal Layers by Spectral Domain Optical
@@ -116,18 +136,9 @@ class Electrode(object):
         So for an epiretinal array the bipolar layer is L1+L2+(.5*L3).
 
         """
-        assert radius >= 0
-        assert height >= 0
+        fovdist = np.sqrt(self.x_center ** 2 + self.y_center ** 2)
 
-        self.etype = etype
-        self.radius = radius
-        self.x_center = x_center
-        self.y_center = y_center
-        self.name = name
-
-        fovdist = np.sqrt(x_center ** 2 + y_center ** 2)
-
-        if etype == 'epiretinal':
+        if self.etype == 'epiretinal':
             self.h_nfl = height
             if fovdist <= 600:
                 self.h_inl = height + 71.5
@@ -135,7 +146,7 @@ class Electrode(object):
                 self.h_inl = height + 139.75
             elif fovdist > 1550:
                 self.h_inl = height + 119.075
-        elif etype == 'subretinal':
+        elif self.etype == 'subretinal':
             if fovdist <= 600:
                 self.h_inl = height + 23 / 2
                 self.h_nfl = height + 83
@@ -247,8 +258,6 @@ class ElectrodeArray(object):
         Get access to the second electrode in the array:
         >>> my_electrode = implant2[1]
 
-
-
         """
         # Make it so the constructor can accept either floats, lists, or
         # numpy arrays, and `zip` works regardless.
@@ -265,7 +274,6 @@ class ElectrodeArray(object):
 
         self.etype = etype
         self.num_electrodes = names.size
-        self.names = names
         self.electrodes = []
         for r, x, y, h, n in zip(radii, xs, ys, hs, names):
             self.electrodes.append(Electrode(etype, r, x, y, h, n))
@@ -310,13 +318,15 @@ class ElectrodeArray(object):
         -------
         A valid electrode index or None.
         """
-        try:
-            # Is `name` a valid electrode name?
-            idx = self.names.tolist().index(name)
-            return idx
-        except:
-            # Else: `name` could not be found.
-            return None
+        # Is `name` a valid electrode name?
+        # Iterate through electrodes to find a matching name. Shuffle list
+        # to reduce time complexity of average lookup.
+        for idx, electrode in randomly(enumerate(self.electrodes)):
+            if electrode.name == name:
+                return idx
+
+        # Worst case O(n): name could not be found.
+        return None
 
 
 class ArgusI(ElectrodeArray):
@@ -403,7 +413,6 @@ class ArgusI(ElectrodeArray):
 
         self.etype = 'epiretinal'
         self.num_electrodes = len(names)
-        self.names = np.array(names, dtype=np.str)
         self.electrodes = []
         for r, x, y, h, n in zip(r_arr, x_arr, y_arr, h_arr, names):
             self.electrodes.append(Electrode(self.etype, r, x, y, h, n))
@@ -493,7 +502,6 @@ class ArgusII(ElectrodeArray):
 
         self.etype = 'epiretinal'
         self.num_electrodes = len(names)
-        self.names = np.array(names, dtype=np.str)
         self.electrodes = []
         for r, x, y, h, n in zip(r_arr, x_arr, y_arr, h_arr, names):
             self.electrodes.append(Electrode(self.etype, r, x, y, h, n))

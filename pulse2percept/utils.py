@@ -3,6 +3,7 @@ Utility functions for pulse2percept
 """
 import numpy as np
 import multiprocessing
+import random
 
 try:
     from numba import jit
@@ -277,3 +278,24 @@ def memory_usage():
         if status is not None:
             status.close()
     return result
+
+
+def randomly(seq):
+    """Traverses a list in random order
+
+    Parameters
+    ----------
+    seq : list
+        An iterable list of elements.
+
+    Notes
+    -----
+    From: http://stackoverflow.com/a/9253366
+    Note that even for rather small `len(x)`, the total number of permutations
+    of `seq` can quickly grow larger than the period of most random number
+    generators. For example, a sequence of length 2080 is the largest that can
+    fit within the period of the Mersenne Twister random number generator.
+    """
+    shuffled = list(seq)
+    random.shuffle(shuffled)
+    return iter(shuffled)
