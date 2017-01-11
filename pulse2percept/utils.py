@@ -5,6 +5,7 @@ import numpy as np
 import multiprocessing
 import random
 
+
 try:
     from numba import jit
     has_jit = True
@@ -258,28 +259,6 @@ def mov2npy(movie_file, out_file):
     np.save(out_file, frames)
 
 
-def memory_usage():
-    """Memory usage of the current process in kilobytes.
-
-    This works only on systems with a /proc file system
-    (like Linux).
-    http://stackoverflow.com/questions/897941/python-equivalent-of-phps-memory-get-usage/7669279
-    """
-    status = None
-    result = {'peak': 0, 'rss': 0}
-    try:
-        status = open('/proc/self/status')
-        for line in status:
-            parts = line.split()
-            key = parts[0][2:-1].lower()
-            if key in result:
-                result[key] = int(parts[1])
-    finally:
-        if status is not None:
-            status.close()
-    return result
-
-
 def randomly(seq):
     """Traverses a list in random order
 
@@ -296,6 +275,42 @@ def randomly(seq):
     generators. For example, a sequence of length 2080 is the largest that can
     fit within the period of the Mersenne Twister random number generator.
     """
+    # Make sure we are dealing with a list
     shuffled = list(seq)
+
+    # Import `random` at module level (for performance)
     random.shuffle(shuffled)
+
     return iter(shuffled)
+
+
+def find_files_like(datapath, pattern):
+    """Finds files in a folder whose name matches a pattern
+
+    This function looks for files in folder `datapath` that match a regular
+    expression `pattern`.
+
+    Parameters
+    ----------
+    datapath : str
+        Path to search
+    pattern : str
+        A valid regular expression pattern
+
+    Examples
+    --------
+    # Find all '.npz' files in parent dir
+    >>> files = find_files_like('..', '.*\.npz$')
+    """
+    # No need to import these at module level
+    from os import listdir
+    import re
+
+    # Traverse file list and look for `pattern`
+    filenames = []
+    pattern = re.compile(pattern)
+    for file in listdir(datapath):
+        if pattern.search(file):
+            filenames.append(file)
+
+    return filenames
