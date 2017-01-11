@@ -331,7 +331,8 @@ class ElectrodeArray(object):
 
 class ArgusI(ElectrodeArray):
 
-    def __init__(self, x_center=0, y_center=0, h=0, rot=0 * np.pi / 180):
+    def __init__(self, x_center=0, y_center=0, h=0, rot=0 * np.pi / 180,
+                 use_legacy_names=False):
         """Create an ArgusI array on the retina
 
         This function creates an ArgusI array and places it on the retina
@@ -348,6 +349,7 @@ class ArgusI(ElectrodeArray):
         -->x    A4 B4 C4 D4                     520 260 520 260
 
         Electrode order is: A1, B1, C1, D1, A2, B2, ..., D4.
+        If `use_legacy_names` is True, electrode order is: L6, L2, M8, M4, ...
         An electrode can be addressed by index (integer) or name.
 
         Parameters
@@ -379,9 +381,17 @@ class ArgusI(ElectrodeArray):
         r_arr = np.concatenate((r_arr, r_arr[::-1], r_arr, r_arr[::-1]),
                                axis=0)
 
-        # Standard Argus I names: A1, B1, C1, D1, A1, B2, ..., D4
-        # Shortcut: Use `chr` to go from int to char
-        names = [chr(i) + str(j) for j in range(1, 5) for i in range(65, 69)]
+        if use_legacy_names:
+            # Legacy Argus I names
+            names = ['L6', 'L2', 'M8', 'M4',
+                     'L5', 'L1', 'M7', 'M3',
+                     'L8', 'L4', 'M6', 'M2',
+                     'L7', 'L3', 'M5', 'M1']
+        else:
+            # Standard Argus I names: A1, B1, C1, D1, A1, B2, ..., D4
+            # Shortcut: Use `chr` to go from int to char
+            names = [chr(i) + str(j) for j in range(1, 5)
+                     for i in range(65, 69)]
 
         if isinstance(h, list):
             h_arr = np.array(h).flatten()
