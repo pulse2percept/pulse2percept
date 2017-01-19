@@ -318,6 +318,19 @@ def test_Psycho2Pulsetrain():
     pdur = 0.45 / 1000
     tsample = 5e-6
     ampl = 20
+
+    # Size of array given stimulus duration
+    stim_size = int(np.round(dur / tsample))
+
+    # All empty pulse trains: Expect no division by zero errors
+    for amp in [0, 20]:
+        p2pt = e2cm.Psycho2Pulsetrain(freq=0, amp=ampl, dur=dur,
+                                      pulse_dur=pdur,
+                                      interphase_dur=pdur,
+                                      tsample=tsample)
+        npt.assert_equal(p2pt.data, np.zeros(stim_size))
+
+    # Non-zero pulse trains: Expect right length, pulse order, etc.
     for freq in [8, 13.8, 20]:
         for pulsetype in ['cathodicfirst', 'anodicfirst']:
             for delay in [0, 10 / 1000]:
@@ -333,8 +346,7 @@ def test_Psycho2Pulsetrain():
                                                   pulseorder=pulseorder)
 
                     # make sure length is correct
-                    npt.assert_equal(p2pt.data.size,
-                                     int(np.round(dur / tsample)))
+                    npt.assert_equal(p2pt.data.size, stim_size)
 
                     # make sure amplitude is correct
                     npt.assert_equal(np.unique(p2pt.data),
