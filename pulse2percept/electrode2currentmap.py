@@ -856,6 +856,8 @@ class Retina(object):
         self.axon_weight = axon_weight
         self.jan_x = jan_x
         self.jan_y = jan_y
+        self.range_x = self.gridx.max() - self.gridx.min()
+        self.range_y = self.gridy.max() - self.gridy.min()
 
     def cm2ecm(self, cs):
         """

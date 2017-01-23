@@ -238,6 +238,9 @@ def test_Retina_Electrodes():
                          sampling=sampling, save_data=False)
     npt.assert_equal(retina.gridx.shape, ((yhi - ylo) / sampling + 1,
                                           (xhi - xlo) / sampling + 1))
+    npt.assert_equal(retina.range_x, retina.gridx.max() - retina.gridx.min())
+    npt.assert_equal(retina.range_y, retina.gridy.max() - retina.gridy.min())
+
     electrode1 = e2cm.Electrode('epiretinal', 1, 0, 0, 0)
 
     # Calculate current spread for all retinal layers

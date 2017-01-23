@@ -280,7 +280,8 @@ def pulse2percept(stim, implant, tm=None, retina=None,
         Scaling factor applied to charge accumulation (used to be called
         epsilon). Default: 42.1.
     tol : float
-        Ignore pixels whose effective current is smaller than tol.
+        Ignore pixels whose effective current is smaller than a fraction `tol`
+        of the max value.
         Default: 0.05.
     use_ecs : bool
         Flag whether to use effective current spread (True) or regular
@@ -364,11 +365,15 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     idx_list = []
     for xx in range(retina.gridx.shape[1]):
         for yy in range(retina.gridx.shape[0]):
-            if np.all(ecs[yy, xx] < tol):
+            if np.all(ecs[yy, xx] < tol * ecs.max()):
                 pass
             else:
                 ecs_list.append(ecs[yy, xx])
                 idx_list.append([yy, xx])
+
+    if verbose:
+        print("tol=%.3f, %d/%d pixels selected" % (tol, len(ecs_list),
+                                                   ecs.size))
 
     # Apply charge accumulation
     for i, p in enumerate(pt_list):
