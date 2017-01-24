@@ -243,6 +243,46 @@ def test_get_pulse():
                         npt.assert_equal(idx_min[0] < idx_max[0], False)
 
 
+def test_image2pulsetrain():
+    # Range of values
+    amp_min = 2
+    amp_max = 15
+
+    # Create a standard Argus I array
+    implant = e2cm.ArgusI()
+
+    # Create a small image with 1 pixel per electrode
+    img = np.zeros((4, 4))
+
+    # An all-zero image should give us a really boring stimulation protocol
+    pulses = e2cm.image2pulsetrain(img, implant, valrange=[amp_min, amp_max])
+    for pt in pulses:
+        npt.assert_equal(pt.data.max(), amp_min)
+    # pulses = e2cm.image2pulsetrain(img, implant, valrange=[amp_min, amp_max],
+    #                                maximize=False, invert=True)
+    # for pt in pulses:
+    #     npt.assert_equal(pt.data.max(), amp_max)
+
+    # Now put some structure in the image
+    img[1, 1] = img[1, 2] = img[2, 1] = img[2, 2] = 0.8
+
+    for max_contrast, val_max in zip([True, False], [amp_max, 0.8 * amp_max]):
+        pt = e2cm.image2pulsetrain(img, implant, coding='amplitude',
+                                   max_contrast=max_contrast,
+                                   rftype='square', rfsize=50,
+                                   valrange=[amp_min, amp_max])
+
+        # Make sure we have one pulse train per electrode
+        npt.assert_equal(len(pt), implant.num_electrodes)
+
+        # Make sure the brightest electrode has `amp_max`
+        npt.assert_almost_equal(np.max([p.data.max() for p in pt]), val_max)
+
+        # make sure the dimmest electrode has `amp_min` as max amplitude
+        npt.assert_almost_equal(np.min([np.abs(p.data).max() for p in pt]),
+                                amp_min)
+
+
 def test_Retina_Electrodes():
     sampling = 1
     xlo = -2
@@ -318,7 +358,23 @@ def test_Psycho2Pulsetrain():
     pdur = 0.45 / 1000
     tsample = 5e-6
     ampl = 20
+    freq = 5
 
+    # First an easy one (sawtooth)...
+    for scale in [1, 2, 5, 10]:
+        print(scale)
+        pt = e2cm.Psycho2Pulsetrain(tsample=0.1 * scale, dur=1.0 * scale,
+                                    freq=freq / scale, amp=ampl * scale,
+                                    pulse_dur=0.1 * scale, interphase_dur=0,
+                                    pulsetype='cathodicfirst',
+                                    pulseorder='pulsefirst')
+        npt.assert_equal(np.sum(pt.data == ampl * scale), freq)
+        npt.assert_equal(np.sum(pt.data == -ampl * scale), freq)
+        npt.assert_equal(pt.data[0], -ampl * scale)
+        npt.assert_equal(pt.data[-1], ampl * scale)
+        npt.assert_equal(len(pt.data), 10)
+
+    # Then some more general ones...
     # Size of array given stimulus duration
     stim_size = int(np.round(dur / tsample))
 

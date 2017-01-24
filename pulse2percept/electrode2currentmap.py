@@ -678,23 +678,51 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
                        Amplitude is held constant at `const_amp`.
         Default: 'amplitude'
     valrange : list, optional
+        Range of stimulation values to be used (If `coding` is 'amplitude',
+        specifies min and max current; if `coding` is 'frequency', specifies
+        min and max frequency).
+        Default: [0, 50]
     max_contrast : bool, optional
+        Flag wether to maximize image contrast (True) or not (False).
+        Default: True
     const_amp : float, optional
+        Constant amplitude value to be sued during frequency coding (only
+        relevant when `coding` is 'frequency').
+        Default: 20
     const_freq : float, optional
+        Constant frequency value to be sued during amplitude coding (only
+        relevant when `coding` is 'amplitude').
+        Default: 20
     rftype : {'square', 'gaussian'}, optional
+        The type of receptive field.
+        - 'square': A simple square box receptive field with side length
+                    `size`.
+        - 'gaussian': A Gaussian receptive field where the weight drops off
+                      as a function of distance from the electrode center.
+                      The standard deviation of the Gaussian is `size`.
     rfsize : float, optional
+        Parameter describing the size of the receptive field. For square
+        receptive fields, this corresponds to the side length of the square.
+        For Gaussian receptive fields, this corresponds to the standard
+        deviation of the Gaussian.
+        Default: Twice the `electrode.radius`
     invert : bool, optional
+        Flag whether to invert the grayscale values of the image (True) or
+        not (False).
+        Default: False
     tsample : float, optional
         Sampling time step (seconds). Default: 0.005 / 1000 seconds.
     dur : float, optional
         Stimulus duration (seconds). Default: 0.5 seconds.
     pulsedur : float, optional
+        Duration of single (positive or negative) pulse phase in seconds.
     interphasedur : float, optional
-    pulsetype: {'cathodicfirst', 'anodicfirst'}, optional
-
+        Duration of inter-phase interval (between positive and negative
+        pulse) in seconds.
+    pulsetype : {'cathodicfirst', 'anodicfirst'}, optional
+        A cathodic-first pulse has the negative phase first, whereas an
+        anodic-first pulse has the positive phase first.
     """
-
-    # TODO: Default RF size could be half of the electrode gap?
     try:
         from skimage.io import imread
         from skimage.transform import resize
@@ -707,30 +735,26 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
 
     if isinstance(img, str):
         # Load image from filename
-        img_large = imread(img, as_grey=True).astype(np.float32)
+        img_orig = imread(img, as_grey=True).astype(np.float32)
     else:
         if img.ndim == 2:
             # Grayscale
-            img_large = img.astype(np.float32)
+            img_orig = img.astype(np.float32)
         else:
             # Assume RGB, convert to grayscale
             assert img.shape[-1] == 3
-            img_large = rgb2gray(np.array(img)).astype(np.float32)
+            img_orig = rgb2gray(np.array(img)).astype(np.float32)
 
     # Make sure all pixels are between 0 and 1
-    if img_large.max() > 1.0:
-        img_large /= 255.0
-    assert np.all(img_large >= 0.0) and np.all(img_large <= 1.0)
+    if img_orig.max() > 1.0:
+        img_orig /= 255.0
+    assert np.all(img_orig >= 0.0) and np.all(img_orig <= 1.0)
 
     if invert:
-        img_large = 1.0 - img_large
+        img_orig = 1.0 - img_orig
 
-    if max_contrast:
-        # Maximize contrast
-        img_large -= img_large.min()
-        img_large /= img_large.max()
-    else:
-        assert np.max(img_large) <= 1.0
+    print("img orig")
+    print(img_orig)
 
     # Center the image on the implant
     xyr = np.array([[e.x_center, e.y_center, e.radius] for e in implant])
@@ -739,9 +763,8 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     ylo = np.min(xyr[:, 1] - xyr[:, 2])
     yhi = np.max(xyr[:, 1] + xyr[:, 2])
 
-    # Resize the image accordingly (rows, columns) and flip upside down
-    img_resize = resize(img_large, (yhi - ylo, xhi - xlo))
-    img_resize = np.flipud(img_resize)
+    # Resize the image accordingly (rows, columns)
+    img_resize = resize(img_orig, (yhi - ylo, xhi - xlo))
 
     # Make a grid that has the image's coordinates on the retina
     yg = np.linspace(ylo, yhi, img_resize.shape[0])
@@ -757,8 +780,17 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
 
     if max_contrast:
         # Normalize contrast to valrange
-        magn = (magn - magn.min()) / (magn.max() - magn.min())
-        magn = magn * np.diff(valrange) + valrange[0]
+        if magn.min() < magn.max():
+            magn = (magn - magn.min()) / (magn.max() - magn.min())
+
+    print("magn before")
+    print(magn.reshape((4, 4)))
+
+    # With `magn` between 0 and 1, now scale to valrange
+    magn = magn * np.diff(valrange) + valrange[0]
+
+    print("magn after")
+    print(magn.reshape((4, 4)))
 
     # Map magnitude to either freq or amp of pulse train
     pulses = []
@@ -877,7 +909,7 @@ class Psycho2Pulsetrain(TimeSeries):
             envelope_size = np.inf
 
         # Make sure values are valid, else return all zeros
-        if amp == 0 or envelope_size >= stim_size:
+        if amp == 0 or envelope_size > stim_size:
             TimeSeries.__init__(self, tsample, np.zeros(stim_size))
             return
 
