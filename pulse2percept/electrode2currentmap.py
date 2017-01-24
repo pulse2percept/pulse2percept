@@ -10,7 +10,7 @@ from scipy import interpolate
 from scipy.misc import factorial
 
 from pulse2percept import oyster
-from pulse2percept.utils import TimeSeries, randomly
+from pulse2percept.utils import TimeSeries, traverse_randomly
 
 
 def micron2deg(micron):
@@ -321,7 +321,7 @@ class ElectrodeArray(object):
         # Is `name` a valid electrode name?
         # Iterate through electrodes to find a matching name. Shuffle list
         # to reduce time complexity of average lookup.
-        for idx, electrode in randomly(enumerate(self.electrodes)):
+        for idx, electrode in traverse_randomly(enumerate(self.electrodes)):
             if electrode.name == name:
                 return idx
 

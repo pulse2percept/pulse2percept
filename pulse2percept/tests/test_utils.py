@@ -61,14 +61,14 @@ def test_parfor():
                      power_it(my_array[0, 0]))
 
 
-def test_randomly():
+def test_traverse_randomly():
     # Generate a list of integers
     sequence = np.arange(100).tolist()
 
     # Iterate the sequence in random order
     shuffled_idx = []
     shuffled_val = []
-    for idx, value in enumerate(utils.randomly(sequence)):
+    for idx, value in enumerate(utils.traverse_randomly(sequence)):
         shuffled_idx.append(idx)
         shuffled_val.append(value)
 

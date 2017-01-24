@@ -259,13 +259,27 @@ def mov2npy(movie_file, out_file):
     np.save(out_file, frames)
 
 
-def randomly(seq):
+def traverse_randomly(seq):
     """Traverses a list in random order
 
     Parameters
     ----------
     seq : list
         An iterable list of elements.
+    Returns
+    -------
+    A list iterator.
+
+    Examples
+    --------
+    Shuffle a list:
+    >>> list_ordered = [0, 1, 2, 3]
+    >>> list_shuffled = [l for l in traverse_randomly(list_ordered)]
+
+    Traverse a list in random order:
+    >>> list_ordered = [0, 1, 2, 3]
+    >>> for idx, val in traverse_randomly(enumerate(list_ordered)):
+    ...     pass
 
     Notes
     -----
