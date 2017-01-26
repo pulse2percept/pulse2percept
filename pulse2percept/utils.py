@@ -3,6 +3,8 @@ Utility functions for pulse2percept
 """
 import numpy as np
 import multiprocessing
+import random
+
 
 try:
     from numba import jit
@@ -257,23 +259,40 @@ def mov2npy(movie_file, out_file):
     np.save(out_file, frames)
 
 
-def memory_usage():
-    """Memory usage of the current process in kilobytes.
+def traverse_randomly(seq):
+    """Traverses a list in random order
 
-    This works only on systems with a /proc file system
-    (like Linux).
-    http://stackoverflow.com/questions/897941/python-equivalent-of-phps-memory-get-usage/7669279
+    Parameters
+    ----------
+    seq : list
+        An iterable list of elements.
+    Returns
+    -------
+    A list iterator.
+
+    Examples
+    --------
+    Shuffle a list:
+    >>> list_ordered = [0, 1, 2, 3]
+    >>> list_shuffled = [l for l in traverse_randomly(list_ordered)]
+
+    Traverse a list in random order:
+    >>> list_ordered = [0, 1, 2, 3]
+    >>> for idx, val in traverse_randomly(enumerate(list_ordered)):
+    ...     pass
+
+    Notes
+    -----
+    From: http://stackoverflow.com/a/9253366
+    Note that even for rather small `len(x)`, the total number of permutations
+    of `seq` can quickly grow larger than the period of most random number
+    generators. For example, a sequence of length 2080 is the largest that can
+    fit within the period of the Mersenne Twister random number generator.
     """
-    status = None
-    result = {'peak': 0, 'rss': 0}
-    try:
-        status = open('/proc/self/status')
-        for line in status:
-            parts = line.split()
-            key = parts[0][2:-1].lower()
-            if key in result:
-                result[key] = int(parts[1])
-    finally:
-        if status is not None:
-            status.close()
-    return result
+    # Make sure we are dealing with a list
+    shuffled = list(seq)
+
+    # Import `random` at module level (for performance)
+    random.shuffle(shuffled)
+
+    return iter(shuffled)

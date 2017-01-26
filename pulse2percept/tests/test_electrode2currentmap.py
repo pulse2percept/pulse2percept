@@ -22,6 +22,21 @@ def test_Electrode():
         # npt.assert_equal(e.h, hh)
         npt.assert_equal(e.etype, tt)
         npt.assert_equal(e.name, nn)
+        if tt.lower() == 'epiretinal':
+            # `height` property should return `h_nfl`
+            npt.assert_equal(e.height, e.h_nfl)
+
+            # `h_nfl` should be the same as the user-specified height
+            npt.assert_equal(e.height, hh)
+
+            # `h_inl` should be further away from the array
+            npt.assert_equal(e.h_inl > hh, True)
+        else:
+            # `height` property should return `h_inl`
+            npt.assert_equal(e.height, e.h_inl)
+
+            # Subretinal arrays have layer thicknesses added to `hh`.
+            npt.assert_equal(e.height > hh, True)
 
 
 def test_ElectrodeArray():
@@ -51,8 +66,8 @@ def test_ElectrodeArray():
         npt.assert_equal(el.radius, v)
         npt.assert_equal(el.x_center, v)
         npt.assert_equal(el.y_center, v)
-        npt.assert_equal(el.h_inl, v + 23 / 2)
-        npt.assert_equal(el.h_nfl, v + 83)
+        npt.assert_equal(el.h_inl, v + 23.0 / 2.0)
+        npt.assert_equal(el.h_nfl, v + 83.0)
 
 
 def test_ArgusI():
@@ -98,19 +113,28 @@ def test_ArgusI():
     with pytest.raises(ValueError):
         e2cm.ArgusI(-100, 10, h=np.zeros(5))
 
-    # Indexing must work for both integers and electrode names
-    argus = e2cm.ArgusI()
-    for idx, name in zip(range(16), argus.names):
-        npt.assert_equal(argus[idx], argus[name])
-        npt.assert_equal(argus[idx].name, name)
-    npt.assert_equal(argus[16], None)
-    npt.assert_equal(argus["unlikely name for an electrode"], None)
+    for use_legacy_names in [False, True]:
+        # Indexing must work for both integers and electrode names
+        argus = e2cm.ArgusI(use_legacy_names=use_legacy_names)
+        for idx, electrode in enumerate(argus):
+            name = electrode.name
+            npt.assert_equal(electrode, argus[idx])
+            npt.assert_equal(electrode, argus[name])
+        npt.assert_equal(argus[16], None)
+        npt.assert_equal(argus["unlikely name for an electrode"], None)
 
-    # Indexing must have the right order
-    npt.assert_equal(argus.get_index('B1'), 1)
-    npt.assert_equal(argus['B1'], argus[1])
-    npt.assert_equal(argus.get_index('A2'), 4)
-    npt.assert_equal(argus['A2'], argus[4])
+        if use_legacy_names:
+            name_idx1 = 'L2'
+            name_idx4 = 'L5'
+        else:
+            name_idx1 = 'B1'
+            name_idx4 = 'A2'
+
+        # Indexing must have the right order
+        npt.assert_equal(argus.get_index(name_idx1), 1)
+        npt.assert_equal(argus[name_idx1], argus[1])
+        npt.assert_equal(argus.get_index(name_idx4), 4)
+        npt.assert_equal(argus[name_idx4], argus[4])
 
 
 def test_ArgusII():
@@ -158,9 +182,10 @@ def test_ArgusII():
 
     # Indexing must work for both integers and electrode names
     argus = e2cm.ArgusII()
-    for idx, name in zip(range(60), argus.names):
-        npt.assert_equal(argus[idx], argus[name])
-        npt.assert_equal(argus[idx].name, name)
+    for idx, electrode in enumerate(argus):
+        name = electrode.name
+        npt.assert_equal(electrode, argus[idx])
+        npt.assert_equal(electrode, argus[name])
     npt.assert_equal(argus[60], None)
     npt.assert_equal(argus["unlikely name for an electrode"], None)
 
@@ -228,6 +253,9 @@ def test_Retina_Electrodes():
                          sampling=sampling, save_data=False)
     npt.assert_equal(retina.gridx.shape, ((yhi - ylo) / sampling + 1,
                                           (xhi - xlo) / sampling + 1))
+    npt.assert_equal(retina.range_x, retina.gridx.max() - retina.gridx.min())
+    npt.assert_equal(retina.range_y, retina.gridy.max() - retina.gridy.min())
+
     electrode1 = e2cm.Electrode('epiretinal', 1, 0, 0, 0)
 
     # Calculate current spread for all retinal layers

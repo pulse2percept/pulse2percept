@@ -10,7 +10,7 @@ from scipy import interpolate
 from scipy.misc import factorial
 
 from pulse2percept import oyster
-from pulse2percept.utils import TimeSeries
+from pulse2percept.utils import TimeSeries, traverse_randomly
 
 
 def micron2deg(micron):
@@ -91,6 +91,46 @@ class Electrode(object):
         name : string
             Electrode name
 
+        """
+        assert radius >= 0
+        assert height >= 0
+
+        if etype.lower() not in ['epiretinal', 'subretinal']:
+            e_s = "Acceptable values for `etype` are: 'epiretinal', "
+            e_s += "'subretinal'."
+            raise ValueError(e_s)
+
+        self.etype = etype.lower()
+        self.radius = radius
+        self.x_center = x_center
+        self.y_center = y_center
+        self.name = name
+        self.height = height
+
+    def get_height(self):
+        """Returns the electrode-retina distance
+
+        For epiretinal electrodes, this returns the distance to the ganglion
+        cell layer.
+        For subretinal electrodes, this returns the distance to the bipolar
+        layer.
+        """
+        if self.etype == 'epiretinal':
+            return self.h_nfl
+        elif self.etype == 'subretinal':
+            return self.h_inl
+        else:
+            raise ValueError("Unknown `etype`: " + self.etype)
+
+    def set_height(self, height):
+        """Sets the electrode-to-retina distance
+
+        This function sets the electrode-to-retina distance according to
+        `height`. For an epiretinal device, we calculate the distance to
+        the ganglion cell layer (layer thickness depends on retinal location).
+        For a subretinal device, we calculate the distance to the bipolar
+        layer (layer thickness again depends on retinal location).
+
         Estimates of layer thickness based on:
         LoDuca et al. Am J. Ophthalmology 2011
         Thickness Mapping of Retinal Layers by Spectral Domain Optical
@@ -116,39 +156,46 @@ class Electrode(object):
         So for an epiretinal array the bipolar layer is L1+L2+(.5*L3).
 
         """
-        assert radius >= 0
-        assert height >= 0
-
-        self.etype = etype
-        self.radius = radius
-        self.x_center = x_center
-        self.y_center = y_center
-        self.name = name
-
-        fovdist = np.sqrt(x_center ** 2 + y_center ** 2)
-
-        if etype == 'epiretinal':
-            self.h_nfl = height
-            if fovdist <= 600:
-                self.h_inl = height + 71.5
-            elif fovdist <= 1550:
-                self.h_inl = height + 139.75
-            elif fovdist > 1550:
-                self.h_inl = height + 119.075
-        elif etype == 'subretinal':
-            if fovdist <= 600:
-                self.h_inl = height + 23 / 2
-                self.h_nfl = height + 83
-            elif fovdist <= 1550:
-                self.h_inl = height + 37.5 / 2
-                self.h_nfl = height + 158.5
-            elif fovdist > 1550:
-                self.h_inl = height + 30.75 / 2
-                self.h_nfl = height + 141.45
+        fovdist = np.sqrt(self.x_center ** 2 + self.y_center ** 2)
+        if fovdist <= 600:
+            # Layer thicknesses given for 0-600 um distance (from fovea)
+            th_nfl = 4.0  # nerve fiber layer
+            th_gc = 56.0  # ganglion cell bodies + inner nuclear layer
+            th_bp = 23.0  # bipolar bodies + inner nuclear layer
+        elif fovdist <= 1550:
+            # Layer thicknesses given for 600-1550 um distance (from fovea)
+            th_nfl = 34.0
+            th_gc = 87.0
+            th_bp = 37.5
         else:
-            e_s = "Acceptable values for `ptype` are: 'epiretinal', "
-            e_s += "'subretinal'."
-            raise ValueError(e_s)
+            # Layer thicknesses given for 1550-3000 um distance (from fovea)
+            th_nfl = 45.5
+            th_gc = 58.2
+            th_bp = 30.75
+            if fovdist > 3000:
+                e_s = "Warning: Distance to fovea > 3000 um, assuming same "
+                e_s += "layer thicknesses as for 1550-3000 um distance."
+                print(e_s)
+
+        if self.etype == 'epiretinal':
+            # This is simply the electrode-retina distance
+            self.h_nfl = height
+
+            # All the way through the ganglion cell layer, inner plexiform
+            # layer, and halfway through the inner nuclear layer
+            self.h_inl = height + th_nfl + th_gc + 0.5 * th_bp
+        elif self.etype == 'subretinal':
+            # Starting from the outer plexiform layer, go halfway through the
+            # inner nuclear layer
+            self.h_inl = height + 0.5 * th_bp
+
+            # Starting from the outer plexiform layer, all the way through the
+            # inner nuclear layer, inner plexiform layer, and ganglion cell
+            # layer
+            self.h_nfl = height + th_bp + th_gc + th_nfl
+        else:
+            raise ValueError("Unknown `etype`: " + self.etype)
+    height = property(get_height, set_height)
 
     def current_spread(self, xg, yg, layer, alpha=14000, n=1.69):
         """
@@ -247,8 +294,6 @@ class ElectrodeArray(object):
         Get access to the second electrode in the array:
         >>> my_electrode = implant2[1]
 
-
-
         """
         # Make it so the constructor can accept either floats, lists, or
         # numpy arrays, and `zip` works regardless.
@@ -265,7 +310,6 @@ class ElectrodeArray(object):
 
         self.etype = etype
         self.num_electrodes = names.size
-        self.names = names
         self.electrodes = []
         for r, x, y, h, n in zip(radii, xs, ys, hs, names):
             self.electrodes.append(Electrode(etype, r, x, y, h, n))
@@ -310,18 +354,21 @@ class ElectrodeArray(object):
         -------
         A valid electrode index or None.
         """
-        try:
-            # Is `name` a valid electrode name?
-            idx = self.names.tolist().index(name)
-            return idx
-        except:
-            # Else: `name` could not be found.
-            return None
+        # Is `name` a valid electrode name?
+        # Iterate through electrodes to find a matching name. Shuffle list
+        # to reduce time complexity of average lookup.
+        for idx, electrode in traverse_randomly(enumerate(self.electrodes)):
+            if electrode.name == name:
+                return idx
+
+        # Worst case O(n): name could not be found.
+        return None
 
 
 class ArgusI(ElectrodeArray):
 
-    def __init__(self, x_center=0, y_center=0, h=0, rot=0 * np.pi / 180):
+    def __init__(self, x_center=0, y_center=0, h=0, rot=0 * np.pi / 180,
+                 use_legacy_names=False):
         """Create an ArgusI array on the retina
 
         This function creates an ArgusI array and places it on the retina
@@ -338,6 +385,7 @@ class ArgusI(ElectrodeArray):
         -->x    A4 B4 C4 D4                     520 260 520 260
 
         Electrode order is: A1, B1, C1, D1, A2, B2, ..., D4.
+        If `use_legacy_names` is True, electrode order is: L6, L2, M8, M4, ...
         An electrode can be addressed by index (integer) or name.
 
         Parameters
@@ -369,9 +417,17 @@ class ArgusI(ElectrodeArray):
         r_arr = np.concatenate((r_arr, r_arr[::-1], r_arr, r_arr[::-1]),
                                axis=0)
 
-        # Standard Argus I names: A1, B1, C1, D1, A1, B2, ..., D4
-        # Shortcut: Use `chr` to go from int to char
-        names = [chr(i) + str(j) for j in range(1, 5) for i in range(65, 69)]
+        if use_legacy_names:
+            # Legacy Argus I names
+            names = ['L6', 'L2', 'M8', 'M4',
+                     'L5', 'L1', 'M7', 'M3',
+                     'L8', 'L4', 'M6', 'M2',
+                     'L7', 'L3', 'M5', 'M1']
+        else:
+            # Standard Argus I names: A1, B1, C1, D1, A1, B2, ..., D4
+            # Shortcut: Use `chr` to go from int to char
+            names = [chr(i) + str(j) for j in range(1, 5)
+                     for i in range(65, 69)]
 
         if isinstance(h, list):
             h_arr = np.array(h).flatten()
@@ -403,7 +459,6 @@ class ArgusI(ElectrodeArray):
 
         self.etype = 'epiretinal'
         self.num_electrodes = len(names)
-        self.names = np.array(names, dtype=np.str)
         self.electrodes = []
         for r, x, y, h, n in zip(r_arr, x_arr, y_arr, h_arr, names):
             self.electrodes.append(Electrode(self.etype, r, x, y, h, n))
@@ -493,7 +548,6 @@ class ArgusII(ElectrodeArray):
 
         self.etype = 'epiretinal'
         self.num_electrodes = len(names)
-        self.names = np.array(names, dtype=np.str)
         self.electrodes = []
         for r, x, y, h, n in zip(r_arr, x_arr, y_arr, h_arr, names):
             self.electrodes.append(Electrode(self.etype, r, x, y, h, n))
@@ -684,7 +738,7 @@ class Psycho2Pulsetrain(TimeSeries):
                              "interval.")
         gap = np.zeros(gap_size)
 
-        pulse_train = []
+        pulse_train = np.array([])
         for j in range(int(np.round(dur * freq))):
             if pulseorder == 'pulsefirst':
                 pulse_train = np.concatenate((pulse_train, delay, pulse,
@@ -838,6 +892,8 @@ class Retina(object):
         self.axon_weight = axon_weight
         self.jan_x = jan_x
         self.jan_y = jan_y
+        self.range_x = self.gridx.max() - self.gridx.min()
+        self.range_y = self.gridy.max() - self.gridy.min()
 
     def cm2ecm(self, cs):
         """
