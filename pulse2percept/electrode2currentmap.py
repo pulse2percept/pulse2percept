@@ -159,13 +159,13 @@ class Electrode(object):
         fovdist = np.sqrt(self.x_center ** 2 + self.y_center ** 2)
         if fovdist <= 600:
             # Layer thicknesses given for 0-600 um distance (from fovea)
-            th_nfl = 4  # nerve fiber layer
-            th_gc = 56  # ganglion cell bodies + inner nuclear layer
-            th_bp = 23  # bipolar bodies + inner nuclear layer
+            th_nfl = 4.0  # nerve fiber layer
+            th_gc = 56.0  # ganglion cell bodies + inner nuclear layer
+            th_bp = 23.0  # bipolar bodies + inner nuclear layer
         elif fovdist <= 1550:
             # Layer thicknesses given for 600-1550 um distance (from fovea)
-            th_nfl = 34
-            th_gc = 87
+            th_nfl = 34.0
+            th_gc = 87.0
             th_bp = 37.5
         else:
             # Layer thicknesses given for 1550-3000 um distance (from fovea)

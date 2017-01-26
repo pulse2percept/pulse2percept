@@ -66,8 +66,8 @@ def test_ElectrodeArray():
         npt.assert_equal(el.radius, v)
         npt.assert_equal(el.x_center, v)
         npt.assert_equal(el.y_center, v)
-        npt.assert_equal(el.h_inl, v + 23 / 2)
-        npt.assert_equal(el.h_nfl, v + 83)
+        npt.assert_equal(el.h_inl, v + 23.0 / 2.0)
+        npt.assert_equal(el.h_nfl, v + 83.0)
 
 
 def test_ArgusI():
