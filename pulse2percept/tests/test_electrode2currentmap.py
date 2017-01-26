@@ -22,6 +22,21 @@ def test_Electrode():
         # npt.assert_equal(e.h, hh)
         npt.assert_equal(e.etype, tt)
         npt.assert_equal(e.name, nn)
+        if tt.lower() == 'epiretinal':
+            # `height` property should return `h_nfl`
+            npt.assert_equal(e.height, e.h_nfl)
+
+            # `h_nfl` should be the same as the user-specified height
+            npt.assert_equal(e.height, hh)
+
+            # `h_inl` should be further away from the array
+            npt.assert_equal(e.h_inl > hh, True)
+        else:
+            # `height` property should return `h_inl`
+            npt.assert_equal(e.height, e.h_inl)
+
+            # Subretinal arrays have layer thicknesses added to `hh`.
+            npt.assert_equal(e.height > hh, True)
 
 
 def test_ElectrodeArray():

@@ -95,12 +95,32 @@ class Electrode(object):
         assert radius >= 0
         assert height >= 0
 
-        self.etype = etype
+        if etype.lower() not in ['epiretinal', 'subretinal']:
+            e_s = "Acceptable values for `etype` are: 'epiretinal', "
+            e_s += "'subretinal'."
+            raise ValueError(e_s)
+
+        self.etype = etype.lower()
         self.radius = radius
         self.x_center = x_center
         self.y_center = y_center
         self.name = name
-        self.set_height(height)
+        self.height = height
+
+    def get_height(self):
+        """Returns the electrode-retina distance
+
+        For epiretinal electrodes, this returns the distance to the ganglion
+        cell layer.
+        For subretinal electrodes, this returns the distance to the bipolar
+        layer.
+        """
+        if self.etype == 'epiretinal':
+            return self.h_nfl
+        elif self.etype == 'subretinal':
+            return self.h_inl
+        else:
+            raise ValueError("Unknown `etype`: " + self.etype)
 
     def set_height(self, height):
         """Sets the electrode-to-retina distance
@@ -137,29 +157,45 @@ class Electrode(object):
 
         """
         fovdist = np.sqrt(self.x_center ** 2 + self.y_center ** 2)
+        if fovdist <= 600:
+            # Layer thicknesses given for 0-600 um distance (from fovea)
+            th_nfl = 4  # nerve fiber layer
+            th_gc = 56  # ganglion cell bodies + inner nuclear layer
+            th_bp = 23  # bipolar bodies + inner nuclear layer
+        elif fovdist <= 1550:
+            # Layer thicknesses given for 600-1550 um distance (from fovea)
+            th_nfl = 34
+            th_gc = 87
+            th_bp = 37.5
+        else:
+            # Layer thicknesses given for 1550-3000 um distance (from fovea)
+            th_nfl = 45.5
+            th_gc = 58.2
+            th_bp = 30.75
+            if fovdist > 3000:
+                e_s = "Warning: Distance to fovea > 3000 um, assuming same "
+                e_s += "layer thicknesses as for 1550-3000 um distance."
+                print(e_s)
 
         if self.etype == 'epiretinal':
+            # This is simply the electrode-retina distance
             self.h_nfl = height
-            if fovdist <= 600:
-                self.h_inl = height + 71.5
-            elif fovdist <= 1550:
-                self.h_inl = height + 139.75
-            elif fovdist > 1550:
-                self.h_inl = height + 119.075
+
+            # All the way through the ganglion cell layer, inner plexiform
+            # layer, and halfway through the inner nuclear layer
+            self.h_inl = height + th_nfl + th_gc + 0.5 * th_bp
         elif self.etype == 'subretinal':
-            if fovdist <= 600:
-                self.h_inl = height + 23 / 2
-                self.h_nfl = height + 83
-            elif fovdist <= 1550:
-                self.h_inl = height + 37.5 / 2
-                self.h_nfl = height + 158.5
-            elif fovdist > 1550:
-                self.h_inl = height + 30.75 / 2
-                self.h_nfl = height + 141.45
+            # Starting from the outer plexiform layer, go halfway through the
+            # inner nuclear layer
+            self.h_inl = height + 0.5 * th_bp
+
+            # Starting from the outer plexiform layer, all the way through the
+            # inner nuclear layer, inner plexiform layer, and ganglion cell
+            # layer
+            self.h_nfl = height + th_bp + th_gc + th_nfl
         else:
-            e_s = "Acceptable values for `ptype` are: 'epiretinal', "
-            e_s += "'subretinal'."
-            raise ValueError(e_s)
+            raise ValueError("Unknown `etype`: " + self.etype)
+    height = property(get_height, set_height)
 
     def current_spread(self, xg, yg, layer, alpha=14000, n=1.69):
         """
