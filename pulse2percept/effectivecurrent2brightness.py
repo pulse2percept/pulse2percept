@@ -200,7 +200,7 @@ class TemporalModel(object):
         # the dimensions of the input signal.
         return self.scale_slow * self.tsample * conv[:b4.shape[-1]]
 
-    def model_cascade(self, ecm, dolayer, dojit):
+    def model_cascade(self, ecm, dolayers, dojit):
         """Model cascade according to Nanduri et al. (2012).
 
         The 'Nanduri' model calculates the fast response first, followed by the
@@ -218,14 +218,14 @@ class TemporalModel(object):
             maximum value of this signal was used to represent the perceptual
             brightness of a particular location in space, B(r).
         """
-        if 'INL' in dolayer:
+        if 'INL' in dolayers:
             resp_inl = self.fast_response(ecm[0].data, self.gamma_inl,
                                           dojit=dojit,
                                           usefft=True)
         else:
             resp_inl = np.zeros((ecm[0].data.shape))
 
-        if 'NFL' in dolayer:
+        if 'NFL' in dolayers:
             resp_nfl = self.fast_response(ecm[1].data, self.gamma_nfl,
                                           dojit=dojit,
                                           usefft=False)
@@ -352,6 +352,15 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     elif not isinstance(retina, e2cm.Retina):
         raise TypeError("`retina` object must be of type e2cm.Retina")
 
+    # Which layer to simulate is given by implant type
+    if implant.etype == 'epiretinal':
+        dolayers = ['NFL', 'INL']  # nerve fiber layer
+    elif implant.etype == 'subretinal':
+        dolayers = ['INL', 'NFL']  # inner nuclear layer
+    else:
+        e_s = "Supported electrode types are 'epiretinal', 'subretinal'"
+        raise ValueError(e_s)
+
     # Derive the effective current spread
     if use_ecs:
         ecs, _ = retina.electrode_ecs(implant)
@@ -365,15 +374,23 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     idx_list = []
     for xx in range(retina.gridx.shape[1]):
         for yy in range(retina.gridx.shape[0]):
-            if np.all(ecs[yy, xx] < tol * ecs.max()):
-                pass
-            else:
+            # If any of the used current spread maps at [yy, xx] are above
+            # tolerance, we need to process that pixel
+            process_pixel = False
+            if 'INL' in dolayers:
+                layer = ecs[yy, xx, 0, :]
+                process_pixel |= np.any(layer >= tol * layer.max())
+            if 'NFL' in dolayers:
+                layer = ecs[yy, xx, 1, :]
+                process_pixel |= np.any(layer >= tol * layer.max())
+
+            if process_pixel:
                 ecs_list.append(ecs[yy, xx])
                 idx_list.append([yy, xx])
 
     if verbose:
-        print("tol=%.3f, %d/%d pixels selected" % (tol, len(ecs_list),
-                                                   ecs.size))
+        print("tol=%.2f%%, %d/%d pixels selected" % (tol * 100, len(ecs_list),
+                                                     np.prod(ecs.shape[:2])))
 
     # Apply charge accumulation
     for i, p in enumerate(pt_list):
@@ -390,28 +407,19 @@ def pulse2percept(stim, implant, tm=None, retina=None,
         pt_list[i].data[idx] = np.maximum(p.data[idx] - conv_ca[idx], 0)
     pt_arr = np.array([p.data for p in pt_list])
 
-    # Which layer to simulate is given by implant type
-    if implant.etype == 'epiretinal':
-        dolayer = 'NFL'  # nerve fiber layer
-    elif implant.etype == 'subretinal':
-        dolayer = 'INL'  # inner nuclear layer
-    else:
-        e_s = "Supported electrode types are 'epiretinal', 'subretinal'"
-        raise ValueError(e_s)
-
     sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs, engine=engine,
-                           func_args=[pt_arr, tm, rsample, dolayer, dojit])
+                           func_args=[pt_arr, tm, rsample, dolayers, dojit])
     bm = np.zeros(retina.gridx.shape + (sr_list[0].data.shape[-1], ))
     idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
     bm[idxer] = [sr.data for sr in sr_list]
     return utils.TimeSeries(sr_list[0].tsample, bm)
 
 
-def calc_pixel(ecs_item, pt, tm, resample, dolayer,
+def calc_pixel(ecs_item, pt, tm, resample, dolayers,
                dojit=False):
     ecm = e2cm.ecm(ecs_item, pt, tm.tsample)
     # converts the current map to one that includes axon streaks
-    sr = tm.model_cascade(ecm, dolayer, dojit=dojit)
+    sr = tm.model_cascade(ecm, dolayers, dojit=dojit)
     sr.resample(resample)
     return sr
 

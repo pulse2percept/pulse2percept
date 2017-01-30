@@ -173,8 +173,9 @@ class Electrode(object):
             th_gc = 58.2
             th_bp = 30.75
             if fovdist > 3000:
-                e_s = "Warning: Distance to fovea > 3000 um, assuming same "
-                e_s += "layer thicknesses as for 1550-3000 um distance."
+                e_s = "Warning: Distance to fovea=%.0f > 3000 um, " % fovdist
+                e_s += "assuming same layer thicknesses as for 1550-3000 um "
+                e_s += "distance."
                 print(e_s)
 
         if self.etype == 'epiretinal':
