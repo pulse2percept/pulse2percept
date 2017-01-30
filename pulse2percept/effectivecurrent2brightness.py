@@ -352,11 +352,13 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     elif not isinstance(retina, e2cm.Retina):
         raise TypeError("`retina` object must be of type e2cm.Retina")
 
-    # Which layer to simulate is given by implant type
+    # Which layer to simulate is given by implant type.
+    # For now, both implant types process the same two layers. In the
+    # future, these layers might differ. Order doesn't matter.
     if implant.etype == 'epiretinal':
         dolayers = ['NFL', 'INL']  # nerve fiber layer
     elif implant.etype == 'subretinal':
-        dolayers = ['INL', 'NFL']  # inner nuclear layer
+        dolayers = ['NFL', 'INL']  # inner nuclear layer
     else:
         e_s = "Supported electrode types are 'epiretinal', 'subretinal'"
         raise ValueError(e_s)

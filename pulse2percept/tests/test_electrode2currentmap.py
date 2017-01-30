@@ -365,8 +365,8 @@ def test_Psycho2Pulsetrain():
                                     pulse_dur=0.1 * scale, interphase_dur=0,
                                     pulsetype='cathodicfirst',
                                     pulseorder='pulsefirst')
-        npt.assert_equal(np.sum(pt.data == ampl * scale), freq)
-        npt.assert_equal(np.sum(pt.data == -ampl * scale), freq)
+        npt.assert_equal(np.sum(np.isclose(pt.data, ampl * scale)), freq)
+        npt.assert_equal(np.sum(np.isclose(pt.data, -ampl * scale)), freq)
         npt.assert_equal(pt.data[0], -ampl * scale)
         npt.assert_equal(pt.data[-1], ampl * scale)
         npt.assert_equal(len(pt.data), 10)
