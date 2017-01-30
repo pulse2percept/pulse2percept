@@ -258,15 +258,11 @@ def test_image2pulsetrain():
     pulses = e2cm.image2pulsetrain(img, implant, valrange=[amp_min, amp_max])
     for pt in pulses:
         npt.assert_equal(pt.data.max(), amp_min)
-    # pulses = e2cm.image2pulsetrain(img, implant, valrange=[amp_min, amp_max],
-    #                                maximize=False, invert=True)
-    # for pt in pulses:
-    #     npt.assert_equal(pt.data.max(), amp_max)
 
     # Now put some structure in the image
-    img[1, 1] = img[1, 2] = img[2, 1] = img[2, 2] = 0.8
+    img[1, 1] = img[1, 2] = img[2, 1] = img[2, 2] = 0.75
 
-    for max_contrast, val_max in zip([True, False], [amp_max, 0.8 * amp_max]):
+    for max_contrast, val_max in zip([True, False], [amp_max, 0.75 * amp_max]):
         pt = e2cm.image2pulsetrain(img, implant, coding='amplitude',
                                    max_contrast=max_contrast,
                                    rftype='square', rfsize=50,
@@ -276,11 +272,12 @@ def test_image2pulsetrain():
         npt.assert_equal(len(pt), implant.num_electrodes)
 
         # Make sure the brightest electrode has `amp_max`
-        npt.assert_almost_equal(np.max([p.data.max() for p in pt]), val_max)
+        npt.assert_equal(np.round(np.max([p.data.max() for p in pt])),
+                         np.round(val_max))
 
-        # make sure the dimmest electrode has `amp_min` as max amplitude
+        # Make sure the dimmest electrode has `amp_min` as max amplitude
         npt.assert_almost_equal(np.min([np.abs(p.data).max() for p in pt]),
-                                amp_min)
+                                amp_min, decimal=1)
 
 
 def test_Retina_Electrodes():

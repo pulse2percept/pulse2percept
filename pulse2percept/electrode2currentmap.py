@@ -753,9 +753,6 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     if invert:
         img_orig = 1.0 - img_orig
 
-    print("img orig")
-    print(img_orig)
-
     # Center the image on the implant
     xyr = np.array([[e.x_center, e.y_center, e.radius] for e in implant])
     xlo = np.min(xyr[:, 0] - xyr[:, 2])
@@ -775,7 +772,7 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     magn = []
     for e in implant:
         rf = receptive_field(e, xg, yg, rftype, rfsize)
-        magn.append(np.mean(rf.T * img_resize))
+        magn.append(np.sum(rf.T * img_resize) / np.sum(rf))
     magn = np.array(magn)
 
     if max_contrast:
@@ -783,14 +780,8 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
         if magn.min() < magn.max():
             magn = (magn - magn.min()) / (magn.max() - magn.min())
 
-    print("magn before")
-    print(magn.reshape((4, 4)))
-
     # With `magn` between 0 and 1, now scale to valrange
     magn = magn * np.diff(valrange) + valrange[0]
-
-    print("magn after")
-    print(magn.reshape((4, 4)))
 
     # Map magnitude to either freq or amp of pulse train
     pulses = []
