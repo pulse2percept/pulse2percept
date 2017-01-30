@@ -354,17 +354,17 @@ def test_Psycho2Pulsetrain():
     dur = 0.5
     pdur = 0.45 / 1000
     tsample = 5e-6
-    ampl = 20
-    freq = 5
+    ampl = 20.0
+    freq = 5.0
 
     # First an easy one (sawtooth)...
-    for scale in [1, 2, 5, 10]:
-        print(scale)
+    for scale in [1.0, 2.0, 5.0, 10.0]:
         pt = e2cm.Psycho2Pulsetrain(tsample=0.1 * scale, dur=1.0 * scale,
                                     freq=freq / scale, amp=ampl * scale,
                                     pulse_dur=0.1 * scale, interphase_dur=0,
                                     pulsetype='cathodicfirst',
                                     pulseorder='pulsefirst')
+        print(pt.data)
         npt.assert_equal(np.sum(np.isclose(pt.data, ampl * scale)), freq)
         npt.assert_equal(np.sum(np.isclose(pt.data, -ampl * scale)), freq)
         npt.assert_equal(pt.data[0], -ampl * scale)

@@ -894,16 +894,15 @@ class Psycho2Pulsetrain(TimeSeries):
         # Stimulus size given by `dur`
         stim_size = int(np.round(1.0 * dur / tsample))
 
-        # Envelope size (single pulse + gap) given by `freq`
-        if freq > 0:
-            envelope_size = int(np.round(1.0 / float(freq) / tsample))
-        else:
-            envelope_size = np.inf
-
-        # Make sure values are valid, else return all zeros
-        if amp == 0 or envelope_size > stim_size:
+        # Make sure input is non-trivial, else return all zeros
+        if np.isclose(freq, 0) or np.isclose(amp, 0):
             TimeSeries.__init__(self, tsample, np.zeros(stim_size))
             return
+
+        # Envelope size (single pulse + gap) given by `freq`
+        # Note that this can be larger than `stim_size`, but we will trim
+        # the stimulus to proper length at the very end.
+        envelope_size = int(np.round(1.0 / float(freq) / tsample))
 
         # Delay given by `delay`
         delay_size = int(np.round(1.0 * delay / tsample))
@@ -928,7 +927,7 @@ class Psycho2Pulsetrain(TimeSeries):
         gap = np.zeros(gap_size)
 
         pulse_train = np.array([])
-        for j in range(int(np.round(dur * freq))):
+        for j in range(int(np.ceil(dur * freq))):
             if pulseorder == 'pulsefirst':
                 pulse_train = np.concatenate((pulse_train, delay, pulse,
                                               gap), axis=0)
