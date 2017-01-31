@@ -9,9 +9,13 @@ from __future__ import print_function
 import numpy as np
 from scipy.signal import fftconvolve
 from scipy.special import expit
+import logging
 
 import pulse2percept.electrode2currentmap as e2cm
 from pulse2percept import utils
+
+# reload(logging)
+logger = logging.getLogger(__name__)
 
 
 class TemporalModel(object):
@@ -391,8 +395,9 @@ def pulse2percept(stim, implant, tm=None, retina=None,
                 idx_list.append([yy, xx])
 
     if verbose:
-        print("tol=%.2f%%, %d/%d pixels selected" % (tol * 100, len(ecs_list),
-                                                     np.prod(ecs.shape[:2])))
+        logger.info("tol=%.1f%%, %d/%d px selected" % (tol * 100,
+                                                       len(ecs_list),
+                                                       np.prod(ecs.shape[:2])))
 
     # Apply charge accumulation
     for i, p in enumerate(pt_list):

@@ -8,9 +8,13 @@ import numpy as np
 from os.path import exists
 from scipy import interpolate
 from scipy.misc import factorial
+import logging
 
 from pulse2percept import oyster
 from pulse2percept.utils import TimeSeries, traverse_randomly
+
+
+logger = logging.getLogger(__name__)
 
 
 def micron2deg(micron):
@@ -173,10 +177,10 @@ class Electrode(object):
             th_gc = 58.2
             th_bp = 30.75
             if fovdist > 3000:
-                e_s = "Warning: Distance to fovea=%.0f > 3000 um, " % fovdist
+                e_s = "Distance to fovea=%.0f > 3000 um, " % fovdist
                 e_s += "assuming same layer thicknesses as for 1550-3000 um "
                 e_s += "distance."
-                print(e_s)
+                logger.warning(e_s)
 
         if self.etype == 'epiretinal':
             # This is simply the electrode-retina distance
@@ -1051,7 +1055,7 @@ class Retina(object):
             if verbose:
                 info_str = "File '%s' doesn't exist " % filename
                 info_str += "or has outdated parameter values, generating..."
-                print(info_str)
+                logger.info(info_str)
             jan_x, jan_y = oyster.jansonius(rot=rot)
             axon_id, axon_weight = oyster.makeAxonMap(micron2deg(self.gridx),
                                                       micron2deg(self.gridy),
