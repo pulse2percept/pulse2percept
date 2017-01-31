@@ -173,8 +173,9 @@ class Electrode(object):
             th_gc = 58.2
             th_bp = 30.75
             if fovdist > 3000:
-                e_s = "Warning: Distance to fovea > 3000 um, assuming same "
-                e_s += "layer thicknesses as for 1550-3000 um distance."
+                e_s = "Warning: Distance to fovea=%.0f > 3000 um, " % fovdist
+                e_s += "assuming same layer thicknesses as for 1550-3000 um "
+                e_s += "distance."
                 print(e_s)
 
         if self.etype == 'epiretinal':
@@ -553,30 +554,57 @@ class ArgusII(ElectrodeArray):
             self.electrodes.append(Electrode(self.etype, r, x, y, h, n))
 
 
-def receptive_field(electrode, xg, yg, size):
+def receptive_field(electrode, xg, yg, rftype='square', size=None):
+    """An electrode's receptive field
 
-    # creates a map of the retina for each electrode
-    # where it's 1 under the electrode, 0 elsewhere
-    rf = np.zeros(xg.shape)
-    ind = np.where((xg > electrode.x - (size / 2)) &
-                   (xg < electrode.x + (size / 2)) &
-                   (yg > electrode.y - (size / 2)) &
-                   (yg < electrode.y + (size / 2)))
+    Parameters
+    ----------
+    electrode : Electrode
+        An Electrode object describing the electrode.
+    xg : array_like
+        Array of all x coordinates
+    yg : array_like
+        Array of all y coordinates
+    rftype : {'square', 'gaussian'}
+        The type of receptive field.
+        - 'square': A simple square box receptive field with side length
+                    `size`.
+        - 'gaussian': A Gaussian receptive field where the weight drops off
+                      as a function of distance from the electrode center.
+                      The standard deviation of the Gaussian is `size`.
+    size : float, optional
+        Parameter describing the size of the receptive field. For square
+        receptive fields, this corresponds to the side length of the square.
+        For Gaussian receptive fields, this corresponds to the standard
+        deviation of the Gaussian.
+        Default: Twice the `electrode.radius`
+    """
+    if size is None:
+        size = 2 * electrode.radius
 
-    rf[ind] = 1
+    if rftype == 'square':
+        # Create a map of the retina for each electrode
+        # where it's 1 under the electrode, 0 elsewhere
+        rf = np.zeros(xg.shape).astype(np.float32)
+        ind = np.where((xg > electrode.x_center - (size / 2.0)) &
+                       (xg < electrode.x_center + (size / 2.0)) &
+                       (yg > electrode.y_center - (size / 2.0)) &
+                       (yg < electrode.y_center + (size / 2.0)))
+        rf[ind] = 1.0
+    elif rftype == 'gaussian':
+        # Create a map of the retina where the weight drops of as a function
+        # of distance from the electrode center
+        dist = (xg - electrode.x_center) ** 2 + (yg - electrode.y_center) ** 2
+        rf = np.exp(-dist / (2 * size ** 2))
+        rf /= np.sum(rf)
+    else:
+        e_s = "Acceptable values for `rftype` are 'square' or 'gaussian'"
+        raise ValueError(e_s)
+
     return rf
 
 
-def gaussian_receptive_field(electrode, xg, yg, sigma):
-    """
-    A Gaussian receptive field
-    """
-    amp = np.exp(-((xg - electrode.x)**2 + (yg - electrode.y) ** 2) /
-                 (2 * (sigma ** 2)))
-    return amp / np.sum(amp)
-
-
-def retinalmovie2electrodtimeseries(rf, movie, fps=30):
+def retinalmovie2electrodtimeseries(rf, movie):
     """
     calculate the luminance over time for each electrodes receptive field
     """
@@ -622,6 +650,163 @@ def get_pulse(pulse_dur, tsample, interphase_dur, pulsetype):
         raise ValueError("Acceptable values for `pulsetype` are "
                          "'anodicfirst' or 'cathodicfirst'")
     return pulse
+
+
+def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
+                     max_contrast=True, const_amp=20, const_freq=20,
+                     rftype='gaussian', rfsize=None, invert=False,
+                     tsample=0.005 / 1000, dur=0.5, pulsedur=0.5 / 1000.,
+                     interphasedur=0.5 / 1000., pulsetype='cathodicfirst'):
+    """Converts an image into a series of pulse trains
+
+    This function creates an input stimulus from an RGB or grayscale image.
+    Requires `scikit-image`.
+
+    Parameters
+    ----------
+    img : str|array_like
+        An input image, either a valid filename (string) or a numpy array
+        (row x col x channels).
+    implant : ElectrodeArray
+        An ElectrodeArray object that describes the implant.
+    coding : {'amplitude', 'frequency'}, optional
+        A string describing the coding scheme:
+        - 'amplitude': Image intensity is linearly converted to a current
+                       amplitude between `valrange[0]` and `valrange[1]`.
+                       Frequency is held constant at `const_freq`.
+        - 'frequency': Image intensity is linearly converted to a pulse
+                       frequency between `valrange[0]` and `valrange[1]`.
+                       Amplitude is held constant at `const_amp`.
+        Default: 'amplitude'
+    valrange : list, optional
+        Range of stimulation values to be used (If `coding` is 'amplitude',
+        specifies min and max current; if `coding` is 'frequency', specifies
+        min and max frequency).
+        Default: [0, 50]
+    max_contrast : bool, optional
+        Flag wether to maximize image contrast (True) or not (False).
+        Default: True
+    const_amp : float, optional
+        Constant amplitude value to be sued during frequency coding (only
+        relevant when `coding` is 'frequency').
+        Default: 20
+    const_freq : float, optional
+        Constant frequency value to be sued during amplitude coding (only
+        relevant when `coding` is 'amplitude').
+        Default: 20
+    rftype : {'square', 'gaussian'}, optional
+        The type of receptive field.
+        - 'square': A simple square box receptive field with side length
+                    `size`.
+        - 'gaussian': A Gaussian receptive field where the weight drops off
+                      as a function of distance from the electrode center.
+                      The standard deviation of the Gaussian is `size`.
+    rfsize : float, optional
+        Parameter describing the size of the receptive field. For square
+        receptive fields, this corresponds to the side length of the square.
+        For Gaussian receptive fields, this corresponds to the standard
+        deviation of the Gaussian.
+        Default: Twice the `electrode.radius`
+    invert : bool, optional
+        Flag whether to invert the grayscale values of the image (True) or
+        not (False).
+        Default: False
+    tsample : float, optional
+        Sampling time step (seconds). Default: 0.005 / 1000 seconds.
+    dur : float, optional
+        Stimulus duration (seconds). Default: 0.5 seconds.
+    pulsedur : float, optional
+        Duration of single (positive or negative) pulse phase in seconds.
+    interphasedur : float, optional
+        Duration of inter-phase interval (between positive and negative
+        pulse) in seconds.
+    pulsetype : {'cathodicfirst', 'anodicfirst'}, optional
+        A cathodic-first pulse has the negative phase first, whereas an
+        anodic-first pulse has the positive phase first.
+    """
+    try:
+        from skimage.io import imread
+        from skimage.transform import resize
+        from skimage.color import rgb2gray
+    except ImportError:
+        raise ImportError("You do not have scikit-image installed.")
+
+    # Make sure range of values is valid
+    assert len(valrange) == 2 and valrange[1] > valrange[0]
+
+    if isinstance(img, str):
+        # Load image from filename
+        img_orig = imread(img, as_grey=True).astype(np.float32)
+    else:
+        if img.ndim == 2:
+            # Grayscale
+            img_orig = img.astype(np.float32)
+        else:
+            # Assume RGB, convert to grayscale
+            assert img.shape[-1] == 3
+            img_orig = rgb2gray(np.array(img)).astype(np.float32)
+
+    # Make sure all pixels are between 0 and 1
+    if img_orig.max() > 1.0:
+        img_orig /= 255.0
+    assert np.all(img_orig >= 0.0) and np.all(img_orig <= 1.0)
+
+    if invert:
+        img_orig = 1.0 - img_orig
+
+    # Center the image on the implant
+    xyr = np.array([[e.x_center, e.y_center, e.radius] for e in implant])
+    xlo = np.min(xyr[:, 0] - xyr[:, 2])
+    xhi = np.max(xyr[:, 0] + xyr[:, 2])
+    ylo = np.min(xyr[:, 1] - xyr[:, 2])
+    yhi = np.max(xyr[:, 1] + xyr[:, 2])
+
+    # Resize the image accordingly (rows, columns)
+    img_resize = resize(img_orig, (yhi - ylo, xhi - xlo))
+
+    # Make a grid that has the image's coordinates on the retina
+    yg = np.linspace(ylo, yhi, img_resize.shape[0])
+    xg = np.linspace(xlo, xhi, img_resize.shape[1])
+    yg, xg = np.meshgrid(yg, xg)
+
+    # For each electrode, find the stimulation strength (magnitude)
+    magn = []
+    for e in implant:
+        rf = receptive_field(e, xg, yg, rftype, rfsize)
+        magn.append(np.sum(rf.T * img_resize) / np.sum(rf))
+    magn = np.array(magn)
+
+    if max_contrast:
+        # Normalize contrast to valrange
+        if magn.min() < magn.max():
+            magn = (magn - magn.min()) / (magn.max() - magn.min())
+
+    # With `magn` between 0 and 1, now scale to valrange
+    magn = magn * np.diff(valrange) + valrange[0]
+
+    # Map magnitude to either freq or amp of pulse train
+    pulses = []
+    for m in magn:
+        if coding == 'amplitude':
+            # Map magnitude to amplitude
+            amp = m
+            freq = const_freq
+        elif coding == 'frequency':
+            # Map magnitude to frequency
+            amp = const_amp
+            freq = m
+        else:
+            e_s = "Acceptable values for `coding` are 'amplitude' or"
+            e_s += "'frequency'."
+            raise ValueError(e_s)
+
+        pt = Psycho2Pulsetrain(tsample, freq=freq, amp=amp, dur=dur,
+                               pulse_dur=pulsedur,
+                               interphase_dur=interphasedur,
+                               pulsetype=pulsetype)
+        pulses.append(pt)
+
+    return pulses
 
 
 class Movie2Pulsetrain(TimeSeries):
@@ -709,11 +894,14 @@ class Psycho2Pulsetrain(TimeSeries):
         # Stimulus size given by `dur`
         stim_size = int(np.round(1.0 * dur / tsample))
 
-        if freq == 0 or amp == 0:
+        # Make sure input is non-trivial, else return all zeros
+        if np.isclose(freq, 0) or np.isclose(amp, 0):
             TimeSeries.__init__(self, tsample, np.zeros(stim_size))
             return
 
         # Envelope size (single pulse + gap) given by `freq`
+        # Note that this can be larger than `stim_size`, but we will trim
+        # the stimulus to proper length at the very end.
         envelope_size = int(np.round(1.0 / float(freq) / tsample))
 
         # Delay given by `delay`
@@ -739,7 +927,7 @@ class Psycho2Pulsetrain(TimeSeries):
         gap = np.zeros(gap_size)
 
         pulse_train = np.array([])
-        for j in range(int(np.round(dur * freq))):
+        for j in range(int(np.ceil(dur * freq))):
             if pulseorder == 'pulsefirst':
                 pulse_train = np.concatenate((pulse_train, delay, pulse,
                                               gap), axis=0)
@@ -993,19 +1181,3 @@ def ecm(ecs_item, ptrain_data, tsample):
 
     ecm = np.sum(ecs_item[:, :, None] * ptrain_data, 1)
     return TimeSeries(tsample, ecm)
-
-
-def distance2threshold(el_dist):
-    """Converts electrode distance (um) to threshold (uA)
-
-    Based on linear regression of data presented in Fig. 7b of
-    deBalthasar et al. (2008). Relationship is linear in log-log space.
-    """
-
-    slope = 1.5863261730600329
-    intercept = -4.2496180725811659
-
-    if el_dist > 0:
-        return np.exp(np.log(el_dist) * slope + intercept)
-    else:
-        return np.exp(intercept)
