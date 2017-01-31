@@ -15,6 +15,7 @@ written Ione Fine 7/2016
 import subprocess
 import numpy as np
 import scipy.io as sio
+import logging
 
 
 def savemoviefiles(filestr, data, path='savedImages/'):
@@ -34,7 +35,7 @@ def npy2movie(filename, movie, rate=30):
                  '-vcodec', 'libxvid',
                  filename
                  )
-    print(filename)
+    logging.getLogger(__name__).info(filename)
     p = subprocess.Popen(cmdstring, stdin=subprocess.PIPE, shell=False)
 
     for i in range(movie.shape[-1]):

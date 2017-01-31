@@ -962,7 +962,7 @@ class Retina(object):
 
     def __init__(self, xlo=-1000, xhi=1000, ylo=-1000, yhi=1000,
                  sampling=25, axon_lambda=2.0, rot=0 * np.pi / 180,
-                 loadpath='../', save_data=True, verbose=True):
+                 loadpath='../', save_data=True):
         """Generates a retina
 
         This function generates the coordinate system for the retina
@@ -993,9 +993,6 @@ class Retina(object):
             (False). The file name is automatically generated from all
             specified input arguments.
             Default: True.
-        verbose : bool
-             Flag whether to produce output (True) or suppress it (False).
-             Default: True.
         """
         # Include endpoints in meshgrid
         num_x = int((xhi - xlo) / sampling + 1)
@@ -1052,10 +1049,10 @@ class Retina(object):
 
         # At this point we know whether we need to generate a new retina:
         if need_new_retina:
-            if verbose:
-                info_str = "File '%s' doesn't exist " % filename
-                info_str += "or has outdated parameter values, generating..."
-                logger.info(info_str)
+            info_str = "File '%s' doesn't exist " % filename
+            info_str += "or has outdated parameter values, generating..."
+            logger.info(info_str)
+
             jan_x, jan_y = oyster.jansonius(rot=rot)
             axon_id, axon_weight = oyster.makeAxonMap(micron2deg(self.gridx),
                                                       micron2deg(self.gridy),
