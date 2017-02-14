@@ -7,8 +7,8 @@ Output: a vector of brightness over time
 """
 from __future__ import print_function
 import numpy as np
-from scipy.signal import fftconvolve
-from scipy.special import expit
+import scipy.signal as signal
+import scipy.special
 import logging
 
 import pulse2percept.electrode2currentmap as e2cm
@@ -131,7 +131,7 @@ class TemporalModel(object):
         The output is not converted to a TimeSeries object for speedup.
         """
         if usefft:  # In Krishnan model, b1 is no longer sparse (run FFT)
-            conv = self.tsample * fftconvolve(b1, gamma, mode='full')
+            conv = self.tsample * signal.fftconvolve(b1, gamma, mode='full')
         else:
             conv = self.tsample * utils.sparseconv(gamma, b1,
                                                    mode='full', dojit=dojit)
@@ -167,7 +167,7 @@ class TemporalModel(object):
         """
         # use expit (logistic) function for speedup
         b3max = b3.max()
-        scale = expit((b3max - self.shift) / self.slope)
+        scale = scipy.special.expit((b3max - self.shift) / self.slope)
 
         # avoid division by zero
         return b3 / (b3max + np.finfo(float).eps) * scale
@@ -198,7 +198,7 @@ class TemporalModel(object):
         """
         # No need to zero-pad: fftconvolve already takes care of optimal
         # kernel/data size
-        conv = fftconvolve(b4, self.gamma_slow, mode='full')
+        conv = signal.fftconvolve(b4, self.gamma_slow, mode='full')
 
         # Cut off the tail of the convolution to make the output signal match
         # the dimensions of the input signal.
@@ -398,7 +398,7 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     # Apply charge accumulation
     for i, p in enumerate(pt_list):
         ca = tm.tsample * np.cumsum(np.maximum(0, -p.data))
-        tmp = fftconvolve(ca, tm.gamma_ca, mode='full')
+        tmp = signal.fftconvolve(ca, tm.gamma_ca, mode='full')
         conv_ca = scale_charge * tm.tsample * tmp[:p.data.size]
 
         # negative elements first

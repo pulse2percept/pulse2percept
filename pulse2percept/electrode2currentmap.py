@@ -5,9 +5,8 @@ Functions for transforming electrode specifications into a current map
 
 """
 import numpy as np
-from os.path import exists
-from scipy import interpolate
-from scipy.misc import factorial
+import scipy as sp
+import os.path
 import logging
 
 from pulse2percept import oyster
@@ -23,7 +22,7 @@ def micron2deg(micron):
 
     Based on http://retina.anatomy.upenn.edu/~rob/lance/units_space.html
     """
-    deg = micron / 280
+    deg = micron / 280.0
     return deg
 
 
@@ -33,7 +32,7 @@ def deg2micron(deg):
 
     Based on http://retina.anatomy.upenn.edu/~rob/lance/units_space.html
     """
-    microns = 280 * deg
+    microns = 280.0 * deg
     return microns
 
 
@@ -53,7 +52,7 @@ def gamma(n, tau, t):
 
     y = ((t / tau) ** (n - 1) *
          np.exp(-t / tau) /
-         (tau * factorial(n - 1)))
+         (tau * sp.misc.factorial(n - 1)))
 
     if flag == 1:
         y = np.concatenate([[0], y])
@@ -843,8 +842,8 @@ class Movie2Pulsetrain(TimeSeries):
                 ppt = np.concatenate((ppt, pulse), axis=0)
 
         ppt = ppt[0:round(dur / tsample)]
-        intfunc = interpolate.interp1d(np.linspace(0, len(rflum), len(rflum)),
-                                       rflum)
+        intfunc = sp.interpolate.interp1d(np.linspace(0, len(rflum),
+                                                      len(rflum)), rflum)
 
         amp = intfunc(np.linspace(0, len(rflum), len(ppt)))
         data = amp * ppt * amp_max
@@ -1011,7 +1010,7 @@ class Retina(object):
 
         # Check if such a file already exists. If so, load parameters and
         # make sure they are the same as specified above. Else, create new.
-        if exists(filename):
+        if os.path.exists(filename):
             need_new_retina = False
             axon_map = np.load(filename)
 
