@@ -34,12 +34,20 @@ class Parameters(object):
 class TimeSeries(object):
 
     def __init__(self, tsample, data):
-        """
-        Represent a time-series
+        """Container for time series data
+
+        Provides a container for time series data. Every time series has a
+        sampling step `tsample`, and some `data` sampled at that rate.
+
+        Parameters
+        ----------
+        tsample : float
+            Sampling time step (seconds).
+        data : array_like
+            Time series data sampled at every `tsample` seconds.
         """
         self.data = data
         self.tsample = tsample
-        # self.sampling_rate = 1 / tsample
         self.duration = self.data.shape[-1] * tsample
         self.shape = data.shape
 
@@ -47,6 +55,16 @@ class TimeSeries(object):
         return TimeSeries(self.tsample, self.data[y])
 
     def resample(self, factor):
+        """Resamples time series data
+
+        Downsamples time series data according to a resampling factor
+        `factor`. Only integers allowed.
+
+        Parameters
+        ----------
+        factor : int
+            Resampling factor.
+        """
         factor = int(factor)
         TimeSeries.__init__(self, self.tsample * factor,
                             self.data[..., ::factor])
@@ -128,7 +146,7 @@ def sparseconv(kernel, data, mode='full', dojit=True):
         return _sparseconv(kernel, data, mode)
 
 
-def _centered(vec, newlen):
+def center_vector(vec, newlen):
     """
     Returns the center `newlen` portion of a vector.
 
