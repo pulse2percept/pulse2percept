@@ -871,7 +871,7 @@ class Movie2Pulsetrain(utils.TimeSeries):
 
         ppt = ppt[0:round(dur / tsample)]
         intfunc = spi.interp1d(np.linspace(0, len(rflum),
-                                                      len(rflum)), rflum)
+                                           len(rflum)), rflum)
 
         amp = intfunc(np.linspace(0, len(rflum), len(ppt)))
         data = amp * ppt * amp_max
