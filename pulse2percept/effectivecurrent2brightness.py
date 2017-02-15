@@ -7,8 +7,8 @@ Output: a vector of brightness over time
 """
 from __future__ import print_function
 import numpy as np
-from scipy.signal import fftconvolve
-from scipy.special import expit
+import scipy.signal as signal
+import scipy.special
 import logging
 
 import pulse2percept.electrode2currentmap as e2cm
@@ -102,16 +102,16 @@ class TemporalModel(object):
         t = np.arange(0, 10 * self.tau_slow, self.tsample)
         self.gamma_slow = e2cm.gamma(3, self.tau_slow, t)
 
-    def fast_response(self, b1, gamma, dojit=True, usefft=False):
+    def fast_response(self, stim, gamma, dojit=True, usefft=False):
         """Fast response function (Box 2) for the bipolar layer
 
-        Convolve a stimulus `b1` with a temporal low-pass filter (1-stage
+        Convolve a stimulus `stim` with a temporal low-pass filter (1-stage
         gamma) with time constant `self.tau_inl` ~ 14ms representing bipolars.
 
         Parameters
         ----------
-        b1 : array
-           Temporal signal to process, b1(r,t) in Nanduri et al. (2012).
+        stim : array
+           Temporal signal to process, stim(r,t) in Nanduri et al. (2012).
         dojit : bool, optional
            If True (default), use numba just-in-time compilation.
         usefft : bool, optional
@@ -119,31 +119,31 @@ class TemporalModel(object):
 
         Returns
         -------
-        b2 : array
-           Fast response, b2(r,t) in Nanduri et al. (2012).
+        Fast response, b2(r,t) in Nanduri et al. (2012).
 
         Notes
         -----
         The function utils.sparseconv can be much faster than np.convolve and
-        scipy.signals.fftconvolve if `b1` is sparse and much longer than the
+        scipy.signals.fftconvolve if `stim` is sparse and much longer than the
         convolution kernel.
 
         The output is not converted to a TimeSeries object for speedup.
         """
-        if usefft:  # In Krishnan model, b1 is no longer sparse (run FFT)
-            conv = self.tsample * fftconvolve(b1, gamma, mode='full')
+        # FFT is faster on non-sparse data
+        if usefft:
+            conv = self.tsample * signal.fftconvolve(stim, gamma, mode='full')
         else:
-            conv = self.tsample * utils.sparseconv(gamma, b1,
-                                                   mode='full', dojit=dojit)
+            conv = self.tsample * utils.sparseconv(gamma, stim, mode='full',
+                                                   dojit=dojit)
             # Cut off the tail of the convolution to make the output signal
             # match the dimensions of the input signal.
-        return conv[:b1.shape[-1]]
+        return conv[:stim.shape[-1]]
 
-    def stationary_nonlinearity(self, b3):
+    def stationary_nonlinearity(self, stim):
         """Stationary nonlinearity (Box 4)
 
-        Nonlinearly rescale a temporal signal `b3` across space and time, based
-        on a sigmoidal function dependent on the maximum value of `b3`.
+        Nonlinearly rescale a temporal signal `stim` across space and time,
+        based on a sigmoidal function dependent on the maximum value of `stim`.
         This is Box 4 in Nanduri et al. (2012).
 
         The parameter values of the asymptote, slope, and shift of the logistic
@@ -152,42 +152,39 @@ class TemporalModel(object):
 
         Parameters
         ----------
-        b3 : array
-           Temporal signal to process, b3(r,t) in Nanduri et al. (2012).
+        stim : array
+           Temporal signal to process, stim(r,t) in Nanduri et al. (2012).
 
         Returns
         -------
-        b4 : array
-           Rescaled signal, b4(r,t) in Nanduri et al. (2012).
+        Rescaled signal, b4(r,t) in Nanduri et al. (2012).
 
         Notes
         -----
         Conversion to TimeSeries is avoided for the sake of speedup.
-        (np.sum(y) * (t[1]-t[0]))
         """
         # use expit (logistic) function for speedup
-        b3max = b3.max()
-        scale = expit((b3max - self.shift) / self.slope)
+        stimmax = stim.max()
+        scale = scipy.special.expit((stimmax - self.shift) / self.slope)
 
         # avoid division by zero
-        return b3 / (b3max + np.finfo(float).eps) * scale
+        return stim / (stimmax + np.finfo(float).eps) * scale
 
-    def slow_response(self, b4):
+    def slow_response(self, stim):
         """Slow response function (Box 5)
 
-        Convolve a stimulus `b4` with a low-pass filter (3-stage gamma)
+        Convolve a stimulus `stim` with a low-pass filter (3-stage gamma)
         with time constant self.tau_slow.
         This is Box 5 in Nanduri et al. (2012).
 
         Parameters
         ----------
-        b4 : array
-           Temporal signal to process, b4(r,t) in Nanduri et al. (2012)
+        stim : array
+           Temporal signal to process, stim(r,t) in Nanduri et al. (2012)
 
         Returns
         -------
-        b5 : array
-           Slow response, b5(r,t) in Nanduri et al. (2012).
+        Slow response, b5(r,t) in Nanduri et al. (2012).
 
         Notes
         -----
@@ -198,11 +195,11 @@ class TemporalModel(object):
         """
         # No need to zero-pad: fftconvolve already takes care of optimal
         # kernel/data size
-        conv = fftconvolve(b4, self.gamma_slow, mode='full')
+        conv = signal.fftconvolve(stim, self.gamma_slow, mode='full')
 
         # Cut off the tail of the convolution to make the output signal match
         # the dimensions of the input signal.
-        return self.scale_slow * self.tsample * conv[:b4.shape[-1]]
+        return self.scale_slow * self.tsample * conv[:stim.shape[-1]]
 
     def model_cascade(self, ecm, dolayers, dojit):
         """Model cascade according to Nanduri et al. (2012).
@@ -214,38 +211,49 @@ class TemporalModel(object):
         ----------
         ecm : TimeSeries
             Effective current
+        dolayers : list
+
+            List of retinal layers to simulate. Choose from:
+            - 'NFL': nerve fiber layer
+            - 'INL': inner nuclear layer
 
         Returns
         -------
-        b5 : TimeSeries
-            Brightness response over time. In Nanduri et al. (2012), the
-            maximum value of this signal was used to represent the perceptual
-            brightness of a particular location in space, B(r).
+        Brightness response over time. In Nanduri et al. (2012), the
+        maximum value of this signal was used to represent the perceptual
+        brightness of a particular location in space, B(r).
         """
+        # Sparse convolution is faster if input is sparse. This is true for
+        # the first convolution in the cascade, but not for subsequent ones.
+        usefft = False
         if 'INL' in dolayers:
             resp_inl = self.fast_response(ecm[0].data, self.gamma_inl,
                                           dojit=dojit,
-                                          usefft=True)
+                                          usefft=usefft)
+            # Set `usefft` to True for subsequent stages of the cascade
+            usefft = True
         else:
             resp_inl = np.zeros((ecm[0].data.shape))
 
         if 'NFL' in dolayers:
             resp_nfl = self.fast_response(ecm[1].data, self.gamma_nfl,
                                           dojit=dojit,
-                                          usefft=False)
+                                          usefft=usefft)
+            # Set `usefft` to True for subsequent stages of the cascade
+            usefft = True
         else:
             resp_nfl = np.zeros((ecm[1].data.shape))
 
-        # here we are converting from current  - where a cathodic (effective)
-        # stimulus is negative to a vague concept of neuronal response, where
-        # positive implies a neuronal response
-        # There is a rectification here because we assume that the anodic part
-        # of the pulse is ineffective which is wrong
-        respC = self.lweight * np.maximum(-resp_inl, 0) + \
+        # Here we are converting from current  - where a cathodic (effective)
+        # stimulus is negative - to a vague concept of neuronal response,
+        # where positive implies a neuronal response.
+        # There is a rectification here because we used to assume that the
+        # anodic part of the pulse is ineffective (which is wrong).
+        resp_cathodic = self.lweight * np.maximum(-resp_inl, 0) + \
             np.maximum(-resp_nfl, 0)
-        respA = self.lweight * np.maximum(resp_inl, 0) + \
+        resp_anodic = self.lweight * np.maximum(resp_inl, 0) + \
             np.maximum(resp_nfl, 0)
-        resp = respC + self.aweight * respA
+        resp = resp_cathodic + self.aweight * resp_anodic
         resp = self.stationary_nonlinearity(resp)
         resp = self.slow_response(resp)
         return utils.TimeSeries(self.tsample, resp)
@@ -264,6 +272,7 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     ----------
     stim : utils.TimeSeries|list|dict
         There are several ways to specify an input stimulus:
+
         - For a single-electrode array, pass a single pulse train; i.e., a
           single utils.TimeSeries object.
         - For a multi-electrode array, pass a list of pulse trains; i.e., one
@@ -313,12 +322,14 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     Examples
     --------
     Stimulate a single-electrode array:
+
     >>> implant = e2cm.ElectrodeArray('subretinal', 0, 0, 0, 0)
     >>> stim = e2cm.Psycho2Pulsetrain(tsample=5e-6, freq=50, amp=20)
     >>> resp = pulse2percept(stim, implant)
 
     Stimulate a single electrode ('C3') of an Argus I array centered on the
     fovea:
+
     >>> implant = e2cm.ArgusI()
     >>> stim = {'C3': e2cm.Psycho2Pulsetrain(tsample=5e-6, freq=50, amp=20)}
     >>> resp = pulse2percept(stim, implant) # doctest: +SKIP
@@ -398,7 +409,7 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     # Apply charge accumulation
     for i, p in enumerate(pt_list):
         ca = tm.tsample * np.cumsum(np.maximum(0, -p.data))
-        tmp = fftconvolve(ca, tm.gamma_ca, mode='full')
+        tmp = signal.fftconvolve(ca, tm.gamma_ca, mode='full')
         conv_ca = scale_charge * tm.tsample * tmp[:p.data.size]
 
         # negative elements first
@@ -418,12 +429,40 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     return utils.TimeSeries(sr_list[0].tsample, bm)
 
 
-def calc_pixel(ecs_item, pt, tm, resample, dolayers,
-               dojit=False):
+def calc_pixel(ecs_item, pt, tm, rsample, dolayers, dojit=False):
+    """Calculates the temporal response of a single pixel
+
+    Parameters
+    ----------
+    ecs_item : array
+        Effective current spread map from the electrodes in a particular
+        spatial location (pixel), one value per layer.
+    pt : utils.TimeSeries
+        Pulse train
+    tm : ec2b.TemporalModel
+        A model of temporal sensitivity.
+    rsample : int
+        Resampling factor. For example, a resampling factor of 3 keeps
+        only every third frame.
+        Default: 30 frames per second.
+    dolayers : list
+        List of retinal layers to simulate. Choose from:
+
+        - 'NFL': nerve fiber layer
+        - 'INL': inner nuclear layer
+    dojit : bool, optional
+        Whether to use just-in-time (JIT) compilation to speed up computation.
+        Default: True.
+    """
+    # Convert the current map to one that includes axon streaks
     ecm = e2cm.ecm(ecs_item, pt, tm.tsample)
-    # converts the current map to one that includes axon streaks
+
+    # Apply temporal model that pixel
     sr = tm.model_cascade(ecm, dolayers, dojit=dojit)
-    sr.resample(resample)
+
+    # Apply resampling factor
+    sr.resample(rsample)
+
     return sr
 
 
@@ -434,15 +473,16 @@ def parse_pulse_trains(stim, implant):
     ----------
     stim : utils.TimeSeries|list|dict
         There are several ways to specify an input stimulus:
-        * For a single-electrode array, pass a single pulse train; i.e., a
+
+        - For a single-electrode array, pass a single pulse train; i.e., a
           single utils.TimeSeries object.
-        * For a multi-electrode array, pass a list of pulse trains, where
+        - For a multi-electrode array, pass a list of pulse trains, where
           every pulse train is a utils.TimeSeries object; i.e., one pulse
           train per electrode.
-        * For a multi-electrode array, specify all electrodes that should
+        - For a multi-electrode array, specify all electrodes that should
           receive non-zero pulse trains by name in a dictionary. The key
           of each element is the electrode name, the value is a pulse train.
-          Example: stim = {'E1': pt, 'B3': pt}, where 'E1' and 'B3' are
+          Example: stim = {'E1': pt, 'stim': pt}, where 'E1' and 'stim' are
           electrode names, and `pt` is a utils.TimeSeries object.
     implant : e2cm.ElectrodeArray
         An ElectrodeArray object that describes the implant.
@@ -492,7 +532,7 @@ def get_brightest_frame(resp):
     """Return brightest frame of a brightness movie
 
     This function returns the frame of a brightness movie that contains the
-    brightest element.
+    brightest pixel.
 
     Parameters
     ----------

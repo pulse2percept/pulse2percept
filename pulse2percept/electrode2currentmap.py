@@ -5,13 +5,12 @@ Functions for transforming electrode specifications into a current map
 
 """
 import numpy as np
-from os.path import exists
-from scipy import interpolate
-from scipy.misc import factorial
+import scipy as sp
+import os.path
 import logging
 
 from pulse2percept import oyster
-from pulse2percept.utils import TimeSeries, traverse_randomly
+from pulse2percept import utils
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +22,7 @@ def micron2deg(micron):
 
     Based on http://retina.anatomy.upenn.edu/~rob/lance/units_space.html
     """
-    deg = micron / 280
+    deg = micron / 280.0
     return deg
 
 
@@ -33,13 +32,13 @@ def deg2micron(deg):
 
     Based on http://retina.anatomy.upenn.edu/~rob/lance/units_space.html
     """
-    microns = 280 * deg
+    microns = 280.0 * deg
     return microns
 
 
 def gamma(n, tau, t):
     """
-    returns a gamma function from in [0, t]:
+    Returns a gamma function from in [0, t]:
 
     y = (t/theta).^(n-1).*exp(-t/theta)/(theta*factorial(n-1))
 
@@ -53,7 +52,7 @@ def gamma(n, tau, t):
 
     y = ((t / tau) ** (n - 1) *
          np.exp(-t / tau) /
-         (tau * factorial(n - 1)))
+         (tau * sp.misc.factorial(n - 1)))
 
     if flag == 1:
         y = np.concatenate([[0], y])
@@ -64,14 +63,11 @@ def gamma(n, tau, t):
 
 
 class Electrode(object):
-    """
-    Represent a circular, disc-like electrode.
-    """
 
     def __init__(self, etype, radius, x_center, y_center, height, name=None):
         """Create an electrode on the retina
 
-        This function creates an electrode of type `etype` and places it
+        This function creates a disk electrode of type `etype` and places it
         on the retina at location (`xs`, `ys`) in microns. The electrode has
         radius `radius` (microns) and sits a distance `height` away from the
         retinal surface.
@@ -89,9 +85,10 @@ class Electrode(object):
         y_center : float
             The y location of the electrode (in microns) from the fovea
         height : float
-            The height of the electrode from the retinal surface
-              epiretinal array - distance to the ganglion layer
-             subretinal array - distance to the bipolar layer
+            The height of the electrode from the retinal surface:
+
+            - epiretinal array: distance to the ganglion layer
+            - subretinal array: distance to the bipolar layer
         name : string
             Electrode name
 
@@ -141,23 +138,27 @@ class Electrode(object):
         Coherence Tomography
         Note that this is for normal retinal, so may overestimate thickness.
         Thickness from their paper (averaged across quadrants):
-          0-600 um radius (from fovea)
-            Layer 1. (Nerve fiber layer) = 4
-            Layer 2. (Ganglion cell bodies + inner plexiform) = 56
-            Layer 3. (Bipolar bodies, inner nuclear layer) = 23
-          600-1550 um radius
-            Layer 1. 34
-            Layer 2. 87
-            Layer 3. 37.5
-          1550-3000 um radius
-            Layer 1. 45.5
-            Layer 2. 58.2
-            Layer 3. 30.75
+            0-600 um radius (from fovea):
+
+            - Layer 1. (Nerve fiber layer) = 4
+            - Layer 2. (Ganglion cell bodies + inner plexiform) = 56
+            - Layer 3. (Bipolar bodies, inner nuclear layer) = 23
+
+          600-1550 um radius:
+
+            - Layer 1. 34
+            - Layer 2. 87
+            - Layer 3. 37.5
+
+          1550-3000 um radius:
+            - Layer 1. 45.5
+            - Layer 2. 58.2
+            - Layer 3. 30.75
 
         We place our ganglion axon surface on the inner side of the nerve fiber
         layer.
         We place our bipolar surface 1/2 way through the inner nuclear layer.
-        So for an epiretinal array the bipolar layer is L1+L2+(.5*L3).
+        So for an epiretinal array the bipolar layer is L1 + L2 + 0.5 * L3.
 
         """
         fovdist = np.sqrt(self.x_center ** 2 + self.y_center ** 2)
@@ -213,15 +214,20 @@ class Electrode(object):
 
         Parameters
         ----------
-        xg and yg defining the retinal grid
-        layers describing which layers of the retina are simulated
-            'NFL': nerve fiber layer, ganglion axons
-            'INL': inner nuclear layer, containing the bipolars
+        xg : array
+            x-coordinates of the retinal grid
+        yg : array
+            y-coordinates of the retinal grid
+        layer: str
+            Layer for which to calculate the current spread:
+
+            - 'NFL': nerve fiber layer, ganglion axons
+            - 'INL': inner nuclear layer, containing the bipolars
         alpha : float
-            a constant to do with the spatial fall-off.
+            A constant to do with the spatial fall-off.
 
         n : float
-            a constant to do with the spatial fall-off (Default: 1.69, based
+            A constant to do with the spatial fall-off (Default: 1.69, based
             on Ahuja et al. [2]  An In Vitro Model of a Retinal Prosthesis.
             Ashish K. Ahuja, Matthew R. Behrend, Masako Kuroda, Mark S.
             Humayun, and James D. Weiland (2008). IEEE Trans Biomed Eng 55.
@@ -284,19 +290,23 @@ class ElectrodeArray(object):
         --------
         A single epiretinal electrode called 'A1', with radius 100um, sitting
         at retinal location (0, 0), 10um away from the retina:
+
         >>> from pulse2percept import electrode2currentmap as e2cm
         >>> implant1 = e2cm.ElectrodeArray('epiretinal', 100, 0, 0, 10, 'A1')
 
         An array with two electrodes of size 100um, one sitting at
         (-100, -100), the other sitting at (0, 0), with 0 distance from the
         retina, of type 'subretinal':
+
         >>> implant2 = e2cm.ElectrodeArray('subretinal', [100, 100], [-100, 0],
         ...                                [-100, 0], [0, 0])
 
         Get access to the electrode with name 'A1' in the array:
+
         >>> my_electrode = implant1['A1']
 
         Get access to the second electrode in the array:
+
         >>> my_electrode = implant2[1]
 
         """
@@ -362,8 +372,8 @@ class ElectrodeArray(object):
         # Is `name` a valid electrode name?
         # Iterate through electrodes to find a matching name. Shuffle list
         # to reduce time complexity of average lookup.
-        for idx, electrode in traverse_randomly(enumerate(self.electrodes)):
-            if electrode.name == name:
+        for idx, el in utils.traverse_randomly(enumerate(self.electrodes)):
+            if el.name == name:
                 return idx
 
         # Worst case O(n): name could not be found.
@@ -384,10 +394,15 @@ class ArgusI(ElectrodeArray):
         The array is oriented in the visual field as shown in Fig. 1 of
         Horsager et al. (2009); that is, if placed in (0,0), the top two
         rows will lie in the lower retina (upper visual field):
-        y       A1 B1 C1 D1                     260 520 260 520
-        ^       A2 B2 C2 D2   where electrode   520 260 520 260
-        |       A3 B3 C3 D3   diameters are:    260 520 260 520
-        -->x    A4 B4 C4 D4                     520 260 520 260
+
+        .. raw:: html
+
+          <pre>
+            y       A1 B1 C1 D1                     260 520 260 520
+            ^       A2 B2 C2 D2   where electrode   520 260 520 260
+            |       A3 B3 C3 D3   diameters are:    260 520 260 520
+            -->x    A4 B4 C4 D4                     520 260 520 260
+          </pre>
 
         Electrode order is: A1, B1, C1, D1, A2, B2, ..., D4.
         If `use_legacy_names` is True, electrode order is: L6, L2, M8, M4, ...
@@ -410,10 +425,12 @@ class ArgusI(ElectrodeArray):
         --------
         Create an ArgusI array centered on the fovea, at 100um distance from
         the retina:
+
         >>> from pulse2percept import electrode2currentmap as e2cm
         >>> argus = e2cm.ArgusI(x_center=0, y_center=0, h=100, rot=0)
 
         Get access to electrode 'B1':
+
         >>> my_electrode = argus['B1']
 
         """
@@ -482,12 +499,17 @@ class ArgusII(ElectrodeArray):
         The array is oriented upright in the visual field, such that an
         array with center (0,0) has the top three rows lie in the lower
         retina (upper visual field), as shown below:
-                A1 A2 A3 A4 A5 A6 A7 A8 A9 A10
-        y       B1 B2 B3 B4 B5 B6 B7 B8 B9 B10
-        ^       C1 C2 C3 C4 C5 C6 C7 C8 C9 C10
-        |       D1 D2 D3 D4 D5 D6 D7 D8 D9 D10
-        -->x    E1 E2 E3 E4 E5 E6 E7 E8 E9 E10
-                F1 F2 F3 F4 F5 F6 F7 F8 F9 F10
+
+        .. raw:: html
+
+          <pre>
+                    A1 A2 A3 A4 A5 A6 A7 A8 A9 A10
+            y       B1 B2 B3 B4 B5 B6 B7 B8 B9 B10
+            ^       C1 C2 C3 C4 C5 C6 C7 C8 C9 C10
+            |       D1 D2 D3 D4 D5 D6 D7 D8 D9 D10
+            -->x    E1 E2 E3 E4 E5 E6 E7 E8 E9 E10
+                    F1 F2 F3 F4 F5 F6 F7 F8 F9 F10
+          </pre>
 
         Electrode order is: A1, A2, ..., A10, B1, B2, ..., F10.
         An electrode can be addressed by index (integer) or name.
@@ -509,10 +531,12 @@ class ArgusII(ElectrodeArray):
         --------
         Create an ArgusII array centered on the fovea, at 100um distance from
         the retina:
+
         >>> from pulse2percept import electrode2currentmap as e2cm
         >>> argus = e2cm.ArgusII(x_center=0, y_center=0, h=100, rot=0)
 
         Get access to electrode 'E7':
+
         >>> my_electrode = argus['E7']
 
         """
@@ -610,7 +634,9 @@ def receptive_field(electrode, xg, yg, rftype='square', size=None):
 
 def retinalmovie2electrodtimeseries(rf, movie):
     """
-    calculate the luminance over time for each electrodes receptive field
+    Calculates the luminance over time for each electrodes receptive field.
+
+    .. deprecated:: 0.1
     """
     rflum = np.zeros(movie.shape[-1])
     for f in range(movie.shape[-1]):
@@ -813,7 +839,7 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     return pulses
 
 
-class Movie2Pulsetrain(TimeSeries):
+class Movie2Pulsetrain(utils.TimeSeries):
     """
     Is used to create pulse-train stimulus based on luminance over time from
     a movie
@@ -843,15 +869,15 @@ class Movie2Pulsetrain(TimeSeries):
                 ppt = np.concatenate((ppt, pulse), axis=0)
 
         ppt = ppt[0:round(dur / tsample)]
-        intfunc = interpolate.interp1d(np.linspace(0, len(rflum), len(rflum)),
-                                       rflum)
+        intfunc = sp.interpolate.interp1d(np.linspace(0, len(rflum),
+                                                      len(rflum)), rflum)
 
         amp = intfunc(np.linspace(0, len(rflum), len(ppt)))
         data = amp * ppt * amp_max
-        TimeSeries.__init__(self, tsample, data)
+        utils.TimeSeries.__init__(self, tsample, data)
 
 
-class Psycho2Pulsetrain(TimeSeries):
+class Psycho2Pulsetrain(utils.TimeSeries):
     """
     Is used to generate pulse trains to simulate psychophysical experiments.
 
@@ -900,7 +926,7 @@ class Psycho2Pulsetrain(TimeSeries):
 
         # Make sure input is non-trivial, else return all zeros
         if np.isclose(freq, 0) or np.isclose(amp, 0):
-            TimeSeries.__init__(self, tsample, np.zeros(stim_size))
+            utils.TimeSeries.__init__(self, tsample, np.zeros(stim_size))
             return
 
         # Envelope size (single pulse + gap) given by `freq`
@@ -952,7 +978,7 @@ class Psycho2Pulsetrain(TimeSeries):
         # Trim to correct length (takes care of too long arrays, too)
         pulse_train = pulse_train[:stim_size]
 
-        TimeSeries.__init__(self, tsample, pulse_train)
+        utils.TimeSeries.__init__(self, tsample, pulse_train)
 
 
 class Retina(object):
@@ -1011,13 +1037,13 @@ class Retina(object):
 
         # Check if such a file already exists. If so, load parameters and
         # make sure they are the same as specified above. Else, create new.
-        if exists(filename):
+        if os.path.exists(filename):
             need_new_retina = False
             axon_map = np.load(filename)
 
             # Verify that the file was created with a consistent grid:
             axon_id = axon_map['axon_id']
-            axon_weight = axon_map['axon_weight']
+            axon_wt = axon_map['axon_weight']
             xlo_am = axon_map['xlo']
             xhi_am = axon_map['xhi']
             ylo_am = axon_map['ylo']
@@ -1054,16 +1080,16 @@ class Retina(object):
             logger.info(info_str)
 
             jan_x, jan_y = oyster.jansonius(rot=rot)
-            axon_id, axon_weight = oyster.makeAxonMap(micron2deg(self.gridx),
-                                                      micron2deg(self.gridy),
-                                                      jan_x, jan_y,
-                                                      axon_lambda=axon_lambda)
+            axon_id, axon_wt = oyster.make_axon_map(micron2deg(self.gridx),
+                                                    micron2deg(self.gridy),
+                                                    jan_x, jan_y,
+                                                    axon_lambda=axon_lambda)
 
             # Save the variables, together with metadata about the grid:
             if save_data:
                 np.savez(filename,
                          axon_id=axon_id,
-                         axon_weight=axon_weight,
+                         axon_weight=axon_wt,
                          jan_x=jan_x,
                          jan_y=jan_y,
                          xlo=[xlo],
@@ -1078,7 +1104,7 @@ class Retina(object):
         self.rot = rot
         self.sampling = sampling
         self.axon_id = axon_id
-        self.axon_weight = axon_weight
+        self.axon_weight = axon_wt
         self.jan_x = jan_x
         self.jan_y = jan_y
         self.range_x = self.gridx.max() - self.gridx.min()
@@ -1092,14 +1118,16 @@ class Retina(object):
 
         Parameters
         ----------
-        current_spread : the 2D spread map in retinal space
+        cs : array
+            The 2D spread map in retinal space
 
         Returns
         -------
-        ecm: effective current spread, a time-series of the same size as the
-        current map, where each pixel is the dot product of the pixel values in
-        ecm along the pixels in the list in axon_map, weighted by the weights
-        axon map.
+        ecm : array
+            The effective current spread, a time-series of the same size as the
+            current map, where each pixel is the dot product of the pixel
+            values in ecm along the pixels in the list in axon_map, weighted
+            by the weights axon map.
         """
         ecs = np.zeros(cs.shape)
         for id in range(0, len(cs.flat)):
@@ -1181,4 +1209,4 @@ def ecm(ecs_item, ptrain_data, tsample):
     """
 
     ecm = np.sum(ecs_item[:, :, None] * ptrain_data, 1)
-    return TimeSeries(tsample, ecm)
+    return utils.TimeSeries(tsample, ecm)

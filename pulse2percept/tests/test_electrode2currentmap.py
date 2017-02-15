@@ -3,6 +3,7 @@ import numpy.testing as npt
 import pytest
 
 import pulse2percept.electrode2currentmap as e2cm
+from pulse2percept import utils
 
 
 def test_Electrode():
@@ -198,7 +199,7 @@ def test_ArgusII():
 
 def test_TimeSeries():
     data_orig = np.zeros((10, 10, 1000))
-    ts1 = e2cm.TimeSeries(1, data_orig)
+    ts1 = utils.TimeSeries(1, data_orig)
     resample_factor = 10
     ts1.resample(resample_factor)
     npt.assert_equal(ts1.data.shape[-1],

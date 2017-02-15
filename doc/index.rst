@@ -1,54 +1,131 @@
-Pulse2percept: models for sight restoration
-============================================
+pulse2percept: Models for Sight Restoration
+===========================================
 
-What would the world look like to someone with a bionic eye?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-More than 20 million Americans aged 18 and older have experienced vision loss,
-according to the `American Foundation for the Blind <http://www.afb.org/info/blindness-statistics/adults/facts-and-figures/235>`_,
-and the rates of vision loss are expected to double by 2030 as the nation's
-population ages. A variety of sight recovery therapies are being developed by
-companies around the world, offering new hope for people who are blind. But
-little is known about what the world will look like to patients who undergo such
-procedures.
-
-We have developed a computer model of what someone with restored vision might
-see. This computer model creates a 'virtual patient' who can give scientists and
-patients into the vision that these prostheses might provide.
-
-A virtual patient
-~~~~~~~~~~~~~~~~~~
-
-The following videos show a simulation of the vision of a patient implanted with
-an electronic prosthesis like the `Argus
-II  <http://www.secondsight.com/g-the-argus-ii-prosthesis-system-pf-en.html>`_. The Argus II bionic eye system is the major electrical prosthesis
-device on the market. It uses a digital camera mounted to a pair of eyeglasses
-that sends visual data to a computer chip implanted on the side of the eye. This
-chip then activates a small array of electrodes implanted in the retina that
-stimulates retinal cells to convert that data into vision.
+By 2020 roughly 200 million people worldwide will suffer from retinal
+diseases such as retinitis pigmentosa (RP) and age-related macular degeneration (AMD).
+RP is identified by a progressive degeneration of photoreceptors beginning in the peripheral
+retina, whereas photoreceptor degeneration in AMD begins in the macula (see figure below).
 
 .. raw:: html
 
-  <iframe>
-    <video width="140%" height="auto" autoplay loop> <source src="_static/videos/girlJumpsInPool.mov"/> </video>
-    <div style="position: relative; top: -400px; left:150px;">Stimulus</div>
-    <div style="position: relative; top: -430px; left:600px;">Percept</div>
-  </iframe>
-
-  <iframe style="position: absolute; top: 1470px; left: 290px;">
-    <video width="140%" height="auto" autoplay loop><source src="_static/videos/platformBostonT.mov"/> </video>
-  </iframe>
-
-  <div style="position:relative; top:850px; ">
+  <div style="width: 100%; padding: 0 5%">
+    <img src="_static/rp_amd.jpg" width="100%"/>
+    <p style="font-size: 10px; text-align: center">
+      Visual loss typical of later stages of retinitis
+      pigmentosa (A) and macular degeneration (B).
+      Source: <a href="www.actionforblindpeople.org.uk" target="_blank">Action for
+      blind people (UK)</a>.
+    </p>
   </div>
+
+Consequently, a variety of retinal sight restoration technologies are being
+developed to target these diseases.
+
+Electronic retinal prostheses
+-----------------------------
+
+.. raw:: html
+
+  <img src="http://ieeexplore.ieee.org/ieee_pilot/articles/96jproc07/96jproc07-weiland/assets/img/article_1/fig_4/large.jpg" align="right" style="width: 60%; margin-left: 10px"/>
+
+Analogous to cochlear implants, the goal of electronic retinal prostheses is to produce
+meaningful visual information by electrically stimulating remaining retinal cells.
+Several types of retinal prostheses are currently under development, including
+epiretinal prostheses (where the implant is placed on the ganglion cell surface within
+the vitreous space),
+subretinal prostheses (where the implant is placed between bipolar cells and the retinal
+pigmented epithelium),
+and suprachoroidal prostheses (where the implant is placed either between the choroid and
+the sclera or contained within the sclera).
+All of these approaches are similar in that light from the visual scene is captured and
+transformed into electrical pulses delivered through electrodes to stimulate the retina.
+
+However, these devices do not restore anything resembling natural vision:
+Interactions between the electronics and the underlying neurophysiology result
+in significant distortions of the perceptual experience.
+For example, epiretinal prostheses face the challenge that they do not only activate
+ganglion cell bodies, but also their axons. This leads to a perceptual 'smearing' of
+the stimulus, producing percepts that resemble 'comet streaks':
+
+.. raw:: html
+
+  <div style="width: 100%; padding: 0 5%">
+    <img src="_static/axon_streaks.jpg" width="100%"/>
+    <p style="font-size: 10px; text-align: center">
+      Simulations of perceptual distortions as a result of axonal stimulation.
+      An image of a Snellen chart is overlaid on the retinal surface (left).
+      The position of the retinal implant (subtending 12 deg) is shown by a red
+      dashed box.
+      The predicted effect of axonal stimulation on the image is shown for different
+      values of lambda (describing the activation sensitivity of a passing axon fiber
+      as a function of distance). <br/>
+      Source: <a href="https://dx.doi.org/10.1098/rstb.2014.0208" target="_blank">Fine
+      and Boynton 2015</a>.
+    </p>
+  </div>
+
+
+What would the world look like to someone with a bionic eye?
+------------------------------------------------------------
+
+We have developed a computer model that has the goal of predicting the perceptual
+experience of retinal prosthesis patients.
+The model was developed using a variety of patient data describing the brightness
+and shape of phosphenes elicited by stimulating single electrodes, and validated
+against an independent set of behavioral measures examining spatiotemporal
+interactions across multiple electrodes.
+
+The model takes as input a series of (simulated) electrical pulse trains---one pulse
+train per electrode in the array---and converts them into an image sequence that
+corresponds to the predicted perceptual experience of a patient:
+
+.. raw:: html
+
+  <img src="_static/model.jpg" width="100%"/>
+
+
+A virtual patient
+-----------------
+
+The following are two example simulations illustrating the predicted perceptual experience of a retinal
+prosthesis patient:
+
+.. raw:: html
+
+  <div style="width: 100%; padding: 0 5%; text-align: center">
+    <div style="float: right; width: 50%; text-align: center">
+      Predicted percept
+    </div>
+    <div style="width: 50%; text-align: center">
+      Input stimulus
+    </div>
+    <br clear="both"/>
+    <video width="100%" height="auto" autoplay loop>
+      <source src="_static/videos/girlJumpsInPool.mp4"/ type="video/mp4" controls>
+      Your browser does not support the video tag.
+    </video>
+  </div>
+
+  <div style="width: 100%; padding: 0 5%; text-align: center; margin-top: 30px">
+    <div style="float: right; width: 50%; text-align: center">
+      Predicted percept
+    </div>
+    <div style="width: 50%; text-align: center">
+      Input stimulus
+    </div>
+    <br clear="both"/>
+    <video width="100%" height="auto" autoplay loop>
+      <source src="_static/videos/platformBostonT.mp4"/ type="video/mp4" controls>
+      Your browser does not support the video tag.
+    </video>
+  </div>
+
 
 The videos show that patients may see fuzzy, comet-like shapes or blurred
 outlines, or experience temporary disappearances if the object moves too fast.
 
-One goal of this project is to provide information about the quality of vision
-people can expect if they undergo sight restoration surgery. Models like these
-can also help scientists improve future implants by providing insights into
-which aspects of the technology are limiting performance.
+Simulations such as these, which provide an insight into the perceptual outcomes of prosthetic vision, are likely to be critical for providing realistic estimates of prosthetic vision, providing regulatory bodies with guidance into what sort of visual tests are appropriate for evaluating prosthetic performance, and improving current and future technology.
+
 
 
     .. toctree::

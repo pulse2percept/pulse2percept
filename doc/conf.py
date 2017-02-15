@@ -46,7 +46,7 @@ extensions = [
     'sphinx.ext.imgmath',
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
-    'sphinx_gallery.gen_gallery',
+#    'sphinx_gallery.gen_gallery',
     'sphinx.ext.autosummary'
 ]
 
@@ -66,7 +66,7 @@ source_suffix = '.rst'
 #source_encoding = 'utf-8-sig'
 
 # Generate the plots for the gallery
-plot_gallery = True
+plot_gallery = False
 
 # The master toctree document.
 master_doc = 'index'

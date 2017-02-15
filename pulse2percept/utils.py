@@ -273,10 +273,12 @@ def traverse_randomly(seq):
     Examples
     --------
     Shuffle a list:
+
     >>> list_ordered = [0, 1, 2, 3]
     >>> list_shuffled = [l for l in traverse_randomly(list_ordered)]
 
     Traverse a list in random order:
+
     >>> list_ordered = [0, 1, 2, 3]
     >>> for idx, val in traverse_randomly(enumerate(list_ordered)):
     ...     pass
