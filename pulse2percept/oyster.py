@@ -108,7 +108,7 @@ def jansonius(nCells=500, nR=801, center=np.array([15, 2]),
     return x, y
 
 
-def makeAxonMap(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=.001):
+def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=.001):
     """Retinal axon map
 
     Generates a mapping of how each pixel in the retina space is affected

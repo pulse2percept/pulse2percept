@@ -66,14 +66,14 @@ source_suffix = '.rst'
 #source_encoding = 'utf-8-sig'
 
 # Generate the plots for the gallery
-plot_gallery = True
+plot_gallery = False
 
 # The master toctree document.
 master_doc = 'index'
 
 # General information about the project.
 project = u'pulse2percept'
-copyright = u'2016, Michael Beyeler, Ariel Rokem, Geoff Boynton, and Ione Fine, The University of Washington'
+copyright = u'2016 Michael Beyeler, Ariel Rokem, Geoff Boynton, and Ione Fine, The University of Washington'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
