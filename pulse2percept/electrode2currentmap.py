@@ -5,7 +5,8 @@ Functions for transforming electrode specifications into a current map
 
 """
 import numpy as np
-import scipy as sp
+from scipy import misc as spm
+from scipy import interpolate as spi
 import os.path
 import logging
 
@@ -52,7 +53,7 @@ def gamma(n, tau, t):
 
     y = ((t / tau) ** (n - 1) *
          np.exp(-t / tau) /
-         (tau * sp.misc.factorial(n - 1)))
+         (tau * spm.factorial(n - 1)))
 
     if flag == 1:
         y = np.concatenate([[0], y])
@@ -869,7 +870,7 @@ class Movie2Pulsetrain(utils.TimeSeries):
                 ppt = np.concatenate((ppt, pulse), axis=0)
 
         ppt = ppt[0:round(dur / tsample)]
-        intfunc = sp.interpolate.interp1d(np.linspace(0, len(rflum),
+        intfunc = spi.interp1d(np.linspace(0, len(rflum),
                                                       len(rflum)), rflum)
 
         amp = intfunc(np.linspace(0, len(rflum), len(ppt)))
