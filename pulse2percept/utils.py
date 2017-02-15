@@ -96,9 +96,9 @@ def _sparseconv(v, a, mode):
     if mode == 'full':
         return out
     elif mode == 'valid':
-        return _centered(out, a_len - v_len + 1)
+        return center_vector(out, a_len - v_len + 1)
     elif mode == 'same':
-        return _centered(out, a_len)
+        return center_vector(out, a_len)
     else:
         raise ValueError("Acceptable mode flags are 'valid',"
                          " 'same', or 'full'.")
