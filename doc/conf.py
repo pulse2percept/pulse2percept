@@ -73,7 +73,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'pulse2percept'
-copyright = u'2016 Michael Beyeler, Ariel Rokem, Geoff Boynton, and Ione Fine, The University of Washington'
+copyright = u'2016, Michael Beyeler, Ariel Rokem, Geoff Boynton, and Ione Fine, The University of Washington'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
