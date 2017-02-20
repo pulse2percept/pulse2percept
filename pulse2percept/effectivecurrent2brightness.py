@@ -419,11 +419,11 @@ def pulse2percept(stim, implant, tm=None, retina=None,
         _, ecs = retina.electrode_ecs(implant)
 
     # Calculate the max of every current spread map
-    layermax = np.zeros(2)
+    lmax = np.zeros((2, ecs.shape[-1]))
     if 'INL' in dolayers:
-        layermax[0] = ecs[:, :, 0, :].max(axis=(0, 1))
+        lmax[0, :] = ecs[:, :, 0, :].max(axis=(0, 1))
     if 'NFL' in dolayers:
-        layermax[1] = ecs[:, :, 1, :].max(axis=(0, 1))
+        lmax[1, :] = ecs[:, :, 1, :].max(axis=(0, 1))
 
     # `ecs_list` is a pixel by `n` list where `n` is the number of layers
     # being simulated. Each value in `ecs_list` is the current contributed
@@ -438,9 +438,9 @@ def pulse2percept(stim, implant, tm=None, retina=None,
             if 'INL' in dolayers:
                 # For this pixel: Check if the ecs in any layer is large
                 # enough compared to the max across pixels within the layer
-                process_pixel |= np.any(ecs[yy, xx, 0, :] >= tol * layermax[0])
+                process_pixel |= np.any(ecs[yy, xx, 0, :] >= tol * lmax[0, :])
             if 'NFL' in dolayers:
-                process_pixel |= np.any(ecs[yy, xx, 1, :] >= tol * layermax[1])
+                process_pixel |= np.any(ecs[yy, xx, 1, :] >= tol * lmax[1, :])
 
             if process_pixel:
                 ecs_list.append(ecs[yy, xx])
