@@ -30,6 +30,12 @@ description = "pulse2percept: Models for retinal prosthetics"
 # Long description will go up on the pypi page
 long_description = """
 
+Models for Retinal Prosthetics
+------------------------------
+
+See our `Github repo <https://github.com/uwescience/pulse2percept>`_ for
+details.
+
 """
 
 NAME = "pulse2percept"
@@ -48,4 +54,3 @@ MINOR = _version_minor
 MICRO = _version_micro
 VERSION = __version__
 PACKAGE_DATA = {}
-REQUIRES = ["numpy", "scipy", "joblib"]
