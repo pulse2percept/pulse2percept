@@ -45,26 +45,33 @@ pulse2percept requires the following software installed for your platform:
 
 3. [SciPy](http://www.scipy.org)
 
-4. [Numba](http://numba.pydata.org/)
+4. [JobLib](https://github.com/joblib/joblib)
+
+5. [scikit-image](http://scikit-image.org/)
 
 Optional packages:
 
-1. [JobLib](https://github.com/joblib/joblib) for parallel processing.
+1. [Dask](https://github.com/dask/dask) for parallel processing
+   (a joblib alternative). Use conda to install.
 
-2. [Dask](https://github.com/dask/dask) for parallel processing
-   (a joblib alternative).
-
-3. [scikit-image](http://scikit-image.org/) if you want to use
-   the `image2pulsetrain` function.
+2. [Numba](http://numba.pydata.org/). Use conda to install.
 
 4. [ffmpeg codec](http://adaptivesamples.com/how-to-install-ffmpeg-on-windows)
    if you're on Windows and want to use functions in the `files`
    module.
 
 
+### Stable version
+
+The latest stable release of pulse2percept can be installed with pip:
+```
+$ pip install pulse2percept
+```
+
+
 ### Development version
 
-In order to get the latest version of pulse2percept,
+In order to get the bleeding-edge version of pulse2percept,
 use the commands:
 
 ```
