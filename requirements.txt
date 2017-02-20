@@ -3,4 +3,4 @@ scipy
 numba
 joblib
 dask
-scikit-image
+scikitimage
