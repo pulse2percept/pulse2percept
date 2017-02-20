@@ -1,4 +1,3 @@
-[![Build Status](https://travis-ci.org/uwescience/pulse2percept.svg?branch=master)](https://travis-ci.org/uwescience/pulse2percept)
 [![Coverage Status](https://coveralls.io/repos/github/uwescience/pulse2percept/badge.svg?branch=master)](https://coveralls.io/github/uwescience/pulse2percept?branch=master)
 
 
@@ -90,3 +89,5 @@ folder, including the following:
 
 - [1.0-exp-nanduri2012.ipynb](https://github.com/uwescience/pulse2percept/blob/master/examples/notebooks/1.0-exp-nanduri2012.ipynb): A notebook reproducing the findings described
    in Nanduri et al. (2012).
+
+Detailed documentation can be found at [uwescience.github.io/pulse2percept](https://uwescience.github.io/pulse2percept).

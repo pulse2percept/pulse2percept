@@ -8,7 +8,7 @@ Output: a vector of brightness over time
 from __future__ import print_function
 import numpy as np
 import scipy.signal as signal
-import scipy.special
+import scipy.special as ss
 import logging
 
 import pulse2percept.electrode2currentmap as e2cm
@@ -129,7 +129,7 @@ class TemporalModel(object):
         Notes
         -----
         The function utils.sparseconv can be much faster than np.convolve and
-        scipy.signals.fftconvolve if `stim` is sparse and much longer than the
+        signal.fftconvolve if `stim` is sparse and much longer than the
         convolution kernel.
 
         The output is not converted to a TimeSeries object for speedup.
@@ -170,7 +170,7 @@ class TemporalModel(object):
         """
         # use expit (logistic) function for speedup
         stim_max = stim.max()
-        scale = scipy.special.expit((stim_max - self.shift) / self.slope)
+        scale = ss.expit((stim_max - self.shift) / self.slope)
 
         # avoid division by zero
         return stim / (stim_max + np.finfo(float).eps) * scale
@@ -418,6 +418,13 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     else:
         _, ecs = retina.electrode_ecs(implant)
 
+    # Calculate the max of every current spread map
+    layermax = np.zeros(2)
+    if 'INL' in dolayers:
+        layermax[0] = ecs[:, :, 0, :].max(axis=(0, 1))
+    if 'NFL' in dolayers:
+        layermax[1] = ecs[:, :, 1, :].max(axis=(0, 1))
+
     # `ecs_list` is a pixel by `n` list where `n` is the number of layers
     # being simulated. Each value in `ecs_list` is the current contributed
     # by each electrode for that spatial location
@@ -431,11 +438,9 @@ def pulse2percept(stim, implant, tm=None, retina=None,
             if 'INL' in dolayers:
                 # For this pixel: Check if the ecs in any layer is large
                 # enough compared to the max across pixels within the layer
-                layer_max = ecs[:, :, 0, :].max(axis=(0, 1))
-                process_pixel |= np.any(ecs[yy, xx, 0, :] >= tol * layer_max)
+                process_pixel |= np.any(ecs[yy, xx, 0, :] >= tol * layermax[0])
             if 'NFL' in dolayers:
-                layer_max = ecs[:, :, 1, :].max(axis=(0, 1))
-                process_pixel |= np.any(ecs[yy, xx, 0, :] >= tol * layer_max)
+                process_pixel |= np.any(ecs[yy, xx, 1, :] >= tol * layermax[1])
 
             if process_pixel:
                 ecs_list.append(ecs[yy, xx])
