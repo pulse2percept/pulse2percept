@@ -1,21 +1,12 @@
+language: python
 sudo: false
-
 env:
   global:
-    - CONDA_DEPS="pip flake8 numpy scipy numba joblib dask scikit-image" PIP_DEPS="pytest coveralls pytest-cov"
+    - CONDA_DEPS="pip flake8 numpy scipy numba joblib dask scikit-image" PIP_DEPS="pytest coveralls pytest-cov" MINICONDA_URL="http://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh"
 
-matrix:
-  include:
-    - os: linux
-      env:
-         - PYTHON_VERSION=2.7
-         - MINICONDA_URL="http://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh"
-    - os: linux
-      env:
-         - PYTHON_VERSION=3.5
-         - MINICONDA_URL="https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh"
-
-
+python:
+- '2.7'
+- '3.5'
 
 before_install:
   - export MINICONDA=$HOME/miniconda
@@ -27,30 +18,19 @@ before_install:
   - conda config --set always_yes yes
   - conda update conda
   - conda info -a
-  - conda install python=$PYTHON_VERSION
-  - conda install $CONDA_DEPS
+  - conda config --add channels conda-forge
+  - conda install python=$TRAVIS_PYTHON_VERSION $CONDA_DEPS
   - pip install $PIP_DEPS
 
 install:
 - python setup.py install --record installed_files.txt
 
 script:
-- flake8 --ignore N802,N806 `find . -name \*.py | grep -v setup.py | grep -v version.py | grep -v __init__.py | grep -v /doc/ | grep -v /scripts/`
+  - flake8 --ignore N802,N806 `find . -name \*.py | grep -v setup.py | grep -v version.py | grep -v __init__.py | grep -v /doc/ | grep -v /scripts/`
 
-- mkdir for_test
-- cd for_test
-- py.test --pyargs pulse2percept --cov-report term-missing --cov=pulse2percept --doctest-modules
+  - mkdir for_test
+  - cd for_test
+  - py.test --pyargs pulse2percept --cov-report term-missing --cov=pulse2percept --doctest-modules
 
 after_success:
 - coveralls
-
-before_cache:
-# clean unused packages & installed files from conda cache
-# this makes the cache rebuilt less frequently
-- conda clean --tarballs --packages --index-cache
-- rm -rf $HOME/miniconda/pkgs/cache
-- xargs rm <installed_files.txt
-
-cache:
-  directories:
-    - $HOME/miniconda
