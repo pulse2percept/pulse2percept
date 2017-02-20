@@ -869,7 +869,7 @@ class Movie2Pulsetrain(utils.TimeSeries):
                 ppt = np.concatenate((ppt, interpulsegap), axis=0)
                 ppt = np.concatenate((ppt, pulse), axis=0)
 
-        ppt = ppt[0:round(dur / tsample)]
+        ppt = ppt[0:int(round(dur / tsample))]
         intfunc = spi.interp1d(np.linspace(0, len(rflum),
                                            len(rflum)), rflum)
 
