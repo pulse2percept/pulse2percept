@@ -8,7 +8,7 @@ Output: a vector of brightness over time
 from __future__ import print_function
 import numpy as np
 import scipy.signal as signal
-import scipy.special
+import scipy.special as ss
 import logging
 
 import pulse2percept.electrode2currentmap as e2cm
@@ -22,8 +22,9 @@ class TemporalModel(object):
 
     def __init__(self, tsample=0.005 / 1000,
                  tau_nfl=0.42 / 1000, tau_inl=18.0 / 1000,
-                 tau_ca=45.25 / 1000, tau_slow=26.25 / 1000,
-                 scale_slow=1150.0, lweight=0.636, aweight=0.5,
+                 tau_ca=45.25 / 1000, scale_ca=42.1,
+                 tau_slow=26.25 / 1000, scale_slow=1150.0,
+                 lweight=0.636, aweight=0.5,
                  slope=3.0, shift=15.0):
         """Temporal Sensitivity Model
 
@@ -46,6 +47,9 @@ class TemporalModel(object):
         tau_ca : float
             Time decay constant for the charge accumulation, has values
             between 38 - 57 ms. Default: 45.25 / 1000 s.
+        scale_ca : float, optional
+            Scaling factor applied to charge accumulation (used to be called
+            epsilon). Default: 42.1.
         tau_slow : float
             Time decay constant for the slow leaky integrator.
             Default: 26.25 / 1000 s.
@@ -74,6 +78,7 @@ class TemporalModel(object):
         self.tau_nfl = tau_nfl
         self.tau_inl = tau_inl
         self.tau_ca = tau_ca
+        self.scale_ca = scale_ca
         self.tau_slow = tau_slow
         self.slope = slope
         self.shift = shift
@@ -124,7 +129,7 @@ class TemporalModel(object):
         Notes
         -----
         The function utils.sparseconv can be much faster than np.convolve and
-        scipy.signals.fftconvolve if `stim` is sparse and much longer than the
+        signal.fftconvolve if `stim` is sparse and much longer than the
         convolution kernel.
 
         The output is not converted to a TimeSeries object for speedup.
@@ -164,11 +169,11 @@ class TemporalModel(object):
         Conversion to TimeSeries is avoided for the sake of speedup.
         """
         # use expit (logistic) function for speedup
-        stimmax = stim.max()
-        scale = scipy.special.expit((stimmax - self.shift) / self.slope)
+        stim_max = stim.max()
+        scale = ss.expit((stim_max - self.shift) / self.slope)
 
         # avoid division by zero
-        return stim / (stimmax + np.finfo(float).eps) * scale
+        return stim / (stim_max + np.finfo(float).eps) * scale
 
     def slow_response(self, stim):
         """Slow response function (Box 5)
@@ -258,9 +263,37 @@ class TemporalModel(object):
         resp = self.slow_response(resp)
         return utils.TimeSeries(self.tsample, resp)
 
+    def calc_per_electrode(self, pt):
+        ca = self.tsample * np.cumsum(np.maximum(0, -pt.data))
+        tmp = signal.fftconvolve(ca, self.gamma_ca, mode='full')
+        conv_ca = self.scale_ca * self.tsample * tmp[:pt.data.size]
+
+        pt_entry = np.zeros_like(pt.data)
+
+        # negative elements first
+        idx = np.where(pt.data <= 0)[0]
+        pt_entry[idx] = np.minimum(pt.data[idx] + conv_ca[idx], 0)
+
+        # then positive elements
+        idx = np.where(pt.data > 0)[0]
+        pt_entry[idx] = np.maximum(pt.data[idx] - conv_ca[idx], 0)
+
+        return pt_entry
+
+    def calc_per_pixel(self, ecs_item, pt, resample, dolayers, dojit=False):
+        # Convert the current map to one that includes axon streaks
+        ecm = e2cm.ecm(ecs_item, pt, self.tsample)
+
+        # Run the model cascade
+        sr = self.model_cascade(ecm, dolayers, dojit=dojit)
+
+        # Downsample output
+        sr.resample(resample)
+        return sr
+
 
 def pulse2percept(stim, implant, tm=None, retina=None,
-                  rsample=30, scale_charge=42.1, tol=0.05, use_ecs=True,
+                  rsample=30, tol=0.05, use_ecs=True,
                   engine='joblib', dojit=True, n_jobs=-1):
     """Transforms an input stimulus to a percept
 
@@ -364,6 +397,10 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     elif not isinstance(retina, e2cm.Retina):
         raise TypeError("`retina` object must be of type e2cm.Retina")
 
+    # Perform any necessary calculations per electrode
+    pt_list = utils.parfor(tm.calc_per_electrode, pt_list, engine=engine,
+                           n_jobs=n_jobs)
+
     # Which layer to simulate is given by implant type.
     # For now, both implant types process the same two layers. In the
     # future, these layers might differ. Order doesn't matter.
@@ -381,6 +418,13 @@ def pulse2percept(stim, implant, tm=None, retina=None,
     else:
         _, ecs = retina.electrode_ecs(implant)
 
+    # Calculate the max of every current spread map
+    layermax = np.zeros(2)
+    if 'INL' in dolayers:
+        layermax[0] = ecs[:, :, 0, :].max(axis=(0, 1))
+    if 'NFL' in dolayers:
+        layermax[1] = ecs[:, :, 1, :].max(axis=(0, 1))
+
     # `ecs_list` is a pixel by `n` list where `n` is the number of layers
     # being simulated. Each value in `ecs_list` is the current contributed
     # by each electrode for that spatial location
@@ -392,11 +436,11 @@ def pulse2percept(stim, implant, tm=None, retina=None,
             # tolerance, we need to process that pixel
             process_pixel = False
             if 'INL' in dolayers:
-                layer = ecs[yy, xx, 0, :]
-                process_pixel |= np.any(layer >= tol * layer.max())
+                # For this pixel: Check if the ecs in any layer is large
+                # enough compared to the max across pixels within the layer
+                process_pixel |= np.any(ecs[yy, xx, 0, :] >= tol * layermax[0])
             if 'NFL' in dolayers:
-                layer = ecs[yy, xx, 1, :]
-                process_pixel |= np.any(layer >= tol * layer.max())
+                process_pixel |= np.any(ecs[yy, xx, 1, :] >= tol * layermax[1])
 
             if process_pixel:
                 ecs_list.append(ecs[yy, xx])
@@ -406,64 +450,13 @@ def pulse2percept(stim, implant, tm=None, retina=None,
                                                    len(ecs_list),
                                                    np.prod(ecs.shape[:2])))
 
-    # Apply charge accumulation
-    for i, p in enumerate(pt_list):
-        ca = tm.tsample * np.cumsum(np.maximum(0, -p.data))
-        tmp = signal.fftconvolve(ca, tm.gamma_ca, mode='full')
-        conv_ca = scale_charge * tm.tsample * tmp[:p.data.size]
-
-        # negative elements first
-        idx = np.where(p.data <= 0)[0]
-        pt_list[i].data[idx] = np.minimum(p.data[idx] + conv_ca[idx], 0)
-
-        # then positive elements
-        idx = np.where(p.data > 0)[0]
-        pt_list[i].data[idx] = np.maximum(p.data[idx] - conv_ca[idx], 0)
-    pt_arr = np.array([p.data for p in pt_list])
-
-    sr_list = utils.parfor(calc_pixel, ecs_list, n_jobs=n_jobs, engine=engine,
-                           func_args=[pt_arr, tm, rsample, dolayers, dojit])
+    sr_list = utils.parfor(tm.calc_per_pixel, ecs_list,
+                           n_jobs=n_jobs, engine=engine,
+                           func_args=[pt_list, rsample, dolayers, dojit])
     bm = np.zeros(retina.gridx.shape + (sr_list[0].data.shape[-1], ))
     idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
     bm[idxer] = [sr.data for sr in sr_list]
     return utils.TimeSeries(sr_list[0].tsample, bm)
-
-
-def calc_pixel(ecs_item, pt, tm, rsample, dolayers, dojit=False):
-    """Calculates the temporal response of a single pixel
-
-    Parameters
-    ----------
-    ecs_item : array
-        Effective current spread map from the electrodes in a particular
-        spatial location (pixel), one value per layer.
-    pt : utils.TimeSeries
-        Pulse train
-    tm : ec2b.TemporalModel
-        A model of temporal sensitivity.
-    rsample : int
-        Resampling factor. For example, a resampling factor of 3 keeps
-        only every third frame.
-        Default: 30 frames per second.
-    dolayers : list
-        List of retinal layers to simulate. Choose from:
-
-        - 'NFL': nerve fiber layer
-        - 'INL': inner nuclear layer
-    dojit : bool, optional
-        Whether to use just-in-time (JIT) compilation to speed up computation.
-        Default: True.
-    """
-    # Convert the current map to one that includes axon streaks
-    ecm = e2cm.ecm(ecs_item, pt, tm.tsample)
-
-    # Apply temporal model that pixel
-    sr = tm.model_cascade(ecm, dolayers, dojit=dojit)
-
-    # Apply resampling factor
-    sr.resample(rsample)
-
-    return sr
 
 
 def parse_pulse_trains(stim, implant):

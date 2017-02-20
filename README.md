@@ -1,6 +1,7 @@
-# pulse2percept
+[![Coverage Status](https://coveralls.io/repos/github/uwescience/pulse2percept/badge.svg?branch=master)](https://coveralls.io/github/uwescience/pulse2percept?branch=master)
 
-Models for retinal prosthetics
+
+# pulse2percept: Models for Retinal Prosthetics
 
 ## Summary
 
@@ -84,7 +85,9 @@ folder, including the following:
 
 - [0.0-example-usage.ipynb](https://github.com/uwescience/pulse2percept/blob/master/examples/notebooks/0.0-example-usage.ipynb): How to use the model.
 
- - [0.1-image2percept.ipynb](https://github.com/uwescience/pulse2percept/blob/master/examples/notebooks/0.1-image2percept.ipynb): How to convert an image to a percept.
+- [0.1-image2percept.ipynb](https://github.com/uwescience/pulse2percept/blob/master/examples/notebooks/0.1-image2percept.ipynb): How to convert an image to a percept.
 
- - [1.0-exp-nanduri2012.ipynb](https://github.com/uwescience/pulse2percept/blob/master/examples/notebooks/1.0-exp-nanduri2012.ipynb): A notebook reproducing the findings described
+- [1.0-exp-nanduri2012.ipynb](https://github.com/uwescience/pulse2percept/blob/master/examples/notebooks/1.0-exp-nanduri2012.ipynb): A notebook reproducing the findings described
    in Nanduri et al. (2012).
+
+Detailed documentation can be found at [uwescience.github.io/pulse2percept](https://uwescience.github.io/pulse2percept).

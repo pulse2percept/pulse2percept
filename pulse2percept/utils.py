@@ -34,12 +34,20 @@ class Parameters(object):
 class TimeSeries(object):
 
     def __init__(self, tsample, data):
-        """
-        Represent a time-series
+        """Container for time series data
+
+        Provides a container for time series data. Every time series has a
+        sampling step `tsample`, and some `data` sampled at that rate.
+
+        Parameters
+        ----------
+        tsample : float
+            Sampling time step (seconds).
+        data : array_like
+            Time series data sampled at every `tsample` seconds.
         """
         self.data = data
         self.tsample = tsample
-        # self.sampling_rate = 1 / tsample
         self.duration = self.data.shape[-1] * tsample
         self.shape = data.shape
 
@@ -47,6 +55,16 @@ class TimeSeries(object):
         return TimeSeries(self.tsample, self.data[y])
 
     def resample(self, factor):
+        """Resamples time series data
+
+        Downsamples time series data according to a resampling factor
+        `factor`. Only integers allowed.
+
+        Parameters
+        ----------
+        factor : int
+            Resampling factor.
+        """
         factor = int(factor)
         TimeSeries.__init__(self, self.tsample * factor,
                             self.data[..., ::factor])
@@ -78,9 +96,9 @@ def _sparseconv(v, a, mode):
     if mode == 'full':
         return out
     elif mode == 'valid':
-        return _centered(out, a_len - v_len + 1)
+        return center_vector(out, a_len - v_len + 1)
     elif mode == 'same':
-        return _centered(out, a_len)
+        return center_vector(out, a_len)
     else:
         raise ValueError("Acceptable mode flags are 'valid',"
                          " 'same', or 'full'.")
@@ -128,7 +146,7 @@ def sparseconv(kernel, data, mode='full', dojit=True):
         return _sparseconv(kernel, data, mode)
 
 
-def _centered(vec, newlen):
+def center_vector(vec, newlen):
     """
     Returns the center `newlen` portion of a vector.
 
