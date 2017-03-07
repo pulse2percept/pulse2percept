@@ -4,6 +4,9 @@ Utility functions for pulse2percept
 import numpy as np
 import multiprocessing
 import random
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 try:
@@ -13,8 +16,27 @@ except ImportError:
     has_jit = False
 
 
+def deprecated(func):
+    """Decorator used to mark functions as deprecated
+
+    This is a decorator which can be used to mark functions as deprecated.
+    It will result in a warning being emitted when the function is used.
+
+    Adapted from: https://wiki.python.org/moin/PythonDecoratorLibrary
+    """
+    def new_func(*args, **kwargs):
+        logger.warn("Call to deprecated function {}.".format(func.__name__),
+                    category=DeprecationWarning)
+        return func(*args, **kwargs)
+    new_func.__name__ = func.__name__
+    new_func.__doc__ = func.__doc__
+    new_func.__dict__.update(func.__dict__)
+    return new_func
+
+
 class Parameters(object):
 
+    @deprecated
     def __init__(self, **params):
         for k, v in params.items():
             self.__dict__[k] = v
