@@ -35,6 +35,7 @@ def deprecated(func):
 
 
 class Parameters(object):
+    """Container to wrap a MATLAB array in a Python dict"""
 
     @deprecated
     def __init__(self, **params):

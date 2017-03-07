@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.testing as npt
+import pytest
 import os
 
 from pulse2percept import files
@@ -11,12 +12,18 @@ def test_savemoviefiles():
     except ImportError:
         # If PIL is not installed, running savemoviefiles should break
         with pytest.raises(AssertionError):
-            files.savemoviefiles("blah.avi", numpy.zeros(10), path='./')
+            files.savemoviefiles("blah.avi", np.zeros(10), path='./')
     else:
+        # Avoid import but unused error
+        dummy = Image.__name__
+
         if os.name != 'nt':
             # If not on Windows, this should break
             with pytest.raises(OSError):
-                files.savemoviefiles("blah.avi", numpy.zeros(10), path='./')
+                files.savemoviefiles("blah.avi", np.zeros(10), path='./')
+        else:
+                # smoke test
+            files.savemoviefiles("blah.avi", np.zeros(10), path='./')
 
 
 def test_npy2movie():
@@ -25,12 +32,18 @@ def test_npy2movie():
     except ImportError:
         # If PIL is not installed, running savemoviefiles should break
         with pytest.raises(AssertionError):
-            files.npy2movie("blah.avi", numpy.zeros(10))
+            files.npy2movie("blah.avi", np.zeros(10))
     else:
+        # Avoid import but unused error
+        dummy = Image.__name__
+
         if os.name != 'nt':
             # If not on Windows, this should break
             with pytest.raises(OSError):
-                files.npy2movie("blah.avi", numpy.zeros(10))
+                files.npy2movie("blah.avi", np.zeros(10))
+        else:
+                # smoke test
+            files.npy2movie("blah.avi", np.zeros(10))
 
 
 def test_scale():
