@@ -7,6 +7,7 @@ from pulse2percept import files
 
 
 def test_savemoviefiles():
+    # This function is deprecated
     try:
         from PIL import Image
     except ImportError:
@@ -15,18 +16,19 @@ def test_savemoviefiles():
             files.savemoviefiles("blah.avi", np.zeros(10), path='./')
     else:
         # Avoid import but unused error
-        dummy = Image.__name__
+        Image.__name__
 
         if os.name != 'nt':
             # If not on Windows, this should break
             with pytest.raises(OSError):
                 files.savemoviefiles("blah.avi", np.zeros(10), path='./')
         else:
-                # smoke test
+            # smoke test
             files.savemoviefiles("blah.avi", np.zeros(10), path='./')
 
 
 def test_npy2movie():
+    # This function is deprecated
     try:
         from PIL import Image
     except ImportError:
@@ -35,20 +37,20 @@ def test_npy2movie():
             files.npy2movie("blah.avi", np.zeros(10))
     else:
         # Avoid import but unused error
-        dummy = Image.__name__
+        Image.__name__
 
         if os.name != 'nt':
             # If not on Windows, this should break
             with pytest.raises(OSError):
                 files.npy2movie("blah.avi", np.zeros(10))
         else:
-                # smoke test
+            # smoke test
             files.npy2movie("blah.avi", np.zeros(10))
 
 
 def test_scale():
+    # This function is deprecated
     inarray = np.random.rand(100)
-
     for newmin in [0.0, -0.5]:
         for newmax in [1.0, 10.0]:
             scaled = files.scale(inarray, newmin=newmin, newmax=newmax)

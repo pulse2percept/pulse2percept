@@ -25,8 +25,7 @@ def deprecated(func):
     Adapted from: https://wiki.python.org/moin/PythonDecoratorLibrary
     """
     def new_func(*args, **kwargs):
-        logger.warn("Call to deprecated function {}.".format(func.__name__),
-                    category=DeprecationWarning)
+        logger.warn("Call to deprecated function {}.".format(func.__name__))
         return func(*args, **kwargs)
     new_func.__name__ = func.__name__
     new_func.__doc__ = func.__doc__
