@@ -277,7 +277,19 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         return results
 
 
+@deprecated
 def mov2npy(movie_file, out_file):
+    """Converts a movie file to a NumPy array
+
+    This function is deprecated as of v0.2.
+
+    Parameters
+    ----------
+    movie_file : array
+        The movie file to be read
+    out_file: str
+        Name of .npy file to be created.
+    """
     # Don't import cv at module level. Instead we'll use this on python 2
     # sometimes...
     try:

@@ -1,9 +1,23 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
+try:
+    from unittest import mock
+except ImportError:
+    import mock
 
 import pulse2percept.electrode2currentmap as e2cm
 from pulse2percept import utils
+
+
+def test_micron2deg():
+    npt.assert_almost_equal(e2cm.micron2deg(0.0), 0.0)
+    npt.assert_almost_equal(e2cm.micron2deg(280.0), 1.0)
+
+
+def test_deg2micron():
+    npt.assert_almost_equal(e2cm.deg2micron(0.0), 0.0)
+    npt.assert_almost_equal(e2cm.deg2micron(1.0), 280.0)
 
 
 def test_Electrode():
@@ -38,6 +52,20 @@ def test_Electrode():
 
             # Subretinal arrays have layer thicknesses added to `hh`.
             npt.assert_equal(e.height > hh, True)
+
+    # Invalid type
+    with pytest.raises(ValueError):
+        e2cm.Electrode('suprachoroidal', 10, 0, 0, 0)
+
+    # Invalid layer
+    e = e2cm.Electrode('epiretinal', 10, 0, 0, 0)
+    with pytest.raises(ValueError):
+        e.current_spread(0, 0, 'RGC')
+
+    # Invalid type lookup
+    e.etype = 'suprachoroidal'
+    with pytest.raises(ValueError):
+        e.height
 
 
 def test_ElectrodeArray():
@@ -113,6 +141,8 @@ def test_ArgusI():
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
         e2cm.ArgusI(-100, 10, h=np.zeros(5))
+    with pytest.raises(ValueError):
+        e2cm.ArgusI(-100, 10, h=[1, 2, 3])
 
     for use_legacy_names in [False, True]:
         # Indexing must work for both integers and electrode names
@@ -180,6 +210,8 @@ def test_ArgusII():
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
         e2cm.ArgusII(-100, 10, h=np.zeros(5))
+    with pytest.raises(ValueError):
+        e2cm.ArgusII(-100, 100, h=[1, 2, 3])
 
     # Indexing must work for both integers and electrode names
     argus = e2cm.ArgusII()
@@ -243,8 +275,19 @@ def test_get_pulse():
                     else:
                         npt.assert_equal(idx_min[0] < idx_max[0], False)
 
+    # Invalid pulsetype
+    with pytest.raises(ValueError):
+        e2cm.get_pulse(10, 0.1, 0, 'anodic')
+    with pytest.raises(ValueError):
+        e2cm.get_pulse(10, 0.1, 0, 'cathodic')
+
 
 def test_image2pulsetrain():
+    # Trigger an import error
+    with mock.patch.dict("sys.modules", {"skimage": {}}):
+        with pytest.raises(ImportError):
+            e2cm.image2pulsetrain("rainbow_cat.jpg", e2cm.ArgusI())
+
     # Range of values
     amp_min = 2
     amp_max = 15
@@ -279,6 +322,27 @@ def test_image2pulsetrain():
         # Make sure the dimmest electrode has `amp_min` as max amplitude
         npt.assert_almost_equal(np.min([np.abs(p.data).max() for p in pt]),
                                 amp_min, decimal=1)
+
+    # Invalid image
+    with pytest.raises(IOError):
+        e2cm.image2pulsetrain("rainbow_cat.jpg", e2cm.ArgusI())
+
+    # Smoke-test RGB
+    e2cm.image2pulsetrain(np.zeros((10, 10, 3)), e2cm.ArgusI())
+
+    # Smoke-test invert
+    e2cm.image2pulsetrain(np.zeros((10, 10, 3)), e2cm.ArgusI(), invert=True)
+
+    # Smoke-test normalize
+    e2cm.image2pulsetrain(np.ones((10, 10, 3)) * 2, e2cm.ArgusI(), invert=True)
+
+    # Smoke-test frequency coding
+    e2cm.image2pulsetrain(np.zeros((10, 10, 3)), e2cm.ArgusI(),
+                          coding='frequency')
+
+    # Invalid coding
+    with pytest.raises(ValueError):
+        e2cm.image2pulsetrain(np.zeros((10, 10)), e2cm.ArgusI(), coding='n/a')
 
 
 def test_Retina_Electrodes():
@@ -442,6 +506,16 @@ def test_Psycho2Pulsetrain():
                     npt.assert_equal(p2pt.data[idx0], val)
                     npt.assert_equal(p2pt.data[idx0 + envelope_dur], val)
 
+    # Invalid values
+    with pytest.raises(ValueError):
+        e2cm.Psycho2Pulsetrain(0.1, delay=-10)
+    with pytest.raises(ValueError):
+        e2cm.Psycho2Pulsetrain(0.1, pulse_dur=-10)
+    with pytest.raises(ValueError):
+        e2cm.Psycho2Pulsetrain(0.1, freq=1000, pulse_dur=10)
+    with pytest.raises(ValueError):
+        e2cm.Psycho2Pulsetrain(0.1, pulseorder='cathodicfirst')
+
 
 def test_Retina_ecm():
     sampling = 1
@@ -491,3 +565,19 @@ def test_Retina_ecm():
     # make sure the code runs
     stim_data = np.array([s.data for s in [m2pt, m2pt]])
     e2cm.ecm(ecs_vector, stim_data, m2pt.tsample)
+
+
+def test_receptive_field():
+    e = e2cm.Electrode('epiretinal', 100, 0, 0, 0)
+    with pytest.raises(ValueError):
+        e2cm.receptive_field(e, 0, 0, rftype='invalid')
+
+
+def test_retinalmovie2electrodtimeseries():
+    # This function is deprecated
+
+    movie = np.random.rand(10, 10, 100)
+    rf = np.random.rand(10, 10)
+
+    # smoke test
+    e2cm.retinalmovie2electrodtimeseries(rf, movie)

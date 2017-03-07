@@ -633,6 +633,7 @@ def receptive_field(electrode, xg, yg, rftype='square', size=None):
     return rf
 
 
+@utils.deprecated
 def retinalmovie2electrodtimeseries(rf, movie):
     """
     Calculates the luminance over time for each electrodes receptive field.
