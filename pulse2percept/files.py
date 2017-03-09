@@ -5,13 +5,15 @@ import os
 import logging
 
 from pulse2percept import utils
+from pulse2percept import electrode2currentmap as e2cm
 
 
 @utils.deprecated
 def savemoviefiles(filestr, data, path='savedImages/'):
     """Saves a brightness movie to .npy, .mat, and .avi format
 
-    This function is deprecated as of v0.2.
+    This function is deprecated as of v0.2 and will be removed
+    completely in v0.3.
 
     Parameters
     ----------
@@ -24,6 +26,8 @@ def savemoviefiles(filestr, data, path='savedImages/'):
     path : str, optional
         Path to directory where files should be saved.
         Default: savedImages/
+
+    .. deprecated:: 0.2
     """
     np.save(path + filestr, data)  # save as npy
     sio.savemat(path + filestr + '.mat', dict(mov=data))  # save as matfile
@@ -82,12 +86,13 @@ def npy2movie(filename, movie, rate=30):
     p.stdin.close()
 
 
-@utils.deprecated
+@utils.deprecated(e2cm.image2pulsetrain)
 def scale(inarray, newmin=0.0, newmax=1.0):
     """Scales an image such that its lowest value attains newmin and
     it's highest value attains newmax.
 
-    This function is deprecated as of v2.0.
+    This function is deprecated as of v0.2 and will be removed
+    completely in v0.3.
 
     written by Ione Fine, based on code from Rick Anthony
 
@@ -99,6 +104,8 @@ def scale(inarray, newmin=0.0, newmax=1.0):
         The desired lower bound of values in `inarray`. Default: 0
     newmax : float, optional
         The desired upper bound of values in `inarray`. Default: 1
+
+    .. deprecated:: 0.2
     """
 
     oldmin = inarray.min()

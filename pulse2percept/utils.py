@@ -16,21 +16,44 @@ except ImportError:
     has_jit = False
 
 
-def deprecated(func):
-    """Decorator used to mark functions as deprecated
+class deprecated(object):
 
-    This is a decorator which can be used to mark functions as deprecated.
-    It will result in a warning being emitted when the function is used.
+    def __init__(self, alt_func=None):
+        """Decorator used to mark functions as deprecated
 
-    Adapted from: https://wiki.python.org/moin/PythonDecoratorLibrary
-    """
-    def new_func(*args, **kwargs):
-        logger.warn("Call to deprecated function {}.".format(func.__name__))
-        return func(*args, **kwargs)
-    new_func.__name__ = func.__name__
-    new_func.__doc__ = func.__doc__
-    new_func.__dict__.update(func.__dict__)
-    return new_func
+        This is a decorator which can be used to mark functions as deprecated.
+        It will result in a warning being emitted when the function is used.
+
+        Adapted from: http://www.artima.com/weblogs/viewpost.jsp?thread=240845
+
+        Parameters
+        ----------
+        alt_func : function object, optional
+            The function to use instead of the deprecated one.
+            Default: None.
+        """
+        self.alt_func = alt_func
+
+    def __call__(self, func):
+        """The function performing the decoration
+
+        This function is perfoming the actual decoration process. It can only
+        have a single argument, which is the function object.
+
+        Parameters
+        ----------
+        func : function object
+            The function that is deprecated.
+        """
+        def wrapped_func(*args, **kwargs):
+            e_s = "Call to deprecated function %s" % func.__name__
+            if self.alt_func:
+                e_s += ", use %s instead." % self.alt_func.__name__
+            else:
+                e_s += "."
+            logger.warn(e_s)
+            func(*args, **kwargs)
+        return wrapped_func
 
 
 class Parameters(object):
@@ -281,7 +304,8 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
 def mov2npy(movie_file, out_file):
     """Converts a movie file to a NumPy array
 
-    This function is deprecated as of v0.2.
+    This function is deprecated as of v0.2 and will be removed completely
+    in v0.3.
 
     Parameters
     ----------
@@ -289,6 +313,8 @@ def mov2npy(movie_file, out_file):
         The movie file to be read
     out_file: str
         Name of .npy file to be created.
+
+    .. deprecated:: 0.2
     """
     # Don't import cv at module level. Instead we'll use this on python 2
     # sometimes...

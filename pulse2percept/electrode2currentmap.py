@@ -638,7 +638,10 @@ def retinalmovie2electrodtimeseries(rf, movie):
     """
     Calculates the luminance over time for each electrodes receptive field.
 
-    .. deprecated:: 0.1
+    This function is deprecated as of v0.2 and will be removed completely
+    in v0.3.
+
+    .. deprecated:: 0.2
     """
     rflum = np.zeros(movie.shape[-1])
     for f in range(movie.shape[-1]):
