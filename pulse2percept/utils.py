@@ -6,8 +6,6 @@ import multiprocessing
 import random
 import logging
 
-logger = logging.getLogger(__name__)
-
 
 try:
     from numba import jit
@@ -16,25 +14,23 @@ except ImportError:
     has_jit = False
 
 
-class deprecated(object):
 
-    def __init__(self, alt_func=None):
-        """Decorator used to mark functions as deprecated
+def deprecated(arg=None):
+    """Decorator used to mark functions as deprecated
 
-        This is a decorator which can be used to mark functions as deprecated.
-        It will result in a warning being emitted when the function is used.
+    This is a decorator which can be used to mark functions as deprecated.
+    It will result in a warning being emitted when the function is used.
 
-        Adapted from: http://www.artima.com/weblogs/viewpost.jsp?thread=240845
+    Adapted from: http://www.artima.com/weblogs/viewpost.jsp?thread=240845
 
-        Parameters
-        ----------
-        alt_func : function object, optional
-            The function to use instead of the deprecated one.
-            Default: None.
-        """
-        self.alt_func = alt_func
-
-    def __call__(self, func):
+    Parameters
+    ----------
+    alt_func : str, optional
+        The function to use instead of the deprecated one.
+        Be sure to list a string, not a function object.
+        Default: None.
+    """
+    def wrap(func):
         """The function performing the decoration
 
         This function is perfoming the actual decoration process. It can only
@@ -45,15 +41,23 @@ class deprecated(object):
         func : function object
             The function that is deprecated.
         """
+        e_s = "Call to deprecated function %s." % func.__name__
+        if alt_func:
+            e_s += "Use %s instead." % alt_func
+        logging.getLogger(__name__).warn(e_s)
+
         def wrapped_func(*args, **kwargs):
-            e_s = "Call to deprecated function %s" % func.__name__
-            if self.alt_func:
-                e_s += ", use %s instead." % self.alt_func.__name__
-            else:
-                e_s += "."
-            logger.warn(e_s)
-            func(*args, **kwargs)
+            return func(*args, **kwargs)
         return wrapped_func
+
+    alt_func = None
+    if callable(arg):
+        # Direct decoration
+        return wrap(arg)
+    else:
+        # Alternative function given
+        alt_func = arg
+        return wrap
 
 
 class Parameters(object):

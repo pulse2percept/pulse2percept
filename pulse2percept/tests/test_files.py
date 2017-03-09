@@ -24,7 +24,8 @@ def test_savemoviefiles():
                 files.savemoviefiles("invalid.avi", np.zeros(10), path='./')
 
         # smoke test
-        files.savemoviefiles("invalid.avi", np.zeros(10), path='./')
+        with pytest.warns(UserWarning):
+            files.savemoviefiles("invalid.avi", np.zeros(10), path='./')
 
 
 def test_npy2movie():
@@ -33,15 +34,16 @@ def test_npy2movie():
     if os.name != 'nt':
         # If not on Windows, this should break
         with pytest.raises(OSError):
-            files.npy2movie("invalid.avi", np.zeros(10))
+            files.npy2movie("invalid.avi", np.zeros(10), rate=30)
     else:
         # Trigger an import error
         with mock.patch.dict("sys.modules", {"PIL": {}}):
             with pytest.raises(ImportError):
-                files.npy2movie("invalid.avi", np.zeros(10), path='./')
+                files.npy2movie("invalid.avi", np.zeros(10), rate=30)
 
         # smoke test
-        files.npy2movie("invalid.avi", np.zeros(10))
+        with pytest.raises(UserWarning):
+            files.npy2movie("invalid.avi", np.zeros(10), rate=30)
 
 
 def test_scale():

@@ -86,7 +86,7 @@ def npy2movie(filename, movie, rate=30):
     p.stdin.close()
 
 
-@utils.deprecated(e2cm.image2pulsetrain)
+@utils.deprecated('e2cm.image2pulsetrain')
 def scale(inarray, newmin=0.0, newmax=1.0):
     """Scales an image such that its lowest value attains newmin and
     it's highest value attains newmax.
