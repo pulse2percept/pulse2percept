@@ -14,7 +14,6 @@ except ImportError:
     has_jit = False
 
 
-
 def deprecated(arg=None):
     """Decorator used to mark functions as deprecated
 

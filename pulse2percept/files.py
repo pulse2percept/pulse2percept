@@ -5,7 +5,6 @@ import os
 import logging
 
 from pulse2percept import utils
-from pulse2percept import electrode2currentmap as e2cm
 
 
 @utils.deprecated
