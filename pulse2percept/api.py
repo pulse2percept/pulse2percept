@@ -6,16 +6,16 @@ import pulse2percept as p2p
 
 class Simulation(object):
 
-    def __init__(self, implant, name=None, engine='joblib', dojit=True,
+    def __init__(self, name, implant, engine='joblib', dojit=True,
                  num_jobs=-1):
         """Generates a simulation framework
 
         Parameters
         ----------
+        name : str
+            Name of the simulation
         implant : implants.ElectrodeArray
             An implants.ElectrodeArray object that describes the implant.
-        name : str, optional
-            Name of the simulation. Default: None.
         engine : str, optional
             Which computational backend to use:
             - 'serial': Single-core computation
@@ -36,24 +36,153 @@ class Simulation(object):
             e_s = "`implant` must be of type p2p.implants.ElectrodeArray"
             raise TypeError(e_s)
 
+        logging.getLogger(__name__).info('Create simulation "%s".' % name)
         self.name = name
         self.implant = implant
         self.engine = engine
         self.dojit = dojit
         self.num_jobs = num_jobs
 
-        # Optic fiber layer (OFL): After calling `set_optic_fiber_layer`, this
-        # variable will contain a `p2p.retina.Grid` object.
         self.ofl = None
         self.ofl_streaks = True
 
-        # Ganglion cell layer (GCL): After calling `set_ganglion_cell_layer`,
-        # this variable will contain a `p2p.retina.TemporalModel` object.
         self.gcl = None
 
-    def set_optic_fiber_layer(self, sampling=100, axon_lambda=2, rot_deg=0,
-                              x_range=None, y_range=None, datapath='./',
-                              save_data=True, streaks_enabled=True):
+    def pulse2percept(self, stim, t_pulse=None, t_percept=None, tol=0.05):
+        """Transforms an input stimulus to a percept
+
+        Parameters
+        ----------
+        stim : utils.TimeSeries|list|dict
+            There are several ways to specify an input stimulus:
+
+            - For a single-electrode array, pass a single pulse train; i.e.,
+              a single utils.TimeSeries object.
+            - For a multi-electrode array, pass a list of pulse trains; i.e.,
+              one pulse train per electrode.
+            - For a multi-electrode array, specify all electrodes that should
+              receive non-zero pulse trains by name.
+        t_percept : float, optional
+            The desired sampling time step (seconds) of the output. If None is
+            given, the output sampling time step will correspond to the input
+            time step (as defined by `stim` and `tm`).
+            Default: None.
+        tol : float, optional
+            Ignore pixels whose effective current is smaller than a fraction
+            `tol` of the max value.
+            Default: 0.05.
+
+        Returns
+        -------
+        A utils.TimeSeries object whose data container comprises the predicted
+        brightness over time at each retinal location (x, y), with the last
+        dimension of the container representing time (t).
+
+        Examples
+        --------
+        Stimulate a single-electrode array:
+
+        >>> import pulse2percept as p2p
+        >>> implant = p2p.implants.ElectrodeArray('subretinal', 0, 0, 0, 0)
+        >>> stim = p2p.stimuli.Psycho2Pulsetrain(tsample=5e-6, freq=50, amp=20)
+        >>> sim = p2p.Simulation("Single-electrode example", implant)
+        >>> percept = sim.pulse2percept(stim)  # doctest: +SKIP
+
+        Stimulate a single electrode ('C3') of an Argus I array centered on the
+        fovea:
+
+        >>> import pulse2percept as p2p
+        >>> implant = p2p.implants.ArgusI()
+        >>> stim = {'C3': p2p.stimuli.Psycho2Pulsetrain(tsample=5e-6, freq=50,
+        ...                                              amp=20)}
+        >>> sim = p2p.Simulation("ArgusI example", implant)
+        >>> resp = sim.pulse2percept(stim, implant)  # doctest: +SKIP
+        """
+        self._init()
+
+        # Parse `stim` (either single pulse train or a list/dict of pulse
+        # trains), and generate a list of pulse trains, one for each electrode
+        pt_list = p2p.stimuli.parse_pulse_trains(stim, self.implant)
+
+        self.gcl.tsample = pt_list[0].tsample
+
+        # Perform any necessary calculations per electrode
+        pt_list = p2p.utils.parfor(self.gcl.calc_per_electrode,
+                                   pt_list, engine=self.engine,
+                                   n_jobs=self.num_jobs)
+
+        # Which layer to simulate is given by implant type.
+        # For now, both implant types process the same two layers. In the
+        # future, these layers might differ. Order doesn't matter.
+        if self.implant.etype == 'epiretinal':
+            dolayers = ['NFL', 'INL']  # nerve fiber layer
+        elif self.implant.etype == 'subretinal':
+            dolayers = ['NFL', 'INL']  # inner nuclear layer
+        else:
+            e_s = "Supported electrode types are 'epiretinal', 'subretinal'"
+            raise ValueError(e_s)
+
+        # Derive the effective current spread
+        if self.ofl_streaks:
+            ecs, _ = self.ofl.electrode_ecs(self.implant)
+        else:
+            _, ecs = self.ofl.electrode_ecs(self.implant)
+
+        # Calculate the max of every current spread map
+        lmax = np.zeros((2, ecs.shape[-1]))
+        if 'INL' in dolayers:
+            lmax[0, :] = ecs[:, :, 0, :].max(axis=(0, 1))
+        if 'NFL' in dolayers:
+            lmax[1, :] = ecs[:, :, 1, :].max(axis=(0, 1))
+
+        # `ecs_list` is a pixel by `n` list where `n` is the number of layers
+        # being simulated. Each value in `ecs_list` is the current contributed
+        # by each electrode for that spatial location
+        ecs_list = []
+        idx_list = []
+        for xx in range(self.ofl.gridx.shape[1]):
+            for yy in range(self.ofl.gridx.shape[0]):
+                # If any of the used current spread maps at [yy, xx] are above
+                # tolerance, we need to process that pixel
+                process_pixel = False
+                if 'INL' in dolayers:
+                    # For this pixel: Check if the ecs in any layer is large
+                    # enough compared to the max across pixels within the layer
+                    process_pixel |= np.any(ecs[yy, xx, 0, :] >=
+                                            tol * lmax[0, :])
+                if 'NFL' in dolayers:
+                    process_pixel |= np.any(ecs[yy, xx, 1, :] >=
+                                            tol * lmax[1, :])
+
+                if process_pixel:
+                    ecs_list.append(ecs[yy, xx])
+                    idx_list.append([yy, xx])
+
+        s_info = "tol=%.1f%%, %d/%d px selected" % (tol * 100, len(ecs_list),
+                                                    np.prod(ecs.shape[:2]))
+        logging.getLogger(__name__).info(s_info)
+
+        logging.getLogger(__name__).info("Starting computation...")
+        sr_list = p2p.utils.parfor(self.gcl.calc_per_pixel,
+                                   ecs_list, n_jobs=self.num_jobs,
+                                   engine=self.engine,
+                                   func_args=[pt_list, dolayers, self.dojit])
+        bm = np.zeros(self.ofl.gridx.shape +
+                      (sr_list[0].data.shape[-1], ))
+        idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
+        bm[idxer] = [sr.data for sr in sr_list]
+        percept = p2p.utils.TimeSeries(sr_list[0].tsample, bm)
+
+        if t_percept != percept.tsample:
+            percept = percept.resample(t_percept)
+
+        logging.getLogger(__name__).info("Done.")
+
+        return percept
+
+    def set_ofl(self, sampling=100, axon_lambda=2, rot_deg=0,
+                x_range=None, y_range=None,
+                loadpath='../', save_data=True, streaks_enabled=True):
         """Sets parameters of the optic fiber layer (OFL)
 
         Parameters
@@ -75,9 +204,9 @@ class Simulation(object):
             dimension. Either a list [ylo, yhi] or None. If None, the generated
             grid will be just big enough to fit the implant.
             Default: None.
-        datapath : str
-            Relative path where to look for existing retina files, and where to
-            store new retina files. Default: current directory.
+        loadpath : str
+            Relative path where to look for existing retina file.
+            Default: '../'
         save_data : bool
             Flag whether to save the data to a new retina file (True) or not
             (False). The file name is automatically generated from all
@@ -131,31 +260,31 @@ class Simulation(object):
                                    sampling=sampling,
                                    axon_lambda=axon_lambda,
                                    rot=np.deg2rad(rot_deg),
-                                   datapath=datapath,
                                    save_data=save_data)
         self.ofl_streaks = streaks_enabled
 
-    def set_ganglion_cell_layer(self, tsample=0.005 / 1000,
-                                tau_gcl=0.42 / 1000, tau_inl=18.0 / 1000,
-                                tau_ca=45.25 / 1000, scale_ca=42.1,
-                                tau_slow=26.25 / 1000, scale_slow=1150.0,
-                                lweight=0.636, aweight=0.5,
-                                slope=3.0, shift=15.0):
+    def set_gcl(self, t_gcl=0.005 / 1000,
+                tau_gcl=0.42 / 1000, tau_inl=18.0 / 1000,
+                tau_ca=45.25 / 1000, scale_ca=42.1,
+                tau_slow=26.25 / 1000, scale_slow=1150.0,
+                lweight=0.636, aweight=0.5,
+                slope=3.0, shift=15.0):
         """Sets parameters of the ganglion cell layer (GCL)
 
         Parameters
         ----------
-        tsample : float
-            Sampling time step (seconds). Default: 0.005 / 1000 s.
+        t_gcl : float
+            Sampling time step (seconds) for the ganglion cell layer.
+            Default: 0.005 / 1000 s.
         tau_gcl : float
             Time decay constant for the fast leaky integrater of the ganglion
             cell layer.
             Default: 45.25 / 1000 s.
         tau_inl : float
             Time decay constant for the fast leaky integrater of the inner
-            nuclear layer (INL). It has been shown that even epiretinal arrays
-            can activate bipolar cells (in the INL), which in turn influence
-            GCL activity. Default: 18.0 / 1000 s.
+            nuclear layer (INL); i.e., bipolar cell layer.
+            This is only important in combination with subretinal electrode
+            arrays. Default: 18.0 / 1000 s.
         tau_ca : float
             Time decay constant for the charge accumulation, has values
             between 38 - 57 ms. Default: 45.25 / 1000 s.
@@ -187,168 +316,15 @@ class Simulation(object):
             perhaps should be 15.9
         """
         # Generate a a TemporalModel from above specs
-        tm = p2p.retina.TemporalModel(tsample=tsample,
-                                      tau_gcl=tau_gcl, tau_inl=tau_inl,
-                                      tau_ca=tau_ca, scale_ca=scale_ca,
-                                      tau_slow=tau_slow, scale_slow=scale_slow,
+        tm = p2p.retina.TemporalModel(tsample=t_gcl, tau_gcl=tau_gcl,
+                                      tau_inl=tau_inl, tau_ca=tau_ca,
+                                      scale_ca=scale_ca, tau_slow=tau_slow,
+                                      scale_slow=scale_slow,
                                       lweight=lweight, aweight=aweight,
                                       slope=slope, shift=shift)
         self.gcl = tm
 
-    def _set_layers(self):
-        """Sets up all layers whose setters have not been called by the user
-
-        This function makes sure all necessary parts of the simulation are
-        initialized before transforming stimuli to percepts.
-        Uninitialized layers (by the user) will simply be initialized with
-        default argument values.
-        """
-        if self.ofl is None:
-            self.set_optic_fiber_layer()
-        if self.gcl is None:
-            self.set_ganglion_cell_layer()
-
-    def pulse2percept(self, stim, t_percept=None, tol=0.05,
-                      layers=['OFL', 'GCL', 'INL']):
-        """Transforms an input stimulus to a percept
-
-        Parameters
-        ----------
-        stim : utils.TimeSeries|list|dict
-            There are several ways to specify an input stimulus:
-
-            - For a single-electrode array, pass a single pulse train; i.e.,
-              a single utils.TimeSeries object.
-            - For a multi-electrode array, pass a list of pulse trains; i.e.,
-              one pulse train per electrode.
-            - For a multi-electrode array, specify all electrodes that should
-              receive non-zero pulse trains by name.
-        t_percept : float, optional
-            The desired sampling time step (seconds) of the output. If None is
-            given, the output sampling time step will correspond to the time
-            step of the `stim` object.
-            Default: Inherit from the `stim` object.
-        tol : float, optional
-            Ignore pixels whose effective current is smaller than a fraction
-            `tol` of the max value.
-            Default: 0.05.
-        layers : list, optional
-            A list of retina layers to simulate:
-            - 'OFL': Includes the optic fiber layer in the simulation.
-                     If omitted, the tissue activation map will not account
-                     for axon streaks.
-            - 'GCL': Includes the ganglion cell layer in the simulation.
-            - 'INL': Includes the inner nuclear layer in the simulation.
-                     If omitted, bipolar cell activity does not contribute
-                     to ganglion cell activity.
-            Order of specified layer does not matter.
-            Default: ['OFL', 'GCL', 'INL'].
-
-        Returns
-        -------
-        A utils.TimeSeries object whose data container comprises the predicted
-        brightness over time at each retinal location (x, y), with the last
-        dimension of the container representing time (t).
-
-        Examples
-        --------
-        Simulate a single-electrode array:
-
-        >>> import pulse2percept as p2p
-        >>> implant = p2p.implants.ElectrodeArray('subretinal', 0, 0, 0, 0)
-        >>> stim = p2p.stimuli.PulseTrain(tsample=5e-6, freq=50, amp=20)
-        >>> sim = p2p.Simulation(implant)
-        >>> percept = sim.pulse2percept(stim)  # doctest: +SKIP
-
-        Simulate an Argus I array centered on the fovea, where a single
-        electrode is being stimulated ('C3'):
-
-        >>> import pulse2percept as p2p
-        >>> implant = p2p.implants.ArgusI()
-        >>> stim = {'C3': p2p.stimuli.PulseTrain(tsample=5e-6, freq=50,
-        ...                                              amp=20)}
-        >>> sim = p2p.Simulation(implant)
-        >>> resp = sim.pulse2percept(stim, implant)  # doctest: +SKIP
-        """
-        logging.getLogger(__name__).info("Starting pulse2percept...")
-        self._set_layers()
-        layers = [l.upper() for l in layers]
-
-        # Parse `stim` (either single pulse train or a list/dict of pulse
-        # trains), and generate a list of pulse trains, one for each electrode
-        pt_list = p2p.stimuli.parse_pulse_trains(stim, self.implant)
-
-        if not np.allclose([p.tsample for p in pt_list], self.gcl.tsample):
-            e_s = "For now, all pulse trains must have the same sampling "
-            e_s += "time step as the ganglion cell layer. In the future, "
-            e_s += "this requirement might be relaxed."
-            raise ValueError(e_s)
-
-        # Perform any necessary calculations per electrode
-        pt_list = p2p.utils.parfor(self.gcl.calc_per_electrode,
-                                   pt_list, engine=self.engine,
-                                   n_jobs=self.num_jobs)
-
-        # Tissue activation maps: If OFL is simulated, includes axon streaks.
-        if 'OFL' in layers:
-            ecs, _ = self.ofl.electrode_ecs(self.implant)
-        else:
-            _, ecs = self.ofl.electrode_ecs(self.implant)
-
-        # Calculate the max of every current spread map
-        lmax = np.zeros((2, ecs.shape[-1]))
-        if 'INL' in layers:
-            lmax[0, :] = ecs[:, :, 0, :].max(axis=(0, 1))
-        if ('GCL' or 'OFL') in layers:
-            lmax[1, :] = ecs[:, :, 1, :].max(axis=(0, 1))
-
-        # `ecs_list` is a pixel by `n` list where `n` is the number of layers
-        # being simulated. Each value in `ecs_list` is the current contributed
-        # by each electrode for that spatial location
-        ecs_list = []
-        idx_list = []
-        for xx in range(self.ofl.gridx.shape[1]):
-            for yy in range(self.ofl.gridx.shape[0]):
-                # If any of the used current spread maps at [yy, xx] are above
-                # tolerance, we need to process that pixel
-                process_pixel = False
-                if 'INL' in layers:
-                    # For this pixel: Check if the ecs in any layer is large
-                    # enough compared to the max across pixels within the layer
-                    process_pixel |= np.any(ecs[yy, xx, 0, :] >=
-                                            tol * lmax[0, :])
-                if ('GCL' or 'OFL') in layers:
-                    process_pixel |= np.any(ecs[yy, xx, 1, :] >=
-                                            tol * lmax[1, :])
-
-                if process_pixel:
-                    ecs_list.append(ecs[yy, xx])
-                    idx_list.append([yy, xx])
-
-        s_info = "tol=%.1f%%, %d/%d px selected" % (tol * 100, len(ecs_list),
-                                                    np.prod(ecs.shape[:2]))
-        logging.getLogger(__name__).info(s_info)
-
-        sr_list = p2p.utils.parfor(self.gcl.calc_per_pixel,
-                                   ecs_list, n_jobs=self.num_jobs,
-                                   engine=self.engine,
-                                   func_args=[pt_list, layers, self.dojit])
-        bm = np.zeros(self.ofl.gridx.shape +
-                      (sr_list[0].data.shape[-1], ))
-        idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
-        bm[idxer] = [sr.data for sr in sr_list]
-        percept = p2p.utils.TimeSeries(sr_list[0].tsample, bm)
-
-        # It is possible to specify an additional sampling rate for the
-        # percept: If different from the input sampling rate, need to resample.
-        if t_percept != percept.tsample:
-            percept = percept.resample(t_percept)
-
-        logging.getLogger(__name__).info("Done.")
-
-        return percept
-
-    def plot_fundus(self, stim=None, ax=None):
+    def plot_fundus(self, ax=None, stim=None):
         """Plot the implant on the retinal surface akin to a fundus photopgraph
 
         This function plots an electrode array on top of the axon streak map
@@ -358,12 +334,12 @@ class Simulation(object):
 
         Parameters
         ----------
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
+            A Matplotlib axes object. If None given, a new one will be created.
+            Default: None
         stim : utils.TimeSeries|list|dict, optional
             An input stimulus, as passed to p2p.pulse2percept. If given,
             activated electrodes will be highlighted in the plot.
-            Default: None
-        ax : matplotlib.axes._subplots.AxesSubplot, optional
-            A Matplotlib axes object. If None given, a new one will be created.
             Default: None
 
         Returns
@@ -371,8 +347,6 @@ class Simulation(object):
         Returns a handle to the created figure (`fig`) and axes element (`ax`).
         """
         from matplotlib import patches
-
-        self._set_layers()
 
         fig = None
         if ax is None:
@@ -397,11 +371,9 @@ class Simulation(object):
         # Highlight location of stimulated electrodes
         if stim is not None:
             for key in stim:
-                el = self.implant[key]
-                if el is not None:
-                    ax.plot(p2p.retina.ret2dva(el.x_center),
-                            -p2p.retina.ret2dva(el.y_center), 'oy',
-                            markersize=np.sqrt(el.radius) * 2)
+                ax.plot(p2p.retina.ret2dva(self.implant[key].x_center),
+                        -p2p.retina.ret2dva(self.implant[key].y_center), 'oy',
+                        markersize=np.sqrt(self.implant[key].radius) * 2)
 
         # Plot all electrodes and their label
         for e in self.implant.electrodes:
@@ -421,6 +393,18 @@ class Simulation(object):
         ax.grid('off')
 
         return fig, ax
+
+    def _init(self):
+        """Initializes the model
+
+        This function makes sure all necessary parts of the simulation are
+        initialized before transforming stimuli. Uninitialized layers will
+        simply be initialized with default argument values.
+        """
+        if self.ofl is None:
+            self.set_ofl()
+        if self.gcl is None:
+            self.set_gcl()
 
 
 def get_brightest_frame(percept):
