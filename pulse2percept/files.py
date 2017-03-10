@@ -57,6 +57,8 @@ def npy2movie(filename, movie, rate=30):
         a utils.TimeSeries object
     rate : float, optional
         Frame rate. Default: 30 Hz
+
+    .. deprecated:: 0.2
     """
     if os.name != 'nt':
         raise OSError("npy2movie only works on Windows.")

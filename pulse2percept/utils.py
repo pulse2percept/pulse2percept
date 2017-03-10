@@ -14,7 +14,7 @@ except ImportError:
     has_jit = False
 
 
-def deprecated(arg=None):
+def deprecated(arg):
     """Decorator used to mark functions as deprecated
 
     This is a decorator which can be used to mark functions as deprecated.
@@ -42,7 +42,7 @@ def deprecated(arg=None):
         """
         e_s = "Call to deprecated function %s." % func.__name__
         if alt_func:
-            e_s += "Use %s instead." % alt_func
+            e_s += " Use %s instead." % alt_func
         logging.getLogger(__name__).warn(e_s)
 
         def wrapped_func(*args, **kwargs):
@@ -60,7 +60,13 @@ def deprecated(arg=None):
 
 
 class Parameters(object):
-    """Container to wrap a MATLAB array in a Python dict"""
+    """Container to wrap a MATLAB array in a Python dict
+
+    This function is deprecated as of v0.2 and will be completely removed
+    in v0.3.
+
+    .. deprecated:: 0.2
+    """
 
     @deprecated
     def __init__(self, **params):
