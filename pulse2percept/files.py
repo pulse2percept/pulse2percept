@@ -1,31 +1,73 @@
-# -*- npy2savedformats.py -*-
-"""
-Creates avi files will work on a 64x Windows as well as a PC provided that the
-ffmpeg folder is included in the right location
-
-Most uptodate version of ffmpeg can be found here:
-https://ffmpeg.zeranoe.com/builds/win64/static/
-
-Used instructions from here with modifications:
-http://adaptivesamples.com/how-to-install-ffmpeg-on-windows/
-
-written Ione Fine 7/2016
-"""
-
 import subprocess
 import numpy as np
 import scipy.io as sio
+import os
 import logging
 
+from pulse2percept import utils
 
+
+@utils.deprecated
 def savemoviefiles(filestr, data, path='savedImages/'):
+    """Saves a brightness movie to .npy, .mat, and .avi format
+
+    This function is deprecated as of v0.2 and will be removed
+    completely in v0.3.
+
+    Parameters
+    ----------
+    filestr : str
+        Name of the resulting files without file type (suffix .npy, .mat
+        or .avi will be appended)
+    data : array
+        A 3-D NumPy array containing the data, such as the `data` field of
+        a utils.TimeSeries object
+    path : str, optional
+        Path to directory where files should be saved.
+        Default: savedImages/
+
+    .. deprecated:: 0.2
+    """
     np.save(path + filestr, data)  # save as npy
     sio.savemat(path + filestr + '.mat', dict(mov=data))  # save as matfile
     npy2movie(path + filestr + '.avi', data)  # save as avi
 
 
+@utils.deprecated
 def npy2movie(filename, movie, rate=30):
-    from PIL import Image
+    """Saves a NumPy array to .avi on Windows
+
+    This function is deprecated as of v0.2.
+
+    Creates avi files will work on a 64x Windows as well as a PC provided
+    that the ffmpeg folder is included in the right location.
+
+    Most uptodate version of ffmpeg can be found here:
+    https://ffmpeg.zeranoe.com/builds/win64/static/
+
+    Used instructions from here with modifications:
+    http://adaptivesamples.com/how-to-install-ffmpeg-on-windows
+
+    Parameters
+    ----------
+    filename : str
+        File name of .avi movie to be produced
+    movie : array
+        A 3-D NumPy array containing the data, such as the `data` field of
+        a utils.TimeSeries object
+    rate : float, optional
+        Frame rate. Default: 30 Hz
+
+    .. deprecated:: 0.2
+    """
+    if os.name != 'nt':
+        raise OSError("npy2movie only works on Windows.")
+
+    try:
+        from PIL import Image
+    except ImportError:
+        raise ImportError("You do not have PIL installed.")
+
     cmdstring = ('ffmpeg.exe',
                  '-y',
                  '-r', '%d' % rate,
@@ -41,16 +83,30 @@ def npy2movie(filename, movie, rate=30):
     for i in range(movie.shape[-1]):
         im = Image.fromarray(np.uint8(scale(movie[:, :, i], 0, 255)))
         p.stdin.write(im.tobytes('jpeg', 'L'))
-    # p.communicate(im.tostring('jpeg','L'))
 
     p.stdin.close()
 
 
-def scale(inarray, newmin=0, newmax=1):
+@utils.deprecated('e2cm.image2pulsetrain')
+def scale(inarray, newmin=0.0, newmax=1.0):
     """Scales an image such that its lowest value attains newmin and
     it's highest value attains newmax.
+
+    This function is deprecated as of v0.2 and will be removed
+    completely in v0.3.
+
     written by Ione Fine, based on code from Rick Anthony
-    6/5/2015
+
+    Parameters
+    ----------
+    inarray : array
+        The input array
+    newmin : float, optional
+        The desired lower bound of values in `inarray`. Default: 0
+    newmax : float, optional
+        The desired upper bound of values in `inarray`. Default: 1
+
+    .. deprecated:: 0.2
     """
 
     oldmin = inarray.min()

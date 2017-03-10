@@ -1,6 +1,7 @@
 from pulse2percept import utils
 import numpy as np
 import numpy.testing as npt
+import pytest
 
 
 def test_Parameters():
@@ -41,6 +42,9 @@ def test_sparseconv():
 
         npt.assert_equal(conv.shape, sparse_conv.shape)
         npt.assert_almost_equal(conv, sparse_conv)
+
+    with pytest.raises(ValueError):
+        utils.sparseconv(G, stim, mode='invalid', dojit=False)
 
 
 # We define a function of the right form:
