@@ -201,10 +201,58 @@ class Electrode(object):
 
         return cspread
 
+    def receptive_field(self, xg, yg, rftype='square', size=None):
+        """An electrode's receptive field
+
+        Parameters
+        ----------
+        xg : array_like
+            Array of all x coordinates
+        yg : array_like
+            Array of all y coordinates
+        rftype : {'square', 'gaussian'}
+            The type of receptive field.
+            - 'square': A simple square box receptive field with side length
+                        `size`.
+            - 'gaussian': A Gaussian receptive field where the weight drops off
+                          as a function of distance from the electrode center.
+                          The standard deviation of the Gaussian is `size`.
+        size : float, optional
+            Parameter describing the size of the receptive field. For square
+            receptive fields, this corresponds to the side length of the
+            square.
+            For Gaussian receptive fields, this corresponds to the standard
+            deviation of the Gaussian.
+            Default: Twice the electrode radius.
+        """
+        if size is None:
+            size = 2 * self.radius
+
+        if rftype == 'square':
+            # Create a map of the retina for each electrode
+            # where it's 1 under the electrode, 0 elsewhere
+            rf = np.zeros(xg.shape).astype(np.float32)
+            ind = np.where((xg > self.x_center - (size / 2.0)) &
+                           (xg < self.x_center + (size / 2.0)) &
+                           (yg > self.y_center - (size / 2.0)) &
+                           (yg < self.y_center + (size / 2.0)))
+            rf[ind] = 1.0
+        elif rftype == 'gaussian':
+            # Create a map of the retina where the weight drops of as a
+            # function of distance from the electrode center
+            dist = (xg - self.x_center) ** 2 + (yg - self.y_center) ** 2
+            rf = np.exp(-dist / (2 * size ** 2))
+            rf /= np.sum(rf)
+        else:
+            e_s = "Acceptable values for `rftype` are 'square' or 'gaussian'"
+            raise ValueError(e_s)
+
+        return rf
+
 
 class ElectrodeArray(object):
 
-    def __init__(self, etype, radii, xs, ys, hs, names=None):
+    def __init__(self, etype, radii, xs, ys, hs=0, names=None):
         """Create an ElectrodeArray on the retina
 
         This function creates an electrode array of type `etype` and places it
@@ -228,8 +276,9 @@ class ElectrodeArray(object):
             List of x-coordinates for the center of the electrodes (microns).
         ys : array_like
             List of y-coordinates for the center of the electrodes (microns).
-        hs : array_like
-            List of electrode heights (distance from the retinal surface)
+        hs : float | array_like, optional
+            List of electrode heights (distance from the retinal surface).
+            Default: 0.
         names : array_like, optional
             List of names (string identifiers) for each eletrode.
             Default: None.
@@ -264,8 +313,14 @@ class ElectrodeArray(object):
         radii = np.array([radii], dtype=np.float32).flatten()
         xs = np.array([xs], dtype=np.float32).flatten()
         ys = np.array([ys], dtype=np.float32).flatten()
-        hs = np.array([hs], dtype=np.float32).flatten()
         names = np.array([names], dtype=np.str).flatten()
+
+        if isinstance(hs, list):
+            hs = np.array(hs).flatten()
+        else:
+            # All electrodes have the same height
+            hs = np.ones_like(radii) * hs
+
         assert radii.size == xs.size == ys.size == hs.size
 
         if names.size != radii.size:

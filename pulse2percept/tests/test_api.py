@@ -8,33 +8,36 @@ import pulse2percept as p2p
 def test_Simulation_init():
     implant = p2p.implants.Electrode("epiretinal", 10, 0, 0, 0)
     with pytest.raises(TypeError):
-        p2p.Simulation("test_Simulation_set_ofl", implant)
+        p2p.Simulation(implant)
 
 
 def test_Simulation_pulse2percept():
     implant = p2p.implants.ElectrodeArray("epiretinal", 10, 0, 0, 0)
-    sim = p2p.Simulation("test_Simulation_pulse2percept", implant,
-                         engine='serial')
-    sim.set_ofl(x_range=[0, 0], y_range=[0, 0])
+    sim = p2p.Simulation(implant, engine='serial')
+    sim.set_optic_fiber_layer(x_range=[0, 0], y_range=[0, 0])
 
-    # Smoke test
-    pt = p2p.stimuli.biphasic_pulse("cathodicfirst", 0.1, 0.001)
+    # PulseTrain must have the same tsample as (implicitly set up) GCL
+    pt = p2p.stimuli.BiphasicPulse("cathodicfirst", 0.1, 0.001)
+    with pytest.raises(ValueError):
+        sim.pulse2percept(pt)
+
+    pt = p2p.stimuli.BiphasicPulse("cathodicfirst", 0.1, 0.005 / 1000)
     sim.pulse2percept(pt)
 
 
-def test_Simulation_set_ofl():
-    sim = p2p.Simulation("test_Simulation_set_ofl", p2p.implants.ArgusI(),
-                         engine='serial')
+def test_Simulation_set_optic_fiber_layer():
+    sim = p2p.Simulation(p2p.implants.ArgusI(), engine='serial')
 
     # Invalid grid ranges
     with pytest.raises(ValueError):
-        sim.set_ofl(x_range=[10, 0])
+        sim.set_optic_fiber_layer(x_range=[10, 0])
     with pytest.raises(ValueError):
-        sim.set_ofl(y_range=[10, 0])
+        sim.set_optic_fiber_layer(y_range=[10, 0])
 
     x_range = [-100, 100]
     y_range = [0, 200]
-    sim.set_ofl(x_range=x_range, y_range=y_range, save_data=False)
+    sim.set_optic_fiber_layer(x_range=x_range, y_range=y_range,
+                              save_data=False)
     npt.assert_equal(sim.ofl.gridx.min(), x_range[0])
     npt.assert_equal(sim.ofl.gridx.max(), x_range[1])
     npt.assert_equal(sim.ofl.gridy.min(), y_range[0])
@@ -44,10 +47,10 @@ def test_Simulation_set_ofl():
 
     # Smoke test
     implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0, 0)
-    sim = p2p.Simulation("test_Simulation_set_ofl", implant, engine='serial')
-    sim.set_ofl(x_range=0, y_range=0)
-    sim.set_ofl(x_range=[0, 0], y_range=[0, 0])
-    sim.set_ofl()
+    sim = p2p.Simulation(implant, engine='serial')
+    sim.set_optic_fiber_layer(x_range=0, y_range=0)
+    sim.set_optic_fiber_layer(x_range=[0, 0], y_range=[0, 0])
+    sim.set_optic_fiber_layer()
 
 
 def test_get_brightest_frame():

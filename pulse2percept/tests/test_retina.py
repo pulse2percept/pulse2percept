@@ -64,11 +64,11 @@ def test_Retina_ecm():
                              sampling=sampling,
                              save_data=False)
 
-    s1 = p2p.stimuli.Psycho2Pulsetrain(freq=20, dur=0.5,
-                                       pulse_dur=.075 / 1000.,
-                                       interphase_dur=.075 / 1000., delay=0.,
-                                       tsample=.075 / 1000., amp=20,
-                                       pulsetype='cathodicfirst')
+    s1 = p2p.stimuli.PulseTrain(freq=20, dur=0.5,
+                                pulse_dur=.075 / 1000.,
+                                interphase_dur=.075 / 1000., delay=0.,
+                                tsample=.075 / 1000., amp=20,
+                                pulsetype='cathodicfirst')
 
     electrode_array = p2p.implants.ElectrodeArray('epiretinal', [1, 1], [0, 1],
                                                   [0, 1], [0, 1])
@@ -111,23 +111,24 @@ def test_brightness_movie():
 
     tsample = 0.075 / 1000
     tsample_out = 1.0 / 30.0
-    s1 = p2p.stimuli.Psycho2Pulsetrain(freq=20, dur=0.5,
-                                       pulse_dur=.075 / 1000.,
-                                       interphase_dur=.075 / 1000., delay=0.,
-                                       tsample=tsample, amp=20,
-                                       pulsetype='cathodicfirst')
+    s1 = p2p.stimuli.PulseTrain(freq=20, dur=0.5,
+                                pulse_dur=.075 / 1000.,
+                                interphase_dur=.075 / 1000., delay=0.,
+                                tsample=tsample, amp=20,
+                                pulsetype='cathodicfirst')
 
     implant = p2p.implants.ElectrodeArray('epiretinal', [1, 1], [0, 1], [0, 1],
                                           [0, 1])
 
     # Smoke testing, feed the same stimulus through both electrodes:
-    sim = p2p.Simulation("test movie", implant, engine='serial')
+    sim = p2p.Simulation(implant, engine='serial')
 
-    sim.set_ofl(x_range=[-2, 2], y_range=[-3, 3], sampling=1, save_data=False)
+    sim.set_optic_fiber_layer(x_range=[-2, 2], y_range=[-3, 3], sampling=1,
+                              save_data=False)
 
-    sim.set_gcl(tsample)
+    sim.set_ganglion_cell_layer(tsample)
 
-    logging.getLogger(__name__).info(" - Psycho2Pulsetrain")
+    logging.getLogger(__name__).info(" - PulseTrain")
     sim.pulse2percept([s1, s1], t_percept=tsample_out)
 
 
@@ -137,10 +138,10 @@ def test_debalthasar_threshold():
 
     def get_baltha_pulse(curr, tsample):
         id = 0.975 / 1000
-        pulse = curr * p2p.stimuli.biphasic_pulse('cathodicfirst',
-                                                  0.975 / 1000,
-                                                  tsample,
-                                                  interphase_dur=id).data
+        pulse = curr * p2p.stimuli.BiphasicPulse('cathodicfirst',
+                                                 0.975 / 1000,
+                                                 tsample,
+                                                 interphase_dur=id).data
         stim_dur = 0.1
         stim_size = int(round(stim_dur / tsample))
         pulse = np.concatenate((pulse, np.zeros(stim_size - pulse.size)))
@@ -166,10 +167,10 @@ def test_debalthasar_threshold():
         # Place the implant at various distances from the retina
         implant = p2p.implants.ElectrodeArray('epiretinal', 260, 0, 0, dist)
 
-        sim = p2p.Simulation("debaltha", implant, engine='serial', dojit=True)
-        sim.set_ofl(x_range=0, y_range=0, save_data=False,
-                    streaks_enabled=False)
-        sim.set_gcl(tsample)
+        sim = p2p.Simulation(implant, engine='serial', dojit=True)
+        sim.set_optic_fiber_layer(x_range=0, y_range=0, save_data=False,
+                                  streaks_enabled=False)
+        sim.set_ganglion_cell_layer(tsample)
 
         # For each distance to retina, find the threshold current according
         # to deBalthasar et al. (2008)
