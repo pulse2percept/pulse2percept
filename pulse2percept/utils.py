@@ -4,7 +4,12 @@ Utility functions for pulse2percept
 import numpy as np
 import multiprocessing
 import random
+import copy
 import logging
+
+from scipy import misc as spm
+from scipy import interpolate as spi
+from scipy import signal as sps
 
 
 try:
@@ -108,51 +113,117 @@ class TimeSeries(object):
     def __getitem__(self, y):
         return TimeSeries(self.tsample, self.data[y])
 
-    def resample(self, factor):
-        """Resamples time series data
+    def max(self):
+        """Returns the time and value of the largest data point
 
-        Downsamples time series data according to a resampling factor
-        `factor`. Only integers allowed.
+        This function returns the the largest value in the TimeSeries data,
+        as well as the time at which it occurred.
+
+        Returns
+        -------
+        t : float
+            time (s) at which max occurred
+        val : float
+            max value
+        """
+        # Find index and value of largest element
+        idx = self.data.argmax()
+        val = self.data.max()
+
+        # Find frame that contains the brightest data point using `unravel`,
+        # which maps the flat index `idx_px` onto the high-dimensional
+        # indices (x,y,z).
+        # What we want is index `z` (i.e., the frame index), given by the last
+        # dimension in the return argument.
+        idx_frame = np.unravel_index(idx, self.data.shape)[-1]
+
+        # Convert index to time
+        t = idx_frame * self.tsample
+
+        return t, val
+
+    def max_frame(self):
+        """Returns the time frame that contains the largest data point
+
+        This function returns the time frame in the TimeSeries data that
+        contains the largest data point, as well as the time at which
+        it occurred.
+
+        Returns
+        -------
+        t : float
+            time (s) at which max occurred
+        frame : TimeSeries
+            A TimeSeries object.
+        """
+        # Find index and value of largest element
+        idx = self.data.argmax()
+
+        # Find frame that contains the brightest data point using `unravel`,
+        # which maps the flat index `idx_px` onto the high-dimensional
+        # indices (x,y,z).
+        # What we want is index `z` (i.e., the frame index), given by the last
+        # dimension in the return argument.
+        idx_frame = np.unravel_index(idx, self.data.shape)[-1]
+        t = idx_frame * self.tsample
+        frame = self.data[..., idx_frame]
+
+        return t, TimeSeries(self.tsample, copy.deepcopy(frame))
+
+    def resample(self, tsample_new):
+        """Returns data sampled according to new time step
+
+        This function returns a TimeSeries object whose data points were
+        resampled according to a new time step `tsample_new`. New values
+        are found using linear interpolation.
 
         Parameters
         ----------
-        factor : int
-            Resampling factor.
+        tsample_new : float
+            New sampling time step (s)
+
+        Returns
+        -------
+        TimeSeries object
         """
-        factor = int(factor)
-        TimeSeries.__init__(self, self.tsample * factor,
-                            self.data[..., ::factor])
+        if tsample_new is None or tsample_new == self.tsample:
+            return TimeSeries(self.tsample, self.data)
+
+        t_old = np.arange(0, self.duration, self.tsample)
+        y_old = self.data
+        f = spi.interp1d(t_old, y_old, axis=-1, fill_value='extrapolate')
+
+        t_new = np.arange(0, self.duration, tsample_new)
+        y_new = f(t_new)
+
+        return TimeSeries(tsample_new, y_new)
 
 
-def _sparseconv(v, a, mode):
+def _sparseconv(data, kernel, mode):
     """
     Returns the discrete, linear convolution of two one-dimensional sequences.
-    output is of length len(v) + len(a) -1 (same as the default for
+    output is of length len(kernel) + len(data) -1 (same as the default for
     numpy.convolve).
-
-    v is typically the kernel, a is the input to the system
 
     Can run faster than numpy.convolve if:
     (1) a is much longer than v
     (2) a is sparse (has lots of zeros)
     """
-    # v = asarray(v)
-    # a = asarray(a)
-    v_len = v.shape[-1]
-    a_len = a.shape[-1]
-    out = np.zeros(a_len + v_len - 1)
+    kernel_len = kernel.shape[-1]
+    data_len = data.shape[-1]
+    out = np.zeros(data_len + kernel_len - 1)
 
-    pos = np.where(a != 0)[0]
-    # add shifted and scaled copies of v only where a is nonzero
+    pos = np.where(data != 0)[0]
+    # add shifted and scaled copies of kernel only where data is nonzero
     for p in pos:
-        out[p:p + v_len] = out[p:p + v_len] + v * a[p]
+        out[p:p + kernel_len] = out[p:p + kernel_len] + kernel * data[p]
 
-    if mode == 'full':
+    if mode.lower() == 'full':
         return out
-    elif mode == 'valid':
-        return center_vector(out, a_len - v_len + 1)
-    elif mode == 'same':
-        return center_vector(out, a_len)
+    elif mode.lower() == 'valid':
+        return center_vector(out, data_len - kernel_len + 1)
+    elif mode.lower() == 'same':
+        return center_vector(out, data_len)
     else:
         raise ValueError("Acceptable mode flags are 'valid',"
                          " 'same', or 'full'.")
@@ -162,7 +233,7 @@ if has_jit:
     _sparseconvj = jit(_sparseconv)
 
 
-def sparseconv(kernel, data, mode='full', dojit=True):
+def sparseconv(data, kernel, mode='full', dojit=True):
     """
     Returns the discrete, linear convolution of two one-dimensional sequences.
 
@@ -172,10 +243,10 @@ def sparseconv(kernel, data, mode='full', dojit=True):
 
     Parameters
     ----------
-    kernel : array_like
-        First input, typically the kernel.
     data : array_like
-        Second input, typically the data array.
+        First input, typically the data array.
+    kernel : array_like
+        Second input, typically the kernel.
     mode : str {'full', 'valid', 'same'}, optional
         A string indicating the size of the output:
         ``full``
@@ -197,7 +268,51 @@ def sparseconv(kernel, data, mode='full', dojit=True):
                "please run sparseconv with dojit=False")
         raise ValueError(e_s)
     else:
-        return _sparseconv(kernel, data, mode)
+        return _sparseconv(data, kernel, mode)
+
+
+def conv(data, kernel, tsample, mode='full', method='fft', dojit=True):
+    """Convoles data with a kernel using either FFT or sparseconv
+
+    This function convolves data with a kernel, relying either on the
+    fast Fourier transform (FFT) or a sparse convolution function.
+
+    Parameters
+    ----------
+    data : array_like
+        First input, typically the data array
+    kernel : array_like
+        Second input, typically the kernel
+    mode : str {'full', 'valid', 'same'}, optional
+        A string indicating the size of the output:
+        ``full``
+        The output is the full discrete linear convolution of the inputs.
+        (Default)
+        ``valid``
+        The output consists only of those elements that do not rely on
+        zero-padding.
+        ``same``
+        The output is the same size as `data`, centered with respect to the
+        'full' output.
+    method : str {'fft', 'sparse'}, optional
+        A string indicating the convolution method:
+        ``fft``
+        Use the fast Fourier transform (FFT). (Default)
+        ``sparse``
+        Use the sparse convolution.
+    dojit : bool, optional
+        A flag indicating whether to use numba's just-in-time compilation
+        option (only relevant for `method`=='sparse').
+    """
+    if method.lower() == 'fft':
+        # Use FFT: faster on non-sparse data
+        conved = tsample * sps.fftconvolve(data, kernel, mode)
+    elif method.lower() == 'sparse':
+        # Use sparseconv: faster on sparse data
+        conved = tsample * sparseconv(data, kernel, mode, dojit)
+    else:
+        raise ValueError("Acceptable methods are: 'fft', 'sparse'.")
+    return conved
 
 
 def center_vector(vec, newlen):
@@ -264,7 +379,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         n_jobs = multiprocessing.cpu_count()
         n_jobs = n_jobs - 1
 
-    if engine == 'joblib':
+    if engine.lower() == 'joblib':
         try:
             import joblib
         except ImportError:
@@ -278,7 +393,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         for in_element in in_list:
             d_l.append(d(in_element, *func_args, **func_kwargs))
         results = p(d_l)
-    elif engine == 'dask':
+    elif engine.lower() == 'dask':
         try:
             import dask
             import dask.multiprocessing
@@ -298,7 +413,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
                                    workers=n_jobs)
         elif backend == 'threading':
             results = dask.compute(*d, get=dask.threaded.get, workers=n_jobs)
-    elif engine == 'serial':
+    elif engine.lower() == 'serial':
         results = []
         for in_element in in_list:
             results.append(func(in_element, *func_args, **func_kwargs))
@@ -344,6 +459,49 @@ def mov2npy(movie_file, out_file):
         img = cv.QueryFrame(capture)
     frames = np.fliplr(np.rot90(np.mean(frames, -1).T, -1))
     np.save(out_file, frames)
+
+
+def gamma(n, tau, tsample, tol=0.01):
+    """Returns the impulse response of `n` cascaded leaky integrators
+
+    This function calculates the impulse response of `n` cascaded
+    leaky integrators with constant of proportionality 1/`tau`:
+    y = (t/theta).^(n-1).*exp(-t/theta)/(theta*factorial(n-1))
+
+    Parameters
+    ----------
+    n : int
+        Number of cascaded leaky integrators
+    tau : float
+        Decay constant of leaky integration (seconds).
+        Equivalent to the inverse of the constant of proportionality.
+    tsample : float
+        Sampling time step (seconds).
+    tol : float
+        Cut the kernel to size by ignoring function values smaller
+        than a fraction `tol` of the peak value.
+    """
+    n = int(n)
+
+    # Allocate a time vector that is long enough for sure.
+    # Trim vector later on.
+    t = np.arange(0, 5 * n * tau, tsample)
+
+    # Calculate gamma
+    y = (t / tau) ** (n - 1) * np.exp(-t / tau)
+    y /= (tau * spm.factorial(n - 1))
+
+    # Normalize to unit area
+    y /= np.trapz(np.abs(y), dx=tsample)
+
+    # Cut off tail where values are smaller than `tol`.
+    # Make sure to start search on the right-hand side of the peak.
+    peak = y.argmax()
+    small_vals = np.where(y[peak:] < tol * y.max())[0]
+    t = t[:small_vals[0] + peak]
+    y = y[:small_vals[0] + peak]
+
+    return t, y
 
 
 def traverse_randomly(seq):

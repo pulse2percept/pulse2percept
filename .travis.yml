@@ -5,9 +5,9 @@ env:
     - CONDA_DEPS="pip flake8 numpy scipy numba joblib dask scikit-image" PIP_DEPS="pytest coveralls mock pytest-cov" MINICONDA_URL="https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh"
 
 python:
-- '2.7'
-- '3.5'
-- '3.6'
+  - '2.7'
+  - '3.5'
+  - '3.6'
 
 before_install:
   - export MINICONDA=$HOME/miniconda
@@ -24,7 +24,8 @@ before_install:
   - pip install $PIP_DEPS
 
 install:
-- python setup.py install --record installed_files.txt
+  - travis_wait
+  - python setup.py install --record installed_files.txt
 
 script:
   - flake8 --ignore N802,N806 `find . -name \*.py | grep -v setup.py | grep -v version.py | grep -v __init__.py | grep -v /doc/ | grep -v /scripts/`
@@ -34,4 +35,4 @@ script:
   - py.test --pyargs pulse2percept --cov-report term-missing --cov=pulse2percept --doctest-modules
 
 after_success:
-- coveralls
+  - coveralls
