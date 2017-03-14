@@ -13,90 +13,95 @@ from pulse2percept import utils
 from pulse2percept import implants
 
 
-def monophasic_pulse(ptype, pdur, tsample, delay_dur=0, stim_dur=None):
-    """Returns a monophasic pulse.
+class MonophasicPulse(utils.TimeSeries):
 
-    Parameters
-    ----------
-    ptype : {'anodic', 'cathodic'}
-        Pulse type. Anodic pulses have positive current amplitude, cathodic
-        pulses have negative amplitude.
-    pdur : float
-        Pulse duration (s).
-    tsample : float
-        Sampling time step (s).
-    delay_dur : float, optional
-        Pulse delay (s). Pulse will be zero-padded (prepended) to deliver the
-        pulse only after `delay_dur` milliseconds. Default: 0.
-    stim_dur : float, optional
-        Stimulus duration (ms). Pulse will be zero-padded (appended) to fit
-        the stimulus duration. Default: No additional zero padding, `stim_dur`
-        is `pdur`+`delay_dur`.
-    """
-    if tsample <= 0:
-        raise ValueError("tsample must be a non-negative float.")
+    def __init__(self, ptype, pdur, tsample, delay_dur=0, stim_dur=None):
+        """A pulse with a single phase
 
-    if stim_dur is None:
-        stim_dur = pdur + delay_dur
+        Parameters
+        ----------
+        ptype : {'anodic', 'cathodic'}
+            Pulse type. Anodic pulses have positive current amplitude,
+            cathodic pulses have negative amplitude.
+        pdur : float
+            Pulse duration (s).
+        tsample : float
+            Sampling time step (s).
+        delay_dur : float, optional
+            Pulse delay (s). Pulse will be zero-padded (prepended) to deliver
+            the pulse only after `delay_dur` milliseconds. Default: 0.
+        stim_dur : float, optional
+            Stimulus duration (ms). Pulse will be zero-padded (appended) to fit
+            the stimulus duration. Default: No additional zero padding,
+            `stim_dur` is `pdur`+`delay_dur`.
+        """
+        if tsample <= 0:
+            raise ValueError("tsample must be a non-negative float.")
 
-    # Convert durations to number of samples
-    pulse_size = int(np.round(pdur / tsample))
-    delay_size = int(np.round(delay_dur / tsample))
-    stim_size = int(np.round(stim_dur / tsample))
+        if stim_dur is None:
+            stim_dur = pdur + delay_dur
 
-    if ptype == 'cathodic':
-        pulse = -np.ones(pulse_size)
-    elif ptype == 'anodic':
-        pulse = np.ones(pulse_size)
-    else:
-        raise ValueError("Acceptable values for `ptype` are 'anodic', "
-                         "'cathodic'.")
+        # Convert durations to number of samples
+        pulse_size = int(np.round(pdur / tsample))
+        delay_size = int(np.round(delay_dur / tsample))
+        stim_size = int(np.round(stim_dur / tsample))
 
-    pulse = np.concatenate((np.zeros(delay_size), pulse, np.zeros(stim_size)))
-    return utils.TimeSeries(tsample, pulse[:stim_size])
+        if ptype == 'cathodic':
+            pulse = -np.ones(pulse_size)
+        elif ptype == 'anodic':
+            pulse = np.ones(pulse_size)
+        else:
+            raise ValueError("Acceptable values for `ptype` are 'anodic', "
+                             "'cathodic'.")
+
+        pulse = np.concatenate((np.zeros(delay_size), pulse,
+                                np.zeros(stim_size)))
+        utils.TimeSeries.__init__(self, tsample, pulse[:stim_size])
 
 
-def biphasic_pulse(ptype, pdur, tsample, interphase_dur=0):
-    """Returns a single biphasic pulse.
+class BiphasicPulse(utils.TimeSeries):
 
-    A single biphasic pulse with duration `pdur` per phase,
-    separated by `interphase_dur` is returned.
+    def __init__(self, ptype, pdur, tsample, interphase_dur=0):
+        """A charge-balanced pulse with a cathodic and anodic phase
 
-    Parameters
-    ----------
-    ptype : {'cathodicfirst', 'anodicfirst'}
-        A cathodic-first pulse has the negative phase first, whereas an
-        anodic-first pulse has the positive phase first.
-    pdur : float
-        Duration of single (positive or negative) pulse phase in seconds.
-    tsample : float
-        Sampling time step in seconds.
-    interphase_dur : float, optional
-        Duration of inter-phase interval (between positive and negative
-        pulse) in seconds. Default: 0.
-    """
-    if tsample <= 0:
-        raise ValueError("tsample must be a non-negative float.")
+        A single biphasic pulse with duration `pdur` per phase,
+        separated by `interphase_dur` is returned.
 
-    # Get the two monophasic pulses
-    on = monophasic_pulse('anodic', pdur, tsample, 0, pdur)
-    off = monophasic_pulse('cathodic', pdur, tsample, 0, pdur)
+        Parameters
+        ----------
+        ptype : {'cathodicfirst', 'anodicfirst'}
+            A cathodic-first pulse has the negative phase first, whereas an
+            anodic-first pulse has the positive phase first.
+        pdur : float
+            Duration of single (positive or negative) pulse phase in seconds.
+        tsample : float
+            Sampling time step in seconds.
+        interphase_dur : float, optional
+            Duration of inter-phase interval (between positive and negative
+            pulse) in seconds. Default: 0.
+        """
+        if tsample <= 0:
+            raise ValueError("tsample must be a non-negative float.")
 
-    # Insert interphase gap if necessary
-    gap = np.zeros(int(round(interphase_dur / tsample)))
+        # Get the two monophasic pulses
+        on = MonophasicPulse('anodic', pdur, tsample, 0, pdur)
+        off = MonophasicPulse('cathodic', pdur, tsample, 0, pdur)
 
-    # Order the pulses
-    if ptype == 'cathodicfirst':
-        # has negative current first
-        pulse = np.concatenate((off.data, gap), axis=0)
-        pulse = np.concatenate((pulse, on.data), axis=0)
-    elif ptype == 'anodicfirst':
-        pulse = np.concatenate((on.data, gap), axis=0)
-        pulse = np.concatenate((pulse, off.data), axis=0)
-    else:
-        raise ValueError("Acceptable values for `type` are "
-                         "'anodicfirst' or 'cathodicfirst'")
-    return utils.TimeSeries(tsample, pulse)
+        # Insert interphase gap if necessary
+        gap = np.zeros(int(round(interphase_dur / tsample)))
+
+        # Order the pulses
+        if ptype == 'cathodicfirst':
+            # has negative current first
+            pulse = np.concatenate((off.data, gap), axis=0)
+            pulse = np.concatenate((pulse, on.data), axis=0)
+        elif ptype == 'anodicfirst':
+            pulse = np.concatenate((on.data, gap), axis=0)
+            pulse = np.concatenate((pulse, off.data), axis=0)
+        else:
+            raise ValueError("Acceptable values for `type` are "
+                             "'anodicfirst' or 'cathodicfirst'")
+        utils.TimeSeries.__init__(self, tsample, pulse)
 
 
 def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
@@ -220,7 +225,7 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     # For each electrode, find the stimulation strength (magnitude)
     magn = []
     for e in implant:
-        rf = receptive_field(e, xg, yg, rftype, rfsize)
+        rf = e.receptive_field(xg, yg, rftype, rfsize)
         magn.append(np.sum(rf.T * img_resize) / np.sum(rf))
     magn = np.array(magn)
 
@@ -248,10 +253,10 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
             e_s += "'frequency'."
             raise ValueError(e_s)
 
-        pt = Psycho2Pulsetrain(tsample, freq=freq, amp=amp, dur=dur,
-                               pulse_dur=pulsedur,
-                               interphase_dur=interphasedur,
-                               pulsetype=pulsetype)
+        pt = PulseTrain(tsample, freq=freq, amp=amp, dur=dur,
+                        pulse_dur=pulsedur,
+                        interphase_dur=interphasedur,
+                        pulsetype=pulsetype)
         pulses.append(pt)
 
     return pulses
@@ -282,8 +287,8 @@ class Movie2Pulsetrain(utils.TimeSeries):
             raise ValueError("tsample must be a non-negative float.")
 
         # set up the individual pulses
-        pulse = biphasic_pulse(pulsetype, pulse_dur, tsample,
-                               interphase_dur)
+        pulse = BiphasicPulse(pulsetype, pulse_dur, tsample,
+                              interphase_dur)
         # set up the sequence
         dur = rflum.shape[-1] / fps
         if stimtype == 'pulsetrain':
@@ -303,16 +308,14 @@ class Movie2Pulsetrain(utils.TimeSeries):
         utils.TimeSeries.__init__(self, tsample, data)
 
 
-class Psycho2Pulsetrain(utils.TimeSeries):
-    """
-    Is used to generate pulse trains to simulate psychophysical experiments.
-    """
+class PulseTrain(utils.TimeSeries):
 
     def __init__(self, tsample, freq=20, amp=20, dur=0.5, delay=0,
                  pulse_dur=0.45 / 1000, interphase_dur=0.45 / 1000,
                  pulsetype='cathodicfirst',
                  pulseorder='pulsefirst'):
-        """
+        """A train of biphasic pulses
+
         tsample : float
             Sampling interval in seconds parameters, use TemporalModel.tsample.
         ----------
@@ -361,8 +364,8 @@ class Psycho2Pulsetrain(utils.TimeSeries):
         delay = np.zeros(delay_size)
 
         # Single pulse given by `pulse_dur`
-        pulse = amp * biphasic_pulse(pulsetype, pulse_dur, tsample,
-                                     interphase_dur).data
+        pulse = amp * BiphasicPulse(pulsetype, pulse_dur, tsample,
+                                    interphase_dur).data
         pulse_size = pulse.size
         if pulse_size < 0:
             raise ValueError("Single pulse must fit within 1/freq interval.")
@@ -461,59 +464,6 @@ def parse_pulse_trains(stim, implant):
         pt = copy.deepcopy(stim)
 
     return pt
-
-
-def receptive_field(electrode, xg, yg, rftype='square', size=None):
-    """An electrode's receptive field
-
-    Parameters
-    ----------
-    electrode : Electrode
-        An Electrode object describing the electrode.
-    xg : array_like
-        Array of all x coordinates
-    yg : array_like
-        Array of all y coordinates
-    rftype : {'square', 'gaussian'}
-        The type of receptive field.
-        - 'square': A simple square box receptive field with side length
-                    `size`.
-        - 'gaussian': A Gaussian receptive field where the weight drops off
-                      as a function of distance from the electrode center.
-                      The standard deviation of the Gaussian is `size`.
-    size : float, optional
-        Parameter describing the size of the receptive field. For square
-        receptive fields, this corresponds to the side length of the square.
-        For Gaussian receptive fields, this corresponds to the standard
-        deviation of the Gaussian.
-        Default: Twice the `electrode.radius`
-    """
-    if not isinstance(electrode, implants.Electrode):
-        raise TypeError("Electrode must be of type implants.Electrode")
-
-    if size is None:
-        size = 2 * electrode.radius
-
-    if rftype == 'square':
-        # Create a map of the retina for each electrode
-        # where it's 1 under the electrode, 0 elsewhere
-        rf = np.zeros(xg.shape).astype(np.float32)
-        ind = np.where((xg > electrode.x_center - (size / 2.0)) &
-                       (xg < electrode.x_center + (size / 2.0)) &
-                       (yg > electrode.y_center - (size / 2.0)) &
-                       (yg < electrode.y_center + (size / 2.0)))
-        rf[ind] = 1.0
-    elif rftype == 'gaussian':
-        # Create a map of the retina where the weight drops of as a function
-        # of distance from the electrode center
-        dist = (xg - electrode.x_center) ** 2 + (yg - electrode.y_center) ** 2
-        rf = np.exp(-dist / (2 * size ** 2))
-        rf /= np.sum(rf)
-    else:
-        e_s = "Acceptable values for `rftype` are 'square' or 'gaussian'"
-        raise ValueError(e_s)
-
-    return rf
 
 
 @utils.deprecated

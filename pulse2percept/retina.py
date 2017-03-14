@@ -12,12 +12,12 @@ class Grid(object):
 
     def __init__(self, xlo=-1000, xhi=1000, ylo=-1000, yhi=1000,
                  sampling=25, axon_lambda=2.0, rot=0 * np.pi / 180,
-                 loadpath='../', save_data=True):
+                 datapath='./', save_data=True):
         """Generates a spatial grid representing the retinal coordinate frame
 
         This function generates the coordinate system for the retina
         and an axon map. As this can take a while, the function will
-        first look for an already existing file in the directory `loadpath`
+        first look for an already existing file in the directory `datapath`
         that was automatically created from an earlier call to this function,
         before it attempts to generate new grid from scratch.
 
@@ -29,9 +29,9 @@ class Grid(object):
         ylo, yhi : float
            Extent of the retinal coverage (microns) in vertical dimension.
            Default: ylo=-1000, ylo=1000.
-        loadpath : str
-            Relative path where to look for existing retina file.
-            Default: '../'
+        datapath : str
+            Relative path where to look for existing retina files, and where to
+            store new files. Default: current directory.
         save_data : bool
             Flag whether to save the data to a new file (True) or not (False).
             The file name is automatically generated from all specified input
@@ -47,7 +47,7 @@ class Grid(object):
 
         # Create descriptive filename based on input args
         filename = "%sretina_s%d_l%.1f_rot%.1f_%dx%d.npz" \
-            % (loadpath, sampling, axon_lambda, rot / np.pi * 180,
+            % (datapath, sampling, axon_lambda, rot / np.pi * 180,
                xhi - xlo, yhi - ylo)
 
         # Bool whether we need to create a new grid
@@ -395,7 +395,7 @@ class TemporalModel(object):
         # the dimensions of the input signal.
         return self.scale_slow * self.tsample * conv[:stim.shape[-1]]
 
-    def model_cascade(self, ecm, dolayers, dojit):
+    def model_cascade(self, ecm, layers, dojit):
         """Model cascade according to Nanduri et al. (2012).
 
         The 'Nanduri' model calculates the fast response first, followed by the
@@ -405,10 +405,11 @@ class TemporalModel(object):
         ----------
         ecm : TimeSeries
             Effective current
-        dolayers : list
+        layers : list
 
             List of retinal layers to simulate. Choose from:
-            - 'NFL': nerve fiber layer
+            - 'OFL': optic fiber layer
+            - 'GCL': ganglion cell layer
             - 'INL': inner nuclear layer
 
         Returns
@@ -417,10 +418,12 @@ class TemporalModel(object):
         maximum value of this signal was used to represent the perceptual
         brightness of a particular location in space, B(r).
         """
+        layers = [l.upper() for l in layers]
+
         # Sparse convolution is faster if input is sparse. This is true for
         # the first convolution in the cascade, but not for subsequent ones.
         usefft = False
-        if 'INL' in dolayers:
+        if 'INL' in layers:
             resp_inl = self.fast_response(ecm[0].data, self.gamma_inl,
                                           dojit=dojit,
                                           usefft=usefft)
@@ -429,14 +432,14 @@ class TemporalModel(object):
         else:
             resp_inl = np.zeros((ecm[0].data.shape))
 
-        if 'NFL' in dolayers:
-            resp_nfl = self.fast_response(ecm[1].data, self.gamma_nfl,
+        if ('GCL' or 'OFL') in layers:
+            resp_ofl = self.fast_response(ecm[1].data, self.gamma_nfl,
                                           dojit=dojit,
                                           usefft=usefft)
             # Set `usefft` to True for subsequent stages of the cascade
             usefft = True
         else:
-            resp_nfl = np.zeros((ecm[1].data.shape))
+            resp_ofl = np.zeros((ecm[1].data.shape))
 
         # Here we are converting from current  - where a cathodic (effective)
         # stimulus is negative - to a vague concept of neuronal response,
@@ -444,9 +447,9 @@ class TemporalModel(object):
         # There is a rectification here because we used to assume that the
         # anodic part of the pulse is ineffective (which is wrong).
         resp_cathodic = self.lweight * np.maximum(-resp_inl, 0) + \
-            np.maximum(-resp_nfl, 0)
+            np.maximum(-resp_ofl, 0)
         resp_anodic = self.lweight * np.maximum(resp_inl, 0) + \
-            np.maximum(resp_nfl, 0)
+            np.maximum(resp_ofl, 0)
         resp = resp_cathodic + self.aweight * resp_anodic
         resp = self.stationary_nonlinearity(resp)
         resp = self.slow_response(resp)
@@ -469,12 +472,12 @@ class TemporalModel(object):
 
         return pt_entry
 
-    def calc_per_pixel(self, ecs_item, pt, dolayers, dojit=False):
+    def calc_per_pixel(self, ecs_item, pt, layers, dojit=False):
         # Convert the current map to one that includes axon streaks
         ecm = effectivecurrentmap(ecs_item, pt, self.tsample)
 
         # Run the model cascade
-        sr = self.model_cascade(ecm, dolayers, dojit=dojit)
+        sr = self.model_cascade(ecm, layers, dojit=dojit)
 
         return sr
 
@@ -556,9 +559,9 @@ def dva2ret(r_deg):
     return sign * r_um
 
 
-def jansonius(nCells=500, nR=801, center=np.array([15, 2]),
+def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
               rot=0 * np.pi / 180, scale=1, bs=-1.9, bi=.5, r0=4,
-              maxR=45, angRange=60):
+              max_samples=45, ang_range=60):
     """Implements the model of retinal axonal pathways by generating a
     matrix of (x,y) positions.
 
@@ -566,9 +569,9 @@ def jansonius(nCells=500, nR=801, center=np.array([15, 2]),
 
     Parameters
     ----------
-    nCells : int
+    num_cells : int
         Number of axons (cells).
-    nR : int
+    num_samples : int
         Number of samples per axon (spatial resolution).
     Center: 2 item array
         The location of the optic disk in dva.
@@ -590,23 +593,23 @@ def jansonius(nCells=500, nR=801, center=np.array([15, 2]),
     #
     # bs = -1.9;          %superior 'b' parameter constant
     # bi = .5;            %inferior 'c' parameter constant
-    # angRange = 60
+    # ang_range = 60
 
-    ang0 = np.hstack([np.linspace(angRange, 180, nCells / 2),
-                      np.linspace(-180, angRange, nCells / 2)])
+    ang0 = np.hstack([np.linspace(ang_range, 180, num_cells / 2),
+                      np.linspace(-180, ang_range, num_cells / 2)])
 
-    r = np.linspace(r0, maxR, nR)
+    r = np.linspace(r0, max_samples, num_samples)
     # generate angle and radius matrices from vectors with meshgrid
     ang0mat, rmat = np.meshgrid(ang0, r)
 
-    nR = ang0mat.shape[0]
-    nCells = ang0mat.shape[1]
+    num_samples = ang0mat.shape[0]
+    num_cells = ang0mat.shape[1]
 
     # index into superior (upper) axons
     sup = ang0mat > 0
 
     # Set up 'b' parameter:
-    b = np.zeros([nR, nCells])
+    b = np.zeros([num_samples, num_cells])
 
     b[sup] = np.exp(
         bs + 3.9 * np.tanh(-(ang0mat[sup] - 121) / 14))  # equation 5
@@ -614,7 +617,7 @@ def jansonius(nCells=500, nR=801, center=np.array([15, 2]),
     b[~sup] = -np.exp(bi + 1.5 * np.tanh(-(-ang0mat[~sup] - 90) / 25))
 
     # Set up 'c' parameter:
-    c = np.zeros([nR, nCells])
+    c = np.zeros([num_samples, num_cells])
 
     # equation 3 (fixed typo)
     c[sup] = 1.9 + 1.4 * np.tanh((ang0mat[sup] - 121) / 14)
@@ -628,7 +631,7 @@ def jansonius(nCells=500, nR=801, center=np.array([15, 2]),
     yprime = rmat * np.sin(ang * np.pi / 180)
 
     # Find where the fibers cross the horizontal meridian
-    cross = np.zeros([nR, nCells])
+    cross = np.zeros([num_samples, num_cells])
     cross[sup] = yprime[sup] < 0
     cross[~sup] = yprime[~sup] > 0
 
@@ -690,37 +693,39 @@ def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=.001):
     axon_id = ()
 
     # loop through pixels as indexed into a single dimension
-    for id in range(0, len(xg.flat)):
+    for px in range(0, len(xg.flat)):
         # find the nearest axon to this pixel
-        d = (jan_x - xg.flat[id])**2 + (jan_y - yg.flat[id])**2
+        d = (jan_x - xg.flat[px])**2 + (jan_y - yg.flat[px])**2
         cur_ax_id = np.nanargmin(d)  # index into the current axon
-        [axPosId0, axNum] = np.unravel_index(cur_ax_id, d.shape)
+        [ax_pos_id0, ax_num] = np.unravel_index(cur_ax_id, d.shape)
 
         dist = 0
 
-        cur_xg = xg.flat[id]
-        cur_yg = yg.flat[id]
+        cur_xg = xg.flat[px]
+        cur_yg = yg.flat[px]
 
         # add first values to the list for this pixel
         axon_dist = axon_dist + ([0],)
         axon_weight = axon_weight + ([1],)
         axon_xg = axon_xg + ([cur_xg],)
         axon_yg = axon_yg + ([cur_yg],)
-        axon_id = axon_id + ([id],)
+        axon_id = axon_id + ([px],)
 
         # now loop back along this nearest axon toward the optic disc
-        for axPosId in range(axPosId0 - 1, -1, -1):
+        for ax_pos_id in range(ax_pos_id0 - 1, -1, -1):
             # increment the distance from the starting point
-            ax = (jan_x[axPosId + 1, axNum] - jan_x[axPosId, axNum])**2
-            ay = (jan_y[axPosId + 1, axNum] - jan_y[axPosId, axNum])**2
+            ax = (jan_x[ax_pos_id + 1, ax_num] - jan_x[ax_pos_id, ax_num])**2
+            ay = (jan_y[ax_pos_id + 1, ax_num] - jan_y[ax_pos_id, ax_num])**2
             dist += np.sqrt(ax ** 2 + ay ** 2)
 
             # weight falls off exponentially as distance from axon cell body
             weight = np.exp(-dist / axon_lambda)
 
             # find the nearest pixel to the current position along the axon
-            nearest_xg_id = np.abs(xg[0, :] - jan_x[axPosId, axNum]).argmin()
-            nearest_yg_id = np.abs(yg[:, 0] - jan_y[axPosId, axNum]).argmin()
+            dist_xg = np.abs(xg[0, :] - jan_x[ax_pos_id, ax_num])
+            dist_yg = np.abs(yg[:, 0] - jan_y[ax_pos_id, ax_num])
+            nearest_xg_id = dist_xg.argmin()
+            nearest_yg_id = dist_yg.argmin()
             nearest_xg = xg[0, nearest_xg_id]
             nearest_yg = yg[nearest_yg_id, 0]
 
@@ -733,8 +738,8 @@ def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=.001):
                     cur_yg = nearest_yg
 
                     # append the list
-                    axon_weight[id].append(np.exp(weight))
-                    axon_id[id].append(np.ravel_multi_index((nearest_yg_id,
+                    axon_weight[px].append(np.exp(weight))
+                    axon_id[px].append(np.ravel_multi_index((nearest_yg_id,
                                                              nearest_xg_id),
                                                             xg.shape))
 

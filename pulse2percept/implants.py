@@ -201,6 +201,54 @@ class Electrode(object):
 
         return cspread
 
+    def receptive_field(self, xg, yg, rftype='square', size=None):
+        """An electrode's receptive field
+
+        Parameters
+        ----------
+        xg : array_like
+            Array of all x coordinates
+        yg : array_like
+            Array of all y coordinates
+        rftype : {'square', 'gaussian'}
+            The type of receptive field.
+            - 'square': A simple square box receptive field with side length
+                        `size`.
+            - 'gaussian': A Gaussian receptive field where the weight drops off
+                          as a function of distance from the electrode center.
+                          The standard deviation of the Gaussian is `size`.
+        size : float, optional
+            Parameter describing the size of the receptive field. For square
+            receptive fields, this corresponds to the side length of the
+            square.
+            For Gaussian receptive fields, this corresponds to the standard
+            deviation of the Gaussian.
+            Default: Twice the electrode radius.
+        """
+        if size is None:
+            size = 2 * self.radius
+
+        if rftype == 'square':
+            # Create a map of the retina for each electrode
+            # where it's 1 under the electrode, 0 elsewhere
+            rf = np.zeros(xg.shape).astype(np.float32)
+            ind = np.where((xg > self.x_center - (size / 2.0)) &
+                           (xg < self.x_center + (size / 2.0)) &
+                           (yg > self.y_center - (size / 2.0)) &
+                           (yg < self.y_center + (size / 2.0)))
+            rf[ind] = 1.0
+        elif rftype == 'gaussian':
+            # Create a map of the retina where the weight drops of as a
+            # function of distance from the electrode center
+            dist = (xg - self.x_center) ** 2 + (yg - self.y_center) ** 2
+            rf = np.exp(-dist / (2 * size ** 2))
+            rf /= np.sum(rf)
+        else:
+            e_s = "Acceptable values for `rftype` are 'square' or 'gaussian'"
+            raise ValueError(e_s)
+
+        return rf
+
 
 class ElectrodeArray(object):
 

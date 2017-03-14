@@ -5,16 +5,16 @@ import pytest
 import pulse2percept as p2p
 
 
-def test_monophasic_pulse():
+def test_MonophasicPulse():
     tsample = 1.0
 
     for pdur in range(10):
         for ddur in range(10):
             for sdur in [None, 5, 10, 100]:
                 for ptype in ['anodic', 'cathodic']:
-                    pulse = p2p.stimuli.monophasic_pulse(ptype, pdur,
-                                                         tsample, ddur,
-                                                         sdur)
+                    pulse = p2p.stimuli.MonophasicPulse(ptype, pdur,
+                                                        tsample, ddur,
+                                                        sdur)
 
                     # Make sure the pulse length is correct:
                     # When stimulus duration is not specified, stimulus must
@@ -53,20 +53,20 @@ def test_monophasic_pulse():
 
     # Invalid pulsetype
     with pytest.raises(ValueError):
-        p2p.stimuli.monophasic_pulse(10, 0.1, 0, 'anodicfirst')
+        p2p.stimuli.MonophasicPulse(10, 0.1, 0, 'anodicfirst')
     with pytest.raises(ValueError):
-        p2p.stimuli.monophasic_pulse(10, 0.1, 0, 'cathodicfirst')
+        p2p.stimuli.MonophasicPulse(10, 0.1, 0, 'cathodicfirst')
 
 
-def test_biphasic_pulse():
+def test_BiphasicPulse():
     for ptype in ['cathodicfirst', 'anodicfirst']:
         for pdur in [0.25 / 1000, 0.45 / 1000, 0.65 / 1000]:
             for interphase_dur in [0, 0.25 / 1000, 0.45 / 1000, 0.65 / 1000]:
                 for tsample in [5e-6, 1e-5, 5e-5]:
                     # generate pulse
-                    pulse = p2p.stimuli.biphasic_pulse(ptype, pdur,
-                                                       tsample,
-                                                       interphase_dur)
+                    pulse = p2p.stimuli.BiphasicPulse(ptype, pdur,
+                                                      tsample,
+                                                      interphase_dur)
 
                     # predicted length
                     pulse_gap_dur = 2 * pdur + interphase_dur
@@ -97,9 +97,9 @@ def test_biphasic_pulse():
 
     # Invalid pulsetype
     with pytest.raises(ValueError):
-        p2p.stimuli.biphasic_pulse(10, 0.1, 0, 'anodic')
+        p2p.stimuli.BiphasicPulse(10, 0.1, 0, 'anodic')
     with pytest.raises(ValueError):
-        p2p.stimuli.biphasic_pulse(10, 0.1, 0, 'cathodic')
+        p2p.stimuli.BiphasicPulse(10, 0.1, 0, 'cathodic')
 
 
 def test_image2pulsetrain():
@@ -194,7 +194,7 @@ def test_Movie2Pulsetrain():
     npt.assert_(m2pt.data.max() < amp_max)
 
 
-def test_Psycho2Pulsetrain():
+def test_PulseTrain():
     dur = 0.5
     pdur = 0.45 / 1000
     tsample = 5e-6
@@ -203,13 +203,13 @@ def test_Psycho2Pulsetrain():
 
     # First an easy one (sawtooth)...
     for scale in [1.0, 2.0, 5.0, 10.0]:
-        pt = p2p.stimuli.Psycho2Pulsetrain(tsample=0.1 * scale,
-                                           dur=1.0 * scale, freq=freq / scale,
-                                           amp=ampl * scale,
-                                           pulse_dur=0.1 * scale,
-                                           interphase_dur=0,
-                                           pulsetype='cathodicfirst',
-                                           pulseorder='pulsefirst')
+        pt = p2p.stimuli.PulseTrain(tsample=0.1 * scale,
+                                    dur=1.0 * scale, freq=freq / scale,
+                                    amp=ampl * scale,
+                                    pulse_dur=0.1 * scale,
+                                    interphase_dur=0,
+                                    pulsetype='cathodicfirst',
+                                    pulseorder='pulsefirst')
         npt.assert_equal(np.sum(np.isclose(pt.data, ampl * scale)), freq)
         npt.assert_equal(np.sum(np.isclose(pt.data, -ampl * scale)), freq)
         npt.assert_equal(pt.data[0], -ampl * scale)
@@ -222,10 +222,10 @@ def test_Psycho2Pulsetrain():
 
     # All empty pulse trains: Expect no division by zero errors
     for amp in [0, 20]:
-        p2pt = p2p.stimuli.Psycho2Pulsetrain(freq=0, amp=ampl, dur=dur,
-                                             pulse_dur=pdur,
-                                             interphase_dur=pdur,
-                                             tsample=tsample)
+        p2pt = p2p.stimuli.PulseTrain(freq=0, amp=ampl, dur=dur,
+                                      pulse_dur=pdur,
+                                      interphase_dur=pdur,
+                                      tsample=tsample)
         npt.assert_equal(p2pt.data, np.zeros(stim_size))
 
     # Non-zero pulse trains: Expect right length, pulse order, etc.
@@ -233,15 +233,15 @@ def test_Psycho2Pulsetrain():
         for pulsetype in ['cathodicfirst', 'anodicfirst']:
             for delay in [0, 10 / 1000]:
                 for pulseorder in ['pulsefirst', 'gapfirst']:
-                    p2pt = p2p.stimuli.Psycho2Pulsetrain(freq=freq,
-                                                         dur=dur,
-                                                         pulse_dur=pdur,
-                                                         interphase_dur=pdur,
-                                                         delay=delay,
-                                                         tsample=tsample,
-                                                         amp=ampl,
-                                                         pulsetype=pulsetype,
-                                                         pulseorder=pulseorder)
+                    p2pt = p2p.stimuli.PulseTrain(freq=freq,
+                                                  dur=dur,
+                                                  pulse_dur=pdur,
+                                                  interphase_dur=pdur,
+                                                  delay=delay,
+                                                  tsample=tsample,
+                                                  amp=ampl,
+                                                  pulsetype=pulsetype,
+                                                  pulseorder=pulseorder)
 
                     # make sure length is correct
                     npt.assert_equal(p2pt.data.size, stim_size)
@@ -288,13 +288,13 @@ def test_Psycho2Pulsetrain():
 
     # Invalid values
     with pytest.raises(ValueError):
-        p2p.stimuli.Psycho2Pulsetrain(0.1, delay=-10)
+        p2p.stimuli.PulseTrain(0.1, delay=-10)
     with pytest.raises(ValueError):
-        p2p.stimuli.Psycho2Pulsetrain(0.1, pulse_dur=-10)
+        p2p.stimuli.PulseTrain(0.1, pulse_dur=-10)
     with pytest.raises(ValueError):
-        p2p.stimuli.Psycho2Pulsetrain(0.1, freq=1000, pulse_dur=10)
+        p2p.stimuli.PulseTrain(0.1, freq=1000, pulse_dur=10)
     with pytest.raises(ValueError):
-        p2p.stimuli.Psycho2Pulsetrain(0.1, pulseorder='cathodicfirst')
+        p2p.stimuli.PulseTrain(0.1, pulseorder='cathodicfirst')
 
 
 def test_parse_pulse_trains():
@@ -347,12 +347,3 @@ def test_parse_pulse_trains():
     p2p.stimuli.parse_pulse_trains([pt_zero] * argus.num_electrodes, argus)
     p2p.stimuli.parse_pulse_trains(pt_zero, simple)
     p2p.stimuli.parse_pulse_trains([pt_zero], simple)
-
-
-def test_receptive_field():
-    e = p2p.implants.Electrode('epiretinal', 100, 0, 0, 0)
-
-    with pytest.raises(TypeError):
-        p2p.stimuli.receptive_field(p2p.implants.ArgusI(), 0, 0)
-    with pytest.raises(ValueError):
-        p2p.stimuli.receptive_field(e, 0, 0, rftype='invalid')
