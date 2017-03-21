@@ -1,8 +1,21 @@
 language: python
+
 sudo: false
+
+os: linux
+dist: trusty
+
 env:
   global:
     - CONDA_DEPS="pip flake8 numpy scipy numba joblib dask scikit-image" PIP_DEPS="pytest coveralls mock pytest-cov" MINICONDA_URL="https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh"
+
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+      - sourceline: 'ppa:heyarje/libav-11'
+    packages:
+      - libav-tools
 
 python:
   - '2.7'

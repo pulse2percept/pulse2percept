@@ -3,11 +3,89 @@ import numpy.testing as npt
 import pytest
 import os
 try:
+    # Python 3
     from unittest import mock
 except ImportError:
+    # Python 2
     import mock
 
+try:
+    # Python 3
+    from imp import reload
+except ImportError:
+    pass
+
 from pulse2percept import files
+from pulse2percept import utils
+
+
+def test_skvideo_path():
+    # Smoke-test
+    files.set_skvideo_path('/usr/bin')
+
+
+def test_load_video():
+    # Load a test example
+    from skvideo import datasets
+    video = files.load_video(datasets.bikes())
+    npt.assert_equal(video.shape, [250, 272, 640, 3])
+
+    # Trigger an import error
+    with mock.patch.dict("sys.modules", {"skvideo": {}, "skvideo.utils": {}}):
+        with pytest.raises(ImportError):
+            reload(files)
+            files.load_video('invalid.avi')
+
+
+def test_load_video_generator():
+    # Load a test example
+    reload(files)
+    from skvideo import datasets
+    reader = files.load_video_generator(datasets.bikes())
+    for frame in reader.nextFrame():
+        npt.assert_equal(frame.shape, [272, 640, 3])
+
+    # Trigger an import error
+    with mock.patch.dict("sys.modules", {"skvideo": {}, "skvideo.utils": {}}):
+        with pytest.raises(ImportError):
+            reload(files)
+            files.load_video_generator('invalid.avi')
+
+
+def test_save_video():
+    # Load a test example
+    reload(files)
+    from skvideo import datasets
+    video = files.load_video(datasets.bikes())
+
+    # Smoke-test
+    files.save_video('myvideo.avi', video)
+    files.save_video('myvideo.mp4', video)
+
+    # Trigger an import error
+    with mock.patch.dict("sys.modules", {"skvideo": {}, "skvideo.utils": {}}):
+        with pytest.raises(ImportError):
+            reload(files)
+            files.save_video('invalid.avi', video)
+
+
+def test_save_percept():
+    # Smoke-test
+    reload(files)
+    pt = utils.TimeSeries(1, np.zeros((10, 8, 3)))
+    files.save_percept('mypercept.avi', pt)
+    files.save_percept('mypercept.mp4', pt)
+
+    # Trigger an import error
+    with mock.patch.dict("sys.modules", {"skvideo": {}, "skvideo.utils": {}}):
+        with pytest.raises(ImportError):
+            reload(files)
+            files.save_percept('invalid.avi', pt)
+
+    # Trigger a TypeError
+    reload(files)
+    with pytest.raises(TypeError):
+        files.save_percept('invalid.avi', np.zeros((10, 8, 3)))
 
 
 def test_savemoviefiles():

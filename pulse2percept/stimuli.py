@@ -11,6 +11,16 @@ import logging
 
 from pulse2percept import utils
 from pulse2percept import implants
+from pulse2percept import files
+
+try:
+    import skimage.io as sio
+    import skimage.transform as sit
+    import skimage.color as sic
+    has_skimage = True
+except:
+    # Might also raise "dict object has no attribute 'io'"
+    has_skimage = False
 
 
 class MonophasicPulse(utils.TimeSeries):
@@ -284,11 +294,9 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
         the implant.
 
     """
-    try:
-        import skimage.io as sio
-        import skimage.transform as sit
-        import skimage.color as sic
-    except ImportError:
+    if not has_skimage:
+        # We don't want to repeatedly import Scikit-Image. This would (e.g.)
+        # unnecessarily slow down `video2pulsetrain`.
         raise ImportError("You do not have scikit-image installed. "
                           "You can install it via $ pip install scikit-image.")
 
@@ -326,9 +334,16 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     ylo = np.min(xyr[:, 1] - xyr[:, 2])
     yhi = np.max(xyr[:, 1] + xyr[:, 2])
 
-    # Resize the image accordingly (rows, columns)
-    img_resize = sit.resize(img_orig, (yhi - ylo, xhi - xlo))
-    info_s = "Image resized to %dx%d pixels." % (yhi - ylo, xhi - xlo)
+    # Resize the image accordingly (rows, columns) in steps of `rfsize`
+    if rfsize is None:
+        # Find smallest radius
+        scale = np.min([e.radius for e in implant]) / 2.0
+    else:
+        scale = np.maximum(1.0, rfsize / 4.0)
+    py = int((yhi - ylo) / scale)
+    px = int((xhi - xlo) / scale)
+    img_resize = sit.resize(img_orig, (py, px))
+    info_s = "Image resized to %dx%d pixels." % (py, px)
     logging.getLogger(__name__).info(info_s)
 
     # Make a grid that has the image's coordinates on the retina
@@ -340,8 +355,13 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     magn = []
     for e in implant:
         rf = e.receptive_field(xg, yg, rftype, rfsize)
-        magn.append(np.sum(rf.T * img_resize) / np.sum(rf))
+        numer = np.sum(rf.T * img_resize)
+        denom = np.sum(rf) + np.finfo(float).eps
+        magn.append(numer / denom)
     magn = np.array(magn)
+    if np.any(np.isnan(magn) + np.isinf(magn)):
+        logging.getLogger(__name__).warn("Invalid value encountered in "
+                                         "receptive field calculation.")
 
     if max_contrast:
         # Normalize contrast to valrange
@@ -376,7 +396,7 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     return pulses
 
 
-def video2pulsetrain(videofile, implant, framerate=20,
+def video2pulsetrain(filename, implant, framerate=20,
                      coding='amplitude', valrange=[0, 50],
                      max_contrast=True, const_amp=20, const_freq=20,
                      rftype='gaussian', rfsize=None, invert=False,
@@ -384,43 +404,19 @@ def video2pulsetrain(videofile, implant, framerate=20,
                      interphasedur=0.5 / 1000., pulsetype='cathodicfirst',
                      ffmpeg_path=None, libav_path=None):
     """Converts a video into a pulsetrain"""
-    try:
-        # Their init file is weird: Telling mock to disable the module will
-        # not result in an ImportError... But, all of the functionality will
-        # be missing... So check for some class attributes instead.
-        import skvideo
-        import skvideo.io as svio
-        skvideo._HAS_AVCONV
-        skvideo._HAS_FFMPEG
-    except:
-        raise ImportError("You do not have scikit-video installed. "
-                          "You can install it via $ pip install sk-video.")
-
-    # Set the path if necessary
-    if libav_path is not None:
-        skvideo.setLibAVPath(libav_path)
-    if ffmpeg_path is not None:
-        skvideo.setFFmpegPath(ffmpeg_path)
-
-    # Try loading
-    if skvideo._HAS_FFMPEG:
-        reader = svio.FFmpegReader(videofile)
-    elif skvideo._HAS_AVCONV:
-        reader = svio.LibAVReader(videofile)
-    else:
-        raise ImportError("You have neither ffmpeg nor libav (which comes "
-                          "with avprobe) installed.")
-
-    # Convert the desired framerate to a duration (seconds)
-    dur = 1.0 / framerate
 
     # Temporarily increase logger level to suppress info messages
     current_level = logging.getLogger(__name__).getEffectiveLevel()
     logging.getLogger(__name__).setLevel(logging.WARN)
 
+    # Convert the desired framerate to a duration (seconds)
+    dur = 1.0 / framerate
+
     # Read one frame at a time, and append to previous frames
     video = []
-    for img in reader.nextFrame():
+    reader = files.load_video_generator(filename, ffmpeg_path, libav_path)
+    for i, img in enumerate(reader.nextFrame()):
+        logging.getLogger(__name__).warn("Processing frame %d" % i)
         frame = image2pulsetrain(img, implant, coding=coding,
                                  valrange=valrange, max_contrast=max_contrast,
                                  const_amp=const_amp, const_freq=const_freq,
