@@ -221,7 +221,7 @@ def test_image2pulsetrain():
     img = np.zeros((4, 4))
 
     # Trigger an import error
-    with mock.patch.dict("sys.modules", {"scikit-image": {}}):
+    with mock.patch.dict("sys.modules", {"skimage": {}}):
         with pytest.raises(ImportError):
             p2p.stimuli.image2pulsetrain(img, implant)
 
@@ -288,7 +288,12 @@ def test_video2pulsetrain():
         with pytest.raises(ImportError):
             p2p.stimuli.video2pulsetrain('invalid.avi', implant)
 
-    p2p.stimuli.video2pulsetrain('invalid.avi', implant)
+    with pytest.raises(FileNotFoundError):
+        p2p.stimuli.video2pulsetrain('no-such-file.avi', implant)
+
+    # Smoke-test example video
+    from skvideo import datasets
+    p2p.stimuli.video2pulsetrain(datasets.bikes(), implant)
 
 
 def test_Movie2Pulsetrain():

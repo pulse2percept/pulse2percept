@@ -276,11 +276,18 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     pulsetype : {'cathodicfirst', 'anodicfirst'}, optional
         A cathodic-first pulse has the negative phase first, whereas an
         anodic-first pulse has the positive phase first.
+
+    Returns
+    -------
+    pulses : list
+        A list of p2p.stimuli.PulseTrain objects, one for each electrode in
+        the implant.
+
     """
     try:
-        import skimage.io as skio
-        import skimage.transform as skt
-        import skimage.color as skc
+        import skimage.io as sio
+        import skimage.transform as sit
+        import skimage.color as sic
     except ImportError:
         raise ImportError("You do not have scikit-image installed. "
                           "You can install it via $ pip install scikit-image.")
@@ -293,7 +300,7 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
 
     if isinstance(img, str):
         # Load image from filename
-        img_orig = skio.imread(img, as_grey=True).astype(np.float32)
+        img_orig = sio.imread(img, as_grey=True).astype(np.float32)
         logging.getLogger(__name__).info("Loaded file '%s'." % img)
     else:
         if img.ndim == 2:
@@ -302,7 +309,7 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
         else:
             # Assume RGB, convert to grayscale
             assert img.shape[-1] == 3
-            img_orig = skc.rgb2gray(np.array(img)).astype(np.float32)
+            img_orig = sic.rgb2gray(np.array(img)).astype(np.float32)
 
     # Make sure all pixels are between 0 and 1
     if img_orig.max() > 1.0:
@@ -320,7 +327,7 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     yhi = np.max(xyr[:, 1] + xyr[:, 2])
 
     # Resize the image accordingly (rows, columns)
-    img_resize = skt.resize(img_orig, (yhi - ylo, xhi - xlo))
+    img_resize = sit.resize(img_orig, (yhi - ylo, xhi - xlo))
     info_s = "Image resized to %dx%d pixels." % (yhi - ylo, xhi - xlo)
     logging.getLogger(__name__).info(info_s)
 
@@ -369,10 +376,11 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     return pulses
 
 
-def video2pulsetrain(video, implant, coding='amplitude', valrange=[0, 50],
+def video2pulsetrain(videofile, implant, framerate=20,
+                     coding='amplitude', valrange=[0, 50],
                      max_contrast=True, const_amp=20, const_freq=20,
                      rftype='gaussian', rfsize=None, invert=False,
-                     tsample=0.005 / 1000, dur=0.5, pulsedur=0.5 / 1000.,
+                     tsample=0.005 / 1000, pulsedur=0.5 / 1000.,
                      interphasedur=0.5 / 1000., pulsetype='cathodicfirst',
                      ffmpeg_path=None, libav_path=None):
     """Converts a video into a pulsetrain"""
@@ -381,14 +389,12 @@ def video2pulsetrain(video, implant, coding='amplitude', valrange=[0, 50],
         # not result in an ImportError... But, all of the functionality will
         # be missing... So check for some class attributes instead.
         import skvideo
+        import skvideo.io as svio
         skvideo._HAS_AVCONV
         skvideo._HAS_FFMPEG
     except:
         raise ImportError("You do not have scikit-video installed. "
                           "You can install it via $ pip install sk-video.")
-
-    if not (skvideo._HAS_AVCONV or skvideo._HAS_FFMPEG):
-        raise ImportError("You have neither ffmpeg nor avconv installed.")
 
     # Set the path if necessary
     if libav_path is not None:
@@ -396,7 +402,42 @@ def video2pulsetrain(video, implant, coding='amplitude', valrange=[0, 50],
     if ffmpeg_path is not None:
         skvideo.setFFmpegPath(ffmpeg_path)
 
-    print(dir(skvideo))
+    # Try loading
+    if skvideo._HAS_FFMPEG:
+        reader = svio.FFmpegReader(videofile)
+    elif skvideo._HAS_AVCONV:
+        reader = svio.LibAVReader(videofile)
+    else:
+        raise ImportError("You have neither ffmpeg nor libav (which comes "
+                          "with avprobe) installed.")
+
+    # Convert the desired framerate to a duration (seconds)
+    dur = 1.0 / framerate
+
+    # Temporarily increase logger level to suppress info messages
+    current_level = logging.getLogger(__name__).getEffectiveLevel()
+    logging.getLogger(__name__).setLevel(logging.WARN)
+
+    # Read one frame at a time, and append to previous frames
+    video = []
+    for img in reader.nextFrame():
+        frame = image2pulsetrain(img, implant, coding=coding,
+                                 valrange=valrange, max_contrast=max_contrast,
+                                 const_amp=const_amp, const_freq=const_freq,
+                                 rftype=rftype, rfsize=rfsize, invert=invert,
+                                 tsample=tsample, dur=dur, pulsedur=pulsedur,
+                                 interphasedur=interphasedur,
+                                 pulsetype=pulsetype)
+        if video:
+            # Append pulse train of current frame to previous frames
+            video = [p + pf for p, pf in zip(video, frame)]
+        else:
+            video = frame
+
+    # Restore logger level
+    logging.getLogger(__name__).setLevel(current_level)
+
+    return video
 
 
 @utils.deprecated('p2p.stimuli.video2pulsetrain')

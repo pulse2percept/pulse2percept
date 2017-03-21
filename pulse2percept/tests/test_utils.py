@@ -31,7 +31,7 @@ def test_TimeSeries():
     npt.assert_equal(tmax, max_idx)
     npt.assert_equal(fmax.data, data_orig[:, :, max_idx])
 
-    # Make sure resampling works, and leaves old object unaffected
+    # Make sure resampling works
     tsample_new = 2.0
     ts_new = ts.resample(tsample_new)
     npt.assert_equal(ts_new.tsample, tsample_new)
@@ -39,6 +39,44 @@ def test_TimeSeries():
     tmax_new, vmax_new = ts_new.max()
     npt.assert_equal(tmax_new, tmax)
     npt.assert_equal(vmax_new, vmax)
+
+    # Make sure resampling leaves old data unaffected (deep copy)
+    ts_new.data[0, 0, 0] = max_val * 2.0
+    tmax_new, vmax_new = ts_new.max()
+    npt.assert_equal(tmax_new, 0)
+    npt.assert_equal(vmax_new, max_val * 2.0)
+    tmax, vmax = ts.max()
+    npt.assert_equal(tmax, max_idx)
+    npt.assert_equal(vmax, max_val)
+
+    # Make sure adding two TimeSeries objects works:
+    # Must have the right type and size
+    with pytest.raises(TypeError):
+        ts + 4.0
+    with pytest.raises(ValueError):
+        ts_wrong_size = p2p.utils.TimeSeries(1.0, np.ones((2, 2)))
+        ts + ts_wrong_size
+
+    # Adding messes only with the last dimension of the array
+    ts_add = ts + ts
+    npt.assert_equal(ts_add.shape[:-1], ts.shape[:-1])
+    npt.assert_equal(ts_add.shape[-1], ts.shape[-1] * 2)
+
+    # If necessary, the second pulse train is resampled to the first
+    ts_add = ts + ts_new
+    npt.assert_equal(ts_add.shape[:-1], ts.shape[:-1])
+    npt.assert_equal(ts_add.shape[-1], ts.shape[-1] * 2)
+    ts_add = ts_new + ts
+    npt.assert_equal(ts_add.shape[:-1], ts_new.shape[:-1])
+    npt.assert_equal(ts_add.shape[-1], ts_new.shape[-1] * 2)
+
+    # New one is a deep copy: Old data is unaffected
+    tmax, vmax = ts.max()
+    _, vmax_add = ts_new.max()
+    ts_new.data[0, 0, 0] = vmax_add * 2.0
+    tmax2, vmax2 = ts.max()
+    npt.assert_equal(tmax, tmax2)
+    npt.assert_equal(vmax, vmax2)
 
 
 def test_sparseconv():
