@@ -205,7 +205,7 @@ class Grid(object):
                                              layer='INL', alpha=alpha, n=n)
             ecs[..., 0, i] = cs[..., 0, i]
             cs[..., 1, i] = e.current_spread(self.gridx, self.gridy,
-                                             layer='NFL', alpha=alpha, n=n)
+                                             layer='OFL', alpha=alpha, n=n)
             ecs[:, :, 1, i] = self.current2effectivecurrent(cs[..., 1, i])
 
         return ecs, cs
@@ -228,8 +228,8 @@ class TemporalModel(object):
         tsample : float
             Sampling time step (seconds). Default: 5e-6 s.
         tau_gcl : float
-            Time decay constant for the fast leaky integrater of the nerve
-            fiber layer (NFL); i.e., ganglion cell layer.
+            Time decay constant for the fast leaky integrater of the optic
+            fiber layer (OFL); i.e., ganglion cell layer.
             This is only important in combination with epiretinal electrode
             arrays. Default: 45.25 / 1000 s.
         tau_inl : float
@@ -283,11 +283,11 @@ class TemporalModel(object):
         # Gamma functions used as convolution kernels do not depend on input
         # data, hence can be calculated once, then re-used (trade off memory
         # for speed).
-        # gamma_nfl and gamma_inl are used to calculate the fast response in
+        # gamma_ofl and gamma_inl are used to calculate the fast response in
         # bipolar and ganglion cells respectively
 
         _, self.gamma_inl = utils.gamma(1, self.tau_inl, self.tsample)
-        _, self.gamma_nfl = utils.gamma(1, self.tau_gcl, self.tsample)
+        _, self.gamma_ofl = utils.gamma(1, self.tau_gcl, self.tsample)
 
         # gamma_ca is used to calculate charge accumulation
         _, self.gamma_ca = utils.gamma(1, self.tau_ca, self.tsample)
@@ -403,8 +403,11 @@ class TemporalModel(object):
 
         Parameters
         ----------
-        ecm : TimeSeries
-            Effective current
+        ecm : array-like
+            A 2D array containing the time series data for each layer. Each
+            time series is the sum of all PulseTrains through a particular
+            pixel.
+            Dimensions: <#layers x #time points>
         layers : list
 
             List of retinal layers to simulate. Choose from:
@@ -417,29 +420,23 @@ class TemporalModel(object):
         Brightness response over time. In Nanduri et al. (2012), the
         maximum value of this signal was used to represent the perceptual
         brightness of a particular location in space, B(r).
-        """
-        layers = [l.upper() for l in layers]
 
+        """
         # Sparse convolution is faster if input is sparse. This is true for
         # the first convolution in the cascade, but not for subsequent ones.
-        usefft = False
         if 'INL' in layers:
-            resp_inl = self.fast_response(ecm[0].data, self.gamma_inl,
+            resp_inl = self.fast_response(ecm[0], self.gamma_inl,
                                           dojit=dojit,
-                                          usefft=usefft)
-            # Set `usefft` to True for subsequent stages of the cascade
-            usefft = True
+                                          usefft=False)
         else:
-            resp_inl = np.zeros((ecm[0].data.shape))
+            resp_inl = np.zeros_like(ecm[0])
 
         if ('GCL' or 'OFL') in layers:
-            resp_ofl = self.fast_response(ecm[1].data, self.gamma_nfl,
+            resp_ofl = self.fast_response(ecm[1], self.gamma_ofl,
                                           dojit=dojit,
-                                          usefft=usefft)
-            # Set `usefft` to True for subsequent stages of the cascade
-            usefft = True
+                                          usefft=False)
         else:
-            resp_ofl = np.zeros((ecm[1].data.shape))
+            resp_ofl = np.zeros_like(ecm[1])
 
         # Here we are converting from current  - where a cathodic (effective)
         # stimulus is negative - to a vague concept of neuronal response,
@@ -472,36 +469,72 @@ class TemporalModel(object):
 
         return pt_entry
 
-    def calc_per_pixel(self, ecs_item, pt, layers, dojit=False):
-        # Convert the current map to one that includes axon streaks
-        ecm = effectivecurrentmap(ecs_item, pt, self.tsample)
+    def calc_per_pixel(self, ecs_item, pt_list, layers, dojit=False):
+        """Calculations to be done on a per-pixel basis
 
-        # Run the model cascade
+        The following calculations need to be done on a pixel-by-pixel basis.
+
+        Parameters
+        ----------
+        ecs_item: array-like
+            A 2D array specifying the effective current values at a particular
+            spatial location (pixel); one value per retinal layer and
+            electrode.
+            Dimensions: <#layers x #electrodes>
+        pt_list: list
+            A list of PulseTrain `data` containers.
+            Dimensions: <#electrodes x #time points>
+        layers : list
+
+            List of retinal layers to simulate. Choose from:
+            - 'OFL': optic fiber layer
+            - 'GCL': ganglion cell layer
+            - 'INL': inner nuclear layer
+
+        dojit : bool
+        """
+        # For each layer in the model, scale the pulse train data with the
+        # effective current:
+        ecm = self.calc_layer_current(ecs_item, pt_list, layers)
+
+        # `ecm` now contains a scaled PulseTrain per layer for this particular
+        # pixel: Use as input to model cascade
         sr = self.model_cascade(ecm, layers, dojit=dojit)
 
         return sr
 
+    def calc_layer_current(self, ecs_item, pt_list, layers):
+        """For a given pixel, calculates the effective current for each retinal
+           layer over time
 
-def effectivecurrentmap(ecs_item, ptrain_data, tsample):
-    """
+            This function operates at a single-pixel level: It calculates the
+            combined current from all electrodes through a spatial location
+            over time. This calculation is performed per retinal layer.
 
-    Effective current map from the electrodes in one spatial location
-    ([x, y] index) and the stimuli through these electrodes.
+            Parameters
+            ----------
+            ecs_item: array-like
+                A 2D array specifying the effective current values at a
+                particular spatial location (pixel); one value per retinal
+                layer and electrode.
+                Dimensions: <#layers x #electrodes>
+            pt_list: list
+                A list of PulseTrain `data` containers.
+                Dimensions: <#electrodes x #time points>
+            layers : list
 
-    Parameters
-    ----------
-    ecs_list: nlayer x npixels (over threshold) arrays
+                List of retinal layers to simulate. Choose from:
+                - 'OFL': optic fiber layer
+                - 'GCL': ganglion cell layer
+                - 'INL': inner nuclear layer
 
-    stimuli : list of TimeSeries objects with the electrode stimulation
-        pulse trains.
-
-    Returns
-    -------
-    A TimeSeries object with the effective current for this stimulus
-    """
-
-    ecm = np.sum(ecs_item[:, :, None] * ptrain_data, 1)
-    return utils.TimeSeries(tsample, ecm)
+        """
+        ecm = np.zeros((ecs_item.shape[0], pt_list[0].shape[-1]))
+        if 'INL' in layers:
+            ecm[0, :] = np.sum(ecs_item[0, :, np.newaxis] * pt_list, axis=0)
+        if ('GCL' or 'OFL') in layers:
+            ecm[1, :] = np.sum(ecs_item[1, :, np.newaxis] * pt_list, axis=0)
+        return ecm
 
 
 def ret2dva(r_um):

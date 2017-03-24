@@ -65,7 +65,7 @@ class Electrode(object):
         layer.
         """
         if self.etype == 'epiretinal':
-            return self.h_nfl
+            return self.h_ofl
         elif self.etype == 'subretinal':
             return self.h_inl
         else:
@@ -112,17 +112,17 @@ class Electrode(object):
         fovdist = np.sqrt(self.x_center ** 2 + self.y_center ** 2)
         if fovdist <= 600:
             # Layer thicknesses given for 0-600 um distance (from fovea)
-            th_nfl = 4.0  # nerve fiber layer
+            th_ofl = 4.0  # nerve fiber layer
             th_gc = 56.0  # ganglion cell bodies + inner nuclear layer
             th_bp = 23.0  # bipolar bodies + inner nuclear layer
         elif fovdist <= 1550:
             # Layer thicknesses given for 600-1550 um distance (from fovea)
-            th_nfl = 34.0
+            th_ofl = 34.0
             th_gc = 87.0
             th_bp = 37.5
         else:
             # Layer thicknesses given for 1550-3000 um distance (from fovea)
-            th_nfl = 45.5
+            th_ofl = 45.5
             th_gc = 58.2
             th_bp = 30.75
             if fovdist > 3000:
@@ -133,11 +133,11 @@ class Electrode(object):
 
         if self.etype == 'epiretinal':
             # This is simply the electrode-retina distance
-            self.h_nfl = height
+            self.h_ofl = height
 
             # All the way through the ganglion cell layer, inner plexiform
             # layer, and halfway through the inner nuclear layer
-            self.h_inl = height + th_nfl + th_gc + 0.5 * th_bp
+            self.h_inl = height + th_ofl + th_gc + 0.5 * th_bp
         elif self.etype == 'subretinal':
             # Starting from the outer plexiform layer, go halfway through the
             # inner nuclear layer
@@ -146,7 +146,7 @@ class Electrode(object):
             # Starting from the outer plexiform layer, all the way through the
             # inner nuclear layer, inner plexiform layer, and ganglion cell
             # layer
-            self.h_nfl = height + th_bp + th_gc + th_nfl
+            self.h_ofl = height + th_bp + th_gc + th_ofl
         else:
             raise ValueError("Unknown `etype`: " + self.etype)
     height = property(get_height, set_height)
@@ -169,7 +169,7 @@ class Electrode(object):
         layer: str
             Layer for which to calculate the current spread:
 
-            - 'NFL': nerve fiber layer, ganglion axons
+            - 'OFL': optic fiber layer, ganglion axons
             - 'INL': inner nuclear layer, containing the bipolars
         alpha : float
             A constant to do with the spatial fall-off.
@@ -184,16 +184,16 @@ class Electrode(object):
         r = np.sqrt((xg - self.x_center) ** 2 + (yg - self.y_center) ** 2)
         # current values on the retina due to array being above the retinal
         # surface
-        if 'NFL' in layer:  # nerve fiber layer, ganglion axons
-            h = np.ones(r.shape) * self.h_nfl
+        if 'OFL' in layer:  # optic fiber layer, ganglion axons
+            h = np.ones(r.shape) * self.h_ofl
             # actual distance from the electrode edge
-            d = ((r - self.radius)**2 + self.h_nfl**2)**.5
+            d = ((r - self.radius)**2 + self.h_ofl**2)**.5
         elif 'INL' in layer:  # inner nuclear layer, containing the bipolars
             h = np.ones(r.shape) * self.h_inl
             d = ((r - self.radius)**2 + self.h_inl**2)**.5
         else:
             s = "Layer %s not found. Acceptable values for `layer` are " \
-                "'NFL' or 'INL'." % layer
+                "'OFL' or 'INL'." % layer
             raise ValueError(s)
         cspread = (alpha / (alpha + h ** n))
         cspread[r > self.radius] = (alpha /

@@ -235,8 +235,6 @@ class TimeSeries(object):
         y_old = self.data
         t_old = np.arange(0, self.duration + self.tsample, self.tsample)
         t_old = t_old[:y_old.shape[-1]]
-        print(t_old.shape)
-        print(y_old.shape)
         f = spi.interp1d(t_old, y_old, axis=-1, fill_value='extrapolate')
 
         t_new = np.arange(0, self.duration, tsample_new)

@@ -45,7 +45,6 @@ class Simulation(object):
         # Optic fiber layer (OFL): After calling `set_optic_fiber_layer`, this
         # variable will contain a `p2p.retina.Grid` object.
         self.ofl = None
-        self.ofl_streaks = True
 
         # Ganglion cell layer (GCL): After calling `set_ganglion_cell_layer`,
         # this variable will contain a `p2p.retina.TemporalModel` object.
@@ -53,7 +52,7 @@ class Simulation(object):
 
     def set_optic_fiber_layer(self, sampling=100, axon_lambda=2, rot_deg=0,
                               x_range=None, y_range=None, datapath='./',
-                              save_data=True, streaks_enabled=True):
+                              save_data=True):
         """Sets parameters of the optic fiber layer (OFL)
 
         Parameters
@@ -82,10 +81,6 @@ class Simulation(object):
             Flag whether to save the data to a new retina file (True) or not
             (False). The file name is automatically generated from all
             specified input arguments.
-            Default: True.
-        streaks_enabled : bool, optional
-            Flag whether to use a tissue activation map that includes axon
-            streaks (True) or not (False).
             Default: True.
         """
         # For auto-generated grids:
@@ -133,7 +128,6 @@ class Simulation(object):
                                    rot=np.deg2rad(rot_deg),
                                    datapath=datapath,
                                    save_data=save_data)
-        self.ofl_streaks = streaks_enabled
 
     def set_ganglion_cell_layer(self, tsample=0.005 / 1000,
                                 tau_gcl=0.42 / 1000, tau_inl=18.0 / 1000,
@@ -271,8 +265,22 @@ class Simulation(object):
         >>> resp = sim.pulse2percept(stim, implant)  # doctest: +SKIP
         """
         logging.getLogger(__name__).info("Starting pulse2percept...")
+
+        # Get a flattened, all-uppercase list of layers
+        layers = np.array([layers]).flatten()
+        layers = np.array([l.upper() for l in layers])
+
+        # Make sure all specified layers exist
+        supported = np.array(['INL', 'GCL', 'OFL'])
+        not_supported = np.array([l not in supported for l in layers])
+        if np.any(not_supported):
+            msg = ', '.join(layers[not_supported])
+            msg = "Specified layer %s not supported. " % msg
+            msg += "Choose from %s." % ', '.join(supported)
+            logging.getLogger(__name__).warn(msg)
+
+        # Set up all layers that haven't been set up yet
         self._set_layers()
-        layers = [l.upper() for l in layers]
 
         # Parse `stim` (either single pulse train or a list/dict of pulse
         # trains), and generate a list of pulse trains, one for each electrode

@@ -5,6 +5,35 @@ import logging
 import pulse2percept as p2p
 
 
+def test_TemporalModel_calc_layer_current():
+    tsample = 0.01 / 1000
+
+    # Assume 4 electrodes, each getting some stimulation
+    pts = [p2p.stimuli.PulseTrain(tsample=tsample, dur=0.1)] * 4
+    ptrain_data = [pt.data for pt in pts]
+
+    # For each of these 4 electrodes, we have two effective current values:
+    # one for the ganglion cell layer, one for the bipolar cell layer
+    ecs_item = np.random.rand(2, 4)
+
+    # What we want is the effective current per layer, for all electrodes
+    # added up.
+    # We do this for different layer configurations:
+    for layers in [['INL'], ['GCL'], ['GCL', 'INL']]:
+        ecm_by_hand = np.zeros((2, ptrain_data[0].size))
+        if 'INL' in layers:
+            for curr, pt in zip(ecs_item[0, :], ptrain_data):
+                ecm_by_hand[0, :] += curr * pt
+        if 'GCL' in layers:
+            for curr, pt in zip(ecs_item[1, :], ptrain_data):
+                ecm_by_hand[1, :] += curr * pt
+
+        # And that should be the same as `calc_layer_current`:
+        tm = p2p.retina.TemporalModel(tsample=tsample)
+        ecm = tm.calc_layer_current(ecs_item, ptrain_data, layers)
+        npt.assert_almost_equal(ecm, ecm_by_hand)
+
+
 def test_Retina_Electrodes():
     logging.getLogger(__name__).info("test_Retina_Electrodes()")
     sampling = 1
@@ -24,7 +53,7 @@ def test_Retina_Electrodes():
     electrode1 = p2p.implants.Electrode('epiretinal', 1, 0, 0, 0)
 
     # Calculate current spread for all retinal layers
-    retinal_layers = ['INL', 'NFL']
+    retinal_layers = ['INL', 'OFL']
     cs = dict()
     ecs = dict()
     for layer in retinal_layers:
@@ -40,7 +69,6 @@ def test_Retina_Electrodes():
                      electrode_array.electrodes[0].y_center)
     npt.assert_equal(electrode1.radius, electrode_array.electrodes[0].radius)
     ecs_list, cs_list = retina.electrode_ecs(electrode_array)
-    print(ecs_list.shape)
 
     # Make sure cs_list has an entry for every layer
     npt.assert_equal(cs_list.shape[-2], len(retinal_layers))
@@ -50,60 +78,6 @@ def test_Retina_Electrodes():
     for i, e in enumerate(retinal_layers):
         # last index: electrode, second-to-last: layer
         npt.assert_equal(cs[e], cs_list[..., i, 0])
-
-
-def test_Retina_ecm():
-    logging.getLogger(__name__).info("test_Retina_ecm()")
-    sampling = 1
-    xlo = -2
-    xhi = 2
-    ylo = -3
-    yhi = 3
-    retina = p2p.retina.Grid(xlo=xlo, xhi=xhi,
-                             ylo=ylo, yhi=yhi,
-                             sampling=sampling,
-                             save_data=False)
-
-    s1 = p2p.stimuli.PulseTrain(freq=20, dur=0.5,
-                                pulse_dur=.075 / 1000.,
-                                interphase_dur=.075 / 1000., delay=0.,
-                                tsample=.075 / 1000., amp=20,
-                                pulsetype='cathodicfirst')
-
-    electrode_array = p2p.implants.ElectrodeArray('epiretinal', [1, 1], [0, 1],
-                                                  [0, 1], [0, 1])
-    ecs_list, cs_list = retina.electrode_ecs(electrode_array)
-    xx = yy = 0
-    ecs_vector = ecs_list[yy, xx]
-    # Smoke testing, feed the same stimulus through both electrodes
-    stim_data = np.array([s.data for s in [s1, s1]])
-    p2p.retina.effectivecurrentmap(ecs_vector, stim_data, s1.tsample)
-
-    fps = 30.0
-    amplitude_transform = 'linear'
-    amp_max = 90
-    freq = 20
-    pulse_dur = .075 / 1000.
-    interphase_dur = .075 / 1000.
-    tsample = .005 / 1000.
-    pulsetype = 'cathodicfirst'
-    stimtype = 'pulsetrain'
-    rflum = np.zeros(100)
-    rflum[50] = 1
-    m2pt = p2p.stimuli.Movie2Pulsetrain(rflum,
-                                        fps=fps,
-                                        amp_transform=amplitude_transform,
-                                        amp_max=amp_max,
-                                        freq=freq,
-                                        pulse_dur=pulse_dur,
-                                        interphase_dur=interphase_dur,
-                                        tsample=tsample,
-                                        pulsetype=pulsetype,
-                                        stimtype=stimtype)
-    # Smoke testing, feed the same stimulus through both electrodes to
-    # make sure the code runs
-    stim_data = np.array([s.data for s in [m2pt, m2pt]])
-    p2p.retina.effectivecurrentmap(ecs_vector, stim_data, m2pt.tsample)
 
 
 def test_brightness_movie():
@@ -168,8 +142,7 @@ def test_debalthasar_threshold():
         implant = p2p.implants.ElectrodeArray('epiretinal', 260, 0, 0, dist)
 
         sim = p2p.Simulation(implant, engine='serial', dojit=True)
-        sim.set_optic_fiber_layer(x_range=0, y_range=0, save_data=False,
-                                  streaks_enabled=False)
+        sim.set_optic_fiber_layer(x_range=0, y_range=0, save_data=False)
         sim.set_ganglion_cell_layer(tsample)
 
         # For each distance to retina, find the threshold current according
@@ -177,7 +150,7 @@ def test_debalthasar_threshold():
         pt = get_baltha_pulse(distance2threshold(dist), tsample)
 
         # Run the model
-        resp = sim.pulse2percept(pt, t_percept=1.0 / 30.0)
+        resp = sim.pulse2percept(pt, t_percept=1.0 / 30.0, layers=['GCL'])
 
         # Keep track of brightness
         bright.append(resp.data.max())

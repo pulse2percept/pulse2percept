@@ -239,26 +239,29 @@ def test_image2pulsetrain():
     # Now put some structure in the image
     img[1, 1] = img[1, 2] = img[2, 1] = img[2, 2] = 0.75
 
-    for max_contrast, val_max in zip([True, False], [amp_max, 0.75 * amp_max]):
+    expected_max = [amp_max, 0.75 * (amp_max - amp_min) + amp_min]
+    for max_contrast, val_max in zip([True, False], expected_max):
         pt = stimuli.image2pulsetrain(img, implant, coding='amplitude',
                                       max_contrast=max_contrast,
-                                      rftype='square', rfsize=50,
                                       valrange=[amp_min, amp_max])
 
         # Make sure we have one pulse train per electrode
         npt.assert_equal(len(pt), implant.num_electrodes)
 
         # Make sure the brightest electrode has `amp_max`
-        npt.assert_equal(np.round(np.max([p.data.max() for p in pt])),
-                         np.round(val_max))
+        npt.assert_almost_equal(np.max([p.data.max() for p in pt]),
+                                val_max)
 
         # Make sure the dimmest electrode has `amp_min` as max amplitude
         npt.assert_almost_equal(np.min([np.abs(p.data).max() for p in pt]),
-                                amp_min, decimal=1)
+                                amp_min)
 
     # Invalid implant
     with pytest.raises(TypeError):
         stimuli.image2pulsetrain("rainbow_cat.jpg", np.zeros(10))
+    with pytest.raises(TypeError):
+        e_array = implants.ElectrodeArray('epiretinal', 100, 0, 0)
+        stimuli.image2pulsetrain("rainbow_cat.jpg", e_array)
 
     # Invalid image
     with pytest.raises(IOError):
@@ -293,7 +296,7 @@ def test_image2pulsetrain():
 
 def test_video2pulsetrain():
     reload(stimuli)
-    implant = implants.ElectrodeArray('epiretinal', 100, 0, 0)
+    implant = implants.ArgusI()
 
     with pytest.raises(OSError):
         stimuli.video2pulsetrain('no-such-file.avi', implant)

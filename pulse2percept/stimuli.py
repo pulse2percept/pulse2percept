@@ -218,13 +218,16 @@ class PulseTrain(utils.TimeSeries):
 
 
 def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
-                     max_contrast=True, const_amp=20, const_freq=20,
-                     rftype='gaussian', rfsize=None, invert=False,
+                     max_contrast=False, const_val=20, invert=False,
                      tsample=0.005 / 1000, dur=0.5, pulsedur=0.5 / 1000.,
                      interphasedur=0.5 / 1000., pulsetype='cathodicfirst'):
     """Converts an image into a series of pulse trains
+
     This function creates an input stimulus from an RGB or grayscale image.
-    Requires `scikit-image`.
+    The image is down-sampled to fit the spatial layout of the implant
+    (currently supported are ArgusI and ArgusII arrays).
+    Requires Scikit-Image.
+
     Parameters
     ----------
     img : str|array_like
@@ -248,28 +251,12 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
         Default: [0, 50]
     max_contrast : bool, optional
         Flag wether to maximize image contrast (True) or not (False).
-        Default: True
-    const_amp : float, optional
-        Constant amplitude value to be sued during frequency coding (only
-        relevant when `coding` is 'frequency').
+        Default: False
+    const_val : float, optional
+        For frequency coding: The constant amplitude value to be used for all
+        pulse trains. For amplitude coding: The constant frequency value to
+        be used for all pulse trains.
         Default: 20
-    const_freq : float, optional
-        Constant frequency value to be sued during amplitude coding (only
-        relevant when `coding` is 'amplitude').
-        Default: 20
-    rftype : {'square', 'gaussian'}, optional
-        The type of receptive field.
-        - 'square': A simple square box receptive field with side length
-                    `size`.
-        - 'gaussian': A Gaussian receptive field where the weight drops off
-                      as a function of distance from the electrode center.
-                      The standard deviation of the Gaussian is `size`.
-    rfsize : float, optional
-        Parameter describing the size of the receptive field. For square
-        receptive fields, this corresponds to the side length of the square.
-        For Gaussian receptive fields, this corresponds to the standard
-        deviation of the Gaussian.
-        Default: Twice the `electrode.radius`
     invert : bool, optional
         Flag whether to invert the grayscale values of the image (True) or
         not (False).
@@ -303,8 +290,11 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     # Make sure range of values is valid
     assert len(valrange) == 2 and valrange[1] > valrange[0]
 
-    if not isinstance(implant, implants.ElectrodeArray):
-        raise TypeError("implant must be of type implants.ElectrodeArray.")
+    isargus1 = isinstance(implant, implants.ArgusI)
+    isargus2 = isinstance(implant, implants.ArgusII)
+    if not isargus1 and not isargus2:
+        raise TypeError("For now, implant must be of type implants.ArgusI or "
+                        "implants.ArgusII.")
 
     if isinstance(img, str):
         # Load image from filename
@@ -322,66 +312,36 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     # Make sure all pixels are between 0 and 1
     if img_orig.max() > 1.0:
         img_orig /= 255.0
-    assert np.all(img_orig >= 0.0) and np.all(img_orig <= 1.0)
 
+    # Let Scikit-Image do the resampling: Downscale image to fit array:
+    if isargus1:
+        img_stim = sit.resize(img_orig, (4, 4))
+    elif isargus2:
+        img_stim = sit.resize(img_orig, (6, 10))
+
+    # If specified, invert the mapping of grayscale values:
     if invert:
-        img_orig = 1.0 - img_orig
+        img_stim = 1.0 - img_stim
 
-    # Center the image on the implant
-    xyr = np.array([[e.x_center, e.y_center, e.radius] for e in implant])
-    xlo = np.min(xyr[:, 0] - xyr[:, 2])
-    xhi = np.max(xyr[:, 0] + xyr[:, 2])
-    ylo = np.min(xyr[:, 1] - xyr[:, 2])
-    yhi = np.max(xyr[:, 1] + xyr[:, 2])
-
-    # Resize the image accordingly (rows, columns) in steps of `rfsize`
-    if rfsize is None:
-        # Find smallest radius
-        scale = np.min([e.radius for e in implant]) / 2.0
-    else:
-        scale = np.maximum(1.0, rfsize / 4.0)
-    py = int((yhi - ylo) / scale)
-    px = int((xhi - xlo) / scale)
-    img_resize = sit.resize(img_orig, (py, px))
-    info_s = "Image resized to %dx%d pixels." % (py, px)
-    logging.getLogger(__name__).info(info_s)
-
-    # Make a grid that has the image's coordinates on the retina
-    yg = np.linspace(ylo, yhi, img_resize.shape[0])
-    xg = np.linspace(xlo, xhi, img_resize.shape[1])
-    yg, xg = np.meshgrid(yg, xg)
-
-    # For each electrode, find the stimulation strength (magnitude)
-    magn = []
-    for e in implant:
-        rf = e.receptive_field(xg, yg, rftype, rfsize)
-        numer = np.sum(rf.T * img_resize)
-        denom = np.sum(rf) + np.finfo(float).eps
-        magn.append(numer / denom)
-    magn = np.array(magn)
-    if np.any(np.isnan(magn) + np.isinf(magn)):
-        logging.getLogger(__name__).warn("Invalid value encountered in "
-                                         "receptive field calculation.")
-
+    # If specified, maximize the contrast in the image:
     if max_contrast:
-        # Normalize contrast to valrange
-        if magn.min() < magn.max():
-            magn = (magn - magn.min()) / (magn.max() - magn.min())
+        img_stim -= img_stim.min()
+        if img_stim.max() > 0:
+            img_stim /= img_stim.max()
 
-    # With `magn` between 0 and 1, now scale to valrange
-    magn = magn * np.diff(valrange) + valrange[0]
+    # With all pixels between 0 and 1, now scale to valrange
+    assert np.all(img_stim >= 0.0) and np.all(img_stim <= 1.0)
+    img_stim = img_stim * np.diff(valrange) + valrange[0]
+    assert np.all(img_stim >= valrange[0]) and np.all(img_stim <= valrange[1])
 
-    # Map magnitude to either freq or amp of pulse train
-    pulses = []
-    for m in magn:
+    stim = []
+    for _, px in np.ndenumerate(img_stim):
         if coding == 'amplitude':
-            # Map magnitude to amplitude
-            amp = m
-            freq = const_freq
+            amp = px
+            freq = const_val
         elif coding == 'frequency':
-            # Map magnitude to frequency
-            amp = const_amp
-            freq = m
+            amp = const_val
+            freq = px
         else:
             e_s = "Acceptable values for `coding` are 'amplitude' or"
             e_s += "'frequency'."
@@ -391,19 +351,81 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
                         pulse_dur=pulsedur,
                         interphase_dur=interphasedur,
                         pulsetype=pulsetype)
-        pulses.append(pt)
+        stim.append(pt)
 
-    return pulses
+    return stim
 
 
 def video2pulsetrain(filename, implant, framerate=20,
                      coding='amplitude', valrange=[0, 50],
-                     max_contrast=True, const_amp=20, const_freq=20,
-                     rftype='gaussian', rfsize=None, invert=False,
+                     max_contrast=False, const_val=20, invert=False,
                      tsample=0.005 / 1000, pulsedur=0.5 / 1000.,
                      interphasedur=0.5 / 1000., pulsetype='cathodicfirst',
                      ffmpeg_path=None, libav_path=None):
-    """Converts a video into a pulsetrain"""
+    """Converts a video into a series of pulse trains
+
+    This function creates an input stimulus from a video.
+    Every frame of the video is passed to `image2pulsetrain`, where it is
+    down-sampled to fit the spatial layout of the implant (currently supported
+    are ArgusI and ArgusII arrays).
+    In this mapping, rows of the image correspond to rows in the implant
+    (top row, Argus I: A1 B1 C1 D1, Argus II: A1 A2 ... A10).
+
+    Requires Scikit-Image and Scikit-Video.
+
+    Parameters
+    ----------
+    img : str|array_like
+        An input image, either a valid filename (string) or a numpy array
+        (row x col x channels).
+    implant : p2p.implants.ElectrodeArray
+        An ElectrodeArray object that describes the implant.
+    coding : {'amplitude', 'frequency'}, optional
+        A string describing the coding scheme:
+        - 'amplitude': Image intensity is linearly converted to a current
+                       amplitude between `valrange[0]` and `valrange[1]`.
+                       Frequency is held constant at `const_freq`.
+        - 'frequency': Image intensity is linearly converted to a pulse
+                       frequency between `valrange[0]` and `valrange[1]`.
+                       Amplitude is held constant at `const_amp`.
+        Default: 'amplitude'
+    valrange : list, optional
+        Range of stimulation values to be used (If `coding` is 'amplitude',
+        specifies min and max current; if `coding` is 'frequency', specifies
+        min and max frequency).
+        Default: [0, 50]
+    max_contrast : bool, optional
+        Flag wether to maximize image contrast (True) or not (False).
+        Default: False
+    const_val : float, optional
+        For frequency coding: The constant amplitude value to be used for all
+        pulse trains. For amplitude coding: The constant frequency value to
+        be used for all pulse trains.
+        Default: 20
+    invert : bool, optional
+        Flag whether to invert the grayscale values of the image (True) or
+        not (False).
+        Default: False
+    tsample : float, optional
+        Sampling time step (seconds). Default: 0.005 / 1000 seconds.
+    dur : float, optional
+        Stimulus duration (seconds). Default: 0.5 seconds.
+    pulsedur : float, optional
+        Duration of single (positive or negative) pulse phase in seconds.
+    interphasedur : float, optional
+        Duration of inter-phase interval (between positive and negative
+        pulse) in seconds.
+    pulsetype : {'cathodicfirst', 'anodicfirst'}, optional
+        A cathodic-first pulse has the negative phase first, whereas an
+        anodic-first pulse has the positive phase first.
+
+    Returns
+    -------
+    pulses : list
+        A list of p2p.stimuli.PulseTrain objects, one for each electrode in
+        the implant.
+
+    """
 
     # Temporarily increase logger level to suppress info messages
     current_level = logging.getLogger(__name__).getEffectiveLevel()
@@ -415,12 +437,10 @@ def video2pulsetrain(filename, implant, framerate=20,
     # Read one frame at a time, and append to previous frames
     video = []
     reader = files.load_video_generator(filename, ffmpeg_path, libav_path)
-    for i, img in enumerate(reader.nextFrame()):
-        logging.getLogger(__name__).warn("Processing frame %d" % i)
+    for img in reader.nextFrame():
         frame = image2pulsetrain(img, implant, coding=coding,
                                  valrange=valrange, max_contrast=max_contrast,
-                                 const_amp=const_amp, const_freq=const_freq,
-                                 rftype=rftype, rfsize=rfsize, invert=invert,
+                                 const_val=const_val, invert=invert,
                                  tsample=tsample, dur=dur, pulsedur=pulsedur,
                                  interphasedur=interphasedur,
                                  pulsetype=pulsetype)
@@ -465,6 +485,7 @@ class Movie2Pulsetrain(utils.TimeSeries):
                               interphase_dur)
         # set up the sequence
         dur = rflum.shape[-1] / fps
+
         if stimtype == 'pulsetrain':
             interpulsegap = np.zeros(int(round((1.0 / freq) / tsample)) -
                                      len(pulse.data))
