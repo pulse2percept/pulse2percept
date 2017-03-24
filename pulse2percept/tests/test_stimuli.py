@@ -67,9 +67,9 @@ def test_MonophasicPulse():
 
     # Invalid pulsetype
     with pytest.raises(ValueError):
-        stimuli.MonophasicPulse(10, 0.1, 0, 'anodicfirst')
+        stimuli.MonophasicPulse('anodicfirst', 10, 0.1)
     with pytest.raises(ValueError):
-        stimuli.MonophasicPulse(10, 0.1, 0, 'cathodicfirst')
+        stimuli.MonophasicPulse('cathodicfirst', 10, 0.1)
 
 
 def test_BiphasicPulse():
@@ -111,9 +111,9 @@ def test_BiphasicPulse():
 
     # Invalid pulsetype
     with pytest.raises(ValueError):
-        stimuli.BiphasicPulse(10, 0.1, 0, 'anodic')
+        stimuli.BiphasicPulse('anodic', 10, 0.1)
     with pytest.raises(ValueError):
-        stimuli.BiphasicPulse(10, 0.1, 0, 'cathodic')
+        stimuli.BiphasicPulse('cathodic', 10, 0.1)
 
 
 def test_PulseTrain():
@@ -217,6 +217,11 @@ def test_PulseTrain():
         stimuli.PulseTrain(0.1, freq=1000, pulse_dur=10)
     with pytest.raises(ValueError):
         stimuli.PulseTrain(0.1, pulseorder='cathodicfirst')
+    with pytest.raises(ValueError):
+        stimuli.PulseTrain(0)
+
+    # Smoke test envelope_size > stim_size
+    stimuli.PulseTrain(1, freq=0.01, dur=0.01)
 
 
 def test_image2pulsetrain():
@@ -330,6 +335,9 @@ def test_Movie2Pulsetrain():
                                     stimtype=stimtype)
     npt.assert_equal(m2pt.shape[0], round((rflum.shape[-1] / fps) / tsample))
     npt.assert_(m2pt.data.max() < amp_max)
+
+    with pytest.raises(ValueError):
+        stimuli.Movie2Pulsetrain(np.zeros(10), -0.1)
 
 
 def test_parse_pulse_trains():

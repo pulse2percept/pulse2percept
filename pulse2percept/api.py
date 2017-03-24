@@ -95,7 +95,7 @@ class Simulation(object):
         elif isinstance(x_range, (int, float)):
             xlo = x_range
             xhi = x_range
-        elif isinstance(x_range, (list, tuple, np.array)):
+        elif isinstance(x_range, (list, tuple, np.ndarray)):
             if len(x_range) != 2 or x_range[1] < x_range[0]:
                 e_s = "x_range must be a list [xlo, xhi] where xlo <= xhi."
                 raise ValueError(e_s)
@@ -112,14 +112,14 @@ class Simulation(object):
         elif isinstance(y_range, (int, float)):
             ylo = y_range
             yhi = y_range
-        elif isinstance(y_range, (list, np.array)):
+        elif isinstance(y_range, (list, np.ndarray)):
             if len(y_range) != 2 or y_range[1] < y_range[0]:
                 e_s = "y_range must be a list [ylo, yhi] where ylo <= yhi."
                 raise ValueError(e_s)
             ylo = y_range[0]
             yhi = y_range[1]
         else:
-            raise ValueError("x_range must be a list [xlo, xhi] or None.")
+            raise ValueError("y_range must be a list [ylo, yhi] or None.")
 
         # Generate the grid from the above specs
         self.ofl = p2p.retina.Grid(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,

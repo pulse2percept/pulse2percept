@@ -2,11 +2,24 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-import pulse2percept as p2p
+from pulse2percept import utils
+
+try:
+    # Python 3
+    from unittest import mock
+except ImportError:
+    # Python 2
+    import mock
+
+try:
+    # Python 3
+    from imp import reload
+except ImportError:
+    pass
 
 
 def test_Parameters():
-    my_params = p2p.utils.Parameters(foo='bar', list=[1, 2, 3])
+    my_params = utils.Parameters(foo='bar', list=[1, 2, 3])
     assert my_params.foo == 'bar'
     assert my_params.list == [1, 2, 3]
     assert str(my_params) == 'foo : bar\nlist : [1, 2, 3]'
@@ -19,7 +32,7 @@ def test_TimeSeries():
     max_idx = 156
     data_orig = np.random.rand(10, 10, 1000)
     data_orig[4, 4, max_idx] = max_val
-    ts = p2p.utils.TimeSeries(1.0, data_orig)
+    ts = utils.TimeSeries(1.0, data_orig)
 
     # Make sure function returns largest element
     tmax, vmax = ts.max()
@@ -54,7 +67,7 @@ def test_TimeSeries():
     with pytest.raises(TypeError):
         ts + 4.0
     with pytest.raises(ValueError):
-        ts_wrong_size = p2p.utils.TimeSeries(1.0, np.ones((2, 2)))
+        ts_wrong_size = utils.TimeSeries(1.0, np.ones((2, 2)))
         ts + ts_wrong_size
 
     # Adding messes only with the last dimension of the array
@@ -103,14 +116,14 @@ def test_sparseconv():
         # np.convolve
         conv = np.convolve(stim, G, mode=mode)
 
-        # p2p.utils.sparseconv
-        sparse_conv = p2p.utils.sparseconv(stim, G, mode=mode, dojit=False)
+        # utils.sparseconv
+        sparse_conv = utils.sparseconv(stim, G, mode=mode, dojit=False)
 
         npt.assert_equal(conv.shape, sparse_conv.shape)
         npt.assert_almost_equal(conv, sparse_conv)
 
     with pytest.raises(ValueError):
-        p2p.utils.sparseconv(G, stim, mode='invalid', dojit=False)
+        utils.sparseconv(G, stim, mode='invalid', dojit=False)
 
 
 def test_conv():
@@ -125,7 +138,7 @@ def test_conv():
     stim[100::1000] = -1
 
     # kernel
-    tt, gg = p2p.utils.gamma(1, 0.005, tsample)
+    tt, gg = utils.gamma(1, 0.005, tsample)
 
     # make sure conv returns the same result as
     # make sure sparseconv returns the same result as np.convolve
@@ -137,15 +150,15 @@ def test_conv():
         npconv = tsample * np.convolve(stim, gg, mode=mode)
 
         for method in methods:
-            conv = p2p.utils.conv(stim, gg, tsample, mode=mode, method=method)
+            conv = utils.conv(stim, gg, tsample, mode=mode, method=method)
 
             npt.assert_equal(conv.shape, npconv.shape)
             npt.assert_almost_equal(conv, npconv)
 
     with pytest.raises(ValueError):
-        p2p.utils.conv(gg, stim, tsample, mode="invalid")
+        utils.conv(gg, stim, tsample, mode="invalid")
     with pytest.raises(ValueError):
-        p2p.utils.conv(gg, stim, tsample, method="invalid")
+        utils.conv(gg, stim, tsample, method="invalid")
 
 
 def power_it(num, n=2):
@@ -156,20 +169,38 @@ def test_parfor():
     my_array = np.arange(100).reshape(10, 10)
     i, j = np.random.randint(0, 9, 2)
     my_list = list(my_array.ravel())
-    npt.assert_equal(p2p.utils.parfor(power_it, my_list,
-                                      out_shape=my_array.shape)[i, j],
-                     power_it(my_array[i, j]))
 
-    # If it's not reshaped, the first item should be the item 0, 0:
-    npt.assert_equal(p2p.utils.parfor(power_it, my_list)[0],
-                     power_it(my_array[0, 0]))
+    expected_00 = power_it(my_array[0, 0])
+    expected_ij = power_it(my_array[i, j])
+
+    for engine in ['serial', 'joblib', 'dask']:
+        print(engine)
+        calculated_00 = utils.parfor(power_it, my_list, engine=engine,
+                                     out_shape=my_array.shape)[0, 0]
+        calculated_ij = utils.parfor(power_it, my_list, engine=engine,
+                                     out_shape=my_array.shape)[i, j]
+
+        npt.assert_equal(expected_00, calculated_00)
+        npt.assert_equal(expected_ij, calculated_ij)
+
+        print('as expected')
+
+        if engine == 'serial':
+            continue
+
+        with mock.patch.dict("sys.modules", {engine: {}}):
+            reload(utils)
+            with pytest.raises(ImportError):
+                utils.parfor(power_it, my_list, engine=engine,
+                             out_shape=my_array.shape)[0, 0]
+        reload(utils)
 
 
 def test_gamma():
     tsample = 0.005 / 1000
     for tau in [0.001, 0.01, 0.1]:
         for n in [1, 2, 5]:
-            t, g = p2p.utils.gamma(n, tau, tsample)
+            t, g = utils.gamma(n, tau, tsample)
             npt.assert_equal(np.arange(0, t[-1] + tsample / 2.0, tsample), t)
             if n > 1:
                 npt.assert_equal(g[0], 0.0)
@@ -189,10 +220,15 @@ def test_traverse_randomly():
     # Iterate the sequence in random order
     shuffled_idx = []
     shuffled_val = []
-    for idx, value in enumerate(p2p.utils.traverse_randomly(sequence)):
+    for idx, value in enumerate(utils.traverse_randomly(sequence)):
         shuffled_idx.append(idx)
         shuffled_val.append(value)
 
     # Make sure every element was visited once
     npt.assert_equal(shuffled_idx, np.arange(len(sequence)).tolist())
     npt.assert_equal(shuffled_val.sort(), sequence.sort())
+
+
+def test_mov2npy():
+    with pytest.raises(ImportError):
+        utils.mov2npy(np.array([]), "invalid.npy")

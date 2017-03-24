@@ -22,7 +22,7 @@ def test_Simulation_pulse2percept():
         sim.pulse2percept(pt)
 
     pt = p2p.stimuli.BiphasicPulse("cathodicfirst", 0.1, 0.005 / 1000)
-    sim.pulse2percept(pt)
+    sim.pulse2percept(pt, layers=['GCL', 'invalid'])
 
 
 def test_Simulation_set_optic_fiber_layer():
@@ -32,7 +32,15 @@ def test_Simulation_set_optic_fiber_layer():
     with pytest.raises(ValueError):
         sim.set_optic_fiber_layer(x_range=[10, 0])
     with pytest.raises(ValueError):
+        sim.set_optic_fiber_layer(x_range=[1, 2, 3])
+    with pytest.raises(ValueError):
+        sim.set_optic_fiber_layer(x_range='invalid')
+    with pytest.raises(ValueError):
         sim.set_optic_fiber_layer(y_range=[10, 0])
+    with pytest.raises(ValueError):
+        sim.set_optic_fiber_layer(y_range=[1, 2, 3])
+    with pytest.raises(ValueError):
+        sim.set_optic_fiber_layer(y_range='invalid')
 
     x_range = [-100, 100]
     y_range = [0, 200]
@@ -51,6 +59,12 @@ def test_Simulation_set_optic_fiber_layer():
     sim.set_optic_fiber_layer(x_range=0, y_range=0)
     sim.set_optic_fiber_layer(x_range=[0, 0], y_range=[0, 0])
     sim.set_optic_fiber_layer()
+
+
+def test_plot_fundus():
+    implant = p2p.implants.ElectrodeArray("epiretinal", 10, 0, 0, 0)
+    sim = p2p.Simulation(implant, engine='serial')
+    sim.plot_fundus()
 
 
 def test_get_brightest_frame():

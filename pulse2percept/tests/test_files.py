@@ -19,9 +19,10 @@ from pulse2percept import files
 from pulse2percept import utils
 
 
-def test_skvideo_path():
+def test_set_skvideo_path():
     # Smoke-test
     files.set_skvideo_path('/usr/bin')
+    files.set_skvideo_path(libav_path='/usr/bin')
 
 
 def test_load_video():
@@ -74,7 +75,7 @@ def test_save_percept():
     reload(files)
     pt = utils.TimeSeries(1, np.zeros((10, 8, 3)))
     files.save_percept('mypercept.avi', pt)
-    files.save_percept('mypercept.mp4', pt)
+    files.save_percept('mypercept.mp4', pt, max_contrast=False)
 
     # Trigger an import error
     with mock.patch.dict("sys.modules", {"skvideo": {}, "skvideo.utils": {}}):

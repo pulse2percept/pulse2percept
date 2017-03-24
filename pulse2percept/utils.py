@@ -12,6 +12,23 @@ from scipy import interpolate as spi
 from scipy import signal as sps
 
 
+# Rather than trying to import these all over, try once and then remember
+# by setting a flag.
+try:
+    import joblib
+    joblib.Parallel
+    has_joblib = True
+except (ImportError, AttributeError):
+    has_joblib = False
+
+try:
+    import dask
+    import dask.multiprocessing
+    dask.delayed
+    has_dask = True
+except (ImportError, AttributeError):
+    has_dask = False
+
 try:
     from numba import jit
     has_jit = True
@@ -424,9 +441,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         n_jobs = n_jobs - 1
 
     if engine.lower() == 'joblib':
-        try:
-            import joblib
-        except ImportError:
+        if not has_joblib:
             err = "You do not have `joblib` installed. Consider setting"
             err += "`engine` to 'serial' or 'dask'."
             raise ImportError(err)
@@ -438,10 +453,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
             d_l.append(d(in_element, *func_args, **func_kwargs))
         results = p(d_l)
     elif engine.lower() == 'dask':
-        try:
-            import dask
-            import dask.multiprocessing
-        except ImportError:
+        if not has_dask:
             err = "You do not have `dask` installed. Consider setting"
             err += "`engine` to 'serial' or 'joblib'."
             raise ImportError(err)

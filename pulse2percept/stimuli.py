@@ -13,12 +13,14 @@ from pulse2percept import utils
 from pulse2percept import implants
 from pulse2percept import files
 
+# Rather than trying to import these all over, try once and then remember
+# by setting a flag.
 try:
     import skimage.io as sio
     import skimage.transform as sit
     import skimage.color as sic
     has_skimage = True
-except:
+except (ImportError, AttributeError):
     # Might also raise "dict object has no attribute 'io'"
     has_skimage = False
 

@@ -15,7 +15,7 @@ try:
     skvideo._HAS_AVCONV
     skvideo._HAS_FFMPEG
     has_skvideo = True
-except:
+except (ImportError, AttributeError):
     has_skvideo = False
 
 
