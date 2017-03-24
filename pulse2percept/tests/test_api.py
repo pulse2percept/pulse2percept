@@ -61,12 +61,6 @@ def test_Simulation_set_optic_fiber_layer():
     sim.set_optic_fiber_layer()
 
 
-def test_plot_fundus():
-    implant = p2p.implants.ElectrodeArray("epiretinal", 10, 0, 0, 0)
-    sim = p2p.Simulation(implant, engine='serial')
-    sim.plot_fundus()
-
-
 def test_get_brightest_frame():
     # Pick a few raindom frames and place brightest pixel therein
     num_frames = 10
