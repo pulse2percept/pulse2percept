@@ -44,11 +44,26 @@ def test_TimeSeries():
     npt.assert_equal(tmax, max_idx)
     npt.assert_equal(fmax.data, data_orig[:, :, max_idx])
 
+
+def test_TimeSeries_resample():
+    max_val = 2.0
+    max_idx = 156
+    data_orig = np.random.rand(10, 10, 1000)
+    data_orig[4, 4, max_idx] = max_val
+    ts = utils.TimeSeries(1.0, data_orig)
+    tmax, vmax = ts.max()
+
+    # Resampling with same sampling step shouldn't change anything
+    ts_new = ts.resample(ts.tsample)
+    npt.assert_equal(ts_new.shape, ts.shape)
+    npt.assert_equal(ts_new.duration, ts.duration)
+
     # Make sure resampling works
-    tsample_new = 2.0
+    tsample_new = 4
     ts_new = ts.resample(tsample_new)
     npt.assert_equal(ts_new.tsample, tsample_new)
     npt.assert_equal(ts_new.data.shape[-1], ts.data.shape[-1] / tsample_new)
+    npt.assert_equal(ts_new.duration, ts.duration)
     tmax_new, vmax_new = ts_new.max()
     npt.assert_equal(tmax_new, tmax)
     npt.assert_equal(vmax_new, vmax)
@@ -61,6 +76,14 @@ def test_TimeSeries():
     tmax, vmax = ts.max()
     npt.assert_equal(tmax, max_idx)
     npt.assert_equal(vmax, max_val)
+
+
+def test_TimeSeries_add():
+    max_val = 2.0
+    max_idx = 156
+    data_orig = np.random.rand(10, 10, 1000)
+    data_orig[4, 4, max_idx] = max_val
+    ts = utils.TimeSeries(1.0, data_orig)
 
     # Make sure adding two TimeSeries objects works:
     # Must have the right type and size
@@ -76,6 +99,8 @@ def test_TimeSeries():
     npt.assert_equal(ts_add.shape[-1], ts.shape[-1] * 2)
 
     # If necessary, the second pulse train is resampled to the first
+    tsample_new = 2.0
+    ts_new = ts.resample(tsample_new)
     ts_add = ts + ts_new
     npt.assert_equal(ts_add.shape[:-1], ts.shape[:-1])
     npt.assert_equal(ts_add.shape[-1], ts.shape[-1] * 2)

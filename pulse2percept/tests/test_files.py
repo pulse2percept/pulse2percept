@@ -25,11 +25,56 @@ def test_set_skvideo_path():
     files.set_skvideo_path(libav_path='/usr/bin')
 
 
+def test_load_video_metadata():
+    # Load a test example
+    reload(files)
+    with pytest.raises(OSError):
+        metadata = files.load_video_metadata('nothing_there.mp4')
+
+    from skvideo import datasets
+    metadata = files.load_video_metadata(datasets.bikes())
+    npt.assert_equal(metadata['@codec_name'], 'h264')
+    npt.assert_equal(metadata['@duration_ts'], '128000')
+    npt.assert_equal(metadata['@r_frame_rate'], '25/1')
+
+    # Trigger an import error
+    with mock.patch.dict("sys.modules", {"skvideo": {}, "skvideo.utils": {}}):
+        with pytest.raises(ImportError):
+            reload(files)
+            files.load_video_metadata(datasets.bikes())
+
+
+def test_load_frame_rate():
+    # Load a test example
+    reload(files)
+    with pytest.raises(OSError):
+        files.load_video_metadata('nothing_there.mp4')
+
+    from skvideo import datasets
+    fps = files.load_video_frame_rate(datasets.bikes())
+    npt.assert_equal(fps, 25)
+
+
 def test_load_video():
     # Load a test example
     from skvideo import datasets
+
+    # Load with default values
     video = files.load_video(datasets.bikes())
+    npt.assert_equal(isinstance(video, np.ndarray), True)
     npt.assert_equal(video.shape, [250, 272, 640, 3])
+
+    # Load as grayscale
+    video = files.load_video(datasets.bikes(), as_gray=True)
+    npt.assert_equal(isinstance(video, np.ndarray), True)
+    npt.assert_equal(video.shape, [250, 272, 640, 1])
+
+    # Load as TimeSeries
+    video = files.load_video(datasets.bikes(), as_timeseries=True)
+    fps = files.load_video_frame_rate(datasets.bikes())
+    npt.assert_equal(isinstance(video, utils.TimeSeries), True)
+    npt.assert_almost_equal(video.tsample, 1.0 / fps)
+    npt.assert_equal(video.shape, [272, 640, 3, 250])
 
     # Trigger an import error
     with mock.patch.dict("sys.modules", {"skvideo": {}, "skvideo.utils": {}}):
@@ -41,6 +86,7 @@ def test_load_video():
 def test_load_video_generator():
     # Load a test example
     reload(files)
+
     from skvideo import datasets
     reader = files.load_video_generator(datasets.bikes())
     for frame in reader.nextFrame():
@@ -57,36 +103,53 @@ def test_save_video():
     # Load a test example
     reload(files)
     from skvideo import datasets
-    video = files.load_video(datasets.bikes())
 
-    # Smoke-test
-    files.save_video('myvideo.avi', video)
-    files.save_video('myvideo.mp4', video)
+    # There and back again: ndarray
+    videoin = files.load_video(datasets.bikes())
+    fpsin = files.load_video_frame_rate(datasets.bikes())
+    files.save_video(videoin, 'myvideo.mp4', fps=fpsin)
+    videout = files.load_video('myvideo.mp4')
+    npt.assert_equal(videoin.shape, videout.shape)
+    npt.assert_almost_equal(videout / 255.0, videoin / 255.0, decimal=0)
 
-    # Trigger an import error
-    with mock.patch.dict("sys.modules", {"skvideo": {}, "skvideo.utils": {}}):
-        with pytest.raises(ImportError):
-            reload(files)
-            files.save_video('invalid.avi', video)
+    # Write to file with different frame rate
+    fpsout = 15
+    files.save_video(videoin, 'myvideo.mp4', fps=fpsout)
+    npt.assert_equal(files.load_video_frame_rate('myvideo.mp4'), fpsout)
 
+    # There and back again: TimeSeries
+    tsamplein = 1.0 / float(fpsin)
+    tsampleout = 1.0 / float(fpsout)
+    rollaxes = np.roll(range(videoin.ndim), -1)
+    tsin = utils.TimeSeries(tsamplein, np.transpose(videoin, rollaxes))
+    files.save_video(tsin, 'myvideo.mp4', fps=fpsout)
+    npt.assert_equal(tsin.tsample, tsamplein)
+    tsout = files.load_video('myvideo.mp4', as_timeseries=True)
+    print(tsout.tsample, tsout.shape)
+    npt.assert_equal(files.load_video_frame_rate('myvideo.mp4'), fpsout)
+    npt.assert_equal(isinstance(tsout, utils.TimeSeries), True)
+    npt.assert_almost_equal(tsout.tsample, tsampleout)
 
-def test_save_percept():
-    # Smoke-test
-    reload(files)
-    pt = utils.TimeSeries(1, np.zeros((10, 8, 3)))
-    files.save_percept('mypercept.avi', pt)
-    files.save_percept('mypercept.mp4', pt, max_contrast=False)
+    # Also verify the actual data: Need to flip up-down and scale
+    print(tsamplein, tsampleout)
+    tsres = tsin.resample(tsampleout)
+    print(tsres.tsample, tsres.shape)
+    npt.assert_equal(tsout.shape, tsres.shape)
+    npt.assert_almost_equal(tsout.data / 255.0, tsres.data / tsres.data.max(),
+                            decimal=0)
 
-    # Trigger an import error
-    with mock.patch.dict("sys.modules", {"skvideo": {}, "skvideo.utils": {}}):
-        with pytest.raises(ImportError):
-            reload(files)
-            files.save_percept('invalid.avi', pt)
-
-    # Trigger a TypeError
-    reload(files)
     with pytest.raises(TypeError):
-        files.save_percept('invalid.avi', np.zeros((10, 8, 3)))
+        files.save_video([2, 3, 4], 'invalid.avi')
+
+    # Trigger an import error
+    with mock.patch.dict("sys.modules", {"skvideo": {}}):
+        with pytest.raises(ImportError):
+            reload(files)
+            files.save_video(videoin, 'invalid.avi')
+    with mock.patch.dict("sys.modules", {"skimage": {}}):
+        with pytest.raises(ImportError):
+            reload(files)
+            files.save_video(videoin, 'invalid.avi')
 
 
 def test_savemoviefiles():
@@ -95,16 +158,16 @@ def test_savemoviefiles():
     if os.name != 'nt':
         # If not on Windows, this should break
         with pytest.raises(OSError):
-            files.savemoviefiles("invalid.avi", np.zeros(10), path='./')
+            files.savemoviefiles('invalid.avi', np.zeros(10), path='./')
     else:
         # Trigger an import error
         with mock.patch.dict("sys.modules", {"PIL": {}}):
             with pytest.raises(ImportError):
-                files.savemoviefiles("invalid.avi", np.zeros(10), path='./')
+                files.savemoviefiles('invalid.avi', np.zeros(10), path='./')
 
         # smoke test
         with pytest.warns(UserWarning):
-            files.savemoviefiles("invalid.avi", np.zeros(10), path='./')
+            files.savemoviefiles('invalid.avi', np.zeros(10), path='./')
 
 
 def test_npy2movie():
