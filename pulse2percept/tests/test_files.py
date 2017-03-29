@@ -111,6 +111,7 @@ def test_save_video():
     videout = files.load_video('myvideo.mp4')
     npt.assert_equal(videoin.shape, videout.shape)
     npt.assert_almost_equal(videout / 255.0, videoin / 255.0, decimal=0)
+    videout = None
 
     # Write to file with different frame rate
     fpsout = 15
@@ -125,18 +126,17 @@ def test_save_video():
     files.save_video(tsin, 'myvideo.mp4', fps=fpsout)
     npt.assert_equal(tsin.tsample, tsamplein)
     tsout = files.load_video('myvideo.mp4', as_timeseries=True)
-    print(tsout.tsample, tsout.shape)
     npt.assert_equal(files.load_video_frame_rate('myvideo.mp4'), fpsout)
     npt.assert_equal(isinstance(tsout, utils.TimeSeries), True)
     npt.assert_almost_equal(tsout.tsample, tsampleout)
 
     # Also verify the actual data: Need to flip up-down and scale
-    print(tsamplein, tsampleout)
     tsres = tsin.resample(tsampleout)
-    print(tsres.tsample, tsres.shape)
+    tsin = None
     npt.assert_equal(tsout.shape, tsres.shape)
     npt.assert_almost_equal(tsout.data / 255.0, tsres.data / tsres.data.max(),
                             decimal=0)
+    tsres = None
 
     with pytest.raises(TypeError):
         files.save_video([2, 3, 4], 'invalid.avi')

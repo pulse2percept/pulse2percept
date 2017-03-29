@@ -348,7 +348,6 @@ def save_video(data, filename, width=None, height=None, fps=30,
 
     # Reshape and scale the data
     savedata = np.zeros((length, height, width, 3), dtype=np.float32)
-    print(savedata.shape)
     for i in range(length):
         if is_ndarray:
             frame = skimage.img_as_float(data[i, ...])

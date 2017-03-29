@@ -199,7 +199,6 @@ def test_parfor():
     expected_ij = power_it(my_array[i, j])
 
     for engine in ['serial', 'joblib', 'dask']:
-        print(engine)
         calculated_00 = utils.parfor(power_it, my_list, engine=engine,
                                      out_shape=my_array.shape)[0, 0]
         calculated_ij = utils.parfor(power_it, my_list, engine=engine,
@@ -207,8 +206,6 @@ def test_parfor():
 
         npt.assert_equal(expected_00, calculated_00)
         npt.assert_equal(expected_ij, calculated_ij)
-
-        print('as expected')
 
         if engine == 'serial':
             continue
