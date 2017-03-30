@@ -201,7 +201,6 @@ def load_video(filename, as_timeseries=False, as_gray=False, ffmpeg_path=None,
         # then squeeze out singleton dimensions
         axes = np.roll(range(video.ndim), -1)
         video = np.squeeze(np.transpose(video, axes=axes))
-        video = np.flipud(video)
         fps = load_video_framerate(filename)
         d_s = "Reshaped video to shape (M, N, C, T) = " + str(video.shape)
         logging.getLogger(__name__).debug(d_s)
@@ -356,7 +355,7 @@ def save_video(data, filename, width=None, height=None, fps=30,
             frame = skimage.img_as_float(data[i, ...])
         elif is_timeseries:
             frame = data.data[..., i] / data.data.max()
-            frame = skimage.img_as_float(np.flipud(frame))
+            frame = skimage.img_as_float(frame)
 
         # resize wants the data to be between 0 and 1
         frame = sic.gray2rgb(sit.resize(frame, (height, width)))
@@ -445,7 +444,7 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
     for i in range(combined_len):
         vframe = skimage.img_as_float(video.data[..., i])
         pframe = percept.data[..., i] / percept.data.max()
-        pframe = skimage.img_as_float(np.flipud(pframe))
+        pframe = skimage.img_as_float(pframe)
         pframe = sic.gray2rgb(sit.resize(pframe, (pheight, pwidth)))
         combined[i, ...] = np.concatenate((vframe, pframe), axis=1)
 

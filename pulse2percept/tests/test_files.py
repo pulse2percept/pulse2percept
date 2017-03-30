@@ -142,7 +142,7 @@ def test_save_video():
     npt.assert_equal(isinstance(tsout, utils.TimeSeries), True)
     npt.assert_almost_equal(tsout.tsample, tsampleout)
 
-    # Also verify the actual data: Need to flip up-down and scale
+    # Also verify the actual data
     tsres = tsin.resample(tsampleout)
     tsin = None
     npt.assert_equal(tsout.shape, tsres.shape)
@@ -164,7 +164,7 @@ def test_save_video():
             files.save_video(videoin, 'invalid.avi')
 
 
-def test_save_video_percept():
+def test_save_video_sidebyside():
     reload(files)
     from skvideo import datasets
     videoin = files.load_video(datasets.bikes())
@@ -173,7 +173,8 @@ def test_save_video_percept():
     rollaxes = np.roll(range(videoin.ndim), -1)
     percept = utils.TimeSeries(tsample, np.transpose(videoin, rollaxes))
 
-    files.save_video_percept(datasets.bikes(), percept, 'mymovie.mp4', fps=fps)
+    files.save_video_sidebyside(datasets.bikes(), percept, 'mymovie.mp4',
+                                fps=fps)
     videout = files.load_video('mymovie.mp4')
     npt.assert_equal(videout.shape[0], videoin.shape[0])
     npt.assert_equal(videout.shape[1], videoin.shape[1])
@@ -181,16 +182,18 @@ def test_save_video_percept():
     npt.assert_equal(videout.shape[3], videoin.shape[3])
 
     with pytest.raises(TypeError):
-        files.save_video_percept(datasets.bikes(), [2, 3, 4], 'invalid.avi')
+        files.save_video_sidebyside(datasets.bikes(), [2, 3, 4], 'invalid.avi')
 
     with mock.patch.dict("sys.modules", {"skvideo": {}}):
         with pytest.raises(ImportError):
             reload(files)
-            files.save_video_percept(datasets.bikes(), percept, 'invalid.avi')
+            files.save_video_sidebyside(datasets.bikes(), percept,
+                                        'invalid.avi')
     with mock.patch.dict("sys.modules", {"skimage": {}}):
         with pytest.raises(ImportError):
             reload(files)
-            files.save_video_percept(datasets.bikes(), percept, 'invalid.avi')
+            files.save_video_sidebyside(datasets.bikes(), percept,
+                                        'invalid.avi')
 
 
 def test_savemoviefiles():
