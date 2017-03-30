@@ -436,7 +436,7 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
 
     # Up-scale percept to fit video dimensions
     pheight = video.shape[0]
-    pwidth = int(percept.shape[1] / percept.shape[0] * video.shape[0])
+    pwidth = int(percept.shape[1] / float(percept.shape[0]) * video.shape[0])
 
     # Show the two side-by-side
     combined = np.zeros((combined_len, pheight, video.shape[1] + pwidth, 3))
