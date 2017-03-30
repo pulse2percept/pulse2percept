@@ -327,7 +327,7 @@ def sparseconv(data, kernel, mode='full', dojit=True):
     if dojit and not has_jit:
         e_s = ("You do not have numba ",
                "please run sparseconv with dojit=False")
-        raise ValueError(e_s)
+        raise ImportError(e_s)
     else:
         return _sparseconv(data, kernel, mode)
 

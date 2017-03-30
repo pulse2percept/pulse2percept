@@ -118,6 +118,8 @@ def test_TimeSeries_add():
 
 
 def test_sparseconv():
+    reload(utils)
+
     # time vector for stimulus (long)
     maxT = .5  # seconds
     nt = 100000
@@ -150,8 +152,14 @@ def test_sparseconv():
     with pytest.raises(ValueError):
         utils.sparseconv(G, stim, mode='invalid', dojit=False)
 
+    with mock.patch.dict("sys.modules", {"numba": {}}):
+        with pytest.raises(ImportError):
+            reload(utils)
+            utils.sparseconv(stim, G, mode='full', dojit=True)
+
 
 def test_conv():
+    reload(utils)
     # time vector for stimulus (long)
     stim_dur = 0.5  # seconds
     tsample = 0.001 / 1000

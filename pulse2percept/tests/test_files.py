@@ -44,18 +44,25 @@ def test_load_video_metadata():
             files.load_video_metadata(datasets.bikes())
 
 
-def test_load_frame_rate():
+def test_load_framerate():
     # Load a test example
     reload(files)
     with pytest.raises(OSError):
         files.load_video_metadata('nothing_there.mp4')
 
     from skvideo import datasets
-    fps = files.load_video_frame_rate(datasets.bikes())
+    fps = files.load_video_framerate(datasets.bikes())
     npt.assert_equal(fps, 25)
+
+    # Trigger an import error
+    with mock.patch.dict("sys.modules", {"skvideo": {}, "skvideo.utils": {}}):
+        with pytest.raises(ImportError):
+            reload(files)
+            files.load_video_framerate(datasets.bikes())
 
 
 def test_load_video():
+    reload(files)
     # Load a test example
     from skvideo import datasets
 
@@ -71,7 +78,7 @@ def test_load_video():
 
     # Load as TimeSeries
     video = files.load_video(datasets.bikes(), as_timeseries=True)
-    fps = files.load_video_frame_rate(datasets.bikes())
+    fps = files.load_video_framerate(datasets.bikes())
     npt.assert_equal(isinstance(video, utils.TimeSeries), True)
     npt.assert_almost_equal(video.tsample, 1.0 / fps)
     npt.assert_equal(video.shape, [272, 640, 3, 250])
@@ -106,17 +113,22 @@ def test_save_video():
 
     # There and back again: ndarray
     videoin = files.load_video(datasets.bikes())
-    fpsin = files.load_video_frame_rate(datasets.bikes())
+    fpsin = files.load_video_framerate(datasets.bikes())
     files.save_video(videoin, 'myvideo.mp4', fps=fpsin)
     videout = files.load_video('myvideo.mp4')
     npt.assert_equal(videoin.shape, videout.shape)
     npt.assert_almost_equal(videout / 255.0, videoin / 255.0, decimal=0)
-    videout = None
 
-    # Write to file with different frame rate
+    # Write to file with different frame rate, widths, and heights
     fpsout = 15
-    files.save_video(videoin, 'myvideo.mp4', fps=fpsout)
-    npt.assert_equal(files.load_video_frame_rate('myvideo.mp4'), fpsout)
+    files.save_video(videoin, 'myvideo.mp4', width=100, fps=fpsout)
+    npt.assert_equal(files.load_video_framerate('myvideo.mp4'), fpsout)
+    videout = files.load_video('myvideo.mp4')
+    npt.assert_equal(videout.shape[2], 100)
+    files.save_video(videoin, 'myvideo.mp4', height=20, fps=fpsout)
+    videout = files.load_video('myvideo.mp4')
+    npt.assert_equal(videout.shape[1], 20)
+    videout = None
 
     # There and back again: TimeSeries
     tsamplein = 1.0 / float(fpsin)
@@ -126,7 +138,7 @@ def test_save_video():
     files.save_video(tsin, 'myvideo.mp4', fps=fpsout)
     npt.assert_equal(tsin.tsample, tsamplein)
     tsout = files.load_video('myvideo.mp4', as_timeseries=True)
-    npt.assert_equal(files.load_video_frame_rate('myvideo.mp4'), fpsout)
+    npt.assert_equal(files.load_video_framerate('myvideo.mp4'), fpsout)
     npt.assert_equal(isinstance(tsout, utils.TimeSeries), True)
     npt.assert_almost_equal(tsout.tsample, tsampleout)
 
@@ -150,6 +162,35 @@ def test_save_video():
         with pytest.raises(ImportError):
             reload(files)
             files.save_video(videoin, 'invalid.avi')
+
+
+def test_save_video_percept():
+    reload(files)
+    from skvideo import datasets
+    videoin = files.load_video(datasets.bikes())
+    fps = files.load_video_framerate(datasets.bikes())
+    tsample = 1.0 / float(fps)
+    rollaxes = np.roll(range(videoin.ndim), -1)
+    percept = utils.TimeSeries(tsample, np.transpose(videoin, rollaxes))
+
+    files.save_video_percept(datasets.bikes(), percept, 'mymovie.mp4', fps=fps)
+    videout = files.load_video('mymovie.mp4')
+    npt.assert_equal(videout.shape[0], videoin.shape[0])
+    npt.assert_equal(videout.shape[1], videoin.shape[1])
+    npt.assert_equal(videout.shape[2], videoin.shape[2] * 2)
+    npt.assert_equal(videout.shape[3], videoin.shape[3])
+
+    with pytest.raises(TypeError):
+        files.save_video_percept(datasets.bikes(), [2, 3, 4], 'invalid.avi')
+
+    with mock.patch.dict("sys.modules", {"skvideo": {}}):
+        with pytest.raises(ImportError):
+            reload(files)
+            files.save_video_percept(datasets.bikes(), percept, 'invalid.avi')
+    with mock.patch.dict("sys.modules", {"skimage": {}}):
+        with pytest.raises(ImportError):
+            reload(files)
+            files.save_video_percept(datasets.bikes(), percept, 'invalid.avi')
 
 
 def test_savemoviefiles():

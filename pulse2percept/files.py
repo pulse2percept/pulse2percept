@@ -38,9 +38,9 @@ def set_skvideo_path(ffmpeg_path=None, libav_path=None):
     Parameters
     ----------
     ffmpeg_path : str, optional
-        Path to ffmpeg library. If not given, use the system's default path.
+        Path to ffmpeg library. If not given, uses the system's default path.
     libav_path : str, optional
-        Path to libav library. If not given, use the system's default path.
+        Path to libav library. If not given, uses the system's default path.
 
     """
     if libav_path is not None:
@@ -62,9 +62,9 @@ def load_video_metadata(filename, ffmpeg_path=None, libav_path=None):
     filename : str
         Video file name
     ffmpeg_path : str, optional
-        Path to ffmpeg library. If not given, use the system's default path.
+        Path to ffmpeg library. If not given, uses the system's default path.
     libav_path : str, optional
-        Path to libav library. If not given, use the system's default path.
+        Path to libav library. If not given, uses the system's default path.
 
     Returns
     -------
@@ -84,7 +84,7 @@ def load_video_metadata(filename, ffmpeg_path=None, libav_path=None):
     return metadata['video']
 
 
-def load_video_frame_rate(filename, ffmpeg_path=None, libav_path=None):
+def load_video_framerate(filename, ffmpeg_path=None, libav_path=None):
     """Returns the video frame rate
 
     This function returns the frame rate of the video, as given by its
@@ -95,9 +95,9 @@ def load_video_frame_rate(filename, ffmpeg_path=None, libav_path=None):
     filename : str
         Video file name
     ffmpeg_path : str, optional
-        Path to ffmpeg library. If not given, use the system's default path.
+        Path to ffmpeg library. If not given, uses the system's default path.
     libav_path : str, optional
-        Path to libav library. If not given, use the system's default path.
+        Path to libav library. If not given, uses the system's default path.
 
     Returns
     -------
@@ -140,9 +140,9 @@ def load_video(filename, as_timeseries=False, as_gray=False, ffmpeg_path=None,
         If True, loads only the luminance channel of the video.
         Default: False.
     ffmpeg_path : str, optional
-        Path to ffmpeg library. If not given, use the system's default path.
+        Path to ffmpeg library. If not given, uses the system's default path.
     libav_path : str, optional
-        Path to libav library. If not given, use the system's default path.
+        Path to libav library. If not given, uses the system's default path.
 
     Returns
     -------
@@ -202,7 +202,7 @@ def load_video(filename, as_timeseries=False, as_gray=False, ffmpeg_path=None,
         axes = np.roll(range(video.ndim), -1)
         video = np.squeeze(np.transpose(video, axes=axes))
         video = np.flipud(video)
-        fps = load_video_frame_rate(filename)
+        fps = load_video_framerate(filename)
         d_s = "Reshaped video to shape (M, N, C, T) = " + str(video.shape)
         logging.getLogger(__name__).debug(d_s)
         return utils.TimeSeries(1.0 / fps, video)
@@ -222,9 +222,9 @@ def load_video_generator(filename, ffmpeg_path=None, libav_path=None):
     filename : str
         Video file name
     ffmpeg_path : str, optional
-        Path to ffmpeg library. If not given, use the system's default path.
+        Path to ffmpeg library. If not given, uses the system's default path.
     libav_path : str, optional
-        Path to libav library. If not given, use the system's default path.
+        Path to libav library. If not given, uses the system's default path.
 
     Returns
     -------
@@ -271,9 +271,8 @@ def save_video(data, filename, width=None, height=None, fps=30,
         (T, M, N), (M, N, C), or (M, N), where T is the number of frames,
         M is the height, N is the width, and C is the number of channels.
 
-        Video data as a TimeSeries object must have dimension (M, N, C, T),
-        (M, N, T), (M, N, C), or (M, N).
-        The sampling step will be used as the video's frame rate.
+        Video data as a TimeSeries object must have dimension (M, N, C, T) or
+        (M, N, T). The sampling step will be used as the video's frame rate.
     filename : str
         Video file name.
     width : int
@@ -289,6 +288,10 @@ def save_video(data, filename, width=None, height=None, fps=30,
     fps : int
         Desired frame rate of the video (frames per second).
         Default: 30.
+    ffmpeg_path : str, optional
+        Path to ffmpeg library. If not given, uses the system's default path.
+    libav_path : str, optional
+        Path to libav library. If not given, uses the system's default path.
 
     """
     if not has_skvideo:
@@ -355,8 +358,8 @@ def save_video(data, filename, width=None, height=None, fps=30,
             frame = data.data[..., i] / data.data.max()
             frame = skimage.img_as_float(np.flipud(frame))
 
-        # resize wants the data to be between -1 and +1
-        # frame = sic.gray2rgb(sit.resize(frame, (height, width)))
+        # resize wants the data to be between 0 and 1
+        frame = sic.gray2rgb(sit.resize(frame, (height, width)))
         savedata[i, ...] = frame * 255.0
 
     # Set the input frame rate and frame size
@@ -374,9 +377,34 @@ def save_video(data, filename, width=None, height=None, fps=30,
     logging.getLogger(__name__).info("Saved video to file '%s'." % filename)
 
 
-def save_combined(videofile, percept, savefile, fps=30, ffmpeg_path=None,
-                  libav_path=None):
-    """Saves both an input video and the percept to file, side-by-side"""
+def save_video_sidebyside(videofile, percept, savefile, fps=30,
+                          ffmpeg_path=None, libav_path=None):
+    """Saves both an input video and the percept to file, side-by-side.
+
+    This function creates a new video from an input video file and a
+    pulse2percept.utils.TimeSeries object, assuming they correspond to model
+    input and model output, and plots them side-by-side.
+    Both input video and percept are resampled according to `fps`.
+    The percept is resized to match the height of the input video.
+
+    Parameters
+    ----------
+    videofile : str
+        File name of input video.
+    percept : pulse2percept.utils.TimeSeries
+        A TimeSeries object with dimension (M, N, C, T) or (M, N, T), where
+        T is the number of frames, M is the height, N is the width, and C is
+        the number of channels.
+    savefile : str
+        File name of output video.
+    fps : int, optional
+        Desired frame rate of output video. Default: 30.
+    ffmpeg_path : str, optional
+        Path to ffmpeg library. If not given, uses the system's default path.
+    libav_path : str, optional
+        Path to libav library. If not given, uses the system's default path.
+
+    """
     if not has_skvideo:
         raise ImportError("You do not have scikit-video installed. "
                           "You can install it via $ pip install sk-video.")
@@ -391,7 +419,7 @@ def save_combined(videofile, percept, savefile, fps=30, ffmpeg_path=None,
     set_skvideo_path(ffmpeg_path, libav_path)
 
     # Load video from file
-    video = load_video(videofile, ffmpeg_path=ffmpeg_path,
+    video = load_video(videofile, as_timeseries=True, ffmpeg_path=ffmpeg_path,
                        libav_path=libav_path)
 
     # Re-sample time series to new frame rate
@@ -415,13 +443,13 @@ def save_combined(videofile, percept, savefile, fps=30, ffmpeg_path=None,
     combined = np.zeros((combined_len, pheight, video.shape[1] + pwidth, 3))
     combined = combined.astype(np.float32)
     for i in range(combined_len):
-        vframe = video.data[..., i].astype(np.float32)
-        pframe = np.flipud(percept.data[..., i].astype(np.float32))
-        pframe /= percept.data.max()
+        vframe = skimage.img_as_float(video.data[..., i])
+        pframe = percept.data[..., i] / percept.data.max()
+        pframe = skimage.img_as_float(np.flipud(pframe))
         pframe = sic.gray2rgb(sit.resize(pframe, (pheight, pwidth)))
-        combined[i, ...] = np.concatenate((vframe, pframe * 255.0), axis=1)
+        combined[i, ...] = np.concatenate((vframe, pframe), axis=1)
 
-    save_video(combined, savefile, ffmpeg_path=ffmpeg_path,
+    save_video(combined, savefile, fps=fps, ffmpeg_path=ffmpeg_path,
                libav_path=libav_path)
 
 
