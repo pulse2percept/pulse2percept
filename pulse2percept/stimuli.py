@@ -124,35 +124,36 @@ class PulseTrain(utils.TimeSeries):
                  pulseorder='pulsefirst'):
         """A train of biphasic pulses
 
-        tsample : float
-            Sampling interval in seconds parameters, use TemporalModel.tsample.
+        Parameters
         ----------
-        optional parameters
-        freq : float
-            Frequency of the pulse envelope in Hz.
-        dur : float
+        tsample : float
+            Sampling time step (seconds).
+        freq : float, optional, default: 20 Hz
+            Frequency of the pulse envelope (Hz).
+        amp : float, optional, default: 20 uA
+            Max amplitude of the pulse train in micro-amps.
+        dur : float, optional, default: 0.5 seconds
             Stimulus duration in seconds.
-        pulse_dur : float
+        delay : float, optional, default: 0
+            Delay until stimulus on-set in seconds.
+        pulse_dur : float, optional, default: 0.45 ms
             Single-pulse duration in seconds.
-        interphase_duration : float
+        interphase_duration : float, optional, default: 0.45 ms
             Single-pulse interphase duration (the time between the positive
             and negative phase) in seconds.
-        delay : float
-            Delay until stimulus on-set in seconds.
-        amp : float
-            Max amplitude of the pulse train in micro-amps.
-        pulsetype : string
-            Pulse type {"cathodicfirst" | "anodicfirst"}, where
+        pulsetype : str, optional, default: 'cathodicfirst'
+            Pulse type {'cathodicfirst' | 'anodicfirst'}, where
             'cathodicfirst' has the negative phase first.
-        pulseorder : string
-            Pulse order {"gapfirst" | "pulsefirst"}, where
+        pulseorder : str, optional, default: 'pulsefirst'
+            Pulse order {'gapfirst' | 'pulsefirst'}, where
             'pulsefirst' has the pulse first, followed by the gap.
+            'gapfirst' has it the other way round.
         """
         if tsample <= 0:
             raise ValueError("tsample must be a non-negative float.")
 
         # Stimulus size given by `dur`
-        stim_size = int(np.round(1.0 * dur / tsample))
+        stim_size = int(np.round(float(dur) / tsample))
 
         # Make sure input is non-trivial, else return all zeros
         if np.isclose(freq, 0) or np.isclose(amp, 0):
@@ -172,7 +173,7 @@ class PulseTrain(utils.TimeSeries):
             envelope_size = stim_size
 
         # Delay given by `delay`
-        delay_size = int(np.round(1.0 * delay / tsample))
+        delay_size = int(np.round(float(delay) / tsample))
 
         if delay_size < 0:
             raise ValueError("Delay cannot be negative.")
@@ -448,7 +449,7 @@ def video2pulsetrain(filename, implant, framerate=20,
                                  pulsetype=pulsetype)
         if video:
             # Append pulse train of current frame to previous frames
-            video = [p + pf for p, pf in zip(video, frame)]
+            video.append(frame)
         else:
             video = frame
 

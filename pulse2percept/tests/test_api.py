@@ -22,7 +22,8 @@ def test_Simulation_pulse2percept():
         sim.pulse2percept(pt)
 
     pt = p2p.stimuli.BiphasicPulse("cathodicfirst", 0.1, 0.005 / 1000)
-    sim.pulse2percept(pt, layers=['GCL', 'invalid'])
+    with pytest.raises(ValueError):
+        sim.pulse2percept(pt, layers=['GCL', 'invalid'])
 
 
 def test_Simulation_set_optic_fiber_layer():

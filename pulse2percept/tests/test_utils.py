@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
+import copy
 
 from pulse2percept import utils
 
@@ -78,43 +79,39 @@ def test_TimeSeries_resample():
     npt.assert_equal(vmax, max_val)
 
 
-def test_TimeSeries_add():
+def test_TimeSeries_append():
     max_val = 2.0
     max_idx = 156
     data_orig = np.random.rand(10, 10, 1000)
     data_orig[4, 4, max_idx] = max_val
-    ts = utils.TimeSeries(1.0, data_orig)
+    ts_orig = utils.TimeSeries(1.0, data_orig)
 
     # Make sure adding two TimeSeries objects works:
     # Must have the right type and size
+    ts = copy.deepcopy(ts_orig)
     with pytest.raises(TypeError):
-        ts + 4.0
+        ts.append(4.0)
     with pytest.raises(ValueError):
         ts_wrong_size = utils.TimeSeries(1.0, np.ones((2, 2)))
-        ts + ts_wrong_size
+        ts.append(ts_wrong_size)
 
     # Adding messes only with the last dimension of the array
-    ts_add = ts + ts
-    npt.assert_equal(ts_add.shape[:-1], ts.shape[:-1])
-    npt.assert_equal(ts_add.shape[-1], ts.shape[-1] * 2)
+    ts = copy.deepcopy(ts_orig)
+    ts.append(ts)
+    npt.assert_equal(ts.shape[:-1], ts_orig.shape[:-1])
+    npt.assert_equal(ts.shape[-1], ts_orig.shape[-1] * 2)
 
     # If necessary, the second pulse train is resampled to the first
+    ts = copy.deepcopy(ts_orig)
     tsample_new = 2.0
     ts_new = ts.resample(tsample_new)
-    ts_add = ts + ts_new
-    npt.assert_equal(ts_add.shape[:-1], ts.shape[:-1])
-    npt.assert_equal(ts_add.shape[-1], ts.shape[-1] * 2)
-    ts_add = ts_new + ts
+    ts.append(ts_new)
+    npt.assert_equal(ts.shape[:-1], ts_orig.shape[:-1])
+    npt.assert_equal(ts.shape[-1], ts_orig.shape[-1] * 2)
+    ts_add = copy.deepcopy(ts_new)
+    ts_add.append(ts_orig)
     npt.assert_equal(ts_add.shape[:-1], ts_new.shape[:-1])
     npt.assert_equal(ts_add.shape[-1], ts_new.shape[-1] * 2)
-
-    # New one is a deep copy: Old data is unaffected
-    tmax, vmax = ts.max()
-    _, vmax_add = ts_new.max()
-    ts_new.data[0, 0, 0] = vmax_add * 2.0
-    tmax2, vmax2 = ts.max()
-    npt.assert_equal(tmax, tmax2)
-    npt.assert_equal(vmax, vmax2)
 
 
 def test_sparseconv():

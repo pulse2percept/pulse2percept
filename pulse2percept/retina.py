@@ -7,6 +7,9 @@ import logging
 from pulse2percept import utils
 
 
+SUPPORTED_LAYERS = ['INL', 'GCL', 'OFL']
+
+
 class Grid(object):
     """Represent the retinal coordinate frame"""
 
@@ -228,8 +231,8 @@ class TemporalModel(object):
         tsample : float
             Sampling time step (seconds). Default: 5e-6 s.
         tau_gcl : float
-            Time decay constant for the fast leaky integrater of the optic
-            fiber layer (OFL); i.e., ganglion cell layer.
+            Time decay constant for the fast leaky integrater of the ganglion
+            cell layer (GCL).
             This is only important in combination with epiretinal electrode
             arrays. Default: 45.25 / 1000 s.
         tau_inl : float
@@ -283,11 +286,11 @@ class TemporalModel(object):
         # Gamma functions used as convolution kernels do not depend on input
         # data, hence can be calculated once, then re-used (trade off memory
         # for speed).
-        # gamma_ofl and gamma_inl are used to calculate the fast response in
+        # gamma_gcl and gamma_inl are used to calculate the fast response in
         # bipolar and ganglion cells respectively
 
         _, self.gamma_inl = utils.gamma(1, self.tau_inl, self.tsample)
-        _, self.gamma_ofl = utils.gamma(1, self.tau_gcl, self.tsample)
+        _, self.gamma_gcl = utils.gamma(1, self.tau_gcl, self.tsample)
 
         # gamma_ca is used to calculate charge accumulation
         _, self.gamma_ca = utils.gamma(1, self.tau_ca, self.tsample)
@@ -432,11 +435,11 @@ class TemporalModel(object):
             resp_inl = np.zeros_like(ecm[0])
 
         if ('GCL' or 'OFL') in layers:
-            resp_ofl = self.fast_response(ecm[1], self.gamma_ofl,
+            resp_gcl = self.fast_response(ecm[1], self.gamma_gcl,
                                           dojit=dojit,
                                           usefft=False)
         else:
-            resp_ofl = np.zeros_like(ecm[1])
+            resp_gcl = np.zeros_like(ecm[1])
 
         # Here we are converting from current  - where a cathodic (effective)
         # stimulus is negative - to a vague concept of neuronal response,
@@ -444,9 +447,9 @@ class TemporalModel(object):
         # There is a rectification here because we used to assume that the
         # anodic part of the pulse is ineffective (which is wrong).
         resp_cathodic = self.lweight * np.maximum(-resp_inl, 0) + \
-            np.maximum(-resp_ofl, 0)
+            np.maximum(-resp_gcl, 0)
         resp_anodic = self.lweight * np.maximum(resp_inl, 0) + \
-            np.maximum(resp_ofl, 0)
+            np.maximum(resp_gcl, 0)
         resp = resp_cathodic + self.aweight * resp_anodic
         resp = self.stationary_nonlinearity(resp)
         resp = self.slow_response(resp)
@@ -470,7 +473,7 @@ class TemporalModel(object):
         return pt_entry
 
     def calc_per_pixel(self, ecs_item, pt_list, layers, dojit=False):
-        """Calculations to be done on a per-pixel basis
+        """Applies the temporal model to a single retina cell (pixel)
 
         The following calculations need to be done on a pixel-by-pixel basis.
 
@@ -492,6 +495,9 @@ class TemporalModel(object):
             - 'INL': inner nuclear layer
 
         dojit : bool
+            If True, applies just-in-time (JIT) compilation to expensive
+            computations for additional speed-up (requires Numba).
+
         """
         # For each layer in the model, scale the pulse train data with the
         # effective current:

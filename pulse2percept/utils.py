@@ -130,28 +130,29 @@ class TimeSeries(object):
     def __getitem__(self, y):
         return TimeSeries(self.tsample, self.data[y])
 
-    def __add__(self, other):
-        """Concatenates the data of two TimeSeries objects
+    def append(self, other):
+        """Appends the data of another TimeSeries object (in time)
 
-        This function concatenates the data of two TimeSeries objects along
-        the last dimension (frames).
+        This function concatenates the data of another TimeSeries object to
+        the current object, along the last dimension (time). To make this work,
+        all but the last dimension of the two objects must be the same.
+
+        If the two objects have different time sampling steps, the other object
+        is resampled to fit the current `tsample`.
 
         Parameters
         ----------
         other : p2p.utils.TimeSeries
             A TimeSeries object whose content should be appended.
 
-        Returns
-        -------
-        timeseries : p2p.utils.TimeSeries
-            A new TimeSeries object with the combined contents (deep copy).
-
         Examples
         --------
         >>> from pulse2percept import utils
         >>> pt = utils.TimeSeries(1.0, np.zeros((2, 2, 10)))
-        >>> pt_doubled = pt + pt
-
+        >>> num_frames = pt.shape[-1]
+        >>> pt.append(pt)
+        >>> pt.shape[-1] == 2 * num_frames
+        True
         """
         # Make sure type is correct
         if not isinstance(other, TimeSeries):
@@ -168,8 +169,9 @@ class TimeSeries(object):
         resampled = other.resample(self.tsample)
 
         # Then concatenate the two
-        newdata = np.concatenate((self.data, resampled.data), axis=-1)
-        return TimeSeries(self.tsample, copy.deepcopy(newdata))
+        self.data = np.concatenate((self.data, resampled.data), axis=-1)
+        self.duration = self.data.shape[-1] * self.tsample
+        self.shape = self.data.shape
 
     def max(self):
         """Returns the time and value of the largest data point

@@ -144,11 +144,9 @@ def test_save_video():
 
     # Also verify the actual data
     tsres = tsin.resample(tsampleout)
-    tsin = None
     npt.assert_equal(tsout.shape, tsres.shape)
     npt.assert_almost_equal(tsout.data / 255.0, tsres.data / tsres.data.max(),
                             decimal=0)
-    tsres = None
 
     with pytest.raises(TypeError):
         files.save_video([2, 3, 4], 'invalid.avi')

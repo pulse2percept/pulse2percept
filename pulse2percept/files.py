@@ -116,7 +116,8 @@ def load_video_framerate(filename, ffmpeg_path=None, libav_path=None):
     if '@r_frame_rate' not in metadata:
         raise AttributeError('Meta data does not contain field @r_frame_rate.')
 
-    # Parse frame rate entry
+    # Parse frame rate entry: It's a rational expression encoded as a string.
+    # Hence, split by '/' and to the divison by hand.
     str_fps = metadata['@r_frame_rate'].split('/')
     return float(str_fps[0]) / float(str_fps[1])
 
@@ -150,7 +151,8 @@ def load_video(filename, as_timeseries=False, as_gray=False, ffmpeg_path=None,
         If `as_timeseries` is False, returns video data according to the
         Scikit-Video standard; that is, an ndarray of dimension (T, M, N, C),
         (T, M, N), (M, N, C), or (M, N), where T is the number of frames,
-        M is the height, N is the width, and C is the number of channels.
+        M is the height, N is the width, and C is the number of channels (will
+        be either 1 for grayscale or 3 for RGB).
 
         If `as_timeseries` is True, returns video data as a TimeSeries object
         of dimension (M, N, C), (M, N, T), (M, N, C), or (M, N).
@@ -268,7 +270,8 @@ def save_video(data, filename, width=None, height=None, fps=30,
     data : ndarray | pulse2percept.utils.TimeSeries
         Video data as a NumPy ndarray must have dimension (T, M, N, C),
         (T, M, N), (M, N, C), or (M, N), where T is the number of frames,
-        M is the height, N is the width, and C is the number of channels.
+        M is the height, N is the width, and C is the number of channels (must
+        be either 1 for grayscale or 3 for RGB).
 
         Video data as a TimeSeries object must have dimension (M, N, C, T) or
         (M, N, T). The sampling step will be used as the video's frame rate.
@@ -291,6 +294,13 @@ def save_video(data, filename, width=None, height=None, fps=30,
         Path to ffmpeg library. If not given, uses the system's default path.
     libav_path : str, optional
         Path to libav library. If not given, uses the system's default path.
+
+    Notes
+    -----
+    To distinguish between 3-D inputs of shape (T, M, N) and (M, N, C), the
+    last dimension is checked: If it is small (<= 4), it is most likely a
+    color channel - hence the input is interpreted as (M, N, C).
+    Else it is interpreted as (T, M, N).
 
     """
     if not has_skvideo:
@@ -354,7 +364,7 @@ def save_video(data, filename, width=None, height=None, fps=30,
         if is_ndarray:
             frame = skimage.img_as_float(data[i, ...])
         elif is_timeseries:
-            frame = data.data[..., i] / data.data.max()
+            frame = data.data[..., i] / float(data.data.max())
             frame = skimage.img_as_float(frame)
 
         # resize wants the data to be between 0 and 1
