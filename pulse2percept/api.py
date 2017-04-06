@@ -1,7 +1,10 @@
 import numpy as np
 import logging
 
-import pulse2percept as p2p
+from pulse2percept import utils
+from pulse2percept import retina
+from pulse2percept import implants
+from pulse2percept import stimuli
 
 
 class Simulation(object):
@@ -32,8 +35,8 @@ class Simulation(object):
             Specify -1 to use as many cores as available.
             Default: -1.
         """
-        if not isinstance(implant, p2p.implants.ElectrodeArray):
-            e_s = "`implant` must be of type p2p.implants.ElectrodeArray"
+        if not isinstance(implant, implants.ElectrodeArray):
+            e_s = "`implant` must be of type implants.ElectrodeArray"
             raise TypeError(e_s)
 
         self.name = name
@@ -43,17 +46,16 @@ class Simulation(object):
         self.num_jobs = num_jobs
 
         # Optic fiber layer (OFL): After calling `set_optic_fiber_layer`, this
-        # variable will contain a `p2p.retina.Grid` object.
+        # variable will contain a `retina.Grid` object.
         self.ofl = None
-        self.ofl_streaks = True
 
         # Ganglion cell layer (GCL): After calling `set_ganglion_cell_layer`,
-        # this variable will contain a `p2p.retina.TemporalModel` object.
+        # this variable will contain a `retina.TemporalModel` object.
         self.gcl = None
 
     def set_optic_fiber_layer(self, sampling=100, axon_lambda=2, rot_deg=0,
                               x_range=None, y_range=None, datapath='./',
-                              save_data=True, streaks_enabled=True):
+                              save_data=True):
         """Sets parameters of the optic fiber layer (OFL)
 
         Parameters
@@ -83,10 +85,6 @@ class Simulation(object):
             (False). The file name is automatically generated from all
             specified input arguments.
             Default: True.
-        streaks_enabled : bool, optional
-            Flag whether to use a tissue activation map that includes axon
-            streaks (True) or not (False).
-            Default: True.
         """
         # For auto-generated grids:
         round_to = 500  # round to nearest (microns)
@@ -100,7 +98,7 @@ class Simulation(object):
         elif isinstance(x_range, (int, float)):
             xlo = x_range
             xhi = x_range
-        elif isinstance(x_range, (list, tuple, np.array)):
+        elif isinstance(x_range, (list, tuple, np.ndarray)):
             if len(x_range) != 2 or x_range[1] < x_range[0]:
                 e_s = "x_range must be a list [xlo, xhi] where xlo <= xhi."
                 raise ValueError(e_s)
@@ -117,28 +115,27 @@ class Simulation(object):
         elif isinstance(y_range, (int, float)):
             ylo = y_range
             yhi = y_range
-        elif isinstance(y_range, (list, np.array)):
+        elif isinstance(y_range, (list, np.ndarray)):
             if len(y_range) != 2 or y_range[1] < y_range[0]:
                 e_s = "y_range must be a list [ylo, yhi] where ylo <= yhi."
                 raise ValueError(e_s)
             ylo = y_range[0]
             yhi = y_range[1]
         else:
-            raise ValueError("x_range must be a list [xlo, xhi] or None.")
+            raise ValueError("y_range must be a list [ylo, yhi] or None.")
 
         # Generate the grid from the above specs
-        self.ofl = p2p.retina.Grid(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
-                                   sampling=sampling,
-                                   axon_lambda=axon_lambda,
-                                   rot=np.deg2rad(rot_deg),
-                                   datapath=datapath,
-                                   save_data=save_data)
-        self.ofl_streaks = streaks_enabled
+        self.ofl = retina.Grid(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
+                               sampling=sampling,
+                               axon_lambda=axon_lambda,
+                               rot=np.deg2rad(rot_deg),
+                               datapath=datapath,
+                               save_data=save_data)
 
     def set_ganglion_cell_layer(self, tsample=0.005 / 1000,
                                 tau_gcl=0.42 / 1000, tau_inl=18.0 / 1000,
                                 tau_ca=45.25 / 1000, scale_ca=42.1,
-                                tau_slow=26.25 / 1000, scale_slow=1150.0,
+                                tau_slow=26.25 / 1000, scale_slow=10.0,
                                 lweight=0.636, aweight=0.5,
                                 slope=3.0, shift=15.0):
         """Sets parameters of the ganglion cell layer (GCL)
@@ -187,12 +184,12 @@ class Simulation(object):
             perhaps should be 15.9
         """
         # Generate a a TemporalModel from above specs
-        tm = p2p.retina.TemporalModel(tsample=tsample,
-                                      tau_gcl=tau_gcl, tau_inl=tau_inl,
-                                      tau_ca=tau_ca, scale_ca=scale_ca,
-                                      tau_slow=tau_slow, scale_slow=scale_slow,
-                                      lweight=lweight, aweight=aweight,
-                                      slope=slope, shift=shift)
+        tm = retina.TemporalModel(tsample=tsample,
+                                  tau_gcl=tau_gcl, tau_inl=tau_inl,
+                                  tau_ca=tau_ca, scale_ca=scale_ca,
+                                  tau_slow=tau_slow, scale_slow=scale_slow,
+                                  lweight=lweight, aweight=aweight,
+                                  slope=slope, shift=shift)
         self.gcl = tm
 
     def _set_layers(self):
@@ -265,29 +262,37 @@ class Simulation(object):
 
         >>> import pulse2percept as p2p
         >>> implant = p2p.implants.ArgusI()
-        >>> stim = {'C3': p2p.stimuli.PulseTrain(tsample=5e-6, freq=50,
+        >>> stim = {'C3': stimuli.PulseTrain(tsample=5e-6, freq=50,
         ...                                              amp=20)}
         >>> sim = p2p.Simulation(implant)
         >>> resp = sim.pulse2percept(stim, implant)  # doctest: +SKIP
         """
         logging.getLogger(__name__).info("Starting pulse2percept...")
+
+        # Get a flattened, all-uppercase list of layers
+        layers = np.array([layers]).flatten()
+        layers = np.array([l.upper() for l in layers])
+
+        # Make sure all specified layers exist
+        not_supported = [l not in retina.SUPPORTED_LAYERS for l in layers]
+        if any(not_supported):
+            msg = ', '.join(layers[not_supported])
+            msg = "Specified layer %s not supported. " % msg
+            msg += "Choose from %s." % ', '.join(retina.SUPPORTED_LAYERS)
+            raise ValueError(msg)
+
+        # Set up all layers that haven't been set up yet
         self._set_layers()
-        layers = [l.upper() for l in layers]
 
         # Parse `stim` (either single pulse train or a list/dict of pulse
         # trains), and generate a list of pulse trains, one for each electrode
-        pt_list = p2p.stimuli.parse_pulse_trains(stim, self.implant)
+        pt_list = stimuli.parse_pulse_trains(stim, self.implant)
 
         if not np.allclose([p.tsample for p in pt_list], self.gcl.tsample):
             e_s = "For now, all pulse trains must have the same sampling "
             e_s += "time step as the ganglion cell layer. In the future, "
             e_s += "this requirement might be relaxed."
             raise ValueError(e_s)
-
-        # Perform any necessary calculations per electrode
-        pt_list = p2p.utils.parfor(self.gcl.calc_per_electrode,
-                                   pt_list, engine=self.engine,
-                                   n_jobs=self.num_jobs)
 
         # Tissue activation maps: If OFL is simulated, includes axon streaks.
         if 'OFL' in layers:
@@ -329,15 +334,15 @@ class Simulation(object):
                                                     np.prod(ecs.shape[:2]))
         logging.getLogger(__name__).info(s_info)
 
-        sr_list = p2p.utils.parfor(self.gcl.calc_per_pixel,
-                                   ecs_list, n_jobs=self.num_jobs,
-                                   engine=self.engine,
-                                   func_args=[pt_list, layers, self.dojit])
+        sr_list = utils.parfor(self.gcl.model_cascade,
+                               ecs_list, n_jobs=self.num_jobs,
+                               engine=self.engine,
+                               func_args=[pt_list, layers, self.dojit])
         bm = np.zeros(self.ofl.gridx.shape +
                       (sr_list[0].data.shape[-1], ))
         idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
         bm[idxer] = [sr.data for sr in sr_list]
-        percept = p2p.utils.TimeSeries(sr_list[0].tsample, bm)
+        percept = utils.TimeSeries(sr_list[0].tsample, bm)
 
         # It is possible to specify an additional sampling rate for the
         # percept: If different from the input sampling rate, need to resample.
@@ -380,17 +385,17 @@ class Simulation(object):
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots(1, figsize=(10, 8))
 
-        ax.set_axis_bgcolor('black')
+        ax.set_facecolor('black')
         ax.plot(self.ofl.jan_x[:, ::5], -self.ofl.jan_y[:, ::5],
                 c=(0.5, 1, 0.5))
 
         # Draw in the the retinal patch we're simulating.
         # This defines the size of our "percept" image below.
-        dva_xmin = p2p.retina.ret2dva(self.ofl.gridx.min())
-        dva_ymin = -p2p.retina.ret2dva(self.ofl.gridy.max())
+        dva_xmin = retina.ret2dva(self.ofl.gridx.min())
+        dva_ymin = -retina.ret2dva(self.ofl.gridy.max())
         patch = patches.Rectangle((dva_xmin, dva_ymin),
-                                  p2p.retina.ret2dva(self.ofl.range_x),
-                                  p2p.retina.ret2dva(self.ofl.range_y),
+                                  retina.ret2dva(self.ofl.range_x),
+                                  retina.ret2dva(self.ofl.range_y),
                                   alpha=0.7)
         ax.add_patch(patch)
 
@@ -399,17 +404,17 @@ class Simulation(object):
             for key in stim:
                 el = self.implant[key]
                 if el is not None:
-                    ax.plot(p2p.retina.ret2dva(el.x_center),
-                            -p2p.retina.ret2dva(el.y_center), 'oy',
+                    ax.plot(retina.ret2dva(el.x_center),
+                            -retina.ret2dva(el.y_center), 'oy',
                             markersize=np.sqrt(el.radius) * 2)
 
         # Plot all electrodes and their label
         for e in self.implant.electrodes:
-            ax.text(p2p.retina.ret2dva(e.x_center + 10),
-                    -p2p.retina.ret2dva(e.y_center + 5),
+            ax.text(retina.ret2dva(e.x_center + 10),
+                    -retina.ret2dva(e.y_center + 5),
                     e.name, color='white', size='x-large')
-            ax.plot(p2p.retina.ret2dva(e.x_center),
-                    -p2p.retina.ret2dva(e.y_center), 'ow',
+            ax.plot(retina.ret2dva(e.x_center),
+                    -retina.ret2dva(e.y_center), 'ow',
                     markersize=np.sqrt(e.radius))
 
         ax.set_aspect('equal')

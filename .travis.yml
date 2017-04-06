@@ -1,8 +1,21 @@
 language: python
-sudo: false
+
+sudo: required
+
+os: linux
+dist: trusty
+
 env:
   global:
     - CONDA_DEPS="pip flake8 numpy scipy numba joblib dask scikit-image" PIP_DEPS="pytest coveralls mock pytest-cov" MINICONDA_URL="https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh"
+
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+      - sourceline: 'ppa:mc3man/trusty-media'
+    packages:
+      - ffmpeg
 
 python:
   - '2.7'
@@ -10,6 +23,7 @@ python:
   - '3.6'
 
 before_install:
+  - ulimit -a && free -m
   - export MINICONDA=$HOME/miniconda
   - export PATH="$MINICONDA/bin:$PATH"
   - hash -r
@@ -29,6 +43,7 @@ install:
 
 script:
   - flake8 --ignore N802,N806 `find . -name \*.py | grep -v setup.py | grep -v version.py | grep -v __init__.py | grep -v /doc/ | grep -v /scripts/`
+  - ulimit -a && free -m
 
   - mkdir for_test
   - cd for_test
@@ -36,3 +51,8 @@ script:
 
 after_success:
   - coveralls
+
+after failure:
+  - ls -alh
+  - ulimit -a
+  - free -m

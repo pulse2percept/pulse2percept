@@ -23,10 +23,10 @@ def test_Electrode():
         npt.assert_equal(e.etype, tt)
         npt.assert_equal(e.name, nn)
         if tt.lower() == 'epiretinal':
-            # `height` property should return `h_nfl`
-            npt.assert_equal(e.height, e.h_nfl)
+            # `height` property should return `h_ofl`
+            npt.assert_equal(e.height, e.h_ofl)
 
-            # `h_nfl` should be the same as the user-specified height
+            # `h_ofl` should be the same as the user-specified height
             npt.assert_equal(e.height, hh)
 
             # `h_inl` should be further away from the array
@@ -65,7 +65,7 @@ def test_ElectrodeArray():
         npt.assert_equal(arr.electrodes[0].radius, 0)
         npt.assert_equal(arr.electrodes[0].x_center, 1)
         npt.assert_equal(arr.electrodes[0].y_center, 2)
-        npt.assert_equal(arr.electrodes[0].h_nfl, 3)
+        npt.assert_equal(arr.electrodes[0].h_ofl, 3)
         npt.assert_equal(arr.electrodes[0].etype, 'epiretinal')
 
     # However, all input arguments must have the same number of elements
@@ -81,7 +81,7 @@ def test_ElectrodeArray():
         npt.assert_equal(el.x_center, v)
         npt.assert_equal(el.y_center, v)
         npt.assert_equal(el.h_inl, v + 23.0 / 2.0)
-        npt.assert_equal(el.h_nfl, v + 83.0)
+        npt.assert_equal(el.h_ofl, v + 83.0)
 
 
 def test_ArgusI():

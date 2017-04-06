@@ -12,6 +12,23 @@ from scipy import interpolate as spi
 from scipy import signal as sps
 
 
+# Rather than trying to import these all over, try once and then remember
+# by setting a flag.
+try:
+    import joblib
+    joblib.Parallel
+    has_joblib = True
+except (ImportError, AttributeError):
+    has_joblib = False
+
+try:
+    import dask
+    import dask.multiprocessing
+    dask.delayed
+    has_dask = True
+except (ImportError, AttributeError):
+    has_dask = False
+
 try:
     from numba import jit
     has_jit = True
@@ -113,6 +130,49 @@ class TimeSeries(object):
     def __getitem__(self, y):
         return TimeSeries(self.tsample, self.data[y])
 
+    def append(self, other):
+        """Appends the data of another TimeSeries object (in time)
+
+        This function concatenates the data of another TimeSeries object to
+        the current object, along the last dimension (time). To make this work,
+        all but the last dimension of the two objects must be the same.
+
+        If the two objects have different time sampling steps, the other object
+        is resampled to fit the current `tsample`.
+
+        Parameters
+        ----------
+        other : p2p.utils.TimeSeries
+            A TimeSeries object whose content should be appended.
+
+        Examples
+        --------
+        >>> from pulse2percept import utils
+        >>> pt = utils.TimeSeries(1.0, np.zeros((2, 2, 10)))
+        >>> num_frames = pt.shape[-1]
+        >>> pt.append(pt)
+        >>> pt.shape[-1] == 2 * num_frames
+        True
+        """
+        # Make sure type is correct
+        if not isinstance(other, TimeSeries):
+            raise TypeError("Other object must be of type "
+                            "p2p.utils.TimeSeries.")
+
+        # Make sure size is correct for all but the last dimension (number
+        # of frames)
+        if self.shape[:-1] != other.shape[:-1]:
+            raise ValueError("Shape mismatch: ", self.shape[:-1], " vs. ",
+                             other.shape[:-1])
+
+        # Then resample the other to current `tsample`
+        resampled = other.resample(self.tsample)
+
+        # Then concatenate the two
+        self.data = np.concatenate((self.data, resampled.data), axis=-1)
+        self.duration = self.data.shape[-1] * self.tsample
+        self.shape = self.data.shape
+
     def max(self):
         """Returns the time and value of the largest data point
 
@@ -189,8 +249,11 @@ class TimeSeries(object):
         if tsample_new is None or tsample_new == self.tsample:
             return TimeSeries(self.tsample, self.data)
 
-        t_old = np.arange(0, self.duration, self.tsample)
+        # Try to avoid rounding errors in arr size by making sure `t_old` is
+        # too long at first, then cutting it to the right size
         y_old = self.data
+        t_old = np.arange(0, self.duration + self.tsample, self.tsample)
+        t_old = t_old[:y_old.shape[-1]]
         f = spi.interp1d(t_old, y_old, axis=-1, fill_value='extrapolate')
 
         t_new = np.arange(0, self.duration, tsample_new)
@@ -266,7 +329,7 @@ def sparseconv(data, kernel, mode='full', dojit=True):
     if dojit and not has_jit:
         e_s = ("You do not have numba ",
                "please run sparseconv with dojit=False")
-        raise ValueError(e_s)
+        raise ImportError(e_s)
     else:
         return _sparseconv(data, kernel, mode)
 
@@ -380,9 +443,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         n_jobs = n_jobs - 1
 
     if engine.lower() == 'joblib':
-        try:
-            import joblib
-        except ImportError:
+        if not has_joblib:
             err = "You do not have `joblib` installed. Consider setting"
             err += "`engine` to 'serial' or 'dask'."
             raise ImportError(err)
@@ -394,10 +455,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
             d_l.append(d(in_element, *func_args, **func_kwargs))
         results = p(d_l)
     elif engine.lower() == 'dask':
-        try:
-            import dask
-            import dask.multiprocessing
-        except ImportError:
+        if not has_dask:
             err = "You do not have `dask` installed. Consider setting"
             err += "`engine` to 'serial' or 'joblib'."
             raise ImportError(err)

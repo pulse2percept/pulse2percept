@@ -11,6 +11,18 @@ import logging
 
 from pulse2percept import utils
 from pulse2percept import implants
+from pulse2percept import files
+
+# Rather than trying to import these all over, try once and then remember
+# by setting a flag.
+try:
+    import skimage.io as sio
+    import skimage.transform as sit
+    import skimage.color as sic
+    has_skimage = True
+except (ImportError, AttributeError):
+    # Might also raise "dict object has no attribute 'io'"
+    has_skimage = False
 
 
 class MonophasicPulse(utils.TimeSeries):
@@ -104,210 +116,6 @@ class BiphasicPulse(utils.TimeSeries):
         utils.TimeSeries.__init__(self, tsample, pulse)
 
 
-def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
-                     max_contrast=True, const_amp=20, const_freq=20,
-                     rftype='gaussian', rfsize=None, invert=False,
-                     tsample=0.005 / 1000, dur=0.5, pulsedur=0.5 / 1000.,
-                     interphasedur=0.5 / 1000., pulsetype='cathodicfirst'):
-    """Converts an image into a series of pulse trains
-    This function creates an input stimulus from an RGB or grayscale image.
-    Requires `scikit-image`.
-    Parameters
-    ----------
-    img : str|array_like
-        An input image, either a valid filename (string) or a numpy array
-        (row x col x channels).
-    implant : p2p.implants.ElectrodeArray
-        An ElectrodeArray object that describes the implant.
-    coding : {'amplitude', 'frequency'}, optional
-        A string describing the coding scheme:
-        - 'amplitude': Image intensity is linearly converted to a current
-                       amplitude between `valrange[0]` and `valrange[1]`.
-                       Frequency is held constant at `const_freq`.
-        - 'frequency': Image intensity is linearly converted to a pulse
-                       frequency between `valrange[0]` and `valrange[1]`.
-                       Amplitude is held constant at `const_amp`.
-        Default: 'amplitude'
-    valrange : list, optional
-        Range of stimulation values to be used (If `coding` is 'amplitude',
-        specifies min and max current; if `coding` is 'frequency', specifies
-        min and max frequency).
-        Default: [0, 50]
-    max_contrast : bool, optional
-        Flag wether to maximize image contrast (True) or not (False).
-        Default: True
-    const_amp : float, optional
-        Constant amplitude value to be sued during frequency coding (only
-        relevant when `coding` is 'frequency').
-        Default: 20
-    const_freq : float, optional
-        Constant frequency value to be sued during amplitude coding (only
-        relevant when `coding` is 'amplitude').
-        Default: 20
-    rftype : {'square', 'gaussian'}, optional
-        The type of receptive field.
-        - 'square': A simple square box receptive field with side length
-                    `size`.
-        - 'gaussian': A Gaussian receptive field where the weight drops off
-                      as a function of distance from the electrode center.
-                      The standard deviation of the Gaussian is `size`.
-    rfsize : float, optional
-        Parameter describing the size of the receptive field. For square
-        receptive fields, this corresponds to the side length of the square.
-        For Gaussian receptive fields, this corresponds to the standard
-        deviation of the Gaussian.
-        Default: Twice the `electrode.radius`
-    invert : bool, optional
-        Flag whether to invert the grayscale values of the image (True) or
-        not (False).
-        Default: False
-    tsample : float, optional
-        Sampling time step (seconds). Default: 0.005 / 1000 seconds.
-    dur : float, optional
-        Stimulus duration (seconds). Default: 0.5 seconds.
-    pulsedur : float, optional
-        Duration of single (positive or negative) pulse phase in seconds.
-    interphasedur : float, optional
-        Duration of inter-phase interval (between positive and negative
-        pulse) in seconds.
-    pulsetype : {'cathodicfirst', 'anodicfirst'}, optional
-        A cathodic-first pulse has the negative phase first, whereas an
-        anodic-first pulse has the positive phase first.
-    """
-    try:
-        from skimage.io import imread
-        from skimage.transform import resize
-        from skimage.color import rgb2gray
-    except ImportError:
-        raise ImportError("You do not have scikit-image installed.")
-
-    # Make sure range of values is valid
-    assert len(valrange) == 2 and valrange[1] > valrange[0]
-
-    if not isinstance(implant, implants.ElectrodeArray):
-        raise TypeError("implant must be of type implants.ElectrodeArray.")
-
-    if isinstance(img, str):
-        # Load image from filename
-        img_orig = imread(img, as_grey=True).astype(np.float32)
-    else:
-        if img.ndim == 2:
-            # Grayscale
-            img_orig = img.astype(np.float32)
-        else:
-            # Assume RGB, convert to grayscale
-            assert img.shape[-1] == 3
-            img_orig = rgb2gray(np.array(img)).astype(np.float32)
-
-    # Make sure all pixels are between 0 and 1
-    if img_orig.max() > 1.0:
-        img_orig /= 255.0
-    assert np.all(img_orig >= 0.0) and np.all(img_orig <= 1.0)
-
-    if invert:
-        img_orig = 1.0 - img_orig
-
-    # Center the image on the implant
-    xyr = np.array([[e.x_center, e.y_center, e.radius] for e in implant])
-    xlo = np.min(xyr[:, 0] - xyr[:, 2])
-    xhi = np.max(xyr[:, 0] + xyr[:, 2])
-    ylo = np.min(xyr[:, 1] - xyr[:, 2])
-    yhi = np.max(xyr[:, 1] + xyr[:, 2])
-
-    # Resize the image accordingly (rows, columns)
-    img_resize = resize(img_orig, (yhi - ylo, xhi - xlo))
-
-    # Make a grid that has the image's coordinates on the retina
-    yg = np.linspace(ylo, yhi, img_resize.shape[0])
-    xg = np.linspace(xlo, xhi, img_resize.shape[1])
-    yg, xg = np.meshgrid(yg, xg)
-
-    # For each electrode, find the stimulation strength (magnitude)
-    magn = []
-    for e in implant:
-        rf = e.receptive_field(xg, yg, rftype, rfsize)
-        magn.append(np.sum(rf.T * img_resize) / np.sum(rf))
-    magn = np.array(magn)
-
-    if max_contrast:
-        # Normalize contrast to valrange
-        if magn.min() < magn.max():
-            magn = (magn - magn.min()) / (magn.max() - magn.min())
-
-    # With `magn` between 0 and 1, now scale to valrange
-    magn = magn * np.diff(valrange) + valrange[0]
-
-    # Map magnitude to either freq or amp of pulse train
-    pulses = []
-    for m in magn:
-        if coding == 'amplitude':
-            # Map magnitude to amplitude
-            amp = m
-            freq = const_freq
-        elif coding == 'frequency':
-            # Map magnitude to frequency
-            amp = const_amp
-            freq = m
-        else:
-            e_s = "Acceptable values for `coding` are 'amplitude' or"
-            e_s += "'frequency'."
-            raise ValueError(e_s)
-
-        pt = PulseTrain(tsample, freq=freq, amp=amp, dur=dur,
-                        pulse_dur=pulsedur,
-                        interphase_dur=interphasedur,
-                        pulsetype=pulsetype)
-        pulses.append(pt)
-
-    return pulses
-
-
-@utils.deprecated
-class Movie2Pulsetrain(utils.TimeSeries):
-    """
-    Is used to create pulse-train stimulus based on luminance over time from
-    a movie
-
-    This class is deprecated as of v0.2 and will be replaced with a new
-    version in v0.3.
-    """
-
-    def __init__(self, rflum, tsample, fps=30.0, amp_transform='linear',
-                 amp_max=60, freq=20, pulse_dur=.5 / 1000.,
-                 interphase_dur=.5 / 1000.,
-                 pulsetype='cathodicfirst', stimtype='pulsetrain'):
-        """
-        Parameters
-        ----------
-        rflum : 1D array
-           Values between 0 and 1
-        tsample : suggest TemporalModel.tsample
-        """
-        if tsample <= 0:
-            raise ValueError("tsample must be a non-negative float.")
-
-        # set up the individual pulses
-        pulse = BiphasicPulse(pulsetype, pulse_dur, tsample,
-                              interphase_dur)
-        # set up the sequence
-        dur = rflum.shape[-1] / fps
-        if stimtype == 'pulsetrain':
-            interpulsegap = np.zeros(int(round((1.0 / freq) / tsample)) -
-                                     len(pulse.data))
-            ppt = []
-            for j in range(0, int(np.ceil(dur * freq))):
-                ppt = np.concatenate((ppt, interpulsegap), axis=0)
-                ppt = np.concatenate((ppt, pulse.data), axis=0)
-
-        ppt = ppt[0:int(round(dur / tsample))]
-        intfunc = spi.interp1d(np.linspace(0, len(rflum), len(rflum)),
-                               rflum)
-
-        amp = intfunc(np.linspace(0, len(rflum), len(ppt)))
-        data = amp * ppt * amp_max
-        utils.TimeSeries.__init__(self, tsample, data)
-
-
 class PulseTrain(utils.TimeSeries):
 
     def __init__(self, tsample, freq=20, amp=20, dur=0.5, delay=0,
@@ -316,35 +124,36 @@ class PulseTrain(utils.TimeSeries):
                  pulseorder='pulsefirst'):
         """A train of biphasic pulses
 
-        tsample : float
-            Sampling interval in seconds parameters, use TemporalModel.tsample.
+        Parameters
         ----------
-        optional parameters
-        freq : float
-            Frequency of the pulse envelope in Hz.
-        dur : float
+        tsample : float
+            Sampling time step (seconds).
+        freq : float, optional, default: 20 Hz
+            Frequency of the pulse envelope (Hz).
+        amp : float, optional, default: 20 uA
+            Max amplitude of the pulse train in micro-amps.
+        dur : float, optional, default: 0.5 seconds
             Stimulus duration in seconds.
-        pulse_dur : float
+        delay : float, optional, default: 0
+            Delay until stimulus on-set in seconds.
+        pulse_dur : float, optional, default: 0.45 ms
             Single-pulse duration in seconds.
-        interphase_duration : float
+        interphase_duration : float, optional, default: 0.45 ms
             Single-pulse interphase duration (the time between the positive
             and negative phase) in seconds.
-        delay : float
-            Delay until stimulus on-set in seconds.
-        amp : float
-            Max amplitude of the pulse train in micro-amps.
-        pulsetype : string
-            Pulse type {"cathodicfirst" | "anodicfirst"}, where
+        pulsetype : str, optional, default: 'cathodicfirst'
+            Pulse type {'cathodicfirst' | 'anodicfirst'}, where
             'cathodicfirst' has the negative phase first.
-        pulseorder : string
-            Pulse order {"gapfirst" | "pulsefirst"}, where
+        pulseorder : str, optional, default: 'pulsefirst'
+            Pulse order {'gapfirst' | 'pulsefirst'}, where
             'pulsefirst' has the pulse first, followed by the gap.
+            'gapfirst' has it the other way round.
         """
         if tsample <= 0:
             raise ValueError("tsample must be a non-negative float.")
 
         # Stimulus size given by `dur`
-        stim_size = int(np.round(1.0 * dur / tsample))
+        stim_size = int(np.round(float(dur) / tsample))
 
         # Make sure input is non-trivial, else return all zeros
         if np.isclose(freq, 0) or np.isclose(amp, 0):
@@ -355,9 +164,16 @@ class PulseTrain(utils.TimeSeries):
         # Note that this can be larger than `stim_size`, but we will trim
         # the stimulus to proper length at the very end.
         envelope_size = int(np.round(1.0 / float(freq) / tsample))
+        if envelope_size > stim_size:
+            debug_s = ("Envelope size (%d) clipped to "
+                       "stimulus size (%d) for freq=%f" % (envelope_size,
+                                                           stim_size,
+                                                           freq))
+            logging.getLogger(__name__).debug(debug_s)
+            envelope_size = stim_size
 
         # Delay given by `delay`
-        delay_size = int(np.round(1.0 * delay / tsample))
+        delay_size = int(np.round(float(delay) / tsample))
 
         if delay_size < 0:
             raise ValueError("Delay cannot be negative.")
@@ -402,6 +218,295 @@ class PulseTrain(utils.TimeSeries):
         pulse_train = pulse_train[:stim_size]
 
         utils.TimeSeries.__init__(self, tsample, pulse_train)
+
+
+def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
+                     max_contrast=False, const_val=20, invert=False,
+                     tsample=0.005 / 1000, dur=0.5, pulsedur=0.5 / 1000.,
+                     interphasedur=0.5 / 1000., pulsetype='cathodicfirst'):
+    """Converts an image into a series of pulse trains
+
+    This function creates an input stimulus from an RGB or grayscale image.
+    The image is down-sampled to fit the spatial layout of the implant
+    (currently supported are ArgusI and ArgusII arrays).
+    Requires Scikit-Image.
+
+    Parameters
+    ----------
+    img : str|array_like
+        An input image, either a valid filename (string) or a numpy array
+        (row x col x channels).
+    implant : p2p.implants.ElectrodeArray
+        An ElectrodeArray object that describes the implant.
+    coding : {'amplitude', 'frequency'}, optional
+        A string describing the coding scheme:
+        - 'amplitude': Image intensity is linearly converted to a current
+                       amplitude between `valrange[0]` and `valrange[1]`.
+                       Frequency is held constant at `const_freq`.
+        - 'frequency': Image intensity is linearly converted to a pulse
+                       frequency between `valrange[0]` and `valrange[1]`.
+                       Amplitude is held constant at `const_amp`.
+        Default: 'amplitude'
+    valrange : list, optional
+        Range of stimulation values to be used (If `coding` is 'amplitude',
+        specifies min and max current; if `coding` is 'frequency', specifies
+        min and max frequency).
+        Default: [0, 50]
+    max_contrast : bool, optional
+        Flag wether to maximize image contrast (True) or not (False).
+        Default: False
+    const_val : float, optional
+        For frequency coding: The constant amplitude value to be used for all
+        pulse trains. For amplitude coding: The constant frequency value to
+        be used for all pulse trains.
+        Default: 20
+    invert : bool, optional
+        Flag whether to invert the grayscale values of the image (True) or
+        not (False).
+        Default: False
+    tsample : float, optional
+        Sampling time step (seconds). Default: 0.005 / 1000 seconds.
+    dur : float, optional
+        Stimulus duration (seconds). Default: 0.5 seconds.
+    pulsedur : float, optional
+        Duration of single (positive or negative) pulse phase in seconds.
+    interphasedur : float, optional
+        Duration of inter-phase interval (between positive and negative
+        pulse) in seconds.
+    pulsetype : {'cathodicfirst', 'anodicfirst'}, optional
+        A cathodic-first pulse has the negative phase first, whereas an
+        anodic-first pulse has the positive phase first.
+
+    Returns
+    -------
+    pulses : list
+        A list of p2p.stimuli.PulseTrain objects, one for each electrode in
+        the implant.
+
+    """
+    if not has_skimage:
+        # We don't want to repeatedly import Scikit-Image. This would (e.g.)
+        # unnecessarily slow down `video2pulsetrain`.
+        raise ImportError("You do not have scikit-image installed. "
+                          "You can install it via $ pip install scikit-image.")
+
+    # Make sure range of values is valid
+    assert len(valrange) == 2 and valrange[1] > valrange[0]
+
+    isargus1 = isinstance(implant, implants.ArgusI)
+    isargus2 = isinstance(implant, implants.ArgusII)
+    if not isargus1 and not isargus2:
+        raise TypeError("For now, implant must be of type implants.ArgusI or "
+                        "implants.ArgusII.")
+
+    if isinstance(img, str):
+        # Load image from filename
+        img_orig = sio.imread(img, as_grey=True).astype(np.float32)
+        logging.getLogger(__name__).info("Loaded file '%s'." % img)
+    else:
+        if img.ndim == 2:
+            # Grayscale
+            img_orig = img.astype(np.float32)
+        else:
+            # Assume RGB, convert to grayscale
+            assert img.shape[-1] == 3
+            img_orig = sic.rgb2gray(np.array(img)).astype(np.float32)
+
+    # Make sure all pixels are between 0 and 1
+    if img_orig.max() > 1.0:
+        img_orig /= 255.0
+
+    # Let Scikit-Image do the resampling: Downscale image to fit array:
+    if isargus1:
+        img_stim = sit.resize(img_orig, (4, 4))
+    elif isargus2:
+        img_stim = sit.resize(img_orig, (6, 10))
+
+    # If specified, invert the mapping of grayscale values:
+    if invert:
+        img_stim = 1.0 - img_stim
+
+    # If specified, maximize the contrast in the image:
+    if max_contrast:
+        img_stim -= img_stim.min()
+        if img_stim.max() > 0:
+            img_stim /= img_stim.max()
+
+    # With all pixels between 0 and 1, now scale to valrange
+    assert np.all(img_stim >= 0.0) and np.all(img_stim <= 1.0)
+    img_stim = img_stim * np.diff(valrange) + valrange[0]
+    assert np.all(img_stim >= valrange[0]) and np.all(img_stim <= valrange[1])
+
+    stim = []
+    for _, px in np.ndenumerate(img_stim):
+        if coding == 'amplitude':
+            amp = px
+            freq = const_val
+        elif coding == 'frequency':
+            amp = const_val
+            freq = px
+        else:
+            e_s = "Acceptable values for `coding` are 'amplitude' or"
+            e_s += "'frequency'."
+            raise ValueError(e_s)
+
+        pt = PulseTrain(tsample, freq=freq, amp=amp, dur=dur,
+                        pulse_dur=pulsedur,
+                        interphase_dur=interphasedur,
+                        pulsetype=pulsetype)
+        stim.append(pt)
+
+    return stim
+
+
+def video2pulsetrain(filename, implant, framerate=20,
+                     coding='amplitude', valrange=[0, 50],
+                     max_contrast=False, const_val=20, invert=False,
+                     tsample=0.005 / 1000, pulsedur=0.5 / 1000.,
+                     interphasedur=0.5 / 1000., pulsetype='cathodicfirst',
+                     ffmpeg_path=None, libav_path=None):
+    """Converts a video into a series of pulse trains
+
+    This function creates an input stimulus from a video.
+    Every frame of the video is passed to `image2pulsetrain`, where it is
+    down-sampled to fit the spatial layout of the implant (currently supported
+    are ArgusI and ArgusII arrays).
+    In this mapping, rows of the image correspond to rows in the implant
+    (top row, Argus I: A1 B1 C1 D1, Argus II: A1 A2 ... A10).
+
+    Requires Scikit-Image and Scikit-Video.
+
+    Parameters
+    ----------
+    img : str|array_like
+        An input image, either a valid filename (string) or a numpy array
+        (row x col x channels).
+    implant : p2p.implants.ElectrodeArray
+        An ElectrodeArray object that describes the implant.
+    coding : {'amplitude', 'frequency'}, optional
+        A string describing the coding scheme:
+        - 'amplitude': Image intensity is linearly converted to a current
+                       amplitude between `valrange[0]` and `valrange[1]`.
+                       Frequency is held constant at `const_freq`.
+        - 'frequency': Image intensity is linearly converted to a pulse
+                       frequency between `valrange[0]` and `valrange[1]`.
+                       Amplitude is held constant at `const_amp`.
+        Default: 'amplitude'
+    valrange : list, optional
+        Range of stimulation values to be used (If `coding` is 'amplitude',
+        specifies min and max current; if `coding` is 'frequency', specifies
+        min and max frequency).
+        Default: [0, 50]
+    max_contrast : bool, optional
+        Flag wether to maximize image contrast (True) or not (False).
+        Default: False
+    const_val : float, optional
+        For frequency coding: The constant amplitude value to be used for all
+        pulse trains. For amplitude coding: The constant frequency value to
+        be used for all pulse trains.
+        Default: 20
+    invert : bool, optional
+        Flag whether to invert the grayscale values of the image (True) or
+        not (False).
+        Default: False
+    tsample : float, optional
+        Sampling time step (seconds). Default: 0.005 / 1000 seconds.
+    dur : float, optional
+        Stimulus duration (seconds). Default: 0.5 seconds.
+    pulsedur : float, optional
+        Duration of single (positive or negative) pulse phase in seconds.
+    interphasedur : float, optional
+        Duration of inter-phase interval (between positive and negative
+        pulse) in seconds.
+    pulsetype : {'cathodicfirst', 'anodicfirst'}, optional
+        A cathodic-first pulse has the negative phase first, whereas an
+        anodic-first pulse has the positive phase first.
+
+    Returns
+    -------
+    pulses : list
+        A list of p2p.stimuli.PulseTrain objects, one for each electrode in
+        the implant.
+
+    """
+
+    # Load generator to read video frame-by-frame
+    reader = files.load_video_generator(filename, ffmpeg_path, libav_path)
+
+    # Temporarily increase logger level to suppress info messages
+    current_level = logging.getLogger(__name__).getEffectiveLevel()
+    logging.getLogger(__name__).setLevel(logging.WARN)
+
+    # Convert the desired framerate to a duration (seconds)
+    dur = 1.0 / framerate
+
+    # Read one frame at a time, and append to previous frames
+    video = []
+    for img in reader.nextFrame():
+        frame = image2pulsetrain(img, implant, coding=coding,
+                                 valrange=valrange, max_contrast=max_contrast,
+                                 const_val=const_val, invert=invert,
+                                 tsample=tsample, dur=dur, pulsedur=pulsedur,
+                                 interphasedur=interphasedur,
+                                 pulsetype=pulsetype)
+        if video:
+            # List of pulse trains: Append new frame to each element
+            [v.append(f) for v, f in zip(video, frame)]
+        else:
+            # Initialize with a list of pulse trains
+            video = frame
+
+    # Restore logger level
+    logging.getLogger(__name__).setLevel(current_level)
+
+    return video
+
+
+@utils.deprecated('p2p.stimuli.video2pulsetrain')
+class Movie2Pulsetrain(utils.TimeSeries):
+    """
+    Is used to create pulse-train stimulus based on luminance over time from
+    a movie
+
+    This class is deprecated as of v0.2 and will be replaced with a new
+    version in v0.3.
+    """
+
+    def __init__(self, rflum, tsample, fps=30.0, amp_transform='linear',
+                 amp_max=60, freq=20, pulse_dur=.5 / 1000.,
+                 interphase_dur=.5 / 1000.,
+                 pulsetype='cathodicfirst', stimtype='pulsetrain'):
+        """
+        Parameters
+        ----------
+        rflum : 1D array
+           Values between 0 and 1
+        tsample : suggest TemporalModel.tsample
+        """
+        if tsample <= 0:
+            raise ValueError("tsample must be a non-negative float.")
+
+        # set up the individual pulses
+        pulse = BiphasicPulse(pulsetype, pulse_dur, tsample,
+                              interphase_dur)
+        # set up the sequence
+        dur = rflum.shape[-1] / fps
+
+        if stimtype == 'pulsetrain':
+            interpulsegap = np.zeros(int(round((1.0 / freq) / tsample)) -
+                                     len(pulse.data))
+            ppt = []
+            for j in range(0, int(np.ceil(dur * freq))):
+                ppt = np.concatenate((ppt, interpulsegap), axis=0)
+                ppt = np.concatenate((ppt, pulse.data), axis=0)
+
+        ppt = ppt[0:int(round(dur / tsample))]
+        intfunc = spi.interp1d(np.linspace(0, len(rflum), len(rflum)),
+                               rflum)
+
+        amp = intfunc(np.linspace(0, len(rflum), len(ppt)))
+        data = amp * ppt * amp_max
+        utils.TimeSeries.__init__(self, tsample, data)
 
 
 def parse_pulse_trains(stim, implant):
