@@ -430,6 +430,9 @@ def video2pulsetrain(filename, implant, framerate=20,
 
     """
 
+    # Load generator to read video frame-by-frame
+    reader = files.load_video_generator(filename, ffmpeg_path, libav_path)
+
     # Temporarily increase logger level to suppress info messages
     current_level = logging.getLogger(__name__).getEffectiveLevel()
     logging.getLogger(__name__).setLevel(logging.WARN)
@@ -439,7 +442,6 @@ def video2pulsetrain(filename, implant, framerate=20,
 
     # Read one frame at a time, and append to previous frames
     video = []
-    reader = files.load_video_generator(filename, ffmpeg_path, libav_path)
     for img in reader.nextFrame():
         frame = image2pulsetrain(img, implant, coding=coding,
                                  valrange=valrange, max_contrast=max_contrast,
@@ -448,9 +450,10 @@ def video2pulsetrain(filename, implant, framerate=20,
                                  interphasedur=interphasedur,
                                  pulsetype=pulsetype)
         if video:
-            # Append pulse train of current frame to previous frames
-            video.append(frame)
+            # List of pulse trains: Append new frame to each element
+            [v.append(f) for v, f in zip(video, frame)]
         else:
+            # Initialize with a list of pulse trains
             video = frame
 
     # Restore logger level

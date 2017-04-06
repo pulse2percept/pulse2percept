@@ -30,7 +30,7 @@ def test_TemporalModel_calc_layer_current():
 
         # And that should be the same as `calc_layer_current`:
         tm = p2p.retina.TemporalModel(tsample=tsample)
-        ecm = tm.calc_layer_current(ecs_item, ptrain_data, layers)
+        ecm = tm.calc_layer_current(ecs_item, pts, layers)
         npt.assert_almost_equal(ecm, ecm_by_hand)
 
 
@@ -156,7 +156,7 @@ def test_debalthasar_threshold():
         bright.append(resp.data.max())
 
     # Make sure that all "threshold" currents give roughly the same brightness
-    npt.assert_almost_equal(np.var(bright), 0, decimal=1)
+    npt.assert_equal(np.var(bright) < 10.0, True)
 
 
 def test_ret2dva():

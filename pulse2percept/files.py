@@ -215,8 +215,11 @@ def load_video(filename, as_timeseries=False, as_gray=False, ffmpeg_path=None,
 def load_video_generator(filename, ffmpeg_path=None, libav_path=None):
     """Returns a generator that can load a video from file frame-by-frame.
 
-    This function loads a video from file and returns it as a NumPy ndarray
-    with the help of the Scikit-Video.
+    This function returns a generator `reader` that can load a video from a
+    file frame-by-frame. Every call to `reader.nextFrame()` will return a
+    single frame of the video as a NumPy array with dimensions (M, N) or
+    (M, N, C), where M is the height, N is the width, and C is the number of
+    channels (will be either 1 for grayscale or 3 for RGB).
 
     Parameters
     ----------
@@ -256,6 +259,7 @@ def load_video_generator(filename, ffmpeg_path=None, libav_path=None):
         raise ImportError("You have neither ffmpeg nor libav (which comes "
                           "with avprobe) installed.")
 
+    logging.getLogger(__name__).info("Loaded video from file '%s'." % filename)
     return reader
 
 

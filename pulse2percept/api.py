@@ -135,7 +135,7 @@ class Simulation(object):
     def set_ganglion_cell_layer(self, tsample=0.005 / 1000,
                                 tau_gcl=0.42 / 1000, tau_inl=18.0 / 1000,
                                 tau_ca=45.25 / 1000, scale_ca=42.1,
-                                tau_slow=26.25 / 1000, scale_slow=1150.0,
+                                tau_slow=26.25 / 1000, scale_slow=10.0,
                                 lweight=0.636, aweight=0.5,
                                 slope=3.0, shift=15.0):
         """Sets parameters of the ganglion cell layer (GCL)
@@ -294,11 +294,6 @@ class Simulation(object):
             e_s += "this requirement might be relaxed."
             raise ValueError(e_s)
 
-        # Perform any necessary calculations per electrode
-        pt_list = utils.parfor(self.gcl.calc_per_electrode,
-                               pt_list, engine=self.engine,
-                               n_jobs=self.num_jobs)
-
         # Tissue activation maps: If OFL is simulated, includes axon streaks.
         if 'OFL' in layers:
             ecs, _ = self.ofl.electrode_ecs(self.implant)
@@ -339,7 +334,7 @@ class Simulation(object):
                                                     np.prod(ecs.shape[:2]))
         logging.getLogger(__name__).info(s_info)
 
-        sr_list = utils.parfor(self.gcl.calc_per_pixel,
+        sr_list = utils.parfor(self.gcl.model_cascade,
                                ecs_list, n_jobs=self.num_jobs,
                                engine=self.engine,
                                func_args=[pt_list, layers, self.dojit])

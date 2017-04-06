@@ -171,8 +171,7 @@ class Grid(object):
 
         return ecs
 
-    def electrode_ecs(self, implant, alpha=14000, n=1.69,
-                      integrationtype='maxrule'):
+    def electrode_ecs(self, implant, alpha=14000, n=1.69):
         """
         Gather current spread and effective current spread for each electrode
         within both the bipolar and the ganglion cell layer
@@ -219,7 +218,7 @@ class TemporalModel(object):
     def __init__(self, tsample=0.005 / 1000,
                  tau_gcl=0.42 / 1000, tau_inl=18.0 / 1000,
                  tau_ca=45.25 / 1000, scale_ca=42.1,
-                 tau_slow=26.25 / 1000, scale_slow=1150.0,
+                 tau_slow=26.25 / 1000, scale_slow=10.0,
                  lweight=0.636, aweight=0.5,
                  slope=3.0, shift=15.0):
         """Temporal Sensitivity Model
@@ -336,6 +335,29 @@ class TemporalModel(object):
             # match the dimensions of the input signal.
         return conv[:stim.shape[-1]]
 
+    def charge_accumulation(self, ecm):
+        """Calculates the charge accumulation
+
+        Charge accumulation is calculcalated on the effective input current
+        `ecm`, as opposed to the output of the fast response stage.
+
+        Parameters
+        ----------
+        ecm : array-like
+            A 2D array specifying the effective current values at a particular
+            spatial location (pixel); one value per retinal layer, averaged
+            over all electrodes through that pixel.
+            Dimensions: <#layers x #time points>
+        """
+        ca = np.zeros_like(ecm)
+
+        for i in range(ca.shape[0]):
+            summed = self.tsample * np.cumsum(np.abs(ecm[i, :]))
+            conved = self.tsample * signal.fftconvolve(summed, self.gamma_ca,
+                                                       mode='full')
+            ca[i, :] = self.scale_ca * conved[:ecm.shape[-1]]
+        return ca
+
     def stationary_nonlinearity(self, stim):
         """Stationary nonlinearity (Box 4)
 
@@ -361,11 +383,10 @@ class TemporalModel(object):
         Conversion to TimeSeries is avoided for the sake of speedup.
         """
         # use expit (logistic) function for speedup
-        stim_max = stim.max()
-        scale = ss.expit((stim_max - self.shift) / self.slope)
+        sigmoid = ss.expit((stim.max() - self.shift) / self.slope)
 
         # avoid division by zero
-        return stim / (stim_max + np.finfo(float).eps) * scale
+        return stim * sigmoid
 
     def slow_response(self, stim):
         """Slow response function (Box 5)
@@ -398,117 +419,6 @@ class TemporalModel(object):
         # the dimensions of the input signal.
         return self.scale_slow * self.tsample * conv[:stim.shape[-1]]
 
-    def model_cascade(self, ecm, layers, dojit):
-        """Model cascade according to Nanduri et al. (2012).
-
-        The 'Nanduri' model calculates the fast response first, followed by the
-        current accumulation.
-
-        Parameters
-        ----------
-        ecm : array-like
-            A 2D array containing the time series data for each layer. Each
-            time series is the sum of all PulseTrains through a particular
-            pixel.
-            Dimensions: <#layers x #time points>
-        layers : list
-
-            List of retinal layers to simulate. Choose from:
-            - 'OFL': optic fiber layer
-            - 'GCL': ganglion cell layer
-            - 'INL': inner nuclear layer
-
-        Returns
-        -------
-        Brightness response over time. In Nanduri et al. (2012), the
-        maximum value of this signal was used to represent the perceptual
-        brightness of a particular location in space, B(r).
-
-        """
-        # Sparse convolution is faster if input is sparse. This is true for
-        # the first convolution in the cascade, but not for subsequent ones.
-        if 'INL' in layers:
-            resp_inl = self.fast_response(ecm[0], self.gamma_inl,
-                                          dojit=dojit,
-                                          usefft=False)
-        else:
-            resp_inl = np.zeros_like(ecm[0])
-
-        if ('GCL' or 'OFL') in layers:
-            resp_gcl = self.fast_response(ecm[1], self.gamma_gcl,
-                                          dojit=dojit,
-                                          usefft=False)
-        else:
-            resp_gcl = np.zeros_like(ecm[1])
-
-        # Here we are converting from current  - where a cathodic (effective)
-        # stimulus is negative - to a vague concept of neuronal response,
-        # where positive implies a neuronal response.
-        # There is a rectification here because we used to assume that the
-        # anodic part of the pulse is ineffective (which is wrong).
-        resp_cathodic = self.lweight * np.maximum(-resp_inl, 0) + \
-            np.maximum(-resp_gcl, 0)
-        resp_anodic = self.lweight * np.maximum(resp_inl, 0) + \
-            np.maximum(resp_gcl, 0)
-        resp = resp_cathodic + self.aweight * resp_anodic
-        resp = self.stationary_nonlinearity(resp)
-        resp = self.slow_response(resp)
-        return utils.TimeSeries(self.tsample, resp)
-
-    def calc_per_electrode(self, pt):
-        ca = self.tsample * np.cumsum(np.maximum(0, -pt.data))
-        tmp = signal.fftconvolve(ca, self.gamma_ca, mode='full')
-        conv_ca = self.scale_ca * self.tsample * tmp[:pt.data.size]
-
-        pt_entry = np.zeros_like(pt.data)
-
-        # negative elements first
-        idx = np.where(pt.data <= 0)[0]
-        pt_entry[idx] = np.minimum(pt.data[idx] + conv_ca[idx], 0)
-
-        # then positive elements
-        idx = np.where(pt.data > 0)[0]
-        pt_entry[idx] = np.maximum(pt.data[idx] - conv_ca[idx], 0)
-
-        return pt_entry
-
-    def calc_per_pixel(self, ecs_item, pt_list, layers, dojit=False):
-        """Applies the temporal model to a single retina cell (pixel)
-
-        The following calculations need to be done on a pixel-by-pixel basis.
-
-        Parameters
-        ----------
-        ecs_item: array-like
-            A 2D array specifying the effective current values at a particular
-            spatial location (pixel); one value per retinal layer and
-            electrode.
-            Dimensions: <#layers x #electrodes>
-        pt_list: list
-            A list of PulseTrain `data` containers.
-            Dimensions: <#electrodes x #time points>
-        layers : list
-
-            List of retinal layers to simulate. Choose from:
-            - 'OFL': optic fiber layer
-            - 'GCL': ganglion cell layer
-            - 'INL': inner nuclear layer
-
-        dojit : bool
-            If True, applies just-in-time (JIT) compilation to expensive
-            computations for additional speed-up (requires Numba).
-
-        """
-        # For each layer in the model, scale the pulse train data with the
-        # effective current:
-        ecm = self.calc_layer_current(ecs_item, pt_list, layers)
-
-        # `ecm` now contains a scaled PulseTrain per layer for this particular
-        # pixel: Use as input to model cascade
-        sr = self.model_cascade(ecm, layers, dojit=dojit)
-
-        return sr
-
     def calc_layer_current(self, ecs_item, pt_list, layers):
         """For a given pixel, calculates the effective current for each retinal
            layer over time
@@ -536,11 +446,88 @@ class TemporalModel(object):
 
         """
         ecm = np.zeros((ecs_item.shape[0], pt_list[0].shape[-1]))
+        pt_data = np.array([pt.data for pt in pt_list])
         if 'INL' in layers:
-            ecm[0, :] = np.sum(ecs_item[0, :, np.newaxis] * pt_list, axis=0)
+            ecm[0, :] = np.sum(ecs_item[0, :, np.newaxis] * pt_data, axis=0)
         if ('GCL' or 'OFL') in layers:
-            ecm[1, :] = np.sum(ecs_item[1, :, np.newaxis] * pt_list, axis=0)
+            ecm[1, :] = np.sum(ecs_item[1, :, np.newaxis] * pt_data, axis=0)
         return ecm
+
+    def model_cascade(self, ecs_item, pt_list, layers, dojit):
+        """The Temporal Sensitivity model
+
+        This function applies the model of temporal sensitivity to a single
+        retinal cell (i.e., a pixel). The model is inspired by Nanduri
+        et al. (2012), with some extended functionality.
+
+        Parameters
+        ----------
+        ecs_item: array-like
+            A 2D array specifying the effective current values at a particular
+            spatial location (pixel); one value per retinal layer and
+            electrode.
+            Dimensions: <#layers x #electrodes>
+        pt_list: list
+            A list of PulseTrain `data` containers.
+            Dimensions: <#electrodes x #time points>
+        layers : list
+
+            List of retinal layers to simulate. Choose from:
+            - 'OFL': optic fiber layer
+            - 'GCL': ganglion cell layer
+            - 'INL': inner nuclear layer
+        dojit : bool
+            If True, applies just-in-time (JIT) compilation to expensive
+            computations for additional speed-up (requires Numba).
+
+        Returns
+        -------
+        Brightness response over time. In Nanduri et al. (2012), the
+        maximum value of this signal was used to represent the perceptual
+        brightness of a particular location in space, B(r).
+
+        """
+        # For each layer in the model, scale the pulse train data with the
+        # effective current:
+        ecm = self.calc_layer_current(ecs_item, pt_list, layers)
+
+        # Calculate charge accumulation on the input
+        ca = self.charge_accumulation(ecm)
+
+        # Sparse convolution is faster if input is sparse. This is true for
+        # the first convolution in the cascade, but not for subsequent ones.
+        if 'INL' in layers:
+            fr_inl = self.fast_response(ecm[0], self.gamma_inl,
+                                        dojit=dojit,
+                                        usefft=False)
+
+            # Cathodic and anodic parts are treated separately: They have the
+            # same charge accumulation, but anodic currents contribute less to
+            # the response
+            fr_inl_cath = np.maximum(0, -fr_inl)
+            fr_inl_anod = self.aweight * np.maximum(0, fr_inl)
+            resp_inl = np.maximum(0, fr_inl_cath + fr_inl_anod - ca[0, :])
+        else:
+            resp_inl = np.zeros_like(ecm[0])
+
+        if ('GCL' or 'OFL') in layers:
+            fr_gcl = self.fast_response(ecm[1], self.gamma_gcl,
+                                        dojit=dojit,
+                                        usefft=False)
+
+            # Cathodic and anodic parts are treated separately: They have the
+            # same charge accumulation, but anodic currents contribute less to
+            # the response
+            fr_gcl_cath = np.maximum(0, -fr_gcl)
+            fr_gcl_anod = self.aweight * np.maximum(0, fr_gcl)
+            resp_gcl = np.maximum(0, fr_gcl_cath + fr_gcl_anod - ca[1, :])
+        else:
+            resp_gcl = np.zeros_like(ecm[1])
+
+        resp = resp_gcl + self.lweight * resp_inl
+        resp = self.stationary_nonlinearity(resp)
+        resp = self.slow_response(resp)
+        return utils.TimeSeries(self.tsample, resp)
 
 
 def ret2dva(r_um):
