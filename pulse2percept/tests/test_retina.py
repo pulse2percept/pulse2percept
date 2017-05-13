@@ -1,8 +1,31 @@
 import numpy as np
 import numpy.testing as npt
+import pytest
 import logging
 
 import pulse2percept as p2p
+
+
+def test_TemporalModel():
+    # Cannot instantiate abstract class
+    with pytest.raises(TypeError):
+        tm = p2p.retina.TemporalModel(0.01)
+
+    # Child class must provide `model_cascade()`
+    class Incomplete(p2p.retina.TemporalModel):
+        pass
+    with pytest.raises(TypeError):
+        tm = Incomplete()
+
+    # A complete class
+    class Complete(p2p.retina.TemporalModel):
+
+        def model_cascade(self, inval):
+            return inval
+
+    tm = Complete(tsample=0.1)
+    npt.assert_equal(tm.tsample, 0.1)
+    npt.assert_equal(tm.model_cascade(2.4), 2.4)
 
 
 def test_TemporalModel_calc_layer_current():

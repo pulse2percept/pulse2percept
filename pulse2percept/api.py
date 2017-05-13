@@ -132,6 +132,15 @@ class Simulation(object):
                                datapath=datapath,
                                save_data=save_data)
 
+    # def set_ganglion_cell_layer(self, model, **kwargs):
+    #     if isinstance(model, retina.TemporalModel):
+    #         debug_str = "Setting up %s." % model.__module__
+    #         logging.getLogger(__name__).debug(debug_str)
+    #         self.gcl = model
+    #     elif isinstance(model, str):
+    #         if model.lower() == 'latest':
+    #             logging.getLogger(__name__).debug("Setting up latest model.")
+
     def set_ganglion_cell_layer(self, tsample=0.005 / 1000,
                                 tau_gcl=0.42 / 1000, tau_inl=18.0 / 1000,
                                 tau_ca=45.25 / 1000, scale_ca=42.1,
@@ -183,13 +192,13 @@ class Simulation(object):
             stage. Default: 16. In normalized units of perceptual response
             perhaps should be 15.9
         """
-        # Generate a a TemporalModel from above specs
-        tm = retina.TemporalModel(tsample=tsample,
-                                  tau_gcl=tau_gcl, tau_inl=tau_inl,
-                                  tau_ca=tau_ca, scale_ca=scale_ca,
-                                  tau_slow=tau_slow, scale_slow=scale_slow,
-                                  lweight=lweight, aweight=aweight,
-                                  slope=slope, shift=shift)
+        # Generate a TemporalModel from above specs
+        tm = retina.LatestModel(tsample=tsample,
+                                tau_gcl=tau_gcl, tau_inl=tau_inl,
+                                tau_ca=tau_ca, scale_ca=scale_ca,
+                                tau_slow=tau_slow, scale_slow=scale_slow,
+                                lweight=lweight, aweight=aweight,
+                                slope=slope, shift=shift)
         self.gcl = tm
 
     def _set_layers(self):

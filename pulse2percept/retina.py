@@ -1,11 +1,21 @@
 import numpy as np
 import scipy.signal as signal
 import scipy.special as ss
+import abc
+import sys
 import os.path
 import logging
 
 from pulse2percept import utils
 
+
+# Making abstract base classes Python 2, 3 compatible
+# An alternative would be to require six:
+# http://stackoverflow.com/questions/35673474/using-abc-abcmeta-in-a-way-it-is-compatible-both-with-python-2-7-and-python-3-5
+if sys.version_info >= (3, 4):
+    ABC = abc.ABC
+else:
+    ABC = abc.ABCMeta('ABC', (), {})
 
 SUPPORTED_LAYERS = ['INL', 'GCL', 'OFL']
 
@@ -213,7 +223,35 @@ class Grid(object):
         return ecs, cs
 
 
-class TemporalModel(object):
+class TemporalModel(ABC):
+    """Abstract base class for all models of temporal sensitivity.
+
+    This class provides a standard template for all models of temporal
+    sensitivity.
+    """
+
+    def __init__(self, **kwargs):
+        self.set_kwargs(**kwargs)
+
+    @abc.abstractmethod
+    def model_cascade(self, ecv):
+        """Run the model cascade on a single-pixel TimeSeries and return a
+           brightness value"""
+        return
+
+    def set_kwargs(self, warn_inexistent=True, **kwargs):
+        """Overwrite any given keyword arguments"""
+        for key, value in kwargs.items():
+            if not hasattr(self, key) and warn_inexistent:
+                w_s = "Unknown class attribute '%s'" % key
+                logging.getLogger(__name__).warning(w_s)
+            setattr(self, key, value)
+
+    # Static attribute
+    tsample = 0.005 / 1000
+
+
+class LatestModel(object):
 
     def __init__(self, tsample=0.005 / 1000,
                  tau_gcl=0.42 / 1000, tau_inl=18.0 / 1000,
@@ -269,7 +307,7 @@ class TemporalModel(object):
             stage. Default: 16. In normalized units of perceptual response
             perhaps should be 15.9
         """
-        self.tsample = tsample
+        self._tsample = tsample
         self.tau_gcl = tau_gcl
         self.tau_inl = tau_inl
         self.tau_ca = tau_ca
@@ -296,6 +334,9 @@ class TemporalModel(object):
 
         # gamma_slow is used to calculate the slow response
         _, self.gamma_slow = utils.gamma(3, self.tau_slow, self.tsample)
+
+    def tsample(self):
+        return self._tsample
 
     def fast_response(self, stim, gamma, dojit=True, usefft=False):
         """Fast response function (Box 2) for the bipolar layer

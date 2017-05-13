@@ -33,6 +33,7 @@ before_install:
   - conda config --set always_yes yes
   - conda update conda
   - conda info -a
+  - conda list
   - conda config --add channels conda-forge
   - conda install python=$TRAVIS_PYTHON_VERSION $CONDA_DEPS
   - pip install $PIP_DEPS
