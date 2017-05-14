@@ -230,6 +230,14 @@ class TemporalModel(ABC):
     sensitivity.
     """
 
+    def set_kwargs(self, warn_inexistent=True, **kwargs):
+        """Overwrite any given keyword arguments"""
+        for key, value in kwargs.items():
+            if not hasattr(self, key) and warn_inexistent:
+                w_s = "Unknown class attribute '%s'" % key
+                logging.getLogger(__name__).warning(w_s)
+            setattr(self, key, value)
+
     def __init__(self, **kwargs):
         self.set_kwargs(**kwargs)
 
@@ -239,19 +247,11 @@ class TemporalModel(ABC):
            brightness value"""
         return
 
-    def set_kwargs(self, warn_inexistent=True, **kwargs):
-        """Overwrite any given keyword arguments"""
-        for key, value in kwargs.items():
-            if not hasattr(self, key) and warn_inexistent:
-                w_s = "Unknown class attribute '%s'" % key
-                logging.getLogger(__name__).warning(w_s)
-            setattr(self, key, value)
-
     # Static attribute
     tsample = 0.005 / 1000
 
 
-class LatestModel(object):
+class LatestModel(TemporalModel):
 
     def __init__(self, tsample=0.005 / 1000,
                  tau_gcl=0.42 / 1000, tau_inl=18.0 / 1000,
@@ -307,7 +307,7 @@ class LatestModel(object):
             stage. Default: 16. In normalized units of perceptual response
             perhaps should be 15.9
         """
-        self._tsample = tsample
+        self.tsample = tsample
         self.tau_gcl = tau_gcl
         self.tau_inl = tau_inl
         self.tau_ca = tau_ca
@@ -334,9 +334,6 @@ class LatestModel(object):
 
         # gamma_slow is used to calculate the slow response
         _, self.gamma_slow = utils.gamma(3, self.tau_slow, self.tsample)
-
-    def tsample(self):
-        return self._tsample
 
     def fast_response(self, stim, gamma, dojit=True, usefft=False):
         """Fast response function (Box 2) for the bipolar layer

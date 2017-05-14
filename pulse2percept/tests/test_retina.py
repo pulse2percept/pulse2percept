@@ -28,7 +28,7 @@ def test_TemporalModel():
     npt.assert_equal(tm.model_cascade(2.4), 2.4)
 
 
-def test_TemporalModel_calc_layer_current():
+def test_LatestModel_calc_layer_current():
     tsample = 0.01 / 1000
 
     # Assume 4 electrodes, each getting some stimulation
@@ -52,7 +52,7 @@ def test_TemporalModel_calc_layer_current():
                 ecm_by_hand[1, :] += curr * pt
 
         # And that should be the same as `calc_layer_current`:
-        tm = p2p.retina.TemporalModel(tsample=tsample)
+        tm = p2p.retina.LatestModel(tsample=tsample)
         ecm = tm.calc_layer_current(ecs_item, pts, layers)
         npt.assert_almost_equal(ecm, ecm_by_hand)
 

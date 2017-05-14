@@ -540,6 +540,10 @@ def gamma(n, tau, tsample, tol=0.01):
         than a fraction `tol` of the peak value.
     """
     n = int(n)
+    tau = float(tau)
+    tsample = float(tsample)
+    if n <= 0 or tau <= 0 or tsample <= 0:
+        raise ValueError("`n`, `tau`, and `tsample` must be nonnegative.")
 
     # Allocate a time vector that is long enough for sure.
     # Trim vector later on.

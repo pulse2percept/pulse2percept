@@ -225,6 +225,14 @@ def test_parfor():
 
 def test_gamma():
     tsample = 0.005 / 1000
+
+    with pytest.raises(ValueError):
+        t, g = utils.gamma(0, 0.1, tsample)
+    with pytest.raises(ValueError):
+        t, g = utils.gamma(2, -0.1, tsample)
+    with pytest.raises(ValueError):
+        t, g = utils.gamma(2, 0.1, -tsample)
+
     for tau in [0.001, 0.01, 0.1]:
         for n in [1, 2, 5]:
             t, g = utils.gamma(n, tau, tsample)
