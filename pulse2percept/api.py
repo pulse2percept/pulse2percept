@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+import six
 
 from pulse2percept import utils
 from pulse2percept import retina
@@ -9,16 +10,13 @@ from pulse2percept import stimuli
 
 class Simulation(object):
 
-    def __init__(self, implant, name=None, engine='joblib', dojit=True,
-                 num_jobs=-1):
+    def __init__(self, implant, engine='joblib', dojit=True, num_jobs=-1):
         """Generates a simulation framework
 
         Parameters
         ----------
         implant : implants.ElectrodeArray
             An implants.ElectrodeArray object that describes the implant.
-        name : str, optional
-            Name of the simulation. Default: None.
         engine : str, optional
             Which computational backend to use:
             - 'serial': Single-core computation
@@ -39,7 +37,6 @@ class Simulation(object):
             e_s = "`implant` must be of type implants.ElectrodeArray"
             raise TypeError(e_s)
 
-        self.name = name
         self.implant = implant
         self.engine = engine
         self.dojit = dojit
@@ -132,74 +129,86 @@ class Simulation(object):
                                datapath=datapath,
                                save_data=save_data)
 
-    # def set_ganglion_cell_layer(self, model, **kwargs):
-    #     if isinstance(model, retina.TemporalModel):
-    #         debug_str = "Setting up %s." % model.__module__
-    #         logging.getLogger(__name__).debug(debug_str)
-    #         self.gcl = model
-    #     elif isinstance(model, str):
-    #         if model.lower() == 'latest':
-    #             logging.getLogger(__name__).debug("Setting up latest model.")
-
-    def set_ganglion_cell_layer(self, tsample=0.005 / 1000,
-                                tau_gcl=0.42 / 1000, tau_inl=18.0 / 1000,
-                                tau_ca=45.25 / 1000, scale_ca=42.1,
-                                tau_slow=26.25 / 1000, scale_slow=10.0,
-                                lweight=0.636, aweight=0.5,
-                                slope=3.0, shift=15.0):
+    def set_ganglion_cell_layer(self, model, **kwargs):
         """Sets parameters of the ganglion cell layer (GCL)
+
+        Select from pre-existing ganglion cell models or specify a custom one.
 
         Parameters
         ----------
-        tsample : float
-            Sampling time step (seconds). Default: 0.005 / 1000 s.
-        tau_gcl : float
-            Time decay constant for the fast leaky integrater of the ganglion
-            cell layer.
-            Default: 45.25 / 1000 s.
-        tau_inl : float
-            Time decay constant for the fast leaky integrater of the inner
-            nuclear layer (INL). It has been shown that even epiretinal arrays
-            can activate bipolar cells (in the INL), which in turn influence
-            GCL activity. Default: 18.0 / 1000 s.
-        tau_ca : float
-            Time decay constant for the charge accumulation, has values
-            between 38 - 57 ms. Default: 45.25 / 1000 s.
-        scale_ca : float, optional
-            Scaling factor applied to charge accumulation (used to be called
-            epsilon). Default: 42.1.
-        tau_slow : float
-            Time decay constant for the slow leaky integrator.
-            Default: 26.25 / 1000 s.
-        scale_slow : float
-            Scaling factor applied to the output of the cascade, to make
-            output values interpretable brightness values >= 0.
-            Default: 1150.0
-        lweight : float
-            Relative weight applied to responses from bipolar cells (weight
-            of ganglion cells is 1).
-            Default: 0.636.
-        aweight : float
-            Relative weight applied to anodic charges (weight of cathodic
-            charges is 1).
-            Default: 0.5.
-        slope : float
-            Slope of the logistic function in the stationary nonlinearity
-            stage. Default: 3. In normalized units of perceptual response
-            perhaps should be 2.98
-        shift : float
-            Shift of the logistic function in the stationary nonlinearity
-            stage. Default: 16. In normalized units of perceptual response
-            perhaps should be 15.9
+        model : str|retina.TemporalModel
+            A custom ganglion cell model can be specified by passing
+            an instance of type `retina.TemporalModel`. Else select from
+            pre-existing models:
+
+            - 'latest':
+                The latest temporal model for epiretinal and subretinal
+                arrays.
+
+                Additional keyword arguments:
+
+                - tau_gcl : float, optional, default: 45.25 ms
+                    Time decay constant for the fast leaky integrater of the
+                    ganglionc ell layer.
+                - tau_inl : float, optional, default: 18 ms
+                    Time decay constant for the fast leaky integrater of the
+                    inner nuclear layer (INL). It has been shown that even
+                    epiretinal arrays can activate bipolar cells (in the INL),
+                    which in turn influence GCL activity.
+                - tau_ca : float, optional, default: 45.25 ms
+                    Time decay constant for the charge accumulation.
+                - scale_ca : float, optional, default: 42.1
+                    Scaling factor applied to charge accumulation (used to be
+                    called epsilon).
+                - tau_slow : float, optional, default: 26.25 ms
+                    Time decay constant for the slow leaky integrator.
+                - scale_slow : float, optional, default: 1150.0
+                    Scaling factor applied to the output of the cascade, to
+                    make output values interpretable brightness values >= 0.
+                - lweight : float, optional, default: 0.636
+                    Relative weight applied to responses from bipolar cells
+                    (weight of ganglion cells is 1).
+                - aweight : float, optional, default: 0.5
+                    Relative weight applied to anodic charges (weight of
+                    cathodic charges is 1).
+                - slope : float, optional, default: 3.0
+                    Slope of the logistic function in the stationary
+                    nonlinearity stage.
+                - shift : float, optional, default: 15.0
+                    Shift of the logistic function in the stationary
+                    nonlinearity stage.
+
+            - 'Nanduri2012':
+                The temporal sensitivity model of Nanduri et al. (2012).
+
+            Alternatively, a custom `model` can be specified by passing an
+            instance of type `retina.TemporalModel`.
         """
-        # Generate a TemporalModel from above specs
-        tm = retina.LatestModel(tsample=tsample,
-                                tau_gcl=tau_gcl, tau_inl=tau_inl,
-                                tau_ca=tau_ca, scale_ca=scale_ca,
-                                tau_slow=tau_slow, scale_slow=scale_slow,
-                                lweight=lweight, aweight=aweight,
-                                slope=slope, shift=shift)
-        self.gcl = tm
+        model_not_found = False
+        if isinstance(model, six.string_types):
+            # If `model` is a string, choose from existing models
+            if model.lower() == 'latest':
+                logging.getLogger(__name__).debug("Setting up latest model.")
+                self.gcl = retina.LatestModel(**kwargs)
+            elif model.lower() in ['nanduri', 'nanduri2012']:
+                logging.getLogger(__name__).debug("Setting up Nanduri (2012) "
+                                                  "model.")
+                self.gcl = retina.Nanduri2012(**kwargs)
+            else:
+                model_not_found = True
+        elif isinstance(model, retina.TemporalModel):
+            # If `model` is not a string, must be of type TemporalModel
+            debug_str = "Setting up %s." % model.__module__
+            logging.getLogger(__name__).debug(debug_str)
+            self.gcl = model
+        else:
+            model_not_found = True
+
+        if model_not_found:
+            err_str = "Model '%s' not found. Choose from: " % model
+            err_str += ", ".join(retina.SUPPORTED_MODELS)
+            err_str += " or provide your own retina.TemporalModel instance."
+            raise ValueError(err_str)
 
     def _set_layers(self):
         """Sets up all layers whose setters have not been called by the user
@@ -212,7 +221,7 @@ class Simulation(object):
         if self.ofl is None:
             self.set_optic_fiber_layer()
         if self.gcl is None:
-            self.set_ganglion_cell_layer()
+            self.set_ganglion_cell_layer('latest')
 
     def pulse2percept(self, stim, t_percept=None, tol=0.05,
                       layers=['OFL', 'GCL', 'INL']):

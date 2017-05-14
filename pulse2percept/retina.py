@@ -2,7 +2,8 @@ import numpy as np
 import scipy.signal as signal
 import scipy.special as ss
 import abc
-import sys
+import six
+# import sys
 import os.path
 import logging
 
@@ -12,12 +13,13 @@ from pulse2percept import utils
 # Making abstract base classes Python 2, 3 compatible
 # An alternative would be to require six:
 # http://stackoverflow.com/questions/35673474/using-abc-abcmeta-in-a-way-it-is-compatible-both-with-python-2-7-and-python-3-5
-if sys.version_info >= (3, 4):
-    ABC = abc.ABC
-else:
-    ABC = abc.ABCMeta('ABC', (), {})
+# if sys.version_info >= (3, 4):
+#     ABC = abc.ABC
+# else:
+#     ABC = abc.ABCMeta('ABC', (), {})
 
 SUPPORTED_LAYERS = ['INL', 'GCL', 'OFL']
+SUPPORTED_MODELS = ['latest', 'Nanduri2012']
 
 
 class Grid(object):
@@ -223,7 +225,8 @@ class Grid(object):
         return ecs, cs
 
 
-class TemporalModel(ABC):
+@six.add_metaclass(abc.ABCMeta)
+class TemporalModel():
     """Abstract base class for all models of temporal sensitivity.
 
     This class provides a standard template for all models of temporal
@@ -249,6 +252,10 @@ class TemporalModel(ABC):
 
     # Static attribute
     tsample = 0.005 / 1000
+
+
+class Nanduri2012(TemporalModel):
+    pass
 
 
 class LatestModel(TemporalModel):

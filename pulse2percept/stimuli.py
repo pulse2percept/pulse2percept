@@ -6,6 +6,7 @@ Functions for creating retinal implants
 """
 import numpy as np
 from scipy import interpolate as spi
+import six
 import copy
 import logging
 
@@ -299,7 +300,7 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
         raise TypeError("For now, implant must be of type implants.ArgusI or "
                         "implants.ArgusII.")
 
-    if isinstance(img, str):
+    if isinstance(img, six.string_types):
         # Load image from filename
         img_orig = sio.imread(img, as_grey=True).astype(np.float32)
         logging.getLogger(__name__).info("Loaded file '%s'." % img)
