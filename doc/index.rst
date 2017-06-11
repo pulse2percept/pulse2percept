@@ -26,7 +26,7 @@ Electronic retinal prostheses
 
 .. raw:: html
 
-  <img src="http://ieeexplore.ieee.org/ieee_pilot/articles/96jproc07/96jproc07-weiland/assets/img/article_1/fig_4/large.jpg" align="right" style="width: 60%; margin-left: 10px"/>
+  <img src="_static/artificial_retina.jpg" align="right" style="width: 60%; margin-left: 10px"/>
 
 Analogous to cochlear implants, the goal of electronic retinal prostheses is to produce
 meaningful visual information by electrically stimulating remaining retinal cells.
