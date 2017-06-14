@@ -3,20 +3,11 @@ import scipy.signal as signal
 import scipy.special as ss
 import abc
 import six
-# import sys
 import os.path
 import logging
 
 from pulse2percept import utils
 
-
-# Making abstract base classes Python 2, 3 compatible
-# An alternative would be to require six:
-# http://stackoverflow.com/questions/35673474/using-abc-abcmeta-in-a-way-it-is-compatible-both-with-python-2-7-and-python-3-5
-# if sys.version_info >= (3, 4):
-#     ABC = abc.ABC
-# else:
-#     ABC = abc.ABCMeta('ABC', (), {})
 
 SUPPORTED_LAYERS = ['INL', 'GCL', 'OFL']
 SUPPORTED_MODELS = ['latest', 'Nanduri2012']

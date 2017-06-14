@@ -17,21 +17,18 @@ class Simulation(object):
         ----------
         implant : implants.ElectrodeArray
             An implants.ElectrodeArray object that describes the implant.
-        engine : str, optional
+        engine : str, optional, default: 'joblib'
             Which computational backend to use:
             - 'serial': Single-core computation
             - 'joblib': Parallelization via joblib (requires `pip install
                         joblib`)
             - 'dask': Parallelization via dask (requires `pip install dask`)
-            Default: joblib.
-        dojit : bool, optional
+        dojit : bool, optional, default: True
             Whether to use just-in-time (JIT) compilation to speed up
             computation.
-            Default: True.
-        num_jobs : int, optional
+        num_jobs : int, optional, default: -1
             Number of cores (threads) to run the model on in parallel.
             Specify -1 to use as many cores as available.
-            Default: -1.
         """
         if not isinstance(implant, implants.ElectrodeArray):
             e_s = "`implant` must be of type implants.ElectrodeArray"
@@ -57,31 +54,27 @@ class Simulation(object):
 
         Parameters
         ----------
-        sampling : float, optional
-            Microns per grid cell. Default: 100 microns.
-        axon_lambda : float, optional
+        sampling : float, optional, default: 100 microns
+            Microns per grid cell.
+        axon_lambda : float, optional, default: 2
             Constant that determines fall-off with axonal distance.
-            Default: 2.
-        rot_deg : float, optional
-            Rotation angle (deg). Default: 0.
-        x_range : list|None
+        rot_deg : float, optional, default: 0
+            Rotation angle (deg).
+        x_range : list|None, default: None
             Lower and upper bound of the retinal grid (microns) in horizontal
             dimension. Either a list [xlo, xhi] or None. If None, the generated
             grid will be just big enough to fit the implant.
-            Default: None.
-        y_range : list|None
+        y_range : list|None, default: None
             Lower and upper bound of the retinal grid (microns) in vertical
             dimension. Either a list [ylo, yhi] or None. If None, the generated
             grid will be just big enough to fit the implant.
-            Default: None.
-        datapath : str
+        datapath : str, default: current directory
             Relative path where to look for existing retina files, and where to
-            store new retina files. Default: current directory.
-        save_data : bool
+            store new retina files.
+        save_data : bool, default: True
             Flag whether to save the data to a new retina file (True) or not
             (False). The file name is automatically generated from all
             specified input arguments.
-            Default: True.
         """
         # For auto-generated grids:
         round_to = 500  # round to nearest (microns)
@@ -270,7 +263,7 @@ class Simulation(object):
         Simulate a single-electrode array:
 
         >>> import pulse2percept as p2p
-        >>> implant = p2p.implants.ElectrodeArray('subretinal', 0, 0, 0, 0)
+        >>> implant = p2p.implants.ElectrodeArray('subretinal', 0, 0, 0)
         >>> stim = p2p.stimuli.PulseTrain(tsample=5e-6, freq=50, amp=20)
         >>> sim = p2p.Simulation(implant)
         >>> percept = sim.pulse2percept(stim)  # doctest: +SKIP

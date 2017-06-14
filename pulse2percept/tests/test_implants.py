@@ -37,6 +37,7 @@ def test_Electrode():
 
             # Subretinal arrays have layer thicknesses added to `hh`.
             npt.assert_equal(e.height > hh, True)
+        print(e)
 
     # Invalid type
     with pytest.raises(ValueError):
@@ -54,27 +55,33 @@ def test_Electrode():
 
 
 def test_ElectrodeArray():
+    implant = p2p.implants.ElectrodeArray('subretinal', 10, 0, 0)
+    npt.assert_equal(implant.num_electrodes, 1)
+    print(implant)
+
     # Make sure ElectrodeArray can accept ints, floats, lists, np.arrays
     implants = [None] * 4
-    implants[0] = p2p.implants.ElectrodeArray('epiretinal', [0], [1], [2], [3])
-    implants[1] = p2p.implants.ElectrodeArray('epiretinal', 0, 1, 2, 3)
-    implants[2] = p2p.implants.ElectrodeArray('epiretinal', .0, [1], 2.0, [3])
-    implants[3] = p2p.implants.ElectrodeArray('epiretinal', np.array([0]),
-                                              [1], [2], [[3]])
+    implants[0] = p2p.implants.ElectrodeArray('epiretinal', [0], [1], [2],
+                                              hs=[3])
+    implants[1] = p2p.implants.ElectrodeArray('epiretinal', 0, 1, 2, hs=3)
+    implants[2] = p2p.implants.ElectrodeArray('epiretinal', .0, [1], 2.0,
+                                              hs=[3])
+    implants[3] = p2p.implants.ElectrodeArray('epiretinal', np.array([0]), [1],
+                                              [2], hs=[[3]])
+
     for arr in implants:
+        npt.assert_equal(arr.num_electrodes, 1)
         npt.assert_equal(arr.electrodes[0].radius, 0)
         npt.assert_equal(arr.electrodes[0].x_center, 1)
         npt.assert_equal(arr.electrodes[0].y_center, 2)
         npt.assert_equal(arr.electrodes[0].h_ofl, 3)
         npt.assert_equal(arr.electrodes[0].etype, 'epiretinal')
 
-    # However, all input arguments must have the same number of elements
-    with pytest.raises(AssertionError):
-        p2p.implants.ElectrodeArray('epiretinal', [0], [1, 2], [3, 4, 5], [6])
-
     # Make sure electrodes can be addressed by index
     vals = range(5)
-    implant = p2p.implants.ElectrodeArray('subretinal', vals, vals, vals, vals)
+    implant = p2p.implants.ElectrodeArray('subretinal', vals, vals, vals,
+                                          hs=vals)
+    npt.assert_equal(implant.num_electrodes, len(vals))
     for v in vals:
         el = implant[v]
         npt.assert_equal(el.radius, v)
@@ -82,6 +89,31 @@ def test_ElectrodeArray():
         npt.assert_equal(el.y_center, v)
         npt.assert_equal(el.h_inl, v + 23.0 / 2.0)
         npt.assert_equal(el.h_ofl, v + 83.0)
+
+
+def test_ElectrodeArray_add_electrode():
+    implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0)
+    with pytest.raises(TypeError):
+        implant.add_electrode(implant)
+
+    with pytest.raises(ValueError):
+        implant.add_electrode(p2p.implants.Electrode('subretinal', 10, 0, 0))
+
+    # Make sure electrode count is correct
+    for j in range(5):
+        implant.add_electrode(p2p.implants.Electrode('epiretinal', 10, 10, 10))
+        npt.assert_equal(implant.num_electrodes, j + 2)
+
+
+def test_ElectrodeArray_add_electrodes():
+    for j in range(5):
+        implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0)
+        implant.add_electrodes(range(1, j + 1), range(j), range(j))
+        npt.assert_equal(implant.num_electrodes, j + 1)
+
+    # However, all input arguments must have the same number of elements
+    with pytest.raises(AssertionError):
+        implant.add_electrodes([0], [1, 2], [3, 4, 5], [6])
 
 
 def test_ArgusI():
