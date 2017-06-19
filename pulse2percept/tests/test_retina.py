@@ -28,6 +28,26 @@ def test_TemporalModel():
     npt.assert_equal(tm.model_cascade(2.4), 2.4)
 
 
+def test_Nanduri2012_calc_layer_current():
+    tsample = 0.01 / 1000
+
+    # Assume 4 electrodes, each getting some stimulation
+    pts = [p2p.stimuli.PulseTrain(tsample=tsample, dur=0.1)] * 4
+    ptrain_data = [pt.data for pt in pts]
+
+    # For each of these 4 electrodes, we have two effective current values:
+    # one for the ganglion cell layer, one for the bipolar cell layer
+    ecs_item = np.random.rand(2, 4)
+
+    # The Nanduri model does not support INL, so it's just one layer:
+    ecm_by_hand = np.sum(ecs_item[1, :, np.newaxis] * ptrain_data, axis=0)
+
+    # And that should be the same as `calc_layer_current`:
+    tm = p2p.retina.Nanduri2012(tsample=tsample)
+    ecm = tm.calc_layer_current(ecs_item, ptrain_data, layers=['GCL'])
+    npt.assert_almost_equal(ecm, ecm_by_hand)
+
+
 def test_LatestModel_calc_layer_current():
     tsample = 0.01 / 1000
 

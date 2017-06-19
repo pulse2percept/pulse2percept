@@ -134,9 +134,44 @@ class Simulation(object):
             an instance of type `retina.TemporalModel`. Else select from
             pre-existing models:
 
+
+            - 'Nanduri2012':
+                A model of temporal sensitivity as described in:
+
+                > Nanduri, Fine, Horsager, Boynton, Humayun, Greenberg, Weiland
+                > (2012). Frequency and Amplitude Modulation Have Different
+                > Effects on the Percepts Elicited by Retinal Stimulation.
+                > Investigative Ophthalmology & Visual Science January 2012,
+                > Vol.53, 205-214. doi:10.1167/iovs.11-8401.
+
+                Additional keyword arguments
+                ----------------------------
+                tsample : float, optional, default:
+                tau1 : float, optional, default: 0.42 / 1000 (seconds)
+                    Time decay constant for the fast leaky integrater of
+                    the ganglion cell layer (GCL).
+                tau2 : float, optional, default: 45.25 / 1000 (seconds)
+                    Time decay constant for the charge accumulation, has
+                    values between 38 - 57 ms.
+                tau3 : float, optional, default: 26.25 / 1000 (seconds)
+                    Time decay constant for the slow leaky integrator.
+                    Default: 26.25 / 1000 s.
+                eps : float, optional, default: 8.73
+                    Scaling factor applied to charge accumulation (used to
+                    be called epsilon).
+                asymptote : float, optional, default: 14.0
+                    Asymptote of the logistic function used in the
+                    stationary nonlinearity stage.
+                slope : float, optional, default: 3.0
+                    Slope of the logistic function in the stationary
+                    nonlinearity stage.
+                shift : float, optional, default: 16.0
+                    Shift of the logistic function in the stationary
+                    nonlinearity stage.
+
             - 'latest':
                 The latest temporal model for epiretinal and subretinal
-                arrays.
+                arrays (experimental).
 
                 Additional keyword arguments:
 
@@ -170,12 +205,6 @@ class Simulation(object):
                 - shift : float, optional, default: 15.0
                     Shift of the logistic function in the stationary
                     nonlinearity stage.
-
-            - 'Nanduri2012':
-                The temporal sensitivity model of Nanduri et al. (2012).
-
-            Alternatively, a custom `model` can be specified by passing an
-            instance of type `retina.TemporalModel`.
         """
         model_not_found = False
         if isinstance(model, six.string_types):
@@ -285,7 +314,8 @@ class Simulation(object):
         layers = np.array([l.upper() for l in layers])
 
         # Make sure all specified layers exist
-        not_supported = [l not in retina.SUPPORTED_LAYERS for l in layers]
+        not_supported = np.array([l not in retina.SUPPORTED_LAYERS
+                                  for l in layers], dtype=bool)
         if any(not_supported):
             msg = ', '.join(layers[not_supported])
             msg = "Specified layer %s not supported. " % msg

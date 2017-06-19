@@ -224,8 +224,15 @@ class TemporalModel():
     sensitivity.
     """
 
-    def set_kwargs(self, warn_inexistent=True, **kwargs):
-        """Overwrite any given keyword arguments"""
+    def set_kwargs(self, warn_inexistent, **kwargs):
+        """Overwrite any given keyword arguments
+
+        Parameters
+        ----------
+        warn_inexistent : bool
+            If True, displays a warning message if a keyword is provided that
+            is not recognized by the temporal model.
+        """
         for key, value in kwargs.items():
             if not hasattr(self, key) and warn_inexistent:
                 w_s = "Unknown class attribute '%s'" % key
@@ -233,97 +240,248 @@ class TemporalModel():
             setattr(self, key, value)
 
     def __init__(self, **kwargs):
-        self.set_kwargs(**kwargs)
+        self.set_kwargs(True, **kwargs)
 
     @abc.abstractmethod
-    def model_cascade(self, ecv):
-        """Run the model cascade on a single-pixel TimeSeries and return a
-           brightness value"""
-        return
+    def model_cascade(self, in_arr, pt_list, layers, dojit):
+        """Custom ganglion cell model
+
+        Parameters
+        ----------
+        in_arr: array-like
+            A 2D array specifying the effective current values
+            at a particular spatial location (pixel); one value
+            per retinal layer and electrode.
+            Dimensions: <#layers x #electrodes>
+        pt_list : list
+            List of pulse train ‘data‘ containers.
+            Dimensions: <#electrodes x #time points>
+        layers : list
+            List of retinal layers to simulate.
+            Choose from:
+            - 'OFL': optic fiber layer
+            - 'GCL': ganglion cell layer
+            - 'INL': inner nuclear layer
+        dojit : bool
+            If True, applies just-in-time (JIT) compilation to
+            expensive computations for additional speed-up
+            (requires Numba).
+        """
+        pass
 
     # Static attribute
     tsample = 0.005 / 1000
 
 
 class Nanduri2012(TemporalModel):
-    pass
+    """Model of temporal sensitivity (Nanduri et al. 2012)
 
+    This class implements the model of temporal sensitivity as described in:
 
-class LatestModel(TemporalModel):
+    > Nanduri, Fine, Horsager, Boynton, Humayun, Greenberg, Weiland (2012).
+    > Frequency and Amplitude Modulation Have Different Effects on the Percepts
+    > Elicited by Retinal Stimulation. Investigative Ophthalmology & Visual
+    > Science January 2012, Vol.53, 205-214. doi:10.1167/iovs.11-8401.
 
-    def __init__(self, tsample=0.005 / 1000,
-                 tau_gcl=0.42 / 1000, tau_inl=18.0 / 1000,
-                 tau_ca=45.25 / 1000, scale_ca=42.1,
-                 tau_slow=26.25 / 1000, scale_slow=10.0,
-                 lweight=0.636, aweight=0.5,
-                 slope=3.0, shift=15.0):
-        """Temporal Sensitivity Model
+    Parameters
+    ----------
+    tsample : float, optional, default: 0.005 / 1000 seconds
+        Sampling time step (seconds).
+    tau1 : float, optional, default: 0.42 / 1000 seconds
+        Time decay constant for the fast leaky integrater of the ganglion
+        cell layer (GCL).
+    tau2 : float, optional, default: 45.25 / 1000 seconds
+        Time decay constant for the charge accumulation, has values
+        between 38 - 57 ms.
+    tau3 : float, optional, default: 26.25 / 1000 seconds
+        Time decay constant for the slow leaky integrator.
+        Default: 26.25 / 1000 s.
+    eps : float, optional, default: 8.73
+        Scaling factor applied to charge accumulation (used to be called
+        epsilon).
+    asymptote : float, optional, default: 14.0
+        Asymptote of the logistic function used in the stationary
+        nonlinearity stage.
+    slope : float, optional, default: 3.0
+        Slope of the logistic function in the stationary nonlinearity
+        stage.
+    shift : float, optional, default: 16.0
+        Shift of the logistic function in the stationary nonlinearity
+        stage.
+    """
 
-        A model of temporal integration from retina pixels.
+    def __init__(self, **kwargs):
+        # Set default values of keyword arguments
+        self.tau1 = 0.42 / 1000
+        self.tau2 = 45.25 / 1000
+        self.tau3 = 26.25 / 1000
+        self.eps = 8.73
+        self.asymptote = 14.0
+        self.slope = 3.0
+        self.shift = 16.0
+
+        # Overwrite any given keyword arguments, print warning message (True)
+        # if attempting to set an unrecognized keyword
+        self.set_kwargs(True, **kwargs)
+
+        # perform one-time setup calculations
+        # gamma1 is used for the fast response
+        _, self.gamma1 = utils.gamma(1, self.tau1, self.tsample)
+
+        # gamma2 is used to calculate charge accumulation
+        _, self.gamma2 = utils.gamma(1, self.tau2, self.tsample)
+
+        # gamma3 is used to calculate the slow response
+        _, self.gamma3 = utils.gamma(3, self.tau3, self.tsample)
+
+    def calc_layer_current(self, in_arr, pt_list, layers):
+        """Calculates the effective current map of a given layer
 
         Parameters
         ----------
-        tsample : float
-            Sampling time step (seconds). Default: 5e-6 s.
-        tau_gcl : float
-            Time decay constant for the fast leaky integrater of the ganglion
-            cell layer (GCL).
-            This is only important in combination with epiretinal electrode
-            arrays. Default: 45.25 / 1000 s.
-        tau_inl : float
-            Time decay constant for the fast leaky integrater of the inner
-            nuclear layer (INL); i.e., bipolar cell layer.
-            This is only important in combination with subretinal electrode
-            arrays. Default: 18.0 / 1000 s.
-        tau_ca : float
-            Time decay constant for the charge accumulation, has values
-            between 38 - 57 ms. Default: 45.25 / 1000 s.
-        scale_ca : float, optional
-            Scaling factor applied to charge accumulation (used to be called
-            epsilon). Default: 42.1.
-        tau_slow : float
-            Time decay constant for the slow leaky integrator.
-            Default: 26.25 / 1000 s.
-        scale_slow : float
-            Scaling factor applied to the output of the cascade, to make
-            output values interpretable brightness values >= 0.
-            Default: 1150.0
-        lweight : float
-            Relative weight applied to responses from bipolar cells (weight
-            of ganglion cells is 1).
-            Default: 0.636.
-        aweight : float
-            Relative weight applied to anodic charges (weight of cathodic
-            charges is 1).
-            Default: 0.5.
-        slope : float
-            Slope of the logistic function in the stationary nonlinearity
-            stage. Default: 3. In normalized units of perceptual response
-            perhaps should be 2.98
-        shift : float
-            Shift of the logistic function in the stationary nonlinearity
-            stage. Default: 16. In normalized units of perceptual response
-            perhaps should be 15.9
+        in_arr: array-like
+            A 2D array specifying the effective current values
+            at a particular spatial location (pixel); one value
+            per retinal layer and electrode.
+            Dimensions: <#layers x #electrodes>
+        pt_list : list
+            List of pulse train ‘data‘ containers.
+            Dimensions: <#electrodes x #time points>
+        layers : list
+            List of retinal layers to simulate.
+            Choose from:
+            - ’OFL’: optic fiber layer
+            - ’GCL’: ganglion cell layer
         """
-        self.tsample = tsample
-        self.tau_gcl = tau_gcl
-        self.tau_inl = tau_inl
-        self.tau_ca = tau_ca
-        self.scale_ca = scale_ca
-        self.tau_slow = tau_slow
-        self.slope = slope
-        self.shift = shift
-        self.lweight = lweight
-        self.aweight = aweight
-        self.scale_slow = scale_slow
+        if 'INL' in layers:
+            logging.getLogger(__name__).warn("The Nanduri2012 model does not "
+                                             "support an inner nuclear layer.")
+
+        pt_data = np.array([pt.data for pt in pt_list])
+        if ('GCL' or 'OFL') in layers:
+            ecm = np.sum(in_arr[1, :, np.newaxis] * pt_data, axis=0)
+        else:
+            raise ValueError("Acceptable values for `layers` are: 'GCL', "
+                             "'OFL'.")
+        return ecm
+
+    def model_cascade(self, in_arr, pt_list, layers, dojit):
+        """Nanduri model cascade
+
+        Parameters
+        ----------
+        in_arr: array-like
+            A 2D array specifying the effective current values
+            at a particular spatial location (pixel); one value
+            per retinal layer and electrode.
+            Dimensions: <#layers x #electrodes>
+        pt_list : list
+            List of pulse train ‘data‘ containers.
+            Dimensions: <#electrodes x #time points>
+        layers : list
+            List of retinal layers to simulate.
+            Choose from:
+            - ’OFL’: optic fiber layer
+            - ’GCL’: ganglion cell layer
+        dojit : bool
+            If True, applies just-in-time (JIT) compilation to
+            expensive computations for additional speed-up
+            (requires Numba).
+        """
+        if 'INL' in layers:
+            logging.getLogger(__name__).warn("The Nanduri2012 model does not "
+                                             "support an inner nuclear layer.")
+
+        # `b1` contains a scaled PulseTrain per layer for this particular
+        # pixel: Use as input to model cascade
+        b1 = self.calc_layer_current(in_arr, pt_list, layers)
+
+        # Fast response
+        b2 = self.tsample * utils.conv(b1, self.gamma1, mode='full',
+                                       method='sparse', dojit=dojit)[:b1.size]
+
+        # Charge accumulation
+        ca = self.tsample * np.cumsum(np.maximum(0, b1))
+        ca = self.tsample * utils.conv(ca, self.gamma2, mode='full',
+                                       method='fft')[:b1.size]
+        b3 = np.maximum(0, b2 - self.eps * ca)
+
+        # Stationary nonlinearity
+        sigmoid = ss.expit((b3.max() - self.shift) / self.slope)
+        b4 = b3 * sigmoid * self.asymptote
+
+        # Slow response
+        b5 = self.tsample * utils.conv(b4, self.gamma3, mode='full',
+                                       method='fft')[:b1.size]
+
+        return utils.TimeSeries(self.tsample, b5)
+
+
+class LatestModel(TemporalModel):
+    """Latest edition of the temporal sensitivity model (experimental)
+
+    This class implements the latest version of the temporal sensitivity
+    model (experimental). As such, the model might still change from version
+    to version. For more stable implementations, please refer to other,
+    published models (see `p2p.retina.SUPPORTED_MODELS`).
+
+    Parameters
+    ----------
+    tsample : float, optional, default: 0.005 / 1000 seconds
+        Sampling time step (seconds).
+    tau_gcl : float, optional, default: 45.25 / 1000 seconds
+        Time decay constant for the fast leaky integrater of the ganglion
+        cell layer (GCL).
+        This is only important in combination with epiretinal electrode
+        arrays.
+    tau_inl : float, optional, default: 18.0 / 1000 seconds
+        Time decay constant for the fast leaky integrater of the inner
+        nuclear layer (INL); i.e., bipolar cell layer.
+        This is only important in combination with subretinal electrode
+        arrays.
+    tau_ca : float, optional, default: 45.25 / 1000 seconds
+        Time decay constant for the charge accumulation, has values
+        between 38 - 57 ms.
+    scale_ca : float, optional, default: 42.1
+        Scaling factor applied to charge accumulation (used to be called
+        epsilon).
+    tau_slow : float, optional, default: 26.25 / 1000 seconds
+        Time decay constant for the slow leaky integrator.
+    scale_slow : float, optional, default: 1150.0
+        Scaling factor applied to the output of the cascade, to make
+        output values interpretable brightness values >= 0.
+    lweight : float, optional, default: 0.636
+        Relative weight applied to responses from bipolar cells (weight
+        of ganglion cells is 1).
+    aweight : float, optional, default: 0.5
+        Relative weight applied to anodic charges (weight of cathodic
+        charges is 1).
+    slope : float, optional, default: 3.0
+        Slope of the logistic function in the stationary nonlinearity
+        stage.
+    shift : float, optional, default: 15.0
+        Shift of the logistic function in the stationary nonlinearity
+        stage.
+    """
+
+    def __init__(self, **kwargs):
+        # Set default values of keyword arguments
+        self.tau_gcl = 0.42 / 1000
+        self.tau_inl = 18.0 / 1000
+        self.tau_ca = 45.25 / 1000
+        self.tau_slow = 26.25 / 1000
+        self.scale_ca = 42.1
+        self.scale_slow = 1150.0
+        self.lweight = 0.636
+        self.aweight = 0.5
+        self.slope = 3.0
+        self.shift = 15.0
+
+        # Overwrite any given keyword arguments, print warning message (True)
+        # if attempting to set an unrecognized keyword
+        self.set_kwargs(True, **kwargs)
 
         # perform one-time setup calculations
-        # Gamma functions used as convolution kernels do not depend on input
-        # data, hence can be calculated once, then re-used (trade off memory
-        # for speed).
-        # gamma_gcl and gamma_inl are used to calculate the fast response in
-        # bipolar and ganglion cells respectively
-
         _, self.gamma_inl = utils.gamma(1, self.tau_inl, self.tsample)
         _, self.gamma_gcl = utils.gamma(1, self.tau_gcl, self.tsample)
 
@@ -333,11 +491,9 @@ class LatestModel(TemporalModel):
         # gamma_slow is used to calculate the slow response
         _, self.gamma_slow = utils.gamma(3, self.tau_slow, self.tsample)
 
-    def fast_response(self, stim, gamma, dojit=True, usefft=False):
-        """Fast response function (Box 2) for the bipolar layer
-
-        Convolve a stimulus `stim` with a temporal low-pass filter (1-stage
-        gamma) with time constant `self.tau_inl` ~ 14ms representing bipolars.
+    def fast_response(self, stim, gamma, method, dojit=True):
+        """Fast response function
+        Convolve a stimulus `stim` with a temporal low-pass filter `gamma`.
 
         Parameters
         ----------
@@ -357,19 +513,14 @@ class LatestModel(TemporalModel):
         The function utils.sparseconv can be much faster than np.convolve and
         signal.fftconvolve if `stim` is sparse and much longer than the
         convolution kernel.
-
         The output is not converted to a TimeSeries object for speedup.
         """
-        # FFT is faster on non-sparse data
-        if usefft:
-            conv = self.tsample * signal.fftconvolve(stim, gamma, mode='full')
-        else:
-            conv = self.tsample * utils.sparseconv(gamma, stim,
-                                                   mode='full',
-                                                   dojit=dojit)
-            # Cut off the tail of the convolution to make the output signal
-            # match the dimensions of the input signal.
-        return conv[:stim.shape[-1]]
+        conv = utils.conv(stim, gamma, self.tsample, mode='full',
+                          method=method, dojit=dojit)
+
+        # Cut off the tail of the convolution to make the output signal
+        # match the dimensions of the input signal.
+        return self.tsample * conv[:stim.shape[-1]]
 
     def charge_accumulation(self, ecm):
         """Calculates the charge accumulation
@@ -395,12 +546,11 @@ class LatestModel(TemporalModel):
         return ca
 
     def stationary_nonlinearity(self, stim):
-        """Stationary nonlinearity (Box 4)
+        """Stationary nonlinearity
 
         Nonlinearly rescale a temporal signal `stim` across space and time,
         based on a sigmoidal function dependent on the maximum value of `stim`.
         This is Box 4 in Nanduri et al. (2012).
-
         The parameter values of the asymptote, slope, and shift of the logistic
         function are given by self.asymptote, self.slope, and self.shift,
         respectively.
@@ -425,7 +575,7 @@ class LatestModel(TemporalModel):
         return stim * sigmoid
 
     def slow_response(self, stim):
-        """Slow response function (Box 5)
+        """Slow response function
 
         Convolve a stimulus `stim` with a low-pass filter (3-stage gamma)
         with time constant self.tau_slow.
@@ -444,7 +594,6 @@ class LatestModel(TemporalModel):
         -----
         This is by far the most computationally involved part of the perceptual
         sensitivity model.
-
         Conversion to TimeSeries is avoided for the sake of speedup.
         """
         # No need to zero-pad: fftconvolve already takes care of optimal
@@ -459,27 +608,25 @@ class LatestModel(TemporalModel):
         """For a given pixel, calculates the effective current for each retinal
            layer over time
 
-            This function operates at a single-pixel level: It calculates the
-            combined current from all electrodes through a spatial location
-            over time. This calculation is performed per retinal layer.
+        This function operates at a single-pixel level: It calculates the
+        combined current from all electrodes through a spatial location
+        over time. This calculation is performed per retinal layer.
 
-            Parameters
-            ----------
-            ecs_item: array-like
-                A 2D array specifying the effective current values at a
-                particular spatial location (pixel); one value per retinal
-                layer and electrode.
-                Dimensions: <#layers x #electrodes>
-            pt_list: list
-                A list of PulseTrain `data` containers.
-                Dimensions: <#electrodes x #time points>
-            layers : list
-
-                List of retinal layers to simulate. Choose from:
-                - 'OFL': optic fiber layer
-                - 'GCL': ganglion cell layer
-                - 'INL': inner nuclear layer
-
+        Parameters
+        ----------
+        ecs_item: array-like
+            A 2D array specifying the effective current values at a
+            particular spatial location (pixel); one value per retinal
+            layer and electrode.
+            Dimensions: <#layers x #electrodes>
+        pt_list: list
+            A list of PulseTrain `data` containers.
+            Dimensions: <#electrodes x #time points>
+        layers : list
+            List of retinal layers to simulate. Choose from:
+            - 'OFL': optic fiber layer
+            - 'GCL': ganglion cell layer
+            - 'INL': inner nuclear layer
         """
         ecm = np.zeros((ecs_item.shape[0], pt_list[0].shape[-1]))
         pt_data = np.array([pt.data for pt in pt_list])
@@ -507,7 +654,6 @@ class LatestModel(TemporalModel):
             A list of PulseTrain `data` containers.
             Dimensions: <#electrodes x #time points>
         layers : list
-
             List of retinal layers to simulate. Choose from:
             - 'OFL': optic fiber layer
             - 'GCL': ganglion cell layer
@@ -521,7 +667,6 @@ class LatestModel(TemporalModel):
         Brightness response over time. In Nanduri et al. (2012), the
         maximum value of this signal was used to represent the perceptual
         brightness of a particular location in space, B(r).
-
         """
         # For each layer in the model, scale the pulse train data with the
         # effective current:
@@ -535,7 +680,7 @@ class LatestModel(TemporalModel):
         if 'INL' in layers:
             fr_inl = self.fast_response(ecm[0], self.gamma_inl,
                                         dojit=dojit,
-                                        usefft=False)
+                                        method='sparse')
 
             # Cathodic and anodic parts are treated separately: They have the
             # same charge accumulation, but anodic currents contribute less to
@@ -549,7 +694,7 @@ class LatestModel(TemporalModel):
         if ('GCL' or 'OFL') in layers:
             fr_gcl = self.fast_response(ecm[1], self.gamma_gcl,
                                         dojit=dojit,
-                                        usefft=False)
+                                        method='sparse')
 
             # Cathodic and anodic parts are treated separately: They have the
             # same charge accumulation, but anodic currents contribute less to
