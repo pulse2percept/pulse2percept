@@ -357,7 +357,7 @@ class Nanduri2012(TemporalModel):
             logging.getLogger(__name__).warn("The Nanduri2012 model does not "
                                              "support an inner nuclear layer.")
 
-        pt_data = np.array([pt.data for pt in pt_list])
+        pt_data = [pt.data for pt in pt_list]
         if ('GCL' or 'OFL') in layers:
             ecm = np.sum(in_arr[1, :, np.newaxis] * pt_data, axis=0)
         else:
