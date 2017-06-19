@@ -84,12 +84,18 @@ def test_Simulation_set_ganglion_cell_layer():
         sim.set_ganglion_cell_layer(modelstr, tau3=42)
         npt.assert_equal(isinstance(sim.gcl, p2p.retina.Nanduri2012), True)
         npt.assert_equal(sim.gcl.tau3, 42)
+        sim.set_ganglion_cell_layer(modelstr, unknown_param=2)  # smoke
 
     # Smoke test latest model
     for modelstr in ['latest', 'Latest', 'LATEST']:
         sim.set_ganglion_cell_layer(modelstr, lweight=42)
         npt.assert_equal(isinstance(sim.gcl, p2p.retina.LatestModel), True)
         npt.assert_equal(sim.gcl.lweight, 42)
+        sim.set_ganglion_cell_layer(modelstr, unknown_param=2)  # smoke
+
+    # Model unknown
+    with pytest.raises(ValueError):
+        sim.set_ganglion_cell_layer('unknown-model')
 
 
 def test_get_brightest_frame():

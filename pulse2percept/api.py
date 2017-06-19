@@ -328,6 +328,7 @@ class Simulation(object):
         # Parse `stim` (either single pulse train or a list/dict of pulse
         # trains), and generate a list of pulse trains, one for each electrode
         pt_list = stimuli.parse_pulse_trains(stim, self.implant)
+        pt_data = [pt.data for pt in pt_list]
 
         if not np.allclose([p.tsample for p in pt_list], self.gcl.tsample):
             e_s = "For now, all pulse trains must have the same sampling "
@@ -378,7 +379,7 @@ class Simulation(object):
         sr_list = utils.parfor(self.gcl.model_cascade,
                                ecs_list, n_jobs=self.num_jobs,
                                engine=self.engine,
-                               func_args=[pt_list, layers, self.dojit])
+                               func_args=[pt_data, layers, self.dojit])
         bm = np.zeros(self.ofl.gridx.shape +
                       (sr_list[0].data.shape[-1], ))
         idxer = tuple(np.array(idx_list)[:, i] for i in range(2))

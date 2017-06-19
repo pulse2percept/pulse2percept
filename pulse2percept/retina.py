@@ -354,12 +354,11 @@ class Nanduri2012(TemporalModel):
             - ’GCL’: ganglion cell layer
         """
         if 'INL' in layers:
-            logging.getLogger(__name__).warn("The Nanduri2012 model does not "
-                                             "support an inner nuclear layer.")
+            raise ValueError("The Nanduri2012 model does not support an inner "
+                             "nuclear layer.")
 
-        pt_data = [pt.data for pt in pt_list]
         if ('GCL' or 'OFL') in layers:
-            ecm = np.sum(in_arr[1, :, np.newaxis] * pt_data, axis=0)
+            ecm = np.sum(in_arr[1, :, np.newaxis] * pt_list, axis=0)
         else:
             raise ValueError("Acceptable values for `layers` are: 'GCL', "
                              "'OFL'.")
@@ -389,21 +388,22 @@ class Nanduri2012(TemporalModel):
             (requires Numba).
         """
         if 'INL' in layers:
-            logging.getLogger(__name__).warn("The Nanduri2012 model does not "
-                                             "support an inner nuclear layer.")
+            raise ValueError("The Nanduri2012 model does not support an inner "
+                             "nuclear layer.")
 
         # `b1` contains a scaled PulseTrain per layer for this particular
         # pixel: Use as input to model cascade
         b1 = self.calc_layer_current(in_arr, pt_list, layers)
 
         # Fast response
-        b2 = self.tsample * utils.conv(b1, self.gamma1, mode='full',
-                                       method='sparse', dojit=dojit)[:b1.size]
+        b2 = self.tsample * utils.conv(b1, self.gamma1, self.tsample,
+                                       mode='full', method='sparse',
+                                       dojit=dojit)[:b1.size]
 
         # Charge accumulation
         ca = self.tsample * np.cumsum(np.maximum(0, b1))
-        ca = self.tsample * utils.conv(ca, self.gamma2, mode='full',
-                                       method='fft')[:b1.size]
+        ca = self.tsample * utils.conv(ca, self.gamma2, self.tsample,
+                                       mode='full', method='fft')[:b1.size]
         b3 = np.maximum(0, b2 - self.eps * ca)
 
         # Stationary nonlinearity
@@ -411,8 +411,8 @@ class Nanduri2012(TemporalModel):
         b4 = b3 * sigmoid * self.asymptote
 
         # Slow response
-        b5 = self.tsample * utils.conv(b4, self.gamma3, mode='full',
-                                       method='fft')[:b1.size]
+        b5 = self.tsample * utils.conv(b4, self.gamma3, self.tsample,
+                                       mode='full', method='fft')[:b1.size]
 
         return utils.TimeSeries(self.tsample, b5)
 
@@ -628,12 +628,17 @@ class LatestModel(TemporalModel):
             - 'GCL': ganglion cell layer
             - 'INL': inner nuclear layer
         """
+        not_supported = np.array([l not in SUPPORTED_LAYERS for l in layers],
+                                 dtype=bool)
+        if any(not_supported):
+            raise ValueError("Acceptable values for `layers` is 'OFL', 'GCL', "
+                             "'INL'.")
+
         ecm = np.zeros((ecs_item.shape[0], pt_list[0].shape[-1]))
-        pt_data = np.array([pt.data for pt in pt_list])
         if 'INL' in layers:
-            ecm[0, :] = np.sum(ecs_item[0, :, np.newaxis] * pt_data, axis=0)
+            ecm[0, :] = np.sum(ecs_item[0, :, np.newaxis] * pt_list, axis=0)
         if ('GCL' or 'OFL') in layers:
-            ecm[1, :] = np.sum(ecs_item[1, :, np.newaxis] * pt_data, axis=0)
+            ecm[1, :] = np.sum(ecs_item[1, :, np.newaxis] * pt_list, axis=0)
         return ecm
 
     def model_cascade(self, ecs_item, pt_list, layers, dojit):

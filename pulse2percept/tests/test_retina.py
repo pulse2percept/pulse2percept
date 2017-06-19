@@ -28,8 +28,9 @@ def test_TemporalModel():
     npt.assert_equal(tm.model_cascade(2.4), 2.4)
 
 
-def test_Nanduri2012_calc_layer_current():
+def test_Nanduri2012():
     tsample = 0.01 / 1000
+    tm = p2p.retina.Nanduri2012(tsample=tsample)
 
     # Assume 4 electrodes, each getting some stimulation
     pts = [p2p.stimuli.PulseTrain(tsample=tsample, dur=0.1)] * 4
@@ -39,16 +40,27 @@ def test_Nanduri2012_calc_layer_current():
     # one for the ganglion cell layer, one for the bipolar cell layer
     ecs_item = np.random.rand(2, 4)
 
+    # Calulating layer current:
     # The Nanduri model does not support INL, so it's just one layer:
-    ecm_by_hand = np.sum(ecs_item[1, :, np.newaxis] * ptrain_data, axis=0)
+    with pytest.raises(ValueError):
+        tm.calc_layer_current(ecs_item, ptrain_data, ['GCL', 'INL'])
+    with pytest.raises(ValueError):
+        tm.calc_layer_current(ecs_item, ptrain_data, ['unknown'])
 
-    # And that should be the same as `calc_layer_current`:
-    tm = p2p.retina.Nanduri2012(tsample=tsample)
-    ecm = tm.calc_layer_current(ecs_item, ptrain_data, layers=['GCL'])
+    # ...and that should be the same as `calc_layer_current`:
+    ecm_by_hand = np.sum(ecs_item[1, :, np.newaxis] * ptrain_data, axis=0)
+    ecm = tm.calc_layer_current(ecs_item, ptrain_data, ['GCL'])
     npt.assert_almost_equal(ecm, ecm_by_hand)
 
+    # Running the model cascade:
+    with pytest.raises(ValueError):
+        tm.model_cascade(ecs_item, ptrain_data, ['GCL', 'INL'], False)
+    with pytest.raises(ValueError):
+        tm.model_cascade(ecs_item, ptrain_data, ['unknown'], False)
+    tm.model_cascade(ecs_item, ptrain_data, ['GCL'], False)
 
-def test_LatestModel_calc_layer_current():
+
+def test_LatestModel():
     tsample = 0.01 / 1000
 
     # Assume 4 electrodes, each getting some stimulation
@@ -73,8 +85,14 @@ def test_LatestModel_calc_layer_current():
 
         # And that should be the same as `calc_layer_current`:
         tm = p2p.retina.LatestModel(tsample=tsample)
-        ecm = tm.calc_layer_current(ecs_item, pts, layers)
+        ecm = tm.calc_layer_current(ecs_item, ptrain_data, layers)
         npt.assert_almost_equal(ecm, ecm_by_hand)
+        tm.model_cascade(ecs_item, ptrain_data, layers, False)
+
+    with pytest.raises(ValueError):
+        tm.calc_layer_current(ecs_item, ptrain_data, ['unknown'])
+    with pytest.raises(ValueError):
+        tm.model_cascade(ecs_item, ptrain_data, ['unknown'], False)
 
 
 def test_Retina_Electrodes():
