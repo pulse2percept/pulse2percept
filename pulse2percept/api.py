@@ -10,7 +10,8 @@ from pulse2percept import stimuli
 
 class Simulation(object):
 
-    def __init__(self, implant, engine='joblib', dojit=True, num_jobs=-1):
+    def __init__(self, implant, engine='joblib', scheduler='threading',
+                 dojit=True, num_jobs=-1):
         """Generates a simulation framework
 
         Parameters
@@ -18,11 +19,16 @@ class Simulation(object):
         implant : implants.ElectrodeArray
             An implants.ElectrodeArray object that describes the implant.
         engine : str, optional, default: 'joblib'
-            Which computational backend to use:
+            Which computational back end to use:
             - 'serial': Single-core computation
             - 'joblib': Parallelization via joblib (requires `pip install
                         joblib`)
-            - 'dask': Parallelization via dask (requires `pip install dask`)
+            - 'dask': Parallelization via dask (requires `pip install dask`).
+                      Dask backend can be specified via `threading`.
+        scheduler : str, optional, default: 'threading'
+            Which scheduler to use (irrelevant for 'serial' engine):
+            - 'threading': a scheduler backed by a thread pool
+            - 'multiprocessing': a scheduler backed by a process pool
         dojit : bool, optional, default: True
             Whether to use just-in-time (JIT) compilation to speed up
             computation.
@@ -36,6 +42,7 @@ class Simulation(object):
 
         self.implant = implant
         self.engine = engine
+        self.scheduler = scheduler
         self.dojit = dojit
         self.num_jobs = num_jobs
 
@@ -48,7 +55,7 @@ class Simulation(object):
         self.gcl = None
 
     def set_optic_fiber_layer(self, sampling=100, axon_lambda=2, rot_deg=0,
-                              x_range=None, y_range=None, datapath='./',
+                              x_range=None, y_range=None, datapath='.',
                               save_data=True):
         """Sets parameters of the optic fiber layer (OFL)
 
@@ -129,9 +136,9 @@ class Simulation(object):
 
         Parameters
         ----------
-        model : str|retina.TemporalModel
+        model : str|retina.BaseModel
             A custom ganglion cell model can be specified by passing
-            an instance of type `retina.TemporalModel`. Else select from
+            an instance of type `retina.BaseModel`. Else select from
             pre-existing models:
 
 
@@ -211,15 +218,15 @@ class Simulation(object):
             # If `model` is a string, choose from existing models
             if model.lower() == 'latest':
                 logging.getLogger(__name__).debug("Setting up latest model.")
-                self.gcl = retina.LatestModel(**kwargs)
+                self.gcl = retina.TemporalModel(**kwargs)
             elif model.lower() in ['nanduri', 'nanduri2012']:
                 logging.getLogger(__name__).debug("Setting up Nanduri (2012) "
                                                   "model.")
                 self.gcl = retina.Nanduri2012(**kwargs)
             else:
                 model_not_found = True
-        elif isinstance(model, retina.TemporalModel):
-            # If `model` is not a string, must be of type TemporalModel
+        elif isinstance(model, retina.BaseModel):
+            # If `model` is not a string, must be of type BaseModel
             debug_str = "Setting up %s." % model.__module__
             logging.getLogger(__name__).debug(debug_str)
             self.gcl = model
@@ -229,7 +236,7 @@ class Simulation(object):
         if model_not_found:
             err_str = "Model '%s' not found. Choose from: " % model
             err_str += ", ".join(retina.SUPPORTED_MODELS)
-            err_str += " or provide your own retina.TemporalModel instance."
+            err_str += " or provide your own retina.BaseModel instance."
             raise ValueError(err_str)
 
     def _set_layers(self):
@@ -237,7 +244,7 @@ class Simulation(object):
 
         This function makes sure all necessary parts of the simulation are
         initialized before transforming stimuli to percepts.
-        Uninitialized layers (by the user) will simply be initialized with
+        Layers not initialized by the user will simply be initialized with
         default argument values.
         """
         if self.ofl is None:
@@ -260,17 +267,13 @@ class Simulation(object):
               one pulse train per electrode.
             - For a multi-electrode array, specify all electrodes that should
               receive non-zero pulse trains by name.
-        t_percept : float, optional
-            The desired sampling time step (seconds) of the output. If None is
-            given, the output sampling time step will correspond to the time
-            step of the `stim` object.
-            Default: Inherit from the `stim` object.
-        tol : float, optional
+        t_percept : float, optional, default: inherit from `stim` object
+            The desired time sampling of the output (seconds).
+        tol : float, optional, default: 0.05
             Ignore pixels whose effective current is smaller than a fraction
             `tol` of the max value.
-            Default: 0.05.
-        layers : list, optional
-            A list of retina layers to simulate:
+        layers : list, optional, default: ['OFL', 'GCL', 'INL']
+            A list of retina layers to simulate (order does not matter):
             - 'OFL': Includes the optic fiber layer in the simulation.
                      If omitted, the tissue activation map will not account
                      for axon streaks.
@@ -278,8 +281,6 @@ class Simulation(object):
             - 'INL': Includes the inner nuclear layer in the simulation.
                      If omitted, bipolar cell activity does not contribute
                      to ganglion cell activity.
-            Order of specified layer does not matter.
-            Default: ['OFL', 'GCL', 'INL'].
 
         Returns
         -------
@@ -378,7 +379,7 @@ class Simulation(object):
 
         sr_list = utils.parfor(self.gcl.model_cascade,
                                ecs_list, n_jobs=self.num_jobs,
-                               engine=self.engine,
+                               engine=self.engine, scheduler=self.scheduler,
                                func_args=[pt_data, layers, self.dojit])
         bm = np.zeros(self.ofl.gridx.shape +
                       (sr_list[0].data.shape[-1], ))

@@ -203,11 +203,21 @@ def test_parfor():
     expected_00 = power_it(my_array[0, 0])
     expected_ij = power_it(my_array[i, j])
 
+    with pytest.raises(ValueError):
+        utils.parfor(power_it, my_list, engine='unknown')
+    with pytest.raises(ValueError):
+        utils.parfor(power_it, my_list, engine='dask', scheduler='unknown')
+
     for engine in ['serial', 'joblib', 'dask']:
-        calculated_00 = utils.parfor(power_it, my_list, engine=engine,
-                                     out_shape=my_array.shape)[0, 0]
-        calculated_ij = utils.parfor(power_it, my_list, engine=engine,
-                                     out_shape=my_array.shape)[i, j]
+        for scheduler in ['threading', 'multiprocessing']:
+            # `backend` only relevant for dask, will be ignored for others
+            # and should thus still give the right result
+            calculated_00 = utils.parfor(power_it, my_list, engine=engine,
+                                         scheduler=scheduler,
+                                         out_shape=my_array.shape)[0, 0]
+            calculated_ij = utils.parfor(power_it, my_list, engine=engine,
+                                         scheduler=scheduler,
+                                         out_shape=my_array.shape)[i, j]
 
         npt.assert_equal(expected_00, calculated_00)
         npt.assert_equal(expected_ij, calculated_ij)

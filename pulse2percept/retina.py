@@ -18,7 +18,7 @@ class Grid(object):
 
     def __init__(self, xlo=-1000, xhi=1000, ylo=-1000, yhi=1000,
                  sampling=25, axon_lambda=2.0, rot=0 * np.pi / 180,
-                 datapath='./', save_data=True):
+                 datapath='.', save_data=True):
         """Generates a spatial grid representing the retinal coordinate frame
 
         This function generates the coordinate system for the retina
@@ -52,9 +52,12 @@ class Grid(object):
                                              indexing='xy')
 
         # Create descriptive filename based on input args
-        filename = "%sretina_s%d_l%.1f_rot%.1f_%dx%d.npz" \
-            % (datapath, sampling, axon_lambda, rot / np.pi * 180,
-               xhi - xlo, yhi - ylo)
+        filename = "retina_s%d_l%.1f_rot%.1f_%dx%d.npz" % (sampling,
+                                                           axon_lambda,
+                                                           rot / np.pi * 180,
+                                                           xhi - xlo,
+                                                           yhi - ylo)
+        filename = os.path.join(datapath, filename)
 
         # Bool whether we need to create a new grid
         need_new_grid = True
@@ -161,9 +164,8 @@ class Grid(object):
 
         # normalize so the response under the electrode in the ecs map
         # is equal to cs
-        maxloc = np.where(cs == np.max(cs))
-        scFac = np.max(cs) / ecs[maxloc[0][0], maxloc[1][0]]
-        ecs = ecs * scFac
+        scale = np.max(cs) / ecs[np.argmax(cs)]
+        ecs = ecs * scale
 
         # this normalization is based on unit current on the retina producing
         # a max response of 1 based on axonal integration.
@@ -217,7 +219,7 @@ class Grid(object):
 
 
 @six.add_metaclass(abc.ABCMeta)
-class TemporalModel():
+class BaseModel():
     """Abstract base class for all models of temporal sensitivity.
 
     This class provides a standard template for all models of temporal
@@ -244,17 +246,16 @@ class TemporalModel():
 
     @abc.abstractmethod
     def model_cascade(self, in_arr, pt_list, layers, dojit):
-        """Custom ganglion cell model
+        """Abstract base ganglion cell model
 
         Parameters
         ----------
         in_arr: array-like
-            A 2D array specifying the effective current values
-            at a particular spatial location (pixel); one value
-            per retinal layer and electrode.
-            Dimensions: <#layers x #electrodes>
+            A 2D array specifying the effective current values at a particular
+            spatial location (pixel); one value per retinal layer and
+            electrode. Dimensions: <#layers x #electrodes>
         pt_list : list
-            List of pulse train ‘data‘ containers.
+            List of pulse train 'data' containers.
             Dimensions: <#electrodes x #time points>
         layers : list
             List of retinal layers to simulate.
@@ -263,9 +264,8 @@ class TemporalModel():
             - 'GCL': ganglion cell layer
             - 'INL': inner nuclear layer
         dojit : bool
-            If True, applies just-in-time (JIT) compilation to
-            expensive computations for additional speed-up
-            (requires Numba).
+            If True, applies just-in-time (JIT) compilation to expensive
+            computations for additional speed-up (requires Numba).
         """
         pass
 
@@ -273,7 +273,7 @@ class TemporalModel():
     tsample = 0.005 / 1000
 
 
-class Nanduri2012(TemporalModel):
+class Nanduri2012(BaseModel):
     """Model of temporal sensitivity (Nanduri et al. 2012)
 
     This class implements the model of temporal sensitivity as described in:
@@ -345,7 +345,7 @@ class Nanduri2012(TemporalModel):
             per retinal layer and electrode.
             Dimensions: <#layers x #electrodes>
         pt_list : list
-            List of pulse train ‘data‘ containers.
+            List of pulse train 'data' containers.
             Dimensions: <#electrodes x #time points>
         layers : list
             List of retinal layers to simulate.
@@ -375,7 +375,7 @@ class Nanduri2012(TemporalModel):
             per retinal layer and electrode.
             Dimensions: <#layers x #electrodes>
         pt_list : list
-            List of pulse train ‘data‘ containers.
+            List of pulse train 'data' containers.
             Dimensions: <#electrodes x #time points>
         layers : list
             List of retinal layers to simulate.
@@ -417,7 +417,7 @@ class Nanduri2012(TemporalModel):
         return utils.TimeSeries(self.tsample, b5)
 
 
-class LatestModel(TemporalModel):
+class TemporalModel(BaseModel):
     """Latest edition of the temporal sensitivity model (experimental)
 
     This class implements the latest version of the temporal sensitivity
@@ -525,7 +525,7 @@ class LatestModel(TemporalModel):
     def charge_accumulation(self, ecm):
         """Calculates the charge accumulation
 
-        Charge accumulation is calculcalated on the effective input current
+        Charge accumulation is calculated on the effective input current
         `ecm`, as opposed to the output of the fast response stage.
 
         Parameters
@@ -570,8 +570,6 @@ class LatestModel(TemporalModel):
         """
         # use expit (logistic) function for speedup
         sigmoid = ss.expit((stim.max() - self.shift) / self.slope)
-
-        # avoid division by zero
         return stim * sigmoid
 
     def slow_response(self, stim):
@@ -850,11 +848,11 @@ def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
     # Set Nans to axon paths after crossing horizontal meridian
     id = np.where(np.transpose(cross))
 
-    currCol = -1
+    curr_col = -1
     for i in range(0, len(id[0])):  # loop through axons
-        if currCol != id[0][i]:
+        if curr_col != id[0][i]:
             yprime[id[1][i]:, id[0][i]] = np.NaN
-            currCol = id[0][i]
+            curr_col = id[0][i]
 
     # Bend the image according to (the inverse) of Appendix A
     xmodel = xprime + center[0]
@@ -897,7 +895,7 @@ def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=.001):
         space
 
     """
-    # initialize lists
+    # initialize tuples
     axon_xg = ()
     axon_yg = ()
     axon_dist = ()

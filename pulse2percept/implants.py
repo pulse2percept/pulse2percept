@@ -262,10 +262,10 @@ class Electrode(object):
 class ElectrodeArray(object):
 
     def __init__(self, etype, radii, xs, ys, hs=0, names=None):
-        """Creates an ElectrodeArray on the retina
+        """Create an ElectrodeArray on the retina
 
-        This function adds one or more electrodes to an existing ElectrodeArray
-        object. Lists should specify, for each electrode to be added, the size
+        This function creates an electrode array of type `etype` and places it
+        on the retina. Lists should specify, for each electrode, its size
         (`radii`), location on the retina (`xs` and `ys`), distance to the
         retina (height, `hs`), and a string identifier (`names`, optional).
 
