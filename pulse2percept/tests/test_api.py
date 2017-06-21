@@ -64,7 +64,7 @@ def test_Simulation_set_optic_fiber_layer():
 
 def test_Simulation_set_ganglion_cell_layer():
     # A valid ganglion cell model
-    class Valid(p2p.retina.TemporalModel):
+    class Valid(p2p.retina.BaseModel):
 
         def model_cascade(self, inval):
             return inval
@@ -76,7 +76,7 @@ def test_Simulation_set_ganglion_cell_layer():
 
     valid_model = Valid(tsample=0.2)
     sim.set_ganglion_cell_layer(valid_model)
-    npt.assert_equal(isinstance(sim.gcl, p2p.retina.TemporalModel), True)
+    npt.assert_equal(isinstance(sim.gcl, p2p.retina.BaseModel), True)
     npt.assert_equal(sim.gcl.tsample, 0.2)
 
     # Smoke test Nanduri model
@@ -89,7 +89,7 @@ def test_Simulation_set_ganglion_cell_layer():
     # Smoke test latest model
     for modelstr in ['latest', 'Latest', 'LATEST']:
         sim.set_ganglion_cell_layer(modelstr, lweight=42)
-        npt.assert_equal(isinstance(sim.gcl, p2p.retina.LatestModel), True)
+        npt.assert_equal(isinstance(sim.gcl, p2p.retina.TemporalModel), True)
         npt.assert_equal(sim.gcl.lweight, 42)
         sim.set_ganglion_cell_layer(modelstr, unknown_param=2)  # smoke
 

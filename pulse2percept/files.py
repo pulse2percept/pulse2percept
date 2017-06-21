@@ -373,7 +373,7 @@ def save_video(data, filename, width=None, height=None, fps=30,
 
         # resize wants the data to be between 0 and 1
         frame = sic.gray2rgb(sit.resize(frame, (height, width),
-                                        mode='constant'))
+                                        mode='reflect'))
         savedata[i, ...] = frame * 255.0
 
     # Set the input frame rate and frame size
@@ -461,7 +461,7 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
         pframe = percept.data[..., i] / percept.data.max()
         pframe = skimage.img_as_float(pframe)
         pframe = sic.gray2rgb(sit.resize(pframe, (pheight, pwidth),
-                                         mode='constant'))
+                                         mode='reflect'))
         combined[i, ...] = np.concatenate((vframe, pframe), axis=1)
 
     save_video(combined, savefile, fps=fps, ffmpeg_path=ffmpeg_path,

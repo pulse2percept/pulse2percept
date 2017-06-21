@@ -6,19 +6,19 @@ import logging
 import pulse2percept as p2p
 
 
-def test_TemporalModel():
+def test_BaseModel():
     # Cannot instantiate abstract class
     with pytest.raises(TypeError):
-        tm = p2p.retina.TemporalModel(0.01)
+        tm = p2p.retina.BaseModel(0.01)
 
     # Child class must provide `model_cascade()`
-    class Incomplete(p2p.retina.TemporalModel):
+    class Incomplete(p2p.retina.BaseModel):
         pass
     with pytest.raises(TypeError):
         tm = Incomplete()
 
     # A complete class
-    class Complete(p2p.retina.TemporalModel):
+    class Complete(p2p.retina.BaseModel):
 
         def model_cascade(self, inval):
             return inval
@@ -60,7 +60,7 @@ def test_Nanduri2012():
     tm.model_cascade(ecs_item, ptrain_data, ['GCL'], False)
 
 
-def test_LatestModel():
+def test_TemporalModel():
     tsample = 0.01 / 1000
 
     # Assume 4 electrodes, each getting some stimulation
@@ -84,7 +84,7 @@ def test_LatestModel():
                 ecm_by_hand[1, :] += curr * pt
 
         # And that should be the same as `calc_layer_current`:
-        tm = p2p.retina.LatestModel(tsample=tsample)
+        tm = p2p.retina.TemporalModel(tsample=tsample)
         ecm = tm.calc_layer_current(ecs_item, ptrain_data, layers)
         npt.assert_almost_equal(ecm, ecm_by_hand)
         tm.model_cascade(ecs_item, ptrain_data, layers, False)

@@ -164,7 +164,7 @@ class Grid(object):
 
         # normalize so the response under the electrode in the ecs map
         # is equal to cs
-        scale = np.max(cs) / ecs[np.argmax(cs)]
+        scale = np.max(cs) / ecs.flat[np.argmax(cs)]
         ecs = ecs * scale
 
         # this normalization is based on unit current on the retina producing
@@ -252,7 +252,7 @@ class BaseModel():
         ----------
         in_arr: array-like
             A 2D array specifying the effective current values at a particular
-            spatial location (pixel); one value per retinal layer and
+`            spatial location (pixel); one value per retinal layer and
             electrode. Dimensions: <#layers x #electrodes>
         pt_list : list
             List of pulse train 'data' containers.

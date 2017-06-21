@@ -317,11 +317,13 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     if img_orig.max() > 1.0:
         img_orig /= 255.0
 
-    # Let Scikit-Image do the resampling: Downscale image to fit array:
+    # Let Scikit-Image do the resampling: Downscale image to fit array
+    # Use mode 'reflect' for np.pad: Pads with the reflection of the vector
+    # mirrored on the first and last values of the vector along each axis.
     if isargus1:
-        img_stim = sit.resize(img_orig, (4, 4))
+        img_stim = sit.resize(img_orig, (4, 4), mode='reflect')
     elif isargus2:
-        img_stim = sit.resize(img_orig, (6, 10))
+        img_stim = sit.resize(img_orig, (6, 10), mode='reflect')
 
     # If specified, invert the mapping of grayscale values:
     if invert:
