@@ -6,6 +6,7 @@ Functions for creating retinal implants
 """
 import numpy as np
 from scipy import interpolate as spi
+import six
 import copy
 import logging
 
@@ -299,7 +300,7 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
         raise TypeError("For now, implant must be of type implants.ArgusI or "
                         "implants.ArgusII.")
 
-    if isinstance(img, str):
+    if isinstance(img, six.string_types):
         # Load image from filename
         img_orig = sio.imread(img, as_grey=True).astype(np.float32)
         logging.getLogger(__name__).info("Loaded file '%s'." % img)
@@ -316,11 +317,13 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     if img_orig.max() > 1.0:
         img_orig /= 255.0
 
-    # Let Scikit-Image do the resampling: Downscale image to fit array:
+    # Let Scikit-Image do the resampling: Downscale image to fit array
+    # Use mode 'reflect' for np.pad: Pads with the reflection of the vector
+    # mirrored on the first and last values of the vector along each axis.
     if isargus1:
-        img_stim = sit.resize(img_orig, (4, 4))
+        img_stim = sit.resize(img_orig, (4, 4), mode='reflect')
     elif isargus2:
-        img_stim = sit.resize(img_orig, (6, 10))
+        img_stim = sit.resize(img_orig, (6, 10), mode='reflect')
 
     # If specified, invert the mapping of grayscale values:
     if invert:

@@ -4,6 +4,9 @@ sudo: required
 
 os: linux
 dist: trusty
+# Use new Trusty image:
+# https://blog.travis-ci.com/2017-06-19-trusty-updates-2017-Q2
+group: edge
 
 env:
   global:

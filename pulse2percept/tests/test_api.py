@@ -62,6 +62,42 @@ def test_Simulation_set_optic_fiber_layer():
     sim.set_optic_fiber_layer()
 
 
+def test_Simulation_set_ganglion_cell_layer():
+    # A valid ganglion cell model
+    class Valid(p2p.retina.BaseModel):
+
+        def model_cascade(self, inval):
+            return inval
+
+    # Smoke test custom model
+    implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0, 0)
+    sim = p2p.Simulation(implant, engine='serial')
+    sim.set_optic_fiber_layer(x_range=0, y_range=0)
+
+    valid_model = Valid(tsample=0.2)
+    sim.set_ganglion_cell_layer(valid_model)
+    npt.assert_equal(isinstance(sim.gcl, p2p.retina.BaseModel), True)
+    npt.assert_equal(sim.gcl.tsample, 0.2)
+
+    # Smoke test Nanduri model
+    for modelstr in ['Nanduri2012', 'nanduri2012', 'NANDURI2012']:
+        sim.set_ganglion_cell_layer(modelstr, tau3=42)
+        npt.assert_equal(isinstance(sim.gcl, p2p.retina.Nanduri2012), True)
+        npt.assert_equal(sim.gcl.tau3, 42)
+        sim.set_ganglion_cell_layer(modelstr, unknown_param=2)  # smoke
+
+    # Smoke test latest model
+    for modelstr in ['latest', 'Latest', 'LATEST']:
+        sim.set_ganglion_cell_layer(modelstr, lweight=42)
+        npt.assert_equal(isinstance(sim.gcl, p2p.retina.TemporalModel), True)
+        npt.assert_equal(sim.gcl.lweight, 42)
+        sim.set_ganglion_cell_layer(modelstr, unknown_param=2)  # smoke
+
+    # Model unknown
+    with pytest.raises(ValueError):
+        sim.set_ganglion_cell_layer('unknown-model')
+
+
 def test_get_brightest_frame():
     # Pick a few raindom frames and place brightest pixel therein
     num_frames = 10

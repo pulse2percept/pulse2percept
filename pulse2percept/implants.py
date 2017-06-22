@@ -10,6 +10,9 @@ import logging
 from pulse2percept import utils
 
 
+SUPPORTED_IMPLANT_TYPES = ['epiretinal', 'subretinal']
+
+
 class Electrode(object):
 
     def __init__(self, etype, radius, x_center, y_center, height=0, name=None):
@@ -44,9 +47,9 @@ class Electrode(object):
         assert radius >= 0
         assert height >= 0
 
-        if etype.lower() not in ['epiretinal', 'subretinal']:
-            e_s = "Acceptable values for `etype` are: 'epiretinal', "
-            e_s += "'subretinal'."
+        if etype.lower() not in SUPPORTED_IMPLANT_TYPES:
+            e_s = "Acceptable values for `etype` are: "
+            e_s += ", ".join(SUPPORTED_IMPLANT_TYPES) + "."
             raise ValueError(e_s)
 
         self.etype = etype.lower()
@@ -55,6 +58,12 @@ class Electrode(object):
         self.y_center = y_center
         self.name = name
         self.height = height
+
+    def __str__(self):
+        info_s = "Electrode(%s, r=%.2f um, " % (self.etype, self.radius)
+        info_s += "(x,y) = (%.2f, %.2f) um, " % (self.x_center, self.y_center)
+        info_s += "h=%.2f um, n=%s" % (self.height, self.name)
+        return info_s
 
     def get_height(self):
         """Returns the electrode-retina distance
@@ -268,20 +277,16 @@ class ElectrodeArray(object):
 
         Parameters
         ----------
-        etype : string
-            Electrode type, {'epiretinal', 'subretinal'}
         radii : array_like
             List of electrode radii.
         xs : array_like
             List of x-coordinates for the center of the electrodes (microns).
         ys : array_like
             List of y-coordinates for the center of the electrodes (microns).
-        hs : float | array_like, optional
+        hs : float | array_like, optional, default: 0
             List of electrode heights (distance from the retinal surface).
-            Default: 0.
-        names : array_like, optional
+        names : array_like, optional, default: None
             List of names (string identifiers) for each eletrode.
-            Default: None.
 
         Examples
         --------
@@ -289,26 +294,92 @@ class ElectrodeArray(object):
         at retinal location (0, 0), 10um away from the retina:
 
         >>> from pulse2percept import implants
-        >>> implant1 = implants.ElectrodeArray('epiretinal', 100, 0, 0, 10,
-        ...                                    'A1')
+        >>> implant0 = implants.ElectrodeArray('epiretinal', 100, 0, 0, hs=10,
+        ...                                    names='A1')
+
+        Get access to the electrode with name 'A1' in the first array:
+
+        >>> my_electrode = implant0['A1']
 
         An array with two electrodes of size 100um, one sitting at
         (-100, -100), the other sitting at (0, 0), with 0 distance from the
         retina, of type 'subretinal':
 
-        >>> implant2 = implants.ElectrodeArray('subretinal', [100, 100],
-        ...                                    [-100, 0], [-100, 0], [0, 0])
-
-        Get access to the electrode with name 'A1' in the array:
-
-        >>> my_electrode = implant1['A1']
-
-        Get access to the second electrode in the array:
-
-        >>> my_electrode = implant2[1]
+        >>> implant1 = implants.ElectrodeArray('subretinal', [100, 100],
+        ...                                    [-100, 0], [-100, 0], hs=[0, 0])
 
         """
-        # Make it so the constructor can accept either floats, lists, or
+        self.etype = etype
+        self.electrodes = []
+        self.num_electrodes = 0
+        self.add_electrodes(radii, xs, ys, hs, names)
+
+    def __str__(self):
+        return "ElectrodeArray(%s, num_electrodes=%d)" % (self.etype,
+                                                          self.num_electrodes)
+
+    def add_electrode(self, electrode):
+        """Adds an electrode to an ElectrodeArray object
+
+        This function adds a single electrode to an existing ElectrodeArray
+        object. The electrode must have the same type as the array
+        (see implants.SUPPORTED_IMPLANT_TYPES).
+
+        Parameters
+        ----------
+        electrode : implants.Electrode
+            An electrode object specifying type, size, and location of the
+            electrode on the retina.
+        """
+        if not isinstance(electrode, Electrode):
+            raise TypeError("`electrode` must be of type retina.Electrode.")
+
+        if electrode.etype != self.etype:
+            e_s = "Added electrode must be of same type as the existing"
+            e_s = "array (%s)." % self.etype
+            raise ValueError(e_s)
+
+        self.num_electrodes += 1
+        self.electrodes.append(electrode)
+
+    def add_electrodes(self, radii, xs, ys, hs=0, names=None):
+        """Adds electrodes to an ElectrodeArray object
+
+        This function adds one or more electrodes to an existing ElectrodeArray
+        object. Lists should specify, for each electrode to be added, the size
+        (`radii`), location on the retina (`xs` and `ys`), distance to the
+        retina (height, `hs`), and a string identifier (`names`, optional).
+
+        Array location should be given in microns, where the fovea is located
+        at (0, 0).
+
+        Single electrodes in the array can be addressed by index (integer)
+        or name.
+
+        Parameters
+        ----------
+        radii : array_like
+            List of electrode radii.
+        xs : array_like
+            List of x-coordinates for the center of the electrodes (microns).
+        ys : array_like
+            List of y-coordinates for the center of the electrodes (microns).
+        hs : float | array_like, optional, default: 0
+            List of electrode heights (distance from the retinal surface).
+        names : array_like, optional, default: None
+            List of names (string identifiers) for each eletrode.
+
+        Examples
+        --------
+
+        Adding a single electrode of radius 50um sitting at (0, 0) to an
+        existing ElectrodeArray object:
+
+        >>> implant = ElectrodeArray('epiretinal', 100, 100, 100)
+        >>> implant.add_electrodes(50, 0, 0)
+
+        """
+        # Make it so the method can accept either floats, lists, or
         # numpy arrays, and `zip` works regardless.
         radii = np.array([radii], dtype=np.float32).flatten()
         xs = np.array([xs], dtype=np.float32).flatten()
@@ -327,11 +398,8 @@ class ElectrodeArray(object):
             # If not every electrode has a name, replace with None's
             names = np.array([None] * radii.size)
 
-        self.etype = etype
-        self.num_electrodes = names.size
-        self.electrodes = []
         for r, x, y, h, n in zip(radii, xs, ys, hs, names):
-            self.electrodes.append(Electrode(etype, r, x, y, h, n))
+            self.add_electrode(Electrode(self.etype, r, x, y, h, n))
 
     def __iter__(self):
         return iter(self.electrodes)
@@ -484,10 +552,10 @@ class ArgusI(ElectrodeArray):
         y_arr += y_center
 
         self.etype = 'epiretinal'
-        self.num_electrodes = len(names)
+        self.num_electrodes = 0
         self.electrodes = []
         for r, x, y, h, n in zip(r_arr, x_arr, y_arr, h_arr, names):
-            self.electrodes.append(Electrode(self.etype, r, x, y, h, n))
+            self.add_electrode(Electrode(self.etype, r, x, y, h, n))
 
 
 class ArgusII(ElectrodeArray):
@@ -580,7 +648,7 @@ class ArgusII(ElectrodeArray):
         y_arr += y_center
 
         self.etype = 'epiretinal'
-        self.num_electrodes = len(names)
+        self.num_electrodes = 0
         self.electrodes = []
         for r, x, y, h, n in zip(r_arr, x_arr, y_arr, h_arr, names):
-            self.electrodes.append(Electrode(self.etype, r, x, y, h, n))
+            self.add_electrode(Electrode(self.etype, r, x, y, h, n))

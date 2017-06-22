@@ -393,7 +393,7 @@ def center_vector(vec, newlen):
 
 
 def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
-           backend='threading', func_args=[], func_kwargs={}):
+           scheduler='threading', func_args=[], func_kwargs={}):
     """
     Parallel for loop for numpy arrays
 
@@ -404,25 +404,26 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         func(arr, idx, *args, *kwargs) where arr is an ndarray and idx is an
         index into that array (a tuple). The Return of `func` needs to be one
         item (e.g. float, int) per input item.
-
     in_list : list
        All legitimate inputs to the function to operate over.
-
-    n_jobs : integer, optional
+    out_shape : int or tuple of ints, optional
+        If set, output will be reshaped accordingly. The new shape should be
+        compatible with the original shape. If an integer, then the result will
+        be a 1-D array of that length. One shape dimension can be -1. In this
+        case, the value is inferred from the length of the array and remaining
+        dimensions.
+    n_jobs : integer, optional, default: 1
         The number of jobs to perform in parallel. -1 to use all cpus
-        Default: 1
-
-    engine : str
-        {"dask", "joblib", "serial"}
+    engine : str, optional, default: 'joblib'
+        {'dask', 'joblib', 'serial'}
         The last one is useful for debugging -- runs the code without any
         parallelization.
-
-    backend : str
-        What dask backend to use. Irrelevant for other engines.
-
+    scheduler : str, optional, default: 'threading'
+        Which scheduler to use (irrelevant for 'serial' engine):
+        - 'threading': a scheduler backed by a thread pool
+        - 'multiprocessing': a scheduler backed by a process pool
     func_args : list, optional
         Positional arguments to `func`
-
     func_kwargs : list, optional
         Keyword arguments to `func`
 
@@ -432,7 +433,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
 
     Notes
     -----
-    Imported from pyAFQ (blob e20eaa0 from June 3, 2016):
+    Equivalent to pyAFQ version (blob e20eaa0 from June 3, 2016):
     https://github.com/arokem/pyAFQ/blob/master/AFQ/utils/parallel.py
 
     Examples
@@ -448,7 +449,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
             err += "`engine` to 'serial' or 'dask'."
             raise ImportError(err)
 
-        p = joblib.Parallel(n_jobs=n_jobs, backend=backend)
+        p = joblib.Parallel(n_jobs=n_jobs, backend=scheduler)
         d = joblib.delayed(func)
         d_l = []
         for in_element in in_list:
@@ -466,15 +467,21 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
             return newfunc
         p = partial(func, *func_args, **func_kwargs)
         d = [dask.delayed(p)(i) for i in in_list]
-        if backend == 'multiprocessing':
-            results = dask.compute(*d, get=dask.multiprocessing_get,
+        if scheduler == 'multiprocessing':
+            results = dask.compute(*d, get=dask.multiprocessing.get,
                                    workers=n_jobs)
-        elif backend == 'threading':
+        elif scheduler == 'threading':
             results = dask.compute(*d, get=dask.threaded.get, workers=n_jobs)
+        else:
+            raise ValueError("Acceptable values for `scheduler` are: "
+                             "'threading', 'multiprocessing'")
     elif engine.lower() == 'serial':
         results = []
         for in_element in in_list:
             results.append(func(in_element, *func_args, **func_kwargs))
+    else:
+        raise ValueError("Acceptable values for `engine` are: 'serial', "
+                         "'joblib', or 'dask'.")
 
     if out_shape is not None:
         return np.array(results).reshape(out_shape)
@@ -540,6 +547,10 @@ def gamma(n, tau, tsample, tol=0.01):
         than a fraction `tol` of the peak value.
     """
     n = int(n)
+    tau = float(tau)
+    tsample = float(tsample)
+    if n <= 0 or tau <= 0 or tsample <= 0:
+        raise ValueError("`n`, `tau`, and `tsample` must be nonnegative.")
 
     # Allocate a time vector that is long enough for sure.
     # Trim vector later on.

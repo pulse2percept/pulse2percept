@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+import six
 
 from pulse2percept import utils
 from pulse2percept import retina
@@ -9,39 +10,39 @@ from pulse2percept import stimuli
 
 class Simulation(object):
 
-    def __init__(self, implant, name=None, engine='joblib', dojit=True,
-                 num_jobs=-1):
+    def __init__(self, implant, engine='joblib', scheduler='threading',
+                 dojit=True, num_jobs=-1):
         """Generates a simulation framework
 
         Parameters
         ----------
         implant : implants.ElectrodeArray
             An implants.ElectrodeArray object that describes the implant.
-        name : str, optional
-            Name of the simulation. Default: None.
-        engine : str, optional
-            Which computational backend to use:
+        engine : str, optional, default: 'joblib'
+            Which computational back end to use:
             - 'serial': Single-core computation
             - 'joblib': Parallelization via joblib (requires `pip install
                         joblib`)
-            - 'dask': Parallelization via dask (requires `pip install dask`)
-            Default: joblib.
-        dojit : bool, optional
+            - 'dask': Parallelization via dask (requires `pip install dask`).
+                      Dask backend can be specified via `threading`.
+        scheduler : str, optional, default: 'threading'
+            Which scheduler to use (irrelevant for 'serial' engine):
+            - 'threading': a scheduler backed by a thread pool
+            - 'multiprocessing': a scheduler backed by a process pool
+        dojit : bool, optional, default: True
             Whether to use just-in-time (JIT) compilation to speed up
             computation.
-            Default: True.
-        num_jobs : int, optional
+        num_jobs : int, optional, default: -1
             Number of cores (threads) to run the model on in parallel.
             Specify -1 to use as many cores as available.
-            Default: -1.
         """
         if not isinstance(implant, implants.ElectrodeArray):
             e_s = "`implant` must be of type implants.ElectrodeArray"
             raise TypeError(e_s)
 
-        self.name = name
         self.implant = implant
         self.engine = engine
+        self.scheduler = scheduler
         self.dojit = dojit
         self.num_jobs = num_jobs
 
@@ -54,37 +55,33 @@ class Simulation(object):
         self.gcl = None
 
     def set_optic_fiber_layer(self, sampling=100, axon_lambda=2, rot_deg=0,
-                              x_range=None, y_range=None, datapath='./',
+                              x_range=None, y_range=None, datapath='.',
                               save_data=True):
         """Sets parameters of the optic fiber layer (OFL)
 
         Parameters
         ----------
-        sampling : float, optional
-            Microns per grid cell. Default: 100 microns.
-        axon_lambda : float, optional
+        sampling : float, optional, default: 100 microns
+            Microns per grid cell.
+        axon_lambda : float, optional, default: 2
             Constant that determines fall-off with axonal distance.
-            Default: 2.
-        rot_deg : float, optional
-            Rotation angle (deg). Default: 0.
-        x_range : list|None
+        rot_deg : float, optional, default: 0
+            Rotation angle (deg).
+        x_range : list|None, default: None
             Lower and upper bound of the retinal grid (microns) in horizontal
             dimension. Either a list [xlo, xhi] or None. If None, the generated
             grid will be just big enough to fit the implant.
-            Default: None.
-        y_range : list|None
+        y_range : list|None, default: None
             Lower and upper bound of the retinal grid (microns) in vertical
             dimension. Either a list [ylo, yhi] or None. If None, the generated
             grid will be just big enough to fit the implant.
-            Default: None.
-        datapath : str
+        datapath : str, default: current directory
             Relative path where to look for existing retina files, and where to
-            store new retina files. Default: current directory.
-        save_data : bool
+            store new retina files.
+        save_data : bool, default: True
             Flag whether to save the data to a new retina file (True) or not
             (False). The file name is automatically generated from all
             specified input arguments.
-            Default: True.
         """
         # For auto-generated grids:
         round_to = 500  # round to nearest (microns)
@@ -132,78 +129,128 @@ class Simulation(object):
                                datapath=datapath,
                                save_data=save_data)
 
-    def set_ganglion_cell_layer(self, tsample=0.005 / 1000,
-                                tau_gcl=0.42 / 1000, tau_inl=18.0 / 1000,
-                                tau_ca=45.25 / 1000, scale_ca=42.1,
-                                tau_slow=26.25 / 1000, scale_slow=10.0,
-                                lweight=0.636, aweight=0.5,
-                                slope=3.0, shift=15.0):
+    def set_ganglion_cell_layer(self, model, **kwargs):
         """Sets parameters of the ganglion cell layer (GCL)
+
+        Select from pre-existing ganglion cell models or specify a custom one.
 
         Parameters
         ----------
-        tsample : float
-            Sampling time step (seconds). Default: 0.005 / 1000 s.
-        tau_gcl : float
-            Time decay constant for the fast leaky integrater of the ganglion
-            cell layer.
-            Default: 45.25 / 1000 s.
-        tau_inl : float
-            Time decay constant for the fast leaky integrater of the inner
-            nuclear layer (INL). It has been shown that even epiretinal arrays
-            can activate bipolar cells (in the INL), which in turn influence
-            GCL activity. Default: 18.0 / 1000 s.
-        tau_ca : float
-            Time decay constant for the charge accumulation, has values
-            between 38 - 57 ms. Default: 45.25 / 1000 s.
-        scale_ca : float, optional
-            Scaling factor applied to charge accumulation (used to be called
-            epsilon). Default: 42.1.
-        tau_slow : float
-            Time decay constant for the slow leaky integrator.
-            Default: 26.25 / 1000 s.
-        scale_slow : float
-            Scaling factor applied to the output of the cascade, to make
-            output values interpretable brightness values >= 0.
-            Default: 1150.0
-        lweight : float
-            Relative weight applied to responses from bipolar cells (weight
-            of ganglion cells is 1).
-            Default: 0.636.
-        aweight : float
-            Relative weight applied to anodic charges (weight of cathodic
-            charges is 1).
-            Default: 0.5.
-        slope : float
-            Slope of the logistic function in the stationary nonlinearity
-            stage. Default: 3. In normalized units of perceptual response
-            perhaps should be 2.98
-        shift : float
-            Shift of the logistic function in the stationary nonlinearity
-            stage. Default: 16. In normalized units of perceptual response
-            perhaps should be 15.9
+        model : str|retina.BaseModel
+            A custom ganglion cell model can be specified by passing
+            an instance of type `retina.BaseModel`. Else select from
+            pre-existing models:
+
+
+            - 'Nanduri2012':
+                A model of temporal sensitivity as described in:
+
+                > Nanduri, Fine, Horsager, Boynton, Humayun, Greenberg, Weiland
+                > (2012). Frequency and Amplitude Modulation Have Different
+                > Effects on the Percepts Elicited by Retinal Stimulation.
+                > Investigative Ophthalmology & Visual Science January 2012,
+                > Vol.53, 205-214. doi:10.1167/iovs.11-8401.
+
+                Additional keyword arguments
+                ----------------------------
+                tsample : float, optional, default:
+                tau1 : float, optional, default: 0.42 / 1000 (seconds)
+                    Time decay constant for the fast leaky integrater of
+                    the ganglion cell layer (GCL).
+                tau2 : float, optional, default: 45.25 / 1000 (seconds)
+                    Time decay constant for the charge accumulation, has
+                    values between 38 - 57 ms.
+                tau3 : float, optional, default: 26.25 / 1000 (seconds)
+                    Time decay constant for the slow leaky integrator.
+                    Default: 26.25 / 1000 s.
+                eps : float, optional, default: 8.73
+                    Scaling factor applied to charge accumulation (used to
+                    be called epsilon).
+                asymptote : float, optional, default: 14.0
+                    Asymptote of the logistic function used in the
+                    stationary nonlinearity stage.
+                slope : float, optional, default: 3.0
+                    Slope of the logistic function in the stationary
+                    nonlinearity stage.
+                shift : float, optional, default: 16.0
+                    Shift of the logistic function in the stationary
+                    nonlinearity stage.
+
+            - 'latest':
+                The latest temporal model for epiretinal and subretinal
+                arrays (experimental).
+
+                Additional keyword arguments:
+
+                - tau_gcl : float, optional, default: 45.25 ms
+                    Time decay constant for the fast leaky integrater of the
+                    ganglionc ell layer.
+                - tau_inl : float, optional, default: 18 ms
+                    Time decay constant for the fast leaky integrater of the
+                    inner nuclear layer (INL). It has been shown that even
+                    epiretinal arrays can activate bipolar cells (in the INL),
+                    which in turn influence GCL activity.
+                - tau_ca : float, optional, default: 45.25 ms
+                    Time decay constant for the charge accumulation.
+                - scale_ca : float, optional, default: 42.1
+                    Scaling factor applied to charge accumulation (used to be
+                    called epsilon).
+                - tau_slow : float, optional, default: 26.25 ms
+                    Time decay constant for the slow leaky integrator.
+                - scale_slow : float, optional, default: 1150.0
+                    Scaling factor applied to the output of the cascade, to
+                    make output values interpretable brightness values >= 0.
+                - lweight : float, optional, default: 0.636
+                    Relative weight applied to responses from bipolar cells
+                    (weight of ganglion cells is 1).
+                - aweight : float, optional, default: 0.5
+                    Relative weight applied to anodic charges (weight of
+                    cathodic charges is 1).
+                - slope : float, optional, default: 3.0
+                    Slope of the logistic function in the stationary
+                    nonlinearity stage.
+                - shift : float, optional, default: 15.0
+                    Shift of the logistic function in the stationary
+                    nonlinearity stage.
         """
-        # Generate a a TemporalModel from above specs
-        tm = retina.TemporalModel(tsample=tsample,
-                                  tau_gcl=tau_gcl, tau_inl=tau_inl,
-                                  tau_ca=tau_ca, scale_ca=scale_ca,
-                                  tau_slow=tau_slow, scale_slow=scale_slow,
-                                  lweight=lweight, aweight=aweight,
-                                  slope=slope, shift=shift)
-        self.gcl = tm
+        model_not_found = False
+        if isinstance(model, six.string_types):
+            # If `model` is a string, choose from existing models
+            if model.lower() == 'latest':
+                logging.getLogger(__name__).debug("Setting up latest model.")
+                self.gcl = retina.TemporalModel(**kwargs)
+            elif model.lower() in ['nanduri', 'nanduri2012']:
+                logging.getLogger(__name__).debug("Setting up Nanduri (2012) "
+                                                  "model.")
+                self.gcl = retina.Nanduri2012(**kwargs)
+            else:
+                model_not_found = True
+        elif isinstance(model, retina.BaseModel):
+            # If `model` is not a string, must be of type BaseModel
+            debug_str = "Setting up %s." % model.__module__
+            logging.getLogger(__name__).debug(debug_str)
+            self.gcl = model
+        else:
+            model_not_found = True
+
+        if model_not_found:
+            err_str = "Model '%s' not found. Choose from: " % model
+            err_str += ", ".join(retina.SUPPORTED_MODELS)
+            err_str += " or provide your own retina.BaseModel instance."
+            raise ValueError(err_str)
 
     def _set_layers(self):
         """Sets up all layers whose setters have not been called by the user
 
         This function makes sure all necessary parts of the simulation are
         initialized before transforming stimuli to percepts.
-        Uninitialized layers (by the user) will simply be initialized with
+        Layers not initialized by the user will simply be initialized with
         default argument values.
         """
         if self.ofl is None:
             self.set_optic_fiber_layer()
         if self.gcl is None:
-            self.set_ganglion_cell_layer()
+            self.set_ganglion_cell_layer('latest')
 
     def pulse2percept(self, stim, t_percept=None, tol=0.05,
                       layers=['OFL', 'GCL', 'INL']):
@@ -220,17 +267,13 @@ class Simulation(object):
               one pulse train per electrode.
             - For a multi-electrode array, specify all electrodes that should
               receive non-zero pulse trains by name.
-        t_percept : float, optional
-            The desired sampling time step (seconds) of the output. If None is
-            given, the output sampling time step will correspond to the time
-            step of the `stim` object.
-            Default: Inherit from the `stim` object.
-        tol : float, optional
+        t_percept : float, optional, default: inherit from `stim` object
+            The desired time sampling of the output (seconds).
+        tol : float, optional, default: 0.05
             Ignore pixels whose effective current is smaller than a fraction
             `tol` of the max value.
-            Default: 0.05.
-        layers : list, optional
-            A list of retina layers to simulate:
+        layers : list, optional, default: ['OFL', 'GCL', 'INL']
+            A list of retina layers to simulate (order does not matter):
             - 'OFL': Includes the optic fiber layer in the simulation.
                      If omitted, the tissue activation map will not account
                      for axon streaks.
@@ -238,8 +281,6 @@ class Simulation(object):
             - 'INL': Includes the inner nuclear layer in the simulation.
                      If omitted, bipolar cell activity does not contribute
                      to ganglion cell activity.
-            Order of specified layer does not matter.
-            Default: ['OFL', 'GCL', 'INL'].
 
         Returns
         -------
@@ -252,7 +293,7 @@ class Simulation(object):
         Simulate a single-electrode array:
 
         >>> import pulse2percept as p2p
-        >>> implant = p2p.implants.ElectrodeArray('subretinal', 0, 0, 0, 0)
+        >>> implant = p2p.implants.ElectrodeArray('subretinal', 0, 0, 0)
         >>> stim = p2p.stimuli.PulseTrain(tsample=5e-6, freq=50, amp=20)
         >>> sim = p2p.Simulation(implant)
         >>> percept = sim.pulse2percept(stim)  # doctest: +SKIP
@@ -274,7 +315,8 @@ class Simulation(object):
         layers = np.array([l.upper() for l in layers])
 
         # Make sure all specified layers exist
-        not_supported = [l not in retina.SUPPORTED_LAYERS for l in layers]
+        not_supported = np.array([l not in retina.SUPPORTED_LAYERS
+                                  for l in layers], dtype=bool)
         if any(not_supported):
             msg = ', '.join(layers[not_supported])
             msg = "Specified layer %s not supported. " % msg
@@ -287,6 +329,7 @@ class Simulation(object):
         # Parse `stim` (either single pulse train or a list/dict of pulse
         # trains), and generate a list of pulse trains, one for each electrode
         pt_list = stimuli.parse_pulse_trains(stim, self.implant)
+        pt_data = [pt.data for pt in pt_list]
 
         if not np.allclose([p.tsample for p in pt_list], self.gcl.tsample):
             e_s = "For now, all pulse trains must have the same sampling "
@@ -336,8 +379,8 @@ class Simulation(object):
 
         sr_list = utils.parfor(self.gcl.model_cascade,
                                ecs_list, n_jobs=self.num_jobs,
-                               engine=self.engine,
-                               func_args=[pt_list, layers, self.dojit])
+                               engine=self.engine, scheduler=self.scheduler,
+                               func_args=[pt_data, layers, self.dojit])
         bm = np.zeros(self.ofl.gridx.shape +
                       (sr_list[0].data.shape[-1], ))
         idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
