@@ -37,10 +37,10 @@ def set_skvideo_path(ffmpeg_path=None, libav_path=None):
 
     Parameters
     ----------
-    ffmpeg_path : str, optional
-        Path to ffmpeg library. If not given, uses the system's default path.
-    libav_path : str, optional
-        Path to libav library. If not given, uses the system's default path.
+    ffmpeg_path : str, optional, default: system's default path
+        Path to ffmpeg library.
+    libav_path : str, optional, default: system's default path
+        Path to libav library.
 
     """
     if libav_path is not None:
@@ -61,10 +61,10 @@ def load_video_metadata(filename, ffmpeg_path=None, libav_path=None):
     ----------
     filename : str
         Video file name
-    ffmpeg_path : str, optional
-        Path to ffmpeg library. If not given, uses the system's default path.
-    libav_path : str, optional
-        Path to libav library. If not given, uses the system's default path.
+    ffmpeg_path : str, optional, default: system's default path
+        Path to ffmpeg library.
+    libav_path : str, optional, default: system's default path
+        Path to libav library.
 
     Returns
     -------
@@ -94,10 +94,10 @@ def load_video_framerate(filename, ffmpeg_path=None, libav_path=None):
     ----------
     filename : str
         Video file name
-    ffmpeg_path : str, optional
-        Path to ffmpeg library. If not given, uses the system's default path.
-    libav_path : str, optional
-        Path to libav library. If not given, uses the system's default path.
+    ffmpeg_path : str, optional, default: system's default path
+        Path to ffmpeg library.
+    libav_path : str, optional, default: system's default path
+        Path to libav library.
 
     Returns
     -------
@@ -122,7 +122,7 @@ def load_video_framerate(filename, ffmpeg_path=None, libav_path=None):
     return float(str_fps[0]) / float(str_fps[1])
 
 
-def load_video(filename, as_timeseries=False, as_gray=False, ffmpeg_path=None,
+def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
                libav_path=None):
     """Loads a video from file.
 
@@ -134,16 +134,14 @@ def load_video(filename, as_timeseries=False, as_gray=False, ffmpeg_path=None,
     ----------
     filename : str
         Video file name
-    as_timeseries: bool, optional
-        If True, returns the data as a ``p2p.utils.TimeSeries object``.
-        Default: False.
-    as_gray : bool, optional
+    as_timeseries: bool, optional, default: True
+        If True, returns the data as a ``p2p.utils.TimeSeries`` object.
+    as_gray : bool, optional, default: False
         If True, loads only the luminance channel of the video.
-        Default: False.
-    ffmpeg_path : str, optional
-        Path to ffmpeg library. If not given, uses the system's default path.
-    libav_path : str, optional
-        Path to libav library. If not given, uses the system's default path.
+    ffmpeg_path : str, optional, default: system's default path
+        Path to ffmpeg library.
+    libav_path : str, optional, default: system's default path
+        Path to libav library.
 
     Returns
     -------
@@ -160,26 +158,28 @@ def load_video(filename, as_timeseries=False, as_gray=False, ffmpeg_path=None,
 
     Examples
     --------
-    Load a video as a NumPy ndarray:
+    Load a video as a ``p2p.utils.TimeSeries`` object:
 
     >>> from skvideo import datasets
     >>> video = load_video(datasets.bikes())
+    >>> video.tsample
+    0.04
+    >>> video.shape
+    (272, 640, 3, 250)
+
+    Load a video as a NumPy ndarray:
+
+    >>> from skvideo import datasets
+    >>> video = load_video(datasets.bikes(), as_timeseries=False)
     >>> video.shape
     (250, 272, 640, 3)
 
     Load a video as a NumPy ndarray and convert to grayscale:
 
-    >>> video = load_video(datasets.bikes(), as_gray=True)
+    >>> from skvideo import datasets
+    >>> video = load_video(datasets.bikes(), as_timeseries=False, as_gray=True)
     >>> video.shape
     (250, 272, 640, 1)
-
-    Load a video as a ``p2p.utils.TimeSeries`` object:
-
-    >>> video = load_video(datasets.bikes(), as_timeseries=True)
-    >>> video.tsample
-    0.04
-    >>> video.shape
-    (272, 640, 3, 250)
 
     """
     if not has_skvideo:
@@ -225,10 +225,10 @@ def load_video_generator(filename, ffmpeg_path=None, libav_path=None):
     ----------
     filename : str
         Video file name
-    ffmpeg_path : str, optional
-        Path to ffmpeg library. If not given, uses the system's default path.
-    libav_path : str, optional
-        Path to libav library. If not given, uses the system's default path.
+    ffmpeg_path : str, optional, default: system's default path
+        Path to ffmpeg library.
+    libav_path : str, optional, default: system's default path
+        Path to libav library.
 
     Returns
     -------
@@ -281,23 +281,22 @@ def save_video(data, filename, width=None, height=None, fps=30,
         (M, N, T). The sampling step will be used as the video's frame rate.
     filename : str
         Video file name.
-    width : int
+    width : int, optional
         Desired width of the movie.
         Default: Automatically determined based on `height` (without changing
         the aspect ratio). If `height` is not given, the percept's original
         width is used.
-    height : int
+    height : int, optional
         Desired height of the movie.
         Default: Automatically determined based on `width` (without changing
         the aspect ratio). If `width` is not given, the percept's original
         height is used.
-    fps : int
+    fps : int, optional, default: 30
         Desired frame rate of the video (frames per second).
-        Default: 30.
-    ffmpeg_path : str, optional
-        Path to ffmpeg library. If not given, uses the system's default path.
-    libav_path : str, optional
-        Path to libav library. If not given, uses the system's default path.
+    ffmpeg_path : str, optional, default: system's default path
+        Path to ffmpeg library.
+    libav_path : str, optional, default: system's default path
+        Path to libav library.
 
     Notes
     -----
@@ -411,12 +410,12 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
         the number of channels.
     savefile : str
         File name of output video.
-    fps : int, optional
-        Desired frame rate of output video. Default: 30.
-    ffmpeg_path : str, optional
-        Path to ffmpeg library. If not given, uses the system's default path.
-    libav_path : str, optional
-        Path to libav library. If not given, uses the system's default path.
+    fps : int, optional, default: 30
+        Desired frame rate of output video.
+    ffmpeg_path : str, optional, default: system's default path
+        Path to ffmpeg library.
+    libav_path : str, optional, default: system's default path
+        Path to libav library.
 
     """
     if not has_skvideo:
@@ -511,8 +510,8 @@ def npy2movie(filename, movie, rate=30):
     movie : array
         A 3-D NumPy array containing the data, such as the `data` field of
         a utils.TimeSeries object
-    rate : float, optional
-        Frame rate. Default: 30 Hz
+    rate : float, optional, default: 30
+        Frame rate.
     """
     if os.name != 'nt':
         raise OSError("npy2movie only works on Windows.")
@@ -553,10 +552,10 @@ def scale(inarray, newmin=0.0, newmax=1.0):
     ----------
     inarray : array
         The input array
-    newmin : float, optional
-        The desired lower bound of values in `inarray`. Default: 0
-    newmax : float, optional
-        The desired upper bound of values in `inarray`. Default: 1
+    newmin : float, optional, default: 0.0
+        The desired lower bound of values in `inarray`.
+    newmax : float, optional, default: 1.0
+        The desired upper bound of values in `inarray`.
     """
 
     oldmin = inarray.min()

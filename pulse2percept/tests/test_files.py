@@ -67,12 +67,13 @@ def test_load_video():
     from skvideo import datasets
 
     # Load with default values
-    video = files.load_video(datasets.bikes())
+    video = files.load_video(datasets.bikes(), as_timeseries=False)
     npt.assert_equal(isinstance(video, np.ndarray), True)
     npt.assert_equal(video.shape, [250, 272, 640, 3])
 
     # Load as grayscale
-    video = files.load_video(datasets.bikes(), as_gray=True)
+    video = files.load_video(datasets.bikes(), as_timeseries=False,
+                             as_gray=True)
     npt.assert_equal(isinstance(video, np.ndarray), True)
     npt.assert_equal(video.shape, [250, 272, 640, 1])
 
@@ -112,10 +113,10 @@ def test_save_video():
     from skvideo import datasets
 
     # There and back again: ndarray
-    videoin = files.load_video(datasets.bikes())
+    videoin = files.load_video(datasets.bikes(), as_timeseries=False)
     fpsin = files.load_video_framerate(datasets.bikes())
     files.save_video(videoin, 'myvideo.mp4', fps=fpsin)
-    videout = files.load_video('myvideo.mp4')
+    videout = files.load_video('myvideo.mp4', as_timeseries=False)
     npt.assert_equal(videoin.shape, videout.shape)
     npt.assert_almost_equal(videout / 255.0, videoin / 255.0, decimal=0)
 
@@ -123,10 +124,10 @@ def test_save_video():
     fpsout = 15
     files.save_video(videoin, 'myvideo.mp4', width=100, fps=fpsout)
     npt.assert_equal(files.load_video_framerate('myvideo.mp4'), fpsout)
-    videout = files.load_video('myvideo.mp4')
+    videout = files.load_video('myvideo.mp4', as_timeseries=False)
     npt.assert_equal(videout.shape[2], 100)
     files.save_video(videoin, 'myvideo.mp4', height=20, fps=fpsout)
-    videout = files.load_video('myvideo.mp4')
+    videout = files.load_video('myvideo.mp4', as_timeseries=False)
     npt.assert_equal(videout.shape[1], 20)
     videout = None
 
@@ -165,7 +166,7 @@ def test_save_video():
 def test_save_video_sidebyside():
     reload(files)
     from skvideo import datasets
-    videoin = files.load_video(datasets.bikes())
+    videoin = files.load_video(datasets.bikes(), as_timeseries=False)
     fps = files.load_video_framerate(datasets.bikes())
     tsample = 1.0 / float(fps)
     rollaxes = np.roll(range(videoin.ndim), -1)
@@ -173,7 +174,7 @@ def test_save_video_sidebyside():
 
     files.save_video_sidebyside(datasets.bikes(), percept, 'mymovie.mp4',
                                 fps=fps)
-    videout = files.load_video('mymovie.mp4')
+    videout = files.load_video('mymovie.mp4', as_timeseries=False)
     npt.assert_equal(videout.shape[0], videoin.shape[0])
     npt.assert_equal(videout.shape[1], videoin.shape[1])
     npt.assert_equal(videout.shape[2], videoin.shape[2] * 2)
