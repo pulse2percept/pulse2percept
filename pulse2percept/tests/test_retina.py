@@ -202,7 +202,7 @@ def test_debalthasar_threshold():
         # Place the implant at various distances from the retina
         implant = p2p.implants.ElectrodeArray('epiretinal', 260, 0, 0, dist)
 
-        sim = p2p.Simulation(implant, engine='serial', dojit=True)
+        sim = p2p.Simulation(implant, engine='serial', use_jit=True)
         sim.set_optic_fiber_layer(x_range=0, y_range=0, save_data=False)
         sim.set_ganglion_cell_layer('latest', tsample=tsample)
 

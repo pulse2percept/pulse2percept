@@ -305,7 +305,7 @@ if has_jit:
     _sparseconvj = jit(_sparseconv)
 
 
-def sparseconv(data, kernel, mode='full', dojit=True):
+def sparseconv(data, kernel, mode='full', use_jit=True):
     """
     Returns the discrete, linear convolution of two one-dimensional sequences.
 
@@ -330,20 +330,20 @@ def sparseconv(data, kernel, mode='full', dojit=True):
         ``same``
         The output is the same size as `data`, centered with respect to the
         'full' output.
-    dojit : boolean
+    use_jit : boolean
         A flag indicating whether to use numba's just-in-time compilation
         option.
 
     """
-    if dojit and not has_jit:
+    if use_jit and not has_jit:
         e_s = ("You do not have numba ",
-               "please run sparseconv with dojit=False")
+               "please run sparseconv with use_jit=False")
         raise ImportError(e_s)
     else:
         return _sparseconv(data, kernel, mode)
 
 
-def conv(data, kernel, tsample, mode='full', method='fft', dojit=True):
+def conv(data, kernel, tsample, mode='full', method='fft', use_jit=True):
     """Convoles data with a kernel using either FFT or sparseconv
 
     This function convolves data with a kernel, relying either on the
@@ -372,7 +372,7 @@ def conv(data, kernel, tsample, mode='full', method='fft', dojit=True):
         Use the fast Fourier transform (FFT). (Default)
         ``sparse``
         Use the sparse convolution.
-    dojit : bool, optional
+    use_jit : bool, optional
         A flag indicating whether to use numba's just-in-time compilation
         option (only relevant for `method`=='sparse').
     """
@@ -381,7 +381,7 @@ def conv(data, kernel, tsample, mode='full', method='fft', dojit=True):
         conved = tsample * sps.fftconvolve(data, kernel, mode)
     elif method.lower() == 'sparse':
         # Use sparseconv: faster on sparse data
-        conved = tsample * sparseconv(data, kernel, mode, dojit)
+        conved = tsample * sparseconv(data, kernel, mode, use_jit)
     else:
         raise ValueError("Acceptable methods are: 'fft', 'sparse'.")
     return conved
