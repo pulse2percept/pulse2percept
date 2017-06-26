@@ -151,18 +151,18 @@ def test_sparseconv():
         conv = np.convolve(stim, G, mode=mode)
 
         # utils.sparseconv
-        sparse_conv = utils.sparseconv(stim, G, mode=mode, dojit=False)
+        sparse_conv = utils.sparseconv(stim, G, mode=mode, use_jit=False)
 
         npt.assert_equal(conv.shape, sparse_conv.shape)
         npt.assert_almost_equal(conv, sparse_conv)
 
     with pytest.raises(ValueError):
-        utils.sparseconv(G, stim, mode='invalid', dojit=False)
+        utils.sparseconv(G, stim, mode='invalid', use_jit=False)
 
     with mock.patch.dict("sys.modules", {"numba": {}}):
         with pytest.raises(ImportError):
             reload(utils)
-            utils.sparseconv(stim, G, mode='full', dojit=True)
+            utils.sparseconv(stim, G, mode='full', use_jit=True)
 
 
 def test_conv():

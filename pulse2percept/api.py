@@ -11,7 +11,7 @@ from pulse2percept import stimuli
 class Simulation(object):
 
     def __init__(self, implant, engine='joblib', scheduler='threading',
-                 dojit=True, num_jobs=-1):
+                 use_jit=True, num_jobs=-1):
         """Generates a simulation framework
 
         Parameters
@@ -29,7 +29,7 @@ class Simulation(object):
             Which scheduler to use (irrelevant for 'serial' engine):
             - 'threading': a scheduler backed by a thread pool
             - 'multiprocessing': a scheduler backed by a process pool
-        dojit : bool, optional, default: True
+        use_jit : bool, optional, default: True
             Whether to use just-in-time (JIT) compilation to speed up
             computation.
         num_jobs : int, optional, default: -1
@@ -43,7 +43,7 @@ class Simulation(object):
         self.implant = implant
         self.engine = engine
         self.scheduler = scheduler
-        self.dojit = dojit
+        self.use_jit = use_jit
         self.num_jobs = num_jobs
 
         # Optic fiber layer (OFL): After calling `set_optic_fiber_layer`, this
@@ -380,7 +380,7 @@ class Simulation(object):
         sr_list = utils.parfor(self.gcl.model_cascade,
                                ecs_list, n_jobs=self.num_jobs,
                                engine=self.engine, scheduler=self.scheduler,
-                               func_args=[pt_data, layers, self.dojit])
+                               func_args=[pt_data, layers, self.use_jit])
         bm = np.zeros(self.ofl.gridx.shape +
                       (sr_list[0].data.shape[-1], ))
         idxer = tuple(np.array(idx_list)[:, i] for i in range(2))

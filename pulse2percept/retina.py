@@ -245,7 +245,7 @@ class BaseModel():
         self.set_kwargs(True, **kwargs)
 
     @abc.abstractmethod
-    def model_cascade(self, in_arr, pt_list, layers, dojit):
+    def model_cascade(self, in_arr, pt_list, layers, use_jit):
         """Abstract base ganglion cell model
 
         Parameters
@@ -263,7 +263,7 @@ class BaseModel():
             - 'OFL': optic fiber layer
             - 'GCL': ganglion cell layer
             - 'INL': inner nuclear layer
-        dojit : bool
+        use_jit : bool
             If True, applies just-in-time (JIT) compilation to expensive
             computations for additional speed-up (requires Numba).
         """
@@ -364,7 +364,7 @@ class Nanduri2012(BaseModel):
                              "'OFL'.")
         return ecm
 
-    def model_cascade(self, in_arr, pt_list, layers, dojit):
+    def model_cascade(self, in_arr, pt_list, layers, use_jit):
         """Nanduri model cascade
 
         Parameters
@@ -382,7 +382,7 @@ class Nanduri2012(BaseModel):
             Choose from:
             - ’OFL’: optic fiber layer
             - ’GCL’: ganglion cell layer
-        dojit : bool
+        use_jit : bool
             If True, applies just-in-time (JIT) compilation to
             expensive computations for additional speed-up
             (requires Numba).
@@ -398,7 +398,7 @@ class Nanduri2012(BaseModel):
         # Fast response
         b2 = self.tsample * utils.conv(b1, self.gamma1, self.tsample,
                                        mode='full', method='sparse',
-                                       dojit=dojit)[:b1.size]
+                                       use_jit=use_jit)[:b1.size]
 
         # Charge accumulation
         ca = self.tsample * np.cumsum(np.maximum(0, b1))
@@ -491,7 +491,7 @@ class TemporalModel(BaseModel):
         # gamma_slow is used to calculate the slow response
         _, self.gamma_slow = utils.gamma(3, self.tau_slow, self.tsample)
 
-    def fast_response(self, stim, gamma, method, dojit=True):
+    def fast_response(self, stim, gamma, method, use_jit=True):
         """Fast response function
         Convolve a stimulus `stim` with a temporal low-pass filter `gamma`.
 
@@ -499,7 +499,7 @@ class TemporalModel(BaseModel):
         ----------
         stim : array
            Temporal signal to process, stim(r,t) in Nanduri et al. (2012).
-        dojit : bool, optional
+        use_jit : bool, optional
            If True (default), use numba just-in-time compilation.
         usefft : bool, optional
            If False (default), use sparseconv, else fftconvolve.
@@ -516,7 +516,7 @@ class TemporalModel(BaseModel):
         The output is not converted to a TimeSeries object for speedup.
         """
         conv = utils.conv(stim, gamma, self.tsample, mode='full',
-                          method=method, dojit=dojit)
+                          method=method, use_jit=use_jit)
 
         # Cut off the tail of the convolution to make the output signal
         # match the dimensions of the input signal.
@@ -639,7 +639,7 @@ class TemporalModel(BaseModel):
             ecm[1, :] = np.sum(ecs_item[1, :, np.newaxis] * pt_list, axis=0)
         return ecm
 
-    def model_cascade(self, ecs_item, pt_list, layers, dojit):
+    def model_cascade(self, ecs_item, pt_list, layers, use_jit):
         """The Temporal Sensitivity model
 
         This function applies the model of temporal sensitivity to a single
@@ -661,7 +661,7 @@ class TemporalModel(BaseModel):
             - 'OFL': optic fiber layer
             - 'GCL': ganglion cell layer
             - 'INL': inner nuclear layer
-        dojit : bool
+        use_jit : bool
             If True, applies just-in-time (JIT) compilation to expensive
             computations for additional speed-up (requires Numba).
 
@@ -682,7 +682,7 @@ class TemporalModel(BaseModel):
         # the first convolution in the cascade, but not for subsequent ones.
         if 'INL' in layers:
             fr_inl = self.fast_response(ecm[0], self.gamma_inl,
-                                        dojit=dojit,
+                                        use_jit=use_jit,
                                         method='sparse')
 
             # Cathodic and anodic parts are treated separately: They have the
@@ -696,7 +696,7 @@ class TemporalModel(BaseModel):
 
         if ('GCL' or 'OFL') in layers:
             fr_gcl = self.fast_response(ecm[1], self.gamma_gcl,
-                                        dojit=dojit,
+                                        use_jit=use_jit,
                                         method='sparse')
 
             # Cathodic and anodic parts are treated separately: They have the
