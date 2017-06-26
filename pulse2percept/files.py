@@ -468,12 +468,9 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
                libav_path=libav_path)
 
 
-@utils.deprecated('p2p.files.save_video')
+@utils.deprecated('p2p.files.save_video', removed_version='0.3')
 def savemoviefiles(filestr, data, path='savedImages/'):
     """Saves a brightness movie to .npy, .mat, and .avi format
-
-    This function is deprecated as of v0.2 and will be removed
-    completely in v0.3.
 
     Parameters
     ----------
@@ -494,11 +491,9 @@ def savemoviefiles(filestr, data, path='savedImages/'):
     npy2movie(path + filestr + '.avi', data)  # save as avi
 
 
-@utils.deprecated('p2p.files.save_video')
+@utils.deprecated('p2p.files.save_video', removed_version='0.3')
 def npy2movie(filename, movie, rate=30):
     """Saves a NumPy array to .avi on Windows
-
-    This function is deprecated as of v0.2.
 
     Creates avi files will work on a 64x Windows as well as a PC provided
     that the ffmpeg folder is included in the right location.
@@ -548,13 +543,10 @@ def npy2movie(filename, movie, rate=30):
     p.stdin.close()
 
 
-@utils.deprecated('p2p.stimuli.image2pulsetrain')
+@utils.deprecated('p2p.stimuli.image2pulsetrain', removed_version='0.3')
 def scale(inarray, newmin=0.0, newmax=1.0):
     """Scales an image such that its lowest value attains newmin and
     it's highest value attains newmax.
-
-    This function is deprecated as of v0.2 and will be removed
-    completely in v0.3.
 
     written by Ione Fine, based on code from Rick Anthony
 
