@@ -54,23 +54,28 @@ class deprecated(object):
         The package version in which the deprecated function will be removed.
     """
 
-    def __init__(self, alt_func=None, behavior='warn', removed_version=None):
+    def __init__(self, alt_func=None, behavior='warn', deprecated_version=None,
+                 removed_version=None):
         self.alt_func = alt_func
         self.behavior = behavior
+        self.deprecated_version = deprecated_version
         self.removed_version = removed_version
 
     def __call__(self, func):
 
-        alt_msg = ''
+        alt_msg = ""
         if self.alt_func is not None:
-            alt_msg = ' Use ``%s`` instead.' % self.alt_func
-        rmv_msg = ''
+            alt_msg = "Use ``%s`` instead." % self.alt_func
+        dep_msg = ""
+        if self.deprecated_version is not None:
+            dep_msg = " since version %s" % self.deprecated_version
+        rmv_msg = ""
         if self.removed_version is not None:
-            rmv_msg = (' and will be removed in version %s' %
+            rmv_msg = (", and will be removed in version %s" %
                        self.removed_version)
 
-        msg = ('Function ``%s`` is deprecated' % func.__name__ +
-               rmv_msg + '.' + alt_msg)
+        msg = "Function ``%s`` is deprecated" % func.__name__
+        msg += dep_msg + rmv_msg + ". " + alt_msg
 
         @functools.wraps(func)
         def wrapped(*args, **kwargs):
@@ -81,21 +86,19 @@ class deprecated(object):
             return func(*args, **kwargs)
 
         # modify doc string to display deprecation warning
-        doc = '**Deprecated function**.' + alt_msg
+        doc = "**Deprecated function**. " + alt_msg
+        doc += "\n\n    " + msg
         if wrapped.__doc__ is None:
             wrapped.__doc__ = doc
         else:
-            wrapped.__doc__ = doc + '\n\n    ' + wrapped.__doc__
+            wrapped.__doc__ = doc + "\n\n    " + wrapped.__doc__
 
         return wrapped
 
 
-@deprecated(removed_version='0.3')
+@deprecated(deprecated_version='0.2', removed_version='0.3')
 class Parameters(object):
-    """Container to wrap a MATLAB array in a Python dict
-
-    .. deprecated:: 0.2
-    """
+    """Container to wrap a MATLAB array in a Python dict"""
 
     def __init__(self, **params):
         for k, v in params.items():
@@ -495,7 +498,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         return results
 
 
-@deprecated(removed_version='0.3')
+@deprecated(deprecated_version='0.2', removed_version='0.3')
 def mov2npy(movie_file, out_file):
     """Converts a movie file to a NumPy array
 
@@ -505,8 +508,6 @@ def mov2npy(movie_file, out_file):
         The movie file to be read
     out_file: str
         Name of .npy file to be created.
-
-    .. deprecated:: 0.2
     """
     # Don't import cv at module level. Instead we'll use this on python 2
     # sometimes...

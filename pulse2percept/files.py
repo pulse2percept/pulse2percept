@@ -128,14 +128,14 @@ def load_video(filename, as_timeseries=False, as_gray=False, ffmpeg_path=None,
 
     This function loads a video from file with the help of Scikit-Video, and
     returns the data either as a NumPy array (if `as_timeseries` is False)
-    or as a pulse2percept.utils.TimeSeries object (if `as_timeseries` is True).
+    or as a ``p2p.utils.TimeSeries`` object (if `as_timeseries` is True).
 
     Parameters
     ----------
     filename : str
         Video file name
     as_timeseries: bool, optional
-        If True, returns the data as a pulse2percept.utils.TimeSeries object.
+        If True, returns the data as a ``p2p.utils.TimeSeries object``.
         Default: False.
     as_gray : bool, optional
         If True, loads only the luminance channel of the video.
@@ -147,7 +147,7 @@ def load_video(filename, as_timeseries=False, as_gray=False, ffmpeg_path=None,
 
     Returns
     -------
-    video : ndarray | pulse2percept.utils.TimeSeries
+    video : ndarray | p2p2.utils.TimeSeries
         If `as_timeseries` is False, returns video data according to the
         Scikit-Video standard; that is, an ndarray of dimension (T, M, N, C),
         (T, M, N), (M, N, C), or (M, N), where T is the number of frames,
@@ -173,7 +173,7 @@ def load_video(filename, as_timeseries=False, as_gray=False, ffmpeg_path=None,
     >>> video.shape
     (250, 272, 640, 1)
 
-    Load a video as a pulse2percept.utils.TimeSeries object:
+    Load a video as a ``p2p.utils.TimeSeries`` object:
 
     >>> video = load_video(datasets.bikes(), as_timeseries=True)
     >>> video.tsample
@@ -271,7 +271,7 @@ def save_video(data, filename, width=None, height=None, fps=30,
 
     Parameters
     ----------
-    data : ndarray | pulse2percept.utils.TimeSeries
+    data : ndarray | p2p.utils.TimeSeries
         Video data as a NumPy ndarray must have dimension (T, M, N, C),
         (T, M, N), (M, N, C), or (M, N), where T is the number of frames,
         M is the height, N is the width, and C is the number of channels (must
@@ -321,7 +321,7 @@ def save_video(data, filename, width=None, height=None, fps=30,
         is_timeseries = True
     else:
         raise TypeError('Data to be saved must be either a NumPy ndarray '
-                        'or a pulse2percept.utils.TimeSeries object')
+                        'or a ``p2p.utils.TimeSeries`` object')
 
     # Set the path if necessary, then choose backend
     set_skvideo_path(ffmpeg_path, libav_path)
@@ -396,7 +396,7 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
     """Saves both an input video and the percept to file, side-by-side.
 
     This function creates a new video from an input video file and a
-    pulse2percept.utils.TimeSeries object, assuming they correspond to model
+    ``p2p.utils.TimeSeries`` object, assuming they correspond to model
     input and model output, and plots them side-by-side.
     Both input video and percept are resampled according to `fps`.
     The percept is resized to match the height of the input video.
@@ -405,7 +405,7 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
     ----------
     videofile : str
         File name of input video.
-    percept : pulse2percept.utils.TimeSeries
+    percept : p2p.utils.TimeSeries
         A TimeSeries object with dimension (M, N, C, T) or (M, N, T), where
         T is the number of frames, M is the height, N is the width, and C is
         the number of channels.
@@ -468,7 +468,8 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
                libav_path=libav_path)
 
 
-@utils.deprecated('p2p.files.save_video', removed_version='0.3')
+@utils.deprecated(alt_func='p2p.files.save_video', deprecated_version='0.2',
+                  removed_version='0.3')
 def savemoviefiles(filestr, data, path='savedImages/'):
     """Saves a brightness movie to .npy, .mat, and .avi format
 
@@ -483,15 +484,14 @@ def savemoviefiles(filestr, data, path='savedImages/'):
     path : str, optional
         Path to directory where files should be saved.
         Default: savedImages/
-
-    .. deprecated:: 0.2
     """
     np.save(path + filestr, data)  # save as npy
     sio.savemat(path + filestr + '.mat', dict(mov=data))  # save as matfile
     npy2movie(path + filestr + '.avi', data)  # save as avi
 
 
-@utils.deprecated('p2p.files.save_video', removed_version='0.3')
+@utils.deprecated(alt_func='p2p.files.save_video', deprecated_version='0.2',
+                  removed_version='0.3')
 def npy2movie(filename, movie, rate=30):
     """Saves a NumPy array to .avi on Windows
 
@@ -513,8 +513,6 @@ def npy2movie(filename, movie, rate=30):
         a utils.TimeSeries object
     rate : float, optional
         Frame rate. Default: 30 Hz
-
-    .. deprecated:: 0.2
     """
     if os.name != 'nt':
         raise OSError("npy2movie only works on Windows.")
@@ -543,7 +541,8 @@ def npy2movie(filename, movie, rate=30):
     p.stdin.close()
 
 
-@utils.deprecated('p2p.stimuli.image2pulsetrain', removed_version='0.3')
+@utils.deprecated(alt_func='p2p.stimuli.image2pulsetrain',
+                  deprecated_version='0.2', removed_version='0.3')
 def scale(inarray, newmin=0.0, newmax=1.0):
     """Scales an image such that its lowest value attains newmin and
     it's highest value attains newmax.
@@ -558,8 +557,6 @@ def scale(inarray, newmin=0.0, newmax=1.0):
         The desired lower bound of values in `inarray`. Default: 0
     newmax : float, optional
         The desired upper bound of values in `inarray`. Default: 1
-
-    .. deprecated:: 0.2
     """
 
     oldmin = inarray.min()

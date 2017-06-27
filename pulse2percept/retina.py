@@ -729,25 +729,23 @@ def ret2dva(r_um):
     return sign * r_deg
 
 
-@utils.deprecated('p2p.retina.ret2dva', removed_version='0.3')
+@utils.deprecated(alt_func='p2p.retina.ret2dva', deprecated_version='0.2',
+                  removed_version='0.3')
 def micron2deg(micron):
     """Transforms a distance from microns to degrees
 
     Based on http://retina.anatomy.upenn.edu/~rob/lance/units_space.html
-
-    .. deprecated:: 0.2
     """
     deg = micron / 280.0
     return deg
 
 
-@utils.deprecated('p2p.retina.dva2ret', removed_version='0.3')
+@utils.deprecated(alt_func='p2p.retina.dva2ret', deprecated_version='0.2',
+                  removed_version='0.3')
 def deg2micron(deg):
     """Transforms a distance from degrees to microns
 
     Based on http://retina.anatomy.upenn.edu/~rob/lance/units_space.html
-
-    .. deprecated:: 0.2
     """
     microns = 280.0 * deg
     return microns
