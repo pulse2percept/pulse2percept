@@ -167,59 +167,6 @@ def test_brightness_movie():
     sim.pulse2percept([s1, s1], t_percept=tsample_out)
 
 
-def test_debalthasar_threshold():
-    # Make sure the threshold current fits for different implant heights
-    logging.getLogger(__name__).info("test_debalthasar_threshold()")
-
-    def get_baltha_pulse(curr, tsample):
-        id = 0.975 / 1000
-        pulse = curr * p2p.stimuli.BiphasicPulse('cathodicfirst',
-                                                 0.975 / 1000,
-                                                 tsample,
-                                                 interphase_dur=id).data
-        stim_dur = 0.1
-        stim_size = int(round(stim_dur / tsample))
-        pulse = np.concatenate((pulse, np.zeros(stim_size - pulse.size)))
-        return p2p.utils.TimeSeries(tsample, pulse)
-
-    def distance2threshold(el_dist):
-        """Converts electrode distance (um) to threshold (uA)
-
-        Based on linear regression of data presented in Fig. 7b of
-        deBalthasar et al. (2008). Relationship is linear in log-log space.
-        """
-        slope = 1.5863261730600329
-        intercept = -4.2496180725811659
-        if el_dist > 0:
-            return np.exp(np.log(el_dist) * slope + intercept)
-        else:
-            return np.exp(intercept)
-
-    tsample = 0.005 / 1000
-
-    bright = []
-    for dist in np.linspace(150, 1000, 10):
-        # Place the implant at various distances from the retina
-        implant = p2p.implants.ElectrodeArray('epiretinal', 260, 0, 0, dist)
-
-        sim = p2p.Simulation(implant, engine='serial', use_jit=True)
-        sim.set_optic_fiber_layer(x_range=0, y_range=0, save_data=False)
-        sim.set_ganglion_cell_layer('latest', tsample=tsample)
-
-        # For each distance to retina, find the threshold current according
-        # to deBalthasar et al. (2008)
-        pt = get_baltha_pulse(distance2threshold(dist), tsample)
-
-        # Run the model
-        resp = sim.pulse2percept(pt, t_percept=1.0 / 30.0, layers=['GCL'])
-
-        # Keep track of brightness
-        bright.append(resp.data.max())
-
-    # Make sure that all "threshold" currents give roughly the same brightness
-    npt.assert_equal(np.var(bright) < 10.0, True)
-
-
 def test_ret2dva():
     # Below 15mm eccentricity, relationship is linear with slope 3.731
     npt.assert_equal(p2p.retina.ret2dva(0.0), 0.0)
