@@ -46,15 +46,15 @@ extensions = [
     'sphinx.ext.imgmath',
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
-#    'sphinx_gallery.gen_gallery',
+    #    'sphinx_gallery.gen_gallery',
     'sphinx.ext.autosummary'
 ]
 
 sphinx_gallery_conf = {
     # path to your examples scripts
-    'examples_dirs' : '../examples',
+    'examples_dirs': '../examples',
     # path where to save gallery generated examples
-    'gallery_dirs'  : 'auto_examples'}
+    'gallery_dirs': 'auto_examples'}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -211,22 +211,22 @@ htmlhelp_basename = 'pulse2percept-doc'
 # -- Options for LaTeX output ---------------------------------------------
 
 latex_elements = {
-# The paper size ('letterpaper' or 'a4paper').
-#'papersize': 'letterpaper',
+    # The paper size ('letterpaper' or 'a4paper').
+    #'papersize': 'letterpaper',
 
-# The font size ('10pt', '11pt' or '12pt').
-#'pointsize': '10pt',
+    # The font size ('10pt', '11pt' or '12pt').
+    #'pointsize': '10pt',
 
-# Additional stuff for the LaTeX preamble.
-#'preamble': '',
+    # Additional stuff for the LaTeX preamble.
+    #'preamble': '',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  ('index', 'pulse2percept.tex', u'Pulse2percept: Documentation',
-   u'Michael Beyeler', 'manual'),
+    ('index', 'pulse2percept.tex', u'Pulse2percept: Documentation',
+     u'Michael Beyeler', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -269,16 +269,19 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'Pulse2percept', u'Pulse2percept Documentation',
-   u'Michael Beyeler', 'Pulse2percept', 'Models for sight restoration',
-   'Miscellaneous'),
+    ('index', 'Pulse2percept', u'Pulse2percept Documentation',
+     u'Michael Beyeler', 'Pulse2percept', 'Models for sight restoration',
+     'Miscellaneous'),
 ]
+
 
 def generate_example_rst(app, what, name, obj, options, lines):
     # generate empty examples files, so that we don't get
     # inclusion errors if there are no examples for a class / module
     examples_path = os.path.join(app.srcdir, "_build", "html", "_modules",
-                                 "%s.examples" % name) 
+                                 "%s.examples" % name)
+    if not os.path.isdir(os.path.dirname(examples_path)):
+        os.mkdir(os.path.dirname(examples_path))
     if not os.path.exists(examples_path):
         # touch file
         open(examples_path, 'w').close()
@@ -297,6 +300,7 @@ import buildmodref
 
 # autogenerate api documentation
 # (see https://github.com/rtfd/readthedocs.org/issues/1139)
+
 
 def generateapidoc(_):
     output_path = os.path.join(currentdir, 'reference')
