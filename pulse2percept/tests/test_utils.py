@@ -125,8 +125,6 @@ def test_TimeSeries_append():
 
 
 def test_sparseconv():
-    reload(utils)
-
     # time vector for stimulus (long)
     maxT = .5  # seconds
     nt = 100000
@@ -151,18 +149,13 @@ def test_sparseconv():
         conv = np.convolve(stim, G, mode=mode)
 
         # utils.sparseconv
-        sparse_conv = utils.sparseconv(stim, G, mode=mode, use_jit=False)
+        sparse_conv = utils.sparseconv(stim, G, mode=mode)
 
         npt.assert_equal(conv.shape, sparse_conv.shape)
         npt.assert_almost_equal(conv, sparse_conv)
 
     with pytest.raises(ValueError):
-        utils.sparseconv(G, stim, mode='invalid', use_jit=False)
-
-    with mock.patch.dict("sys.modules", {"numba": {}}):
-        with pytest.raises(ImportError):
-            reload(utils)
-            utils.sparseconv(stim, G, mode='full', use_jit=True)
+        utils.sparseconv(G, stim, mode='invalid')
 
 
 def test_conv():
@@ -178,7 +171,7 @@ def test_conv():
     stim[100::1000] = -1
 
     # kernel
-    tt, gg = utils.gamma(1, 0.005, tsample)
+    _, gg = utils.gamma(1, 0.005, tsample)
 
     # make sure conv returns the same result as
     # make sure sparseconv returns the same result as np.convolve
@@ -187,18 +180,23 @@ def test_conv():
     modes = ["full", "valid", "same"]
     for mode in modes:
         # np.convolve
-        npconv = tsample * np.convolve(stim, gg, mode=mode)
+        npconv = np.convolve(stim, gg, mode=mode)
 
         for method in methods:
-            conv = utils.conv(stim, gg, tsample, mode=mode, method=method)
+            conv = utils.conv(stim, gg, mode=mode, method=method)
 
             npt.assert_equal(conv.shape, npconv.shape)
             npt.assert_almost_equal(conv, npconv)
 
     with pytest.raises(ValueError):
-        utils.conv(gg, stim, tsample, mode="invalid")
+        utils.conv(gg, stim, mode="invalid")
     with pytest.raises(ValueError):
-        utils.conv(gg, stim, tsample, method="invalid")
+        utils.conv(gg, stim, method="invalid")
+
+    with mock.patch.dict("sys.modules", {"numba": {}}):
+        with pytest.raises(ImportError):
+            reload(utils)
+            utils.conv(stim, gg, mode='full', method='sparse', use_jit=True)
 
 
 def power_it(num, n=2):

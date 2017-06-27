@@ -1,5 +1,4 @@
 import numpy as np
-import scipy.signal as signal
 import scipy.special as ss
 import abc
 import six
@@ -252,7 +251,7 @@ class BaseModel():
         ----------
         in_arr: array-like
             A 2D array specifying the effective current values at a particular
-`            spatial location (pixel); one value per retinal layer and
+            spatial location (pixel); one value per retinal layer and
             electrode. Dimensions: <#layers x #electrodes>
         pt_list : list
             List of pulse train 'data' containers.
@@ -275,14 +274,11 @@ class BaseModel():
 
 class Nanduri2012(BaseModel):
     """Model of temporal sensitivity (Nanduri et al. 2012)
-
     This class implements the model of temporal sensitivity as described in:
-
     > Nanduri, Fine, Horsager, Boynton, Humayun, Greenberg, Weiland (2012).
     > Frequency and Amplitude Modulation Have Different Effects on the Percepts
     > Elicited by Retinal Stimulation. Investigative Ophthalmology & Visual
     > Science January 2012, Vol.53, 205-214. doi:10.1167/iovs.11-8401.
-
     Parameters
     ----------
     tsample : float, optional, default: 0.005 / 1000 seconds
@@ -336,7 +332,6 @@ class Nanduri2012(BaseModel):
 
     def calc_layer_current(self, in_arr, pt_list, layers):
         """Calculates the effective current map of a given layer
-
         Parameters
         ----------
         in_arr: array-like
@@ -366,7 +361,6 @@ class Nanduri2012(BaseModel):
 
     def model_cascade(self, in_arr, pt_list, layers, use_jit):
         """Nanduri model cascade
-
         Parameters
         ----------
         in_arr: array-like
@@ -396,14 +390,14 @@ class Nanduri2012(BaseModel):
         b1 = self.calc_layer_current(in_arr, pt_list, layers)
 
         # Fast response
-        b2 = self.tsample * utils.conv(b1, self.gamma1, self.tsample,
-                                       mode='full', method='sparse',
+        b2 = self.tsample * utils.conv(b1, self.gamma1, mode='full',
+                                       method='sparse',
                                        use_jit=use_jit)[:b1.size]
 
         # Charge accumulation
         ca = self.tsample * np.cumsum(np.maximum(0, b1))
-        ca = self.tsample * utils.conv(ca, self.gamma2, self.tsample,
-                                       mode='full', method='fft')[:b1.size]
+        ca = self.tsample * utils.conv(ca, self.gamma2, mode='full',
+                                       method='fft')[:b1.size]
         b3 = np.maximum(0, b2 - self.eps * ca)
 
         # Stationary nonlinearity
@@ -411,20 +405,18 @@ class Nanduri2012(BaseModel):
         b4 = b3 * sigmoid * self.asymptote
 
         # Slow response
-        b5 = self.tsample * utils.conv(b4, self.gamma3, self.tsample,
-                                       mode='full', method='fft')[:b1.size]
+        b5 = self.tsample * utils.conv(b4, self.gamma3, mode='full',
+                                       method='fft')[:b1.size]
 
         return utils.TimeSeries(self.tsample, b5)
 
 
 class TemporalModel(BaseModel):
     """Latest edition of the temporal sensitivity model (experimental)
-
     This class implements the latest version of the temporal sensitivity
     model (experimental). As such, the model might still change from version
     to version. For more stable implementations, please refer to other,
     published models (see `p2p.retina.SUPPORTED_MODELS`).
-
     Parameters
     ----------
     tsample : float, optional, default: 0.005 / 1000 seconds
@@ -494,7 +486,6 @@ class TemporalModel(BaseModel):
     def fast_response(self, stim, gamma, method, use_jit=True):
         """Fast response function
         Convolve a stimulus `stim` with a temporal low-pass filter `gamma`.
-
         Parameters
         ----------
         stim : array
@@ -503,11 +494,9 @@ class TemporalModel(BaseModel):
            If True (default), use numba just-in-time compilation.
         usefft : bool, optional
            If False (default), use sparseconv, else fftconvolve.
-
         Returns
         -------
         Fast response, b2(r,t) in Nanduri et al. (2012).
-
         Notes
         -----
         The function utils.sparseconv can be much faster than np.convolve and
@@ -515,8 +504,7 @@ class TemporalModel(BaseModel):
         convolution kernel.
         The output is not converted to a TimeSeries object for speedup.
         """
-        conv = utils.conv(stim, gamma, self.tsample, mode='full',
-                          method=method, use_jit=use_jit)
+        conv = utils.conv(stim, gamma, mode='full', method=method, use_jit=use_jit)
 
         # Cut off the tail of the convolution to make the output signal
         # match the dimensions of the input signal.
@@ -524,10 +512,8 @@ class TemporalModel(BaseModel):
 
     def charge_accumulation(self, ecm):
         """Calculates the charge accumulation
-
         Charge accumulation is calculated on the effective input current
         `ecm`, as opposed to the output of the fast response stage.
-
         Parameters
         ----------
         ecm : array-like
@@ -540,30 +526,26 @@ class TemporalModel(BaseModel):
 
         for i in range(ca.shape[0]):
             summed = self.tsample * np.cumsum(np.abs(ecm[i, :]))
-            conved = self.tsample * signal.fftconvolve(summed, self.gamma_ca,
-                                                       mode='full')
+            conved = self.tsample * utils.conv(summed, self.gamma_ca,
+                                               mode='full', method='fft')
             ca[i, :] = self.scale_ca * conved[:ecm.shape[-1]]
         return ca
 
     def stationary_nonlinearity(self, stim):
         """Stationary nonlinearity
-
         Nonlinearly rescale a temporal signal `stim` across space and time,
         based on a sigmoidal function dependent on the maximum value of `stim`.
         This is Box 4 in Nanduri et al. (2012).
         The parameter values of the asymptote, slope, and shift of the logistic
         function are given by self.asymptote, self.slope, and self.shift,
         respectively.
-
         Parameters
         ----------
         stim : array
            Temporal signal to process, stim(r,t) in Nanduri et al. (2012).
-
         Returns
         -------
         Rescaled signal, b4(r,t) in Nanduri et al. (2012).
-
         Notes
         -----
         Conversion to TimeSeries is avoided for the sake of speedup.
@@ -574,20 +556,16 @@ class TemporalModel(BaseModel):
 
     def slow_response(self, stim):
         """Slow response function
-
         Convolve a stimulus `stim` with a low-pass filter (3-stage gamma)
         with time constant self.tau_slow.
         This is Box 5 in Nanduri et al. (2012).
-
         Parameters
         ----------
         stim : array
            Temporal signal to process, stim(r,t) in Nanduri et al. (2012)
-
         Returns
         -------
         Slow response, b5(r,t) in Nanduri et al. (2012).
-
         Notes
         -----
         This is by far the most computationally involved part of the perceptual
@@ -596,7 +574,7 @@ class TemporalModel(BaseModel):
         """
         # No need to zero-pad: fftconvolve already takes care of optimal
         # kernel/data size
-        conv = signal.fftconvolve(stim, self.gamma_slow, mode='full')
+        conv = utils.conv(stim, self.gamma_slow, method='fft', mode='full')
 
         # Cut off the tail of the convolution to make the output signal match
         # the dimensions of the input signal.
@@ -605,11 +583,9 @@ class TemporalModel(BaseModel):
     def calc_layer_current(self, ecs_item, pt_list, layers):
         """For a given pixel, calculates the effective current for each retinal
            layer over time
-
         This function operates at a single-pixel level: It calculates the
         combined current from all electrodes through a spatial location
         over time. This calculation is performed per retinal layer.
-
         Parameters
         ----------
         ecs_item: array-like
@@ -641,11 +617,9 @@ class TemporalModel(BaseModel):
 
     def model_cascade(self, ecs_item, pt_list, layers, use_jit):
         """The Temporal Sensitivity model
-
         This function applies the model of temporal sensitivity to a single
         retinal cell (i.e., a pixel). The model is inspired by Nanduri
         et al. (2012), with some extended functionality.
-
         Parameters
         ----------
         ecs_item: array-like
@@ -664,7 +638,6 @@ class TemporalModel(BaseModel):
         use_jit : bool
             If True, applies just-in-time (JIT) compilation to expensive
             computations for additional speed-up (requires Numba).
-
         Returns
         -------
         Brightness response over time. In Nanduri et al. (2012), the
