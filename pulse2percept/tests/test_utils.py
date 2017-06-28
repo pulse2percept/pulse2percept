@@ -55,6 +55,10 @@ def test_TimeSeries():
     npt.assert_equal(tmax, max_idx)
     npt.assert_equal(fmax.data, data_orig[:, :, max_idx])
 
+    # Make sure getitem works
+    npt.assert_equal(isinstance(ts[3], utils.TimeSeries), True)
+    npt.assert_equal(ts[3].data, ts.data[3])
+
 
 def test_TimeSeries_resample():
     max_val = 2.0
@@ -149,7 +153,7 @@ def test_sparseconv():
         conv = np.convolve(stim, G, mode=mode)
 
         # utils.sparseconv
-        sparse_conv = utils.sparseconv(stim, G, mode=mode)
+        sparse_conv = utils.sparseconv(stim, G, mode=mode, use_jit=False)
 
         npt.assert_equal(conv.shape, sparse_conv.shape)
         npt.assert_almost_equal(conv, sparse_conv)
