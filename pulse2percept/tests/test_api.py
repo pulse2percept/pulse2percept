@@ -15,6 +15,10 @@ def test_Simulation_pulse2percept():
     implant = p2p.implants.ElectrodeArray("epiretinal", 10, 0, 0, 0)
     sim = p2p.Simulation(implant, engine='serial')
     sim.set_optic_fiber_layer(x_range=[0, 0], y_range=[0, 0])
+    pt = p2p.stimuli.BiphasicPulse('cathodicfirst', 0.45 / 1000, 0.005 / 1000)
+    sim.pulse2percept(pt)
+    sim.pulse2percept(pt, layers=['GCL'])
+    sim.pulse2percept(pt, layers=['INL'])
 
     # PulseTrain must have the same tsample as (implicitly set up) GCL
     pt = p2p.stimuli.BiphasicPulse("cathodicfirst", 0.1, 0.001)
@@ -103,6 +107,8 @@ def test_Simulation_set_ganglion_cell_layer():
     # Model unknown
     with pytest.raises(ValueError):
         sim.set_ganglion_cell_layer('unknown-model')
+    with pytest.raises(ValueError):
+        sim.set_ganglion_cell_layer(p2p.implants.ArgusII())
 
 
 def test_get_brightest_frame():
