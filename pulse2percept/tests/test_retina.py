@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.optimize as scpo
 import numpy.testing as npt
 import pytest
 import logging
@@ -26,38 +27,6 @@ def test_BaseModel():
     tm = Complete(tsample=0.1)
     npt.assert_equal(tm.tsample, 0.1)
     npt.assert_equal(tm.model_cascade(2.4), 2.4)
-
-
-def test_Nanduri2012():
-    tsample = 0.01 / 1000
-    tm = p2p.retina.Nanduri2012(tsample=tsample)
-
-    # Assume 4 electrodes, each getting some stimulation
-    pts = [p2p.stimuli.PulseTrain(tsample=tsample, dur=0.1)] * 4
-    ptrain_data = [pt.data for pt in pts]
-
-    # For each of these 4 electrodes, we have two effective current values:
-    # one for the ganglion cell layer, one for the bipolar cell layer
-    ecs_item = np.random.rand(2, 4)
-
-    # Calulating layer current:
-    # The Nanduri model does not support INL, so it's just one layer:
-    with pytest.raises(ValueError):
-        tm.calc_layer_current(ecs_item, ptrain_data, ['GCL', 'INL'])
-    with pytest.raises(ValueError):
-        tm.calc_layer_current(ecs_item, ptrain_data, ['unknown'])
-
-    # ...and that should be the same as `calc_layer_current`:
-    ecm_by_hand = np.sum(ecs_item[1, :, np.newaxis] * ptrain_data, axis=0)
-    ecm = tm.calc_layer_current(ecs_item, ptrain_data, ['GCL'])
-    npt.assert_almost_equal(ecm, ecm_by_hand)
-
-    # Running the model cascade:
-    with pytest.raises(ValueError):
-        tm.model_cascade(ecs_item, ptrain_data, ['GCL', 'INL'], False)
-    with pytest.raises(ValueError):
-        tm.model_cascade(ecs_item, ptrain_data, ['unknown'], False)
-    tm.model_cascade(ecs_item, ptrain_data, ['GCL'], False)
 
 
 def test_TemporalModel():
@@ -93,6 +62,138 @@ def test_TemporalModel():
         tm.calc_layer_current(ecs_item, ptrain_data, ['unknown'])
     with pytest.raises(ValueError):
         tm.model_cascade(ecs_item, ptrain_data, ['unknown'], False)
+
+
+def test_Nanduri2012():
+    tsample = 0.01 / 1000
+    tm = p2p.retina.Nanduri2012(tsample=tsample)
+
+    # Assume 4 electrodes, each getting some stimulation
+    pts = [p2p.stimuli.PulseTrain(tsample=tsample, dur=0.1)] * 4
+    ptrain_data = [pt.data for pt in pts]
+
+    # For each of these 4 electrodes, we have two effective current values:
+    # one for the ganglion cell layer, one for the bipolar cell layer
+    ecs_item = np.random.rand(2, 4)
+
+    # Calulating layer current:
+    # The Nanduri model does not support INL, so it's just one layer:
+    with pytest.raises(ValueError):
+        tm.calc_layer_current(ecs_item, ptrain_data, ['GCL', 'INL'])
+    with pytest.raises(ValueError):
+        tm.calc_layer_current(ecs_item, ptrain_data, ['unknown'])
+
+    # ...and that should be the same as `calc_layer_current`:
+    ecm_by_hand = np.sum(ecs_item[1, :, np.newaxis] * ptrain_data, axis=0)
+    ecm = tm.calc_layer_current(ecs_item, ptrain_data, ['GCL'])
+    npt.assert_almost_equal(ecm, ecm_by_hand)
+
+    # Running the model cascade:
+    with pytest.raises(ValueError):
+        tm.model_cascade(ecs_item, ptrain_data, ['GCL', 'INL'], False)
+    with pytest.raises(ValueError):
+        tm.model_cascade(ecs_item, ptrain_data, ['unknown'], False)
+    tm.model_cascade(ecs_item, ptrain_data, ['GCL'], False)
+
+
+def test_Horsager2009_model_cascade():
+    tsample = 0.01 / 1000
+    tm = p2p.retina.Horsager2009(tsample=tsample)
+
+    # Assume 4 electrodes, each getting some stimulation
+    pts = [p2p.stimuli.PulseTrain(tsample=tsample, dur=0.1)] * 4
+    ptrain_data = [pt.data for pt in pts]
+
+    # For each of these 4 electrodes, we have two effective current values:
+    # one for the ganglion cell layer, one for the bipolar cell layer
+    ecs_item = np.random.rand(2, 4)
+
+    # Run the model cascade:
+    with pytest.raises(ValueError):
+        tm.model_cascade(ecs_item, ptrain_data, ['GCL', 'INL'], False)
+    with pytest.raises(ValueError):
+        tm.model_cascade(ecs_item, ptrain_data, ['unknown'], False)
+    tm.model_cascade(ecs_item, ptrain_data, ['GCL'], False)
+
+
+def test_Horsager2009_calc_layer_current():
+    tsample = 0.01 / 1000
+    tm = p2p.retina.Horsager2009(tsample=tsample)
+
+    # Assume 4 electrodes, each getting some stimulation
+    pts = [p2p.stimuli.PulseTrain(tsample=tsample, dur=0.1)] * 4
+    ptrain_data = [pt.data for pt in pts]
+
+    # For each of these 4 electrodes, we have two effective current values:
+    # one for the ganglion cell layer, one for the bipolar cell layer
+    ecs_item = np.random.rand(2, 4)
+
+    # Calulating layer current:
+    # The Horsager model does not support INL, so it's just one layer:
+    with pytest.raises(ValueError):
+        tm.calc_layer_current(ecs_item, ptrain_data, ['GCL', 'INL'])
+    with pytest.raises(ValueError):
+        tm.calc_layer_current(ecs_item, ptrain_data, ['unknown'])
+
+    # ...and that should be the same as `calc_layer_current`:
+    ecm_by_hand = np.sum(ecs_item[1, :, np.newaxis] * ptrain_data, axis=0)
+    ecm = tm.calc_layer_current(ecs_item, ptrain_data, ['GCL'])
+    npt.assert_almost_equal(ecm, ecm_by_hand)
+
+
+def test_Horsager2009():
+    """Make sure the model can reproduce data from Horsager et al. (2009)
+
+    Single-pulse data is taken from Fig.3, where the threshold current is
+    reported for a given pulse duration and amplitude of a single pulse.
+    We don't fit every data point to save some computation time, but make sure
+    the model produces roughly the same values as reported in the paper for
+    some data points.
+    """
+
+    def forward_pass(model, pdurs, amps):
+        """Calculate model output based on a list of pulse durs and amps"""
+        pdurs = np.array([pdurs]).ravel()
+        amps = np.array([amps]).ravel()
+        for pdur, amp in zip(pdurs, amps):
+            in_arr = np.ones((2, 1))
+            pt = p2p.stimuli.PulseTrain(model.tsample, amp=amp, freq=0.1,
+                                        pulsetype='cathodicfirst',
+                                        pulse_dur=pdur / 1000.0,
+                                        interphase_dur=pdur / 1000.0)
+            percept = model.model_cascade(in_arr, [pt.data], 'GCL', False)
+            yield percept.data.max()
+
+    def calc_error_amp(amp_pred, pdur, model):
+        """Calculates the error in threshold current
+
+        For a given data `pdur`, what is the `amp` needed for output `theta`?
+        We're trying to find the current that produces output `theta`. Thus
+        we calculate the error between output produced with `amp_pred` and
+        `theta`.
+        """
+        theta_pred = list(forward_pass(model, pdur, amp_pred))[0]
+        return np.log(np.maximum(1e-10, (theta_pred - model.theta) ** 2))
+
+    def yield_fits(model, pdurs, amps):
+        """Yields a threshold current by fitting the model to the data"""
+        for pdur, amp in zip(pdurs, amps):
+            yield scpo.fmin(calc_error_amp, amp, disp=0, args=(pdur, model))[0]
+
+    # Data from Fig.3 in Horsager et al. (2009)
+    pdurs = [0.52707, 3.96939]  # pulse duration in ms
+    amps = [33.1, 14.7]  # threshold current in uA
+
+    # Make sure our implementation comes close to ground-truth `amps`:
+    # - Do the forward pass
+    model = p2p.retina.Horsager2009(tsample=0.01 / 1000, tau1=0.42 / 1000,
+                                    tau2=45.25 / 1000, tau3=26.25 / 1000,
+                                    beta=3.43, epsilon=2.25, theta=110.3)
+    pred_amps = np.array(list(yield_fits(model, pdurs, amps)))
+
+    # - Calculate the error, make sure every data point is not more than 5uA
+    #   off
+    npt.assert_equal(np.all(np.abs(pred_amps - amps) < 5.0), True)
 
 
 def test_Retina_Electrodes():
