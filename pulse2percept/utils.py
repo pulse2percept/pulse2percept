@@ -5,6 +5,7 @@ import numpy as np
 import multiprocessing
 import random
 import copy
+import functools
 import logging
 
 from scipy import misc as spm
@@ -36,61 +37,69 @@ except ImportError:
     has_jit = False
 
 
-def deprecated(arg):
-    """Decorator used to mark functions as deprecated
+class deprecated(object):
+    """Decorator to mark deprecated functions with warning.
 
-    This is a decorator which can be used to mark functions as deprecated.
-    It will result in a warning being emitted when the function is used.
-
-    Adapted from: http://www.artima.com/weblogs/viewpost.jsp?thread=240845
+    Adapted from <https://github.com/scikit-image/scikit-image/blob/master/skimage/_shared/utils.py>,
+    who adapted it from <http://wiki.python.org/moin/PythonDecoratorLibrary>.
 
     Parameters
     ----------
-    alt_func : str, optional
-        The function to use instead of the deprecated one.
-        Be sure to list a string, not a function object.
-        Default: None.
+    alt_func : str
+        If given, tell user what function to use instead.
+    behavior : {'warn', 'raise'}
+        Behavior during call to deprecated function: 'warn' = warn user that
+        function is deprecated; 'raise' = raise error.
+    removed_version : str
+        The package version in which the deprecated function will be removed.
     """
-    def wrap(func):
-        """The function performing the decoration
 
-        This function is perfoming the actual decoration process. It can only
-        have a single argument, which is the function object.
+    def __init__(self, alt_func=None, behavior='warn', deprecated_version=None,
+                 removed_version=None):
+        self.alt_func = alt_func
+        self.behavior = behavior
+        self.deprecated_version = deprecated_version
+        self.removed_version = removed_version
 
-        Parameters
-        ----------
-        func : function object
-            The function that is deprecated.
-        """
-        e_s = "Call to deprecated function %s." % func.__name__
-        if alt_func:
-            e_s += " Use %s instead." % alt_func
-        logging.getLogger(__name__).warn(e_s)
+    def __call__(self, func):
 
-        def wrapped_func(*args, **kwargs):
+        alt_msg = ""
+        if self.alt_func is not None:
+            alt_msg = "Use ``%s`` instead." % self.alt_func
+        dep_msg = ""
+        if self.deprecated_version is not None:
+            dep_msg = " since version %s" % self.deprecated_version
+        rmv_msg = ""
+        if self.removed_version is not None:
+            rmv_msg = (", and will be removed in version %s" %
+                       self.removed_version)
+
+        msg = "Function ``%s`` is deprecated" % func.__name__
+        msg += dep_msg + rmv_msg + ". " + alt_msg
+
+        @functools.wraps(func)
+        def wrapped(*args, **kwargs):
+            if self.behavior == 'warn':
+                logging.getLogger(__name__).warn(msg)
+            elif self.behavior == 'raise':
+                raise RuntimeError(msg)
             return func(*args, **kwargs)
-        return wrapped_func
 
-    alt_func = None
-    if callable(arg):
-        # Direct decoration
-        return wrap(arg)
-    else:
-        # Alternative function given
-        alt_func = arg
-        return wrap
+        # modify doc string to display deprecation warning
+        doc = "**Deprecated function**. " + alt_msg
+        doc += "\n\n    " + msg
+        if wrapped.__doc__ is None:
+            wrapped.__doc__ = doc
+        else:
+            wrapped.__doc__ = doc + "\n\n    " + wrapped.__doc__
+
+        return wrapped
 
 
+@deprecated(deprecated_version='0.2', removed_version='0.3')
 class Parameters(object):
-    """Container to wrap a MATLAB array in a Python dict
+    """Container to wrap a MATLAB array in a Python dict"""
 
-    This function is deprecated as of v0.2 and will be completely removed
-    in v0.3.
-
-    .. deprecated:: 0.2
-    """
-
-    @deprecated
     def __init__(self, **params):
         for k, v in params.items():
             self.__dict__[k] = v
@@ -489,12 +498,9 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         return results
 
 
-@deprecated
+@deprecated(deprecated_version='0.2', removed_version='0.3')
 def mov2npy(movie_file, out_file):
     """Converts a movie file to a NumPy array
-
-    This function is deprecated as of v0.2 and will be removed completely
-    in v0.3.
 
     Parameters
     ----------
@@ -502,8 +508,6 @@ def mov2npy(movie_file, out_file):
         The movie file to be read
     out_file: str
         Name of .npy file to be created.
-
-    .. deprecated:: 0.2
     """
     # Don't import cv at module level. Instead we'll use this on python 2
     # sometimes...

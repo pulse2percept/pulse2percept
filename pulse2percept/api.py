@@ -407,7 +407,7 @@ class Simulation(object):
         Parameters
         ----------
         stim : utils.TimeSeries|list|dict, optional
-            An input stimulus, as passed to p2p.pulse2percept. If given,
+            An input stimulus, as passed to ``p2p.pulse2percept``. If given,
             activated electrodes will be highlighted in the plot.
             Default: None
         ax : matplotlib.axes._subplots.AxesSubplot, optional

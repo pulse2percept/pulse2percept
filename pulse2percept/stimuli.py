@@ -465,15 +465,10 @@ def video2pulsetrain(filename, implant, framerate=20,
     return video
 
 
-@utils.deprecated('p2p.stimuli.video2pulsetrain')
+@utils.deprecated('p2p.stimuli.video2pulsetrain', removed_version='0.3')
 class Movie2Pulsetrain(utils.TimeSeries):
-    """
-    Is used to create pulse-train stimulus based on luminance over time from
-    a movie
-
-    This class is deprecated as of v0.2 and will be replaced with a new
-    version in v0.3.
-    """
+    """Is used to create pulse-train stimulus based on luminance over time from
+       a movie"""
 
     def __init__(self, rflum, tsample, fps=30.0, amp_transform='linear',
                  amp_max=60, freq=20, pulse_dur=.5 / 1000.,
@@ -574,12 +569,9 @@ def parse_pulse_trains(stim, implant):
     return pt
 
 
-@utils.deprecated
+@utils.deprecated(deprecated_version='0.2', removed_version='0.3')
 def retinalmovie2electrodtimeseries(rf, movie):
-    """
-    Calculates the luminance over time for each electrodes receptive field.
-
-    .. deprecated:: 0.1
+    """Calculates the luminance over time for each electrodes receptive field.
     """
     rflum = np.zeros(movie.shape[-1])
     for f in range(movie.shape[-1]):

@@ -19,6 +19,16 @@ except ImportError:
     pass
 
 
+@utils.deprecated(behavior='raise')
+def raise_deprecated():
+    pass
+
+
+def test_deprecated():
+    with pytest.raises(RuntimeError):
+        raise_deprecated()
+
+
 def test_Parameters():
     my_params = utils.Parameters(foo='bar', list=[1, 2, 3])
     assert my_params.foo == 'bar'
