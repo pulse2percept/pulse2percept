@@ -137,44 +137,9 @@ class Simulation(object):
         Parameters
         ----------
         model : str|retina.BaseModel
-            A custom ganglion cell model can be specified by passing
-            an instance of type `retina.BaseModel`. Else select from
-            pre-existing models:
-
-
-            - 'Nanduri2012':
-                A model of temporal sensitivity as described in:
-
-                > Nanduri, Fine, Horsager, Boynton, Humayun, Greenberg, Weiland
-                > (2012). Frequency and Amplitude Modulation Have Different
-                > Effects on the Percepts Elicited by Retinal Stimulation.
-                > Investigative Ophthalmology & Visual Science January 2012,
-                > Vol.53, 205-214. doi:10.1167/iovs.11-8401.
-
-                Additional keyword arguments
-                ----------------------------
-                tsample : float, optional, default:
-                tau1 : float, optional, default: 0.42 / 1000 (seconds)
-                    Time decay constant for the fast leaky integrater of
-                    the ganglion cell layer (GCL).
-                tau2 : float, optional, default: 45.25 / 1000 (seconds)
-                    Time decay constant for the charge accumulation, has
-                    values between 38 - 57 ms.
-                tau3 : float, optional, default: 26.25 / 1000 (seconds)
-                    Time decay constant for the slow leaky integrator.
-                    Default: 26.25 / 1000 s.
-                eps : float, optional, default: 8.73
-                    Scaling factor applied to charge accumulation (used to
-                    be called epsilon).
-                asymptote : float, optional, default: 14.0
-                    Asymptote of the logistic function used in the
-                    stationary nonlinearity stage.
-                slope : float, optional, default: 3.0
-                    Slope of the logistic function in the stationary
-                    nonlinearity stage.
-                shift : float, optional, default: 16.0
-                    Shift of the logistic function in the stationary
-                    nonlinearity stage.
+            A custom ganglion cell model can be specified by passing an
+            instance of type `retina.BaseModel`. Else select from pre-existing
+            models:
 
             - 'latest':
                 The latest temporal model for epiretinal and subretinal
@@ -212,6 +177,70 @@ class Simulation(object):
                 - shift : float, optional, default: 15.0
                     Shift of the logistic function in the stationary
                     nonlinearity stage.
+
+            - 'Nanduri2012':
+                A model of temporal sensitivity as described in:
+
+                > Nanduri, Fine, Horsager, Boynton, Humayun, Greenberg, Weiland
+                > (2012). Frequency and Amplitude Modulation Have Different
+                > Effects on the Percepts Elicited by Retinal Stimulation.
+                > Investigative Ophthalmology & Visual Science January 2012,
+                > Vol.53, 205-214. doi:10.1167/iovs.11-8401.
+
+                Additional keyword arguments
+                ----------------------------
+                tsample : float, optional, default:
+                tau1 : float, optional, default: 0.42 / 1000 (seconds)
+                    Time decay constant for the fast leaky integrater of
+                    the ganglion cell layer (GCL).
+                tau2 : float, optional, default: 45.25 / 1000 (seconds)
+                    Time decay constant for the charge accumulation, has
+                    values between 38 - 57 ms.
+                tau3 : float, optional, default: 26.25 / 1000 (seconds)
+                    Time decay constant for the slow leaky integrator.
+                    Default: 26.25 / 1000 s.
+                eps : float, optional, default: 8.73
+                    Scaling factor applied to charge accumulation (used to
+                    be called epsilon).
+                asymptote : float, optional, default: 14.0
+                    Asymptote of the logistic function used in the
+                    stationary nonlinearity stage.
+                slope : float, optional, default: 3.0
+                    Slope of the logistic function in the stationary
+                    nonlinearity stage.
+                shift : float, optional, default: 16.0
+                    Shift of the logistic function in the stationary
+                    nonlinearity stage.
+
+            - 'Horsager2009':
+                A model of temporal sensitivity as described in:
+
+                > A Horsager, SH Greenwald, JD Weiland, MS Humayun, RJ
+                > Greenberg, MJ McMahon, GM Boynton, and I Fine (2009).
+                > Predicting visual sensitivity in retinal prosthesis patients.
+                > Investigative Ophthalmology & Visual Science, 50(4):1483.
+
+                Parameters
+                ----------
+                tsample : float, optional, default: 0.005 / 1000 seconds
+                    Sampling time step (seconds).
+                tau1 : float, optional, default: 0.42 / 1000 seconds
+                    Time decay constant for the fast leaky integrater of the
+                    ganglion cell layer (GCL).
+                tau2 : float, optional, default: 45.25 / 1000 seconds
+                    Time decay constant for the charge accumulation, has values
+                    between 38 - 57 ms.
+                tau3 : float, optional, default: 26.25 / 1000 seconds
+                    Time decay constant for the slow leaky integrator.
+                    Default: 26.25 / 1000 s.
+                eps : float, optional, default: 8.73
+                    Scaling factor applied to charge accumulation (used to be
+                    called epsilon).
+                beta : float, optional, default: 3.43
+                    Power nonlinearity applied after half-rectification. The
+                    original model used two different values, depending on
+                    whether an experiment is at threshold (`beta`=3.43) or
+                    above threshold (`beta`=0.83).
         """
         model_not_found = False
         if isinstance(model, six.string_types):
@@ -223,6 +252,10 @@ class Simulation(object):
                 logging.getLogger(__name__).debug("Setting up Nanduri (2012) "
                                                   "model.")
                 self.gcl = retina.Nanduri2012(**kwargs)
+            elif model.lower() in ['horsager', 'horsager2009']:
+                logging.getLogger(__name__).debug("Setting up Horsager "
+                                                  "(2009) model.")
+                self.gcl = retina.Horsager2009(**kwargs)
             else:
                 model_not_found = True
         elif isinstance(model, retina.BaseModel):

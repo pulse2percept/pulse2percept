@@ -5,7 +5,7 @@ import pytest
 import pulse2percept as p2p
 
 
-def test_Simulation_init():
+def test_Simulation___init__():
     implant = p2p.implants.Electrode("epiretinal", 10, 0, 0, 0)
     with pytest.raises(TypeError):
         p2p.Simulation(implant)
@@ -79,6 +79,13 @@ def test_Simulation_set_ganglion_cell_layer():
     npt.assert_equal(isinstance(sim.gcl, p2p.retina.BaseModel), True)
     npt.assert_equal(sim.gcl.tsample, 0.2)
 
+    # Smoke test latest model
+    for modelstr in ['latest', 'Latest', 'LATEST']:
+        sim.set_ganglion_cell_layer(modelstr, lweight=42)
+        npt.assert_equal(isinstance(sim.gcl, p2p.retina.TemporalModel), True)
+        npt.assert_equal(sim.gcl.lweight, 42)
+        sim.set_ganglion_cell_layer(modelstr, unknown_param=2)  # smoke
+
     # Smoke test Nanduri model
     for modelstr in ['Nanduri2012', 'nanduri2012', 'NANDURI2012']:
         sim.set_ganglion_cell_layer(modelstr, tau3=42)
@@ -86,11 +93,11 @@ def test_Simulation_set_ganglion_cell_layer():
         npt.assert_equal(sim.gcl.tau3, 42)
         sim.set_ganglion_cell_layer(modelstr, unknown_param=2)  # smoke
 
-    # Smoke test latest model
-    for modelstr in ['latest', 'Latest', 'LATEST']:
-        sim.set_ganglion_cell_layer(modelstr, lweight=42)
-        npt.assert_equal(isinstance(sim.gcl, p2p.retina.TemporalModel), True)
-        npt.assert_equal(sim.gcl.lweight, 42)
+    # Smoke test Horsager model
+    for modelstr in ['Horsager2009', 'horsager', 'HORSAGER2009']:
+        sim.set_ganglion_cell_layer(modelstr, tau3=42)
+        npt.assert_equal(isinstance(sim.gcl, p2p.retina.Horsager2009), True)
+        npt.assert_equal(sim.gcl.tau3, 42)
         sim.set_ganglion_cell_layer(modelstr, unknown_param=2)  # smoke
 
     # Model unknown

@@ -9,7 +9,7 @@ from pulse2percept import utils
 
 
 SUPPORTED_LAYERS = ['INL', 'GCL', 'OFL']
-SUPPORTED_MODELS = ['latest', 'Nanduri2012']
+SUPPORTED_MODELS = ['latest', 'Nanduri2012', 'Horsager2009']
 
 
 class Grid(object):
@@ -272,13 +272,143 @@ class BaseModel():
     tsample = 0.005 / 1000
 
 
+class Horsager2009(BaseModel):
+    """Model of temporal sensitivity (Horsager et al. 2009)
+
+    This class implements the model of temporal sensitivty as described in:
+    > A Horsager, SH Greenwald, JD Weiland, MS Humayun, RJ Greenberg,
+    > MJ McMahon, GM Boynton, and I Fine (2009). Predicting visual sensitivity
+    > in retinal prosthesis patients. Investigative Ophthalmology & Visual
+    > Science, 50(4):1483.
+
+    Parameters
+    ----------
+    tsample : float, optional, default: 0.005 / 1000 seconds
+        Sampling time step (seconds).
+    tau1 : float, optional, default: 0.42 / 1000 seconds
+        Time decay constant for the fast leaky integrater of the ganglion
+        cell layer (GCL).
+    tau2 : float, optional, default: 45.25 / 1000 seconds
+        Time decay constant for the charge accumulation, has values
+        between 38 - 57 ms.
+    tau3 : float, optional, default: 26.25 / 1000 seconds
+        Time decay constant for the slow leaky integrator.
+        Default: 26.25 / 1000 s.
+    epsilon : float, optional, default: 8.73
+        Scaling factor applied to charge accumulation (used to be called
+        epsilon).
+    beta : float, optional, default: 3.43
+        Power nonlinearity applied after half-rectification. The original model
+        used two different values, depending on whether an experiment is at
+        threshold (`beta`=3.43) or above threshold (`beta`=0.83).
+    """
+
+    def __init__(self, **kwargs):
+        self.tsample = 0.01 / 1000
+        self.tau1 = 0.42 / 1000
+        self.tau2 = 45.25 / 1000
+        self.tau3 = 26.25 / 1000
+        self.epsilon = 2.25
+        self.beta = 3.43
+
+        # Overwrite any given keyword arguments, print warning message (True)
+        # if attempting to set an unrecognized keyword
+        self.set_kwargs(True, **kwargs)
+
+        _, self.gamma1 = utils.gamma(1, self.tau1, self.tsample)
+        _, self.gamma2 = utils.gamma(1, self.tau2, self.tsample)
+        _, self.gamma3 = utils.gamma(3, self.tau3, self.tsample)
+
+    def calc_layer_current(self, in_arr, pt_list, layers):
+        """Calculates the effective current map of a given layer
+
+        Parameters
+        ----------
+        in_arr: array-like
+            A 2D array specifying the effective current values
+            at a particular spatial location (pixel); one value
+            per retinal layer and electrode.
+            Dimensions: <#layers x #electrodes>
+        pt_list : list
+            List of pulse train 'data' containers.
+            Dimensions: <#electrodes x #time points>
+        layers : list
+            List of retinal layers to simulate.
+            Choose from:
+            - 'OFL': optic fiber layer
+            - 'GCL': ganglion cell layer
+        """
+        if 'INL' in layers:
+            raise ValueError("The Horsager2009 model does not support an "
+                             "inner nuclear layer.")
+
+        if ('GCL' or 'OFL') in layers:
+            ecm = np.sum(in_arr[1, :, np.newaxis] * pt_list, axis=0)
+        else:
+            raise ValueError("Acceptable values for `layers` are: 'GCL', "
+                             "'OFL'.")
+        return ecm
+
+    def model_cascade(self, in_arr, pt_list, layers, use_jit):
+        """Horsager model cascade
+
+        Parameters
+        ----------
+        in_arr: array-like
+            A 2D array specifying the effective current values
+            at a particular spatial location (pixel); one value
+            per retinal layer and electrode.
+            Dimensions: <#layers x #electrodes>
+        pt_list : list
+            List of pulse train 'data' containers.
+            Dimensions: <#electrodes x #time points>
+        layers : list
+            List of retinal layers to simulate.
+            Choose from:
+            - 'OFL': optic fiber layer
+            - 'GCL': ganglion cell layer
+        use_jit : bool
+            If True, applies just-in-time (JIT) compilation to
+            expensive computations for additional speed-up
+            (requires Numba).
+        """
+        if 'INL' in layers:
+            raise ValueError("The Nanduri2012 model does not support an inner "
+                             "nuclear layer.")
+
+        stim = self.calc_layer_current(in_arr, pt_list, layers)
+
+        # R1 convolved the entire stimulus (with both pos + neg parts)
+        r1 = self.tsample * utils.conv(stim, self.gamma1, mode='full',
+                                       method='sparse')[:stim.size]
+
+        # However, charge accumulation was done on the anodic phase, it
+        # seems. Although the amplitude might be the same as for the cathodic
+        # phase, the timing is slightly different!
+        ca = self.tsample * np.cumsum(np.maximum(0, stim))
+        ca = self.tsample * utils.conv(ca, self.gamma2, mode='full',
+                                       method='fft')[:stim.size]
+        r2 = r1 - self.epsilon * ca
+
+        # Then half-rectify and pass through the power-nonlinearity
+        r3 = np.maximum(0.0, r2) ** self.beta
+
+        # Then convolve with slow gamma
+        r4 = self.tsample * utils.conv(r3, self.gamma3, mode='full',
+                                       method='fft')[:stim.size]
+
+        return utils.TimeSeries(self.tsample, r4)
+
+
 class Nanduri2012(BaseModel):
     """Model of temporal sensitivity (Nanduri et al. 2012)
+
     This class implements the model of temporal sensitivity as described in:
     > Nanduri, Fine, Horsager, Boynton, Humayun, Greenberg, Weiland (2012).
     > Frequency and Amplitude Modulation Have Different Effects on the Percepts
     > Elicited by Retinal Stimulation. Investigative Ophthalmology & Visual
     > Science January 2012, Vol.53, 205-214. doi:10.1167/iovs.11-8401.
+
     Parameters
     ----------
     tsample : float, optional, default: 0.005 / 1000 seconds
@@ -332,6 +462,7 @@ class Nanduri2012(BaseModel):
 
     def calc_layer_current(self, in_arr, pt_list, layers):
         """Calculates the effective current map of a given layer
+
         Parameters
         ----------
         in_arr: array-like
@@ -345,8 +476,8 @@ class Nanduri2012(BaseModel):
         layers : list
             List of retinal layers to simulate.
             Choose from:
-            - ’OFL’: optic fiber layer
-            - ’GCL’: ganglion cell layer
+            - 'OFL': optic fiber layer
+            - 'GCL': ganglion cell layer
         """
         if 'INL' in layers:
             raise ValueError("The Nanduri2012 model does not support an inner "
@@ -361,6 +492,7 @@ class Nanduri2012(BaseModel):
 
     def model_cascade(self, in_arr, pt_list, layers, use_jit):
         """Nanduri model cascade
+
         Parameters
         ----------
         in_arr: array-like
@@ -374,8 +506,8 @@ class Nanduri2012(BaseModel):
         layers : list
             List of retinal layers to simulate.
             Choose from:
-            - ’OFL’: optic fiber layer
-            - ’GCL’: ganglion cell layer
+            - 'OFL': optic fiber layer
+            - 'GCL': ganglion cell layer
         use_jit : bool
             If True, applies just-in-time (JIT) compilation to
             expensive computations for additional speed-up
@@ -413,10 +545,12 @@ class Nanduri2012(BaseModel):
 
 class TemporalModel(BaseModel):
     """Latest edition of the temporal sensitivity model (experimental)
+
     This class implements the latest version of the temporal sensitivity
     model (experimental). As such, the model might still change from version
     to version. For more stable implementations, please refer to other,
     published models (see `p2p.retina.SUPPORTED_MODELS`).
+
     Parameters
     ----------
     tsample : float, optional, default: 0.005 / 1000 seconds
@@ -485,7 +619,9 @@ class TemporalModel(BaseModel):
 
     def fast_response(self, stim, gamma, method, use_jit=True):
         """Fast response function
+
         Convolve a stimulus `stim` with a temporal low-pass filter `gamma`.
+
         Parameters
         ----------
         stim : array
@@ -494,9 +630,11 @@ class TemporalModel(BaseModel):
            If True (default), use numba just-in-time compilation.
         usefft : bool, optional
            If False (default), use sparseconv, else fftconvolve.
+
         Returns
         -------
         Fast response, b2(r,t) in Nanduri et al. (2012).
+
         Notes
         -----
         The function utils.sparseconv can be much faster than np.convolve and
@@ -504,7 +642,8 @@ class TemporalModel(BaseModel):
         convolution kernel.
         The output is not converted to a TimeSeries object for speedup.
         """
-        conv = utils.conv(stim, gamma, mode='full', method=method, use_jit=use_jit)
+        conv = utils.conv(stim, gamma, mode='full', method=method,
+                          use_jit=use_jit)
 
         # Cut off the tail of the convolution to make the output signal
         # match the dimensions of the input signal.
@@ -512,8 +651,10 @@ class TemporalModel(BaseModel):
 
     def charge_accumulation(self, ecm):
         """Calculates the charge accumulation
+
         Charge accumulation is calculated on the effective input current
         `ecm`, as opposed to the output of the fast response stage.
+
         Parameters
         ----------
         ecm : array-like
@@ -533,19 +674,23 @@ class TemporalModel(BaseModel):
 
     def stationary_nonlinearity(self, stim):
         """Stationary nonlinearity
+
         Nonlinearly rescale a temporal signal `stim` across space and time,
         based on a sigmoidal function dependent on the maximum value of `stim`.
         This is Box 4 in Nanduri et al. (2012).
         The parameter values of the asymptote, slope, and shift of the logistic
         function are given by self.asymptote, self.slope, and self.shift,
         respectively.
+
         Parameters
         ----------
         stim : array
            Temporal signal to process, stim(r,t) in Nanduri et al. (2012).
+
         Returns
         -------
         Rescaled signal, b4(r,t) in Nanduri et al. (2012).
+
         Notes
         -----
         Conversion to TimeSeries is avoided for the sake of speedup.
@@ -556,16 +701,20 @@ class TemporalModel(BaseModel):
 
     def slow_response(self, stim):
         """Slow response function
+
         Convolve a stimulus `stim` with a low-pass filter (3-stage gamma)
         with time constant self.tau_slow.
         This is Box 5 in Nanduri et al. (2012).
+
         Parameters
         ----------
         stim : array
            Temporal signal to process, stim(r,t) in Nanduri et al. (2012)
+
         Returns
         -------
         Slow response, b5(r,t) in Nanduri et al. (2012).
+
         Notes
         -----
         This is by far the most computationally involved part of the perceptual
@@ -583,9 +732,11 @@ class TemporalModel(BaseModel):
     def calc_layer_current(self, ecs_item, pt_list, layers):
         """For a given pixel, calculates the effective current for each retinal
            layer over time
+
         This function operates at a single-pixel level: It calculates the
         combined current from all electrodes through a spatial location
         over time. This calculation is performed per retinal layer.
+
         Parameters
         ----------
         ecs_item: array-like
@@ -617,9 +768,11 @@ class TemporalModel(BaseModel):
 
     def model_cascade(self, ecs_item, pt_list, layers, use_jit):
         """The Temporal Sensitivity model
+
         This function applies the model of temporal sensitivity to a single
         retinal cell (i.e., a pixel). The model is inspired by Nanduri
         et al. (2012), with some extended functionality.
+
         Parameters
         ----------
         ecs_item: array-like
@@ -638,6 +791,7 @@ class TemporalModel(BaseModel):
         use_jit : bool
             If True, applies just-in-time (JIT) compilation to expensive
             computations for additional speed-up (requires Numba).
+
         Returns
         -------
         Brightness response over time. In Nanduri et al. (2012), the
