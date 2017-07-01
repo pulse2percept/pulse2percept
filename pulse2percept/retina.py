@@ -376,16 +376,20 @@ class Horsager2009(BaseModel):
             raise ValueError("The Nanduri2012 model does not support an inner "
                              "nuclear layer.")
 
-        stim = self.calc_layer_current(in_arr, pt_list, layers)
+        # Although the paper says to use cathodic-first, the code only
+        # reproduces if we use what we now call anodic-first. So flip the sign
+        # on the stimulus here:
+        stim = -self.calc_layer_current(in_arr, pt_list, layers)
 
         # R1 convolved the entire stimulus (with both pos + neg parts)
         r1 = self.tsample * utils.conv(stim, self.gamma1, mode='full',
                                        method='sparse')[:stim.size]
 
-        # However, charge accumulation was done on the anodic phase, it
-        # seems. Although the amplitude might be the same as for the cathodic
-        # phase, the timing is slightly different!
-        ca = self.tsample * np.cumsum(np.maximum(0, stim))
+        # It's possible that charge accumulation was done on the anodic phase.
+        # It might not matter too much (timing is slightly different, but the
+        # data are not accurate enough to warrant using one over the other).
+        # Thus use what makes the most sense: accumulate on cathodic
+        ca = self.tsample * np.cumsum(np.maximum(0, -stim))
         ca = self.tsample * utils.conv(ca, self.gamma2, mode='full',
                                        method='fft')[:stim.size]
         r2 = r1 - self.epsilon * ca

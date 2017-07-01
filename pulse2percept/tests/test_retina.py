@@ -181,19 +181,19 @@ def test_Horsager2009():
             yield scpo.fmin(calc_error_amp, amp, disp=0, args=(pdur, model))[0]
 
     # Data from Fig.3 in Horsager et al. (2009)
-    pdurs = [0.52707, 3.96939]  # pulse duration in ms
-    amps = [33.1, 14.7]  # threshold current in uA
+    pdurs = [0.07335, 0.21985, 0.52707, 3.96939]  # pulse duration in ms
+    amps_true = [181.6, 64.7, 33.1, 14.7]  # threshold current in uA
+    amps_expected = [201.9, 61.0, 29.2, 10.4]
 
     # Make sure our implementation comes close to ground-truth `amps`:
     # - Do the forward pass
     model = p2p.retina.Horsager2009(tsample=0.01 / 1000, tau1=0.42 / 1000,
                                     tau2=45.25 / 1000, tau3=26.25 / 1000,
                                     beta=3.43, epsilon=2.25, theta=110.3)
-    pred_amps = np.array(list(yield_fits(model, pdurs, amps)))
+    amps_predicted = np.array(list(yield_fits(model, pdurs, amps_true)))
 
-    # - Calculate the error, make sure every data point is not more than 5uA
-    #   off
-    npt.assert_equal(np.all(np.abs(pred_amps - amps) < 5.0), True)
+    # - Make sure predicted values still the same
+    npt.assert_almost_equal(amps_expected, amps_predicted, decimal=0)
 
 
 def test_Retina_Electrodes():
