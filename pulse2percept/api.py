@@ -461,7 +461,13 @@ class Simulation(object):
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots(1, figsize=(10, 8))
 
-        ax.set_facecolor('black')
+        # Matplotlib<2 compatibility
+        if hasattr(ax, 'set_facecolor'):
+            ax.set_facecolor('black')
+        elif hasattr(ax, 'set_axis_bgcolor'):
+            ax.set_axis_bgcolor('black')
+
+        # Draw axon pathways
         ax.plot(self.ofl.jan_x[:, ::5], -self.ofl.jan_y[:, ::5],
                 c=(0.5, 1, 0.5))
 
