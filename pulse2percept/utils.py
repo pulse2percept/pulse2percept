@@ -563,6 +563,8 @@ def gamma(n, tau, tsample, tol=0.01):
     tsample = float(tsample)
     if n <= 0 or tau <= 0 or tsample <= 0:
         raise ValueError("`n`, `tau`, and `tsample` must be nonnegative.")
+    if tau <= tsample:
+        raise ValueError("`tau` cannot be smaller than `tsample`.")
 
     # Allocate a time vector that is long enough for sure.
     # Trim vector later on.
@@ -579,8 +581,9 @@ def gamma(n, tau, tsample, tol=0.01):
     # Make sure to start search on the right-hand side of the peak.
     peak = y.argmax()
     small_vals = np.where(y[peak:] < tol * y.max())[0]
-    t = t[:small_vals[0] + peak]
-    y = y[:small_vals[0] + peak]
+    if small_vals.size:
+        t = t[:small_vals[0] + peak]
+        y = y[:small_vals[0] + peak]
 
     return t, y
 
