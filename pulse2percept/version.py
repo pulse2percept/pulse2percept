@@ -3,7 +3,7 @@ from os.path import join as pjoin
 
 # Format expected by setup.py and doc/source/conf.py: string of form "X.Y.Z"
 _version_major = 0
-_version_minor = 2
+_version_minor = 3
 _version_micro = ''  # use '' for first of series, number for 1 and above
 _version_extra = ''
 # _version_extra = ''  # Uncomment this for full releases
@@ -26,12 +26,12 @@ CLASSIFIERS = ["Development Status :: 3 - Alpha",
                "Topic :: Scientific/Engineering"]
 
 # Description should be a one-liner:
-description = "pulse2percept: Models for retinal prosthetics"
+description = "pulse2percept: A Python-based simulation framework for bionic vision"
 # Long description will go up on the pypi page
 long_description = """
 
-Models for Retinal Prosthetics
-------------------------------
+A Python-based simulation framework for bionic vision
+-----------------------------------------------------
 
 See our `Github repo <https://github.com/uwescience/pulse2percept>`_ for
 details.
