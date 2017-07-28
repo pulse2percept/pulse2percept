@@ -896,6 +896,111 @@ def dva2ret(r_deg):
     return sign * r_um
 
 
+def grow_axon(phi0, n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.0, 2.0),
+              beta_sup=-1.9, beta_inf=0.5):
+    """Grows a single axon based on the model by Jansonius et al. (2009)
+
+    This function generates the trajectory of a single nerve fiber bundle based
+    on the mathematical model described in:
+
+    > Jansionus et al. (2009). A mathematical description of nerve fiber bundle
+    > trajectories and their variability in the human retina. Vis Res 49:
+    > 2157-2163.
+
+    Parameters
+    ----------
+    phi0 : float
+        Angular position of the axon at its starting point (polar coordinates,
+        degrees). Must be within [-180, 180].
+    n_rho : int, optional, default: 801
+        Number of sampling point along the radial axis (polar coordinates).
+    rho_range : (rho_min, rho_max), optional, default: (4.0, 45.0)
+        Lower and upper bounds for the radial position values (polar
+        coordinates).
+    loc_od : (x_od, y_od), optional, default: (15.0, 2.0)
+        Location of the center of the optic disc (x, y) in Cartesian
+        coordinates.
+    beta_sup : float, optional, default: -1.9
+        Scalar value for the superior retina (see Eq. 5, `\beta_s` in the
+        paper).
+    beta_inf : float, optional, default: 0.5
+        Scalar value for the inferior retina (see Eq. 6, `\beta_i` in the
+        paper.)
+    """
+    if np.abs(phi0) > 180.0:
+        raise ValueError('phi0 must be within [-180, 180].')
+    if n_rho < 1:
+        raise ValueError('Number of radial sampling points must be >= 1.')
+    if np.any(np.abs(rho_range) < 0):
+        raise ValueError('rho cannot be negative.')
+    if rho_range[0] > rho_range[1]:
+        raise ValueError('Lower bound on rho cannot be larger than the '
+                         ' upper bound.')
+    is_superior = phi0 > 0
+    if is_superior:
+        # Axon is in superior retina, compute `b` (real number) from Eq. 5:
+        b = np.exp(beta_sup + 3.9 * np.tanh(-(phi0 - 121.0) / 14.0))
+        # Equation 3, `c` a positive real number:
+        c = 1.9 + 1.4 * np.tanh((phi0 - 121.0) / 14.0)
+    else:
+        # Axon is in inferior retina: compute `b` (real number) from Eq. 6:
+        b = -np.exp(beta_inf + 1.5 * np.tanh(-(-phi0 - 90.0) / 25.0))
+        # Equation 4, `c` a positive real number:
+        c = 1.0 + 0.5 * np.tanh((-phi0 - 90.0) / 25.0)
+
+    # Spiral as a function of `rho`:
+    phi = phi0 + b * (rho - rho.min()) ** c
+
+    # Convert to Cartesian coordinates
+    xprime = rho * np.cos(np.deg2rad(phi))
+    yprime = rho * np.sin(np.deg2rad(phi))
+
+    # Find the array elements where the axon crosses the meridian
+    if is_superior:
+        # Find elements in inferior retina
+        idx = np.where(yprime < 0)[0]
+    else:
+        # Find elements in superior retina
+        idx = np.where(yprime > 0)[0]
+    if idx.size:
+        # Keep only up to first occurrence
+        xprime = xprime[:idx[0]]
+        yprime = yprime[:idx[0]]
+
+    # From `loc_od`=[0, 0] to fovea=[0, 0]
+    xmodel = xprime + loc_od[0]
+    ymodel = yprime
+    idx = xprime > -loc_od[0]
+    ymodel[idx] = yprime[idx] + loc_od[1] * (xmodel[idx] / loc_od[0]) ** 2
+
+    return xmodel, ymodel
+
+
+def jansionius2009(n_axons=500, phi_range=(-180.0, 180.0), n_rho=801,
+                   rho_range=(4.0, 45.0), beta_sup=-1.9, beta_inf=0.5,
+                   loc_od=(15.0, 2.0)):
+
+    if n_axons < 1:
+        raise ValueError('Number of axons must be >= 1.')
+    if np.any(np.abs(phi_range) > 180.0):
+        raise ValueError('phi must be within [-180, 180].')
+    if phi_range[0] > phi_range[1]:
+        raise ValueError('Lower bound on phi cannot be larger than the '
+                         'upper bound.')
+
+    rho = np.linspace(rho_range[0], rho_range[1], n_rho)
+    # axons = utils.parfor(grow_axon, rho, func_args=)
+
+    axons = []
+    for phi0 in np.linspace(phi_range[0], phi_range[1], n_axons):
+        x, y = grow_axon(phi0, n_rho=n_rho, rho_range=rho_range, loc_od=loc_od,
+                         beta_sup=beta_sup, beta_inf=beta_inf)
+        axons.append(np.vstack((x, y)).T)
+    return axons
+
+
+@utils.deprecated(alt_func='p2p.retina.jansionius2009',
+                  deprecated_version='0.3', removed_version='0.4')
 def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
               rot=0 * np.pi / 180, scale=1, bs=-1.9, bi=.5, r0=4,
               max_samples=45, ang_range=60):
@@ -932,35 +1037,46 @@ def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
     # bi = .5;            %inferior 'c' parameter constant
     # ang_range = 60
 
-    ang0 = np.hstack([np.linspace(ang_range, 180, num_cells / 2),
-                      np.linspace(-180, ang_range, num_cells / 2)])
+    # sample space of superior/inferior retina, add them in a 1D array
+    # superior is where ang0 > 0
+    # this will be the first dimension of the meshgrid
+    # inferior should go from -180 to -60? or typo in paper
+    # ang0 is \phi_0
+    ang0 = np.hstack([np.linspace(ang_range, 180, num_cells / 2),  # superior
+                      np.linspace(-180, ang_range, num_cells / 2)])  # inferior
 
+    # from r0=4 to max_samples=45, take num_samples=801 steps
+    # this will be the second dimension of the meshgrid
     r = np.linspace(r0, max_samples, num_samples)
+
     # generate angle and radius matrices from vectors with meshgrid
     ang0mat, rmat = np.meshgrid(ang0, r)
 
     num_samples = ang0mat.shape[0]
     num_cells = ang0mat.shape[1]
 
-    # index into superior (upper) axons
+    # index into axons from superior (upper) retina
     sup = ang0mat > 0
 
     # Set up 'b' parameter:
     b = np.zeros([num_samples, num_cells])
 
+    # Equation 5: upper retina
     b[sup] = np.exp(
-        bs + 3.9 * np.tanh(-(ang0mat[sup] - 121) / 14))  # equation 5
-    # equation 6
+        bs + 3.9 * np.tanh(-(ang0mat[sup] - 121) / 14))
+
+    # equation 6: lower retina
     b[~sup] = -np.exp(bi + 1.5 * np.tanh(-(-ang0mat[~sup] - 90) / 25))
 
     # Set up 'c' parameter:
     c = np.zeros([num_samples, num_cells])
 
     # equation 3 (fixed typo)
+    # Paper says -(angmat-121)/14. Is the - sign the typo?
     c[sup] = 1.9 + 1.4 * np.tanh((ang0mat[sup] - 121) / 14)
     c[~sup] = 1 + .5 * np.tanh((-ang0mat[~sup] - 90) / 25)   # equation 4
 
-    # %Here's the main function: spirals as a function of r (equation 1)
+    # Here's the main function: spirals as a function of r (equation 1)
     ang = ang0mat + b * (rmat - r0)**c
 
     # Transform to x-y coordinates
