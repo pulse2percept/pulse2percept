@@ -334,7 +334,7 @@ def test_grow_axon():
     p2p.retina.grow_axon(0.0, rho_range=[10.0, 10.0])
 
 
-def test_jansionius2009():
+def test_jansonius2009():
     for n_axons in [-1, 0]:
         with pytest.raises(ValueError):
             p2p.retina.jansonius2009(n_axons=n_axons)

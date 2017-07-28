@@ -157,9 +157,9 @@ class Grid(object):
             by the weights axon map.
         """
         ecs = np.zeros(cs.shape)
-        for id in range(0, len(cs.flat)):
-            ecs.flat[id] = np.dot(cs.flat[self.axon_id[id]],
-                                  self.axon_weight[id])
+        for idx in range(0, len(cs.flat)):
+            ecs.flat[idx] = np.dot(cs.flat[self.axon_id[idx]],
+                                   self.axon_weight[idx])
 
         # normalize so the response under the electrode in the ecs map
         # is equal to cs
@@ -937,6 +937,8 @@ def grow_axon(phi0, n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.0, 2.0),
         raise ValueError('Lower bound on rho cannot be larger than the '
                          ' upper bound.')
     is_superior = phi0 > 0
+    rho = np.linspace(rho_range[0], rho_range[1], n_rho)
+
     if is_superior:
         # Axon is in superior retina, compute `b` (real number) from Eq. 5:
         b = np.exp(beta_sup + 3.9 * np.tanh(-(phi0 - 121.0) / 14.0))
@@ -976,9 +978,9 @@ def grow_axon(phi0, n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.0, 2.0),
     return xmodel, ymodel
 
 
-def jansionius2009(n_axons=500, phi_range=(-180.0, 180.0), n_rho=801,
-                   rho_range=(4.0, 45.0), beta_sup=-1.9, beta_inf=0.5,
-                   loc_od=(15.0, 2.0)):
+def jansonius2009(n_axons=500, phi_range=(-180.0, 180.0), n_rho=801,
+                  rho_range=(4.0, 45.0), beta_sup=-1.9, beta_inf=0.5,
+                  loc_od=(15.0, 2.0)):
 
     if n_axons < 1:
         raise ValueError('Number of axons must be >= 1.')
@@ -999,7 +1001,7 @@ def jansionius2009(n_axons=500, phi_range=(-180.0, 180.0), n_rho=801,
     return axons
 
 
-@utils.deprecated(alt_func='p2p.retina.jansionius2009',
+@utils.deprecated(alt_func='p2p.retina.jansonius2009',
                   deprecated_version='0.3', removed_version='0.4')
 def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
               rot=0 * np.pi / 180, scale=1, bs=-1.9, bi=.5, r0=4,
@@ -1167,8 +1169,8 @@ def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=.001):
         # now loop back along this nearest axon toward the optic disc
         for ax_pos_id in range(ax_pos_id0 - 1, -1, -1):
             # increment the distance from the starting point
-            ax = (jan_x[ax_pos_id + 1, ax_num] - jan_x[ax_pos_id, ax_num])**2
-            ay = (jan_y[ax_pos_id + 1, ax_num] - jan_y[ax_pos_id, ax_num])**2
+            ax = (jan_x[ax_pos_id + 1, ax_num] - jan_x[ax_pos_id, ax_num])
+            ay = (jan_y[ax_pos_id + 1, ax_num] - jan_y[ax_pos_id, ax_num])
             dist += np.sqrt(ax ** 2 + ay ** 2)
 
             # weight falls off exponentially as distance from axon cell body
@@ -1191,7 +1193,7 @@ def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=.001):
                     cur_yg = nearest_yg
 
                     # append the list
-                    axon_weight[px].append(np.exp(weight))
+                    axon_weight[px].append(weight)
                     axon_id[px].append(np.ravel_multi_index((nearest_yg_id,
                                                              nearest_xg_id),
                                                             xg.shape))

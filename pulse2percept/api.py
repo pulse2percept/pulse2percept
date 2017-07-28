@@ -2,10 +2,7 @@ import numpy as np
 import logging
 import six
 
-from pulse2percept import utils
-from pulse2percept import retina
-from pulse2percept import implants
-from pulse2percept import stimuli
+from pulse2percept import (utils, retina, implants, stimuli)
 
 
 class Simulation(object):
