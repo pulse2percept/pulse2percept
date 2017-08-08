@@ -203,8 +203,7 @@ def test_Retina_Electrodes():
     xhi = 2
     ylo = -3
     yhi = 3
-    retina = p2p.retina.Grid(xlo=xlo, xhi=xhi,
-                             ylo=ylo, yhi=yhi,
+    retina = p2p.retina.Grid(x_range=(xlo, xhi), y_range=(ylo, yhi),
                              sampling=sampling,
                              save_data=False)
     npt.assert_equal(retina.gridx.shape, ((yhi - ylo) / sampling + 1,
@@ -302,62 +301,71 @@ def test_deg2micron():
     npt.assert_almost_equal(p2p.retina.deg2micron(1.0), 280.0)
 
 
-def test_grow_axon():
+def test_jansonius2009():
     # With `rho` starting at 0, all axons should originate in the optic disc
     # center
     for phi0 in [-135.0, 66.0, 128.0]:
-        for loc_od in [[15.0, 2.0], [-15.0, 2.0], [-4.2, -6.66]]:
-            x, y = p2p.retina.grow_axon(phi0, n_rho=100, rho_range=(0.0, 45.0),
-                                        loc_od=loc_od)
-            npt.assert_almost_equal(x[0], loc_od[0])
-            npt.assert_almost_equal(y[0], loc_od[1])
+        for loc_od in [(15.0, 2.0), (-15.0, 2.0), (-4.2, -6.66)]:
+            ax_pos = p2p.retina.jansonius2009(phi0, n_rho=100,
+                                              rho_range=(0.0, 45.0),
+                                              loc_od=loc_od)
+            npt.assert_almost_equal(ax_pos[0, 0], loc_od[0])
+            npt.assert_almost_equal(ax_pos[0, 1], loc_od[1])
 
     # These axons should all end at the meridian
     for sign in [-1.0, 1.0]:
         for phi0 in [110.0, 135.0, 160.0]:
-            x, y = p2p.retina.grow_axon(sign * phi0, n_rho=100,
-                                        rho_range=(0.0, 45.0))
-            npt.assert_almost_equal(y[-1], 0.0, decimal=1)
+            ax_pos = p2p.retina.jansonius2009(sign * phi0, n_rho=501,
+                                              rho_range=(0.0, 45.0))
+            print(ax_pos[-1, :])
+            npt.assert_almost_equal(ax_pos[-1, 1], 0.0, decimal=1)
 
     # `phi0` must be within [-180, 180]
     for phi0 in [-200.0, 181.0]:
         with pytest.raises(ValueError):
-            p2p.retina.grow_axon(phi0)
+            p2p.retina.jansonius2009(phi0)
+
+    # `n_rho` must be >= 1
+    for n_rho in [-1, 0]:
+        with pytest.raises(ValueError):
+            p2p.retina.jansonius2009(0.0, n_rho=n_rho)
 
     # `rho_range` must have min <= max
     for lorho in [-200.0, 90.0]:
         with pytest.raises(ValueError):
-            p2p.retina.grow_axon(0.0, rho_range=(lorho, 45.0))
+            p2p.retina.jansonius2009(0.0, rho_range=(lorho, 45.0))
     for hirho in [-200.0, 40.0]:
         with pytest.raises(ValueError):
-            p2p.retina.grow_axon(0.0, rho_range=(45.0, hirho))
-    p2p.retina.grow_axon(0.0, rho_range=[10.0, 10.0])
+            p2p.retina.jansonius2009(0.0, rho_range=(45.0, hirho))
 
 
-def test_jansonius2009():
+def test_grow_axon_bundles():
     for n_axons in [-1, 0]:
         with pytest.raises(ValueError):
-            p2p.retina.jansonius2009(n_axons=n_axons)
+            p2p.retina.grow_axon_bundles(n_axons)
     for n_rho in [-1, 0]:
         with pytest.raises(ValueError):
-            p2p.retina.jansonius2009(n_rho=n_rho)
+            p2p.retina.grow_axon_bundles(1, n_rho=n_rho)
     for lophi in [-200.0, 90.0, 200.0]:
         with pytest.raises(ValueError):
-            p2p.retina.jansonius2009(phi_range=(lophi, 85.0))
+            p2p.retina.grow_axon_bundles(1, phi_range=(lophi, 85.0))
     for hiphi in [-200.0, 90.0, 200.0]:
         with pytest.raises(ValueError):
-            p2p.retina.jansonius2009(phi_range=(95.0, hiphi))
+            p2p.retina.grow_axon_bundles(1, phi_range=(95.0, hiphi))
 
-    n_axons = 3
     n_rho = 100
     phi_range = (-180.0, 180.0)
-    phi = np.linspace(phi_range[0], phi_range[1], n_axons)
-    axons = p2p.retina.jansonius2009(n_axons=n_axons, phi_range=phi_range,
-                                     n_rho=n_rho)
-    npt.assert_equal(len(axons), n_axons)
-    for ax, phi0 in zip(axons, phi):
-        # Every axon is a `n_rho` x 2 matrix, where every row has (x, y)
-        npt.assert_equal(ax.shape, (n_rho, 2))
-        x, y = p2p.retina.grow_axon(phi0, phi_range=phi_range, n_rho=n_rho)
-        npt.assert_almost_equal(x, ax[:, 0])
-        npt.assert_almost_equal(x, ax[:, 1])
+    for n_axons in [1, 5, 11]:
+        phi = np.linspace(phi_range[0], phi_range[1], n_axons)
+        axons = p2p.retina.grow_axon_bundles(n_axons, phi_range=phi_range,
+                                             n_rho=n_rho)
+        npt.assert_equal(len(axons), n_axons)
+        for ax, phi0 in zip(axons, phi):
+            # Every axon is at most a `n_rho` x 2 matrix, where every row has
+            # (x, y). Number of rows might be < `n_rho` if axon crossed
+            # meridian.
+            npt.assert_equal(ax.shape[1], 2)
+            npt.assert_equal(ax.shape[0] <= n_rho, True)
+            ax_pos = p2p.retina.jansonius2009(phi0, n_rho=n_rho)
+            npt.assert_almost_equal(ax_pos[:, 0], ax[:, 0])
+            npt.assert_almost_equal(ax_pos[:, 1], ax[:, 1])

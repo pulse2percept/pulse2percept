@@ -910,7 +910,7 @@ def dva2ret(r_deg):
 
 def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0),
                   loc_od=(15.0, 2.0), beta_sup=-1.9, beta_inf=0.5):
-    """Grows a single axon based on the model by Jansonius et al. (2009)
+    """Grows a single axon bundle based on the model by Jansonius et al. (2009)
 
     This function generates the trajectory of a single nerve fiber bundle
     based on the mathematical model described in:
@@ -922,10 +922,10 @@ def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0),
     Parameters
     ----------
     phi0 : float
-        Angular position of the axon at its starting point (polar 
+        Angular position of the axon at its starting point (polar
         coordinates, degrees). Must be within [-180, 180].
     n_rho : int, optional, default: 801
-        Number of sampling point along the radial axis (polar coordinates).
+        Number of sampling points along the radial axis (polar coordinates).
     rho_range : (rho_min, rho_max), optional, default: (4.0, 45.0)
         Lower and upper bounds for the radial position values (polar
         coordinates).
@@ -939,6 +939,15 @@ def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0),
         Scalar value for the inferior retina (see Eq. 6, `\beta_i` in the
         paper.)
 
+    Returns
+    -------
+    ax_pos: Nx2 array
+        Returns a two-dimensional array of axonal positions, where ax_pos[0, :]
+        contains the (x, y) coordinates of the axon segment closest to the
+        optic disc, and aubsequent row indices move the axon away from the
+        optic disc. Number of rows is at most `n_rho`, but might be smaller if
+        the axon crosses the meridian.
+
     Notes
     -----
     The study did not include axons with phi0 in [-60, 60] deg.
@@ -947,7 +956,7 @@ def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0),
         raise ValueError('phi0 must be within [-180, 180].')
     if n_rho < 1:
         raise ValueError('Number of radial sampling points must be >= 1.')
-    if np.any(np.abs(rho_range) < 0):
+    if np.any(np.array(rho_range) < 0):
         raise ValueError('rho cannot be negative.')
     if rho_range[0] > rho_range[1]:
         raise ValueError('Lower bound on rho cannot be larger than the '
@@ -985,20 +994,80 @@ def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0),
         xprime = xprime[:idx[0]]
         yprime = yprime[:idx[0]]
 
-    # From `loc_od`=[0, 0] to fovea=[0, 0]
+    # Adjust coordinate system, having fovea=[0, 0] instead of `loc_od`=[0, 0]
     xmodel = xprime + loc_od[0]
     ymodel = yprime
-    idx = xprime > -loc_od[0]
+    if loc_od[0] > 0:
+        # If x-coordinate of optic disc is positive, use Appendix A
+        idx = xprime > -loc_od[0]
+    else:
+        # Else we need to flip the sign
+        idx = xprime < -loc_od[0]
     ymodel[idx] = yprime[idx] + loc_od[1] * (xmodel[idx] / loc_od[0]) ** 2
 
-    return xmodel, ymodel
+    # Return as Nx2 array
+    return np.vstack((xmodel, ymodel)).T
 
 
-def grow_axons(n_axons=501, phi_range=(-180.0, 180.0), n_rho=801,
-               rho_range=(4.0, 45.0), beta_sup=-1.9, beta_inf=0.5,
-               loc_od=(15.0, 2.0), engine='joblib', n_jobs=-1,
-               scheduler='threading'):
+def grow_axon_bundles(n_axons, phi_range=(-180.0, 180.0), n_rho=801,
+                      rho_range=(4.0, 45.0), beta_sup=-1.9, beta_inf=0.5,
+                      loc_od=(15.0, 2.0), engine='joblib', n_jobs=-1,
+                      scheduler='threading'):
+    """Grows axon bundles based on the model by Jansonius et al. (2009)
 
+    This function generates the trajectory of `n_axons` nerve fiber bundles
+    based on the mathematical model described in:
+
+    > Jansionus et al. (2009). A mathematical description of nerve fiber
+    > bundle trajectories and their variability in the human retina. Vis
+    > Res 49: 2157-2163.
+
+    Parameters
+    ----------
+    n_axons : int
+        The number of axons to generate. Their start orientations `phi0` (in
+        modified polar coordinates) will be sampled uniformly from `phi_range`.
+    phi_range : (lophi, hiphi)
+        Range of angular positions of axon fibers at their starting points
+        (polar coordinates, degrees) to be sampled uniformly with `n_axons`
+        samples. Must be within [-180, 180].
+    n_rho : int, optional, default: 801
+        Number of sampling points along the radial axis (polar coordinates).
+    rho_range : (rho_min, rho_max), optional, default: (4.0, 45.0)
+        Lower and upper bounds for the radial position values (polar
+        coordinates).
+    loc_od : (x_od, y_od), optional, default: (15.0, 2.0)
+        Location of the center of the optic disc (x, y) in Cartesian
+        coordinates.
+    beta_sup : float, optional, default: -1.9
+        Scalar value for the superior retina (see Eq. 5, `\beta_s` in the
+        paper).
+    beta_inf : float, optional, default: 0.5
+        Scalar value for the inferior retina (see Eq. 6, `\beta_i` in the
+        paper.)
+    engine : str, optional, default: 'joblib'
+        Which computational back end to use:
+        - 'serial': Single-core computation
+        - 'joblib': Parallelization via joblib (requires `pip install joblib`)
+        - 'dask': Parallelization via dask (requires `pip install dask`). Dask
+                  backend can be specified via `threading`.
+    scheduler : str, optional, default: 'threading'
+        Which scheduler to use (irrelevant for 'serial' engine):
+        - 'threading': a scheduler backed by a thread pool
+        - 'multiprocessing': a scheduler backed by a process pool
+    n_jobs : int, optional, default: -1
+        Number of cores (threads) to run the model on in parallel. Specify -1
+        to use as many cores as available.
+
+    Returns
+    -------
+    axons: list of Nx2 arrays
+        For every generated axon bundle, returns a two-dimensional array of
+        axonal positions, where ax_pos[0, :] contains the (x, y) coordinates of
+        the axon segment closest to the optic disc, and aubsequent row indices
+        move the axon away from the optic disc. Number of rows is at most
+        `n_rho`, but might be smaller if the axon crosses the meridian.
+    """
     if n_axons < 1:
         raise ValueError('Number of axons must be >= 1.')
     if np.any(np.abs(phi_range) > 180.0):
@@ -1011,13 +1080,12 @@ def grow_axons(n_axons=501, phi_range=(-180.0, 180.0), n_rho=801,
     func_kwargs = {'n_rho': n_rho, 'rho_range': rho_range,
                    'beta_sup': beta_sup, 'beta_inf': beta_inf,
                    'loc_od': loc_od}
-    xy = utils.parfor(jansonius2009, phi, func_kwargs=func_kwargs,
-                      engine=engine, scheduler=scheduler, n_jobs=n_jobs)
-    axons = [np.vstack((x, y)).T for x, y in xy]
+    axons = utils.parfor(jansonius2009, phi, func_kwargs=func_kwargs,
+                         engine=engine, scheduler=scheduler, n_jobs=n_jobs)
     return axons
 
 
-@utils.deprecated(alt_func='p2p.retina.grow_axons',
+@utils.deprecated(alt_func='p2p.retina.grow_axon_bundles',
                   deprecated_version='0.3', removed_version='0.4')
 def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
               rot=0 * np.pi / 180, scale=1, bs=-1.9, bi=.5, r0=4,
