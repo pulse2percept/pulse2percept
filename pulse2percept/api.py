@@ -51,9 +51,8 @@ class Simulation(object):
         # this variable will contain a `retina.TemporalModel` object.
         self.gcl = None
 
-    def set_optic_fiber_layer(self, sampling=100, axon_lambda=2, rot_deg=0,
-                              x_range=None, y_range=None, datapath='.',
-                              save_data=True):
+    def set_optic_fiber_layer(self, sampling=100, axon_lambda=2, x_range=None,
+                              y_range=None, datapath='.', save_data=True):
         """Sets parameters of the optic fiber layer (OFL)
 
         Parameters
@@ -62,15 +61,13 @@ class Simulation(object):
             Microns per grid cell.
         axon_lambda : float, optional, default: 2
             Constant that determines fall-off with axonal distance.
-        rot_deg : float, optional, default: 0
-            Rotation angle (deg).
-        x_range : list|None, default: None
+        x_range : (xlo, xhi)|None, default: None
             Lower and upper bound of the retinal grid (microns) in horizontal
-            dimension. Either a list [xlo, xhi] or None. If None, the generated
+            dimension. Either a tuple (xlo, xhi) or None. If None, the generated
             grid will be just big enough to fit the implant.
-        y_range : list|None, default: None
+        y_range : (ylo, yhi)|None, default: None
             Lower and upper bound of the retinal grid (microns) in vertical
-            dimension. Either a list [ylo, yhi] or None. If None, the generated
+            dimension. Either a tuple (ylo, yhi) or None. If None, the generated
             grid will be just big enough to fit the implant.
         datapath : str, default: current directory
             Relative path where to look for existing retina files, and where to
@@ -109,7 +106,7 @@ class Simulation(object):
         elif isinstance(y_range, (int, float)):
             ylo = y_range
             yhi = y_range
-        elif isinstance(y_range, (list, np.ndarray)):
+        elif isinstance(y_range, (list, tuple, np.ndarray)):
             if len(y_range) != 2 or y_range[1] < y_range[0]:
                 e_s = "y_range must be a list [ylo, yhi] where ylo <= yhi."
                 raise ValueError(e_s)
@@ -119,12 +116,11 @@ class Simulation(object):
             raise ValueError("y_range must be a list [ylo, yhi] or None.")
 
         # Generate the grid from the above specs
-        self.ofl = retina.Grid(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
-                               sampling=sampling,
-                               axon_lambda=axon_lambda,
-                               rot=np.deg2rad(rot_deg),
-                               datapath=datapath,
-                               save_data=save_data)
+        self.ofl = retina.Grid(x_range=(xlo, xhi), y_range=(ylo, yhi),
+                               sampling=sampling, axon_lambda=axon_lambda,
+                               datapath=datapath, save_data=save_data,
+                               engine=self.engine, scheduler=self.scheduler,
+                               n_jobs=self.num_jobs)
 
     def set_ganglion_cell_layer(self, model, **kwargs):
         """Sets parameters of the ganglion cell layer (GCL)
@@ -265,7 +261,7 @@ class Simulation(object):
 
         if model_not_found:
             err_str = "Model '%s' not found. Choose from: " % model
-            err_str += ", ".join(retina.SUPPORTED_MODELS)
+            err_str += ", ".join(retina.SUPPORTED_TEMPORAL_MODELS)
             err_str += " or provide your own retina.BaseModel instance."
             raise ValueError(err_str)
 

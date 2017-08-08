@@ -9,15 +9,15 @@ from pulse2percept import utils
 
 
 SUPPORTED_LAYERS = ['INL', 'GCL', 'OFL']
-SUPPORTED_MODELS = ['latest', 'Nanduri2012', 'Horsager2009']
+SUPPORTED_TEMPORAL_MODELS = ['latest', 'Nanduri2012', 'Horsager2009']
 
 
 class Grid(object):
     """Represent the retinal coordinate frame"""
 
-    def __init__(self, xlo=-1000, xhi=1000, ylo=-1000, yhi=1000,
-                 sampling=25, axon_lambda=2.0, rot=0 * np.pi / 180,
-                 datapath='.', save_data=True):
+    def __init__(self, x_range=(-1000.0, 1000.0), y_range=(-1000.0, 1000.0),
+                 sampling=25, axon_lambda=2.0, datapath='.', save_data=True,
+                 engine='joblib', scheduler='threading', n_jobs=-1):
         """Generates a spatial grid representing the retinal coordinate frame
 
         This function generates the coordinate system for the retina
@@ -28,21 +28,34 @@ class Grid(object):
 
         Parameters
         ----------
-        xlo, xhi : float
+        x_range : (xlo, xhi), optional, default: xlo=-1000, xhi=1000
            Extent of the retinal coverage (microns) in horizontal dimension.
-           Default: xlo=-1000, xhi=1000.
-        ylo, yhi : float
+        y_range : (ylo, yhi), optional, default: ylo=-1000, ylo=1000
            Extent of the retinal coverage (microns) in vertical dimension.
-           Default: ylo=-1000, ylo=1000.
-        datapath : str
+        datapath : str, optional, default: current directory
             Relative path where to look for existing retina files, and where to
-            store new files. Default: current directory.
-        save_data : bool
+            store new files.
+        save_data : bool, optional, default: True
             Flag whether to save the data to a new file (True) or not (False).
             The file name is automatically generated from all specified input
             arguments.
-            Default: True.
+        engine : str, optional, default: 'joblib'
+            Which computational back end to use:
+            - 'serial': Single-core computation
+            - 'joblib': Parallelization via joblib (requires `pip install
+                        joblib`)
+            - 'dask': Parallelization via dask (requires `pip install dask`).
+                      Dask backend can be specified via `threading`.
+        scheduler : str, optional, default: 'threading'
+            Which scheduler to use (irrelevant for 'serial' engine):
+            - 'threading': a scheduler backed by a thread pool
+            - 'multiprocessing': a scheduler backed by a process pool
+        n_jobs : int, optional, default: -1
+            Number of cores (threads) to run the model on in parallel.
+            Specify -1 to use as many cores as available.
         """
+        xlo, xhi = x_range
+        ylo, yhi = y_range
         # Include endpoints in meshgrid
         num_x = int((xhi - xlo) / sampling + 1)
         num_y = int((yhi - ylo) / sampling + 1)
@@ -51,6 +64,7 @@ class Grid(object):
                                              indexing='xy')
 
         # Create descriptive filename based on input args
+        rot = 0.0
         filename = "retina_s%d_l%.1f_rot%.1f_%dx%d.npz" % (sampling,
                                                            axon_lambda,
                                                            rot / np.pi * 180,
@@ -92,12 +106,10 @@ class Grid(object):
             need_new_grid |= axon_lambda != axon_lambda_am
 
             if 'rot' in axon_map:
+                # Backwards compatibility for older retina object files that
+                # had `rot`
                 rot_am = axon_map['rot']
                 need_new_grid |= rot != rot_am
-            else:
-                # Backwards compatibility for older retina object files that
-                # did not have `rot`
-                need_new_grid |= rot != 0
 
         # At this point we know whether we need to generate a new retina:
         if need_new_grid:
@@ -553,7 +565,7 @@ class TemporalModel(BaseModel):
     This class implements the latest version of the temporal sensitivity
     model (experimental). As such, the model might still change from version
     to version. For more stable implementations, please refer to other,
-    published models (see `p2p.retina.SUPPORTED_MODELS`).
+    published models (see `p2p.retina.SUPPORTED_TEMPORAL_MODELS`).
 
     Parameters
     ----------
@@ -896,22 +908,22 @@ def dva2ret(r_deg):
     return sign * r_um
 
 
-def grow_axon(phi0, n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.0, 2.0),
-              beta_sup=-1.9, beta_inf=0.5):
+def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0),
+                  loc_od=(15.0, 2.0), beta_sup=-1.9, beta_inf=0.5):
     """Grows a single axon based on the model by Jansonius et al. (2009)
 
-    This function generates the trajectory of a single nerve fiber bundle based
-    on the mathematical model described in:
+    This function generates the trajectory of a single nerve fiber bundle
+    based on the mathematical model described in:
 
-    > Jansionus et al. (2009). A mathematical description of nerve fiber bundle
-    > trajectories and their variability in the human retina. Vis Res 49:
-    > 2157-2163.
+    > Jansionus et al. (2009). A mathematical description of nerve fiber
+    > bundle trajectories and their variability in the human retina. Vis
+    > Res 49: 2157-2163.
 
     Parameters
     ----------
     phi0 : float
-        Angular position of the axon at its starting point (polar coordinates,
-        degrees). Must be within [-180, 180].
+        Angular position of the axon at its starting point (polar 
+        coordinates, degrees). Must be within [-180, 180].
     n_rho : int, optional, default: 801
         Number of sampling point along the radial axis (polar coordinates).
     rho_range : (rho_min, rho_max), optional, default: (4.0, 45.0)
@@ -926,6 +938,10 @@ def grow_axon(phi0, n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.0, 2.0),
     beta_inf : float, optional, default: 0.5
         Scalar value for the inferior retina (see Eq. 6, `\beta_i` in the
         paper.)
+
+    Notes
+    -----
+    The study did not include axons with phi0 in [-60, 60] deg.
     """
     if np.abs(phi0) > 180.0:
         raise ValueError('phi0 must be within [-180, 180].')
@@ -978,9 +994,10 @@ def grow_axon(phi0, n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.0, 2.0),
     return xmodel, ymodel
 
 
-def jansonius2009(n_axons=500, phi_range=(-180.0, 180.0), n_rho=801,
-                  rho_range=(4.0, 45.0), beta_sup=-1.9, beta_inf=0.5,
-                  loc_od=(15.0, 2.0)):
+def grow_axons(n_axons=501, phi_range=(-180.0, 180.0), n_rho=801,
+               rho_range=(4.0, 45.0), beta_sup=-1.9, beta_inf=0.5,
+               loc_od=(15.0, 2.0), engine='joblib', n_jobs=-1,
+               scheduler='threading'):
 
     if n_axons < 1:
         raise ValueError('Number of axons must be >= 1.')
@@ -990,18 +1007,17 @@ def jansonius2009(n_axons=500, phi_range=(-180.0, 180.0), n_rho=801,
         raise ValueError('Lower bound on phi cannot be larger than the '
                          'upper bound.')
 
-    rho = np.linspace(rho_range[0], rho_range[1], n_rho)
-    # axons = utils.parfor(grow_axon, rho, func_args=)
-
-    axons = []
-    for phi0 in np.linspace(phi_range[0], phi_range[1], n_axons):
-        x, y = grow_axon(phi0, n_rho=n_rho, rho_range=rho_range, loc_od=loc_od,
-                         beta_sup=beta_sup, beta_inf=beta_inf)
-        axons.append(np.vstack((x, y)).T)
+    phi = np.linspace(phi_range[0], phi_range[1], n_axons)
+    func_kwargs = {'n_rho': n_rho, 'rho_range': rho_range,
+                   'beta_sup': beta_sup, 'beta_inf': beta_inf,
+                   'loc_od': loc_od}
+    utils.parfor(jansonius2009, phi, func_kwargs=func_kwargs,
+                 engine=engine, scheduler=scheduler, n_jobs=n_jobs)
+    axons = [np.vstack((x, y)).T for x, y in xy]
     return axons
 
 
-@utils.deprecated(alt_func='p2p.retina.jansonius2009',
+@utils.deprecated(alt_func='p2p.retina.grow_axons',
                   deprecated_version='0.3', removed_version='0.4')
 def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
               rot=0 * np.pi / 180, scale=1, bs=-1.9, bi=.5, r0=4,
@@ -1114,7 +1130,62 @@ def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
     return x, y
 
 
-def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=.001):
+def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=0.001):
+    axon_id = []
+    axon_weight = []
+    for idx, _ in enumerate(xg.ravel()):
+        cur_xg = xg.ravel()[idx]
+        cur_yg = yg.ravel()[idx]
+        # find the nearest axon to this pixel
+        d = (jan_x - cur_xg) ** 2 + (jan_y - cur_yg) ** 2
+        cur_ax_id = np.nanargmin(d)  # index into the current axon
+
+        # `ax_num`: which axon it is
+        # `ax_pos_id0`: the point on that axon that is closest to `px`
+        [ax_pos_id0, ax_num] = np.unravel_index(cur_ax_id, d.shape)
+
+        dist = 0
+        this_id = [idx]
+        this_weight = [1.0]
+        for ax_pos_id in range(ax_pos_id0 - 1, -1, -1):
+            # increment the distance from the starting point
+            ax = (jan_x[ax_pos_id + 1, ax_num] - jan_x[ax_pos_id, ax_num])
+            ay = (jan_y[ax_pos_id + 1, ax_num] - jan_y[ax_pos_id, ax_num])
+            dist += np.sqrt(ax ** 2 + ay ** 2)
+
+            # weight falls off exponentially as distance from axon cell body
+            weight = np.exp(-dist / axon_lambda)
+
+            # find the nearest pixel to the current position along the axon
+            dist_xg = np.abs(xg[0, :] - jan_x[ax_pos_id, ax_num])
+            dist_yg = np.abs(yg[:, 0] - jan_y[ax_pos_id, ax_num])
+            nearest_xg_id = dist_xg.argmin()
+            nearest_yg_id = dist_yg.argmin()
+            nearest_xg = xg[0, nearest_xg_id]
+            nearest_yg = yg[nearest_yg_id, 0]
+
+            # if the position along the axon has moved to a new pixel, and the
+            # weight isn't too small...
+            if weight > min_weight:
+                if nearest_xg != cur_xg or nearest_yg != cur_yg:
+                    # update the current pixel location
+                    cur_xg = nearest_xg
+                    cur_yg = nearest_yg
+
+                    # append the list
+                    this_weight.append(weight)
+                    this_id.append(np.ravel_multi_index((nearest_yg_id,
+                                                         nearest_xg_id),
+                                                        xg.shape))
+
+        axon_id.append(this_id)
+        axon_weight.append(this_weight)
+    return axon_id, axon_weight
+
+
+@utils.deprecated(alt_func='p2p.retina.make_axon_map',
+                  deprecated_version='0.3', removed_version='0.4')
+def make_axon_map_legacy(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=.001):
     """Retinal axon map
 
     Generates a mapping of how each pixel in the retina space is affected
@@ -1169,8 +1240,8 @@ def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=.001):
         # now loop back along this nearest axon toward the optic disc
         for ax_pos_id in range(ax_pos_id0 - 1, -1, -1):
             # increment the distance from the starting point
-            ax = (jan_x[ax_pos_id + 1, ax_num] - jan_x[ax_pos_id, ax_num])
-            ay = (jan_y[ax_pos_id + 1, ax_num] - jan_y[ax_pos_id, ax_num])
+            ax = (jan_x[ax_pos_id + 1, ax_num] - jan_x[ax_pos_id, ax_num])**2
+            ay = (jan_y[ax_pos_id + 1, ax_num] - jan_y[ax_pos_id, ax_num])**2
             dist += np.sqrt(ax ** 2 + ay ** 2)
 
             # weight falls off exponentially as distance from axon cell body
@@ -1193,7 +1264,7 @@ def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=.001):
                     cur_yg = nearest_yg
 
                     # append the list
-                    axon_weight[px].append(weight)
+                    axon_weight[px].append(np.exp(weight))
                     axon_id[px].append(np.ravel_multi_index((nearest_yg_id,
                                                              nearest_xg_id),
                                                             xg.shape))
