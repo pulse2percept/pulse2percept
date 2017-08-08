@@ -1011,8 +1011,8 @@ def grow_axons(n_axons=501, phi_range=(-180.0, 180.0), n_rho=801,
     func_kwargs = {'n_rho': n_rho, 'rho_range': rho_range,
                    'beta_sup': beta_sup, 'beta_inf': beta_inf,
                    'loc_od': loc_od}
-    utils.parfor(jansonius2009, phi, func_kwargs=func_kwargs,
-                 engine=engine, scheduler=scheduler, n_jobs=n_jobs)
+    xy = utils.parfor(jansonius2009, phi, func_kwargs=func_kwargs,
+                      engine=engine, scheduler=scheduler, n_jobs=n_jobs)
     axons = [np.vstack((x, y)).T for x, y in xy]
     return axons
 
