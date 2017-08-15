@@ -63,12 +63,12 @@ class Simulation(object):
             Constant that determines fall-off with axonal distance.
         x_range : (xlo, xhi)|None, default: None
             Lower and upper bound of the retinal grid (microns) in horizontal
-            dimension. Either a tuple (xlo, xhi) or None. If None, the generated
-            grid will be just big enough to fit the implant.
+            dimension. Either a tuple (xlo, xhi) or None. If None, the
+            generated grid will be just big enough to fit the implant.
         y_range : (ylo, yhi)|None, default: None
             Lower and upper bound of the retinal grid (microns) in vertical
-            dimension. Either a tuple (ylo, yhi) or None. If None, the generated
-            grid will be just big enough to fit the implant.
+            dimension. Either a tuple (ylo, yhi) or None. If None, the
+            generated grid will be just big enough to fit the implant.
         datapath : str, default: current directory
             Relative path where to look for existing retina files, and where to
             store new retina files.

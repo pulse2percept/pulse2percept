@@ -7,6 +7,27 @@ import logging
 import pulse2percept as p2p
 
 
+def test_Grid():
+    # Invalid calls
+    with pytest.raises(ValueError):
+        grid = p2p.retina.Grid(x_range=1, n_axons=1)
+    with pytest.raises(ValueError):
+        grid = p2p.retina.Grid(x_range=(1.0, 0.0), n_axons=1)
+    with pytest.raises(ValueError):
+        grid = p2p.retina.Grid(y_range=1, n_axons=1)
+    with pytest.raises(ValueError):
+        grid = p2p.retina.Grid(y_range=(1.0, 0.0), n_axons=1)
+
+    # Verify size of axon bundles
+    for n_axons in [3, 5, 10]:
+        grid = p2p.retina.Grid(x_range=(0, 0), y_range=(0, 0), n_axons=n_axons,
+                               save_data=False)
+        # Number of axon bundles given by `n_axons`
+        npt.assert_equal(len(grid.axon_bundles), n_axons)
+        # Number of axons given by number of pixels on grid
+        npt.assert_equal(len(grid.axons), 1)
+
+
 def test_BaseModel():
     # Cannot instantiate abstract class
     with pytest.raises(TypeError):
@@ -369,3 +390,20 @@ def test_grow_axon_bundles():
             ax_pos = p2p.retina.jansonius2009(phi0, n_rho=n_rho)
             npt.assert_almost_equal(ax_pos[:, 0], ax[:, 0])
             npt.assert_almost_equal(ax_pos[:, 1], ax[:, 1])
+
+
+def test_find_closest_axon():
+    axon_bundles = p2p.retina.grow_axon_bundles(10)
+    for idx, ax in enumerate(axon_bundles):
+        # Each axon bundle should be closest to itself
+        closest = p2p.retina.find_closest_axon(ax[-1, :], axon_bundles)
+        npt.assert_almost_equal(closest, ax[-1:0:-1, :])
+
+
+def test_assign_axons():
+    axon_bundles = p2p.retina.grow_axon_bundles(10)
+    xg, yg = np.meshgrid([-1, 0, 1], [-1, 0, 1], indexing='xy')
+    assigned = p2p.retina.assign_axons(xg, yg, axon_bundles)
+    for x, y, ax in zip(xg.ravel(), yg.ravel(), assigned):
+        closest = p2p.retina.find_closest_axon((x, y), axon_bundles)
+        npt.assert_almost_equal(ax, closest)

@@ -16,7 +16,8 @@ class Grid(object):
     """Represent the retinal coordinate frame"""
 
     def __init__(self, x_range=(-1000.0, 1000.0), y_range=(-1000.0, 1000.0),
-                 sampling=25, axon_lambda=2.0, datapath='.', save_data=True,
+                 sampling=25, n_axons=501, phi_range=(-180.0, 180.0),
+                 axon_lambda=2.0, datapath='.', save_data=True,
                  engine='joblib', scheduler='threading', n_jobs=-1):
         """Generates a spatial grid representing the retinal coordinate frame
 
@@ -32,6 +33,16 @@ class Grid(object):
            Extent of the retinal coverage (microns) in horizontal dimension.
         y_range : (ylo, yhi), optional, default: ylo=-1000, ylo=1000
            Extent of the retinal coverage (microns) in vertical dimension.
+        sampling : float
+            Spatial sampling step (microns) for the grid.
+        n_axons : int
+            The number of axons to generate. Their start orientations `phi0`
+            (in modified polar coordinates) will be sampled uniformly from
+            `phi_range`.
+        phi_range : (lophi, hiphi)
+            Range of angular positions of axon fibers at their starting points
+            (polar coordinates, degrees) to be sampled uniformly with `n_axons`
+            samples. Must be within [-180, 180].
         datapath : str, optional, default: current directory
             Relative path where to look for existing retina files, and where to
             store new files.
@@ -54,6 +65,16 @@ class Grid(object):
             Number of cores (threads) to run the model on in parallel.
             Specify -1 to use as many cores as available.
         """
+        if not isinstance(x_range, (tuple, list, np.ndarray)):
+            raise ValueError('`x_range` must be a tuple (`xlo`, `xhi`).')
+        if x_range[0] > x_range[1]:
+            raise ValueError('Lower bound on x cannot be larger than the '
+                             'upper bound.')
+        if not isinstance(y_range, (tuple, list, np.ndarray)):
+            raise ValueError('`y_range` must be a tuple (`ylo`, `yhi`).')
+        if y_range[0] > y_range[1]:
+            raise ValueError('Lower bound on y cannot be larger than the '
+                             'upper bound.')
         xlo, xhi = x_range
         ylo, yhi = y_range
         # Include endpoints in meshgrid
@@ -81,29 +102,35 @@ class Grid(object):
             need_new_grid = False
             axon_map = np.load(filename)
 
-            # Verify that the file was created with a consistent grid:
-            ax_id = axon_map['axon_id']
-            ax_wt = axon_map['axon_weight']
-            xlo_am = axon_map['xlo']
-            xhi_am = axon_map['xhi']
-            ylo_am = axon_map['ylo']
-            yhi_am = axon_map['yhi']
-            sampling_am = axon_map['sampling']
-            axon_lambda_am = axon_map['axon_lambda']
+            # Verify that the file was created with the latest code
+            need_new_grid |= 'axon_bundles' not in axon_map
+            need_new_grid |= 'axons' not in axon_map
+            need_new_grid |= 'jan_x' in axon_map
+            need_new_grid |= 'jan_y' in axon_map
+            need_new_grid |= 'axon_id' in axon_map
+            need_new_grid |= 'axon_weight' in axon_map
 
-            if 'jan_x' in axon_map and 'jan_y' in axon_map:
-                jan_x = axon_map['jan_x']
-                jan_y = axon_map['jan_y']
-            else:
-                jan_x = jan_y = None
+            if not need_new_grid:
+                # File seems to up-to-date: Now make sure the file was created
+                # with the right-size grid
+                # ax_id = axon_map['axon_id']
+                # ax_wt = axon_map['axon_weight']
+                axon_bundles = axon_map['axon_bundles']
+                axons = axon_map['axons']
+                xlo_am = axon_map['xlo']
+                xhi_am = axon_map['xhi']
+                ylo_am = axon_map['ylo']
+                yhi_am = axon_map['yhi']
+                sampling_am = axon_map['sampling']
+                axon_lambda_am = axon_map['axon_lambda']
 
-            # If any of the dimensions don't match, we need a new retina
-            need_new_grid |= xlo != xlo_am
-            need_new_grid |= xhi != xhi_am
-            need_new_grid |= ylo != ylo_am
-            need_new_grid |= yhi != yhi_am
-            need_new_grid |= sampling != sampling_am
-            need_new_grid |= axon_lambda != axon_lambda_am
+                # If any of the dimensions don't match, we need a new grid
+                need_new_grid |= xlo != xlo_am
+                need_new_grid |= xhi != xhi_am
+                need_new_grid |= ylo != ylo_am
+                need_new_grid |= yhi != yhi_am
+                need_new_grid |= sampling != sampling_am
+                need_new_grid |= axon_lambda != axon_lambda_am
 
             if 'rot' in axon_map:
                 # Backwards compatibility for older retina object files that
@@ -117,20 +144,27 @@ class Grid(object):
             info_str += "or has outdated parameter values, generating..."
             logging.getLogger(__name__).info(info_str)
 
-            jan_x, jan_y = jansonius(rot=rot)
-            dva_x = ret2dva(self.gridx)
-            dva_y = ret2dva(self.gridy)
-            ax_id, ax_wt = make_axon_map(dva_x, dva_y,
-                                         jan_x, jan_y,
-                                         axon_lambda=axon_lambda)
+            # Grow a number `n_axons` of axon bundles with orientations in
+            # `phi_range`
+            axon_bundles = grow_axon_bundles(n_axons, phi_range=phi_range,
+                                             engine=engine, n_jobs=n_jobs,
+                                             scheduler=scheduler)
+
+            # Assume there is a neuron at every grid location: Use the above
+            # axon bundles to assign an axon to each neuron
+            axons = assign_axons(ret2dva(self.gridx), ret2dva(self.gridy),
+                                 axon_bundles, engine=engine, n_jobs=n_jobs,
+                                 scheduler=scheduler)
 
             # Save the variables, together with metadata about the grid:
             if save_data:
                 np.savez(filename,
-                         axon_id=ax_id,
-                         axon_weight=ax_wt,
-                         jan_x=jan_x,
-                         jan_y=jan_y,
+                         axon_bundles=axon_bundles,
+                         axons=axons,
+                         # axon_id=ax_id,
+                         # axon_weight=ax_wt,
+                         # jan_x=jan_x,
+                         # jan_y=jan_y,
                          xlo=[xlo],
                          xhi=[xhi],
                          ylo=[ylo],
@@ -142,10 +176,12 @@ class Grid(object):
         self.axon_lambda = axon_lambda
         self.rot = rot
         self.sampling = sampling
-        self.axon_id = ax_id
-        self.axon_weight = ax_wt
-        self.jan_x = jan_x
-        self.jan_y = jan_y
+        self.axon_bundles = axon_bundles
+        self.axons = axons
+        # self.axon_id = ax_id
+        # self.axon_weight = ax_wt
+        # self.jan_x = jan_x
+        # self.jan_y = jan_y
         self.range_x = self.gridx.max() - self.gridx.min()
         self.range_y = self.gridy.max() - self.gridy.min()
 
@@ -157,13 +193,13 @@ class Grid(object):
 
         Parameters
         ----------
-        cs : array
+        cs: array
             The 2D spread map in retinal space
 
         Returns
         -------
-        ecm : array
-            The effective current spread, a time-series of the same size as the
+        ecm: array
+            The effective current spread, a time - series of the same size as the
             current map, where each pixel is the dot product of the pixel
             values in ecm along the pixels in the list in axon_map, weighted
             by the weights axon map.
@@ -194,17 +230,17 @@ class Grid(object):
 
         Parameters
         ----------
-        implant : implants.ElectrodeArray
+        implant: implants.ElectrodeArray
             An implants.ElectrodeArray instance describing the implant.
 
-        alpha : float
+        alpha: float
             Current spread parameter
-        n : float
+        n: float
             Current spread parameter
 
         Returns
         -------
-        ecs : contains n arrays containing the the effective current
+        ecs: contains n arrays containing the the effective current
             spread within various layers
             for each electrode in the array respectively.
 
@@ -242,7 +278,7 @@ class BaseModel():
 
         Parameters
         ----------
-        warn_inexistent : bool
+        warn_inexistent: bool
             If True, displays a warning message if a keyword is provided that
             is not recognized by the temporal model.
         """
@@ -261,22 +297,22 @@ class BaseModel():
 
         Parameters
         ----------
-        in_arr: array-like
+        in_arr: array - like
             A 2D array specifying the effective current values at a particular
-            spatial location (pixel); one value per retinal layer and
-            electrode. Dimensions: <#layers x #electrodes>
-        pt_list : list
+            spatial location(pixel); one value per retinal layer and
+            electrode. Dimensions: <  # layers x #electrodes>
+        pt_list: list
             List of pulse train 'data' containers.
-            Dimensions: <#electrodes x #time points>
-        layers : list
+            Dimensions: <  # electrodes x #time points>
+        layers: list
             List of retinal layers to simulate.
             Choose from:
             - 'OFL': optic fiber layer
             - 'GCL': ganglion cell layer
             - 'INL': inner nuclear layer
-        use_jit : bool
-            If True, applies just-in-time (JIT) compilation to expensive
-            computations for additional speed-up (requires Numba).
+        use_jit: bool
+            If True, applies just - in-time(JIT) compilation to expensive
+            computations for additional speed - up(requires Numba).
         """
         pass
 
@@ -289,30 +325,30 @@ class Horsager2009(BaseModel):
 
     This class implements the model of temporal sensitivty as described in:
     > A Horsager, SH Greenwald, JD Weiland, MS Humayun, RJ Greenberg,
-    > MJ McMahon, GM Boynton, and I Fine (2009). Predicting visual sensitivity
+    > MJ McMahon, GM Boynton, and I Fine(2009). Predicting visual sensitivity
     > in retinal prosthesis patients. Investigative Ophthalmology & Visual
-    > Science, 50(4):1483.
+    > Science, 50(4): 1483.
 
     Parameters
     ----------
-    tsample : float, optional, default: 0.005 / 1000 seconds
-        Sampling time step (seconds).
-    tau1 : float, optional, default: 0.42 / 1000 seconds
+    tsample: float, optional, default: 0.005 / 1000 seconds
+        Sampling time step(seconds).
+    tau1: float, optional, default: 0.42 / 1000 seconds
         Time decay constant for the fast leaky integrater of the ganglion
-        cell layer (GCL).
-    tau2 : float, optional, default: 45.25 / 1000 seconds
+        cell layer(GCL).
+    tau2: float, optional, default: 45.25 / 1000 seconds
         Time decay constant for the charge accumulation, has values
         between 38 - 57 ms.
-    tau3 : float, optional, default: 26.25 / 1000 seconds
+    tau3: float, optional, default: 26.25 / 1000 seconds
         Time decay constant for the slow leaky integrator.
         Default: 26.25 / 1000 s.
-    epsilon : float, optional, default: 8.73
-        Scaling factor applied to charge accumulation (used to be called
+    epsilon: float, optional, default: 8.73
+        Scaling factor applied to charge accumulation(used to be called
         epsilon).
-    beta : float, optional, default: 3.43
-        Power nonlinearity applied after half-rectification. The original model
+    beta: float, optional, default: 3.43
+        Power nonlinearity applied after half - rectification. The original model
         used two different values, depending on whether an experiment is at
-        threshold (`beta`=3.43) or above threshold (`beta`=0.83).
+        threshold(`beta`=3.43) or above threshold(`beta`=0.83).
     """
 
     def __init__(self, **kwargs):
@@ -336,15 +372,15 @@ class Horsager2009(BaseModel):
 
         Parameters
         ----------
-        in_arr: array-like
+        in_arr: array - like
             A 2D array specifying the effective current values
-            at a particular spatial location (pixel); one value
+            at a particular spatial location(pixel); one value
             per retinal layer and electrode.
-            Dimensions: <#layers x #electrodes>
-        pt_list : list
+            Dimensions: <  # layers x #electrodes>
+        pt_list: list
             List of pulse train 'data' containers.
-            Dimensions: <#electrodes x #time points>
-        layers : list
+            Dimensions: <  # electrodes x #time points>
+        layers: list
             List of retinal layers to simulate.
             Choose from:
             - 'OFL': optic fiber layer
@@ -366,22 +402,22 @@ class Horsager2009(BaseModel):
 
         Parameters
         ----------
-        in_arr: array-like
+        in_arr: array - like
             A 2D array specifying the effective current values
-            at a particular spatial location (pixel); one value
+            at a particular spatial location(pixel); one value
             per retinal layer and electrode.
-            Dimensions: <#layers x #electrodes>
-        pt_list : list
+            Dimensions: <  # layers x #electrodes>
+        pt_list: list
             List of pulse train 'data' containers.
-            Dimensions: <#electrodes x #time points>
-        layers : list
+            Dimensions: <  # electrodes x #time points>
+        layers: list
             List of retinal layers to simulate.
             Choose from:
             - 'OFL': optic fiber layer
             - 'GCL': ganglion cell layer
-        use_jit : bool
-            If True, applies just-in-time (JIT) compilation to
-            expensive computations for additional speed-up
+        use_jit: bool
+            If True, applies just - in-time(JIT) compilation to
+            expensive computations for additional speed - up
             (requires Numba).
         """
         if 'INL' in layers:
@@ -420,34 +456,34 @@ class Nanduri2012(BaseModel):
     """Model of temporal sensitivity (Nanduri et al. 2012)
 
     This class implements the model of temporal sensitivity as described in:
-    > Nanduri, Fine, Horsager, Boynton, Humayun, Greenberg, Weiland (2012).
+    > Nanduri, Fine, Horsager, Boynton, Humayun, Greenberg, Weiland(2012).
     > Frequency and Amplitude Modulation Have Different Effects on the Percepts
     > Elicited by Retinal Stimulation. Investigative Ophthalmology & Visual
-    > Science January 2012, Vol.53, 205-214. doi:10.1167/iovs.11-8401.
+    > Science January 2012, Vol.53, 205 - 214. doi: 10.1167 / iovs.11 - 8401.
 
     Parameters
     ----------
-    tsample : float, optional, default: 0.005 / 1000 seconds
-        Sampling time step (seconds).
-    tau1 : float, optional, default: 0.42 / 1000 seconds
+    tsample: float, optional, default: 0.005 / 1000 seconds
+        Sampling time step(seconds).
+    tau1: float, optional, default: 0.42 / 1000 seconds
         Time decay constant for the fast leaky integrater of the ganglion
-        cell layer (GCL).
-    tau2 : float, optional, default: 45.25 / 1000 seconds
+        cell layer(GCL).
+    tau2: float, optional, default: 45.25 / 1000 seconds
         Time decay constant for the charge accumulation, has values
         between 38 - 57 ms.
-    tau3 : float, optional, default: 26.25 / 1000 seconds
+    tau3: float, optional, default: 26.25 / 1000 seconds
         Time decay constant for the slow leaky integrator.
         Default: 26.25 / 1000 s.
-    eps : float, optional, default: 8.73
-        Scaling factor applied to charge accumulation (used to be called
+    eps: float, optional, default: 8.73
+        Scaling factor applied to charge accumulation(used to be called
         epsilon).
-    asymptote : float, optional, default: 14.0
+    asymptote: float, optional, default: 14.0
         Asymptote of the logistic function used in the stationary
         nonlinearity stage.
-    slope : float, optional, default: 3.0
+    slope: float, optional, default: 3.0
         Slope of the logistic function in the stationary nonlinearity
         stage.
-    shift : float, optional, default: 16.0
+    shift: float, optional, default: 16.0
         Shift of the logistic function in the stationary nonlinearity
         stage.
     """
@@ -481,15 +517,15 @@ class Nanduri2012(BaseModel):
 
         Parameters
         ----------
-        in_arr: array-like
+        in_arr: array - like
             A 2D array specifying the effective current values
-            at a particular spatial location (pixel); one value
+            at a particular spatial location(pixel); one value
             per retinal layer and electrode.
-            Dimensions: <#layers x #electrodes>
-        pt_list : list
+            Dimensions: <  # layers x #electrodes>
+        pt_list: list
             List of pulse train 'data' containers.
-            Dimensions: <#electrodes x #time points>
-        layers : list
+            Dimensions: <  # electrodes x #time points>
+        layers: list
             List of retinal layers to simulate.
             Choose from:
             - 'OFL': optic fiber layer
@@ -511,22 +547,22 @@ class Nanduri2012(BaseModel):
 
         Parameters
         ----------
-        in_arr: array-like
+        in_arr: array - like
             A 2D array specifying the effective current values
-            at a particular spatial location (pixel); one value
+            at a particular spatial location(pixel); one value
             per retinal layer and electrode.
-            Dimensions: <#layers x #electrodes>
-        pt_list : list
+            Dimensions: <  # layers x #electrodes>
+        pt_list: list
             List of pulse train 'data' containers.
-            Dimensions: <#electrodes x #time points>
-        layers : list
+            Dimensions: <  # electrodes x #time points>
+        layers: list
             List of retinal layers to simulate.
             Choose from:
             - 'OFL': optic fiber layer
             - 'GCL': ganglion cell layer
-        use_jit : bool
-            If True, applies just-in-time (JIT) compilation to
-            expensive computations for additional speed-up
+        use_jit: bool
+            If True, applies just - in-time(JIT) compilation to
+            expensive computations for additional speed - up
             (requires Numba).
         """
         if 'INL' in layers:
@@ -563,45 +599,45 @@ class TemporalModel(BaseModel):
     """Latest edition of the temporal sensitivity model (experimental)
 
     This class implements the latest version of the temporal sensitivity
-    model (experimental). As such, the model might still change from version
+    model(experimental). As such, the model might still change from version
     to version. For more stable implementations, please refer to other,
-    published models (see `p2p.retina.SUPPORTED_TEMPORAL_MODELS`).
+    published models(see `p2p.retina.SUPPORTED_TEMPORAL_MODELS`).
 
     Parameters
     ----------
-    tsample : float, optional, default: 0.005 / 1000 seconds
-        Sampling time step (seconds).
-    tau_gcl : float, optional, default: 45.25 / 1000 seconds
+    tsample: float, optional, default: 0.005 / 1000 seconds
+        Sampling time step(seconds).
+    tau_gcl: float, optional, default: 45.25 / 1000 seconds
         Time decay constant for the fast leaky integrater of the ganglion
-        cell layer (GCL).
+        cell layer(GCL).
         This is only important in combination with epiretinal electrode
         arrays.
-    tau_inl : float, optional, default: 18.0 / 1000 seconds
+    tau_inl: float, optional, default: 18.0 / 1000 seconds
         Time decay constant for the fast leaky integrater of the inner
-        nuclear layer (INL); i.e., bipolar cell layer.
+        nuclear layer(INL); i.e., bipolar cell layer.
         This is only important in combination with subretinal electrode
         arrays.
-    tau_ca : float, optional, default: 45.25 / 1000 seconds
+    tau_ca: float, optional, default: 45.25 / 1000 seconds
         Time decay constant for the charge accumulation, has values
         between 38 - 57 ms.
-    scale_ca : float, optional, default: 42.1
-        Scaling factor applied to charge accumulation (used to be called
+    scale_ca: float, optional, default: 42.1
+        Scaling factor applied to charge accumulation(used to be called
         epsilon).
-    tau_slow : float, optional, default: 26.25 / 1000 seconds
+    tau_slow: float, optional, default: 26.25 / 1000 seconds
         Time decay constant for the slow leaky integrator.
-    scale_slow : float, optional, default: 1150.0
+    scale_slow: float, optional, default: 1150.0
         Scaling factor applied to the output of the cascade, to make
         output values interpretable brightness values >= 0.
-    lweight : float, optional, default: 0.636
-        Relative weight applied to responses from bipolar cells (weight
+    lweight: float, optional, default: 0.636
+        Relative weight applied to responses from bipolar cells(weight
         of ganglion cells is 1).
-    aweight : float, optional, default: 0.5
-        Relative weight applied to anodic charges (weight of cathodic
+    aweight: float, optional, default: 0.5
+        Relative weight applied to anodic charges(weight of cathodic
         charges is 1).
-    slope : float, optional, default: 3.0
+    slope: float, optional, default: 3.0
         Slope of the logistic function in the stationary nonlinearity
         stage.
-    shift : float, optional, default: 15.0
+    shift: float, optional, default: 15.0
         Shift of the logistic function in the stationary nonlinearity
         stage.
     """
@@ -636,20 +672,20 @@ class TemporalModel(BaseModel):
     def fast_response(self, stim, gamma, method, use_jit=True):
         """Fast response function
 
-        Convolve a stimulus `stim` with a temporal low-pass filter `gamma`.
+        Convolve a stimulus `stim` with a temporal low - pass filter `gamma`.
 
         Parameters
         ----------
-        stim : array
-           Temporal signal to process, stim(r,t) in Nanduri et al. (2012).
-        use_jit : bool, optional
-           If True (default), use numba just-in-time compilation.
-        usefft : bool, optional
+        stim: array
+           Temporal signal to process, stim(r, t) in Nanduri et al. (2012).
+        use_jit: bool, optional
+           If True (default), use numba just - in-time compilation.
+        usefft: bool, optional
            If False (default), use sparseconv, else fftconvolve.
 
         Returns
         -------
-        Fast response, b2(r,t) in Nanduri et al. (2012).
+        Fast response, b2(r, t) in Nanduri et al. (2012).
 
         Notes
         -----
@@ -673,11 +709,11 @@ class TemporalModel(BaseModel):
 
         Parameters
         ----------
-        ecm : array-like
+        ecm: array - like
             A 2D array specifying the effective current values at a particular
-            spatial location (pixel); one value per retinal layer, averaged
+            spatial location(pixel); one value per retinal layer, averaged
             over all electrodes through that pixel.
-            Dimensions: <#layers x #time points>
+            Dimensions: <  # layers x #time points>
         """
         ca = np.zeros_like(ecm)
 
@@ -700,12 +736,12 @@ class TemporalModel(BaseModel):
 
         Parameters
         ----------
-        stim : array
-           Temporal signal to process, stim(r,t) in Nanduri et al. (2012).
+        stim: array
+           Temporal signal to process, stim(r, t) in Nanduri et al. (2012).
 
         Returns
         -------
-        Rescaled signal, b4(r,t) in Nanduri et al. (2012).
+        Rescaled signal, b4(r, t) in Nanduri et al. (2012).
 
         Notes
         -----
@@ -718,18 +754,18 @@ class TemporalModel(BaseModel):
     def slow_response(self, stim):
         """Slow response function
 
-        Convolve a stimulus `stim` with a low-pass filter (3-stage gamma)
+        Convolve a stimulus `stim` with a low - pass filter(3 - stage gamma)
         with time constant self.tau_slow.
         This is Box 5 in Nanduri et al. (2012).
 
         Parameters
         ----------
-        stim : array
-           Temporal signal to process, stim(r,t) in Nanduri et al. (2012)
+        stim: array
+           Temporal signal to process, stim(r, t) in Nanduri et al. (2012)
 
         Returns
         -------
-        Slow response, b5(r,t) in Nanduri et al. (2012).
+        Slow response, b5(r, t) in Nanduri et al. (2012).
 
         Notes
         -----
@@ -749,21 +785,21 @@ class TemporalModel(BaseModel):
         """For a given pixel, calculates the effective current for each retinal
            layer over time
 
-        This function operates at a single-pixel level: It calculates the
+        This function operates at a single - pixel level: It calculates the
         combined current from all electrodes through a spatial location
         over time. This calculation is performed per retinal layer.
 
         Parameters
         ----------
-        ecs_item: array-like
+        ecs_item: array - like
             A 2D array specifying the effective current values at a
-            particular spatial location (pixel); one value per retinal
+            particular spatial location(pixel); one value per retinal
             layer and electrode.
-            Dimensions: <#layers x #electrodes>
+            Dimensions: <  # layers x #electrodes>
         pt_list: list
             A list of PulseTrain `data` containers.
-            Dimensions: <#electrodes x #time points>
-        layers : list
+            Dimensions: <  # electrodes x #time points>
+        layers: list
             List of retinal layers to simulate. Choose from:
             - 'OFL': optic fiber layer
             - 'GCL': ganglion cell layer
@@ -786,27 +822,27 @@ class TemporalModel(BaseModel):
         """The Temporal Sensitivity model
 
         This function applies the model of temporal sensitivity to a single
-        retinal cell (i.e., a pixel). The model is inspired by Nanduri
+        retinal cell(i.e., a pixel). The model is inspired by Nanduri
         et al. (2012), with some extended functionality.
 
         Parameters
         ----------
-        ecs_item: array-like
+        ecs_item: array - like
             A 2D array specifying the effective current values at a particular
-            spatial location (pixel); one value per retinal layer and
+            spatial location(pixel); one value per retinal layer and
             electrode.
-            Dimensions: <#layers x #electrodes>
+            Dimensions: <  # layers x #electrodes>
         pt_list: list
             A list of PulseTrain `data` containers.
-            Dimensions: <#electrodes x #time points>
-        layers : list
+            Dimensions: <  # electrodes x #time points>
+        layers: list
             List of retinal layers to simulate. Choose from:
             - 'OFL': optic fiber layer
             - 'GCL': ganglion cell layer
             - 'INL': inner nuclear layer
-        use_jit : bool
-            If True, applies just-in-time (JIT) compilation to expensive
-            computations for additional speed-up (requires Numba).
+        use_jit: bool
+            If True, applies just - in-time(JIT) compilation to expensive
+            computations for additional speed - up(requires Numba).
 
         Returns
         -------
@@ -861,9 +897,9 @@ def ret2dva(r_um):
     """Converts retinal distances (um) to visual angles (deg)
 
     This function converts an eccentricity measurement on the retinal
-    surface (in micrometers), measured from the optic axis, into degrees
+    surface(in micrometers), measured from the optic axis, into degrees
     of visual angle.
-    Source: Eq. A6 in Watson (2014), J Vis 14(7):15, 1-17
+    Source: Eq. A6 in Watson(2014), J Vis 14(7): 15, 1 - 17
     """
     sign = np.sign(r_um)
     r_mm = 1e-3 * np.abs(r_um)
@@ -877,7 +913,7 @@ def ret2dva(r_um):
 def micron2deg(micron):
     """Transforms a distance from microns to degrees
 
-    Based on http://retina.anatomy.upenn.edu/~rob/lance/units_space.html
+    Based on http: // retina.anatomy.upenn.edu / ~rob / lance / units_space.html
     """
     deg = micron / 280.0
     return deg
@@ -888,7 +924,7 @@ def micron2deg(micron):
 def deg2micron(deg):
     """Transforms a distance from degrees to microns
 
-    Based on http://retina.anatomy.upenn.edu/~rob/lance/units_space.html
+    Based on http: // retina.anatomy.upenn.edu / ~rob / lance / units_space.html
     """
     microns = 280.0 * deg
     return microns
@@ -897,9 +933,9 @@ def deg2micron(deg):
 def dva2ret(r_deg):
     """Converts visual angles (deg) into retinal distances (um)
 
-    This function converts a retinal distancefrom the optic axis (um)
+    This function converts a retinal distancefrom the optic axis(um)
     into degrees of visual angle.
-    Source: Eq. A5 in Watson (2014), J Vis 14(7):15, 1-17
+    Source: Eq. A5 in Watson(2014), J Vis 14(7): 15, 1 - 17
     """
     sign = np.sign(r_deg)
     r_deg = np.abs(r_deg)
@@ -917,33 +953,33 @@ def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0),
 
     > Jansionus et al. (2009). A mathematical description of nerve fiber
     > bundle trajectories and their variability in the human retina. Vis
-    > Res 49: 2157-2163.
+    > Res 49: 2157 - 2163.
 
     Parameters
     ----------
-    phi0 : float
-        Angular position of the axon at its starting point (polar
-        coordinates, degrees). Must be within [-180, 180].
-    n_rho : int, optional, default: 801
-        Number of sampling points along the radial axis (polar coordinates).
-    rho_range : (rho_min, rho_max), optional, default: (4.0, 45.0)
-        Lower and upper bounds for the radial position values (polar
+    phi0: float
+        Angular position of the axon at its starting point(polar
+        coordinates, degrees). Must be within[-180, 180].
+    n_rho: int, optional, default: 801
+        Number of sampling points along the radial axis(polar coordinates).
+    rho_range: (rho_min, rho_max), optional, default: (4.0, 45.0)
+        Lower and upper bounds for the radial position values(polar
         coordinates).
-    loc_od : (x_od, y_od), optional, default: (15.0, 2.0)
-        Location of the center of the optic disc (x, y) in Cartesian
+    loc_od: (x_od, y_od), optional, default: (15.0, 2.0)
+        Location of the center of the optic disc(x, y) in Cartesian
         coordinates.
-    beta_sup : float, optional, default: -1.9
-        Scalar value for the superior retina (see Eq. 5, `\beta_s` in the
+    beta_sup: float, optional, default: -1.9
+        Scalar value for the superior retina(see Eq. 5, `\beta_s` in the
         paper).
-    beta_inf : float, optional, default: 0.5
-        Scalar value for the inferior retina (see Eq. 6, `\beta_i` in the
+    beta_inf: float, optional, default: 0.5
+        Scalar value for the inferior retina(see Eq. 6, `\beta_i` in the
         paper.)
 
     Returns
     -------
     ax_pos: Nx2 array
-        Returns a two-dimensional array of axonal positions, where ax_pos[0, :]
-        contains the (x, y) coordinates of the axon segment closest to the
+        Returns a two - dimensional array of axonal positions, where ax_pos[0, :]
+        contains the(x, y) coordinates of the axon segment closest to the
         optic disc, and aubsequent row indices move the axon away from the
         optic disc. Number of rows is at most `n_rho`, but might be smaller if
         the axon crosses the meridian.
@@ -1020,53 +1056,57 @@ def grow_axon_bundles(n_axons, phi_range=(-180.0, 180.0), n_rho=801,
 
     > Jansionus et al. (2009). A mathematical description of nerve fiber
     > bundle trajectories and their variability in the human retina. Vis
-    > Res 49: 2157-2163.
+    > Res 49: 2157 - 2163.
 
     Parameters
     ----------
-    n_axons : int
+    n_axons: int
         The number of axons to generate. Their start orientations `phi0` (in
         modified polar coordinates) will be sampled uniformly from `phi_range`.
-    phi_range : (lophi, hiphi)
+    phi_range: (lophi, hiphi)
         Range of angular positions of axon fibers at their starting points
         (polar coordinates, degrees) to be sampled uniformly with `n_axons`
-        samples. Must be within [-180, 180].
-    n_rho : int, optional, default: 801
-        Number of sampling points along the radial axis (polar coordinates).
-    rho_range : (rho_min, rho_max), optional, default: (4.0, 45.0)
-        Lower and upper bounds for the radial position values (polar
+        samples. Must be within[-180, 180].
+    n_rho: int, optional, default: 801
+        Number of sampling points along the radial axis(polar coordinates).
+    rho_range: (rho_min, rho_max), optional, default: (4.0, 45.0)
+        Lower and upper bounds for the radial position values(polar
         coordinates).
-    loc_od : (x_od, y_od), optional, default: (15.0, 2.0)
-        Location of the center of the optic disc (x, y) in Cartesian
+    loc_od: (x_od, y_od), optional, default: (15.0, 2.0)
+        Location of the center of the optic disc(x, y) in Cartesian
         coordinates.
-    beta_sup : float, optional, default: -1.9
-        Scalar value for the superior retina (see Eq. 5, `\beta_s` in the
+    beta_sup: float, optional, default: -1.9
+        Scalar value for the superior retina(see Eq. 5, `\beta_s` in the
         paper).
-    beta_inf : float, optional, default: 0.5
-        Scalar value for the inferior retina (see Eq. 6, `\beta_i` in the
+    beta_inf: float, optional, default: 0.5
+        Scalar value for the inferior retina(see Eq. 6, `\beta_i` in the
         paper.)
-    engine : str, optional, default: 'joblib'
+    engine: str, optional, default: 'joblib'
         Which computational back end to use:
-        - 'serial': Single-core computation
-        - 'joblib': Parallelization via joblib (requires `pip install joblib`)
-        - 'dask': Parallelization via dask (requires `pip install dask`). Dask
+        - 'serial': Single - core computation
+        - 'joblib': Parallelization via joblib(requires `pip install joblib`)
+        - 'dask': Parallelization via dask(requires `pip install dask`). Dask
                   backend can be specified via `threading`.
-    scheduler : str, optional, default: 'threading'
-        Which scheduler to use (irrelevant for 'serial' engine):
+    scheduler: str, optional, default: 'threading'
+        Which scheduler to use(irrelevant for 'serial' engine):
         - 'threading': a scheduler backed by a thread pool
         - 'multiprocessing': a scheduler backed by a process pool
-    n_jobs : int, optional, default: -1
-        Number of cores (threads) to run the model on in parallel. Specify -1
+    n_jobs: int, optional, default: -1
+        Number of cores(threads) to run the model on in parallel. Specify - 1
         to use as many cores as available.
 
     Returns
     -------
     axons: list of Nx2 arrays
-        For every generated axon bundle, returns a two-dimensional array of
-        axonal positions, where ax_pos[0, :] contains the (x, y) coordinates of
-        the axon segment closest to the optic disc, and aubsequent row indices
+        For every generated axon bundle, returns a two - dimensional array of
+        axonal positions, where ax_pos[0, :] contains the(x, y) coordinates of
+        the axon segment closest to the optic disc, and subsequent row indices
         move the axon away from the optic disc. Number of rows is at most
         `n_rho`, but might be smaller if the axon crosses the meridian.
+
+    Notes
+    -----
+    This function is basically a wrapper around ``jansonius2009``.
     """
     if n_axons < 1:
         raise ValueError('Number of axons must be >= 1.')
@@ -1085,22 +1125,113 @@ def grow_axon_bundles(n_axons, phi_range=(-180.0, 180.0), n_rho=801,
     return axons
 
 
+def find_closest_axon(pos_xy, axon_bundles):
+    """Finds the closest axon to a 2D point
+
+    This function finds the axon bundle closest to a 2D point `pos_xy` on the
+    retina, and returns an axon that originates in `pos_xy` and projects to
+    the optic disc.
+
+    Parameters
+    ----------
+    pos_xy: (x, y)
+        2D Cartesian coordinates of a location on the retina.
+    axon_bundles: list of Nx2 arrays
+        List of two - dimensional arrays containing the(x, y) coordinates of
+        each axon bundle. The first row of each axon bundle is assumed to
+        be closest to the optic disc, and subsequent row indices move the axon
+        away from the optic disc.
+
+    Returns
+    -------
+    axon: Nx2 array
+        A single axon, where axon[0, :] contains the(x, y) coordinates of the
+        location closest to `pos_xy`, and all subsequent rows move the axon
+        closer to the optic disc.
+
+    Notes
+    -----
+    The order of axonal segments in the output argument `axon` is reversed
+    with respect to the axonal segments in the input argument `axon_bundles`.
+    """
+    xneuron, yneuron = pos_xy
+    # Find the nearest axon to this pixel
+    dist2 = [min((ax[:, 0] - xneuron) ** 2 + (ax[:, 1] - yneuron) ** 2)
+             for ax in axon_bundles]
+    axon_id = np.argmin(dist2)
+
+    # Find the position on the axon
+    ax = axon_bundles[axon_id]
+    dist2 = (ax[:, 0] - xneuron) ** 2 + (ax[:, 1] - yneuron) ** 2
+    pos_id = np.argmin(dist2)
+
+    # Add all positions: from `pos_id` to the optic disc
+    return axon_bundles[axon_id][pos_id:0:-1, :]
+
+
+def assign_axons(xg, yg, axon_bundles, engine='joblib', scheduler='threading',
+                 n_jobs=-1):
+    """Assigns an axon to every point on a grid
+
+    For every pixel on the meshgrid given by `xg`, `yg`, this function selects
+    the closest axon from a list of `axon_bundles`.
+
+    Parameters
+    ----------
+    xg, yg: array - like
+        A NumPy meshgrid of retinal locations.
+    axon_bundles: list of Nx2 arrays
+        List of two - dimensional arrays containing the(x, y) coordinates of
+        each axon bundle. The first row of each axon bundle is assumed to
+        be closest to the optic disc, and subsequent row indices move the axon
+        away from the optic disc.
+    engine: str, optional, default: 'joblib'
+        Which computational back end to use:
+        - 'serial': Single - core computation
+        - 'joblib': Parallelization via joblib(requires `pip install joblib`)
+        - 'dask': Parallelization via dask(requires `pip install dask`). Dask
+                  backend can be specified via `threading`.
+    scheduler: str, optional, default: 'threading'
+        Which scheduler to use(irrelevant for 'serial' engine):
+        - 'threading': a scheduler backed by a thread pool
+        - 'multiprocessing': a scheduler backed by a process pool
+    n_jobs: int, optional, default: -1
+        Number of cores(threads) to run the model on in parallel. Specify - 1
+        to use as many cores as available.
+
+    Returns
+    -------
+    axons: list of Nx2 arrays
+        A list of axons, where the first row of every axon contains the(x, y)
+        coordinates of the location closest to the pixel on the meshgrid, and
+        all subsequent rows move the axon closer to the optic disc.
+
+    Notes
+    -----
+    This function is basically a wrapper around ``find_closest_axon``.
+    """
+    # Let's say we want a neuron at every pixel location.
+    # We loop over all (x, y) locations and find the closest axon:
+    pos_xy = [(x, y) for x, y in zip(xg.ravel(), yg.ravel())]
+    return utils.parfor(find_closest_axon, pos_xy, func_args=[axon_bundles])
+
+
 @utils.deprecated(alt_func='p2p.retina.grow_axon_bundles',
                   deprecated_version='0.3', removed_version='0.4')
 def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
               rot=0 * np.pi / 180, scale=1, bs=-1.9, bi=.5, r0=4,
               max_samples=45, ang_range=60):
     """Implements the model of retinal axonal pathways by generating a
-    matrix of (x,y) positions.
+    matrix of(x, y) positions.
 
-    Assumes that the fovea is at [0, 0]
+    Assumes that the fovea is at[0, 0]
 
     Parameters
     ----------
-    num_cells : int
-        Number of axons (cells).
-    num_samples : int
-        Number of samples per axon (spatial resolution).
+    num_cells: int
+        Number of axons(cells).
+    num_samples: int
+        Number of samples per axon(spatial resolution).
     Center: 2 item array
         The location of the optic disk in dva.
 
@@ -1198,7 +1329,34 @@ def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
     return x, y
 
 
+@utils.deprecated(alt_func='p2p.retina.assign_axons',
+                  deprecated_version='0.3', removed_version='0.4')
 def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=0.001):
+    """Retinal axon map
+
+    Generates a mapping of how each pixel in the retina space is affected
+    by stimulation of underlying ganglion cell axons.
+    Parameters
+    ----------
+    xg, yg: array
+        meshgrid of pixel locations in units of visual angle sp
+    axon_lambda: float
+        space constant for how effective stimulation(or 'weight') falls off
+        with distance from the pixel back along the axon toward the optic disc
+        (default 1 degree)
+    min_weight: float
+        minimum weight falloff.  default .001
+
+    Returns
+    -------
+    axon_id: list
+        a list, for every pixel, of the index into the pixel in xg, yg space,
+        along the underlying axonal pathway.
+    axon_weight: list
+        a list, for every pixel, of the axon weight into the pixel in xg, yg
+        space
+
+    """
     axon_id = []
     axon_weight = []
     for idx, _ in enumerate(xg.ravel()):
@@ -1249,92 +1407,3 @@ def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=0.001):
         axon_id.append(this_id)
         axon_weight.append(this_weight)
     return axon_id, axon_weight
-
-
-@utils.deprecated(alt_func='p2p.retina.make_axon_map',
-                  deprecated_version='0.3', removed_version='0.4')
-def make_axon_map_legacy(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=.001):
-    """Retinal axon map
-
-    Generates a mapping of how each pixel in the retina space is affected
-    by stimulation of underlying ganglion cell axons.
-    Parameters
-    ----------
-    xg, yg : array
-        meshgrid of pixel locations in units of visual angle sp
-    axon_lambda : float
-        space constant for how effective stimulation (or 'weight') falls off
-        with distance from the pixel back along the axon toward the optic disc
-        (default 1 degree)
-    min_weight : float
-        minimum weight falloff.  default .001
-
-    Returns
-    -------
-    axon_id : list
-        a list, for every pixel, of the index into the pixel in xg,yg space,
-        along the underlying axonal pathway.
-    axon_weight : list
-        a list, for every pixel, of the axon weight into the pixel in xg,yg
-        space
-
-    """
-    # initialize tuples
-    axon_xg = ()
-    axon_yg = ()
-    axon_dist = ()
-    axon_weight = ()
-    axon_id = ()
-
-    # loop through pixels as indexed into a single dimension
-    for px in range(0, len(xg.flat)):
-        # find the nearest axon to this pixel
-        d = (jan_x - xg.flat[px])**2 + (jan_y - yg.flat[px])**2
-        cur_ax_id = np.nanargmin(d)  # index into the current axon
-        [ax_pos_id0, ax_num] = np.unravel_index(cur_ax_id, d.shape)
-
-        dist = 0
-
-        cur_xg = xg.flat[px]
-        cur_yg = yg.flat[px]
-
-        # add first values to the list for this pixel
-        axon_dist = axon_dist + ([0],)
-        axon_weight = axon_weight + ([1],)
-        axon_xg = axon_xg + ([cur_xg],)
-        axon_yg = axon_yg + ([cur_yg],)
-        axon_id = axon_id + ([px],)
-
-        # now loop back along this nearest axon toward the optic disc
-        for ax_pos_id in range(ax_pos_id0 - 1, -1, -1):
-            # increment the distance from the starting point
-            ax = (jan_x[ax_pos_id + 1, ax_num] - jan_x[ax_pos_id, ax_num])**2
-            ay = (jan_y[ax_pos_id + 1, ax_num] - jan_y[ax_pos_id, ax_num])**2
-            dist += np.sqrt(ax ** 2 + ay ** 2)
-
-            # weight falls off exponentially as distance from axon cell body
-            weight = np.exp(-dist / axon_lambda)
-
-            # find the nearest pixel to the current position along the axon
-            dist_xg = np.abs(xg[0, :] - jan_x[ax_pos_id, ax_num])
-            dist_yg = np.abs(yg[:, 0] - jan_y[ax_pos_id, ax_num])
-            nearest_xg_id = dist_xg.argmin()
-            nearest_yg_id = dist_yg.argmin()
-            nearest_xg = xg[0, nearest_xg_id]
-            nearest_yg = yg[nearest_yg_id, 0]
-
-            # if the position along the axon has moved to a new pixel, and the
-            # weight isn't too small...
-            if weight > min_weight:
-                if nearest_xg != cur_xg or nearest_yg != cur_yg:
-                    # update the current pixel location
-                    cur_xg = nearest_xg
-                    cur_yg = nearest_yg
-
-                    # append the list
-                    axon_weight[px].append(np.exp(weight))
-                    axon_id[px].append(np.ravel_multi_index((nearest_yg_id,
-                                                             nearest_xg_id),
-                                                            xg.shape))
-
-    return list(axon_id), list(axon_weight)
