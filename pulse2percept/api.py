@@ -8,7 +8,7 @@ from pulse2percept import (utils, retina, implants, stimuli)
 class Simulation(object):
 
     def __init__(self, implant, engine='joblib', scheduler='threading',
-                 use_jit=True, num_jobs=-1):
+                 use_jit=True, n_jobs=-1):
         """Generates a simulation framework
 
         Parameters
@@ -29,7 +29,7 @@ class Simulation(object):
         use_jit : bool, optional, default: True
             Whether to use just-in-time (JIT) compilation to speed up
             computation.
-        num_jobs : int, optional, default: -1
+        n_jobs : int, optional, default: -1
             Number of cores (threads) to run the model on in parallel.
             Specify -1 to use as many cores as available.
         """
@@ -41,7 +41,7 @@ class Simulation(object):
         self.engine = engine
         self.scheduler = scheduler
         self.use_jit = use_jit
-        self.num_jobs = num_jobs
+        self.n_jobs = n_jobs
 
         # Optic fiber layer (OFL): After calling `set_optic_fiber_layer`, this
         # variable will contain a `retina.Grid` object.
@@ -51,16 +51,19 @@ class Simulation(object):
         # this variable will contain a `retina.TemporalModel` object.
         self.gcl = None
 
-    def set_optic_fiber_layer(self, sampling=100, axon_lambda=2, x_range=None,
-                              y_range=None, datapath='.', save_data=True):
+    def set_optic_fiber_layer(self, sampling=100, x_range=None, y_range=None,
+                              n_axons=501, phi_range=(-180.0, 180.0),
+                              n_rho=801, rho_range=(4.0, 45.0),
+                              loc_od=(15.0, 2.0),
+                              sensitivity_rule='decay', decay_const=2.0,
+                              contribution_rule='max', powermean_exp=1.0,
+                              datapath='.', save_data=True):
         """Sets parameters of the optic fiber layer (OFL)
 
         Parameters
         ----------
         sampling : float, optional, default: 100 microns
             Microns per grid cell.
-        axon_lambda : float, optional, default: 2
-            Constant that determines fall-off with axonal distance.
         x_range : (xlo, xhi)|None, default: None
             Lower and upper bound of the retinal grid (microns) in horizontal
             dimension. Either a tuple (xlo, xhi) or None. If None, the
@@ -69,6 +72,61 @@ class Simulation(object):
             Lower and upper bound of the retinal grid (microns) in vertical
             dimension. Either a tuple (ylo, yhi) or None. If None, the
             generated grid will be just big enough to fit the implant.
+        n_axons : int, optional, default: 501
+            The number of axons to generate. Their start orientations `phi0`
+            (in modified polar coordinates) will be sampled uniformly from
+            `phi_range`.
+        phi_range : (lophi, hiphi), optional, default: (-180, 180)
+            Range of angular positions of axon fibers at their starting points
+            (polar coordinates, degrees) to be sampled uniformly with `n_axons`
+            samples. Must be within [-180, 180].
+        n_rho: int, optional, default: 801
+            Number of sampling points along the radial axis(polar coordinates).
+        rho_range: (rho_min, rho_max), optional, default: (4.0, 45.0)
+            Lower and upper bounds for the radial position values(polar
+            coordinates).
+        loc_od: (x_od, y_od), optional, default: (15.0, 2.0)
+            Location of the center of the optic disc(x, y) in Cartesian
+            coordinates.
+        sensitivity_rule : {'decay', 'Jeng2011'}, optional, default: 'decay'
+            This rule specifies how the activation of the axon differs as a
+            function of distance from the soma. The following options are
+            available:
+            - 'decay':
+                Axon sensitivity decays exponentially with distance. Specify
+                `decay_const` to change the steepness of the fall-off with
+                distance.
+            - 'Jeng2011':
+                Axon sensitivity peaks near the sodium band (50um from the
+                soma), then plateaus on the distal axon at roughly half of the
+                peak sensitivity. See Figure 2 in Jeng, Tang, Molnar, Desai,
+                and Fried (2011). The sodium channel band shapes the response
+                to electric stimulation in retinal ganglion cells. J Neural Eng
+                8 (036022).
+        contribution_rule : {'max', 'sum', 'mean'}, optional, default: 'max'
+            This rule specifies how the activation thresholds across all axon
+            segments are combined to determine the contribution of the axon to
+            the current spread. The following options are available:
+            - 'max':
+                The axon's contribution to the current spread is equal to the
+                max. sensitivity across all axon segments.
+            - 'sum':
+                The axon's contribution to the current spread is equal to the
+                sum sensitivity across all axon segments.
+            - 'mean':
+                The axon's contribution to the current spread is equal to the
+                mean sensitivity across all axon segments. Specify
+                `powermean_exp` to change the exponent of the generalized
+                (power) mean, calculated as np.mean(x ** powermean_exp) **
+                (1.0 / powermean_exp). Default is 1, which is equal to the
+                arithmetic mean.
+        decay_const : float, optional, default: 2.0
+            When `sensitivity_rule` is set to 'decay', specifies the decay
+            constant of the exponential fall-off.
+        powermean_exp : float, optional, default: 1.0
+            When `sensitivity_rule` is set to 'mean', specifies the exponent of
+            the generalized (power) mean function. The power mean is calculated
+            as np.mean(x ** powermean_exp) ** (1.0 / powermean_exp).
         datapath : str, default: current directory
             Relative path where to look for existing retina files, and where to
             store new retina files.
@@ -91,12 +149,12 @@ class Simulation(object):
             xhi = x_range
         elif isinstance(x_range, (list, tuple, np.ndarray)):
             if len(x_range) != 2 or x_range[1] < x_range[0]:
-                e_s = "x_range must be a list [xlo, xhi] where xlo <= xhi."
+                e_s = "x_range must be a tuple (xlo, xhi) where xlo <= xhi."
                 raise ValueError(e_s)
             xlo = x_range[0]
             xhi = x_range[1]
         else:
-            raise ValueError("x_range must be a list [xlo, xhi] or None.")
+            raise ValueError("x_range must be a tuple (xlo, xhi) or None.")
 
         if y_range is None:
             # No y ranges given: generate automatically to fit the implant
@@ -108,19 +166,25 @@ class Simulation(object):
             yhi = y_range
         elif isinstance(y_range, (list, tuple, np.ndarray)):
             if len(y_range) != 2 or y_range[1] < y_range[0]:
-                e_s = "y_range must be a list [ylo, yhi] where ylo <= yhi."
+                e_s = "y_range must be a tuple (ylo, yhi) where ylo <= yhi."
                 raise ValueError(e_s)
             ylo = y_range[0]
             yhi = y_range[1]
         else:
-            raise ValueError("y_range must be a list [ylo, yhi] or None.")
+            raise ValueError("y_range must be a tuple (ylo, yhi) or None.")
 
         # Generate the grid from the above specs
         self.ofl = retina.Grid(x_range=(xlo, xhi), y_range=(ylo, yhi),
-                               sampling=sampling, axon_lambda=axon_lambda,
+                               sampling=sampling,
+                               n_axons=n_axons, phi_range=phi_range,
+                               n_rho=n_rho, rho_range=rho_range,
+                               sensitivity_rule=sensitivity_rule,
+                               contribution_rule=contribution_rule,
+                               decay_const=decay_const,
+                               powermean_exp=powermean_exp,
                                datapath=datapath, save_data=save_data,
                                engine=self.engine, scheduler=self.scheduler,
-                               n_jobs=self.num_jobs)
+                               n_jobs=self.n_jobs)
 
     def set_ganglion_cell_layer(self, model, **kwargs):
         """Sets parameters of the ganglion cell layer (GCL)
@@ -404,7 +468,7 @@ class Simulation(object):
         logging.getLogger(__name__).info(s_info)
 
         sr_list = utils.parfor(self.gcl.model_cascade,
-                               ecs_list, n_jobs=self.num_jobs,
+                               ecs_list, n_jobs=self.n_jobs,
                                engine=self.engine, scheduler=self.scheduler,
                                func_args=[pt_data, layers, self.use_jit])
         bm = np.zeros(self.ofl.gridx.shape +
@@ -422,7 +486,7 @@ class Simulation(object):
 
         return percept
 
-    def plot_fundus(self, stim=None, ax=None):
+    def plot_fundus(self, stim=None, ax=None, n_axons=100):
         """Plot the implant on the retinal surface akin to a fundus photopgraph
 
         This function plots an electrode array on top of the axon streak map
@@ -439,6 +503,8 @@ class Simulation(object):
         ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None given, a new one will be created.
             Default: None
+        n_axons : int, optional, default: 100
+            Number of axons to plot.
 
         Returns
         -------
@@ -460,17 +526,22 @@ class Simulation(object):
         elif hasattr(ax, 'set_axis_bgcolor'):
             ax.set_axis_bgcolor('black')
 
-        # Draw axon pathways
-        ax.plot(self.ofl.jan_x[:, ::5], -self.ofl.jan_y[:, ::5],
-                c=(0.5, 1, 0.5))
+        # Draw axon pathways: Need to regenerate because parfor returns axons
+        # out of orders - random sample doesn't look neat. Should be fast:
+        phi = np.linspace(-180, 180, n_axons)
+        axon_bundles = utils.parfor(retina.jansonius2009, phi,
+                                    engine=self.engine, n_jobs=self.n_jobs,
+                                    scheduler=self.scheduler)
+        for bundle in axon_bundles:
+            ax.plot(bundle[:, 0], -bundle[:, 1], c=(0.5, 1.0, 0.5))
 
         # Draw in the the retinal patch we're simulating.
         # This defines the size of our "percept" image below.
         dva_xmin = retina.ret2dva(self.ofl.gridx.min())
         dva_ymin = -retina.ret2dva(self.ofl.gridy.max())
         patch = patches.Rectangle((dva_xmin, dva_ymin),
-                                  retina.ret2dva(self.ofl.range_x),
-                                  retina.ret2dva(self.ofl.range_y),
+                                  retina.ret2dva(np.diff(self.ofl.x_range)),
+                                  retina.ret2dva(np.diff(self.ofl.y_range)),
                                   alpha=0.7)
         ax.add_patch(patch)
 

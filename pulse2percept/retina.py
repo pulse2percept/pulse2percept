@@ -20,7 +20,7 @@ class Grid(object):
                  sampling=25, n_axons=501, phi_range=(-180.0, 180.0),
                  n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.0, 2.0),
                  sensitivity_rule='decay', contribution_rule='max',
-                 axon_lambda=2.0, datapath='.',
+                 decay_const=2.0, powermean_exp=1.0, datapath='.',
                  save_data=True, engine='joblib', scheduler='threading',
                  n_jobs=-1):
         """Generates a spatial grid representing the retinal coordinate frame
@@ -64,27 +64,36 @@ class Grid(object):
                 `decay_const` to change the steepness of the fall-off with
                 distance.
             - 'Jeng2011':
-                Axon sensitivity peaks near the sodium band (50um from the soma),
-                then plateaus on the distal axon at roughly half of the peak
-                sensitivity. See Figure 2 in Jeng, Tang, Molnar, Desai, and Fried
-                (2011). The sodium channel band shapes the response to electric
-                stimulation in retinal ganglion cells. J Neural Eng 8 (036022).
+                Axon sensitivity peaks near the sodium band (50um from the
+                soma), then plateaus on the distal axon at roughly half of the
+                peak sensitivity. See Figure 2 in Jeng, Tang, Molnar, Desai,
+                and Fried (2011). The sodium channel band shapes the response
+                to electric stimulation in retinal ganglion cells. J Neural Eng
+                8 (036022).
         contribution_rule : {'max', 'sum', 'mean'}, optional, default: 'max'
             This rule specifies how the activation thresholds across all axon
-            segments are combined to determine the contribution of the axon to the
-            current spread. The following options are available:
+            segments are combined to determine the contribution of the axon to
+            the current spread. The following options are available:
             - 'max':
-                The axon's contribution to the current spread is equal to the max.
-                sensitivity across all axon segments.
+                The axon's contribution to the current spread is equal to the
+                max. sensitivity across all axon segments.
             - 'sum':
-                The axon's contribution to the current spread is equal to the sum
-                sensitivity across all axon segments.
+                The axon's contribution to the current spread is equal to the
+                sum sensitivity across all axon segments.
             - 'mean':
-                The axon's contribution to the current spread is equal to the mean
-                sensitivity across all axon segments. Specify `powermean_exp` to
-                change the exponent of the generalized (power) mean, calculated as
-                np.mean(x ** powermean_exp) ** (1.0 / powermean_exp). Default is 1,
-                which is equal to the arithmetic mean.
+                The axon's contribution to the current spread is equal to the
+                mean sensitivity across all axon segments. Specify
+                `powermean_exp` to change the exponent of the generalized
+                (power) mean, calculated as np.mean(x ** powermean_exp) **
+                (1.0 / powermean_exp). Default is 1, which is equal to the
+                arithmetic mean.
+        decay_const : float, optional, default: 2.0
+            When `sensitivity_rule` is set to 'decay', specifies the decay
+            constant of the exponential fall-off.
+        powermean_exp : float, optional, default: 1.0
+            When `sensitivity_rule` is set to 'mean', specifies the exponent of
+            the generalized (power) mean function. The power mean is calculated
+            as np.mean(x ** powermean_exp) ** (1.0 / powermean_exp).
         datapath : str, optional, default: current directory
             Relative path where to look for existing retina files, and where to
             store new files.
@@ -124,9 +133,20 @@ class Grid(object):
         if phi_range[0] > phi_range[1]:
             raise ValueError('Lower bound on phi cannot be larger than the '
                              'upper bound.')
+        self.x_range = x_range
+        self.y_range = y_range
+        self.sampling = sampling
+        self.sensitivity_rule = sensitivity_rule
+        self.contribution_rule = contribution_rule
+        self.decay_const = decay_const
+        self.powermean_exp = powermean_exp
+        self.engine = engine
+        self.scheduler = scheduler
+        self.n_jobs = n_jobs
+
+        # Include endpoints in meshgrid
         xlo, xhi = x_range
         ylo, yhi = y_range
-        # Include endpoints in meshgrid
         num_x = int((xhi - xlo) / sampling + 1)
         num_y = int((yhi - ylo) / sampling + 1)
         self.gridx, self.gridy = np.meshgrid(np.linspace(xlo, xhi, num_x),
@@ -134,136 +154,87 @@ class Grid(object):
                                              indexing='xy')
 
         # Create descriptive filename based on input args
-        rot = 0.0
-        filename = "retina_s%d_l%.1f_rot%.1f_%dx%d.npz" % (sampling,
-                                                           axon_lambda,
-                                                           rot / np.pi * 180,
-                                                           xhi - xlo,
-                                                           yhi - ylo)
+        filename = "retina_s%d_a%d_r%d_%dx%d.npz" % (sampling, n_axons, n_rho,
+                                                     xhi - xlo,
+                                                     yhi - ylo)
         filename = os.path.join(datapath, filename)
 
-        # Bool whether we need to create a new grid
-        need_new_grid = True
+        # There are some variables, like `sensitivity_rule` and `decay_const`
+        # that are only needed in the effective current calculation, not for
+        # the grid and axon maps - so not included here:
+        grid_dict = {'x_range': x_range, 'y_range': y_range,
+                     'n_axons': n_axons, 'phi_range': phi_range,
+                     'n_rho': n_rho, 'rho_range': rho_range,
+                     'sampling': sampling, 'loc_od': loc_od}
 
         # Check if such a file already exists. If so, load parameters and
         # make sure they are the same as specified above. Else, create new.
-        if os.path.exists(filename):
-            need_new_grid = False
-            axon_map = np.load(filename)
+        need_new_grid = False
+        if not os.path.exists(filename):
+            need_new_grid = True
+        else:
+            logging.getLogger(__name__).info('Found file "%s".' % filename)
+            try:
+                load_grid_dict = six.moves.cPickle.load(open(filename, 'rb'))
+            except six.moves.cPickle.UnpicklingError:
+                msg = 'UnpicklingError: Could not load file "%s".'
+                logging.getLogger(__name__).info(msg)
+                need_new_grid = True
+                load_grid_dict = {}
 
-            # Verify that the file was created with the latest code by looking
-            # for new fields:
-            new_fields = ['axon_bundles', 'axon_distances', 'axons', 'n_rho',
-                          'rho_range', 'n_axons', 'phi_range', 'loc_od']
-            need_new_grid |= any([f not in axon_map for f in new_fields])
+            # Make sure all relevant variables are present and have the right
+            # values:
+            for key, value in six.iteritems(grid_dict):
+                if key not in load_grid_dict:
+                    logging.getLogger(__name__).info('File out of date.')
+                    need_new_grid = True
+                    break
+                if value != load_grid_dict[key]:
+                    logging.getLogger(__name__).info('File out of date.')
+                    need_new_grid = True
+                    break
 
-            # Alternatively, the presence of old fields is an indication that
-            # the grid was generated with old code:
-            old_fields = ['jan_x', 'jan_y', 'axon_id', 'axon_weights']
-            need_new_grid |= any([f in axon_map for f in old_fields])
-
-            if not need_new_grid:
-                # File seems to up-to-date: Now make sure the file was created
-                # with the right-size grid
-                # ax_id = axon_map['axon_id']
-                # ax_wt = axon_map['axon_weight']
-                axon_bundles = axon_map['axon_bundles']
-                axon_distances = axon_map['axon_distances']
-                axons = axon_map['axons']
-                n_rho_am = axon_map['n_rho']
-                rho_range_am = axon_map['rho_range']
-                n_axons_am = axon_map['n_axons']
-                phi_range_am = axon_map['phi_range']
-                loc_od_am = axon_map['loc_od']
-                xlo_am = axon_map['xlo']
-                xhi_am = axon_map['xhi']
-                ylo_am = axon_map['ylo']
-                yhi_am = axon_map['yhi']
-                sampling_am = axon_map['sampling']
-                axon_lambda_am = axon_map['axon_lambda']
-
-                # If any of the dimensions don't match, we need a new grid
-                need_new_grid |= n_rho != n_rho_am
-                need_new_grid |= rho_range != rho_range_am
-                need_new_grid |= n_axons != n_axons_am
-                need_new_grid |= phi_range != phi_range_am
-                need_new_grid |= loc_od != loc_od_am
-                need_new_grid |= xlo != xlo_am
-                need_new_grid |= xhi != xhi_am
-                need_new_grid |= ylo != ylo_am
-                need_new_grid |= yhi != yhi_am
-                need_new_grid |= sampling != sampling_am
-                need_new_grid |= axon_lambda != axon_lambda_am
-
-            if 'rot' in axon_map:
-                # Backwards compatibility for older retina object files that
-                # had `rot`
-                rot_am = axon_map['rot']
-                need_new_grid |= rot != rot_am
-
-        # At this point we know whether we need to generate a new retina:
         if need_new_grid:
-            info_str = "File '%s' doesn't exist " % filename
-            info_str += "or has outdated parameter values, generating..."
-            logging.getLogger(__name__).info(info_str)
+            logging.getLogger(__name__).info('Need new file. Generating...')
 
             # Grow a number `n_axons` of axon bundles with orientations in
             # `phi_range`
             phi = np.linspace(phi_range[0], phi_range[1], n_axons)
             func_kwargs = {'n_rho': n_rho, 'rho_range': rho_range,
                            'loc_od': loc_od}
-            axon_bundles = utils.parfor(jansonius2009, phi,
-                                        func_kwargs=func_kwargs, engine=engine,
-                                        scheduler=scheduler, n_jobs=n_jobs)
+            self.axon_bundles = utils.parfor(jansonius2009, phi,
+                                             func_kwargs=func_kwargs,
+                                             engine=engine, n_jobs=n_jobs,
+                                             scheduler=scheduler)
+            grid_dict['axon_bundles'] = self.axon_bundles
 
             # Assume there is a neuron at every grid location: Use the above
             # axon bundles to assign an axon to each neuron
             xg, yg = ret2dva(self.gridx), ret2dva(self.gridy)
             pos_xy = np.column_stack((xg.ravel(), yg.ravel()))
-            axons = utils.parfor(find_closest_axon, pos_xy,
-                                 func_args=[axon_bundles])
+            self.axons = utils.parfor(find_closest_axon, pos_xy,
+                                      func_args=[self.axon_bundles])
+            grid_dict['axons'] = self.axons
 
             # For every axon segment, calculate distance to soma. Snap axon
             # locations to the grid using a nearest-neighbor tree structure:
-            axon_distances = utils.parfor(axon_dist_from_soma, axons,
-                                          func_args=[xg, yg],
-                                          func_kwargs={'tree':
-                                                       spat.cKDTree(pos_xy)},
-                                          engine=engine, scheduler=scheduler,
-                                          n_jobs=n_jobs)
+            func_kwargs = {'tree': spat.cKDTree(pos_xy)}
+            self.axon_distances = utils.parfor(axon_dist_from_soma, self.axons,
+                                               func_args=[xg, yg],
+                                               func_kwargs=func_kwargs,
+                                               engine=engine, n_jobs=n_jobs,
+                                               scheduler=scheduler)
+            grid_dict['axon_distances'] = self.axon_distances
 
             # Save the variables, together with metadata about the grid:
             if save_data:
-                np.savez(filename,
-                         axon_bundles=axon_bundles,
-                         axon_distances=axon_distances,
-                         axons=axons,
-                         n_rho=n_rho,
-                         rho_range=rho_range,
-                         loc_od=loc_od,
-                         xlo=[xlo],
-                         xhi=[xhi],
-                         ylo=[ylo],
-                         yhi=[yhi],
-                         sampling=[sampling],
-                         axon_lambda=[axon_lambda],
-                         rot=[rot])
+                six.moves.cPickle.dump(grid_dict, open(filename, 'wb'))
+        else:
+            # Assign all elements in the loaded dictionary to this object
+            for key, value in six.iteritems(load_grid_dict):
+                setattr(self, key, value)
 
-        self.axon_lambda = axon_lambda
-        self.rot = rot
-        self.sampling = sampling
-        self.axon_bundles = axon_bundles
-        self.axon_distances = axon_distances
-        self.axons = axons
-        self.range_x = self.gridx.max() - self.gridx.min()
-        self.range_y = self.gridy.max() - self.gridy.min()
-        self.sensitivity_rule = sensitivity_rule
-        self.contribution_rule = contribution_rule
-        self.engine = engine
-        self.scheduler = scheduler
-        self.n_jobs = n_jobs
-
-    def current2effectivecurrent(self, cs):
+    def current2effectivecurrent(self, current_spread):
         """
 
         Converts a current spread map to an 'effective' current spread map, by
@@ -283,19 +254,20 @@ class Grid(object):
             by the weights axon map.
         """
         contrib = utils.parfor(axon_contribution, self.axon_distances,
-                               func_args=[cs], engine=self.engine,
+                               func_args=[current_spread], engine=self.engine,
                                func_kwargs={
                                    'sensitivity_rule': self.sensitivity_rule,
                                    'contribution_rule': self.contribution_rule
                                },
                                scheduler=self.scheduler, n_jobs=self.n_jobs)
+
+        ecs = np.zeros_like(current_spread)
         px_contrib = list(filter(None, contrib))
-        ecs = np.zeros_like(cs)
         for idx, value in px_contrib:
             ecs.ravel()[idx] = value
 
-        # Normalize so that the max of `ecs` is the same as `cs`
-        return ecs / (ecs.max() + np.finfo(float).eps) * cs.max()
+        # Normalize so that the max of `ecs` is the same as `current_spread`
+        return ecs / (ecs.max() + np.finfo(float).eps) * current_spread.max()
 
     def electrode_ecs(self, implant, alpha=14000, n=1.69):
         """
@@ -356,7 +328,7 @@ class BaseModel():
             If True, displays a warning message if a keyword is provided that
             is not recognized by the temporal model.
         """
-        for key, value in kwargs.items():
+        for key, value in six.iteritems(kwargs):
             if not hasattr(self, key) and warn_inexistent:
                 w_s = "Unknown class attribute '%s'" % key
                 logging.getLogger(__name__).warning(w_s)
@@ -1052,11 +1024,11 @@ def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0),
     Returns
     -------
     ax_pos: Nx2 array
-        Returns a two - dimensional array of axonal positions, where ax_pos[0, :]
-        contains the(x, y) coordinates of the axon segment closest to the
-        optic disc, and aubsequent row indices move the axon away from the
-        optic disc. Number of rows is at most `n_rho`, but might be smaller if
-        the axon crosses the meridian.
+        Returns a two - dimensional array of axonal positions, where
+        ax_pos[0, :] contains the(x, y) coordinates of the axon segment closest
+        to the optic disc, and aubsequent row indices move the axon away from
+        the optic disc. Number of rows is at most `n_rho`, but might be smaller
+        if the axon crosses the meridian.
 
     Notes
     -----
@@ -1329,7 +1301,7 @@ def axon_contribution(axon_dist, current_spread, sensitivity_rule='decay',
     else:
         raise ValueError('Unknown activation rule "%s"' % contribution_rule)
 
-    return contribution
+    return idx_cs, contribution
 
 
 @utils.deprecated(alt_func='p2p.retina.jansonius2009',

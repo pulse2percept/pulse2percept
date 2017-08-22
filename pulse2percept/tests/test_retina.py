@@ -39,6 +39,8 @@ def test_Grid():
         # Number of axons given by number of pixels on grid
         npt.assert_equal(len(grid.axons), 1)
 
+    # Verify file
+
 
 def test_BaseModel():
     # Cannot instantiate abstract class
@@ -231,18 +233,16 @@ def test_Horsager2009():
 
 def test_Retina_Electrodes():
     logging.getLogger(__name__).info("test_Retina_Electrodes()")
-    sampling = 1
-    xlo = -2
-    xhi = 2
-    ylo = -3
-    yhi = 3
-    retina = p2p.retina.Grid(x_range=(xlo, xhi), y_range=(ylo, yhi),
-                             sampling=sampling,
+    ssample = 1
+    x_range = (-2, 2)
+    y_range = (-3, 3)
+    retina = p2p.retina.Grid(x_range=x_range, y_range=y_range,
+                             sampling=ssample,
                              save_data=False)
-    npt.assert_equal(retina.gridx.shape, ((yhi - ylo) / sampling + 1,
-                                          (xhi - xlo) / sampling + 1))
-    npt.assert_equal(retina.range_x, retina.gridx.max() - retina.gridx.min())
-    npt.assert_equal(retina.range_y, retina.gridy.max() - retina.gridy.min())
+    npt.assert_equal(retina.gridx.shape, (int(np.diff(y_range) / ssample + 1),
+                                          int(np.diff(x_range) / ssample + 1)))
+    npt.assert_equal(retina.x_range, x_range)
+    npt.assert_equal(retina.y_range, y_range)
 
     electrode1 = p2p.implants.Electrode('epiretinal', 1, 0, 0, 0)
 
@@ -424,7 +424,7 @@ def test_axon_contribution():
     decay_const = 4.0
     for c_rule in ['max', 'mean', 'sum']:
         # If current spread == 1 everywhere, contribution given by `dist`
-        contrib = p2p.retina.axon_contribution(
+        _, contrib = p2p.retina.axon_contribution(
             dist2, np.ones_like(dist), sensitivity_rule='decay',
             decay_const=decay_const, contribution_rule=c_rule
         )
@@ -436,7 +436,7 @@ def test_axon_contribution():
     for s_rule in ['decay', 'Jeng2011']:
         for c_rule in ['max', 'sum', 'mean']:
             for p in [1.0, 2.0, 3.0]:
-                contrib = p2p.retina.axon_contribution(
+                _, contrib = p2p.retina.axon_contribution(
                     dist2, np.zeros_like(dist), sensitivity_rule=s_rule,
                     contribution_rule=c_rule
                 )
