@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.special as ss
+import scipy.spatial as spat
 import abc
 import six
 import os.path
@@ -17,8 +18,11 @@ class Grid(object):
 
     def __init__(self, x_range=(-1000.0, 1000.0), y_range=(-1000.0, 1000.0),
                  sampling=25, n_axons=501, phi_range=(-180.0, 180.0),
-                 axon_lambda=2.0, datapath='.', save_data=True,
-                 engine='joblib', scheduler='threading', n_jobs=-1):
+                 n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.0, 2.0),
+                 axon_sensitivity='decay', axon_activation='max',
+                 axon_lambda=2.0, datapath='.',
+                 save_data=True, engine='joblib', scheduler='threading',
+                 n_jobs=-1):
         """Generates a spatial grid representing the retinal coordinate frame
 
         This function generates the coordinate system for the retina
@@ -33,16 +37,24 @@ class Grid(object):
            Extent of the retinal coverage (microns) in horizontal dimension.
         y_range : (ylo, yhi), optional, default: ylo=-1000, ylo=1000
            Extent of the retinal coverage (microns) in vertical dimension.
-        sampling : float
+        sampling : float, optional, default: 25
             Spatial sampling step (microns) for the grid.
-        n_axons : int
+        n_axons : int, optional, default: 501
             The number of axons to generate. Their start orientations `phi0`
             (in modified polar coordinates) will be sampled uniformly from
             `phi_range`.
-        phi_range : (lophi, hiphi)
+        phi_range : (lophi, hiphi), optional, default: (-180, 180)
             Range of angular positions of axon fibers at their starting points
             (polar coordinates, degrees) to be sampled uniformly with `n_axons`
             samples. Must be within [-180, 180].
+        n_rho: int, optional, default: 801
+            Number of sampling points along the radial axis(polar coordinates).
+        rho_range: (rho_min, rho_max), optional, default: (4.0, 45.0)
+            Lower and upper bounds for the radial position values(polar
+            coordinates).
+        loc_od: (x_od, y_od), optional, default: (15.0, 2.0)
+            Location of the center of the optic disc(x, y) in Cartesian
+            coordinates.
         datapath : str, optional, default: current directory
             Relative path where to look for existing retina files, and where to
             store new files.
@@ -75,6 +87,13 @@ class Grid(object):
         if y_range[0] > y_range[1]:
             raise ValueError('Lower bound on y cannot be larger than the '
                              'upper bound.')
+        if n_axons < 1:
+            raise ValueError('Number of axons must be >= 1.')
+        if np.any(np.abs(phi_range) > 180.0):
+            raise ValueError('phi must be within [-180, 180].')
+        if phi_range[0] > phi_range[1]:
+            raise ValueError('Lower bound on phi cannot be larger than the '
+                             'upper bound.')
         xlo, xhi = x_range
         ylo, yhi = y_range
         # Include endpoints in meshgrid
@@ -102,13 +121,16 @@ class Grid(object):
             need_new_grid = False
             axon_map = np.load(filename)
 
-            # Verify that the file was created with the latest code
-            need_new_grid |= 'axon_bundles' not in axon_map
-            need_new_grid |= 'axons' not in axon_map
-            need_new_grid |= 'jan_x' in axon_map
-            need_new_grid |= 'jan_y' in axon_map
-            need_new_grid |= 'axon_id' in axon_map
-            need_new_grid |= 'axon_weight' in axon_map
+            # Verify that the file was created with the latest code by looking
+            # for new fields:
+            new_fields = ['axon_bundles', 'axon_distances', 'axons', 'n_rho',
+                          'rho_range', 'n_axons', 'phi_range', 'loc_od']
+            need_new_grid |= any([f not in axon_map for f in new_fields])
+
+            # Alternatively, the presence of old fields is an indication that
+            # the grid was generated with old code:
+            old_fields = ['jan_x', 'jan_y', 'axon_id', 'axon_weights']
+            need_new_grid |= any([f in axon_map for f in old_fields])
 
             if not need_new_grid:
                 # File seems to up-to-date: Now make sure the file was created
@@ -116,7 +138,13 @@ class Grid(object):
                 # ax_id = axon_map['axon_id']
                 # ax_wt = axon_map['axon_weight']
                 axon_bundles = axon_map['axon_bundles']
+                axon_distances = axon_map['axon_distances']
                 axons = axon_map['axons']
+                n_rho_am = axon_map['n_rho']
+                rho_range_am = axon_map['rho_range']
+                n_axons_am = axon_map['n_axons']
+                phi_range_am = axon_map['phi_range']
+                loc_od_am = axon_map['loc_od']
                 xlo_am = axon_map['xlo']
                 xhi_am = axon_map['xhi']
                 ylo_am = axon_map['ylo']
@@ -125,6 +153,11 @@ class Grid(object):
                 axon_lambda_am = axon_map['axon_lambda']
 
                 # If any of the dimensions don't match, we need a new grid
+                need_new_grid |= n_rho != n_rho_am
+                need_new_grid |= rho_range != rho_range_am
+                need_new_grid |= n_axons != n_axons_am
+                need_new_grid |= phi_range != phi_range_am
+                need_new_grid |= loc_od != loc_od_am
                 need_new_grid |= xlo != xlo_am
                 need_new_grid |= xhi != xhi_am
                 need_new_grid |= ylo != ylo_am
@@ -146,25 +179,38 @@ class Grid(object):
 
             # Grow a number `n_axons` of axon bundles with orientations in
             # `phi_range`
-            axon_bundles = grow_axon_bundles(n_axons, phi_range=phi_range,
-                                             engine=engine, n_jobs=n_jobs,
-                                             scheduler=scheduler)
+            phi = np.linspace(phi_range[0], phi_range[1], n_axons)
+            func_kwargs = {'n_rho': n_rho, 'rho_range': rho_range,
+                           'loc_od': loc_od}
+            axon_bundles = utils.parfor(jansonius2009, phi,
+                                        func_kwargs=func_kwargs, engine=engine,
+                                        scheduler=scheduler, n_jobs=n_jobs)
 
             # Assume there is a neuron at every grid location: Use the above
             # axon bundles to assign an axon to each neuron
-            axons = assign_axons(ret2dva(self.gridx), ret2dva(self.gridy),
-                                 axon_bundles, engine=engine, n_jobs=n_jobs,
-                                 scheduler=scheduler)
+            xg, yg = ret2dva(self.gridx), ret2dva(self.gridy)
+            pos_xy = np.column_stack((xg.ravel(), yg.ravel()))
+            axons = utils.parfor(find_closest_axon, pos_xy,
+                                 func_args=[axon_bundles])
+
+            # For every axon segment, calculate distance to soma. Snap axon
+            # locations to the grid using a nearest-neighbor tree structure:
+            axon_distances = utils.parfor(axon_dist_from_soma, axons,
+                                          func_args=[xg, yg],
+                                          func_kwargs={'tree':
+                                                       spat.cKDTree(pos_xy)},
+                                          engine=engine, scheduler=scheduler,
+                                          n_jobs=n_jobs)
 
             # Save the variables, together with metadata about the grid:
             if save_data:
                 np.savez(filename,
                          axon_bundles=axon_bundles,
+                         axon_distances=axon_distances,
                          axons=axons,
-                         # axon_id=ax_id,
-                         # axon_weight=ax_wt,
-                         # jan_x=jan_x,
-                         # jan_y=jan_y,
+                         n_rho=n_rho,
+                         rho_range=rho_range,
+                         loc_od=loc_od,
                          xlo=[xlo],
                          xhi=[xhi],
                          ylo=[ylo],
@@ -177,13 +223,15 @@ class Grid(object):
         self.rot = rot
         self.sampling = sampling
         self.axon_bundles = axon_bundles
+        self.axon_distances = axon_distances
         self.axons = axons
-        # self.axon_id = ax_id
-        # self.axon_weight = ax_wt
-        # self.jan_x = jan_x
-        # self.jan_y = jan_y
         self.range_x = self.gridx.max() - self.gridx.min()
         self.range_y = self.gridy.max() - self.gridy.min()
+        self.axon_sensitivity = axon_sensitivity
+        self.axon_activation = axon_activation
+        self.engine = engine
+        self.scheduler = scheduler
+        self.n_jobs = n_jobs
 
     def current2effectivecurrent(self, cs):
         """
@@ -204,24 +252,20 @@ class Grid(object):
             values in ecm along the pixels in the list in axon_map, weighted
             by the weights axon map.
         """
-        ecs = np.zeros(cs.shape)
-        for idx in range(0, len(cs.flat)):
-            ecs.flat[idx] = np.dot(cs.flat[self.axon_id[idx]],
-                                   self.axon_weight[idx])
+        contrib = utils.parfor(axon_contribution, self.axon_distances,
+                               func_args=[cs], engine=self.engine,
+                               func_kwargs={
+                                   'sensitivity_rule': self.axon_sensitivity,
+                                   'activation_rule': self.axon_activation
+                               },
+                               scheduler=self.scheduler, n_jobs=self.n_jobs)
+        px_contrib = list(filter(None, contrib))
+        ecs = np.zeros_like(cs)
+        for idx, value in px_contrib:
+            ecs.ravel()[idx] = value
 
-        # normalize so the response under the electrode in the ecs map
-        # is equal to cs
-        scale = np.max(cs) / ecs.flat[np.argmax(cs)]
-        ecs = ecs * scale
-
-        # this normalization is based on unit current on the retina producing
-        # a max response of 1 based on axonal integration.
-        # means that response magnitudes don't change as you increase the
-        # length of axonal integration or sampling of the retina
-        # Doesn't affect normalization over time, or responses as a function
-        # of the anount of current,
-
-        return ecs
+        # Normalize so that the max of `ecs` is the same as `cs`
+        return ecs / (ecs.max() + np.finfo(float).eps) * cs.max()
 
     def electrode_ecs(self, implant, alpha=14000, n=1.69):
         """
@@ -1045,86 +1089,6 @@ def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0),
     return np.vstack((xmodel, ymodel)).T
 
 
-def grow_axon_bundles(n_axons, phi_range=(-180.0, 180.0), n_rho=801,
-                      rho_range=(4.0, 45.0), beta_sup=-1.9, beta_inf=0.5,
-                      loc_od=(15.0, 2.0), engine='joblib', n_jobs=-1,
-                      scheduler='threading'):
-    """Grows axon bundles based on the model by Jansonius et al. (2009)
-
-    This function generates the trajectory of `n_axons` nerve fiber bundles
-    based on the mathematical model described in:
-
-    > Jansionus et al. (2009). A mathematical description of nerve fiber
-    > bundle trajectories and their variability in the human retina. Vis
-    > Res 49: 2157 - 2163.
-
-    Parameters
-    ----------
-    n_axons: int
-        The number of axons to generate. Their start orientations `phi0` (in
-        modified polar coordinates) will be sampled uniformly from `phi_range`.
-    phi_range: (lophi, hiphi)
-        Range of angular positions of axon fibers at their starting points
-        (polar coordinates, degrees) to be sampled uniformly with `n_axons`
-        samples. Must be within[-180, 180].
-    n_rho: int, optional, default: 801
-        Number of sampling points along the radial axis(polar coordinates).
-    rho_range: (rho_min, rho_max), optional, default: (4.0, 45.0)
-        Lower and upper bounds for the radial position values(polar
-        coordinates).
-    loc_od: (x_od, y_od), optional, default: (15.0, 2.0)
-        Location of the center of the optic disc(x, y) in Cartesian
-        coordinates.
-    beta_sup: float, optional, default: -1.9
-        Scalar value for the superior retina(see Eq. 5, `\beta_s` in the
-        paper).
-    beta_inf: float, optional, default: 0.5
-        Scalar value for the inferior retina(see Eq. 6, `\beta_i` in the
-        paper.)
-    engine: str, optional, default: 'joblib'
-        Which computational back end to use:
-        - 'serial': Single - core computation
-        - 'joblib': Parallelization via joblib(requires `pip install joblib`)
-        - 'dask': Parallelization via dask(requires `pip install dask`). Dask
-                  backend can be specified via `threading`.
-    scheduler: str, optional, default: 'threading'
-        Which scheduler to use(irrelevant for 'serial' engine):
-        - 'threading': a scheduler backed by a thread pool
-        - 'multiprocessing': a scheduler backed by a process pool
-    n_jobs: int, optional, default: -1
-        Number of cores(threads) to run the model on in parallel. Specify - 1
-        to use as many cores as available.
-
-    Returns
-    -------
-    axons: list of Nx2 arrays
-        For every generated axon bundle, returns a two - dimensional array of
-        axonal positions, where ax_pos[0, :] contains the(x, y) coordinates of
-        the axon segment closest to the optic disc, and subsequent row indices
-        move the axon away from the optic disc. Number of rows is at most
-        `n_rho`, but might be smaller if the axon crosses the meridian.
-
-    Notes
-    -----
-    This function is basically a wrapper around ``jansonius2009``.
-    """
-    if n_axons < 1:
-        raise ValueError('Number of axons must be >= 1.')
-    if np.any(np.abs(phi_range) > 180.0):
-        raise ValueError('phi must be within [-180, 180].')
-    if phi_range[0] > phi_range[1]:
-        raise ValueError('Lower bound on phi cannot be larger than the '
-                         'upper bound.')
-
-    phi = np.linspace(phi_range[0], phi_range[1], n_axons)
-    func_kwargs = {'n_rho': n_rho, 'rho_range': rho_range,
-                   'beta_sup': beta_sup, 'beta_inf': beta_inf,
-                   'loc_od': loc_od}
-    axons = utils.parfor(jansonius2009, phi, func_kwargs=func_kwargs,
-                         engine=engine, scheduler=scheduler, n_jobs=n_jobs)
-    return axons
-
-
 def find_closest_axon(pos_xy, axon_bundles):
     """Finds the closest axon to a 2D point
 
@@ -1145,7 +1109,7 @@ def find_closest_axon(pos_xy, axon_bundles):
     Returns
     -------
     axon: Nx2 array
-        A single axon, where axon[0, :] contains the(x, y) coordinates of the
+        A single axon, where axon[0, :] contains the (x, y) coordinates of the
         location closest to `pos_xy`, and all subsequent rows move the axon
         closer to the optic disc.
 
@@ -1169,54 +1133,176 @@ def find_closest_axon(pos_xy, axon_bundles):
     return axon_bundles[axon_id][pos_id:0:-1, :]
 
 
-def assign_axons(xg, yg, axon_bundles, engine='joblib', scheduler='threading',
-                 n_jobs=-1):
-    """Assigns an axon to every point on a grid
+def axon_dist_from_soma(axon, xg, yg, tree=None):
+    """Calculates the distance to soma for every axon segment
 
-    For every pixel on the meshgrid given by `xg`, `yg`, this function selects
-    the closest axon from a list of `axon_bundles`.
+    For every segment of an axon, this function calculates the distance to the
+    soma. The 2D coordinates of the axon are snapped to the grid using a
+    nearest-neighbor tree structure.
 
     Parameters
     ----------
-    xg, yg: array - like
-        A NumPy meshgrid of retinal locations.
-    axon_bundles: list of Nx2 arrays
-        List of two - dimensional arrays containing the(x, y) coordinates of
-        each axon bundle. The first row of each axon bundle is assumed to
-        be closest to the optic disc, and subsequent row indices move the axon
-        away from the optic disc.
-    engine: str, optional, default: 'joblib'
-        Which computational back end to use:
-        - 'serial': Single - core computation
-        - 'joblib': Parallelization via joblib(requires `pip install joblib`)
-        - 'dask': Parallelization via dask(requires `pip install dask`). Dask
-                  backend can be specified via `threading`.
-    scheduler: str, optional, default: 'threading'
-        Which scheduler to use(irrelevant for 'serial' engine):
-        - 'threading': a scheduler backed by a thread pool
-        - 'multiprocessing': a scheduler backed by a process pool
-    n_jobs: int, optional, default: -1
-        Number of cores(threads) to run the model on in parallel. Specify - 1
-        to use as many cores as available.
+    axon: Nx2 array
+        A single axon, where axon[0, :] contains the (x, y) coordinates of the
+        location closest to the soma, and all subsequent rows move the axon
+        away from the soma towards the optic disc.
+    xg, yg: array
+        meshgrid of pixel locations in units of visual angle sp
+    tree : spat.cKDTree, optional, default: train on `xg`, `yg` meshgrid
+        A kd-tree trained on `xg`, `yg` for quick nearest-neighbor lookup.
 
     Returns
     -------
-    axons: list of Nx2 arrays
-        A list of axons, where the first row of every axon contains the(x, y)
-        coordinates of the location closest to the pixel on the meshgrid, and
-        all subsequent rows move the axon closer to the optic disc.
-
-    Notes
-    -----
-    This function is basically a wrapper around ``find_closest_axon``.
+    idx_cs : list
+        Axon segment locations snapped to the grid, returned as a list of
+        indices into the flat `xg`, `yg` meshgrid.
+    dist : list
+        Axon segment distances to the soma
     """
-    # Let's say we want a neuron at every pixel location.
-    # We loop over all (x, y) locations and find the closest axon:
-    pos_xy = [(x, y) for x, y in zip(xg.ravel(), yg.ravel())]
-    return utils.parfor(find_closest_axon, pos_xy, func_args=[axon_bundles])
+    if tree is None:
+        # Build a nearest-neighbor tree for the coordinate system
+        tree = spat.cKDTree(np.column_stack((xg.ravel(), yg.ravel())))
+
+    # Consider only pixels within the grid, otherwise snap to grid might
+    # yield unexpected results
+    idx_valid = (axon[:, 0] >= xg.min()) * (axon[:, 0] <= xg.max())
+    idx_valid *= (axon[:, 1] >= yg.min()) * (axon[:, 1] <= yg.max())
+
+    # For these, find the xg, yg coordinates
+    _, idx_cs = tree.query(axon[idx_valid, :])
+    if len(idx_cs) == 0:
+        return 0, np.inf
+
+    # Drop duplicates
+    _, idx_cs_unique = np.unique(idx_cs, return_index=True)
+    idx_cs = idx_cs[np.sort(idx_cs_unique)]
+    if len(idx_cs) == 0:
+        return 0, np.inf
+
+    # Find the location of the soma, based on the first axon segment
+    _, idx_neuron = tree.query(axon[0, :])
+
+    # Calculate the distance to soma.
+    # For distance calculation, add a pixel at the location of the soma:
+    idx_dist = np.insert(idx_cs, 0, idx_neuron, axis=0)
+
+    # For every axon segment, calculate distance from soma by summing up the
+    # individual distances between neighboring axon segments ("walking along
+    # the axon"):
+    xdiff = np.diff(xg.ravel()[idx_dist])
+    ydiff = np.diff(yg.ravel()[idx_dist])
+    dist = np.sqrt(np.cumsum(xdiff ** 2 + ydiff ** 2))
+
+    return idx_cs, dist
 
 
-@utils.deprecated(alt_func='p2p.retina.grow_axon_bundles',
+def axon_contribution(axon_dist, current_spread, sensitivity_rule='decay',
+                      contribution_rule='max', min_contribution=0.01,
+                      decay_const=2.0, powermean_exp=1.0):
+    """Determines the contribution of a single axon to the current map
+
+    This function determines the contribution of a single axon to the current
+    map based on a sensitivity rule (i.e., how the activation threshold of the
+    axon differs as a function of distance from the soma), and an contribution
+    rule (i.e., how the different activation thresholds along the axon are
+    combined to determine the axon contribution).
+
+    Parameters
+    ----------
+    axon_dist : tuple (indices, distances)
+        A tuple containing a list of coordinates (indices into the retinal
+        coordinates mesh grid) and distances for each axon segment.
+    current_spread : 2D array
+        A 2D current spread map that must have the same dimensions as the
+        `xg`, `yg` meshgrid.
+    sensitivity_rule : {'decay', 'Jeng2011'}, optional, default: 'decay'
+        This rule specifies how the activation of the axon differs as a
+        function of distance from the soma. The following options are
+        available:
+        - 'decay':
+            Axon sensitivity decays exponentially with distance. Specify
+            `decay_const` to change the steepness of the fall-off with
+            distance.
+        - 'Jeng2011':
+            Axon sensitivity peaks near the sodium band (50um from the soma),
+            then plateaus on the distal axon at roughly half of the peak
+            sensitivity. See Figure 2 in Jeng, Tang, Molnar, Desai, and Fried
+            (2011). The sodium channel band shapes the response to electric
+            stimulation in retinal ganglion cells. J Neural Eng 8 (036022).
+    contribution_rule : {'max', 'sum', 'power-mean'}, optional, default: 'max'
+        This rule specifies how the activation thresholds across all axon
+        segments are combined to determine the contribution of the axon to the
+        current spread. The following options are available:
+        - 'max':
+            The axon's contribution to the current spread is equal to the max.
+            sensitivity across all axon segments.
+        - 'sum':
+            The axon's contribution to the current spread is equal to the sum
+            sensitivity across all axon segments.
+        - 'power-mean':
+            The axon's contribution to the current spread is equal to the mean
+            sensitivity across all axon segments. Specify `powermean_exp` to
+            change the exponent of the generalized (power) mean, calculated as
+            np.mean(x ** powermean_exp) ** (1.0 / powermean_exp). Default is 1,
+            which is equal to the arithmetic mean.
+    min_contribution : float, optional, default: 0.01
+        Current contributions below this value will not be counted.
+    decay_const : float, optional, default: 2.0
+        When `sensitivity_rule` is set to 'decay', specifies the decay constant
+        of the exponential fall-off.
+    powermean_exp : float, optional, default: 1.0
+        When `sensitivity_rule` is set to 'mean', specifies the exponent of the
+        generalized (power) mean function. The power mean is calculated as
+        np.mean(x ** powermean_exp) ** (1.0 / powermean_exp).
+    """
+    if powermean_exp <= 0.0:
+        raise ValueError('`powermean_exp` must be positive.')
+    if decay_const <= 0.0:
+        raise ValueError('`decay_const` must be positive.')
+
+    # Unpack list of indices and distances for each axon segment
+    idx_cs, dist = axon_dist
+
+    # The sensitivity rule specifies how the activation thresholds differs
+    # along the axon:
+    if sensitivity_rule.lower() == 'decay':
+        # Exponential fall-off with distance
+        sensitivity = np.exp(-dist / decay_const)
+    elif sensitivity_rule.lower() == 'jeng2011':
+        # Roughly the inverse of Figure 2 in Jeng et al. (2011): The peak
+        # sensitivity is over the sodium band, and the sensitivity of the
+        # distal axon plateaus at roughly 50% of peak
+        mu_gauss = ret2dva(50.0)
+        std_gauss = ret2dva(20.0)
+        bell = 0.7 * np.exp(-(dist - mu_gauss) ** 2 / (2 * std_gauss ** 2))
+        plateau = 0.5
+        soma = np.maximum(mu_gauss - dist, 0)
+        sensitivity = np.maximum(0, bell - 0.001 * dist + plateau - soma)
+    else:
+        raise ValueError('Unknown sensitivity rule "%s"' % sensitivity_rule)
+
+    # Effective activation of all axon segments, given by the segment's
+    # sensitivity and activating current
+    activation = sensitivity * current_spread.ravel()[idx_cs]
+
+    # The contribution rule specifies how the activation values along the axon
+    # are combined to determine the contribution of the axon to the current
+    # spread:
+    if contribution_rule.lower() == 'max':
+        contribution = activation.max()
+    elif contribution_rule.lower() == 'sum':
+        contribution = activation.sum()
+    elif contribution_rule.lower() == 'mean':
+        # Generalized (power) mean
+        p = powermean_exp
+        contribution = np.mean(activation ** p) ** (1.0 / p)
+    else:
+        raise ValueError('Unknown activation rule "%s"' % contribution_rule)
+
+    return contribution
+
+
+@utils.deprecated(alt_func='p2p.retina.jansonius2009',
                   deprecated_version='0.3', removed_version='0.4')
 def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
               rot=0 * np.pi / 180, scale=1, bs=-1.9, bi=.5, r0=4,
@@ -1329,8 +1415,7 @@ def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
     return x, y
 
 
-@utils.deprecated(alt_func='p2p.retina.assign_axons',
-                  deprecated_version='0.3', removed_version='0.4')
+@utils.deprecated(deprecated_version='0.3', removed_version='0.4')
 def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=0.001):
     """Retinal axon map
 

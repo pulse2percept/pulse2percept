@@ -17,6 +17,18 @@ def test_Grid():
         grid = p2p.retina.Grid(y_range=1, n_axons=1)
     with pytest.raises(ValueError):
         grid = p2p.retina.Grid(y_range=(1.0, 0.0), n_axons=1)
+    for n_axons in [-1, 0]:
+        with pytest.raises(ValueError):
+            grid = p2p.retina.Grid(n_axons=n_axons)
+    for n_rho in [-1, 0]:
+        with pytest.raises(ValueError):
+            p2p.retina.Grid(n_rho=n_rho)
+    for lophi in [-200.0, 90.0, 200.0]:
+        with pytest.raises(ValueError):
+            p2p.retina.Grid(phi_range=(lophi, 85.0))
+    for hiphi in [-200.0, 90.0, 200.0]:
+        with pytest.raises(ValueError):
+            p2p.retina.Grid(phi_range=(95.0, hiphi))
 
     # Verify size of axon bundles
     for n_axons in [3, 5, 10]:
@@ -360,50 +372,72 @@ def test_jansonius2009():
             p2p.retina.jansonius2009(0.0, rho_range=(45.0, hirho))
 
 
-def test_grow_axon_bundles():
-    for n_axons in [-1, 0]:
-        with pytest.raises(ValueError):
-            p2p.retina.grow_axon_bundles(n_axons)
-    for n_rho in [-1, 0]:
-        with pytest.raises(ValueError):
-            p2p.retina.grow_axon_bundles(1, n_rho=n_rho)
-    for lophi in [-200.0, 90.0, 200.0]:
-        with pytest.raises(ValueError):
-            p2p.retina.grow_axon_bundles(1, phi_range=(lophi, 85.0))
-    for hiphi in [-200.0, 90.0, 200.0]:
-        with pytest.raises(ValueError):
-            p2p.retina.grow_axon_bundles(1, phi_range=(95.0, hiphi))
-
-    n_rho = 100
-    phi_range = (-180.0, 180.0)
-    for n_axons in [1, 5, 11]:
-        phi = np.linspace(phi_range[0], phi_range[1], n_axons)
-        axons = p2p.retina.grow_axon_bundles(n_axons, phi_range=phi_range,
-                                             n_rho=n_rho)
-        npt.assert_equal(len(axons), n_axons)
-        for ax, phi0 in zip(axons, phi):
-            # Every axon is at most a `n_rho` x 2 matrix, where every row has
-            # (x, y). Number of rows might be < `n_rho` if axon crossed
-            # meridian.
-            npt.assert_equal(ax.shape[1], 2)
-            npt.assert_equal(ax.shape[0] <= n_rho, True)
-            ax_pos = p2p.retina.jansonius2009(phi0, n_rho=n_rho)
-            npt.assert_almost_equal(ax_pos[:, 0], ax[:, 0])
-            npt.assert_almost_equal(ax_pos[:, 1], ax[:, 1])
-
-
 def test_find_closest_axon():
-    axon_bundles = p2p.retina.grow_axon_bundles(10)
+    phi = np.linspace(-180.0, 180.0, 10)
+    axon_bundles = p2p.utils.parfor(p2p.retina.jansonius2009, phi)
     for idx, ax in enumerate(axon_bundles):
         # Each axon bundle should be closest to itself
         closest = p2p.retina.find_closest_axon(ax[-1, :], axon_bundles)
         npt.assert_almost_equal(closest, ax[-1:0:-1, :])
 
 
-def test_assign_axons():
-    axon_bundles = p2p.retina.grow_axon_bundles(10)
+def test_axon_dist_from_soma():
+    # A small grid
     xg, yg = np.meshgrid([-1, 0, 1], [-1, 0, 1], indexing='xy')
-    assigned = p2p.retina.assign_axons(xg, yg, axon_bundles)
-    for x, y, ax in zip(xg.ravel(), yg.ravel(), assigned):
-        closest = p2p.retina.find_closest_axon((x, y), axon_bundles)
-        npt.assert_almost_equal(ax, closest)
+
+    # When axon locations are snapped to the grid, a really short axon should
+    # have zero distance to the soma:
+    for x_soma in [-1.0, -0.2, 0.51]:
+        axon = np.array([[i, i] for i in np.linspace(x_soma, x_soma + 0.01)])
+        _, dist = p2p.retina.axon_dist_from_soma(axon, xg, yg)
+        npt.assert_almost_equal(dist, 0.0)
+
+    # On this simple grid, a diagonal axon should have dist [0, sqrt(2), 2]:
+    for sign in [-1.0, 1.0]:
+        for num in [10, 20, 50]:
+            axon = np.array([[i, i] for i in np.linspace(sign, -sign, num)])
+            _, dist = p2p.retina.axon_dist_from_soma(axon, xg, yg)
+            npt.assert_almost_equal(dist, np.array([0.0, np.sqrt(2), 2.0]))
+
+    # An axon that does not live near the grid should return infinite distance
+    axon = np.array([[i, i] for i in np.linspace(1000.0, 1500.0)])
+    _, dist = p2p.retina.axon_dist_from_soma(axon, xg, yg)
+    npt.assert_equal(np.isinf(dist), True)
+
+
+def test_axon_contribution():
+    # Invalid calls
+    for lmbda in [-1, 0]:
+        with pytest.raises(ValueError):
+            p2p.retina.axon_contribution([0], [0], decay_const=lmbda)
+    for p in [-1, 0]:
+        with pytest.raises(ValueError):
+            p2p.retina.axon_contribution([0], [0], powermean_exp=p)
+    with pytest.raises(ValueError):
+        p2p.retina.axon_contribution([0], [0], sensitivity_rule='unknown')
+    with pytest.raises(ValueError):
+        p2p.retina.axon_contribution([0], [0], contribution_rule='unknown')
+
+    # Make sure numbers are right for a simple setup:
+    dist = np.arange(10)
+    dist2 = (dist, dist)
+    decay_const = 4.0
+    for c_rule in ['max', 'mean', 'sum']:
+        # If current spread == 1 everywhere, contribution given by `dist`
+        contrib = p2p.retina.axon_contribution(
+            dist2, np.ones_like(dist), sensitivity_rule='decay',
+            decay_const=decay_const, contribution_rule=c_rule
+        )
+        sensitivity = np.exp(-dist / decay_const)
+        method_to_call = getattr(np, c_rule)
+        npt.assert_almost_equal(contrib, method_to_call(sensitivity))
+
+    # No current spread in -> no axon contribution out
+    for s_rule in ['decay', 'Jeng2011']:
+        for c_rule in ['max', 'sum', 'mean']:
+            for p in [1.0, 2.0, 3.0]:
+                contrib = p2p.retina.axon_contribution(
+                    dist2, np.zeros_like(dist), sensitivity_rule=s_rule,
+                    contribution_rule=c_rule
+                )
+                npt.assert_almost_equal(contrib, 0.0)
