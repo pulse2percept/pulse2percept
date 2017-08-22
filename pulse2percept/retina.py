@@ -19,7 +19,7 @@ class Grid(object):
     def __init__(self, x_range=(-1000.0, 1000.0), y_range=(-1000.0, 1000.0),
                  sampling=25, n_axons=501, phi_range=(-180.0, 180.0),
                  n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.0, 2.0),
-                 axon_sensitivity='decay', axon_activation='max',
+                 sensitivity_rule='decay', contribution_rule='max',
                  axon_lambda=2.0, datapath='.',
                  save_data=True, engine='joblib', scheduler='threading',
                  n_jobs=-1):
@@ -55,6 +55,36 @@ class Grid(object):
         loc_od: (x_od, y_od), optional, default: (15.0, 2.0)
             Location of the center of the optic disc(x, y) in Cartesian
             coordinates.
+        sensitivity_rule : {'decay', 'Jeng2011'}, optional, default: 'decay'
+            This rule specifies how the activation of the axon differs as a
+            function of distance from the soma. The following options are
+            available:
+            - 'decay':
+                Axon sensitivity decays exponentially with distance. Specify
+                `decay_const` to change the steepness of the fall-off with
+                distance.
+            - 'Jeng2011':
+                Axon sensitivity peaks near the sodium band (50um from the soma),
+                then plateaus on the distal axon at roughly half of the peak
+                sensitivity. See Figure 2 in Jeng, Tang, Molnar, Desai, and Fried
+                (2011). The sodium channel band shapes the response to electric
+                stimulation in retinal ganglion cells. J Neural Eng 8 (036022).
+        contribution_rule : {'max', 'sum', 'mean'}, optional, default: 'max'
+            This rule specifies how the activation thresholds across all axon
+            segments are combined to determine the contribution of the axon to the
+            current spread. The following options are available:
+            - 'max':
+                The axon's contribution to the current spread is equal to the max.
+                sensitivity across all axon segments.
+            - 'sum':
+                The axon's contribution to the current spread is equal to the sum
+                sensitivity across all axon segments.
+            - 'mean':
+                The axon's contribution to the current spread is equal to the mean
+                sensitivity across all axon segments. Specify `powermean_exp` to
+                change the exponent of the generalized (power) mean, calculated as
+                np.mean(x ** powermean_exp) ** (1.0 / powermean_exp). Default is 1,
+                which is equal to the arithmetic mean.
         datapath : str, optional, default: current directory
             Relative path where to look for existing retina files, and where to
             store new files.
@@ -227,8 +257,8 @@ class Grid(object):
         self.axons = axons
         self.range_x = self.gridx.max() - self.gridx.min()
         self.range_y = self.gridy.max() - self.gridy.min()
-        self.axon_sensitivity = axon_sensitivity
-        self.axon_activation = axon_activation
+        self.sensitivity_rule = sensitivity_rule
+        self.contribution_rule = contribution_rule
         self.engine = engine
         self.scheduler = scheduler
         self.n_jobs = n_jobs
@@ -247,16 +277,16 @@ class Grid(object):
         Returns
         -------
         ecm: array
-            The effective current spread, a time - series of the same size as the
-            current map, where each pixel is the dot product of the pixel
+            The effective current spread, a time - series of the same size as
+            the current map, where each pixel is the dot product of the pixel
             values in ecm along the pixels in the list in axon_map, weighted
             by the weights axon map.
         """
         contrib = utils.parfor(axon_contribution, self.axon_distances,
                                func_args=[cs], engine=self.engine,
                                func_kwargs={
-                                   'sensitivity_rule': self.axon_sensitivity,
-                                   'activation_rule': self.axon_activation
+                                   'sensitivity_rule': self.sensitivity_rule,
+                                   'contribution_rule': self.contribution_rule
                                },
                                scheduler=self.scheduler, n_jobs=self.n_jobs)
         px_contrib = list(filter(None, contrib))
