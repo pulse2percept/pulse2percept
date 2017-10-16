@@ -429,7 +429,7 @@ class Simulation(object):
 
         return percept
 
-    def plot_fundus(self, stim=None, ax=None):
+    def plot_fundus(self, stim=None, ax=None, upside_down=True, annotate=True):
         """Plot the implant on the retinal surface akin to a fundus photopgraph
 
         This function plots an electrode array on top of the axon streak map
@@ -446,6 +446,13 @@ class Simulation(object):
         ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None given, a new one will be created.
             Default: None
+        upside_down : bool
+            Flag whether to plot the retina upside-down, such that the upper
+            half of the plot corresponds to the upper visual field. In general,
+            inferior retina == upper visual field (and superior == lower).
+        annotate : bool
+            Flag whether to annotate the four retinal quadrants
+            (inferior/superior x temporal/nasal).
 
         Returns
         -------
@@ -468,13 +475,13 @@ class Simulation(object):
             ax.set_axis_bgcolor('black')
 
         # Draw axon pathways
-        ax.plot(self.ofl.jan_x[:, ::5], -self.ofl.jan_y[:, ::5],
+        ax.plot(self.ofl.jan_x[:, ::5], self.ofl.jan_y[:, ::5],
                 c=(0.5, 1, 0.5))
 
         # Draw in the the retinal patch we're simulating.
         # This defines the size of our "percept" image below.
         dva_xmin = retina.ret2dva(self.ofl.gridx.min())
-        dva_ymin = -retina.ret2dva(self.ofl.gridy.max())
+        dva_ymin = retina.ret2dva(self.ofl.gridy.min())
         patch = patches.Rectangle((dva_xmin, dva_ymin),
                                   retina.ret2dva(self.ofl.range_x),
                                   retina.ret2dva(self.ofl.range_y),
@@ -487,25 +494,46 @@ class Simulation(object):
                 el = self.implant[key]
                 if el is not None:
                     ax.plot(retina.ret2dva(el.x_center),
-                            -retina.ret2dva(el.y_center), 'oy',
+                            retina.ret2dva(el.y_center), 'oy',
                             markersize=np.sqrt(el.radius) * 2)
 
         # Plot all electrodes and their label
         for e in self.implant.electrodes:
             ax.text(retina.ret2dva(e.x_center + 10),
-                    -retina.ret2dva(e.y_center + 5),
+                    retina.ret2dva(e.y_center + 5),
                     e.name, color='white', size='x-large')
             ax.plot(retina.ret2dva(e.x_center),
-                    -retina.ret2dva(e.y_center), 'ow',
+                    retina.ret2dva(e.y_center), 'ow',
                     markersize=np.sqrt(e.radius))
 
+        xmin, xmax, ymin, ymax = -20, 20, -15, 15
         ax.set_aspect('equal')
-        ax.set_xlim(-20, 20)
+        ax.set_xlim(xmin, xmax)
         ax.set_xlabel('visual angle (deg)')
-        ax.set_ylim(-15, 15)
+        ax.set_ylim(ymin, ymax)
         ax.set_ylabel('visual angle (deg)')
-        ax.set_title('Image flipped (upper retina = upper visual field)')
         ax.grid('off')
+
+        if annotate:
+            # Annotate the four retinal quadrants near the corners of the plot:
+            # superior/inferior x temporal/nasal
+            tb = ['top', 'bottom']
+            if upside_down:
+                # Need to flip the vertical alignment
+                tb = ['bottom', 'top']
+            else:
+            for yy, va, si in zip([ymax, ymin], tb, ['superior', 'inferior']):
+                for xx, ha, tn in zip([xmin, xmax], ['left', 'right'],
+                                      ['temporal', 'nasal']):
+                    ax.text(xx, yy, si + ' ' + tn,
+                            color='black', fontsize=14,
+                            horizontalalignment=ha,
+                            verticalalignment=va,
+                            backgroundcolor=(1, 1, 1, 0.8))
+
+        if upside_down:
+            ax.invert_yaxis()
+            ax.set_title('Image flipped (upper retina = upper visual field)')
 
         return fig, ax
 
