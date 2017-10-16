@@ -57,7 +57,6 @@ def test_Electrode():
 def test_ElectrodeArray():
     implant = p2p.implants.ElectrodeArray('subretinal', 10, 0, 0)
     npt.assert_equal(implant.num_electrodes, 1)
-    print(implant)
 
     # Make sure ElectrodeArray can accept ints, floats, lists, np.arrays
     implants = [None] * 4
@@ -89,6 +88,20 @@ def test_ElectrodeArray():
         npt.assert_equal(el.y_center, v)
         npt.assert_equal(el.h_inl, v + 23.0 / 2.0)
         npt.assert_equal(el.h_ofl, v + 83.0)
+
+    # Test left/right eye
+    for validstr in ['left', 'LEFT', 'l', 'LE']:
+        implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0,
+                                              eye=validstr)
+        npt.assert_equal(implant.eye, 'LE')
+    for validstr in ['right', 'Right', 'r', 'RE']:
+        implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0,
+                                              eye=validstr)
+        npt.assert_equal(implant.eye, 'RE')
+    for invalidstr in ['both', None]:
+        with pytest.raises(ValueError):
+            implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0,
+                                                  eye=invalidstr)
 
 
 def test_ElectrodeArray_add_electrode():
@@ -154,6 +167,10 @@ def test_ArgusI():
                     x_center = argus['A1'].x_center + \
                         (argus['D4'].x_center - argus['A1'].x_center) / 2
                     npt.assert_almost_equal(x_center, x)
+
+                    # Check location of the tack
+                    tack = np.matmul(R, [-2000, 0])
+                    tack = tuple(self.tack + [x_center, y_center])
 
     # `h` must have the right dimensions
     with pytest.raises(ValueError):

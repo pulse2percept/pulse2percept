@@ -446,11 +446,11 @@ class Simulation(object):
         ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None given, a new one will be created.
             Default: None
-        upside_down : bool
+        upside_down : bool, optional, default: True
             Flag whether to plot the retina upside-down, such that the upper
             half of the plot corresponds to the upper visual field. In general,
             inferior retina == upper visual field (and superior == lower).
-        annotate : bool
+        annotate : bool, optional, default: True
             Flag whether to annotate the four retinal quadrants
             (inferior/superior x temporal/nasal).
 
@@ -499,12 +499,22 @@ class Simulation(object):
 
         # Plot all electrodes and their label
         for e in self.implant.electrodes:
-            ax.text(retina.ret2dva(e.x_center + 10),
-                    retina.ret2dva(e.y_center + 5),
-                    e.name, color='white', size='x-large')
+            if annotate:
+                ax.text(retina.ret2dva(e.x_center + 10),
+                        retina.ret2dva(e.y_center + 5),
+                        e.name, color='white', size='x-large')
             ax.plot(retina.ret2dva(e.x_center),
                     retina.ret2dva(e.y_center), 'ow',
                     markersize=np.sqrt(e.radius))
+
+        # Plot the location of the array's tack and annotate it
+        if self.implant.tack:
+            tx, ty = self.implant.tack
+            ax.plot(retina.ret2dva(tx), retina.ret2dva(ty), 'ow')
+            if annotate:
+                ax.text(retina.ret2dva(tx), retina.ret2dva(ty) + 1, 'tack',
+                        horizontalalignment='center',
+                        color='white', size='large')
 
         xmin, xmax, ymin, ymax = -20, 20, -15, 15
         ax.set_aspect('equal')
@@ -518,12 +528,13 @@ class Simulation(object):
             # Annotate the four retinal quadrants near the corners of the plot:
             # superior/inferior x temporal/nasal
             tb = ['top', 'bottom']
+            xminmax = [xmin, xmax]
             if upside_down:
-                # Need to flip the vertical alignment
                 tb = ['bottom', 'top']
-            else:
+            if self.implant.eye == 'LE':
+                xminmax = [xmax, xmin]
             for yy, va, si in zip([ymax, ymin], tb, ['superior', 'inferior']):
-                for xx, ha, tn in zip([xmin, xmax], ['left', 'right'],
+                for xx, ha, tn in zip(xminmax, ['left', 'right'],
                                       ['temporal', 'nasal']):
                     ax.text(xx, yy, si + ' ' + tn,
                             color='black', fontsize=14,
@@ -531,9 +542,16 @@ class Simulation(object):
                             verticalalignment=va,
                             backgroundcolor=(1, 1, 1, 0.8))
 
+        # Need to flip y axis to have upper half == upper visual field
         if upside_down:
             ax.invert_yaxis()
-            ax.set_title('Image flipped (upper retina = upper visual field)')
+
+        # Need to flip x axis if implanted in left eye
+        if self.implant.eye == 'LE':
+            ax.set_title('%s in left eye' % self.implant)
+            ax.invert_xaxis()
+        else:
+            ax.set_title('%s in right eye' % self.implant)
 
         return fig, ax
 
