@@ -15,9 +15,8 @@ SUPPORTED_MODELS = ['latest', 'Nanduri2012', 'Horsager2009']
 class Grid(object):
     """Represent the retinal coordinate frame"""
 
-    def __init__(self, xlo=-1000, xhi=1000, ylo=-1000, yhi=1000,
-                 sampling=25, axon_lambda=2.0, rot=0 * np.pi / 180,
-                 datapath='.', save_data=True):
+    def __init__(self, xlo=-1000, xhi=1000, ylo=-1000, yhi=1000, eye='RE',
+                 sampling=25, axon_lambda=2.0, datapath='.', save_data=True):
         """Generates a spatial grid representing the retinal coordinate frame
 
         This function generates the coordinate system for the retina
@@ -34,6 +33,11 @@ class Grid(object):
         ylo, yhi : float
            Extent of the retinal coverage (microns) in vertical dimension.
            Default: ylo=-1000, ylo=1000.
+        eye : {'LE', 'RE'}, optional, default: 'RE'
+            Which eye to simulate (left/right). The optic disc is at (15, 2)
+            deg in a right eye, and at (-15, 2) deg in a left eye.
+        sampling : float, optional, default: 25
+            Spatial sampling step (microns) for the grid.
         datapath : str
             Relative path where to look for existing retina files, and where to
             store new files. Default: current directory.
@@ -51,11 +55,10 @@ class Grid(object):
                                              indexing='xy')
 
         # Create descriptive filename based on input args
-        filename = "retina_s%d_l%.1f_rot%.1f_%dx%d.npz" % (sampling,
-                                                           axon_lambda,
-                                                           rot / np.pi * 180,
-                                                           xhi - xlo,
-                                                           yhi - ylo)
+        filename = "retina_%s_s%d_l%.1f_%dx%d.npz" % (eye, sampling,
+                                                      axon_lambda,
+                                                      xhi - xlo,
+                                                      yhi - ylo)
         filename = os.path.join(datapath, filename)
 
         # Bool whether we need to create a new grid
@@ -77,6 +80,11 @@ class Grid(object):
             sampling_am = axon_map['sampling']
             axon_lambda_am = axon_map['axon_lambda']
 
+            if 'eye' in axon_map:
+                eye_am = axon_map['eye']
+            else:
+                eye_am = None
+
             if 'jan_x' in axon_map and 'jan_y' in axon_map:
                 jan_x = axon_map['jan_x']
                 jan_y = axon_map['jan_y']
@@ -88,16 +96,9 @@ class Grid(object):
             need_new_grid |= xhi != xhi_am
             need_new_grid |= ylo != ylo_am
             need_new_grid |= yhi != yhi_am
+            need_new_grid |= eye != eye_am
             need_new_grid |= sampling != sampling_am
             need_new_grid |= axon_lambda != axon_lambda_am
-
-            if 'rot' in axon_map:
-                rot_am = axon_map['rot']
-                need_new_grid |= rot != rot_am
-            else:
-                # Backwards compatibility for older retina object files that
-                # did not have `rot`
-                need_new_grid |= rot != 0
 
         # At this point we know whether we need to generate a new retina:
         if need_new_grid:
@@ -105,7 +106,11 @@ class Grid(object):
             info_str += "or has outdated parameter values, generating..."
             logging.getLogger(__name__).info(info_str)
 
-            jan_x, jan_y = jansonius(rot=rot)
+            jan_x, jan_y = jansonius()
+            if eye == 'LE':
+                # x coordinates need to be flipped so that OD at (-15, 2) and
+                # all generated axons mirror-symmetric to 'RE'
+                jan_x = -jan_x
             dva_x = ret2dva(self.gridx)
             dva_y = ret2dva(self.gridy)
             ax_id, ax_wt = make_axon_map(dva_x, dva_y,
@@ -115,6 +120,7 @@ class Grid(object):
             # Save the variables, together with metadata about the grid:
             if save_data:
                 np.savez(filename,
+                         eye=[eye],
                          axon_id=ax_id,
                          axon_weight=ax_wt,
                          jan_x=jan_x,
@@ -124,11 +130,10 @@ class Grid(object):
                          ylo=[ylo],
                          yhi=[yhi],
                          sampling=[sampling],
-                         axon_lambda=[axon_lambda],
-                         rot=[rot])
+                         axon_lambda=[axon_lambda])
 
+        self.eye = eye
         self.axon_lambda = axon_lambda
-        self.rot = rot
         self.sampling = sampling
         self.axon_id = ax_id
         self.axon_weight = ax_wt

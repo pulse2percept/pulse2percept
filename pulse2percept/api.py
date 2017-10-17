@@ -54,7 +54,7 @@ class Simulation(object):
         # this variable will contain a `retina.TemporalModel` object.
         self.gcl = None
 
-    def set_optic_fiber_layer(self, sampling=100, axon_lambda=2, rot_deg=0,
+    def set_optic_fiber_layer(self, sampling=100, axon_lambda=2,
                               x_range=None, y_range=None, datapath='.',
                               save_data=True):
         """Sets parameters of the optic fiber layer (OFL)
@@ -65,8 +65,6 @@ class Simulation(object):
             Microns per grid cell.
         axon_lambda : float, optional, default: 2
             Constant that determines fall-off with axonal distance.
-        rot_deg : float, optional, default: 0
-            Rotation angle (deg).
         x_range : list|None, default: None
             Lower and upper bound of the retinal grid (microns) in horizontal
             dimension. Either a list [xlo, xhi] or None. If None, the generated
@@ -123,9 +121,9 @@ class Simulation(object):
 
         # Generate the grid from the above specs
         self.ofl = retina.Grid(xlo=xlo, xhi=xhi, ylo=ylo, yhi=yhi,
+                               eye=self.implant.eye,
                                sampling=sampling,
                                axon_lambda=axon_lambda,
-                               rot=np.deg2rad(rot_deg),
                                datapath=datapath,
                                save_data=save_data)
 
@@ -475,16 +473,14 @@ class Simulation(object):
             ax.set_axis_bgcolor('black')
 
         # Draw axon pathways
-        ax.plot(self.ofl.jan_x[:, ::5], self.ofl.jan_y[:, ::5],
+        ax.plot(retina.dva2ret(self.ofl.jan_x[:, ::5]),
+                retina.dva2ret(self.ofl.jan_y[:, ::5]),
                 c=(0.5, 1, 0.5))
 
         # Draw in the the retinal patch we're simulating.
         # This defines the size of our "percept" image below.
-        dva_xmin = retina.ret2dva(self.ofl.gridx.min())
-        dva_ymin = retina.ret2dva(self.ofl.gridy.min())
-        patch = patches.Rectangle((dva_xmin, dva_ymin),
-                                  retina.ret2dva(self.ofl.range_x),
-                                  retina.ret2dva(self.ofl.range_y),
+        patch = patches.Rectangle((self.ofl.gridx.min(), self.ofl.gridy.min()),
+                                  self.ofl.range_x, self.ofl.range_y,
                                   alpha=0.7)
         ax.add_patch(patch)
 
@@ -493,65 +489,57 @@ class Simulation(object):
             for key in stim:
                 el = self.implant[key]
                 if el is not None:
-                    ax.plot(retina.ret2dva(el.x_center),
-                            retina.ret2dva(el.y_center), 'oy',
+                    ax.plot(el.x_center, el.y_center, 'oy',
                             markersize=np.sqrt(el.radius) * 2)
 
         # Plot all electrodes and their label
         for e in self.implant.electrodes:
             if annotate:
-                ax.text(retina.ret2dva(e.x_center + 10),
-                        retina.ret2dva(e.y_center + 5),
-                        e.name, color='white', size='x-large')
-            ax.plot(retina.ret2dva(e.x_center),
-                    retina.ret2dva(e.y_center), 'ow',
-                    markersize=np.sqrt(e.radius))
+                ax.text(e.x_center + 100, e.y_center + 50, e.name,
+                        color='white', size='x-large')
+            ax.plot(e.x_center, e.y_center, 'ow', markersize=np.sqrt(e.radius))
 
         # Plot the location of the array's tack and annotate it
         if self.implant.tack:
             tx, ty = self.implant.tack
-            ax.plot(retina.ret2dva(tx), retina.ret2dva(ty), 'ow')
+            ax.plot(tx, ty, 'ow')
             if annotate:
-                ax.text(retina.ret2dva(tx), retina.ret2dva(ty) + 1, 'tack',
+                ax.text(tx, ty + 100, 'tack',
                         horizontalalignment='center',
                         color='white', size='large')
 
-        xmin, xmax, ymin, ymax = -20, 20, -15, 15
+        xmin, xmax, ymin, ymax = retina.dva2ret([-20, 20, -15, 15])
         ax.set_aspect('equal')
         ax.set_xlim(xmin, xmax)
-        ax.set_xlabel('visual angle (deg)')
+        ax.set_xlabel('x (microns)')
         ax.set_ylim(ymin, ymax)
-        ax.set_ylabel('visual angle (deg)')
+        ax.set_ylabel('y (microns)')
+        eyestr = {'LE': 'left', 'RE': 'right'}
+        ax.set_title('%s in %s eye' % (self.implant, eyestr[self.implant.eye]))
         ax.grid('off')
 
         if annotate:
             # Annotate the four retinal quadrants near the corners of the plot:
             # superior/inferior x temporal/nasal
-            tb = ['top', 'bottom']
-            xminmax = [xmin, xmax]
+            topbottom = ['top', 'bottom']
+            leftright = ['left', 'right']
             if upside_down:
-                tb = ['bottom', 'top']
+                topbottom = ['bottom', 'top']
             if self.implant.eye == 'LE':
-                xminmax = [xmax, xmin]
-            for yy, va, si in zip([ymax, ymin], tb, ['superior', 'inferior']):
-                for xx, ha, tn in zip(xminmax, ['left', 'right'],
-                                      ['temporal', 'nasal']):
+                lefright = ['right', 'left']
+            for yy, valign, si in zip([ymax, ymin], topbottom,
+                                      ['superior', 'inferior']):
+                for xx, halign, tn in zip([xmin, xmax], leftright,
+                                          ['temporal', 'nasal']):
                     ax.text(xx, yy, si + ' ' + tn,
                             color='black', fontsize=14,
-                            horizontalalignment=ha,
-                            verticalalignment=va,
+                            horizontalalignment=halign,
+                            verticalalignment=valign,
                             backgroundcolor=(1, 1, 1, 0.8))
 
         # Need to flip y axis to have upper half == upper visual field
         if upside_down:
             ax.invert_yaxis()
-
-        # Need to flip x axis if implanted in left eye
-        if self.implant.eye == 'LE':
-            ax.set_title('%s in left eye' % self.implant)
-            ax.invert_xaxis()
-        else:
-            ax.set_title('%s in right eye' % self.implant)
 
         return fig, ax
 

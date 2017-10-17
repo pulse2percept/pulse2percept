@@ -557,6 +557,10 @@ class ArgusI(ElectrodeArray):
         # Equally spaced electrodes
         e_spacing = 800  # um
         x_arr = np.arange(0, 4) * e_spacing - 1.5 * e_spacing
+        if self.eye == 'LE':
+            # Left eye: Need to invert x coordinates and rotation angle
+            x_arr = x_arr[::-1]
+            rot = -rot  # Positive value: CCW
         x_arr, y_arr = np.meshgrid(x_arr, x_arr, sparse=False)
 
         # Rotation matrix
@@ -564,7 +568,10 @@ class ArgusI(ElectrodeArray):
                       -np.sin(rot), np.cos(rot)]).reshape((2, 2))
 
         # Set the x, y location of the tack
-        self.tack = np.matmul(R, [-2.5 * e_spacing, 0])
+        if self.eye == 'RE':
+            self.tack = np.matmul(R, [-2.5 * e_spacing, 0])
+        else:
+            self.tack = np.matmul(R, [2.5 * e_spacing, 0])
         self.tack = tuple(self.tack + [x_center, y_center])
 
         # Rotate the array
@@ -665,6 +672,10 @@ class ArgusII(ElectrodeArray):
         # Equally spaced electrodes
         e_spacing = 525  # um
         x_arr = np.arange(10) * e_spacing - 4.5 * e_spacing
+        if self.eye == 'LE':
+            # Left eye: Need to invert x coordinates and rotation angle
+            x_arr = x_arr[::-1]
+            rot = -rot  # positive value: CCW
         y_arr = np.arange(6) * e_spacing - 2.5 * e_spacing
         x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
 
@@ -673,7 +684,10 @@ class ArgusII(ElectrodeArray):
                       -np.sin(rot), np.cos(rot)]).reshape((2, 2))
 
         # Set the x, y location of the tack
-        self.tack = np.matmul(R, [-5.5 * e_spacing, 0])
+        if self.eye == 'RE':
+            self.tack = np.matmul(R, [-5.5 * e_spacing, 0])
+        else:
+            self.tack = np.matmul(R, [5.5 * e_spacing, 0])
         self.tack = tuple(self.tack + [x_center, y_center])
 
         # Rotate the array

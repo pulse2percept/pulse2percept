@@ -98,7 +98,7 @@ def test_ElectrodeArray():
         implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0,
                                               eye=validstr)
         npt.assert_equal(implant.eye, 'RE')
-    for invalidstr in ['both', None]:
+    for invalidstr in ['both', 'lefteye', 'invalid']:
         with pytest.raises(ValueError):
             implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0,
                                                   eye=invalidstr)
@@ -170,7 +170,7 @@ def test_ArgusI():
 
                     # Check location of the tack
                     tack = np.matmul(R, [-2000, 0])
-                    tack = tuple(self.tack + [x_center, y_center])
+                    tack = tuple(tack + [x_center, y_center])
 
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
@@ -200,6 +200,27 @@ def test_ArgusI():
         npt.assert_equal(argus[name_idx1], argus[1])
         npt.assert_equal(argus.get_index(name_idx4), 4)
         npt.assert_equal(argus[name_idx4], argus[4])
+
+    # Right-eye implant:
+    xc, yc = 500, -500
+    argus_re = p2p.implants.ArgusI(eye='RE', x_center=xc, y_center=yc)
+    npt.assert_equal(argus_re['D1'].x_center > argus_re['A1'].x_center, True)
+    npt.assert_almost_equal(argus_re['D1'].y_center, argus_re['A1'].y_center)
+    npt.assert_equal(argus_re.tack[0] < argus_re['D1'].x_center, True)
+    npt.assert_almost_equal(argus_re.tack[1], yc)
+
+    # Left-eye implant:
+    argus_le = p2p.implants.ArgusI(eye='LE', x_center=xc, y_center=yc)
+    npt.assert_equal(argus_le['A1'].x_center > argus_le['D1'].x_center, True)
+    npt.assert_almost_equal(argus_le['D1'].y_center, argus_le['A1'].y_center)
+    npt.assert_equal(argus_le.tack[0] > argus_le['A1'].x_center, True)
+    npt.assert_almost_equal(argus_le.tack[1], yc)
+
+    # In both left and right eyes, rotat with positive angle should be CCW
+    for eye in ['LE', 'RE']:
+        before = p2p.implants.ArgusI(eye=eye)
+        after = p2p.implants.ArgusI(eye=eye, rot=np.deg2rad(10))
+        npt.assert_equal(after['D1'].y_center > before['D1'].y_center, True)
 
 
 def test_ArgusII():
@@ -261,6 +282,28 @@ def test_ArgusII():
     npt.assert_equal(argus['A2'], argus[1])
     npt.assert_equal(argus.get_index('B1'), 10)
     npt.assert_equal(argus['B1'], argus[10])
+
+    # Right-eye implant:
+    xc, yc = 500, -500
+    argus_re = p2p.implants.ArgusII(eye='RE', x_center=xc, y_center=yc)
+    npt.assert_equal(argus_re['A10'].x_center > argus_re['A1'].x_center, True)
+    npt.assert_almost_equal(argus_re['A10'].y_center, argus_re['A1'].y_center)
+    npt.assert_equal(argus_re.tack[0] < argus_re['A1'].x_center, True)
+    npt.assert_almost_equal(argus_re.tack[1], yc)
+
+    # Left-eye implant:
+    argus_le = p2p.implants.ArgusII(eye='LE', x_center=xc, y_center=yc)
+    npt.assert_equal(argus_le['A1'].x_center > argus_le['A10'].x_center, True)
+    npt.assert_almost_equal(argus_le['A10'].y_center, argus_le['A1'].y_center)
+    npt.assert_equal(argus_le.tack[0] > argus_le['A10'].x_center, True)
+    npt.assert_almost_equal(argus_le.tack[1], yc)
+
+    # In both left and right eyes, rotation with positive angle should be CCW
+    for eye in ['LE', 'RE']:
+        before = p2p.implants.ArgusII(eye=eye)
+        after = p2p.implants.ArgusII(eye=eye, rot=np.deg2rad(10))
+        print(eye, before['A1'].y_center, after['A1'].y_center)
+        npt.assert_equal(after['A1'].y_center > before['A1'].y_center, True)
 
 
 def test_Electrode_receptive_field():
