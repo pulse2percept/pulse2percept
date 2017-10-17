@@ -523,12 +523,14 @@ class Simulation(object):
             # Annotate the four retinal quadrants near the corners of the plot:
             # superior/inferior x temporal/nasal
             topbottom = ['top', 'bottom']
+            temporalnasal = ['temporal', 'nasal']
             if upside_down:
                 topbottom = ['bottom', 'top']
+                temporalnasal = ['nasal', 'temporal']
             for yy, valign, si in zip([ymax, ymin], topbottom,
                                       ['superior', 'inferior']):
                 for xx, halign, tn in zip([xmin, xmax], ['left', 'right'],
-                                          ['temporal', 'nasal']):
+                                          temporalnasal):
                     ax.text(xx, yy, si + ' ' + tn,
                             color='black', fontsize=14,
                             horizontalalignment=halign,
