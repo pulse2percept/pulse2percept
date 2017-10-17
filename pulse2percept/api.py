@@ -506,6 +506,7 @@ class Simulation(object):
             if annotate:
                 ax.text(tx, ty + 100, 'tack',
                         horizontalalignment='center',
+                        verticalalignment='top',
                         color='white', size='large')
 
         xmin, xmax, ymin, ymax = retina.dva2ret([-20, 20, -15, 15])
@@ -522,14 +523,11 @@ class Simulation(object):
             # Annotate the four retinal quadrants near the corners of the plot:
             # superior/inferior x temporal/nasal
             topbottom = ['top', 'bottom']
-            leftright = ['left', 'right']
             if upside_down:
                 topbottom = ['bottom', 'top']
-            if self.implant.eye == 'LE':
-                lefright = ['right', 'left']
             for yy, valign, si in zip([ymax, ymin], topbottom,
                                       ['superior', 'inferior']):
-                for xx, halign, tn in zip([xmin, xmax], leftright,
+                for xx, halign, tn in zip([xmin, xmax], ['left', 'right'],
                                           ['temporal', 'nasal']):
                     ax.text(xx, yy, si + ' ' + tn,
                             color='black', fontsize=14,

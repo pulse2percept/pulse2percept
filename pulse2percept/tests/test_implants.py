@@ -222,6 +222,11 @@ def test_ArgusI():
         after = p2p.implants.ArgusI(eye=eye, rot=np.deg2rad(10))
         npt.assert_equal(after['A1'].y_center > before['A1'].y_center, True)
 
+    # Old and new names
+    argus = p2p.implants.ArgusI()
+    npt.assert_equal(argus.get_new_name('L2'), 'B1')
+    npt.assert_equal(argus.get_old_name('B1'), 'L2')
+
 
 def test_ArgusII():
     # Create an ArgusII and make sure location is correct

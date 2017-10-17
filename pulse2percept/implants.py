@@ -533,17 +533,20 @@ class ArgusI(ElectrodeArray):
         # Set left/right eye
         self.eye = eye
 
+        # In older papers, Argus I electrodes go by L and M
+        self.old_names = names = ['L6', 'L2', 'M8', 'M4',
+                                  'L5', 'L1', 'M7', 'M3',
+                                  'L8', 'L4', 'M6', 'M2',
+                                  'L7', 'L3', 'M5', 'M1']
+        # In newer papers, they go by A-D: A1, B1, C1, D1, A1, B2, ..., D4
+        # Shortcut: Use `chr` to go from int to char
+        self.new_names = [chr(i) + str(j) for j in range(1, 5)
+                          for i in range(65, 69)]
+
         if use_legacy_names:
-            # Legacy Argus I names
-            names = ['L6', 'L2', 'M8', 'M4',
-                     'L5', 'L1', 'M7', 'M3',
-                     'L8', 'L4', 'M6', 'M2',
-                     'L7', 'L3', 'M5', 'M1']
+            names = self.old_names
         else:
-            # Standard Argus I names: A1, B1, C1, D1, A1, B2, ..., D4
-            # Shortcut: Use `chr` to go from int to char
-            names = [chr(i) + str(j) for j in range(1, 5)
-                     for i in range(65, 69)]
+            names = self.new_names
 
         if isinstance(h, list):
             h_arr = np.array(h).flatten()
@@ -593,6 +596,14 @@ class ArgusI(ElectrodeArray):
     def __str__(self):
         return "ArgusI(%s, num_electrodes=%d)" % (self.etype,
                                                   self.num_electrodes)
+
+    def get_old_name(self, new_name):
+        """Look up the legacy name of a standard-named Argus I electrode"""
+        return self.old_names[self.new_names.index(new_name)]
+
+    def get_new_name(self, old_name):
+        """Look up the standard name of a legacy-named Argus I electrode"""
+        return self.new_names[self.old_names.index(old_name)]
 
 
 class ArgusII(ElectrodeArray):
