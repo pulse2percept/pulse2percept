@@ -220,7 +220,7 @@ def test_ArgusI():
     for eye in ['LE', 'RE']:
         before = p2p.implants.ArgusI(eye=eye)
         after = p2p.implants.ArgusI(eye=eye, rot=np.deg2rad(10))
-        npt.assert_equal(after['D1'].y_center > before['D1'].y_center, True)
+        npt.assert_equal(after['A1'].y_center > before['A1'].y_center, True)
 
 
 def test_ArgusII():
