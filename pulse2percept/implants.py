@@ -261,7 +261,7 @@ class Electrode(object):
 
 class ElectrodeArray(object):
 
-    def __init__(self, etype, radii, xs, ys, hs=0, names=None):
+    def __init__(self, etype, radii, xs, ys, hs=0, names=None, eye='RE'):
         """Create an ElectrodeArray on the retina
 
         This function creates an electrode array of type `etype` and places it
@@ -287,6 +287,8 @@ class ElectrodeArray(object):
             List of electrode heights (distance from the retinal surface).
         names : array_like, optional, default: None
             List of names (string identifiers) for each eletrode.
+        eye : {'LE', 'RE'}, optional, default: 'RE'
+            Eye in which array is implanted.
 
         Examples
         --------
@@ -310,6 +312,7 @@ class ElectrodeArray(object):
 
         """
         self.etype = etype
+        self.eye = eye
         self.electrodes = []
         self.num_electrodes = 0
         self.add_electrodes(radii, xs, ys, hs, names)
@@ -451,10 +454,23 @@ class ElectrodeArray(object):
         # Worst case O(n): name could not be found.
         return None
 
+    def get_eye(self):
+        return self._eye
+
+    def set_eye(self, eye):
+        if eye.lower() in ['r', 're', 'right']:
+            self._eye = 'RE'
+        elif eye.lower() in ['l', 'le', 'left']:
+            self._eye = 'LE'
+        else:
+            raise ValueError("Unknown eye '%s'. Choose from 'LE', 'RE'.")
+
+    eye = property(get_eye, set_eye)
+
 
 class ArgusI(ElectrodeArray):
 
-    def __init__(self, x_center=0, y_center=0, h=0, rot=0 * np.pi / 180,
+    def __init__(self, x_center=0, y_center=0, h=0, rot=0, eye='RE',
                  use_legacy_names=False):
         """Create an ArgusI array on the retina
 
@@ -482,16 +498,20 @@ class ArgusI(ElectrodeArray):
 
         Parameters
         ----------
-        x_center : float
+        x_center : float, optional, default: 0
             x coordinate of the array center (um)
-        y_center : float
+        y_center : float, optional, default: 0
             y coordinate of the array center (um)
-        h : float || array_like
+        h : float || array_like, optional, default: 0
             Distance of the array to the retinal surface (um). Either a list
             with 16 entries or a scalar.
-        rot : float
+        rot : float, optional, default: 0
             Rotation angle of the array (rad). Positive values denote
-            counter-clock-wise rotations.
+            counter-clock-wise (CCW) rotations in the retinal coordinate
+            system.
+        eye : {'LE', 'RE'}, optional, default: 'RE'
+            Eye in which array is implanted.
+
 
         Examples
         --------
@@ -511,17 +531,23 @@ class ArgusI(ElectrodeArray):
         r_arr = np.concatenate((r_arr, r_arr[::-1], r_arr, r_arr[::-1]),
                                axis=0)
 
+        # Set left/right eye
+        self.eye = eye
+
+        # In older papers, Argus I electrodes go by L and M
+        self.old_names = names = ['L6', 'L2', 'M8', 'M4',
+                                  'L5', 'L1', 'M7', 'M3',
+                                  'L8', 'L4', 'M6', 'M2',
+                                  'L7', 'L3', 'M5', 'M1']
+        # In newer papers, they go by A-D: A1, B1, C1, D1, A1, B2, ..., D4
+        # Shortcut: Use `chr` to go from int to char
+        self.new_names = [chr(i) + str(j) for j in range(1, 5)
+                          for i in range(65, 69)]
+
         if use_legacy_names:
-            # Legacy Argus I names
-            names = ['L6', 'L2', 'M8', 'M4',
-                     'L5', 'L1', 'M7', 'M3',
-                     'L8', 'L4', 'M6', 'M2',
-                     'L7', 'L3', 'M5', 'M1']
+            names = self.old_names
         else:
-            # Standard Argus I names: A1, B1, C1, D1, A1, B2, ..., D4
-            # Shortcut: Use `chr` to go from int to char
-            names = [chr(i) + str(j) for j in range(1, 5)
-                     for i in range(65, 69)]
+            names = self.new_names
 
         if isinstance(h, list):
             h_arr = np.array(h).flatten()
@@ -532,14 +558,25 @@ class ArgusI(ElectrodeArray):
             # All electrodes have the same height
             h_arr = np.ones_like(r_arr) * h
 
-        # Equally spaced electrodes
+        # Equally spaced electrodes: n_rows x n_cols = 16
         e_spacing = 800  # um
-        x_arr = np.arange(0, 4) * e_spacing - 1.5 * e_spacing
+        n_cols = 4  # number of electrodes horizontally (same vertically)
+        x_arr = np.arange(n_cols) * e_spacing - (n_cols / 2 - 0.5) * e_spacing
+        if self.eye == 'LE':
+            # Left eye: Need to invert x coordinates and rotation angle
+            x_arr = x_arr[::-1]
         x_arr, y_arr = np.meshgrid(x_arr, x_arr, sparse=False)
 
         # Rotation matrix
-        R = np.array([np.cos(rot), np.sin(rot),
-                      -np.sin(rot), np.cos(rot)]).reshape((2, 2))
+        R = np.array([np.cos(rot), -np.sin(rot),
+                      np.sin(rot), np.cos(rot)]).reshape((2, 2))
+
+        # Set the x, y location of the tack
+        if self.eye == 'RE':
+            self.tack = np.matmul(R, [-(n_cols / 2 + 0.5) * e_spacing, 0])
+        else:
+            self.tack = np.matmul(R, [(n_cols / 2 + 0.5) * e_spacing, 0])
+        self.tack = tuple(self.tack + [x_center, y_center])
 
         # Rotate the array
         xy = np.vstack((x_arr.flatten(), y_arr.flatten()))
@@ -557,10 +594,22 @@ class ArgusI(ElectrodeArray):
         for r, x, y, h, n in zip(r_arr, x_arr, y_arr, h_arr, names):
             self.add_electrode(Electrode(self.etype, r, x, y, h, n))
 
+    def __str__(self):
+        return "ArgusI(%s, num_electrodes=%d)" % (self.etype,
+                                                  self.num_electrodes)
+
+    def get_old_name(self, new_name):
+        """Look up the legacy name of a standard-named Argus I electrode"""
+        return self.old_names[self.new_names.index(new_name)]
+
+    def get_new_name(self, old_name):
+        """Look up the standard name of a legacy-named Argus I electrode"""
+        return self.new_names[self.old_names.index(old_name)]
+
 
 class ArgusII(ElectrodeArray):
 
-    def __init__(self, x_center=0, y_center=0, h=0, rot=0 * np.pi / 180):
+    def __init__(self, x_center=0, y_center=0, h=0, rot=0, eye='RE'):
         """Create an ArgusII array on the retina
 
         This function creates an ArgusII array and places it on the retina
@@ -597,7 +646,10 @@ class ArgusII(ElectrodeArray):
             with 60 entries or a scalar.
         rot : float
             Rotation angle of the array (rad). Positive values denote
-            counter-clock-wise rotations.
+            counter-clock-wise (CCW) rotations in the retinal coordinate
+            system.
+        eye : {'LE', 'RE'}, optional, default: 'RE'
+            Eye in which array is implanted.
 
         Examples
         --------
@@ -615,6 +667,9 @@ class ArgusII(ElectrodeArray):
         # Electrodes are 200um in diameter
         r_arr = np.ones(60) * 100.0
 
+        # Set left/right eye
+        self.eye = eye
+
         # Standard ArgusII names: A1, A2, ..., A10, B1, ..., F10
         names = [chr(i) + str(j) for i in range(65, 71) for j in range(1, 11)]
 
@@ -627,19 +682,31 @@ class ArgusII(ElectrodeArray):
             # All electrodes have the same height
             h_arr = np.ones_like(r_arr) * h
 
-        # Equally spaced electrodes
+        # Equally spaced electrodes: n_rows x n_cols = 60
         e_spacing = 525  # um
-        x_arr = np.arange(10) * e_spacing - 4.5 * e_spacing
-        y_arr = np.arange(6) * e_spacing - 2.5 * e_spacing
+        n_cols = 10  # number of electrodes horizontally
+        n_rows = 6  # number of electrodes vertically
+        x_arr = np.arange(n_cols) * e_spacing - (n_cols / 2 - 0.5) * e_spacing
+        if self.eye == 'LE':
+            # Left eye: Need to invert x coordinates and rotation angle
+            x_arr = x_arr[::-1]
+        y_arr = np.arange(n_rows) * e_spacing - (n_rows / 2 - 0.5) * e_spacing
         x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
 
         # Rotation matrix
-        R = np.array([np.cos(rot), np.sin(rot),
-                      -np.sin(rot), np.cos(rot)]).reshape((2, 2))
+        rotmat = np.array([np.cos(rot), -np.sin(rot),
+                           np.sin(rot), np.cos(rot)]).reshape((2, 2))
+
+        # Set the x, y location of the tack
+        if self.eye == 'RE':
+            self.tack = np.matmul(rotmat, [-(n_cols / 2 + 0.5) * e_spacing, 0])
+        else:
+            self.tack = np.matmul(rotmat, [(n_cols / 2 + 0.5) * e_spacing, 0])
+        self.tack = tuple(self.tack + [x_center, y_center])
 
         # Rotate the array
         xy = np.vstack((x_arr.flatten(), y_arr.flatten()))
-        xy = np.matmul(R, xy)
+        xy = np.matmul(rotmat, xy)
         x_arr = xy[0, :]
         y_arr = xy[1, :]
 
@@ -652,3 +719,7 @@ class ArgusII(ElectrodeArray):
         self.electrodes = []
         for r, x, y, h, n in zip(r_arr, x_arr, y_arr, h_arr, names):
             self.add_electrode(Electrode(self.etype, r, x, y, h, n))
+
+    def __str__(self):
+        return "ArgusII(%s, num_electrodes=%d)" % (self.etype,
+                                                   self.num_electrodes)
