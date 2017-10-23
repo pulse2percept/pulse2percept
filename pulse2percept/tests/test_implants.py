@@ -149,8 +149,8 @@ def test_ArgusI():
                     xy = np.array([-1200, -1200]).T
 
                     # Rotate
-                    R = np.array([np.cos(rot), np.sin(rot),
-                                  -np.sin(rot), np.cos(rot)]).reshape((2, 2))
+                    R = np.array([np.cos(rot), -np.sin(rot),
+                                  np.sin(rot), np.cos(rot)]).reshape((2, 2))
                     xy = np.matmul(R, xy)
 
                     # Then off-set: Make sure first electrode is placed
@@ -167,6 +167,12 @@ def test_ArgusI():
                     x_center = argus['A1'].x_center + \
                         (argus['D4'].x_center - argus['A1'].x_center) / 2
                     npt.assert_almost_equal(x_center, x)
+
+                    # Check radii of electrodes
+                    for e in ['A1', 'A3', 'B2', 'C1', 'D4']:
+                        npt.assert_almost_equal(argus[e].radius, 130)
+                    for e in ['A2', 'A4', 'B1', 'C2', 'D3']:
+                        npt.assert_almost_equal(argus[e].radius, 260)
 
                     # Check location of the tack
                     tack = np.matmul(R, [-2000, 0])
@@ -216,16 +222,21 @@ def test_ArgusI():
     npt.assert_equal(argus_le.tack[0] > argus_le['A1'].x_center, True)
     npt.assert_almost_equal(argus_le.tack[1], yc)
 
-    # In both left and right eyes, rotat with positive angle should be CCW
-    for eye in ['LE', 'RE']:
+    # In both left and right eyes, rotation with positive angle should be
+    # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
+    for eye, el in zip(['LE', 'RE'], ['A1', 'D4']):
         before = p2p.implants.ArgusI(eye=eye)
         after = p2p.implants.ArgusI(eye=eye, rot=np.deg2rad(10))
-        npt.assert_equal(after['A1'].y_center > before['A1'].y_center, True)
+        npt.assert_equal(after[el].x_center < before[el].x_center, True)
+        npt.assert_equal(after[el].y_center > before[el].y_center, True)
 
-    # Old and new names
     argus = p2p.implants.ArgusI()
-    npt.assert_equal(argus.get_new_name('L2'), 'B1')
-    npt.assert_equal(argus.get_old_name('B1'), 'L2')
+    # Old to new
+    npt.assert_equal(argus.get_new_name('M1'), 'D4')
+    npt.assert_equal(argus.get_new_name('M6'), 'C3')
+    # New to old
+    npt.assert_equal(argus.get_old_name('B2'), 'L1')
+    npt.assert_equal(argus.get_old_name('A1'), 'L6')
 
 
 def test_ArgusII():
@@ -241,15 +252,15 @@ def test_ArgusII():
                         h = np.ones(60) * 20
 
                     # Convert rotation angle to rad
-                    rot = r * np.pi / 180
+                    rot = np.deg2rad(r)
                     argus = p2p.implants.ArgusII(x, y, h=h, rot=rot)
 
                     # Coordinates of first electrode
                     xy = np.array([-2362.5, -1312.5]).T
 
                     # Rotate
-                    R = np.array([np.cos(rot), np.sin(rot),
-                                  -np.sin(rot), np.cos(rot)]).reshape((2, 2))
+                    R = np.array([np.cos(rot), -np.sin(rot),
+                                  np.sin(rot), np.cos(rot)]).reshape((2, 2))
                     xy = np.matmul(R, xy)
 
                     # Then off-set: Make sure first electrode is placed
@@ -266,6 +277,10 @@ def test_ArgusII():
                     x_center = argus['A1'].x_center + \
                         (argus['F10'].x_center - argus['A1'].x_center) / 2
                     npt.assert_almost_equal(x_center, x)
+
+                    # Make sure radius is correct
+                    for e in ['A1', 'B3', 'C5', 'D7', 'E9', 'F10']:
+                        npt.assert_almost_equal(argus[e].radius, 100)
 
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
@@ -303,12 +318,13 @@ def test_ArgusII():
     npt.assert_equal(argus_le.tack[0] > argus_le['A10'].x_center, True)
     npt.assert_almost_equal(argus_le.tack[1], yc)
 
-    # In both left and right eyes, rotation with positive angle should be CCW
-    for eye in ['LE', 'RE']:
+    # In both left and right eyes, rotation with positive angle should be
+    # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
+    for eye, el in zip(['LE', 'RE'], ['F1', 'F10']):
         before = p2p.implants.ArgusII(eye=eye)
         after = p2p.implants.ArgusII(eye=eye, rot=np.deg2rad(10))
-        print(eye, before['A1'].y_center, after['A1'].y_center)
-        npt.assert_equal(after['A1'].y_center > before['A1'].y_center, True)
+        npt.assert_equal(after[el].x_center < before[el].x_center, True)
+        npt.assert_equal(after[el].y_center > before[el].y_center, True)
 
 
 def test_Electrode_receptive_field():

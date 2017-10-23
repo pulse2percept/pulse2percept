@@ -504,7 +504,11 @@ class Simulation(object):
             tx, ty = self.implant.tack
             ax.plot(tx, ty, 'ow')
             if annotate:
-                ax.text(tx, ty + 100, 'tack',
+                if upside_down:
+                    offset = 100
+                else:
+                    offset = -100
+                ax.text(tx, ty + offset, 'tack',
                         horizontalalignment='center',
                         verticalalignment='top',
                         color='white', size='large')

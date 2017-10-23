@@ -507,7 +507,8 @@ class ArgusI(ElectrodeArray):
             with 16 entries or a scalar.
         rot : float, optional, default: 0
             Rotation angle of the array (rad). Positive values denote
-            counter-clock-wise rotations.
+            counter-clock-wise (CCW) rotations in the retinal coordinate
+            system.
         eye : {'LE', 'RE'}, optional, default: 'RE'
             Eye in which array is implanted.
 
@@ -557,24 +558,24 @@ class ArgusI(ElectrodeArray):
             # All electrodes have the same height
             h_arr = np.ones_like(r_arr) * h
 
-        # Equally spaced electrodes
+        # Equally spaced electrodes: n_rows x n_cols = 16
         e_spacing = 800  # um
-        x_arr = np.arange(0, 4) * e_spacing - 1.5 * e_spacing
+        n_cols = 4  # number of electrodes horizontally (same vertically)
+        x_arr = np.arange(n_cols) * e_spacing - (n_cols / 2 - 0.5) * e_spacing
         if self.eye == 'LE':
             # Left eye: Need to invert x coordinates and rotation angle
             x_arr = x_arr[::-1]
-            rot = -rot  # Positive value: CCW
         x_arr, y_arr = np.meshgrid(x_arr, x_arr, sparse=False)
 
         # Rotation matrix
-        R = np.array([np.cos(rot), np.sin(rot),
-                      -np.sin(rot), np.cos(rot)]).reshape((2, 2))
+        R = np.array([np.cos(rot), -np.sin(rot),
+                      np.sin(rot), np.cos(rot)]).reshape((2, 2))
 
         # Set the x, y location of the tack
         if self.eye == 'RE':
-            self.tack = np.matmul(R, [-2.5 * e_spacing, 0])
+            self.tack = np.matmul(R, [-(n_cols / 2 + 0.5) * e_spacing, 0])
         else:
-            self.tack = np.matmul(R, [2.5 * e_spacing, 0])
+            self.tack = np.matmul(R, [(n_cols / 2 + 0.5) * e_spacing, 0])
         self.tack = tuple(self.tack + [x_center, y_center])
 
         # Rotate the array
@@ -645,7 +646,8 @@ class ArgusII(ElectrodeArray):
             with 60 entries or a scalar.
         rot : float
             Rotation angle of the array (rad). Positive values denote
-            counter-clock-wise rotations.
+            counter-clock-wise (CCW) rotations in the retinal coordinate
+            system.
         eye : {'LE', 'RE'}, optional, default: 'RE'
             Eye in which array is implanted.
 
@@ -680,30 +682,31 @@ class ArgusII(ElectrodeArray):
             # All electrodes have the same height
             h_arr = np.ones_like(r_arr) * h
 
-        # Equally spaced electrodes
+        # Equally spaced electrodes: n_rows x n_cols = 60
         e_spacing = 525  # um
-        x_arr = np.arange(10) * e_spacing - 4.5 * e_spacing
+        n_cols = 10  # number of electrodes horizontally
+        n_rows = 6  # number of electrodes vertically
+        x_arr = np.arange(n_cols) * e_spacing - (n_cols / 2 - 0.5) * e_spacing
         if self.eye == 'LE':
             # Left eye: Need to invert x coordinates and rotation angle
             x_arr = x_arr[::-1]
-            rot = -rot  # positive value: CCW
-        y_arr = np.arange(6) * e_spacing - 2.5 * e_spacing
+        y_arr = np.arange(n_rows) * e_spacing - (n_rows / 2 - 0.5) * e_spacing
         x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
 
         # Rotation matrix
-        R = np.array([np.cos(rot), np.sin(rot),
-                      -np.sin(rot), np.cos(rot)]).reshape((2, 2))
+        rotmat = np.array([np.cos(rot), -np.sin(rot),
+                           np.sin(rot), np.cos(rot)]).reshape((2, 2))
 
         # Set the x, y location of the tack
         if self.eye == 'RE':
-            self.tack = np.matmul(R, [-5.5 * e_spacing, 0])
+            self.tack = np.matmul(rotmat, [-(n_cols / 2 + 0.5) * e_spacing, 0])
         else:
-            self.tack = np.matmul(R, [5.5 * e_spacing, 0])
+            self.tack = np.matmul(rotmat, [(n_cols / 2 + 0.5) * e_spacing, 0])
         self.tack = tuple(self.tack + [x_center, y_center])
 
         # Rotate the array
         xy = np.vstack((x_arr.flatten(), y_arr.flatten()))
-        xy = np.matmul(R, xy)
+        xy = np.matmul(rotmat, xy)
         x_arr = xy[0, :]
         y_arr = xy[1, :]
 
