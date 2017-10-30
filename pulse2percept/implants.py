@@ -293,8 +293,10 @@ class ElectrodeArray(object):
         >>> from pulse2percept import implants
         >>> implant0 = implants.ElectrodeArray('epiretinal', 100, 0, 0, hs=10,
         ...                                    names='A1')
+
         Get access to the electrode with name 'A1' in the first array:
         >>> my_electrode = implant0['A1']
+
         An array with two electrodes of size 100um, one sitting at
         (-100, -100), the other sitting at (0, 0), with 0 distance from the
         retina, of type 'subretinal':
@@ -343,6 +345,7 @@ class ElectrodeArray(object):
         at (0, 0).
         Single electrodes in the array can be addressed by index (integer)
         or name.
+
         Parameters
         ----------
         radii : array_like
@@ -355,6 +358,7 @@ class ElectrodeArray(object):
             List of electrode heights (distance from the retinal surface).
         names : array_like, optional, default: None
             List of names (string identifiers) for each eletrode.
+
         Examples
         --------
         Adding a single electrode of radius 50um sitting at (0, 0) to an
@@ -399,12 +403,12 @@ class ElectrodeArray(object):
         try:
             # Is `item` an integer?
             return self.electrodes[item]
-        except:
+        except (IndexError, TypeError):
             # If `item` is a valid string identifier, return valid index.
             # Else return None
             try:
                 return self.electrodes[self.get_index(item)]
-            except:
+            except IndexError:
                 return None
 
     def get_index(self, name):
@@ -466,6 +470,7 @@ class ArgusI(ElectrodeArray):
         Electrode order is: A1, B1, C1, D1, A2, B2, ..., D4.
         If `use_legacy_names` is True, electrode order is: L6, L2, M8, M4, ...
         An electrode can be addressed by index (integer) or name.
+
         Parameters
         ----------
         x_center : float, optional, default: 0
@@ -488,6 +493,7 @@ class ArgusI(ElectrodeArray):
         the retina:
         >>> from pulse2percept import implants
         >>> argus = implants.ArgusI(x_center=0, y_center=0, h=100, rot=0)
+
         Get access to electrode 'B1':
         >>> my_electrode = argus['B1']
         """
@@ -594,6 +600,7 @@ class ArgusII(ElectrodeArray):
           </pre>
         Electrode order is: A1, A2, ..., A10, B1, B2, ..., F10.
         An electrode can be addressed by index (integer) or name.
+
         Parameters
         ----------
         x_center : float
@@ -616,6 +623,7 @@ class ArgusII(ElectrodeArray):
         the retina:
         >>> from pulse2percept import implants
         >>> argus = implants.ArgusII(x_center=0, y_center=0, h=100, rot=0)
+
         Get access to electrode 'E7':
         >>> my_electrode = argus['E7']
         """

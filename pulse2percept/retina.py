@@ -176,7 +176,7 @@ class Grid(object):
         if not os.path.exists(filename):
             need_new_grid = True
         else:
-            logging.getLogger(__name__).info('Found file "%s".' % filename)
+            logging.getLogger(__name__).info('Loading file "%s".' % filename)
             try:
                 load_grid_dict = six.moves.cPickle.load(open(filename, 'rb'))
             except six.moves.cPickle.UnpicklingError:
@@ -197,8 +197,10 @@ class Grid(object):
                     need_new_grid = True
                     break
 
+        # At this point we know whether we need to generate a new retina:
         if need_new_grid:
-            logging.getLogger(__name__).info('Need new file. Generating...')
+            info_str = "Generating new file '%s'." % filename
+            logging.getLogger(__name__).info(info_str)
 
             # Grow a number `n_axons` of axon bundles with orientations in
             # `phi_range`
@@ -218,12 +220,6 @@ class Grid(object):
             self.axons = utils.parfor(find_closest_axon, pos_xy,
                                       func_args=[self.axon_bundles])
             grid_dict['axons'] = self.axons
-
-        # At this point we know whether we need to generate a new retina:
-        if need_new_grid:
-            info_str = "File '%s' doesn't exist " % filename
-            info_str += "or has outdated parameter values, generating..."
-            logging.getLogger(__name__).info(info_str)
 
             # For every axon segment, calculate distance to soma. Snap axon
             # locations to the grid using a nearest-neighbor tree structure:
