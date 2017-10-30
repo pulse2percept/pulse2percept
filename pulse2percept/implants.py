@@ -408,7 +408,7 @@ class ElectrodeArray(object):
             # Else return None
             try:
                 return self.electrodes[self.get_index(item)]
-            except IndexError:
+            except (IndexError, TypeError):
                 return None
 
     def get_index(self, name):

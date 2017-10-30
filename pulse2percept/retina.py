@@ -620,8 +620,8 @@ class Nanduri2012(BaseModel):
             raise ValueError("The Nanduri2012 model does not support an inner "
                              "nuclear layer.")
 
-        # `b1` contains a scaled PulseTrain per layer for this particular
-        # pixel: Use as input to model cascade
+        # Scaled PulseTrain per layer for this particular pixel: Use as input
+        # to model cascade
         b1 = self.calc_layer_current(in_arr, pt_list, layers)
 
         # Fast response
@@ -636,8 +636,9 @@ class Nanduri2012(BaseModel):
         b3 = np.maximum(0, b2 - self.eps * ca)
 
         # Stationary nonlinearity
-        sigmoid = ss.expit((b3.max() - self.shift) / self.slope)
-        b4 = b3 * sigmoid * self.asymptote
+        b3max = b3.max()
+        sigmoid = ss.expit((b3max - self.shift) / self.slope)
+        b4 = b3 / b3max * sigmoid * self.asymptote
 
         # Slow response
         b5 = self.tsample * utils.conv(b4, self.gamma3, mode='full',
@@ -1178,13 +1179,13 @@ def axon_dist_from_soma(axon, xg, yg, tree=None):
     # For these, find the xg, yg coordinates
     _, idx_cs = tree.query(axon[idx_valid, :])
     if len(idx_cs) == 0:
-        return 0, np.inf
+        return np.array([0]), np.array([np.inf])
 
     # Drop duplicates
     _, idx_cs_unique = np.unique(idx_cs, return_index=True)
     idx_cs = idx_cs[np.sort(idx_cs_unique)]
     if len(idx_cs) == 0:
-        return 0, np.inf
+        return np.array([0]), np.array([np.inf])
 
     # Find the location of the soma, based on the first axon segment
     _, idx_neuron = tree.query(axon[0, :])
@@ -1269,6 +1270,7 @@ def axon_contribution(axon_dist, current_spread, sensitivity_rule='decay',
 
     # Unpack list of indices and distances for each axon segment
     idx_cs, dist = axon_dist
+    idx_soma = idx_cs[0]
 
     # The sensitivity rule specifies how the activation thresholds differs
     # along the axon:
@@ -1306,7 +1308,7 @@ def axon_contribution(axon_dist, current_spread, sensitivity_rule='decay',
     else:
         raise ValueError('Unknown activation rule "%s"' % contribution_rule)
 
-    return idx_cs, contribution
+    return idx_soma, contribution
 
 
 @utils.deprecated(alt_func='p2p.retina.jansonius2009',
