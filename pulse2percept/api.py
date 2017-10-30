@@ -486,14 +486,13 @@ class Simulation(object):
 
         return percept
 
-    def plot_fundus(self, stim=None, ax=None, n_axons=100):
+    def plot_fundus(self, stim=None, ax=None, n_axons=100, upside_down=False,
+                    annotate=True):
         """Plot the implant on the retinal surface akin to a fundus photopgraph
-
         This function plots an electrode array on top of the axon streak map
         of the retina, akin to a fundus photograph. A blue rectangle highlights
         the area of the retinal surface that is being simulated.
         If `stim` is passed, activated electrodes will be highlighted.
-
         Parameters
         ----------
         stim : utils.TimeSeries|list|dict, optional
@@ -505,7 +504,13 @@ class Simulation(object):
             Default: None
         n_axons : int, optional, default: 100
             Number of axons to plot.
-
+        upside_down : bool, optional, default: False
+            Flag whether to plot the retina upside-down, such that the upper
+            half of the plot corresponds to the upper visual field. In general,
+            inferior retina == upper visual field (and superior == lower).
+        annotate : bool, optional, default: True
+            Flag whether to annotate the four retinal quadrants
+            (inferior/superior x temporal/nasal).
         Returns
         -------
         Returns a handle to the created figure (`fig`) and axes element (`ax`).
@@ -516,7 +521,7 @@ class Simulation(object):
 
         fig = None
         if ax is None:
-            # No axes object given: create
+                # No axes object given: create
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots(1, figsize=(10, 8))
 
@@ -533,15 +538,14 @@ class Simulation(object):
                                     engine=self.engine, n_jobs=self.n_jobs,
                                     scheduler=self.scheduler)
         for bundle in axon_bundles:
-            ax.plot(bundle[:, 0], -bundle[:, 1], c=(0.5, 1.0, 0.5))
+            ax.plot(retina.dva2ret(bundle[:, 0]), retina.dva2ret(bundle[:, 1]),
+                    c=(0.5, 1.0, 0.5))
 
         # Draw in the the retinal patch we're simulating.
         # This defines the size of our "percept" image below.
-        dva_xmin = retina.ret2dva(self.ofl.gridx.min())
-        dva_ymin = -retina.ret2dva(self.ofl.gridy.max())
-        patch = patches.Rectangle((dva_xmin, dva_ymin),
-                                  retina.ret2dva(np.diff(self.ofl.x_range)),
-                                  retina.ret2dva(np.diff(self.ofl.y_range)),
+        patch = patches.Rectangle((self.ofl.gridx.min(), self.ofl.gridy.min()),
+                                  np.diff(self.ofl.x_range),
+                                  np.diff(self.ofl.y_range),
                                   alpha=0.7)
         ax.add_patch(patch)
 
@@ -550,26 +554,63 @@ class Simulation(object):
             for key in stim:
                 el = self.implant[key]
                 if el is not None:
-                    ax.plot(retina.ret2dva(el.x_center),
-                            -retina.ret2dva(el.y_center), 'oy',
+                    ax.plot(el.x_center, el.y_center, 'oy',
                             markersize=np.sqrt(el.radius) * 2)
 
         # Plot all electrodes and their label
         for e in self.implant.electrodes:
-            ax.text(retina.ret2dva(e.x_center + 10),
-                    -retina.ret2dva(e.y_center + 5),
-                    e.name, color='white', size='x-large')
-            ax.plot(retina.ret2dva(e.x_center),
-                    -retina.ret2dva(e.y_center), 'ow',
+            if annotate:
+                ax.text(e.x_center + 100, e.y_center + 50, e.name,
+                        color='white', size='x-large')
+            ax.plot(e.x_center, e.y_center, 'ow',
                     markersize=np.sqrt(e.radius))
 
+        # Plot the location of the array's tack and annotate it
+        if self.implant.tack:
+            tx, ty = self.implant.tack
+            ax.plot(tx, ty, 'ow')
+            if annotate:
+                if upside_down:
+                    offset = 100
+                else:
+                    offset = -100
+                ax.text(tx, ty + offset, 'tack',
+                        horizontalalignment='center',
+                        verticalalignment='top',
+                        color='white', size='large')
+
+        xmin, xmax, ymin, ymax = retina.dva2ret([-20, 20, -15, 15])
         ax.set_aspect('equal')
-        ax.set_xlim(-20, 20)
-        ax.set_xlabel('visual angle (deg)')
-        ax.set_ylim(-15, 15)
-        ax.set_ylabel('visual angle (deg)')
-        ax.set_title('Image flipped (upper retina = upper visual field)')
+        ax.set_xlim(xmin, xmax)
+        ax.set_xlabel('x (microns)')
+        ax.set_ylim(ymin, ymax)
+        ax.set_ylabel('y (microns)')
+        eyestr = {'LE': 'left', 'RE': 'right'}
+        ax.set_title('%s in %s eye' %
+                     (self.implant, eyestr[self.implant.eye]))
         ax.grid('off')
+
+        if annotate:
+            # Annotate the four retinal quadrants near the corners of the plot:
+            # superior/inferior x temporal/nasal
+            topbottom = ['top', 'bottom']
+            temporalnasal = ['temporal', 'nasal']
+            if upside_down:
+                topbottom = ['bottom', 'top']
+                temporalnasal = ['nasal', 'temporal']
+            for yy, valign, si in zip([ymax, ymin], topbottom,
+                                      ['superior', 'inferior']):
+                for xx, halign, tn in zip([xmin, xmax], ['left', 'right'],
+                                          temporalnasal):
+                    ax.text(xx, yy, si + ' ' + tn,
+                            color='black', fontsize=14,
+                            horizontalalignment=halign,
+                            verticalalignment=valign,
+                            backgroundcolor=(1, 1, 1, 0.8))
+
+        # Need to flip y axis to have upper half == upper visual field
+        if upside_down:
+            ax.invert_yaxis()
 
         return fig, ax
 

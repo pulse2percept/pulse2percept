@@ -17,7 +17,7 @@ class Grid(object):
     """Represent the retinal coordinate frame"""
 
     def __init__(self, x_range=(-1000.0, 1000.0), y_range=(-1000.0, 1000.0),
-                 sampling=25, n_axons=501, phi_range=(-180.0, 180.0),
+                 eye='RE', sampling=25, n_axons=501, phi_range=(-180.0, 180.0),
                  n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.0, 2.0),
                  sensitivity_rule='decay', contribution_rule='max',
                  decay_const=2.0, powermean_exp=1.0, datapath='.',
@@ -37,6 +37,9 @@ class Grid(object):
            Extent of the retinal coverage (microns) in horizontal dimension.
         y_range : (ylo, yhi), optional, default: ylo=-1000, ylo=1000
            Extent of the retinal coverage (microns) in vertical dimension.
+        eye : {'LE', 'RE'}, optional, default: 'RE'
+                Which eye to simulate (left/right). If the optic disc is at
+                (15, 2) in a right eye, it is at (-15, 2) in a left eye.
         sampling : float, optional, default: 25
             Spatial sampling step (microns) for the grid.
         n_axons : int, optional, default: 501
@@ -154,15 +157,15 @@ class Grid(object):
                                              indexing='xy')
 
         # Create descriptive filename based on input args
-        filename = "retina_s%d_a%d_r%d_%dx%d.npz" % (sampling, n_axons, n_rho,
-                                                     xhi - xlo,
-                                                     yhi - ylo)
+        filename = "retina_%s_s%d_a%d_r%d_%dx%d.npz" % (eye, sampling, n_axons,
+                                                        n_rho, xhi - xlo,
+                                                        yhi - ylo)
         filename = os.path.join(datapath, filename)
 
         # There are some variables, like `sensitivity_rule` and `decay_const`
         # that are only needed in the effective current calculation, not for
         # the grid and axon maps - so not included here:
-        grid_dict = {'x_range': x_range, 'y_range': y_range,
+        grid_dict = {'x_range': x_range, 'y_range': y_range, 'eye': eye,
                      'n_axons': n_axons, 'phi_range': phi_range,
                      'n_rho': n_rho, 'rho_range': rho_range,
                      'sampling': sampling, 'loc_od': loc_od}
