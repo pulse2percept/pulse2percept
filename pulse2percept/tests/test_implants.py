@@ -37,7 +37,6 @@ def test_Electrode():
 
             # Subretinal arrays have layer thicknesses added to `hh`.
             npt.assert_equal(e.height > hh, True)
-        print(e)
 
     # Invalid type
     with pytest.raises(ValueError):

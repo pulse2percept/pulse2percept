@@ -175,8 +175,7 @@ class Simulation(object):
 
         # Generate the grid from the above specs
         self.ofl = retina.Grid(x_range=(xlo, xhi), y_range=(ylo, yhi),
-                               eye=self.implant.eye,
-                               sampling=sampling,
+                               eye=self.implant.eye, sampling=sampling,
                                n_axons=n_axons, phi_range=phi_range,
                                n_rho=n_rho, rho_range=rho_range,
                                sensitivity_rule=sensitivity_rule,
@@ -487,14 +486,13 @@ class Simulation(object):
 
         return percept
 
-    def plot_fundus(self, stim=None, ax=None, n_axons=100, upside_down=True, annotate=True):
+    def plot_fundus(self, stim=None, ax=None, n_axons=100, upside_down=False,
+                    annotate=True):
         """Plot the implant on the retinal surface akin to a fundus photopgraph
-
         This function plots an electrode array on top of the axon streak map
         of the retina, akin to a fundus photograph. A blue rectangle highlights
         the area of the retinal surface that is being simulated.
         If `stim` is passed, activated electrodes will be highlighted.
-
         Parameters
         ----------
         stim : utils.TimeSeries|list|dict, optional
@@ -506,7 +504,7 @@ class Simulation(object):
             Default: None
         n_axons : int, optional, default: 100
             Number of axons to plot.
-        upside_down : bool, optional, default: True
+        upside_down : bool, optional, default: False
             Flag whether to plot the retina upside-down, such that the upper
             half of the plot corresponds to the upper visual field. In general,
             inferior retina == upper visual field (and superior == lower).
@@ -524,7 +522,7 @@ class Simulation(object):
 
         fig = None
         if ax is None:
-            # No axes object given: create
+                # No axes object given: create
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots(1, figsize=(10, 8))
 
@@ -541,13 +539,14 @@ class Simulation(object):
                                     engine=self.engine, n_jobs=self.n_jobs,
                                     scheduler=self.scheduler)
         for bundle in axon_bundles:
-            ax.plot(retina.dva2ret(bundle[:, 0]),
-                    retina.dva2ret(bundle[:, 1]), c=(0.5, 1.0, 0.5))
+            ax.plot(retina.dva2ret(bundle[:, 0]), retina.dva2ret(bundle[:, 1]),
+                    c=(0.5, 1.0, 0.5))
 
         # Draw in the the retinal patch we're simulating.
         # This defines the size of our "percept" image below.
         patch = patches.Rectangle((self.ofl.gridx.min(), self.ofl.gridy.min()),
-                                  np.diff(self.ofl.range_x), np.diff(self.ofl.range_y),
+                                  np.diff(self.ofl.x_range),
+                                  np.diff(self.ofl.y_range),
                                   alpha=0.7)
         ax.add_patch(patch)
 

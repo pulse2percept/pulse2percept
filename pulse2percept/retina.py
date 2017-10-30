@@ -17,8 +17,7 @@ class Grid(object):
     """Represent the retinal coordinate frame"""
 
     def __init__(self, x_range=(-1000.0, 1000.0), y_range=(-1000.0, 1000.0),
-                 eye='RE',
-                 sampling=25, n_axons=501, phi_range=(-180.0, 180.0),
+                 eye='RE', sampling=25, n_axons=501, phi_range=(-180.0, 180.0),
                  n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.0, 2.0),
                  sensitivity_rule='decay', contribution_rule='max',
                  decay_const=2.0, powermean_exp=1.0, datapath='.',
@@ -166,11 +165,10 @@ class Grid(object):
         # There are some variables, like `sensitivity_rule` and `decay_const`
         # that are only needed in the effective current calculation, not for
         # the grid and axon maps - so not included here:
-        grid_dict = {'x_range': x_range, 'y_range': y_range,
+        grid_dict = {'x_range': x_range, 'y_range': y_range, 'eye': eye,
                      'n_axons': n_axons, 'phi_range': phi_range,
                      'n_rho': n_rho, 'rho_range': rho_range,
-                     'sampling': sampling, 'loc_od': loc_od,
-                     'eye': eye}
+                     'sampling': sampling, 'loc_od': loc_od}
 
         # Check if such a file already exists. If so, load parameters and
         # make sure they are the same as specified above. Else, create new.
@@ -970,7 +968,7 @@ def ret2dva(r_um):
 def micron2deg(micron):
     """Transforms a distance from microns to degrees
 
-    Based on http://retina.anatomy.upenn.edu/~rob/lance/units_space.html
+    Based on http: // retina.anatomy.upenn.edu / ~rob / lance / units_space.html
     """
     deg = micron / 280.0
     return deg
@@ -981,7 +979,7 @@ def micron2deg(micron):
 def deg2micron(deg):
     """Transforms a distance from degrees to microns
 
-    Based on http://retina.anatomy.upenn.edu/~rob/lance/units_space.html
+    Based on http: // retina.anatomy.upenn.edu / ~rob / lance / units_space.html
     """
     microns = 280.0 * deg
     return microns

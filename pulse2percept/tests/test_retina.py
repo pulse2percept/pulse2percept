@@ -441,3 +441,11 @@ def test_axon_contribution():
                     contribution_rule=c_rule
                 )
                 npt.assert_almost_equal(contrib, 0.0)
+
+
+# deprecated
+def test_make_axon_map():
+    jan_x, jan_y = p2p.retina.jansonius(num_cells=10, num_samples=100)
+    xg, yg = np.meshgrid(np.linspace(-100, 100, 21),
+                         np.linspace(-100, 100, 21), indexing='xy')
+    ax_id, ax_wt = p2p.retina.make_axon_map(xg, yg, jan_x, jan_y)
