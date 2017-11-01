@@ -1,5 +1,14 @@
-from setuptools import find_packages, setup
 import os
+import numpy as np
+from setuptools import find_packages, setup
+from setuptools.extension import Extension
+from Cython.Build import cythonize
+
+extensions = [
+    Extension('pulse2percept.retina', ['pulse2percept/retina.pyx'],
+              include_dirs=[np.get_include()],
+              extra_compile_args=['-O3'])
+]
 
 # Get version and release info, which is all stored in pulse2percept/version.py
 ver_file = os.path.join('pulse2percept', 'version.py')
@@ -27,6 +36,7 @@ opts = dict(name=NAME,
             platforms=PLATFORMS,
             version=VERSION,
             packages=find_packages(),
+            ext_modules=cythonize(extensions),
             install_requires=REQUIRES)
 
 
