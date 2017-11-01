@@ -55,7 +55,7 @@ class Simulation(object):
                               n_axons=501, phi_range=(-180.0, 180.0),
                               n_rho=801, rho_range=(4.0, 45.0),
                               loc_od=(15.0, 2.0),
-                              sensitivity_rule='decay', decay_const=2.0,
+                              sensitivity_rule='decay', decay_const=5.0,
                               contribution_rule='max', powermean_exp=1.0,
                               datapath='.', save_data=True):
         """Sets parameters of the optic fiber layer (OFL)

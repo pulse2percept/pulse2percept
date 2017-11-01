@@ -586,7 +586,7 @@ class Nanduri2012(BaseModel):
             raise ValueError("The Nanduri2012 model does not support an inner "
                              "nuclear layer.")
 
-        if ('GCL' or 'OFL') in layers:
+        if np.any([l in layers for l in ('GCL', 'OFL')]):
             ecm = np.sum(in_arr[1, :, np.newaxis] * pt_list, axis=0)
         else:
             raise ValueError("Acceptable values for `layers` are: 'GCL', "
@@ -620,9 +620,10 @@ class Nanduri2012(BaseModel):
             raise ValueError("The Nanduri2012 model does not support an inner "
                              "nuclear layer.")
 
-        # Scaled PulseTrain per layer for this particular pixel: Use as input
-        # to model cascade
-        b1 = self.calc_layer_current(in_arr, pt_list, layers)
+        # Although the paper says to use cathodic-first, the code only
+        # reproduces if we use what we now call anodic-first. So flip the sign
+        # on the stimulus here:
+        b1 = -self.calc_layer_current(in_arr, pt_list, layers)
 
         # Fast response
         b2 = self.tsample * utils.conv(b1, self.gamma1, mode='full',
