@@ -1460,13 +1460,17 @@ def axon_contribution(axon_dist, current_spread, sensitivity_rule='decay',
         generalized (power) mean function. The power mean is calculated as
         np.mean(x ** powermean_exp) ** (1.0 / powermean_exp).
     """
-    if powermean_exp is not None:
-        if contribution_rule != 'mean':
-            raise ValueError(("Contribution rule must be set to 'mean' in "
-                              "to change `powermean_exp` (currently "
-                              "set to %s)." % contribution_rule))
+    if contribution_rule == 'mean':
+        if powermean_exp is None:
+            raise ValueError("`powermean_exp` cannot be None when contribution "
+                             "rule is set to 'mean'.")
         if powermean_exp <= 0.0:
             raise ValueError('`powermean_exp` must be positive.')
+    else:
+        if powermean_exp is not None:
+            raise ValueError(("Contribution rule must be set to 'mean' in "
+                              "order to change `powermean_exp` (currently "
+                              "set to %s)." % contribution_rule))
     if decay_const <= 0.0:
         raise ValueError('`decay_const` must be positive.')
 
