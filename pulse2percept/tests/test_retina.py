@@ -311,12 +311,6 @@ def test_ret2dva():
                                     decimal=3 - exp)  # adjust precision
 
 
-# This function is deprecated
-def test_micron2deg():
-    npt.assert_almost_equal(p2p.retina.micron2deg(0.0), 0.0)
-    npt.assert_almost_equal(p2p.retina.micron2deg(280.0), 1.0)
-
-
 def test_dva2ret():
     # Below 50deg eccentricity, relationship is linear with slope 0.268
     npt.assert_equal(p2p.retina.dva2ret(0.0), 0.0)
@@ -326,12 +320,6 @@ def test_dva2ret():
             ret = 0.268 * sign * 10 ** (exp + 3)  # mm
             npt.assert_almost_equal(p2p.retina.dva2ret(dva), ret,
                                     decimal=-exp)  # adjust precision
-
-
-# This function is deprecated
-def test_deg2micron():
-    npt.assert_almost_equal(p2p.retina.deg2micron(0.0), 0.0)
-    npt.assert_almost_equal(p2p.retina.deg2micron(1.0), 280.0)
 
 
 def test_jansonius2009():
@@ -348,7 +336,8 @@ def test_jansonius2009():
     # These axons should all end at the meridian
     for sign in [-1.0, 1.0]:
         for phi0 in [110.0, 135.0, 160.0]:
-            ax_pos = p2p.retina.jansonius2009(sign * phi0, n_rho=501,
+            ax_pos = p2p.retina.jansonius2009(sign * phi0, n_rho=801,
+                                              loc_od=(15, 2),
                                               rho_range=(0.0, 45.0))
             print(ax_pos[-1, :])
             npt.assert_almost_equal(ax_pos[-1, 1], 0.0, decimal=1)
@@ -370,6 +359,20 @@ def test_jansonius2009():
     for hirho in [-200.0, 40.0]:
         with pytest.raises(ValueError):
             p2p.retina.jansonius2009(0.0, rho_range=(45.0, hirho))
+
+    # `eye` must be left or right
+    for eye in ['L', 'r', 'left', 'right']:
+        with pytest.raises(ValueError):
+            p2p.retina.jansonius2009(0.0, eye=eye)
+
+    # A single axon fiber with `phi0`=0 should return a single pixel location
+    # that corresponds to the optic disc
+    for eye in ['LE', 'RE']:
+        for loc_od in [(15.5, 1.5), (7.0, 3.0), (-2.0, -2.0)]:
+            single_fiber = p2p.retina.jansonius2009(0, n_rho=1, loc_od=loc_od,
+                                                    rho_range=(0, 0))
+            npt.assert_equal(len(single_fiber), 1)
+            npt.assert_almost_equal(single_fiber[0], loc_od)
 
 
 def test_find_closest_axon():
@@ -412,7 +415,11 @@ def test_axon_contribution():
             p2p.retina.axon_contribution([0], [0], decay_const=lmbda)
     for p in [-1, 0]:
         with pytest.raises(ValueError):
-            p2p.retina.axon_contribution([0], [0], powermean_exp=p)
+            p2p.retina.axon_contribution([0], [0], contribution_rule='mean',
+                                         powermean_exp=p)
+    with pytest.raises(ValueError):
+        p2p.retina.axon_contribution([0], [0], contribution_rule='max',
+                                     powermean_exp=1)
     with pytest.raises(ValueError):
         p2p.retina.axon_contribution([0], [0], sensitivity_rule='unknown')
     with pytest.raises(ValueError):

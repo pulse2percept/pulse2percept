@@ -94,7 +94,4 @@ folder, including the following:
 
 - [0.1-image2percept.ipynb](https://github.com/uwescience/pulse2percept/blob/master/examples/notebooks/0.1-image2percept.ipynb): How to convert an image to a percept.
 
-- [1.0-exp-nanduri2012.ipynb](https://github.com/uwescience/pulse2percept/blob/master/examples/notebooks/1.0-exp-nanduri2012.ipynb): A notebook reproducing the findings described
-   in Nanduri et al. (2012).
-
 Detailed documentation can be found at [uwescience.github.io/pulse2percept](https://uwescience.github.io/pulse2percept).

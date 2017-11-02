@@ -47,9 +47,9 @@ class Grid(object):
 
     def __init__(self, x_range=(-1000.0, 1000.0), y_range=(-1000.0, 1000.0),
                  eye='RE', sampling=25, n_axons=501, phi_range=(-180.0, 180.0),
-                 n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.0, 2.0),
+                 n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.5, 1.5),
                  sensitivity_rule='decay', contribution_rule='max',
-                 decay_const=2.0, powermean_exp=1.0, datapath='.',
+                 decay_const=2.0, powermean_exp=None, datapath='.',
                  save_data=True, engine='joblib', scheduler='threading',
                  n_jobs=-1):
         """Generates a spatial grid representing the retinal coordinate frame
@@ -117,12 +117,11 @@ class Grid(object):
                 mean sensitivity across all axon segments. Specify
                 `powermean_exp` to change the exponent of the generalized
                 (power) mean, calculated as np.mean(x ** powermean_exp) **
-                (1.0 / powermean_exp). Default is 1, which is equal to the
-                arithmetic mean.
+                (1.0 / powermean_exp).
         decay_const : float, optional, default: 2.0
             When `sensitivity_rule` is set to 'decay', specifies the decay
             constant of the exponential fall-off.
-        powermean_exp : float, optional, default: 1.0
+        powermean_exp : float, optional, default: None
             When `sensitivity_rule` is set to 'mean', specifies the exponent of
             the generalized (power) mean function. The power mean is calculated
             as np.mean(x ** powermean_exp) ** (1.0 / powermean_exp).
@@ -176,6 +175,25 @@ class Grid(object):
         self.scheduler = scheduler
         self.n_jobs = n_jobs
 
+        if np.abs(loc_od[1]) > 10.0:
+            logging.getLogger(__name__).warn("The Jansonius model might "
+                                             "misbehave if `loc_od` has "
+                                             "a y value > 10.")
+
+        if eye.upper() == 'RE':
+            if loc_od[0] <= 0:
+                w_s = "In a right eye, the optic disc usually has x > 0 - "
+                w_s += "currently at (%.1f, %.1f)." % (loc_od[0], loc_od[1])
+                logging.getLogger(__name__).warn(w_s)
+        elif eye.upper() == 'LE':
+            if loc_od[0] > 0:
+                w_s = "In a left eye, the optic disc usually has x < 0 - "
+                w_s += "currently at (%.1f, %.1f)." % (loc_od[0], loc_od[1])
+                logging.getLogger(__name__).warn(w_s)
+        else:
+            e_s = "Unknown eye string '%s': Choose from 'LE', 'RE'." % eye
+            raise ValueError(e_s)
+
         # Include endpoints in meshgrid
         xlo, xhi = x_range
         ylo, yhi = y_range
@@ -198,6 +216,10 @@ class Grid(object):
                      'n_axons': n_axons, 'phi_range': phi_range,
                      'n_rho': n_rho, 'rho_range': rho_range,
                      'sampling': sampling, 'loc_od': loc_od}
+
+        # Assign all elements in the dictionary to this object
+        for key, value in six.iteritems(grid_dict):
+            setattr(self, key, value)
 
         # Check if such a file already exists. If so, load parameters and
         # make sure they are the same as specified above. Else, create new.
@@ -233,9 +255,9 @@ class Grid(object):
 
             # Grow a number `n_axons` of axon bundles with orientations in
             # `phi_range`
-            phi = np.linspace(phi_range[0], phi_range[1], n_axons)
+            phi = np.linspace(*phi_range, num=n_axons)
             func_kwargs = {'n_rho': n_rho, 'rho_range': rho_range,
-                           'loc_od': loc_od}
+                           'loc_od': loc_od, 'eye': eye}
             self.axon_bundles = utils.parfor(jansonius2009, phi,
                                              func_kwargs=func_kwargs,
                                              engine=engine, n_jobs=n_jobs,
@@ -282,7 +304,7 @@ class Grid(object):
         Returns
         -------
         ecm: array
-            The effective current spread, a time - series of the same size as
+            The effective current spread, a time series of the same size as
             the current map, where each pixel is the dot product of the pixel
             values in ecm along the pixels in the list in axon_map, weighted
             by the weights axon map.
@@ -1140,28 +1162,6 @@ def ret2dva(r_um):
     return sign * r_deg
 
 
-@utils.deprecated(alt_func='p2p.retina.ret2dva', deprecated_version='0.2',
-                  removed_version='0.3')
-def micron2deg(micron):
-    """Transforms a distance from microns to degrees
-
-    Based on http: // retina.anatomy.upenn.edu / ~rob / lance / units_space.html
-    """
-    deg = micron / 280.0
-    return deg
-
-
-@utils.deprecated(alt_func='p2p.retina.dva2ret', deprecated_version='0.2',
-                  removed_version='0.3')
-def deg2micron(deg):
-    """Transforms a distance from degrees to microns
-
-    Based on http: // retina.anatomy.upenn.edu / ~rob / lance / units_space.html
-    """
-    microns = 280.0 * deg
-    return microns
-
-
 def dva2ret(r_deg):
     """Converts visual angles (deg) into retinal distances (um)
 
@@ -1176,16 +1176,12 @@ def dva2ret(r_deg):
     return sign * r_um
 
 
-def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0),
-                  loc_od=(15.0, 2.0), beta_sup=-1.9, beta_inf=0.5):
+def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0), eye='RE',
+                  loc_od=(15.5, 1.5), beta_sup=-1.9, beta_inf=0.5):
     """Grows a single axon bundle based on the model by Jansonius et al. (2009)
 
     This function generates the trajectory of a single nerve fiber bundle
-    based on the mathematical model described in:
-
-    > Jansionus et al. (2009). A mathematical description of nerve fiber
-    > bundle trajectories and their variability in the human retina. Vis
-    > Res 49: 2157 - 2163.
+    based on the mathematical model described in [1]_.
 
     Parameters
     ----------
@@ -1197,9 +1193,9 @@ def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0),
     rho_range: (rho_min, rho_max), optional, default: (4.0, 45.0)
         Lower and upper bounds for the radial position values(polar
         coordinates).
-    loc_od: (x_od, y_od), optional, default: (15.0, 2.0)
+    loc_od: (x_od, y_od), optional, default: (15.5, 1.5)
         Location of the center of the optic disc(x, y) in Cartesian
-        coordinates.
+        coordinates. In a right (left) eye, we should have x > 0 (x < 0).
     beta_sup: float, optional, default: -1.9
         Scalar value for the superior retina(see Eq. 5, `\beta_s` in the
         paper).
@@ -1219,7 +1215,25 @@ def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0),
     Notes
     -----
     The study did not include axons with phi0 in [-60, 60] deg.
+
+    .. [1] N. M. Jansionus, J. Nevalainen, B. Selig, L.M. Zangwill, P.A.
+           Sample, W. M. Budde, J. B. Jonas, W. A. Lagrèze, P. J. Airaksinen,
+           R. Vonthein, L. A. Levin, J. Paetzold, and U. Schieferd, "A
+           mathematical description of nerve fiber bundle trajectories and
+           their variability in the human retina. Vision Research 49:2157-2163,
+           2009.
+
     """
+    if eye.upper() not in ['LE', 'RE']:
+        e_s = "Unknown eye string '%s': Choose from 'LE', 'RE'." % eye
+        raise ValueError(e_s)
+
+    if eye.upper() == 'LE':
+        # The Jansonius model doesn't know about left eyes: We invert the x
+        # coordinate of the optic disc here, run the model, and then invert all
+        # x coordinates of all axon fibers back.
+        loc_od = (-loc_od[0], loc_od[1])
+
     if np.abs(phi0) > 180.0:
         raise ValueError('phi0 must be within [-180, 180].')
     if n_rho < 1:
@@ -1230,7 +1244,7 @@ def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0),
         raise ValueError('Lower bound on rho cannot be larger than the '
                          ' upper bound.')
     is_superior = phi0 > 0
-    rho = np.linspace(rho_range[0], rho_range[1], n_rho)
+    rho = np.linspace(*rho_range, num=n_rho)
 
     if is_superior:
         # Axon is in superior retina, compute `b` (real number) from Eq. 5:
@@ -1272,6 +1286,10 @@ def jansonius2009(phi0, n_rho=801, rho_range=(4.0, 45.0),
         # Else we need to flip the sign
         idx = xprime < -loc_od[0]
     ymodel[idx] = yprime[idx] + loc_od[1] * (xmodel[idx] / loc_od[0]) ** 2
+
+    # In a left eye, need to flip back x coordinates:
+    if eye.upper() == 'LE':
+        xmodel *= -1
 
     # Return as Nx2 array
     return np.vstack((xmodel, ymodel)).T
@@ -1336,7 +1354,7 @@ def axon_dist_from_soma(axon, xg, yg, tree=None):
         away from the soma towards the optic disc.
     xg, yg: array
         meshgrid of pixel locations in units of visual angle sp
-    tree : spat.cKDTree, optional, default: train on `xg`, `yg` meshgrid
+    tree : spat.cKDTree class instance, optional, default: train on `xg`, `yg`
         A kd-tree trained on `xg`, `yg` for quick nearest-neighbor lookup.
 
     Returns
@@ -1386,7 +1404,7 @@ def axon_dist_from_soma(axon, xg, yg, tree=None):
 
 def axon_contribution(axon_dist, current_spread, sensitivity_rule='decay',
                       contribution_rule='max', min_contribution=0.01,
-                      decay_const=2.0, powermean_exp=1.0):
+                      decay_const=2.0, powermean_exp=None):
     """Determines the contribution of a single axon to the current map
 
     This function determines the contribution of a single axon to the current
@@ -1427,24 +1445,28 @@ def axon_contribution(axon_dist, current_spread, sensitivity_rule='decay',
         - 'sum':
             The axon's contribution to the current spread is equal to the sum
             sensitivity across all axon segments.
-        - 'power-mean':
+        - 'mean':
             The axon's contribution to the current spread is equal to the mean
             sensitivity across all axon segments. Specify `powermean_exp` to
             change the exponent of the generalized (power) mean, calculated as
-            np.mean(x ** powermean_exp) ** (1.0 / powermean_exp). Default is 1,
-            which is equal to the arithmetic mean.
+            np.mean(x ** powermean_exp) ** (1.0 / powermean_exp).
     min_contribution : float, optional, default: 0.01
         Current contributions below this value will not be counted.
     decay_const : float, optional, default: 2.0
         When `sensitivity_rule` is set to 'decay', specifies the decay constant
         of the exponential fall-off.
-    powermean_exp : float, optional, default: 1.0
+    powermean_exp : float, optional, default: None
         When `sensitivity_rule` is set to 'mean', specifies the exponent of the
         generalized (power) mean function. The power mean is calculated as
         np.mean(x ** powermean_exp) ** (1.0 / powermean_exp).
     """
-    if powermean_exp <= 0.0:
-        raise ValueError('`powermean_exp` must be positive.')
+    if powermean_exp is not None:
+        if contribution_rule != 'mean':
+            raise ValueError(("Contribution rule must be set to 'mean' in "
+                              "to change `powermean_exp` (currently "
+                              "set to %s)." % contribution_rule))
+        if powermean_exp <= 0.0:
+            raise ValueError('`powermean_exp` must be positive.')
     if decay_const <= 0.0:
         raise ValueError('`decay_const` must be positive.')
 
@@ -1648,7 +1670,9 @@ def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=0.001):
         this_id = [idx]
         this_weight = [1.0]
         for ax_pos_id in range(ax_pos_id0 - 1, -1, -1):
-            # increment the distance from the starting point
+            # Increment the distance from the starting point
+            # The following calculation had a bug in them: squaring was done
+            # twice
             ax = (jan_x[ax_pos_id + 1, ax_num] - jan_x[ax_pos_id, ax_num])
             ay = (jan_y[ax_pos_id + 1, ax_num] - jan_y[ax_pos_id, ax_num])
             dist += np.sqrt(ax ** 2 + ay ** 2)
@@ -1672,7 +1696,9 @@ def make_axon_map(xg, yg, jan_x, jan_y, axon_lambda=1, min_weight=0.001):
                     cur_xg = nearest_xg
                     cur_yg = nearest_yg
 
-                    # append the list
+                    # Append the list
+                    # The following calculation had a bug in it: `weight` was
+                    # exponentiated twice
                     this_weight.append(weight)
                     this_id.append(np.ravel_multi_index((nearest_yg_id,
                                                          nearest_xg_id),

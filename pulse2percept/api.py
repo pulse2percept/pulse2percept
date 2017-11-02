@@ -54,9 +54,9 @@ class Simulation(object):
     def set_optic_fiber_layer(self, sampling=100, x_range=None, y_range=None,
                               n_axons=501, phi_range=(-180.0, 180.0),
                               n_rho=801, rho_range=(4.0, 45.0),
-                              loc_od=(15.0, 2.0),
+                              loc_od=(15.5, 1.5),
                               sensitivity_rule='decay', decay_const=5.0,
-                              contribution_rule='max', powermean_exp=1.0,
+                              contribution_rule='max', powermean_exp=None,
                               datapath='.', save_data=True):
         """Sets parameters of the optic fiber layer (OFL)
 
@@ -85,9 +85,9 @@ class Simulation(object):
         rho_range: (rho_min, rho_max), optional, default: (4.0, 45.0)
             Lower and upper bounds for the radial position values(polar
             coordinates).
-        loc_od: (x_od, y_od), optional, default: (15.0, 2.0)
-            Location of the center of the optic disc(x, y) in Cartesian
-            coordinates.
+        loc_od: (x_od, y_od), optional, default: (15.05 1.5)
+            Location of the center of the optic disc (x, y) in Cartesian
+            coordinates. In a right (left) eye, we should have x > 0 (x < 0).
         sensitivity_rule : {'decay', 'Jeng2011'}, optional, default: 'decay'
             This rule specifies how the activation of the axon differs as a
             function of distance from the soma. The following options are
@@ -99,10 +99,7 @@ class Simulation(object):
             - 'Jeng2011':
                 Axon sensitivity peaks near the sodium band (50um from the
                 soma), then plateaus on the distal axon at roughly half of the
-                peak sensitivity. See Figure 2 in Jeng, Tang, Molnar, Desai,
-                and Fried (2011). The sodium channel band shapes the response
-                to electric stimulation in retinal ganglion cells. J Neural Eng
-                8 (036022).
+                peak sensitivity (see Fig. 2 in [1]_).
         contribution_rule : {'max', 'sum', 'mean'}, optional, default: 'max'
             This rule specifies how the activation thresholds across all axon
             segments are combined to determine the contribution of the axon to
@@ -118,8 +115,8 @@ class Simulation(object):
                 mean sensitivity across all axon segments. Specify
                 `powermean_exp` to change the exponent of the generalized
                 (power) mean, calculated as np.mean(x ** powermean_exp) **
-                (1.0 / powermean_exp). Default is 1, which is equal to the
-                arithmetic mean.
+                (1.0 / powermean_exp). Setting `powermean_exp` to 1 is equal to
+                the arithmetic mean.
         decay_const : float, optional, default: 2.0
             When `sensitivity_rule` is set to 'decay', specifies the decay
             constant of the exponential fall-off.
@@ -134,6 +131,12 @@ class Simulation(object):
             Flag whether to save the data to a new retina file (True) or not
             (False). The file name is automatically generated from all
             specified input arguments.
+
+        Notes
+        -----
+        .. [1] J. Jeng, S. Tang, A. Molnar, N. J. Desai, and S. I. Fried, "The
+           sodium channel band shapes the response to electric stimulation in
+           retinal ganglion cells", J Neural Eng 8 (036022), 2011.
         """
         # For auto-generated grids:
         round_to = 500  # round to nearest (microns)
@@ -178,6 +181,7 @@ class Simulation(object):
                                eye=self.implant.eye, sampling=sampling,
                                n_axons=n_axons, phi_range=phi_range,
                                n_rho=n_rho, rho_range=rho_range,
+                               loc_od=loc_od,
                                sensitivity_rule=sensitivity_rule,
                                contribution_rule=contribution_rule,
                                decay_const=decay_const,
@@ -236,13 +240,7 @@ class Simulation(object):
                     nonlinearity stage.
 
             - 'Nanduri2012':
-                A model of temporal sensitivity as described in:
-
-                > Nanduri, Fine, Horsager, Boynton, Humayun, Greenberg, Weiland
-                > (2012). Frequency and Amplitude Modulation Have Different
-                > Effects on the Percepts Elicited by Retinal Stimulation.
-                > Investigative Ophthalmology & Visual Science January 2012,
-                > Vol.53, 205-214. doi:10.1167/iovs.11-8401.
+                A model of temporal sensitivity as described in [1]_.
 
                 Additional keyword arguments
                 ----------------------------
@@ -270,12 +268,7 @@ class Simulation(object):
                     nonlinearity stage.
 
             - 'Horsager2009':
-                A model of temporal sensitivity as described in:
-
-                > A Horsager, SH Greenwald, JD Weiland, MS Humayun, RJ
-                > Greenberg, MJ McMahon, GM Boynton, and I Fine (2009).
-                > Predicting visual sensitivity in retinal prosthesis patients.
-                > Investigative Ophthalmology & Visual Science, 50(4):1483.
+                A model of temporal sensitivity as described in [2]_.
 
                 Parameters
                 ----------
@@ -298,6 +291,21 @@ class Simulation(object):
                     original model used two different values, depending on
                     whether an experiment is at threshold (`beta`=3.43) or
                     above threshold (`beta`=0.83).
+
+        Notes
+        -----
+        .. [1] D. Nanduri, I. Fine, A. Horsager, G. M. Boynton, M. S. Humayun,
+               R. Greenberg, J. D. Weiland, "Frequency and Amplitude Modulation
+               Have Different Effects on the Percepts Elicited by Retinal
+               Stimulation", Investigative Ophthalmology & Visual Science 53,
+               205-214, 2012.
+        .. [2] A. Horsager, S. H. Greenwald, J. D. Weiland, M. S. Humayun,
+               R. J. Greenberg, M. J. McMahon, G. M. Boynton, and I. Fine,
+               "Predicting visual sensitivity in retinal prosthesis patients",
+               Investigative Ophthalmology & Visual Science, 50(4):1483, 2009.
+
+
+
         """
         model_not_found = False
         if isinstance(model, six.string_types):
@@ -533,9 +541,13 @@ class Simulation(object):
             ax.set_axis_bgcolor('black')
 
         # Draw axon pathways: Need to regenerate because parfor returns axons
-        # out of orders - random sample doesn't look neat. Should be fast:
-        phi = np.linspace(-180, 180, n_axons)
+        # out of orders - random sample doesn't look neat. Use the same
+        # settings as in the OFL, but with a smaller `n_axons`:
+        phi = np.linspace(*self.ofl.phi_range, n_axons)
+        func_kwargs = {'n_rho': self.ofl.n_rho, 'loc_od': self.ofl.loc_od,
+                       'rho_range': self.ofl.rho_range, 'eye': self.ofl.eye}
         axon_bundles = utils.parfor(retina.jansonius2009, phi,
+                                    func_kwargs=func_kwargs,
                                     engine=self.engine, n_jobs=self.n_jobs,
                                     scheduler=self.scheduler)
         for bundle in axon_bundles:
