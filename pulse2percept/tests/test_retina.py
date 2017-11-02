@@ -430,10 +430,16 @@ def test_axon_contribution():
     dist2 = (dist, dist)
     decay_const = 4.0
     for c_rule in ['max', 'mean', 'sum']:
+        if c_rule == 'mean':
+            powermean_exp = 1.0
+        else:
+            powermean_exp = None
+
         # If current spread == 1 everywhere, contribution given by `dist`
         _, contrib = p2p.retina.axon_contribution(
             dist2, np.ones_like(dist), sensitivity_rule='decay',
-            decay_const=decay_const, contribution_rule=c_rule
+            decay_const=decay_const, contribution_rule=c_rule,
+            powermean_exp=powermean_exp
         )
         sensitivity = np.exp(-dist / decay_const)
         method_to_call = getattr(np, c_rule)
@@ -443,9 +449,13 @@ def test_axon_contribution():
     for s_rule in ['decay', 'Jeng2011']:
         for c_rule in ['max', 'sum', 'mean']:
             for p in [1.0, 2.0, 3.0]:
+                if c_rule == 'mean':
+                    powermean_exp = p
+                else:
+                    powermean_exp = None
                 _, contrib = p2p.retina.axon_contribution(
                     dist2, np.zeros_like(dist), sensitivity_rule=s_rule,
-                    contribution_rule=c_rule
+                    contribution_rule=c_rule, powermean_exp=powermean_exp
                 )
                 npt.assert_almost_equal(contrib, 0.0)
 
