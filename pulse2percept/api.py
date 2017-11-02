@@ -543,7 +543,7 @@ class Simulation(object):
         # Draw axon pathways: Need to regenerate because parfor returns axons
         # out of orders - random sample doesn't look neat. Use the same
         # settings as in the OFL, but with a smaller `n_axons`:
-        phi = np.linspace(*self.ofl.phi_range, n_axons)
+        phi = np.linspace(*self.ofl.phi_range, num=n_axons)
         func_kwargs = {'n_rho': self.ofl.n_rho, 'loc_od': self.ofl.loc_od,
                        'rho_range': self.ofl.rho_range, 'eye': self.ofl.eye}
         axon_bundles = utils.parfor(retina.jansonius2009, phi,
