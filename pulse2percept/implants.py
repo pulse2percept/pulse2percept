@@ -263,18 +263,14 @@ class ElectrodeArray(object):
 
     def __init__(self, etype, radii, xs, ys, hs=0, names=None, eye='RE'):
         """Create an ElectrodeArray on the retina
-
         This function creates an electrode array of type `etype` and places it
         on the retina. Lists should specify, for each electrode, its size
         (`radii`), location on the retina (`xs` and `ys`), distance to the
         retina (height, `hs`), and a string identifier (`names`, optional).
-
         Array location should be given in microns, where the fovea is located
         at (0, 0).
-
         Single electrodes in the array can be addressed by index (integer)
         or name.
-
         Parameters
         ----------
         radii : array_like
@@ -294,22 +290,18 @@ class ElectrodeArray(object):
         --------
         A single epiretinal electrode called 'A1', with radius 100um, sitting
         at retinal location (0, 0), 10um away from the retina:
-
         >>> from pulse2percept import implants
         >>> implant0 = implants.ElectrodeArray('epiretinal', 100, 0, 0, hs=10,
         ...                                    names='A1')
 
         Get access to the electrode with name 'A1' in the first array:
-
         >>> my_electrode = implant0['A1']
 
         An array with two electrodes of size 100um, one sitting at
         (-100, -100), the other sitting at (0, 0), with 0 distance from the
         retina, of type 'subretinal':
-
         >>> implant1 = implants.ElectrodeArray('subretinal', [100, 100],
         ...                                    [-100, 0], [-100, 0], hs=[0, 0])
-
         """
         self.etype = etype
         self.eye = eye
@@ -323,11 +315,9 @@ class ElectrodeArray(object):
 
     def add_electrode(self, electrode):
         """Adds an electrode to an ElectrodeArray object
-
         This function adds a single electrode to an existing ElectrodeArray
         object. The electrode must have the same type as the array
         (see implants.SUPPORTED_IMPLANT_TYPES).
-
         Parameters
         ----------
         electrode : implants.Electrode
@@ -347,15 +337,12 @@ class ElectrodeArray(object):
 
     def add_electrodes(self, radii, xs, ys, hs=0, names=None):
         """Adds electrodes to an ElectrodeArray object
-
         This function adds one or more electrodes to an existing ElectrodeArray
         object. Lists should specify, for each electrode to be added, the size
         (`radii`), location on the retina (`xs` and `ys`), distance to the
         retina (height, `hs`), and a string identifier (`names`, optional).
-
         Array location should be given in microns, where the fovea is located
         at (0, 0).
-
         Single electrodes in the array can be addressed by index (integer)
         or name.
 
@@ -374,13 +361,10 @@ class ElectrodeArray(object):
 
         Examples
         --------
-
         Adding a single electrode of radius 50um sitting at (0, 0) to an
         existing ElectrodeArray object:
-
         >>> implant = ElectrodeArray('epiretinal', 100, 100, 100)
         >>> implant.add_electrodes(50, 0, 0)
-
         """
         # Make it so the method can accept either floats, lists, or
         # numpy arrays, and `zip` works regardless.
@@ -409,7 +393,6 @@ class ElectrodeArray(object):
 
     def __getitem__(self, item):
         """Return the electrode specified by `item`
-
         Parameters
         ----------
         item : int|string
@@ -420,26 +403,23 @@ class ElectrodeArray(object):
         try:
             # Is `item` an integer?
             return self.electrodes[item]
-        except:
+        except (IndexError, TypeError):
             # If `item` is a valid string identifier, return valid index.
             # Else return None
             try:
                 return self.electrodes[self.get_index(item)]
-            except:
+            except (IndexError, TypeError):
                 return None
 
     def get_index(self, name):
         """Returns the index of an electrode called `name`
-
         This function searches the electrode array for an electrode with
         string identifier `name`. If found, the index of that electrode is
         returned, else None.
-
         Parameters
         ----------
         name : str
             An electrode name (string identifier).
-
         Returns
         -------
         A valid electrode index or None.
@@ -473,25 +453,20 @@ class ArgusI(ElectrodeArray):
     def __init__(self, x_center=0, y_center=0, h=0, rot=0, eye='RE',
                  use_legacy_names=False):
         """Create an ArgusI array on the retina
-
         This function creates an ArgusI array and places it on the retina
         such that the center of the array is located at
         [`x_center`, `y_center`] (microns) and the array is rotated by
         rotation angle `rot` (radians).
-
         The array is oriented in the visual field as shown in Fig. 1 of
         Horsager et al. (2009); that is, if placed in (0,0), the top two
         rows will lie in the lower retina (upper visual field):
-
         .. raw:: html
-
           <pre>
             y       A1 B1 C1 D1                     260 520 260 520
             ^       A2 B2 C2 D2   where electrode   520 260 520 260
             |       A3 B3 C3 D3   diameters are:    260 520 260 520
             -->x    A4 B4 C4 D4                     520 260 520 260
           </pre>
-
         Electrode order is: A1, B1, C1, D1, A2, B2, ..., D4.
         If `use_legacy_names` is True, electrode order is: L6, L2, M8, M4, ...
         An electrode can be addressed by index (integer) or name.
@@ -512,19 +487,15 @@ class ArgusI(ElectrodeArray):
         eye : {'LE', 'RE'}, optional, default: 'RE'
             Eye in which array is implanted.
 
-
         Examples
         --------
         Create an ArgusI array centered on the fovea, at 100um distance from
         the retina:
-
         >>> from pulse2percept import implants
         >>> argus = implants.ArgusI(x_center=0, y_center=0, h=100, rot=0)
 
         Get access to electrode 'B1':
-
         >>> my_electrode = argus['B1']
-
         """
         # Alternating electrode sizes, arranged in checkerboard pattern
         r_arr = np.array([260, 520, 260, 520]) / 2.0
@@ -611,18 +582,14 @@ class ArgusII(ElectrodeArray):
 
     def __init__(self, x_center=0, y_center=0, h=0, rot=0, eye='RE'):
         """Create an ArgusII array on the retina
-
         This function creates an ArgusII array and places it on the retina
         such that the center of the array is located at
         [`x_center`, `y_center`] (microns) and the array is rotated by
         rotation angle `rot` (radians).
-
         The array is oriented upright in the visual field, such that an
         array with center (0,0) has the top three rows lie in the lower
         retina (upper visual field), as shown below:
-
         .. raw:: html
-
           <pre>
                     A1 A2 A3 A4 A5 A6 A7 A8 A9 A10
             y       B1 B2 B3 B4 B5 B6 B7 B8 B9 B10
@@ -631,7 +598,6 @@ class ArgusII(ElectrodeArray):
             -->x    E1 E2 E3 E4 E5 E6 E7 E8 E9 E10
                     F1 F2 F3 F4 F5 F6 F7 F8 F9 F10
           </pre>
-
         Electrode order is: A1, A2, ..., A10, B1, B2, ..., F10.
         An electrode can be addressed by index (integer) or name.
 
@@ -655,14 +621,11 @@ class ArgusII(ElectrodeArray):
         --------
         Create an ArgusII array centered on the fovea, at 100um distance from
         the retina:
-
         >>> from pulse2percept import implants
         >>> argus = implants.ArgusII(x_center=0, y_center=0, h=100, rot=0)
 
         Get access to electrode 'E7':
-
         >>> my_electrode = argus['E7']
-
         """
         # Electrodes are 200um in diameter
         r_arr = np.ones(60) * 100.0

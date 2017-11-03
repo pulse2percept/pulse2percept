@@ -35,28 +35,28 @@ def test_Simulation_set_optic_fiber_layer():
 
     # Invalid grid ranges
     with pytest.raises(ValueError):
-        sim.set_optic_fiber_layer(x_range=[10, 0])
+        sim.set_optic_fiber_layer(x_range=(10, 0))
     with pytest.raises(ValueError):
-        sim.set_optic_fiber_layer(x_range=[1, 2, 3])
+        sim.set_optic_fiber_layer(x_range=(1, 2, 3))
     with pytest.raises(ValueError):
         sim.set_optic_fiber_layer(x_range='invalid')
     with pytest.raises(ValueError):
-        sim.set_optic_fiber_layer(y_range=[10, 0])
+        sim.set_optic_fiber_layer(y_range=(10, 0))
     with pytest.raises(ValueError):
-        sim.set_optic_fiber_layer(y_range=[1, 2, 3])
+        sim.set_optic_fiber_layer(y_range=(1, 2, 3))
     with pytest.raises(ValueError):
         sim.set_optic_fiber_layer(y_range='invalid')
 
-    x_range = [-100, 100]
-    y_range = [0, 200]
+    x_range = (-100, 100)
+    y_range = (0, 200)
     sim.set_optic_fiber_layer(x_range=x_range, y_range=y_range,
                               save_data=False)
     npt.assert_equal(sim.ofl.gridx.min(), x_range[0])
     npt.assert_equal(sim.ofl.gridx.max(), x_range[1])
     npt.assert_equal(sim.ofl.gridy.min(), y_range[0])
     npt.assert_equal(sim.ofl.gridy.max(), y_range[1])
-    npt.assert_equal(sim.ofl.range_x, np.diff(x_range))
-    npt.assert_equal(sim.ofl.range_x, np.diff(x_range))
+    npt.assert_equal(sim.ofl.x_range, x_range)
+    npt.assert_equal(sim.ofl.y_range, y_range)
 
     # Smoke test
     implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0, 0)
