@@ -284,7 +284,9 @@ class Grid(object):
                                func_args=[current_spread], engine=self.engine,
                                func_kwargs={
                                    'sensitivity_rule': self.sensitivity_rule,
-                                   'contribution_rule': self.contribution_rule
+                                   'contribution_rule': self.contribution_rule,
+                                   'decay_const': self.decay_const,
+                                   'powermean_exp': self.powermean_exp
                                },
                                scheduler=self.scheduler, n_jobs=self.n_jobs)
 
