@@ -42,6 +42,7 @@ before_install:
 
 install:
   - travis_wait
+  - python setup.py build_ext -i
   - python setup.py install --record installed_files.txt
 
 script:
