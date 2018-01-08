@@ -524,9 +524,24 @@ class Simulation(object):
         -------
         Returns a handle to the created figure (`fig`) and axes element (`ax`).
         """
-        from matplotlib import patches
-
-        self._set_layers()
+        if self.ofl is not None:
+            # Optic fiber layer already set via  ``set_optic_fiber_layer``
+            phi_range = self.ofl.phi_range
+            n_rho = self.ofl.n_rho
+            rho_range = self.ofl.rho_range
+            loc_od = self.ofl.loc_od
+            x_range = self.ofl.x_range
+            y_range = self.ofl.y_range
+            plot_patch = True
+        else:
+            msg = "Optic fiber layer not set (call ``set_optic_fiber_layer``)."
+            msg += " Using default values."
+            logging.getLogger(__name__).info(msg)
+            phi_range = (-180.0, 180.0)
+            n_rho = 801
+            rho_range = (4.0, 45.0)
+            loc_od = (15.5, 1.5)
+            plot_patch = False
 
         fig = None
         if ax is None:
@@ -543,9 +558,9 @@ class Simulation(object):
         # Draw axon pathways: Need to regenerate because parfor returns axons
         # out of orders - random sample doesn't look neat. Use the same
         # settings as in the OFL, but with a smaller `n_axons`:
-        phi = np.linspace(*self.ofl.phi_range, num=n_axons)
-        func_kwargs = {'n_rho': self.ofl.n_rho, 'loc_od': self.ofl.loc_od,
-                       'rho_range': self.ofl.rho_range, 'eye': self.ofl.eye}
+        phi = np.linspace(*phi_range, num=n_axons)
+        func_kwargs = {'n_rho': n_rho, 'loc_od': loc_od,
+                       'rho_range': rho_range, 'eye': self.implant.eye}
         axon_bundles = utils.parfor(retina.jansonius2009, phi,
                                     func_kwargs=func_kwargs,
                                     engine=self.engine, n_jobs=self.n_jobs,
@@ -556,11 +571,12 @@ class Simulation(object):
 
         # Draw in the the retinal patch we're simulating.
         # This defines the size of our "percept" image below.
-        patch = patches.Rectangle((self.ofl.gridx.min(), self.ofl.gridy.min()),
-                                  np.diff(self.ofl.x_range),
-                                  np.diff(self.ofl.y_range),
-                                  alpha=0.7)
-        ax.add_patch(patch)
+        if plot_patch:
+            from matplotlib import patches
+            patch = patches.Rectangle((x_range[0], y_range[0]),
+                                      np.diff(x_range), np.diff(y_range),
+                                      alpha=0.7)
+            ax.add_patch(patch)
 
         # Highlight location of stimulated electrodes
         if stim is not None:
