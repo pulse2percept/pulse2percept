@@ -2,7 +2,7 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-import pulse2percept as p2p
+from .. import implants
 
 
 def test_Electrode():
@@ -15,7 +15,7 @@ def test_Electrode():
     n = ["some name"] * num_pts
 
     for rr, xx, yy, hh, tt, nn in zip(r, x, y, h, t, n):
-        e = p2p.implants.Electrode(tt, rr, xx, yy, hh, nn)
+        e = implants.Electrode(tt, rr, xx, yy, hh, nn)
         npt.assert_equal(e.radius, rr)
         npt.assert_equal(e.x_center, xx)
         npt.assert_equal(e.y_center, yy)
@@ -40,10 +40,10 @@ def test_Electrode():
 
     # Invalid type
     with pytest.raises(ValueError):
-        p2p.implants.Electrode('suprachoroidal', 10, 0, 0, 0)
+        implants.Electrode('suprachoroidal', 10, 0, 0, 0)
 
     # Invalid layer
-    e = p2p.implants.Electrode('epiretinal', 10, 0, 0, 0)
+    e = implants.Electrode('epiretinal', 10, 0, 0, 0)
     with pytest.raises(ValueError):
         e.current_spread(0, 0, 'RGC')
 
@@ -54,20 +54,20 @@ def test_Electrode():
 
 
 def test_ElectrodeArray():
-    implant = p2p.implants.ElectrodeArray('subretinal', 10, 0, 0)
+    implant = implants.ElectrodeArray('subretinal', 10, 0, 0)
     npt.assert_equal(implant.num_electrodes, 1)
 
     # Make sure ElectrodeArray can accept ints, floats, lists, np.arrays
-    implants = [None] * 4
-    implants[0] = p2p.implants.ElectrodeArray('epiretinal', [0], [1], [2],
-                                              hs=[3])
-    implants[1] = p2p.implants.ElectrodeArray('epiretinal', 0, 1, 2, hs=3)
-    implants[2] = p2p.implants.ElectrodeArray('epiretinal', .0, [1], 2.0,
-                                              hs=[3])
-    implants[3] = p2p.implants.ElectrodeArray('epiretinal', np.array([0]), [1],
-                                              [2], hs=[[3]])
+    arrays = [None] * 4
+    arrays[0] = implants.ElectrodeArray('epiretinal', [0], [1], [2],
+                                        hs=[3])
+    arrays[1] = implants.ElectrodeArray('epiretinal', 0, 1, 2, hs=3)
+    arrays[2] = implants.ElectrodeArray('epiretinal', .0, [1], 2.0,
+                                        hs=[3])
+    arrays[3] = implants.ElectrodeArray('epiretinal', np.array([0]), [1],
+                                        [2], hs=[[3]])
 
-    for arr in implants:
+    for arr in arrays:
         npt.assert_equal(arr.num_electrodes, 1)
         npt.assert_equal(arr.electrodes[0].radius, 0)
         npt.assert_equal(arr.electrodes[0].x_center, 1)
@@ -77,8 +77,8 @@ def test_ElectrodeArray():
 
     # Make sure electrodes can be addressed by index
     vals = range(5)
-    implant = p2p.implants.ElectrodeArray('subretinal', vals, vals, vals,
-                                          hs=vals)
+    implant = implants.ElectrodeArray('subretinal', vals, vals, vals,
+                                      hs=vals)
     npt.assert_equal(implant.num_electrodes, len(vals))
     for v in vals:
         el = implant[v]
@@ -90,36 +90,36 @@ def test_ElectrodeArray():
 
     # Test left/right eye
     for validstr in ['left', 'LEFT', 'l', 'LE']:
-        implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0,
-                                              eye=validstr)
+        implant = implants.ElectrodeArray('epiretinal', 10, 0, 0,
+                                          eye=validstr)
         npt.assert_equal(implant.eye, 'LE')
     for validstr in ['right', 'Right', 'r', 'RE']:
-        implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0,
-                                              eye=validstr)
+        implant = implants.ElectrodeArray('epiretinal', 10, 0, 0,
+                                          eye=validstr)
         npt.assert_equal(implant.eye, 'RE')
     for invalidstr in ['both', 'lefteye', 'invalid']:
         with pytest.raises(ValueError):
-            implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0,
-                                                  eye=invalidstr)
+            implant = implants.ElectrodeArray('epiretinal', 10, 0, 0,
+                                              eye=invalidstr)
 
 
 def test_ElectrodeArray_add_electrode():
-    implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0)
+    implant = implants.ElectrodeArray('epiretinal', 10, 0, 0)
     with pytest.raises(TypeError):
         implant.add_electrode(implant)
 
     with pytest.raises(ValueError):
-        implant.add_electrode(p2p.implants.Electrode('subretinal', 10, 0, 0))
+        implant.add_electrode(implants.Electrode('subretinal', 10, 0, 0))
 
     # Make sure electrode count is correct
     for j in range(5):
-        implant.add_electrode(p2p.implants.Electrode('epiretinal', 10, 10, 10))
+        implant.add_electrode(implants.Electrode('epiretinal', 10, 10, 10))
         npt.assert_equal(implant.num_electrodes, j + 2)
 
 
 def test_ElectrodeArray_add_electrodes():
     for j in range(5):
-        implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0)
+        implant = implants.ElectrodeArray('epiretinal', 10, 0, 0)
         implant.add_electrodes(range(1, j + 1), range(j), range(j))
         npt.assert_equal(implant.num_electrodes, j + 1)
 
@@ -142,7 +142,7 @@ def test_ArgusI():
 
                     # Convert rotation angle to rad
                     rot = r * np.pi / 180
-                    argus = p2p.implants.ArgusI(x, y, h=h, rot=rot)
+                    argus = implants.ArgusI(x, y, h=h, rot=rot)
 
                     # Coordinates of first electrode
                     xy = np.array([-1200, -1200]).T
@@ -179,13 +179,13 @@ def test_ArgusI():
 
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
-        p2p.implants.ArgusI(-100, 10, h=np.zeros(5))
+        implants.ArgusI(-100, 10, h=np.zeros(5))
     with pytest.raises(ValueError):
-        p2p.implants.ArgusI(-100, 10, h=[1, 2, 3])
+        implants.ArgusI(-100, 10, h=[1, 2, 3])
 
     for use_legacy_names in [False, True]:
         # Indexing must work for both integers and electrode names
-        argus = p2p.implants.ArgusI(use_legacy_names=use_legacy_names)
+        argus = implants.ArgusI(use_legacy_names=use_legacy_names)
         for idx, electrode in enumerate(argus):
             name = electrode.name
             npt.assert_equal(electrode, argus[idx])
@@ -208,14 +208,14 @@ def test_ArgusI():
 
     # Right-eye implant:
     xc, yc = 500, -500
-    argus_re = p2p.implants.ArgusI(eye='RE', x_center=xc, y_center=yc)
+    argus_re = implants.ArgusI(eye='RE', x_center=xc, y_center=yc)
     npt.assert_equal(argus_re['D1'].x_center > argus_re['A1'].x_center, True)
     npt.assert_almost_equal(argus_re['D1'].y_center, argus_re['A1'].y_center)
     npt.assert_equal(argus_re.tack[0] < argus_re['D1'].x_center, True)
     npt.assert_almost_equal(argus_re.tack[1], yc)
 
     # Left-eye implant:
-    argus_le = p2p.implants.ArgusI(eye='LE', x_center=xc, y_center=yc)
+    argus_le = implants.ArgusI(eye='LE', x_center=xc, y_center=yc)
     npt.assert_equal(argus_le['A1'].x_center > argus_le['D1'].x_center, True)
     npt.assert_almost_equal(argus_le['D1'].y_center, argus_le['A1'].y_center)
     npt.assert_equal(argus_le.tack[0] > argus_le['A1'].x_center, True)
@@ -224,12 +224,12 @@ def test_ArgusI():
     # In both left and right eyes, rotation with positive angle should be
     # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
     for eye, el in zip(['LE', 'RE'], ['A1', 'D4']):
-        before = p2p.implants.ArgusI(eye=eye)
-        after = p2p.implants.ArgusI(eye=eye, rot=np.deg2rad(10))
+        before = implants.ArgusI(eye=eye)
+        after = implants.ArgusI(eye=eye, rot=np.deg2rad(10))
         npt.assert_equal(after[el].x_center < before[el].x_center, True)
         npt.assert_equal(after[el].y_center > before[el].y_center, True)
 
-    argus = p2p.implants.ArgusI()
+    argus = implants.ArgusI()
     # Old to new
     npt.assert_equal(argus.get_new_name('M1'), 'D4')
     npt.assert_equal(argus.get_new_name('M6'), 'C3')
@@ -252,7 +252,7 @@ def test_ArgusII():
 
                     # Convert rotation angle to rad
                     rot = np.deg2rad(r)
-                    argus = p2p.implants.ArgusII(x, y, h=h, rot=rot)
+                    argus = implants.ArgusII(x, y, h=h, rot=rot)
 
                     # Coordinates of first electrode
                     xy = np.array([-2362.5, -1312.5]).T
@@ -283,12 +283,12 @@ def test_ArgusII():
 
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
-        p2p.implants.ArgusII(-100, 10, h=np.zeros(5))
+        implants.ArgusII(-100, 10, h=np.zeros(5))
     with pytest.raises(ValueError):
-        p2p.implants.ArgusII(-100, 100, h=[1, 2, 3])
+        implants.ArgusII(-100, 100, h=[1, 2, 3])
 
     # Indexing must work for both integers and electrode names
-    argus = p2p.implants.ArgusII()
+    argus = implants.ArgusII()
     for idx, electrode in enumerate(argus):
         name = electrode.name
         npt.assert_equal(electrode, argus[idx])
@@ -304,14 +304,14 @@ def test_ArgusII():
 
     # Right-eye implant:
     xc, yc = 500, -500
-    argus_re = p2p.implants.ArgusII(eye='RE', x_center=xc, y_center=yc)
+    argus_re = implants.ArgusII(eye='RE', x_center=xc, y_center=yc)
     npt.assert_equal(argus_re['A10'].x_center > argus_re['A1'].x_center, True)
     npt.assert_almost_equal(argus_re['A10'].y_center, argus_re['A1'].y_center)
     npt.assert_equal(argus_re.tack[0] < argus_re['A1'].x_center, True)
     npt.assert_almost_equal(argus_re.tack[1], yc)
 
     # Left-eye implant:
-    argus_le = p2p.implants.ArgusII(eye='LE', x_center=xc, y_center=yc)
+    argus_le = implants.ArgusII(eye='LE', x_center=xc, y_center=yc)
     npt.assert_equal(argus_le['A1'].x_center > argus_le['A10'].x_center, True)
     npt.assert_almost_equal(argus_le['A10'].y_center, argus_le['A1'].y_center)
     npt.assert_equal(argus_le.tack[0] > argus_le['A10'].x_center, True)
@@ -320,14 +320,14 @@ def test_ArgusII():
     # In both left and right eyes, rotation with positive angle should be
     # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
     for eye, el in zip(['LE', 'RE'], ['F1', 'F10']):
-        before = p2p.implants.ArgusII(eye=eye)
-        after = p2p.implants.ArgusII(eye=eye, rot=np.deg2rad(10))
+        before = implants.ArgusII(eye=eye)
+        after = implants.ArgusII(eye=eye, rot=np.deg2rad(10))
         npt.assert_equal(after[el].x_center < before[el].x_center, True)
         npt.assert_equal(after[el].y_center > before[el].y_center, True)
 
 
 def test_Electrode_receptive_field():
-    electrode = p2p.implants.Electrode('epiretinal', 100, 0, 0, 0)
+    electrode = implants.Electrode('epiretinal', 100, 0, 0, 0)
 
     with pytest.raises(ValueError):
         electrode.receptive_field(0, 0, rftype='invalid')

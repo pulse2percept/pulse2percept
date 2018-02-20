@@ -3,7 +3,7 @@ import numpy.testing as npt
 import pytest
 import copy
 
-from pulse2percept import utils
+from .. import utils
 
 try:
     # Python 3
@@ -27,15 +27,6 @@ def raise_deprecated():
 def test_deprecated():
     with pytest.raises(RuntimeError):
         raise_deprecated()
-
-
-def test_Parameters():
-    my_params = utils.Parameters(foo='bar', list=[1, 2, 3])
-    assert my_params.foo == 'bar'
-    assert my_params.list == [1, 2, 3]
-    assert str(my_params) == 'foo : bar\nlist : [1, 2, 3]'
-    my_params.tuple = (1, 2, 3)
-    assert my_params.tuple == (1, 2, 3)
 
 
 def test_TimeSeries():
@@ -284,8 +275,3 @@ def test_traverse_randomly():
     # Make sure every element was visited once
     npt.assert_equal(shuffled_idx, np.arange(len(sequence)).tolist())
     npt.assert_equal(shuffled_val.sort(), sequence.sort())
-
-
-def test_mov2npy():
-    with pytest.raises(ImportError):
-        utils.mov2npy(np.array([]), "invalid.npy")

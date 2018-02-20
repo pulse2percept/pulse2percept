@@ -14,9 +14,9 @@ try:
 except ImportError:
     pass
 
-from pulse2percept import stimuli
-from pulse2percept import implants
-from pulse2percept import utils
+from .. import stimuli
+from .. import implants
+from .. import utils
 
 
 def test_MonophasicPulse():
@@ -309,35 +309,6 @@ def test_video2pulsetrain():
     # Smoke-test example video
     from skvideo import datasets
     stimuli.video2pulsetrain(datasets.bikes(), implant)
-
-
-def test_Movie2Pulsetrain():
-    fps = 30.0
-    amplitude_transform = 'linear'
-    amp_max = 90
-    freq = 20
-    pulse_dur = .075 / 1000.
-    interphase_dur = .075 / 1000.
-    tsample = .005 / 1000.
-    pulsetype = 'cathodicfirst'
-    stimtype = 'pulsetrain'
-    rflum = np.zeros(100)
-    rflum[50] = 1
-    m2pt = stimuli.Movie2Pulsetrain(rflum,
-                                    fps=fps,
-                                    amp_transform=amplitude_transform,
-                                    amp_max=amp_max,
-                                    freq=freq,
-                                    pulse_dur=pulse_dur,
-                                    interphase_dur=interphase_dur,
-                                    tsample=tsample,
-                                    pulsetype=pulsetype,
-                                    stimtype=stimtype)
-    npt.assert_equal(m2pt.shape[0], round((rflum.shape[-1] / fps) / tsample))
-    npt.assert_(m2pt.data.max() < amp_max)
-
-    with pytest.raises(ValueError):
-        stimuli.Movie2Pulsetrain(np.zeros(10), -0.1)
 
 
 def test_parse_pulse_trains():
