@@ -2,36 +2,39 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-import pulse2percept as p2p
+from .. import api as p2p
+from .. import implants
+from .. import stimuli
+from .. import utils
 
 
 def test_Simulation___init__():
-    implant = p2p.implants.Electrode("epiretinal", 10, 0, 0, 0)
+    implant = implants.Electrode("epiretinal", 10, 0, 0, 0)
     with pytest.raises(TypeError):
         p2p.Simulation(implant)
 
 
 def test_Simulation_pulse2percept():
-    implant = p2p.implants.ElectrodeArray("epiretinal", 10, 0, 0, 0)
+    implant = implants.ElectrodeArray("epiretinal", 10, 0, 0, 0)
     sim = p2p.Simulation(implant, engine='serial')
     sim.set_optic_fiber_layer(x_range=[0, 0], y_range=[0, 0])
-    pt = p2p.stimuli.BiphasicPulse('cathodicfirst', 0.45 / 1000, 0.005 / 1000)
+    pt = stimuli.BiphasicPulse('cathodicfirst', 0.45 / 1000, 0.005 / 1000)
     sim.pulse2percept(pt)
     sim.pulse2percept(pt, layers=['GCL'])
     sim.pulse2percept(pt, layers=['INL'])
 
     # PulseTrain must have the same tsample as (implicitly set up) GCL
-    pt = p2p.stimuli.BiphasicPulse("cathodicfirst", 0.1, 0.001)
+    pt = stimuli.BiphasicPulse("cathodicfirst", 0.1, 0.001)
     with pytest.raises(ValueError):
         sim.pulse2percept(pt)
 
-    pt = p2p.stimuli.BiphasicPulse("cathodicfirst", 0.1, 0.005 / 1000)
+    pt = stimuli.BiphasicPulse("cathodicfirst", 0.1, 0.005 / 1000)
     with pytest.raises(ValueError):
         sim.pulse2percept(pt, layers=['GCL', 'invalid'])
 
 
 def test_Simulation_set_optic_fiber_layer():
-    sim = p2p.Simulation(p2p.implants.ArgusI(), engine='serial')
+    sim = p2p.Simulation(implants.ArgusI(), engine='serial')
 
     # Invalid grid ranges
     with pytest.raises(ValueError):
@@ -59,7 +62,7 @@ def test_Simulation_set_optic_fiber_layer():
     npt.assert_equal(sim.ofl.y_range, y_range)
 
     # Smoke test
-    implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0, 0)
+    implant = implants.ElectrodeArray('epiretinal', 10, 0, 0, 0)
     sim = p2p.Simulation(implant, engine='serial')
     sim.set_optic_fiber_layer(x_range=0, y_range=0)
     sim.set_optic_fiber_layer(x_range=[0, 0], y_range=[0, 0])
@@ -74,7 +77,7 @@ def test_Simulation_set_ganglion_cell_layer():
             return inval
 
     # Smoke test custom model
-    implant = p2p.implants.ElectrodeArray('epiretinal', 10, 0, 0, 0)
+    implant = implants.ElectrodeArray('epiretinal', 10, 0, 0, 0)
     sim = p2p.Simulation(implant, engine='serial')
     sim.set_optic_fiber_layer(x_range=0, y_range=0)
 
@@ -108,7 +111,7 @@ def test_Simulation_set_ganglion_cell_layer():
     with pytest.raises(ValueError):
         sim.set_ganglion_cell_layer('unknown-model')
     with pytest.raises(ValueError):
-        sim.set_ganglion_cell_layer(p2p.implants.ArgusII())
+        sim.set_ganglion_cell_layer(implants.ArgusII())
 
 
 def test_get_brightest_frame():
@@ -121,7 +124,7 @@ def test_get_brightest_frame():
         tsdata[1, 1, idx] = 2.0
 
         # Make sure function returns the right frame
-        ts = p2p.utils.TimeSeries(1, tsdata)
+        ts = utils.TimeSeries(1, tsdata)
         brightest = p2p.get_brightest_frame(ts)
         npt.assert_equal(brightest.data.max(), tsdata.max())
         npt.assert_equal(brightest.data, tsdata[:, :, idx])

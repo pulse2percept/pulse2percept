@@ -5,7 +5,6 @@ Functions for creating retinal implants
 
 """
 import numpy as np
-from scipy import interpolate as spi
 import six
 import copy
 import logging
@@ -465,48 +464,6 @@ def video2pulsetrain(filename, implant, framerate=20,
     return video
 
 
-@utils.deprecated('p2p.stimuli.video2pulsetrain', removed_version='0.3')
-class Movie2Pulsetrain(utils.TimeSeries):
-    """Is used to create pulse-train stimulus based on luminance over time from
-       a movie"""
-
-    def __init__(self, rflum, tsample, fps=30.0, amp_transform='linear',
-                 amp_max=60, freq=20, pulse_dur=.5 / 1000.,
-                 interphase_dur=.5 / 1000.,
-                 pulsetype='cathodicfirst', stimtype='pulsetrain'):
-        """
-        Parameters
-        ----------
-        rflum : 1D array
-           Values between 0 and 1
-        tsample : suggest TemporalModel.tsample
-        """
-        if tsample <= 0:
-            raise ValueError("tsample must be a non-negative float.")
-
-        # set up the individual pulses
-        pulse = BiphasicPulse(pulsetype, pulse_dur, tsample,
-                              interphase_dur)
-        # set up the sequence
-        dur = rflum.shape[-1] / fps
-
-        if stimtype == 'pulsetrain':
-            interpulsegap = np.zeros(int(round((1.0 / freq) / tsample)) -
-                                     len(pulse.data))
-            ppt = []
-            for j in range(0, int(np.ceil(dur * freq))):
-                ppt = np.concatenate((ppt, interpulsegap), axis=0)
-                ppt = np.concatenate((ppt, pulse.data), axis=0)
-
-        ppt = ppt[0:int(round(dur / tsample))]
-        intfunc = spi.interp1d(np.linspace(0, len(rflum), len(rflum)),
-                               rflum)
-
-        amp = intfunc(np.linspace(0, len(rflum), len(ppt)))
-        data = amp * ppt * amp_max
-        utils.TimeSeries.__init__(self, tsample, data)
-
-
 def parse_pulse_trains(stim, implant):
     """Parse input stimulus and convert to list of pulse trains
 
@@ -567,15 +524,3 @@ def parse_pulse_trains(stim, implant):
         pt = copy.deepcopy(stim)
 
     return pt
-
-
-@utils.deprecated(deprecated_version='0.2', removed_version='0.3')
-def retinalmovie2electrodtimeseries(rf, movie):
-    """Calculates the luminance over time for each electrodes receptive field.
-    """
-    rflum = np.zeros(movie.shape[-1])
-    for f in range(movie.shape[-1]):
-        tmp = rf * movie[:, :, f]
-        rflum[f] = np.mean(tmp)
-
-    return rflum

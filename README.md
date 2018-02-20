@@ -35,7 +35,8 @@ corresponds to the predicted perceptual experience of a patient:
 If you use pulse2percept in a scholary publication, please cite as:
 > M Beyeler, GM Boynton, I Fine, A Rokem (2017). pulse2percept: A Python-based
 > simulation framework for bionic vision. Proceedings of the 16th Python in
-> Science Conference, 81-88. doi: 10.25080/shinma-7f4c6e7-00c.
+> Science Conference, p.81-88,
+> doi:[10.25080/shinma-7f4c6e7-00c](https://doi.org/10.25080/shinma-7f4c6e7-00c).
 
 Or use the following BibTex:
 ```

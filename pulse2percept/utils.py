@@ -96,26 +96,6 @@ class deprecated(object):
         return wrapped
 
 
-@deprecated(deprecated_version='0.2', removed_version='0.3')
-class Parameters(object):
-    """Container to wrap a MATLAB array in a Python dict"""
-
-    def __init__(self, **params):
-        for k, v in params.items():
-            self.__dict__[k] = v
-
-    def __repr__(self):
-        my_list = []
-        for k, v in self.__dict__.items():
-            my_list.append("%s : %s" % (k, v))
-        my_list.sort()
-        my_str = "\n".join(my_list)
-        return my_str
-
-    def __setattr(self, name, values):
-        self.__dict__[name] = values
-
-
 class TimeSeries(object):
 
     def __init__(self, tsample, data):
@@ -504,38 +484,6 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         return np.array(results).reshape(out_shape)
     else:
         return results
-
-
-@deprecated(deprecated_version='0.2', removed_version='0.3')
-def mov2npy(movie_file, out_file):
-    """Converts a movie file to a NumPy array
-
-    Parameters
-    ----------
-    movie_file : array
-        The movie file to be read
-    out_file: str
-        Name of .npy file to be created.
-    """
-    # Don't import cv at module level. Instead we'll use this on python 2
-    # sometimes...
-    try:
-        import cv
-    except ImportError:
-        e_s = "You do not have opencv installed. "
-        e_s += "You probably want to run this in Python 2"
-        raise ImportError(e_s)
-
-    capture = cv.CaptureFromFile(movie_file)
-    frames = []
-    img = cv.QueryFrame(capture)
-    while img is not None:
-        tmp = cv.CreateImage(cv.GetSize(img), 8, 3)
-        cv.CvtColor(img, tmp, cv.CV_BGR2RGB)
-        frames.append(np.asarray(cv.GetMat(tmp)))
-        img = cv.QueryFrame(capture)
-    frames = np.fliplr(np.rot90(np.mean(frames, -1).T, -1))
-    np.save(out_file, frames)
 
 
 def gamma(n, tau, tsample, tol=0.01):
