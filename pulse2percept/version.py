@@ -3,7 +3,7 @@ from os.path import join as pjoin
 
 # Format expected by setup.py and doc/source/conf.py: string of form "X.Y.Z"
 _version_major = 0
-_version_minor = 3
+_version_minor = 4
 _version_micro = ''  # use '' for first of series, number for 1 and above
 _version_extra = ''
 # _version_extra = ''  # Uncomment this for full releases
@@ -17,7 +17,7 @@ if _version_extra:
 
 __version__ = '.'.join(map(str, _ver))
 
-CLASSIFIERS = ["Development Status :: 3 - Alpha",
+CLASSIFIERS = ["Development Status :: 4 - Alpha",
                "Environment :: Console",
                "Intended Audience :: Science/Research",
                "License :: OSI Approved :: BSD License",
