@@ -1,7 +1,7 @@
 [![Coverage Status](https://coveralls.io/repos/github/uwescience/pulse2percept/badge.svg?branch=master)](https://coveralls.io/github/uwescience/pulse2percept?branch=master)
 
 
-# pulse2percept: Models for Retinal Prosthetics
+# pulse2percept: A Python-based simulation framework for bionic vision
 
 ## Summary
 
@@ -32,6 +32,23 @@ corresponds to the predicted perceptual experience of a patient:
 
 <img src="doc/_static/model.jpg" width="100%"/>
 
+If you use pulse2percept in a scholary publication, please cite as:
+> M Beyeler, GM Boynton, I Fine, A Rokem (2017). pulse2percept: A Python-based
+> simulation framework for bionic vision. Proceedings of the 16th Python in
+> Science Conference, 81-88. doi: 10.25080/shinma-7f4c6e7-00c.
+
+Or use the following BibTex:
+```
+@InProceedings{ michael_beyeler-proc-scipy-2017,
+  author    = { {M}ichael {B}eyeler and {G}eoffrey {M}. {B}oynton and {I}one {F}ine and {A}riel {R}okem },
+  title     = { pulse2percept: {A} {P}ython-based simulation framework for bionic vision },
+  booktitle = { {P}roceedings of the 16th {P}ython in {S}cience {C}onference },
+  pages     = { 81 - 88 },
+  year      = { 2017 },
+  doi       = { 10.25080/shinma-7f4c6e7-00c },
+  editor    = { {K}aty {H}uff and {D}avid {L}ippa and {D}illon {N}iederhut and {M} {P}acer }
+}
+```
 
 
 ## Installation
