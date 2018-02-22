@@ -40,7 +40,7 @@ If you use pulse2percept in a scholary publication, please cite as:
 
 Or use the following BibTex:
 ```
-@InProceedings{ michael_beyeler-proc-scipy-2017,
+@InProceedings{ BeyelerSciPy2017,
   author    = { {M}ichael {B}eyeler and {G}eoffrey {M}. {B}oynton and {I}one {F}ine and {A}riel {R}okem },
   title     = { pulse2percept: {A} {P}ython-based simulation framework for bionic vision },
   booktitle = { {P}roceedings of the 16th {P}ython in {S}cience {C}onference },
