@@ -14,7 +14,8 @@ from pulse2percept import utils
 cdef inline float float_max(float a, float b):
     return a if a >= b else b
 
-ctypedef np.float_t DTYPE_float_t
+DTYPE = np.float
+ctypedef np.float_t DTYPE_t
 
 
 SUPPORTED_LAYERS = ['INL', 'GCL', 'OFL']
@@ -23,7 +24,7 @@ SUPPORTED_TEMPORAL_MODELS = ['latest', 'Nanduri2012', 'Horsager2009']
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def maxzero(np.ndarray[DTYPE_float_t, ndim=1] arr not None):
+def maxzero(np.ndarray[DTYPE_t, ndim=1] arr not None):
     cdef unsigned int idx, lenout
     lenout = arr.shape[0]
     for idx in range(lenout):
@@ -33,7 +34,7 @@ def maxzero(np.ndarray[DTYPE_float_t, ndim=1] arr not None):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def cumsum_maxzero(np.ndarray[DTYPE_float_t, ndim=1] arr not None):
+def cumsum_maxzero(np.ndarray[DTYPE_t, ndim=1] arr not None):
     cdef unsigned int idx, lenout
     lenout = arr.shape[0]
     arr[0] = arr[0] if arr[0] > 0 else 0
@@ -602,6 +603,12 @@ class Nanduri2012(BaseModel):
         self.slope = 3.0
         self.shift = 16.0
 
+        # Nanduri (2012) has a term in the stationary nonlinearity step that
+        # depends on future values of R3: max_t(R3). Because the finite
+        # difference model cannot look into the future, we need to set a
+        # scaling factor here:
+        self.maxR3 = 100.0
+
         # Overwrite any given keyword arguments, print warning message (True)
         # if attempting to set an unrecognized keyword
         self.set_kwargs(True, **kwargs)
@@ -638,13 +645,11 @@ class Nanduri2012(BaseModel):
         if 'INL' in layers:
             raise ValueError("The Nanduri2012 model does not support an inner "
                              "nuclear layer.")
-
-        if np.any([l in layers for l in ('GCL', 'OFL')]):
-            ecm = np.sum(in_arr[1, :, np.newaxis] * pt_list, axis=0)
-        else:
+        if np.all([l not in layers for l in ('GCL', 'OFL')]):
             raise ValueError("Acceptable values for `layers` are: 'GCL', "
                              "'OFL'.")
-        return ecm
+
+        return np.sum(in_arr[1, :, np.newaxis] * pt_list, axis=0)
 
     def model_cascade(self, in_arr, pt_list, layers, use_jit):
         """Nanduri model cascade
@@ -673,182 +678,54 @@ class Nanduri2012(BaseModel):
             raise ValueError("The Nanduri2012 model does not support an inner "
                              "nuclear layer.")
 
-        # Although the paper says to use cathodic-first, the code only
-        # reproduces if we use what we now call anodic-first. So flip the sign
-        # on the stimulus here:
-        b1 = -self.calc_layer_current(in_arr, pt_list, layers)
+        b1 = self.calc_layer_current(in_arr, pt_list, layers)
 
-        # Fast response
-        b2 = self.tsample * utils.conv(b1, self.gamma1, mode='full',
-                                       method='sparse',
-                                       use_jit=use_jit)[:b1.size]
+        cdef float tmp_chargeacc = 0
+        cdef float tmp_ca = 0
+        cdef float tmp_cl = 0
+        cdef float tmp_R1 = 0
+        cdef float tmp_R2 = 0
+        cdef float tmp_R3norm = 0
+        cdef float dt = self.tsample
+        cdef np.ndarray[DTYPE_t] stimdata = b1
 
-        # Charge accumulation
-        ca = self.tsample * np.cumsum(np.maximum(0, b1))
-        ca = self.tsample * utils.conv(ca, self.gamma2, mode='full',
-                                       method='fft')[:b1.size]
-        b3 = np.maximum(0, b2 - self.eps * ca)
+        cdef float max_R3 = self.maxR3
+        cdef float tmp_R3 = 0
+        cdef float sc_fac = 0
 
-        # Stationary nonlinearity
-        b3max = b3.max()
-        sigmoid = ss.expit((b3max - self.shift) / self.slope)
-        b4 = b3 / b3max * sigmoid * self.asymptote
+        tmp_R4a = [0, 0, 0, 0]
+        cdef float duration = b1.shape[-1] * self.tsample
+        cdef np.ndarray[DTYPE_t] out_t = np.arange(0, duration,
+                                                   self.tsample, dtype=DTYPE)
+        cdef np.ndarray[DTYPE_t] out_R4 = np.zeros_like(out_t, dtype=DTYPE)
 
-        # Slow response
-        b5 = self.tsample * utils.conv(b4, self.gamma3, mode='full',
-                                       method='fft')[:b1.size]
+        cdef float tau1 = self.tau1
+        cdef float tau2 = self.tau2
+        cdef float tau3 = self.tau3
+        cdef float asymptote = self.asymptote
+        cdef float shift = self.shift
+        cdef float slope = self.slope
 
-        return utils.TimeSeries(self.tsample, b5)
+        for i in range(len(out_t)):
+            tmp_R1 += dt * (-stimdata[i] - tmp_R1) / tau1
 
+            # Leaky integrated charge accumulation:
+            tmp_chargeacc += dt * float_max(stimdata[i], 0)
+            tmp_ca += dt * (tmp_chargeacc - tmp_ca) / tau2
+            tmp_R3 = float_max(tmp_R1 - self.eps * tmp_ca, 0)
 
-class NanduriCython(BaseModel):
-    """Model of temporal sensitivity (Nanduri et al. 2012)
+            # Stationary nonlinearity:
+            sc_fac = asymptote * ss.expit((max_R3 - shift) / slope)
 
-    This class implements the model of temporal sensitivity as described in:
-    > Nanduri, Fine, Horsager, Boynton, Humayun, Greenberg, Weiland(2012).
-    > Frequency and Amplitude Modulation Have Different Effects on the Percepts
-    > Elicited by Retinal Stimulation. Investigative Ophthalmology & Visual
-    > Science January 2012, Vol.53, 205 - 214. doi: 10.1167 / iovs.11 - 8401.
+            # R4: R3 passed through a cascade of 3 leaky integrators
+            tmp_R4a[0] = tmp_R3b = tmp_R3 / max_R3 * sc_fac
+            for j in range(3):
+                dR4a = dt * (tmp_R4a[j] - tmp_R4a[j + 1]) / tau3
+                tmp_R4a[j + 1] += dR4a
 
-    Parameters
-    ----------
-    tsample: float, optional, default: 0.005 / 1000 seconds
-        Sampling time step(seconds).
-    tau1: float, optional, default: 0.42 / 1000 seconds
-        Time decay constant for the fast leaky integrater of the ganglion
-        cell layer(GCL).
-    tau2: float, optional, default: 45.25 / 1000 seconds
-        Time decay constant for the charge accumulation, has values
-        between 38 - 57 ms.
-    tau3: float, optional, default: 26.25 / 1000 seconds
-        Time decay constant for the slow leaky integrator.
-        Default: 26.25 / 1000 s.
-    eps: float, optional, default: 8.73
-        Scaling factor applied to charge accumulation(used to be called
-        epsilon).
-    asymptote: float, optional, default: 14.0
-        Asymptote of the logistic function used in the stationary
-        nonlinearity stage.
-    slope: float, optional, default: 3.0
-        Slope of the logistic function in the stationary nonlinearity
-        stage.
-    shift: float, optional, default: 16.0
-        Shift of the logistic function in the stationary nonlinearity
-        stage.
-    """
+            out_R4[i] = tmp_R4a[-1]
 
-    def __init__(self, **kwargs):
-        # Set default values of keyword arguments
-        self.tau1 = 0.42 / 1000
-        self.tau2 = 45.25 / 1000
-        self.tau3 = 26.25 / 1000
-        self.eps = 8.73
-        self.asymptote = 14.0
-        self.slope = 3.0
-        self.shift = 16.0
-
-        # Overwrite any given keyword arguments, print warning message (True)
-        # if attempting to set an unrecognized keyword
-        self.set_kwargs(True, **kwargs)
-
-        # perform one-time setup calculations
-        # gamma1 is used for the fast response
-        _, self.gamma1 = utils.gamma(1, self.tau1, self.tsample)
-
-        # gamma2 is used to calculate charge accumulation
-        _, self.gamma2 = utils.gamma(1, self.tau2, self.tsample)
-
-        # gamma3 is used to calculate the slow response
-        _, self.gamma3 = utils.gamma(3, self.tau3, self.tsample)
-
-    def calc_layer_current(self, np.ndarray[DTYPE_float_t, ndim=2] in_arr,
-                           list pt_list, list layers):
-        """Calculates the effective current map of a given layer
-
-        Parameters
-        ----------
-        in_arr: array - like
-            A 2D array specifying the effective current values
-            at a particular spatial location(pixel); one value
-            per retinal layer and electrode.
-            Dimensions: <  # layers x #electrodes>
-        pt_list: list
-            List of pulse train 'data' containers.
-            Dimensions: <  # electrodes x #time points>
-        layers: list
-            List of retinal layers to simulate.
-            Choose from:
-            - 'OFL': optic fiber layer
-            - 'GCL': ganglion cell layer
-        """
-        if 'INL' in layers:
-            raise ValueError("The Nanduri2012 model does not support an inner "
-                             "nuclear layer.")
-        if np.all([l not in layers for l in ('GCL', 'OFL')]):
-            raise ValueError("Acceptable values for `layers` are: 'GCL', "
-                             "'OFL'.")
-
-        return np.sum(in_arr[1, :, np.newaxis] * pt_list, axis=0)
-
-    def model_cascade(self, np.ndarray[DTYPE_float_t, ndim=2] in_arr,
-                      list pt_list, list layers, use_jit):
-        """Nanduri model cascade
-
-        Parameters
-        ----------
-        in_arr: array - like
-            A 2D array specifying the effective current values
-            at a particular spatial location(pixel); one value
-            per retinal layer and electrode.
-            Dimensions: <  # layers x #electrodes>
-        pt_list: list
-            List of pulse train 'data' containers.
-            Dimensions: <  # electrodes x #time points>
-        layers: list
-            List of retinal layers to simulate.
-            Choose from:
-            - 'OFL': optic fiber layer
-            - 'GCL': ganglion cell layer
-        use_jit: bool
-            If True, applies just - in-time(JIT) compilation to
-            expensive computations for additional speed - up
-            (requires Numba).
-        """
-        if 'INL' in layers:
-            raise ValueError("The Nanduri2012 model does not support an inner "
-                             "nuclear layer.")
-
-        cdef np.ndarray b1, b2, ca, b3, b4, b5
-        cdef float b3max, sigmoid
-
-        # Although the paper says to use cathodic-first, the code only
-        # reproduces if we use what we now call anodic-first. So flip the sign
-        # on the stimulus here:
-        b1 = -self.calc_layer_current(in_arr, pt_list, layers)
-
-        # Fast response
-        b2 = self.tsample * utils.conv(b1, self.gamma1, mode='full',
-                                       method='sparse',
-                                       use_jit=use_jit)[:b1.size]
-
-        # Charge accumulation
-        ca = self.tsample * np.cumsum(np.maximum(0, b1))
-        # ca = self.tsample * cumsum_maxzero(b1)
-        ca = self.tsample * utils.conv(ca, self.gamma2, mode='full',
-                                       method='fft')[:b1.size]
-        b3 = np.maximum(0, b2 - self.eps * ca)
-        # b3 = maxzero(b2 - self.eps * ca)
-
-        # Stationary nonlinearity
-        b3max = b3.max()
-        sigmoid = ss.expit((b3max - self.shift) / self.slope) / b3max
-        b4 = b3 * sigmoid * self.asymptote
-
-        # Slow response
-        b5 = self.tsample * utils.conv(b4, self.gamma3, mode='full',
-                                       method='fft')[:b1.size]
-
-        return utils.TimeSeries(self.tsample, b1)
+        return utils.TimeSeries(self.tsample, out_R4)
 
 
 class TemporalModel(BaseModel):

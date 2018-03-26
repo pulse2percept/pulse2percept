@@ -40,8 +40,8 @@ before_install:
 
 install:
   - travis_wait
-  - python setup.py build_ext -i
-  - python setup.py install --record installed_files.txt
+  - pip install -r requirements.txt
+  - pip install -e .
 
 script:
   - flake8 --ignore E501 `find . -name \*.py | grep -v setup.py | grep -v version.py | grep -v __init__.py | grep -v /doc/ | grep -v /scripts/`

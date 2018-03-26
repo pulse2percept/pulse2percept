@@ -52,10 +52,10 @@ class Simulation(object):
         self.gcl = None
 
     def set_optic_fiber_layer(self, sampling=100, x_range=None, y_range=None,
-                              n_axons=501, phi_range=(-180.0, 180.0),
-                              n_rho=801, rho_range=(4.0, 45.0),
+                              n_axons=301, phi_range=(-180.0, 180.0),
+                              n_rho=301, rho_range=(3.0, 50.0),
                               loc_od=(15.5, 1.5),
-                              sensitivity_rule='decay', decay_const=5.0,
+                              sensitivity_rule='decay', decay_const=1.0,
                               contribution_rule='max', powermean_exp=None,
                               datapath='.', save_data=True):
         """Sets parameters of the optic fiber layer (OFL)
