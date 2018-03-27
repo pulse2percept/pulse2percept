@@ -17,7 +17,22 @@ ctypedef double(*metric_ptr)(double[:], double[:])
 @cython.initializedcheck(False)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def nanduri2012_model_cascade(double[::1] stimdata,
+def nanduri2012_calc_layer_current(double[:] in_arr, double[:, ::1] pt_arr):
+    cdef np.intp_t n_el = in_arr.shape[0]
+    cdef np.intp_t n_time = pt_arr.shape[1]
+
+    cdef double[:] pulse = np.zeros(pt_arr.shape[1])
+    for el in range(n_el):
+        with nogil:
+            for t in range(n_time):
+                pulse[t] += in_arr[el] * pt_arr[el, t]
+    return pulse
+
+
+@cython.initializedcheck(False)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def nanduri2012_model_cascade(double[:] stimdata,
                               float dt, float tau1, float tau2,
                               float tau3, float asymptote, float shift,
                               float slope, float eps, float max_R3):

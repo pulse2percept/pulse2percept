@@ -327,9 +327,9 @@ class Grid(object):
         """
 
         cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
-                       2, len(implant.electrodes)))
+                       2, len(implant.electrodes)), dtype=float)
         ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
-                        2, len(implant.electrodes)))
+                        2, len(implant.electrodes)), dtype=float)
 
         for i, e in enumerate(implant.electrodes):
             cs[..., 0, i] = e.current_spread(self.gridx, self.gridy,
@@ -585,7 +585,7 @@ class Nanduri2012(BaseModel):
         # if attempting to set an unrecognized keyword
         self.set_kwargs(True, **kwargs)
 
-    def calc_layer_current(self, in_arr, pt_list, layers):
+    def calc_layer_current(self, in_arr, pt_list):
         """Calculates the effective current map of a given layer
 
         Parameters
@@ -598,20 +598,10 @@ class Nanduri2012(BaseModel):
         pt_list: list
             List of pulse train 'data' containers.
             Dimensions: <  # electrodes x #time points>
-        layers: list
-            List of retinal layers to simulate.
-            Choose from:
-            - 'OFL': optic fiber layer
-            - 'GCL': ganglion cell layer
         """
-        if 'INL' in layers:
-            raise ValueError("The Nanduri2012 model does not support an inner "
-                             "nuclear layer.")
-        if np.all([l not in layers for l in ('GCL', 'OFL')]):
-            raise ValueError("Acceptable values for `layers` are: 'GCL', "
-                             "'OFL'.")
-
-        return np.sum(in_arr[1, :, np.newaxis] * pt_list, axis=0)
+        in_flat = in_arr[1, :].reshape(-1).astype(float)
+        pt_arr = np.array(pt_list, dtype=float)
+        return np.array(fr.nanduri2012_calc_layer_current(in_flat, pt_arr))
 
     def model_cascade(self, in_arr, pt_list, layers, use_jit):
         """Nanduri model cascade
@@ -622,10 +612,10 @@ class Nanduri2012(BaseModel):
             A 2D array specifying the effective current values
             at a particular spatial location(pixel); one value
             per retinal layer and electrode.
-            Dimensions: <  # layers x #electrodes>
+            Dimensions: < #layers x #electrodes>
         pt_list: list
             List of pulse train 'data' containers.
-            Dimensions: <  # electrodes x #time points>
+            Dimensions: < #electrodes < #time points > >
         layers: list
             List of retinal layers to simulate.
             Choose from:
@@ -639,7 +629,11 @@ class Nanduri2012(BaseModel):
         if 'INL' in layers:
             raise ValueError("The Nanduri2012 model does not support an inner "
                              "nuclear layer.")
-        pulse = self.calc_layer_current(in_arr, pt_list, layers)
+        if 'GCL' not in layers and 'OFL' not in layers:
+            raise ValueError("Acceptable values for `layers` are: 'GCL', "
+                             "'OFL'.")
+
+        pulse = self.calc_layer_current(in_arr, pt_list)
         percept = fr.nanduri2012_model_cascade(pulse, self.tsample,
                                                self.tau1, self.tau2, self.tau3,
                                                self.asymptote, self.shift,

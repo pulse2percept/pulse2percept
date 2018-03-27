@@ -62,7 +62,7 @@ class LegacyNanduri2012(retina.Nanduri2012):
         # Although the paper says to use cathodic-first, the code only
         # reproduces if we use what we now call anodic-first. So flip the sign
         # on the stimulus here:
-        b1 = -self.calc_layer_current(in_arr, pt_list, layers)
+        b1 = -self.calc_layer_current(in_arr, pt_list)
 
         # Fast response
         b2 = self.tsample * utils.conv(b1, self.gamma1, mode='full',
@@ -191,16 +191,9 @@ def test_Nanduri2012():
     # one for the ganglion cell layer, one for the bipolar cell layer
     ecs_item = np.random.rand(2, 4)
 
-    # Calulating layer current:
-    # The Nanduri model does not support INL, so it's just one layer:
-    with pytest.raises(ValueError):
-        tm.calc_layer_current(ecs_item, ptrain_data, ['GCL', 'INL'])
-    with pytest.raises(ValueError):
-        tm.calc_layer_current(ecs_item, ptrain_data, ['unknown'])
-
     # ...and that should be the same as `calc_layer_current`:
     ecm_by_hand = np.sum(ecs_item[1, :, np.newaxis] * ptrain_data, axis=0)
-    ecm = tm.calc_layer_current(ecs_item, ptrain_data, ['GCL'])
+    ecm = tm.calc_layer_current(ecs_item, ptrain_data)
     npt.assert_almost_equal(ecm, ecm_by_hand)
 
     # Running the model cascade:
@@ -217,9 +210,9 @@ def test_Nanduri2012():
                               dur=0.5)
     ecm = np.array([1, 1]).reshape((2, 1))
     legacy = LegacyNanduri2012(tsample=tsample)
-    legacy_out = legacy.model_cascade(ecm, stim.data, layers, use_jit)
+    legacy_out = legacy.model_cascade(ecm, [stim.data], layers, use_jit)
     nanduri = retina.Nanduri2012(tsample=tsample)
-    nanduri_out = nanduri.model_cascade(ecm, stim.data, layers, use_jit)
+    nanduri_out = nanduri.model_cascade(ecm, [stim.data], layers, use_jit)
     npt.assert_almost_equal(nanduri_out.data, legacy_out.data, decimal=2)
     npt.assert_almost_equal(nanduri_out.data[-1], legacy_out.data[-1],
                             decimal=2)
