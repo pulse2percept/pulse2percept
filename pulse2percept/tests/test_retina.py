@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.special as ss
 import scipy.optimize as scpo
 import numpy.testing as npt
 import pytest
@@ -189,7 +190,6 @@ def test_Nanduri2012():
         tm.model_cascade(ecs_item, ptrain_data, ['GCL', 'INL'], False)
     with pytest.raises(ValueError):
         tm.model_cascade(ecs_item, ptrain_data, ['unknown'], False)
-    tm.model_cascade(ecs_item, ptrain_data, ['GCL'], False)
 
     # Regression test: Make sure Cython implementation reproduces legacy code
     tsample = 0.005 / 1000
@@ -202,7 +202,7 @@ def test_Nanduri2012():
     legacy_out = legacy.model_cascade(ecm, stim.data, layers, use_jit)
     nanduri = retina.Nanduri2012(tsample=tsample)
     nanduri_out = nanduri.model_cascade(ecm, stim.data, layers, use_jit)
-    npt.assert_almost_equal(nanduri_out.data, legacy_out.data, atol=5e-3)
+    npt.assert_almost_equal(nanduri_out.data, legacy_out.data, decimal=2)
 
 
 def test_Horsager2009_model_cascade():

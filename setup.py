@@ -5,7 +5,7 @@ from setuptools.extension import Extension
 from Cython.Build import cythonize
 
 extensions = [
-    Extension('pulse2percept.retina', ['pulse2percept/retina.pyx'],
+    Extension('pulse2percept.fast_retina', ['pulse2percept/fast_retina.pyx'],
               include_dirs=[np.get_include()],
               extra_compile_args=['-O3'])
 ]

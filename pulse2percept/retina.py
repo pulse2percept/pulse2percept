@@ -1,6 +1,4 @@
 import numpy as np
-cimport numpy as np
-import cython
 
 import scipy.special as ss
 import scipy.spatial as spat
@@ -9,38 +7,12 @@ import six
 import os.path
 import logging
 
-from pulse2percept import utils
-
-cdef inline float float_max(float a, float b):
-    return a if a >= b else b
-
-DTYPE = np.float
-ctypedef np.float_t DTYPE_t
+from . import fast_retina as fr
+from . import utils
 
 
 SUPPORTED_LAYERS = ['INL', 'GCL', 'OFL']
 SUPPORTED_TEMPORAL_MODELS = ['latest', 'Nanduri2012', 'Horsager2009']
-
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-def maxzero(np.ndarray[DTYPE_t, ndim=1] arr not None):
-    cdef unsigned int idx, lenout
-    lenout = arr.shape[0]
-    for idx in range(lenout):
-        arr[idx] = arr[idx] if arr[idx] > 0 else 0
-    return arr
-
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-def cumsum_maxzero(np.ndarray[DTYPE_t, ndim=1] arr not None):
-    cdef unsigned int idx, lenout
-    lenout = arr.shape[0]
-    arr[0] = arr[0] if arr[0] > 0 else 0
-    for idx in range(1, lenout):
-        arr[idx] = arr[idx - 1] + arr[idx] if arr[idx] > 0 else arr[idx - 1]
-    return arr
 
 
 class Grid(object):
@@ -677,55 +649,13 @@ class Nanduri2012(BaseModel):
         if 'INL' in layers:
             raise ValueError("The Nanduri2012 model does not support an inner "
                              "nuclear layer.")
-
-        b1 = self.calc_layer_current(in_arr, pt_list, layers)
-
-        cdef float tmp_chargeacc = 0
-        cdef float tmp_ca = 0
-        cdef float tmp_cl = 0
-        cdef float tmp_R1 = 0
-        cdef float tmp_R2 = 0
-        cdef float tmp_R3norm = 0
-        cdef float dt = self.tsample
-        cdef np.ndarray[DTYPE_t] stimdata = b1
-
-        cdef float max_R3 = self.maxR3
-        cdef float tmp_R3 = 0
-        cdef float sc_fac = 0
-
-        tmp_R4a = [0, 0, 0, 0]
-        cdef float duration = b1.shape[-1] * self.tsample
-        cdef np.ndarray[DTYPE_t] out_t = np.arange(0, duration,
-                                                   self.tsample, dtype=DTYPE)
-        cdef np.ndarray[DTYPE_t] out_R4 = np.zeros_like(out_t, dtype=DTYPE)
-
-        cdef float tau1 = self.tau1
-        cdef float tau2 = self.tau2
-        cdef float tau3 = self.tau3
-        cdef float asymptote = self.asymptote
-        cdef float shift = self.shift
-        cdef float slope = self.slope
-
-        for i in range(len(out_t)):
-            tmp_R1 += dt * (-stimdata[i] - tmp_R1) / tau1
-
-            # Leaky integrated charge accumulation:
-            tmp_chargeacc += dt * float_max(stimdata[i], 0)
-            tmp_ca += dt * (tmp_chargeacc - tmp_ca) / tau2
-            tmp_R3 = float_max(tmp_R1 - self.eps * tmp_ca, 0)
-
-            # Stationary nonlinearity:
-            sc_fac = asymptote * ss.expit((max_R3 - shift) / slope)
-
-            # R4: R3 passed through a cascade of 3 leaky integrators
-            tmp_R4a[0] = tmp_R3b = tmp_R3 / max_R3 * sc_fac
-            for j in range(3):
-                dR4a = dt * (tmp_R4a[j] - tmp_R4a[j + 1]) / tau3
-                tmp_R4a[j + 1] += dR4a
-
-            out_R4[i] = tmp_R4a[-1]
-
-        return utils.TimeSeries(self.tsample, out_R4)
+        pulse = self.calc_layer_current(in_arr, pt_list, layers)
+        percept = fr.nanduri2012_model_cascade(pulse, self.tsample,
+                                               self.tau1, self.tau2, self.tau3,
+                                               self.asymptote, self.shift,
+                                               self.slope, self.eps,
+                                               self.maxR3)
+        return utils.TimeSeries(self.tsample, percept)
 
 
 class TemporalModel(BaseModel):
