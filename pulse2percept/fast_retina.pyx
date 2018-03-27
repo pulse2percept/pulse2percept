@@ -35,7 +35,7 @@ def nanduri2012_model_cascade(np.ndarray[DTYPE_t, ndim=1] stimdata,
 
     cdef np.ndarray[DTYPE_t] out_R4 = np.zeros(arr_size, dtype=DTYPE)
 
-    for i in range(len(arr_size)):
+    for i in range(arr_size):
         tmp_R1 += dt * (-stimdata[i] - tmp_R1) / tau1
 
         # Leaky integrated charge accumulation:
