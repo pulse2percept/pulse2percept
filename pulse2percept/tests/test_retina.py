@@ -203,6 +203,8 @@ def test_Nanduri2012():
     nanduri = retina.Nanduri2012(tsample=tsample)
     nanduri_out = nanduri.model_cascade(ecm, stim.data, layers, use_jit)
     npt.assert_almost_equal(nanduri_out.data, legacy_out.data, decimal=2)
+    npt.assert_almost_equal(nanduri_out.data[-1], legacy_out.data[-1],
+                            decimal=2)
 
 
 def test_Horsager2009_model_cascade():

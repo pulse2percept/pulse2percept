@@ -85,7 +85,7 @@ class Simulation(object):
         rho_range: (rho_min, rho_max), optional, default: (4.0, 45.0)
             Lower and upper bounds for the radial position values(polar
             coordinates).
-        loc_od: (x_od, y_od), optional, default: (15.05 1.5)
+        loc_od: (x_od, y_od), optional, default: (15.5 1.5)
             Location of the center of the optic disc (x, y) in Cartesian
             coordinates. In a right (left) eye, we should have x > 0 (x < 0).
         sensitivity_rule : {'decay', 'Jeng2011'}, optional, default: 'decay'
