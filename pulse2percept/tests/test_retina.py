@@ -14,6 +14,24 @@ from .. import utils
 class LegacyNanduri2012(retina.Nanduri2012):
     """Preserve old implementation to make sure Cython model runs correctly"""
 
+    def __init__(self, **kwargs):
+        # Set default values of keyword arguments
+        self.tau1 = 0.42 / 1000
+        self.tau2 = 45.25 / 1000
+        self.tau3 = 26.25 / 1000
+        self.eps = 8.73
+        self.asymptote = 14.0
+        self.slope = 3.0
+        self.shift = 16.0
+
+        # Overwrite any given keyword arguments, print warning message (True)
+        # if attempting to set an unrecognized keyword
+        self.set_kwargs(True, **kwargs)
+
+        _, self.gamma1 = utils.gamma(1, self.tau1, self.tsample)
+        _, self.gamma2 = utils.gamma(1, self.tau2, self.tsample)
+        _, self.gamma3 = utils.gamma(3, self.tau3, self.tsample)
+
     def model_cascade(self, in_arr, pt_list, layers, use_jit):
         """Nanduri model cascade
 
