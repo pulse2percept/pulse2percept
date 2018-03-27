@@ -52,8 +52,8 @@ class Simulation(object):
         self.gcl = None
 
     def set_optic_fiber_layer(self, sampling=100, x_range=None, y_range=None,
-                              n_axons=301, phi_range=(-180.0, 180.0),
-                              n_rho=301, rho_range=(3.0, 50.0),
+                              n_axons=501, phi_range=(-180.0, 180.0),
+                              n_rho=801, rho_range=(4.0, 45.0),
                               loc_od=(15.5, 1.5),
                               sensitivity_rule='decay', decay_const=1.0,
                               contribution_rule='max', powermean_exp=None,
@@ -115,8 +115,8 @@ class Simulation(object):
                 mean sensitivity across all axon segments. Specify
                 `powermean_exp` to change the exponent of the generalized
                 (power) mean, calculated as np.mean(x ** powermean_exp) **
-                (1.0 / powermean_exp). Setting `powermean_exp` to 1 is equal to
-                the arithmetic mean.
+                (1.0 / powermean_exp). Default is 1, which is equal to the
+                arithmetic mean.
         decay_const : float, optional, default: 2.0
             When `sensitivity_rule` is set to 'decay', specifies the decay
             constant of the exponential fall-off.

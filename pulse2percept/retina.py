@@ -585,16 +585,6 @@ class Nanduri2012(BaseModel):
         # if attempting to set an unrecognized keyword
         self.set_kwargs(True, **kwargs)
 
-        # perform one-time setup calculations
-        # gamma1 is used for the fast response
-        _, self.gamma1 = utils.gamma(1, self.tau1, self.tsample)
-
-        # gamma2 is used to calculate charge accumulation
-        _, self.gamma2 = utils.gamma(1, self.tau2, self.tsample)
-
-        # gamma3 is used to calculate the slow response
-        _, self.gamma3 = utils.gamma(3, self.tau3, self.tsample)
-
     def calc_layer_current(self, in_arr, pt_list, layers):
         """Calculates the effective current map of a given layer
 
