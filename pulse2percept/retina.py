@@ -1,4 +1,5 @@
 import numpy as np
+
 import scipy.special as ss
 import scipy.spatial as spat
 import abc
@@ -6,7 +7,8 @@ import six
 import os.path
 import logging
 
-from pulse2percept import utils
+from . import fast_retina as fr
+from . import utils
 
 
 SUPPORTED_LAYERS = ['INL', 'GCL', 'OFL']
@@ -325,9 +327,9 @@ class Grid(object):
         """
 
         cs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
-                       2, len(implant.electrodes)))
+                       2, len(implant.electrodes)), dtype=float)
         ecs = np.zeros((self.gridx.shape[0], self.gridx.shape[1],
-                        2, len(implant.electrodes)))
+                        2, len(implant.electrodes)), dtype=float)
 
         for i, e in enumerate(implant.electrodes):
             cs[..., 0, i] = e.current_spread(self.gridx, self.gridy,
@@ -573,21 +575,17 @@ class Nanduri2012(BaseModel):
         self.slope = 3.0
         self.shift = 16.0
 
+        # Nanduri (2012) has a term in the stationary nonlinearity step that
+        # depends on future values of R3: max_t(R3). Because the finite
+        # difference model cannot look into the future, we need to set a
+        # scaling factor here:
+        self.maxR3 = 100.0
+
         # Overwrite any given keyword arguments, print warning message (True)
         # if attempting to set an unrecognized keyword
         self.set_kwargs(True, **kwargs)
 
-        # perform one-time setup calculations
-        # gamma1 is used for the fast response
-        _, self.gamma1 = utils.gamma(1, self.tau1, self.tsample)
-
-        # gamma2 is used to calculate charge accumulation
-        _, self.gamma2 = utils.gamma(1, self.tau2, self.tsample)
-
-        # gamma3 is used to calculate the slow response
-        _, self.gamma3 = utils.gamma(3, self.tau3, self.tsample)
-
-    def calc_layer_current(self, in_arr, pt_list, layers):
+    def calc_layer_current(self, in_arr, pt_list):
         """Calculates the effective current map of a given layer
 
         Parameters
@@ -600,22 +598,10 @@ class Nanduri2012(BaseModel):
         pt_list: list
             List of pulse train 'data' containers.
             Dimensions: <  # electrodes x #time points>
-        layers: list
-            List of retinal layers to simulate.
-            Choose from:
-            - 'OFL': optic fiber layer
-            - 'GCL': ganglion cell layer
         """
-        if 'INL' in layers:
-            raise ValueError("The Nanduri2012 model does not support an inner "
-                             "nuclear layer.")
-
-        if np.any([l in layers for l in ('GCL', 'OFL')]):
-            ecm = np.sum(in_arr[1, :, np.newaxis] * pt_list, axis=0)
-        else:
-            raise ValueError("Acceptable values for `layers` are: 'GCL', "
-                             "'OFL'.")
-        return ecm
+        in_flat = in_arr[1, :].reshape(-1).astype(float)
+        pt_arr = np.array(pt_list, dtype=float)
+        return np.array(fr.nanduri2012_calc_layer_current(in_flat, pt_arr))
 
     def model_cascade(self, in_arr, pt_list, layers, use_jit):
         """Nanduri model cascade
@@ -626,10 +612,10 @@ class Nanduri2012(BaseModel):
             A 2D array specifying the effective current values
             at a particular spatial location(pixel); one value
             per retinal layer and electrode.
-            Dimensions: <  # layers x #electrodes>
+            Dimensions: < #layers x #electrodes>
         pt_list: list
             List of pulse train 'data' containers.
-            Dimensions: <  # electrodes x #time points>
+            Dimensions: < #electrodes < #time points > >
         layers: list
             List of retinal layers to simulate.
             Choose from:
@@ -643,33 +629,17 @@ class Nanduri2012(BaseModel):
         if 'INL' in layers:
             raise ValueError("The Nanduri2012 model does not support an inner "
                              "nuclear layer.")
+        if 'GCL' not in layers and 'OFL' not in layers:
+            raise ValueError("Acceptable values for `layers` are: 'GCL', "
+                             "'OFL'.")
 
-        # Although the paper says to use cathodic-first, the code only
-        # reproduces if we use what we now call anodic-first. So flip the sign
-        # on the stimulus here:
-        b1 = -self.calc_layer_current(in_arr, pt_list, layers)
-
-        # Fast response
-        b2 = self.tsample * utils.conv(b1, self.gamma1, mode='full',
-                                       method='sparse',
-                                       use_jit=use_jit)[:b1.size]
-
-        # Charge accumulation
-        ca = self.tsample * np.cumsum(np.maximum(0, b1))
-        ca = self.tsample * utils.conv(ca, self.gamma2, mode='full',
-                                       method='fft')[:b1.size]
-        b3 = np.maximum(0, b2 - self.eps * ca)
-
-        # Stationary nonlinearity
-        b3max = b3.max()
-        sigmoid = ss.expit((b3max - self.shift) / self.slope)
-        b4 = b3 / b3max * sigmoid * self.asymptote
-
-        # Slow response
-        b5 = self.tsample * utils.conv(b4, self.gamma3, mode='full',
-                                       method='fft')[:b1.size]
-
-        return utils.TimeSeries(self.tsample, b5)
+        pulse = self.calc_layer_current(in_arr, pt_list)
+        percept = fr.nanduri2012_model_cascade(pulse, self.tsample,
+                                               self.tau1, self.tau2, self.tau3,
+                                               self.asymptote, self.shift,
+                                               self.slope, self.eps,
+                                               self.maxR3)
+        return utils.TimeSeries(self.tsample, percept)
 
 
 class TemporalModel(BaseModel):

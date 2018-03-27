@@ -3,3 +3,4 @@ scipy
 joblib
 scikit_image
 sk_video
+cython

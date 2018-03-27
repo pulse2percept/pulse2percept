@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.special as ss
 import scipy.optimize as scpo
 import numpy.testing as npt
 import pytest
@@ -8,6 +9,82 @@ from .. import retina
 from .. import implants
 from .. import stimuli
 from .. import utils
+
+
+class LegacyNanduri2012(retina.Nanduri2012):
+    """Preserve old implementation to make sure Cython model runs correctly"""
+
+    def __init__(self, **kwargs):
+        # Set default values of keyword arguments
+        self.tau1 = 0.42 / 1000
+        self.tau2 = 45.25 / 1000
+        self.tau3 = 26.25 / 1000
+        self.eps = 8.73
+        self.asymptote = 14.0
+        self.slope = 3.0
+        self.shift = 16.0
+
+        # Overwrite any given keyword arguments, print warning message (True)
+        # if attempting to set an unrecognized keyword
+        self.set_kwargs(True, **kwargs)
+
+        _, self.gamma1 = utils.gamma(1, self.tau1, self.tsample)
+        _, self.gamma2 = utils.gamma(1, self.tau2, self.tsample)
+        _, self.gamma3 = utils.gamma(3, self.tau3, self.tsample)
+
+    def model_cascade(self, in_arr, pt_list, layers, use_jit):
+        """Nanduri model cascade
+
+        Parameters
+        ----------
+        in_arr: array - like
+            A 2D array specifying the effective current values
+            at a particular spatial location(pixel); one value
+            per retinal layer and electrode.
+            Dimensions: <  # layers x #electrodes>
+        pt_list: list
+            List of pulse train 'data' containers.
+            Dimensions: <  # electrodes x #time points>
+        layers: list
+            List of retinal layers to simulate.
+            Choose from:
+            - 'OFL': optic fiber layer
+            - 'GCL': ganglion cell layer
+        use_jit: bool
+            If True, applies just - in-time(JIT) compilation to
+            expensive computations for additional speed - up
+            (requires Numba).
+        """
+        if 'INL' in layers:
+            raise ValueError("The Nanduri2012 model does not support an inner "
+                             "nuclear layer.")
+
+        # Although the paper says to use cathodic-first, the code only
+        # reproduces if we use what we now call anodic-first. So flip the sign
+        # on the stimulus here:
+        b1 = -self.calc_layer_current(in_arr, pt_list)
+
+        # Fast response
+        b2 = self.tsample * utils.conv(b1, self.gamma1, mode='full',
+                                       method='sparse',
+                                       use_jit=use_jit)[:b1.size]
+
+        # Charge accumulation
+        ca = self.tsample * np.cumsum(np.maximum(0, b1))
+        ca = self.tsample * utils.conv(ca, self.gamma2, mode='full',
+                                       method='fft')[:b1.size]
+        b3 = np.maximum(0, b2 - self.eps * ca)
+
+        # Stationary nonlinearity
+        b3max = b3.max()
+        sigmoid = ss.expit((b3max - self.shift) / self.slope)
+        b4 = b3 / b3max * sigmoid * self.asymptote
+
+        # Slow response
+        b5 = self.tsample * utils.conv(b4, self.gamma3, mode='full',
+                                       method='fft')[:b1.size]
+
+        return utils.TimeSeries(self.tsample, b5)
 
 
 def test_Grid():
@@ -114,16 +191,9 @@ def test_Nanduri2012():
     # one for the ganglion cell layer, one for the bipolar cell layer
     ecs_item = np.random.rand(2, 4)
 
-    # Calulating layer current:
-    # The Nanduri model does not support INL, so it's just one layer:
-    with pytest.raises(ValueError):
-        tm.calc_layer_current(ecs_item, ptrain_data, ['GCL', 'INL'])
-    with pytest.raises(ValueError):
-        tm.calc_layer_current(ecs_item, ptrain_data, ['unknown'])
-
     # ...and that should be the same as `calc_layer_current`:
     ecm_by_hand = np.sum(ecs_item[1, :, np.newaxis] * ptrain_data, axis=0)
-    ecm = tm.calc_layer_current(ecs_item, ptrain_data, ['GCL'])
+    ecm = tm.calc_layer_current(ecs_item, ptrain_data)
     npt.assert_almost_equal(ecm, ecm_by_hand)
 
     # Running the model cascade:
@@ -131,7 +201,21 @@ def test_Nanduri2012():
         tm.model_cascade(ecs_item, ptrain_data, ['GCL', 'INL'], False)
     with pytest.raises(ValueError):
         tm.model_cascade(ecs_item, ptrain_data, ['unknown'], False)
-    tm.model_cascade(ecs_item, ptrain_data, ['GCL'], False)
+
+    # Regression test: Make sure Cython implementation reproduces legacy code
+    tsample = 0.005 / 1000
+    layers = ['GCL']
+    use_jit = True
+    stim = stimuli.PulseTrain(tsample, freq=20, amp=150, pulse_dur=0.45 / 1000,
+                              dur=0.5)
+    ecm = np.array([1, 1]).reshape((2, 1))
+    legacy = LegacyNanduri2012(tsample=tsample)
+    legacy_out = legacy.model_cascade(ecm, [stim.data], layers, use_jit)
+    nanduri = retina.Nanduri2012(tsample=tsample)
+    nanduri_out = nanduri.model_cascade(ecm, [stim.data], layers, use_jit)
+    npt.assert_almost_equal(nanduri_out.data, legacy_out.data, decimal=2)
+    npt.assert_almost_equal(nanduri_out.data[-1], legacy_out.data[-1],
+                            decimal=2)
 
 
 def test_Horsager2009_model_cascade():

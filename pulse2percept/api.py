@@ -55,7 +55,7 @@ class Simulation(object):
                               n_axons=501, phi_range=(-180.0, 180.0),
                               n_rho=801, rho_range=(4.0, 45.0),
                               loc_od=(15.5, 1.5),
-                              sensitivity_rule='decay', decay_const=5.0,
+                              sensitivity_rule='decay', decay_const=1.0,
                               contribution_rule='max', powermean_exp=None,
                               datapath='.', save_data=True):
         """Sets parameters of the optic fiber layer (OFL)
@@ -85,7 +85,7 @@ class Simulation(object):
         rho_range: (rho_min, rho_max), optional, default: (4.0, 45.0)
             Lower and upper bounds for the radial position values(polar
             coordinates).
-        loc_od: (x_od, y_od), optional, default: (15.05 1.5)
+        loc_od: (x_od, y_od), optional, default: (15.5 1.5)
             Location of the center of the optic disc (x, y) in Cartesian
             coordinates. In a right (left) eye, we should have x > 0 (x < 0).
         sensitivity_rule : {'decay', 'Jeng2011'}, optional, default: 'decay'
@@ -115,8 +115,8 @@ class Simulation(object):
                 mean sensitivity across all axon segments. Specify
                 `powermean_exp` to change the exponent of the generalized
                 (power) mean, calculated as np.mean(x ** powermean_exp) **
-                (1.0 / powermean_exp). Setting `powermean_exp` to 1 is equal to
-                the arithmetic mean.
+                (1.0 / powermean_exp). Default is 1, which is equal to the
+                arithmetic mean.
         decay_const : float, optional, default: 2.0
             When `sensitivity_rule` is set to 'decay', specifies the decay
             constant of the exponential fall-off.
