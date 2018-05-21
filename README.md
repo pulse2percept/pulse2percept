@@ -1,4 +1,7 @@
+[![Build Status](https://travis-ci.org/uwescience/pulse2percept.svg?branch=master)](https://travis-ci.org/uwescience/pulse2percept)   
 [![Coverage Status](https://coveralls.io/repos/github/uwescience/pulse2percept/badge.svg?branch=master)](https://coveralls.io/github/uwescience/pulse2percept?branch=master)
+[![PyPI](https://img.shields.io/pypi/v/nine.svg)](https://pypi.org/project/pulse2percept)
+[![license](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/uwescience/pulse2percept/blob/master/LICENSE)
 
 
 # pulse2percept: A Python-based simulation framework for bionic vision
