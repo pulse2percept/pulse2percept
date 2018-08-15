@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patches
+from . import implants
 from . import utils
 from . import retina
 
@@ -41,10 +42,17 @@ def plot_fundus(implant, stim=None, ax=None, loc_od=(15.5, 1.5), n_axons=100,
     Returns a handle to the created figure (`fig`) and axes element (`ax`).
 
     """
+    if not isinstance(implant, implants.ElectrodeArray):
+        e_s = "`implant` must be of type implants.ElectrodeArray"
+        raise TypeError(e_s)
+    if n_axons < 1:
+        raise ValueError('Number of axons must be >= 1.')
+    if (implant.eye == 'RE' and loc_od[0] <= 0 or
+            implant.eye == 'LE' and loc_od[0] > 0):
+        loc_od = (-loc_od[0], loc_od[1])
     phi_range = (-180.0, 180.0)
     n_rho = 801
     rho_range = (2.0, 45.0)
-    loc_od = (15.5, 1.5)
     plot_patch = False
 
     fig = None
@@ -114,10 +122,13 @@ def plot_fundus(implant, stim=None, ax=None, loc_od=(15.5, 1.5), n_axons=100,
     # Annotate the four retinal quadrants near the corners of the plot:
     # superior/inferior x temporal/nasal
     if annot_quadr:
-        topbottom = ['top', 'bottom']
-        temporalnasal = ['temporal', 'nasal']
         if upside_down:
             topbottom = ['bottom', 'top']
+        else:
+            topbottom = ['top', 'bottom']
+        if implant.eye == 'RE':
+            temporalnasal = ['temporal', 'nasal']
+        else:
             temporalnasal = ['nasal', 'temporal']
         for yy, valign, si in zip([ymax, ymin], topbottom,
                                   ['superior', 'inferior']):
