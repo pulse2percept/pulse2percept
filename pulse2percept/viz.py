@@ -6,7 +6,7 @@ from . import utils
 from . import retina
 
 
-def plot_fundus(implant, stim=None, ax=None, loc_od=(15.5, 1.5), n_axons=100,
+def plot_fundus(implant, stim=None, ax=None, loc_od=(15.5, 1.5), n_bundles=100,
                 upside_down=False, annot_array=True, annot_quadr=True):
     """Plot an implant on top of the axon map
 
@@ -25,8 +25,8 @@ def plot_fundus(implant, stim=None, ax=None, loc_od=(15.5, 1.5), n_axons=100,
         A Matplotlib axes object. If None given, a new one will be created.
     loc_od : (x_od, y_od), optional, default: (15.5, 1.5)
         Location of the optic disc center (deg).
-    n_axons : int, optional, default: 100
-        Number of axons to plot.
+    n_bundles : int, optional, default: 100
+        Number of nerve fiber bundles to plot.
     upside_down : bool, optional, default: False
         Flag whether to plot the retina upside-down, such that the upper
         half of the plot corresponds to the upper visual field. In general,
@@ -45,20 +45,22 @@ def plot_fundus(implant, stim=None, ax=None, loc_od=(15.5, 1.5), n_axons=100,
     if not isinstance(implant, implants.ElectrodeArray):
         e_s = "`implant` must be of type implants.ElectrodeArray"
         raise TypeError(e_s)
-    if n_axons < 1:
-        raise ValueError('Number of axons must be >= 1.')
-    if (implant.eye == 'RE' and loc_od[0] <= 0 or
-            implant.eye == 'LE' and loc_od[0] > 0):
-        loc_od = (-loc_od[0], loc_od[1])
+    if n_bundles < 1:
+        raise ValueError('Number of nerve fiber bundles must be >= 1.')
     phi_range = (-180.0, 180.0)
     n_rho = 801
     rho_range = (2.0, 45.0)
-    plot_patch = False
 
-    fig = None
+    # Make sure x-coord of optic disc has the correct sign for LE/RE:
+    if (implant.eye == 'RE' and loc_od[0] <= 0 or
+            implant.eye == 'LE' and loc_od[0] > 0):
+        loc_od = (-loc_od[0], loc_od[1])
+
     if ax is None:
         # No axes object given: create
         fig, ax = plt.subplots(1, figsize=(10, 8))
+    else:
+        fig = ax.figure
 
     # Matplotlib<2 compatibility
     if hasattr(ax, 'set_facecolor'):
@@ -67,7 +69,7 @@ def plot_fundus(implant, stim=None, ax=None, loc_od=(15.5, 1.5), n_axons=100,
         ax.set_axis_bgcolor('black')
 
     # Draw axon pathways:
-    phi = np.linspace(*phi_range, num=n_axons)
+    phi = np.linspace(*phi_range, num=n_bundles)
     func_kwargs = {'n_rho': n_rho, 'loc_od': loc_od,
                    'rho_range': rho_range, 'eye': implant.eye}
     axon_bundles = utils.parfor(retina.jansonius2009, phi,
