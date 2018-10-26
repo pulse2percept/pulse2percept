@@ -55,10 +55,11 @@ Or use the following BibTex:
 ```
 
 Scientific studies referencing pulse2percept:
-- JR Golden, C Erickson-Davis, NP Cottaris, N Parthasarathy, F Rieke, DH Brainard, BA Wandell, EJ Chichilnisky (2018): Simulation of visual perception and learning with a retinal prosthesis. *bioRxiv 206409*, [doi:10.1101/206409](https://doi.org/10.1101/206409).
-- J Steffen, J Napp, S Pollmann, K Tönnies (2018). Perception Enhancement for Bionic Vision - Preliminary Study on Object Classification with Subretinal Implants. *Proceedings of the 7th International Conference on Pattern Recognition Applications and Methods, 169-177*. [doi:10.5220/0006648901690177](https://doi.org/10.5220/0006648901690177)
-- J Huth, T Masquelier, A Arleo (2018). Convis: A toolbox to fit and simulate filter-based models of early visual processing. *Frontiers in Neuroinformatics*, [doi:10.3389/fninf.2018.00009](https://doi.org/10.3389/fninf.2018.00009).
+- M Beyeler, D Nanduri, JD Weiland, A Rokem, GM Boynton, I Fine (2018). A model of ganglion axon pathways accounts for percepts elicited by retinal implants. *bioRxiv 453035*, [doi:10.1101/453035](https://doi.org/10.1101/453035).
 - L Wang, F Sharifian, J Napp, C Nath, S Pollmann (2018). Cross-task perceptual learning of object recognition in simulated retinal implant perception. *bioRxiv 360669*, [doi:10.1101/360669](https://doi.org/10.1101/360669).
+- J Huth, T Masquelier, A Arleo (2018). Convis: A toolbox to fit and simulate filter-based models of early visual processing. *Frontiers in Neuroinformatics*, [doi:10.3389/fninf.2018.00009](https://doi.org/10.3389/fninf.2018.00009).
+- J Steffen, J Napp, S Pollmann, K Tönnies (2018). Perception Enhancement for Bionic Vision - Preliminary Study on Object Classification with Subretinal Implants. *Proceedings of the 7th International Conference on Pattern Recognition Applications and Methods, 169-177*. [doi:10.5220/0006648901690177](https://doi.org/10.5220/0006648901690177)
+- JR Golden, C Erickson-Davis, NP Cottaris, N Parthasarathy, F Rieke, DH Brainard, BA Wandell, EJ Chichilnisky (2018): Simulation of visual perception and learning with a retinal prosthesis. *bioRxiv 206409*, [doi:10.1101/206409](https://doi.org/10.1101/206409).
 
 
 ## Installation
