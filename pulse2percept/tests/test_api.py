@@ -53,7 +53,7 @@ def test_Simulation_set_optic_fiber_layer():
     x_range = (-100, 100)
     y_range = (0, 200)
     sim.set_optic_fiber_layer(x_range=x_range, y_range=y_range,
-                              save_data=False)
+                              save_data=False, alpha = 14000)
     npt.assert_equal(sim.ofl.gridx.min(), x_range[0])
     npt.assert_equal(sim.ofl.gridx.max(), x_range[1])
     npt.assert_equal(sim.ofl.gridy.min(), y_range[0])

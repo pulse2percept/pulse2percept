@@ -55,7 +55,7 @@ class Simulation(object):
                               n_axons=501, phi_range=(-180.0, 180.0),
                               n_rho=801, rho_range=(4.0, 45.0),
                               loc_od=(15.5, 1.5),
-                              sensitivity_rule='decay', decay_const=1.0,
+                              sensitivity_rule='decay', decay_const=1.0, alpha = 14000,
                               contribution_rule='max', powermean_exp=None,
                               datapath='.', save_data=True):
         """Sets parameters of the optic fiber layer (OFL)
@@ -120,6 +120,8 @@ class Simulation(object):
         decay_const : float, optional, default: 2.0
             When `sensitivity_rule` is set to 'decay', specifies the decay
             constant of the exponential fall-off.
+        alpha : float, optional, default:14000
+                Current spread parameter for passive current spread from the electrode.
         powermean_exp : float, optional, default: 1.0
             When `sensitivity_rule` is set to 'mean', specifies the exponent of
             the generalized (power) mean function. The power mean is calculated
@@ -185,7 +187,7 @@ class Simulation(object):
                                sensitivity_rule=sensitivity_rule,
                                contribution_rule=contribution_rule,
                                decay_const=decay_const,
-                               powermean_exp=powermean_exp,
+                               powermean_exp=powermean_exp, alpha = alpha,
                                datapath=datapath, save_data=save_data,
                                engine=self.engine, scheduler=self.scheduler,
                                n_jobs=self.n_jobs)
