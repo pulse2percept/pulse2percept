@@ -55,9 +55,9 @@ class Simulation(object):
                               n_axons=501, phi_range=(-180.0, 180.0),
                               n_rho=801, rho_range=(4.0, 45.0),
                               loc_od=(15.5, 1.5),
-                              sensitivity_rule='decay', decay_const=1.0, alpha = 14000,
-                              contribution_rule='max', powermean_exp=None,
-                              datapath='.', save_data=True):
+                              sensitivity_rule='decay', decay_const=1.0,
+                              alpha=14000, contribution_rule='max',
+                              powermean_exp=None, datapath='.', save_data=True):
         """Sets parameters of the optic fiber layer (OFL)
 
         Parameters
@@ -178,6 +178,9 @@ class Simulation(object):
         else:
             raise ValueError("y_range must be a tuple (ylo, yhi) or None.")
 
+        if alpha <= 0:
+            raise ValueError("alpha cannot be a negative value. ")
+
         # Generate the grid from the above specs
         self.ofl = retina.Grid(x_range=(xlo, xhi), y_range=(ylo, yhi),
                                eye=self.implant.eye, sampling=sampling,
@@ -187,7 +190,7 @@ class Simulation(object):
                                sensitivity_rule=sensitivity_rule,
                                contribution_rule=contribution_rule,
                                decay_const=decay_const,
-                               powermean_exp=powermean_exp, alpha = alpha,
+                               powermean_exp=powermean_exp, alpha=alpha,
                                datapath=datapath, save_data=save_data,
                                engine=self.engine, scheduler=self.scheduler,
                                n_jobs=self.n_jobs)

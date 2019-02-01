@@ -22,7 +22,7 @@ class Grid(object):
                  eye='RE', sampling=25, n_axons=501, phi_range=(-180.0, 180.0),
                  n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.5, 1.5),
                  sensitivity_rule='decay', contribution_rule='max',
-                 decay_const=2.0,alpha = 14000, powermean_exp=None, datapath='.',
+                 decay_const=2.0, alpha=14000, powermean_exp=None, datapath='.',
                  save_data=True, engine='joblib', scheduler='threading',
                  n_jobs=-1):
         """Generates a spatial grid representing the retinal coordinate frame
@@ -94,8 +94,8 @@ class Grid(object):
         decay_const : float, optional, default: 2.0
             When `sensitivity_rule` is set to 'decay', specifies the decay
             constant of the exponential fall-off.
-        alpha : float, optional, default:14000
-            Current spread parameter for passive current spread from the electrode. 
+        alpha : float, optional, default: 14000
+            Current spread parameter for passive current spread from the electrode.
         powermean_exp : float, optional, default: None
             When `sensitivity_rule` is set to 'mean', specifies the exponent of
             the generalized (power) mean function. The power mean is calculated
@@ -303,7 +303,7 @@ class Grid(object):
         # Normalize so that the max of `ecs` is the same as `current_spread`
         return ecs / (ecs.max() + np.finfo(float).eps) * current_spread.max()
 
-    def electrode_ecs(self, implant,  n=1.69):
+    def electrode_ecs(self, implant, n=1.69):
         """
         Gather current spread and effective current spread for each electrode
         within both the bipolar and the ganglion cell layer
