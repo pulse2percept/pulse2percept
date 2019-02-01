@@ -205,8 +205,8 @@ class Electrode(object):
                 "'OFL' or 'INL'." % layer
             raise ValueError(s)
         cspread = (alpha / (alpha + h ** n))
-        cspread[r > self.radius] = (alpha /
-                                    (alpha + d[r > self.radius] ** n))
+        cspread[r > self.radius] = (alpha
+                                    / (alpha + d[r > self.radius] ** n))
 
         return cspread
 
@@ -241,10 +241,10 @@ class Electrode(object):
             # Create a map of the retina for each electrode
             # where it's 1 under the electrode, 0 elsewhere
             rf = np.zeros(xg.shape).astype(np.float32)
-            ind = np.where((xg > self.x_center - (size / 2.0)) &
-                           (xg < self.x_center + (size / 2.0)) &
-                           (yg > self.y_center - (size / 2.0)) &
-                           (yg < self.y_center + (size / 2.0)))
+            ind = np.where((xg > self.x_center - (size / 2.0))
+                           & (xg < self.x_center + (size / 2.0))
+                           & (yg > self.y_center - (size / 2.0))
+                           & (yg < self.y_center + (size / 2.0)))
             rf[ind] = 1.0
         elif rftype == 'gaussian':
             # Create a map of the retina where the weight drops of as a

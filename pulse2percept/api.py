@@ -120,7 +120,7 @@ class Simulation(object):
         decay_const : float, optional, default: 2.0
             When `sensitivity_rule` is set to 'decay', specifies the decay
             constant of the exponential fall-off.
-        alpha : float, optional, default:14000
+        alpha : float, optional, default: 14000
                 Current spread parameter for passive current spread from the electrode.
         powermean_exp : float, optional, default: 1.0
             When `sensitivity_rule` is set to 'mean', specifies the exponent of
@@ -466,8 +466,8 @@ class Simulation(object):
                 if 'INL' in layers:
                     # For this pixel: Check if the ecs in any layer is large
                     # enough compared to the max across pixels within the layer
-                    process_pixel |= np.any(ecs[yy, xx, 0, :] >=
-                                            tol * lmax[0, :])
+                    process_pixel |= np.any(ecs[yy, xx, 0, :]
+                                            >= tol * lmax[0, :])
                 if ('GCL' or 'OFL') in layers:
                     process_pixel |= np.any(ecs[yy, xx, 1, :] >=
                                             tol * lmax[1, :])
