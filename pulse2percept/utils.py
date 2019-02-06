@@ -282,8 +282,8 @@ def _sparseconv(data, kernel, mode):
     pos = np.where(data.ravel() != 0)[0]
     # Add shifted and scaled copies of `kernel` only where `data` is nonzero
     for p in pos:
-        out[p:p + kernel_len] = (out[p:p + kernel_len]
-                                + kernel.ravel() * data.ravel()[p])
+        out[p:p + kernel_len] = (out[p:p + kernel_len] +
+                                 kernel.ravel() * data.ravel()[p])
 
     if mode.lower() == 'full':
         return out
