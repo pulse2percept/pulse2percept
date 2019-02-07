@@ -56,8 +56,8 @@ class Simulation(object):
                               n_rho=801, rho_range=(4.0, 45.0),
                               loc_od=(15.5, 1.5),
                               sensitivity_rule='decay', decay_const=1.0,
-                              contribution_rule='max', powermean_exp=None,
-                              datapath='.', save_data=True):
+                              alpha=14000, contribution_rule='max',
+                              powermean_exp=None, datapath='.', save_data=True):
         """Sets parameters of the optic fiber layer (OFL)
 
         Parameters
@@ -120,6 +120,8 @@ class Simulation(object):
         decay_const : float, optional, default: 2.0
             When `sensitivity_rule` is set to 'decay', specifies the decay
             constant of the exponential fall-off.
+        alpha : float, optional, default: 14000
+                Current spread parameter for passive current spread from the electrode.
         powermean_exp : float, optional, default: 1.0
             When `sensitivity_rule` is set to 'mean', specifies the exponent of
             the generalized (power) mean function. The power mean is calculated
@@ -176,6 +178,9 @@ class Simulation(object):
         else:
             raise ValueError("y_range must be a tuple (ylo, yhi) or None.")
 
+        if alpha <= 0:
+            raise ValueError("alpha cannot be a negative value. ")
+
         # Generate the grid from the above specs
         self.ofl = retina.Grid(x_range=(xlo, xhi), y_range=(ylo, yhi),
                                eye=self.implant.eye, sampling=sampling,
@@ -185,7 +190,7 @@ class Simulation(object):
                                sensitivity_rule=sensitivity_rule,
                                contribution_rule=contribution_rule,
                                decay_const=decay_const,
-                               powermean_exp=powermean_exp,
+                               powermean_exp=powermean_exp, alpha=alpha,
                                datapath=datapath, save_data=save_data,
                                engine=self.engine, scheduler=self.scheduler,
                                n_jobs=self.n_jobs)
@@ -461,11 +466,12 @@ class Simulation(object):
                 if 'INL' in layers:
                     # For this pixel: Check if the ecs in any layer is large
                     # enough compared to the max across pixels within the layer
-                    process_pixel |= np.any(ecs[yy, xx, 0, :] >=
-                                            tol * lmax[0, :])
+                    process_pixel |= np.any(ecs[yy, xx, 0, :]
+
+                                            >= tol * lmax[0, :])
                 if ('GCL' or 'OFL') in layers:
-                    process_pixel |= np.any(ecs[yy, xx, 1, :] >=
-                                            tol * lmax[1, :])
+                    process_pixel |= np.any(ecs[yy, xx, 1, :]
+                                            >= tol * lmax[1, :])
 
                 if process_pixel:
                     ecs_list.append(ecs[yy, xx])
@@ -479,8 +485,8 @@ class Simulation(object):
                                ecs_list, n_jobs=self.n_jobs,
                                engine=self.engine, scheduler=self.scheduler,
                                func_args=[pt_data, layers, self.use_jit])
-        bm = np.zeros(self.ofl.gridx.shape +
-                      (sr_list[0].data.shape[-1], ))
+        bm = np.zeros(self.ofl.gridx.shape
+                     + (sr_list[0].data.shape[-1], ))
         idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
         bm[idxer] = [sr.data for sr in sr_list]
         percept = utils.TimeSeries(sr_list[0].tsample, bm)

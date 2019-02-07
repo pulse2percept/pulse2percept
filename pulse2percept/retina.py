@@ -22,7 +22,7 @@ class Grid(object):
                  eye='RE', sampling=25, n_axons=501, phi_range=(-180.0, 180.0),
                  n_rho=801, rho_range=(4.0, 45.0), loc_od=(15.5, 1.5),
                  sensitivity_rule='decay', contribution_rule='max',
-                 decay_const=2.0, powermean_exp=None, datapath='.',
+                 decay_const=2.0, alpha=14000, powermean_exp=None, datapath='.',
                  save_data=True, engine='joblib', scheduler='threading',
                  n_jobs=-1):
         """Generates a spatial grid representing the retinal coordinate frame
@@ -94,6 +94,8 @@ class Grid(object):
         decay_const : float, optional, default: 2.0
             When `sensitivity_rule` is set to 'decay', specifies the decay
             constant of the exponential fall-off.
+        alpha : float, optional, default: 14000
+            Current spread parameter for passive current spread from the electrode.
         powermean_exp : float, optional, default: None
             When `sensitivity_rule` is set to 'mean', specifies the exponent of
             the generalized (power) mean function. The power mean is calculated
@@ -143,6 +145,7 @@ class Grid(object):
         self.sensitivity_rule = sensitivity_rule
         self.contribution_rule = contribution_rule
         self.decay_const = decay_const
+        self.alpha = alpha
         self.powermean_exp = powermean_exp
         self.engine = engine
         self.scheduler = scheduler
@@ -300,7 +303,7 @@ class Grid(object):
         # Normalize so that the max of `ecs` is the same as `current_spread`
         return ecs / (ecs.max() + np.finfo(float).eps) * current_spread.max()
 
-    def electrode_ecs(self, implant, alpha=14000, n=1.69):
+    def electrode_ecs(self, implant, n=1.69):
         """
         Gather current spread and effective current spread for each electrode
         within both the bipolar and the ganglion cell layer
@@ -309,9 +312,6 @@ class Grid(object):
         ----------
         implant: implants.ElectrodeArray
             An implants.ElectrodeArray instance describing the implant.
-
-        alpha: float
-            Current spread parameter
         n: float
             Current spread parameter
 
@@ -333,10 +333,10 @@ class Grid(object):
 
         for i, e in enumerate(implant.electrodes):
             cs[..., 0, i] = e.current_spread(self.gridx, self.gridy,
-                                             layer='INL', alpha=alpha, n=n)
+                                             layer='INL', alpha=self.alpha, n=n)
             ecs[..., 0, i] = cs[..., 0, i]
             cs[..., 1, i] = e.current_spread(self.gridx, self.gridy,
-                                             layer='OFL', alpha=alpha, n=n)
+                                             layer='OFL', alpha=self.alpha, n=n)
             ecs[:, :, 1, i] = self.current2effectivecurrent(cs[..., 1, i])
 
         return ecs, cs
@@ -1415,10 +1415,10 @@ def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
     ymodel[id] = yprime[id] + center[1] * (xmodel[id] / center[0])**2
 
     #  rotate about the optic disc and scale
-    x = scale * (np.cos(rot) * (xmodel - center[0]) + np.sin(rot) *
-                 (ymodel - center[1])) + center[0]
-    y = scale * (-np.sin(rot) * (xmodel - center[0]) + np.cos(rot) *
-                 (ymodel - center[1])) + center[1]
+    x = scale * (np.cos(rot) * (xmodel - center[0]) + np.sin(rot)
+                * (ymodel - center[1])) + center[0]
+    y = scale * (-np.sin(rot) * (xmodel - center[0]) + np.cos(rot)
+                * (ymodel - center[1])) + center[1]
 
     return x, y
 

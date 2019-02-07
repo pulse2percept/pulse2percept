@@ -480,7 +480,7 @@ def find_files_like(datapath, pattern):
     Examples
     --------
     # Find all '.npz' files in parent dir
-    >>> files = find_files_like('..', '.*\.npz$')
+    >>> files = find_files_like('..', r'.*\.npz$')
     """
     # No need to import these at module level
     from os import listdir
