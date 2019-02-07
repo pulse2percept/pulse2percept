@@ -485,8 +485,8 @@ class Simulation(object):
                                ecs_list, n_jobs=self.n_jobs,
                                engine=self.engine, scheduler=self.scheduler,
                                func_args=[pt_data, layers, self.use_jit])
-        bm = np.zeros(self.ofl.gridx.shape +
-                      (sr_list[0].data.shape[-1], ))
+        bm = np.zeros(self.ofl.gridx.shape
+                     + (sr_list[0].data.shape[-1], ))
         idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
         bm[idxer] = [sr.data for sr in sr_list]
         percept = utils.TimeSeries(sr_list[0].tsample, bm)
