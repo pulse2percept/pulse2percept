@@ -52,8 +52,8 @@ def plot_fundus(implant, stim=None, ax=None, loc_od=(15.5, 1.5), n_bundles=100,
     rho_range = (2.0, 45.0)
 
     # Make sure x-coord of optic disc has the correct sign for LE/RE:
-    if (implant.eye == 'RE' and loc_od[0] <= 0 or
-            implant.eye == 'LE' and loc_od[0] > 0):
+    if (implant.eye == 'RE' and loc_od[0] <= 0
+            or implant.eye == 'LE' and loc_od[0] > 0):
         loc_od = (-loc_od[0], loc_od[1])
     if ax is None:
         # No axes object given: create

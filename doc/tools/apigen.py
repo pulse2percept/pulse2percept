@@ -401,8 +401,8 @@ class ApiDocWriter(object):
             for subpkg_name in dirnames + filenames:
                 package_uri = '.'.join((root_uri, subpkg_name))
                 package_path = self._uri2path(package_uri)
-                if (package_path and
-                    self._survives_exclude(package_uri, 'package')):
+                if (package_path
+                    and self._survives_exclude(package_uri, 'package')):
                     modules.append(package_uri)
 
         return sorted(modules)

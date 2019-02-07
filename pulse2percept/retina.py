@@ -1415,10 +1415,10 @@ def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
     ymodel[id] = yprime[id] + center[1] * (xmodel[id] / center[0])**2
 
     #  rotate about the optic disc and scale
-    x = scale * (np.cos(rot) * (xmodel - center[0]) + np.sin(rot) *
-                 (ymodel - center[1])) + center[0]
-    y = scale * (-np.sin(rot) * (xmodel - center[0]) + np.cos(rot) *
-                 (ymodel - center[1])) + center[1]
+    x = scale * (np.cos(rot) * (xmodel - center[0]) + np.sin(rot)
+                * (ymodel - center[1])) + center[0]
+    y = scale * (-np.sin(rot) * (xmodel - center[0]) + np.cos(rot)
+                * (ymodel - center[1])) + center[1]
 
     return x, y
 
