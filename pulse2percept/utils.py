@@ -465,10 +465,9 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         p = partial(func, *func_args, **func_kwargs)
         d = [dask.delayed(p)(i) for i in in_list]
         if scheduler == 'multiprocessing':
-            results = dask.compute(*d, get=dask.multiprocessing.get,
-                                   workers=n_jobs)
+            results = dask.compute(*d, scheduler='processes', workers=n_jobs)
         elif scheduler == 'threading':
-            results = dask.compute(*d, get=dask.threaded.get, workers=n_jobs)
+            results = dask.compute(*d, scheduler='threads', workers=n_jobs)
         else:
             raise ValueError("Acceptable values for `scheduler` are: "
                              "'threading', 'multiprocessing'")
