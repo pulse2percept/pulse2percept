@@ -295,7 +295,8 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
 
     isargus1 = isinstance(implant, implants.ArgusI)
     isargus2 = isinstance(implant, implants.ArgusII)
-    if not isargus1 and not isargus2:
+    isalphaims = isinstance(implant, implants.AlphaIMS)
+    if not isargus1 and not isargus2 and no isalphaims:
         raise TypeError("For now, implant must be of type implants.ArgusI or "
                         "implants.ArgusII.")
 
@@ -323,6 +324,8 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
         img_stim = sit.resize(img_orig, (4, 4), mode='reflect')
     elif isargus2:
         img_stim = sit.resize(img_orig, (6, 10), mode='reflect')
+    elif isalphaims:
+        img_stim = sit.resize(img_orig, (37, 37), mode='reflect')
 
     # If specified, invert the mapping of grayscale values:
     if invert:
