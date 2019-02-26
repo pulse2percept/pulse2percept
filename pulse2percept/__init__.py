@@ -26,6 +26,7 @@ from . import implants
 from . import stimuli
 from . import files
 from . import utils
+from . import viz
 
 # Reset the logging level to INFO
 console.setLevel(logging.INFO)

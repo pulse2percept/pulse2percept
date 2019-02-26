@@ -201,5 +201,5 @@ def test_find_files_like():
     files.find_files_like(".", ".*")
 
     # Or fail to find an unlikely file name
-    filenames = files.find_files_like(".", "theresnowaythisexists\.xyz")
+    filenames = files.find_files_like(".", r"theresnowaythisexists\.xyz")
     npt.assert_equal(filenames, [])

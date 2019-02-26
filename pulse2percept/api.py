@@ -56,8 +56,8 @@ class Simulation(object):
                               n_rho=801, rho_range=(4.0, 45.0),
                               loc_od=(15.5, 1.5),
                               sensitivity_rule='decay', decay_const=1.0,
-                              contribution_rule='max', powermean_exp=None,
-                              datapath='.', save_data=True):
+                              alpha=14000, contribution_rule='max',
+                              powermean_exp=None, datapath='.', save_data=True):
         """Sets parameters of the optic fiber layer (OFL)
 
         Parameters
@@ -120,6 +120,8 @@ class Simulation(object):
         decay_const : float, optional, default: 2.0
             When `sensitivity_rule` is set to 'decay', specifies the decay
             constant of the exponential fall-off.
+        alpha : float, optional, default: 14000
+                Current spread parameter for passive current spread from the electrode.
         powermean_exp : float, optional, default: 1.0
             When `sensitivity_rule` is set to 'mean', specifies the exponent of
             the generalized (power) mean function. The power mean is calculated
@@ -176,6 +178,9 @@ class Simulation(object):
         else:
             raise ValueError("y_range must be a tuple (ylo, yhi) or None.")
 
+        if alpha <= 0:
+            raise ValueError("alpha cannot be a negative value. ")
+
         # Generate the grid from the above specs
         self.ofl = retina.Grid(x_range=(xlo, xhi), y_range=(ylo, yhi),
                                eye=self.implant.eye, sampling=sampling,
@@ -185,7 +190,7 @@ class Simulation(object):
                                sensitivity_rule=sensitivity_rule,
                                contribution_rule=contribution_rule,
                                decay_const=decay_const,
-                               powermean_exp=powermean_exp,
+                               powermean_exp=powermean_exp, alpha=alpha,
                                datapath=datapath, save_data=save_data,
                                engine=self.engine, scheduler=self.scheduler,
                                n_jobs=self.n_jobs)
@@ -461,11 +466,12 @@ class Simulation(object):
                 if 'INL' in layers:
                     # For this pixel: Check if the ecs in any layer is large
                     # enough compared to the max across pixels within the layer
-                    process_pixel |= np.any(ecs[yy, xx, 0, :] >=
-                                            tol * lmax[0, :])
+                    process_pixel |= np.any(ecs[yy, xx, 0, :]
+
+                                            >= tol * lmax[0, :])
                 if ('GCL' or 'OFL') in layers:
-                    process_pixel |= np.any(ecs[yy, xx, 1, :] >=
-                                            tol * lmax[1, :])
+                    process_pixel |= np.any(ecs[yy, xx, 1, :]
+                                            >= tol * lmax[1, :])
 
                 if process_pixel:
                     ecs_list.append(ecs[yy, xx])
@@ -479,8 +485,8 @@ class Simulation(object):
                                ecs_list, n_jobs=self.n_jobs,
                                engine=self.engine, scheduler=self.scheduler,
                                func_args=[pt_data, layers, self.use_jit])
-        bm = np.zeros(self.ofl.gridx.shape +
-                      (sr_list[0].data.shape[-1], ))
+        bm = np.zeros(self.ofl.gridx.shape
+                     + (sr_list[0].data.shape[-1], ))
         idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
         bm[idxer] = [sr.data for sr in sr_list]
         percept = utils.TimeSeries(sr_list[0].tsample, bm)
@@ -493,153 +499,6 @@ class Simulation(object):
         logging.getLogger(__name__).info("Done.")
 
         return percept
-
-    def plot_fundus(self, stim=None, ax=None, n_axons=100, upside_down=False,
-                    annotate=True):
-        """Plot the implant on the retinal surface akin to a fundus photopgraph
-        This function plots an electrode array on top of the axon streak map
-        of the retina, akin to a fundus photograph. A blue rectangle highlights
-        the area of the retinal surface that is being simulated.
-        If `stim` is passed, activated electrodes will be highlighted.
-        Parameters
-        ----------
-        stim : utils.TimeSeries|list|dict, optional
-            An input stimulus, as passed to ``p2p.pulse2percept``. If given,
-            activated electrodes will be highlighted in the plot.
-            Default: None
-        ax : matplotlib.axes._subplots.AxesSubplot, optional
-            A Matplotlib axes object. If None given, a new one will be created.
-            Default: None
-        n_axons : int, optional, default: 100
-            Number of axons to plot.
-        upside_down : bool, optional, default: False
-            Flag whether to plot the retina upside-down, such that the upper
-            half of the plot corresponds to the upper visual field. In general,
-            inferior retina == upper visual field (and superior == lower).
-        annotate : bool, optional, default: True
-            Flag whether to annotate the four retinal quadrants
-            (inferior/superior x temporal/nasal).
-
-        Returns
-        -------
-        Returns a handle to the created figure (`fig`) and axes element (`ax`).
-        """
-        if self.ofl is not None:
-            # Optic fiber layer already set via  ``set_optic_fiber_layer``
-            phi_range = self.ofl.phi_range
-            n_rho = self.ofl.n_rho
-            rho_range = self.ofl.rho_range
-            loc_od = self.ofl.loc_od
-            x_range = self.ofl.x_range
-            y_range = self.ofl.y_range
-            plot_patch = True
-        else:
-            msg = "Optic fiber layer not set (call ``set_optic_fiber_layer``)."
-            msg += " Using default values."
-            logging.getLogger(__name__).info(msg)
-            phi_range = (-180.0, 180.0)
-            n_rho = 801
-            rho_range = (4.0, 45.0)
-            loc_od = (15.5, 1.5)
-            plot_patch = False
-
-        fig = None
-        if ax is None:
-                # No axes object given: create
-            import matplotlib.pyplot as plt
-            fig, ax = plt.subplots(1, figsize=(10, 8))
-
-        # Matplotlib<2 compatibility
-        if hasattr(ax, 'set_facecolor'):
-            ax.set_facecolor('black')
-        elif hasattr(ax, 'set_axis_bgcolor'):
-            ax.set_axis_bgcolor('black')
-
-        # Draw axon pathways: Need to regenerate because parfor returns axons
-        # out of orders - random sample doesn't look neat. Use the same
-        # settings as in the OFL, but with a smaller `n_axons`:
-        phi = np.linspace(*phi_range, num=n_axons)
-        func_kwargs = {'n_rho': n_rho, 'loc_od': loc_od,
-                       'rho_range': rho_range, 'eye': self.implant.eye}
-        axon_bundles = utils.parfor(retina.jansonius2009, phi,
-                                    func_kwargs=func_kwargs,
-                                    engine=self.engine, n_jobs=self.n_jobs,
-                                    scheduler=self.scheduler)
-        for bundle in axon_bundles:
-            ax.plot(retina.dva2ret(bundle[:, 0]), retina.dva2ret(bundle[:, 1]),
-                    c=(0.5, 1.0, 0.5))
-
-        # Draw in the the retinal patch we're simulating.
-        # This defines the size of our "percept" image below.
-        if plot_patch:
-            from matplotlib import patches
-            patch = patches.Rectangle((x_range[0], y_range[0]),
-                                      np.diff(x_range), np.diff(y_range),
-                                      alpha=0.7)
-            ax.add_patch(patch)
-
-        # Highlight location of stimulated electrodes
-        if stim is not None:
-            for key in stim:
-                el = self.implant[key]
-                if el is not None:
-                    ax.plot(el.x_center, el.y_center, 'oy',
-                            markersize=np.sqrt(el.radius) * 2)
-
-        # Plot all electrodes and their label
-        for e in self.implant.electrodes:
-            if annotate:
-                ax.text(e.x_center + 100, e.y_center + 50, e.name,
-                        color='white', size='x-large')
-            ax.plot(e.x_center, e.y_center, 'ow', markersize=np.sqrt(e.radius))
-
-        # Plot the location of the array's tack and annotate it
-        if self.implant.tack:
-            tx, ty = self.implant.tack
-            ax.plot(tx, ty, 'ow')
-            if annotate:
-                if upside_down:
-                    offset = 100
-                else:
-                    offset = -100
-                ax.text(tx, ty + offset, 'tack',
-                        horizontalalignment='center',
-                        verticalalignment='top',
-                        color='white', size='large')
-
-        xmin, xmax, ymin, ymax = retina.dva2ret([-20, 20, -15, 15])
-        ax.set_aspect('equal')
-        ax.set_xlim(xmin, xmax)
-        ax.set_xlabel('x (microns)')
-        ax.set_ylim(ymin, ymax)
-        ax.set_ylabel('y (microns)')
-        eyestr = {'LE': 'left', 'RE': 'right'}
-        ax.set_title('%s in %s eye' % (self.implant, eyestr[self.implant.eye]))
-        ax.grid('off')
-
-        if annotate:
-            # Annotate the four retinal quadrants near the corners of the plot:
-            # superior/inferior x temporal/nasal
-            topbottom = ['top', 'bottom']
-            temporalnasal = ['temporal', 'nasal']
-            if upside_down:
-                topbottom = ['bottom', 'top']
-                temporalnasal = ['nasal', 'temporal']
-            for yy, valign, si in zip([ymax, ymin], topbottom,
-                                      ['superior', 'inferior']):
-                for xx, halign, tn in zip([xmin, xmax], ['left', 'right'],
-                                          temporalnasal):
-                    ax.text(xx, yy, si + ' ' + tn,
-                            color='black', fontsize=14,
-                            horizontalalignment=halign,
-                            verticalalignment=valign,
-                            backgroundcolor=(1, 1, 1, 0.8))
-
-        # Need to flip y axis to have upper half == upper visual field
-        if upside_down:
-            ax.invert_yaxis()
-
-        return fig, ax
 
 
 def get_brightest_frame(percept):
