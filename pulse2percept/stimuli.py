@@ -296,7 +296,7 @@ def image2pulsetrain(img, implant, coding='amplitude', valrange=[0, 50],
     isargus1 = isinstance(implant, implants.ArgusI)
     isargus2 = isinstance(implant, implants.ArgusII)
     isalphaims = isinstance(implant, implants.AlphaIMS)
-    if not isargus1 and not isargus2 and no isalphaims:
+    if not isargus1 and not isargus2 and not isalphaims:
         raise TypeError("For now, implant must be of type implants.ArgusI or "
                         "implants.ArgusII.")
 
