@@ -40,6 +40,7 @@ before_install:
 
 install:
   - travis_wait
+  - pip install codecov
   - pip install -r requirements.txt
   - pip install -e .
 
@@ -49,10 +50,10 @@ script:
 
   - mkdir for_test
   - cd for_test
-  - py.test --pyargs pulse2percept --cov-report term-missing --cov=pulse2percept --doctest-modules
+  - pytest --pyargs pulse2percept --cov-report term-missing --cov=pulse2percept --doctest-modules
 
 after_success:
-  - coveralls
+  - codecov
 
 after failure:
   - ls -alh
