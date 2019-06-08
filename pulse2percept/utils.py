@@ -8,7 +8,7 @@ import copy
 import functools
 import logging
 
-from scipy import misc as spm
+from scipy.special import factorial
 from scipy import interpolate as spi
 from scipy import signal as sps
 
@@ -519,7 +519,7 @@ def gamma(n, tau, tsample, tol=0.01):
 
     # Calculate gamma
     y = (t / tau) ** (n - 1) * np.exp(-t / tau)
-    y /= (tau * spm.factorial(n - 1))
+    y /= (tau * factorial(n - 1))
 
     # Normalize to unit area
     y /= np.trapz(np.abs(y), dx=tsample)
