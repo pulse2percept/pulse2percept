@@ -15,7 +15,7 @@ cpdef fast_score(double[:] stim, double[:] xel, double[:] yel,
     with nogil:
         for idx in range(n_stim):
             dist2 = c_pow(xtissue - xel[idx], 2) + c_pow(ytissue - yel[idx], 2)
-        bright += stim[idx] * c_exp(-dist2 / (2.0 * c_pow(rho, 2)))
+            bright += stim[idx] * c_exp(-dist2 / (2.0 * c_pow(rho, 2)))
     if bright < th:
         bright = 0
     return bright

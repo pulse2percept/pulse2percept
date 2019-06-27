@@ -90,7 +90,7 @@ class BaseModel(utils.Frozen, utils.PrettyPrint, metaclass=abc.ABCMeta):
             # size):
             'xrange': (-20, 20),  # dva
             'yrange': (-15, 15),  # dva
-            'xystep': 0.2,  # dva
+            'xystep': 0.25,  # dva
             'grid_type': 'rectangular',
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,

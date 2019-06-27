@@ -16,7 +16,6 @@ class ScoreboardModel(WatsonConversionMixin, BaseModel):
         idx_xy, xydva = xygrid
         # Find all nonzero entries in the stimulus array:
         electrodes, pulses = stimulus.nonzero()
-        print(electrodes, pulses)
         # Call the Cython function for fast processing:
         bright = fast_score(pulses,
                             np.array([e.x for e in electrodes]),

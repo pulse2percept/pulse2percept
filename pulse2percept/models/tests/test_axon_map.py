@@ -166,3 +166,14 @@ def test_AxonMapModel_predict_percept():
     npt.assert_almost_equal(np.sum(percept[:15, :]), 0)
     # Same for lower band:
     npt.assert_almost_equal(np.sum(percept[21:, :]), 0)
+
+    # Full Argus II with small lambda: 60 bright spots
+    model = models.AxonMapModel(engine='serial', xystep=1, rho=100,
+                                axlambda=40)
+    model.build()
+    stim = implants.ImplantStimulus(implants.ArgusII(), np.ones((6, 10)))
+    percept = model.predict_percept(stim)
+    # Most spots are pretty bright, but there are 2 dimmer ones (due to their
+    # location on the retina):
+    npt.assert_equal(np.sum(percept > 0.5), 58)
+    npt.assert_equal(np.sum(percept > 0.275), 60)
