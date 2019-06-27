@@ -35,6 +35,7 @@ corresponds to the predicted perceptual experience of a patient:
 <img src="doc/_static/model.jpg" width="100%"/>
 
 If you use pulse2percept in a scholary publication, please cite as:
+
 > M Beyeler, GM Boynton, I Fine, A Rokem (2017). pulse2percept: A Python-based
 > simulation framework for bionic vision. Proceedings of the 16th Python in
 > Science Conference, p.81-88,
@@ -66,57 +67,120 @@ Scientific studies referencing pulse2percept:
 
 ## Installation
 
-### Prerequisites
-pulse2percept requires the following software installed for your platform:
+### Dependencies
 
-1.  [Python](http://www.python.org) 2.7 or >= 3.4
+pulse2percept requires:
 
-2.  [NumPy](http://www.numpy.org)
+1.  [Python](http://www.python.org) >= 3.5
 
-3.  [SciPy](http://www.scipy.org)
+2.  [Cython](http://www.cython.org) >= 0.29
 
-4.  [JobLib](https://github.com/joblib/joblib)
+3.  [NumPy](http://www.numpy.org) >= 1.9
 
-5.  [scikit-image](http://scikit-image.org/)
+4.  [SciPy](http://www.scipy.org) >= 1.0
+
+5.  [JobLib](https://github.com/joblib/joblib) >= 0.11
+
+**pulse2percept 0.5 was the last version to support Python 2.7.**
+pulse2percept 0.6 and later require Python 3.5 or newer.
 
 Optional packages:
 
-1.  [Dask](https://github.com/dask/dask) for parallel processing
-    (a joblib alternative). Use conda to install.
+1.  [scikit-image](http://scikit-image.org/) for image functionality in the `io` 
+    module.
 
-2.  [Numba](http://numba.pydata.org/). Use conda to install.
+2.  [scikit-video](http://www.scikit-video.org) for video functionality in the
+    `io` module. You will also need an FFMPEG codec (see next bullet point).
 
 3.  [ffmpeg codec](http://adaptivesamples.com/how-to-install-ffmpeg-on-windows)
-    if you're on Windows and want to use functions in the `files`
-    module.
+    if you're on Windows and want to use functions in the `io` module.
+
+4.  [Dask](https://github.com/dask/dask) for parallel processing (a joblib 
+    alternative). Use conda to install.
+
+5.  [Numba](http://numba.pydata.org/) for just-in-time compilation. Use conda to 
+    install.
+
+6.  [Pytest](https://docs.pytest.org/en/latest/) to run the test suite.
 
 ### Stable version
 
 The latest stable release of pulse2percept can be installed with pip:
 
 ```bash
-$ pip install pulse2percept
+$ pip3 install pulse2percept
 ```
 
 ### Development version
 
-In order to get the bleeding-edge version of pulse2percept,
-use the commands:
+In order to get the latest development version of pulse2percept, use the 
+following recipe.
 
-```bash
-$ git clone https://github.com/uwescience/pulse2percept.git
-$ cd pulse2percept
-$ python setup.py install
-```
+1.  Go to [pulse2percept on GitHub](https://github.com/uwescience/pulse2percept)
+    and click on "Fork" in the top-right corner. This will allow you to work on
+    your own copy of the code (https://github.com/<Your User Name>/pulse2percept)
+    and contribute changes later on.
 
-To test pulse2percept after installation, execute in Python:
+2.  Clone the repository to get a local copy on your computer:
 
-```python
->>> import pulse2percept
-```
+    ```bash
+    $ git clone https://github.com/<Your User Name>/pulse2percept.git
+    $ cd pulse2percept
+    ```
+
+    Make sure to replace `<Your User Name>` above with your actualy GitHub user
+    name.
+
+3.  Install all packages listed in `requirements.txt`:
+
+    ```bash
+    $ pip3 install -r requirements.txt
+    ```
+
+    This includes Cython. If you are on Windows, you will also need a suitable
+    C compiler (either Visual Studio or MinGW). See instructions
+    [here](https://github.com/cython/cython/wiki/InstallingOnWindows).
+    [Christoph Gohlke](http://www.lfd.uci.edu/~gohlke/) maintains an unofficial 
+    set of Cython 
+    [Windows binaries](http://www.lfd.uci.edu/~gohlke/pythonlibs/#cython)
+    for various Python versions, in both 32 and 64 bits.
+
+5.  On Unix platforms, you can compile pulse2percept using the Makefile:
+
+    ```bash
+    $ make
+    ```
+    Type `make help` to see your options.
+
+    On any other platforms (e.g., Windows), type:
+
+    ```bash
+    $ python setup.py build_ext
+    $ python setup.py install
+    ```
+
+6.  You can run the test suite to make sure everything works as expected:
+
+    ```bash
+    $ make tests
+    ```
+
+    Or, on Windows:
+
+    ```bash
+    $ pytest --showlocals -v pulse2percept --durations=20
+    ```
+
+7.  To use pulse2percept after installation, execute in Python:
+
+    ```python
+    >>> import pulse2percept
+    ```
+
 
 ### Getting started
 
+You can find example
 A number of useful examples can be found in the "examples/notebooks"
 folder, including the following:
 
