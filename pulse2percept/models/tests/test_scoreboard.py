@@ -21,9 +21,6 @@ def test_ScoreboardModel():
     stim = implants.ImplantStimulus(implants.ArgusI(), np.zeros((4, 4)))
     npt.assert_almost_equal(model.predict_percept(stim), 0)
 
-    # Single-pixel percept:
-    model.rho = 100
-
 
 def test_ScoreboardModel_predict_percept():
     model = models.ScoreboardModel(xystep=1, rho=100, thresh_percept=0)
@@ -40,3 +37,10 @@ def test_ScoreboardModel_predict_percept():
     npt.assert_equal(np.sum(percept > 0.00001), 9)
     # Brightest pixel is in lower right:
     npt.assert_almost_equal(percept[18, 25], np.max(percept))
+
+    # Full Argus II: 60 bright spots
+    model = models.ScoreboardModel(engine='serial', xystep=1, rho=100)
+    model.build()
+    stim = implants.ImplantStimulus(implants.ArgusII(), np.ones((6, 10)))
+    percept = model.predict_percept(stim)
+    npt.assert_equal(np.sum(np.isclose(percept, 0.9, rtol=0.1, atol=0.1)), 60)
