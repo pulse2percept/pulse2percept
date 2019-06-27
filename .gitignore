@@ -8,3 +8,7 @@ pulse2percept.egg-info/
 *.eps
 *.log
 *.png
+*.c
+*.so
+*.avi
+*.pickle

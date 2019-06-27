@@ -1,9 +1,9 @@
-numpy
-cython
-scipy
-matplotlib
+numpy>=1.9
+cython>=0.29
+scipy>=1.0
+matplotlib>=2
 scikit_image
 sk_video
-joblib
+joblib>=0.11
 dask
 numba

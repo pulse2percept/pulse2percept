@@ -1,7 +1,9 @@
 import numpy as np
 import logging
 
-from pulse2percept import utils
+from pulse2percept.io import image2stim
+from pulse2percept import implants
+from pulse2percept import stimuli
 
 # Rather than trying to import these all over, try once and then remember
 # by setting a flag.
@@ -11,7 +13,7 @@ try:
     import skimage.color as sic
     has_skimage = True
 except (ImportError, AttributeError):
-    # Might also raise "dict object has no attribute 'transform'"
+    # Might also raise AttributeError: dict object has no attribute 'transform'
     has_skimage = False
 
 try:
@@ -24,7 +26,7 @@ except (ImportError, AttributeError):
     has_skvideo = False
 
 
-def set_skvideo_path(ffmpeg_path=None, libav_path=None):
+def _set_skvideo_path(ffmpeg_path=None, libav_path=None):
     """Sets the path to the FFMPEG and/or LibAV libraries.
 
     If scikit-video complains that either ffmpeg or libav cannot be found,
@@ -73,7 +75,7 @@ def load_video_metadata(filename, ffmpeg_path=None, libav_path=None):
                           "You can install it via $ pip install sk-video.")
 
     # Set the path if necessary
-    set_skvideo_path(ffmpeg_path, libav_path)
+    _set_skvideo_path(ffmpeg_path, libav_path)
 
     metadata = skvideo.io.ffprobe(filename)
     if not metadata:
@@ -106,7 +108,7 @@ def load_video_framerate(filename, ffmpeg_path=None, libav_path=None):
                           "You can install it via $ pip install sk-video.")
 
     # Set the path if necessary
-    set_skvideo_path(ffmpeg_path, libav_path)
+    _set_skvideo_path(ffmpeg_path, libav_path)
 
     # Load all metadata
     metadata = load_video_metadata(filename)
@@ -125,14 +127,14 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
 
     This function loads a video from file with the help of Scikit-Video, and
     returns the data either as a NumPy array (if `as_timeseries` is False)
-    or as a ``p2p.utils.TimeSeries`` object (if `as_timeseries` is True).
+    or as a ``stimuli.TimeSeries`` object (if `as_timeseries` is True).
 
     Parameters
     ----------
     filename : str
         Video file name
     as_timeseries: bool, optional, default: True
-        If True, returns the data as a ``p2p.utils.TimeSeries`` object.
+        If True, returns the data as a ``stimuli.TimeSeries`` object.
     as_gray : bool, optional, default: False
         If True, loads only the luminance channel of the video.
     ffmpeg_path : str, optional, default: system's default path
@@ -142,7 +144,7 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
 
     Returns
     -------
-    video : ndarray | p2p2.utils.TimeSeries
+    video : ndarray | stimuli.TimeSeries
         If `as_timeseries` is False, returns video data according to the
         Scikit-Video standard; that is, an ndarray of dimension (T, M, N, C),
         (T, M, N), (M, N, C), or (M, N), where T is the number of frames,
@@ -159,7 +161,7 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
                           "You can install it via $ pip install sk-video.")
 
     # Set the path if necessary
-    set_skvideo_path(ffmpeg_path, libav_path)
+    _set_skvideo_path(ffmpeg_path, libav_path)
 
     if skvideo._HAS_FFMPEG:
         backend = 'ffmpeg'
@@ -178,7 +180,7 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
         fps = load_video_framerate(filename)
         d_s = "Reshaped video to shape (M, N, C, T) = " + str(video.shape)
         logging.getLogger(__name__).debug(d_s)
-        return utils.TimeSeries(1.0 / fps, video)
+        return stimuli.TimeSeries(1.0 / fps, video)
     else:
         # Return as ndarray
         return video
@@ -213,7 +215,7 @@ def load_video_generator(filename, ffmpeg_path=None, libav_path=None):
                           "You can install it via $ pip install sk-video.")
 
     # Set the path if necessary
-    set_skvideo_path(ffmpeg_path, libav_path)
+    _set_skvideo_path(ffmpeg_path, libav_path)
 
     # Try loading
     if skvideo._HAS_FFMPEG:
@@ -236,7 +238,7 @@ def save_video(data, filename, width=None, height=None, fps=30,
 
     Parameters
     ----------
-    data : ndarray | p2p.utils.TimeSeries
+    data : ndarray | stimuli.TimeSeries
         Video data as a NumPy ndarray must have dimension (T, M, N, C),
         (T, M, N), (M, N, C), or (M, N), where T is the number of frames,
         M is the height, N is the width, and C is the number of channels (must
@@ -281,14 +283,14 @@ def save_video(data, filename, width=None, height=None, fps=30,
     is_ndarray = is_timeseries = False
     if isinstance(data, np.ndarray):
         is_ndarray = True
-    elif isinstance(data, utils.TimeSeries):
+    elif isinstance(data, stimuli.TimeSeries):
         is_timeseries = True
     else:
         raise TypeError('Data to be saved must be either a NumPy ndarray '
-                        'or a ``p2p.utils.TimeSeries`` object')
+                        'or a ``stimuli.TimeSeries`` object')
 
     # Set the path if necessary, then choose backend
-    set_skvideo_path(ffmpeg_path, libav_path)
+    _set_skvideo_path(ffmpeg_path, libav_path)
     if skvideo._HAS_FFMPEG:
         backend = 'ffmpeg'
     else:
@@ -360,7 +362,7 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
     """Saves both an input video and the percept to file, side-by-side.
 
     This function creates a new video from an input video file and a
-    ``p2p.utils.TimeSeries`` object, assuming they correspond to model
+    ``stimuli.TimeSeries`` object, assuming they correspond to model
     input and model output, and plots them side-by-side.
     Both input video and percept are resampled according to `fps`.
     The percept is resized to match the height of the input video.
@@ -369,7 +371,7 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
     ----------
     videofile : str
         File name of input video.
-    percept : p2p.utils.TimeSeries
+    percept : stimuli.TimeSeries
         A TimeSeries object with dimension (M, N, C, T) or (M, N, T), where
         T is the number of frames, M is the height, N is the width, and C is
         the number of channels.
@@ -390,11 +392,11 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
         raise ImportError("You do not have scikit-image installed. "
                           "You can install it via $ pip install scikit-image.")
 
-    if not isinstance(percept, utils.TimeSeries):
-        raise TypeError("`percept` must be of type p2p.utils.TimeSeries.")
+    if not isinstance(percept, stimuli.TimeSeries):
+        raise TypeError("`percept` must be of type stimuli.TimeSeries.")
 
     # Set the path if necessary
-    set_skvideo_path(ffmpeg_path, libav_path)
+    _set_skvideo_path(ffmpeg_path, libav_path)
 
     # Load video from file
     video = load_video(videofile, as_timeseries=True, ffmpeg_path=ffmpeg_path,
@@ -432,33 +434,102 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
                libav_path=libav_path)
 
 
-def find_files_like(datapath, pattern):
-    """Finds files in a folder whose name matches a pattern
+def video2stim(filename, implant, framerate=20, coding='amplitude',
+               valrange=[0, 50], max_contrast=False, const_val=20,
+               invert=False, tsample=0.005 / 1000, pulsedur=0.5 / 1000,
+               interphasedur=0.5 / 1000, pulsetype='cathodicfirst',
+               ffmpeg_path=None, libav_path=None):
+    """Converts a video into a series of pulse trains
 
-    This function looks for files in folder `datapath` that match a regular
-    expression `pattern`.
+    This function creates an input stimulus from a video.
+    Every frame of the video is passed to `image2pulsetrain`, where it is
+    down-sampled to fit the spatial layout of the implant (currently supported
+    are ArgusI and ArgusII arrays).
+    In this mapping, rows of the image correspond to rows in the implant
+    (top row, Argus I: A1 B1 C1 D1, Argus II: A1 A2 ... A10).
+
+    Requires Scikit-Image and Scikit-Video.
 
     Parameters
     ----------
-    datapath : str
-        Path to search
-    pattern : str
-        A valid regular expression pattern
+    img : str|array_like
+        An input image, either a valid filename (string) or a numpy array
+        (row x col x channels).
+    implant : implants.ProsthesisSystem
+        An ElectrodeArray object that describes the implant.
+    coding : {'amplitude', 'frequency'}, optional
+        A string describing the coding scheme:
+        - 'amplitude': Image intensity is linearly converted to a current
+                       amplitude between `valrange[0]` and `valrange[1]`.
+                       Frequency is held constant at `const_freq`.
+        - 'frequency': Image intensity is linearly converted to a pulse
+                       frequency between `valrange[0]` and `valrange[1]`.
+                       Amplitude is held constant at `const_amp`.
+        Default: 'amplitude'
+    valrange : list, optional
+        Range of stimulation values to be used (If `coding` is 'amplitude',
+        specifies min and max current; if `coding` is 'frequency', specifies
+        min and max frequency).
+        Default: [0, 50]
+    max_contrast : bool, optional
+        Flag wether to maximize image contrast (True) or not (False).
+        Default: False
+    const_val : float, optional
+        For frequency coding: The constant amplitude value to be used for all
+        pulse trains. For amplitude coding: The constant frequency value to
+        be used for all pulse trains.
+        Default: 20
+    invert : bool, optional
+        Flag whether to invert the grayscale values of the image (True) or
+        not (False).
+        Default: False
+    tsample : float, optional
+        Sampling time step (seconds). Default: 0.005 / 1000 seconds.
+    dur : float, optional
+        Stimulus duration (seconds). Default: 0.5 seconds.
+    pulsedur : float, optional
+        Duration of single (positive or negative) pulse phase in seconds.
+    interphasedur : float, optional
+        Duration of inter-phase interval (between positive and negative
+        pulse) in seconds.
+    pulsetype : {'cathodicfirst', 'anodicfirst'}, optional
+        A cathodic-first pulse has the negative phase first, whereas an
+        anodic-first pulse has the positive phase first.
 
-    Examples
-    --------
-    # Find all '.npz' files in parent dir
-    >>> files = find_files_like('..', r'.*\.npz$')
+    Returns
+    -------
+    pulses : list
+        A list of p2p.stimuli.PulseTrain objects, one for each electrode in
+        the implant.
+
     """
-    # No need to import these at module level
-    from os import listdir
-    import re
 
-    # Traverse file list and look for `pattern`
-    filenames = []
-    pattern = re.compile(pattern)
-    for file in listdir(datapath):
-        if pattern.search(file):
-            filenames.append(file)
+    # Load generator to read video frame-by-frame
+    reader = load_video_generator(filename, ffmpeg_path, libav_path)
 
-    return filenames
+    # Temporarily increase logger level to suppress info messages
+    current_level = logging.getLogger(__name__).getEffectiveLevel()
+    logging.getLogger(__name__).setLevel(logging.WARN)
+
+    # Convert the desired framerate to a duration (seconds)
+    dur = 1.0 / framerate
+
+    # Read one frame at a time, and append to previous frames
+    video = []
+    for img in reader.nextFrame():
+        frame = image2stim(img, implant, coding=coding, valrange=valrange,
+                           max_contrast=max_contrast, const_val=const_val,
+                           invert=invert, tsample=tsample, dur=dur,
+                           pulsedur=pulsedur, interphasedur=interphasedur,
+                           pulsetype=pulsetype)
+        if video:
+            # List of pulse trains: Append new frame to each element
+            [v.append(f) for v, f in zip(video, frame)]
+        else:
+            # Initialize with a list of pulse trains
+            video = frame
+
+    # Restore logger level
+    logging.getLogger(__name__).setLevel(current_level)
+
+    return video
