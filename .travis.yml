@@ -10,7 +10,7 @@ group: edge
 
 env:
   global:
-    - CONDA_DEPS="pip flake8 numpy scipy numba joblib dask scikit-image" PIP_DEPS="pytest coveralls mock pytest-cov" MINICONDA_URL="https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh"
+    - CONDA_DEPS="pip flake8 numpy scipy numba joblib dask scikit-image" PIP_DEPS="pytest coveralls sk_video mock pytest-cov" MINICONDA_URL="https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh"
 
 addons:
   apt:
@@ -45,7 +45,7 @@ install:
   - pip install -e .
 
 script:
-  - flake8 --ignore N802,N806,W503 --select W504 `find . -name \*.py | grep -v setup.py | grep -v version.py | grep -v __init__.py | grep -v /doc/`
+  - flake8 --ignore N802,N806,W504 --select W503 `find . -name \*.py | grep -v setup.py | grep -v version.py | grep -v __init__.py | grep -v /doc/`
   - ulimit -a && free -m
 
   - mkdir for_test
