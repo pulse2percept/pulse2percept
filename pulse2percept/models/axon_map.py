@@ -316,7 +316,7 @@ class AxonMapModel(WatsonConversionMixin, BaseModel):
         self._is_built = True
         return self
 
-    def _predict_pixel_percept(self, xygrid, stimulus, t=None):
+    def _predict_pixel_percept(self, xygrid, implant, t=None):
         # `xygrid` is a single element in an ``enumerate``: (idx, xy-coords)
         idx_xy, _ = xygrid
         # Find the relevant axon at that location:
@@ -324,10 +324,9 @@ class AxonMapModel(WatsonConversionMixin, BaseModel):
         # Abort if there is no axon at this spot:
         if axon.shape[0] == 0:
             return 0.0
-        # Find all nonzero entries in the stimulus array:
-        electrodes, pulses = stimulus.nonzero()
         # Calculate the brightness at pixel:
-        bright = fast_axon_map(pulses,
+        electrodes = implant.stim.coords['electrodes'].values
+        bright = fast_axon_map(implant.stim.data,
                                np.array([e.x for e in electrodes]),
                                np.array([e.y for e in electrodes]),
                                axon,
@@ -335,9 +334,9 @@ class AxonMapModel(WatsonConversionMixin, BaseModel):
                                self.thresh_percept)
         return bright
 
-    def predict_percept(self, stim, t=None):
+    def predict_percept(self, implant, t=None):
         # Need to add an additional check before running the base method:
-        if stim.implant.eye != self.eye:
+        if implant.eye != self.eye:
             raise ValueError(("The implant is in %s but the model was built "
-                              "for %s.") % (stim.implant.eye, self.eye))
-        return super(AxonMapModel, self).predict_percept(stim, t=t)
+                              "for %s.") % (implant.eye, self.eye))
+        return super(AxonMapModel, self).predict_percept(implant, t=t)

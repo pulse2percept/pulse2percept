@@ -173,7 +173,7 @@ class BaseModel(utils.Frozen, utils.PrettyPrint, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _predict_pixel_percept(self, xygrid, stim, t=None):
+    def _predict_pixel_percept(self, xygrid, implant, t=None):
         """Calculate the percept at pixel location (xdva,ydva)
 
         Parameters
@@ -183,15 +183,19 @@ class BaseModel(utils.Frozen, utils.PrettyPrint, metaclass=abc.ABCMeta):
         """
         raise NotImplementedError
 
-    def predict_percept(self, stim, t=None):
+    def predict_percept(self, implant, t=None):
         if not self._is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
-        if not isinstance(stim, implants.ImplantStimulus):
-            raise TypeError(("'stim' must be an ImplantStimulus object, "
-                             "not %s.") % type(stim))
+        if not isinstance(implant, implants.ProsthesisSystem):
+            raise TypeError(("'implant' must be a ProsthesisSystem object, "
+                             "not %s.") % type(implant))
+        if implant.stim is None:
+            # Nothing to see here:
+            return None
+
         return utils.parfor(self._predict_pixel_percept,
                             enumerate(self.grid),
-                            func_args=[stim],
+                            func_args=[implant],
                             func_kwargs={'t': t},
                             engine=self.engine, scheduler=self.scheduler,
                             n_jobs=self.n_jobs,

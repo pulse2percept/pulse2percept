@@ -18,8 +18,8 @@ def test_ScoreboardModel():
     npt.assert_equal(model.rho, 987)
 
     # Zero in = zero out:
-    stim = implants.ImplantStimulus(implants.ArgusI(), np.zeros((4, 4)))
-    npt.assert_almost_equal(model.predict_percept(stim), 0)
+    implant = implants.ArgusI(stim=np.zeros((4, 4)))
+    npt.assert_almost_equal(model.predict_percept(implant), 0)
 
 
 def test_ScoreboardModel_predict_percept():
@@ -28,8 +28,7 @@ def test_ScoreboardModel_predict_percept():
     # Single-electrode stim:
     img_stim = np.zeros((6, 10))
     img_stim[4, 7] = 1
-    stim = implants.ImplantStimulus(implants.ArgusII(), stim=img_stim)
-    percept = model.predict_percept(stim)
+    percept = model.predict_percept(implants.ArgusII(stim=img_stim))
     # Single bright pixel, very small Gaussian kernel:
     npt.assert_equal(np.sum(percept > 0.9), 1)
     npt.assert_equal(np.sum(percept > 0.5), 1)
@@ -41,6 +40,5 @@ def test_ScoreboardModel_predict_percept():
     # Full Argus II: 60 bright spots
     model = models.ScoreboardModel(engine='serial', xystep=1, rho=100)
     model.build()
-    stim = implants.ImplantStimulus(implants.ArgusII(), np.ones((6, 10)))
-    percept = model.predict_percept(stim)
+    percept = model.predict_percept(implants.ArgusII(stim=np.ones((6, 10))))
     npt.assert_equal(np.sum(np.isclose(percept, 0.9, rtol=0.1, atol=0.1)), 60)

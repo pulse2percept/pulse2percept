@@ -113,10 +113,10 @@ class ArgusI(ProsthesisSystem):
         x_arr += x
         y_arr += y
 
-        self.array = ElectrodeArray([])
+        self.earray = ElectrodeArray([])
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
-            self.array.add_electrode(name, DiskElectrode(x, y, z, r))
-        self.stim = None
+            self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
+        self.stim = stim
 
     def get_old_name(self, new_name):
         """Look up the legacy name of a standard-named Argus I electrode"""
@@ -129,7 +129,7 @@ class ArgusI(ProsthesisSystem):
 
 class ArgusII(ProsthesisSystem):
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE'):
+    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
         """Create an ArgusII array on the retina
 
         This function creates an ArgusII array and places it on the retina
@@ -230,7 +230,7 @@ class ArgusII(ProsthesisSystem):
         x_arr += x
         y_arr += y
 
-        self.array = ElectrodeArray([])
+        self.earray = ElectrodeArray([])
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
-            self.array.add_electrode(name, DiskElectrode(x, y, z, r))
-        self.stim = None
+            self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
+        self.stim = stim
