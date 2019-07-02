@@ -108,40 +108,36 @@ def test_BaseModel_predict_percept():
     img_stim = np.zeros((6, 10))
     model = ValidBaseModel(engine='serial', xystep=5, xrange=(-30, 30),
                            yrange=(-20, 20))
-    stim = implants.ImplantStimulus(implants.ArgusII(), img_stim)
     # Model must be built first:
     with pytest.raises(models.NotBuiltError):
-        model.predict_percept(stim)
+        model.predict_percept(implants.ArgusII())
 
     # But then must pass through ``predict_percept`` just fine
     model.build()
-    percept = model.predict_percept(stim)
+    percept = model.predict_percept(implants.ArgusII(stim=img_stim))
     npt.assert_equal(percept.shape, (9, 13))
     npt.assert_almost_equal(percept, 0)
 
-    # Requires ImplantStimulus object:
-    with pytest.raises(TypeError):
-        model.predict_percept(implants.ArgusII())
+    # Requires ProsthesisSystem object:
     with pytest.raises(TypeError):
         model.predict_percept(img_stim)
 
+    # None in, None out:
+    npt.assert_equal(model.predict_percept(implants.ArgusII(stim=None)), None)
+
     # `predict` only accepts NumPy arrays
     for XX in [42, [3.3, 1.1], {'img': [[2]]}]:
-        with pytest.raises(TypeError):
-            stim = implants.ImplantStimulus(implants.ArgusII(), XX)
-            model.predict_percept(stim)
+        with pytest.raises(NotImplementedError):
+            implants.ArgusII(stim=XX)
 
     # `img_stim` must have right size:
     for shape in [(2, 60), (59,), (2, 3, 4)]:
         with pytest.raises(ValueError):
-            model.predict_percept(implants.ImplantStimulus(implants.ArgusII(),
-                                                           np.zeros(shape)))
+            model.predict_percept(implants.ArgusII(stim=np.zeros(shape)))
 
     # Single-pixel percept:
     model = ValidBaseModel(engine='serial', xrange=(0.45, 0.45), yrange=(0, 0))
     model.build()
-    percept = model.predict_percept(
-        implants.ImplantStimulus(implants.ArgusII(), np.zeros((6, 10)))
-    )
+    percept = model.predict_percept(implants.ArgusII(stim=np.zeros((6, 10))))
     npt.assert_equal(percept.shape, (1, 1))
     npt.assert_almost_equal(percept, 0)

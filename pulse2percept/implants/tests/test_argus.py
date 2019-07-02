@@ -58,7 +58,6 @@ def test_ArgusI(ztype, x, y, r):
         for idx, (name, electrode) in enumerate(argus.items()):
             npt.assert_equal(electrode, argus[idx])
             npt.assert_equal(electrode, argus[name])
-        npt.assert_equal(argus[16], None)
         npt.assert_equal(argus["unlikely name for an electrode"], None)
 
     # Right-eye implant:
@@ -139,7 +138,6 @@ def test_ArgusII(ztype, x, y, r):
     for idx, (name, electrode) in enumerate(argus.items()):
         npt.assert_equal(electrode, argus[idx])
         npt.assert_equal(electrode, argus[name])
-    npt.assert_equal(argus[60], None)
     npt.assert_equal(argus["unlikely name for an electrode"], None)
 
     # Right-eye implant:

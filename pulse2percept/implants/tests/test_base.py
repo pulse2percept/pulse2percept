@@ -78,9 +78,10 @@ def test_ElectrodeArray():
     # Empty array:
     earray = base.ElectrodeArray([])
     npt.assert_equal(earray.n_electrodes, 0)
-    npt.assert_equal(earray[0], None)
+    # npt.assert_equal(earray[0], None)
     npt.assert_equal(earray['A01'], None)
-    npt.assert_equal(earray[base.PointSource(0, 0, 0)], None)
+    with pytest.raises(TypeError):
+        earray[base.PointSource(0, 0, 0)]
 
     # A single electrode:
     earray = base.ElectrodeArray(base.PointSource(0, 1, 2))
@@ -91,6 +92,12 @@ def test_ElectrodeArray():
     npt.assert_almost_equal(earray[0].x, 0)
     npt.assert_almost_equal(earray[0].y, 1)
     npt.assert_almost_equal(earray[0].z, 2)
+
+    # Indexing:
+    ps1, ps2 = base.PointSource(0, 0, 0), base.PointSource(1, 1, 1)
+    earray = base.ElectrodeArray({'A01': ps1, 'D07': ps2})
+    npt.assert_equal(earray['A01'], ps1)
+    npt.assert_equal(earray['D07'], ps2)
 
 
 def test_ElectrodeArray_add_electrode():
@@ -182,52 +189,30 @@ def test_ElectrodeArray_add_electrodes():
         npt.assert_equal(earray[i], val)
 
 
-# def test_parse_pulse_trains():
-#     # Specify pulse trains in a number of different ways and make sure they
-#     # are all identical after parsing
+def test_ProsthesisSystem():
+    # Invalid instantiations:
+    with pytest.raises(TypeError):
+        base.ProsthesisSystem(base.PointSource(0, 0, 0))
+    with pytest.raises(ValueError):
+        base.ProsthesisSystem(base.ElectrodeArray(base.PointSource(0, 0, 0)),
+                              eye='both')
 
-#     # Create some p2p.implants
-#     argus = implants.ArgusI()
-#     simple = implants.ElectrodeArray(implants.DiskElectrode(0, 0, 0, 10))
+    # Iterating over the electrode array:
+    earray = base.ElectrodeArray(base.PointSource(0, 0, 0))
+    implant = base.ProsthesisSystem(earray)
+    npt.assert_equal(implant.n_electrodes, 1)
+    npt.assert_equal(implant[0], earray[0])
+    npt.assert_equal(implant.keys(), earray.keys())
+    # for i, el in enumerate(implant):
+    #     npt.assert_equal(el, earray[i])
 
-#     pt_zero = utils.TimeSeries(1, np.zeros(1000))
-#     pt_nonzero = utils.TimeSeries(1, np.random.rand(1000))
-
-#     # Test 1
-#     # ------
-#     # Specify wrong number of pulse trains
-#     with pytest.raises(ValueError):
-#         stimuli.parse_pulse_trains(pt_nonzero, argus)
-#     with pytest.raises(ValueError):
-#         stimuli.parse_pulse_trains([pt_nonzero], argus)
-#     with pytest.raises(ValueError):
-#         stimuli.parse_pulse_trains([pt_nonzero] * (argus.n_electrodes - 1),
-#                                    argus)
-#     with pytest.raises(ValueError):
-#         stimuli.parse_pulse_trains([pt_nonzero] * 2, simple)
-
-#     # Test 2
-#     # ------
-#     # Send non-zero pulse train to specific electrode
-#     el_name = 'B3'
-#     el_idx = argus.get_index(el_name)
-
-#     # Specify a list of 16 pulse trains (one for each electrode)
-#     pt0_in = [pt_zero] * argus.n_electrodes
-#     pt0_in[el_idx] = pt_nonzero
-#     pt0_out = stimuli.parse_pulse_trains(pt0_in, argus)
-
-#     # Specify a dict with non-zero pulse trains
-#     pt1_in = {el_name: pt_nonzero}
-#     pt1_out = stimuli.parse_pulse_trains(pt1_in, argus)
-
-#     # Make sure the two give the same result
-#     for p0, p1 in zip(pt0_out, pt1_out):
-#         npt.assert_equal(p0.data, p1.data)
-
-#     # Test 3
-#     # ------
-#     # Smoke testing
-#     stimuli.parse_pulse_trains([pt_zero] * argus.n_electrodes, argus)
-#     stimuli.parse_pulse_trains(pt_zero, simple)
-#     stimuli.parse_pulse_trains([pt_zero], simple)
+    # Set a stimulus after the constructor:
+    npt.assert_equal(implant.stim, None)
+    with pytest.raises(NotImplementedError):
+        implant.stim = {'0': 1}
+    with pytest.raises(NotImplementedError):
+        implant.stim = [1]
+    implant.stim = np.array([1])
+    npt.assert_equal(implant.stim.ndim, 1)
+    npt.assert_equal(implant.stim.dims[0], 'electrodes')
+    npt.assert_equal(implant.stim.data, np.array([1]))
