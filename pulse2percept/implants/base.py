@@ -2,6 +2,7 @@
 import numpy as np
 import abc
 import collections as coll
+import xarray as xr
 
 from pulse2percept import utils
 
@@ -176,8 +177,9 @@ class ElectrodeArray(utils.PrettyPrint):
             try:
                 key = list(self.electrodes.keys())[item]
                 return self.electrodes[key]
-            except (IndexError, TypeError):
-                return None
+            except IndexError:
+                raise StopIteration
+            return None
 
     def __iter__(self):
         return iter(self.electrodes)
@@ -194,110 +196,64 @@ class ElectrodeArray(utils.PrettyPrint):
 
 class ProsthesisSystem(utils.PrettyPrint):
 
+    def __init__(self, earray, stim=None, eye='RE'):
+        """ProsthesisSystem
+
+        A visual prosthesis that combines an electrode array and a stimulus.
+        """
+        if not isinstance(earray, ElectrodeArray):
+            raise TypeError("'earray' must be an ElectrodeArray object, not "
+                            "%s." % type(earray))
+        self.earray = earray
+        self.stim = stim
+        if eye not in ['LE', 'RE']:
+            raise ValueError("'eye' must be either 'LE' or 'RE', not "
+                             "%s." % eye)
+        self.eye = eye
+
     def get_params(self):
-        return {'array': self.array, 'stim': self.stim, 'eye': self.eye}
+        return {'earray': self.earray, 'stim': self.stim, 'eye': self.eye}
+
+    @property
+    def stim(self):
+        return self._stim
+
+    @stim.setter
+    def stim(self, data):
+        if data is None:
+            self._stim = None
+        elif isinstance(data, np.ndarray):
+            if data.size != self.earray.n_electrodes:
+                raise ValueError(("NumPy array must have the same number of "
+                                  "elements as the implant has electrodes "
+                                  "(%d), not %d.") % (self.earray.n_electrodes,
+                                                      data.size))
+            # Convert to double
+            data = np.asarray(data, dtype=np.double)
+            # Find all nonzero entries:
+            idx_nz = np.flatnonzero(data)
+            # Make sure these are valid indexes into the electrode array:
+            electrodes = self.earray[idx_nz]
+            # Set these as coordinates:
+            coords = [('electrodes', electrodes)]
+            # Retain only nonzero data:
+            self._stim = xr.DataArray(data.ravel()[idx_nz], coords=coords,
+                                      name='current (uA)')
+        else:
+            raise NotImplementedError
 
     @property
     def n_electrodes(self):
-        return self.array.n_electrodes
+        return self.earray.n_electrodes
 
     def __getitem__(self, item):
-        return self.array[item]
+        return self.earray[item]
 
     def keys(self):
-        return self.array.keys()
+        return self.earray.keys()
 
     def values(self):
-        return self.array.values()
+        return self.earray.values()
 
     def items(self):
-        return self.array.items()
-
-
-class ImplantStimulus(object):
-
-    def __init__(self, implant, stim=None):
-        if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(("'implant' must be of type ProsthesisSystem, "
-                             "not %s") % type(implant))
-        self.implant = implant
-        self.stim = self.parse(stim)
-
-    def parse(self, stim):
-        if not isinstance(stim, np.ndarray):
-            raise TypeError("stim must be a NumPy array")
-        if stim.size != self.implant.n_electrodes:
-            raise ValueError(("'stim' must have the same number of elements "
-                              "as 'implant' has electrodes (%d), not %d.") %
-                             (self.implant.n_electrodes, stim.size))
-        return stim
-
-    def update(self, stim):
-        self.stim = self.parse(stim)
-
-    def nonzero(self):
-        # Find all nonzero entries in the stimulus array:
-        idx_nz = np.flatnonzero(self.stim)
-        return self.implant[idx_nz], self.stim.ravel()[idx_nz]
-
-
-# def parse_pulse_trains(stim, implant):
-#     """Parse input stimulus and convert to list of pulse trains
-
-#     Parameters
-#     ----------
-#     stim : utils.TimeSeries|list|dict
-#         There are several ways to specify an input stimulus:
-
-#         - For a single-electrode array, pass a single pulse train; i.e., a
-#           single utils.TimeSeries object.
-#         - For a multi-electrode array, pass a list of pulse trains, where
-#           every pulse train is a utils.TimeSeries object; i.e., one pulse
-#           train per electrode.
-#         - For a multi-electrode array, specify all electrodes that should
-#           receive non-zero pulse trains by name in a dictionary. The key
-#           of each element is the electrode name, the value is a pulse train.
-#           Example: stim = {'E1': pt, 'stim': pt}, where 'E1' and 'stim' are
-#           electrode names, and `pt` is a utils.TimeSeries object.
-#     implant : p2p.implants.ElectrodeArray
-#         A p2p.implants.ElectrodeArray object that describes the implant.
-
-#     Returns
-#     -------
-#     A list of pulse trains; one pulse train per electrode.
-#     """
-#     # Parse input stimulus
-#     if isinstance(stim, utils.TimeSeries):
-#         # `stim` is a single object: This is only allowed if the implant
-#         # has only one electrode
-#         if implant.n_electrodes > 1:
-#             e_s = "More than 1 electrode given, use a list of pulse trains"
-#             raise ValueError(e_s)
-#         pt = [copy.deepcopy(stim)]
-#     elif isinstance(stim, dict):
-#         # `stim` is a dictionary: Look up electrode names and assign pulse
-#         # trains, fill the rest with zeros
-
-#         # Get right size from first dict element, then generate all zeros
-#         idx0 = list(stim.keys())[0]
-#         pt_zero = utils.TimeSeries(stim[idx0].tsample,
-#                                    np.zeros_like(stim[idx0].data))
-#         pt = [pt_zero] * implant.n_electrodes
-
-#         # Iterate over dictionary and assign non-zero pulse trains to
-#         # corresponding electrodes
-#         for key, value in stim.items():
-#             el_idx = implant.get_index(key)
-#             if el_idx is not None:
-#                 pt[el_idx] = copy.deepcopy(value)
-#             else:
-#                 e_s = "Could not find electrode with name '%s'" % key
-#                 raise ValueError(e_s)
-#     else:
-#         # Else, `stim` must be a list of pulse trains, one for each electrode
-#         if len(stim) != implant.n_electrodes:
-#             e_s = "Number of pulse trains must match number of electrodes"
-#             raise ValueError(e_s)
-#         pt = copy.deepcopy(stim)
-
-#     return pt
+        return self.earray.items()
