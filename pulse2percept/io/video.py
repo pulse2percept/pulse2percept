@@ -1,9 +1,8 @@
 import numpy as np
 import logging
 
-from pulse2percept.io import image2stim
-from pulse2percept import implants
-from pulse2percept import stimuli
+from .image import image2stim
+from ..stimuli import TimeSeries
 
 # Rather than trying to import these all over, try once and then remember
 # by setting a flag.
@@ -15,7 +14,6 @@ try:
 except (ImportError, AttributeError):
     # Might also raise AttributeError: dict object has no attribute 'transform'
     has_skimage = False
-
 try:
     import skvideo
     import skvideo.io as svio
@@ -127,14 +125,14 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
 
     This function loads a video from file with the help of Scikit-Video, and
     returns the data either as a NumPy array (if `as_timeseries` is False)
-    or as a ``stimuli.TimeSeries`` object (if `as_timeseries` is True).
+    or as a ``TimeSeries`` object (if `as_timeseries` is True).
 
     Parameters
     ----------
     filename : str
         Video file name
     as_timeseries: bool, optional, default: True
-        If True, returns the data as a ``stimuli.TimeSeries`` object.
+        If True, returns the data as a ``TimeSeries`` object.
     as_gray : bool, optional, default: False
         If True, loads only the luminance channel of the video.
     ffmpeg_path : str, optional, default: system's default path
@@ -144,7 +142,7 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
 
     Returns
     -------
-    video : ndarray | stimuli.TimeSeries
+    video : ndarray | TimeSeries
         If `as_timeseries` is False, returns video data according to the
         Scikit-Video standard; that is, an ndarray of dimension (T, M, N, C),
         (T, M, N), (M, N, C), or (M, N), where T is the number of frames,
@@ -180,7 +178,7 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
         fps = load_video_framerate(filename)
         d_s = "Reshaped video to shape (M, N, C, T) = " + str(video.shape)
         logging.getLogger(__name__).debug(d_s)
-        return stimuli.TimeSeries(1.0 / fps, video)
+        return TimeSeries(1.0 / fps, video)
     else:
         # Return as ndarray
         return video
@@ -238,7 +236,7 @@ def save_video(data, filename, width=None, height=None, fps=30,
 
     Parameters
     ----------
-    data : ndarray | stimuli.TimeSeries
+    data : ndarray | TimeSeries
         Video data as a NumPy ndarray must have dimension (T, M, N, C),
         (T, M, N), (M, N, C), or (M, N), where T is the number of frames,
         M is the height, N is the width, and C is the number of channels (must
@@ -283,11 +281,11 @@ def save_video(data, filename, width=None, height=None, fps=30,
     is_ndarray = is_timeseries = False
     if isinstance(data, np.ndarray):
         is_ndarray = True
-    elif isinstance(data, stimuli.TimeSeries):
+    elif isinstance(data, TimeSeries):
         is_timeseries = True
     else:
         raise TypeError('Data to be saved must be either a NumPy ndarray '
-                        'or a ``stimuli.TimeSeries`` object')
+                        'or a ``TimeSeries`` object')
 
     # Set the path if necessary, then choose backend
     _set_skvideo_path(ffmpeg_path, libav_path)
@@ -362,7 +360,7 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
     """Saves both an input video and the percept to file, side-by-side.
 
     This function creates a new video from an input video file and a
-    ``stimuli.TimeSeries`` object, assuming they correspond to model
+    ``TimeSeries`` object, assuming they correspond to model
     input and model output, and plots them side-by-side.
     Both input video and percept are resampled according to `fps`.
     The percept is resized to match the height of the input video.
@@ -371,7 +369,7 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
     ----------
     videofile : str
         File name of input video.
-    percept : stimuli.TimeSeries
+    percept : TimeSeries
         A TimeSeries object with dimension (M, N, C, T) or (M, N, T), where
         T is the number of frames, M is the height, N is the width, and C is
         the number of channels.
@@ -392,8 +390,8 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
         raise ImportError("You do not have scikit-image installed. "
                           "You can install it via $ pip install scikit-image.")
 
-    if not isinstance(percept, stimuli.TimeSeries):
-        raise TypeError("`percept` must be of type stimuli.TimeSeries.")
+    if not isinstance(percept, TimeSeries):
+        raise TypeError("`percept` must be of type TimeSeries.")
 
     # Set the path if necessary
     _set_skvideo_path(ffmpeg_path, libav_path)
@@ -455,7 +453,7 @@ def video2stim(filename, implant, framerate=20, coding='amplitude',
     img : str|array_like
         An input image, either a valid filename (string) or a numpy array
         (row x col x channels).
-    implant : implants.ProsthesisSystem
+    implant : ProsthesisSystem
         An ElectrodeArray object that describes the implant.
     coding : {'amplitude', 'frequency'}, optional
         A string describing the coding scheme:
@@ -499,7 +497,7 @@ def video2stim(filename, implant, framerate=20, coding='amplitude',
     Returns
     -------
     pulses : list
-        A list of p2p.stimuli.PulseTrain objects, one for each electrode in
+        A list of PulseTrain objects, one for each electrode in
         the implant.
 
     """
