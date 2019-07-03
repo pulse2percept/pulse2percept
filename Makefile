@@ -19,6 +19,9 @@ inplace:
 install:
 	$(PYTHON) setup.py install
 
+doc: install
+	$(MAKE) -C doc html
+
 tests: inplace install
 	$(PYTEST) --showlocals -v pulse2percept --durations=20
 
@@ -31,6 +34,7 @@ help:
 	@ echo 
 	@ echo "make               Compiles pulse2percept"
 	@ echo "make tests         Compiles pulse2percept and runs the test suite"
+	@ echo "make doc           Compiles pulse2percept and generates the documentation"
 	@ echo "make clean         Cleans out all build files"
 	@ echo "make distclean     Cleans out all build and dist files"
 	@ echo "make help          Brings up this message"

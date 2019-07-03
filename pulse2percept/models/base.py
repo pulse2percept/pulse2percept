@@ -1,8 +1,8 @@
 import sys
 import abc
 
-from pulse2percept import implants
-from pulse2percept import utils
+from ..implants import ProsthesisSystem
+from ..utils import Frozen, PrettyPrint, GridXY, parfor
 
 
 class NotBuiltError(ValueError, AttributeError):
@@ -13,7 +13,7 @@ class NotBuiltError(ValueError, AttributeError):
     """
 
 
-class BaseModel(utils.Frozen, utils.PrettyPrint, metaclass=abc.ABCMeta):
+class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
 
     def __init__(self, **kwargs):
         """Constructor
@@ -77,8 +77,8 @@ class BaseModel(utils.Frozen, utils.PrettyPrint, metaclass=abc.ABCMeta):
                            "from: %s." % (key, ', '.join(defaults.keys())))
                 raise AttributeError(err_str)
         # Retinal grid:
-        self.grid = utils.GridXY(self.xrange, self.yrange, step=self.xystep,
-                                 grid_type=self.grid_type)
+        self.grid = GridXY(self.xrange, self.yrange, step=self.xystep,
+                           grid_type=self.grid_type)
         # This flag will be flipped once the ``build`` method was called
         self.__is_built = False
 
@@ -186,17 +186,17 @@ class BaseModel(utils.Frozen, utils.PrettyPrint, metaclass=abc.ABCMeta):
     def predict_percept(self, implant, t=None):
         if not self._is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
-        if not isinstance(implant, implants.ProsthesisSystem):
+        if not isinstance(implant, ProsthesisSystem):
             raise TypeError(("'implant' must be a ProsthesisSystem object, "
                              "not %s.") % type(implant))
         if implant.stim is None:
             # Nothing to see here:
             return None
 
-        return utils.parfor(self._predict_pixel_percept,
-                            enumerate(self.grid),
-                            func_args=[implant],
-                            func_kwargs={'t': t},
-                            engine=self.engine, scheduler=self.scheduler,
-                            n_jobs=self.n_jobs,
-                            out_shape=self.grid.shape)
+        return parfor(self._predict_pixel_percept,
+                      enumerate(self.grid),
+                      func_args=[implant],
+                      func_kwargs={'t': t},
+                      engine=self.engine, scheduler=self.scheduler,
+                      n_jobs=self.n_jobs,
+                      out_shape=self.grid.shape)

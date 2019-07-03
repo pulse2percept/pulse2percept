@@ -7,11 +7,9 @@ import os
 import numpy as np
 import pickle
 
-from pulse2percept import utils
-from pulse2percept.models.base import BaseModel
-from pulse2percept.models.watson import WatsonConversionMixin, dva2ret
-from pulse2percept.models._axon_map import (fast_axon_contribution,
-                                            fast_axon_map)
+from ..utils import parfor
+from ..models import BaseModel, WatsonConversionMixin, dva2ret
+from ..models._axon_map import fast_axon_contribution, fast_axon_map
 
 
 class AxonMapModel(WatsonConversionMixin, BaseModel):
@@ -160,10 +158,10 @@ class AxonMapModel(WatsonConversionMixin, BaseModel):
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
         phi = np.linspace(*self.axons_range, num=self.n_axons)
         engine = 'serial' if self.engine == 'cython' else self.engine
-        bundles = utils.parfor(self._jansonius2009, phi,
-                               func_kwargs={'eye': self.eye},
-                               engine=engine, n_jobs=self.n_jobs,
-                               scheduler=self.scheduler)
+        bundles = parfor(self._jansonius2009, phi,
+                         func_kwargs={'eye': self.eye},
+                         engine=engine, n_jobs=self.n_jobs,
+                         scheduler=self.scheduler)
         if len(bundles) != self.n_axons:
             raise ValueError("bundles must have the same length as n_axons")
         # Remove axon bundles outside the simulated area:

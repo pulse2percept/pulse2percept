@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.stats as spst
 
-from pulse2percept import utils
+from ..utils import cart2pol, pol2cart
 
 
 class WatsonConversionMixin(object):

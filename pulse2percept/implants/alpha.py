@@ -1,7 +1,6 @@
 """Alpha IMS"""
 import numpy as np
-from pulse2percept import utils
-from pulse2percept.implants import DiskElectrode, ElectrodeArray, ProsthesisSystem
+from .base import DiskElectrode, ElectrodeArray, ProsthesisSystem
 
 
 class AlphaIMS(ProsthesisSystem):

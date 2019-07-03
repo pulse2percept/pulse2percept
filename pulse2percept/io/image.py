@@ -11,8 +11,8 @@ except (ImportError, AttributeError):
     # Might also raise "dict object has no attribute 'io'"
     has_skimage = False
 
-from pulse2percept import implants
-from pulse2percept.stimuli import PulseTrain
+from ..implants import ArgusI, ArgusII
+from ..stimuli import PulseTrain
 
 
 def image2stim(img, implant, coding='amplitude', valrange=[0, 50],
@@ -31,7 +31,7 @@ def image2stim(img, implant, coding='amplitude', valrange=[0, 50],
     img : str|array_like
         An input image, either a valid filename (string) or a numpy array
         (row x col x channels).
-    implant : implants.ProsthesisSystem
+    implant : ProsthesisSystem
         An ElectrodeArray object that describes the implant.
     coding : {'amplitude', 'frequency'}, optional
         A string describing the coding scheme:
@@ -88,11 +88,10 @@ def image2stim(img, implant, coding='amplitude', valrange=[0, 50],
     # Make sure range of values is valid
     assert len(valrange) == 2 and valrange[1] > valrange[0]
 
-    isargus1 = isinstance(implant, implants.ArgusI)
-    isargus2 = isinstance(implant, implants.ArgusII)
+    isargus1 = isinstance(implant, ArgusI)
+    isargus2 = isinstance(implant, ArgusII)
     if not isargus1 and not isargus2:
-        raise TypeError("For now, implant must be of type implants.ArgusI or "
-                        "implants.ArgusII.")
+        raise TypeError("For now, implant must be of type ArgusI or ArgusII.")
 
     if isinstance(img, str):
         # Load image from filename
