@@ -4,10 +4,10 @@ import abc
 import collections as coll
 import xarray as xr
 
-from pulse2percept import utils
+from ..utils import PrettyPrint
 
 
-class Electrode(utils.PrettyPrint):
+class Electrode(PrettyPrint):
 
     def __init__(self, x, y, z):
         """Electrode
@@ -98,7 +98,7 @@ class DiskElectrode(Electrode):
             return 2.0 * v0 / np.pi * np.arcsin(numer / denom)
 
 
-class ElectrodeArray(utils.PrettyPrint):
+class ElectrodeArray(PrettyPrint):
 
     def __init__(self, electrodes):
         self.electrodes = coll.OrderedDict()
@@ -194,7 +194,7 @@ class ElectrodeArray(utils.PrettyPrint):
         return self.electrodes.items()
 
 
-class ProsthesisSystem(utils.PrettyPrint):
+class ProsthesisSystem(PrettyPrint):
 
     def __init__(self, earray, stim=None, eye='RE'):
         """ProsthesisSystem

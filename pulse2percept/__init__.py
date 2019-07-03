@@ -1,21 +1,3 @@
-"""
-Python-based simulation framework for bionic vision
-===================================================
-
-For more information, please visit https://github.com/uwescience/pulse2percept.
-
-Subpackages
------------
-::
-
- models       -- Models
- implants     -- Implants
- stimuli      -- stimuli
- files        -- Files
- utils        -- Utilities
- viz          -- Visualizations
-
-"""
 import logging
 
 __version__ = '0.6.0'

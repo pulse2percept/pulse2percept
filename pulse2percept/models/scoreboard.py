@@ -1,7 +1,6 @@
 import numpy as np
-from pulse2percept.models.base import BaseModel
-from pulse2percept.models.watson import WatsonConversionMixin
-from pulse2percept.models._scoreboard import fast_score
+from ..models import BaseModel, WatsonConversionMixin
+from ..models._scoreboard import fast_score
 
 
 class ScoreboardModel(WatsonConversionMixin, BaseModel):
