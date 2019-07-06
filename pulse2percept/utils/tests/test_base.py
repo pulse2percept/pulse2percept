@@ -3,8 +3,8 @@ import copy
 import pytest
 import numpy.testing as npt
 
-from pulse2percept.utils import (Frozen, gamma, find_files_like, cart2pol,
-                                 pol2cart)
+from pulse2percept.utils import (Frozen, FreezeError, gamma, find_files_like,
+                                 cart2pol, pol2cart)
 
 
 class FrozenChild(Frozen):
@@ -16,7 +16,7 @@ class FrozenChild(Frozen):
 
 def test_Frozen():
     # Cannot set attributes outside constructor:
-    with pytest.raises(AttributeError):
+    with pytest.raises(FreezeError):
         frozen = Frozen()
         frozen.newvar = 0
 
@@ -25,7 +25,7 @@ def test_Frozen():
     npt.assert_almost_equal(frozen_child.a, 1)
     npt.assert_almost_equal(frozen_child.b, 0)
     # But not outside constructor:
-    with pytest.raises(AttributeError):
+    with pytest.raises(FreezeError):
         frozen_child.c = 3
 
 

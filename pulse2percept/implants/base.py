@@ -216,6 +216,7 @@ class ProsthesisSystem(PrettyPrint):
 
     @property
     def stim(self):
+        """Stimulus"""
         return self._stim
 
     @stim.setter
@@ -244,6 +245,7 @@ class ProsthesisSystem(PrettyPrint):
 
     @property
     def n_electrodes(self):
+        """Number of electrodes in the array"""
         return self.earray.n_electrodes
 
     def __getitem__(self, item):

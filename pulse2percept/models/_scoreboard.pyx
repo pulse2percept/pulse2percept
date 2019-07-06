@@ -4,7 +4,7 @@ from cython.parallel import prange
 from libc.math cimport(pow as c_pow, exp as c_exp)
 
 
-cpdef fast_score(double[:] stim, double[:] xel, double[:] yel,
+cpdef scoreboard(double[:] stim, double[:] xel, double[:] yel,
                  double xtissue, double ytissue, double rho, double th):
     cdef np.intp_t idx, n_stim
     cdef double bright
