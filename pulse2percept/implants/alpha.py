@@ -8,7 +8,7 @@ class AlphaIMS(ProsthesisSystem):
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
         """Alpha IMS
 
-        This function creates an ArgusII array and places it on the retina
+        This function creates an AlphaIMS array and places it on the retina
         such that the center of the array is located at (x,y,z), given in
         microns, and the array is rotated by rotation angle `rot`, given in
         radians.
@@ -37,13 +37,13 @@ class AlphaIMS(ProsthesisSystem):
 
         Examples
         --------
-        Create an ArgusII array centered on the fovea, at 100um distance from
+        Create an AlphaIMS array centered on the fovea, at 100um distance from
         the retina:
         >>> from pulse2percept import implants
-        >>> argus = implants.ArgusII(x=0, y=0, z=100, rot=0)
+        >>> alpha_ims = implants.AlphaIMS(x=0, y=0, z=100, rot=0)
 
-        Get access to electrode 'E7':
-        >>> my_electrode = argus['E7']
+        Get access to the third electrode:
+        >>> my_electrode = alpha_ims[2]
         """
         self.eye = eye
 

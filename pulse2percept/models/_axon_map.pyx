@@ -5,6 +5,8 @@ from libc.math cimport(pow as c_pow, exp as c_exp, tanh as c_tanh,
                        sin as c_sin, cos as c_cos)
 
 
+cdef deg2rad = 3.14159265358979323846 / 180.0
+
 cdef double c_min(double[:] arr):
     cdef double arr_min
     cdef np.intp_t idx, arr_len
@@ -15,7 +17,6 @@ cdef double c_min(double[:] arr):
         if arr[idx] < arr_min:
             arr_min = arr[idx]
     return arr_min
-
 
 cdef double c_max(double[:] arr):
     cdef double arr_max
@@ -29,7 +30,7 @@ cdef double c_max(double[:] arr):
     return arr_max
 
 
-cpdef fast_gauss2(double[:, ::1] arr, double x, double y, double tau):
+cpdef gauss2(double[:, ::1] arr, double x, double y, double tau):
     cdef np.intp_t idx, n_arr
     cdef double dist2
     n_arr = arr.shape[0]
@@ -41,11 +42,10 @@ cpdef fast_gauss2(double[:, ::1] arr, double x, double y, double tau):
     return np.asarray(gauss)
 
 
-cpdef fast_jansonius(double[:] rho, double phi0, double beta_s, double beta_i):
-    cdef double b, c, deg2rad, rho_min, tmp_phi, tmp_rho
+cpdef jansonius(double[:] rho, double phi0, double beta_s, double beta_i):
+    cdef double b, c, rho_min, tmp_phi, tmp_rho
     cdef np.intp_t idx
 
-    deg2rad = 3.14159265358979323846 / 180.0
     if phi0 > 0:
         # Axon is in superior retina, compute `b` (real number) from Eq. 5:
         b = c_exp(beta_s + 3.9 * c_tanh(-(phi0 - 121.0) / 14.0))
@@ -82,7 +82,7 @@ cdef np.intp_t argmin_segment(double[:, :] bundles, double x, double y):
     return min_seg
 
 
-cpdef fast_axon_contribution(double[:, :] bundle, double[:] xy, double lmbd):
+cpdef axon_contribution(double[:, :] bundle, double[:] xy, double lmbd):
     cdef np.intp_t p, c, argmin, n_seg
     cdef double dist2
     cdef double[:, :] contrib
@@ -111,8 +111,8 @@ cpdef fast_axon_contribution(double[:, :] bundle, double[:] xy, double lmbd):
     return np.asarray(contrib)
 
 
-cpdef fast_finds_closest_axons(double[:, :] bundles, double[:] xret,
-                               double[:] yret):
+cpdef finds_closest_axons(double[:, :] bundles, double[:] xret,
+                          double[:] yret):
     cdef np.intp_t[:] closest_seg = np.empty(len(xret), dtype=int)
     cdef np.intp_t n_xy, n_seg
     n_xy = len(xret)
@@ -122,8 +122,8 @@ cpdef fast_finds_closest_axons(double[:, :] bundles, double[:] xret,
     return np.asarray(closest_seg)
 
 
-cpdef fast_axon_map(double[:] stim, double[:] xel, double[:] yel,
-                    double[:, ::1] axon, double rho, double th):
+cpdef axon_map(double[:] stim, double[:] xel, double[:] yel,
+               double[:, ::1] axon, double rho, double th):
     cdef np.intp_t idx, n_stim, n_ax
     cdef double bright, gauss
     n_stim = len(stim)

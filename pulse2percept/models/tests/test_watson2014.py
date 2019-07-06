@@ -1,19 +1,19 @@
 import numpy as np
 import pytest
 import numpy.testing as npt
-from pulse2percept import models
-from pulse2percept.models.watson import dva2ret, ret2dva
+from pulse2percept.models import (Watson2014ConversionMixin, dva2ret, ret2dva,
+                                  Watson2014DisplacementMixin)
 
 
-def test_WatsonConversionMixin():
+def test_Watson2014ConversionMixin():
     params = {'xrange': (-2, 2), 'yrange': (-1, 1), 'xystep': 1}
-    trafo = models.WatsonConversionMixin()
+    trafo = Watson2014ConversionMixin()
     npt.assert_almost_equal(trafo.get_tissue_coords(0, 0), 0)
     npt.assert_almost_equal(trafo.get_tissue_coords(6, 6), 1618.53, decimal=2)
 
 
-def test_WatsonDisplacementMixin():
-    trafo = models.WatsonDisplacementMixin()
+def test_Watson2014DisplacementMixin():
+    trafo = Watson2014DisplacementMixin()
     with pytest.raises(ValueError):
         trafo._watson_displacement(0, meridian='invalid')
     npt.assert_almost_equal(trafo._watson_displacement(0), 0.4957506)

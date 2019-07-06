@@ -128,7 +128,7 @@ following recipe.
     $ cd pulse2percept
     ```
 
-    Make sure to replace `<Your User Name>` above with your actualy GitHub user
+    Make sure to replace `<Your User Name>` above with your actual GitHub user
     name.
 
 3.  Install all packages listed in `requirements.txt`:
@@ -180,11 +180,4 @@ following recipe.
 
 ### Getting started
 
-You can find example
-A number of useful examples can be found in the "examples/notebooks"
-folder, including the following:
-
--   [0.0-example-usage.ipynb](https://github.com/uwescience/pulse2percept/blob/master/examples/notebooks/0.0-example-usage.ipynb): How to use the model.
--   [0.1-image2percept.ipynb](https://github.com/uwescience/pulse2percept/blob/master/examples/notebooks/0.1-image2percept.ipynb): How to convert an image to a percept.
-
-Detailed documentation can be found at [uwescience.github.io/pulse2percept](https://uwescience.github.io/pulse2percept).
+TODO

@@ -1,3 +1,6 @@
+"""
+pulse2percept: A Python-based simulation framework for bionic vision
+"""
 import logging
 
 __version__ = '0.6.0'

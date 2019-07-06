@@ -1,21 +1,40 @@
 """
-Axon map model
-==============
+This module implements several equations from [#beyeler-2019]_.
 
+References
+----------
+.. [#beyeler-2019] M Beyeler, D Nanduri, JD Weiland, A Rokem, GM Boynton, I
+                   Fine (2019). A model of ganglion axon pathways accounts for
+                   percepts elicited by retinal implants. Scientific Reports
+                   9(1):9199, doi:`10.1038/s41598-019-45416-4 <https://doi.org/10.1038/s41598-019-45416-4>`_.
 """
 import os
 import numpy as np
 import pickle
 
 from ..utils import parfor
-from ..models import BaseModel, WatsonConversionMixin, dva2ret
-from ..models._axon_map import fast_axon_contribution, fast_axon_map
+from ..models import BaseModel, Watson2014ConversionMixin, dva2ret
+from ..models._axon_map import axon_contribution, axon_map
 
 
-class AxonMapModel(WatsonConversionMixin, BaseModel):
+class AxonMapModel(Watson2014ConversionMixin, BaseModel):
     """Axon map model"""
 
     def __init__(self, **kwargs):
+        """Axon map model
+
+        Implements the axon map model described in [#beyeler-2019]_, where
+        percepts are elongated along nerve fiber bundle trajectories of the
+        retina.
+
+        Parameters
+        ----------
+        axlambda : double
+            Exponential decay constant along the axon (microns).
+        rho : double
+            Exponential decay constant away from the axon (microns).
+
+        """
         super(AxonMapModel, self).__init__(**kwargs)
         self.axon_contrib = None
         self.xret = None
@@ -50,7 +69,7 @@ class AxonMapModel(WatsonConversionMixin, BaseModel):
         """Grows a single axon bundle based on the model by Jansonius (2009)
 
         This function generates the trajectory of a single nerve fiber bundle
-        based on the mathematical model described in [1]_.
+        based on the mathematical model described in [#beyeler-2019]_.
 
         Parameters
         ----------
@@ -77,12 +96,6 @@ class AxonMapModel(WatsonConversionMixin, BaseModel):
         -----
         The study did not include axons with phi0 in [-60, 60] deg.
 
-        .. [1] N. M. Jansionus, J. Nevalainen, B. Selig, L.M. Zangwill, P.A.
-               Sample, W. M. Budde, J. B. Jonas, W. A. Lagreze, P. J.
-               Airaksinen, R. Vonthein, L. A. Levin, J. Paetzold, and U.
-               Schieferd, "A mathematical description of nerve fiber bundle
-               trajectories and their variability in the human retina. Vision
-               Research 49:2157-2163, 2009.
         """
         # Check for the location of the optic disc:
         loc_od = (self.loc_od_x, self.loc_od_y)
@@ -106,7 +119,7 @@ class AxonMapModel(WatsonConversionMixin, BaseModel):
         is_superior = phi0 > 0
         rho = np.linspace(*self.ax_segments_range, num=self.n_ax_segments)
         if self.engine == 'cython':
-            xprime, yprime = fast_jansonius(rho, phi0, beta_sup, beta_inf)
+            xprime, yprime = jansonius(rho, phi0, beta_sup, beta_inf)
         else:
             if is_superior:
                 # Axon is in superior retina, compute `b` (real number) from
@@ -209,7 +222,7 @@ class AxonMapModel(WatsonConversionMixin, BaseModel):
         axon_contrib = []
         for xy, bundle in zip(xyret, axons):
             if self.engine == 'cython':
-                contrib = fast_axon_contribution(bundle, xy, self.axlambda)
+                contrib = axon_contribution(bundle, xy, self.axlambda)
             else:
                 idx = np.argmin((bundle[:, 0] - xy[0]) ** 2 +
                                 (bundle[:, 1] - xy[1]) ** 2)
@@ -324,12 +337,12 @@ class AxonMapModel(WatsonConversionMixin, BaseModel):
             return 0.0
         # Calculate the brightness at pixel:
         electrodes = implant.stim.coords['electrodes'].values
-        bright = fast_axon_map(implant.stim.data,
-                               np.array([e.x for e in electrodes]),
-                               np.array([e.y for e in electrodes]),
-                               axon,
-                               self.rho,
-                               self.thresh_percept)
+        bright = axon_map(implant.stim.data,
+                          np.array([e.x for e in electrodes]),
+                          np.array([e.y for e in electrodes]),
+                          axon,
+                          self.rho,
+                          self.thresh_percept)
         return bright
 
     def predict_percept(self, implant, t=None):
