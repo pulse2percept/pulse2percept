@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# scikit-learn documentation build configuration file, created by
-# sphinx-quickstart on Fri Jan  8 09:13:42 2010.
+# pulse2percept documentation build configuration file
 #
 # This file is execfile()d with the current directory set to its containing
 # dir.
@@ -78,7 +77,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'pulse2percept'
-copyright = '20016 - 2019, pulse2percept developers (BSD License)'
+copyright = '2016 - 2019, pulse2percept developers (BSD License)'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -250,83 +249,9 @@ sphinx_gallery_conf = {
         'pulse2percept': None}
 }
 
-# sphinx_gallery_conf = {
-#     # path to your examples scripts
-#     'examples_dirs': '../examples',
-#     # path where to save gallery generated examples
-#     'gallery_dirs': 'auto_examples'
-# }
-
-
-# The following dictionary contains the information used to create the
-# thumbnails for the front page of the scikit-learn home page.
-# key: first image in set
-# values: (number of plot in set, height of thumbnail)
-carousel_thumbs = {}  # 'sphx_glr_plot_classifier_comparison_001.png': 600,
-
-
-def make_carousel_thumbs(app, exception):
-    """produces the final resized carousel images"""
-    if exception is not None:
-        return
-    print('Preparing carousel images')
-
-    image_dir = os.path.join(app.builder.outdir, '_images')
-    for glr_plot, max_width in carousel_thumbs.items():
-        image = os.path.join(image_dir, glr_plot)
-        if os.path.exists(image):
-            c_thumb = os.path.join(image_dir, glr_plot[:-4] + '_carousel.png')
-            sphinx_gallery.gen_rst.scale_image(image, c_thumb, max_width, 190)
-
-
-# Config for sphinx_issues
-
-# we use the issues path for PRs since the issues URL will forward
-# issues_github_path = 'uwescience/pulse2percept'
-
-
-# currentdir = os.path.abspath(os.path.dirname(__file__))
-# sys.path.append(os.path.join(currentdir, 'tools'))
-# import buildmodref
-
-# autogenerate api documentation
-# (see https://github.com/rtfd/readthedocs.org/issues/1139)
-
-
-# def generate_example_rst(app, what, name, obj, options, lines):
-#     # generate empty examples files, so that we don't get
-#     # inclusion errors if there are no examples for a class / module
-#     examples_path = os.path.join(app.srcdir, "_build", "html", "_modules",
-#                                  "%s.examples" % name)
-#     if not os.path.isdir(os.path.dirname(examples_path)):
-#         os.mkdir(os.path.dirname(examples_path))
-#     if not os.path.exists(examples_path):
-#         # touch file
-#         open(examples_path, 'w').close()
-
-
-# def generateapidoc(_):
-#     output_path = os.path.join(currentdir, 'reference')
-#     buildmodref.writeapi(project, output_path, version, True)
-
-
-# def setup(app):
-#     app.connect('autodoc-process-docstring', generate_example_rst)
-#     app.connect('builder-inited', generateapidoc)
-
-# def setup(app):
-#     # to hide/show the prompt in code examples:
-#     app.add_javascript('js/copybutton.js')
-#     app.add_javascript('js/extra.js')
-#     # app.connect('build-finished', make_carousel_thumbs)
-
 
 # The following is used by sphinx.ext.linkcode to provide links to github
 linkcode_resolve = make_linkcode_resolve('pulse2percept',
                                          'https://github.com/uwescience/'
                                          'pulse2percept/blob/{revision}/'
                                          '{package}/{path}#L{lineno}')
-
-# warnings.filterwarnings("ignore", category=UserWarning,
-#                         message='Matplotlib is currently using agg, which is a'
-#                                 ' non-GUI backend, so cannot show the figure.')

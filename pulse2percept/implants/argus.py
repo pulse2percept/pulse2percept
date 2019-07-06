@@ -48,11 +48,14 @@ class ArgusI(ProsthesisSystem):
         --------
         Create an ArgusI array centered on the fovea, at 100um distance from
         the retina:
+
         >>> from pulse2percept import implants
         >>> argus = implants.ArgusI(x=0, y=0, z=100, rot=0)
 
         Get access to electrode 'B1':
+
         >>> my_electrode = argus['B1']
+
         """
         # Alternating electrode sizes, arranged in checkerboard pattern
         r_arr = np.array([260, 520, 260, 520]) / 2.0
@@ -173,11 +176,14 @@ class ArgusII(ProsthesisSystem):
         --------
         Create an ArgusII array centered on the fovea, at 100um distance from
         the retina:
+
         >>> from pulse2percept import implants
         >>> argus = implants.ArgusII(x=0, y=0, z=100, rot=0)
 
         Get access to electrode 'E7':
+
         >>> my_electrode = argus['E7']
+
         """
         # Electrodes are 200um in diameter
         r_arr = np.ones(60) * 100.0

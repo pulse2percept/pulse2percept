@@ -14,45 +14,57 @@ class NotBuiltError(ValueError, AttributeError):
 
 
 class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
+    """Base model
+
+    The BaseModel class defines which methods and attributes a model must
+    have. You can create your own model by adding a class that derives from
+    BaseModel:
+
+    .. code-block:: python
+
+        class MyModel(BaseModel):
+
+    The constructor is the only place where you can add new variables
+    (i.e., class attributes). The signature of your own constructor should
+    look like this:
+
+    .. code-block:: python
+
+        def __init__(self, **kwargs):
+
+    meaning that all arguments are passed as keyword arguments. Also, make
+    sure to call the BaseModel constructor first thing. So a complete
+    example of a constructor could look like this:
+
+    .. code-block:: python
+
+        class MyModel(BaseModel):
+
+            def __init__(self, **kwargs):
+                super(MyModel, self).__init__(self, **kwargs)
+                self.newvar = 0
+
+    This is the only place where you can add new class attributes. Trying
+    to set `self.someothervar` outside the constructor will raise an
+    AttributeError. Of course, you can always set `self.newvar = None` in
+    the constructor to make sure the variable exists, and then assign a new
+    value in other class methods.
+
+    .. note::
+
+       Please note: If `self.newvar` already exists in the BaseModel class,
+       the last line of the above code snippet would overwrite it.
+
+    To make the model complete (and compile), you will also need to fill in
+    all methods marked with `@abc.abstractmethod` below. These include
+    :py:func:`BasModel.build` and :py:func:`BaseModel.predict_percept`.
+    Have a look at the ScoreboardModel or AxonMapModel classes below to get an idea of how to
+    write a complete model.
+
+    """
 
     def __init__(self, **kwargs):
         """Constructor
-
-        The BaseModel class defines which methods and attributes a model must
-        have. You can create your own model by adding a class that derives from
-        BaseModel:
-
-            class MyModel(BaseModel):
-
-        The constructor is the only place where you can add new variables
-        (i.e., class attributes). The signature of your own constructor should
-        look like this:
-
-            def __init__(self, **kwargs):
-
-        meaning that all arguments are passed as keyword arguments. Also, make
-        sure to call the BaseModel constructor first thing. So a complete
-        example of a constructor could look like this:
-
-            class MyModel(BaseModel):
-
-                def __init__(self, **kwargs):
-                    super(MyModel, self).__init__(self, **kwargs)
-                    self.newvar = 0
-
-        This is the only place where you can add new class attributes. Trying
-        to set `self.someothervar` outside the constructor will raise an
-        AttributeError. Of course, you can always set ``self.newvar = None`` in
-        the constructor to make sure the variable exists, and then assign a new
-        value in other class methods.
-        Please note: If `self.newvar` already exists in the BaseModel class,
-        the last line of the above code snippet would overwrite it.
-
-        To make the model complete (and compile), you will also need to fill in
-        all methods marked with `@abc.abstractmethod` below. These include
-        ``self.build`` and ``self.predict_percept``. Have a look at the
-        ScoreboardModel or AxonMapModel classes below to get an idea of how to
-        write a complete model.
 
         Parameters
         ----------
@@ -136,6 +148,7 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
 
         You can override ``build`` in your own model (for a good example, see
         the AxonMapModel). You will want to make sure that:
+
         - all `build_params` take effect,
         - the flag `_is_built` is set,
         - the method returns `self`.

@@ -36,6 +36,7 @@ corresponds to the predicted perceptual experience of a patient:
 <img src="doc/_static/model.jpg" width="100%"/>
 
 If you use pulse2percept in a scholary publication, please cite as:
+
 > M Beyeler, GM Boynton, I Fine, A Rokem (2017). pulse2percept: A Python-based
 > simulation framework for bionic vision. Proceedings of the 16th Python in
 > Science Conference, p.81-88,
@@ -75,9 +76,7 @@ pulse2percept requires:
 
 2.  [NumPy](http://www.numpy.org)
 
-2.  [Cython](http://www.cython.org) >= 0.29
-
-3.  [NumPy](http://www.numpy.org) >= 1.9
+3.  [Cython](http://www.cython.org) >= 0.29
 
 4.  [SciPy](http://www.scipy.org) >= 1.0
 
@@ -88,10 +87,11 @@ pulse2percept 0.5 and later require Python 3.5 or newer.
 
 Optional packages:
 
-1.  [Dask](https://github.com/dask/dask) for parallel processing
-    (a joblib alternative). Use conda to install.
+1.  [scikit-image](http://scikit-image.org/) for image functionality in the `io` 
+    module.
 
-2.  [Numba](http://numba.pydata.org/). Use conda to install.
+2.  [scikit-video](http://www.scikit-video.org) for video functionality in the
+    `io` module. You will also need an FFMPEG codec (see next bullet point).
 
 3.  [ffmpeg codec](http://adaptivesamples.com/how-to-install-ffmpeg-on-windows)
     if you're on Windows and want to use functions in the `io` module.
@@ -181,10 +181,4 @@ following recipe.
 
 ### Getting started
 
-A number of useful examples can be found in the "examples/notebooks"
-folder, including the following:
-
--   [0.0-example-usage.ipynb](https://github.com/uwescience/pulse2percept/blob/master/examples/notebooks/0.0-example-usage.ipynb): How to use the model.
--   [0.1-image2percept.ipynb](https://github.com/uwescience/pulse2percept/blob/master/examples/notebooks/0.1-image2percept.ipynb): How to convert an image to a percept.
-
-Detailed documentation can be found at [pulse2percept.readthedocs.io](https://pulse2percept.readthedocs.io).
+TODO

@@ -13,6 +13,28 @@ from scipy.special import factorial
 
 
 class PrettyPrint(object, metaclass=abc.ABCMeta):
+    """PrettyPrint
+
+    An abstract class that provides a way to prettyprint all class attributes,
+    inspired by scikit-learn.
+
+    Classes deriving from PrettyPrint are required to implement a
+    ``get_params`` method that returns a dictionary containing all the
+    attributes to prettyprint.
+
+    Examples
+    --------
+    >>> from pulse2percept.utils import PrettyPrint
+    >>> class MyClass(PrettyPrint):
+    ...     def __init__(self, a, b):
+    ...         self.a = a
+    ...         self.b = b
+    ...
+    ...     def get_params(self):
+    ...         return {'a': self.a, 'b': self.b}
+    >>> MyClass(1, 2)
+    MyClass(a=1, b=2)
+    """
 
     @abc.abstractmethod
     def get_params(self):
@@ -54,6 +76,14 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
         return str_params
 
 
+class FreezeError(AttributeError):
+    """Exception class used to raise when trying to add attributes to Frozen
+
+    Classes of type Frozen do not allow for new attributes to be set outside
+    the constructor.
+    """
+
+
 def freeze_class(set):
     """Freezes a class
 
@@ -72,16 +102,17 @@ def freeze_class(set):
             if isinstance(sys._getframe(1).f_locals['self'], self.__class__):
                 set(self, name, value)
                 return
-        err_str = "You cannot add attributes to %s" % self.__class__.__name__
-        raise AttributeError(err_str)
+        raise FreezeError("You cannot add attributes to "
+                          "%s" % self.__class__.__name__)
     return set_attr
 
 
 class Frozen(object):
-    """A frozen class
+    """Frozen
 
-    "Frozen" classes (and subclasses) do not allow for new
-    attributes to be set outside their constructor.
+    "Frozen" classes (and subclasses) do not allow for new class attributes to
+    be set outside the constructor. On attempting to add a new attribute, the
+    class will raise a FreezeError.
     """
     __setattr__ = freeze_class(object.__setattr__)
 
