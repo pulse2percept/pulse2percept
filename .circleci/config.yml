@@ -21,6 +21,8 @@ jobs:
           command: |
             python3 -m venv venv
             . venv/bin/activate
+            sudo apt update
+            sudo apt install ffmpeg
             pip install -r requirements.txt
             pip install -r requirements-dev.txt
             pip install .
