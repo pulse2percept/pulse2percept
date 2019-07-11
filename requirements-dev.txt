@@ -1,0 +1,5 @@
+pytest
+coveralls
+mock
+pytest-cov
+sphinx
