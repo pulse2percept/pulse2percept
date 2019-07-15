@@ -259,3 +259,59 @@ class ProsthesisSystem(PrettyPrint):
 
     def items(self):
         return self.earray.items()
+
+
+#let the implants deal with deciding parameter values, R/L eye / tack,
+#instantiating electrode array
+class ElectrodeGrid(PrettyPrint):
+    def __init__(self, cols, rows, x, y, z, rot, r, spacing):
+        self.cols = cols
+        self.rows = rows
+        self.x = x
+        self.y = y
+        self.z = z
+        self.rot = rot
+        self.r = r
+        self.spacing = spacing
+
+    def get_params(self):
+        """Return a dictionary of class attributes"""
+        return {'x': self.x, 'y': self.y, 'z': self.z}
+
+
+        if isinstance(z, (list, np.ndarray)):
+            z_arr = np.asarray(z).flatten()
+            if z_arr.size != len(r_arr):
+                e_s = "If `h` is a list, it must have %d entries." % n_elecs
+                raise ValueError(e_s)
+         else:
+            # All electrodes have the same height
+            z_arr = np.ones_like(r_arr) * z   
+
+        n_elecs = cols*rows
+        names = np.arange(n_elecs)
+
+        # array containing electrode radii (uniform)
+        r_arr = np.full(shape=n_elecs, fill_value=r)
+
+        x_arr = np.arange(cols) * spacing - (cols / 2 - 0.5) * spacing
+
+        y_arr = np.arange(rows) * spacing - (rows / 2 - 0.5) * spacing
+
+        x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
+
+        rotmat = np.array([np.cos(rot), -np.sin(rot),
+                           np.sin(rot), np.cos(rot)]).reshape((2, 2))
+
+        # Rotate the array
+        xy = np.vstack((x_arr.flatten(), y_arr.flatten()))
+        xy = np.matmul(rotmat, xy)
+        x_arr = xy[0, :]
+        y_arr = xy[1, :]
+
+        # Apply offset
+        x_arr += x
+        y_arr += y
+
+        list = [x_arr, y_arr]
+        return list
