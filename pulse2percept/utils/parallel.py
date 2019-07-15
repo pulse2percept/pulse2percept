@@ -85,13 +85,13 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
             def newfunc(in_arg):
                 return func(in_arg, *args, **keywords)
             return newfunc
-        p = partial(func, *func_args, **func_kwargs)
+        p = dask.delayed(partial(func, *func_args, **func_kwargs))
         d = []
         for in_element in in_list:
             if isinstance(in_element, list):
-                d.append(dask.delayed(p)(*in_element))
+                d.append(p(*in_element))
             else:
-                d.append(dask.delayed(p)(in_element))
+                d.append(p(in_element))
         if scheduler == 'multiprocessing':
             results = dask.compute(*d, scheduler='processes', workers=n_jobs)
         elif scheduler == 'threading':
