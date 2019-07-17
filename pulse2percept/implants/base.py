@@ -263,8 +263,10 @@ class ProsthesisSystem(PrettyPrint):
 
 #let the implants deal with deciding parameter values, R/L eye / tack,
 #instantiating electrode array
-class ElectrodeGrid(PrettyPrint):
+#inherit electrode array
+class ElectrodeGrid(ElectrodeArray):
     def __init__(self, cols, rows, x, y, z, rot, r, spacing):
+        self.add_electrodes(electrodes)
         self.cols = cols
         self.rows = rows
         self.x = x
@@ -273,12 +275,19 @@ class ElectrodeGrid(PrettyPrint):
         self.rot = rot
         self.r = r
         self.spacing = spacing
+        set_grid()
 
     def get_params(self):
         """Return a dictionary of class attributes"""
-        return {'x': self.x, 'y': self.y, 'z': self.z}
+        return {'cols': self.cols, 'rows': self.rows,
+         'x': self.x, 'y': self.y 'z': self.z, 'rot': self.rot,
+          'r':self.r, 'spacing': self.spacing}
 
+    def get_x_arr():
+        x_arr = np.arange(cols) * spacing - (cols / 2 - 0.5) * spacing
+        return x_arr
 
+    def set_grid():
         if isinstance(z, (list, np.ndarray)):
             z_arr = np.asarray(z).flatten()
             if z_arr.size != len(r_arr):
@@ -313,5 +322,6 @@ class ElectrodeGrid(PrettyPrint):
         x_arr += x
         y_arr += y
 
-        list = [x_arr, y_arr]
-        return list
+        #maybe parameterize thee type of electrode later
+        for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
+        self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
