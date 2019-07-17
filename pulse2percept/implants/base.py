@@ -275,7 +275,7 @@ class ElectrodeGrid(ElectrodeArray):
         self.rot = rot
         self.r = r
         self.spacing = spacing
-        set_grid()
+        self.set_grid()
 
     def get_params(self):
         """Return a dictionary of class attributes"""
@@ -287,7 +287,7 @@ class ElectrodeGrid(ElectrodeArray):
         x_arr = np.arange(cols) * spacing - (cols / 2 - 0.5) * spacing
         return x_arr
 
-    def set_grid():
+    def set_grid(self):
         if isinstance(z, (list, np.ndarray)):
             z_arr = np.asarray(z).flatten()
             if z_arr.size != len(r_arr):
