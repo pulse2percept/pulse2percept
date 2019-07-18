@@ -99,6 +99,9 @@ class AlphaIMS(ProsthesisSystem):
         x_arr += x
         y_arr += y
 
+        #self.earrray = ElecrodeGrid(...)
+        #self.stim = stim
+
         self.earray = ElectrodeArray([])
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
             self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
