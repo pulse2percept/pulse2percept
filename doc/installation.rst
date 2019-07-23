@@ -5,7 +5,7 @@ Installation
 Windows
 *******
 
-Pre-Installations
+Prerequisites
 #################
 * use **either** conda **or** pip to download
 
@@ -37,18 +37,28 @@ VS 2019
 *********************
 download visual studio 2019 (make sure you get the build tools. Desktop development with C++ should work)
 
-Recommended: Install make
+recommended: install make
 
-* Go to ezwinports: 'make <https://sourceforge.net/projects/ezwinports/files/>'_
+* go to ezwinports: 'make <https://sourceforge.net/projects/ezwinports/files/>'_
 
-* Download make-4.1-2-without-guile-w32-bin.zip (get the version without guile)
+* download make-4.1-2-without-guile-w32-bin.zip (get the version without guile)
 
-* Extract zip
+* extract zip
 
-* Now you can install pulse2percept by typing make instead of the python setup.py stuff!
+* now you can install pulse2percept by typing make instead of the python setup.py
 
 Installation
 ############
+
+Stable
+*********************
+the latest stable release
+
+``(pip /conda) install pulse2percept``
+
+Development
+*********************
+the most recent pulse2percept
 
 ``(pip /conda) install pulse2percept``
 
