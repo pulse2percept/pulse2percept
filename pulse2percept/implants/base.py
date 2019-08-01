@@ -267,7 +267,21 @@ class ProsthesisSystem(PrettyPrint):
 # inherit electrode array
 class ElectrodeGrid(ElectrodeArray):
 
-    def __init__(self, cols=1, rows=1, x=0, y=0, z=0, rot=0, r=10, spacing=0):
+    def __init__(self, cols=1, rows=1, x=0, y=0, z=0, rot=0, r=10, spacing=0,
+                 name_cols='1', name_rows='A'):
+        """Creates a rectangular grid of electrodes
+
+        Parameters
+        ----------
+        cols : int
+            Number of columns in the grid
+        rows : etc.
+            etc.
+        name_cols, name_rows: {'A', '1'}
+            If 'A', columns will be numbered alphabetically. If '1', columns
+            wil be numbered numerically.
+
+        """
         self.cols = cols
         self.rows = rows
         self.x = x
@@ -276,8 +290,11 @@ class ElectrodeGrid(ElectrodeArray):
         self.rot = rot
         self.r = r
         self.spacing = spacing
+        self.name_cols = name_cols
+        self.name_rows = name_rows
+        # Instantiate empty collection of electrodes:
         self.electrodes = coll.OrderedDict()
-        # self.set_grid()
+        self.set_grid()
 
     def get_params(self):
         """Return a dictionary of class attributes"""
@@ -294,10 +311,16 @@ class ElectrodeGrid(ElectrodeArray):
     # thinking about passing in x_arr because it is modified depending on left/right eye.
     # It seems like bad style to get it from this method, pass it back in from another class,
     # and then modify it.
-    def set_grid(self, x_arr):
+    def set_grid(self):  # , x_arr):
         n_elecs = self.cols * self.rows
 
-        names = np.arange(self.n_elecs)
+        # Create electrode names, using either A-Z or 1-n:
+        if self.name_cols == '1' and self.name_rows == 'A':
+            # Column names should be numbers, row names should be letters:
+            names = [chr(i) + str(j) for i in range(65, 65 + self.rows + 1)
+                     for j in range(1, self.cols + 1)]
+        else:  # TODO jon
+            raise NotImplementedError
 
         # array containing electrode radii (uniform)
         r_arr = np.full(shape=self.n_elecs, fill_value=self.r)
