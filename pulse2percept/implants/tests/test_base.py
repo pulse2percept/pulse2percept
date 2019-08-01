@@ -216,3 +216,30 @@ def test_ProsthesisSystem():
     npt.assert_equal(implant.stim.ndim, 1)
     npt.assert_equal(implant.stim.dims[0], 'electrodes')
     npt.assert_equal(implant.stim.data, np.array([1]))
+
+
+def test_ElectrodeGrid():
+    with pytest.raises(TypeError):
+        base.ElectrodeGrid.set_grid("badinstantiation")
+    with pytest.raises(TypeError):
+        base.ElectrodeGrid.set_grid(coll.OrderedDict({'badinstantiation': 0}))
+    with pytest.raises(TypeError):
+        base.ElectrodeGrid.set_grid([0])
+
+    # Empty array:
+    #earray = base.ElectrodeArray([])
+    egrid = base.ElectrodeGrid(cols=0, rows=0)
+
+    # not sure if it returns 0
+    npt.assert_equal(egrid.get_x_arr(), 0)
+
+    # inherets electrode array
+    npt.assert_equal(egrid.n_electrodes, 0)
+
+    # A single electrode:
+    #earray = base.ElectrodeArray(base.PointSource(0, 1, 2))
+    # redundant to pass in, just for clarity
+    egrid = base.ElectrodeGrid(cols=1, rows=1)
+    params = egrid.get_params()
+    npt.assert_equal(params["rows"], 1)
+    npt.assert_equal(params["cols"], 1)

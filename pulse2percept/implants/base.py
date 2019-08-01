@@ -100,6 +100,7 @@ class DiskElectrode(Electrode):
 
 class ElectrodeArray(PrettyPrint):
 
+    # electrodes is initialized as an empty dictionary
     def __init__(self, electrodes):
         self.electrodes = coll.OrderedDict()
         self.add_electrodes(electrodes)
@@ -114,7 +115,7 @@ class ElectrodeArray(PrettyPrint):
                 'n_electrodes': self.n_electrodes}
 
     def add_electrode(self, name, electrode):
-        """Add an electrode to the array
+        """Add an electrode to the dictionary
 
         Parameters
         ----------
@@ -266,8 +267,7 @@ class ProsthesisSystem(PrettyPrint):
 # inherit electrode array
 class ElectrodeGrid(ElectrodeArray):
 
-    def __init__(self, cols, rows, x, y, z, rot, r, spacing):
-        self.add_electrodes(electrodes)
+    def __init__(self, cols=1, rows=1, x=0, y=0, z=0, rot=0, r=10, spacing=0):
         self.cols = cols
         self.rows = rows
         self.x = x
@@ -276,42 +276,51 @@ class ElectrodeGrid(ElectrodeArray):
         self.rot = rot
         self.r = r
         self.spacing = spacing
-        self.set_grid()
+        self.electrodes = coll.OrderedDict()
+        # self.set_grid()
 
     def get_params(self):
         """Return a dictionary of class attributes"""
         return {'cols': self.cols, 'rows': self.rows,
-         'x': self.x, 'y': self.y 'z': self.z, 'rot': self.rot,
-          'r': self.r, 'spacing': self.spacing}
+                'x': self.x, 'y': self.y, 'z': self.z, 'rot': self.rot,
+                'r': self.r, 'spacing': self.spacing}
 
-    def get_x_arr():
-        x_arr = np.arange(cols) * spacing - (cols / 2 - 0.5) * spacing
+    def get_x_arr(self):
+        # np.arange(self.cols)
+        x_arr = np.arange(self.cols) * self.spacing - \
+            (self.cols / 2 - 0.5) * self.spacing
         return x_arr
 
-    def set_grid(self):
+    # thinking about passing in x_arr because it is modified depending on left/right eye.
+    # It seems like bad style to get it from this method, pass it back in from another class,
+    # and then modify it.
+    def set_grid(self, x_arr):
+        n_elecs = self.cols * self.rows
+
+        names = np.arange(self.n_elecs)
+
+        # array containing electrode radii (uniform)
+        r_arr = np.full(shape=self.n_elecs, fill_value=self.r)
+
         if isinstance(z, (list, np.ndarray)):
             z_arr = np.asarray(z).flatten()
             if z_arr.size != len(r_arr):
                 e_s = "If `h` is a list, it must have %d entries." % n_elecs
                 raise ValueError(e_s)
-         else:
-            # All electrodes have the same height
-            z_arr = np.ones_like(r_arr) * z   
+            else:
+                # All electrodes have the same height
+                z_arr = np.ones_like(r_arr) * self.z
 
-        n_elecs = cols*rows
-        names = np.arange(n_elecs)
+        x_arr = np.arange(self.cols) * self.spacing - \
+            (self.cols / 2 - 0.5) * self.spacing
 
-        # array containing electrode radii (uniform)
-        r_arr = np.full(shape=n_elecs, fill_value=r)
-
-        x_arr = np.arange(cols) * spacing - (cols / 2 - 0.5) * spacing
-
-        y_arr = np.arange(rows) * spacing - (rows / 2 - 0.5) * spacing
+        y_arr = np.arange(self.rows) * self.spacing - \
+            (self.rows / 2 - 0.5) * self.spacing
 
         x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
 
-        rotmat = np.array([np.cos(rot), -np.sin(rot),
-                           np.sin(rot), np.cos(rot)]).reshape((2, 2))
+        rotmat = np.array([np.cos(self.rot), -np.sin(self.rot),
+                           np.sin(self.rot), np.cos(self.rot)]).reshape((2, 2))
 
         # Rotate the array
         xy = np.vstack((x_arr.flatten(), y_arr.flatten()))
@@ -325,4 +334,5 @@ class ElectrodeGrid(ElectrodeArray):
 
         # maybe parameterize thee type of electrode later
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
-        self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
+            self.add_electrode(
+                name, DiskElectrode(self.x, self.y, self.z, self.r))
