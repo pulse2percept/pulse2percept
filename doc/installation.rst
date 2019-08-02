@@ -60,8 +60,6 @@ Development
 *********************
 the most recent pulse2percept
 
-``(pip /conda) install pulse2percept``
-
 ``git clone https://github.com/uwescience/pulse2percept.git``
 
 ``cd pulse2percept``
