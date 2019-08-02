@@ -26,7 +26,7 @@ class ArgusI(ProsthesisSystem):
 
         Electrode order is: A1, B1, C1, D1, A2, B2, ..., D4.
         If `use_legacy_names` is True, electrode order is: L6, L2, M8, M4, ...
-        An electrode can be addressed by index (integer) or name. Column 
+        An electrode can be addressed by index (integer) or name. Column
         order is reversed in the left eye.
 
         Parameters
@@ -73,12 +73,16 @@ class ArgusI(ProsthesisSystem):
                                   'L7', 'L3', 'M5', 'M1']
         # In newer papers, they go by A-D: A1, B1, C1, D1, A1, B2, ..., D4
         # Shortcut: Use `chr` to go from int to char
-        if self.eye == 'RE':
-            self.new_names = [chr(i) + str(j) for j in range(1, 5)
-                              for i in range(65, 69)]
-        else:
-            self.new_names = [chr(i) + str(j) for j in range(1, 5)
-                              for i in range(69, 65, -1)]
+
+        self.new_names = [chr(i) + str(j) for j in range(1, 5)
+                          for i in range(65, 69)]
+        # if self.eye == 'RE':
+        #    self.new_names = [chr(i) + str(j) for j in range(1, 5)
+        #                      for i in range(65, 69)]
+        # else:
+        #   self.new_names = [chr(i) + str(j) for j in range(1, 5)
+        #                      for i in range(68, 64, -1)]
+        # A10, ... A1
 
         names = self.old_names if use_legacy_names else self.new_names
 
@@ -98,7 +102,11 @@ class ArgusI(ProsthesisSystem):
         if self.eye == 'LE':
             # Left eye: Need to invert x coordinates and rotation angle
             x_arr = x_arr[::-1]
+
         x_arr, y_arr = np.meshgrid(x_arr, x_arr, sparse=False)
+        if self.eye == 'LE':
+            # Left eye: Need to invert y coordinates and rotation angle
+            y_arr = y_arr[::-1]
 
         # Rotation matrix
         R = np.array([np.cos(rot), -np.sin(rot),
@@ -160,7 +168,7 @@ class ArgusII(ProsthesisSystem):
           </pre>
 
         Electrode order is: A1, A2, ..., A10, B1, B2, ..., F10.
-        An electrode can be addressed by index (integer) or name. Note 
+        An electrode can be addressed by index (integer) or name. Note
         that the columns move from 10 to 1 in the left eye.
 
         Parameters
@@ -199,14 +207,15 @@ class ArgusII(ProsthesisSystem):
         self.eye = eye
 
         # Standard ArgusII names: A1, A2, ..., A10, B1, ..., F10
-        #names = [chr(i) + str(j) for i in range(65, 71) for j in range(1, 11)]
+        names = [chr(i) + str(j) for i in range(65, 71) for j in range(1,
+                                                                       11)]
 
-        if self.eye == 'RE':
-            names = [chr(i) + str(j) for i in range(65, 71)
-                     for j in range(1, 11)]
-        else:
-            names = [chr(i) + str(j) for i in range(65, 71)
-                     for j in range(11, 1, -1)]
+        # if self.eye == 'RE':
+        #    names = [chr(i) + str(j) for i in range(65, 71)
+        #             for j in range(1, 11)]
+        # else:
+        #    names = [chr(i) + str(j) for i in range(65, 71)
+        #             for j in range(11, 1, -1)]
 
         if isinstance(z, (list, np.ndarray)):
             z_arr = np.asarray(z).flatten()
@@ -225,6 +234,7 @@ class ArgusII(ProsthesisSystem):
         if self.eye == 'LE':
             # Left eye: Need to invert x coordinates and rotation angle
             x_arr = x_arr[::-1]
+
         y_arr = np.arange(n_rows) * e_spacing - (n_rows / 2 - 0.5) * e_spacing
         x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
 

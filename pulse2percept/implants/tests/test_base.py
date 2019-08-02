@@ -227,7 +227,9 @@ def test_ElectrodeGrid():
         base.ElectrodeGrid.set_grid([0])
 
     # naming restrictions
-    egrid = base.ElectrodeGrid(name_rows=[1])
+    with pytest.raises(ValueError):
+        egrid = base.ElectrodeGrid(name_rows=[1])
+
     with pytest.raises(ValueError):
         egrid.set_grid()
 
