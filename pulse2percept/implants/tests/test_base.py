@@ -219,12 +219,29 @@ def test_ProsthesisSystem():
 
 
 def test_ElectrodeGrid():
-    with pytest.raises(TypeError):
+    with pytest.raises(AttributeError):
         base.ElectrodeGrid.set_grid("badinstantiation")
-    with pytest.raises(TypeError):
+    with pytest.raises(AttributeError):
         base.ElectrodeGrid.set_grid(coll.OrderedDict({'badinstantiation': 0}))
-    with pytest.raises(TypeError):
+    with pytest.raises(AttributeError):
         base.ElectrodeGrid.set_grid([0])
+
+    # naming restrictions
+    egrid = base.ElectrodeGrid(name_rows=[1])
+    with pytest.raises(ValueError):
+        egrid.set_grid()
+
+    egrid = base.ElectrodeGrid(name_rows={1})
+    with pytest.raises(ValueError):
+        egrid.set_grid()
+
+    egrid = base.ElectrodeGrid(name_rows={})
+    with pytest.raises(NameError):
+        egrid.set_grid()
+
+    egrid = base.ElectrodeGrid(name_cols=[])
+    with pytest.raises(NameError):
+        egrid.set_grid()
 
     # Empty array:
     #earray = base.ElectrodeArray([])

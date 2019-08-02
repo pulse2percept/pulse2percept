@@ -275,11 +275,12 @@ class ElectrodeGrid(ElectrodeArray):
         ----------
         cols : int
             Number of columns in the grid
-        rows : etc.
-            etc.
+        rows : int
+            Number of rows in the grid
         name_cols, name_rows: {'A', '1'}
             If 'A', columns will be numbered alphabetically. If '1', columns
-            wil be numbered numerically.
+            wil be numbered numerically. Columns and rows may only be strings
+            and integers.
 
         """
         self.cols = cols
@@ -299,8 +300,9 @@ class ElectrodeGrid(ElectrodeArray):
     def get_params(self):
         """Return a dictionary of class attributes"""
         return {'cols': self.cols, 'rows': self.rows,
-                'x': self.x, 'y': self.y, 'z': self.z, 'rot': self.rot,
-                'r': self.r, 'spacing': self.spacing}
+                'x': self.x, 'y': self.y, 'z': self.z,
+                'rot': self.rot, 'r': self.r, 'spacing': self.spacing,
+                'name_cols': self.name_cols, 'name_rows': self.name_rows}
 
     def get_x_arr(self):
         # np.arange(self.cols)
@@ -320,7 +322,22 @@ class ElectrodeGrid(ElectrodeArray):
             names = [chr(i) + str(j) for i in range(65, 65 + self.rows + 1)
                      for j in range(1, self.cols + 1)]
         else:  # TODO jon
-            raise NotImplementedError
+            if type(self.name_rows) is str:
+                rws = [chr(i) for i in range(65, 65 + self.rows + 1)]
+            elif type(self.name_rows) is int:
+                rws = [str(i) for i in range(1, self.cols + 1)]
+            else:
+                raise ValueError("'name_rows' must be a string or integer")
+
+            if type(self.name_cols) is str:
+                clms = [chr(i) for i in range(65, 65 + self.rows + 1)]
+            elif type(self.name_cols) is int:
+                clms = [str(i) for i in range(1, self.cols + 1)]
+            else:
+                raise ValueError("'name_cols' must be a string or integer")
+
+            names = [rws[i] + clms[j] for i in range(length(rws))
+                     for i in range(length(clms))]
 
         # array containing electrode radii (uniform)
         r_arr = np.full(shape=self.n_elecs, fill_value=self.r)
@@ -355,7 +372,7 @@ class ElectrodeGrid(ElectrodeArray):
         x_arr += x
         y_arr += y
 
-        # maybe parameterize thee type of electrode later
+        # maybe parameterize the type of electrode later
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
             self.add_electrode(
                 name, DiskElectrode(self.x, self.y, self.z, self.r))
