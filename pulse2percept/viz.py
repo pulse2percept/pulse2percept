@@ -13,10 +13,12 @@ def plot_fundus(implant, ax=None, loc_od=(15.5, 1.5), n_bundles=100,
     """Plot an implant on top of the axon map
     This function plots an electrode array on top of the axon map, akin to a
     fundus photograph.
+
     Parameters
     ----------
     implant : p2p.implants.ProsthesisSystem
-        A ProsthesisSystem object
+        A ProsthesisSystem object. If a stimulus is given, stimulating
+        electrodes will be highlighted in yellow.
     ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
         A Matplotlib axes object. If None given, a new one will be created.
     loc_od : (x_od, y_od), optional, default: (15.5, 1.5)
@@ -66,6 +68,11 @@ def plot_fundus(implant, ax=None, loc_od=(15.5, 1.5), n_bundles=100,
     axon_bundles = axon_map.grow_axon_bundles()
     for bundle in axon_bundles:
         ax.plot(bundle[:, 0], bundle[:, 1], c=(0.5, 1.0, 0.5))
+
+    # Highlight location of stimulated electrodes:
+    if implant.stim is not None:
+        for el in implant.stim.coords['electrodes'].values:
+            ax.plot(el.x, el.y, 'oy', markersize=np.sqrt(el.r) * 2)
 
     # Plot all electrodes and label them (optional):
     for name, el in implant.items():
