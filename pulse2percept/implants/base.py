@@ -15,11 +15,11 @@ class Electrode(PrettyPrint):
         Abstract base class for all electrodes.
         """
         if isinstance(x, (coll.Sequence, np.ndarray)):
-            raise TypeError("x must be a scalar.")
+            raise TypeError("x must be a scalar, not %s." % (type(x)))
         if isinstance(y, (coll.Sequence, np.ndarray)):
-            raise TypeError("y must be a scalar.")
+            raise TypeError("y must be a scalar, not %s." % type(y))
         if isinstance(z, (coll.Sequence, np.ndarray)):
-            raise TypeError("z must be a scalar.")
+            raise TypeError("z must be a scalar, not %s." % type(z))
         self.x = x
         self.y = y
         self.z = z
@@ -267,112 +267,130 @@ class ProsthesisSystem(PrettyPrint):
 # inherit electrode array
 class ElectrodeGrid(ElectrodeArray):
 
-    def __init__(self, cols=1, rows=1, x=0, y=0, z=0, rot=0, r=10, spacing=0,
-                 name_cols='1', name_rows='A'):
+    def __init__(self, shape, x=0, y=0, z=0, rot=0, r=10, spacing=None,
+                 names=('1', 'A')):
         """Creates a rectangular grid of electrodes
 
         Parameters
         ----------
-        cols : int
-            Number of columns in the grid
-        rows : int
-            Number of rows in the grid
-        name_cols, name_rows: {'A', '1'}
-            If 'A', columns will be numbered alphabetically. If '1', columns
-            wil be numbered numerically. Columns and rows may only be strings
-            and integers.
+        shape : (rows, cols)
+            A tuple containing the number of rows x columns in the grid
+        x, y, z : double
+            3D coordinates of the center of the grid
+        rot : double
+            Rotation of the grid in radians (positive angle: counter-clockwise)
+        r : double
+            Electrode radius in microns
+        spacing : double
+            Electrode-to-electrode spacing in microns. If None, 2x radius is
+            chosen.
+        names: (name_rows, name_cols), each of which either 'A' or '1'
+            Naming convention for rows and columns, respectively.
+            If 'A', rows or columns will be labeled alphabetically.
+            If '1', rows or columns will be labeled numerically.
+            Columns and rows may only be strings and integers.
+            For example ('1', 'A') will number rows numerically and columns
+            alphabetically.
 
+        Examples
+        --------
+        # An electrode grid with 2 rows and 4 columns, centered at (10, 20)um,
+        # 500um away from the retinal surface, with names like this:
+        # A1 A2 A3 A4
+        # B1 B2 B3 B4
+        >>> egrid = ElectrodeGrid((2, 4), names=('A', '1'))
         """
-        self.cols = cols
-        self.rows = rows
+        if not isinstance(shape, (tuple, list, np.ndarray)):
+            raise TypeError("'shape' must be a tuple/list of (rows, cols)")
+        if len(shape) != 2:
+            raise ValueError("'shape' must have two elements: (rows, cols)")
+        if np.prod(shape) <= 0:
+            raise ValueError("Grid must have non-zero rows and columns.")
+        # Extract rows and columns from shape:
+        self.shape = shape
         self.x = x
         self.y = y
         self.z = z
         self.rot = rot
         self.r = r
         self.spacing = spacing
-        self.name_cols = name_cols
-        self.name_rows = name_rows
-        # Instantiate empty collection of electrodes:
+        self.name_rows, self.name_cols = names
+        # Instantiate empty collection of electrodes. This dictionary will be
+        # populated in a private method ``_set_egrid``:
         self.electrodes = coll.OrderedDict()
-        self.set_grid()
+        self._set_grid()
 
     def get_params(self):
         """Return a dictionary of class attributes"""
-        return {'cols': self.cols, 'rows': self.rows,
+        return {'shape': self.shape,
                 'x': self.x, 'y': self.y, 'z': self.z,
                 'rot': self.rot, 'r': self.r, 'spacing': self.spacing,
                 'name_cols': self.name_cols, 'name_rows': self.name_rows}
 
-    def get_x_arr(self):
-        # np.arange(self.cols)
-        x_arr = np.arange(self.cols) * self.spacing - \
-            (self.cols / 2 - 0.5) * self.spacing
-        return x_arr
-
-    # thinking about passing in x_arr because it is modified depending on left/right eye.
-    # It seems like bad style to get it from this method, pass it back in from another class,
-    # and then modify it.
-    def set_grid(self):  # , x_arr):
-        n_elecs = self.cols * self.rows
+    def _set_grid(self):
+        """Private method to build the electrode grid"""
+        n_elecs = np.prod(self.shape)
+        rows, cols = self.shape
 
         # Create electrode names, using either A-Z or 1-n:
         if self.name_cols == '1' and self.name_rows == 'A':
             # Column names should be numbers, row names should be letters:
-            names = [chr(i) + str(j) for i in range(65, 65 + self.rows + 1)
-                     for j in range(1, self.cols + 1)]
-        else:  # TODO jon
+            names = [chr(i) + str(j) for i in range(65, 65 + rows + 1)
+                     for j in range(1, cols + 1)]
+        else:
             if type(self.name_rows) is str:
-                rws = [chr(i) for i in range(65, 65 + self.rows + 1)]
+                rws = [chr(i) for i in range(65, 65 + rows + 1)]
             elif type(self.name_rows) is int:
-                rws = [str(i) for i in range(1, self.cols + 1)]
+                rws = [str(i) for i in range(1, cols + 1)]
             else:
                 raise ValueError("'name_rows' must be a string or integer")
 
             if type(self.name_cols) is str:
-                clms = [chr(i) for i in range(65, 65 + self.rows + 1)]
+                clms = [chr(i) for i in range(65, 65 + rows + 1)]
             elif type(self.name_cols) is int:
-                clms = [str(i) for i in range(1, self.cols + 1)]
+                clms = [str(i) for i in range(1, cols + 1)]
             else:
                 raise ValueError("'name_cols' must be a string or integer")
 
-            names = [rws[i] + clms[j] for i in range(length(rws))
-                     for i in range(length(clms))]
+            names = [rws[i] + clms[j] for i in range(len(rws))
+                     for j in range(len(clms))]
 
         # array containing electrode radii (uniform)
-        r_arr = np.full(shape=self.n_elecs, fill_value=self.r)
+        r_arr = np.full(shape=n_elecs, fill_value=self.r)
 
-        if isinstance(z, (list, np.ndarray)):
-            z_arr = np.asarray(z).flatten()
+        if isinstance(self.z, (list, np.ndarray)):
+            z_arr = np.asarray(self.z).flatten()
             if z_arr.size != len(r_arr):
                 e_s = "If `h` is a list, it must have %d entries." % n_elecs
                 raise ValueError(e_s)
-            else:
-                # All electrodes have the same height
-                z_arr = np.ones_like(r_arr) * self.z
+        else:
+            # All electrodes have the same height
+            z_arr = np.ones_like(r_arr) * self.z
 
-        x_arr = np.arange(self.cols) * self.spacing - \
-            (self.cols / 2 - 0.5) * self.spacing
+        # If spacing is None, choose 2x radius:
+        if self.spacing is None:
+            self.spacing = 2.0 * self.r
+        x_arr = (np.arange(cols) * self.spacing -
+                 (cols / 2 - 0.5) * self.spacing)
 
-        y_arr = np.arange(self.rows) * self.spacing - \
-            (self.rows / 2 - 0.5) * self.spacing
+        y_arr = (np.arange(rows) * self.spacing -
+                 (rows / 2 - 0.5) * self.spacing)
 
+        # Make a 2D meshgrid from the x_arr, y_arr vectors:
         x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
+        xy = np.vstack((x_arr.flatten(), y_arr.flatten()))
 
+        # Rotate the grid:
         rotmat = np.array([np.cos(self.rot), -np.sin(self.rot),
                            np.sin(self.rot), np.cos(self.rot)]).reshape((2, 2))
-
-        # Rotate the array
-        xy = np.vstack((x_arr.flatten(), y_arr.flatten()))
         xy = np.matmul(rotmat, xy)
         x_arr = xy[0, :]
         y_arr = xy[1, :]
 
-        # Apply offset
-        x_arr += x
-        y_arr += y
+        # Apply offset to make the grid centered at (self.x, self.y):
+        x_arr += self.x
+        y_arr += self.y
 
-        # maybe parameterize the type of electrode later
+        # TODO parameterize the type of electrode
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
-            self.add_electrode(
-                name, DiskElectrode(self.x, self.y, self.z, self.r))
+            self.add_electrode(name, DiskElectrode(x, y, z, r))
