@@ -298,7 +298,7 @@ class ElectrodeGrid(ElectrodeArray):
         # 500um away from the retinal surface, with names like this:
         # A1 A2 A3 A4
         # B1 B2 B3 B4
-        >>> egrid = ElectrodeGrid((2, 4), naming=('A', '1'))
+        >>> egrid = ElectrodeGrid((2, 4), names=('A', '1'))
         """
         if not isinstance(shape, (tuple, list, np.ndarray)):
             raise TypeError("'shape' must be a tuple/list of (rows, cols)")
