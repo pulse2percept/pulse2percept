@@ -82,7 +82,6 @@ def test_ArgusI(ztype, x, y, r):
     for eye, el in zip(['LE', 'RE'], ['A1', 'D1']):
         before = implants.ArgusI(eye=eye)
         after = implants.ArgusI(eye=eye, rot=np.deg2rad(10))
-        print(eye, el, after[el].x, before[el].x, after[el].y, before[el].y)
         npt.assert_equal(after[el].x > before[el].x, True)
         npt.assert_equal(after[el].y > before[el].y, True)
 
@@ -148,20 +147,21 @@ def test_ArgusII(ztype, x, y, r):
     argus_re = implants.ArgusII(eye='RE', x=xc, y=yc)
     npt.assert_equal(argus_re['A10'].x > argus_re['A1'].x, True)
     npt.assert_almost_equal(argus_re['A10'].y, argus_re['A1'].y)
-    npt.assert_equal(argus_re.tack[0] < argus_re['A1'].x, True)
-    npt.assert_almost_equal(argus_re.tack[1], yc)
 
     # Left-eye implant:
     argus_le = implants.ArgusII(eye='LE', x=xc, y=yc)
     npt.assert_equal(argus_le['A1'].x > argus_le['A10'].x, True)
     npt.assert_almost_equal(argus_le['A10'].y, argus_le['A1'].y)
-    npt.assert_equal(argus_le.tack[0] > argus_le['A10'].x, True)
-    npt.assert_almost_equal(argus_le.tack[1], yc)
 
     # In both left and right eyes, rotation with positive angle should be
     # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
-    for eye, el in zip(['LE', 'RE'], ['F1', 'F10']):
+    for eye, el in zip(['LE', 'RE'], ['F2', 'F10']):
+        # By default, electrode 'F1' in a left eye has the same coordinates as
+        # 'F10' in a right eye (because the columns are reversed). Thus both
+        # cases are testing an electrode with x>0, y>0:
         before = implants.ArgusII(eye=eye)
-        after = implants.ArgusII(eye=eye, rot=np.deg2rad(10))
+        after = implants.ArgusII(eye=eye, rot=np.deg2rad(20))
+        print(after[el].x, before[el].x)
+        print(after[el].y, before[el].y)
         npt.assert_equal(after[el].x < before[el].x, True)
         npt.assert_equal(after[el].y > before[el].y, True)

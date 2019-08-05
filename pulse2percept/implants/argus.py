@@ -1,5 +1,7 @@
 import numpy as np
-from .base import DiskElectrode, ElectrodeArray, ProsthesisSystem
+import collections as coll
+from .base import (DiskElectrode, ElectrodeArray, ElectrodeGrid,
+                   ProsthesisSystem)
 
 
 class ArgusI(ProsthesisSystem):
@@ -200,66 +202,38 @@ class ArgusII(ProsthesisSystem):
         >>> my_electrode = argus['E7']
 
         """
-        # Electrodes are 200um in diameter
-        r_arr = np.ones(60) * 100.0
+        # Argus II is a 6x10 grid of electrodes with 200um in diamater, spaced
+        # 525um apart, with rows labeled alphabetically and columsn
+        # numerically:
+        shape = (6, 10)
+        r = 100.0
+        spacing = 525.0
+        names = ('A', '1')
+        self.earray = ElectrodeGrid(shape, x=x, y=y, z=z, rot=rot, r=r,
+                                    spacing=spacing, names=names)
 
-        # Set left/right eye
-        self.eye = eye
-
-        # Standard ArgusII names: A1, A2, ..., A10, B1, ..., F10
-        names = [chr(i) + str(j) for i in range(65, 71) for j in range(1,
-                                                                       11)]
-
-        # if self.eye == 'RE':
-        #    names = [chr(i) + str(j) for i in range(65, 71)
-        #             for j in range(1, 11)]
-        # else:
-        #    names = [chr(i) + str(j) for i in range(65, 71)
-        #             for j in range(11, 1, -1)]
-
-        if isinstance(z, (list, np.ndarray)):
-            z_arr = np.asarray(z).flatten()
-            if z_arr.size != len(r_arr):
-                e_s = "If `h` is a list, it must have 60 entries."
-                raise ValueError(e_s)
-        else:
-            # All electrodes have the same height
-            z_arr = np.ones_like(r_arr) * z
-
-        # Equally spaced electrodes: n_rows x n_cols = 60
-        e_spacing = 525  # um
-        n_cols = 10  # number of electrodes horizontally
-        n_rows = 6  # number of electrodes vertically
-        x_arr = np.arange(n_cols) * e_spacing - (n_cols / 2 - 0.5) * e_spacing
-        if self.eye == 'LE':
-            # Left eye: Need to invert x coordinates and rotation angle
-            x_arr = x_arr[::-1]
-
-        y_arr = np.arange(n_rows) * e_spacing - (n_rows / 2 - 0.5) * e_spacing
-        x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
-
-        # Rotation matrix
-        rotmat = np.array([np.cos(rot), -np.sin(rot),
-                           np.sin(rot), np.cos(rot)]).reshape((2, 2))
-
-        # Set the x, y location of the tack
-        if self.eye == 'RE':
-            self.tack = np.matmul(rotmat, [-(n_cols / 2 + 0.5) * e_spacing, 0])
-        else:
-            self.tack = np.matmul(rotmat, [(n_cols / 2 + 0.5) * e_spacing, 0])
-        self.tack = tuple(self.tack + [x, y])
-
-        # Rotate the array
-        xy = np.vstack((x_arr.flatten(), y_arr.flatten()))
-        xy = np.matmul(rotmat, xy)
-        x_arr = xy[0, :]
-        y_arr = xy[1, :]
-
-        # Apply offset
-        x_arr += x
-        y_arr += y
-
-        self.earray = ElectrodeArray([])
-        for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
-            self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
+        # Set stimulus if available:
         self.stim = stim
+
+        # Set left/right eye:
+        if not isinstance(eye, str):
+            raise TypeError("'eye' must be a string, either 'LE' or 'RE'.")
+        if eye != 'LE' and eye != 'RE':
+            raise ValueError("'eye' must be either 'LE' or 'RE'.")
+        self.eye = eye
+        # Unfortunately, in the left eye the labeling of columns is reversed...
+        if eye == 'LE':
+            # FIXME: Would be better to have more flexibility in the naming
+            # convention. This is a quick-and-dirty fix:
+            names = list(self.earray.keys())
+            objects = list(self.earray.values())
+            names = np.array(names).reshape(self.earray.shape)
+            # Reverse column names:
+            for row in range(self.earray.shape[0]):
+                names[row] = names[row][::-1]
+            # Build a new ordered dict:
+            electrodes = coll.OrderedDict([])
+            for name, obj in zip(names.ravel(), objects):
+                electrodes.update({name: obj})
+            # Assign the new ordered dict to earray:
+            self.earray.electrodes = electrodes
