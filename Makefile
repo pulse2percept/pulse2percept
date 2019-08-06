@@ -1,10 +1,10 @@
 # simple makefile to simplify repetitive build env management tasks under posix
 
-PYTHON ?= python
+PIP ?= pip3
 PYTEST ?= pytest
 FLAKE ?= flake8
 
-all: inplace install
+all: install
 
 clean:
 	$(PYTHON) setup.py clean
@@ -13,16 +13,16 @@ clean:
 distclean: clean
 	rm -rf dist
 
-inplace:
-	$(PYTHON) setup.py build_ext -i
-
 install:
-	$(PYTHON) setup.py install
+	$(PIP) install -e .
+
+uninstall:
+	$(PIP) uninstall pulse2percept -y
 
 doc: install
 	$(MAKE) -C doc html
 
-tests: inplace install
+tests: install
 	$(PYTEST) --showlocals -v pulse2percept --durations=20
 
 flake:
@@ -32,9 +32,10 @@ help:
 	@ echo 
 	@ echo "pulse2percept Makefile options:"
 	@ echo 
-	@ echo "make               Compiles pulse2percept"
-	@ echo "make tests         Compiles pulse2percept and runs the test suite"
-	@ echo "make doc           Compiles pulse2percept and generates the documentation"
+	@ echo "make               Installs pulse2percept"
+	@ echo "make uninstall     Uninstalls pulse2percept"       
+	@ echo "make tests         Installs pulse2percept and runs the test suite"
+	@ echo "make doc           Installs pulse2percept and generates the documentation"
 	@ echo "make clean         Cleans out all build files"
 	@ echo "make distclean     Cleans out all build and dist files"
 	@ echo "make help          Brings up this message"
