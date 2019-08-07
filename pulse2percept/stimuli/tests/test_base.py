@@ -10,31 +10,35 @@ def test_Stimulus():
     # One electrode:
     stim = Stimulus(3)
     npt.assert_equal(stim.shape, (1, 1))
-    npt.assert_equal(stim.electrode, [0])
+    npt.assert_equal(stim.electrodes, [0])
     npt.assert_equal(stim.time, None)
     # One electrode with a name:
-    stim = Stimulus(3, electrode='AA001')
+    stim = Stimulus(3, electrodes='AA001')
     npt.assert_equal(stim.shape, (1, 1))
-    npt.assert_equal(stim.electrode, ['AA001'])
+    npt.assert_equal(stim.electrodes, ['AA001'])
     npt.assert_equal(stim.time, None)
     # Ten electrodes, one will be trimmed:
     stim = Stimulus(np.arange(10))
     npt.assert_equal(stim.shape, (9, 1))
-    npt.assert_equal(stim.electrode, np.arange(1, 10))
+    npt.assert_equal(stim.electrodes, np.arange(1, 10))
     npt.assert_equal(stim.time, None)
     # Electrodes + specific time, time will be trimmed:
     stim = Stimulus(np.ones((4, 3)), time=[-3, -2, -1])
     npt.assert_equal(stim.shape, (4, 2))
     npt.assert_equal(stim.time, [-3, -1])
+    # Electrodes + specific time, but don't trim:
+    stim = Stimulus(np.ones((4, 3)), time=[-3, -2, -1], sparsify=False)
+    npt.assert_equal(stim.shape, (4, 3))
+    npt.assert_equal(stim.time, [-3, -2, -1])
     # Specific names:
     stim = Stimulus({'A1': 3, 'C5': 8})
     npt.assert_equal(stim.shape, (2, 1))
-    npt.assert_equal(np.sort(stim.electrode), np.sort(['A1', 'C5']))
+    npt.assert_equal(np.sort(stim.electrodes), np.sort(['A1', 'C5']))
     npt.assert_equal(stim.time, None)
     # Specific names, renamed:
-    stim = Stimulus({'A1': 3, 'C5': 8}, electrode=['B7', 'B8'])
+    stim = Stimulus({'A1': 3, 'C5': 8}, electrodes=['B7', 'B8'])
     npt.assert_equal(stim.shape, (2, 1))
-    npt.assert_equal(np.sort(stim.electrode), np.sort(['B7', 'B8']))
+    npt.assert_equal(np.sort(stim.electrodes), np.sort(['B7', 'B8']))
     npt.assert_equal(stim.time, None)
     # Electrodes x time, time will be trimmed:
     stim = Stimulus(np.ones((6, 100)))
@@ -46,10 +50,24 @@ def test_Stimulus():
     # Multiple specific electrodes in time:
     stim = Stimulus({'C3': PulseTrain(0.01 / 1000, dur=0.004),
                      'F4': PulseTrain(0.01 / 1000, delay=0.0001, dur=0.004)})
+    # Stimulus from a Stimulus (might happen in ProsthesisSystem):
+    stim = Stimulus(Stimulus(4), electrodes='B3')
+    npt.assert_equal(stim.shape, (1, 1))
+    npt.assert_equal(stim.electrodes, ['B3'])
+    npt.assert_equal(stim.time, None)
     # Saves metadata:
     metadata = {'a': 0, 'b': 1}
     stim = Stimulus(3, metadata=metadata)
     npt.assert_equal(stim.metadata, metadata)
+
+    # Zero activation:
+    source = np.zeros((2, 4))
+    stim = Stimulus(source, sparsify=True)
+    npt.assert_equal(stim.shape, (0, 2))
+    npt.assert_equal(stim.time, [0, source.shape[1] - 1])
+    stim = Stimulus(source, sparsify=False)
+    npt.assert_equal(stim.shape, source.shape)
+    npt.assert_equal(stim.time, np.arange(source.shape[1]))
 
     # Not allowed:
     with pytest.raises(ValueError):
@@ -67,7 +85,7 @@ def test_Stimulus():
         stim = Stimulus("invalid")
     with pytest.raises(ValueError):
         # Wrong number of electrodes:
-        stim = Stimulus([3, 4], electrode='A1')
+        stim = Stimulus([3, 4], electrodes='A1')
     with pytest.raises(ValueError):
         # Wrong number of time points:
         stim = Stimulus(np.ones((3, 5)), time=[0, 1, 2])

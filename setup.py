@@ -22,7 +22,6 @@ NUMPY_MIN_VERSION = '1.9.0'
 SCIPY_MIN_VERSION = '1.0'
 CYTHON_MIN_VERSION = '0.28'
 JOBLIB_MIN_VERSION = '0.11'
-XARRAY_MIN_VERSION = '0.12'
 
 DISTNAME = 'pulse2percept'
 DESCRIPTION = 'A Python-based simulation framework for bionic vision'
@@ -158,25 +157,6 @@ def get_cython_status():
     return cython_status
 
 
-def get_xarray_status():
-    """
-    Returns a dictionary containing a boolean specifying whether xarray is
-    up-to-date, along with the version string (empty string if not installed).
-    """
-    status = {}
-    try:
-        import xarray as xr
-        version = xr.__version__
-        status['up_to_date'] = parse_version(
-            version) >= parse_version(XARRAY_MIN_VERSION)
-        status['version'] = version
-    except ImportError:
-        traceback.print_exc()
-        status['up_to_date'] = False
-        status['version'] = ""
-    return status
-
-
 def setup_package():
     metadata = dict(name=DISTNAME,
                     maintainer=MAINTAINER,
@@ -213,8 +193,7 @@ def setup_package():
                     install_requires=[
                         'numpy>={}'.format(NUMPY_MIN_VERSION),
                         'scipy>={}'.format(SCIPY_MIN_VERSION),
-                        'joblib>={}'.format(JOBLIB_MIN_VERSION),
-                        'xarray>={}'.format(XARRAY_MIN_VERSION)
+                        'joblib>={}'.format(JOBLIB_MIN_VERSION)
                     ],
                     **extra_setuptools_args)
 
@@ -277,20 +256,6 @@ def setup_package():
                 raise ImportError("C-Extensions for Python (Cython) is not "
                                   "installed.\n{}{}"
                                   .format(cython_req_str, instructions))
-
-        xr_status = get_xarray_status()
-        xr_req_str = "pulse2percept requires Xarray >= {}.\n".format(
-            XARRAY_MIN_VERSION
-        )
-        if cython_status['up_to_date'] is False:
-            if cython_status['version']:
-                raise ImportError("Your installation of Xarray {} is "
-                                  "out-of-date.\n{}{}"
-                                  .format(xr_status['version'], xr_req_str,
-                                          instructions))
-            else:
-                raise ImportError("Xarray not installed.\n{}{}".format(
-                    xarray_req_str, instructions))
 
         metadata['configuration'] = configuration
 

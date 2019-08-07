@@ -105,7 +105,7 @@ def test_BaseModel__is_built():
 
 
 def test_BaseModel_predict_percept():
-    img_stim = np.zeros((6, 10))
+    img_stim = np.zeros(60)
     model = ValidBaseModel(engine='serial', xystep=5, xrange=(-30, 30),
                            yrange=(-20, 20))
     # Model must be built first:
@@ -127,7 +127,7 @@ def test_BaseModel_predict_percept():
 
     # `predict` only accepts NumPy arrays
     for XX in [42, [3.3, 1.1], {'img': [[2]]}]:
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(ValueError):
             implants.ArgusII(stim=XX)
 
     # `img_stim` must have right size:
@@ -138,6 +138,6 @@ def test_BaseModel_predict_percept():
     # Single-pixel percept:
     model = ValidBaseModel(engine='serial', xrange=(0.45, 0.45), yrange=(0, 0))
     model.build()
-    percept = model.predict_percept(implants.ArgusII(stim=np.zeros((6, 10))))
+    percept = model.predict_percept(implants.ArgusII(stim=np.zeros(60)))
     npt.assert_equal(percept.shape, (1, 1))
     npt.assert_almost_equal(percept, 0)

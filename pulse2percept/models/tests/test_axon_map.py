@@ -26,7 +26,7 @@ def test_AxonMapModel():
         npt.assert_equal(getattr(model, key), value)
 
     # Zeros in, zeros out:
-    implant = implants.ArgusII(stim=np.zeros((6, 10)))
+    implant = implants.ArgusII(stim=np.zeros(60))
     npt.assert_almost_equal(model.predict_percept(implant), 0)
     implant.stim = np.zeros(60)
     npt.assert_almost_equal(model.predict_percept(implant), 0)
@@ -150,8 +150,8 @@ def test_AxonMapModel_predict_percept():
     model = models.AxonMapModel(xystep=1, axlambda=100, thresh_percept=0)
     model.build()
     # Single-electrode stim:
-    img_stim = np.zeros((6, 10))
-    img_stim[4, 7] = 1
+    img_stim = np.zeros(60)
+    img_stim[47] = 1
     percept = model.predict_percept(implants.ArgusII(stim=img_stim))
     # Single bright pixel, rest of arc is less bright:
     npt.assert_equal(np.sum(percept > 0.9), 1)
@@ -171,7 +171,7 @@ def test_AxonMapModel_predict_percept():
     model = models.AxonMapModel(engine='serial', xystep=1, rho=100,
                                 axlambda=40)
     model.build()
-    percept = model.predict_percept(implants.ArgusII(stim=np.ones((6, 10))))
+    percept = model.predict_percept(implants.ArgusII(stim=np.ones(60)))
     # Most spots are pretty bright, but there are 2 dimmer ones (due to their
     # location on the retina):
     npt.assert_equal(np.sum(percept > 0.5), 58)
