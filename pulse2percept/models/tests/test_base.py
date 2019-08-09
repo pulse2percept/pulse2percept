@@ -125,11 +125,6 @@ def test_BaseModel_predict_percept():
     # None in, None out:
     npt.assert_equal(model.predict_percept(implants.ArgusII(stim=None)), None)
 
-    # `predict` only accepts NumPy arrays
-    for XX in [42, [3.3, 1.1], {'img': [[2]]}]:
-        with pytest.raises(ValueError):
-            implants.ArgusII(stim=XX)
-
     # `img_stim` must have right size:
     for shape in [(2, 60), (59,), (2, 3, 4)]:
         with pytest.raises(ValueError):

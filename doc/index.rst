@@ -5,11 +5,15 @@ Welcome to pulse2percept, a Python-based simulation framework for bionic vision.
 
 For more information, see https://github.com/uwescience/pulse2percept.
 
+Documentation
+-------------
+
 .. toctree::
+   :caption: Getting Started
    :maxdepth: 2
 
    installation
-   getting_started
+   first_steps
    background
    auto_examples/index
 
@@ -21,9 +25,6 @@ For more information, see https://github.com/uwescience/pulse2percept.
    users/index
    developers/index
    reference/index
-
-
-
 
 .. figure:: _static/eScience_Logo_HR.png
    :align: center

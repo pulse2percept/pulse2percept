@@ -1,6 +1,7 @@
 # simple makefile to simplify repetitive build env management tasks under posix
 
 PIP ?= pip3
+PYTHON ?= python3
 PYTEST ?= pytest
 FLAKE ?= flake8
 
@@ -23,7 +24,7 @@ doc: install
 	$(MAKE) -C doc html
 
 tests: install
-	$(PYTEST) --showlocals -v pulse2percept --durations=20
+	$(PYTEST) --doctest-modules --showlocals -v pulse2percept --durations=20
 
 flake:
 	$(FLAKE) --ignore N802,N806,W504 --select W503 `find . -name \*.py | grep -v setup.py | grep -v __init__.py | grep -v /doc/`

@@ -10,5 +10,6 @@ Have a look at the following topics:
 .. toctree::
    :numbered:
 
-   models
+   stimuli
    implants
+   models

@@ -59,7 +59,16 @@ def test_Stimulus():
     metadata = {'a': 0, 'b': 1}
     stim = Stimulus(3, metadata=metadata)
     npt.assert_equal(stim.metadata, metadata)
-
+    # List of lists instead of 2D NumPy array:
+    stim = Stimulus([[1, 1, 1, 1, 1], [1, 1, 1, 1, 1]])
+    npt.assert_equal(stim.shape, (2, 2))
+    npt.assert_equal(stim.electrodes, [0, 1])
+    npt.assert_equal(stim.time, [0, 4])
+    # Tuple of tuples instead of 2D NumPy array:
+    stim = Stimulus(((1, 1, 1, 1, 1), (1, 1, 1, 1, 1)))
+    npt.assert_equal(stim.shape, (2, 2))
+    npt.assert_equal(stim.electrodes, [0, 1])
+    npt.assert_equal(stim.time, [0, 4])
     # Zero activation:
     source = np.zeros((2, 4))
     stim = Stimulus(source, sparsify=True)
@@ -68,6 +77,20 @@ def test_Stimulus():
     stim = Stimulus(source, sparsify=False)
     npt.assert_equal(stim.shape, source.shape)
     npt.assert_equal(stim.time, np.arange(source.shape[1]))
+
+    # Rename electrodes:
+    stim = Stimulus(np.ones((2, 5)))
+    npt.assert_equal(stim.electrodes, [0, 1])
+    stim = Stimulus(stim, electrodes=['A3', 'B8'])
+    npt.assert_equal(stim.electrodes, ['A3', 'B8'])
+    npt.assert_equal(stim.time, [0, 4])
+
+    # Specify new time points:
+    stim = Stimulus(np.ones((2, 5)))
+    npt.assert_equal(stim.time, [0, 4])
+    stim = Stimulus(stim, time=np.array(stim.time) / 10.0)
+    npt.assert_equal(stim.electrodes, [0, 1])
+    npt.assert_equal(stim.time, [0, 0.4])
 
     # Not allowed:
     with pytest.raises(ValueError):
@@ -152,26 +175,3 @@ def test_Stimulus_sparsify(tsample):
     npt.assert_equal(idata, odata)
     npt.assert_equal(ielec, oelec)
     npt.assert_equal(itime, otime)
-
-
-# def test_Stimulus__from_ndarray():
-#     # From NumPy array:
-#     shape = (2, 4)
-#     stim = Stimulus(np.ones(shape))
-#     npt.assert_equal(stim.ndim, len(shape))
-#     npt.assert_equal(stim.size, np.prod(shape))
-#     # Zeros will be trimmed:
-#     stim = Stimulus(np.arange(4) - 2)
-#     npt.assert_equal(np.allclose(stim.coords['electrode'], [0, 1, 3]), True)
-#     npt.assert_equal(np.allclose(stim.data, [-2, -1, 1]), True)
-#     npt.assert_equal(len(stim), size - 1)
-
-#     # From list:
-#     stim = Stimulus([0, 0, 2] * size)
-#     npt.assert_equal(len(stim), size)
-
-#     # From tuple:
-#     stim = Stimulus((0, 2, 5, 2))
-#     npt.assert_equal(len(stim), 3)
-
-#     # With coordinates:

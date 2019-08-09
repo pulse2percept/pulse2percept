@@ -284,7 +284,7 @@ class ProsthesisSystem(PrettyPrint):
         --------
         Send a biphasic pulse to an implant made from a single `DiskElectrode`:
 
-        >>> form pulse2percept.implants import DiskElectrode, ProsthesisSystem
+        >>> from pulse2percept.implants import DiskElectrode, ProsthesisSystem
         >>> from pulse2percept.stimuli import BiphasicPulse
         >>> implant = ProsthesisSystem(DiskElectrode(0, 0, 0, 100))
         >>> implant.stim = BiphasicPulse('cathodicfirst', 1e-4, 1e-6)
@@ -303,8 +303,12 @@ class ProsthesisSystem(PrettyPrint):
         if data is None:
             self._stim = None
         else:
-            # Use electrode names as stimulus coordinates:
-            stim = Stimulus(data, electrodes=list(self.earray.keys()))
+            if isinstance(data, dict):
+                # Electrode names already provided by keys:
+                stim = Stimulus(data)
+            else:
+                # Use electrode names as stimulus coordinates:
+                stim = Stimulus(data, electrodes=list(self.earray.keys()))
             # Perform safety checks, etc.:
             self.check_stim(stim)
             # Store safe stimulus:
@@ -371,7 +375,7 @@ class ProsthesisSystem(PrettyPrint):
 
         >>> from pulse2percept.implants import ArgusI
         >>> xcoords = {}
-        >>> for name, electrode in ArgusI():
+        >>> for name, electrode in ArgusI().items():
         ...     xcoords[name] = electrode.x
 
         """

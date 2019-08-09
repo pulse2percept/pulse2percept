@@ -11,6 +11,8 @@ from ..utils import PrettyPrint
 class Stimulus(PrettyPrint):
     """Stimulus
 
+    .. versionadded:: 0.6
+
     A stimulus is comprised of a labeled 2-D NumPy array that contains the
     data, where the rows denoted electrodes and the columns denote points in
     time.
@@ -142,24 +144,15 @@ class Stimulus(PrettyPrint):
         Some stimuli don't have a time component (such as a stimulus created
         from a scalar or 1D NumPy array. In this case, times=None.
         """
-        if isinstance(source, self.__class__):
-            # Stimulus: We're done. This might happen in ProsthesisSystem if
-            # the user builds the stimulus themselves. It can also be used to
-            # overwrite the time axis or provide new electrode names.
-            time = source.time
-            data = source.data
-        elif np.isscalar(source) and not isinstance(source, str):
-            print('scalar')
+        if np.isscalar(source) and not isinstance(source, str):
             # Scalar: 1 electrode, no time component
             time = None
             data = np.array([source]).reshape((1, -1))
         elif isinstance(source, (list, tuple)):
-            print("list/tuple")
             # List or touple with N elements: 1 electrode, N time points
             time = np.arange(len(source))
             data = np.array(source).reshape((1, -1))
         elif isinstance(source, np.ndarray):
-            print("ndarray", source, source.ndim)
             if source.ndim > 1:
                 raise ValueError("Cannot create Stimulus object from a %d-D "
                                  "NumPy array. Must be 1-D." % source.ndim)
@@ -167,7 +160,6 @@ class Stimulus(PrettyPrint):
             time = np.arange(len(source))
             data = source.reshape((1, -1))
         elif isinstance(source, TimeSeries):
-            print('timeseries')
             # TimeSeries with NxM time points: N electrodes, M time points
             time = np.arange(source.shape[-1]) * source.tsample
             data = source.data.reshape((-1, len(time)))
@@ -178,27 +170,51 @@ class Stimulus(PrettyPrint):
         return time, data
 
     def _factory(self, source, electrodes, time):
-        # Input is either be a valid source type (see ``self._from_source``) or
-        # a collection thereof. Thus treat everything as a collection, and
-        # iterate:
-        if isinstance(source, dict):
-            iterator = source.items()
-        elif isinstance(source, (list, tuple, np.ndarray)):
-            iterator = enumerate(source)
+        if isinstance(source, self.__class__):
+            # Stimulus: We're done. This might happen in ProsthesisSystem if
+            # the user builds the stimulus themselves. It can also be used to
+            # overwrite the time axis or provide new electrode names.
+            _data = source.data
+            _time = source.time 
+            _electrodes = source.electrodes
         else:
-            iterator = enumerate([source])
-        _time = []
-        _electrodes = []
-        _data = []
-        for e, s in iterator:
-            # Extract times and data from source:
-            t, d = self._from_source(s)
-            _time.append(t)
-            _electrodes.append(e)
-            _data.append(d)
-        # Now make `data` a 2-D NumPy array, with `electrodes` as rows and
-        # `times` as columns (except sometimes `times` is None).
-        _data = np.vstack(_data)
+            # Input is either be a valid source type (see `self._from_source`)
+            # or a collection thereof. Thus treat everything as a collection,
+            # and iterate:
+            if isinstance(source, dict):
+                iterator = source.items()
+            elif isinstance(source, (list, tuple, np.ndarray)):
+                iterator = enumerate(source)
+            else:
+                iterator = enumerate([source])
+            _time = []
+            _electrodes = []
+            _data = []
+            for e, s in iterator:
+                # Extract times and data from source:
+                t, d = self._from_source(s)
+                _time.append(t)
+                _electrodes.append(e)
+                _data.append(d)
+            # All elements of `times` must be the same, but they can either be
+            # None or a NumPy array, so comparing with == will fail. Therefore,
+            # convert all elements to NumPy float arrays, which will convert
+            # None to NaN. Then you can compare two entries with np.allclose,
+            # making sure the `equal_nan` option is set to True so that two NaNs
+            # are considered equal:
+            for e, t in enumerate(_time):
+                if not np.allclose(np.array(t, dtype=float),
+                                   np.array(_time[0], dtype=float),
+                                   equal_nan=True):
+                    raise ValueError("All stimuli must have the same time axis, "
+                                     "but electrode %s has t=%s and electrode %s "
+                                     "has t=%s." % (_electrodes[0], _time[0],
+                                                    _electrodes[e], t))
+                    break
+            _time = _time[0]
+            # Now make `data` a 2-D NumPy array, with `electrodes` as rows and
+            # `times` as columns (except sometimes `times` is None).
+            _data = np.vstack(_data)
         # User can overwrite the names of the electrodes:
         if electrodes is not None:
             electrodes = np.array(electrodes).flatten()
@@ -209,22 +225,7 @@ class Stimulus(PrettyPrint):
             _electrodes = electrodes
         else:
             _electrodes = np.array(_electrodes)
-        # All elements of `times` must be the same, but they can either be None
-        # or a NumPy array, so comparing with == will fail. Therefore, convert
-        # all elements to NumPy float arrays, which will convert None to NaN.
-        # Then you can compare two entries with np.allclose, making sure the
-        # `equal_nan` option is set to True so that two NaNs are considered
-        # equal:
-        for e, t in enumerate(_time):
-            if not np.allclose(np.array(t, dtype=float),
-                               np.array(_time[0], dtype=float),
-                               equal_nan=True):
-                raise ValueError("All stimuli must have the same time axis, "
-                                 "but electrode %s has t=%s and electrode %s "
-                                 "has t=%s." % (_electrodes[0], _time[0],
-                                                _electrodes[e], t))
-                break
-        _time = _time[0]
+            assert len(_electrodes) == _data.shape[0]
         # User can overwrite time:
         if time is not None:
             if _time is None:
