@@ -268,7 +268,7 @@ class ProsthesisSystem(PrettyPrint):
 class ElectrodeGrid(ElectrodeArray):
 
     def __init__(self, shape, x=0, y=0, z=0, rot=0, r=10, spacing=None,
-                 names=('1', 'A')):
+                 names=('A', '1')):
         """Creates a rectangular grid of electrodes
 
         Parameters
@@ -280,7 +280,7 @@ class ElectrodeGrid(ElectrodeArray):
         rot : double
             Rotation of the grid in radians (positive angle: counter-clockwise)
         r : double
-            Electrode radius in microns
+        Electrode radius in microns
         spacing : double
             Electrode-to-electrode spacing in microns. If None, 2x radius is
             chosen.
@@ -300,6 +300,9 @@ class ElectrodeGrid(ElectrodeArray):
         # B1 B2 B3 B4
         >>> egrid = ElectrodeGrid((2, 4), names=('A', '1'))
         """
+        if not isinstance(names, (tuple, list, np.ndarray)):
+            raise TypeError("'names' must be a tuple/list of (rows, cols)")
+
         if not isinstance(shape, (tuple, list, np.ndarray)):
             raise TypeError("'shape' must be a tuple/list of (rows, cols)")
         if len(shape) != 2:
@@ -314,7 +317,9 @@ class ElectrodeGrid(ElectrodeArray):
         self.rot = rot
         self.r = r
         self.spacing = spacing
-        self.name_rows, self.name_cols = names
+        if len(names) == 2:
+            self.name_rows, self.name_cols = names
+        self.names = names
         # Instantiate empty collection of electrodes. This dictionary will be
         # populated in a private method ``_set_egrid``:
         self.electrodes = coll.OrderedDict()
@@ -332,31 +337,49 @@ class ElectrodeGrid(ElectrodeArray):
         n_elecs = np.prod(self.shape)
         rows, cols = self.shape
 
-        # Create electrode names, using either A-Z or 1-n:
-        if self.name_cols == '1' and self.name_rows == 'A':
-            # Column names should be numbers, row names should be letters:
-            names = [chr(i) + str(j) for i in range(65, 65 + rows + 1)
-                     for j in range(1, cols + 1)]
+        # the user did not specify unique naming scheme
+        if len(self.names) == 2:
+            # Create electrode names, using either A-Z or 1-n:
+            if self.name_rows.isalpha() == True:
+                rws = [chr(i) for i in range(
+                    ord(self.name_rows), ord(self.name_rows) + rows + 1)]
+            elif self.name_rows.isdigit() == True:
+                rws = [str(i) for i in range(
+                    int(self.name_rows), rows + int(self.name_rows))]
+            else:
+                raise ValueError("rows must be alphabetic or numeric")
+
+            if self.name_cols.isalpha() == True:
+                clms = [chr(i) for i in range(ord(self.name_cols),
+                                              ord(self.name_cols) + cols)]
+            elif self.name_cols.isdigit() == True:
+                clms = [str(i) for i in range(
+                    int(self.name_cols), cols + int(self.name_cols))]
+            else:
+                raise ValueError("columns must be alphabetic or numeric")
+
+            # facilitating Argus I naming scheme
+            if self.name_cols.isalpha() and not self.name_rows.isalpha():
+                names = [clms[i] + rws[j] for i in range(len(clms))
+                         for j in range(len(rws))]
+            else:
+                names = [rws[i] + clms[j] for i in range(len(rws))
+                         for j in range(len(clms))]
         else:
-            if type(self.name_rows) is str:
-                rws = [chr(i) for i in range(65, 65 + rows + 1)]
-            elif type(self.name_rows) is int:
-                rws = [str(i) for i in range(1, cols + 1)]
-            else:
-                raise ValueError("'name_rows' must be a string or integer")
-
-            if type(self.name_cols) is str:
-                clms = [chr(i) for i in range(65, 65 + rows + 1)]
-            elif type(self.name_cols) is int:
-                clms = [str(i) for i in range(1, cols + 1)]
-            else:
-                raise ValueError("'name_cols' must be a string or integer")
-
-            names = [rws[i] + clms[j] for i in range(len(rws))
-                     for j in range(len(clms))]
+            if len(self.names) != n_elecs:
+                raise ValueError("names must specify a name for each electrode. names size: ",
+                                 len(self.names), "shape size: ", n_elecs)
+            names = self.names
 
         # array containing electrode radii (uniform)
-        r_arr = np.full(shape=n_elecs, fill_value=self.r)
+        # test case
+        if isinstance(self.r, (list, np.ndarray)):
+            if len(self.r) != n_elecs:
+                raise ValueError("each electrode needs a specified radius. names size: ",
+                                 len(self.names), "shape size: ", n_elecs)
+            r_arr = self.r
+        else:
+            r_arr = np.full(shape=n_elecs, fill_value=self.r)
 
         if isinstance(self.z, (list, np.ndarray)):
             z_arr = np.asarray(self.z).flatten()

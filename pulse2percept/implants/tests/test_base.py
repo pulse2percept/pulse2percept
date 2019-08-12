@@ -255,17 +255,30 @@ def test_ElectrodeGrid():
 
     # Test whether egrid.z is set correctly, when z is a constant:
     z = 12
-    # ...
-    # TODO
+    egrid = ElectrodeGrid(shape, z=z)
+    npt.assert_equal(egrid.z, z)
+    for i in egrid.values():
+        npt.assert_equal(i.z, z)
+
     # and when every electrode has a different z:
     z = np.arange(np.prod(shape))
-    # ...
-    # TODO
+    egrid = ElectrodeGrid(shape, z=z)
+    npt.assert_equal(egrid.z, z)
+    x = -1
+    for i in egrid.values():
+        npt.assert_equal(i.z, x + 1)
+        x = i.z
 
     # TODO display a warning when rot > 2pi (meaning it might be in degrees).
     # I think we did this somewhere in the old Argus code
 
     # TODO test rotation, making sure positive angles rotate CCW
+    egrid1 = ElectrodeGrid(shape=(2, 2))
+    egrid2 = ElectrodeGrid(shape=(2, 2), rot=np.deg2rad(10))
+    npt.assert_equal(egrid1["A1"].x < egrid2["A1"].x, True)
+    npt.assert_equal(egrid1["A1"].y > egrid2["A1"].y, True)
+    npt.assert_equal(egrid1["B2"].x > egrid2["B2"].x, True)
+    npt.assert_equal(egrid1["B2"].y < egrid2["B2"].y, True)
 
     # Smallest possible grid:
     egrid = ElectrodeGrid((1, 1))
@@ -283,14 +296,38 @@ def test_ElectrodeGrid():
         egrid = ElectrodeGrid(shape, names=[1])
     with pytest.raises(ValueError):
         egrid = ElectrodeGrid(shape, names=[])
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         egrid = ElectrodeGrid(shape, names={1})
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         egrid = ElectrodeGrid(shape, names={})
 
     # Test all naming conventions:
     egrid = ElectrodeGrid(shape, names=('A', '1'))
+    #print([e for e in egrid.keys()])
     npt.assert_equal([e for e in egrid.keys()],
                      ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
-    # etc. ... for '1A', '11', 'AA'
-    # TODO
+    egrid = ElectrodeGrid(shape, names=('1', 'A'))
+    #print([e for e in egrid.keys()])
+    npt.assert_equal([e for e in egrid.keys()],
+                     ['A1', 'B1', 'C1', 'A2', 'B2', 'C2'])
+    egrid = ElectrodeGrid(shape, names=('1', '1'))
+    #print([e for e in egrid.keys()])
+    npt.assert_equal([e for e in egrid.keys()],
+                     ['11', '12', '13', '21', '22', '23'])
+    egrid = ElectrodeGrid(shape, names=('A', 'A'))
+    #print([e for e in egrid.keys()])
+    npt.assert_equal([e for e in egrid.keys()],
+                     ['AA', 'AB', 'AC', 'BA', 'BB', 'BC'])
+
+    # rows and columns start at values other than A or 1
+    egrid = ElectrodeGrid(shape, names=('B', '1'))
+    npt.assert_equal([e for e in egrid.keys()],
+                     ['B1', 'B2', 'B3', 'C1', 'C2', 'C3'])
+    egrid = ElectrodeGrid(shape, names=('A', '2'))
+    npt.assert_equal([e for e in egrid.keys()],
+                     ['A2', 'A3', 'A4', 'B2', 'B3', 'B4'])
+
+    # test unique names
+    egrid = ElectrodeGrid(shape, names=['53', '18', '00', '81', '11', '12'])
+    npt.assert_equal([e for e in egrid.keys()],
+                     ['53', '18', '00', '81', '11', '12'])
