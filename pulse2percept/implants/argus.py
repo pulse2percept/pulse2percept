@@ -69,7 +69,9 @@ class ArgusI(ProsthesisSystem):
         r_arr = np.concatenate((r_arr, r_arr[::-1], r_arr, r_arr[::-1]),
                                axis=0)
         spacing = 800.0
+        # newer papers
         names = ('1', 'A')
+
         self.earray = ElectrodeGrid(shape, x=x, y=y, z=z, rot=rot, r=r_arr,
                                     spacing=spacing, names=names)
 
@@ -107,23 +109,23 @@ class ArgusI(ProsthesisSystem):
         # # Set left/right eye
         # self.eye = eye
 
-        # # In older papers, Argus I electrodes go by L and M
+        # # # In older papers, Argus I electrodes go by L and M
         # self.old_names = names = ['L6', 'L2', 'M8', 'M4',
         #                           'L5', 'L1', 'M7', 'M3',
         #                           'L8', 'L4', 'M6', 'M2',
         #                           'L7', 'L3', 'M5', 'M1']
-        # # In newer papers, they go by A-D: A1, B1, C1, D1, A1, B2, ..., D4
-        # # Shortcut: Use `chr` to go from int to char
+        # # # In newer papers, they go by A-D: A1, B1, C1, D1, A1, B2, ..., D4
+        # # # Shortcut: Use `chr` to go from int to char
 
         # self.new_names = [chr(i) + str(j) for j in range(1, 5)
         #                   for i in range(65, 69)]
-        # # if self.eye == 'RE':
-        # #    self.new_names = [chr(i) + str(j) for j in range(1, 5)
-        # #                      for i in range(65, 69)]
-        # # else:
-        # #   self.new_names = [chr(i) + str(j) for j in range(1, 5)
-        # #                      for i in range(68, 64, -1)]
-        # # A10, ... A1
+        # if self.eye == 'RE':
+        #    self.new_names = [chr(i) + str(j) for j in range(1, 5)
+        #                      for i in range(65, 69)]
+        # else:
+        #   self.new_names = [chr(i) + str(j) for j in range(1, 5)
+        #                      for i in range(68, 64, -1)]
+        # # # A10, ... A1
 
         # names = self.old_names if use_legacy_names else self.new_names
 
@@ -175,13 +177,13 @@ class ArgusI(ProsthesisSystem):
         #     self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
         # self.stim = stim
 
-    def get_old_name(self, new_name):
+    # def get_old_name(self, new_name):
         """Look up the legacy name of a standard-named Argus I electrode"""
-        return self.old_names[self.new_names.index(new_name)]
+    #    return self.old_names[self.new_names.index(new_name)]
 
-    def get_new_name(self, old_name):
+    # def get_new_name(self, old_name):
         """Look up the standard name of a legacy-named Argus I electrode"""
-        return self.new_names[self.old_names.index(old_name)]
+    #    return self.new_names[self.old_names.index(old_name)]
 
 
 class ArgusII(ProsthesisSystem):

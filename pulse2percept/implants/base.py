@@ -360,8 +360,8 @@ class ElectrodeGrid(ElectrodeArray):
 
             # facilitating Argus I naming scheme
             if self.name_cols.isalpha() and not self.name_rows.isalpha():
-                names = [clms[i] + rws[j] for i in range(len(clms))
-                         for j in range(len(rws))]
+                names = [clms[j] + rws[i] for i in range(len(rws))
+                         for j in range(len(clms))]
             else:
                 names = [rws[i] + clms[j] for i in range(len(rws))
                          for j in range(len(clms))]
