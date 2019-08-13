@@ -1,6 +1,5 @@
 """
 This module implements several equations from [#beyeler-2019]_.
-
 References
 ----------
 .. [#beyeler-2019] M Beyeler, D Nanduri, JD Weiland, A Rokem, GM Boynton, I
@@ -22,18 +21,15 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
 
     def __init__(self, **kwargs):
         """Axon map model
-
         Implements the axon map model described in [#beyeler-2019]_, where
         percepts are elongated along nerve fiber bundle trajectories of the
         retina.
-
         Parameters
         ----------
         axlambda : double
             Exponential decay constant along the axon (microns).
         rho : double
             Exponential decay constant away from the axon (microns).
-
         """
         super(AxonMapModel, self).__init__(**kwargs)
         self.axon_contrib = None
@@ -67,10 +63,8 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
 
     def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
         """Grows a single axon bundle based on the model by Jansonius (2009)
-
         This function generates the trajectory of a single nerve fiber bundle
         based on the mathematical model described in [#beyeler-2019]_.
-
         Parameters
         ----------
         phi0: float
@@ -82,7 +76,6 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         beta_inf: float, optional, default: 0.5
             Scalar value for the inferior retina(see Eq. 6, `\beta_i` in the
             paper.)
-
         Returns
         -------
         ax_pos: Nx2 array
@@ -91,11 +84,9 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
             closest to the optic disc, and aubsequent row indices move the axon
             away from the optic disc. Number of rows is at most `n_rho`, but
             might be smaller if the axon crosses the meridian.
-
         Notes
         -----
         The study did not include axons with phi0 in [-60, 60] deg.
-
         """
         # Check for the location of the optic disc:
         loc_od = (self.loc_od_x, self.loc_od_y)
@@ -242,7 +233,6 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
 
     def calc_bundle_tangent(self, xc, yc):
         """Calculates orientation of fiber bundle tangent at (xc,yc)
-
         Parameters
         ----------
         xc, yc : float
@@ -337,12 +327,11 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
             return 0.0
         # Calculate the brightness at pixel:
         electrodes = implant.stim.electrodes
-        bright = axon_map(implant.stim.data[:, 0],
+        bright = axon_map(implant.stim.interp(time=t).data.ravel(),
                           np.array([implant[e].x for e in electrodes]),
                           np.array([implant[e].y for e in electrodes]),
                           axon,
-                          self.rho,
-                          self.thresh_percept)
+                          self.rho)
         return bright
 
     def predict_percept(self, implant, t=None):

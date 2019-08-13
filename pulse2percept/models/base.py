@@ -1,5 +1,6 @@
 import sys
 import abc
+import numpy as np
 
 from ..implants import ProsthesisSystem
 from ..utils import Frozen, PrettyPrint, GridXY, parfor
@@ -17,65 +18,40 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
     """Base model
 
     The BaseModel class defines which methods and attributes a model must
-    have. You can create your own model by adding a class that derives from
-    BaseModel:
+    have.
 
-    .. code-block:: python
-
-        class MyModel(BaseModel):
-
-    The constructor is the only place where you can add new variables
-    (i.e., class attributes). The signature of your own constructor should
-    look like this:
-
-    .. code-block:: python
-
-        def __init__(self, **kwargs):
-
-    meaning that all arguments are passed as keyword arguments. Also, make
-    sure to call the BaseModel constructor first thing. So a complete
-    example of a constructor could look like this:
-
-    .. code-block:: python
-
-        class MyModel(BaseModel):
-
-            def __init__(self, **kwargs):
-                super(MyModel, self).__init__(self, **kwargs)
-                self.newvar = 0
-
-    This is the only place where you can add new class attributes. Trying
-    to set `self.someothervar` outside the constructor will raise an
-    AttributeError. Of course, you can always set `self.newvar = None` in
-    the constructor to make sure the variable exists, and then assign a new
-    value in other class methods.
+    You can set individual model parameters by passing them as keyword
+    arguments (e.g., ``MyModel(engine='joblib')``). Note that these parameters
+    must be listed in ``get_params``. If no kwargs are passed, all model
+    parameters will be initialized with default values.
 
     .. note::
+        You can add more parameters to your model by subclassing
+        `_get_default_params`.
 
-       Please note: If `self.newvar` already exists in the BaseModel class,
-       the last line of the above code snippet would overwrite it.
-
+    To write your own model, create a class that inherits from `BaseModel`.
     To make the model complete (and compile), you will also need to fill in
     all methods marked with `@abc.abstractmethod` below. These include
-    :py:func:`BasModel.build` and :py:func:`BaseModel.predict_percept`.
-    Have a look at the ScoreboardModel or AxonMapModel classes below to get an idea of how to
-    write a complete model.
+    :py:meth:`BaseModel.build` and :py:meth:`BaseModel.predict_percept`.
 
+    .. note::
+        Have a look at the `ScoreboardModel` or `AxonMapModel` classes
+        to get an idea of how to write a complete model.
+
+    Parameters
+    ----------
+    xrange : (xmin, xmax)
+    yrange : (ymin, ymax)
+    xystep : double
+    grid_type : 'rectangular'
+    thresh_percept : double
+    engine : {'joblib', 'dask', 'serial', 'cython'}
+    scheduler : {'threading', 'multiprocessing'}
+    n_jobs : int
+    verbose : bool
     """
 
     def __init__(self, **kwargs):
-        """Constructor
-
-        Parameters
-        ----------
-        **kwargs: keyword arguments
-            You can set individual model parameters by passing them as keyword
-            arguments (e.g., ``MyModel(engine='joblib')``). Note that these
-            parameters must be listed in ``get_params``. If no kwargs are
-            passed, all model parameters will be initialized with default
-            values. You can add more parameters to your model by subclassing
-            ``_get_default_params``.
-        """
         # First, set all default arguments:
         defaults = self._get_default_params()
         for key, val in defaults.items():
@@ -156,6 +132,8 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         One way to do this is to call the BaseModel's ``build`` method from
         within your own model:
 
+        .. code-block:: python
+
             class MyModel(BaseModel):
 
                 def build(self, **build_params):
@@ -196,7 +174,7 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         """
         raise NotImplementedError
 
-    def predict_percept(self, implant, t=None):
+    def predict_percept(self, implant, t=None, n_frames=None, fps=20):
         """Predict a percept
 
         Parameters
@@ -218,16 +196,89 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         if implant.stim is None:
             # Nothing to see here:
             return None
-        if implant.stim.time is not None:
-            # The stimulus has a time dimension
-            raise NotImplementedError
 
-        # The stimulus does not have a time dimesnion. In this case, we
-        # only need to run the spatial model:
-        return parfor(self._predict_pixel_percept,
-                      enumerate(self.grid),
-                      func_args=[implant],
-                      func_kwargs={'t': t},
-                      engine=self.engine, scheduler=self.scheduler,
-                      n_jobs=self.n_jobs,
-                      out_shape=self.grid.shape)
+        if implant.stim.time is None:
+            # The stimulus does not have a time dimension: In this case, we
+            # only need to run the spatial model:
+            bright = parfor(self._predict_pixel_percept,
+                            enumerate(self.grid),
+                            func_args=[implant],
+                            func_kwargs={'t': None},
+                            engine=self.engine, scheduler=self.scheduler,
+                            n_jobs=self.n_jobs,
+                            out_shape=self.grid.shape)
+            return np.where(bright > self.thresh_percept, bright, 0)
+
+        # Stimulus has time, so we need both spatial + temporal model:
+        if not self.has_time:
+            raise ValueError("Model does not have a temporal part")
+        if t is not None:
+            t_percept = np.asarray(t)
+        else:
+            fps = np.double(fps)
+            if fps <= 0:
+                raise ValueError("fps must be nonnegative, not %f." % fps)
+            if n_frames is None:
+                if implant.stim['t'].max() < 1.0 / fps:
+                    # Simulate until the end of the stimulus:
+                    t_end = implant.stim['t'].max()
+                    n_frames = 2
+                else:
+                    # We need to for the duration of the stimulus, rounding up:
+                    n_frames = max(2, np.ceil(implant.stim['t'].max() * fps))
+                    t_end = n_frames / fps
+            else:
+                n_frames = int(n_frames)
+                if n_frames <= 0:
+                    raise ValueError("n_frames must be nonnegative, not "
+                                     "%d" % n_frames)
+                t_end = n_frames / fps
+            t_percept = np.linspace(0, t_end, num=n_frames)
+        # Simulate:
+        t_sim = 0
+        percept = []
+        cache_stim = None
+        print('dt:', self.dt)
+        print('t_percept:', t_percept)
+        for tp in t_percept:
+            # Step the temporal model from `t` to `t_percept`:
+            print('tp:', tp)
+            while cache_stim is None or t_sim < tp:
+                # Last time step might be smaller, if `t_percept` is not
+                # divisible by `self.dt`:
+                dt_sim = min(self.dt, tp - t_sim)
+                # Calculate current map at time `t_sim`:
+                stim_at_t = implant.stim.interp(t=t_sim,
+                                                kwargs={'fill_value':
+                                                        'extrapolate'})
+                need_cmap = False
+                if cache_stim is None:
+                    need_cmap = True
+                else:
+                    if np.any(stim_at_t != cache_stim):
+                        need_cmap = True
+                if need_cmap:
+                    print('-', t_sim, 'calc cmap')
+                    cmap = parfor(self._predict_pixel_percept,
+                                  enumerate(self.grid),
+                                  func_args=[implant.stim],
+                                  func_kwargs={'t': t_sim},
+                                  engine=self.engine,
+                                  scheduler=self.scheduler,
+                                  n_jobs=self.n_jobs)
+                cache_stim = stim_at_t
+                # Step the temporal model:
+                print('-', t_sim, 'step temp')
+                frame = parfor(self._step_temporal_model,
+                               enumerate(cmap),
+                               func_args=[dt_sim],
+                               engine=self.engine,
+                               scheduler=self.scheduler,
+                               n_jobs=self.n_jobs,
+                               out_shape=self.grid.shape)
+                # Add `frame` to `percept` output:
+                frame = np.where(frame > self.thresh_percept, frame, 0)
+                percept.append(frame)
+                # Increase the time counter:
+                t_sim += dt_sim
+        return percept

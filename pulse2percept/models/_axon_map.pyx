@@ -123,7 +123,7 @@ cpdef finds_closest_axons(double[:, :] bundles, double[:] xret,
 
 
 cpdef axon_map(double[:] stim, double[:] xel, double[:] yel,
-               double[:, ::1] axon, double rho, double th):
+               double[:, ::1] axon, double rho):
     cdef np.intp_t idx, n_stim, n_ax
     cdef double bright, gauss
     n_stim = len(stim)
@@ -137,6 +137,4 @@ cpdef axon_map(double[:] stim, double[:] xel, double[:] yel,
                 gauss = c_exp(-r2 / (2.0 * c_pow(rho, 2)))
                 act[i_ax] += stim[i_stim] * axon[i_ax, 2] * gauss
     bright = c_max(act)
-    if bright < th:
-        bright = 0
     return bright

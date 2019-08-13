@@ -76,6 +76,7 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
                 sparam = key + '=' + strobj + ', '
             # If adding `sparam` puts line over `lwidth`, start a new line:
             if lc + len(sparam) > lwidth:
+                # FIXME don't need \n for first line
                 str_params += '\n' + ' ' * lindent
                 lc = lindent
             str_params += sparam
@@ -111,8 +112,8 @@ def freeze_class(set):
             if isinstance(sys._getframe(1).f_locals['self'], self.__class__):
                 set(self, name, value)
                 return
-        raise FreezeError("You cannot add attributes to "
-                          "%s" % self.__class__.__name__)
+        raise FreezeError("You cannot add attributes to %s outside the "
+                          "constructor." % self.__class__.__name__)
     return set_attr
 
 

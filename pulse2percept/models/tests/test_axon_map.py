@@ -2,9 +2,9 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 
-from pulse2percept import models
+from pulse2percept.models import AxonMapModel
 from pulse2percept import stimuli
-from pulse2percept import implants
+from pulse2percept.implants import ArgusI, ArgusII
 
 
 def test_AxonMapModel():
@@ -12,7 +12,7 @@ def test_AxonMapModel():
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
                   'loc_od_x': 5, 'loc_od_y': 6}
-    model = models.AxonMapModel()
+    model = AxonMapModel()
     for param in set_params:
         npt.assert_equal(hasattr(model, param), True)
 
@@ -20,20 +20,20 @@ def test_AxonMapModel():
     for key, value in set_params.items():
         setattr(model, key, value)
         npt.assert_equal(getattr(model, key), value)
-    model = models.AxonMapModel(**set_params)
+    model = AxonMapModel(**set_params)
     model.build(**set_params)
     for key, value in set_params.items():
         npt.assert_equal(getattr(model, key), value)
 
     # Zeros in, zeros out:
-    implant = implants.ArgusII(stim=np.zeros(60))
+    implant = ArgusI(stim=np.zeros(16))
     npt.assert_almost_equal(model.predict_percept(implant), 0)
-    implant.stim = np.zeros(60)
+    implant.stim = np.zeros(16)
     npt.assert_almost_equal(model.predict_percept(implant), 0)
 
     # Implant and model must be built for same eye:
     with pytest.raises(ValueError):
-        implant = implants.ArgusII(eye='LE', stim=np.zeros(60))
+        implant = ArgusII(eye='LE', stim=np.zeros(60))
         model.predict_percept(implant)
 
 
@@ -43,10 +43,10 @@ def test_AxonMapModel():
 def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
     # With `rho` starting at 0, all axons should originate in the optic disc
     # center
-    model = models.AxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
-                                xystep=2, engine='serial',
-                                ax_segments_range=(0, 45),
-                                n_ax_segments=100)
+    model = AxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
+                         xystep=2, engine='serial',
+                         ax_segments_range=(0, 45),
+                         n_ax_segments=100)
     for phi0 in [-135.0, 66.0, 128.0]:
         ax_pos = model._jansonius2009(phi0)
         npt.assert_almost_equal(ax_pos[0, 0], loc_od[0])
@@ -54,10 +54,10 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
 
     # These axons should all end at the meridian
     for phi0 in [110.0, 135.0, 160.0]:
-        model = models.AxonMapModel(loc_od_x=15, loc_od_y=2,
-                                    xystep=2, engine='serial',
-                                    n_ax_segments=801,
-                                    ax_segments_range=(0, 45))
+        model = AxonMapModel(loc_od_x=15, loc_od_y=2,
+                             xystep=2, engine='serial',
+                             n_ax_segments=801,
+                             ax_segments_range=(0, 45))
         ax_pos = model._jansonius2009(sign * phi0)
         print(ax_pos[-1, :])
         npt.assert_almost_equal(ax_pos[-1, 1], 0.0, decimal=1)
@@ -65,33 +65,33 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
     # `phi0` must be within [-180, 180]
     for phi0 in [-200.0, 181.0]:
         with pytest.raises(ValueError):
-            models.AxonMapModel(xystep=2, engine='serial')._jansonius2009(phi0)
+            AxonMapModel(xystep=2, engine='serial')._jansonius2009(phi0)
 
     # `n_rho` must be >= 1
     for n_rho in [-1, 0]:
         with pytest.raises(ValueError):
-            model = models.AxonMapModel(n_ax_segments=n_rho, xystep=2,
-                                        engine='serial')
+            model = AxonMapModel(n_ax_segments=n_rho, xystep=2,
+                                 engine='serial')
             model._jansonius2009(0.0)
 
     # `ax_segments_range` must have min <= max
     for lorho in [-200.0, 90.0]:
         with pytest.raises(ValueError):
-            model = models.AxonMapModel(ax_segments_range=(lorho, 45), xystep=2,
-                                        engine='serial')
+            model = AxonMapModel(ax_segments_range=(lorho, 45), xystep=2,
+                                 engine='serial')
             model._jansonius2009(0)
     for hirho in [-200.0, 40.0]:
         with pytest.raises(ValueError):
-            model = models.AxonMapModel(ax_segments_range=(45, hirho), xystep=2,
-                                        engine='serial')
+            model = AxonMapModel(ax_segments_range=(45, hirho), xystep=2,
+                                 engine='serial')
             model._jansonius2009(0)
 
     # A single axon fiber with `phi0`=0 should return a single pixel location
     # that corresponds to the optic disc
-        model = models.AxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
-                                    xystep=2, engine='serial', eye=eye,
-                                    ax_segments_range=(0, 0),
-                                    n_ax_segments=1)
+        model = AxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
+                             xystep=2, engine='serial', eye=eye,
+                             ax_segments_range=(0, 0),
+                             n_ax_segments=1)
         single_fiber = model._jansonius2009(0)
         npt.assert_equal(len(single_fiber), 1)
         npt.assert_almost_equal(single_fiber[0], loc_od)
@@ -99,16 +99,16 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
 
 def test_AxonMapModel_grow_axon_bundles():
     for n_axons in [1, 2, 3, 5, 10]:
-        model = models.AxonMapModel(xystep=2, engine='serial', n_axons=n_axons,
-                                    axons_range=(-20, 20))
+        model = AxonMapModel(xystep=2, engine='serial', n_axons=n_axons,
+                             axons_range=(-20, 20))
         model.build()
         bundles = model.grow_axon_bundles()
         npt.assert_equal(len(bundles), n_axons)
 
 
 def test_AxonMapModel_find_closest_axon():
-    model = models.AxonMapModel(xystep=1, engine='serial', n_axons=5,
-                                axons_range=(-45, 45))
+    model = AxonMapModel(xystep=1, engine='serial', n_axons=5,
+                         axons_range=(-45, 45))
     model.build()
     # Pretend there is an axon close to each point on the grid:
     bundles = [np.array([x + 0.001, y - 0.001]).reshape((1, 2))
@@ -120,8 +120,8 @@ def test_AxonMapModel_find_closest_axon():
 
 
 def test_AxonMapModel_calc_axon_contribution():
-    model = models.AxonMapModel(xystep=2, engine='serial', n_axons=10,
-                                axons_range=(-30, 30))
+    model = AxonMapModel(xystep=2, engine='serial', n_axons=10,
+                         axons_range=(-30, 30))
     model.build()
     xyret = np.column_stack((model.xret.ravel(), model.yret.ravel()))
     bundles = model.grow_axon_bundles()
@@ -138,21 +138,21 @@ def test_AxonMapModel_calc_axon_contribution():
 
 
 def test_AxonMapModel__calc_bundle_tangent():
-    model = models.AxonMapModel(xystep=5, engine='serial', n_axons=500,
-                                n_ax_segments=500, axons_range=(-180, 180),
-                                ax_segments_range=(3, 50))
+    model = AxonMapModel(xystep=5, engine='serial', n_axons=500,
+                         n_ax_segments=500, axons_range=(-180, 180),
+                         ax_segments_range=(3, 50))
     npt.assert_almost_equal(model.calc_bundle_tangent(0, 0), 0.4819, decimal=3)
     npt.assert_almost_equal(model.calc_bundle_tangent(0, 1000), -0.5532,
                             decimal=3)
 
 
 def test_AxonMapModel_predict_percept():
-    model = models.AxonMapModel(xystep=1, axlambda=100, thresh_percept=0)
+    model = AxonMapModel(xystep=1, axlambda=100, thresh_percept=0)
     model.build()
     # Single-electrode stim:
     img_stim = np.zeros(60)
     img_stim[47] = 1
-    percept = model.predict_percept(implants.ArgusII(stim=img_stim))
+    percept = model.predict_percept(ArgusII(stim=img_stim))
     # Single bright pixel, rest of arc is less bright:
     npt.assert_equal(np.sum(percept > 0.9), 1)
     npt.assert_equal(np.sum(percept > 0.5), 2)
@@ -168,10 +168,10 @@ def test_AxonMapModel_predict_percept():
     npt.assert_almost_equal(np.sum(percept[21:, :]), 0)
 
     # Full Argus II with small lambda: 60 bright spots
-    model = models.AxonMapModel(engine='serial', xystep=1, rho=100,
+    model = AxonMapModel(engine='serial', xystep=1, rho=100,
                                 axlambda=40)
     model.build()
-    percept = model.predict_percept(implants.ArgusII(stim=np.ones(60)))
+    percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     # Most spots are pretty bright, but there are 2 dimmer ones (due to their
     # location on the retina):
     npt.assert_equal(np.sum(percept > 0.5), 58)

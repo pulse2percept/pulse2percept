@@ -8,7 +8,7 @@ class ScoreboardModel(Watson2014ConversionMixin, BaseModel):
 
     def _get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
-        params = super(ScoreboardModel, self)._get_default_params()
+        params = super()._get_default_params()
         params.update({'rho': 100, 'thresh_percept': 1.0 / np.sqrt(np.e)})
         return params
 
@@ -24,14 +24,15 @@ class ScoreboardModel(Watson2014ConversionMixin, BaseModel):
         t : optional
             Not yet implemented.
         """
+        if t is not None:
+            raise NotImplementedError("The ScoreboardModel cannot handle time")
         idx_xy, xydva = xygrid
         # Call the Cython function for fast processing:
         electrodes = implant.stim.electrodes
-        bright = scoreboard(implant.stim.data[:, 0],
+        bright = scoreboard(implant.stim.interp(time=t).data.ravel(),
                             np.array([implant[e].x for e in electrodes]),
                             np.array([implant[e].y for e in electrodes]),
                             *self.get_tissue_coords(*xydva),
-                            self.rho,
-                            self.thresh_percept)
+                            self.rho)
         # return utils.Percept(self.xdva, self.ydva, brightness)
         return bright

@@ -1,14 +1,14 @@
 import numpy as np
 import numpy.testing as npt
 
-from pulse2percept import implants
-from pulse2percept import stimuli
-from pulse2percept import models
+from pulse2percept.implants import ArgusI, ArgusII
+from pulse2percept.stimuli import Stimulus
+from pulse2percept.models import ScoreboardModel
 
 
 def test_ScoreboardModel():
     # ScoreboardModel automatically sets `rho`:
-    model = models.ScoreboardModel(engine='serial', xystep=5)
+    model = ScoreboardModel(engine='serial', xystep=5)
     npt.assert_equal(hasattr(model, 'rho'), True)
 
     # User can set `rho`:
@@ -18,17 +18,17 @@ def test_ScoreboardModel():
     npt.assert_equal(model.rho, 987)
 
     # Zero in = zero out:
-    implant = implants.ArgusI(stim=np.zeros(16))
+    implant = ArgusI(stim=Stimulus(np.zeros(16), sparsified=False))
     npt.assert_almost_equal(model.predict_percept(implant), 0)
 
 
 def test_ScoreboardModel_predict_percept():
-    model = models.ScoreboardModel(xystep=1, rho=100, thresh_percept=0)
+    model = ScoreboardModel(xystep=1, rho=100, thresh_percept=0)
     model.build()
     # Single-electrode stim:
     img_stim = np.zeros(60)
     img_stim[47] = 1
-    percept = model.predict_percept(implants.ArgusII(stim=img_stim))
+    percept = model.predict_percept(ArgusII(stim=img_stim))
     # Single bright pixel, very small Gaussian kernel:
     npt.assert_equal(np.sum(percept > 0.9), 1)
     npt.assert_equal(np.sum(percept > 0.5), 1)
@@ -38,7 +38,7 @@ def test_ScoreboardModel_predict_percept():
     npt.assert_almost_equal(percept[18, 25], np.max(percept))
 
     # Full Argus II: 60 bright spots
-    model = models.ScoreboardModel(engine='serial', xystep=1, rho=100)
+    model = ScoreboardModel(engine='serial', xystep=1, rho=100)
     model.build()
-    percept = model.predict_percept(implants.ArgusII(stim=np.ones(60)))
+    percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     npt.assert_equal(np.sum(np.isclose(percept, 0.9, rtol=0.1, atol=0.1)), 60)
