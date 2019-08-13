@@ -1,4 +1,4 @@
-"""This modules implements the model described in [#nanduri-2012]_.
+"""This module implements the model described in [#nanduri-2012]_.
 
 References
 ----------
@@ -102,6 +102,10 @@ class Nanduri2012TemporalMixin(object):
             'max_r3': 100.0,
             'max_out': 0,
         }
+        # This is subtle: Rather than calling `params.update(base_params)`, we
+        # call `base_params.update(params)`. This will overwrite `base_params`
+        # with values from `params`, which allows us to set `thresh_percept`=0
+        # rather than what the BaseModel dictates:
         base_params.update(params)
         return base_params
 

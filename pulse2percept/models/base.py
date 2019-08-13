@@ -219,13 +219,13 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
             if fps <= 0:
                 raise ValueError("fps must be nonnegative, not %f." % fps)
             if n_frames is None:
-                if implant.stim['t'].max() < 1.0 / fps:
+                if implant.stim.time.max() < 1.0 / fps:
                     # Simulate until the end of the stimulus:
-                    t_end = implant.stim['t'].max()
+                    t_end = implant.stim.time.max()
                     n_frames = 2
                 else:
                     # We need to for the duration of the stimulus, rounding up:
-                    n_frames = max(2, np.ceil(implant.stim['t'].max() * fps))
+                    n_frames = max(2, np.ceil(implant.stim.time.max() * fps))
                     t_end = n_frames / fps
             else:
                 n_frames = int(n_frames)
@@ -235,6 +235,7 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
                 t_end = n_frames / fps
             t_percept = np.linspace(0, t_end, num=n_frames)
         # Simulate:
+        self.reset_state()
         t_sim = 0
         percept = []
         cache_stim = None
@@ -242,33 +243,34 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         print('t_percept:', t_percept)
         for tp in t_percept:
             # Step the temporal model from `t` to `t_percept`:
-            print('tp:', tp)
+            # print('tp:', tp)
             while cache_stim is None or t_sim < tp:
                 # Last time step might be smaller, if `t_percept` is not
                 # divisible by `self.dt`:
                 dt_sim = min(self.dt, tp - t_sim)
                 # Calculate current map at time `t_sim`:
-                stim_at_t = implant.stim.interp(t=t_sim,
-                                                kwargs={'fill_value':
-                                                        'extrapolate'})
+                stim_at_t = implant.stim.interp(time=t_sim)
                 need_cmap = False
                 if cache_stim is None:
                     need_cmap = True
                 else:
-                    if np.any(stim_at_t != cache_stim):
+                    if not np.allclose(stim_at_t.data, cache_stim.data):
                         need_cmap = True
+                need_cmap = True
                 if need_cmap:
-                    print('-', t_sim, 'calc cmap')
+                    # print('-', t_sim, 'calc cmap')
+                    # print('-', stim_at_t)
+                    # print('-', cache_stim)
                     cmap = parfor(self._predict_pixel_percept,
                                   enumerate(self.grid),
-                                  func_args=[implant.stim],
+                                  func_args=[implant],
                                   func_kwargs={'t': t_sim},
                                   engine=self.engine,
                                   scheduler=self.scheduler,
                                   n_jobs=self.n_jobs)
                 cache_stim = stim_at_t
                 # Step the temporal model:
-                print('-', t_sim, 'step temp')
+                # print('-', t_sim, 'step temp')
                 frame = parfor(self._step_temporal_model,
                                enumerate(cmap),
                                func_args=[dt_sim],

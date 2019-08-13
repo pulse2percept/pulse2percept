@@ -24,14 +24,14 @@ class ScoreboardModel(Watson2014ConversionMixin, BaseModel):
         t : optional
             Not yet implemented.
         """
-        if t is not None:
-            raise NotImplementedError("The ScoreboardModel cannot handle time")
         idx_xy, xydva = xygrid
         # Call the Cython function for fast processing:
         electrodes = implant.stim.electrodes
         bright = scoreboard(implant.stim.interp(time=t).data.ravel(),
-                            np.array([implant[e].x for e in electrodes]),
-                            np.array([implant[e].y for e in electrodes]),
+                            np.array([implant[e].x for e in electrodes],
+                                     dtype=float),
+                            np.array([implant[e].y for e in electrodes],
+                                     dtype=float),
                             *self.get_tissue_coords(*xydva),
                             self.rho)
         # return utils.Percept(self.xdva, self.ydva, brightness)
