@@ -64,25 +64,12 @@ To create stimuli in time, you can pass a `TimeSeries` object, such as a `Biphas
     # This stimulus has a time component:
     stim.time
 
-Note that the `Stimulus` object automatically compresses the data.
-That is, rather than saving the current amplitude at every 0.1ms time step, only the non-redundant values are retained.
-You can convince yourself of that by inspecting the size of the two objects:
-
-.. ipython:: python
-
-    pt.shape
-
-    stim.shape
-
 You can specify not only the name of the electrode but also the time steps to be used:
 
 .. ipython:: python
 
    # Stimulate Electrode 'C7' with int time steps:
    Stimulus(pt, electrodes='C7', time=np.arange(pt.shape[-1]))
-
-.. note::
-    You can disable this compression by passing `sparsify=False` to `Stimulus`.
 
 Creating multi-electrode stimuli
 --------------------------------
@@ -114,11 +101,8 @@ The same is true for a dictionary of pulse trains:
     # Sending the same pulse train to three specific electrodes:
     Stimulus({'A1': pt, 'B1': pt, 'C1': pt})
 
-Miscellaneous
--------------
-
 Assigning new coordinates to an existing stimulus
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------------------------------
 
 You can change the coordinates of an existing `Stimulus` object, but retain all its data,
 as follows:
@@ -132,19 +116,80 @@ as follows:
     # You can create a new object from it with named electrodes:
     Stimulus(stim, electrodes=['A1', 'F10'])
 
-    # Same goes for time points (but note it's been compressed):
-    Stimulus(stim, time=[0, 0.1])
+    # Same goes for time points:
+    Stimulus(stim, time=[0, 0.1, 0.2, 0.3, 0.4])
 
-Compressing an uncompressed stimulus
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Compressing a stimulus
+----------------------
 
-You can compress an uncompressed stimulus as follows:
+The :py:meth:`~pulse2percept.stimuli.Stimulus.compress` method automatically
+compresses the data in two ways:
+
+* Removes electrodes with all-zero activation.
+* Retains only the time points at which the stimulus changes.
+
+For example, only the signal edges of a pulse train are saved.
+That is, rather than saving the current amplitude at every 0.1ms time step, 
+only the non-redundant values are retained.
+This drastically reduces the memory footprint of the stimulus.
+You can convince yourself of that by inspecting the size of a Stimulus object
+before and after compression:
 
 .. ipython:: python
 
-    # Say you have an uncompressed stimulus:
-    stim = Stimulus(PulseTrain(0.0001, freq=10), sparsify=False)
+    # An uncompressed stimulus:
+    stim = Stimulus(PulseTrain(0.0001, freq=10), compress=False)
     stim
 
-    # You can create a new oject from it with compressed data:
-    Stimulus(stim, sparsify=True)
+    # Now compress the data:
+    stim.compress()
+
+    # Notice how the stimulus shape and time axis have changed:
+    stim
+
+Interpolating stimulus values
+-----------------------------
+
+The :py:meth:`~pulse2percept.stimuli.Stimulus.interp` method interpolates
+stimulus values at time points that are not explicitly provided:
+
+.. ipython:: python
+
+    # A single-electrode ramp stimulus:
+    stim = Stimulus(np.arange(10).reshape((1, -1)))
+
+    # Interpolate stimulus at a single time point:
+    stim.interp(time=3.45)
+
+    # Interpolate stimulus at multiple time points:
+    stim.interp(time=[3.45, 6.78])
+
+    # You can also extrapolate values outside the provided data range:
+    stim.interp(time=123.45)
+
+For a multi-electrode stimulus, the stimulus values at time t are returned
+for all electrodes:
+
+.. ipython:: python
+
+    # Multi-electrode stimulus
+    stim = Stimulus(np.arange(100).reshape((5, 20)))
+
+    # Interpolate:
+    stim.interp(time=4.5)
+
+You can choose different interpolation methods, as long as
+`scipy.interpolate.interp1d <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ accepts them.
+For example, the 'nearest' method will return the value of the nearest
+data point:
+
+.. ipython:: python
+
+    # A single-electrode ramp stimulus:
+    stim = Stimulus(np.arange(10).reshape((1, -1)), interp_method='nearest')
+
+    # Interpolate:
+    stim.interp(time=3.45)
+
+    # Outside the data range:
+    stim.interp(time=12.2)
