@@ -8,9 +8,10 @@ from .base import (DiskElectrode,
                    PointSource,
                    ProsthesisSystem)
 from .argus import ArgusI, ArgusII
-from .alpha import AlphaIMS
+from .alpha import AlphaIMS, AlphaAMS
 
 __all__ = [
+    'AlphaAMS',
     'AlphaIMS',
     'ArgusI',
     'ArgusII',

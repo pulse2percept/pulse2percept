@@ -64,13 +64,20 @@ class ArgusI(ProsthesisSystem):
         # Argus I is a 4x4 grid of electrodes with 200um in diamater, spaced
         # 525um apart, with rows labeled alphabetically and columsn
         # numerically:
+        self.eye = eye
         shape = (4, 4)
         r_arr = np.array([260, 520, 260, 520]) / 2.0
         r_arr = np.concatenate((r_arr, r_arr[::-1], r_arr, r_arr[::-1]),
                                axis=0)
         spacing = 800.0
-        # newer papers
-        names = ('1', 'A')
+
+        # In older papers, Argus I electrodes go by L and M
+        self.old_names = names = ['L6', 'L2', 'M8', 'M4',
+                                  'L5', 'L1', 'M7', 'M3',
+                                  'L8', 'L4', 'M6', 'M2',
+                                  'L7', 'L3', 'M5', 'M1']
+
+        names = self.old_names if use_legacy_names else ('1', 'A')
 
         self.earray = ElectrodeGrid(shape, x=x, y=y, z=z, rot=rot, r=r_arr,
                                     spacing=spacing, names=names)
@@ -176,14 +183,6 @@ class ArgusI(ProsthesisSystem):
         # for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
         #     self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
         # self.stim = stim
-
-    # def get_old_name(self, new_name):
-        """Look up the legacy name of a standard-named Argus I electrode"""
-    #    return self.old_names[self.new_names.index(new_name)]
-
-    # def get_new_name(self, old_name):
-        """Look up the standard name of a legacy-named Argus I electrode"""
-    #    return self.new_names[self.old_names.index(old_name)]
 
 
 class ArgusII(ProsthesisSystem):

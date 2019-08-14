@@ -28,7 +28,9 @@ def test_ArgusI(ztype, x, y, r):
 
     # Then off-set: Make sure first electrode is placed
     # correctly
-    npt.assert_almost_equal(argus['A1'].x, xy[0] + x)
+    print("argus x set to", argus['A1'].x)
+    print("artifical array set to", xy[0] + x)
+    npt.assert_almost_equal(argus['A1'].x, xy[0] - x)
     npt.assert_almost_equal(argus['A1'].y, xy[1] + y)
 
     # Make sure array center is still (x,y)
@@ -67,19 +69,11 @@ def test_ArgusI(ztype, x, y, r):
     npt.assert_equal(argus_re['D1'].x > argus_re['A1'].x, True)
     npt.assert_almost_equal(argus_re['D1'].y, argus_re['A1'].y)
 
-    # not using tack for now
-    #npt.assert_equal(argus_re.tack[0] < argus_re['D1'].x, True)
-    #npt.assert_almost_equal(argus_re.tack[1], yc)
-
     # need to adjust for reflection about y-axis
     # Left-eye implant:
     argus_le = implants.ArgusI(eye='LE', x=xc, y=yc)
     npt.assert_equal(argus_le['A1'].x > argus_le['D4'].x, True)
     npt.assert_almost_equal(argus_le['D1'].y, argus_le['A1'].y)
-
-    # not using tack for now
-    #npt.assert_equal(argus_le.tack[0] > argus_le['A1'].x, True)
-    #npt.assert_almost_equal(argus_le.tack[1], yc)
 
     # In both left and right eyes, rotation with positive angle should be
     # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
@@ -89,15 +83,14 @@ def test_ArgusI(ztype, x, y, r):
         npt.assert_equal(after[el].x > before[el].x, True)
         npt.assert_equal(after[el].y > before[el].y, True)
 
-    argus = implants.ArgusI()
+    # Check naming scheme
+    argus = implants.ArgusI(use_legacy_names=False)
+    npt.assert_equal(list(argus.keys())[15], 'D4')
+    npt.assert_equal(list(argus.keys())[0], 'A1')
 
-    # currently only using new naming scheme
-    # Old to new
-    #npt.assert_equal(argus.get_new_name('M1'), 'D4')
-    #npt.assert_equal(argus.get_new_name('M6'), 'C3')
-    # New to old
-    #npt.assert_equal(argus.get_old_name('B2'), 'L1')
-    #npt.assert_equal(argus.get_old_name('A1'), 'L6')
+    argus = implants.ArgusI(use_legacy_names=True)
+    npt.assert_equal(list(argus.keys())[15], 'M1')
+    npt.assert_equal(list(argus.keys())[0], 'L6')
 
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))
