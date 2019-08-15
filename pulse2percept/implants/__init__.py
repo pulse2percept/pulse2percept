@@ -1,5 +1,6 @@
-"""
-The `pulse2percept.implants` module provides a number of visual prostheses.
+"""Implants
+
+This module provides a number of visual prostheses.
 """
 from .base import (DiskElectrode,
                    Electrode,

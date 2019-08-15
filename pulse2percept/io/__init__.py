@@ -1,5 +1,6 @@
-"""
-The `pulse2percept.io` module provides functions for I/O.
+"""I/O
+
+This module provides functions for I/O.
 """
 from .image import image2stim
 from .video import (load_video_metadata, load_video_framerate, load_video,

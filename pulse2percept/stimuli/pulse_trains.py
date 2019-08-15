@@ -5,20 +5,20 @@ from scipy import interpolate as spi
 
 
 class TimeSeries(object):
+    """Container for time series data
+
+    Provides a container for time series data. Every time series has a
+    sampling step `tsample`, and some `data` sampled at that rate.
+
+    Parameters
+    ----------
+    tsample : float
+        Sampling time step (seconds).
+    data : array_like
+        Time series data sampled at every `tsample` seconds.
+    """
 
     def __init__(self, tsample, data):
-        """Container for time series data
-
-        Provides a container for time series data. Every time series has a
-        sampling step `tsample`, and some `data` sampled at that rate.
-
-        Parameters
-        ----------
-        tsample : float
-            Sampling time step (seconds).
-        data : array_like
-            Time series data sampled at every `tsample` seconds.
-        """
         self.data = data
         self.tsample = tsample
         self.duration = self.data.shape[-1] * tsample
@@ -160,27 +160,27 @@ class TimeSeries(object):
 
 
 class MonophasicPulse(TimeSeries):
+    """A pulse with a single phase
+
+    Parameters
+    ----------
+    ptype : {'anodic', 'cathodic'}
+        Pulse type. Anodic pulses have positive current amplitude,
+        cathodic pulses have negative amplitude.
+    pdur : float
+        Pulse duration (s).
+    tsample : float
+        Sampling time step (s).
+    delay_dur : float, optional
+        Pulse delay (s). Pulse will be zero-padded (prepended) to deliver
+        the pulse only after `delay_dur` milliseconds. Default: 0.
+    stim_dur : float, optional
+        Stimulus duration (ms). Pulse will be zero-padded (appended) to fit
+        the stimulus duration. Default: No additional zero padding,
+        `stim_dur` is `pdur`+`delay_dur`.
+    """
 
     def __init__(self, ptype, pdur, tsample, delay_dur=0, stim_dur=None):
-        """A pulse with a single phase
-
-        Parameters
-        ----------
-        ptype : {'anodic', 'cathodic'}
-            Pulse type. Anodic pulses have positive current amplitude,
-            cathodic pulses have negative amplitude.
-        pdur : float
-            Pulse duration (s).
-        tsample : float
-            Sampling time step (s).
-        delay_dur : float, optional
-            Pulse delay (s). Pulse will be zero-padded (prepended) to deliver
-            the pulse only after `delay_dur` milliseconds. Default: 0.
-        stim_dur : float, optional
-            Stimulus duration (ms). Pulse will be zero-padded (appended) to fit
-            the stimulus duration. Default: No additional zero padding,
-            `stim_dur` is `pdur`+`delay_dur`.
-        """
         if tsample <= 0:
             raise ValueError("tsample must be a non-negative float.")
 
@@ -206,26 +206,26 @@ class MonophasicPulse(TimeSeries):
 
 
 class BiphasicPulse(TimeSeries):
+    """A charge-balanced pulse with a cathodic and anodic phase
+
+    A single biphasic pulse with duration `pdur` per phase,
+    separated by `interphase_dur` is returned.
+
+    Parameters
+    ----------
+    ptype : {'cathodicfirst', 'anodicfirst'}
+        A cathodic-first pulse has the negative phase first, whereas an
+        anodic-first pulse has the positive phase first.
+    pdur : float
+        Duration of single (positive or negative) pulse phase in seconds.
+    tsample : float
+        Sampling time step in seconds.
+    interphase_dur : float, optional
+        Duration of inter-phase interval (between positive and negative
+        pulse) in seconds. Default: 0.
+    """
 
     def __init__(self, ptype, pdur, tsample, interphase_dur=0):
-        """A charge-balanced pulse with a cathodic and anodic phase
-
-        A single biphasic pulse with duration `pdur` per phase,
-        separated by `interphase_dur` is returned.
-
-        Parameters
-        ----------
-        ptype : {'cathodicfirst', 'anodicfirst'}
-            A cathodic-first pulse has the negative phase first, whereas an
-            anodic-first pulse has the positive phase first.
-        pdur : float
-            Duration of single (positive or negative) pulse phase in seconds.
-        tsample : float
-            Sampling time step in seconds.
-        interphase_dur : float, optional
-            Duration of inter-phase interval (between positive and negative
-            pulse) in seconds. Default: 0.
-        """
         if tsample <= 0:
             raise ValueError("tsample must be a non-negative float.")
 
@@ -251,38 +251,38 @@ class BiphasicPulse(TimeSeries):
 
 
 class PulseTrain(TimeSeries):
+    """A train of biphasic pulses
+
+    Parameters
+    ----------
+    tsample : float
+        Sampling time step (seconds).
+    freq : float, optional, default: 20 Hz
+        Frequency of the pulse envelope (Hz).
+    amp : float, optional, default: 20 uA
+        Max amplitude of the pulse train in micro-amps.
+    dur : float, optional, default: 0.5 seconds
+        Stimulus duration in seconds.
+    delay : float, optional, default: 0
+        Delay until stimulus on-set in seconds.
+    pulse_dur : float, optional, default: 0.45 ms
+        Single-pulse duration in seconds.
+    interphase_duration : float, optional, default: 0.45 ms
+        Single-pulse interphase duration (the time between the positive
+        and negative phase) in seconds.
+    pulsetype : str, optional, default: 'cathodicfirst'
+        Pulse type {'cathodicfirst' | 'anodicfirst'}, where
+        'cathodicfirst' has the negative phase first.
+    pulseorder : str, optional, default: 'pulsefirst'
+        Pulse order {'gapfirst' | 'pulsefirst'}, where
+        'pulsefirst' has the pulse first, followed by the gap.
+        'gapfirst' has it the other way round.
+    """
 
     def __init__(self, tsample, freq=20, amp=20, dur=0.5, delay=0,
                  pulse_dur=0.45 / 1000, interphase_dur=0.45 / 1000,
                  pulsetype='cathodicfirst',
                  pulseorder='pulsefirst'):
-        """A train of biphasic pulses
-
-        Parameters
-        ----------
-        tsample : float
-            Sampling time step (seconds).
-        freq : float, optional, default: 20 Hz
-            Frequency of the pulse envelope (Hz).
-        amp : float, optional, default: 20 uA
-            Max amplitude of the pulse train in micro-amps.
-        dur : float, optional, default: 0.5 seconds
-            Stimulus duration in seconds.
-        delay : float, optional, default: 0
-            Delay until stimulus on-set in seconds.
-        pulse_dur : float, optional, default: 0.45 ms
-            Single-pulse duration in seconds.
-        interphase_duration : float, optional, default: 0.45 ms
-            Single-pulse interphase duration (the time between the positive
-            and negative phase) in seconds.
-        pulsetype : str, optional, default: 'cathodicfirst'
-            Pulse type {'cathodicfirst' | 'anodicfirst'}, where
-            'cathodicfirst' has the negative phase first.
-        pulseorder : str, optional, default: 'pulsefirst'
-            Pulse order {'gapfirst' | 'pulsefirst'}, where
-            'pulsefirst' has the pulse first, followed by the gap.
-            'gapfirst' has it the other way round.
-        """
         if tsample <= 0:
             raise ValueError("tsample must be a non-negative float.")
 

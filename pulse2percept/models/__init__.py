@@ -1,5 +1,6 @@
-"""
-The `pulse2percept.models` module provides a number of models.
+"""Models
+
+This module provides a number of computational models.
 """
 from .base import BaseModel, NotBuiltError
 from .watson2014 import (Watson2014ConversionMixin, dva2ret, ret2dva,

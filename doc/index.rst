@@ -24,7 +24,7 @@ Documentation
 
    users/index
    developers/index
-   reference/index
+   api
 
 .. figure:: _static/eScience_Logo_HR.png
    :align: center
