@@ -91,6 +91,16 @@ def test_ArgusI(ztype, x, y, r):
     npt.assert_equal(argus.get_old_name('B2'), 'L1')
     npt.assert_equal(argus.get_old_name('A1'), 'L6')
 
+    # Set a stimulus via dict:
+    argus = implants.ArgusI(stim={'B3': 13})
+    npt.assert_equal(argus.stim.shape, (1, 1))
+    npt.assert_equal(argus.stim.electrodes, ['B3'])
+
+    # Set a stimulus via array:
+    argus = implants.ArgusI(stim=np.ones(16))
+    npt.assert_equal(argus.stim.shape, (16, 1))
+    npt.assert_almost_equal(argus.stim.data, 1)
+
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
@@ -162,3 +172,13 @@ def test_ArgusII(ztype, x, y, r):
         after = implants.ArgusII(eye=eye, rot=np.deg2rad(10))
         npt.assert_equal(after[el].x < before[el].x, True)
         npt.assert_equal(after[el].y > before[el].y, True)
+
+    # Set a stimulus via dict:
+    argus = implants.ArgusII(stim={'B7': 13})
+    npt.assert_equal(argus.stim.shape, (1, 1))
+    npt.assert_equal(argus.stim.electrodes, ['B7'])
+
+    # Set a stimulus via array:
+    argus = implants.ArgusII(stim=np.ones(60))
+    npt.assert_equal(argus.stim.shape, (60, 1))
+    npt.assert_almost_equal(argus.stim.data, 1)

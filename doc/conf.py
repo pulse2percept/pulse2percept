@@ -39,7 +39,9 @@ extensions = [
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
     'sphinx_gallery.gen_gallery',
-    'sphinx.ext.autosummary'
+    'sphinx.ext.autosummary',
+    'IPython.sphinxext.ipython_directive',
+    'IPython.sphinxext.ipython_console_highlighting',
 ]
 
 # this is needed for some reason...
@@ -57,8 +59,6 @@ else:
     mathjax_path = ('https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/'
                     'MathJax.js?config=TeX-AMS_SVG')
 
-
-# autodoc_default_flags = ['members', 'inherited-members']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

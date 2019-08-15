@@ -26,10 +26,10 @@ class ScoreboardModel(Watson2014ConversionMixin, BaseModel):
         """
         idx_xy, xydva = xygrid
         # Call the Cython function for fast processing:
-        electrodes = implant.stim.coords['electrodes'].values
-        bright = scoreboard(implant.stim.data,
-                            np.array([e.x for e in electrodes]),
-                            np.array([e.y for e in electrodes]),
+        electrodes = implant.stim.electrodes
+        bright = scoreboard(implant.stim.data[:, 0],
+                            np.array([implant[e].x for e in electrodes]),
+                            np.array([implant[e].y for e in electrodes]),
                             *self.get_tissue_coords(*xydva),
                             self.rho,
                             self.thresh_percept)

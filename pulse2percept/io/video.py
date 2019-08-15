@@ -167,8 +167,7 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
         backend = 'libav'
     video = svio.vread(filename, as_grey=as_gray, backend=backend)
     logging.getLogger(__name__).info("Loaded video from file '%s'." % filename)
-    d_s = "Loaded video has shape (T, M, N, C) = " + str(video.shape)
-    logging.getLogger(__name__).debug(d_s)
+    d_s = "Loaded video has shape (T, M, N, C) = " + str(video.shape) 
 
     if as_timeseries:
         # TimeSeries has the time as the last dimensions: re-order dimensions,
@@ -176,8 +175,7 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
         axes = np.roll(range(video.ndim), -1)
         video = np.squeeze(np.transpose(video, axes=axes))
         fps = load_video_framerate(filename)
-        d_s = "Reshaped video to shape (M, N, C, T) = " + str(video.shape)
-        logging.getLogger(__name__).debug(d_s)
+        d_s = "Reshaped video to shape (M, N, C, T) = " + str(video.shape) 
         return TimeSeries(1.0 / fps, video)
     else:
         # Return as ndarray
@@ -305,12 +303,10 @@ def save_video(data, filename, width=None, height=None, fps=30,
         # Resample the percept to the given frame rate
         new_tsample = 1.0 / float(fps)
         d_s = 'old: tsample=%f' % data.tsample
-        d_s += ', shape=' + str(data.shape)
-        logging.getLogger(__name__).debug(d_s)
+        d_s += ', shape=' + str(data.shape) 
         data = data.resample(new_tsample)
         d_s = 'new: tsample=%f' % new_tsample
         d_s += ', shape=' + str(data.shape)
-        logging.getLogger(__name__).debug(d_s)
         oldheight = data.shape[0]
         oldwidth = data.shape[1]
         length = data.shape[-1]
@@ -323,8 +319,7 @@ def save_video(data, filename, width=None, height=None, fps=30,
         width = int(height * 1.0 / oldheight * oldwidth)
     elif width and not height:
         height = int(width * 1.0 / oldwidth * oldheight)
-    d_s = "Video scaled to (M, N, T) = (%d, %d, %d)." % (height, width, length)
-    logging.getLogger(__name__).debug(d_s)
+    d_s = "Video scaled to (M, N, T) = (%d, %d, %d)." % (height, width, length) 
 
     # Reshape and scale the data
     savedata = np.zeros((length, height, width, 3), dtype=np.float32)
