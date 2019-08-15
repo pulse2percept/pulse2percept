@@ -1,6 +1,7 @@
 [![Build Status](https://travis-ci.org/uwescience/pulse2percept.svg?branch=master)](https://travis-ci.org/uwescience/pulse2percept)
 [![Coverage Status](https://coveralls.io/repos/github/uwescience/pulse2percept/badge.svg?branch=master)](https://coveralls.io/github/uwescience/pulse2percept?branch=master)
 [![PyPI](https://img.shields.io/pypi/v/pulse2percept.svg)](https://pypi.org/project/pulse2percept)
+[![Documentation Status](https://readthedocs.org/projects/pulse2percept/badge/?version=latest)](https://pulse2percept.readthedocs.io/en/latest/?badge=latest)
 [![license](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/uwescience/pulse2percept/blob/master/LICENSE)
 
 # pulse2percept: A Python-based simulation framework for bionic vision
@@ -123,4 +124,4 @@ folder, including the following:
 -   [0.0-example-usage.ipynb](https://github.com/uwescience/pulse2percept/blob/master/examples/notebooks/0.0-example-usage.ipynb): How to use the model.
 -   [0.1-image2percept.ipynb](https://github.com/uwescience/pulse2percept/blob/master/examples/notebooks/0.1-image2percept.ipynb): How to convert an image to a percept.
 
-Detailed documentation can be found at [uwescience.github.io/pulse2percept](https://uwescience.github.io/pulse2percept).
+Detailed documentation can be found at [pulse2percept.readthedocs.io](https://pulse2percept.readthedocs.io).
