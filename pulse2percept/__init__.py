@@ -1,5 +1,6 @@
-"""
-pulse2percept: A Python-based simulation framework for bionic vision
+"""Utilities
+
+This modules provides a number of utility functions.
 """
 import logging
 

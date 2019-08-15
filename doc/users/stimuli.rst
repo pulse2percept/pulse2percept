@@ -19,7 +19,7 @@ A stimulus can be created from a variety of source types, such as the following:
 * NumPy array:
    * Nx1 array: interpreted as N current amplitudes delivered to N electrodes (no time component).
    * NxM array: interpreted as N electrodes each receiving M current amplitudes in time.
-* :class:`pulse2percept.utils.TimeSeries`: interpreted as the stimulus in time for a single electrode (e.g., `PulseTrain`).
+* :class:`pulse2percept.stimuli.TimeSeries`: interpreted as the stimulus in time for a single electrode (e.g., `PulseTrain`).
 
 In addition, you can also pass a collection of source types (e.g., list, dictionary).
 
@@ -50,7 +50,7 @@ You can also specify the name of the electrode to be stimulated:
 By default, this stimulus will not have a time component (`stim.time` is None).
 Some models, such as :class:`pulse2percept.models.ScoreboardModel`, cannot handle stimuli in time.
 
-To create stimuli in time, you can pass a :class:`pulse2percept.utils.TimeSeries` object, such as a :class:`pulse2percept.stimuli.BiphasicPulse` or a :class:`pulse2percept.stimuli.PulseTrain`:
+To create stimuli in time, you can pass a :class:`pulse2percept.stimuli.TimeSeries` object, such as a :class:`pulse2percept.stimuli.BiphasicPulse` or a :class:`pulse2percept.stimuli.PulseTrain`:
 
 .. ipython:: python
 

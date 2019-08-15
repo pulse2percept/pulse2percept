@@ -1,4 +1,4 @@
-First steps
+First Steps
 ===========
 
 TODO

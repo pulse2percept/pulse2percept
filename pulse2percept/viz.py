@@ -1,12 +1,15 @@
+"""Visualization
+
+This module provides a number of visualization functions.
+"""
 # https://stackoverflow.com/questions/21784641/installation-issue-with-matplotlib-python
 from sys import platform
 import matplotlib as mpl
 if platform == "darwin":  # OS X
     mpl.use('TkAgg')
+import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patches
-
-import numpy as np
 import logging
 
 from pulse2percept.implants import ProsthesisSystem
