@@ -10,8 +10,8 @@ Creating stimuli
     mpl.rcdefaults()
 
 The `Stimulus` object defines a common interface for all electrical stimuli.
-It basically provides a 2-D data array with labeled axes, where rows denote electrodes and columns denote points in time.
-Stimuli can be assigned to electrodes of a `ProsthesisSystem` object, who will deliver them to the retina.
+It provides a 2-D data array with labeled axes, where rows denote electrodes and columns denote points in time.
+Stimuli can be assigned to electrodes of a :class:`pulse2percept.implants.ProsthesisSystem` object, who will deliver them to the retina.
 
 A stimulus can be created from a variety of source types, such as the following:
 
@@ -19,11 +19,11 @@ A stimulus can be created from a variety of source types, such as the following:
 * NumPy array:
    * Nx1 array: interpreted as N current amplitudes delivered to N electrodes (no time component).
    * NxM array: interpreted as N electrodes each receiving M current amplitudes in time.
-* `TimeSeries`: interpreted as the stimulus in time for a single electrode (e.g., `PulseTrain`).
+* :class:`pulse2percept.utils.TimeSeries`: interpreted as the stimulus in time for a single electrode (e.g., `PulseTrain`).
 
 In addition, you can also pass a collection of source types (e.g., list, dictionary).
 
-See the `Stimulus` API documentation for a full list.
+See the :class:`pulse2percept.stimuli.Stimulus` API documentation for a full list.
 
 .. note::
    Depending on the source type, a stimulus might have a time component or not.
@@ -48,9 +48,9 @@ You can also specify the name of the electrode to be stimulated:
     Stimulus(-14, electrodes='B7')
     
 By default, this stimulus will not have a time component (`stim.time` is None).
-Some models, such as `ScoreboardModel`, cannot handle stimuli in time.
+Some models, such as :class:`pulse2percept.models.ScoreboardModel`, cannot handle stimuli in time.
 
-To create stimuli in time, you can pass a `TimeSeries` object, such as a `BiphasicPulse` or a `PulseTrain`:
+To create stimuli in time, you can pass a :class:`pulse2percept.utils.TimeSeries` object, such as a :class:`pulse2percept.stimuli.BiphasicPulse` or a :class:`pulse2percept.stimuli.PulseTrain`:
 
 .. ipython:: python
 
@@ -104,7 +104,7 @@ The same is true for a dictionary of pulse trains:
 Assigning new coordinates to an existing stimulus
 -------------------------------------------------
 
-You can change the coordinates of an existing `Stimulus` object, but retain all its data,
+You can change the coordinates of an existing `:class:`pulse2percept.stimuli.Stimulus` object, but retain all its data,
 as follows:
 
 .. ipython:: python
