@@ -197,6 +197,19 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     def predict_percept(self, implant, t=None):
+        """Predict a percept
+
+        Parameters
+        ----------
+        implant : `ProsthesisSystem`
+            Stimulus can be passed via
+            :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
+        fps : int, double
+            Frames per second at which the percept should be rendered.
+        n_frames : int
+            If None, will simulate for the duration of the stimulus plus one
+            frame (rounding up).
+        """
         if not self._is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
@@ -205,7 +218,12 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         if implant.stim is None:
             # Nothing to see here:
             return None
+        if implant.stim.time is not None:
+            # The stimulus has a time dimension
+            raise NotImplementedError
 
+        # The stimulus does not have a time dimesnion. In this case, we
+        # only need to run the spatial model:
         return parfor(self._predict_pixel_percept,
                       enumerate(self.grid),
                       func_args=[implant],

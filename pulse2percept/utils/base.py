@@ -43,8 +43,10 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
 
     def __repr__(self):
         """Pretty print class as: ClassName(arg1=val1, arg2=val2)"""
+        # Shorten NumPy array output:
+        np.set_printoptions(precision=2, threshold=5, edgeitems=2)
         # Line width:
-        lwidth = 70
+        lwidth = 80
         # Sort list of parameters alphabetically:
         sorted_params = coll.OrderedDict(sorted(self.get_params().items()))
         # Start string with class name, followed by all arguments:
@@ -59,11 +61,18 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
                 # Need extra '' around strings for repr:
                 sparam = key + '=\'' + str(val) + '\', '
             else:
-                strobj = str(val)
-                if len(strobj) > lwidth - lindent:
-                    # Too long, just show the type:
-                    strobj = str(type(val)).replace("<class '", "")
-                    strobj = strobj.replace("'>", "")
+                if isinstance(val, np.ndarray):
+                    # Print NumPy arrays without line breaks:
+                    strobj = np.array2string(val).replace('\n', ',')
+                    # If still too long, show shape:
+                    if len(strobj) > lwidth - lindent:
+                        strobj = '<%s np.ndarray>' % str(val.shape)
+                else:
+                    strobj = str(val)
+                    if len(strobj) > lwidth - lindent:
+                        # Too long, just show the type:
+                        strobj = str(type(val)).replace("<class '", "")
+                        strobj = strobj.replace("'>", "")
                 sparam = key + '=' + strobj + ', '
             # If adding `sparam` puts line over `lwidth`, start a new line:
             if lc + len(sparam) > lwidth:
