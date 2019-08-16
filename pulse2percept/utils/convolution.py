@@ -1,4 +1,7 @@
-"""Convolutions"""
+"""
+convolution
+===========
+"""
 
 import numpy as np
 from scipy import signal as sps
@@ -11,10 +14,9 @@ except ImportError:
 
 
 def center_vector(vec, newlen):
-    """
-    Returns the center `newlen` portion of a vector.
+    """Returns the center ``newlen`` portion of a vector.
 
-    Adapted from scipy.signal.signaltools._centered:
+    Adapted from ``scipy.signal.signaltools._centered``:
     github.com/scipy/scipy/blob/v0.18.0/scipy/signal/signaltools.py#L236-L243
 
     """
@@ -29,10 +31,10 @@ def _sparseconv(data, kernel, mode):
 
     This function returns the discrete, linear convolution of two
     one-dimensional sequences, where the length of the output is determined
-    by `mode`.
+    by ``mode``.
     Can run faster than ``np.convolve`` if:
-    (1) `data` is much longer than `kernel`
-    (2) `data` is sparse (has lots of zeros)
+    (1) ``data`` is much longer than ``kernel``
+    (2) ``data`` is sparse (has lots of zeros)
     """
     # NOTE Numba 0.44 has trouble with jitting nested functions when they
     # raise exceptions, so we don't raise ValueError here.
@@ -74,8 +76,8 @@ def conv(data, kernel, mode='full', method='fft', use_jit=True):
             The output consists only of those elements that do not rely on
             zero-padding.
         - ``same``:
-            The output is the same size as `data`, centered with respect to the
-            'full' output.
+            The output is the same size as ``data``, centered with respect to
+            the 'full' output.
 
     method : str {'fft', 'sparse'}, optional, default: 'fft'
         A string indicating the convolution method:
@@ -87,7 +89,7 @@ def conv(data, kernel, mode='full', method='fft', use_jit=True):
 
     use_jit : bool, optional, default: True
         A flag indicating whether to use Numba's just-in-time compilation
-        option (only relevant for `method`=='sparse').
+        option (only relevant for ``method=='sparse'``).
     """
     if mode not in ['full', 'valid', 'same']:
         raise ValueError("Acceptable mode flags are 'full', 'valid', or "

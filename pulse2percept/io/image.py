@@ -31,20 +31,22 @@ def image2stim(img, implant, coding='amplitude', valrange=[0, 50],
     img : str|array_like
         An input image, either a valid filename (string) or a numpy array
         (row x col x channels).
-    implant : ProsthesisSystem
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
         An ElectrodeArray object that describes the implant.
     coding : {'amplitude', 'frequency'}, optional
         A string describing the coding scheme:
-        - 'amplitude': Image intensity is linearly converted to a current
-                       amplitude between `valrange[0]` and `valrange[1]`.
-                       Frequency is held constant at `const_freq`.
-        - 'frequency': Image intensity is linearly converted to a pulse
-                       frequency between `valrange[0]` and `valrange[1]`.
-                       Amplitude is held constant at `const_amp`.
+
+        * 'amplitude': Image intensity is linearly converted to a current
+                       amplitude between ``valrange[0]`` and ``valrange[1]``.
+                       Frequency is held constant at ``const_freq``.
+        * 'frequency': Image intensity is linearly converted to a pulse
+                       frequency between ``valrange[0]`` and ``valrange[1]``.
+                       Amplitude is held constant at ``const_amp``.
+
         Default: 'amplitude'
     valrange : list, optional
-        Range of stimulation values to be used (If `coding` is 'amplitude',
-        specifies min and max current; if `coding` is 'frequency', specifies
+        Range of stimulation values to be used (If ``coding`` is 'amplitude',
+        specifies min and max current; if ``coding`` is 'frequency', specifies
         min and max frequency).
         Default: [0, 50]
     max_contrast : bool, optional

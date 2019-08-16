@@ -1,6 +1,4 @@
-"""
-Utility functions for pulse2percept
-"""
+"""Utility functions for pulse2percept"""
 import numpy as np
 import sys
 import abc
@@ -212,10 +210,10 @@ class GridXY(object):
 
 
 def gamma(n, tau, tsample, tol=0.01):
-    """Returns the impulse response of `n` cascaded leaky integrators
+    """Returns the impulse response of ``n`` cascaded leaky integrators
 
-    This function calculates the impulse response of `n` cascaded
-    leaky integrators with constant of proportionality 1/`tau`:
+    This function calculates the impulse response of ``n`` cascaded
+    leaky integrators with constant of proportionality 1/``tau``:
     y = (t/theta).^(n-1).*exp(-t/theta)/(theta*factorial(n-1))
 
     Parameters
@@ -229,7 +227,7 @@ def gamma(n, tau, tsample, tol=0.01):
         Sampling time step (seconds).
     tol : float
         Cut the kernel to size by ignoring function values smaller
-        than a fraction `tol` of the peak value.
+        than a fraction ``tol`` of the peak value.
     """
     n = int(n)
     tau = float(tau)
@@ -276,8 +274,8 @@ def pol2cart(theta, rho):
 def find_files_like(datapath, pattern):
     """Finds files in a folder whose name matches a pattern
 
-    This function looks for files in folder `datapath` that match a regular
-    expression `pattern`.
+    This function looks for files in folder ``datapath`` that match a regular
+    expression ``pattern``.
 
     Parameters
     ----------

@@ -25,7 +25,7 @@ JOBLIB_MIN_VERSION = '0.11'
 
 DISTNAME = 'pulse2percept'
 DESCRIPTION = 'A Python-based simulation framework for bionic vision'
-with open('README.md') as f:
+with open('README.rst') as f:
     LONG_DESCRIPTION = f.read()
 MAINTAINER = 'Michael Beyeler, Ariel Rokem'
 MAINTAINER_EMAIL = 'mbeyeler@uw.edu, arokem@gmail.com'

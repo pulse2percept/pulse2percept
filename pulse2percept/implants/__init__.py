@@ -1,6 +1,12 @@
-"""Implants
+"""This module provides a number of visual prostheses.
 
-This module provides a number of visual prostheses.
+.. autosummary::
+    :toctree: _api
+
+    base
+    argus
+    alpha
+
 """
 from .base import (DiskElectrode,
                    Electrode,

@@ -1,8 +1,3 @@
-.. _contributing:
+.. _dev-contributing:
 
-Contributing
-============
-
-TODO
-
-Explain workflow when developing code.
+.. include:: ../../CONTRIBUTING.rst

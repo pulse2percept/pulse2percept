@@ -45,21 +45,22 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
                 self.newvar = 0
 
     This is the only place where you can add new class attributes. Trying
-    to set `self.someothervar` outside the constructor will raise an
-    AttributeError. Of course, you can always set `self.newvar = None` in
+    to set ``self.someothervar`` outside the constructor will raise an
+    AttributeError. Of course, you can always set ``self.newvar = None`` in
     the constructor to make sure the variable exists, and then assign a new
     value in other class methods.
 
     .. note::
 
-       Please note: If `self.newvar` already exists in the BaseModel class,
+       Please note: If ``self.newvar`` already exists in the BaseModel class,
        the last line of the above code snippet would overwrite it.
 
     To make the model complete (and compile), you will also need to fill in
-    all methods marked with `@abc.abstractmethod` below. These include
-    :py:func:`BasModel.build` and :py:func:`BaseModel.predict_percept`.
-    Have a look at the ScoreboardModel or AxonMapModel classes below to get an idea of how to
-    write a complete model.
+    all methods marked with ``@abc.abstractmethod`` below. These include
+    :py:meth:`~pulse2percept.models.BaseModel.build` and
+    :py:meth:`~pulse2percept.models.BaseModel.predict_percept`.
+    Have a look at the ScoreboardModel or AxonMapModel classes below to get an
+    idea of how to write a complete model.
 
     """
 
@@ -149,22 +150,22 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         You can override ``build`` in your own model (for a good example, see
         the AxonMapModel). You will want to make sure that:
 
-        - all `build_params` take effect,
-        - the flag `_is_built` is set,
-        - the method returns `self`.
+        - all ``build_params`` take effect,
+        - the flag ``_is_built`` is set,
+        - the method returns ``self``.
 
         One way to do this is to call the BaseModel's ``build`` method from
         within your own model:
 
             class MyModel(BaseModel):
 
-                def build(self, **build_params):
-                    super(MyModel, self).build(self, **build_params)
+                def build(self, \*\*build_params):
+                    super(MyModel, self).build(self, \*\*build_params)
                     # Add your own code here...
 
         Parameters
         ----------
-        **build_params : Additional build parameters
+        \*\*build_params : Additional build parameters
             Additional build parameters passed as keyword arguments (e.g.,
             ``model.build(engine='joblib')``). Note that these must be listed
             in ``get_params``; i.e., you can't add any new parameters outside
@@ -201,7 +202,7 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        implant : `ProsthesisSystem`
+        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
             Stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
         fps : int, double

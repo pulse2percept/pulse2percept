@@ -1,3 +1,14 @@
+"""This module provides a number of utility functions.
+
+.. autosummary::
+    :toctree: _api
+
+    base
+    convolution
+    deprecation
+    parallel
+
+"""
 from .base import (Frozen, FreezeError, PrettyPrint, GridXY, cart2pol,
                    find_files_like, gamma, pol2cart)
 from .convolution import center_vector, conv

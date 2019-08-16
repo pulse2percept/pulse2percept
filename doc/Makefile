@@ -38,15 +38,13 @@ help:
 	@echo "  doctest   to run all doctests embedded in the documentation (if enabled)"
 
 clean:
-	-rm -rf $(BUILDDIR)/*
-	-rm -rf auto_examples/
-	-rm -rf generated/*
-	-rm -rf modules/generated/*
-	-rm -rf reference/*
+	-rm -rf $(BUILDDIR)
+	-rm -rf _api
+	-rm -rf _examples
+	-rm -rf savefig
+	-rm debug.log
 
-html: html-after-examples
-
-html-after-examples:
+html: clean
 	# These two lines make the build a bit more lengthy, and the
 	# the embedding of images more robust
 	rm -rf $(BUILDDIR)/html/_images

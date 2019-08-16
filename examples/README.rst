@@ -1,6 +1,7 @@
 .. _examples:
 
-Examples
-========
+===============
+Example Gallery
+===============
 
 Miscellaneous and introductory examples for pulse2percept.

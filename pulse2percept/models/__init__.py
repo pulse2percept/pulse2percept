@@ -1,6 +1,13 @@
-"""Models
+"""This module provides a number of computational models.
 
-This module provides a number of computational models.
+.. autosummary::
+    :toctree: _api
+
+    base
+    scoreboard
+    axon_map
+    watson2014
+
 """
 from .base import BaseModel, NotBuiltError
 from .watson2014 import (Watson2014ConversionMixin, dva2ret, ret2dva,

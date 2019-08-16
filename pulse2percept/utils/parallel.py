@@ -1,3 +1,9 @@
+"""
+========
+parallel
+========
+
+"""
 import numpy as np
 import multiprocessing
 import joblib
@@ -17,14 +23,14 @@ except (ImportError, AttributeError):
 def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
            scheduler='threading', func_args=[], func_kwargs={}):
     """
-    Parallel for loop for numpy arrays
+    Parallel for loop for NumPy arrays
 
     Parameters
     ----------
     func : callable
         The function to apply to each item in the array. Must have the form:
-        func(arr, idx, *args, *kwargs) where arr is an ndarray and idx is an
-        index into that array (a tuple). The Return of `func` needs to be one
+        func(arr, idx, \*args, \*kwargs) where arr is an ndarray and idx is an
+        index into that array (a tuple). The Return of ``func`` needs to be one
         item (e.g. float, int) per input item.
     in_list : list
        All legitimate inputs to the function to operate over.
@@ -44,22 +50,20 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         Which scheduler to use (irrelevant for 'serial' engine):
         - 'threading': a scheduler backed by a thread pool
         - 'multiprocessing': a scheduler backed by a process pool
-    func_args : list, optional
-        Positional arguments to `func`
-    func_kwargs : list, optional
-        Keyword arguments to `func`
+    \*func_args : list, optional
+        Positional arguments to ``func``
+    \*\*func_kwargs : dict, optional
+        Keyword arguments to ``func``
 
     Returns
     -------
-    ndarray of identical shape to `arr`
+    ndarray
+        NumPy array of identical shape to ``arr``
 
-    Notes
-    -----
-    Equivalent to pyAFQ version (blob e20eaa0 from June 3, 2016):
-    https://github.com/arokem/pyAFQ/blob/master/AFQ/utils/parallel.py
-
-    Examples
-    --------
+    Note
+    ----
+        Equivalent to pyAFQ version (blob e20eaa0 from June 3, 2016):
+        https://github.com/arokem/pyAFQ/blob/master/AFQ/utils/parallel.py
     """
     if n_jobs == -1:
         n_jobs = multiprocessing.cpu_count()

@@ -1,6 +1,11 @@
-"""I/O
+"""This module provides functions for I/O.
 
-This module provides functions for I/O.
+.. autosummary::
+    :toctree: _api
+
+    image
+    video
+
 """
 from .image import image2stim
 from .video import (load_video_metadata, load_video_framerate, load_video,

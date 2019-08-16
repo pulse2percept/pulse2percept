@@ -434,30 +434,35 @@ class ProsthesisSystem(PrettyPrint):
     """Visual prosthesis system
 
     A visual prosthesis combines an electrode array and (optionally) a
-    stimulus. This is the base class for prosthesis systems such as `ArgusII`
-    and `AlphaIMS`.
+    stimulus. This is the base class for prosthesis systems such as
+    :py:class:`~pulse2percept.implants.ArgusII` and
+    :py:class:`~pulse2percept.implants.AlphaIMS`.
 
     Parameters
     ----------
-    earray : `ElectrodeArray` or `Electrode`
+    earray : :py:class:`~pulse2percept.implants.ElectrodeArray` or
+             :py:class:`~pulse2percept.implants.Electrode`
         The electrode array used to deliver electrical stimuli to the retina.
-    stim : `Stimulus` source type
-        A valid source type for the `Stimulus` object (e.g., scalar, NumPy
-        array, pulse train).
+    stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+        A valid source type for the :py:class:`~pulse2percept.stimuli.Stimulus`
+        object (e.g., scalar, NumPy array, pulse train).
     eye : 'LE' or 'RE'
         A string indicating whether the system is implanted in the left ('LE')
         or right eye ('RE')
 
     Examples
     --------
-    A system in the left eye made from a single DiskElectrode with radius
+    A system in the left eye made from a single
+    :py:class:`~pulse2percept.implants.DiskElectrode` with radius
     r=100um sitting at x=200um, y=-50um, z=10um:
 
     >>> from pulse2percept.implants import DiskElectrode, ProsthesisSystem
     >>> implant = ProsthesisSystem(DiskElectrode(200, -50, 10, 100), eye='LE')
 
     .. note::
-       A stimulus can also be assigned later (see `stim`).
+
+        A stimulus can also be assigned later (see
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim`).
     """
 
     def __init__(self, earray, stim=None, eye='RE'):
@@ -471,16 +476,18 @@ class ProsthesisSystem(PrettyPrint):
     def check_stim(self, stim):
         """Quality-check the stimulus
 
-        This method is executed every time a new value is assigned to `stim`.
+        This method is executed every time a new value is assigned to ``stim``.
 
         No checks are performed by default, but the user can define their own
-        checks in implants that inherit from `ProsthesisSystem`.
+        checks in implants that inherit from
+        :py:class:`~pulse2percept.implants.ProsthesisSystem`.
 
         Parameters
         ----------
-        stim : `Stimulus` source type
-            A valid source type for the `Stimulus` object (e.g., scalar, NumPy
-            array, pulse train).
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+            A valid source type for the
+            :py:class:`~pulse2percept.stimuli.Stimulus` object (e.g., scalar,
+            NumPy array, pulse train).
         """
         pass
 
@@ -493,7 +500,7 @@ class ProsthesisSystem(PrettyPrint):
 
     @earray.setter
     def earray(self, earray):
-        """Electrode array setter (called upon `self.earray = earray`)"""
+        """Electrode array setter (called upon ``self.earray = earray``)"""
         # Assign the electrode array:
         if isinstance(earray, Electrode):
             # For convenience, build an array froma single electrode:
@@ -508,18 +515,21 @@ class ProsthesisSystem(PrettyPrint):
         """Stimulus
 
         A stimulus can be created from many source types, such as scalars,
-        NumPy arrays, and dictionaries (see `Stimulus` for a complete list).
+        NumPy arrays, and dictionaries (see
+        :py:class:`~pulse2percept.stimuli.Stimulus` for a complete list).
 
-        A stimulus can be assigned either in the `ProsthesisSystem` constructor
+        A stimulus can be assigned either in the
+        :py:class:`~pulse2percept.implants.ProsthesisSystem` constructor
         or later by assigning a value to `stim`.
 
         .. note::
            Unless when using dictionary notation, the number of stimuli must
-           equal the number of electrodes in `earray`.
+           equal the number of electrodes in ``earray``.
 
         Examples
         --------
-        Send a biphasic pulse to an implant made from a single `DiskElectrode`:
+        Send a biphasic pulse to an implant made from a single
+        :py:class:`~pulse2percept.implants.DiskElectrode`:
 
         >>> from pulse2percept.implants import DiskElectrode, ProsthesisSystem
         >>> from pulse2percept.stimuli import BiphasicPulse
@@ -536,7 +546,7 @@ class ProsthesisSystem(PrettyPrint):
 
     @stim.setter
     def stim(self, data):
-        """Stimulus setter (called upon `self.stim = data`)"""
+        """Stimulus setter (called upon ``self.stim = data``)"""
         if data is None:
             self._stim = None
         else:
@@ -555,8 +565,9 @@ class ProsthesisSystem(PrettyPrint):
     def eye(self):
         """Implanted eye
 
-        A `ProsthesisSystem` can be implanted either in a left eye ('LE') or
-        right eye ('RE'). Models such as `AxonMapModel` will treat left and
+        A :py:class:`~pulse2percept.implants.ProsthesisSystem` can be implanted
+        either in a left eye ('LE') or right eye ('RE'). Models such as
+        :py:class:`~pulse2percept.models.AxonMapModel` will treat left and
         right eyes differently (for example, adjusting the location of the
         optic disc).
 
@@ -581,7 +592,7 @@ class ProsthesisSystem(PrettyPrint):
     def n_electrodes(self):
         """Number of electrodes in the array
 
-        This is equivalent to calling `earray.n_electrodes`.
+        This is equivalent to calling ``earray.n_electrodes``.
         """
         return self.earray.n_electrodes
 
@@ -603,8 +614,8 @@ class ProsthesisSystem(PrettyPrint):
         """Return all electrode names and objects in the electrode array
 
         Internally, electrodes are stored in a dictionary in
-        `earray.electrodes`. For convenience, electrodes can also be accessed
-        via `items`.
+        ``earray.electrodes``. For convenience, electrodes can also be accessed
+        via ``items``.
 
         Examples
         --------

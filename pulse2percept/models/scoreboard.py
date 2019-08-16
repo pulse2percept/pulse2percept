@@ -19,7 +19,7 @@ class ScoreboardModel(Watson2014ConversionMixin, BaseModel):
         ----------
         xygrid : tuple
             (idx, (x, y)): Stemming from an enumerate of self.grid
-        implant : ProsthesisSystem
+        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
             A ProsthesisSystem object with an assigned stimulus
         t : optional
             Not yet implemented.

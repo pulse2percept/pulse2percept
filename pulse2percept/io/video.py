@@ -124,15 +124,17 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
     """Loads a video from file.
 
     This function loads a video from file with the help of Scikit-Video, and
-    returns the data either as a NumPy array (if `as_timeseries` is False)
-    or as a ``TimeSeries`` object (if `as_timeseries` is True).
+    returns the data either as a NumPy array (if ``as_timeseries`` is False)
+    or as a :py:class:`~pulse2percept.stimuli.TimeSeries` object (if
+    ``as_timeseries`` is True).
 
     Parameters
     ----------
     filename : str
         Video file name
     as_timeseries: bool, optional, default: True
-        If True, returns the data as a ``TimeSeries`` object.
+        If True, returns the data as a
+        :py:class:`~pulse2percept.stimuli.TimeSeries` object.
     as_gray : bool, optional, default: False
         If True, loads only the luminance channel of the video.
     ffmpeg_path : str, optional, default: system's default path
@@ -143,13 +145,13 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
     Returns
     -------
     video : ndarray | TimeSeries
-        If `as_timeseries` is False, returns video data according to the
+        If ``as_timeseries`` is False, returns video data according to the
         Scikit-Video standard; that is, an ndarray of dimension (T, M, N, C),
         (T, M, N), (M, N, C), or (M, N), where T is the number of frames,
         M is the height, N is the width, and C is the number of channels (will
         be either 1 for grayscale or 3 for RGB).
 
-        If `as_timeseries` is True, returns video data as a TimeSeries object
+        If ``as_timeseries`` is True, returns video data as a TimeSeries object
         of dimension (M, N, C), (M, N, T), (M, N, C), or (M, N).
         The sampling rate corresponds to 1 / frame rate.
 
@@ -192,7 +194,7 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
         backend = 'libav'
     video = svio.vread(filename, as_grey=as_gray, backend=backend)
     logging.getLogger(__name__).info("Loaded video from file '%s'." % filename)
-    d_s = "Loaded video has shape (T, M, N, C) = " + str(video.shape) 
+    d_s = "Loaded video has shape (T, M, N, C) = " + str(video.shape)
 
     if as_timeseries:
         # TimeSeries has the time as the last dimensions: re-order dimensions,
@@ -200,7 +202,7 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
         axes = np.roll(range(video.ndim), -1)
         video = np.squeeze(np.transpose(video, axes=axes))
         fps = load_video_framerate(filename)
-        d_s = "Reshaped video to shape (M, N, C, T) = " + str(video.shape) 
+        d_s = "Reshaped video to shape (M, N, C, T) = " + str(video.shape)
         return TimeSeries(1.0 / fps, video)
     else:
         # Return as ndarray
@@ -210,8 +212,8 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
 def load_video_generator(filename, ffmpeg_path=None, libav_path=None):
     """Returns a generator that can load a video from file frame-by-frame.
 
-    This function returns a generator `reader` that can load a video from a
-    file frame-by-frame. Every call to `reader.nextFrame()` will return a
+    This function returns a generator ``reader`` that can load a video from a
+    file frame-by-frame. Every call to ``reader.nextFrame()`` will return a
     single frame of the video as a NumPy array with dimensions (M, N) or
     (M, N, C), where M is the height, N is the width, and C is the number of
     channels (will be either 1 for grayscale or 3 for RGB).
@@ -278,13 +280,13 @@ def save_video(data, filename, width=None, height=None, fps=30,
         Video file name.
     width : int, optional
         Desired width of the movie.
-        Default: Automatically determined based on `height` (without changing
-        the aspect ratio). If `height` is not given, the percept's original
+        Default: Automatically determined based on ``height`` (without changing
+        the aspect ratio). If ``height`` is not given, the percept's original
         width is used.
     height : int, optional
         Desired height of the movie.
         Default: Automatically determined based on `width` (without changing
-        the aspect ratio). If `width` is not given, the percept's original
+        the aspect ratio). If ``width`` is not given, the percept's original
         height is used.
     fps : int, optional, default: 30
         Desired frame rate of the video (frames per second).
@@ -335,7 +337,7 @@ def save_video(data, filename, width=None, height=None, fps=30,
         # Resample the percept to the given frame rate
         new_tsample = 1.0 / float(fps)
         d_s = 'old: tsample=%f' % data.tsample
-        d_s += ', shape=' + str(data.shape) 
+        d_s += ', shape=' + str(data.shape)
         data = data.resample(new_tsample)
         d_s = 'new: tsample=%f' % new_tsample
         d_s += ', shape=' + str(data.shape)
@@ -351,7 +353,7 @@ def save_video(data, filename, width=None, height=None, fps=30,
         width = int(height * 1.0 / oldheight * oldwidth)
     elif width and not height:
         height = int(width * 1.0 / oldwidth * oldheight)
-    d_s = "Video scaled to (M, N, T) = (%d, %d, %d)." % (height, width, length) 
+    d_s = "Video scaled to (M, N, T) = (%d, %d, %d)." % (height, width, length)
 
     # Reshape and scale the data
     savedata = np.zeros((length, height, width, 3), dtype=np.float32)
@@ -387,16 +389,16 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
     """Saves both an input video and the percept to file, side-by-side.
 
     This function creates a new video from an input video file and a
-    ``TimeSeries`` object, assuming they correspond to model
-    input and model output, and plots them side-by-side.
-    Both input video and percept are resampled according to `fps`.
+    :py:class`~pulse2percept.stimuli.TimeSeries` object, assuming they
+    correspond to model input and model output, and plots them side-by-side.
+    Both input video and percept are resampled according to ``fps``.
     The percept is resized to match the height of the input video.
 
     Parameters
     ----------
     videofile : str
         File name of input video.
-    percept : TimeSeries
+    percept : :py:class:`~pulse2percept.stimuli.TimeSeries`
         A TimeSeries object with dimension (M, N, C, T) or (M, N, T), where
         T is the number of frames, M is the height, N is the width, and C is
         the number of channels.
@@ -467,7 +469,8 @@ def video2stim(filename, implant, framerate=20, coding='amplitude',
     """Converts a video into a series of pulse trains
 
     This function creates an input stimulus from a video.
-    Every frame of the video is passed to `image2pulsetrain`, where it is
+    Every frame of the video is passed to
+    :py:meth:`~pulse2percept.io.image2stim`, where it is
     down-sampled to fit the spatial layout of the implant (currently supported
     are ArgusI and ArgusII arrays).
     In this mapping, rows of the image correspond to rows in the implant
@@ -480,20 +483,22 @@ def video2stim(filename, implant, framerate=20, coding='amplitude',
     img : str|array_like
         An input image, either a valid filename (string) or a numpy array
         (row x col x channels).
-    implant : ProsthesisSystem
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
         An ElectrodeArray object that describes the implant.
     coding : {'amplitude', 'frequency'}, optional
         A string describing the coding scheme:
-        - 'amplitude': Image intensity is linearly converted to a current
-                       amplitude between `valrange[0]` and `valrange[1]`.
-                       Frequency is held constant at `const_freq`.
-        - 'frequency': Image intensity is linearly converted to a pulse
-                       frequency between `valrange[0]` and `valrange[1]`.
-                       Amplitude is held constant at `const_amp`.
+
+        * 'amplitude': Image intensity is linearly converted to a current
+                       amplitude between ``valrange[0]`` and ``valrange[1]``.
+                       Frequency is held constant at ``const_freq``.
+        * 'frequency': Image intensity is linearly converted to a pulse
+                       frequency between ``valrange[0]`` and ``valrange[1]``.
+                       Amplitude is held constant at ``const_amp``.
+
         Default: 'amplitude'
     valrange : list, optional
-        Range of stimulation values to be used (If `coding` is 'amplitude',
-        specifies min and max current; if `coding` is 'frequency', specifies
+        Range of stimulation values to be used (If ``coding`` is 'amplitude',
+        specifies min and max current; if ``coding`` is 'frequency', specifies
         min and max frequency).
         Default: [0, 50]
     max_contrast : bool, optional

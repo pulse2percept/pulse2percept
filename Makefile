@@ -24,7 +24,7 @@ doc: install
 	$(MAKE) -C doc html
 
 tests: install
-	$(PYTEST) --doctest-modules --showlocals -v pulse2percept --durations=20
+	$(PYTEST) --doctest-modules --showlocals -v pulse2percept
 
 flake:
 	$(FLAKE) --ignore N802,N806,W504 --select W503 `find . -name \*.py | grep -v setup.py | grep -v __init__.py | grep -v /doc/`

@@ -1,6 +1,4 @@
-cython>=0.28
-numpy>=1.9
-scipy>=1.0
-joblib>=0.11
-sphinx_gallery
+sphinx==1.8.5
+sphinx_gallery>=0.4
+sphinx_rtd_theme
 ipython
