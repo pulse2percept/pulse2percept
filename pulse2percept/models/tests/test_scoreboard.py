@@ -18,7 +18,7 @@ def test_ScoreboardModel():
     npt.assert_equal(model.rho, 987)
 
     # Zero in = zero out:
-    implant = ArgusI(stim=Stimulus(np.zeros(16), sparsified=False))
+    implant = ArgusI(stim=Stimulus(np.zeros(16), compress=False))
     npt.assert_almost_equal(model.predict_percept(implant), 0)
 
 
