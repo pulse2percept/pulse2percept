@@ -31,21 +31,32 @@ import sphinx_gallery
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
+    'sphinx.ext.napoleon',
     'sphinx.ext.doctest',
     'sphinx.ext.intersphinx',
     'sphinx.ext.linkcode',
     'sphinx.ext.todo',
-    'numpydoc',
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
     'sphinx_gallery.gen_gallery',
-    'sphinx.ext.autosummary'
+    'sphinx.ext.autosummary',
+    'IPython.sphinxext.ipython_directive',
+    'IPython.sphinxext.ipython_console_highlighting',
 ]
 
-# this is needed for some reason...
-# see https://github.com/numpy/numpydoc/issues/69
-numpydoc_class_members_toctree = False
-
+# Napoleon settings
+napoleon_google_docstring = False
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = False
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = False
+napoleon_use_admonition_for_examples = False
+napoleon_use_admonition_for_notes = False
+napoleon_use_admonition_for_references = False
+napoleon_use_ivar = False
+napoleon_use_param = True
+napoleon_use_rtype = True
 
 # For maths, use mathjax by default and svg if NO_MATHJAX env variable is set
 # (useful for viewing the doc offline)
@@ -57,14 +68,17 @@ else:
     mathjax_path = ('https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/'
                     'MathJax.js?config=TeX-AMS_SVG')
 
-
-# autodoc_default_flags = ['members', 'inherited-members']
+autodoc_default_options = {
+    'members': None,
+    'member-order': 'bysource',
+    'inherited-members': ''
+}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
 # generate autosummary even if no references
-# autosummary_generate = False
+autosummary_generate = True
 
 # The suffix of source filenames.
 source_suffix = '.rst'
@@ -101,7 +115,7 @@ release = __version__
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ['_build', 'templates', 'includes', 'themes']
+exclude_patterns = ['_build', 'api/pulse2percept.rst']
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
@@ -249,6 +263,35 @@ sphinx_gallery_conf = {
         'pulse2percept': None}
 }
 
+
+def run_apidoc(_):
+    ignore_paths = [
+        os.path.join('..', 'pulse2percept', '*', 'tests')
+    ]
+
+    argv = [
+        "-f",
+        "-M",
+        "-e",
+        "-E",
+        "-T",
+        "-o", "api",
+        os.path.join('..', 'pulse2percept')
+    ] + ignore_paths
+
+    try:
+        # Sphinx 1.7+
+        from sphinx.ext import apidoc
+        apidoc.main(argv)
+    except ImportError:
+        # Sphinx 1.6 (and earlier)
+        from sphinx import apidoc
+        argv.insert(0, apidoc.__file__)
+        apidoc.main(argv)
+
+
+def setup(app):
+    app.connect('builder-inited', run_apidoc)
 
 # The following is used by sphinx.ext.linkcode to provide links to github
 linkcode_resolve = make_linkcode_resolve('pulse2percept',

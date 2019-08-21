@@ -1,3 +1,7 @@
+"""Visualization
+
+This module provides a number of visualization functions.
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patches

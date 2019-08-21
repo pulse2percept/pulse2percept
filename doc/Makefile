@@ -19,17 +19,15 @@ ALLSPHINXOPTS   = -T -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS)\
 
 .PHONY: help clean html dirhtml pickle json latex latexpdf changes linkcheck doctest optipng
 
-all: html-noplot
+all: html
 
 help:
 	@echo "Please use 'make <target>'' where <target> is one of"
 	@echo "- Standard:"
 	@echo "  html      to make standalone HTML files"
 	@echo "  clean     to clean all Sphinx build files"
-	@echo "  upload    to upload the documentation to GitHub"
 	@echo " "
 	@echo "- Advanced:"
-	@echo "  api       to make the auto-generated API files"
 	@echo "  dirhtml   to make HTML files named index.html in directories"
 	@echo "  pickle    to make pickle files"
 	@echo "  json      to make JSON files"
@@ -43,14 +41,10 @@ clean:
 	-rm -rf $(BUILDDIR)/*
 	-rm -rf auto_examples/
 	-rm -rf generated/*
-	-rm -rf modules/generated/
-	rm -rf reference/*.rst
+	-rm -rf modules/generated/*
+	-rm -rf reference/*
 
-api:
-	@mkdir -p reference
-	$(PYTHON) tools/buildmodref.py pulse2percept reference
-
-html: api html-after-examples
+html: html-after-examples
 
 html-after-examples:
 	# These two lines make the build a bit more lengthy, and the
@@ -58,35 +52,32 @@ html-after-examples:
 	rm -rf $(BUILDDIR)/html/_images
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
 	@echo
-	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html"
+	@echo "HTML build finished. The HTML pages are in $(BUILDDIR)/html"
 
-upload: html
-	./upload-gh-pages.sh _build/html/ pulse2percept uwescience
-
-html-noplot: api
+html-noplot:
 	$(SPHINXBUILD) -D plot_gallery=0 -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
 	@echo
-	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
+	@echo "HTML-noplot build finished. The HTML pages are in $(BUILDDIR)/html."
 
 dirhtml:
 	$(SPHINXBUILD) -b dirhtml $(ALLSPHINXOPTS) $(BUILDDIR)/dirhtml
 	@echo
-	@echo "Build finished. The HTML pages are in $(BUILDDIR)/dirhtml."
+	@echo "DirHTML build finished. The HTML pages are in $(BUILDDIR)/dirhtml."
 
 pickle:
 	$(SPHINXBUILD) -b pickle $(ALLSPHINXOPTS) $(BUILDDIR)/pickle
 	@echo
-	@echo "Build finished; now you can process the pickle files."
+	@echo "Pickle build finished; now you can process the pickle files."
 
 json:
 	$(SPHINXBUILD) -b json $(ALLSPHINXOPTS) $(BUILDDIR)/json
 	@echo
-	@echo "Build finished; now you can process the JSON files."
+	@echo "JSON build finished; now you can process the JSON files."
 
 latex:
 	$(SPHINXBUILD) -b latex $(ALLSPHINXOPTS) $(BUILDDIR)/latex
 	@echo
-	@echo "Build finished; the LaTeX files are in $(BUILDDIR)/latex."
+	@echo "LaTeX build finished; the LaTeX files are in $(BUILDDIR)/latex."
 	@echo "Run \`make' in that directory to run these through (pdf)latex" \
 	      "(use \`make latexpdf' here to do that automatically)."
 
@@ -120,6 +111,3 @@ download-data:
 optipng:
 	find _build auto_examples */generated -name '*.png' -print0 \
 	  | xargs -0 -n 1 -P 4 optipng -o10
-
-dist: html latexpdf
-	cp _build/latex/user_guide.pdf _build/html/_downloads/scikit-learn-docs.pdf

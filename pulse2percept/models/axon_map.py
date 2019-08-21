@@ -336,10 +336,10 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         if axon.shape[0] == 0:
             return 0.0
         # Calculate the brightness at pixel:
-        electrodes = implant.stim.coords['electrodes'].values
-        bright = axon_map(implant.stim.data,
-                          np.array([e.x for e in electrodes]),
-                          np.array([e.y for e in electrodes]),
+        electrodes = implant.stim.electrodes
+        bright = axon_map(implant.stim.data[:, 0],
+                          np.array([implant[e].x for e in electrodes]),
+                          np.array([implant[e].y for e in electrodes]),
                           axon,
                           self.rho,
                           self.thresh_percept)

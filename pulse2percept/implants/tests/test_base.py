@@ -6,6 +6,7 @@ import numpy.testing as npt
 from pulse2percept.implants import (Electrode, DiskElectrode, PointSource,
                                     ElectrodeArray, ElectrodeGrid,
                                     ProsthesisSystem)
+from pulse2percept.stimuli import Stimulus
 
 
 class ValidElectrode(Electrode):
@@ -193,31 +194,30 @@ def test_ElectrodeArray_add_electrodes():
 
 def test_ProsthesisSystem():
     # Invalid instantiations:
-    with pytest.raises(TypeError):
-        ProsthesisSystem(PointSource(0, 0, 0))
     with pytest.raises(ValueError):
         ProsthesisSystem(ElectrodeArray(PointSource(0, 0, 0)),
                          eye='both')
 
     # Iterating over the electrode array:
-    earray = ElectrodeArray(PointSource(0, 0, 0))
-    implant = ProsthesisSystem(earray)
+    implant = ProsthesisSystem(PointSource(0, 0, 0))
     npt.assert_equal(implant.n_electrodes, 1)
-    npt.assert_equal(implant[0], earray[0])
-    npt.assert_equal(implant.keys(), earray.keys())
-    # for i, el in enumerate(implant):
-    #     npt.assert_equal(el, earray[i])
+    npt.assert_equal(implant[0], implant.earray[0])
+    npt.assert_equal(implant.keys(), implant.earray.keys())
 
     # Set a stimulus after the constructor:
     npt.assert_equal(implant.stim, None)
-    with pytest.raises(NotImplementedError):
-        implant.stim = {'0': 1}
-    with pytest.raises(NotImplementedError):
-        implant.stim = [1]
-    implant.stim = np.array([1])
-    npt.assert_equal(implant.stim.ndim, 1)
-    npt.assert_equal(implant.stim.dims[0], 'electrodes')
-    npt.assert_equal(implant.stim.data, np.array([1]))
+    implant.stim = 3
+    npt.assert_equal(isinstance(implant.stim, Stimulus), True)
+    npt.assert_equal(implant.stim.shape, (1, 1))
+    npt.assert_equal(implant.stim.time, None)
+    npt.assert_equal(implant.stim.electrodes, [0])
+
+    with pytest.raises(ValueError):
+        # Wrong number of stimuli
+        implant.stim = [1, 2]
+    with pytest.raises(TypeError):
+        # Invalid stim type:
+        implant.stim = "stim"
 
 
 def test_ElectrodeGrid():

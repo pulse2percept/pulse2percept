@@ -8,6 +8,7 @@ from unittest import mock
 from imp import reload
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('mode', ('full', 'valid', 'same'))
 @pytest.mark.parametrize('method', ('sparse', 'fft'))
 @pytest.mark.parametrize('use_jit', (True, False))
