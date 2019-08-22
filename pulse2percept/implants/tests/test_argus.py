@@ -30,7 +30,7 @@ def test_ArgusI(ztype, x, y, r):
     # correctly
     print("argus x set to", argus['A1'].x)
     print("artifical array set to", xy[0] + x)
-    npt.assert_almost_equal(argus['A1'].x, xy[0] - x)
+    npt.assert_almost_equal(argus['A1'].x, xy[0] + x)
     npt.assert_almost_equal(argus['A1'].y, xy[1] + y)
 
     # Make sure array center is still (x,y)
