@@ -119,7 +119,7 @@ class AlphaAMS(ProsthesisSystem):
         Create an AlphaAMS array centered on the fovea, at 100um distance from
         the retina:
         >>> from pulse2percept import implants
-        >>> alpha_ims = implants.AlphaAMS(x=0, y=0, z=100, rot=0)
+        >>> alpha_ams = implants.AlphaAMS(x=0, y=0, z=100, rot=0)
 
         Get access to the third electrode:
         >>> my_electrode = alpha_ams[2]

@@ -303,15 +303,18 @@ def test_ElectrodeGrid():
 
     # Test all naming conventions:
     egrid = ElectrodeGrid(shape, names=('A', '1'))
-    print([e for e in egrid.keys()])
+    #print([e for e in egrid.keys()])
     npt.assert_equal([e for e in egrid.keys()],
                      ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
     egrid = ElectrodeGrid(shape, names=('1', 'A'))
-    print([e for e in egrid.keys()])
+    #print([e for e in egrid.keys()])
+    #egrid = ElectrodeGrid(shape, names=('A', '1'))
     npt.assert_equal([e for e in egrid.keys()],
                      ['A1', 'B1', 'C1', 'A2', 'B2', 'C2'])
-    npt.assert_equal([e for e in egrid.keys()],
-                     ['A1', 'A1', 'C1', 'A2', 'B2', 'C2'])
+
+    # egrid = ElectrodeGrid(shape, names=('A', '1'))
+    # npt.assert_equal([e for e in egrid.keys()],
+    #                  ['A1', 'A1', 'C1', 'A2', 'B2', 'C2'])
     egrid = ElectrodeGrid(shape, names=('1', '1'))
     #print([e for e in egrid.keys()])
     npt.assert_equal([e for e in egrid.keys()],
