@@ -60,6 +60,7 @@ class ArgusI(ProsthesisSystem):
     >>> ArgusI(x=0, y=0, z=100, rot=0)  # doctest: +NORMALIZE_WHITESPACE
     ArgusI(earray=pulse2percept.implants.base.ElectrodeGrid, eye='RE',
            shape=(4, 4), stim=None)
+
     Get access to electrode 'B1', either by name or by row/column index:
 
     >>> argus = ArgusI(x=0, y=0, z=100, rot=0)

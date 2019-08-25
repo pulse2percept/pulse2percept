@@ -248,8 +248,8 @@ class ElectrodeGrid(ElectrodeArray):
 
     >>> from pulse2percept.implants import ElectrodeGrid
     >>> grid = ElectrodeGrid((3, 3), names=('A', '1'))
-    >>> grid['C3']
-    DiskElectrode(r=10, x=20.0, y=20.0, z=0)
+    >>> grid['C3']  # doctest: +ELLIPSIS
+    DiskElectrode(r=10..., x=20.0, y=20.0, z=0...)
     >>> grid['C3'] == grid[8] == grid[2, 2]
     True
 
@@ -258,10 +258,10 @@ class ElectrodeGrid(ElectrodeArray):
 
     >>> from pulse2percept.implants import ElectrodeGrid
     >>> grid = ElectrodeGrid((3, 3), names=('A', '1'))
-    >>> grid[['A1', 1, (0, 2)]]  # doctest: +NORMALIZE_WHITESPACE
-    [DiskElectrode(r=10, x=-20.0, y=-20.0, z=0),
-     DiskElectrode(r=10, x=0.0, y=-20.0, z=0),
-     DiskElectrode(r=10, x=20.0, y=-20.0, z=0)]
+    >>> grid[['A1', 1, (0, 2)]]  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    [DiskElectrode(r=10..., x=-20.0, y=-20.0, z=0...),
+     DiskElectrode(r=10..., x=0.0, y=-20.0, z=0...),
+     DiskElectrode(r=10..., x=20.0, y=-20.0, z=0...)]
 
     Todo
     ----
