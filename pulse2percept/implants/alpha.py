@@ -5,56 +5,68 @@ from .base import DiskElectrode, ElectrodeArray, ElectrodeGrid, ProsthesisSystem
 
 
 class AlphaIMS(ProsthesisSystem):
+    """Alpha IMS
+
+    This function creates an AlphaIMS array and places it on the retina
+    such that the center of the array is located at (x,y,z), given in
+    microns, and the array is rotated by rotation angle `rot`, given in
+    radians.
+
+    The array is oriented upright in the visual field, such that an
+    array with center (0,0) has the top three rows lie in the lower
+    retina (upper visual field).
+
+    An electrode can be addressed by name, row/column index, or integer index
+    (into the flattened array).
+
+    .. note::
+
+        Column order is reversed in a left-eye implant.
+
+    Parameters
+    ----------
+    x : float
+        x coordinate of the array center (um)
+    y : float
+        y coordinate of the array center (um)
+    z: float or array_like
+        Distance of the array to the retinal surface (um). Either a list
+        with 60 entries or a scalar.
+    rot : float
+        Rotation angle of the array (rad). Positive values denote
+        counter-clock-wise (CCW) rotations in the retinal coordinate
+        system.
+    eye : 'LE' or 'RE', optional, default: 'RE'
+        Eye in which array is implanted.
+
+    Examples
+    --------
+    Create an AlphaIMS array centered on the fovea, at 100um distance from
+    the retina:
+
+    >>> from pulse2percept.implants import AlphaIMS
+    >>> AlphaIMS(x=0, y=0, z=100, rot=0)  # doctest: +NORMALIZE_WHITESPACE
+    AlphaIMS(earray=pulse2percept.implants.base.ElectrodeGrid, eye='RE',
+             shape=(37, 37), stim=None)
+
+    Get access to the third electrode in the top row (by name or by row/column
+    index):
+
+    >>> alpha_ims = AlphaIMS(x=0, y=0, z=100, rot=0)
+    >>> alpha_ims['A3']
+    DiskElectrode(r=50.0, x=-1152.0, y=-1296.0, z=100.0)
+    >>> alpha_ims[0, 2]
+    DiskElectrode(r=50.0, x=-1152.0, y=-1296.0, z=100.0)
+
+    """
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
-        """Alpha IMS
-
-        This function creates an AlphaIMS array and places it on the retina
-        such that the center of the array is located at (x,y,z), given in
-        microns, and the array is rotated by rotation angle `rot`, given in
-        radians.
-
-        The array is oriented upright in the visual field, such that an
-        array with center (0,0) has the top three rows lie in the lower
-        retina (upper visual field), as shown below:
-
-        An electrode can be addressed by index (integer) or name.
-
-        Parameters
-        ----------
-        x : float
-            x coordinate of the array center (um)
-        y : float
-            y coordinate of the array center (um)
-        z: float || array_like
-            Distance of the array to the retinal surface (um). Either a list
-            with 60 entries or a scalar.
-        rot : float
-            Rotation angle of the array (rad). Positive values denote
-            counter-clock-wise (CCW) rotations in the retinal coordinate
-            system.
-        eye : {'LE', 'RE'}, optional, default: 'RE'
-            Eye in which array is implanted.
-
-        Examples
-        --------
-        Create an AlphaIMS array centered on the fovea, at 100um distance from
-        the retina:
-        >>> from pulse2percept import implants
-        >>> alpha_ims = implants.AlphaIMS(x=0, y=0, z=100, rot=0)
-
-        Get access to the third electrode:
-        >>> my_electrode = alpha_ims[2]
-        """
         self.eye = eye
-
-        shape = (37, 37)
+        self.shape = (37, 37)
         elec_radius = 50
         e_spacing = 72  # um
-
-        #names = ('A', '1')
-        self.earray = ElectrodeGrid(shape, x=x, y=y, z=z, rot=rot, r=elec_radius,
-                                    spacing=e_spacing)
+        self.earray = ElectrodeGrid(self.shape, x=x, y=y, z=z, rot=rot,
+                                    r=elec_radius, spacing=e_spacing)
 
         # Set stimulus if available:
         self.stim = stim
@@ -80,59 +92,77 @@ class AlphaIMS(ProsthesisSystem):
                 electrodes.update({name: obj})
             # Assign the new ordered dict to earray:
             self.earray.electrodes = electrodes
+
+    def get_params(self):
+        params = super().get_params()
+        params.update({'shape': self.shape})
+        return params
 
 
 class AlphaAMS(ProsthesisSystem):
+    """Alpha AMS
+
+    This function creates an AlphaAMS array and places it below the retina
+    such that the center of the array is located at (x,y,z), given in
+    microns, and the array is rotated by rotation angle `rot`, given in
+    radians.
+
+    The array is oriented upright in the visual field, such that an
+    array with center (0,0) has the top three rows lie in the lower
+    retina (upper visual field), as shown below:
+
+    An electrode can be addressed by name, row/column index, or integer index
+    (into the flattened array).
+
+    .. note::
+
+        Column order is reversed in a left-eye implant.
+
+    Parameters
+    ----------
+    x : float
+        x coordinate of the array center (um)
+    y : float
+        y coordinate of the array center (um)
+    z: float || array_like
+        Distance of the array to the retinal surface (um). Either a list
+        with 60 entries or a scalar.
+    rot : float
+        Rotation angle of the array (rad). Positive values denote
+        counter-clock-wise (CCW) rotations in the retinal coordinate
+        system.
+    eye : {'LE', 'RE'}, optional, default: 'RE'
+        Eye in which array is implanted.
+
+    Examples
+    --------
+    Create an AlphaAMS array centered on the fovea, at 100um distance from
+    the retina:
+
+    >>> from pulse2percept.implants import AlphaAMS
+    >>> AlphaAMS(x=0, y=0, z=100, rot=0)  # doctest: +NORMALIZE_WHITESPACE
+    AlphaAMS(earray=pulse2percept.implants.base.ElectrodeGrid, eye='RE',
+             shape=(40, 40), stim=None)
+
+    Get access to the third electrode in the top row (by name or by row/column
+    index):
+
+    >>> alpha_ims = AlphaAMS(x=0, y=0, z=100, rot=0)
+    >>> alpha_ims['A3']
+    DiskElectrode(r=15.0, x=-1225.0, y=-1365.0, z=100.0)
+    >>> alpha_ims[0, 2]
+    DiskElectrode(r=15.0, x=-1225.0, y=-1365.0, z=100.0)
+
+    """
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
-        """Alpha AMS
-
-        This function creates an AlphaAMS array and places it below the retina
-        such that the center of the array is located at (x,y,z), given in
-        microns, and the array is rotated by rotation angle `rot`, given in
-        radians.
-
-        The array is oriented upright in the visual field, such that an
-        array with center (0,0) has the top three rows lie in the lower
-        retina (upper visual field), as shown below:
-
-        An electrode can be addressed by index (integer) or name.
-
-        Parameters
-        ----------
-        x : float
-            x coordinate of the array center (um)
-        y : float
-            y coordinate of the array center (um)
-        z: float || array_like
-            Distance of the array to the retinal surface (um). Either a list
-            with 60 entries or a scalar.
-        rot : float
-            Rotation angle of the array (rad). Positive values denote
-            counter-clock-wise (CCW) rotations in the retinal coordinate
-            system.
-        eye : {'LE', 'RE'}, optional, default: 'RE'
-            Eye in which array is implanted.
-
-        Examples
-        --------
-        Create an AlphaAMS array centered on the fovea, at 100um distance from
-        the retina:
-        >>> from pulse2percept import implants
-        >>> alpha_ams = implants.AlphaAMS(x=0, y=0, z=100, rot=0)
-
-        Get access to the third electrode:
-        >>> my_electrode = alpha_ams[2]
-        """
         self.eye = eye
-
-        # array dimensions
-        shape = (40, 40)
+        self.shape = (40, 40)
         elec_radius = 15
         e_spacing = 70  # um
 
-        self.earray = ElectrodeGrid(shape, x=x, y=y, z=z, rot=rot, r=elec_radius,
-                                    spacing=e_spacing)
+        self.earray = ElectrodeGrid(self.shape, x=x, y=y, z=z, rot=rot,
+                                    r=elec_radius, spacing=e_spacing)
 
         # Set stimulus if available:
         self.stim = stim
@@ -158,3 +188,8 @@ class AlphaAMS(ProsthesisSystem):
                 electrodes.update({name: obj})
             # Assign the new ordered dict to earray:
             self.earray.electrodes = electrodes
+
+    def get_params(self):
+        params = super().get_params()
+        params.update({'shape': self.shape})
+        return params
