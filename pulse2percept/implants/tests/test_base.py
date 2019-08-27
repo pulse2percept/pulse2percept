@@ -192,34 +192,6 @@ def test_ElectrodeArray_add_electrodes():
         npt.assert_equal(earray[i], val)
 
 
-def test_ProsthesisSystem():
-    # Invalid instantiations:
-    with pytest.raises(ValueError):
-        ProsthesisSystem(ElectrodeArray(PointSource(0, 0, 0)),
-                         eye='both')
-
-    # Iterating over the electrode array:
-    implant = ProsthesisSystem(PointSource(0, 0, 0))
-    npt.assert_equal(implant.n_electrodes, 1)
-    npt.assert_equal(implant[0], implant.earray[0])
-    npt.assert_equal(implant.keys(), implant.earray.keys())
-
-    # Set a stimulus after the constructor:
-    npt.assert_equal(implant.stim, None)
-    implant.stim = 3
-    npt.assert_equal(isinstance(implant.stim, Stimulus), True)
-    npt.assert_equal(implant.stim.shape, (1, 1))
-    npt.assert_equal(implant.stim.time, None)
-    npt.assert_equal(implant.stim.electrodes, [0])
-
-    with pytest.raises(ValueError):
-        # Wrong number of stimuli
-        implant.stim = [1, 2]
-    with pytest.raises(TypeError):
-        # Invalid stim type:
-        implant.stim = "stim"
-
-
 def test_ElectrodeGrid():
     # Must pass in tuple/list of (rows, cols) for grid shape:
     with pytest.raises(TypeError):
@@ -230,6 +202,10 @@ def test_ElectrodeGrid():
         ElectrodeGrid([0])
     with pytest.raises(ValueError):
         ElectrodeGrid([1, 2, 3])
+    with pytest.raises(TypeError):
+        ElectrodeGrid((2, 3), etype=ElectrodeArray)
+    with pytest.raises(TypeError):
+        ElectrodeGrid((2, 3), etype="foo")
 
     # A valid 2x5 grid centered at (0, 500):
     shape = (2, 3)
@@ -303,12 +279,12 @@ def test_ElectrodeGrid():
 
     # Test all naming conventions:
     egrid = ElectrodeGrid(shape, names=('A', '1'))
-    #print([e for e in egrid.keys()])
+    # print([e for e in egrid.keys()])
     npt.assert_equal([e for e in egrid.keys()],
                      ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
     egrid = ElectrodeGrid(shape, names=('1', 'A'))
-    #print([e for e in egrid.keys()])
-    #egrid = ElectrodeGrid(shape, names=('A', '1'))
+    # print([e for e in egrid.keys()])
+    # egrid = ElectrodeGrid(shape, names=('A', '1'))
     npt.assert_equal([e for e in egrid.keys()],
                      ['A1', 'B1', 'C1', 'A2', 'B2', 'C2'])
 
@@ -316,11 +292,11 @@ def test_ElectrodeGrid():
     # npt.assert_equal([e for e in egrid.keys()],
     #                  ['A1', 'A1', 'C1', 'A2', 'B2', 'C2'])
     egrid = ElectrodeGrid(shape, names=('1', '1'))
-    #print([e for e in egrid.keys()])
+    # print([e for e in egrid.keys()])
     npt.assert_equal([e for e in egrid.keys()],
                      ['11', '12', '13', '21', '22', '23'])
     egrid = ElectrodeGrid(shape, names=('A', 'A'))
-    #print([e for e in egrid.keys()])
+    # print([e for e in egrid.keys()])
     npt.assert_equal([e for e in egrid.keys()],
                      ['AA', 'AB', 'AC', 'BA', 'BB', 'BC'])
 
@@ -336,3 +312,41 @@ def test_ElectrodeGrid():
     egrid = ElectrodeGrid(shape, names=['53', '18', '00', '81', '11', '12'])
     npt.assert_equal([e for e in egrid.keys()],
                      ['53', '18', '00', '81', '11', '12'])
+
+
+def test_ElectrodeGrid___get_item__():
+    grid = ElectrodeGrid((2, 4), names=('C', '3'))
+    npt.assert_equal(grid[0], grid['C3'])
+    npt.assert_equal(grid[0, 0], grid['C3'])
+    npt.assert_equal(grid[1], grid['C4'])
+    npt.assert_equal(grid[0, 1], grid['C4'])
+    npt.assert_equal(grid[['C3', 1, (0, 2)]],
+                     [grid['C3'], grid['C4'], grid['C5']])
+
+
+def test_ProsthesisSystem():
+    # Invalid instantiations:
+    with pytest.raises(ValueError):
+        ProsthesisSystem(ElectrodeArray(PointSource(0, 0, 0)),
+                         eye='both')
+
+    # Iterating over the electrode array:
+    implant = ProsthesisSystem(PointSource(0, 0, 0))
+    npt.assert_equal(implant.n_electrodes, 1)
+    npt.assert_equal(implant[0], implant.earray[0])
+    npt.assert_equal(implant.keys(), implant.earray.keys())
+
+    # Set a stimulus after the constructor:
+    npt.assert_equal(implant.stim, None)
+    implant.stim = 3
+    npt.assert_equal(isinstance(implant.stim, Stimulus), True)
+    npt.assert_equal(implant.stim.shape, (1, 1))
+    npt.assert_equal(implant.stim.time, None)
+    npt.assert_equal(implant.stim.electrodes, [0])
+
+    with pytest.raises(ValueError):
+        # Wrong number of stimuli
+        implant.stim = [1, 2]
+    with pytest.raises(TypeError):
+        # Invalid stim type:
+        implant.stim = "stim"
