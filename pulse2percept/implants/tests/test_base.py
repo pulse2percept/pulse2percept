@@ -3,8 +3,9 @@ import collections as coll
 import pytest
 import numpy.testing as npt
 
-from pulse2percept.implants import (DiskElectrode, Electrode, ElectrodeArray,
-                                    PointSource, ProsthesisSystem)
+from pulse2percept.implants import (Electrode, DiskElectrode, PointSource,
+                                    ElectrodeArray, ElectrodeGrid,
+                                    ProsthesisSystem)
 from pulse2percept.stimuli import Stimulus
 
 
@@ -189,6 +190,138 @@ def test_ElectrodeArray_add_electrodes():
     for i, (key, val) in enumerate(earray.items()):
         npt.assert_equal(earray[i], earray[key])
         npt.assert_equal(earray[i], val)
+
+
+def test_ElectrodeGrid():
+    # Must pass in tuple/list of (rows, cols) for grid shape:
+    with pytest.raises(TypeError):
+        ElectrodeGrid("badinstantiation")
+    with pytest.raises(TypeError):
+        ElectrodeGrid(coll.OrderedDict({'badinstantiation': 0}))
+    with pytest.raises(ValueError):
+        ElectrodeGrid([0])
+    with pytest.raises(ValueError):
+        ElectrodeGrid([1, 2, 3])
+    with pytest.raises(TypeError):
+        ElectrodeGrid((2, 3), etype=ElectrodeArray)
+    with pytest.raises(TypeError):
+        ElectrodeGrid((2, 3), etype="foo")
+
+    # A valid 2x5 grid centered at (0, 500):
+    shape = (2, 3)
+    x, y = 0, 500
+    spacing = 100
+    egrid = ElectrodeGrid(shape, x=x, y=y, spacing=spacing)
+    npt.assert_equal(egrid.shape, shape)
+    npt.assert_equal(egrid.n_electrodes, np.prod(shape))
+    npt.assert_equal(egrid.x, x)
+    npt.assert_equal(egrid.y, y)
+    npt.assert_almost_equal(egrid.spacing, spacing)
+    # Make sure different electrodes have different coordinates:
+    npt.assert_equal(len(np.unique([e.x for e in egrid.values()])), shape[1])
+    npt.assert_equal(len(np.unique([e.y for e in egrid.values()])), shape[0])
+    # Make sure the average of all x-coordinates == x:
+    # (Note: egrid has all electrodes in a dictionary, with (name, object)
+    # as (key, value) pairs. You can get the electrode names by iterating over
+    # egrid.keys(). You can get the electrode objects by iterating over
+    # egrid.values().)
+    npt.assert_almost_equal(np.mean([e.x for e in egrid.values()]), x)
+    # Same for y:
+    npt.assert_almost_equal(np.mean([e.y for e in egrid.values()]), y)
+
+    # Test whether egrid.z is set correctly, when z is a constant:
+    z = 12
+    egrid = ElectrodeGrid(shape, z=z)
+    npt.assert_equal(egrid.z, z)
+    for i in egrid.values():
+        npt.assert_equal(i.z, z)
+
+    # and when every electrode has a different z:
+    z = np.arange(np.prod(shape))
+    egrid = ElectrodeGrid(shape, z=z)
+    npt.assert_equal(egrid.z, z)
+    x = -1
+    for i in egrid.values():
+        npt.assert_equal(i.z, x + 1)
+        x = i.z
+
+    # TODO display a warning when rot > 2pi (meaning it might be in degrees).
+    # I think we did this somewhere in the old Argus code
+
+    # TODO test rotation, making sure positive angles rotate CCW
+    egrid1 = ElectrodeGrid(shape=(2, 2))
+    egrid2 = ElectrodeGrid(shape=(2, 2), rot=np.deg2rad(10))
+    npt.assert_equal(egrid1["A1"].x < egrid2["A1"].x, True)
+    npt.assert_equal(egrid1["A1"].y > egrid2["A1"].y, True)
+    npt.assert_equal(egrid1["B2"].x > egrid2["B2"].x, True)
+    npt.assert_equal(egrid1["B2"].y < egrid2["B2"].y, True)
+
+    # Smallest possible grid:
+    egrid = ElectrodeGrid((1, 1))
+    npt.assert_equal(egrid.shape, (1, 1))
+    npt.assert_equal(egrid.n_electrodes, 1)
+
+    # Can't have a zero-sized grid:
+    with pytest.raises(ValueError):
+        egrid = ElectrodeGrid((0, 0))
+    with pytest.raises(ValueError):
+        egrid = ElectrodeGrid((5, 0))
+
+    # Invalid naming conventions:
+    with pytest.raises(ValueError):
+        egrid = ElectrodeGrid(shape, names=[1])
+    with pytest.raises(ValueError):
+        egrid = ElectrodeGrid(shape, names=[])
+    with pytest.raises(TypeError):
+        egrid = ElectrodeGrid(shape, names={1})
+    with pytest.raises(TypeError):
+        egrid = ElectrodeGrid(shape, names={})
+
+    # Test all naming conventions:
+    egrid = ElectrodeGrid(shape, names=('A', '1'))
+    # print([e for e in egrid.keys()])
+    npt.assert_equal([e for e in egrid.keys()],
+                     ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
+    egrid = ElectrodeGrid(shape, names=('1', 'A'))
+    # print([e for e in egrid.keys()])
+    # egrid = ElectrodeGrid(shape, names=('A', '1'))
+    npt.assert_equal([e for e in egrid.keys()],
+                     ['A1', 'B1', 'C1', 'A2', 'B2', 'C2'])
+
+    # egrid = ElectrodeGrid(shape, names=('A', '1'))
+    # npt.assert_equal([e for e in egrid.keys()],
+    #                  ['A1', 'A1', 'C1', 'A2', 'B2', 'C2'])
+    egrid = ElectrodeGrid(shape, names=('1', '1'))
+    # print([e for e in egrid.keys()])
+    npt.assert_equal([e for e in egrid.keys()],
+                     ['11', '12', '13', '21', '22', '23'])
+    egrid = ElectrodeGrid(shape, names=('A', 'A'))
+    # print([e for e in egrid.keys()])
+    npt.assert_equal([e for e in egrid.keys()],
+                     ['AA', 'AB', 'AC', 'BA', 'BB', 'BC'])
+
+    # rows and columns start at values other than A or 1
+    egrid = ElectrodeGrid(shape, names=('B', '1'))
+    npt.assert_equal([e for e in egrid.keys()],
+                     ['B1', 'B2', 'B3', 'C1', 'C2', 'C3'])
+    egrid = ElectrodeGrid(shape, names=('A', '2'))
+    npt.assert_equal([e for e in egrid.keys()],
+                     ['A2', 'A3', 'A4', 'B2', 'B3', 'B4'])
+
+    # test unique names
+    egrid = ElectrodeGrid(shape, names=['53', '18', '00', '81', '11', '12'])
+    npt.assert_equal([e for e in egrid.keys()],
+                     ['53', '18', '00', '81', '11', '12'])
+
+
+def test_ElectrodeGrid___get_item__():
+    grid = ElectrodeGrid((2, 4), names=('C', '3'))
+    npt.assert_equal(grid[0], grid['C3'])
+    npt.assert_equal(grid[0, 0], grid['C3'])
+    npt.assert_equal(grid[1], grid['C4'])
+    npt.assert_equal(grid[0, 1], grid['C4'])
+    npt.assert_equal(grid[['C3', 1, (0, 2)]],
+                     [grid['C3'], grid['C4'], grid['C5']])
 
 
 def test_ProsthesisSystem():
