@@ -85,7 +85,7 @@ def plot_fundus(implant, ax=None, loc_od=(15.5, 1.5), n_bundles=100,
         ax.plot(el.x, el.y, 'ow', markersize=np.sqrt(el.r))
 
     # Plot the location of the array's tack and annotate it (optional):
-    if implant.tack:
+    if hasattr(implant, 'tack'):
         tx, ty = implant.tack
         ax.plot(tx, ty, 'ow')
         if annot_array:

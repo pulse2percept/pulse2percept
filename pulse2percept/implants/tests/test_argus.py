@@ -15,6 +15,7 @@ def test_ArgusI(ztype, x, y, r):
     z = 100 if ztype == 'float' else np.ones(16) * 20
     # Convert rotation angle to rad
     rot = r * np.pi / 180
+
     argus = implants.ArgusI(x, y, z=z, rot=rot)
 
     # Coordinates of first electrode
@@ -27,6 +28,8 @@ def test_ArgusI(ztype, x, y, r):
 
     # Then off-set: Make sure first electrode is placed
     # correctly
+    print("argus x set to", argus['A1'].x)
+    print("artifical array set to", xy[0] + x)
     npt.assert_almost_equal(argus['A1'].x, xy[0] + x)
     npt.assert_almost_equal(argus['A1'].y, xy[1] + y)
 
@@ -65,31 +68,29 @@ def test_ArgusI(ztype, x, y, r):
     argus_re = implants.ArgusI(eye='RE', x=xc, y=yc)
     npt.assert_equal(argus_re['D1'].x > argus_re['A1'].x, True)
     npt.assert_almost_equal(argus_re['D1'].y, argus_re['A1'].y)
-    npt.assert_equal(argus_re.tack[0] < argus_re['D1'].x, True)
-    npt.assert_almost_equal(argus_re.tack[1], yc)
 
+    # need to adjust for reflection about y-axis
     # Left-eye implant:
     argus_le = implants.ArgusI(eye='LE', x=xc, y=yc)
-    npt.assert_equal(argus_le['A1'].x > argus_le['D1'].x, True)
+    npt.assert_equal(argus_le['A1'].x > argus_le['D4'].x, True)
     npt.assert_almost_equal(argus_le['D1'].y, argus_le['A1'].y)
-    npt.assert_equal(argus_le.tack[0] > argus_le['A1'].x, True)
-    npt.assert_almost_equal(argus_le.tack[1], yc)
 
     # In both left and right eyes, rotation with positive angle should be
     # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
-    for eye, el in zip(['LE', 'RE'], ['A1', 'D4']):
+    for eye, el in zip(['LE', 'RE'], ['A1', 'D1']):
         before = implants.ArgusI(eye=eye)
         after = implants.ArgusI(eye=eye, rot=np.deg2rad(10))
-        npt.assert_equal(after[el].x < before[el].x, True)
+        npt.assert_equal(after[el].x > before[el].x, True)
         npt.assert_equal(after[el].y > before[el].y, True)
 
-    argus = implants.ArgusI()
-    # Old to new
-    npt.assert_equal(argus.get_new_name('M1'), 'D4')
-    npt.assert_equal(argus.get_new_name('M6'), 'C3')
-    # New to old
-    npt.assert_equal(argus.get_old_name('B2'), 'L1')
-    npt.assert_equal(argus.get_old_name('A1'), 'L6')
+    # Check naming scheme
+    argus = implants.ArgusI(use_legacy_names=False)
+    npt.assert_equal(list(argus.keys())[15], 'D4')
+    npt.assert_equal(list(argus.keys())[0], 'A1')
+
+    argus = implants.ArgusI(use_legacy_names=True)
+    npt.assert_equal(list(argus.keys())[15], 'M1')
+    npt.assert_equal(list(argus.keys())[0], 'L6')
 
     # Set a stimulus via dict:
     argus = implants.ArgusI(stim={'B3': 13})
@@ -155,21 +156,22 @@ def test_ArgusII(ztype, x, y, r):
     argus_re = implants.ArgusII(eye='RE', x=xc, y=yc)
     npt.assert_equal(argus_re['A10'].x > argus_re['A1'].x, True)
     npt.assert_almost_equal(argus_re['A10'].y, argus_re['A1'].y)
-    npt.assert_equal(argus_re.tack[0] < argus_re['A1'].x, True)
-    npt.assert_almost_equal(argus_re.tack[1], yc)
 
     # Left-eye implant:
     argus_le = implants.ArgusII(eye='LE', x=xc, y=yc)
     npt.assert_equal(argus_le['A1'].x > argus_le['A10'].x, True)
     npt.assert_almost_equal(argus_le['A10'].y, argus_le['A1'].y)
-    npt.assert_equal(argus_le.tack[0] > argus_le['A10'].x, True)
-    npt.assert_almost_equal(argus_le.tack[1], yc)
 
     # In both left and right eyes, rotation with positive angle should be
     # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
-    for eye, el in zip(['LE', 'RE'], ['F1', 'F10']):
+    for eye, el in zip(['LE', 'RE'], ['F2', 'F10']):
+        # By default, electrode 'F1' in a left eye has the same coordinates as
+        # 'F10' in a right eye (because the columns are reversed). Thus both
+        # cases are testing an electrode with x>0, y>0:
         before = implants.ArgusII(eye=eye)
-        after = implants.ArgusII(eye=eye, rot=np.deg2rad(10))
+        after = implants.ArgusII(eye=eye, rot=np.deg2rad(20))
+        print(after[el].x, before[el].x)
+        print(after[el].y, before[el].y)
         npt.assert_equal(after[el].x < before[el].x, True)
         npt.assert_equal(after[el].y > before[el].y, True)
 
