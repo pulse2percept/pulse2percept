@@ -1,5 +1,6 @@
 """Alpha IMS"""
 import numpy as np
+from collections import OrderedDict
 from .base import DiskElectrode, ElectrodeArray, ElectrodeGrid, ProsthesisSystem
 
 
@@ -86,7 +87,7 @@ class AlphaIMS(ProsthesisSystem):
             for row in range(self.earray.shape[0]):
                 names[row] = names[row][::-1]
             # Build a new ordered dict:
-            electrodes = coll.OrderedDict([])
+            electrodes = OrderedDict([])
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
             # Assign the new ordered dict to earray:
@@ -165,3 +166,30 @@ class AlphaAMS(ProsthesisSystem):
 
         # Set stimulus if available:
         self.stim = stim
+
+        # Set left/right eye:
+        if not isinstance(eye, str):
+            raise TypeError("'eye' must be a string, either 'LE' or 'RE'.")
+        if eye != 'LE' and eye != 'RE':
+            raise ValueError("'eye' must be either 'LE' or 'RE'.")
+        # Unfortunately, in the left eye the labeling of columns is reversed...
+        if eye == 'LE':
+            # FIXME: Would be better to have more flexibility in the naming
+            # convention. This is a quick-and-dirty fix:
+            names = list(self.earray.keys())
+            objects = list(self.earray.values())
+            names = np.array(names).reshape(self.earray.shape)
+            # Reverse column names:
+            for row in range(self.earray.shape[0]):
+                names[row] = names[row][::-1]
+            # Build a new ordered dict:
+            electrodes = OrderedDict([])
+            for name, obj in zip(names.ravel(), objects):
+                electrodes.update({name: obj})
+            # Assign the new ordered dict to earray:
+            self.earray.electrodes = electrodes
+
+    def get_params(self):
+        params = super().get_params()
+        params.update({'shape': self.shape})
+        return params
