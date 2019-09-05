@@ -5,8 +5,9 @@
 import matplotlib
 matplotlib.use('agg')
 
-from .base import plot_fundus
+from .axon_map import plot_axon_map, plot_implant_on_axon_map
 
 __all__ = [
-    'plot_fundus'
+    'plot_axon_map',
+    'plot_implant_on_axon_map'
 ]
