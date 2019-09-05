@@ -12,13 +12,14 @@ import matplotlib.pyplot as plt
 from matplotlib import patches
 import logging
 
-from pulse2percept.implants import ProsthesisSystem
-from pulse2percept.utils import parfor
-from pulse2percept.models import AxonMapModel, dva2ret
+from ..implants import ProsthesisSystem
+from ..utils import parfor
+from ..models import AxonMapModel, dva2ret
 
 
 def plot_fundus(implant, ax=None, loc_od=(15.5, 1.5), n_bundles=100,
-                upside_down=False, annot_array=True, annot_quadr=True):
+                upside_down=False, annotate_implant=True,
+                annotate_quadrants=True):
     """Plot an implant on top of the axon map
     This function plots an electrode array on top of the axon map, akin to a
     fundus photograph.
@@ -38,9 +39,9 @@ def plot_fundus(implant, ax=None, loc_od=(15.5, 1.5), n_bundles=100,
         Flag whether to plot the retina upside-down, such that the upper
         half of the plot corresponds to the upper visual field. In general,
         inferior retina == upper visual field (and superior == lower).
-    annot_array : bool, optional, default: True
-        Flag whether to label electrodes and the tack.
-    annot_quadr : bool, optional, default: True
+    annotate_implant : bool, optional, default: True
+        Flag whether to label electrodes in the implant.
+    annotate_quadrants : bool, optional, default: True
         Flag whether to annotate the four retinal quadrants
         (inferior/superior x temporal/nasal).
     """
@@ -57,7 +58,7 @@ def plot_fundus(implant, ax=None, loc_od=(15.5, 1.5), n_bundles=100,
                   "the optic disc; changing %.2f to %.2f" % (implant.eye,
                                                              loc_od[0],
                                                              -loc_od[0]))
-        print(logstr)
+        logging.getLogger(__name__).info(logstr)
         loc_od = (-loc_od[0], loc_od[1])
     if ax is None:
         # No axes object given: create
@@ -80,28 +81,15 @@ def plot_fundus(implant, ax=None, loc_od=(15.5, 1.5), n_bundles=100,
 
     # Highlight location of stimulated electrodes:
     if implant.stim is not None:
-        for el in implant.stim.coords['electrodes'].values:
-            ax.plot(el.x, el.y, 'oy', markersize=np.sqrt(el.r) * 2)
+        for e in implant.stim.electrodes:
+            ax.plot(implant[e].x, implant[e].y, 'oy',
+                    markersize=np.sqrt(implant[e].r) * 2)
 
     # Plot all electrodes and label them (optional):
     for name, el in implant.items():
-        if annot_array:
+        if annotate_implant:
             ax.text(el.x + 100, el.y + 50, name, color='white', size='x-large')
         ax.plot(el.x, el.y, 'ow', markersize=np.sqrt(el.r))
-
-    # Plot the location of the array's tack and annotate it (optional):
-    if hasattr(implant, 'tack'):
-        tx, ty = implant.tack
-        ax.plot(tx, ty, 'ow')
-        if annot_array:
-            if upside_down:
-                offset = 100
-            else:
-                offset = -100
-            ax.text(tx, ty + offset, 'tack',
-                    horizontalalignment='center',
-                    verticalalignment='top',
-                    color='white', size='large')
 
     # Show circular optic disc:
     ax.add_patch(patches.Circle(dva2ret(loc_od), radius=900, alpha=1,
@@ -118,7 +106,7 @@ def plot_fundus(implant, ax=None, loc_od=(15.5, 1.5), n_bundles=100,
 
     # Annotate the four retinal quadrants near the corners of the plot:
     # superior/inferior x temporal/nasal
-    if annot_quadr:
+    if annotate_quadrants:
         if upside_down:
             topbottom = ['bottom', 'top']
         else:
