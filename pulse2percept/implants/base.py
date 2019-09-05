@@ -1,13 +1,13 @@
 """implants"""
 import numpy as np
-import abc
+from abc import ABCMeta, abstractmethod
 import collections as coll
 
 from ..stimuli import Stimulus
 from ..utils import PrettyPrint
 
 
-class Electrode(PrettyPrint):
+class Electrode(PrettyPrint, metaclass=ABCMeta):
     """Electrode
 
     Abstract base class for all electrodes.
@@ -28,7 +28,7 @@ class Electrode(PrettyPrint):
         """Return a dictionary of class attributes"""
         return {'x': self.x, 'y': self.y, 'z': self.z}
 
-    @abc.abstractmethod
+    @abstractmethod
     def electric_potential(self, x, y, z):
         raise NotImplementedError
 
@@ -100,13 +100,44 @@ class DiskElectrode(Electrode):
 class ElectrodeArray(PrettyPrint):
     """Electrode array
 
-    A collection of Electrode objects.
+    A collection of :py:class:`~pulse2percept.implants.Electrode` objects.
+
+    Parameters
+    ----------
+    electrodes : array-like
+        Either a single :py:class:`~pulse2percept.implants.Electrode` object
+        or a dict, list, or NumPy array thereof. The keys of the dict will
+        serve as electrode names. Otherwise electrodes will be indexed 0..N.
+
+    Examples
+    --------
+    Electrode array made from a single DiskElectrode:
+
+    >>> from pulse2percept.implants import ElectrodeArray, DiskElectrode
+    >>> earray = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
+    >>> earray.electrodes  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    OrderedDict([(0, DiskElectrode(r=20..., x=0..., y=0..., z=0...))])
+
+    Electrode array made from a single DiskElectrode with name 'A1':
+
+    >>> from pulse2percept.implants import ElectrodeArray, DiskElectrode
+    >>> earray = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 100)})
+    >>> earray.electrodes  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    OrderedDict([('A1', DiskElectrode(r=20..., x=0..., y=0..., z=0...))])
+
     """
 
-    # electrodes is initialized as an empty dictionary
     def __init__(self, electrodes):
         self.electrodes = coll.OrderedDict()
         self.add_electrodes(electrodes)
+
+    @property
+    def electrodes(self):
+        return self._electrodes
+
+    @electrodes.setter
+    def electrodes(self, electrodes):
+        self._electrodes = electrodes
 
     @property
     def n_electrodes(self):
@@ -133,7 +164,7 @@ class ElectrodeArray(PrettyPrint):
         if name in self.electrodes.keys():
             raise ValueError(("Cannot add electrode: key '%s' already "
                               "exists.") % name)
-        self.electrodes.update({name: electrode})
+        self._electrodes.update({name: electrode})
 
     def add_electrodes(self, electrodes):
         """

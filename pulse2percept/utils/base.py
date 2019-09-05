@@ -73,7 +73,7 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
                         strobj = strobj.replace("'>", "")
                 sparam = key + '=' + strobj + ', '
             # If adding `sparam` puts line over `lwidth`, start a new line:
-            if lc + len(sparam) > lwidth:
+            if lc + len(sparam) > lwidth and '\n' in str_params:
                 str_params += '\n' + ' ' * lindent
                 lc = lindent
             str_params += sparam

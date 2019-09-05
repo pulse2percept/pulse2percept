@@ -21,7 +21,6 @@ sections:
 *   `Understanding issue labels`_
 *   `Contributing code`_
 *   `Testing your code`_
-*   `Recognizing contributions`_
 
 .. _dev-contributing-workflow:
 
@@ -40,7 +39,6 @@ workflow similar to the following:
     announcing your intention to work on it.
     If no such issue exists, create a new one (see
     `Understanding issue labels`_).
-
     This allows other members of the development team to confirm that you
     aren't overlapping with existing work and that everyone is on the same page
     with the goal of your proposed work.
