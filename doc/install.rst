@@ -21,14 +21,14 @@ the bleeding-edge version, you will want to install
 Prerequisites
 =============
 
-*  **Python** (>=3.5): Before getting started, you will need to have `Python`_
-   on your computer. Check if Python is installed on your system by typing
-   ``python --version`` in a terminal or command prompt.
+*  **Python** (>=3.5): Before getting started, you will need to have to
+   `install Python`_ on your computer. Check if Python is installed on your
+   system by typing ``python --version`` in a terminal or command prompt.
 
    .. important::
 
-       pulse2percept 0.5 will be the last release to support Python 2.7 and
-       3.4. pulse2percept 0.6+ will require **Python 3.5 or newer**.
+       pulse2percept 0.5 was the last release to support Python 2.7 and 3.4.
+       pulse2percept 0.6+ will require **Python 3.5 or newer**.
 
 *  **Cython** (>= 0.28): pulse2percept relies on C extension modules for code
    acceleration. These require a C compiler, which on Unix platforms is
@@ -41,7 +41,7 @@ Prerequisites
        well (Python >= 3.5 requires C++ 14.X to be exact).
        Also note that you don't need to install Visual Studio itself.
 
-   2.  Install `Cython`_:
+   2.  `Install Cython`_:
 
        .. code-block:: bash
 
@@ -51,15 +51,15 @@ Prerequisites
        is a problem with your Build Tools installation, in which case you
        should follow `this guide`_.
 
-   .. important::
+   .. warning::
 
        Some guides on the web tell you to install MinGW instead of Visual Studio.
        However, this is not recommended for 64-bit platforms.
        When in doubt, follow `this guide`_.
 
-.. _Python: https://wiki.python.org/moin/BeginnersGuide/Download
+.. _install Python: https://wiki.python.org/moin/BeginnersGuide/Download
 .. _Microsoft website: https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2019
-.. _Cython: https://cython.readthedocs.io/en/latest/src/quickstart/install.html
+.. _Install Cython: https://cython.readthedocs.io/en/latest/src/quickstart/install.html
 .. _this guide: https://github.com/cython/cython/wiki/CythonExtensionsOnWindows
 
 .. _install-release:
@@ -72,7 +72,7 @@ the latest pulse2percept release can be installed using pip:
 
 .. code-block:: bash
 
-    pip3 install -U pulse2percept
+    pip3 install pulse2percept
 
 Then from any Python console or script, try:
 
@@ -108,75 +108,67 @@ Prerequisites
 .. _XCode: https://developer.apple.com/support/xcode
 .. _ezwinports: https://gist.github.com/evanwill/0207876c3243bbb6863e65ec5dc3f058#make
 
+Dependencies
+------------
+
+.. include:: ../README.rst
+   :start-line: 109
+   :end-line: 141
+
 Obtaining the latest code from GitHub
 -------------------------------------
 
-The latest code can be obtained from our `GitHub repository`_.
-Open a terminal, navigate to the directory where you want to install
-pulse2percept, and type:
+1.  Go to `pulse2percept on GitHub`_ and click on "Fork" in the top-right
+    corner (you will need a `GitHub account`_ for this).
+    This will allow you to work on your own copy of the code
+    (``https://github.com/<username>/pulse2percept``)
+    and contribute changes later on.
 
-.. code-block:: bash
+2.  Clone the repository to get a local copy on your computer:
 
-    git clone https://github.com/uwescience/pulse2percept
+    .. code-block:: bash
 
-This will download the git repository and place it into a directory called
-"pulse2percept".
+        git clone https://github.com/<username>/pulse2percept.git
+        cd pulse2percept
 
-.. note::
+    Make sure to replace ``<username>`` above with your actual GitHub user
+    name.
 
-   If you wish to contribute to the project, it is recommended to fork the
-   repo instead (see our :ref:`Contribution Guidelines <dev-contributing>`).
+    .. note::
 
-.. _GitHub repository: https://github.com/uwescience/pulse2percept
+        A "fork" is basically a "remote copy" of a GitHub repository; i.e.,
+        creating "https://github.com/<username>/pulse2percept.git" from
+        "https://github.com/uwescience/pulse2percept.git".
 
-Installing dependencies
------------------------
+        A "clone" is basically a "local copy" of your GitHub repository; i.e.,
+        creating a local "pulse2percept" directory (including all the git
+        machinery and history) from
+        "https://github.com/<username>/pulse2percept.git".
 
-pulse2percept requires:
+3.  Install all dependencies listed in ``requirements.txt``:
 
-*  :ref:`Python <install-prerequisites>` (>= 3.5)
-*  :ref:`Cython <install-prerequisites>` (>= 0.28)
-*  `NumPy`_ (>= 1.9)
-*  `SciPy`_ (>= 1.0)
-*  `JobLib`_ (>= 0.11)
+    .. code-block:: bash
 
-Optional packages include:
+        pip3 install -r requirements.txt
 
-*  `Dask`_: an alternative to JobLib
-*  `Numba`_: for just-in-time compilation of several functions in the
-   :py:mod:`~pulse2percept.utils.convolution` module
-*  `scikit-image`_: for functions in the :py:mod:`~pulse2percept.io.image`
-   module
-*  `scikit-video`_: for functions in the :py:mod:`~pulse2percept.io.video`
-   module
+    This includes Cython. If you are on Windows, you will also need a suitable
+    C compiler (see :ref:`Prerequisites <install-prerequisites>` above).
 
-All required packages are listed in ``requirements.txt`` in the root directory
-of the git repository, and can be installed with the following command:
+    If you plan on :ref:`contributing to pulse2percept <dev-contributing>`,
+    you should also install all developer dependencies listed in
+    ``requirements-dev.txt``:
 
-.. code-block:: bash
+    .. code-block:: bash
 
-    cd pulse2percept
-    pip3 install -r requirements.txt
+       pip3 install -r requirements-dev.txt
 
-All packages required for development (including all optional packages) are
-listed in ``requirements-dev.txt`` and can be installed via:
-
-.. code-block:: bash
-
-    pip3 install -r requirements-dev.txt
-
-.. _NumPy: https://numpy.org
-.. _SciPy: https://scipy.org
-.. _JobLib: https://joblib.readthedocs.io
-.. _Dask: https://dask.org
-.. _Numba: https://numba.pydata.org
-.. _scikit-image: https://scikit-image.org
-.. _scikit-video: https://www.scikit-video.org
+.. _pulse2percept on GitHub: https://github.com/uwescience/pulse2percept
+.. _GitHub account: https://help.github.com/articles/signing-up-for-a-new-github-account
 
 Building pulse2percept
 ----------------------
 
-From the root directory of the git repo, type:
+Assuming you are still in the root directory of the git clone, type:
 
 .. code-block:: bash
 
@@ -202,10 +194,42 @@ install ``make``, the following commands are available:
 *  ``make clean``: Cleans out all build files
 *  ``make help``: Brings up this message
 
+.. _install-upgrade:
+
+Upgrading pulse2percept
+=======================
+
+If you have previously installed pulse2percept, but wish to upgrade to the
+latest version, you have two options.
+
+To upgrade to the latest stable release, use the ``-U`` option with pip:
+
+.. code-block:: bash
+
+    pip3 install -U pulse2percept
+
+To upgrade to the bleedingest-edge version, navigate to the directory where you
+cloned the git repository. If you have never upgraded your code before, add
+a new `remote repository`_ named "upstream" (you need to do this only once):
+
+.. code-block:: bash
+
+    git remote add upstream https://github.com/uwescience/pulse2percept.git
+
+Then you `sync your fork`_ by grabbing the latest code from the uwescience
+master branch:
+
+.. code-block:: bash
+
+    git pull upstream master
+
+.. _remote repository: https://help.github.com/articles/configuring-a-remote-for-a-fork
+.. _sync your fork: https://help.github.com/articles/syncing-a-fork/
+
 .. _install-uninstall:
 
-Uninstalling
-============
+Uninstalling pulse2percept
+==========================
 
 You can uninstall pulse2percept using pip:
 
@@ -213,8 +237,9 @@ You can uninstall pulse2percept using pip:
 
    pip3 uninstall pulse2percept
 
-In addition, you may want to manually delete the GitHub folder containing all
-the source code if you installed :ref:`from source <install-source>`.
+In addition, if you installed :ref:`from source <install-source>`, you may want
+to manually delete the directory where you cloned the git repository that
+contains all the source code.
 
 .. _install-troubleshooting:
 

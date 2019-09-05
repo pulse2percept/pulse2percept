@@ -44,7 +44,7 @@ if "%1" == "clean" (
 	for /d %%i in (%BUILDDIR%\*) do rmdir /q /s %%i
 	del /q /s %BUILDDIR%\*
 	del /q /s _api
-	del /q /s _examples
+	del /q /s examples
 	del /q /s savefig
 	goto end
 )

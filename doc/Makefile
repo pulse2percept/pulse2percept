@@ -40,7 +40,7 @@ help:
 clean:
 	-rm -rf $(BUILDDIR)
 	-rm -rf _api
-	-rm -rf _examples
+	-rm -rf examples
 	-rm -rf savefig
 	-rm debug.log
 

@@ -259,7 +259,7 @@ sphinx_gallery_conf = {
     'reference_url': {
         'pulse2percept': None},
     'examples_dirs': ['../examples'],
-    'gallery_dirs': ['_examples'],
+    'gallery_dirs': ['examples'],
     'subsection_order': ExplicitOrder(['../examples/implants',
                                        '../examples/stimuli',
                                        '../examples/models',

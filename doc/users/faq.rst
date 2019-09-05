@@ -35,12 +35,36 @@ Python is free, well-designed, painless to read, and easy to use.
 True, sometimes Python can be slow, but that is why we use `Cython`_ under the
 hood, which takes execution up to C speed.
 
+.. _Cython: http://cython.org
+
 How can I contribute to pulse2percept?
 --------------------------------------
 
-We appreciate all contributions to pulse2percept, but those accepted fastest
-will follow a workflow similar to the one described in our
-:ref:`Contribution Guidelines <dev-contributing>`.
+If you found a bug or want to request a feature, simply open an issue in our
+`Issue Tracker`_ on GitHub. Make sure to
+:ref:`label your issue appropriately <dev-contributing-issue-labels>`.
 
-.. _open an issue: https://github.com/uwescience/pulse2percept/issues
-.. _Cython: http://cython.org
+If you would like to contribute some code, great!
+We appreciate all contributions, but those accepted fastest will follow a
+workflow similar to the one described in our
+:ref:`Contribution Guidelines <dev-contributing-workflow>`.
+
+The code I downloaded does not match the documentation. What gives?
+-------------------------------------------------------------------
+
+Make sure you are reading the right version of the documentation:
+
+*  If you installed pulse2percept :ref:`with pip <install-release>`, you are
+   using the latest stable release, for which you can find documentation at
+   `pulse2percept.readthedocs.io/en/stable`_.
+
+*  If you installed pulse2percept from source, you are using the
+   :ref:`bleeding-edge version <install-source>`, for which you can find
+   documentation at `pulse2percept.readthedocs.io/en/latest`_.
+
+*  Unfortunately, pulse2percept < 0.5 is incompatible with ReadTheDocs.
+   Please refer to the :ref:`Installation Guide <install-upgrade>` for
+   information on how to upgrade your code to the latest version.
+
+.. _pulse2percept.readthedocs.io/en/stable: https://pulse2percept.readthedocs.io/en/stable/index.html
+.. _pulse2percept.readthedocs.io/en/latest: https://pulse2percept.readthedocs.io/en/latest/index.html

@@ -7,7 +7,7 @@
 
    Overview <self>
    install
-   _examples/index
+   examples/index
 
 .. toctree::
    :caption: Basic concepts
@@ -50,19 +50,9 @@ pulse2percept |version| documentation
 Installation
 ============
 
-The latest stable release of *pulse2percept* can be installed with pip:
-
-.. code-block:: bash
-
-    pip3 install pulse2percept
-
-In order to get the bleeding-edge version of *pulse2percept*, use the commands:
-
-.. code-block:: bash
-
-    git clone https://github.com/uwescience/pulse2percept.git
-    cd pulse2percept
-    make
+.. include:: ../README.rst
+   :start-line: 78
+   :end-line: 98
 
 Detailed instructions for different platforms can be found in our
 :ref:`Installation Guide <install>`.
@@ -75,9 +65,11 @@ Where to go from here
 *  Familiarize yourself with :ref:`visual prostheses <topics-implants>`,
    :ref:`electrical stimuli <topics-stimuli>`, and our
    :ref:`computational models <topics-models>`.
-*  Request features or report bugs in our `issue tracker`_ on GitHub.
+*  See if your question has already been addressed in the
+   :ref:`FAQ <users/faq>`.
+*  Request features or report bugs in our `Issue Tracker`_ on GitHub.
 
-.. _issue tracker: https://github.com/uwescience/pulse2percept/issues
+.. _Issue Tracker: https://github.com/uwescience/pulse2percept/issues
 
 .. figure:: _static/eScience_Logo_HR.png
    :align: center
