@@ -24,6 +24,5 @@ def assert_warns_msg(expected_warning, func, msg, *args, **kwargs):
     with pytest.warns(expected_warning) as record:
         func(*args, **kwargs)
     npt.assert_equal(len(record), 1)
-    print(msg, record[0].message.args[0])
     if msg is not None:
         npt.assert_equal(msg in record[0].message.args[0], True)
