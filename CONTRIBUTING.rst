@@ -67,12 +67,12 @@ workflow similar to the following:
     When opening a `pull request`_ (PR) against the uwescience master branch,
     please use one of the following prefixes:
 
-    * **ENH:** for enhancements
-    * **FIX:** for bug fixes
-    * **TST:** for new or updated tests
-    * **DOC:** for new or updated documentation
-    * **STY:** for stylistic changes
-    * **REF:** for refactoring existing code
+    * **[ENH]** for enhancements
+    * **[FIX]** for bug fixes
+    * **[TST]** for new or updated tests
+    * **[DOC]** for new or updated documentation
+    * **[STY]** for stylistic changes
+    * **[REF]** for refactoring existing code
 
     Once your PR is ready, request a review from `@arokem`_ and/or
     `@mbeyeler`_, who will review your changes before merging them into the
@@ -80,7 +80,7 @@ workflow similar to the following:
 
     .. note::
 
-        If your PR is not yet ready to be merged, also add the **WIP** prefix
+        If your PR is not yet ready to be merged, also add the **[WIP]** prefix
         to label it as a "work in progress".
 
 .. _GitHub account: https://help.github.com/articles/signing-up-for-a-new-github-account
