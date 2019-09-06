@@ -517,7 +517,7 @@ class Stimulus(PrettyPrint):
 
     @property
     def data(self):
-        """Data container
+        """Stimulus data container
 
         A 2-D NumPy array that contains the stimulus data, where the rows
         denote electrodes and the columns denote points in time.
@@ -526,20 +526,39 @@ class Stimulus(PrettyPrint):
 
     @property
     def shape(self):
+        """Data container shape"""
         return self.data.shape
 
     @property
     def electrodes(self):
+        """Electrode names
+
+        A list of electrode names, corresponding to the rows in the data
+        container.
+        """
         return self._stim['electrodes']
 
     @property
     def time(self):
+        """Time steps
+
+        A list of time steps, corresponding to the columns in the data
+        container.
+        """
         return self._stim['time']
 
     @property
     def metadata(self):
+        """Metadata
+
+        A dictionary of metadata about the stimulus.
+        """
         return self._stim['metadata']
 
     @property
     def interp_method(self):
+        """Interpolation method
+
+        The method used to interpolate stimulus values at specific time steps.
+        """
         return self._stim['interp_method']
