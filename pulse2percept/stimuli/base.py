@@ -391,6 +391,32 @@ class Stimulus(PrettyPrint):
         return Stimulus(data, electrodes=self.electrodes, time=time,
                         compress=False)
 
+    def __getitem__(self, item):
+        """Returns an item from the data array, interpolated if necessary"""
+        try:
+            # NumPy handles most indexing and slicing:
+            return self._stim['data'][item]
+        except IndexError as e:
+            # IndexErrors must still be thrown except when `item` is a tuple,
+            # in which case we might want to interpolate time:
+            if not isinstance(item, tuple):
+                raise IndexError(e)
+        # Handle the special case where we interpolate time. Electrodes cannot
+        # be interpolated, so convert from slice, ellipsis or indices into a
+        # list:
+        if item[0] == Ellipsis:
+            interp = np.array(self._interp)
+        else:
+            interp = np.array([self._interp[item[0]]]).flatten()
+        # Time might be a single index or a list of indices. Convert all to
+        # list so we can iterate:
+        time = np.array([item[1]]).flatten()
+        data = np.array([[ip(t) for t in time] for ip in interp])
+        # Return a single element as scalar:
+        if len(data) == 1:
+            data = data.ravel()[0]
+        return data
+
     def __eq__(self, other):
         """Returns True if two Stimulus objects are identical
 

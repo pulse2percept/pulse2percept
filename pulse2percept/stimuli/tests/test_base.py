@@ -295,3 +295,27 @@ def test_Stimulus___eq__():
     # Different type:
     npt.assert_equal(stim == np.ones((2, 3)), False)
     npt.assert_equal(stim != np.ones((2, 3)), True)
+
+
+def test_Stimulus___getitem__():
+    stim = Stimulus(np.arange(12).reshape((3, 4)))
+    # Slicing:
+    npt.assert_equal(stim[:], stim.data)
+    npt.assert_equal(stim[...], stim.data)
+    npt.assert_equal(stim[:, :], stim.data)
+    npt.assert_equal(stim[:2], stim.data[:2])
+    npt.assert_equal(stim[:, 0], stim.data[:, 0])
+    npt.assert_equal(stim[0, :], stim.data[0, :])
+    npt.assert_equal(stim[0, ...], stim.data[0, ...])
+    npt.assert_equal(stim[..., 0], stim.data[..., 0])
+    # Single element:
+    npt.assert_equal(stim[0, 0], stim.data[0, 0])
+    # Interpolating time:
+    npt.assert_almost_equal(stim[0, 3.3], 3.3)
+    npt.assert_almost_equal(stim[..., 3.3], np.array([[3.3], [7.3], [11.3]]))
+    # Extrapolating should be disabled by default:
+    npt.assert_almost_equal(stim[0, 9.9], 9.9)
+    with pytest.raises(IndexError):
+        stim[10, :]
+    with pytest.raises(TypeError):
+        stim[3.3, 0]
