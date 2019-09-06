@@ -14,7 +14,7 @@ class Stimulus(PrettyPrint):
     .. versionadded:: 0.6
 
     A stimulus is comprised of a labeled 2-D NumPy array that contains the
-    data, where the rows denoted electrodes and the columns denote points in
+    data, where the rows denote electrodes and the columns denote points in
     time.
 
     A stimulus can be created from a variety of source types (see below),
@@ -133,21 +133,8 @@ class Stimulus(PrettyPrint):
     def __init__(self, source, electrodes=None, time=None, metadata=None,
                  compress=False, interp_method='linear'):
         # Extract the data and coordinates (electrodes, time) from the source:
-        data, electrodes, time, compress = self._factory(source, electrodes,
-                                                         time, compress)
-        # Save all attributes:
-        self.data = data
-        self.shape = data.shape
-        self.electrodes = electrodes
-        self.time = time
-        self.metadata = metadata
-        self.compressed = False
-        # Compress the data if necessary (will set compressed to True):
-        if compress:
-            self.compress()
-        # Set up the interpolator:
-        self.interp_method = interp_method
-        self._set_interp()
+        self._factory(source, electrodes, time, metadata, compress,
+                      interp_method)
 
     def get_params(self):
         """Return a dictionary of class attributes"""
@@ -189,7 +176,7 @@ class Stimulus(PrettyPrint):
                             "TimeSeries." % type(source))
         return time, data
 
-    def _factory(self, source, electrodes, time, compress):
+    def _factory(self, source, electrodes, time, mdata, compress, intp_method):
         if isinstance(source, self.__class__):
             # Stimulus: We're done. This might happen in ProsthesisSystem if
             # the user builds the stimulus themselves. It can also be used to
@@ -200,11 +187,14 @@ class Stimulus(PrettyPrint):
             _compress = source.compressed
         else:
             # Input is either be a valid source type (see `self._from_source`)
-            # or a collection thereof. Thus treat everything as a collection,
+            # or a collection thereof. Thus treat everything as a collection
             # and iterate:
             if isinstance(source, dict):
                 iterator = source.items()
             elif isinstance(source, (list, tuple, np.ndarray)):
+                if len(source) == 0:
+                    # Make sure a 2-D array is returned:
+                    source = [[]]
                 iterator = enumerate(source)
             else:
                 iterator = enumerate([source])
@@ -247,7 +237,6 @@ class Stimulus(PrettyPrint):
             _electrodes = electrodes
         else:
             _electrodes = np.array(_electrodes)
-            assert len(_electrodes) == _data.shape[0]
         # User can overwrite time:
         if time is not None:
             if _time is None:
@@ -259,7 +248,21 @@ class Stimulus(PrettyPrint):
                                  "match the number of time steps in the data "
                                  "(%d)." % (len(time), _data.shape[1]))
             _time = time
-        return _data, _electrodes, _time, _compress
+        # Store the data in the private container. Setting all elements at once
+        # enforces consistency; e.g., between shape of electrodes and time:
+        self._stim = {
+            'data': _data,
+            'electrodes': _electrodes,
+            'time': _time,
+            'metadata': mdata,
+            'compressed': False,
+            'interp_method': intp_method
+        }
+        # Set up the interpolator:
+        self._set_interp()
+        # Compress the data if necessary (will set compressed to True):
+        if _compress:
+            self.compress()
 
     def compress(self):
         """Compress the source data
@@ -305,11 +308,15 @@ class Stimulus(PrettyPrint):
             # now we need to vertically stack them and transpose:
             data = np.vstack(signal).T
             time = np.array(ticks)
-        self.data = data
-        self.shape = data.shape
-        self.electrodes = electrodes
-        self.time = time
-        self.compressed = True
+        self._stim = {
+            'data': data,
+            'electrodes': electrodes,
+            'time': time,
+            'metadata': self._stim['metadata'],
+            'compressed': True,
+            'interp_method': self._stim['interp_method']
+        }
+        self._set_interp()
 
     def _need_interp(self):
         """Returns True if new interpolator needs to be set up"""
@@ -463,3 +470,85 @@ class Stimulus(PrettyPrint):
 
         """
         return not self.__eq__(other)
+
+    @property
+    def _stim(self):
+        """A dictionary containing all the stimulus data"""
+        return self.__stim
+
+    @_stim.setter
+    def _stim(self, stim):
+        # Check stimulus data for consistency:
+        if not isinstance(stim, dict):
+            raise TypeError("Stimulus data must be stored in a dictionary, "
+                            "not %s." % type(stim))
+        for field in ['data', 'electrodes', 'time', 'metadata', 'compressed',
+                      'interp_method']:
+            if field not in stim:
+                raise AttributeError("Stimulus dict must contain a field "
+                                     "'%s'." % field)
+        if not isinstance(stim['data'], np.ndarray):
+            raise TypeError("Stimulus data must be a NumPy array, not "
+                            "%s." % type(stim['data']))
+        if stim['data'].ndim != 2:
+            raise ValueError("Stimulus data must be a 2-D NumPy array, not "
+                             "%d-D." % stim['data'].ndim)
+        if len(stim['electrodes']) != stim['data'].shape[0]:
+            raise ValueError("Number of electrodes (%d) must match the number "
+                             "of rows in the data array "
+                             "(%d)." % (len(stim['electrodes']),
+                                        stim['data'].shape[0]))
+        if len(stim['electrodes']) != stim['data'].shape[0]:
+            raise ValueError("Number of electrodes (%d) must match the number "
+                             "of rows in the data array "
+                             "(%d)." % (len(stim['electrodes']),
+                                        stim['data'].shape[0]))
+        if stim['metadata'] is not None:
+            if not isinstance(stim['metadata'], dict):
+                raise TypeError("Stimulus metadata must be a dict, not "
+                                "%s." % type(stim['metadata']))
+        if stim['time'] is not None:
+            if len(stim['time']) != stim['data'].shape[1]:
+                raise ValueError("Number of time points (%d) must match the "
+                                 "number of columns in the data array "
+                                 "(%d)." % (len(stim['time']),
+                                            stim['data'].shape[1]))
+        else:
+            if stim['data'].shape[1] != 1:
+                raise ValueError("Number of columns in the data array must be "
+                                 "1 if time=None.")
+        # All checks passed, store the data:
+        self.__stim = stim
+
+    @property
+    def data(self):
+        """Data container
+
+        A 2-D NumPy array that contains the stimulus data, where the rows
+        denote electrodes and the columns denote points in time.
+        """
+        return self._stim['data']
+
+    @property
+    def shape(self):
+        return self.data.shape
+
+    @property
+    def electrodes(self):
+        return self._stim['electrodes']
+
+    @property
+    def time(self):
+        return self._stim['time']
+
+    @property
+    def metadata(self):
+        return self._stim['metadata']
+
+    @property
+    def compressed(self):
+        return self._stim['compressed']
+
+    @property
+    def interp_method(self):
+        return self._stim['interp_method']
