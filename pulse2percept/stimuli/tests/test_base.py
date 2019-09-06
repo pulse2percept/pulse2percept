@@ -137,11 +137,9 @@ def test_Stimulus_compress(tsample):
     ielec = np.array([0])
     itime = np.arange(idata.shape[-1]) * pt.tsample
     stim = Stimulus(idata, electrodes=ielec, time=itime, compress=False)
-    npt.assert_equal(stim.compressed, False)
     # Compress the data. The original `tsample` shouldn't matter as long as the
     # resolution is fine enough to capture all of the pulse train:
     stim.compress()
-    npt.assert_equal(stim.compressed, True)
     npt.assert_equal(stim.shape, (1, 8))
     # Electrodes are unchanged:
     npt.assert_equal(ielec, stim.electrodes)
@@ -163,10 +161,8 @@ def test_Stimulus_compress(tsample):
     ielec = np.array([0, 1, 2])
     itime = np.arange(idata.shape[-1]) * pt.tsample
     stim = Stimulus(idata, electrodes=ielec, time=itime, compress=False)
-    npt.assert_equal(stim.compressed, False)
     # Compress the data:
     stim.compress()
-    npt.assert_equal(stim.compressed, True)
     npt.assert_equal(stim.shape, (2, 16))
     # Zero electrodes should be deselected:
     npt.assert_equal(stim.electrodes, np.array([0, 1]))
@@ -186,7 +182,6 @@ def test_Stimulus_compress(tsample):
     ielec = stim.electrodes
     itime = stim.time
     stim.compress()
-    npt.assert_equal(stim.compressed, True)
     npt.assert_equal(idata, stim.data)
     npt.assert_equal(ielec, stim.electrodes)
     npt.assert_equal(itime, stim.time)

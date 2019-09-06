@@ -125,8 +125,8 @@ class Stimulus(PrettyPrint):
     >>> from pulse2percept.stimuli import Stimulus
     >>> stim = Stimulus(np.arange(10).reshape((1, -1)))
     >>> stim.interp(time=3.45) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    Stimulus(compressed=False, data=[[...3.45]], electrodes=[0],
-             interp_method='linear', shape=(1, 1), time=[...3.45])
+    Stimulus(data=[[...3.45]], electrodes=[0], interp_method='linear',
+             shape=(1, 1), time=[...3.45])
 
     """
 
@@ -140,7 +140,6 @@ class Stimulus(PrettyPrint):
         """Return a dictionary of class attributes"""
         return {'data': self.data, 'electrodes': self.electrodes,
                 'time': self.time, 'shape': self.shape,
-                'compressed': self.compressed,
                 'interp_method': self.interp_method}
 
     def _from_source(self, source):
@@ -184,7 +183,6 @@ class Stimulus(PrettyPrint):
             _data = source.data
             _time = source.time
             _electrodes = source.electrodes
-            _compress = source.compressed
         else:
             # Input is either be a valid source type (see `self._from_source`)
             # or a collection thereof. Thus treat everything as a collection
@@ -201,7 +199,6 @@ class Stimulus(PrettyPrint):
             _time = []
             _electrodes = []
             _data = []
-            _compress = compress
             for e, s in iterator:
                 # Extract times and data from source:
                 t, d = self._from_source(s)
@@ -255,13 +252,12 @@ class Stimulus(PrettyPrint):
             'electrodes': _electrodes,
             'time': _time,
             'metadata': mdata,
-            'compressed': False,
             'interp_method': intp_method
         }
         # Set up the interpolator:
         self._set_interp()
-        # Compress the data if necessary (will set compressed to True):
-        if _compress:
+        # Compress the data upon request:
+        if compress:
             self.compress()
 
     def compress(self):
@@ -313,7 +309,6 @@ class Stimulus(PrettyPrint):
             'electrodes': electrodes,
             'time': time,
             'metadata': self._stim['metadata'],
-            'compressed': True,
             'interp_method': self._stim['interp_method']
         }
         self._set_interp()
@@ -361,8 +356,8 @@ class Stimulus(PrettyPrint):
         >>> from pulse2percept.stimuli import Stimulus
         >>> stim = Stimulus(np.arange(10).reshape((1, -1)))
         >>> stim.interp(time=3.45) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-        Stimulus(compressed=False, data=[[...3.45]], electrodes=[0],
-                 interp_method='linear', shape=(1, 1), time=[...3.45])
+        Stimulus(data=[[...3.45]], electrodes=[0], interp_method='linear',
+                 shape=(1, 1), time=[...3.45])
 
         Use the 'nearest' interpolation method instead
         (see `scipy.interpolate.interp1d <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_):
@@ -371,30 +366,30 @@ class Stimulus(PrettyPrint):
         >>> stim = Stimulus(np.arange(10).reshape((1, -1)),
         ...                 interp_method='nearest')
         >>> stim.interp(time=3.45) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-        Stimulus(compressed=False, data=[[...3.]], electrodes=[0],
-                 interp_method='linear', shape=(1, 1), time=[...3.45])
+        Stimulus(data=[[...3.]], electrodes=[0], interp_method='linear',
+                 shape=(1, 1), time=[...3.45])
 
         Extrapolate to a time point outside the provided data range:
 
         >>> from pulse2percept.stimuli import Stimulus
         >>> stim = Stimulus(np.arange(10).reshape((1, -1)))
         >>> stim.interp(time=123.45) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-        Stimulus(compressed=False, data=[[...123.45]], electrodes=[0],
-                 interp_method='linear', shape=(1, 1), time=[...123.45])
+        Stimulus(data=[[...123.45]], electrodes=[0], interp_method='linear',
+                 shape=(1, 1), time=[...123.45])
 
         """
         if not self._need_interp():
             # This includes the special case of a single time point (where
             # `interp1d` would not work):
             return Stimulus(self.data[:, 0], electrodes=self.electrodes,
-                            time=None, compress=self.compressed)
+                            time=None, compress=False)
 
         # Should work with scalars and lists:
         time = np.array([time]).flatten()
         data = np.array([[self._interp[e](t) for t in time]
                          for e, _ in enumerate(self.electrodes)])
         return Stimulus(data, electrodes=self.electrodes, time=time,
-                        compress=self.compressed)
+                        compress=False)
 
     def __eq__(self, other):
         """Returns True if two Stimulus objects are identical
@@ -482,7 +477,7 @@ class Stimulus(PrettyPrint):
         if not isinstance(stim, dict):
             raise TypeError("Stimulus data must be stored in a dictionary, "
                             "not %s." % type(stim))
-        for field in ['data', 'electrodes', 'time', 'metadata', 'compressed',
+        for field in ['data', 'electrodes', 'time', 'metadata',
                       'interp_method']:
             if field not in stim:
                 raise AttributeError("Stimulus dict must contain a field "
@@ -544,10 +539,6 @@ class Stimulus(PrettyPrint):
     @property
     def metadata(self):
         return self._stim['metadata']
-
-    @property
-    def compressed(self):
-        return self._stim['compressed']
 
     @property
     def interp_method(self):
