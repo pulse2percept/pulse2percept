@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
+from copy import deepcopy
 from collections import OrderedDict as ODict
 
 from pulse2percept.stimuli import Stimulus, PulseTrain
@@ -185,6 +186,68 @@ def test_Stimulus_compress(tsample):
     npt.assert_equal(idata, stim.data)
     npt.assert_equal(ielec, stim.electrodes)
     npt.assert_equal(itime, stim.time)
+
+
+def test_Stimulus__stim():
+    stim = Stimulus(3)
+    # User could try and motify the data container after the constructor, which
+    # would lead to inconsistencies between data, electrodes, time. The new
+    # property setting mechanism prevents that.
+    # Requires dict:
+    with pytest.raises(TypeError):
+        stim._stim = np.array([0, 1])
+    # Dict must have all required fields:
+    fields = ['data', 'electrodes', 'time', 'metadata', 'interp_method']
+    for field in fields:
+        _fields = deepcopy(fields)
+        _fields.remove(field)
+        with pytest.raises(AttributeError):
+            stim._stim = {f: None for f in _fields}
+    # Data must be a 2-D NumPy array:
+    data = {f: None for f in fields}
+    with pytest.raises(TypeError):
+        data['data'] = [1, 2]
+        stim._stim = data
+    with pytest.raises(ValueError):
+        data['data'] = np.ones(3)
+        stim._stim = data
+    # Data rows must match electrodes:
+    with pytest.raises(ValueError):
+        data['data'] = np.ones((3, 4))
+        data['time'] = np.arange(4)
+        data['electrodes'] = np.arange(2)
+        stim._stim = data
+    # Data columns must match time:
+    with pytest.raises(ValueError):
+        data['data'] = np.ones((3, 4))
+        data['electrodes'] = np.arange(3)
+        data['time'] = np.arange(7)
+        stim._stim = data
+    # Metadata must be a dict:
+    with pytest.raises(TypeError):
+        data['metadata'] = "notes"
+        stim._stim = data
+    # But if you do all the things right, you can reset the stimulus by hand:
+    data['data'] = np.ones((3, 1))
+    data['electrodes'] = np.arange(3)
+    data['time'] = None
+    data['metadata'] = None
+    data['interp_method'] = 'linear'
+    stim._stim = data
+
+    data['data'] = np.ones((3, 1))
+    data['electrodes'] = np.arange(3)
+    data['time'] = np.arange(1)
+    data['metadata'] = None
+    data['interp_method'] = None
+    stim._stim = data
+
+    data['data'] = np.ones((3, 7))
+    data['electrodes'] = np.arange(3)
+    data['time'] = np.ones(7)
+    data['metadata'] = {'date': '2018-08-25'}
+    data['interp_method'] = None
+    stim._stim = data
 
 
 @pytest.mark.parametrize('time', [0, 0.9, 12.5, np.array([3.5, 7.8])])
