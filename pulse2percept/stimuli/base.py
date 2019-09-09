@@ -126,9 +126,8 @@ class Stimulus(PrettyPrint):
 
     >>> from pulse2percept.stimuli import Stimulus
     >>> stim = Stimulus(np.arange(10).reshape((1, -1)))
-    >>> stim[:, 3.45]) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    Stimulus(data=[[...3.45]], electrodes=[0], interp_method='linear',
-             shape=(1, 1), time=[...3.45])
+    >>> stim[:, 3.45] # doctest: +ELLIPSIS
+    3.45...
 
     """
 
@@ -145,8 +144,7 @@ class Stimulus(PrettyPrint):
         """Return a dictionary of class attributes"""
         return {'data': self.data, 'electrodes': self.electrodes,
                 'time': self.time, 'shape': self.shape,
-                'metadata': self.metadata, 'interp_method': self.interp_method,
-                'extrapolate': self.extrapolate}
+                'metadata': self.metadata}
 
     def _from_source(self, source):
         """Extract the data container and time information from source data
@@ -196,9 +194,6 @@ class Stimulus(PrettyPrint):
             if isinstance(source, dict):
                 iterator = source.items()
             elif isinstance(source, (list, tuple, np.ndarray)):
-                if len(source) == 0:
-                    # Make sure a 2-D array is returned:
-                    source = [[]]
                 iterator = enumerate(source)
             else:
                 iterator = enumerate([source])
@@ -226,7 +221,6 @@ class Stimulus(PrettyPrint):
                                      "has t=%s." % (_electrodes[0], _time[0],
                                                     _electrodes[e], t))
             _time = _time[0] if _time else None
-            # _time = _time[0]
             # Now make `data` a 2-D NumPy array, with `electrodes` as rows and
             # `times` as columns (except sometimes `times` is None).
             _data = np.vstack(_data) if _data else np.array([])
@@ -324,7 +318,7 @@ class Stimulus(PrettyPrint):
                 raise IndexError(e)
         # Handle the special case where we interpolate time.
         # First of all, if time=None, then _interp=None, and we won't interp:
-        if self.time is None:
+        if self._interp is None:
             raise ValueError("Cannot interpolate time if time=None.")
         # Electrodes cannot be interpolated, so convert from slice, ellipsis or
         # indices into a list:
@@ -337,7 +331,7 @@ class Stimulus(PrettyPrint):
         time = np.array([item[1]]).flatten()
         data = np.array([[ip(t) for t in time] for ip in interp])
         # Return a single element as scalar:
-        if len(data) == 1:
+        if len(data) <= 1:
             data = data.ravel()[0]
         return data
 
@@ -431,12 +425,13 @@ class Stimulus(PrettyPrint):
             if field not in stim:
                 raise AttributeError("Stimulus dict must contain a field "
                                      "'%s'." % field)
-        if not isinstance(stim['data'], np.ndarray):
-            raise TypeError("Stimulus data must be a NumPy array, not "
-                            "%s." % type(stim['data']))
-        if stim['data'].ndim != 2:
-            raise ValueError("Stimulus data must be a 2-D NumPy array, not "
-                             "%d-D." % stim['data'].ndim)
+        if len(stim['data']) > 0:
+            if not isinstance(stim['data'], np.ndarray):
+                raise TypeError("Stimulus data must be a NumPy array, not "
+                                "%s." % type(stim['data']))
+            if stim['data'].ndim != 2:
+                raise ValueError("Stimulus data must be a 2-D NumPy array, not "
+                                 "%d-D." % stim['data'].ndim)
         if len(stim['electrodes']) != stim['data'].shape[0]:
             raise ValueError("Number of electrodes (%d) must match the number "
                              "of rows in the data array "
@@ -453,8 +448,8 @@ class Stimulus(PrettyPrint):
                                  "number of columns in the data array "
                                  "(%d)." % (len(stim['time']),
                                             stim['data'].shape[1]))
-        else:
-            if stim['data'].shape[1] != 1:
+        elif len(stim['data']) > 0:
+            if stim['data'].shape[1] > 1:
                 raise ValueError("Number of columns in the data array must be "
                                  "1 if time=None.")
         # All checks passed, store the data:
