@@ -126,7 +126,7 @@ class Stimulus(PrettyPrint):
 
     >>> from pulse2percept.stimuli import Stimulus
     >>> stim = Stimulus(np.arange(10).reshape((1, -1)))
-    >>> stim.interp(time=3.45) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> stim[:, 3.45]) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     Stimulus(data=[[...3.45]], electrodes=[0], interp_method='linear',
              shape=(1, 1), time=[...3.45])
 
