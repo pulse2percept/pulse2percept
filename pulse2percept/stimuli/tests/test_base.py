@@ -89,6 +89,12 @@ def test_Stimulus():
     stim = Stimulus(source, compress=False)
     npt.assert_equal(stim.shape, source.shape)
     npt.assert_equal(stim.time, np.arange(source.shape[1]))
+    # Annoying but possible:
+    stim = Stimulus([])
+    npt.assert_equal(stim.time, None)
+    npt.assert_equal(len(stim.data), 0)
+    npt.assert_equal(len(stim.electrodes), 0)
+    npt.assert_equal(stim.shape, (0,))
 
     # Rename electrodes:
     stim = Stimulus(np.ones((2, 5)), compress=True)
@@ -240,30 +246,6 @@ def test_Stimulus__stim():
     stim._stim = data
 
 
-# @pytest.mark.parametrize('time', [0, 0.9, 12.5, np.array([3.5, 7.8])])
-# @pytest.mark.parametrize('shape', [(1, 4), (2, 2), (3, 5)])
-# def test_Stimulus_interp(time, shape):
-#     # Time is None: nothing to interpolate/extrapolate, simply return the
-#     # original data
-#     stim = Stimulus(np.ones(shape[0]))
-#     npt.assert_almost_equal(stim.interp(time=None).data, stim.data)
-
-#     # Single time point: nothing to interpolate/extrapolate, simply return the
-#     # original data
-#     data = np.ones(shape).reshape((-1, 1))
-#     stim = Stimulus(data)
-#     npt.assert_almost_equal(stim.interp(time=time).data, data)
-
-#     # Specific time steps:
-#     stim = Stimulus([np.arange(shape[1])] * shape[0], compress=False)
-#     npt.assert_almost_equal(stim.interp(time=time).data,
-#                             np.ones((shape[0], 1)) * time)
-#     npt.assert_almost_equal(stim.interp(time=[time]).data,
-#                             np.ones((shape[0], 1)) * time)
-#     # All time steps:
-#     npt.assert_almost_equal(stim.interp(time=stim.time).data, stim.data)
-
-
 def test_Stimulus___eq__():
     # Two Stimulus objects created from the same source data are considered
     # equal:
@@ -285,6 +267,8 @@ def test_Stimulus___eq__():
     # Different type:
     npt.assert_equal(stim == np.ones((2, 3)), False)
     npt.assert_equal(stim != np.ones((2, 3)), True)
+    # Annoying but possible:
+    npt.assert_equal(Stimulus([]), Stimulus(()))
 
 
 def test_Stimulus___getitem__():
@@ -327,3 +311,8 @@ def test_Stimulus___getitem__():
         stim[0, 3.33]
     stim = Stimulus(np.arange(3).reshape((-1, 1)), extrapolate=True)
     npt.assert_almost_equal(stim[0, 3.33], stim.data[0, 0])
+    # Annoying but possible:
+    stim = Stimulus([])
+    npt.assert_almost_equal(stim[:], stim.data)
+    with pytest.raises(IndexError):
+        stim[0]
