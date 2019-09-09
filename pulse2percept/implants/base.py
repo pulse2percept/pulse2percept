@@ -116,14 +116,14 @@ class ElectrodeArray(PrettyPrint):
     >>> from pulse2percept.implants import ElectrodeArray, DiskElectrode
     >>> earray = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
     >>> earray.electrodes  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    OrderedDict([(0, DiskElectrode(r=20..., x=0..., y=0..., z=0...))])
+    OrderedDict([(0, DiskElectrode(r=100..., x=0..., y=0..., z=0...))])
 
     Electrode array made from a single DiskElectrode with name 'A1':
 
     >>> from pulse2percept.implants import ElectrodeArray, DiskElectrode
     >>> earray = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 100)})
     >>> earray.electrodes  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    OrderedDict([('A1', DiskElectrode(r=20..., x=0..., y=0..., z=0...))])
+    OrderedDict([('A1', DiskElectrode(r=100..., x=0..., y=0..., z=0...))])
 
     """
 
