@@ -197,7 +197,7 @@ def test_Stimulus__stim():
     with pytest.raises(TypeError):
         stim._stim = np.array([0, 1])
     # Dict must have all required fields:
-    fields = ['data', 'electrodes', 'time', 'metadata', 'interp_method']
+    fields = ['data', 'electrodes', 'time']
     for field in fields:
         _fields = deepcopy(fields)
         _fields.remove(field)
@@ -223,55 +223,45 @@ def test_Stimulus__stim():
         data['electrodes'] = np.arange(3)
         data['time'] = np.arange(7)
         stim._stim = data
-    # Metadata must be a dict:
-    with pytest.raises(TypeError):
-        data['metadata'] = "notes"
-        stim._stim = data
     # But if you do all the things right, you can reset the stimulus by hand:
     data['data'] = np.ones((3, 1))
     data['electrodes'] = np.arange(3)
     data['time'] = None
-    data['metadata'] = None
-    data['interp_method'] = 'linear'
     stim._stim = data
 
     data['data'] = np.ones((3, 1))
     data['electrodes'] = np.arange(3)
     data['time'] = np.arange(1)
-    data['metadata'] = None
-    data['interp_method'] = None
     stim._stim = data
 
     data['data'] = np.ones((3, 7))
     data['electrodes'] = np.arange(3)
     data['time'] = np.ones(7)
-    data['metadata'] = {'date': '2018-08-25'}
-    data['interp_method'] = None
     stim._stim = data
 
 
-@pytest.mark.parametrize('time', [0, 0.9, 12.5, np.array([3.5, 7.8])])
-@pytest.mark.parametrize('shape', [(1, 4), (2, 2), (3, 5)])
-def test_Stimulus_interp(time, shape):
-    # Time is None: nothing to interpolate/extrapolate, simply return the
-    # original data
-    stim = Stimulus(np.ones(shape[0]))
-    npt.assert_almost_equal(stim.interp(time=None).data, stim.data)
+# @pytest.mark.parametrize('time', [0, 0.9, 12.5, np.array([3.5, 7.8])])
+# @pytest.mark.parametrize('shape', [(1, 4), (2, 2), (3, 5)])
+# def test_Stimulus_interp(time, shape):
+#     # Time is None: nothing to interpolate/extrapolate, simply return the
+#     # original data
+#     stim = Stimulus(np.ones(shape[0]))
+#     npt.assert_almost_equal(stim.interp(time=None).data, stim.data)
 
-    # Single time point: nothing to interpolate/extrapolate, simply return the
-    # original data
-    data = np.ones(shape).reshape((-1, 1))
-    stim = Stimulus(data)
-    npt.assert_almost_equal(stim.interp(time=time).data, data)
+#     # Single time point: nothing to interpolate/extrapolate, simply return the
+#     # original data
+#     data = np.ones(shape).reshape((-1, 1))
+#     stim = Stimulus(data)
+#     npt.assert_almost_equal(stim.interp(time=time).data, data)
 
-    # Specific time steps:
-    stim = Stimulus([np.arange(shape[1])] * shape[0], compress=False)
-    npt.assert_almost_equal(stim.interp(time=time).data,
-                            np.ones((shape[0], 1)) * time)
-    npt.assert_almost_equal(stim.interp(time=[time]).data,
-                            np.ones((shape[0], 1)) * time)
-    # All time steps:
-    npt.assert_almost_equal(stim.interp(time=stim.time).data, stim.data)
+#     # Specific time steps:
+#     stim = Stimulus([np.arange(shape[1])] * shape[0], compress=False)
+#     npt.assert_almost_equal(stim.interp(time=time).data,
+#                             np.ones((shape[0], 1)) * time)
+#     npt.assert_almost_equal(stim.interp(time=[time]).data,
+#                             np.ones((shape[0], 1)) * time)
+#     # All time steps:
+#     npt.assert_almost_equal(stim.interp(time=stim.time).data, stim.data)
 
 
 def test_Stimulus___eq__():
@@ -311,11 +301,29 @@ def test_Stimulus___getitem__():
     # Single element:
     npt.assert_equal(stim[0, 0], stim.data[0, 0])
     # Interpolating time:
-    npt.assert_almost_equal(stim[0, 3.3], 3.3)
-    npt.assert_almost_equal(stim[..., 3.3], np.array([[3.3], [7.3], [11.3]]))
-    # Extrapolating should be disabled by default:
-    npt.assert_almost_equal(stim[0, 9.9], 9.9)
+    npt.assert_almost_equal(stim[0, 2.6], 2.6)
+    npt.assert_almost_equal(stim[..., 2.3], np.array([[2.3], [6.3], [10.3]]))
+    # "Valid" index errors:
     with pytest.raises(IndexError):
         stim[10, :]
     with pytest.raises(TypeError):
         stim[3.3, 0]
+    # Extrapolating should be disabled by default:
+    with pytest.raises(ValueError):
+        stim[0, 9.9]
+    # But you can enable it:
+    stim = Stimulus(np.arange(12).reshape((3, 4)), extrapolate=True)
+    npt.assert_almost_equal(stim[0, 9.9], 9.9)
+    # If time=None, you cannot interpolate/extrapolate:
+    stim = Stimulus([3, 4, 5], extrapolate=True)
+    npt.assert_almost_equal(stim[0], stim.data[0, 0])
+    with pytest.raises(ValueError):
+        stim[0, 0.2]
+    # With a single time point, interpolate is still possible:
+    stim = Stimulus(np.arange(3).reshape((-1, 1)), extrapolate=False)
+    npt.assert_almost_equal(stim[0], stim.data[0, 0])
+    npt.assert_almost_equal(stim[0, 0], stim.data[0, 0])
+    with pytest.raises(ValueError):
+        stim[0, 3.33]
+    stim = Stimulus(np.arange(3).reshape((-1, 1)), extrapolate=True)
+    npt.assert_almost_equal(stim[0, 3.33], stim.data[0, 0])

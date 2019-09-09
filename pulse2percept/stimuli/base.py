@@ -82,7 +82,9 @@ class Stimulus(PrettyPrint):
         Here, 'zero', 'slinear', 'quadratic' and 'cubic' refer to a spline
         interpolation of zeroth, first, second or third order; 'previous' and
         'next' simply return the previous or next value of the point.
-        By default, points outside the data range will be extrapolated.
+
+    extrapolate : bool, optional, default: False
+        Whether to extrapolate data points outside the given range.
 
     Examples
     --------
@@ -131,16 +133,20 @@ class Stimulus(PrettyPrint):
     """
 
     def __init__(self, source, electrodes=None, time=None, metadata=None,
-                 compress=False, interp_method='linear'):
+                 compress=False, interp_method='linear', extrapolate=False):
+        self.metadata = metadata
+        # Private: User is not supposed to overwrite these later on:
+        self._interp_method = interp_method
+        self._extrapolate = extrapolate
         # Extract the data and coordinates (electrodes, time) from the source:
-        self._factory(source, electrodes, time, metadata, compress,
-                      interp_method)
+        self._factory(source, electrodes, time, compress)
 
     def get_params(self):
         """Return a dictionary of class attributes"""
         return {'data': self.data, 'electrodes': self.electrodes,
                 'time': self.time, 'shape': self.shape,
-                'interp_method': self.interp_method}
+                'metadata': self.metadata, 'interp_method': self.interp_method,
+                'extrapolate': self.extrapolate}
 
     def _from_source(self, source):
         """Extract the data container and time information from source data
@@ -175,7 +181,7 @@ class Stimulus(PrettyPrint):
                             "TimeSeries." % type(source))
         return time, data
 
-    def _factory(self, source, electrodes, time, mdata, compress, intp_method):
+    def _factory(self, source, electrodes, time, compress):
         if isinstance(source, self.__class__):
             # Stimulus: We're done. This might happen in ProsthesisSystem if
             # the user builds the stimulus themselves. It can also be used to
@@ -251,11 +257,7 @@ class Stimulus(PrettyPrint):
             'data': _data,
             'electrodes': _electrodes,
             'time': _time,
-            'metadata': mdata,
-            'interp_method': intp_method
         }
-        # Set up the interpolator:
-        self._set_interp()
         # Compress the data upon request:
         if compress:
             self.compress()
@@ -308,88 +310,7 @@ class Stimulus(PrettyPrint):
             'data': data,
             'electrodes': electrodes,
             'time': time,
-            'metadata': self._stim['metadata'],
-            'interp_method': self._stim['interp_method']
         }
-        self._set_interp()
-
-    def _need_interp(self):
-        """Returns True if new interpolator needs to be set up"""
-        if self.time is None:
-            return False
-        if len(self.time) <= 1:
-            return False
-        return True
-
-    def _set_interp(self):
-        """Set up the interpolator"""
-        self._interp = None
-        if self._need_interp():
-            self._interp = [interp1d(self.time, row, kind=self.interp_method,
-                                     assume_sorted=True, bounds_error=False,
-                                     fill_value='extrapolate')
-                            for row in self.data]
-
-    def interp(self, time=None):
-        """Interpolate along the time axis
-
-        SciPy's `interp1d <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ method is used to interpolate stimulus values along
-        the time axis. An interpolation method can be set in the Stimulus
-        constructor.
-
-        Parameters
-        ----------
-        time : int, float or list thereof
-            The time point(s) at which to interpolate the stimulus
-
-        Returns
-        -------
-        interpolated: Stimulus
-            New Stimulus object with new time coordinates
-
-        Examples
-        --------
-        Interpolate the stimulus value at some point in time. Here, the
-        stimulus is a single-electrode ramp stimulus (stimulus value == point
-        in time):
-
-        >>> from pulse2percept.stimuli import Stimulus
-        >>> stim = Stimulus(np.arange(10).reshape((1, -1)))
-        >>> stim.interp(time=3.45) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-        Stimulus(data=[[...3.45]], electrodes=[0], interp_method='linear',
-                 shape=(1, 1), time=[...3.45])
-
-        Use the 'nearest' interpolation method instead
-        (see `scipy.interpolate.interp1d <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_):
-
-        >>> from pulse2percept.stimuli import Stimulus
-        >>> stim = Stimulus(np.arange(10).reshape((1, -1)),
-        ...                 interp_method='nearest')
-        >>> stim.interp(time=3.45) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-        Stimulus(data=[[...3.]], electrodes=[0], interp_method='linear',
-                 shape=(1, 1), time=[...3.45])
-
-        Extrapolate to a time point outside the provided data range:
-
-        >>> from pulse2percept.stimuli import Stimulus
-        >>> stim = Stimulus(np.arange(10).reshape((1, -1)))
-        >>> stim.interp(time=123.45) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-        Stimulus(data=[[...123.45]], electrodes=[0], interp_method='linear',
-                 shape=(1, 1), time=[...123.45])
-
-        """
-        if not self._need_interp():
-            # This includes the special case of a single time point (where
-            # `interp1d` would not work):
-            return Stimulus(self.data[:, 0], electrodes=self.electrodes,
-                            time=None, compress=False)
-
-        # Should work with scalars and lists:
-        time = np.array([time]).flatten()
-        data = np.array([[self._interp[e](t) for t in time]
-                         for e, _ in enumerate(self.electrodes)])
-        return Stimulus(data, electrodes=self.electrodes, time=time,
-                        compress=False)
 
     def __getitem__(self, item):
         """Returns an item from the data array, interpolated if necessary"""
@@ -401,9 +322,12 @@ class Stimulus(PrettyPrint):
             # in which case we might want to interpolate time:
             if not isinstance(item, tuple):
                 raise IndexError(e)
-        # Handle the special case where we interpolate time. Electrodes cannot
-        # be interpolated, so convert from slice, ellipsis or indices into a
-        # list:
+        # Handle the special case where we interpolate time.
+        # First of all, if time=None, then _interp=None, and we won't interp:
+        if self.time is None:
+            raise ValueError("Cannot interpolate time if time=None.")
+        # Electrodes cannot be interpolated, so convert from slice, ellipsis or
+        # indices into a list:
         if item[0] == Ellipsis:
             interp = np.array(self._interp)
         else:
@@ -503,8 +427,7 @@ class Stimulus(PrettyPrint):
         if not isinstance(stim, dict):
             raise TypeError("Stimulus data must be stored in a dictionary, "
                             "not %s." % type(stim))
-        for field in ['data', 'electrodes', 'time', 'metadata',
-                      'interp_method']:
+        for field in ['data', 'electrodes', 'time']:
             if field not in stim:
                 raise AttributeError("Stimulus dict must contain a field "
                                      "'%s'." % field)
@@ -524,10 +447,6 @@ class Stimulus(PrettyPrint):
                              "of rows in the data array "
                              "(%d)." % (len(stim['electrodes']),
                                         stim['data'].shape[0]))
-        if stim['metadata'] is not None:
-            if not isinstance(stim['metadata'], dict):
-                raise TypeError("Stimulus metadata must be a dict, not "
-                                "%s." % type(stim['metadata']))
         if stim['time'] is not None:
             if len(stim['time']) != stim['data'].shape[1]:
                 raise ValueError("Number of time points (%d) must match the "
@@ -540,6 +459,30 @@ class Stimulus(PrettyPrint):
                                  "1 if time=None.")
         # All checks passed, store the data:
         self.__stim = stim
+        # Set up the interpolator:
+        self._interp = None
+        if self.time is None:
+            return
+        if len(self.time) == 1:
+            # Special case: Duplicate data with slightly different time points
+            # so we can set up an interp1d:
+            eps = np.finfo(float).eps
+            time = np.array([self.time - eps, self.time + eps]).flatten()
+            data = np.repeat(self.data, 2, axis=1)
+        else:
+            time = self.time
+            data = self.data
+        if self._extrapolate:
+            bounds_error = False
+            fill_value = 'extrapolate'
+        else:
+            bounds_error = True
+            fill_value = None
+        self._interp = [interp1d(time, row, kind=self._interp_method,
+                                 assume_sorted=True,
+                                 bounds_error=bounds_error,
+                                 fill_value=fill_value)
+                        for row in data]
 
     @property
     def data(self):
@@ -572,19 +515,3 @@ class Stimulus(PrettyPrint):
         container.
         """
         return self._stim['time']
-
-    @property
-    def metadata(self):
-        """Metadata
-
-        A dictionary of metadata about the stimulus.
-        """
-        return self._stim['metadata']
-
-    @property
-    def interp_method(self):
-        """Interpolation method
-
-        The method used to interpolate stimulus values at specific time steps.
-        """
-        return self._stim['interp_method']
