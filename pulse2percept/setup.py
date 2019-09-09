@@ -23,6 +23,8 @@ def configuration(parent_package='', top_path=None):
     config.add_subpackage('utils/tests')
     config.add_subpackage('io')
     config.add_subpackage('io/tests')
+    config.add_subpackage('viz')
+    config.add_subpackage('viz/tests')
 
     # Submodules which have their own setup.py; e.g., because they use Cython:
     config.add_subpackage('models')
