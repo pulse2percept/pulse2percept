@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
+from copy import deepcopy
 from collections import OrderedDict as ODict
 
 from pulse2percept.stimuli import Stimulus, PulseTrain
@@ -88,6 +89,12 @@ def test_Stimulus():
     stim = Stimulus(source, compress=False)
     npt.assert_equal(stim.shape, source.shape)
     npt.assert_equal(stim.time, np.arange(source.shape[1]))
+    # Annoying but possible:
+    stim = Stimulus([])
+    npt.assert_equal(stim.time, None)
+    npt.assert_equal(len(stim.data), 0)
+    npt.assert_equal(len(stim.electrodes), 0)
+    npt.assert_equal(stim.shape, (0,))
 
     # Rename electrodes:
     stim = Stimulus(np.ones((2, 5)), compress=True)
@@ -137,11 +144,9 @@ def test_Stimulus_compress(tsample):
     ielec = np.array([0])
     itime = np.arange(idata.shape[-1]) * pt.tsample
     stim = Stimulus(idata, electrodes=ielec, time=itime, compress=False)
-    npt.assert_equal(stim.compressed, False)
     # Compress the data. The original `tsample` shouldn't matter as long as the
     # resolution is fine enough to capture all of the pulse train:
     stim.compress()
-    npt.assert_equal(stim.compressed, True)
     npt.assert_equal(stim.shape, (1, 8))
     # Electrodes are unchanged:
     npt.assert_equal(ielec, stim.electrodes)
@@ -163,10 +168,8 @@ def test_Stimulus_compress(tsample):
     ielec = np.array([0, 1, 2])
     itime = np.arange(idata.shape[-1]) * pt.tsample
     stim = Stimulus(idata, electrodes=ielec, time=itime, compress=False)
-    npt.assert_equal(stim.compressed, False)
     # Compress the data:
     stim.compress()
-    npt.assert_equal(stim.compressed, True)
     npt.assert_equal(stim.shape, (2, 16))
     # Zero electrodes should be deselected:
     npt.assert_equal(stim.electrodes, np.array([0, 1]))
@@ -186,34 +189,61 @@ def test_Stimulus_compress(tsample):
     ielec = stim.electrodes
     itime = stim.time
     stim.compress()
-    npt.assert_equal(stim.compressed, True)
     npt.assert_equal(idata, stim.data)
     npt.assert_equal(ielec, stim.electrodes)
     npt.assert_equal(itime, stim.time)
 
 
-@pytest.mark.parametrize('time', [0, 0.9, 12.5, np.array([3.5, 7.8])])
-@pytest.mark.parametrize('shape', [(1, 4), (2, 2), (3, 5)])
-def test_Stimulus_interp(time, shape):
-    # Time is None: nothing to interpolate/extrapolate, simply return the
-    # original data
-    stim = Stimulus(np.ones(shape[0]))
-    npt.assert_almost_equal(stim.interp(time=None).data, stim.data)
+def test_Stimulus__stim():
+    stim = Stimulus(3)
+    # User could try and motify the data container after the constructor, which
+    # would lead to inconsistencies between data, electrodes, time. The new
+    # property setting mechanism prevents that.
+    # Requires dict:
+    with pytest.raises(TypeError):
+        stim._stim = np.array([0, 1])
+    # Dict must have all required fields:
+    fields = ['data', 'electrodes', 'time']
+    for field in fields:
+        _fields = deepcopy(fields)
+        _fields.remove(field)
+        with pytest.raises(AttributeError):
+            stim._stim = {f: None for f in _fields}
+    # Data must be a 2-D NumPy array:
+    data = {f: None for f in fields}
+    with pytest.raises(TypeError):
+        data['data'] = [1, 2]
+        stim._stim = data
+    with pytest.raises(ValueError):
+        data['data'] = np.ones(3)
+        stim._stim = data
+    # Data rows must match electrodes:
+    with pytest.raises(ValueError):
+        data['data'] = np.ones((3, 4))
+        data['time'] = np.arange(4)
+        data['electrodes'] = np.arange(2)
+        stim._stim = data
+    # Data columns must match time:
+    with pytest.raises(ValueError):
+        data['data'] = np.ones((3, 4))
+        data['electrodes'] = np.arange(3)
+        data['time'] = np.arange(7)
+        stim._stim = data
+    # But if you do all the things right, you can reset the stimulus by hand:
+    data['data'] = np.ones((3, 1))
+    data['electrodes'] = np.arange(3)
+    data['time'] = None
+    stim._stim = data
 
-    # Single time point: nothing to interpolate/extrapolate, simply return the
-    # original data
-    data = np.ones(shape).reshape((-1, 1))
-    stim = Stimulus(data)
-    npt.assert_almost_equal(stim.interp(time=time).data, data)
+    data['data'] = np.ones((3, 1))
+    data['electrodes'] = np.arange(3)
+    data['time'] = np.arange(1)
+    stim._stim = data
 
-    # Specific time steps:
-    stim = Stimulus([np.arange(shape[1])] * shape[0], compress=False)
-    npt.assert_almost_equal(stim.interp(time=time).data,
-                            np.ones((shape[0], 1)) * time)
-    npt.assert_almost_equal(stim.interp(time=[time]).data,
-                            np.ones((shape[0], 1)) * time)
-    # All time steps:
-    npt.assert_almost_equal(stim.interp(time=stim.time).data, stim.data)
+    data['data'] = np.ones((3, 7))
+    data['electrodes'] = np.arange(3)
+    data['time'] = np.ones(7)
+    stim._stim = data
 
 
 def test_Stimulus___eq__():
@@ -237,3 +267,52 @@ def test_Stimulus___eq__():
     # Different type:
     npt.assert_equal(stim == np.ones((2, 3)), False)
     npt.assert_equal(stim != np.ones((2, 3)), True)
+    # Annoying but possible:
+    npt.assert_equal(Stimulus([]), Stimulus(()))
+
+
+def test_Stimulus___getitem__():
+    stim = Stimulus(np.arange(12).reshape((3, 4)))
+    # Slicing:
+    npt.assert_equal(stim[:], stim.data)
+    npt.assert_equal(stim[...], stim.data)
+    npt.assert_equal(stim[:, :], stim.data)
+    npt.assert_equal(stim[:2], stim.data[:2])
+    npt.assert_equal(stim[:, 0], stim.data[:, 0])
+    npt.assert_equal(stim[0, :], stim.data[0, :])
+    npt.assert_equal(stim[0, ...], stim.data[0, ...])
+    npt.assert_equal(stim[..., 0], stim.data[..., 0])
+    # Single element:
+    npt.assert_equal(stim[0, 0], stim.data[0, 0])
+    # Interpolating time:
+    npt.assert_almost_equal(stim[0, 2.6], 2.6)
+    npt.assert_almost_equal(stim[..., 2.3], np.array([[2.3], [6.3], [10.3]]))
+    # "Valid" index errors:
+    with pytest.raises(IndexError):
+        stim[10, :]
+    with pytest.raises(TypeError):
+        stim[3.3, 0]
+    # Extrapolating should be disabled by default:
+    with pytest.raises(ValueError):
+        stim[0, 9.9]
+    # But you can enable it:
+    stim = Stimulus(np.arange(12).reshape((3, 4)), extrapolate=True)
+    npt.assert_almost_equal(stim[0, 9.9], 9.9)
+    # If time=None, you cannot interpolate/extrapolate:
+    stim = Stimulus([3, 4, 5], extrapolate=True)
+    npt.assert_almost_equal(stim[0], stim.data[0, 0])
+    with pytest.raises(ValueError):
+        stim[0, 0.2]
+    # With a single time point, interpolate is still possible:
+    stim = Stimulus(np.arange(3).reshape((-1, 1)), extrapolate=False)
+    npt.assert_almost_equal(stim[0], stim.data[0, 0])
+    npt.assert_almost_equal(stim[0, 0], stim.data[0, 0])
+    with pytest.raises(ValueError):
+        stim[0, 3.33]
+    stim = Stimulus(np.arange(3).reshape((-1, 1)), extrapolate=True)
+    npt.assert_almost_equal(stim[0, 3.33], stim.data[0, 0])
+    # Annoying but possible:
+    stim = Stimulus([])
+    npt.assert_almost_equal(stim[:], stim.data)
+    with pytest.raises(IndexError):
+        stim[0]

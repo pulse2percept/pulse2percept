@@ -14,7 +14,7 @@ class Stimulus(PrettyPrint):
     .. versionadded:: 0.6
 
     A stimulus is comprised of a labeled 2-D NumPy array that contains the
-    data, where the rows denoted electrodes and the columns denote points in
+    data, where the rows denote electrodes and the columns denote points in
     time.
 
     A stimulus can be created from a variety of source types (see below),
@@ -82,7 +82,9 @@ class Stimulus(PrettyPrint):
         Here, 'zero', 'slinear', 'quadratic' and 'cubic' refer to a spline
         interpolation of zeroth, first, second or third order; 'previous' and
         'next' simply return the previous or next value of the point.
-        By default, points outside the data range will be extrapolated.
+
+    extrapolate : bool, optional, default: False
+        Whether to extrapolate data points outside the given range.
 
     Examples
     --------
@@ -124,37 +126,25 @@ class Stimulus(PrettyPrint):
 
     >>> from pulse2percept.stimuli import Stimulus
     >>> stim = Stimulus(np.arange(10).reshape((1, -1)))
-    >>> stim.interp(time=3.45) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    Stimulus(compressed=False, data=[[...3.45]], electrodes=[0],
-             interp_method='linear', shape=(1, 1), time=[...3.45])
+    >>> stim[:, 3.45] # doctest: +ELLIPSIS
+    3.45...
 
     """
 
     def __init__(self, source, electrodes=None, time=None, metadata=None,
-                 compress=False, interp_method='linear'):
-        # Extract the data and coordinates (electrodes, time) from the source:
-        data, electrodes, time, compress = self._factory(source, electrodes,
-                                                         time, compress)
-        # Save all attributes:
-        self.data = data
-        self.shape = data.shape
-        self.electrodes = electrodes
-        self.time = time
+                 compress=False, interp_method='linear', extrapolate=False):
         self.metadata = metadata
-        self.compressed = False
-        # Compress the data if necessary (will set compressed to True):
-        if compress:
-            self.compress()
-        # Set up the interpolator:
-        self.interp_method = interp_method
-        self._set_interp()
+        # Private: User is not supposed to overwrite these later on:
+        self._interp_method = interp_method
+        self._extrapolate = extrapolate
+        # Extract the data and coordinates (electrodes, time) from the source:
+        self._factory(source, electrodes, time, compress)
 
     def get_params(self):
         """Return a dictionary of class attributes"""
         return {'data': self.data, 'electrodes': self.electrodes,
                 'time': self.time, 'shape': self.shape,
-                'compressed': self.compressed,
-                'interp_method': self.interp_method}
+                'metadata': self.metadata}
 
     def _from_source(self, source):
         """Extract the data container and time information from source data
@@ -197,10 +187,9 @@ class Stimulus(PrettyPrint):
             _data = source.data
             _time = source.time
             _electrodes = source.electrodes
-            _compress = source.compressed
         else:
             # Input is either be a valid source type (see `self._from_source`)
-            # or a collection thereof. Thus treat everything as a collection,
+            # or a collection thereof. Thus treat everything as a collection
             # and iterate:
             if isinstance(source, dict):
                 iterator = source.items()
@@ -211,7 +200,6 @@ class Stimulus(PrettyPrint):
             _time = []
             _electrodes = []
             _data = []
-            _compress = compress
             for e, s in iterator:
                 # Extract times and data from source:
                 t, d = self._from_source(s)
@@ -233,7 +221,6 @@ class Stimulus(PrettyPrint):
                                      "has t=%s." % (_electrodes[0], _time[0],
                                                     _electrodes[e], t))
             _time = _time[0] if _time else None
-            # _time = _time[0]
             # Now make `data` a 2-D NumPy array, with `electrodes` as rows and
             # `times` as columns (except sometimes `times` is None).
             _data = np.vstack(_data) if _data else np.array([])
@@ -247,7 +234,6 @@ class Stimulus(PrettyPrint):
             _electrodes = electrodes
         else:
             _electrodes = np.array(_electrodes)
-            assert len(_electrodes) == _data.shape[0]
         # User can overwrite time:
         if time is not None:
             if _time is None:
@@ -259,7 +245,16 @@ class Stimulus(PrettyPrint):
                                  "match the number of time steps in the data "
                                  "(%d)." % (len(time), _data.shape[1]))
             _time = time
-        return _data, _electrodes, _time, _compress
+        # Store the data in the private container. Setting all elements at once
+        # enforces consistency; e.g., between shape of electrodes and time:
+        self._stim = {
+            'data': _data,
+            'electrodes': _electrodes,
+            'time': _time,
+        }
+        # Compress the data upon request:
+        if compress:
+            self.compress()
 
     def compress(self):
         """Compress the source data
@@ -305,89 +300,40 @@ class Stimulus(PrettyPrint):
             # now we need to vertically stack them and transpose:
             data = np.vstack(signal).T
             time = np.array(ticks)
-        self.data = data
-        self.shape = data.shape
-        self.electrodes = electrodes
-        self.time = time
-        self.compressed = True
+        self._stim = {
+            'data': data,
+            'electrodes': electrodes,
+            'time': time,
+        }
 
-    def _need_interp(self):
-        """Returns True if new interpolator needs to be set up"""
-        if self.time is None:
-            return False
-        if len(self.time) <= 1:
-            return False
-        return True
-
-    def _set_interp(self):
-        """Set up the interpolator"""
-        self._interp = None
-        if self._need_interp():
-            self._interp = [interp1d(self.time, row, kind=self.interp_method,
-                                     assume_sorted=True, bounds_error=False,
-                                     fill_value='extrapolate')
-                            for row in self.data]
-
-    def interp(self, time=None):
-        """Interpolate along the time axis
-
-        SciPy's `interp1d <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ method is used to interpolate stimulus values along
-        the time axis. An interpolation method can be set in the Stimulus
-        constructor.
-
-        Parameters
-        ----------
-        time : int, float or list thereof
-            The time point(s) at which to interpolate the stimulus
-
-        Returns
-        -------
-        interpolated: Stimulus
-            New Stimulus object with new time coordinates
-
-        Examples
-        --------
-        Interpolate the stimulus value at some point in time. Here, the
-        stimulus is a single-electrode ramp stimulus (stimulus value == point
-        in time):
-
-        >>> from pulse2percept.stimuli import Stimulus
-        >>> stim = Stimulus(np.arange(10).reshape((1, -1)))
-        >>> stim.interp(time=3.45) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-        Stimulus(compressed=False, data=[[...3.45]], electrodes=[0],
-                 interp_method='linear', shape=(1, 1), time=[...3.45])
-
-        Use the 'nearest' interpolation method instead
-        (see `scipy.interpolate.interp1d <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_):
-
-        >>> from pulse2percept.stimuli import Stimulus
-        >>> stim = Stimulus(np.arange(10).reshape((1, -1)),
-        ...                 interp_method='nearest')
-        >>> stim.interp(time=3.45) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-        Stimulus(compressed=False, data=[[...3.]], electrodes=[0],
-                 interp_method='linear', shape=(1, 1), time=[...3.45])
-
-        Extrapolate to a time point outside the provided data range:
-
-        >>> from pulse2percept.stimuli import Stimulus
-        >>> stim = Stimulus(np.arange(10).reshape((1, -1)))
-        >>> stim.interp(time=123.45) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-        Stimulus(compressed=False, data=[[...123.45]], electrodes=[0],
-                 interp_method='linear', shape=(1, 1), time=[...123.45])
-
-        """
-        if not self._need_interp():
-            # This includes the special case of a single time point (where
-            # `interp1d` would not work):
-            return Stimulus(self.data[:, 0], electrodes=self.electrodes,
-                            time=None, compress=self.compressed)
-
-        # Should work with scalars and lists:
-        time = np.array([time]).flatten()
-        data = np.array([[self._interp[e](t) for t in time]
-                         for e, _ in enumerate(self.electrodes)])
-        return Stimulus(data, electrodes=self.electrodes, time=time,
-                        compress=self.compressed)
+    def __getitem__(self, item):
+        """Returns an item from the data array, interpolated if necessary"""
+        try:
+            # NumPy handles most indexing and slicing:
+            return self._stim['data'][item]
+        except IndexError as e:
+            # IndexErrors must still be thrown except when `item` is a tuple,
+            # in which case we might want to interpolate time:
+            if not isinstance(item, tuple):
+                raise IndexError(e)
+        # Handle the special case where we interpolate time.
+        # First of all, if time=None, then _interp=None, and we won't interp:
+        if self._interp is None:
+            raise ValueError("Cannot interpolate time if time=None.")
+        # Electrodes cannot be interpolated, so convert from slice, ellipsis or
+        # indices into a list:
+        if item[0] == Ellipsis:
+            interp = np.array(self._interp)
+        else:
+            interp = np.array([self._interp[item[0]]]).flatten()
+        # Time might be a single index or a list of indices. Convert all to
+        # list so we can iterate:
+        time = np.array([item[1]]).flatten()
+        data = np.array([[ip(t) for t in time] for ip in interp])
+        # Return a single element as scalar:
+        if len(data) <= 1:
+            data = data.ravel()[0]
+        return data
 
     def __eq__(self, other):
         """Returns True if two Stimulus objects are identical
@@ -463,3 +409,104 @@ class Stimulus(PrettyPrint):
 
         """
         return not self.__eq__(other)
+
+    @property
+    def _stim(self):
+        """A dictionary containing all the stimulus data"""
+        return self.__stim
+
+    @_stim.setter
+    def _stim(self, stim):
+        # Check stimulus data for consistency:
+        if not isinstance(stim, dict):
+            raise TypeError("Stimulus data must be stored in a dictionary, "
+                            "not %s." % type(stim))
+        for field in ['data', 'electrodes', 'time']:
+            if field not in stim:
+                raise AttributeError("Stimulus dict must contain a field "
+                                     "'%s'." % field)
+        if len(stim['data']) > 0:
+            if not isinstance(stim['data'], np.ndarray):
+                raise TypeError("Stimulus data must be a NumPy array, not "
+                                "%s." % type(stim['data']))
+            if stim['data'].ndim != 2:
+                raise ValueError("Stimulus data must be a 2-D NumPy array, not "
+                                 "%d-D." % stim['data'].ndim)
+        if len(stim['electrodes']) != stim['data'].shape[0]:
+            raise ValueError("Number of electrodes (%d) must match the number "
+                             "of rows in the data array "
+                             "(%d)." % (len(stim['electrodes']),
+                                        stim['data'].shape[0]))
+        if len(stim['electrodes']) != stim['data'].shape[0]:
+            raise ValueError("Number of electrodes (%d) must match the number "
+                             "of rows in the data array "
+                             "(%d)." % (len(stim['electrodes']),
+                                        stim['data'].shape[0]))
+        if stim['time'] is not None:
+            if len(stim['time']) != stim['data'].shape[1]:
+                raise ValueError("Number of time points (%d) must match the "
+                                 "number of columns in the data array "
+                                 "(%d)." % (len(stim['time']),
+                                            stim['data'].shape[1]))
+        elif len(stim['data']) > 0:
+            if stim['data'].shape[1] > 1:
+                raise ValueError("Number of columns in the data array must be "
+                                 "1 if time=None.")
+        # All checks passed, store the data:
+        self.__stim = stim
+        # Set up the interpolator:
+        self._interp = None
+        if self.time is None:
+            return
+        if len(self.time) == 1:
+            # Special case: Duplicate data with slightly different time points
+            # so we can set up an interp1d:
+            eps = np.finfo(float).eps
+            time = np.array([self.time - eps, self.time + eps]).flatten()
+            data = np.repeat(self.data, 2, axis=1)
+        else:
+            time = self.time
+            data = self.data
+        if self._extrapolate:
+            bounds_error = False
+            fill_value = 'extrapolate'
+        else:
+            bounds_error = True
+            fill_value = None
+        self._interp = [interp1d(time, row, kind=self._interp_method,
+                                 assume_sorted=True,
+                                 bounds_error=bounds_error,
+                                 fill_value=fill_value)
+                        for row in data]
+
+    @property
+    def data(self):
+        """Stimulus data container
+
+        A 2-D NumPy array that contains the stimulus data, where the rows
+        denote electrodes and the columns denote points in time.
+        """
+        return self._stim['data']
+
+    @property
+    def shape(self):
+        """Data container shape"""
+        return self.data.shape
+
+    @property
+    def electrodes(self):
+        """Electrode names
+
+        A list of electrode names, corresponding to the rows in the data
+        container.
+        """
+        return self._stim['electrodes']
+
+    @property
+    def time(self):
+        """Time steps
+
+        A list of time steps, corresponding to the columns in the data
+        container.
+        """
+        return self._stim['time']
