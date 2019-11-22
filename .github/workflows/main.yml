@@ -22,12 +22,13 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
+        pip install -U setuptools
         pip install -r requirements.txt
     - name: Lint with flake8
       run: |
         pip install flake8
         # stop the build if there are Python syntax errors or undefined names
-        flake8 --ignore N802,N806,W503 --select W504 --count --show-source --statistics `find . -name \*.py | grep -v setup.py | grep -v version.py | grep -v __init__.py | grep -v /doc/`
+        flake8 pulse2percept --ignore N802,N806,W503 --select W504 --count --show-source --statistics
     - name: Install package
       run: |
         pip install -e .

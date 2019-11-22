@@ -1,6 +1,12 @@
-import numpy as np
+# https://stackoverflow.com/questions/21784641/installation-issue-with-matplotlib-python
+from sys import platform
+import matplotlib as mpl
+if platform == "darwin":  # OS X
+    mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 from matplotlib import patches
+
+import numpy as np
 import logging
 from . import implants
 from . import utils
