@@ -33,7 +33,9 @@ jobs:
     - name: Test with pytest
       run: |
         pip install pytest coveralls mock pytest-cov
-        pytest --pyargs pulse2percept --cov-report=xml term-missing --cov=pulse2percept --doctest-modules
+        mkdir test_dir
+        cd test_dir
+        pytest --pyargs pulse2percept --cov-report=xml --cov=pulse2percept --doctest-modules
     - name: Upload coverage report
       uses: codecov/codecov-action@v1
       with:
