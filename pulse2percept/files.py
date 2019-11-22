@@ -153,34 +153,6 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
         of dimension (M, N, C), (M, N, T), (M, N, C), or (M, N).
         The sampling rate corresponds to 1 / frame rate.
 
-    Examples
-    --------
-    Load a video as a ``p2p.utils.TimeSeries`` object:
-
-    >>> from skvideo import datasets
-    >>> video = load_video(datasets.bikes())  # doctest: +SKIP
-    >>> video.tsample
-    0.04
-    >>> video.shape
-    (272, 640, 3, 250)
-
-    Load a video as a NumPy ndarray:
-
-    >>> from skvideo import datasets
-    >>> video = load_video(datasets.bikes(),  # doctest: +SKIP
-    >>>                    as_timeseries=False)  # doctest: +SKIP
-    >>> video.shape
-    (250, 272, 640, 3)
-
-    Load a video as a NumPy ndarray and convert to grayscale:
-
-    >>> from skvideo import datasets
-    >>> video = load_video(datasets.bikes(),  # doctest: +SKIP
-    >>>                    as_timeseries=False,  # doctest: +SKIP
-    >>>                    as_gray=True)  # doctest: +SKIP
-    >>> video.shape
-    (250, 272, 640, 1)
-
     """
     if not has_skvideo:
         raise ImportError("You do not have scikit-video installed. "
@@ -234,13 +206,6 @@ def load_video_generator(filename, ffmpeg_path=None, libav_path=None):
     -------
     reader : skvideo.io.FFmpegReader | skvideo.io.LibAVReader
         A Scikit-Video reader object
-
-    Examples
-    --------
-    >>> from skvideo import datasets
-    >>> reader = load_video_generator(datasets.bikes())
-    >>> for frame in reader.nextFrame():
-    ...    pass
 
     """
     if not has_skvideo:
