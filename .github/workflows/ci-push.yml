@@ -9,7 +9,7 @@ jobs:
     strategy:
       max-parallel: 4
       matrix:
-        python-version: [3.5]
+        python-version: [2.7, 3.5, 3.6]
         os: [ubuntu-latest, windows-latest, macOS-latest]
 
     steps:
@@ -33,5 +33,13 @@ jobs:
     - name: Test with pytest
       run: |
         pip install pytest coveralls mock pytest-cov
-        pytest --pyargs pulse2percept --cov-report term-missing --cov=pulse2percept --doctest-modules
+        pytest --pyargs pulse2percept --cov-report=xml term-missing --cov=pulse2percept --doctest-modules
+    - name: Upload coverage report
+      uses: codecov/codecov-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        yml: ./codecov.yml
 
