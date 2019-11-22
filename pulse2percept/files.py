@@ -158,7 +158,7 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
     Load a video as a ``p2p.utils.TimeSeries`` object:
 
     >>> from skvideo import datasets
-    >>> video = load_video(datasets.bikes())
+    >>> video = load_video(datasets.bikes())  # doctest: +SKIP
     >>> video.tsample
     0.04
     >>> video.shape
@@ -167,14 +167,17 @@ def load_video(filename, as_timeseries=True, as_gray=False, ffmpeg_path=None,
     Load a video as a NumPy ndarray:
 
     >>> from skvideo import datasets
-    >>> video = load_video(datasets.bikes(), as_timeseries=False)
+    >>> video = load_video(datasets.bikes(),  # doctest: +SKIP
+    >>>                    as_timeseries=False)  # doctest: +SKIP
     >>> video.shape
     (250, 272, 640, 3)
 
     Load a video as a NumPy ndarray and convert to grayscale:
 
     >>> from skvideo import datasets
-    >>> video = load_video(datasets.bikes(), as_timeseries=False, as_gray=True)
+    >>> video = load_video(datasets.bikes(),  # doctest: +SKIP
+    >>>                    as_timeseries=False,  # doctest: +SKIP
+    >>>                    as_gray=True)  # doctest: +SKIP
     >>> video.shape
     (250, 272, 640, 1)
 
