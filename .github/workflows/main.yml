@@ -1,0 +1,128 @@
+name: main
+
+on: [push, pull_request]
+
+# By default, jobs run in parallel on a fresh instance of the virtual environment:
+jobs: 
+  build:
+    name: Building on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      max-parallel: 4
+      matrix:
+        python-version: [3.5, 3.6, 3.7]
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+    
+    steps:
+    - uses: actions/checkout@master
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v1
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    - name: Lint with flake8
+      run: |
+        pip install flake8
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 --ignore N802,N806,W503 --select W504 --count --show-source --statistics `find . -name \*.py | grep -v setup.py | grep -v version.py | grep -v __init__.py | grep -v /doc/`
+    - name: Install package
+      run: |
+        pip install -e .
+    - name: Test with pytest
+      run: |
+        pip install pytest coveralls mock pytest-cov
+        mkdir test_dir
+        cd test_dir
+        pytest --pyargs pulse2percept --cov-report=xml --cov=pulse2percept --doctest-modules
+    - name: Upload coverage report
+      uses: codecov/codecov-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ./test_dir/coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        yml: ./codecov.yml
+
+    - name: Build and test wheel
+      #if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags') # only on tag/release
+      run: |
+        # Build wheel
+        python -m pip install wheel
+        python setup.py build_ext --inplace
+        python setup.py bdist_wheel
+        # Test wheel
+        python -m pip uninstall -y pulse2percept
+        python -m pip install --force $(ls dist/*.whl)
+        python -c 'import pulse2percept'
+
+    - uses: actions/upload-artifact@v1.0.0
+      #if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
+      with:
+        name: "dist-${{ matrix.os }}"
+        path: dist
+
+  publish-test-pypi:
+    name: Publish package to TestPyPI
+    if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags') # only on tag/release
+    needs: build
+    runs-on: ubuntu-18.04
+    steps:
+
+    - uses: actions/checkout@master
+    - uses: actions/download-artifact@master
+      with:
+        name: dist-ubuntu-latest
+        path: dist/
+    - uses: actions/download-artifact@master
+      with:
+        name: dist-macOS-latest
+        path: dist/
+    - uses: actions/download-artifact@master
+      with:
+        name: dist-windows-latest
+        path: dist/
+    - name: pre-PyPI
+      run: |
+        cd dist
+        # Rename to manylinux1 to make PyPI accept the package
+        mv `ls -1 pulse2percept*-linux_*.whl` `ls -1 pulse2percept*-linux_*.whl | sed -e's/linux/manylinux1/'`
+        # Remove obsolete egg format:
+        rm *.egg
+        rm requirements.txt # PIPY upload has problem with non-*.whl files 
+        cd ..
+        ls dist/
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@master
+      with:
+        user: __token__
+        password: ${{ secrets.TESTPYPI_TOKEN }}
+        repository_url: https://test.pypi.org/legacy/
+
+  verify-test-pypi:
+    name: Verify TestPyPI package on ${{ matrix.os }}
+    if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags') # only on tag/release
+    needs: [build, publish-test-pypi]
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      max-parallel: 4
+      matrix:
+        python-version: [3.5, 3.6, 3.7]
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+
+    steps:
+    - uses: actions/checkout@master
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v1
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: pip install package
+      run: |
+        python -m pip uninstall -y pulse2percept
+        python -m pip install --index-url https://test.pypi.org/legacy/ pulse2percept
+        python -c 'import pulse2percept; print(pulse2percept.__version__)'
+
+
