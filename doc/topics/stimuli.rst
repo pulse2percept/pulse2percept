@@ -175,33 +175,44 @@ before and after compression:
 Interpolating stimulus values
 -----------------------------
 
-The :py:meth:`~pulse2percept.stimuli.Stimulus.interp` method interpolates
-stimulus values at time points that are not explicitly provided:
+The :py:class:`~pulse2percept.stimuli.Stimulus` object can also interpolate
+stimulus values at time points that are not explicitly provided.
+Interpolation is done automatically by providing an index or slice into the
+2-D data array. The first dimension addresses the electrode (and cannot be
+interpolated), and the second dimension addresses time (which can be
+interpolated):
 
 .. ipython:: python
 
     # A single-electrode ramp stimulus:
     stim = Stimulus(np.arange(10).reshape((1, -1)))
+    stim
 
-    # Interpolate stimulus at a single time point:
-    stim.interp(time=3.45)
+    # Retrieve stimulus at t=3:
+    stim[0, 3]
 
-    # Interpolate stimulus at multiple time points:
-    stim.interp(time=[3.45, 6.78])
+    # Time point 3.45 is not in the data provided above, but can be
+    # interpolated as follows:
+    stim[0, 3.45]
 
-    # You can also extrapolate values outside the provided data range:
-    stim.interp(time=123.45)
+    # This also works for multiple time points:
+    stim[0, [3.45, 6.78]]
+    
+    # Extrapolating is disabled by default, but you can enable it:
+    stim = Stimulus(np.arange(10).reshape((1, -1)), extrapolate=True)
+    stim[0, 123.45]
 
-For a multi-electrode stimulus, the stimulus values at time t are returned
-for all electrodes:
+For a multi-electrode stimulus, you can access stimulus values at time t
+for any or all electrodes:
 
 .. ipython:: python
 
     # Multi-electrode stimulus
     stim = Stimulus(np.arange(100).reshape((5, 20)))
+    stim
 
-    # Interpolate:
-    stim.interp(time=4.5)
+    # Interpolate t=4.5 for all electrodes:
+    stim[:, 4.5]
 
 You can choose different interpolation methods, as long as
 `scipy.interpolate.interp1d <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ accepts them.
@@ -211,10 +222,11 @@ data point:
 .. ipython:: python
 
     # A single-electrode ramp stimulus:
-    stim = Stimulus(np.arange(10).reshape((1, -1)), interp_method='nearest')
+    stim = Stimulus(np.arange(10).reshape((1, -1)), interp_method='nearest',
+                    extrapolate=True)
 
     # Interpolate:
-    stim.interp(time=3.45)
+    stim[0, 3.45]
 
     # Outside the data range:
-    stim.interp(time=12.2)
+    stim[0, 12.2]

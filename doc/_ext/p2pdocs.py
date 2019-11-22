@@ -30,21 +30,21 @@ def run_apidoc(_):
 
 
 def pull_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
-    ref = 'https://github.com/uwescience/pulse2percept/pull/' + text
+    ref = 'https://github.com/pulse2percept/pulse2percept/pull/' + text
     set_classes(options)
     node = nodes.reference(rawtext, 'PR #' + text, refuri=ref, **options)
     return [node], []
 
 
 def issue_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
-    ref = 'https://github.com/uwescience/pulse2percept/issues/' + text
+    ref = 'https://github.com/pulse2percept/pulse2percept/issues/' + text
     set_classes(options)
     node = nodes.reference(rawtext, 'issue #' + text, refuri=ref, **options)
     return [node], []
 
 
 def commit_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
-    ref = 'https://github.com/uwescience/pulse2percept/commit/' + text
+    ref = 'https://github.com/pulse2percept/pulse2percept/commit/' + text
     set_classes(options)
     node = nodes.reference(rawtext, 'commit ' + text, refuri=ref, **options)
     return [node], []

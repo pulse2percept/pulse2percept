@@ -29,13 +29,13 @@ with open('README.rst') as f:
     LONG_DESCRIPTION = f.read()
 MAINTAINER = 'Michael Beyeler, Ariel Rokem'
 MAINTAINER_EMAIL = 'mbeyeler@uw.edu, arokem@gmail.com'
-URL = 'https://github.com/uwescience/pulse2percept'
+URL = 'https://github.com/pulse2percept/pulse2percept'
 DOWNLOAD_URL = 'https://pypi.org/project/pulse2percept/#files'
 LICENSE = 'new BDS'
 PROJECT_URLS = {
-    'Bug Tracker': 'https://github.com/uwescience/pulse2percept/issues',
-    'Documentation': 'https://uwescience.github.io/pulse2percept',
-    'Source Code': 'https://github.com/uwescience/pulse2percept'
+    'Bug Tracker': 'https://github.com/pulse2percept/pulse2percept/issues',
+    'Documentation': 'https://pulse2percept.github.io/pulse2percept',
+    'Source Code': 'https://github.com/pulse2percept/pulse2percept'
 }
 
 
@@ -222,7 +222,7 @@ def setup_package():
                 % (platform.python_version(), sys.executable))
 
         instructions = ("Installation instructions are available on GitHub: "
-                        "http://github.com/uwescience/pulse2percept\n")
+                        "http://github.com/pulse2percept/pulse2percept\n")
 
         # Make sure NumPy is installed:
         numpy_status = get_numpy_status()

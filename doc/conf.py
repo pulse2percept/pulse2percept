@@ -268,6 +268,6 @@ sphinx_gallery_conf = {
 
 # The following is used by sphinx.ext.linkcode to provide links to github
 linkcode_resolve = make_linkcode_resolve('pulse2percept',
-                                         'https://github.com/uwescience/'
+                                         'https://github.com/pulse2percept/'
                                          'pulse2percept/blob/{revision}/'
                                          '{package}/{path}#L{lineno}')

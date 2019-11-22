@@ -66,10 +66,10 @@ following categories:
 
    The base class provides:
 
-   *  :py:var:`~pulse2percept.implants.ElectrodeArray.electrodes`: an ordered
+   *  :py:attr:`~pulse2percept.implants.ElectrodeArray.electrodes`: an ordered
       dictionary of electrode objects (meaning it will remember the order in
       which electrodes were added),
-   *  :py:var:`~pulse2percept.implants.ElectrodeArray.n_electrodes`: a property
+   *  :py:attr:`~pulse2percept.implants.ElectrodeArray.n_electrodes`: a property
       returning the number of electrodes in the array.
    *  :py:meth:`~pulse2percept.implants.ElectrodeArray.add_electrode`: a method
       to add a single electrode to the collection,
@@ -107,20 +107,23 @@ following categories:
       but its behavior might depend on the actual system, such as
       :py:class:`~pulse2percept.implants.ArgusII` or
       :py:class:`~pulse2percept.implants.AlphaIMS`,
-   *  :py:var:`~pulse2percept.implants.ProsthesisSystem.eye`: a string
+   *  :py:attr:`~pulse2percept.implants.ProsthesisSystem.eye`: a string
       indicating whether the system is implanted in the left or right eye,
    *  a means to access and iterate over electrodes in the array, as described
       above.
 
    A small working example:
 
-   class MyFovealArgusII(ProsthesisSystem):
-   	   """An Argus II implant centered over the fovea"""
+   .. code-block:: python
 
-       def __init__(self, stim=None):
-           self.earray = ElectrodeGrid((6, 10), x=0, y=0, z=0, rot=0, r=100,
-                                       spacing=525, names=('A', '1'))
-           self.stim = stim
+       class MyFovealArgusII(ProsthesisSystem):
+           """An Argus II implant centered over the fovea"""
+
+           def __init__(self, stim=None):
+               self.earray = ElectrodeGrid((6, 10), x=0, y=0, z=0, rot=0,
+                                           r=100, spacing=525,
+                                           names=('A', '1'))
+               self.stim = stim
 
    .. seealso::
 
@@ -137,9 +140,9 @@ functionality from the :py:class:`~pulse2percept.stimuli.Stimulus` base class.
 
 The base class provides:
 
-*  :py:var:`~pulse2percept.stimuli.Stimulus.data`: A 2-D NumPy array, where
-   the rows denote electrodes and the columns denote points in time,
-*  :py:var:`~pulse2percept.stimuli.Stimulus.shape`: the shape of the data
+*  :py:attr:`~pulse2percept.stimuli.Stimulus.data`: A 2-D NumPy array,
+   where the rows denote electrodes and the columns denote points in time,
+*  :py:attr:`~pulse2percept.stimuli.Stimulus.shape`: the shape of the data
    array,
 *  :py:meth:`~pulse2percept.stimuli.Stimulus.compress`: a method to compress
    the data container so that only nonredundant values are kept.
@@ -170,4 +173,4 @@ A small working example:
 Creating your own model
 =======================
 
-TODO after :PR:`96` is merged. API will change.
+TODO after :pull:`96` is merged. API will change.

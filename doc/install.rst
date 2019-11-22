@@ -138,7 +138,7 @@ Obtaining the latest code from GitHub
 
         A "fork" is basically a "remote copy" of a GitHub repository; i.e.,
         creating "https://github.com/<username>/pulse2percept.git" from
-        "https://github.com/uwescience/pulse2percept.git".
+        "https://github.com/pulse2percept/pulse2percept.git".
 
         A "clone" is basically a "local copy" of your GitHub repository; i.e.,
         creating a local "pulse2percept" directory (including all the git
@@ -162,7 +162,7 @@ Obtaining the latest code from GitHub
 
        pip3 install -r requirements-dev.txt
 
-.. _pulse2percept on GitHub: https://github.com/uwescience/pulse2percept
+.. _pulse2percept on GitHub: https://github.com/pulse2percept/pulse2percept
 .. _GitHub account: https://help.github.com/articles/signing-up-for-a-new-github-account
 
 Building pulse2percept
@@ -214,9 +214,9 @@ a new `remote repository`_ named "upstream" (you need to do this only once):
 
 .. code-block:: bash
 
-    git remote add upstream https://github.com/uwescience/pulse2percept.git
+    git remote add upstream https://github.com/pulse2percept/pulse2percept.git
 
-Then you `sync your fork`_ by grabbing the latest code from the uwescience
+Then you `sync your fork`_ by grabbing the latest code from the pulse2percept
 master branch:
 
 .. code-block:: bash
@@ -260,4 +260,4 @@ or to :ref:`build from source <install-source>`.
    problem there. Make sure to mention your platform and whether you are
    installing using pip or from source.
 
-.. _open an issue: https://github.com/uwescience/pulse2percept/issues
+.. _open an issue: https://github.com/pulse2percept/pulse2percept/issues

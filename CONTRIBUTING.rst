@@ -12,7 +12,7 @@ We are excited that you are here and want to contribute!
 If you have any questions that aren't discussed below, please let us know
 by opening an issue in our `Issue Tracker`_ on GitHub.
 
-.. _Issue Tracker: https://github.com/uwescience/pulse2percept/issues
+.. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues
 
 Already know what you're looking for in this guide? Jump to the following
 sections:
@@ -62,7 +62,7 @@ workflow similar to the following:
         See `Contributing code`_ below for more detailed instructions.
 
 5.  **Submit a pull request**:
-    When opening a `pull request`_ (PR) against the uwescience master branch,
+    When opening a `pull request`_ (PR) against the pulse2percept master branch,
     please use one of the following prefixes:
 
     * **[ENH]** for enhancements
@@ -82,8 +82,8 @@ workflow similar to the following:
         to label it as a "work in progress".
 
 .. _GitHub account: https://help.github.com/articles/signing-up-for-a-new-github-account
-.. _good-first-issue: https://github.com/uwescience/pulse2percept/labels/good-first-issue
-.. _help-wanted: https://github.com/uwescience/pulse2percept/labels/help-wanted
+.. _good-first-issue: https://github.com/pulse2percept/pulse2percept/labels/good-first-issue
+.. _help-wanted: https://github.com/pulse2percept/pulse2percept/labels/help-wanted
 .. _new branch: https://help.github.com/articles/about-branches
 .. _pull request: https://help.github.com/articles/creating-a-pull-request-from-a-fork/
 .. _@arokem: https://github.com/arokem
@@ -97,7 +97,7 @@ Understanding issue labels
 Make sure to check out the current list of `issue labels`_:
 
 *   .. image:: https://img.shields.io/badge/-bug-fc2929.svg
-       :target: https://github.com/uwescience/pulse2percept/labels/bug
+       :target: https://github.com/pulse2percept/pulse2percept/labels/bug
        :alt: Bug
        :align: left
 
@@ -115,7 +115,7 @@ Make sure to check out the current list of `issue labels`_:
         please add any additional information that you have as a comment.
 
 *   .. image:: https://img.shields.io/badge/-enhancement-00FF09.svg
-       :target: https://github.com/uwescience/pulse2percept/labels/enhancement
+       :target: https://github.com/pulse2percept/pulse2percept/labels/enhancement
        :alt: Enhancement
        :align: left
 
@@ -130,7 +130,7 @@ Make sure to check out the current list of `issue labels`_:
         reference the other request in your issue.
 
 *   .. image:: https://img.shields.io/badge/-help%20wanted-c2e0c6.svg
-       :target: https://github.com/uwescience/pulse2percept/labels/help-wanted
+       :target: https://github.com/pulse2percept/pulse2percept/labels/help-wanted
        :alt: Help wanted
        :align: left
 
@@ -145,8 +145,8 @@ Make sure to check out the current list of `issue labels`_:
         Issues that are also labelled as `good first issue`_ are a great place
         to start if you're looking to make your first contribution.
 
-.. _issue labels: https://github.com/uwescience/pulse2percept/labels
-.. _good first issue: https://github.com/uwescience/pulse2percept/issues?q=is%3Aopen+is%3Aissue+label%3Agood-first-issue
+.. _issue labels: https://github.com/pulse2percept/pulse2percept/labels
+.. _good first issue: https://github.com/pulse2percept/pulse2percept/issues?q=is%3Aopen+is%3Aissue+label%3Agood-first-issue
 
 Contributing code
 =================
@@ -165,7 +165,7 @@ say you want to add "feature1" to the latest version of pulse2percept:
 
         If you get an error saying "upstream does not appear to be a git
         repository", you need to run the following command first:
-        ``git remote add upstream https://github.com/uwescience/pulse2percept.git``
+        ``git remote add upstream https://github.com/pulse2percept/pulse2percept.git``
 
 2.  Create a new branch (aptly named "feature1" or similar):
 
@@ -189,7 +189,7 @@ say you want to add "feature1" to the latest version of pulse2percept:
 
     1.  Click on "compare across forks" at the top of the page.
 
-    2.  Choose "uwescience/pulse2percept" as the base repository and "master"
+    2.  Choose "pulse2percept/pulse2percept" as the base repository and "master"
         as the base branch.
 
     3.  Choose "<username>/pulse2percept" as the head repository and "feature1"
@@ -203,7 +203,7 @@ say you want to add "feature1" to the latest version of pulse2percept:
         checkboxes (type ``- [X]``; or ``- [ ]`` for an item that has yet to be
         implemented).
 
-.. _submit a pull request: https://github.com/uwescience/pulse2percept/compare
+.. _submit a pull request: https://github.com/pulse2percept/pulse2percept/compare
 
 .. _dev-contributing-doc:
 

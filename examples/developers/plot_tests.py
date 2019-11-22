@@ -58,7 +58,7 @@ The function, which we will call ``largest_timeseries_element``, should:
     yourself to it. You can also post a comment to let the community know that
     you are going to submit a pull request on this issue.
 
-.. _issue tracker: https://github.com/uwescience/pulse2percept/issues
+.. _issue tracker: https://github.com/pulse2percept/pulse2percept/issues
 
 Implementation
 ==============

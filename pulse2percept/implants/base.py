@@ -263,7 +263,7 @@ class ElectrodeGrid(ElectrodeArray):
     --------
     An electrode grid with 2 rows and 4 columns, made of electrodes with 10um
     radius spaced 20um apart, centered at (10, 20)um, and located 500um away
-    from the retinal surface, with names like this:
+    from the retinal surface, with names like this: 
 
         A1 A2 A3 A4
         B1 B2 B3 B4

@@ -32,7 +32,6 @@
 
    developers/contributing
    developers/extending
-   developers/debug
 
 .. include:: ../README.rst
    :end-line: 19
@@ -61,15 +60,15 @@ Where to go from here
 =====================
 
 *  Have a look at some code examples from our
-   :ref:`Example Gallery <sphx_glr__examples>`.
+   :ref:`Example Gallery <sphx_glr_examples>`.
 *  Familiarize yourself with :ref:`visual prostheses <topics-implants>`,
    :ref:`electrical stimuli <topics-stimuli>`, and our
    :ref:`computational models <topics-models>`.
 *  See if your question has already been addressed in the
-   :ref:`FAQ <users/faq>`.
+   :ref:`FAQ <users-faq>`.
 *  Request features or report bugs in our `Issue Tracker`_ on GitHub.
 
-.. _Issue Tracker: https://github.com/uwescience/pulse2percept/issues
+.. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues
 
 .. figure:: _static/eScience_Logo_HR.png
    :align: center

@@ -3,19 +3,19 @@
    :alt: DOI
 
 .. image:: https://img.shields.io/badge/License-BSD%203--Clause-blue.svg
-   :target: https://github.com/uwescience/pulse2percept/blob/master/LICENSE
+   :target: https://github.com/pulse2percept/pulse2percept/blob/master/LICENSE
    :alt: BSD 3-clause
 
 .. image:: https://img.shields.io/pypi/v/pulse2percept.svg
    :target: https://pypi.org/project/pulse2percept
    :alt: PyPI
 
-.. image:: https://img.shields.io/github/forks/uwescience/pulse2percept?style=social
-   :target: https://github.com/uwescience/pulse2percept/network/members
+.. image:: https://img.shields.io/github/forks/pulse2percept/pulse2percept?style=social
+   :target: https://github.com/pulse2percept/pulse2percept/network/members
    :alt: GitHub forks
 
-.. image:: https://img.shields.io/github/stars/uwescience/pulse2percept?style=social
-   :target: https://github.com/uwescience/pulse2percept/stargazers
+.. image:: https://img.shields.io/github/stars/pulse2percept/pulse2percept?style=social
+   :target: https://github.com/pulse2percept/pulse2percept/stargazers
    :alt: GitHub stars
 
 ====================================================================
@@ -44,7 +44,7 @@ quality of the generated visual experience:
     </div>
   </div>
 
-.. image:: https://raw.githubusercontent.com/uwescience/pulse2percept/master/doc/_static/boston-train-combined.gif
+.. image:: https://raw.githubusercontent.com/pulse2percept/pulse2percept/master/doc/_static/boston-train-combined.gif
    :align: center
    :alt: Input stimulus and predicted percept
 
@@ -54,7 +54,7 @@ implementation of a number of computational models for state-of-the-art
 such as `ArgusII`_ and `AlphaIMS`_, to provide insight into the
 visual experience provided by these devices.
 
-.. _pulse2percept: https://github.com/uwescience/pulse2percept
+.. _pulse2percept: https://github.com/pulse2percept/pulse2percept
 .. _visual prostheses: https://en.wikipedia.org/wiki/Visual_prosthesis
 .. _ArgusII: https://www.secondsight.com/discover-argus/
 .. _AlphaIMS: https://www.retina-implant.de
@@ -87,7 +87,7 @@ commands:
 
 .. code-block:: bash
 
-    git clone https://github.com/uwescience/pulse2percept.git
+    git clone https://github.com/pulse2percept/pulse2percept.git
     cd pulse2percept
     pip3 install -e .
 
@@ -144,7 +144,7 @@ of the git repository, and can be installed with the following command:
 
 .. code-block:: bash
 
-    git clone https://github.com/uwescience/pulse2percept.git
+    git clone https://github.com/pulse2percept/pulse2percept.git
     cd pulse2percept
     pip3 install -r requirements.txt
 
@@ -169,4 +169,4 @@ Where to go from here
 .. _electrical stimuli: https://pulse2percept.readthedocs.io/en/stable/topics/stimuli.html
 .. _computational models: https://pulse2percept.readthedocs.io/en/stable/topics/models.html
 .. _FAQ: https://pulse2percept.readthedocs.io/en/latest/users/faq.html
-.. _Issue Tracker: https://github.com/uwescience/pulse2percept/issues
+.. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues

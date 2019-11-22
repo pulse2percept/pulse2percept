@@ -44,7 +44,7 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
         # Shorten NumPy array output:
         np.set_printoptions(precision=2, threshold=5, edgeitems=2)
         # Line width:
-        lwidth = 80
+        lwidth = 60
         # Sort list of parameters alphabetically:
         sorted_params = coll.OrderedDict(sorted(self.get_params().items()))
         # Start string with class name, followed by all arguments:
@@ -73,9 +73,12 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
                         strobj = strobj.replace("'>", "")
                 sparam = key + '=' + strobj + ', '
             # If adding `sparam` puts line over `lwidth`, start a new line:
-            if lc + len(sparam) > lwidth and '\n' in str_params:
-                str_params += '\n' + ' ' * lindent
-                lc = lindent
+            if lc + len(sparam) > lwidth:
+                # But only do so if this is not the first param to be added
+                # (check last character of previously written string):
+                if str_params[-1] != '(':
+                    str_params += '\n' + ' ' * lindent
+                    lc = lindent
             str_params += sparam
             lc += len(sparam)
         # Delete last comma and add ')':

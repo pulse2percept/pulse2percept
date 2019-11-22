@@ -4,10 +4,12 @@
 Frequently Asked Questions
 ==========================
 
-.. note ::
+.. note::
 
     Don't see your question here? Please `open an issue`_ on GitHub and ask
     your question there.
+
+.. _open an issue: https://github.com/pulse2percept/pulse2percept/issues
 
 Theoretical
 ===========
@@ -48,6 +50,8 @@ If you would like to contribute some code, great!
 We appreciate all contributions, but those accepted fastest will follow a
 workflow similar to the one described in our
 :ref:`Contribution Guidelines <dev-contributing-workflow>`.
+
+.. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues
 
 The code I downloaded does not match the documentation. What gives?
 -------------------------------------------------------------------

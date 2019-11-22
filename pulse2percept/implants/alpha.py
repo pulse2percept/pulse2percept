@@ -9,7 +9,7 @@ class AlphaIMS(ProsthesisSystem):
 
     This function creates an AlphaIMS array and places it on the retina
     such that the center of the array is located at (x,y,z), given in
-    microns, and the array is rotated by rotation angle `rot`, given in
+    microns, and the array is rotated by rotation angle ``rot``, given in
     radians.
 
     The array is oriented upright in the visual field, such that an
@@ -104,7 +104,7 @@ class AlphaAMS(ProsthesisSystem):
 
     This function creates an AlphaAMS array and places it below the retina
     such that the center of the array is located at (x,y,z), given in
-    microns, and the array is rotated by rotation angle `rot`, given in
+    microns, and the array is rotated by rotation angle ``rot``, given in
     radians.
 
     The array is oriented upright in the visual field, such that an
