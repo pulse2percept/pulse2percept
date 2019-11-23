@@ -21,15 +21,29 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -U setuptools
+        python -m pip install --upgrade pip wheel setuptools
+        # For Windows:
+        pip install matplotlib
+        # Install p2p requirements:
         pip install -r requirements.txt
     - name: Lint with flake8
       run: |
         pip install flake8
         # stop the build if there are Python syntax errors or undefined names
         flake8 pulse2percept --ignore N802,N806,W503 --select W504 --count --show-source --statistics
-    - name: Install package
+    - name: Install package (Windows)
+      # https://github.com/pandas-dev/pandas/issues/981
+      if: matrix.os == 'windows-latest'
+      run: |
+        $env:INCLUDE = 'C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\ucrt'
+        $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\shared'
+        $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\um'
+        $env:LIB = 'C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\ucrt\x64'
+        $env:LIB += ';C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\um\x64'
+        $env:PATH += ';C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64'
+        pip install -e .
+    - name: Install package (Unix)
+      if: matrix.os != 'windows-latest'
       run: |
         pip install -e .
     - name: Test with pytest
@@ -51,13 +65,12 @@ jobs:
       #if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags') # only on tag/release
       run: |
         # Build wheel
-        python -m pip install wheel
         python setup.py build_ext --inplace
         python setup.py bdist_wheel
         # Test wheel
-        python -m pip uninstall -y pulse2percept
-        python -m pip install --force $(ls dist/*.whl)
-        python -c 'import pulse2percept'
+        #python -m pip uninstall -y pulse2percept
+        #python -m pip install --force $(ls dist/*.whl)
+        #python -c 'import pulse2percept'
 
     - uses: actions/upload-artifact@v1.0.0
       #if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
