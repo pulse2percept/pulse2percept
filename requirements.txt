@@ -1,8 +1,9 @@
 numpy
+cython
 scipy
-joblib
+matplotlib
 scikit_image
 sk_video
-cython
+joblib
 dask
 numba
