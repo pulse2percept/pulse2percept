@@ -1,6 +1,6 @@
 variables:
-  # Skip building on Python 2.7 on all platforms
-  CIBW_SKIP: cp27-*
+  # Skip building on Python 2.7 and 3.8 on all platforms
+  CIBW_SKIP: cp27-* cp38-*
 
 
 jobs:
