@@ -3,6 +3,8 @@ jobs:
   pool: {vmImage: 'Ubuntu-16.04'}
   steps: 
     - task: UsePythonVersion@0
+      inputs:
+        versionSpec: 3.5
     - bash: |
         python -m pip install --upgrade pip
         pip install cibuildwheel==1.0.0
@@ -13,6 +15,8 @@ jobs:
   pool: {vmImage: 'macOS-10.13'}
   steps: 
     - task: UsePythonVersion@0
+      inputs:
+        versionSpec: 3.5
     - bash: |
         python -m pip install --upgrade pip
         pip install cibuildwheel==1.0.0
@@ -23,8 +27,10 @@ jobs:
   pool: {vmImage: 'vs2017-win2016'}
   steps: 
     - task: UsePythonVersion@0
-    - script: choco install vcpython27 -f -y
-      displayName: Install Visual C++ for Python 2.7
+      inputs:
+        versionSpec: 3.5
+    - script: choco install vcpython35 -f -y
+      displayName: Install Visual C++ for Python 3.5
     - bash: |
         python -m pip install --upgrade pip
         pip install cibuildwheel==1.0.0
