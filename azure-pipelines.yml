@@ -1,3 +1,8 @@
+variables:
+  # Skip building on Python 2.7 on all platforms
+  CIBW_SKIP: cp27-*
+
+
 jobs:
 - job: linux
   pool: {vmImage: 'Ubuntu-16.04'}
