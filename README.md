@@ -68,9 +68,10 @@ Scientific studies referencing pulse2percept:
 ## Installation
 
 ### Prerequisites
+
 pulse2percept requires the following software installed for your platform:
 
-1.  [Python](http://www.python.org) 2.7 or >= 3.4
+1.  [Python](http://www.python.org) 3.5 - 3.7
 
 2.  [NumPy](http://www.numpy.org)
 
@@ -90,6 +91,12 @@ Optional packages:
 3.  [ffmpeg codec](http://adaptivesamples.com/how-to-install-ffmpeg-on-windows)
     if you're on Windows and want to use functions in the `files`
     module.
+
+You can install all required packages in one fell swoop:
+
+```bash
+$ pip install -r requirements.txt
+```
 
 ### Stable version
 

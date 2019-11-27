@@ -1,14 +1,20 @@
-name: main
+name: Run CI checks
 
 on: [push, pull_request]
 
-# By default, jobs run in parallel on a fresh instance of the virtual environment:
+# By default, jobs run in parallel on a fresh instance of the virtual
+# environment. You can force sequential order by specifying a job's
+# dependencies with the "needs" attribute.
 jobs: 
+
+  # Continuous integration: Run unit tests on all supported platforms whenever
+  # someone pushes a new commit or creates a pull request. 
   build:
     name: Building on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       max-parallel: 4
+      # Test on all supported platforms using all supported Python versions:
       matrix:
         python-version: [3.5, 3.6, 3.7]
         os: [ubuntu-latest, ubuntu-16.04, windows-latest, macOS-latest]
@@ -46,14 +52,16 @@ jobs:
       if: matrix.os != 'windows-latest'
       run: |
         pip install -e .
-    - name: Test with pytest
+    - name: Run test suite with pytest
       run: |
-        pip install pytest coveralls mock pytest-cov
+        pip install pytest mock pytest-cov
         mkdir test_dir
         cd test_dir
         pytest --pyargs pulse2percept --cov-report=xml --cov=pulse2percept --doctest-modules
-    - name: Upload coverage report
+    - name: Upload coveragei report to codecov.io
       uses: codecov/codecov-action@v1
+      # Cannot yet post coverage report as comments on the PR, but see:
+      # https://github.com/codecov/codecov-python/pull/214
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: ./test_dir/coverage.xml
