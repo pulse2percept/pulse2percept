@@ -1,3 +1,5 @@
+"""deprecation"""
+
 import sys
 import warnings
 import functools
@@ -6,16 +8,19 @@ import functools
 class deprecated:
     """Decorator to mark deprecated functions and classes with a warning.
 
-    Adapted from <https://github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/deprecation.py>.
+    .. seealso::
+
+        Adapted from
+        https://github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/deprecation.py.
 
     Parameters
     ----------
     alt_func : str
         If given, tell user what function to use instead.
-    deprecated_version : {float|str}
+    deprecated_version : float or str
         The package version in which the function/class was first marked as
         deprecated.
-    removed_version : {float|str}
+    removed_version : float or str
         The package version in which the deprecated function/class will be
         removed.
     """
@@ -27,11 +32,6 @@ class deprecated:
         self.removed_version = removed_version
 
     def __call__(self, obj):
-        """Call method
-        Parameters
-        ----------
-        obj : object
-        """
         if isinstance(obj, type):
             return self._decorate_class(obj)
         elif isinstance(obj, property):
@@ -91,10 +91,12 @@ class deprecated:
         Note that this is only triggered properly if the `property` decorator
         comes before the `deprecated` decorator, like so:
 
-        @deprecated()
-        @property
-        def deprecated_attribute_(self):
-            ...
+        .. code-block:: python
+
+            @deprecated()
+            @property
+            def deprecated_attribute_(self):
+                ...
         """
         msg = self._get_message("Property %s" % prop.__name__)
 
@@ -120,7 +122,7 @@ class deprecated:
 
 
 def is_deprecated(func):
-    """Helper to check if func is wrapped by the deprecated decorator"""
+    """Helper to check if ``func`` is wrapped by the deprecated decorator"""
     if sys.version_info < (3, 5):
         raise NotImplementedError("This is only available for Python 3.5 "
                                   "or above")

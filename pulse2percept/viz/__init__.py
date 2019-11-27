@@ -1,3 +1,11 @@
+"""This module provides a number of visualization functions.
+
+.. autosummary::
+    :toctree: _api
+
+    axon_map
+
+"""
 # This import is necessary to ensure consistency of the generated images across
 # platforms, and for the tests to run on Travis:
 # https://stackoverflow.com/questions/35403127/testing-matplotlib-based-plots-in-travis-ci

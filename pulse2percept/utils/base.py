@@ -1,6 +1,4 @@
-"""
-Utility functions for pulse2percept
-"""
+"""Utility functions for pulse2percept"""
 import numpy as np
 import sys
 import abc
@@ -46,7 +44,7 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
         # Shorten NumPy array output:
         np.set_printoptions(precision=2, threshold=5, edgeitems=2)
         # Line width:
-        lwidth = 80
+        lwidth = 60
         # Sort list of parameters alphabetically:
         sorted_params = coll.OrderedDict(sorted(self.get_params().items()))
         # Start string with class name, followed by all arguments:
@@ -76,8 +74,11 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
                 sparam = key + '=' + strobj + ', '
             # If adding `sparam` puts line over `lwidth`, start a new line:
             if lc + len(sparam) > lwidth:
-                str_params += '\n' + ' ' * lindent
-                lc = lindent
+                # But only do so if this is not the first param to be added
+                # (check last character of previously written string):
+                if str_params[-1] != '(':
+                    str_params += '\n' + ' ' * lindent
+                    lc = lindent
             str_params += sparam
             lc += len(sparam)
         # Delete last comma and add ')':
@@ -212,10 +213,10 @@ class GridXY(object):
 
 
 def gamma(n, tau, tsample, tol=0.01):
-    """Returns the impulse response of `n` cascaded leaky integrators
+    """Returns the impulse response of ``n`` cascaded leaky integrators
 
-    This function calculates the impulse response of `n` cascaded
-    leaky integrators with constant of proportionality 1/`tau`:
+    This function calculates the impulse response of ``n`` cascaded
+    leaky integrators with constant of proportionality 1/``tau``:
     y = (t/theta).^(n-1).*exp(-t/theta)/(theta*factorial(n-1))
 
     Parameters
@@ -229,7 +230,7 @@ def gamma(n, tau, tsample, tol=0.01):
         Sampling time step (seconds).
     tol : float
         Cut the kernel to size by ignoring function values smaller
-        than a fraction `tol` of the peak value.
+        than a fraction ``tol`` of the peak value.
     """
     n = int(n)
     tau = float(tau)
@@ -276,8 +277,8 @@ def pol2cart(theta, rho):
 def find_files_like(datapath, pattern):
     """Finds files in a folder whose name matches a pattern
 
-    This function looks for files in folder `datapath` that match a regular
-    expression `pattern`.
+    This function looks for files in folder ``datapath`` that match a regular
+    expression ``pattern``.
 
     Parameters
     ----------

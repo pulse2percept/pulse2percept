@@ -1,6 +1,10 @@
-"""Stimuli
+"""This module provides a number of stimuli.
 
-This module provides a number of stimuli.
+.. autosummary::
+    :toctree: _api
+
+    base
+    pulse_trains
 """
 
 from .base import Stimulus

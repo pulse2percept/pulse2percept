@@ -1,6 +1,9 @@
-"""Visualization
+"""This module provides a number of visualization functions.
 
-This module provides a number of visualization functions.
+.. autosummary::
+    :toctree: _api
+
+    .
 """
 # https://stackoverflow.com/questions/21784641/installation-issue-with-matplotlib-python
 from sys import platform
@@ -80,6 +83,7 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
     # Show circular optic disc:
     ax.add_patch(patches.Circle(dva2ret(loc_od), radius=900, alpha=1,
                                 color='black', zorder=10))
+
     xmin, xmax, ymin, ymax = dva2ret([-20, 20, -15, 15])
     ax.set_aspect('equal')
     ax.set_xlim(xmin, xmax)

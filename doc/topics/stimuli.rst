@@ -1,29 +1,44 @@
-Creating stimuli
-================
+.. _topics-stimuli:
+
+==================
+Electrical Stimuli
+==================
 
 .. ipython:: python
     :suppress:
 
     # Use defaults so we don't get gridlines in generated docs
     import matplotlib as mpl
-    
+
     mpl.rcdefaults()
 
-The `Stimulus` object defines a common interface for all electrical stimuli.
-It provides a 2-D data array with labeled axes, where rows denote electrodes and columns denote points in time.
-Stimuli can be assigned to electrodes of a :class:`pulse2percept.implants.ProsthesisSystem` object, who will deliver them to the retina.
+The :py:class:`~pulse2percept.stimuli.Stimulus` object defines a common
+interface for all electrical stimuli.
+It provides a 2-D data array with labeled axes, where rows denote electrodes
+and columns denote points in time.
+Stimuli can be assigned to electrodes of a
+:py:class:`~pulse2percept.implants.ProsthesisSystem` object, who will deliver
+them to the retina.
 
-A stimulus can be created from a variety of source types, such as the following:
+A stimulus can be created from a variety of source types, such as the
+following:
 
-* Scalar value: interpreted as the current amplitude delivered to a single electrode (no time component).
+* Scalar value: interpreted as the current amplitude delivered to a single
+  electrode (no time component).
 * NumPy array:
-   * Nx1 array: interpreted as N current amplitudes delivered to N electrodes (no time component).
-   * NxM array: interpreted as N electrodes each receiving M current amplitudes in time.
-* :class:`pulse2percept.stimuli.TimeSeries`: interpreted as the stimulus in time for a single electrode (e.g., `PulseTrain`).
+   * Nx1 array: interpreted as N current amplitudes delivered to N
+     electrodes (no time component).
+   * NxM array: interpreted as N electrodes each receiving M current
+     amplitudes in time.
+* :py:class:`~pulse2percept.stimuli.TimeSeries`: interpreted as the stimulus
+  in time for a single electrode (e.g.,
+  :py:class:`~pulse2percept.stimuli.PulseTrain`).
 
-In addition, you can also pass a collection of source types (e.g., list, dictionary).
+In addition, you can also pass a collection of source types (e.g., list,
+dictionary).
 
-See the :class:`pulse2percept.stimuli.Stimulus` API documentation for a full list.
+See the :py:class:`~pulse2percept.stimuli.Stimulus` API documentation for a
+full list.
 
 .. note::
    Depending on the source type, a stimulus might have a time component or not.
@@ -31,7 +46,8 @@ See the :class:`pulse2percept.stimuli.Stimulus` API documentation for a full lis
 Single-electrode stimuli
 ------------------------
 
-The easiest way to create a stimulus is to specify the current amplitude (uA) to be delivered to an electrode:
+The easiest way to create a stimulus is to specify the current amplitude (uA)
+to be delivered to an electrode:
 
 .. ipython:: python
 
@@ -46,11 +62,17 @@ You can also specify the name of the electrode to be stimulated:
 
     # Stimulate Electrode 'B7' with -14uA:
     Stimulus(-14, electrodes='B7')
-    
-By default, this stimulus will not have a time component (`stim.time` is None).
-Some models, such as :class:`pulse2percept.models.ScoreboardModel`, cannot handle stimuli in time.
 
-To create stimuli in time, you can pass a :class:`pulse2percept.stimuli.TimeSeries` object, such as a :class:`pulse2percept.stimuli.BiphasicPulse` or a :class:`pulse2percept.stimuli.PulseTrain`:
+By default, this stimulus will not have a time component
+(``stim.time`` is None).
+Some models, such as
+:py:class:`~pulse2percept.models.ScoreboardModel`, cannot handle stimuli in
+time.
+
+To create stimuli in time, you can pass a
+:py:class:`~pulse2percept.stimuli.TimeSeries` object, such as a
+:py:class:`~pulse2percept.stimuli.BiphasicPulse` or a
+:py:class:`~pulse2percept.stimuli.PulseTrain`:
 
 .. ipython:: python
 
@@ -64,7 +86,8 @@ To create stimuli in time, you can pass a :class:`pulse2percept.stimuli.TimeSeri
     # This stimulus has a time component:
     stim.time
 
-You can specify not only the name of the electrode but also the time steps to be used:
+You can specify not only the name of the electrode but also the time steps to
+be used:
 
 .. ipython:: python
 
@@ -78,7 +101,8 @@ Stimuli can also be created from a list or dictionary of source types:
 
 .. ipython:: python
 
-    # Stimulate three unnamed electrodes with -2uA, 14uA, and -100uA, respectively:
+    # Stimulate three unnamed electrodes with -2uA, 14uA, and -100uA,
+    # respectively:
     Stimulus([-2, 14, -100])
 
 Electrode names can be passed in a list:
@@ -104,7 +128,8 @@ The same is true for a dictionary of pulse trains:
 Assigning new coordinates to an existing stimulus
 -------------------------------------------------
 
-You can change the coordinates of an existing `:class:`pulse2percept.stimuli.Stimulus` object, but retain all its data,
+You can change the coordinates of an existing
+:py:class:`~pulse2percept.stimuli.Stimulus` object, but retain all its data,
 as follows:
 
 .. ipython:: python
@@ -129,7 +154,7 @@ compresses the data in two ways:
 * Retains only the time points at which the stimulus changes.
 
 For example, only the signal edges of a pulse train are saved.
-That is, rather than saving the current amplitude at every 0.1ms time step, 
+That is, rather than saving the current amplitude at every 0.1ms time step,
 only the non-redundant values are retained.
 This drastically reduces the memory footprint of the stimulus.
 You can convince yourself of that by inspecting the size of a Stimulus object
@@ -150,33 +175,44 @@ before and after compression:
 Interpolating stimulus values
 -----------------------------
 
-The :py:meth:`~pulse2percept.stimuli.Stimulus.interp` method interpolates
-stimulus values at time points that are not explicitly provided:
+The :py:class:`~pulse2percept.stimuli.Stimulus` object can also interpolate
+stimulus values at time points that are not explicitly provided.
+Interpolation is done automatically by providing an index or slice into the
+2-D data array. The first dimension addresses the electrode (and cannot be
+interpolated), and the second dimension addresses time (which can be
+interpolated):
 
 .. ipython:: python
 
     # A single-electrode ramp stimulus:
     stim = Stimulus(np.arange(10).reshape((1, -1)))
+    stim
 
-    # Interpolate stimulus at a single time point:
-    stim.interp(time=3.45)
+    # Retrieve stimulus at t=3:
+    stim[0, 3]
 
-    # Interpolate stimulus at multiple time points:
-    stim.interp(time=[3.45, 6.78])
+    # Time point 3.45 is not in the data provided above, but can be
+    # interpolated as follows:
+    stim[0, 3.45]
 
-    # You can also extrapolate values outside the provided data range:
-    stim.interp(time=123.45)
+    # This also works for multiple time points:
+    stim[0, [3.45, 6.78]]
+    
+    # Extrapolating is disabled by default, but you can enable it:
+    stim = Stimulus(np.arange(10).reshape((1, -1)), extrapolate=True)
+    stim[0, 123.45]
 
-For a multi-electrode stimulus, the stimulus values at time t are returned
-for all electrodes:
+For a multi-electrode stimulus, you can access stimulus values at time t
+for any or all electrodes:
 
 .. ipython:: python
 
     # Multi-electrode stimulus
     stim = Stimulus(np.arange(100).reshape((5, 20)))
+    stim
 
-    # Interpolate:
-    stim.interp(time=4.5)
+    # Interpolate t=4.5 for all electrodes:
+    stim[:, 4.5]
 
 You can choose different interpolation methods, as long as
 `scipy.interpolate.interp1d <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ accepts them.
@@ -186,10 +222,11 @@ data point:
 .. ipython:: python
 
     # A single-electrode ramp stimulus:
-    stim = Stimulus(np.arange(10).reshape((1, -1)), interp_method='nearest')
+    stim = Stimulus(np.arange(10).reshape((1, -1)), interp_method='nearest',
+                    extrapolate=True)
 
     # Interpolate:
-    stim.interp(time=3.45)
+    stim[0, 3.45]
 
     # Outside the data range:
-    stim.interp(time=12.2)
+    stim[0, 12.2]

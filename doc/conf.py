@@ -15,21 +15,24 @@ import sys
 import os
 import warnings
 import sphinx_rtd_theme
+import sphinx_gallery
+from sphinx_gallery.sorting import ExplicitOrder
 
 # If extensions (or modules to document with autodoc) are in another
 # directory, add these directories to sys.path here. If the directory
 # is relative to the documentation root, use os.path.abspath to make it
 # absolute, like shown here.
-sys.path.insert(0, os.path.abspath('sphinxext'))
+sys.path.insert(0, os.path.abspath('_ext'))
 
 from github_link import make_linkcode_resolve
-import sphinx_gallery
+
 
 # -- General configuration ---------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = [
+    'p2pdocs',
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.napoleon',
@@ -38,15 +41,13 @@ extensions = [
     'sphinx.ext.linkcode',
     'sphinx.ext.todo',
     'sphinx.ext.ifconfig',
-    'sphinx.ext.viewcode',
     'sphinx_gallery.gen_gallery',
-    'sphinx.ext.autosummary',
     'IPython.sphinxext.ipython_directive',
     'IPython.sphinxext.ipython_console_highlighting',
 ]
 
 # Napoleon settings
-napoleon_google_docstring = False
+napoleon_google_docstring = False  # force consistency
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
 napoleon_include_private_with_doc = False
@@ -56,7 +57,9 @@ napoleon_use_admonition_for_notes = False
 napoleon_use_admonition_for_references = False
 napoleon_use_ivar = False
 napoleon_use_param = True
-napoleon_use_rtype = True
+napoleon_use_rtype = False
+
+todo_include_todos = True
 
 # For maths, use mathjax by default and svg if NO_MATHJAX env variable is set
 # (useful for viewing the doc offline)
@@ -71,7 +74,7 @@ else:
 autodoc_default_options = {
     'members': None,
     'member-order': 'bysource',
-    'inherited-members': ''
+    'inherited-members': None
 }
 
 # Add any paths that contain templates here, relative to this directory.
@@ -115,7 +118,7 @@ release = __version__
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ['_build', 'api/pulse2percept.rst']
+exclude_patterns = ['_build']
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
@@ -209,7 +212,7 @@ html_show_sourcelink = False
 # html_file_suffix = ''
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'pulse2percept-learndoc'
+htmlhelp_basename = 'pulse2percept-doc'
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -230,8 +233,8 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass
 # [howto/manual]).
-latex_documents = [('index', 'user_guide.tex', 'pulse2percept user guide',
-                    'pulse2percept developers', 'manual'), ]
+# latex_documents = [('index', 'user_guide.tex', 'pulse2percept user guide',
+# 'pulse2percept developers', 'manual'), ]
 
 # The name of an image file (relative to this directory) to place at the top of
 # the title page.
@@ -247,54 +250,24 @@ trim_doctests_flags = True
 
 # intersphinx configuration
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/{.major}'.format(
-        sys.version_info), None),
-    'numpy': ('https://docs.scipy.org/doc/numpy/', None),
-    'scipy': ('https://docs.scipy.org/doc/scipy/reference', None),
-    'matplotlib': ('https://matplotlib.org/', None),
-    'pandas': ('https://pandas.pydata.org/pandas-docs/stable/', None),
-    'joblib': ('https://joblib.readthedocs.io/en/latest/', None),
+    'python': ('https://docs.python.org/3', None),
 }
 
 sphinx_gallery_conf = {
     'doc_module': 'pulse2percept',
-    'backreferences_dir': os.path.join('modules', 'generated'),
+    'backreferences_dir': '_api',
     'reference_url': {
-        'pulse2percept': None}
+        'pulse2percept': None},
+    'examples_dirs': ['../examples'],
+    'gallery_dirs': ['examples'],
+    'subsection_order': ExplicitOrder(['../examples/implants',
+                                       '../examples/stimuli',
+                                       '../examples/models',
+                                       '../examples/developers'])
 }
-
-
-def run_apidoc(_):
-    ignore_paths = [
-        os.path.join('..', 'pulse2percept', '*', 'tests')
-    ]
-
-    argv = [
-        "-f",
-        "-M",
-        "-e",
-        "-E",
-        "-T",
-        "-o", "api",
-        os.path.join('..', 'pulse2percept')
-    ] + ignore_paths
-
-    try:
-        # Sphinx 1.7+
-        from sphinx.ext import apidoc
-        apidoc.main(argv)
-    except ImportError:
-        # Sphinx 1.6 (and earlier)
-        from sphinx import apidoc
-        argv.insert(0, apidoc.__file__)
-        apidoc.main(argv)
-
-
-def setup(app):
-    app.connect('builder-inited', run_apidoc)
 
 # The following is used by sphinx.ext.linkcode to provide links to github
 linkcode_resolve = make_linkcode_resolve('pulse2percept',
-                                         'https://github.com/uwescience/'
+                                         'https://github.com/pulse2percept/'
                                          'pulse2percept/blob/{revision}/'
                                          '{package}/{path}#L{lineno}')

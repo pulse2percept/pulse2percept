@@ -1,6 +1,20 @@
-"""Utilities
+"""
 
-This modules provides a number of utility functions.
+=============
+pulse2percept
+=============
+
+pulse2percept consists of the following subpackages:
+
+.. autosummary::
+    :toctree: _api
+
+    implants
+    stimuli
+    models
+    io
+    viz
+    utils
 """
 import logging
 

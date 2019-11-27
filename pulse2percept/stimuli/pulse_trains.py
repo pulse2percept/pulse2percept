@@ -8,14 +8,14 @@ class TimeSeries(object):
     """Container for time series data
 
     Provides a container for time series data. Every time series has a
-    sampling step `tsample`, and some `data` sampled at that rate.
+    sampling step ``tsample``, and some ``data`` sampled at that rate.
 
     Parameters
     ----------
     tsample : float
         Sampling time step (seconds).
     data : array_like
-        Time series data sampled at every `tsample` seconds.
+        Time series data sampled at every ``tsample`` seconds.
     """
 
     def __init__(self, tsample, data):
@@ -35,11 +35,11 @@ class TimeSeries(object):
         all but the last dimension of the two objects must be the same.
 
         If the two objects have different time sampling steps, the other object
-        is resampled to fit the current `tsample`.
+        is resampled to fit the current ``tsample``.
 
         Parameters
         ----------
-        other : TimeSeries
+        other : :py:class:`~pulse2percept.stimuli.TimeSeries`
             A TimeSeries object whose content should be appended.
 
         Examples
@@ -131,7 +131,7 @@ class TimeSeries(object):
         """Returns data sampled according to new time step
 
         This function returns a TimeSeries object whose data points were
-        resampled according to a new time step `tsample_new`. New values
+        resampled according to a new time step ``tsample_new``. New values
         are found using linear interpolation.
 
         Parameters
@@ -173,11 +173,11 @@ class MonophasicPulse(TimeSeries):
         Sampling time step (s).
     delay_dur : float, optional
         Pulse delay (s). Pulse will be zero-padded (prepended) to deliver
-        the pulse only after `delay_dur` milliseconds. Default: 0.
+        the pulse only after ``delay_dur`` milliseconds. Default: 0.
     stim_dur : float, optional
         Stimulus duration (ms). Pulse will be zero-padded (appended) to fit
         the stimulus duration. Default: No additional zero padding,
-        `stim_dur` is `pdur`+`delay_dur`.
+        ``stim_dur`` is ``pdur`` + ``delay_dur``.
     """
 
     def __init__(self, ptype, pdur, tsample, delay_dur=0, stim_dur=None):
@@ -208,8 +208,8 @@ class MonophasicPulse(TimeSeries):
 class BiphasicPulse(TimeSeries):
     """A charge-balanced pulse with a cathodic and anodic phase
 
-    A single biphasic pulse with duration `pdur` per phase,
-    separated by `interphase_dur` is returned.
+    A single biphasic pulse with duration ``pdur`` per phase,
+    separated by ``interphase_dur`` is returned.
 
     Parameters
     ----------

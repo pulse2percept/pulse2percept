@@ -9,7 +9,7 @@ class ArgusI(ProsthesisSystem):
 
     This function creates an ArgusI array and places it on the retina
     such that the center of the array is located at 3D location (x,y,z),
-    given in microns, and the array is rotated by rotation angle `rot`,
+    given in microns, and the array is rotated by rotation angle ``rot``,
     given in radians.
 
     The array is oriented in the visual field as shown in Fig. 1 of
@@ -17,16 +17,17 @@ class ArgusI(ProsthesisSystem):
     rows will lie in the lower retina (upper visual field):
 
     .. raw:: html
-      <pre>
-        -y      A1 B1 C1 D1                     260 520 260 520
-        ^       A2 B2 C2 D2   where electrode   520 260 520 260
-        |       A3 B3 C3 D3   diameters are:    260 520 260 520
-        -->x    A4 B4 C4 D4                     520 260 520 260
-      </pre>
+
+        <pre>
+          -y      A1 B1 C1 D1                     260 520 260 520
+          ^       A2 B2 C2 D2   where electrode   520 260 520 260
+          |       A3 B3 C3 D3   diameters are:    260 520 260 520
+          -->x    A4 B4 C4 D4                     520 260 520 260
+        </pre>
 
     Electrode order is: A1, B1, C1, D1, A2, B2, ..., D4.
 
-    If `use_legacy_names` is True, electrode order is: L6, L2, M8, M4, ...
+    If ``use_legacy_names`` is True, electrode order is: L6, L2, M8, M4, ...
 
     An electrode can be addressed by name, row/column index, or integer index
     (into the flattened array).
@@ -130,7 +131,7 @@ class ArgusII(ProsthesisSystem):
 
     This function creates an ArgusII array and places it on the retina
     such that the center of the array is located at (x,y,z), given in
-    microns, and the array is rotated by rotation angle `rot`, given in
+    microns, and the array is rotated by rotation angle ``rot``, given in
     radians.
 
     The array is oriented upright in the visual field, such that an
@@ -138,14 +139,15 @@ class ArgusII(ProsthesisSystem):
     retina (upper visual field), as shown below:
 
     .. raw:: html
-      <pre>
-                A1 A2 A3 A4 A5 A6 A7 A8 A9 A10
-        -y      B1 B2 B3 B4 B5 B6 B7 B8 B9 B10
-        ^       C1 C2 C3 C4 C5 C6 C7 C8 C9 C10
-        |       D1 D2 D3 D4 D5 D6 D7 D8 D9 D10
-        -->x    E1 E2 E3 E4 E5 E6 E7 E8 E9 E10
-                F1 F2 F3 F4 F5 F6 F7 F8 F9 F10
-      </pre>
+
+        <pre>
+                  A1 A2 A3 A4 A5 A6 A7 A8 A9 A10
+          -y      B1 B2 B3 B4 B5 B6 B7 B8 B9 B10
+          ^       C1 C2 C3 C4 C5 C6 C7 C8 C9 C10
+          |       D1 D2 D3 D4 D5 D6 D7 D8 D9 D10
+          -->x    E1 E2 E3 E4 E5 E6 E7 E8 E9 E10
+                  F1 F2 F3 F4 F5 F6 F7 F8 F9 F10
+        </pre>
 
     Electrode order is: A1, A2, ..., A10, B1, B2, ..., F10.
 

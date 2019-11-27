@@ -33,12 +33,14 @@ class Stimulus(PrettyPrint):
              electrodes (no time component).
            * NxM array: interpreted as N electrodes each receiving M current
              amplitudes in time.
-        * `TimeSeries`: interpreted as the stimulus in time for a single
-          electrode (e.g., `BiphasicPulse`, `PulseTrain`).
+        * :py:class:`~pulse2percept.stimuli.TimeSeries`: interpreted as the
+          stimulus in time for a single electrode (e.g.,
+          :py:class:`~pulse2percept.stimuli.BiphasicPulse`,
+          :py:class:`~pulse2percept.stimuli.PulseTrain`).
 
         In addition, you can also pass a collection of source types.
         Each element must be a valid source type for a single electrode (e.g.,
-        scalar, 1-D array, TimeSeries).
+        scalar, 1-D array, :py:class:`~pulse2percept.stimuli.TimeSeries`).
 
         * List or tuple: List elements will be assigned to electrodes in order.
         * Dictionary: Dictionary keys are used to address electrodes by name.
@@ -75,8 +77,8 @@ class Stimulus(PrettyPrint):
         drastically reduces the memory footprint of the stimulus.
 
     interp_method : str or int, optional, default: 'linear'
-        For SciPy's `interp1` method, specifies the kind of interpolation as a
-        string ('linear', 'nearest', 'zero', 'slinear', 'quadratic', 'cubic',
+        For SciPy's ``interp1`` method, specifies the kind of interpolation as
+        a string ('linear', 'nearest', 'zero', 'slinear', 'quadratic', 'cubic',
         'previous', 'next') or as an integer specifying the order of the spline
         interpolator to use.
         Here, 'zero', 'slinear', 'quadratic' and 'cubic' refer to a spline
@@ -261,7 +263,7 @@ class Stimulus(PrettyPrint):
 
         Returns
         -------
-        compressed : Stimulus
+        compressed : :py:class:`~pulse2percept.stimuli.Stimulus`
 
         """
         data = self.data

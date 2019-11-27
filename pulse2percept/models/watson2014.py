@@ -1,14 +1,4 @@
-"""
-This module implements several equation from [#watson-2014]_.
-
-References
-----------
-.. [#watson-2014] A.B. Watson (2014). A formula for human retinal ganglion cell
-                  receptive field density as a function of visual field
-                  location. Journal of Vision 14(7):1-17,
-                  doi:`10.1167/14.7.15 <https://doi.org/10.1167/14.7.15>`_.
-
-"""
+"""This module implements several equation from [Watson2014]_."""
 
 import numpy as np
 import scipy.stats as spst
@@ -17,11 +7,11 @@ from ..utils import cart2pol, pol2cart
 
 
 class Watson2014ConversionMixin(object):
-    """Converts dva to retinal coords using Watson (2014)
+    """Converts dva to retinal coords using [Watson2014]_
 
     Converts from eccentricity (defined as distance from a visual center) in
     degrees of visual angle (dva) to microns on the retina using Eqs. A5, A6
-    in [#watson-2014]_.
+    in [Watson2014]_.
 
     """
 
@@ -42,17 +32,17 @@ class Watson2014ConversionMixin(object):
 
 
 class Watson2014DisplacementMixin(object):
-    """Converts dva to ret coords with RGC displacement using Watson (2014)
+    """Converts dva to ret coords with RGC displacement
 
     Converts from eccentricity (defined as distance from a visual center) in
     degrees of visual angle (dva) to microns on the retina using Eqs. 5, A5,
-    and A6 in [#watson-2014]_.
+    and A6 in [Watson2014]_.
 
     In a central retinal zone, the retinal ganglion cell (RGC) bodies are
     displaced centrifugally some distance from the inner segments of the cones
     to which they are connected through the bipolar cells, and thus from their
     receptive field. The displacement function is described in Eq. 5 of
-    [#watson-2014]_.
+    [Watson2014]_.
 
     """
 
@@ -61,7 +51,7 @@ class Watson2014DisplacementMixin(object):
         """Ganglion cell displacement function
 
         Implements the ganglion cell displacement function described in Eq. 5
-        of [#watson-2014]_.
+        of [Watson2014]_.
 
         Parameters
         ----------
@@ -72,7 +62,7 @@ class Watson2014DisplacementMixin(object):
         Returns
         -------
         The displacement in dva experienced by ganglion cells at eccentricity
-        `r`.
+        ``r``.
 
         """
         if (not isinstance(meridian, (np.ndarray, str)) or
@@ -123,7 +113,7 @@ def ret2dva(r_um):
 
     This function converts an eccentricity measurement on the retinal
     surface(in micrometers), measured from the optic axis, into degrees
-    of visual angle using Eq. A6 in [#watson-2014]_.
+    of visual angle using Eq. A6 in [Watson2014]_.
 
     Parameters
     ----------
@@ -146,7 +136,7 @@ def dva2ret(r_deg):
     """Converts visual angles (deg) into retinal distances (um)
 
     This function converts degrees of visual angle into a retinal distance from
-    the optic axis (um) using Eq. A5 in [#watson-2014]_.
+    the optic axis (um) using Eq. A5 in [Watson2014]_.
 
     Parameters
     ----------

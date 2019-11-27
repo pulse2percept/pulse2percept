@@ -1,6 +1,6 @@
 """Alpha IMS"""
 import numpy as np
-import collections as coll
+from collections import OrderedDict
 from .base import DiskElectrode, ElectrodeArray, ElectrodeGrid, ProsthesisSystem
 
 
@@ -9,7 +9,7 @@ class AlphaIMS(ProsthesisSystem):
 
     This function creates an AlphaIMS array and places it on the retina
     such that the center of the array is located at (x,y,z), given in
-    microns, and the array is rotated by rotation angle `rot`, given in
+    microns, and the array is rotated by rotation angle ``rot``, given in
     radians.
 
     The array is oriented upright in the visual field, such that an
@@ -87,7 +87,7 @@ class AlphaIMS(ProsthesisSystem):
             for row in range(self.earray.shape[0]):
                 names[row] = names[row][::-1]
             # Build a new ordered dict:
-            electrodes = coll.OrderedDict([])
+            electrodes = OrderedDict([])
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
             # Assign the new ordered dict to earray:
@@ -104,7 +104,7 @@ class AlphaAMS(ProsthesisSystem):
 
     This function creates an AlphaAMS array and places it below the retina
     such that the center of the array is located at (x,y,z), given in
-    microns, and the array is rotated by rotation angle `rot`, given in
+    microns, and the array is rotated by rotation angle ``rot``, given in
     radians.
 
     The array is oriented upright in the visual field, such that an
@@ -183,7 +183,7 @@ class AlphaAMS(ProsthesisSystem):
             for row in range(self.earray.shape[0]):
                 names[row] = names[row][::-1]
             # Build a new ordered dict:
-            electrodes = coll.OrderedDict([])
+            electrodes = OrderedDict([])
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
             # Assign the new ordered dict to earray:

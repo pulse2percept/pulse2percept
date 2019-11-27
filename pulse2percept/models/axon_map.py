@@ -1,13 +1,5 @@
-"""
-This module implements several equations from [#beyeler-2019]_.
+"""This module implements several equations from [Beyeler2019]_."""
 
-References
-----------
-.. [#beyeler-2019] M Beyeler, D Nanduri, JD Weiland, A Rokem, GM Boynton, I
-                   Fine (2019). A model of ganglion axon pathways accounts for
-                   percepts elicited by retinal implants. Scientific Reports
-                   9(1):9199, doi:`10.1038/s41598-019-45416-4 <https://doi.org/10.1038/s41598-019-45416-4>`_.
-"""
 import os
 import numpy as np
 import pickle
@@ -18,23 +10,20 @@ from ..models._axon_map import axon_contribution, axon_map
 
 
 class AxonMapModel(Watson2014ConversionMixin, BaseModel):
-    """Axon map model"""
+    """Axon map model
+
+    Implements the axon map model described in [Beyeler2019]_, where percepts
+    are elongated along nerve fiber bundle trajectories of the retina.
+
+    Parameters
+    ----------
+    axlambda : double
+        Exponential decay constant along the axon (microns).
+    rho : double
+        Exponential decay constant away from the axon (microns).
+    """
 
     def __init__(self, **kwargs):
-        """Axon map model
-
-        Implements the axon map model described in [#beyeler-2019]_, where
-        percepts are elongated along nerve fiber bundle trajectories of the
-        retina.
-
-        Parameters
-        ----------
-        axlambda : double
-            Exponential decay constant along the axon (microns).
-        rho : double
-            Exponential decay constant away from the axon (microns).
-
-        """
         super(AxonMapModel, self).__init__(**kwargs)
         self.axon_contrib = None
         self.xret = None
@@ -69,7 +58,7 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         """Grows a single axon bundle based on the model by Jansonius (2009)
 
         This function generates the trajectory of a single nerve fiber bundle
-        based on the mathematical model described in [#beyeler-2019]_.
+        based on the mathematical model described in [Beyeler2019]_.
 
         Parameters
         ----------
@@ -89,7 +78,7 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
             Returns a two - dimensional array of axonal positions, where
             ax_pos[0, :] contains the(x, y) coordinates of the axon segment
             closest to the optic disc, and aubsequent row indices move the axon
-            away from the optic disc. Number of rows is at most `n_rho`, but
+            away from the optic disc. Number of rows is at most ``n_rho``, but
             might be smaller if the axon crosses the meridian.
 
         Notes
@@ -191,7 +180,8 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         return bundles
 
     def find_closest_axon(self, bundles, xret=None, yret=None):
-        """Finds the closest axon segment for every point (`xret`, `yret`)"""
+        """Finds the closest axon segment for every point (``xret``, ``yret``)
+        """
         if len(bundles) <= 0:
             raise ValueError("bundles must have length greater than zero")
         xret = self.xret if xret is None else np.asarray(xret, dtype=float)
@@ -328,7 +318,7 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         return self
 
     def _predict_pixel_percept(self, xygrid, implant, t=None):
-        # `xygrid` is a single element in an ``enumerate``: (idx, xy-coords)
+        # ``xygrid`` is a single element in an ``enumerate``: (idx, xy-coords)
         idx_xy, _ = xygrid
         # Find the relevant axon at that location:
         axon = self.axon_contrib[idx_xy]
