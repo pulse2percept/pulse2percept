@@ -1,7 +1,10 @@
 variables:
   # Skip building on Python 2.7 and 3.8 on all platforms
   CIBW_SKIP: "cp27-* cp38-*"
+  # Install pulse2percept
   CIBW_BEFORE_BUILD: "pip install -r requirements.txt && pip install ."
+  # Install Matplotlib depedencies in Docker container:
+  CIBW_BEFORE_BUILD_LINUX: "yum install freetype-devel pkg-config libpng-devel"
 
 
 jobs:
