@@ -192,7 +192,7 @@ install ``make``, the following commands are available:
 *  ``make tests``: Installs pulse2percept and runs the test suite
 *  ``make doc``: Installs pulse2percept and generates the documentation
 *  ``make clean``: Cleans out all build files
-*  ``make help``: Brings up this message
+*  ``make help``: Prints a help message with this menu of options
 
 .. _install-upgrade:
 

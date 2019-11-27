@@ -13,6 +13,7 @@ Scholarly articles referencing pulse2percept
 ============================================
 
 * BW Brunton, M Beyeler (2019). Data-driven models in human neuroscience and neuroengineering. *Current Opinion in Neurobiology* 58, 21-29, doi:`10.1016/j.conb.2019.06.008 <https://doi.org/10.1016/j.conb.2019.06.008>`_.
+
 * A Lozano, JS Suarez, C Soto-Sanchez, J Garrigos, J-J Martinez, JM Ferrandez Vicente, E Fernandez-Jover (2019). Neurolight Alpha: Interfacing Computational Neural Models for Stimulus Modulation in Cortical Visual Neuroprostheses. *International Work-Conference on the Interplay Between Natural and Artificial Computation (IWINAC)*, doi:`10.1007/978-3-030-19591-5_12 <https://doi.org/10.1007/978-3-030-19591-5_12>`_.
 
 * NP Cottaris, H Jiang, X Ding, BA Wandell, DH Brainard (2019). A computational-observer model of spatial contrast sensitivity: Effects of wave-front-based optics, cone-mosaic structure, and inference engine. *Journal of Vision* 19(8), doi:`10.1167/19.4.8 <https://doi.org/10.1167/19.4.8>`_.
