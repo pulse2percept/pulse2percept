@@ -7,6 +7,7 @@ jobs:
         versionSpec: 3.5
     - bash: |
         python -m pip install --upgrade pip
+        pip install -r requirements.txt
         pip install cibuildwheel==1.0.0
         cibuildwheel --output-dir wheelhouse .
     - task: PublishBuildArtifacts@1
@@ -19,6 +20,7 @@ jobs:
         versionSpec: 3.5
     - bash: |
         python -m pip install --upgrade pip
+        pip install -r requirements.txt
         pip install cibuildwheel==1.0.0
         cibuildwheel --output-dir wheelhouse .
     - task: PublishBuildArtifacts@1
@@ -33,6 +35,7 @@ jobs:
       displayName: Install Visual C++ for Python 3.5
     - bash: |
         python -m pip install --upgrade pip
+        pip install -r requirements.txt
         pip install cibuildwheel==1.0.0
         cibuildwheel --output-dir wheelhouse .
     - task: PublishBuildArtifacts@1
