@@ -7,12 +7,6 @@ trigger:
   tags:
     include:
     - v*
-  # Whenever someone creates/updates a PR to master/develop:
-  pr:
-    branches:
-      include:
-      - master
-      - develop
 
 variables:
   # Install p2p in Docker container
