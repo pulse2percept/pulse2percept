@@ -1,4 +1,21 @@
-pulse2percept: Models for Sight Restoration
+.. toctree::
+   :caption: User Guide
+   :hidden:
+   :maxdepth: 1
+
+   Overview <self>
+   install
+   reference/index
+
+.. toctree::
+   :caption: Developer Guide
+   :hidden:
+   :maxdepth: 1
+
+   developers/contributing
+   developers/releases
+
+pulse2percept: Models for sight restoration
 ===========================================
 
 By 2020 roughly 200 million people worldwide will suffer from retinal
@@ -125,18 +142,6 @@ The videos show that patients may see fuzzy, comet-like shapes or blurred
 outlines, or experience temporary disappearances if the object moves too fast.
 
 Simulations such as these, which provide an insight into the perceptual outcomes of prosthetic vision, are likely to be critical for providing realistic estimates of prosthetic vision, providing regulatory bodies with guidance into what sort of visual tests are appropriate for evaluating prosthetic performance, and improving current and future technology.
-
-
-
-
-
-    .. toctree::
-       :maxdepth: 2
-
-       installation_guide
-       auto_examples/index
-       reference/index
-
 
 .. figure:: _static/eScience_Logo_HR.png
    :align: center
