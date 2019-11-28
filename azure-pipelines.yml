@@ -8,6 +8,10 @@ trigger:
     include:
     - v*
 
+pr:
+- master
+- develop
+
 variables:
   # Install p2p in Docker container
   install_p2p: "pip install -r requirements.txt && pip install -e ."
