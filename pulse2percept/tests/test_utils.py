@@ -198,6 +198,7 @@ def power_it(num, n=2):
     return num ** n
 
 
+@pytest.mark.xfail
 def test_parfor():
     my_array = np.arange(100).reshape(10, 10)
     i, j = np.random.randint(0, 9, 2)

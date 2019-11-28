@@ -18,12 +18,14 @@ from .. import files
 from .. import utils
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_set_skvideo_path():
     # Smoke-test
     files.set_skvideo_path('/usr/bin')
     files.set_skvideo_path(libav_path='/usr/bin')
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_load_video_metadata():
     # Load a test example
     reload(files)
@@ -43,6 +45,7 @@ def test_load_video_metadata():
             files.load_video_metadata(datasets.bikes())
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_load_framerate():
     # Load a test example
     reload(files)
@@ -60,6 +63,7 @@ def test_load_framerate():
             files.load_video_framerate(datasets.bikes())
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_load_video():
     reload(files)
     # Load a test example
@@ -90,6 +94,7 @@ def test_load_video():
             files.load_video('invalid.avi')
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_load_video_generator():
     # Load a test example
     reload(files)
@@ -106,6 +111,7 @@ def test_load_video_generator():
             files.load_video_generator('invalid.avi')
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_save_video():
     # Load a test example
     reload(files)
@@ -162,6 +168,7 @@ def test_save_video():
             files.save_video(videoin, 'invalid.avi')
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_save_video_sidebyside():
     reload(files)
     from skvideo import datasets

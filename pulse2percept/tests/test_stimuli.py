@@ -299,6 +299,7 @@ def test_image2pulsetrain():
             stimuli.image2pulsetrain(img, implant)
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_video2pulsetrain():
     reload(stimuli)
     implant = implants.ArgusI()
