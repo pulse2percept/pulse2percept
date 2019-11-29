@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/uwescience/pulse2percept.svg?branch=master)](https://travis-ci.org/uwescience/pulse2percept)
+[![Actions Status](https://github.com/pulse2percept/pulse2percept/workflows/build/badge.svg)](https://github.com/pulse2percept/pulse2percept/actions)
 [![Coverage Status](https://coveralls.io/repos/github/uwescience/pulse2percept/badge.svg?branch=master)](https://coveralls.io/github/uwescience/pulse2percept?branch=master)
 [![PyPI](https://img.shields.io/pypi/v/pulse2percept.svg)](https://pypi.org/project/pulse2percept)
 [![Documentation Status](https://readthedocs.org/projects/pulse2percept/badge/?version=latest)](https://pulse2percept.readthedocs.io/en/latest/?badge=latest)
