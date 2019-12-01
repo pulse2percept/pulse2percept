@@ -8,7 +8,7 @@ import copy
 import functools
 import logging
 
-from scipy import misc as spm
+from scipy.special import factorial
 from scipy import interpolate as spi
 from scipy import signal as sps
 
@@ -282,8 +282,8 @@ def _sparseconv(data, kernel, mode):
     pos = np.where(data.ravel() != 0)[0]
     # Add shifted and scaled copies of `kernel` only where `data` is nonzero
     for p in pos:
-        out[p:p + kernel_len] = (out[p:p + kernel_len] +
-                                 kernel.ravel() * data.ravel()[p])
+        out[p:p + kernel_len] = (out[p:p + kernel_len]
+                                + kernel.ravel() * data.ravel()[p])
 
     if mode.lower() == 'full':
         return out
@@ -465,10 +465,9 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         p = partial(func, *func_args, **func_kwargs)
         d = [dask.delayed(p)(i) for i in in_list]
         if scheduler == 'multiprocessing':
-            results = dask.compute(*d, get=dask.multiprocessing.get,
-                                   workers=n_jobs)
+            results = dask.compute(*d, scheduler='processes', workers=n_jobs)
         elif scheduler == 'threading':
-            results = dask.compute(*d, get=dask.threaded.get, workers=n_jobs)
+            results = dask.compute(*d, scheduler='threads', workers=n_jobs)
         else:
             raise ValueError("Acceptable values for `scheduler` are: "
                              "'threading', 'multiprocessing'")
@@ -520,7 +519,7 @@ def gamma(n, tau, tsample, tol=0.01):
 
     # Calculate gamma
     y = (t / tau) ** (n - 1) * np.exp(-t / tau)
-    y /= (tau * spm.factorial(n - 1))
+    y /= (tau * factorial(n - 1))
 
     # Normalize to unit area
     y /= np.trapz(np.abs(y), dx=tsample)

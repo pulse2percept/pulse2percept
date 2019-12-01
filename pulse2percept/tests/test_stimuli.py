@@ -87,8 +87,8 @@ def test_BiphasicPulse():
 
                     # make sure length is correct
                     npt.assert_equal(pulse.shape[-1],
-                                     int(np.round(pulse_gap_dur /
-                                                  tsample)))
+                                     int(np.round(pulse_gap_dur
+                                                  / tsample)))
 
                     # make sure amplitude is correct: negative peak,
                     # zero (in case of nonnegative interphase dur),
@@ -299,6 +299,7 @@ def test_image2pulsetrain():
             stimuli.image2pulsetrain(img, implant)
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_video2pulsetrain():
     reload(stimuli)
     implant = implants.ArgusI()
@@ -330,8 +331,8 @@ def test_parse_pulse_trains():
     with pytest.raises(ValueError):
         stimuli.parse_pulse_trains([pt_nonzero], argus)
     with pytest.raises(ValueError):
-        stimuli.parse_pulse_trains([pt_nonzero] *
-                                   (argus.num_electrodes - 1),
+        stimuli.parse_pulse_trains([pt_nonzero]
+                                  * (argus.num_electrodes - 1),
                                    argus)
     with pytest.raises(ValueError):
         stimuli.parse_pulse_trains([pt_nonzero] * 2, simple)
