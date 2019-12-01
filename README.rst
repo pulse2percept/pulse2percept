@@ -10,6 +10,10 @@
    :target: https://pypi.org/project/pulse2percept
    :alt: PyPI
 
+.. image:: https://github.com/pulse2percept/pulse2percept/workflows/build/badge.svg
+   :target: https://github.com/pulse2percept/pulse2percept/actions
+   :alt: build
+
 .. image:: https://img.shields.io/github/forks/pulse2percept/pulse2percept?style=social
    :target: https://github.com/pulse2percept/pulse2percept/network/members
    :alt: GitHub forks
@@ -109,11 +113,12 @@ pulse2percept 0.6+ require Python 3.5 or newer.
 
 pulse2percept requires:
 
-1.  `Python`_ (>= 3.5)
+1.  `Python`_ (3.5 - 3.7)
 2.  `Cython`_ (>= 0.28)
 3.  `NumPy`_ (>= 1.9)
 4.  `SciPy`_ (>= 1.0)
-5.  `JobLib`_ (>= 0.11)
+5.  `Matplotlib`_ (>= 2.1)
+6.  `JobLib`_ (>= 0.11)
 
 Optional packages:
 
@@ -127,16 +132,17 @@ Optional packages:
 5.  `Numba`_ for just-in-time compilation. Use conda to install.
 6.  `Pytest`_ to run the test suite.
 
-.. _Python: http://www.python.org
-.. _Cython: http://www.cython.org
-.. _NumPy: http://www.numpy.org
-.. _SciPy: http://www.scipy.org
+.. _Python: https://www.python.org
+.. _Cython: https://www.cython.org
+.. _NumPy: https://www.numpy.org
+.. _SciPy: https://www.scipy.org
+.. _Matplotlib: https://matplotlib.org/
 .. _JobLib: https://joblib.readthedocs.io
-.. _scikit-image: http://scikit-image.org
-.. _scikit-video: http://www.scikit-video.org
+.. _scikit-image: https://scikit-image.org
+.. _scikit-video: https://www.scikit-video.org
 .. _ffmpeg codec: http://adaptivesamples.com/how-to-install-ffmpeg-on-windows
 .. _Dask: https://github.com/dask/dask
-.. _Numba: http://numba.pydata.org
+.. _Numba: https://numba.pydata.org
 .. _Pytest: https://docs.pytest.org/en/latest
 
 All required packages are listed in ``requirements.txt`` in the root directory
@@ -164,9 +170,9 @@ Where to go from here
 *  Check the `FAQ`_ to see if your question has already been answered.
 *  Request features or report bugs in our `Issue Tracker`_ on GitHub.
 
-.. _Example Gallery: https://pulse2percept.readthedocs.io/en/stable/examples/index.html
-.. _visual prostheses: https://pulse2percept.readthedocs.io/en/stable/topics/implants.html
-.. _electrical stimuli: https://pulse2percept.readthedocs.io/en/stable/topics/stimuli.html
-.. _computational models: https://pulse2percept.readthedocs.io/en/stable/topics/models.html
+.. _Example Gallery: https://pulse2percept.readthedocs.io/en/latest/examples/index.html
+.. _visual prostheses: https://pulse2percept.readthedocs.io/en/latest/topics/implants.html
+.. _electrical stimuli: https://pulse2percept.readthedocs.io/en/latest/topics/stimuli.html
+.. _computational models: https://pulse2percept.readthedocs.io/en/latest/topics/models.html
 .. _FAQ: https://pulse2percept.readthedocs.io/en/latest/users/faq.html
 .. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues

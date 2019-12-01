@@ -11,6 +11,7 @@ def power_it(num, n=2):
     return num ** n
 
 
+@pytest.mark.xfail
 @pytest.mark.parametrize('engine', ('serial', 'joblib', 'dask'))
 @pytest.mark.parametrize('scheduler', ('threading', 'multiprocessing'))
 def test_parfor(engine, scheduler):

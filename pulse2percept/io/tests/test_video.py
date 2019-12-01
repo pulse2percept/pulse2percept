@@ -12,6 +12,7 @@ from pulse2percept import stimuli
 from pulse2percept import implants
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_video2stim():
     reload(image)
     reload(video)
@@ -23,12 +24,14 @@ def test_video2stim():
         video.video2stim('no-such-file.avi', implant)
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test__set_skvideo_path():
     # Smoke-test
     video._set_skvideo_path('/usr/bin')
     video._set_skvideo_path(libav_path='/usr/bin')
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_load_video_metadata():
     # Load a test example
     reload(video)
@@ -48,6 +51,7 @@ def test_load_video_metadata():
             video.load_video_metadata(datasets.bikes())
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_load_framerate():
     # Load a test example
     reload(video)
@@ -65,6 +69,7 @@ def test_load_framerate():
             video.load_video_framerate(datasets.bikes())
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_load_video():
     reload(video)
     # Load a test example
@@ -95,6 +100,7 @@ def test_load_video():
             video.load_video('invalid.avi')
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_load_video_generator():
     # Load a test example
     reload(video)
@@ -111,6 +117,7 @@ def test_load_video_generator():
             video.load_video_generator('invalid.avi')
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_save_video():
     # Load a test example
     reload(video)
@@ -168,6 +175,7 @@ def test_save_video():
             video.save_video(videoin, 'invalid.avi')
 
 
+@pytest.mark.skip(reason='ffmpeg dependency')
 def test_save_video_sidebyside():
     reload(video)
     from skvideo import datasets

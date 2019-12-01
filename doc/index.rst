@@ -32,9 +32,10 @@
 
    developers/contributing
    developers/extending
+   developers/releases
 
 .. include:: ../README.rst
-   :end-line: 19
+   :end-line: 23
 
 |
 
@@ -43,15 +44,15 @@ pulse2percept |version| documentation
 =====================================
 
 .. include:: ../README.rst
-   :start-line: 24
-   :end-line: 75
+   :start-line: 27
+   :end-line: 79
 
 Installation
 ============
 
 .. include:: ../README.rst
-   :start-line: 78
-   :end-line: 98
+   :start-line: 82
+   :end-line: 102
 
 Detailed instructions for different platforms can be found in our
 :ref:`Installation Guide <install>`.

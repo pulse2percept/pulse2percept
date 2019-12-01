@@ -21,14 +21,14 @@ the bleeding-edge version, you will want to install
 Prerequisites
 =============
 
-*  **Python** (>=3.5): Before getting started, you will need to have to
+*  **Python** (3.5 - 3.7): Before getting started, you will need to have to
    `install Python`_ on your computer. Check if Python is installed on your
    system by typing ``python --version`` in a terminal or command prompt.
 
    .. important::
 
-       pulse2percept 0.5 was the last release to support Python 2.7 and 3.4.
-       pulse2percept 0.6+ will require **Python 3.5 or newer**.
+       pulse2percept 0.4.3 was the last release to support Python 2.7 and 3.4.
+       pulse2percept 0.5+ requires **Python 3.5 - 3.7**.
 
 *  **Cython** (>= 0.28): pulse2percept relies on C extension modules for code
    acceleration. These require a C compiler, which on Unix platforms is
@@ -112,8 +112,8 @@ Dependencies
 ------------
 
 .. include:: ../README.rst
-   :start-line: 109
-   :end-line: 141
+   :start-line: 113
+   :end-line: 147
 
 Obtaining the latest code from GitHub
 -------------------------------------
