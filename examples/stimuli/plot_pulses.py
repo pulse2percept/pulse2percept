@@ -80,8 +80,8 @@ monophasic_stim.metadata = 'Threshold measurement'
 
 fig, ax = plt.subplots(figsize=(8, 5))
 ax.plot(monophasic_stim.time, monophasic_stim.data[0])
-ax.set_xlabel('Time (s)')
-ax.set_ylabel('Amplitude ($\mu$A)')
+ax.set_xlabel('Time (s)', fontsize=25)
+ax.set_ylabel('Amplitude ($\mu$A)', fontsize=25)
 
 ###############################################################################
 # A BiphasicPulse
@@ -106,17 +106,17 @@ fig, axes = plt.subplots(1, 2, figsize=(20, 10))
 
 # First, plot monophasic pulse
 axes[0].plot(monophasic_stim.time, monophasic_stim.data[0])
-axes[0].set_xlabel('Time (s)')
-axes[0].set_ylabel('Amplitude ($\mu$A)')
+axes[0].set_xlabel('Time (s)', fontsize=25)
+axes[0].set_ylabel('Amplitude ($\mu$A)', fontsize=25)
 
 # Second, plot biphasic pulse
 axes[1].plot(biphasic_stim.time, biphasic_stim.data[0])
-axes[1].set_xlabel('Time (s)')
-axes[1].set_ylabel('Amplitude ($\mu$A)')
+axes[1].set_ylabel('Amplitude ($\mu$A)', fontsize=25)
+axes[1].set_xlabel('Time (s)', fontsize=25)
 
 ###############################################################################
-# Changing The Amplitude Of Pulses
-# ---------------------------------
+#  Changing The Amplitude Of Pulses
+#  ---------------------------------
 # For any given pulse, we can modify the amplitude simply by indexing the
 # electrode. For this example, we only have 1 electrode with an index of 0.
 # Let's say we want the amplitude of monophasic pulse to be 10 microAmps and
@@ -168,10 +168,9 @@ fig, axes = plt.subplots(1, 2, figsize=(25, 15))
 
 # First, plot monophasic pulse
 axes[0].plot(monophasic_stim.time, monophasic_stim.data[0])
-axes[0].set_xlabel('Time (s)')
-axes[0].set_ylabel('Amplitude ($\mu$A)')
-
+axes[0].set_xlabel('Time (s)', fontsize=25)
+axes[0].set_ylabel('Amplitude ($\mu$A)', fontsize=25)
 # Second, plot biphasic pulse
 axes[1].plot(biphasic_stim.time, biphasic_stim.data[0])
-axes[1].set_xlabel('Time (s)')
-axes[1].set_ylabel('Amplitude ($\mu$A)')
+axes[1].set_xlabel('Time (s)', fontsize=25)
+axes[1].set_ylabel('Amplitude ($\mu$A)', fontsize=25)
