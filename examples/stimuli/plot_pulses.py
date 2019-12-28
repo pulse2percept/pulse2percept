@@ -115,8 +115,8 @@ axes[1].set_ylabel('Amplitude ($\mu$A)', fontsize=25)
 axes[1].set_xlabel('Time (s)', fontsize=25)
 
 ###############################################################################
-#  Changing The Amplitude Of Pulses
-#  ---------------------------------
+# Changing The Amplitude Of Pulses
+# ----------------------------------
 # For any given pulse, we can modify the amplitude simply by indexing the
 # electrode. For this example, we only have 1 electrode with an index of 0.
 # Let's say we want the amplitude of monophasic pulse to be 10 microAmps and
@@ -174,3 +174,47 @@ axes[0].set_ylabel('Amplitude ($\mu$A)', fontsize=25)
 axes[1].plot(biphasic_stim.time, biphasic_stim.data[0])
 axes[1].set_xlabel('Time (s)', fontsize=25)
 axes[1].set_ylabel('Amplitude ($\mu$A)', fontsize=25)
+
+###############################################################################
+# Generating Standard Pulse Trains
+# ----------------------------------
+# How can we combine multiple pulses into a pulse train? We can do that in two
+# ways:
+# * We can use the standard biphasic pulse trains in the
+# p2p.stimuli.pulse_trains module.
+# * We can generate our own pulse trains.
+
+###############################################################################
+# Generating a standard pulse train
+# Defining some parameters - please look into the docstring to see the default
+# values of all parameters which you can modify.
+time_sample = 0.1 / 1000  # temporal sampling in seconds
+freq = 20  # frequency in Hz
+amp = 100  # maximum amplitude of the pulse train in microAmps
+dur = 1  # total duration of the pulse train in seconds
+pulse_type = 'cathodicfirst'  # whether the first phase is positive or negative
+pulse_order = 'gapfirst'  # whether the train starts with gap or a pulse.
+
+# Define the pulse train with given parameters
+ptrain = PulseTrain(tsample=time_sample,
+                    freq=freq,
+                    dur=dur,
+                    amp=amp,
+                    pulsetype=pulse_type,
+                    pulseorder=pulse_order)
+
+# Create a new stimulus where the pulse train is the source
+ptrain_stim = Stimulus(ptrain)
+
+# Let's look at the Stimulus object
+print(ptrain_stim)
+###############################################################################
+
+
+##############################################################################
+# Let's visualize the pulse we generated
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.plot(ptrain_stim.time, ptrain_stim.data[0])
+ax.set_xlabel('Time (s)')
+ax.set_ylabel('Amplitude ($\mu$A)')
