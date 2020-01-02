@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 ============================================================================
-Generating Simple Pulses and Pulse Trains
+Generating simple pulses and pulse trains
 ============================================================================
 This example shows how to build and visualize basic types of stimuli such as
 :py:class:`~pulse2percept.stimuli.MonophasicPulse`,
@@ -20,7 +20,7 @@ Multiple pulses can form a pulse train.
 
 """
 ##############################################################################
-# Simplest Stimulus
+# Simplest stimulus
 # ---------------------
 # :py:class:`~pulse2percept.stimuli.Stimulus` is the base class to generate
 # different types of stimuli. The simplest way to instantiate a Stimulus is
@@ -48,16 +48,17 @@ print(stim)
 #   or within the stimulus. If none are specified it looks up the source
 #   electrode.
 #
-# * `` metadata``: Optionally we can include metadata to the stimulus we
+# * ``metadata``: Optionally we can include metadata to the stimulus we
 #   generate as a dictionary.
 #
 # To change parameter values, either pass them directly to the constructor
 # above or set them by hand, like this:
 
 stim.metadata = {'name': 'A simple stimulus', 'date': '2020-01-01'}
+stim
 
 ##############################################################################
-# A MonophasicPulse
+# A monophasic pulse
 # --------------------
 # We can specify the arguments of the monophasic pulse as follows:
 
@@ -95,11 +96,11 @@ print(monophasic_stim)
 import matplotlib.pyplot as plt
 fig, ax = plt.subplots(figsize=(8, 5))
 ax.plot(monophasic_stim.time, monophasic_stim.data[0, :])
-ax.set_xlabel('Time (s)', fontsize=25)
-ax.set_ylabel('Amplitude ($\mu$A)', fontsize=25)
+ax.set_xlabel('Time (s)')
+ax.set_ylabel('Amplitude ($\mu$A)')
 
 ###############################################################################
-# A BiphasicPulse
+# A biphasic pulse
 # ------------------
 # Similarly, we can generate a biphasic pulse by changing the source of the
 # stimulus to :py:class:`~pulse2percept.stimuli.BiphasicPulse`. This time
@@ -107,13 +108,7 @@ ax.set_ylabel('Amplitude ($\mu$A)', fontsize=25)
 
 # set relevant parameters
 pulse_type = 'cathodicfirst'
-pulse_dur = 0.0046  # in seconds
-delay_dur = 10.0 / 1000  # pulse delivered after delay in seconds
-stim_dur = 0.5  # stimulus duration in seconds (pulse padded with zeros)
-time_sample = 0.1 / 1000   # temporal sampling in seconds
-
 biphasic_stim = Stimulus(BiphasicPulse(ptype=pulse_type, pdur=pulse_dur,
-                                       delay_dur=delay_dur, stim_dur=stim_dur,
                                        tsample=time_sample))
 
 ###############################################################################
@@ -125,16 +120,16 @@ fig, axes = plt.subplots(1, 2, figsize=(20, 10))
 
 # First, plot monophasic pulse
 axes[0].plot(monophasic_stim.time, monophasic_stim.data[0])
-axes[0].set_xlabel('Time (s)', fontsize=25)
-axes[0].set_ylabel('Amplitude ($\mu$A)', fontsize=25)
+ax.set_xlabel('Time (s)')
+ax.set_ylabel('Amplitude ($\mu$A)')
 
 # Second, plot biphasic pulse
 axes[1].plot(biphasic_stim.time, biphasic_stim.data[0])
-axes[1].set_ylabel('Amplitude ($\mu$A)', fontsize=25)
-axes[1].set_xlabel('Time (s)', fontsize=25)
+ax.set_xlabel('Time (s)')
+ax.set_ylabel('Amplitude ($\mu$A)')
 
 ###############################################################################
-# Changing The Amplitude Of Pulses
+# Changing pulse amplitude
 # ----------------------------------
 # For any given pulse, we can modify the amplitude by indexing into the ``data``
 # row that corresponds to the desired electrode. In the above example, we only
@@ -151,7 +146,7 @@ print(monophasic_stim)
 # stimulus:
 
 # recreate the same stimulus with an amplitude 1 microAmps.
-monophasic_stim = Stimulus(MonophasicPulse(ptype=pulse_type, pdur=pulse_dur,
+monophasic_stim = Stimulus(MonophasicPulse(ptype='anodic', pdur=pulse_dur,
                                            delay_dur=delay_dur,
                                            stim_dur=stim_dur,
                                            tsample=time_step))
@@ -180,21 +175,24 @@ biphasic_stim.data[0][0:half] = 5*biphasic_stim.data[0][0:half]
 biphasic_stim.data[0][half:length] = 20*biphasic_stim.data[0][half:length]
 
 ###############################################################################
-# Let's plot the monophasic and biphasic pulses again
+# Let's plot the monophasic and biphasic pulses again:
+
 # Create a figure with two subplots
-fig, axes = plt.subplots(1, 2, figsize=(25, 15))
+fig, axes = plt.subplots(nrows=2, figsize=(25, 15))
 
 # First, plot monophasic pulse
 axes[0].plot(monophasic_stim.time, monophasic_stim.data[0])
-axes[0].set_xlabel('Time (s)', fontsize=25)
-axes[0].set_ylabel('Amplitude ($\mu$A)', fontsize=25)
+axes[0].set_xlabel('Time (s)')
+axes[0].set_ylabel('Amplitude ($\mu$A)')
 # Second, plot biphasic pulse
 axes[1].plot(biphasic_stim.time, biphasic_stim.data[0])
-axes[1].set_xlabel('Time (s)', fontsize=25)
-axes[1].set_ylabel('Amplitude ($\mu$A)', fontsize=25)
+axes[1].set_xlabel('Time (s)')
+axes[1].set_ylabel('Amplitude ($\mu$A)')
+fig.tight_layout()
+
 
 ###############################################################################
-# Generating Standard Pulse Trains
+# Generating standard pulse trains
 # ----------------------------------
 # The easiest way to generate a pulse train is to use the 
 # :py:class:`~pulse2percept.stimuli.PulseTrain` object, which allows for
@@ -203,7 +201,7 @@ axes[1].set_ylabel('Amplitude ($\mu$A)', fontsize=25)
 time_sample = 0.1 / 1000  # temporal sampling in seconds
 freq = 20  # frequency in Hz
 amp = 100  # maximum amplitude of the pulse train in microAmps
-dur = 1  # total duration of the pulse train in seconds
+dur = 0.2  # total duration of the pulse train in seconds
 pulse_type = 'cathodicfirst'  # whether the first phase is positive or negative
 pulse_order = 'gapfirst'  # whether the train starts with gap or a pulse.
 
@@ -221,8 +219,8 @@ ptrain_stim = Stimulus(ptrain)
 # Visualize:
 fig, ax = plt.subplots(figsize=(8, 5))
 ax.plot(ptrain_stim.time, ptrain_stim.data[0, :])
-ax.set_xlabel('Time (s)', fontsize=25)
-ax.set_ylabel('Amplitude ($\mu$A)', fontsize=25)
+ax.set_xlabel('Time (s)')
+ax.set_ylabel('Amplitude ($\mu$A)')
 
 ###############################################################################
 # Alternatively, we are free to specify a discrete set of points in time and
@@ -236,8 +234,8 @@ stim = Stimulus([[0, -10, 10, -10, 10, -10, 0]],
                 time=[0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0])
 fig, ax = plt.subplots(figsize=(8, 5))
 ax.plot(stim.time, stim.data[0, :])
-ax.set_xlabel('Time (s)', fontsize=25)
-ax.set_ylabel('Amplitude ($\mu$A)', fontsize=25)
+ax.set_xlabel('Time (s)')
+ax.set_ylabel('Amplitude ($\mu$A)')
 
 ##############################################################################
 # For a biphasic pulse, we need to specify both the rising edge (low-to-high
@@ -247,8 +245,8 @@ stim = Stimulus([[0, 0, 10, 10,  0, 0]],
                 time=[0, 0.1, 0.1, 0.2, 0.2, 1.0])
 fig, ax = plt.subplots(figsize=(8, 5))
 ax.plot(stim.time, stim.data[0, :])
-ax.set_xlabel('Time (s)', fontsize=25)
-ax.set_ylabel('Amplitude ($\mu$A)', fontsize=25)
+ax.set_xlabel('Time (s)')
+ax.set_ylabel('Amplitude ($\mu$A)')
 
 ##############################################################################
 # We can thus generate arbitrarily complex stimuli:
@@ -257,5 +255,5 @@ stim = Stimulus([[0, 0, 20, 20, -5, -5, 0, 0, 0, 20, 20, -5, -5, 0, 0]],
                 time=[0, 0.1, 0.1, 0.2, 0.2, 0.6, 0.6, 1.0, 1.1, 1.1, 1.2, 1.2, 1.6, 1.6, 2.0])
 fig, ax = plt.subplots(figsize=(8, 5))
 ax.plot(stim.time, stim.data[0, :])
-ax.set_xlabel('Time (s)', fontsize=25)
-ax.set_ylabel('Amplitude ($\mu$A)', fontsize=25)
+ax.set_xlabel('Time (s)')
+ax.set_ylabel('Amplitude ($\mu$A)')
