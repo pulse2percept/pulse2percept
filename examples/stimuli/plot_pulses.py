@@ -1,17 +1,21 @@
 # -*- coding: utf-8 -*-
 """
 ============================================================================
-Building stimuli
+Generating Simple Pulses and Pulse Trains
 ============================================================================
 This example shows how to build and visualize basic types of stimuli such as
 :py:class:`~pulse2percept.stimuli.MonophasicPulse`,
 :py:class:`~pulse2percept.stimuli.BiphasicPulse` or a
 :py:class:`~pulse2percept.stimuli.PulseTrain` for a given implant.
 
-A monophasic pulse has a single phase and can be either anodic or cathodic. A
-biphasic pulse is generally charge balanced for safety reasons and defined
-as either anodic first or cathodic first.
-Multiple pulses can form a pulsetrain.
+A monophasic pulse has a single phase and can be either anodic (by definition:
+has a positive current amplitude) or cathodic (negative current amplitude).
+
+A biphasic pulse is generally charge-balanced for safety reasons (i.e., the
+net current must sum to zero over time) and defined as either anodic-first
+or cathodic-first.
+
+Multiple pulses can form a pulse train.
 
 
 """
@@ -19,7 +23,7 @@ Multiple pulses can form a pulsetrain.
 # Simplest Stimulus
 # ---------------------
 # :py:class:`~pulse2percept.stimuli.Stimulus` is the base class to generate
-# different types of stimulus. Simplest way to instantiate a Stimulus is
+# different types of stimuli. The simplest way to instantiate a Stimulus is
 # to pass a scalar value which is interpreted as the current amplitude
 # for a single electrode.
 
@@ -27,80 +31,95 @@ Multiple pulses can form a pulsetrain.
 from pulse2percept.stimuli import (MonophasicPulse, BiphasicPulse,
                                    Stimulus, PulseTrain)
 
-import matplotlib.pyplot as plt
 import numpy as np
 
 stim = Stimulus(10)
 
 ##############################################################################
-# Parameters you don't specify will take on default values. You can inspect
+# Parameters we don't specify will take on default values. We can inspect
 # all current model parameters as follows:
 
 print(stim)
 
 ##############################################################################
-# A MonophasicPulse
-# --------------------
-# We can specify the arguments of the monophasic pulse
-
-pulse_type = 'anodic'  # whether current has a positive or negative amplitude
-pulse_dur = 0.0046  # in seconds
-time_sample = 0.1 / 1000  # temporal sampling in seconds
-
-##############################################################################
-# By calling Stimulus with a MonophasicPulse source we can generate a single
-# pulse
-monophasic_stim = Stimulus(source=MonophasicPulse(ptype=pulse_type,
-                           pdur=pulse_dur, tsample=time_sample))
-
-print(monophasic_stim)
-
-##############################################################################
-# Here data is a 2D NumPy array where rows are electrodes and columns are the
-# points in time. Since we did not specify any electrodes in our source
-# MonophasicPulse, there is only one row denoting a single electrode. So
-# we generated a single pulse with an amplitude of 1.
-#
 # This command also reveals a number of other parameters to set, such as:
 #
-# * ``electrodes``: you can either specify the electrodes in the source
-#   or within  the stimulus. If none are specified it looks up the source
+# * ``electrodes``: We can either specify the electrodes in the source
+#   or within the stimulus. If none are specified it looks up the source
 #   electrode.
 #
-# * `` metadata``: optionally you can include metadata to the stimulus you
-#   generate
+# * `` metadata``: Optionally we can include metadata to the stimulus we
+#   generate as a dictionary.
 #
 # To change parameter values, either pass them directly to the constructor
 # above or set them by hand, like this:
 
-monophasic_stim.metadata = 'Threshold measurement'
+stim.metadata = {'name': 'A simple stimulus', 'date': '2020-01-01'}
 
 ##############################################################################
-# Let's visualize the pulse we generated
+# A MonophasicPulse
+# --------------------
+# We can specify the arguments of the monophasic pulse as follows:
 
+pulse_type = 'anodic'  # anodic: positive amplitude, cathodic: negative
+pulse_dur = 4.6 / 1000  # pulse duration in seconds
+delay_dur = 10.0 / 1000  # pulse delivered after delay in seconds
+stim_dur = 0.5  # stimulus duration in seconds (pulse padded with zeros)
+time_step = 0.1 / 1000  # temporal sampling step in seconds
+
+##############################################################################
+# The sampling step ``time_step`` defines at which temporal resolution the
+# stimulus is resolved. In the above example, the time step is 0.1 ms.
+#
+# By calling Stimulus with a ``MonophasicPulse`` source, we can generate a
+# single pulse:
+monophasic_stim = Stimulus(MonophasicPulse(ptype=pulse_type, pdur=pulse_dur,
+                                           delay_dur=delay_dur,
+                                           stim_dur=stim_dur,
+                                           tsample=time_step))
+print(monophasic_stim)
+
+##############################################################################
+# Here, ``data`` is a 2D NumPy array where rows are electrodes and columns are
+# the points in time. Since we did not specify any electrode names in
+# ``MonophasicPulse``, the number of electrodes is inferred from the input
+# source type. There is only one row in the above example, denoting a single
+# electrode.
+#
+# By default, the :py:class:`~pulse2percept.stimuli.MonophasicPulse` object
+# automatically assumes a current amplitude of 1 uA.
+
+##############################################################################
+# We can visualize the generated pulse using Matplotlib:
+
+import matplotlib.pyplot as plt
 fig, ax = plt.subplots(figsize=(8, 5))
-ax.plot(monophasic_stim.time, monophasic_stim.data[0])
+ax.plot(monophasic_stim.time, monophasic_stim.data[0, :])
 ax.set_xlabel('Time (s)', fontsize=25)
 ax.set_ylabel('Amplitude ($\mu$A)', fontsize=25)
 
 ###############################################################################
 # A BiphasicPulse
 # ------------------
-# Similarly, we can generate biphasic pulse by changing the source of the
-# stimulus to :py:class:`~pulse2percept.stimuli.BiphasicPulse. This time
+# Similarly, we can generate a biphasic pulse by changing the source of the
+# stimulus to :py:class:`~pulse2percept.stimuli.BiphasicPulse`. This time
 # parameter ``ptype`` can either be 'anodicfirst' or 'cathodicfirst'.
 
 # set relevant parameters
 pulse_type = 'cathodicfirst'
 pulse_dur = 0.0046  # in seconds
+delay_dur = 10.0 / 1000  # pulse delivered after delay in seconds
+stim_dur = 0.5  # stimulus duration in seconds (pulse padded with zeros)
 time_sample = 0.1 / 1000   # temporal sampling in seconds
 
-biphasic_stim = Stimulus(source=BiphasicPulse(ptype=pulse_type, pdur=pulse_dur,
-                         tsample=time_sample))
+biphasic_stim = Stimulus(BiphasicPulse(ptype=pulse_type, pdur=pulse_dur,
+                                       delay_dur=delay_dur, stim_dur=stim_dur,
+                                       tsample=time_sample))
 
 ###############################################################################
-# If we visualize this stimulus we can see the difference between a monophasic
-# and biphasic pulse
+# If we visualize this stimulus, we can see the difference between a monophasic
+# and biphasic pulse:
+
 # Create a figure with two subplots
 fig, axes = plt.subplots(1, 2, figsize=(20, 10))
 
@@ -117,35 +136,33 @@ axes[1].set_xlabel('Time (s)', fontsize=25)
 ###############################################################################
 # Changing The Amplitude Of Pulses
 # ----------------------------------
-# For any given pulse, we can modify the amplitude simply by indexing the
-# electrode. For this example, we only have 1 electrode with an index of 0.
-# Let's say we want the amplitude of monophasic pulse to be 10 microAmps and
-# the cathodic part of the biphasic pulse to be -5, anodic part of the biphasic
-# pulse to be 20 (this is hypothetical, as this wouldn't be suitable for
-# patient testing as it isn't charge balanced)
-###############################################################################
-# You can change the amplitude in two ways: You can either change the values
-# directly or create a NumPy array and assign that to the data structure of the
-# stimulus
+# For any given pulse, we can modify the amplitude by indexing into the ``data``
+# row that corresponds to the desired electrode. In the above example, we only
+# have one electrode (index 0).
+# Let's say we want the amplitude of the monophasic pulse to be 10 micro amps.
+# We have two options: either change the values of the ``data`` array directly:
 
 # get the data structure by indexing the electrode at 0
 monophasic_stim.data[0] = 10*monophasic_stim.data[0]
 print(monophasic_stim)
 
-# OR
+###############################################################################
+# Or we can create a NumPy array and assign that to the data structure of the
+# stimulus:
+
 # recreate the same stimulus with an amplitude 1 microAmps.
-pulse_type = 'anodic'
-monophasic_stim = Stimulus(source=MonophasicPulse(ptype=pulse_type,
-                           pdur=pulse_dur, tsample=time_sample))
+monophasic_stim = Stimulus(MonophasicPulse(ptype=pulse_type, pdur=pulse_dur,
+                                           delay_dur=delay_dur,
+                                           stim_dur=stim_dur,
+                                           tsample=time_step))
 monophasic_stim.data[0] = 10*np.ones_like(monophasic_stim.data[0])
 print(monophasic_stim)
 
 ###############################################################################
-# The outputs show that both works for changing the amplitude from 1 to 10
-# microAmps.
-
-###############################################################################
-# Now, let's change the biphasic pulse.
+# Similarly, let's say we want the cathodic part of the biphasic pulse to be -5
+# micro amps, and the anodic part to be +20 micro amps (note that this stimulus
+# wouldn't be charge-balanced).
+#
 # We first need to find the halfway point where the current switches from
 # cathodic to anodic. To do that we first get the length of the pulse by
 # indexing the single electrode at 0
@@ -161,6 +178,7 @@ biphasic_stim.data[0][0:half] = 5*biphasic_stim.data[0][0:half]
 
 # change the second half to be 20 times larger
 biphasic_stim.data[0][half:length] = 20*biphasic_stim.data[0][half:length]
+
 ###############################################################################
 # Let's plot the monophasic and biphasic pulses again
 # Create a figure with two subplots
@@ -178,16 +196,10 @@ axes[1].set_ylabel('Amplitude ($\mu$A)', fontsize=25)
 ###############################################################################
 # Generating Standard Pulse Trains
 # ----------------------------------
-# How can we combine multiple pulses into a pulse train? We can do that in two
-# ways:
-# * We can use the standard biphasic pulse trains in the
-# p2p.stimuli.pulse_trains module.
-# * We can generate our own pulse trains.
+# The easiest way to generate a pulse train is to use the 
+# :py:class:`~pulse2percept.stimuli.PulseTrain` object, which allows for
+# various stimulus attributes to be specified:
 
-###############################################################################
-# Generating a standard pulse train
-# Defining some parameters - please look into the docstring to see the default
-# values of all parameters which you can modify.
 time_sample = 0.1 / 1000  # temporal sampling in seconds
 freq = 20  # frequency in Hz
 amp = 100  # maximum amplitude of the pulse train in microAmps
@@ -206,15 +218,44 @@ ptrain = PulseTrain(tsample=time_sample,
 # Create a new stimulus where the pulse train is the source
 ptrain_stim = Stimulus(ptrain)
 
-# Let's look at the Stimulus object
-print(ptrain_stim)
-###############################################################################
+# Visualize:
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.plot(ptrain_stim.time, ptrain_stim.data[0, :])
+ax.set_xlabel('Time (s)', fontsize=25)
+ax.set_ylabel('Amplitude ($\mu$A)', fontsize=25)
 
+###############################################################################
+# Alternatively, we are free to specify a discrete set of points in time and
+# the current amplitude we would like to apply at those times.
+#
+# It is important to note that the :py:class:`~pulse2percept.stimuli.Stimulus`
+# object will linearly interpolate between specified time points.
+# For example, the following generates a simple sawtooth stimulus:
+
+stim = Stimulus([[0, -10, 10, -10, 10, -10, 0]],
+                time=[0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0])
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.plot(stim.time, stim.data[0, :])
+ax.set_xlabel('Time (s)', fontsize=25)
+ax.set_ylabel('Amplitude ($\mu$A)', fontsize=25)
 
 ##############################################################################
-# Let's visualize the pulse we generated
+# For a biphasic pulse, we need to specify both the rising edge (low-to-high
+# transition) and falling edge (high-to-low transition) of the signal:
 
+stim = Stimulus([[0, 0, 10, 10,  0, 0]],
+                time=[0, 0.1, 0.1, 0.2, 0.2, 1.0])
 fig, ax = plt.subplots(figsize=(8, 5))
-ax.plot(ptrain_stim.time, ptrain_stim.data[0])
-ax.set_xlabel('Time (s)')
-ax.set_ylabel('Amplitude ($\mu$A)')
+ax.plot(stim.time, stim.data[0, :])
+ax.set_xlabel('Time (s)', fontsize=25)
+ax.set_ylabel('Amplitude ($\mu$A)', fontsize=25)
+
+##############################################################################
+# We can thus generate arbitrarily complex stimuli:
+
+stim = Stimulus([[0, 0, 20, 20, -5, -5, 0, 0, 0, 20, 20, -5, -5, 0, 0]],
+                time=[0, 0.1, 0.1, 0.2, 0.2, 0.6, 0.6, 1.0, 1.1, 1.1, 1.2, 1.2, 1.6, 1.6, 2.0])
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.plot(stim.time, stim.data[0, :])
+ax.set_xlabel('Time (s)', fontsize=25)
+ax.set_ylabel('Amplitude ($\mu$A)', fontsize=25)
