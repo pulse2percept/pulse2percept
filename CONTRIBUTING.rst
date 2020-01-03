@@ -80,6 +80,7 @@ workflow similar to the following:
 
         If your PR is not yet ready to be merged, also add the **[WIP]** prefix
         to label it as a "work in progress".
+        Alternatively, you can use GitHub's new `draft PR`_ feature.
 
 .. _GitHub account: https://help.github.com/articles/signing-up-for-a-new-github-account
 .. _good-first-issue: https://github.com/pulse2percept/pulse2percept/labels/good-first-issue
@@ -88,6 +89,7 @@ workflow similar to the following:
 .. _pull request: https://help.github.com/articles/creating-a-pull-request-from-a-fork/
 .. _@arokem: https://github.com/arokem
 .. _@mbeyeler: https://github.com/mbeyeler
+.. _draft PR: https://github.blog/2019-02-14-introducing-draft-pull-requests
 
 .. _dev-contributing-issue-labels:
 
@@ -173,8 +175,14 @@ say you want to add "feature1" to the latest version of pulse2percept:
 
         git checkout -b feature1
 
-3.  Add and commit your changes to this branch. Then push it to your remote
-    repository on GitHub:
+3.  Add and commit your changes to this branch:
+    
+    .. code-block:: bash
+
+        git add newfile.py
+        git commit -m "add new feature1 file"
+    
+4.  Then push it to your remote repository on GitHub:
 
     .. code-block:: bash
 
@@ -185,7 +193,7 @@ say you want to add "feature1" to the latest version of pulse2percept:
         All code additions must be :ref:`documented <dev-contributing-doc>` and
         :ref:`tested <dev-contributing-test>`.
 
-4.  Go to GitHub and `submit a pull request`_:
+5.  Go to GitHub and `submit a pull request`_:
 
     1.  Click on "compare across forks" at the top of the page.
 
@@ -231,12 +239,12 @@ For example, consider an appropriate docstring for a hypothetical function
         Parameters
         ----------
         angle_rad : int, float
-            The input angle in radians
+            The input angle in radians in (between 0 and 2pi)
 
         Returns
         -------
         angle_deg : float
-            The corresponding angle in degrees
+            The corresponding angle in degrees (between 0 and 360 deg)
 
         Examples
         --------
@@ -249,19 +257,28 @@ For example, consider an appropriate docstring for a hypothetical function
         """
         ...
 
-You can generate the documentation yourself using Sphinx. From the root directory
-of your git clone, type:
+You can generate the documentation yourself using Sphinx.
+If you installed ``make``, type the following from your root directory:
+
+.. code-block:: bash
+
+    make doc
+
+Otherwise, type the following from your root directory:
 
 .. code-block:: bash
 
     cd doc
     pip3 install -r requirements.txt
     make html
-    google-chrome _build/html/index.html
 
-This will build the documentation in "doc/_build/html".
-To see the documentation, use the above command or open "doc/_build/html/index.html"
-in your browser of choice.
+The generated documentation can then be found in ``doc/_build/html``.
+To see the documentation, "doc/_build/html/index.html" in your browser of
+choice, e.g.:
+
+.. code-block:: bash
+
+    google-chrome doc/_build/html/index.html
 
 .. _NumPy docstrings: https://numpydoc.readthedocs.io/en/latest/format.html 
 
@@ -285,13 +302,13 @@ Every subpackage of pulse2percept (e.g., :py:mod:`~pulse2percept.stimuli`)
 has a subdirectory called "tests".
 Within the test directory, there is a "test_<subsubpackage>.py" file for every
 subsubpackage of pulse2percept (e.g.,
-"pulse2percept/stimuli/tests/test_pulse_trains.py" for
-:py:mod:`~pulse2percept.stimuli.pulse_trains`).
+"pulse2percept/stimuli/tests/test_pulse_trains.py" for the
+:py:mod:`~pulse2percept.stimuli.pulse_trains` module).
 
 When you contribute new code, you are expected to test your code in the
 corresponding test file.
 
-You can run the test suite with:
+You can run the test suite from your root directory with:
 
 .. code-block:: bash
 
@@ -301,8 +318,15 @@ You can run the test suite with:
 Successful tasks will be marked with "PASSED", unsuccessful ones with "FAILED".
 We will usually not accept pull requests that don't pass all tests.
 
+.. note::
+
+    Whenever you submit a pull request, the test suite is automatically run in the
+    background using `GitHub Actions`_. This will make sure that all tests pass on
+    all supported platforms whenever changes are made to the code.
+
 .. _pytest: https://pytest.org
 .. _numpy-testing: https://docs.scipy.org/doc/numpy/reference/routines.testing.html
+.. _GitHub Actions: https://github.com/pulse2percept/pulse2percept/actions
 
 Writing your own tests
 ----------------------
