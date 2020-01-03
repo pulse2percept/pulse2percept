@@ -76,11 +76,13 @@ workflow similar to the following:
     `@mbeyeler`_, who will review your changes before merging them into the
     main codebase.
 
-    .. note::
+    .. note:: 
+ 
+        If your PR is not yet ready to be merged, click on the dropdown arrow next to
+        the "Create pull request" button and choose "Create draft pull request" instead.
 
-        If your PR is not yet ready to be merged, also add the **[WIP]** prefix
-        to label it as a "work in progress".
-        Alternatively, you can use GitHub's new `draft PR`_ feature.
+        This will put your PR in `draft state`_ and block merging until you change the status
+        of the PR to "Ready for review".
 
 .. _GitHub account: https://help.github.com/articles/signing-up-for-a-new-github-account
 .. _good-first-issue: https://github.com/pulse2percept/pulse2percept/labels/good-first-issue
@@ -89,7 +91,7 @@ workflow similar to the following:
 .. _pull request: https://help.github.com/articles/creating-a-pull-request-from-a-fork/
 .. _@arokem: https://github.com/arokem
 .. _@mbeyeler: https://github.com/mbeyeler
-.. _draft PR: https://github.blog/2019-02-14-introducing-draft-pull-requests
+.. _draft state: https://github.blog/2019-02-14-introducing-draft-pull-requests
 
 .. _dev-contributing-issue-labels:
 
@@ -203,7 +205,8 @@ say you want to add "feature1" to the latest version of pulse2percept:
     3.  Choose "<username>/pulse2percept" as the head repository and "feature1"
         as the compare branch, where "<username>" is your GitHub user name.
 
-    4.  Click on "Create pull request" and describe the work you have done.
+    4.  Click on "Create pull request" (or "Create draft pull request" if your work
+        is not ready to be merged) and describe the work you have done.
         Make sure to mention the issue number you are addressing (use # as
         prefix).
 

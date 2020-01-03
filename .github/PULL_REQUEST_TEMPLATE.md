@@ -9,7 +9,10 @@
      [STY] for stylistic changes
      [REF] for refactoring existing code
 
-     If your PR is not yet ready to be merged, also add [WIP] to label it as a "work in progress".
+     If your PR is not yet ready to be merged, click on the dropdown arrow next to the
+     "Create pull request" button and choose "Create draft pull request" instead.
+     This will put your PR in draft state and block merging until you change the status
+     of the PR to "Ready for review".
 
      If this is a bug-fix or enhancement, state the issue # it closes.
      If this is a new feature, reference what paper it implements.
