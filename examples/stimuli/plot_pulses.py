@@ -109,7 +109,7 @@ ax.set_ylabel('Amplitude ($\mu$A)')
 # set relevant parameters
 pulse_type = 'cathodicfirst'
 biphasic_stim = Stimulus(BiphasicPulse(ptype=pulse_type, pdur=pulse_dur,
-                                       tsample=time_sample))
+                                       tsample=time_step))
 
 ###############################################################################
 # If we visualize this stimulus, we can see the difference between a monophasic
@@ -198,7 +198,7 @@ fig.tight_layout()
 # :py:class:`~pulse2percept.stimuli.PulseTrain` object, which allows for
 # various stimulus attributes to be specified:
 
-time_sample = 0.1 / 1000  # temporal sampling in seconds
+time_step = 0.1 / 1000  # temporal sampling in seconds
 freq = 20  # frequency in Hz
 amp = 100  # maximum amplitude of the pulse train in microAmps
 dur = 0.2  # total duration of the pulse train in seconds
@@ -206,7 +206,7 @@ pulse_type = 'cathodicfirst'  # whether the first phase is positive or negative
 pulse_order = 'gapfirst'  # whether the train starts with gap or a pulse.
 
 # Define the pulse train with given parameters
-ptrain = PulseTrain(tsample=time_sample,
+ptrain = PulseTrain(tsample=time_step,
                     freq=freq,
                     dur=dur,
                     amp=amp,
