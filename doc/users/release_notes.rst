@@ -6,10 +6,10 @@ Release Notes
 
 .. important::
 
-    pulse2percept 0.5 will be the last release to support Python 2.7 and 3.4.
-    pulse2percept 0.6+ will require **Python 3.5 or newer**.
+    pulse2percept 0.4.3 will be the last release to support Python 2.7 and 3.4.
+    pulse2percept 0.5+ will require **Python 3.5 or newer**.
 
-v0.6.0 (2019)
+v0.6.0 (2020)
 -------------
 
 Highlights:
@@ -52,7 +52,7 @@ Deprecation removals
 * ``pulse2percept.retina``: use :py:mod:`~pulse2percept.models` instead
 * ``pulse2percept.files``: use :py:mod:`~pulse2percept.io` instead
 
-v0.5.0 (2019)
+v0.5.0 (2019-11-29)
 -------------
 
 Highlights:
@@ -60,6 +60,7 @@ Highlights:
 *   New :py:mod:`pulse2percept.viz` module (:pull:`84`)
 *   Support for the :py:class:`~pulse2percept.implants.AlphaIMS` implant
     (:pull:`87`)
+*   Automated wheelhouse build (:pull:`130`)
 *   New contribution guidelines (:pull:`92`)
 *   New issue templates (:pull:`93`)
 *   New code of conduct (:pull:`95`)
