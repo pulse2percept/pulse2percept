@@ -7,7 +7,7 @@ Installation
 pulse2percept is in active development.
 To get the latest stable version, we recommend installing our
 :ref:`latest release <install-release>`.
-If you wish to contribute to the project or require
+If you wish to :ref:`contribute to the project <dev-contributing>` or require
 the bleeding-edge version, you will want to install
 :ref:`from source <install-source>` instead.
 
@@ -28,7 +28,7 @@ Prerequisites
    .. important::
 
        pulse2percept 0.4.3 was the last release to support Python 2.7 and 3.4.
-       pulse2percept 0.5+ will require **Python 3.5 - 3.7**.
+       pulse2percept 0.5+ requires **Python 3.5 - 3.7**.
 
 *  **Cython** (>= 0.28): pulse2percept relies on C extension modules for code
    acceleration. These require a C compiler, which on Unix platforms is
@@ -80,6 +80,10 @@ Then from any Python console or script, try:
 
     import pulse2percept as p2p
 
+.. note::
+
+    Find out what's new in the :ref:`Release Notes <users-release-notes>`.
+
 .. _install-source:
 
 Installing from source
@@ -90,42 +94,26 @@ Installing from source
 Prerequisites
 -------------
 
-**Git**: On Unix, you can install git from the `command line`_. On Windows,
-make sure to download `Git for Windows`_.
+1.  **Git**: On Unix, you can install git from the `command line`_. On Windows,
+    make sure to download `Git for Windows`_.
+
+2.  **make** (optional): pulse2percept provides a Makefile to simplify the
+    build process.
+    ``make`` is part of `build-essentials`_ on Ubuntu, `XCode`_ on Mac OS X,
+    and can be downloaded from `ezwinports`_ on Windows.
 
 .. _command line: https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
 .. _Git for Windows: https://gitforwindows.org
+.. _build-essentials: https://stackoverflow.com/questions/11934997/how-to-install-make-in-ubuntu
+.. _XCode: https://developer.apple.com/support/xcode
+.. _ezwinports: https://gist.github.com/evanwill/0207876c3243bbb6863e65ec5dc3f058#make
 
 Dependencies
 ------------
 
-**pulse2percept 0.4.3 was the last version to support Python 2.7 and 3.4. pulse2percept 0.5+ require Python 3.5 or newer.**
-
-pulse2percept requires:
-
-- Python (3.5 - 3.7)
-- Cython (>= 0.28)
-- NumPy (>= 1.9)
-- SciPy (>= 1.0)
-- Matplotlib (>= 2.0)
-- JobLib (>= 0.11)
-
-Optional packages:
-
-- scikit-image for image functionality in the ``files`` module.
-- scikit-video for video functionality in the ``files`` module. You will also need an FFMPEG codec (see next bullet point).
-- ffmpeg codec if you're on Windows and want to use functions in the ``files`` module.
-- Dask for parallel processing (a joblib alternative). Use ``conda`` to install.
-- Numba for just-in-time compilation. Use ``conda`` to install.
-- Pytest to run the test suite.
-
-All required packages are listed in requirements.txt in the root directory of the git repository, and can be installed with the following command:
-
-.. code-block:: bash
-
-    git clone https://github.com/pulse2percept/pulse2percept.git
-    cd pulse2percept
-    pip3 install -r requirements.txt
+.. include:: ../README.rst
+   :start-line: 113
+   :end-line: 147
 
 Obtaining the latest code from GitHub
 -------------------------------------
@@ -191,6 +179,20 @@ Then from any Python console or script, try:
 .. code-block:: python
 
     import pulse2percept as p2p
+
+Building with make
+------------------
+
+pulse2percept provides a Makefile to simplify the build process.
+If you followed the :ref:`above guide <install-source-prerequisites>` to
+install ``make``, the following commands are available:
+
+*  ``make``: Installs pulse2percept
+*  ``make uninstall``: Uninstalls pulse2percept
+*  ``make tests``: Installs pulse2percept and runs the test suite
+*  ``make doc``: Installs pulse2percept and generates the documentation
+*  ``make clean``: Cleans out all build files
+*  ``make help``: Prints a help message with this menu of options
 
 .. _install-upgrade:
 

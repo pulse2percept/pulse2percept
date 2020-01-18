@@ -1,10 +1,31 @@
-from __future__ import absolute_import, division, print_function
-from .version import __version__  # noqa
+"""
+
+=============
+pulse2percept
+=============
+
+pulse2percept consists of the following subpackages:
+
+.. autosummary::
+    :toctree: _api
+
+    implants
+    stimuli
+    models
+    io
+    viz
+    utils
+"""
 import logging
+
+__version__ = '0.6.0'
 
 # Disable Jupyter Notebook handlers
 # https://github.com/ipython/ipython/issues/8282
 logging.getLogger().handlers = []
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.StreamHandler())
 
 # Set up root logger for debug file
 formatstr = '%(asctime)s [%(name)s] [%(levelname)s] %(message)s'
@@ -13,21 +34,20 @@ logging.basicConfig(level=logging.DEBUG,
                     filename='debug.log',
                     filemode='w')
 
-# Add streaming to console: Temporarily set level to ERROR so the imports
-# don't trigger 'deprecated' warnings
-console = logging.StreamHandler()
-console.setLevel(logging.ERROR)
-console.setFormatter(logging.Formatter(formatstr))
-logging.getLogger(__name__).addHandler(console)
-
-from .api import *
-from . import retina
+# Avoid showing avconv/avprob error:
+logger.setLevel(logging.ERROR)
+from . import io
+logger.setLevel(logging.INFO)
 from . import implants
+from . import models
 from . import stimuli
-from . import files
-from . import utils
 from . import viz
 
-# Reset the logging level to INFO
-console.setLevel(logging.INFO)
-logging.getLogger(__name__).info('Welcome to pulse2percept')
+__all__ = [
+    'io',
+    'implants',
+    'models',
+    'stimuli',
+    'utils',
+    'viz'
+]
