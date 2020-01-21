@@ -108,8 +108,8 @@ Detailed instructions for different platforms can be found in our
 Dependencies
 ------------
 
-**pulse2percept 0.5 was the last version to support Python 2.7 and 3.4.**
-pulse2percept 0.6+ require Python 3.5 or newer.
+**pulse2percept 0.4.3 was the last version to support Python 2.7 and 3.4.**
+pulse2percept 0.5+ requires Python 3.5 - 3.7.
 
 pulse2percept requires:
 
