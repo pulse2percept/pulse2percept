@@ -1,4 +1,4 @@
-"""implants"""
+"""Electrode, ElectrodeArray, ElectrodeGrid, ProsthesisSystem"""
 import numpy as np
 from abc import ABCMeta, abstractmethod
 import collections as coll
@@ -37,6 +37,35 @@ class PointSource(Electrode):
     """Point source"""
 
     def electric_potential(self, x, y, z, amp, sigma):
+        """Calculate electric potential at (x, y, z)
+
+        Parameters
+        ----------
+        x/y/z : double
+            3D location at which to evaluate the electric potential
+        amp : double
+            amplitude of the constant current pulse
+        sigma : double
+            resistivity of the extracellular solution
+
+        Returns
+        -------
+        pot : double
+            The electric potential at (x, y, z)
+
+        The electric potential :math:`V(r)` of a point source is given by:
+
+        .. math::
+
+            V(r) = \\frac{\\sigma I}{4 \\pi r},
+
+        where :math:`\\sigma` is the resistivity of the extracellular solution
+        (typically Ames medium, :math:`\\sigma = 110 \\Ohm cm`),
+        :math:`I` is the amplitude of the constant current pulse,
+        and :math:`r` is the distance from the stimulating electrode to the
+        point at which the voltage is being computed.
+
+        """
         r = np.sqrt((x - self.x) ** 2 + (y - self.y) ** 2 + (z - self.z) ** 2)
         if np.isclose(r, 0):
             return sigma * amp
@@ -48,7 +77,7 @@ class DiskElectrode(Electrode):
 
     Parameters
     ----------
-    x, y, z : double
+    x/y/z : double
         3D location that is the center of the disk electrode
     r : double
         Disk radius in the x,y plane
@@ -73,16 +102,35 @@ class DiskElectrode(Electrode):
 
         Parameters
         ----------
-        x, y, z : double
+        x/y/z : double
             3D location at which to evaluate the electric potential
         v0 : double
             The quasi-static disk potential relative to a ground electrode at
             infinity
+
+        Returns
+        -------
+        pot : double
+            The electric potential at (x, y, z).
+
+
+        The electric potential :math:`V(r,z)` of a disk electrode is given by
+        [WileyWebster1982]_:
+
+        .. math::
+
+            V(r,z) = \\sin^{-1} \\bigg\\{ \\frac{2a}{\\sqrt{(r-a)^2 + z^2} + \\sqrt{(r+a)^2 + z^2}} \\bigg\\} \\times \\frac{2 V_0}{\\pi},
+
+        for :math:`z \\neq 0`, where :math:`r` and :math:`z` are the radial
+        and axial distances from the center of the disk, :math:`V_0` is the
+        disk potential, :math:`\\sigma` is the medium conductivity,
+        and :math:`a` is the disk radius.
+
         """
         radial_dist = np.sqrt((x - self.x) ** 2 + (y - self.y) ** 2)
         axial_dist = z - self.z
         if np.isclose(axial_dist, 0):
-            # Potential on the electrode surface:
+            # Potential on the electrode surface (Eq. 9 in Wiley & Webster):
             if radial_dist > self.r:
                 # Outside the electrode:
                 return 2.0 * v0 / np.pi * np.arcsin(self.r / radial_dist)
@@ -90,7 +138,7 @@ class DiskElectrode(Electrode):
                 # On the electrode:
                 return v0
         else:
-            # Off the electrode surface:
+            # Off the electrode surface (Eq. 10):
             numer = 2 * self.r
             denom = np.sqrt((radial_dist - self.r) ** 2 + axial_dist ** 2)
             denom += np.sqrt((radial_dist + self.r) ** 2 + axial_dist ** 2)
@@ -263,7 +311,7 @@ class ElectrodeGrid(ElectrodeArray):
     --------
     An electrode grid with 2 rows and 4 columns, made of electrodes with 10um
     radius spaced 20um apart, centered at (10, 20)um, and located 500um away
-    from the retinal surface, with names like this: 
+    from the retinal surface, with names like this:
 
         A1 A2 A3 A4
         B1 B2 B3 B4

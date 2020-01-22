@@ -80,11 +80,12 @@ If you use pulse2percept in a scholarly publication, please cite as:
 Installation
 ============
 
-The latest `stable release`_ of pulse2percept can be installed with pip:
+Once you have Python and pip, the latest `stable release`_ of pulse2percept
+can be installed with pip:
 
 .. code-block:: bash
 
-    pip3 install pulse2percept
+    pip3 install -U pulse2percept
 
 In order to get the `bleeding-edge version`_ of pulse2percept, use the
 commands:

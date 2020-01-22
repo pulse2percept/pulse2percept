@@ -1,4 +1,4 @@
-"""This module provides a number of visualization functions.
+"""Various visualization functions.
 
 .. autosummary::
     :toctree: _api

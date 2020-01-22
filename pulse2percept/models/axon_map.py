@@ -1,4 +1,4 @@
-"""This module implements several equations from [Beyeler2019]_."""
+"""AxonMapModel [Beyeler2019]_"""
 
 import os
 import numpy as np

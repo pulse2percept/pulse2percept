@@ -1,7 +1,7 @@
-"""This module provides a number of visual prostheses.
+"""Different retinal prosthetic implants, such as Argus II and Alpha-IMS.
 
 .. autosummary::
-    :toctree: _api
+    : toctree: _api
 
     base
     argus

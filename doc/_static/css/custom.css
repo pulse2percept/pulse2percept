@@ -1,0 +1,27 @@
+/* Numbered Headers */
+body {
+	counter-reset: h1counter;
+}
+h1 {
+	counter-reset: h2counter;
+}
+h2 {
+	counter-reset: h3counter;
+}
+h2:before {
+	content: counter(h2counter) ".\0000a0\0000a0";
+	counter-increment: h2counter;
+}
+h3:before {
+	content: counter(h2counter) "." counter(h3counter) ".\0000a0\0000a0";
+	counter-increment: h3counter;
+}
+
+/* Regular CSS */
+h2 {
+	border-bottom: 1px solid #404040;
+}
+
+p {
+	margin-bottom: 6px;
+}

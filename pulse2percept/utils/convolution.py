@@ -1,7 +1,4 @@
-"""
-convolution
-===========
-"""
+"""conv, center_vector"""
 
 import numpy as np
 from scipy import signal as sps

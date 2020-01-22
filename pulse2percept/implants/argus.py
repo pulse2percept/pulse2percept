@@ -1,3 +1,4 @@
+"""ArgusI, ArgusII"""
 import numpy as np
 import collections as coll
 from .base import (DiskElectrode, ElectrodeArray, ElectrodeGrid,

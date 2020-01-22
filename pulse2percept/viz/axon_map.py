@@ -1,10 +1,4 @@
-"""This module provides a number of visualization functions.
-
-.. autosummary::
-    :toctree: _api
-
-    .
-"""
+"""plot_axon_map, plot_implant_on_axon_map"""
 # https://stackoverflow.com/questions/21784641/installation-issue-with-matplotlib-python
 from sys import platform
 import matplotlib as mpl
