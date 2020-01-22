@@ -1,4 +1,4 @@
-"""This module provides a number of computational models.
+"""Computational models of the retina, such as phosphene and neural response models.
 
 .. autosummary::
     :toctree: _api

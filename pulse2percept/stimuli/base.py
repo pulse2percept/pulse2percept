@@ -1,3 +1,4 @@
+"""Stimulus"""
 import numpy as np
 np.set_printoptions(precision=2, threshold=5, edgeitems=2)
 from copy import deepcopy as cp
@@ -10,8 +11,6 @@ from ..utils import PrettyPrint
 
 class Stimulus(PrettyPrint):
     """Stimulus
-
-    .. versionadded:: 0.6
 
     A stimulus is comprised of a labeled 2-D NumPy array that contains the
     data, where the rows denote electrodes and the columns denote points in
@@ -87,6 +86,8 @@ class Stimulus(PrettyPrint):
 
     extrapolate : bool, optional, default: False
         Whether to extrapolate data points outside the given range.
+
+    .. versionadded:: 0.6
 
     Examples
     --------

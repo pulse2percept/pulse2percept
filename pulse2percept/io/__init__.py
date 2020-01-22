@@ -1,4 +1,4 @@
-"""This module provides functions for I/O.
+"""I/O functions to load/store data as images and videos.
 
 .. autosummary::
     :toctree: _api

@@ -1,8 +1,10 @@
+"""load_video, save_video, video2stim"""
 import numpy as np
 import logging
 
 from .image import image2stim
 from ..stimuli import TimeSeries
+from ..utils import deprecated
 
 # Rather than trying to import these all over, try once and then remember
 # by setting a flag.
@@ -429,6 +431,7 @@ def save_video_sidebyside(videofile, percept, savefile, fps=30,
                libav_path=libav_path)
 
 
+@deprecated(deprecated_version=0.6)
 def video2stim(filename, implant, framerate=20, coding='amplitude',
                valrange=[0, 50], max_contrast=False, const_val=20,
                invert=False, tsample=0.005 / 1000, pulsedur=0.5 / 1000,

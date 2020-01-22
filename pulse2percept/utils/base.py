@@ -1,4 +1,4 @@
-"""Utility functions for pulse2percept"""
+"""PrettyPrint, Frozen, GridXY, gamma, cart2pol, pol2cart"""
 import numpy as np
 import sys
 import abc

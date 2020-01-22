@@ -1,4 +1,4 @@
-"""This module implements several equation from [Watson2014]_."""
+"""Watson2014ConversionMixin, Watson2014DisplacementMixin, ret2dva, dva2ret [Watson2014]_."""
 
 import numpy as np
 import scipy.stats as spst

@@ -1,9 +1,4 @@
-"""
-=======
-testing
-=======
-
-"""
+"""assert_warns_msg"""
 
 import pytest
 import numpy.testing as npt

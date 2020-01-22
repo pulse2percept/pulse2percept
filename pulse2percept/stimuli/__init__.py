@@ -1,4 +1,4 @@
-"""This module provides a number of stimuli.
+"""Common electrical stimuli, such as charge-balanced square-wave pulse trains.
 
 .. autosummary::
     :toctree: _api

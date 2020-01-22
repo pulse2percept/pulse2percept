@@ -1,3 +1,4 @@
+"""image2stim"""
 import numpy as np
 import logging
 # Rather than trying to import these all over, try once and then remember
@@ -13,8 +14,10 @@ except (ImportError, AttributeError):
 
 from ..implants import ArgusI, ArgusII
 from ..stimuli import PulseTrain
+from ..utils import deprecated
 
 
+@deprecated(deprecated_version=0.6)
 def image2stim(img, implant, coding='amplitude', valrange=[0, 50],
                max_contrast=False, const_val=20, invert=False,
                tsample=0.005 / 1000, dur=0.5, pulsedur=0.5 / 1000.,

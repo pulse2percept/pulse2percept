@@ -1,4 +1,4 @@
-"""Alpha IMS"""
+"""Alpha-IMS, Alpha-AMS"""
 import numpy as np
 from collections import OrderedDict
 from .base import DiskElectrode, ElectrodeArray, ElectrodeGrid, ProsthesisSystem

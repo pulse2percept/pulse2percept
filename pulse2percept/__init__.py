@@ -1,10 +1,6 @@
 """
 
-=============
-pulse2percept
-=============
-
-pulse2percept consists of the following subpackages:
+pulse2percept is organized into the following subpackages:
 
 .. autosummary::
     :toctree: _api

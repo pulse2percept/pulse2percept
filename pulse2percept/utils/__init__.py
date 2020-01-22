@@ -1,4 +1,4 @@
-"""This module provides a number of utility functions.
+"""Various utility and helper functions.
 
 .. autosummary::
     :toctree: _api
