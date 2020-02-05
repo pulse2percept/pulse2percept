@@ -283,7 +283,7 @@ def _sparseconv(data, kernel, mode):
     # Add shifted and scaled copies of `kernel` only where `data` is nonzero
     for p in pos:
         out[p:p + kernel_len] = (out[p:p + kernel_len]
-                                + kernel.ravel() * data.ravel()[p])
+                                 + kernel.ravel() * data.ravel()[p])
 
     if mode.lower() == 'full':
         return out
@@ -338,7 +338,7 @@ def sparseconv(data, kernel, mode, use_jit=True):
             e_s = "You do not have numba, please run sparseconv with "
             e_s += "`use_jit`=False."
             raise ImportError(e_s)
-        func_sparseconv = jit(_sparseconv)
+        func_sparseconv = jit(_sparseconv, forceobj=True)
     return func_sparseconv(data, kernel, mode)
 
 
