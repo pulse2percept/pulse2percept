@@ -521,6 +521,7 @@ def test_axon_contribution():
 
 
 # deprecated
+@pytest.mark.xfail
 def test_make_axon_map():
     jan_x, jan_y = retina.jansonius(num_cells=10, num_samples=100)
     xg, yg = np.meshgrid(np.linspace(-100, 100, 21),
