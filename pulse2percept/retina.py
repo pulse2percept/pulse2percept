@@ -508,6 +508,7 @@ class Horsager2009(BaseModel):
 
         # R1 convolved the entire stimulus (with both pos + neg parts)
         r1 = self.tsample * utils.conv(stim, self.gamma1, mode='full',
+                                       use_jit=use_jit,
                                        method='sparse')[:stim.size]
 
         # It's possible that charge accumulation was done on the anodic phase.
@@ -574,12 +575,23 @@ class Nanduri2012(BaseModel):
         self.asymptote = 14.0
         self.slope = 3.0
         self.shift = 16.0
+        self.use_cython = False
 
         # Nanduri (2012) has a term in the stationary nonlinearity step that
         # depends on future values of R3: max_t(R3). Because the finite
         # difference model cannot look into the future, we need to set a
         # scaling factor here:
         self.maxR3 = 100.0
+
+        # perform one-time setup calculations
+        # gamma1 is used for the fast response
+        _, self.gamma1 = utils.gamma(1, self.tau1, self.tsample)
+
+        # gamma2 is used to calculate charge accumulation
+        _, self.gamma2 = utils.gamma(1, self.tau2, self.tsample)
+
+        # gamma3 is used to calculate the slow response
+        _, self.gamma3 = utils.gamma(3, self.tau3, self.tsample)
 
         # Overwrite any given keyword arguments, print warning message (True)
         # if attempting to set an unrecognized keyword
@@ -633,12 +645,35 @@ class Nanduri2012(BaseModel):
             raise ValueError("Acceptable values for `layers` are: 'GCL', "
                              "'OFL'.")
 
-        pulse = self.calc_layer_current(in_arr, pt_list)
-        percept = fr.nanduri2012_model_cascade(pulse, self.tsample,
-                                               self.tau1, self.tau2, self.tau3,
-                                               self.asymptote, self.shift,
-                                               self.slope, self.eps,
-                                               self.maxR3)
+        b1 = self.calc_layer_current(in_arr, pt_list)
+        if self.use_cython:
+            percept = fr.nanduri2012_model_cascade(b1, self.tsample,
+                                                   self.tau1, self.tau2,
+                                                   self.tau3,
+                                                   self.asymptote, self.shift,
+                                                   self.slope, self.eps,
+                                                   self.maxR3)
+        else:
+            # Fast response
+            b2 = self.tsample * utils.conv(-b1, self.gamma1, mode='full',
+                                           method='sparse',
+                                           use_jit=use_jit)[:b1.size]
+
+            # Charge accumulation
+            ca = self.tsample * np.cumsum(np.maximum(0, b1))
+            ca = self.tsample * utils.conv(ca, self.gamma2, mode='full',
+                                           method='fft')[:b1.size]
+            b3 = np.maximum(0, b2 - self.eps * ca)
+
+            # Stationary nonlinearity
+            b3max = b3.max()
+            sigmoid = ss.expit((b3max - self.shift) / self.slope)
+            b4 = b3 / b3max * sigmoid * self.asymptote
+
+            # Slow response
+            percept = self.tsample * utils.conv(b4, self.gamma3, mode='full',
+                                                method='fft')[:b1.size]
+
         return utils.TimeSeries(self.tsample, percept)
 
 
@@ -1416,9 +1451,9 @@ def jansonius(num_cells=500, num_samples=801, center=np.array([15, 2]),
 
     #  rotate about the optic disc and scale
     x = scale * (np.cos(rot) * (xmodel - center[0]) + np.sin(rot)
-                * (ymodel - center[1])) + center[0]
+                 * (ymodel - center[1])) + center[0]
     y = scale * (-np.sin(rot) * (xmodel - center[0]) + np.cos(rot)
-                * (ymodel - center[1])) + center[1]
+                 * (ymodel - center[1])) + center[1]
 
     return x, y
 
