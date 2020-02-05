@@ -1,8 +1,9 @@
 trigger:
-  # Whenever someone pushes to master:
+  # Whenever someone pushes to master or stable:
   branches:
     include:
     - master
+    - stable
   # Whenever a tag is pushed:
   tags:
     include:
@@ -10,7 +11,7 @@ trigger:
 
 pr:
 - master
-- develop
+- stable
 
 variables:
   # Install p2p in Docker container
