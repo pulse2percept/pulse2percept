@@ -347,18 +347,20 @@ class ElectrodeGrid(ElectrodeArray):
     * Allow user-specified electrode types (see :issue:`122`).
 
     """
-
-    def __init__(self, shape, x=0, y=0, z=0, rot=0, r=10, spacing=None,
-                 names=('A', '1')):
+    
+    def __init__(self, shape, x=0, y=0, z=0, rot=0, r = 10, spacing=None,
+                 names=('A', '1'), electrode_type = 'DiskElectrode'): # the default electrode type is DiskElectrode
         if not isinstance(names, (tuple, list, np.ndarray)):
             raise TypeError("'names' must be a tuple/list of (rows, cols)")
-
         if not isinstance(shape, (tuple, list, np.ndarray)):
             raise TypeError("'shape' must be a tuple/list of (rows, cols)")
         if len(shape) != 2:
             raise ValueError("'shape' must have two elements: (rows, cols)")
         if np.prod(shape) <= 0:
             raise ValueError("Grid must have all non-zero rows and columns.")
+        if electrode_type != 'DiskElectrode' and electrode_type != "PointSource": # check the value of the electrode_type
+            raise ValueError("'electrode_type' must be either 'DiskElectrode' or 'PointSource' ")
+
         # Extract rows and columns from shape:
         self.shape = shape
         self.x = x
@@ -367,6 +369,7 @@ class ElectrodeGrid(ElectrodeArray):
         self.rot = rot
         self.r = r
         self.spacing = spacing
+        self.electrode_type = electrode_type # add electrode_type variable under the class
         if len(names) == 2:
             self.name_rows, self.name_cols = names
         self.names = names
@@ -374,6 +377,7 @@ class ElectrodeGrid(ElectrodeArray):
         # populated in a private method ``_set_egrid``:
         self.electrodes = coll.OrderedDict()
         self._set_grid()
+    
 
     def get_params(self):
         """Return a dictionary of class attributes"""
@@ -504,9 +508,14 @@ class ElectrodeGrid(ElectrodeArray):
         x_arr += self.x
         y_arr += self.y
 
-        # TODO parameterize the type of electrode
-        for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
-            self.add_electrode(name, DiskElectrode(x, y, z, r))
+        
+        if self.electrode_type == 'DiskElectrode':
+            for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
+                self.add_electrode(name, DiskElectrode(x, y, z, r))
+        # when the electrode type is PointSource
+        else:
+            for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
+                self.add_electrode(name, PointSource(x, y, z))    
 
 
 class ProsthesisSystem(PrettyPrint):
