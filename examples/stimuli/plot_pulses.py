@@ -19,6 +19,8 @@ Multiple pulses can form a pulse train.
 
 
 """
+# sphinx_gallery_thumbnail_number = 7
+
 ##############################################################################
 # Simplest stimulus
 # ---------------------
@@ -116,7 +118,7 @@ biphasic_stim = Stimulus(BiphasicPulse(ptype=pulse_type, pdur=pulse_dur,
 # and biphasic pulse:
 
 # Create a figure with two subplots
-fig, axes = plt.subplots(1, 2, figsize=(20, 10))
+fig, axes = plt.subplots(1, 2, figsize=(8, 5))
 
 # First, plot monophasic pulse
 axes[0].plot(monophasic_stim.time, monophasic_stim.data[0])
@@ -138,7 +140,7 @@ ax.set_ylabel('Amplitude ($\mu$A)')
 # We have two options: either change the values of the ``data`` array directly:
 
 # get the data structure by indexing the electrode at 0
-monophasic_stim.data[0] = 10*monophasic_stim.data[0]
+monophasic_stim.data[0] = 10 * monophasic_stim.data[0]
 print(monophasic_stim)
 
 ###############################################################################
@@ -150,7 +152,7 @@ monophasic_stim = Stimulus(MonophasicPulse(ptype='anodic', pdur=pulse_dur,
                                            delay_dur=delay_dur,
                                            stim_dur=stim_dur,
                                            tsample=time_step))
-monophasic_stim.data[0] = 10*np.ones_like(monophasic_stim.data[0])
+monophasic_stim.data[0] = 10 * np.ones_like(monophasic_stim.data[0])
 print(monophasic_stim)
 
 ###############################################################################
@@ -165,20 +167,20 @@ length = len(biphasic_stim.data[0])
 print(length)
 
 # Find the halfway where cathodic turns into anodic pulse
-half = int(len(biphasic_stim.data[0])/2)
+half = int(len(biphasic_stim.data[0]) / 2)
 print("Halfway index is", half)
 
 # change the first half of the pulse to be 5 times larger
-biphasic_stim.data[0][0:half] = 5*biphasic_stim.data[0][0:half]
+biphasic_stim.data[0][0:half] = 5 * biphasic_stim.data[0][0:half]
 
 # change the second half to be 20 times larger
-biphasic_stim.data[0][half:length] = 20*biphasic_stim.data[0][half:length]
+biphasic_stim.data[0][half:length] = 20 * biphasic_stim.data[0][half:length]
 
 ###############################################################################
 # Let's plot the monophasic and biphasic pulses again:
 
 # Create a figure with two subplots
-fig, axes = plt.subplots(nrows=2, figsize=(25, 15))
+fig, axes = plt.subplots(ncols=2, figsize=(8, 5))
 
 # First, plot monophasic pulse
 axes[0].plot(monophasic_stim.time, monophasic_stim.data[0])
@@ -194,7 +196,7 @@ fig.tight_layout()
 ###############################################################################
 # Generating standard pulse trains
 # ----------------------------------
-# The easiest way to generate a pulse train is to use the 
+# The easiest way to generate a pulse train is to use the
 # :py:class:`~pulse2percept.stimuli.PulseTrain` object, which allows for
 # various stimulus attributes to be specified:
 
