@@ -1,4 +1,4 @@
-"""ScoreboardModel"""
+"""`ScoreboardModel`"""
 import numpy as np
 from ..models import BaseModel, Watson2014ConversionMixin
 from ..models._scoreboard import scoreboard

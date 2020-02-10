@@ -4,12 +4,16 @@
 Installation
 ============
 
-pulse2percept is in active development.
-To get the latest stable version, we recommend installing our
-:ref:`latest release <install-release>`.
-If you wish to :ref:`contribute to the project <dev-contributing>` or require
-the bleeding-edge version, you will want to install
-:ref:`from source <install-source>` instead.
+Because pulse2percept is in active development, there are at least two versions
+to choose from:
+
+-  ``stable``: Our :ref:`stable release <install-release>` can be installed via
+   pip (see `docs <https://pulse2percept.readthedocs.io/en/stable>`_,
+   `code <https://github.com/pulse2percept/pulse2percept/tree/stable>`_).
+-  ``latest``: Our bleeding-edge version must be installed 
+   :ref:`from source <install-source>`, and may contain experimental features
+   (see `docs <https://pulse2percept.readthedocs.io/en/latest/>`_,
+   `code <https://github.com/pulse2percept/pulse2percept/tree/master>`_).
 
 .. note::
 
@@ -61,10 +65,10 @@ If you don't have pip, do the following:
 
 .. _install-release:
 
-Installing the latest pulse2percept release
+Installing the stable pulse2percept release
 ===========================================
 
-After :ref:`installing Python <install-python>` above, the latest pulse2percept
+After :ref:`installing Python <install-python>` above, the stable pulse2percept
 release can be installed with pip:
 
 .. code-block:: bash
@@ -83,14 +87,20 @@ Then from any Python console or script, try:
 
     import pulse2percept as p2p
 
+.. important::
+
+    Make sure you are reading the right version of the documentation:
+    https://pulse2percept.readthedocs.io/en/stable
+    (<-- "stable", not "latest").
+
 .. note::
 
     Find out what's new in the :ref:`Release Notes <users-release-notes>`.
 
 .. _install-source:
 
-Installing from source
-======================
+Installing version |version| from source
+========================================
 
 .. _install-source-prerequisites:
 
@@ -219,6 +229,12 @@ Then from any Python console or script, try:
 
     import pulse2percept as p2p
 
+.. important::
+
+    Make sure you are reading the right version of the documentation:
+    https://pulse2percept.readthedocs.io/en/latest
+    (<-- "latest", not "stable").
+
 Building with make
 ------------------
 
@@ -239,9 +255,9 @@ Upgrading pulse2percept
 =======================
 
 If you have previously installed pulse2percept, but wish to upgrade to the
-latest version, you have two options.
+newest release, you have two options.
 
-To upgrade to the latest stable release, use the ``-U`` option with pip:
+To upgrade to the newest stable release, use the ``-U`` option with pip:
 
 .. code-block:: bash
 
@@ -275,6 +291,8 @@ You can uninstall pulse2percept using pip:
 .. code-block:: python
 
    pip3 uninstall pulse2percept
+
+This works for both stable and latest releases.
 
 In addition, if you installed :ref:`from source <install-source>`, you may want
 to manually delete the directory where you cloned the git repository that

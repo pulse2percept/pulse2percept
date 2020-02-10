@@ -1,4 +1,4 @@
-"""Electrode, ElectrodeArray, ElectrodeGrid, ProsthesisSystem"""
+"""`Electrode`, `ElectrodeArray`, `ElectrodeGrid`, `ProsthesisSystem`"""
 import numpy as np
 from abc import ABCMeta, abstractmethod
 import collections as coll
