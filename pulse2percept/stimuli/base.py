@@ -1,4 +1,4 @@
-"""Stimulus"""
+"""`Stimulus`"""
 import numpy as np
 np.set_printoptions(precision=2, threshold=5, edgeitems=2)
 from copy import deepcopy as cp
