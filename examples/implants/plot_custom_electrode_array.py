@@ -110,9 +110,9 @@ print(earray)
 
 earray[0]
 
-earray['A1']
+earray['A0']
 
-earray[0] == earray['A1']
+earray[0] == earray['A0']
 
 ##############################################################################
 # Visualizing the electrode array
