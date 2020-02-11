@@ -43,6 +43,7 @@ the equation above (here set to 100 micrometers and 200 micrometers,
 respectively):
 
 """
+# sphinx_gallery_thumbnail_number = 2
 
 from pulse2percept.models import AxonMapModel
 model = AxonMapModel(rho=100, axlambda=200)
