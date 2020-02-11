@@ -348,8 +348,8 @@ class ElectrodeGrid(ElectrodeArray):
 
     """
     
-    def __init__(self, shape, x=0, y=0, z=0, rot=0, r = 10, spacing=None,
-                 names=('A', '1'), electrode_type = 'DiskElectrode'): # the default electrode type is DiskElectrode
+    def __init__(self, shape, x=0, y=0, z=0, rot=0, spacing=None,
+                 names=('A', '1'), electrode_type = 'DiskElectrode', electrode_kwargs=None): # the default electrode type is DiskElectrode
         if not isinstance(names, (tuple, list, np.ndarray)):
             raise TypeError("'names' must be a tuple/list of (rows, cols)")
         if not isinstance(shape, (tuple, list, np.ndarray)):
@@ -360,14 +360,25 @@ class ElectrodeGrid(ElectrodeArray):
             raise ValueError("Grid must have all non-zero rows and columns.")
         if electrode_type != 'DiskElectrode' and electrode_type != "PointSource": # check the value of the electrode_type
             raise ValueError("'electrode_type' must be either 'DiskElectrode' or 'PointSource' ")
+        if electrode_type == 'DiskElectrode':
+            if electrode_kwargs is None:
+                raise NotImplementedError
+            elif not isinstance(electrode_kwargs, dict):
+                raise TypeError("'electrode_kwargs' must be a dict")
+            elif 'r' not in electrode_kwargs:
+                raise NotImplementedError
+            elif 'r' in electrode_kwargs and electrode_kwargs['r'] <= 0:
+                raise ValueError("The radius of the DiskElectrode 'r' must be positive")
+
 
         # Extract rows and columns from shape:
         self.shape = shape
         self.x = x
         self.y = y
         self.z = z
+        if(electrode_kwargs is not None):
+            self.r = electrode_kwargs['r']
         self.rot = rot
-        self.r = r
         self.spacing = spacing
         self.electrode_type = electrode_type # add electrode_type variable under the class
         if len(names) == 2:
@@ -381,10 +392,13 @@ class ElectrodeGrid(ElectrodeArray):
 
     def get_params(self):
         """Return a dictionary of class attributes"""
-        return {'shape': self.shape,
+        params = {'shape': self.shape,
                 'x': self.x, 'y': self.y, 'z': self.z,
-                'rot': self.rot, 'r': self.r, 'spacing': self.spacing,
+                'rot': self.rot, 'spacing': self.spacing,
                 'name_cols': self.name_cols, 'name_rows': self.name_rows}
+        if(self.electrode_type == 'DiskElectrode'):
+            params.update({'r':self.r})
+        return params
 
     def __getitem__(self, item):
         """Access electrode(s) in the grid
@@ -465,29 +479,35 @@ class ElectrodeGrid(ElectrodeArray):
                                  "%d)." % (n_elecs, len(self.names)))
             names = self.names
 
-        if isinstance(self.r, (list, np.ndarray)):
-            # Specify different radius for every electrode in a list:
-            if len(self.r) != n_elecs:
-                raise ValueError("If `r` is a list, it must have %d entries, "
-                                 "not %d)." % (n_elecs, len(self.r)))
-            r_arr = self.r
-        else:
-            # If `r` is a scalar, choose same radius for all electrodes:
-            r_arr = np.ones(n_elecs, dtype=float) * self.r
+        if self.electrode_type == 'DiskElectrode':
+            if isinstance(self.r, (list, np.ndarray)):
+                # Specify different radius for every electrode in a list:
+                if len(self.r) != n_elecs:
+                    raise ValueError("If `r` is a list, it must have %d entries, "
+                                    "not %d)." % (n_elecs, len(self.r)))
+                r_arr = self.r
+            else:
+                # If `r` is a scalar, choose same radius for all electrodes:
+                r_arr = np.ones(n_elecs, dtype=float) * self.r
 
         if isinstance(self.z, (list, np.ndarray)):
             # Specify different height for every electrode in a list:
             z_arr = np.asarray(self.z).flatten()
-            if z_arr.size != len(r_arr):
+            if z_arr.size != n_elecs:
                 raise ValueError("If `h` is a list, it must have %d entries, "
                                  "not %d." % (n_elecs, len(self.z)))
         else:
             # If `z` is a scalar, choose same height for all electrodes:
-            z_arr = np.ones_like(r_arr) * self.z
+            z_arr = np.ones(n_elecs, dtype=float) * self.z
 
-        # If spacing is None, choose 2x radius:
+        # If spacing is None:
         if self.spacing is None:
-            self.spacing = 2.0 * self.r
+            # If the electrode_type is "DiskElectrode", choose 2 * radius as the spacing
+            if self.electrode_type == "DiskElectrode":
+                self.spacing = 2.0 * self.r
+            # If the electrode_type is "PointSource", choose 20.0 as the spacing
+            elif self.electrode_type == "PointSource":
+                self.spacing = 20.0
 
         # Make a 2D meshgrid from x, y coordinates:
         # For example, cols=3 with spacing=100 should give: [-100, 0, 100]
@@ -513,7 +533,7 @@ class ElectrodeGrid(ElectrodeArray):
             for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
                 self.add_electrode(name, DiskElectrode(x, y, z, r))
         # when the electrode type is PointSource
-        else:
+        elif self.electrode_type == 'PointSource':
             for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
                 self.add_electrode(name, PointSource(x, y, z))    
 
