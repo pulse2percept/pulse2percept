@@ -27,35 +27,6 @@ all of its electrodes in a circle.
 
 To do this, we need to create a new class ``CircleElectrodeArray`` that is
 a child of :py:class:`~pulse2percept.implants.ElectrodeArray`:
-<<<<<<< HEAD
-
-.. code-block:: python
-
-    class CircleElectrodeArray(ElectrodeArray):
-        """Electrodes arranged in a circle"""
-        ...
-        
-This way, the ``CircleElectrodeArray`` class can access all public methods
-of :py:class:`~pulse2percept.implants.ElectrodeArray`.
-
-The constructor then has the job of creating all electrodes in the array
-and placing them at the appropriate location; for example, by using the
-:py:func:`~pulse2percept.implants.ElectrodeArray.add_electrodes` method.
-
-The constructor of the class should accept a number of arguments:
-
-- ``n_electrodes``: how many electrodes to arrange in a circle
-- ``radius``: the radius of the circle
-- ``x_center``: the x-coordinate of the center of the circle
-- ``y_center``: the y-coordinate of the center of the circle
-
-For simplicity, we will use :py:class:`~pulse2percept.implants.DiskElectrode`
-objects of a given radius (100um), although it would be relatively straightforward
-to allow the user to choose the electrode type.
-
-"""
-
-=======
 """
 
 ##############################################################################
@@ -83,7 +54,6 @@ to allow the user to choose the electrode type.
 # objects of a given radius (100um), although it would be relatively straightforward
 # to allow the user to choose the electrode type.
 
->>>>>>> 020eff6c1f634f5483eb5074eb4696e7cd4dc142
 from pulse2percept.implants import ElectrodeArray, DiskElectrode
 import collections as coll
 import numpy as np
@@ -140,15 +110,9 @@ print(earray)
 
 earray[0]
 
-<<<<<<< HEAD
-earray['A1']
-
-earray[0] == earray['A1']
-=======
 earray['A0']
 
 earray[0] == earray['A0']
->>>>>>> 020eff6c1f634f5483eb5074eb4696e7cd4dc142
 
 ##############################################################################
 # Visualizing the electrode array
