@@ -32,8 +32,8 @@ where :math:`\\rho` is the spatial decay constant.
 
 The scoreboard model can be instantiated and run in three simple steps.
 
-1. Creating the model
----------------------
+Creating the model
+------------------
 
 The first step is to instantiate the
 :py:class:`~pulse2percept.models.ScoreboardModel` class by calling its
@@ -102,8 +102,8 @@ model.build()
 #     of stimuli -- or even apply the model to different implants -- without
 #     having to rebuild (which takes time).
 #
-# 2. Assigning a stimulus
-# -----------------------
+# Assigning a stimulus
+# --------------------
 # The second step is to specify a visual prosthesis from the
 # :py:mod:`~pulse2percept.implants` module.
 #
@@ -132,8 +132,8 @@ implant.stim = 10 * np.ones(60)
 #     Some models can handle stimuli that have both a spatial and a temporal
 #     component. the scoreboard model cannot.
 #
-# 3. Predicting the percept
-# -------------------------
+# Predicting the percept
+# ----------------------
 # The third step is to apply the model to predict the percept resulting from
 # the specified stimulus. Note that this may take some time on your machine:
 

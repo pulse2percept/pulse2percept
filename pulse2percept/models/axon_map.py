@@ -1,4 +1,4 @@
-"""AxonMapModel [Beyeler2019]_"""
+"""`AxonMapModel`"""
 
 import os
 import numpy as np

@@ -1,4 +1,4 @@
-"""deprecated, is_deprecated"""
+"""`deprecated`, `is_deprecated`"""
 
 import sys
 import warnings

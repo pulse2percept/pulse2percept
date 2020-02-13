@@ -27,32 +27,32 @@ all of its electrodes in a circle.
 
 To do this, we need to create a new class ``CircleElectrodeArray`` that is
 a child of :py:class:`~pulse2percept.implants.ElectrodeArray`:
-
-.. code-block:: python
-
-    class CircleElectrodeArray(ElectrodeArray):
-        """Electrodes arranged in a circle"""
-        ...
-        
-This way, the ``CircleElectrodeArray`` class can access all public methods
-of :py:class:`~pulse2percept.implants.ElectrodeArray`.
-
-The constructor then has the job of creating all electrodes in the array
-and placing them at the appropriate location; for example, by using the
-:py:func:`~pulse2percept.implants.ElectrodeArray.add_electrodes` method.
-
-The constructor of the class should accept a number of arguments:
-
-- ``n_electrodes``: how many electrodes to arrange in a circle
-- ``radius``: the radius of the circle
-- ``x_center``: the x-coordinate of the center of the circle
-- ``y_center``: the y-coordinate of the center of the circle
-
-For simplicity, we will use :py:class:`~pulse2percept.implants.DiskElectrode`
-objects of a given radius (100um), although it would be relatively straightforward
-to allow the user to choose the electrode type.
-
 """
+
+##############################################################################
+# .. code-block:: python
+#
+#     class CircleElectrodeArray(ElectrodeArray):
+#         """Electrodes arranged in a circle"""
+#         ...
+#        
+# This way, the ``CircleElectrodeArray`` class can access all public methods
+# of :py:class:`~pulse2percept.implants.ElectrodeArray`.
+#
+# The constructor then has the job of creating all electrodes in the array
+# and placing them at the appropriate location; for example, by using the
+# :py:func:`~pulse2percept.implants.ElectrodeArray.add_electrodes` method.
+#
+# The constructor of the class should accept a number of arguments:
+#
+# - ``n_electrodes``: how many electrodes to arrange in a circle
+# - ``radius``: the radius of the circle
+# - ``x_center``: the x-coordinate of the center of the circle
+# - ``y_center``: the y-coordinate of the center of the circle
+#
+# For simplicity, we will use :py:class:`~pulse2percept.implants.DiskElectrode`
+# objects of a given radius (100um), although it would be relatively straightforward
+# to allow the user to choose the electrode type.
 
 from pulse2percept.implants import ElectrodeArray, DiskElectrode
 import collections as coll
@@ -110,9 +110,9 @@ print(earray)
 
 earray[0]
 
-earray['A1']
+earray['A0']
 
-earray[0] == earray['A1']
+earray[0] == earray['A0']
 
 ##############################################################################
 # Visualizing the electrode array
