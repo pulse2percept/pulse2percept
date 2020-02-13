@@ -1,4 +1,4 @@
-"""load_video, save_video, video2stim"""
+"""`load_video`, `save_video`, `video2stim`"""
 import numpy as np
 import logging
 

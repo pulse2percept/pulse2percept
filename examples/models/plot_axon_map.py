@@ -32,8 +32,8 @@ exponentially:
 
 The axon map model can be instantiated and run in three steps.
 
-1. Creating the model
----------------------
+Creating the model
+------------------
 
 The first step is to instantiate the
 :py:class:`~pulse2percept.models.AxonMapModel` class by calling its
@@ -43,6 +43,7 @@ the equation above (here set to 100 micrometers and 200 micrometers,
 respectively):
 
 """
+# sphinx_gallery_thumbnail_number = 2
 
 from pulse2percept.models import AxonMapModel
 model = AxonMapModel(rho=100, axlambda=200)
@@ -116,8 +117,8 @@ model.build()
 #     of stimuli -- or even apply the model to different implants -- without
 #     having to rebuild (which takes time).
 #
-# 2. Assigning a stimulus
-# -----------------------
+# Assigning a stimulus
+# --------------------
 # The second step is to specify a visual prosthesis from the
 # :py:mod:`~pulse2percept.implants` module.
 #
@@ -154,8 +155,8 @@ import numpy as np
 implant.stim = np.ones(60)
 
 ##############################################################################
-# 3. Predicting the percept
-# -------------------------
+# Predicting the percept
+# ----------------------
 # The third step is to apply the model to predict the percept resulting from
 # the specified stimulus. Note that this may take some time on your machine:
 

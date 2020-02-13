@@ -1,4 +1,4 @@
-"""Electrode, ElectrodeArray, ElectrodeGrid, ProsthesisSystem"""
+"""`Electrode`, `ElectrodeArray`, `ElectrodeGrid`, `ProsthesisSystem`"""
 import numpy as np
 from abc import ABCMeta, abstractmethod
 import collections as coll
@@ -349,7 +349,7 @@ class ElectrodeGrid(ElectrodeArray):
     """
     
     def __init__(self, shape, x=0, y=0, z=0, rot=0, spacing=None,
-                 names=('A', '1'), electrode_type = 'DiskElectrode', electrode_kwargs=None): # the default electrode type is DiskElectrode
+                 names=('A', '1'), electrode_type ='DiskElectrode', electrode_kwargs=None): # the default electrode type is DiskElectrode
         if not isinstance(names, (tuple, list, np.ndarray)):
             raise TypeError("'names' must be a tuple/list of (rows, cols)")
         if not isinstance(shape, (tuple, list, np.ndarray)):
@@ -367,6 +367,9 @@ class ElectrodeGrid(ElectrodeArray):
                 raise TypeError("'electrode_kwargs' must be a dict")
             elif 'r' not in electrode_kwargs:
                 raise NotImplementedError
+            elif 'r' in electrode_kwargs and isinstance(electrode_kwargs['r'], (tuple, list, np.ndarray)):
+                if all(i <= 0 for i in electrode_kwargs['r']):
+                    raise ValueError("The radius of the DiskElectrode 'r' must be positive")
             elif 'r' in electrode_kwargs and electrode_kwargs['r'] <= 0:
                 raise ValueError("The radius of the DiskElectrode 'r' must be positive")
 

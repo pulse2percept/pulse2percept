@@ -252,6 +252,10 @@ def test_ElectrodeGrid():
         ElectrodeGrid(shape, electrode_kwargs={'r':-1})
     with pytest.raises(ValueError):
         ElectrodeGrid(shape, electrode_kwargs={'r':-30})
+    with pytest.raises(ValueError):
+        ElectrodeGrid(shape, electrode_kwargs={'r':[1,2,-3,2]})
+    with pytest.raises(ValueError):
+        ElectrodeGrid(shape, electrode_kwargs={'r':(1,2,-3,2)})
     
 
 

@@ -1,4 +1,4 @@
-"""parfor"""
+"""`parfor`"""
 import numpy as np
 import multiprocessing
 import joblib

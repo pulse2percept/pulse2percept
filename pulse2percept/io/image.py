@@ -1,4 +1,4 @@
-"""image2stim"""
+"""`image2stim`"""
 import numpy as np
 import logging
 # Rather than trying to import these all over, try once and then remember

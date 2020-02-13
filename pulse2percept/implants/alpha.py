@@ -1,4 +1,4 @@
-"""Alpha-IMS, Alpha-AMS"""
+"""`AlphaIMS`, `AlphaAMS`"""
 import numpy as np
 from collections import OrderedDict
 from .base import DiskElectrode, ElectrodeArray, ElectrodeGrid, ProsthesisSystem
@@ -7,7 +7,7 @@ from .base import DiskElectrode, ElectrodeArray, ElectrodeGrid, ProsthesisSystem
 class AlphaIMS(ProsthesisSystem):
     """Alpha IMS
 
-    This function creates an AlphaIMS array and places it on the retina
+    This class creates an AlphaIMS array and places it on the retina
     such that the center of the array is located at (x,y,z), given in
     microns, and the array is rotated by rotation angle ``rot``, given in
     radians.
@@ -66,7 +66,8 @@ class AlphaIMS(ProsthesisSystem):
         elec_radius = 50
         e_spacing = 72  # um
         self.earray = ElectrodeGrid(self.shape, x=x, y=y, z=z, rot=rot,
-                                    r=elec_radius, spacing=e_spacing)
+                                    spacing=e_spacing, electrode_type='DiskElectrode',
+                                    electrode_kwargs={'r':elec_radius})
 
         # Set stimulus if available:
         self.stim = stim
@@ -102,7 +103,7 @@ class AlphaIMS(ProsthesisSystem):
 class AlphaAMS(ProsthesisSystem):
     """Alpha AMS
 
-    This function creates an AlphaAMS array and places it below the retina
+    This class creates an AlphaAMS array and places it below the retina
     such that the center of the array is located at (x,y,z), given in
     microns, and the array is rotated by rotation angle ``rot``, given in
     radians.
@@ -162,7 +163,8 @@ class AlphaAMS(ProsthesisSystem):
         e_spacing = 70  # um
 
         self.earray = ElectrodeGrid(self.shape, x=x, y=y, z=z, rot=rot,
-                                    r=elec_radius, spacing=e_spacing)
+                                    spacing=e_spacing, electrode_type='DiskElectrode',
+                                    electrode_kwargs={'r':elec_radius})
 
         # Set stimulus if available:
         self.stim = stim

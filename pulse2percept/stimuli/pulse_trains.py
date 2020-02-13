@@ -1,4 +1,4 @@
-"""TimeSeries, MonophasicPulse, BiphasicPulse, PulseTrain"""
+"""`TimeSeries`, `MonophasicPulse`, `BiphasicPulse`, `PulseTrain`"""
 import numpy as np
 import copy
 import logging
