@@ -65,9 +65,9 @@ class AlphaIMS(ProsthesisSystem):
         self.shape = (37, 37)
         elec_radius = 50
         e_spacing = 72  # um
-        self.earray = ElectrodeGrid(self.shape, x=x, y=y, z=z, rot=rot,
-                                    spacing=e_spacing, electrode_type='DiskElectrode',
-                                    electrode_kwargs={'r':elec_radius})
+        self.earray = ElectrodeGrid(self.shape, e_spacing, x=x, y=y, z=z,
+                                    rot=rot, etype=DiskElectrode,
+                                    r=elec_radius)
 
         # Set stimulus if available:
         self.stim = stim
@@ -162,9 +162,9 @@ class AlphaAMS(ProsthesisSystem):
         elec_radius = 15
         e_spacing = 70  # um
 
-        self.earray = ElectrodeGrid(self.shape, x=x, y=y, z=z, rot=rot,
-                                    spacing=e_spacing, electrode_type='DiskElectrode',
-                                    electrode_kwargs={'r':elec_radius})
+        self.earray = ElectrodeGrid(self.shape, e_spacing, x=x, y=y, z=z,
+                                    rot=rot, etype=DiskElectrode,
+                                    r=elec_radius)
 
         # Set stimulus if available:
         self.stim = stim
