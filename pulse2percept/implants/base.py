@@ -368,8 +368,6 @@ class ElectrodeGrid(ElectrodeArray):
         self.x = x
         self.y = y
         self.z = z
-        if(electrode_kwargs is not None):
-            self.r = electrode_kwargs['r']
         self.rot = rot
         self.spacing = spacing
         self.etype = etype  # add etype variable under the class
@@ -381,7 +379,6 @@ class ElectrodeGrid(ElectrodeArray):
         # populated in a private method ``_set_egrid``:
         self.electrodes = coll.OrderedDict()
         self._set_grid()
-    
 
     def get_params(self):
         """Return a dictionary of class attributes"""

@@ -220,58 +220,22 @@ def test_ElectrodeGrid():
     with pytest.raises(ValueError):
         ElectrodeGrid(gshape, spacing, etype=DiskElectrode, radius=[2, 13])
 
-    # Must pass in DiskElectrode or PointSource for grid electrode_type
-    shape = (2, 3)
-    with pytest.raises(ValueError):
-        ElectrodeGrid(shape, electrode_type='abcd')
-    with pytest.raises(ValueError):
-        ElectrodeGrid(shape, electrode_type='diskElectrode')
-    with pytest.raises(ValueError):
-        ElectrodeGrid(shape, electrode_type='pointsource')
-    with pytest.raises(ValueError):
-        ElectrodeGrid(shape, electrode_type='pointSource')
-
-    # Must pass in dict of {'r': radius} for grid electrode_kwargs when the
-    # electrode_type is 'DiskElectrode' ('DiskElectrode' is the default value
-    # of electrode_type)
-    shape = (4, 5)
+    # Must pass in valid Electrode type:
     with pytest.raises(TypeError):
-        ElectrodeGrid(shape, electrode_kwargs=[1])
+        ElectrodeGrid((2, 3), 10, etype=ElectrodeArray)
     with pytest.raises(TypeError):
-        ElectrodeGrid(shape, electrode_kwargs=10)
-    with pytest.raises(TypeError):
-        ElectrodeGrid(shape, electrode_kwargs='DiskElectrode')
-    with pytest.raises(TypeError):
-        ElectrodeGrid(shape, electrode_kwargs=(1,2))
-    with pytest.raises(NotImplementedError):
-        ElectrodeGrid(shape)
+        ElectrodeGrid((2, 3), 10, etype="foo")
 
-    # The key of the radius in the dict for grid electrode_kwargs must be 'r'
-    shape = (5, 6)
-    with pytest.raises(NotImplementedError):
-        ElectrodeGrid(shape, electrode_kwargs={'a':6})
-    with pytest.raises(NotImplementedError):
-        ElectrodeGrid(shape, electrode_kwargs={'absd':8})
-    with pytest.raises(NotImplementedError):
-        ElectrodeGrid(shape, electrode_kwargs={'R':6})
-    
-    # Must pass in positive radius in the dict of {'r': radius} for 
-    # grid electrode_kwargs when the electrode_type is 'DiskElectrode' 
-    # ('DiskElectrode' is the default value of electrode_type)
-    shape = (4, 5)
+    # Must pass in radius `r` for grid of DiskElectrode objects:
+    gshape = (4, 5)
+    spacing = 100
     with pytest.raises(ValueError):
-        ElectrodeGrid(shape, electrode_kwargs={'r':0})
+        ElectrodeGrid(gshape, spacing, etype=DiskElectrode)
     with pytest.raises(ValueError):
-        ElectrodeGrid(shape, electrode_kwargs={'r':-1})
+        ElectrodeGrid(gshape, spacing, etype=DiskElectrode, radius=10)
+    # Number of radii must match number of electrodes
     with pytest.raises(ValueError):
-        ElectrodeGrid(shape, electrode_kwargs={'r':-30})
-    with pytest.raises(ValueError):
-        ElectrodeGrid(shape, electrode_kwargs={'r':[1,2,-3,2]})
-    with pytest.raises(ValueError):
-        ElectrodeGrid(shape, electrode_kwargs={'r':(1,2,-3,2)})
-    
-
-
+        ElectrodeGrid(gshape, spacing, etype=DiskElectrode, radius=[2, 13])
 
     # A valid 2x5 grid centered at (0, 500):
     x, y = 0, 500
@@ -378,43 +342,35 @@ def test_ElectrodeGrid():
     npt.assert_equal([e for e in egrid.keys()],
                      ['53', '18', '00', '81', '11', '12'])
 
-    # Test whether egrid.spacing is set correctly, when spacing is None
-    # When the electrode_type is 'DiskElectrode'
-    shape = (2,3)
-    radius = {'r':30}
-    egrid = ElectrodeGrid(shape, electrode_kwargs=radius)
-    npt.assert_equal(egrid.get_params()['spacing'], 2 * radius['r'])
-    # When the electrode_type is 'PointSource'
-    egrid = ElectrodeGrid(shape, electrode_type='PointSource')
-    npt.assert_equal(egrid.get_params()['spacing'], 20.0)
-
 
 def test_ElectrodeGrid_get_params():
     # When the electrode_type is 'DiskElectrode'
     # test the default value
-    egrid = ElectrodeGrid((2,3), electrode_kwargs={'r':20})
-    params = {'shape': (2,3), 'x': 0, 'y': 0, 'z': 0,
-            'rot': 0, 'spacing': 40, 'name_cols': '1',
-            'name_rows': 'A', 'r':20}
+    egrid = ElectrodeGrid((2, 3), 40, etype=DiskElectrode, r=20)
+    params = {'shape': (2, 3), 'x': 0, 'y': 0, 'z': 0, 'etype': DiskElectrode,
+              'rot': 0, 'spacing': 40, 'name_cols': '1',
+              'name_rows': 'A', 'r': 20}
     npt.assert_equal(egrid.get_params(), params)
     # test the nondefault value for all the parameters
-    egrid = ElectrodeGrid((2,3), x=10, y=20, z=30, rot=10, spacing=30,
-                            names=('A','1'), electrode_type='DiskElectrode', electrode_kwargs={'r':20})
-    params = {'shape': (2,3), 'x':10, 'y': 20, 'z': 30, 'rot': 10, 'spacing': 30,
-              'name_cols': '1', 'name_rows': 'A', 'r':20}
-    npt.assert_equal(egrid.get_params(), params)         
+    egrid = ElectrodeGrid((2, 3), 30, x=10, y=20, z=30, rot=10,
+                          names=('A', '1'), etype=DiskElectrode, r=20)
+    params = {'shape': (2, 3), 'x': 10, 'y': 20, 'z': 30, 'rot': 10,
+              'spacing': 30, 'name_cols': '1', 'name_rows': 'A',
+              'etype': DiskElectrode, 'r': 20}
+    npt.assert_equal(egrid.get_params(), params)
     # When the electrode_type is 'PointSource'
     # test the default value
-    egrid = ElectrodeGrid((2,3), electrode_type='PointSource')
-    params = {'shape': (2,3), 'x': 0, 'y': 0, 'z': 0,
-            'rot': 0, 'spacing': 20, 'name_cols': '1',
-            'name_rows': 'A'}    
+    egrid = ElectrodeGrid((2, 3), 20, etype=PointSource)
+    params = {'shape': (2, 3), 'x': 0, 'y': 0, 'z': 0, 'etype': PointSource,
+              'rot': 0, 'spacing': 20, 'name_cols': '1',
+              'name_rows': 'A'}
     npt.assert_equal(egrid.get_params(), params)
     # test the nondefault value for all the parameters
-    egrid = ElectrodeGrid((2,3), x=10, y=20, z=30, rot=10, spacing=30,
-                            names=('A','1'), electrode_type='PointSource')
-    params = {'shape': (2,3), 'x':10, 'y': 20, 'z': 30, 'rot': 10, 'spacing': 30,
-              'name_cols': '1', 'name_rows': 'A'}
+    egrid = ElectrodeGrid((2, 3), 30, x=10, y=20, z=30, rot=10,
+                          names=('A', '1'), etype=PointSource)
+    params = {'shape': (2, 3), 'x': 10, 'y': 20, 'z': 30, 'rot': 10,
+              'spacing': 30, 'etype': PointSource, 'name_cols': '1',
+              'name_rows': 'A'}
     npt.assert_equal(egrid.get_params(), params)
 
 def test_ElectrodeGrid_get_params():
