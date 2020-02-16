@@ -91,10 +91,9 @@ class ArgusI(ProsthesisSystem):
                                   'L8', 'L4', 'M6', 'M2',
                                   'L7', 'L3', 'M5', 'M1']
         names = self.old_names if use_legacy_names else ('1', 'A')
-        self.earray = ElectrodeGrid(self.shape, x=x, y=y, z=z, rot=rot,
-                                    spacing=spacing, names=names,
-                                    electrode_type='DiskElectrode',
-                                    electrode_kwargs={'r':r_arr})
+        self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z,
+                                    rot=rot, etype=DiskElectrode, r=r_arr,
+                                    names=names)
 
         # Set stimulus if available:
         self.stim = stim
@@ -204,10 +203,8 @@ class ArgusII(ProsthesisSystem):
         r = 100.0
         spacing = 525.0
         names = ('A', '1')
-        self.earray = ElectrodeGrid(self.shape, x=x, y=y, z=z, rot=rot,
-                                    spacing=spacing, names=names,
-                                    electrode_type='DiskElectrode',
-                                    electrode_kwargs={'r':r})
+        self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, r=r,
+                                    rot=rot, names=names, etype=DiskElectrode)
         self.shape = self.earray.shape
 
         # Set stimulus if available:
