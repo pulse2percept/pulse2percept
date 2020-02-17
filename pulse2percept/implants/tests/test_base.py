@@ -274,15 +274,15 @@ def test_ElectrodeArray_remove_electrodes():
     npt.assert_equal(earray.n_electrodes, 4)
     
     with pytest.raises(ValueError):
-        earray.remove_electrodes([None])
+        earray.remove_electrodes(None)
     with pytest.raises(ValueError):
-        earray.remove_electrodes(["A03"])
+        earray.remove_electrodes("A03")
     
     # remove 1 electrode, keep order
     earray.remove_electrodes('F10')
     npt.assert_equal(earray.n_electrodes, 3)
-    npt.assert_equal(earray[0], earray[key[0]])
-    npt.assert_equal(earray[1], earray[key[1]])
+    npt.assert_equal(earray[0], earray[key[1]])
+    npt.assert_equal(earray[1], earray[key[0]])
     npt.assert_equal(earray[2], earray[key[3]])
     
     # Can't remove the key that has been removed
