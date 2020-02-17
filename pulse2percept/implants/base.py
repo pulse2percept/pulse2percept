@@ -229,6 +229,26 @@ class ElectrodeArray(PrettyPrint):
         else:
             raise TypeError(("electrodes must be a list or dict, not "
                              "%s") % type(electrodes))
+    
+    def remove_electrode(self, name):
+        """Remove an electrode from the dictionary
+
+        Parameter
+        ----------
+        name: int|str|...
+            Electrode name or index
+        """
+        if name not in self.electrodes.keys():
+            raise ValueError(("Cannot remove electrode: key '%s' not "
+                             "exist") %name)
+        del self.electrodes[name]
+        
+    def remove_electrodes(self, names):
+        if isinstance(names, (tuple, list, np.ndarray)):
+            for name in names:
+                self.remove_electrode(name)
+        else:
+            self.remove_electrode(names)
 
     def __getitem__(self, item):
         """Return an electrode from the array

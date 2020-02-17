@@ -191,6 +191,115 @@ def test_ElectrodeArray_add_electrodes():
         npt.assert_equal(earray[i], earray[key])
         npt.assert_equal(earray[i], val)
 
+def test_ElectrodeArray_remove_electrode():
+    earray1 = ElectrodeArray([])
+    earray2 = ElectrodeArray([])
+    npt.assert_equal(earray1.n_electrodes, 0)
+
+    # Can't remove electrodes from empty electrodeArray
+    with pytest.raises(ValueError):
+        earray1.remove_electrode(None)
+    with pytest.raises(ValueError):
+        earray1.remove_electrode("foo")
+    
+    key = [0] * 4
+    key[0] = 'D03'
+    key[1] = 'A02'
+    key[2] = 'F10'
+    key[3] = 'E12'
+
+    earray1.add_electrodes({key[0]: PointSource(0,1,2),
+                           key[1]: PointSource(3,4,5), 
+                           key[2]: PointSource(6,7,8), 
+                           key[3]: PointSource(9,10,11)})
+    npt.assert_equal(earray1.n_electrodes, 4)
+
+    earray2.add_electrodes({key[0]: PointSource(0,1,2),
+                           key[1]: PointSource(3,4,5), 
+                           key[2]: PointSource(6,7,8), 
+                           key[3]: PointSource(9,10,11)})
+    npt.assert_equal(earray2.n_electrodes, 4)
+
+    # Remove one electrode key[1] from the electrodeArray
+    earray1.remove_electrode(key[0])
+    npt.assert_equal(earray1.n_electrodes, 3)
+    # Can't remove an electrode that has been removed
+    with pytest.raises(ValueError):
+        earray1.remove_electrode(key[0])
+    
+    # List keeps order:
+    npt.assert_equal(earray1[0], earray1[key[1]])
+    npt.assert_equal(earray1[1], earray1[key[2]])
+    npt.assert_equal(earray1[2], earray1[key[3]])
+
+    # Other electrodes stay the same
+    for k in [key[1], key[2], key[3]]:
+        npt.assert_equal(earray1[k].x, earray2[k].x)
+        npt.assert_equal(earray1[k].y, earray2[k].y)
+        npt.assert_equal(earray1[k].z, earray2[k].z)
+    
+    # Remove two more electrodes from the electrodeArray
+    # List keeps order
+    earray1.remove_electrode(key[1])
+    earray1.remove_electrode(key[2])
+    npt.assert_equal(earray1.n_electrodes, 1)
+    npt.assert_equal(earray1[0], earray1[key[3]])
+    
+    # The last electrode stays the same
+    for key in [key[3]]:
+        npt.assert_equal(earray1[key].x, earray2[key].x)
+        npt.assert_equal(earray1[key].y, earray2[key].y)
+        npt.assert_equal(earray1[key].z, earray2[key].z)
+    
+    
+def test_ElectrodeArray_remove_electrodes():
+    earray = ElectrodeArray([])
+    npt.assert_equal(earray.n_electrodes, 0)
+
+    # Can't remove electrodes from empty electrodeArray
+    with pytest.raises(ValueError):
+        earray.remove_electrodes('A2')
+    with pytest.raises(ValueError):
+        earray.remove_electrodes("foo")
+    
+    key = [0] * 4
+    key[0] = 'D03'
+    key[1] = 'A02'
+    key[2] = 'F10'
+    key[3] = 'E12'
+    earray.add_electrodes({key[0]: PointSource(0,1,2), 
+                           key[1]: PointSource(3,4,5), 
+                           key[2]: PointSource(6,7,8), 
+                           key[3]: PointSource(9,10,11)})
+    npt.assert_equal(earray.n_electrodes, 4)
+    
+    with pytest.raises(ValueError):
+        earray.remove_electrodes([None])
+    with pytest.raises(ValueError):
+        earray.remove_electrodes(["A03"])
+    
+    # remove 1 electrode, keep order
+    earray.remove_electrodes('F10')
+    npt.assert_equal(earray.n_electrodes, 3)
+    npt.assert_equal(earray[0], earray[key[0]])
+    npt.assert_equal(earray[1], earray[key[1]])
+    npt.assert_equal(earray[2], earray[key[3]])
+    
+    # Can't remove the key that has been removed
+    with pytest.raises(ValueError):
+        earray.remove_electrodes('F10')
+    
+    # Remove 2 electrodes, keep order
+    earray.remove_electrodes(['D03', 'A02'])
+    npt.assert_equal(earray.n_electrodes, 1)
+    npt.assert_equal(earray[0], earray[key[3]])
+    
+    # The remaining electrode's value stays the same
+    npt.assert_equal(earray[0].x, 9)
+    npt.assert_equal(earray[0].y, 10)
+    npt.assert_equal(earray[0].z, 11)
+    
+
 
 def test_ElectrodeGrid():
     # Must pass in tuple/list of (rows, cols) for grid shape:
