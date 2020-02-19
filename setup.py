@@ -8,15 +8,13 @@ import shutil
 from distutils.command.clean import clean as Clean
 from pkg_resources import parse_version
 import traceback
-try:
-    import builtins
-except ImportError:
-    # Python 2 compat: just to be able to declare that Python >=3.5 is needed.
-    import __builtin__ as builtins
 
-# We can import a restricted version of p2p that does not need the compiled
-# code:
-VERSION = '0.6.0'
+# Get version and release info, which is all stored in pulse2percept/info.py
+ver_file = os.path.join('pulse2percept', 'version.py')
+with open(ver_file) as f:
+    exec(f.read())
+
+VERSION = __version__
 
 NUMPY_MIN_VERSION = '1.9.0'
 SCIPY_MIN_VERSION = '1.0'
@@ -37,7 +35,26 @@ PROJECT_URLS = {
     'Documentation': 'https://pulse2percept.github.io/pulse2percept',
     'Source Code': 'https://github.com/pulse2percept/pulse2percept'
 }
-
+CLASSIFIERS = ['Intended Audience :: Science/Research',
+               'Intended Audience :: Developers',
+               'License :: OSI Approved',
+               'Programming Language :: C',
+               'Programming Language :: Python',
+               'Topic :: Software Development',
+               'Topic :: Scientific/Engineering',
+               'Operating System :: Microsoft :: Windows',
+               'Operating System :: POSIX',
+               'Operating System :: Unix',
+               'Operating System :: MacOS',
+               'Programming Language :: Python :: 3',
+               'Programming Language :: Python :: 3.5',
+               'Programming Language :: Python :: 3.6',
+               'Programming Language :: Python :: 3.7',
+               ('Programming Language :: Python :: '
+                'Implementation :: CPython'),
+               ('Programming Language :: Python :: '
+                'Implementation :: PyPy')
+               ]
 
 # Optional setuptools features
 # We need to import setuptools early, if we want setuptools features,
@@ -168,26 +185,7 @@ def setup_package():
                     project_urls=PROJECT_URLS,
                     version=VERSION,
                     long_description=LONG_DESCRIPTION,
-                    classifiers=['Intended Audience :: Science/Research',
-                                 'Intended Audience :: Developers',
-                                 'License :: OSI Approved',
-                                 'Programming Language :: C',
-                                 'Programming Language :: Python',
-                                 'Topic :: Software Development',
-                                 'Topic :: Scientific/Engineering',
-                                 'Operating System :: Microsoft :: Windows',
-                                 'Operating System :: POSIX',
-                                 'Operating System :: Unix',
-                                 'Operating System :: MacOS',
-                                 'Programming Language :: Python :: 3',
-                                 'Programming Language :: Python :: 3.5',
-                                 'Programming Language :: Python :: 3.6',
-                                 'Programming Language :: Python :: 3.7',
-                                 ('Programming Language :: Python :: '
-                                  'Implementation :: CPython'),
-                                 ('Programming Language :: Python :: '
-                                  'Implementation :: PyPy')
-                                 ],
+                    classifiers=CLASSIFIERS,
                     cmdclass=cmdclass,
                     python_requires=">=3.5",
                     install_requires=[
