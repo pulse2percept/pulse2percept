@@ -13,8 +13,8 @@ pulse2percept is organized into the following subpackages:
     utils
 """
 import logging
+from .version import __version__
 
-__version__ = '0.6.0'
 
 # Disable Jupyter Notebook handlers
 # https://github.com/ipython/ipython/issues/8282

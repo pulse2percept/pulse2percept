@@ -112,7 +112,7 @@ Prerequisites
 
 2.  **XCode**: On macOS, make sure to install `Apple XCode`_.
 
-2.  **Cython** (>= 0.28): pulse2percept relies on C extension modules for code
+3.  **Cython** (>= 0.28): pulse2percept relies on C extension modules for code
     acceleration. These require a C compiler, which on Unix platforms is
     already installed (``gcc``). However, on Windows you will have to install a
     compiler yourself:
@@ -139,10 +139,10 @@ Prerequisites
         However, this is not recommended for 64-bit platforms.
         When in doubt, follow `this guide`_.
 
-3.  **Git**: On Unix, you can install git from the `command line`_. On Windows,
+4.  **Git**: On Unix, you can install git from the `command line`_. On Windows,
     make sure to download `Git for Windows`_.
 
-4.  **make** (optional): pulse2percept provides a Makefile to simplify the
+5.  **make** (optional): pulse2percept provides a Makefile to simplify the
     build process.
     ``make`` is part of `build-essentials`_ on Ubuntu, `XCode`_ on Mac OS X,
     and can be downloaded from `ezwinports`_ on Windows.
