@@ -156,6 +156,12 @@ class ElectrodeArray(PrettyPrint):
         Either a single :py:class:`~pulse2percept.implants.Electrode` object
         or a dict, list, or NumPy array thereof. The keys of the dict will
         serve as electrode names. Otherwise electrodes will be indexed 0..N.
+        
+        .. note::
+        
+            If you pass multiple electrodes in a dictionary, the keys of the
+            dictionary will automatically be sorted. Thus the original order
+            of electrodes might not be preserved.
 
     Examples
     --------
@@ -207,7 +213,7 @@ class ElectrodeArray(PrettyPrint):
                 'n_electrodes': self.n_electrodes}
 
     def add_electrode(self, name, electrode):
-        """Add an electrode to the dictionary
+        """Add an electrode to the array
 
         Parameters
         ----------
@@ -225,7 +231,7 @@ class ElectrodeArray(PrettyPrint):
         self._electrodes.update({name: electrode})
 
     def remove_electrode(self, name):
-        """Remove an electrode from the dictionary
+        """Remove an electrode from the array
 
         Parameter
         ----------
@@ -233,7 +239,7 @@ class ElectrodeArray(PrettyPrint):
             Electrode name or index
         """
         if name not in self.electrodes.keys():
-            raise ValueError(("Cannot remove electrode: key '%s' not "
+            raise ValueError(("Cannot remove electrode: key '%s' does not "
                              "exist") %name)
         del self.electrodes[name]
 
