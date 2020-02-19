@@ -143,54 +143,6 @@ def test_ElectrodeArray_add_electrode():
         npt.assert_equal(isinstance(selected[0], PointSource), True)
         npt.assert_equal(isinstance(selected[1], DiskElectrode), True)
 
-
-def test_ElectrodeArray_add_electrodes():
-    earray = ElectrodeArray([])
-    npt.assert_equal(earray.n_electrodes, 0)
-
-    with pytest.raises(TypeError):
-        earray.add_electrodes(None)
-
-    with pytest.raises(TypeError):
-        earray.add_electrodes("foo")
-
-    # Add 2 electrodes, keep order:
-    key = [0] * 6
-    key[0] = 'D03'
-    key[1] = 'A02'
-    earray.add_electrodes({key[0]: PointSource(0, 1, 2)})
-    earray.add_electrodes({key[1]: PointSource(3, 4, 5)})
-    npt.assert_equal(earray[0], earray[key[0]])
-    npt.assert_equal(earray[1], earray[key[1]])
-    # Can't add the same key twice:
-    with pytest.raises(ValueError):
-        earray.add_electrodes({key[0]: PointSource(3, 5, 7)})
-
-    # Add 2 more, now keep order:
-    key[2] = 'F10'
-    key[3] = 'E12'
-    earray.add_electrodes({key[2]: PointSource(6, 7, 8)})
-    earray.add_electrodes({key[3]: PointSource(9, 10, 11)})
-    npt.assert_equal(earray[0], earray[key[0]])
-    npt.assert_equal(earray[1], earray[key[1]])
-    npt.assert_equal(earray[2], earray[key[2]])
-    npt.assert_equal(earray[3], earray[key[3]])
-
-    # List keeps order:
-    earray.add_electrodes([PointSource(12, 13, 14),
-                           PointSource(15, 16, 17)])
-    npt.assert_equal(earray[0], earray[key[0]])
-    npt.assert_equal(earray[1], earray[key[1]])
-    npt.assert_equal(earray[2], earray[key[2]])
-    npt.assert_equal(earray[3], earray[key[3]])
-    npt.assert_equal(earray[4].x, 12)
-    npt.assert_equal(earray[5].x, 15)
-
-    # Order is preserved in for loop:
-    for i, (key, val) in enumerate(earray.items()):
-        npt.assert_equal(earray[i], earray[key])
-        npt.assert_equal(earray[i], val)
-
 def test_ElectrodeArray_remove_electrode():
     earray1 = ElectrodeArray([])
     earray2 = ElectrodeArray([])
@@ -208,16 +160,16 @@ def test_ElectrodeArray_remove_electrode():
     key[2] = 'F10'
     key[3] = 'E12'
 
-    earray1.add_electrodes({key[0]: PointSource(0,1,2),
-                           key[1]: PointSource(3,4,5), 
-                           key[2]: PointSource(6,7,8), 
-                           key[3]: PointSource(9,10,11)})
+    earray1.add_electrode(key[0], PointSource(0,1,2))
+    earray1.add_electrode(key[1], PointSource(3,4,5)) 
+    earray1.add_electrode(key[2], PointSource(6,7,8))
+    earray1.add_electrode(key[3], PointSource(9,10,11))
     npt.assert_equal(earray1.n_electrodes, 4)
 
-    earray2.add_electrodes({key[0]: PointSource(0,1,2),
-                           key[1]: PointSource(3,4,5), 
-                           key[2]: PointSource(6,7,8), 
-                           key[3]: PointSource(9,10,11)})
+    earray2.add_electrode(key[0], PointSource(0,1,2))
+    earray2.add_electrode(key[1], PointSource(3,4,5)) 
+    earray2.add_electrode(key[2], PointSource(6,7,8))
+    earray2.add_electrode(key[3], PointSource(9,10,11))
     npt.assert_equal(earray2.n_electrodes, 4)
 
     # Remove one electrode key[1] from the electrodeArray
@@ -251,56 +203,6 @@ def test_ElectrodeArray_remove_electrode():
         npt.assert_equal(earray1[key].y, earray2[key].y)
         npt.assert_equal(earray1[key].z, earray2[key].z)
     
-    
-def test_ElectrodeArray_remove_electrodes():
-    earray = ElectrodeArray([])
-    npt.assert_equal(earray.n_electrodes, 0)
-
-    # Can't remove electrodes from empty electrodeArray
-    with pytest.raises(ValueError):
-        earray.remove_electrodes('A2')
-    with pytest.raises(ValueError):
-        earray.remove_electrodes("foo")
-    
-    key = [0] * 4
-    key[0] = 'D03'
-    key[1] = 'A02'
-    key[2] = 'F10'
-    key[3] = 'E12'
-    earray.add_electrodes({key[0]: PointSource(0,1,2), 
-                           key[1]: PointSource(3,4,5), 
-                           key[2]: PointSource(6,7,8), 
-                           key[3]: PointSource(9,10,11)})
-    npt.assert_equal(earray.n_electrodes, 4)
-    
-    with pytest.raises(ValueError):
-        earray.remove_electrodes(None)
-    with pytest.raises(ValueError):
-        earray.remove_electrodes("A03")
-    
-    # remove 1 electrode, keep order
-    earray.remove_electrodes('F10')
-    npt.assert_equal(earray.n_electrodes, 3)
-    npt.assert_equal(earray[0], earray[key[0]])
-    npt.assert_equal(earray[1], earray[key[1]])
-    npt.assert_equal(earray[2], earray[key[3]])
-    
-    # Can't remove the key that has been removed
-    with pytest.raises(ValueError):
-        earray.remove_electrodes('F10')
-    
-    # Remove 2 electrodes, keep order
-    earray.remove_electrodes(['D03', 'A02'])
-    npt.assert_equal(earray.n_electrodes, 1)
-    npt.assert_equal(earray[0], earray[key[3]])
-    
-    # The remaining electrode's value stays the same
-    npt.assert_equal(earray[0].x, 9)
-    npt.assert_equal(earray[0].y, 10)
-    npt.assert_equal(earray[0].z, 11)
-    
-
-
 def test_ElectrodeGrid():
     # Must pass in tuple/list of (rows, cols) for grid shape:
     with pytest.raises(TypeError):

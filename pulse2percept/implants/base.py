@@ -177,7 +177,17 @@ class ElectrodeArray(PrettyPrint):
 
     def __init__(self, electrodes):
         self.electrodes = coll.OrderedDict()
-        self.add_electrodes(electrodes)
+        if isinstance(electrodes, dict):
+            for name, electrode in electrodes.items():
+                self.add_electrode(name, electrode)
+        elif isinstance(electrodes, list):
+            for electrode in electrodes:
+                self.add_electrode(self.n_electrodes, electrode)
+        elif isinstance(electrodes, Electrode):
+            self.add_electrode(self.n_electrodes, electrodes)
+        else:
+            raise TypeError(("electrodes must be a list or dict, not "
+                             "%s") % type(electrodes))
 
     @property
     def electrodes(self):
@@ -214,22 +224,6 @@ class ElectrodeArray(PrettyPrint):
                               "exists.") % name)
         self._electrodes.update({name: electrode})
 
-    def add_electrodes(self, electrodes):
-        """
-        Note that if you pass a dictionary, keys will automatically be sorted.
-        """
-        if isinstance(electrodes, dict):
-            for name, electrode in electrodes.items():
-                self.add_electrode(name, electrode)
-        elif isinstance(electrodes, list):
-            for electrode in electrodes:
-                self.add_electrode(self.n_electrodes, electrode)
-        elif isinstance(electrodes, Electrode):
-            self.add_electrode(self.n_electrodes, electrodes)
-        else:
-            raise TypeError(("electrodes must be a list or dict, not "
-                             "%s") % type(electrodes))
-    
     def remove_electrode(self, name):
         """Remove an electrode from the dictionary
 
@@ -242,13 +236,6 @@ class ElectrodeArray(PrettyPrint):
             raise ValueError(("Cannot remove electrode: key '%s' not "
                              "exist") %name)
         del self.electrodes[name]
-        
-    def remove_electrodes(self, names):
-        if isinstance(names, (tuple, list, np.ndarray)):
-            for name in names:
-                self.remove_electrode(name)
-        else:
-            self.remove_electrode(names)
 
     def __getitem__(self, item):
         """Return an electrode from the array
