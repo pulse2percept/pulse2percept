@@ -156,6 +156,12 @@ class ElectrodeArray(PrettyPrint):
         Either a single :py:class:`~pulse2percept.implants.Electrode` object
         or a dict, list, or NumPy array thereof. The keys of the dict will
         serve as electrode names. Otherwise electrodes will be indexed 0..N.
+        
+        .. note::
+        
+            If you pass multiple electrodes in a dictionary, the keys of the
+            dictionary will automatically be sorted. Thus the original order
+            of electrodes might not be preserved.
 
     Examples
     --------
@@ -177,7 +183,17 @@ class ElectrodeArray(PrettyPrint):
 
     def __init__(self, electrodes):
         self.electrodes = coll.OrderedDict()
-        self.add_electrodes(electrodes)
+        if isinstance(electrodes, dict):
+            for name, electrode in electrodes.items():
+                self.add_electrode(name, electrode)
+        elif isinstance(electrodes, list):
+            for electrode in electrodes:
+                self.add_electrode(self.n_electrodes, electrode)
+        elif isinstance(electrodes, Electrode):
+            self.add_electrode(self.n_electrodes, electrodes)
+        else:
+            raise TypeError(("electrodes must be a list or dict, not "
+                             "%s") % type(electrodes))
 
     @property
     def electrodes(self):
@@ -197,7 +213,7 @@ class ElectrodeArray(PrettyPrint):
                 'n_electrodes': self.n_electrodes}
 
     def add_electrode(self, name, electrode):
-        """Add an electrode to the dictionary
+        """Add an electrode to the array
 
         Parameters
         ----------
@@ -214,21 +230,18 @@ class ElectrodeArray(PrettyPrint):
                               "exists.") % name)
         self._electrodes.update({name: electrode})
 
-    def add_electrodes(self, electrodes):
+    def remove_electrode(self, name):
+        """Remove an electrode from the array
+
+        Parameter
+        ----------
+        name: int|str|...
+            Electrode name or index
         """
-        Note that if you pass a dictionary, keys will automatically be sorted.
-        """
-        if isinstance(electrodes, dict):
-            for name, electrode in electrodes.items():
-                self.add_electrode(name, electrode)
-        elif isinstance(electrodes, list):
-            for electrode in electrodes:
-                self.add_electrode(self.n_electrodes, electrode)
-        elif isinstance(electrodes, Electrode):
-            self.add_electrode(self.n_electrodes, electrodes)
-        else:
-            raise TypeError(("electrodes must be a list or dict, not "
-                             "%s") % type(electrodes))
+        if name not in self.electrodes.keys():
+            raise ValueError(("Cannot remove electrode: key '%s' does not "
+                             "exist") %name)
+        del self.electrodes[name]
 
     def __getitem__(self, item):
         """Return an electrode from the array
