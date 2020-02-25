@@ -15,8 +15,8 @@
    developers/contributing
    developers/releases
 
-pulse2percept: Models for sight restoration
-===========================================
+pulse2percept |version| documentation
+=====================================
 
 By 2020 roughly 200 million people worldwide will suffer from retinal
 diseases such as retinitis pigmentosa (RP) and age-related macular degeneration (AMD).

@@ -575,13 +575,7 @@ class Nanduri2012(BaseModel):
         self.asymptote = 14.0
         self.slope = 3.0
         self.shift = 16.0
-        self.use_cython = False
-
-        # Nanduri (2012) has a term in the stationary nonlinearity step that
-        # depends on future values of R3: max_t(R3). Because the finite
-        # difference model cannot look into the future, we need to set a
-        # scaling factor here:
-        self.maxR3 = 100.0
+        self.use_cython = True
 
         # perform one-time setup calculations
         # gamma1 is used for the fast response
@@ -651,8 +645,7 @@ class Nanduri2012(BaseModel):
                                                    self.tau1, self.tau2,
                                                    self.tau3,
                                                    self.asymptote, self.shift,
-                                                   self.slope, self.eps,
-                                                   self.maxR3)
+                                                   self.slope, self.eps)
         else:
             # Fast response
             b2 = self.tsample * utils.conv(-b1, self.gamma1, mode='full',
