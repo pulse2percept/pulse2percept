@@ -271,6 +271,9 @@ class Simulation(object):
                 shift : float, optional, default: 16.0
                     Shift of the logistic function in the stationary
                     nonlinearity stage.
+                use_cython : bool, optional, default: True
+                    Flag whether to use the fast Cython implementation (True)
+                    or the slower NumPy implementation (False)
 
             - 'Horsager2009':
                 A model of temporal sensitivity as described in [2]_.
@@ -486,7 +489,7 @@ class Simulation(object):
                                engine=self.engine, scheduler=self.scheduler,
                                func_args=[pt_data, layers, self.use_jit])
         bm = np.zeros(self.ofl.gridx.shape
-                     + (sr_list[0].data.shape[-1], ))
+                      + (sr_list[0].data.shape[-1], ))
         idxer = tuple(np.array(idx_list)[:, i] for i in range(2))
         bm[idxer] = [sr.data for sr in sr_list]
         percept = utils.TimeSeries(sr_list[0].tsample, bm)

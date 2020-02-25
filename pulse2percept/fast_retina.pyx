@@ -2,11 +2,11 @@ import numpy as np
 cimport numpy as np
 import cython
 
-cdef extern from "math.h":
-    cpdef float expf(float x)
+from libc.math cimport(exp as c_exp)
+
 
 cdef inline float expit(float x):
-    return 1.0 / (1.0 + expf(-x))
+    return 1.0 / (1.0 + c_exp(-x))
 
 cdef inline float float_max(float a, float b):
     return a if a >= b else b
@@ -35,25 +35,20 @@ def nanduri2012_calc_layer_current(double[:] in_arr, double[:, ::1] pt_arr):
 def nanduri2012_model_cascade(double[:] stimdata,
                               float dt, float tau1, float tau2,
                               float tau3, float asymptote, float shift,
-                              float slope, float eps, float max_R3):
+                              float slope, float eps):
     """Cython implementation of the Nanduri 2012 model cascade"""
-    cdef float tmp_ca = 0
-    cdef float tmp_R1 = 0
-    cdef float tmp_R2 = 0
-    cdef float tmp_R3 = 0
-    cdef float tmp_R4a = 0
-    cdef float tmp_R4b = 0
-    cdef float tmp_R4c = 0
 
-    # Stationary nonlinearity: used to depend on future values of the
-    # intermediary response, now has to be passed through `max_R3`
-    # (because we can't look into the future):
-    cdef float scale = asymptote * expit((max_R3 - shift) / slope)
+    # Because the stationary nonlinearity depends on `max_R3`, which is the
+    # largest value of R3 over all time points, we have to process the stimulus
+    # in two steps:
 
-    # Output array
+    # Step 1: Calculate `tmp_R3` for all time points and extract `max_R3`:
+    cdef float tmp_ca = 0.0
+    cdef float tmp_R1 = 0.0
+    cdef float tmp_R2 = 0.0
+    cdef float max_R3 = 1e-12  # avoid division by zero
     cdef np.intp_t arr_size = len(stimdata)
-    cdef double[:] out_R4 = np.empty(arr_size, dtype=float)
-
+    cdef double[:] tmp_R3 = np.empty(arr_size, dtype=float)
     for i in range(arr_size):
         # Fast ganglion cell response:
         tmp_R1 += dt * (-stimdata[i] - tmp_R1) / tau1
@@ -61,10 +56,19 @@ def nanduri2012_model_cascade(double[:] stimdata,
         # Leaky integrated charge accumulation:
         tmp_ca += dt * float_max(stimdata[i], 0)
         tmp_R2 += dt * (tmp_ca - tmp_R2) / tau2
-        tmp_R3 = float_max(tmp_R1 - eps * tmp_R2, 0) / max_R3 * scale
+        tmp_R3[i] = float_max(tmp_R1 - eps * tmp_R2, 0)
+        if tmp_R3[i] > max_R3:
+            max_R3 = tmp_R3[i]
 
+    # Step 2: Calculate `out_R4` from `tmp_R3`
+    cdef float tmp_R4a = 0.0
+    cdef float tmp_R4b = 0.0
+    cdef float tmp_R4c = 0.0
+    cdef float scale = asymptote * expit((max_R3 - shift) / slope) / max_R3
+    cdef double[:] out_R4 = np.empty(arr_size, dtype=float)
+    for i in range(arr_size):
         # Slow response: 3-stage leaky integrator
-        tmp_R4a += dt * (tmp_R3 - tmp_R4a) / tau3
+        tmp_R4a += dt * (tmp_R3[i] * scale - tmp_R4a) / tau3
         tmp_R4b += dt * (tmp_R4a - tmp_R4b) / tau3
         tmp_R4c += dt * (tmp_R4b - tmp_R4c) / tau3
         out_R4[i] = tmp_R4c
