@@ -4,7 +4,7 @@
 [![Documentation Status](https://readthedocs.org/projects/pulse2percept/badge/?version=latest)](https://pulse2percept.readthedocs.io/en/latest/?badge=latest)
 [![license](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/uwescience/pulse2percept/blob/master/LICENSE)
 
-# pulse2percept: A Python-based simulation framework for bionic vision
+# pulse2percept 0.5.2: A Python-based simulation framework for bionic vision
 
 ## Summary
 
