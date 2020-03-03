@@ -156,9 +156,9 @@ class ElectrodeArray(PrettyPrint):
         Either a single :py:class:`~pulse2percept.implants.Electrode` object
         or a dict, list, or NumPy array thereof. The keys of the dict will
         serve as electrode names. Otherwise electrodes will be indexed 0..N.
-        
+
         .. note::
-        
+
             If you pass multiple electrodes in a dictionary, the keys of the
             dictionary will automatically be sorted. Thus the original order
             of electrodes might not be preserved.
@@ -240,7 +240,7 @@ class ElectrodeArray(PrettyPrint):
         """
         if name not in self.electrodes.keys():
             raise ValueError(("Cannot remove electrode: key '%s' does not "
-                             "exist") %name)
+                              "exist") % name)
         del self.electrodes[name]
 
     def __getitem__(self, item):
@@ -288,6 +288,7 @@ class ElectrodeArray(PrettyPrint):
 
     def items(self):
         return self.electrodes.items()
+
 
 class ElectrodeGrid(ElectrodeArray):
     """Rectangular grid of electrodes
@@ -532,7 +533,7 @@ class ElectrodeGrid(ElectrodeArray):
         else:
             raise NotImplementedError
 
-            
+
 class ElectrodeGridHex(ElectrodeArray):
     """Hexagonal grid of electrodes
     Parameters
@@ -563,34 +564,22 @@ class ElectrodeGridHex(ElectrodeArray):
         See examples below.
     Examples
     --------
-    An electrode grid with 2 rows and 4 columns, made of disk electrodes with
+    An hexagonal electrode grid with 2 rows and 4 columns, made of disk electrodes with
     10um radius spaced 20um apart, centered at (10, 20)um, and located 500um
     away from the retinal surface, with names like this:
         A1 A2 A3 A4
         B1 B2 B3 B4
-    >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
-    >>> ElectrodeGrid((2, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
+    >>> from pulse2percept.implants import ElectrodeGridHex, DiskElectrode
+    >>> ElectrodeGridHex((2, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
     ...               etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    ElectrodeGrid(..., name_cols='1',
-                  name_rows='A', r=10..., rot=0..., shape=(2, 4),
-                  spacing=20..., x=10..., y=20..., z=500...)
-    There are three ways to access (e.g.) the last electrode in the grid,
-    either by name (``grid['C3']``), by row/column index (``grid[2, 2]``), or
-    by index into the flattened array (``grid[8]``):
-    >>> from pulse2percept.implants import ElectrodeGrid
-    >>> grid = ElectrodeGrid((3, 3), 20, names=('A', '1'))
-    >>> grid['C3']  # doctest: +ELLIPSIS
-    PointSource(x=20..., y=20..., z=0...)
-    >>> grid['C3'] == grid[8] == grid[2, 2]
-    True
-    You can also access multiple electrodes at the same time by passing a
-    list of indices/names (it's ok to mix-and-match):
-    >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
-    >>> grid = ElectrodeGrid((3, 3), 20, etype=DiskElectrode, r=10)
-    >>> grid[['A1', 1, (0, 2)]]  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [DiskElectrode(r=10..., x=-20.0, y=-20.0, z=0...),
-     DiskElectrode(r=10..., x=0.0, y=-20.0, z=0...),
-     DiskElectrode(r=10..., x=20.0, y=-20.0, z=0...)]
+
+    Note that in the current implementation the grid is staggered such that the 
+    electrode placement looks something like...
+
+       o   o   o   o   o
+         o   o   o   o   o 
+       o   o   o   o   o 
+         o   o   o   o   o
     """
 
     def __init__(self, shape, spacing, x=0, y=0, z=0, rot=0, names=('A', '1'),
