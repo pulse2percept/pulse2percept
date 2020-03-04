@@ -2,6 +2,7 @@
 import numpy as np
 from abc import ABCMeta, abstractmethod
 import collections as coll
+import math
 
 from ..stimuli import Stimulus
 from ..utils import PrettyPrint
@@ -572,6 +573,9 @@ class ElectrodeGridHex(ElectrodeArray):
     >>> from pulse2percept.implants import ElectrodeGridHex, DiskElectrode
     >>> ElectrodeGridHex((2, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
     ...               etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    ElectrodeGridHex(..., name_cols='1',
+                  name_rows='A', r=10..., rot=0..., shape=(2, 4),
+                  spacing=20..., x=10..., y=20..., z=500...)
 
     Note that in the current implementation the grid is staggered such that the 
     electrode placement looks something like...
@@ -613,7 +617,7 @@ class ElectrodeGridHex(ElectrodeArray):
         self.names = names
         # Instantiate empty collection of electrodes. This dictionary will be
         # populated in a private method ``_set_egrid``:
-        self.electrodes = OrderedDict()
+        self.electrodes = coll.OrderedDict()
         self._set_grid()
 
     def get_params(self):
