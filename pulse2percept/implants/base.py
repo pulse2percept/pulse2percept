@@ -338,7 +338,7 @@ class ElectrodeGrid(ElectrodeArray):
     ...               type='hex', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     ElectrodeGrid(..., name_cols='1',
                   name_rows='A', r=10..., rot=0..., shape=(3, 4),
-                  spacing=20..., type='hex', x=10..., y=20..., z=500...)
+                  spacing=20..., x=10..., y=20..., z=500...)
 
     A rectangulr electrode grid with 2 rows and 4 columns, made of disk electrodes with
     10um radius spaced 20um apart, centered at (10, 20)um, and located 500um
@@ -352,7 +352,7 @@ class ElectrodeGrid(ElectrodeArray):
     ...               type='rect', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     ElectrodeGrid(..., name_cols='1',
                   name_rows='A', r=10..., rot=0..., shape=(2, 4),
-                  spacing=20..., type='rect', x=10..., y=20..., z=500...)
+                  spacing=20..., x=10..., y=20..., z=500...)
 
     There are three ways to access (e.g.) the last electrode in the grid,
     either by name (``grid['C3']``), by row/column index (``grid[2, 2]``), or
