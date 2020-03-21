@@ -2,6 +2,7 @@
 import numpy as np
 from abc import ABCMeta, abstractmethod
 import collections as coll
+import math
 
 from ..stimuli import Stimulus
 from ..utils import PrettyPrint
@@ -156,9 +157,9 @@ class ElectrodeArray(PrettyPrint):
         Either a single :py:class:`~pulse2percept.implants.Electrode` object
         or a dict, list, or NumPy array thereof. The keys of the dict will
         serve as electrode names. Otherwise electrodes will be indexed 0..N.
-        
+
         .. note::
-        
+
             If you pass multiple electrodes in a dictionary, the keys of the
             dictionary will automatically be sorted. Thus the original order
             of electrodes might not be preserved.
@@ -240,7 +241,7 @@ class ElectrodeArray(PrettyPrint):
         """
         if name not in self.electrodes.keys():
             raise ValueError(("Cannot remove electrode: key '%s' does not "
-                             "exist") %name)
+                              "exist") % name)
         del self.electrodes[name]
 
     def __getitem__(self, item):
@@ -311,6 +312,8 @@ class ElectrodeGrid(ElectrodeArray):
         Columns and rows may only be strings and integers.
         For example ('1', 'A') will number rows numerically and columns
         alphabetically.
+    type : 'rect' or 'hex', optional, default: 'rect'
+        Grid type ('rect': rectangular, 'hex': hexagonal).
     etype : :py:class:`~pulse2percept.implants.Electrode`, optional
         A valid Electrode class. By default,
         :py:class:`~pulse2percept.implants.PointSource` is used.
@@ -322,16 +325,31 @@ class ElectrodeGrid(ElectrodeArray):
 
     Examples
     --------
-    An electrode grid with 2 rows and 4 columns, made of disk electrodes with
-    10um radius spaced 20um apart, centered at (10, 20)um, and located 500um
+    A hexagonal electrode grid with 3 rows and 4 columns, made of disk electrodes
+    with 10um radius spaced 20um apart, centered at (10, 20)um, and located 500um
     away from the retinal surface, with names like this:
 
-        A1 A2 A3 A4
-        B1 B2 B3 B4
+        A1    A2    A3    A4
+           B1    B2    B3    B4
+        C1    C2    C3    C4
 
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
+    >>> ElectrodeGrid((3, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
+    ...               type='hex', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    ElectrodeGrid(..., name_cols='1',
+                  name_rows='A', r=10..., rot=0..., shape=(3, 4),
+                  spacing=20..., x=10..., y=20..., z=500...)
+
+    A rectangulr electrode grid with 2 rows and 4 columns, made of disk electrodes with
+    10um radius spaced 20um apart, centered at (10, 20)um, and located 500um
+    away from the retinal surface, with names like this:
+    
+        A1 A2 A3 A4
+        B1 B2 B3 B4
+        
+    >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> ElectrodeGrid((2, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
-    ...               etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    ...               type='rect', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     ElectrodeGrid(..., name_cols='1',
                   name_rows='A', r=10..., rot=0..., shape=(2, 4),
                   spacing=20..., x=10..., y=20..., z=500...)
@@ -360,7 +378,7 @@ class ElectrodeGrid(ElectrodeArray):
     """
 
     def __init__(self, shape, spacing, x=0, y=0, z=0, rot=0, names=('A', '1'),
-                 etype=PointSource, **kwargs):
+                 type='rect', etype=PointSource, **kwargs):
         if not isinstance(names, (tuple, list, np.ndarray)):
             raise TypeError("'names' must be a tuple/list of (rows, cols)")
         if not isinstance(shape, (tuple, list, np.ndarray)):
@@ -369,6 +387,8 @@ class ElectrodeGrid(ElectrodeArray):
             raise ValueError("'shape' must have two elements: (rows, cols)")
         if np.prod(shape) <= 0:
             raise ValueError("Grid must have all non-zero rows and columns.")
+        if not isinstance(type, str):
+            raise TypeError("'type' must be either 'rect' or 'hex'.")
         if not issubclass(etype, Electrode):
             raise TypeError("'etype' must be a valid Electrode object.")
         if issubclass(etype, DiskElectrode):
@@ -383,6 +403,7 @@ class ElectrodeGrid(ElectrodeArray):
         self.z = z
         self.rot = rot
         self.spacing = spacing
+        self.type = type
         self.etype = etype  # add etype variable under the class
         # Store names for rows/cols separately:
         if len(names) == 2:
@@ -391,7 +412,7 @@ class ElectrodeGrid(ElectrodeArray):
         # Instantiate empty collection of electrodes. This dictionary will be
         # populated in a private method ``_set_egrid``:
         self.electrodes = coll.OrderedDict()
-        self._set_grid()
+        self._make_grid()
 
     def get_params(self):
         """Return a dictionary of class attributes"""
@@ -442,7 +463,7 @@ class ElectrodeGrid(ElectrodeArray):
                     # Index not found:
                     return None
 
-    def _set_grid(self):
+    def _make_grid(self):
         """Private method to build the electrode grid"""
         n_elecs = np.prod(self.shape)
         rows, cols = self.shape
@@ -493,13 +514,37 @@ class ElectrodeGrid(ElectrodeArray):
             z_arr = np.ones(n_elecs, dtype=float) * self.z
 
         # Make a 2D meshgrid from x, y coordinates:
-        # For example, cols=3 with spacing=100 should give: [-100, 0, 100]
-        x_arr = (np.arange(cols) * self.spacing -
-                 (cols / 2.0 - 0.5) * self.spacing)
-        y_arr = (np.arange(rows) * self.spacing -
-                 (rows / 2.0 - 0.5) * self.spacing)
-        x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
-
+        if self.type.lower() == 'rect':
+            # For example, cols=3 with spacing=100 should give: [-100, 0, 100]
+            x_arr = (np.arange(cols) * self.spacing -
+                     (cols / 2.0 - 0.5) * self.spacing)
+            y_arr = (np.arange(rows) * self.spacing -
+                     (rows / 2.0 - 0.5) * self.spacing)
+            x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
+        elif self.type.lower() == 'hex':
+            # Make a 2D meshgrid from x, y coordinates:
+            x_arr_lshift = (np.arange(cols) * self.spacing -
+                            (cols / 2.0 - 0.5) * self.spacing - self.spacing * 0.25)
+            x_arr_rshift = (np.arange(cols) * self.spacing -
+                            (cols / 2.0 - 0.5) * self.spacing + self.spacing * 0.25)
+            y_arr = (np.arange(rows) * math.sqrt(3) * self.spacing/2.0 -
+                     (rows / 2.0 - 0.5) * self.spacing)
+            x_arr_lshift, y_arr_lshift = np.meshgrid(x_arr_lshift, y_arr,
+                                                     sparse=False)
+            x_arr_rshift, y_arr_rshift = np.meshgrid(x_arr_rshift, y_arr,
+                                                     sparse=False)
+            # Shift every other row to get an interleaved pattern:
+            x_arr = []
+            for row in range(0, rows):
+                if row % 2 == 0:
+                    x_arr.append(x_arr_lshift[row])
+                else:
+                    x_arr.append(x_arr_rshift[row])
+            x_arr = np.array(x_arr)
+            y_arr = y_arr_rshift
+        else:
+            raise NotImplementedError
+        
         # Rotate the grid:
         rotmat = np.array([np.cos(self.rot), -np.sin(self.rot),
                            np.sin(self.rot), np.cos(self.rot)]).reshape((2, 2))
