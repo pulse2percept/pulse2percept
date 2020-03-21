@@ -12,7 +12,6 @@ from .base import (DiskElectrode,
                    Electrode,
                    ElectrodeArray,
                    ElectrodeGrid,
-                   ElectrodeGridHex,
                    PointSource,
                    ProsthesisSystem)
 from .argus import ArgusI, ArgusII
@@ -27,7 +26,6 @@ __all__ = [
     'Electrode',
     'ElectrodeArray',
     'ElectrodeGrid',
-    'ElectrodeGridHex',
     'PointSource',
     'ProsthesisSystem'
 ]
