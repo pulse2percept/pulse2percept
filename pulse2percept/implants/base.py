@@ -514,14 +514,14 @@ class ElectrodeGrid(ElectrodeArray):
             z_arr = np.ones(n_elecs, dtype=float) * self.z
 
         # Make a 2D meshgrid from x, y coordinates:
-        if np.lower(self.grid) == 'rect':
+        if self.grid.lower() == 'rect':
             # For example, cols=3 with spacing=100 should give: [-100, 0, 100]
             x_arr = (np.arange(cols) * self.spacing -
                      (cols / 2.0 - 0.5) * self.spacing)
             y_arr = (np.arange(rows) * self.spacing -
                      (rows / 2.0 - 0.5) * self.spacing)
             x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
-        elif np.lower(self.grid) == 'hex':
+        elif self.grid.lower() == 'hex':
             # Make a 2D meshgrid from x, y coordinates:
             x_arr_lshift = (np.arange(cols) * self.spacing -
                             (cols / 2.0 - 0.5) * self.spacing - self.spacing * 0.25)
