@@ -38,23 +38,31 @@ Let's say we want to create a 2x3 rectangular grid of
 500 microns apart, and the whole grid should be centered over the fovea:
 
 """
+# sphinx_gallery_thumbnail_number = 3
 from pulse2percept.implants import ElectrodeGrid
 
 grid = ElectrodeGrid((2, 3), 500)
 
 ##############################################################################
 # We can access individual electrodes by indexing into ``grid``:
-
+#
 # The first electrode:
+
 grid[0]
 
+##############################################################################
 # The first electrode by name:
+
 grid['A1']
 
+##############################################################################
 # Accessing the x-coordinate of the first electrode:
+
 grid[0].x
 
+##############################################################################
 # Showing all electrodes:
+
 grid[:]
 
 ##############################################################################
@@ -70,7 +78,7 @@ for name, electrode in grid.items():
 
 from pulse2percept.implants import DiskElectrode
 
-disk_grid = ElectrodeGrid((2, 3), 800, etype=DiskElectrode, r=100)
+disk_grid = ElectrodeGrid((3, 5), 800, etype=DiskElectrode, r=100)
 
 disk_grid[:]
 
@@ -96,7 +104,7 @@ plot_implant_on_axon_map(ProsthesisSystem(disk_grid))
 # To create a hexagonal grid instead, all we need to do is change the grid type
 # from 'rect' (default) to 'hex':
 
-hex_grid = ElectrodeGrid((2, 3), 800, type='hex', etype=DiskElectrode, r=100)
+hex_grid = ElectrodeGrid((3, 5), 800, type='hex', etype=DiskElectrode, r=100)
 
 plot_implant_on_axon_map(ProsthesisSystem(hex_grid))
 
@@ -106,10 +114,10 @@ plot_implant_on_axon_map(ProsthesisSystem(hex_grid))
 # (note the minus sign):
 
 from numpy import pi
-offset_grid = ElectrodeGrid((2, 3), 800, type='hex', x=-1000, y=200, z=150,
+offset_grid = ElectrodeGrid((3, 5), 800, type='hex', x=-1000, y=200, z=150,
                             rot=-pi / 4, etype=DiskElectrode, r=100)
 
-plot_implant_on_axon_map(ProsthesisSystem(hex_grid))
+plot_implant_on_axon_map(ProsthesisSystem(offset_grid))
 
 ##############################################################################
 # .. note::
