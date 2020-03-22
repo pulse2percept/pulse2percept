@@ -166,13 +166,13 @@ Where to go from here
 =====================
 
 *  Have a look at some code examples from our `Example Gallery`_.
-*  Familiarize yourself with `visual prostheses`_, `electrical stimuli`_,
+*  Familiarize yourself with `visual implants`_, `electrical stimuli`_,
    and our `computational models`_.
 *  Check the `FAQ`_ to see if your question has already been answered.
 *  Request features or report bugs in our `Issue Tracker`_ on GitHub.
 
 .. _Example Gallery: https://pulse2percept.readthedocs.io/en/latest/examples/index.html
-.. _visual prostheses: https://pulse2percept.readthedocs.io/en/latest/topics/implants.html
+.. _visual implants: https://pulse2percept.readthedocs.io/en/latest/topics/implants.html
 .. _electrical stimuli: https://pulse2percept.readthedocs.io/en/latest/topics/stimuli.html
 .. _computational models: https://pulse2percept.readthedocs.io/en/latest/topics/models.html
 .. _FAQ: https://pulse2percept.readthedocs.io/en/latest/users/faq.html
