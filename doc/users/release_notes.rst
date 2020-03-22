@@ -6,13 +6,14 @@ Release Notes
 
 .. important::
 
-    pulse2percept 0.4.3 will be the last release to support Python 2.7 and 3.4.
-    pulse2percept 0.5+ will require **Python 3.5 or newer**.
+    pulse2percept 0.4.3 is the last release to support Python 2.7 and 3.4.
+    pulse2percept 0.5+ require **Python 3.5 or newer**.
 
-v0.6.0 (2020)
--------------
+v0.6.0 (2020, planned)
+----------------------
 
-Highlights:
+Highlights
+~~~~~~~~~~
 
 *   New API (:pull:`96`)
 *   New models: :py:class:`~pulse2percept.models.ScoreboardModel` (:pull:`96`),
@@ -35,6 +36,8 @@ New features
     :py:class:`~pulse2percept.stimuli.TimeSeries` objects.
 *   :py:class:`~pulse2percept.implants.ElectrodeArray` now stores electrodes in
     a dictionary (:issue:`74`).
+*   :py:class:`~pulse2percept.implants.ElectrodeGrid` can be used to create
+    electrodes on a rectangular (:pull:`150`) or hexagonal grid (:pull:`160`).
 
 API changes
 ~~~~~~~~~~~
@@ -44,18 +47,32 @@ Backward-incompatible changes
 
 *   The ``Simulation`` object has been removed. Please directly
     :ref:`instantiate a model <topics-models>` instead.
+*   ``pulse2percept.retina``: use :py:mod:`~pulse2percept.models` instead
+*   ``pulse2percept.files``: use :py:mod:`~pulse2percept.io` instead
 
-Deprecation removals
-^^^^^^^^^^^^^^^^^^^^
+v0.5.2 (2020-02-25)
+-------------------
 
-* ``pulse2percept.Simulation``: directly instantiate a model instead
-* ``pulse2percept.retina``: use :py:mod:`~pulse2percept.models` instead
-* ``pulse2percept.files``: use :py:mod:`~pulse2percept.io` instead
+Bug fixes
+~~~~~~~~~
+
+*   ``pulse2percept.retina.Nanduri2012``: improved Cython implementation
+
+v0.5.1 (2020-02-05)
+-------------------
+
+Bug fixes
+~~~~~~~~~
+
+*   ``pulse2percept.retina.Nanduri2012``: allow switch between FFT/Cython
+*   ``pulse2percept.retina.Horsager2009``: respect ``use_jit`` option
+*   ``pulse2percept.utils.center_vector``: "cannot determine Numba type"
 
 v0.5.0 (2019-11-29)
--------------
+-------------------
 
-Highlights:
+Highlights
+~~~~~~~~~~
 
 *   New :py:mod:`pulse2percept.viz` module (:pull:`84`)
 *   Support for the :py:class:`~pulse2percept.implants.AlphaIMS` implant
@@ -78,7 +95,8 @@ Bug fixes
 v0.4.3 (2018-05-21)
 -------------------
 
-Highlights:
+Highlights
+~~~~~~~~~~
 
 *   Cython integration:
 
@@ -111,7 +129,8 @@ Deprecation removals
 v0.3.0 (2018-02-20)
 -------------------
 
-Highlights:
+Highlights
+~~~~~~~~~~
 
 *   New, faster axon map calculation
 *   Better plotting
