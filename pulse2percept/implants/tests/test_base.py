@@ -256,7 +256,8 @@ def test_ElectrodeGrid(gtype):
         ElectrodeGrid(gshape, spacing, type='unknown')
 
     # Verify spacing is correct:
-    grid = ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode)
+    grid = ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
+                         r=30)
     npt.assert_almost_equal(np.sqrt((grid['A1'].x - grid['A2'].x) ** 2 +
                                     (grid['A1'].y - grid['A2'].y) ** 2),
                             spacing)
