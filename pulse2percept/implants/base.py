@@ -292,7 +292,7 @@ class ElectrodeArray(PrettyPrint):
 
 
 class ElectrodeGrid(ElectrodeArray):
-    """Rectangular grid of electrodes
+    """2D grid of electrodes
 
     Parameters
     ----------
@@ -300,6 +300,8 @@ class ElectrodeGrid(ElectrodeArray):
         A tuple containing the number of rows x columns in the grid
     spacing : double
         Electrode-to-electrode spacing in microns.
+    type : 'rect' or 'hex', optional, default: 'rect'
+        Grid type ('rect': rectangular, 'hex': hexagonal).
     x, y, z : double, optional, default: (0,0,0)
         3D coordinates of the center of the grid
     rot : double, optional, default: 0rad
@@ -312,8 +314,6 @@ class ElectrodeGrid(ElectrodeArray):
         Columns and rows may only be strings and integers.
         For example ('1', 'A') will number rows numerically and columns
         alphabetically.
-    type : 'rect' or 'hex', optional, default: 'rect'
-        Grid type ('rect': rectangular, 'hex': hexagonal).
     etype : :py:class:`~pulse2percept.implants.Electrode`, optional
         A valid Electrode class. By default,
         :py:class:`~pulse2percept.implants.PointSource` is used.
@@ -325,9 +325,9 @@ class ElectrodeGrid(ElectrodeArray):
 
     Examples
     --------
-    A hexagonal electrode grid with 3 rows and 4 columns, made of disk electrodes
-    with 10um radius spaced 20um apart, centered at (10, 20)um, and located 500um
-    away from the retinal surface, with names like this:
+    A hexagonal electrode grid with 3 rows and 4 columns, made of disk
+    electrodes with 10um radius spaced 20um apart, centered at (10, 20)um, and
+    located 500um away from the retinal surface, with names like this:
 
     .. code-block:: none
 
@@ -342,9 +342,9 @@ class ElectrodeGrid(ElectrodeArray):
                   name_rows='A', r=10..., rot=0..., shape=(3, 4),
                   spacing=20..., x=10..., y=20..., z=500...)
 
-    A rectangulr electrode grid with 2 rows and 4 columns, made of disk electrodes with
-    10um radius spaced 20um apart, centered at (10, 20)um, and located 500um
-    away from the retinal surface, with names like this:
+    A rectangulr electrode grid with 2 rows and 4 columns, made of disk
+    electrodes with 10um radius spaced 20um apart, centered at (10, 20)um, and
+    located 500um away from the retinal surface, with names like this:
 
     .. code-block:: none
 

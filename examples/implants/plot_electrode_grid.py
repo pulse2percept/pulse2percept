@@ -101,11 +101,12 @@ hex_grid = ElectrodeGrid((2, 3), 800, type='hex', etype=DiskElectrode, r=100)
 plot_implant_on_axon_map(ProsthesisSystem(hex_grid))
 
 ##############################################################################
-# The following example centers the grid on (x,y) = (-1000um, 200 um) and
-# rotates it clockwise by 45 degrees (note the minus sign):
+# The following example centers the grid on (x,y) = (-1000um, 200 um),
+# z=150um away from the retinal surface, and rotates it clockwise by 45 degrees
+# (note the minus sign):
 
 from numpy import pi
-offset_grid = ElectrodeGrid((2, 3), 800, type='hex', x=-1000, y=200,
+offset_grid = ElectrodeGrid((2, 3), 800, type='hex', x=-1000, y=200, z=150,
                             rot=-pi / 4, etype=DiskElectrode, r=100)
 
 plot_implant_on_axon_map(ProsthesisSystem(hex_grid))
