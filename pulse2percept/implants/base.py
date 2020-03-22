@@ -329,6 +329,8 @@ class ElectrodeGrid(ElectrodeArray):
     with 10um radius spaced 20um apart, centered at (10, 20)um, and located 500um
     away from the retinal surface, with names like this:
 
+    .. code-block:: none
+
         A1    A2    A3    A4
            B1    B2    B3    B4
         C1    C2    C3    C4
@@ -343,10 +345,12 @@ class ElectrodeGrid(ElectrodeArray):
     A rectangulr electrode grid with 2 rows and 4 columns, made of disk electrodes with
     10um radius spaced 20um apart, centered at (10, 20)um, and located 500um
     away from the retinal surface, with names like this:
-    
+
+    .. code-block:: none
+
         A1 A2 A3 A4
         B1 B2 B3 B4
-        
+
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> ElectrodeGrid((2, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
     ...               type='rect', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
@@ -388,7 +392,9 @@ class ElectrodeGrid(ElectrodeArray):
         if np.prod(shape) <= 0:
             raise ValueError("Grid must have all non-zero rows and columns.")
         if not isinstance(type, str):
-            raise TypeError("'type' must be either 'rect' or 'hex'.")
+            raise TypeError("'type' must be a string, either 'rect' or 'hex'.")
+        if type not in ['rect', 'hex']:
+            raise ValueError("'type' must be either 'rect' or 'hex'.")
         if not issubclass(etype, Electrode):
             raise TypeError("'etype' must be a valid Electrode object.")
         if issubclass(etype, DiskElectrode):
@@ -513,38 +519,37 @@ class ElectrodeGrid(ElectrodeArray):
             # If `z` is a scalar, choose same height for all electrodes:
             z_arr = np.ones(n_elecs, dtype=float) * self.z
 
-        # Make a 2D meshgrid from x, y coordinates:
+        spc = self.spacing
         if self.type.lower() == 'rect':
+            # Rectangular grid from x, y coordinates:
             # For example, cols=3 with spacing=100 should give: [-100, 0, 100]
-            x_arr = (np.arange(cols) * self.spacing -
-                     (cols / 2.0 - 0.5) * self.spacing)
-            y_arr = (np.arange(rows) * self.spacing -
-                     (rows / 2.0 - 0.5) * self.spacing)
+            x_arr = (np.arange(cols) * spc - (cols / 2.0 - 0.5) * spc)
+            y_arr = (np.arange(rows) * spc - (rows / 2.0 - 0.5) * spc)
             x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
         elif self.type.lower() == 'hex':
-            # Make a 2D meshgrid from x, y coordinates:
-            x_arr_lshift = (np.arange(cols) * self.spacing -
-                            (cols / 2.0 - 0.5) * self.spacing - self.spacing * 0.25)
-            x_arr_rshift = (np.arange(cols) * self.spacing -
-                            (cols / 2.0 - 0.5) * self.spacing + self.spacing * 0.25)
-            y_arr = (np.arange(rows) * math.sqrt(3) * self.spacing/2.0 -
-                     (rows / 2.0 - 0.5) * self.spacing)
+            # Hexagonal grid from x,y coordinates:
+            x_arr_lshift = (np.arange(cols) * spc - (cols / 2.0 - 0.5) * spc -
+                            spc * 0.25)
+            x_arr_rshift = (np.arange(cols) * spc - (cols / 2.0 - 0.5) * spc +
+                            spc * 0.25)
+            y_arr = (np.arange(rows) * math.sqrt(3) * spc / 2.0 -
+                     (rows / 2.0 - 0.5) * spc)
             x_arr_lshift, y_arr_lshift = np.meshgrid(x_arr_lshift, y_arr,
                                                      sparse=False)
             x_arr_rshift, y_arr_rshift = np.meshgrid(x_arr_rshift, y_arr,
                                                      sparse=False)
             # Shift every other row to get an interleaved pattern:
             x_arr = []
-            for row in range(0, rows):
-                if row % 2 == 0:
-                    x_arr.append(x_arr_lshift[row])
-                else:
+            for row in range(rows):
+                if row % 2:
                     x_arr.append(x_arr_rshift[row])
+                else:
+                    x_arr.append(x_arr_lshift[row])
             x_arr = np.array(x_arr)
             y_arr = y_arr_rshift
         else:
             raise NotImplementedError
-        
+
         # Rotate the grid:
         rotmat = np.array([np.cos(self.rot), -np.sin(self.rot),
                            np.sin(self.rot), np.cos(self.rot)]).reshape((2, 2))

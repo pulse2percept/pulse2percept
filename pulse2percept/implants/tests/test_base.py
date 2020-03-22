@@ -250,6 +250,8 @@ def test_ElectrodeGrid(gtype):
                       radius=[2, 13])
 
     # Must pass in valid grid type:
+    with pytest.raises(TypeError):
+        ElectrodeGrid(gshape, spacing, type=DiskElectrode)
     with pytest.raises(ValueError):
         ElectrodeGrid(gshape, spacing, type='unknown')
 
