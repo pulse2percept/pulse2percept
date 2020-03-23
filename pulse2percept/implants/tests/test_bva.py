@@ -11,7 +11,7 @@ def test_BVA24(x, y, r):
     # Create a BVA24 and make sure location is correct
     # Convert rotation angle to rad
     rot = np.deg2rad(r)
-    bva = BVA24(x_center=x, y_center=y, rot=r)
+    bva = BVA24(x=x, y=y, rot=r)
     
     # Coordinate of first electrode (electrode '1')
     xy = np.array([-1275.0, 1520.0]).T
@@ -47,12 +47,12 @@ def test_BVA24(x, y, r):
     
     # Right-eye implant:
     xc,yc = 500, -500
-    bva_re = BVA24(eye='RE', x_center=xc, y_center=yc)
+    bva_re = BVA24(eye='RE', x=xc, y=yc)
     npt.assert_equal(bva_re['1'].x < bva_re['6'].x, True)
     npt.assert_equal(bva_re['1'].y, bva_re['1'].y)
     
     # Left-eye implant:
     xc,yc = 500, -500
-    bva_le = BVA24(eye='LE', x_center=xc, y_center=yc)
+    bva_le = BVA24(eye='LE', x=xc, y=yc)
     npt.assert_equal(bva_le['1'].x > bva_le['6'].x, True)
     npt.assert_equal(bva_le['1'].y, bva_le['1'].y)
