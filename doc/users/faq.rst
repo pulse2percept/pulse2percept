@@ -59,7 +59,7 @@ The code I downloaded does not match the documentation. What gives?
 Make sure you are reading the right version of the documentation:
 
 *  If you installed pulse2percept :ref:`with pip <install-release>`, you are
-   using the latest stable release, for which you can find documentation at
+   using the stable release, for which you can find documentation at
    `pulse2percept.readthedocs.io/en/stable`_.
 
 *  If you installed pulse2percept from source, you are using the

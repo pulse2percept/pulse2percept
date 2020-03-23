@@ -23,8 +23,9 @@
 
    users/api
    users/faq
-   users/release_notes
    users/news
+   users/release_notes
+   users/references
 
 .. toctree::
    :caption: Developer Guide
