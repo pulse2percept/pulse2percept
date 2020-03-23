@@ -11,7 +11,7 @@ def test_BVA24(x, y, r):
     # Create a BVA24 and make sure location is correct
     # Convert rotation angle to rad
     rot = np.deg2rad(r)
-    bva = BVA24(x=x, y=y, rot=r)
+    bva = BVA24(x=x, y=y, rot=rot)
     
     # Coordinate of first electrode (electrode '1')
     xy = np.array([-1275.0, 1520.0]).T
