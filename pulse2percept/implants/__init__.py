@@ -6,6 +6,7 @@
     base
     argus
     alpha
+    bva
 
 """
 from .base import (DiskElectrode,
@@ -16,12 +17,14 @@ from .base import (DiskElectrode,
                    ProsthesisSystem)
 from .argus import ArgusI, ArgusII
 from .alpha import AlphaIMS, AlphaAMS
+from .bva import BVA24
 
 __all__ = [
     'AlphaAMS',
     'AlphaIMS',
     'ArgusI',
     'ArgusII',
+    'BVA24',
     'DiskElectrode',
     'Electrode',
     'ElectrodeArray',
