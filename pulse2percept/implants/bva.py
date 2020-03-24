@@ -15,9 +15,12 @@ class BVA24(ProsthesisSystem):
     The array consists of:
 
     -   33 platinum stimulating electrodes:
+
         -   30 electrodes with 600um diameter (Electrodes 1-20 (except
             9, 17, 19) and Electrodes 21a-m),
+
         -   3 electrodes with 400um diameter (Electrodes 9, 17, 19)
+
     -   2 return electrodes with 2000um diameter (Electrodes 22, 23)
 
     Electrodes 21a-m are typically being ganged to provide an external

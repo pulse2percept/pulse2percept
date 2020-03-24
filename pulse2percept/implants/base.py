@@ -341,7 +341,7 @@ class ElectrodeGrid(ElectrodeArray):
     electrodes with 10um radius spaced 20um apart, centered at (10, 20)um, and
     located 500um away from the retinal surface, with names like this:
 
-    .. code-block:: none
+    .. raw:: html
 
         A1    A2    A3    A4
            B1    B2    B3    B4
@@ -350,15 +350,13 @@ class ElectrodeGrid(ElectrodeArray):
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> ElectrodeGrid((3, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
     ...               type='hex', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    ElectrodeGrid(..., name_cols='1',
-                  name_rows='A', r=10..., rot=0..., shape=(3, 4),
-                  spacing=20..., x=10..., y=20..., z=500...)
+    ElectrodeGrid(shape=(3, 4), type='hex')
 
     A rectangulr electrode grid with 2 rows and 4 columns, made of disk
     electrodes with 10um radius spaced 20um apart, centered at (10, 20)um, and
     located 500um away from the retinal surface, with names like this:
 
-    .. code-block:: none
+    .. raw:: html
 
         A1 A2 A3 A4
         B1 B2 B3 B4
