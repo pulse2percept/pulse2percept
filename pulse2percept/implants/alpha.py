@@ -145,8 +145,8 @@ class AlphaAMS(ProsthesisSystem):
 
     >>> from pulse2percept.implants import AlphaAMS
     >>> AlphaAMS(x=0, y=0, z=100, rot=0)  # doctest: +NORMALIZE_WHITESPACE
-    AlphaAMS(earray=pulse2percept.implants.base.ElectrodeGrid, eye='RE',
-             shape=(40, 40), stim=None)
+    AlphaAMS(earray=ElectrodeGrid(shape=(40, 40), type='rect'),
+             eye='RE', shape=(40, 40), stim=None)
 
     Get access to the third electrode in the top row (by name or by row/column
     index):
