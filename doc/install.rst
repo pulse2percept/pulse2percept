@@ -41,7 +41,7 @@ If you don't have Python, you have several options:
 .. important::
 
     pulse2percept 0.4.3 was the last release to support Python 2.7 and 3.4.
-    pulse2percept 0.5+ requires **Python 3.5 - 3.7**.
+    pulse2percept 0.5+ requires **Python 3.5+**.
 
 On some platforms (e.g., macOS), you might also have to install pip yourself.
 You can check if pip is installed on your system by typing ``pip --version``
@@ -79,7 +79,7 @@ You can also install a specific version:
 
 .. code-block:: bash
 
-    pip3 install pulse2percept==0.4.3
+    pip3 install pulse2percept==0.5.2
 
 Then from any Python console or script, try:
 
@@ -107,7 +107,7 @@ Installing version |version| from source
 Prerequisites
 -------------
 
-1.  **Python** (3.5 - 3.7): Make sure to :ref:`install Python <install-python>`
+1.  **Python** (>= 3.5): Make sure to :ref:`install Python <install-python>`
     first.
 
 2.  **XCode**: On macOS, make sure to install `Apple XCode`_.
