@@ -143,8 +143,8 @@ class Stimulus(PrettyPrint):
         # Extract the data and coordinates (electrodes, time) from the source:
         self._factory(source, electrodes, time, compress)
 
-    def get_params(self):
-        """Return a dictionary of class attributes"""
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
         return {'data': self.data, 'electrodes': self.electrodes,
                 'time': self.time, 'shape': self.shape,
                 'metadata': self.metadata}

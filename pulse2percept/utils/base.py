@@ -17,7 +17,7 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
     inspired by scikit-learn.
 
     Classes deriving from PrettyPrint are required to implement a
-    ``get_params`` method that returns a dictionary containing all the
+    ``_pprint_params`` method that returns a dictionary containing all the
     attributes to prettyprint.
 
     Examples
@@ -28,14 +28,14 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
     ...         self.a = a
     ...         self.b = b
     ...
-    ...     def get_params(self):
+    ...     def _pprint_params(self):
     ...         return {'a': self.a, 'b': self.b}
     >>> MyClass(1, 2)
     MyClass(a=1, b=2)
     """
 
     @abc.abstractmethod
-    def get_params(self):
+    def _pprint_params(self):
         """Return a dictionary of class attributes"""
         raise NotImplementedError
 
@@ -46,7 +46,7 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
         # Line width:
         lwidth = 60
         # Sort list of parameters alphabetically:
-        sorted_params = coll.OrderedDict(sorted(self.get_params().items()))
+        sorted_params = coll.OrderedDict(sorted(self._pprint_params().items()))
         # Start string with class name, followed by all arguments:
         str_params = self.__class__.__name__ + '('
         # New line indent (align with class name on first line):
