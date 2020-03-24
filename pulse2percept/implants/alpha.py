@@ -59,6 +59,8 @@ class AlphaIMS(ProsthesisSystem):
     DiskElectrode(r=50.0, x=-1152.0, y=-1296.0, z=100.0)
 
     """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
         self.eye = eye
@@ -156,6 +158,8 @@ class AlphaAMS(ProsthesisSystem):
     DiskElectrode(r=15.0, x=-1225.0, y=-1365.0, z=100.0)
 
     """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
         self.eye = eye

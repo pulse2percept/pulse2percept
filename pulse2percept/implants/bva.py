@@ -46,6 +46,8 @@ class BVA24(ProsthesisSystem):
         Eye in which array is implanted.
 
     """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ()
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
         self.earray = ElectrodeArray([])

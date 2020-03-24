@@ -1,6 +1,6 @@
 """`ArgusI`, `ArgusII`"""
 import numpy as np
-import collections as coll
+from collections import OrderedDict
 from .base import (DiskElectrode, ElectrodeArray, ElectrodeGrid,
                    ProsthesisSystem)
 
@@ -72,6 +72,8 @@ class ArgusI(ProsthesisSystem):
     DiskElectrode(r=260.0, x=-400.0, y=-1200.0, z=100.0)
 
     """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
                  use_legacy_names=False):
@@ -86,11 +88,11 @@ class ArgusI(ProsthesisSystem):
         spacing = 800.0
 
         # In older papers, Argus I electrodes go by L and M:
-        self.old_names = names = ['L6', 'L2', 'M8', 'M4',
-                                  'L5', 'L1', 'M7', 'M3',
-                                  'L8', 'L4', 'M6', 'M2',
-                                  'L7', 'L3', 'M5', 'M1']
-        names = self.old_names if use_legacy_names else ('1', 'A')
+        old_names = names = ['L6', 'L2', 'M8', 'M4',
+                             'L5', 'L1', 'M7', 'M3',
+                             'L8', 'L4', 'M6', 'M2',
+                             'L7', 'L3', 'M5', 'M1']
+        names = old_names if use_legacy_names else ('1', 'A')
         self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z,
                                     rot=rot, etype=DiskElectrode, r=r_arr,
                                     names=names)
@@ -115,7 +117,7 @@ class ArgusI(ProsthesisSystem):
             for row in range(self.earray.shape[0]):
                 names[row] = names[row][::-1]
             # Build a new ordered dict:
-            electrodes = coll.OrderedDict([])
+            electrodes = OrderedDict()
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
             # Assign the new ordered dict to earray:
@@ -195,6 +197,8 @@ class ArgusII(ProsthesisSystem):
     DiskElectrode(r=100.0, x=787.5, y=787.5, z=100.0)
 
     """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
         # Argus II is a 6x10 grid of electrodes with 200um in diamater, spaced
@@ -206,7 +210,6 @@ class ArgusII(ProsthesisSystem):
         names = ('A', '1')
         self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, r=r,
                                     rot=rot, names=names, etype=DiskElectrode)
-        self.shape = self.earray.shape
 
         # Set stimulus if available:
         self.stim = stim
@@ -228,7 +231,7 @@ class ArgusII(ProsthesisSystem):
             for row in range(self.earray.shape[0]):
                 names[row] = names[row][::-1]
             # Build a new ordered dict:
-            electrodes = coll.OrderedDict([])
+            electrodes = OrderedDict()
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
             # Assign the new ordered dict to earray:

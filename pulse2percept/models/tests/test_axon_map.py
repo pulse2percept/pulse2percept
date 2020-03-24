@@ -15,6 +15,9 @@ def test_AxonMapModel():
     model = models.AxonMapModel()
     for param in set_params:
         npt.assert_equal(hasattr(model, param), True)
+    # Slots:
+    npt.assert_equal(hasattr(model, '__slots__'), True)
+    npt.assert_equal(hasattr(model, '__dict__'), False)
 
     # User can override default values
     for key, value in set_params.items():

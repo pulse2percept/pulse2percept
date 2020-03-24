@@ -10,9 +10,11 @@ from pulse2percept import implants
 class ValidBaseModel(models.BaseModel):
     """A class that implements all abstract methods of BaseModel"""
 
+    __slots__ = ('_private', 'valid')
+
     def __init__(self, **kwargs):
         super(ValidBaseModel, self).__init__(**kwargs)
-        # It must be allowed to set additional variables in the constructor:
+        # You can only add attributes that are listed in slots:
         self._private = 0
 
     def _get_default_params(self):
@@ -38,10 +40,13 @@ def test_BaseModel___init__():
     # Set new value for existing param:
     model.valid = 2
     npt.assert_almost_equal(model.valid, 2)
-    # However, creating new params outside the constructor is not allowed:
+    # Slots:
+    npt.assert_equal(hasattr(model, '__slots__'), True)
+    npt.assert_equal(hasattr(model, '__dict__'), False)
+    # However, creating new params is not allowed:
     with pytest.raises(AttributeError):
         model.newparam = 0
-    # Passing parameters that are not in get_params() is not allowed:
+    # Passing parameters that are not in slots is not allowed:
     with pytest.raises(AttributeError):
         ValidBaseModel(newparam=0)
     # Technically, nobody stops you from calling model.key = value on other

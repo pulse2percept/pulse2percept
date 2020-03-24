@@ -8,6 +8,9 @@ from pulse2percept.stimuli import Stimulus, PulseTrain
 
 
 def test_Stimulus():
+    # Slots:
+    npt.assert_equal(hasattr(Stimulus(1), '__slots__'), True)
+    npt.assert_equal(hasattr(Stimulus(1), '__dict__'), False)
     # One electrode:
     stim = Stimulus(3)
     npt.assert_equal(stim.shape, (1, 1))

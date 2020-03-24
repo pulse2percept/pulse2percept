@@ -22,6 +22,11 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
     rho : double
         Exponential decay constant away from the axon (microns).
     """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('eye', 'rho', 'axlambda', 'loc_od_x', 'loc_od_y', 'n_axons',
+                 'axons_range', 'n_ax_segments', 'ax_segments_range',
+                 'axon_pickle', 'ignore_pickle', 'xret', 'yret',
+                 'axon_contrib')
 
     def __init__(self, **kwargs):
         super(AxonMapModel, self).__init__(**kwargs)

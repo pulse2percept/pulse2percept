@@ -3,7 +3,7 @@ import sys
 import abc
 
 from ..implants import ProsthesisSystem
-from ..utils import Frozen, PrettyPrint, GridXY, parfor
+from ..utils import PrettyPrint, GridXY, parfor
 
 
 class NotBuiltError(ValueError, AttributeError):
@@ -14,7 +14,7 @@ class NotBuiltError(ValueError, AttributeError):
     """
 
 
-class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
+class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
     """Base model
 
     The BaseModel class defines which methods and attributes a model must
@@ -64,6 +64,9 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
     idea of how to write a complete model.
 
     """
+    __slots__ = ('xrange', 'yrange', 'xystep', 'grid', 'grid_type',
+                 'thresh_percept', 'engine', 'scheduler', 'n_jobs', 'verbose',
+                 '__is_built')
 
     def __init__(self, **kwargs):
         """Constructor
@@ -133,10 +136,13 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         # getframe(0) is '_is_built', getframe(1) is 'set_attr'.
         # getframe(2) is the one we are looking for, and has to be either the
         # construct or ``build``:
-        f_caller = sys._getframe(2).f_code.co_name
+        f_caller = sys._getframe(1).f_code.co_name
         if f_caller in ["__init__", "build"]:
             self.__is_built = val
         else:
+            print(sys._getframe(0).f_code.co_name)
+            print(sys._getframe(1).f_code.co_name)
+            print(sys._getframe(2).f_code.co_name)
             err_s = ("The attribute `_is_built` can only be set in the "
                      "constructor or in ``build``, not in ``%s``." % f_caller)
             raise AttributeError(err_s)
