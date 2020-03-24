@@ -110,11 +110,11 @@ Dependencies
 ------------
 
 **pulse2percept 0.4.3 was the last version to support Python 2.7 and 3.4.**
-pulse2percept 0.5+ requires Python 3.5 - 3.7.
+pulse2percept 0.5+ requires Python 3.5+.
 
 pulse2percept requires:
 
-1.  `Python`_ (3.5 - 3.7)
+1.  `Python`_ (>= 3.5)
 2.  `Cython`_ (>= 0.28)
 3.  `NumPy`_ (>= 1.9)
 4.  `SciPy`_ (>= 1.0)
@@ -130,20 +130,18 @@ Optional packages:
     module.
 4.  `Dask`_ for parallel processing (a joblib alternative).
     Use conda to install.
-5.  `Numba`_ for just-in-time compilation. Use conda to install.
-6.  `Pytest`_ to run the test suite.
+5.  `Pytest`_ to run the test suite.
 
 .. _Python: https://www.python.org
 .. _Cython: https://www.cython.org
 .. _NumPy: https://www.numpy.org
 .. _SciPy: https://www.scipy.org
-.. _Matplotlib: https://matplotlib.org/
+.. _Matplotlib: https://matplotlib.org
 .. _JobLib: https://joblib.readthedocs.io
 .. _scikit-image: https://scikit-image.org
 .. _scikit-video: https://www.scikit-video.org
 .. _ffmpeg codec: http://adaptivesamples.com/how-to-install-ffmpeg-on-windows
 .. _Dask: https://github.com/dask/dask
-.. _Numba: https://numba.pydata.org
 .. _Pytest: https://docs.pytest.org/en/latest
 
 All required packages are listed in ``requirements.txt`` in the root directory

@@ -3,12 +3,6 @@
 import numpy as np
 from scipy import signal as sps
 
-try:
-    from numba import jit
-    has_jit = True
-except ImportError:
-    has_jit = False
-
 
 def center_vector(vec, newlen):
     """Returns the center ``newlen`` portion of a vector.
@@ -52,7 +46,7 @@ def _sparseconv(data, kernel, mode):
         return center_vector(out, data_len)
 
 
-def conv(data, kernel, mode='full', method='fft', use_jit=True):
+def conv(data, kernel, mode='full', method='fft'):
     """Convoles data with a kernel using either FFT or sparse convolution
 
     This function convolves data with a kernel, relying either on the
@@ -83,10 +77,6 @@ def conv(data, kernel, mode='full', method='fft', use_jit=True):
             Use the fast Fourier transform (FFT).
         - ``sparse``:
             Use the sparse convolution.
-
-    use_jit : bool, optional, default: True
-        A flag indicating whether to use Numba's just-in-time compilation
-        option (only relevant for ``method=='sparse'``).
     """
     if mode not in ['full', 'valid', 'same']:
         raise ValueError("Acceptable mode flags are 'full', 'valid', or "
@@ -97,14 +87,5 @@ def conv(data, kernel, mode='full', method='fft', use_jit=True):
         # Use FFT: faster on non-sparse data
         conved = sps.fftconvolve(data, kernel, mode)
     elif method.lower() == 'sparse':
-        # Use sparseconv: faster on sparse data
-        if use_jit:
-            if not has_jit:
-                e_s = "You do not have numba, please run sparseconv with "
-                e_s += "`use_jit`=False."
-                raise ImportError(e_s)
-            sparseconv = jit(_sparseconv)
-        else:
-            sparseconv = _sparseconv
-        conved = sparseconv(data, kernel, mode)
+        conved = _sparseconv(data, kernel, mode)
     return conved
