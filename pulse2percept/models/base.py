@@ -117,8 +117,8 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         }
         return params
 
-    def get_params(self):
-        """Get a dictionary of all model parameters (don't override!)"""
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
         return {key: getattr(self, key)
                 for key, _ in self._get_default_params().items()}
 

@@ -50,10 +50,10 @@ def test_BaseModel___init__():
     npt.assert_almost_equal(model._private, 2)
 
 
-def test_BaseModel_get_params():
-    # We can overwrite default param values if they are in ``get_params``:
+def test_BaseModel__pprint_params():
+    # We can overwrite default param values if they are in ``_pprint_params``:
     model = ValidBaseModel(engine='serial')
-    for key, value in model.get_params().items():
+    for key, value in model._pprint_params().items():
         if key in ('xrange', 'yrange', 'grid_type'):
             continue
         npt.assert_equal(getattr(model, key), value)
@@ -73,7 +73,7 @@ def test_BaseModel_build():
 
     # Params passed to ``build`` must take effect:
     model = ValidBaseModel(engine='serial')
-    model_params = model.get_params()
+    model_params = model._pprint_params()
     for key, value in model_params.items():
         if isinstance(value, (int, float)):
             set_param = {key: 0.1234}

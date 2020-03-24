@@ -121,8 +121,9 @@ class ArgusI(ProsthesisSystem):
             # Assign the new ordered dict to earray:
             self.earray.electrodes = electrodes
 
-    def get_params(self):
-        params = super().get_params()
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
+        params = super()._pprint_params()
         params.update({'shape': self.shape})
         return params
 
@@ -233,7 +234,8 @@ class ArgusII(ProsthesisSystem):
             # Assign the new ordered dict to earray:
             self.earray.electrodes = electrodes
 
-    def get_params(self):
-        params = super().get_params()
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
+        params = super()._pprint_params()
         params.update({'shape': self.shape})
         return params

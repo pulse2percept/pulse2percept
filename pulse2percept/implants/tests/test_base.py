@@ -382,28 +382,44 @@ def test_ElectrodeGrid_get_params(gtype):
     params = {'shape': (2, 3), 'x': 0, 'y': 0, 'z': 0, 'etype': DiskElectrode,
               'rot': 0, 'spacing': 40, 'name_cols': '1',
               'name_rows': 'A', 'r': 20}
-    npt.assert_equal(egrid.get_params(), params)
+    for key, value in params.items():
+        if isinstance(value, float):
+            npt.assert_almost_equal(getattr(egrid, key), value)
+        else:
+            npt.assert_equal(getattr(egrid, key), value)
     # test the nondefault value for all the parameters
     egrid = ElectrodeGrid((2, 3), 30, x=10, y=20, z=30, rot=10, type=gtype,
                           names=('A', '1'), etype=DiskElectrode, r=20)
     params = {'shape': (2, 3), 'x': 10, 'y': 20, 'z': 30, 'rot': 10,
               'spacing': 30, 'name_cols': '1', 'name_rows': 'A',
               'etype': DiskElectrode, 'r': 20}
-    npt.assert_equal(egrid.get_params(), params)
+    for key, value in params.items():
+        if isinstance(value, float):
+            npt.assert_almost_equal(getattr(egrid, key), value)
+        else:
+            npt.assert_equal(getattr(egrid, key), value)
     # When the electrode_type is 'PointSource'
     # test the default value
     egrid = ElectrodeGrid((2, 3), 20, type=gtype, etype=PointSource)
     params = {'shape': (2, 3), 'x': 0, 'y': 0, 'z': 0, 'etype': PointSource,
               'rot': 0, 'spacing': 20, 'name_cols': '1',
               'name_rows': 'A'}
-    npt.assert_equal(egrid.get_params(), params)
+    for key, value in params.items():
+        if isinstance(value, float):
+            npt.assert_almost_equal(getattr(egrid, key), value)
+        else:
+            npt.assert_equal(getattr(egrid, key), value)
     # test the nondefault value for all the parameters
     egrid = ElectrodeGrid((2, 3), 30, x=10, y=20, z=30, rot=10, type=gtype,
                           names=('A', '1'), etype=PointSource)
     params = {'shape': (2, 3), 'x': 10, 'y': 20, 'z': 30, 'rot': 10,
               'spacing': 30, 'etype': PointSource, 'name_cols': '1',
               'name_rows': 'A'}
-    npt.assert_equal(egrid.get_params(), params)
+    for key, value in params.items():
+        if isinstance(value, float):
+            npt.assert_almost_equal(getattr(egrid, key), value)
+        else:
+            npt.assert_equal(getattr(egrid, key), value)
 
 
 @pytest.mark.parametrize('gtype', ('rect', 'hex'))

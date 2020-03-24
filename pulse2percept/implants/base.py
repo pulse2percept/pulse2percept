@@ -26,8 +26,8 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
         self.y = y
         self.z = z
 
-    def get_params(self):
-        """Return a dictionary of class attributes"""
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
         return {'x': self.x, 'y': self.y, 'z': self.z}
 
     @abstractmethod
@@ -93,9 +93,9 @@ class DiskElectrode(Electrode):
             raise ValueError("Electrode radius must be > 0, not %f." % r)
         self.r = r
 
-    def get_params(self):
-        """Return a dictionary of class attributes"""
-        params = super().get_params()
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
+        params = super()._pprint_params()
         params.update({'r': self.r})
         return params
 
@@ -209,8 +209,8 @@ class ElectrodeArray(PrettyPrint):
     def n_electrodes(self):
         return len(self.electrodes)
 
-    def get_params(self):
-        """Return a dictionary of class attributes"""
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
         return {'electrodes': self.electrodes,
                 'n_electrodes': self.n_electrodes}
 
@@ -421,8 +421,8 @@ class ElectrodeGrid(ElectrodeArray):
         self.electrodes = coll.OrderedDict()
         self._make_grid()
 
-    def get_params(self):
-        """Return a dictionary of class attributes"""
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
         params = {'shape': self.shape, 'spacing': self.spacing,
                   'x': self.x, 'y': self.y, 'z': self.z,
                   'rot': self.rot, 'etype': self.etype,
@@ -625,7 +625,8 @@ class ProsthesisSystem(PrettyPrint):
         self.stim = stim
         self.eye = eye
 
-    def get_params(self):
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
         return {'earray': self.earray, 'stim': self.stim, 'eye': self.eye}
 
     def check_stim(self, stim):
