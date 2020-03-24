@@ -424,12 +424,7 @@ class ElectrodeGrid(ElectrodeArray):
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
-        params = {'shape': self.shape, 'spacing': self.spacing,
-                  'x': self.x, 'y': self.y, 'z': self.z,
-                  'rot': self.rot, 'etype': self.etype,
-                  'name_cols': self.name_cols, 'name_rows': self.name_rows}
-        if issubclass(self.etype, DiskElectrode):
-            params.update({'r': self.r})
+        params = {'shape': self.shape, 'type': self.type}
         return params
 
     def __getitem__(self, item):
