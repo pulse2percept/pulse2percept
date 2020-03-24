@@ -46,8 +46,8 @@ class AlphaIMS(ProsthesisSystem):
 
     >>> from pulse2percept.implants import AlphaIMS
     >>> AlphaIMS(x=0, y=0, z=100, rot=0)  # doctest: +NORMALIZE_WHITESPACE
-    AlphaIMS(earray=pulse2percept.implants.base.ElectrodeGrid, eye='RE',
-             shape=(37, 37), stim=None)
+    AlphaIMS(earray=ElectrodeGrid(shape=(37, 37), type='rect'),
+             eye='RE', shape=(37, 37), stim=None)
 
     Get access to the third electrode in the top row (by name or by row/column
     index):
@@ -59,6 +59,8 @@ class AlphaIMS(ProsthesisSystem):
     DiskElectrode(r=50.0, x=-1152.0, y=-1296.0, z=100.0)
 
     """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
         self.eye = eye
@@ -143,8 +145,8 @@ class AlphaAMS(ProsthesisSystem):
 
     >>> from pulse2percept.implants import AlphaAMS
     >>> AlphaAMS(x=0, y=0, z=100, rot=0)  # doctest: +NORMALIZE_WHITESPACE
-    AlphaAMS(earray=pulse2percept.implants.base.ElectrodeGrid, eye='RE',
-             shape=(40, 40), stim=None)
+    AlphaAMS(earray=ElectrodeGrid(shape=(40, 40), type='rect'),
+             eye='RE', shape=(40, 40), stim=None)
 
     Get access to the third electrode in the top row (by name or by row/column
     index):
@@ -156,6 +158,8 @@ class AlphaAMS(ProsthesisSystem):
     DiskElectrode(r=15.0, x=-1225.0, y=-1365.0, z=100.0)
 
     """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
         self.eye = eye

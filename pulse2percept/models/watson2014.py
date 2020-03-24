@@ -14,6 +14,7 @@ class Watson2014ConversionMixin(object):
     in [Watson2014]_.
 
     """
+    __slots__ = ()
 
     def get_tissue_coords(self, xdva, ydva):
         """Converts dva to retinal coords
@@ -45,6 +46,7 @@ class Watson2014DisplacementMixin(object):
     [Watson2014]_.
 
     """
+    __slots__ = ()
 
     @staticmethod
     def _watson_displacement(r, meridian='temporal'):

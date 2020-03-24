@@ -133,6 +133,9 @@ class Stimulus(PrettyPrint):
     3.45...
 
     """
+    # Frozen class: Only the following class attributes are allowed
+    __slots__ = ('metadata', '_interp', '_interp_method', '_extrapolate',
+                 '__stim')
 
     def __init__(self, source, electrodes=None, time=None, metadata=None,
                  compress=False, interp_method='linear', extrapolate=False):
@@ -353,16 +356,14 @@ class Stimulus(PrettyPrint):
         Examples
         --------
         >>> from pulse2percept.stimuli import Stimulus
-        >>> stim1 = Stimulus(np.ones(3))
-        >>> stim2 = Stimulus(np.zeros(5))
-        >>> stim1 == stim2
+        >>> Stimulus([1, 2, 3]) == Stimulus([1, 2, 3])
+        True
+        >>> Stimulus(np.ones(3)) == Stimulus(np.zeros(5))
         False
 
         Compare a Stimulus with something else entirely:
 
-        >>> from pulse2percept.stimuli import Stimulus
-        >>> stim1 = Stimulus(np.ones(3))
-        >>> stim1 == 1
+        >>> Stimulus(np.ones(3)) == 1
         False
 
         """
@@ -380,7 +381,7 @@ class Stimulus(PrettyPrint):
                 return False
         if len(self.electrodes) != len(other.electrodes):
             return False
-        if not np.all(self.electrodes == other.electrodes):
+        if not np.array_equal(self.electrodes, other.electrodes):
             return False
         if self.shape != other.shape:
             return False

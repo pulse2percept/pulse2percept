@@ -10,6 +10,9 @@ def test_Watson2014ConversionMixin():
     trafo = Watson2014ConversionMixin()
     npt.assert_almost_equal(trafo.get_tissue_coords(0, 0), 0)
     npt.assert_almost_equal(trafo.get_tissue_coords(6, 6), 1618.53, decimal=2)
+    # Slots:
+    npt.assert_equal(hasattr(trafo, '__slots__'), True)
+    npt.assert_equal(hasattr(trafo, '__dict__'), False)
 
 
 def test_Watson2014DisplacementMixin():
@@ -29,6 +32,9 @@ def test_Watson2014DisplacementMixin():
     all_displace = trafo._watson_displacement(radii, meridian='nasal')
     npt.assert_almost_equal(np.max(all_displace), 1.9228664)
     npt.assert_almost_equal(radii[np.argmax(all_displace)], 2.1212121)
+    # Slots:
+    npt.assert_equal(hasattr(trafo, '__slots__'), True)
+    npt.assert_equal(hasattr(trafo, '__dict__'), False)
 
 
 def test_ret2dva():

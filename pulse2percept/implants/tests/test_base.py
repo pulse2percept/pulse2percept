@@ -10,6 +10,7 @@ from pulse2percept.stimuli import Stimulus
 
 
 class ValidElectrode(Electrode):
+    __slots__ = ()
 
     def electric_potential(self, x, y, z):
         r = np.sqrt((x - self.x) ** 2 + (y - self.y) ** 2 + (z - self.z) ** 2)
@@ -28,6 +29,9 @@ def test_Electrode():
         ValidElectrode(0, np.array([1, 2]), 2)
     with pytest.raises(TypeError):
         ValidElectrode(0, 1, [2, 3])
+    # Slots:
+    npt.assert_equal(hasattr(electrode, '__slots__'), True)
+    npt.assert_equal(hasattr(electrode, '__dict__'), False)
 
 
 def test_PointSource():
@@ -38,6 +42,9 @@ def test_PointSource():
     npt.assert_almost_equal(electrode.electric_potential(0, 1, 2, 1, 1), 1)
     npt.assert_almost_equal(electrode.electric_potential(0, 0, 0, 1, 1), 0.035,
                             decimal=3)
+    # Slots:
+    npt.assert_equal(hasattr(electrode, '__slots__'), True)
+    npt.assert_equal(hasattr(electrode, '__dict__'), False)
 
 
 def test_DiskElectrode():
@@ -68,6 +75,9 @@ def test_DiskElectrode():
     # Some distance away from the electrode (z>2):
     npt.assert_almost_equal(electrode.electric_potential(0, 1, 38, 1), 0.780,
                             decimal=3)
+    # Slots:
+    npt.assert_equal(hasattr(electrode, '__slots__'), True)
+    npt.assert_equal(hasattr(electrode, '__dict__'), False)
 
 
 def test_ElectrodeArray():
@@ -101,6 +111,9 @@ def test_ElectrodeArray():
     earray = ElectrodeArray({'A01': ps1, 'D07': ps2})
     npt.assert_equal(earray['A01'], ps1)
     npt.assert_equal(earray['D07'], ps2)
+    # Slots:
+    npt.assert_equal(hasattr(earray, '__slots__'), True)
+    npt.assert_equal(hasattr(earray, '__dict__'), False)
 
 
 def test_ElectrodeArray_add_electrode():
@@ -272,9 +285,6 @@ def test_ElectrodeGrid(gtype):
                           etype=DiskElectrode, r=radius)
     npt.assert_equal(egrid.shape, gshape)
     npt.assert_equal(egrid.n_electrodes, np.prod(gshape))
-    npt.assert_equal(egrid.x, x)
-    npt.assert_equal(egrid.y, y)
-    npt.assert_almost_equal(egrid.spacing, spacing)
     # Make sure different electrodes have different coordinates:
     npt.assert_equal(len(np.unique([e.x for e in egrid.values()])), gshape[1])
     npt.assert_equal(len(np.unique([e.y for e in egrid.values()])), gshape[0])
@@ -291,7 +301,6 @@ def test_ElectrodeGrid(gtype):
     z = 12
     egrid = ElectrodeGrid(gshape, spacing, z=z, type=gtype,
                           etype=DiskElectrode, r=radius)
-    npt.assert_equal(egrid.z, z)
     for i in egrid.values():
         npt.assert_equal(i.z, z)
 
@@ -299,7 +308,6 @@ def test_ElectrodeGrid(gtype):
     z = np.arange(np.prod(gshape))
     egrid = ElectrodeGrid(gshape, spacing, z=z, type=gtype,
                           etype=DiskElectrode, r=radius)
-    npt.assert_equal(egrid.z, z)
     x = -1
     for i in egrid.values():
         npt.assert_equal(i.z, x + 1)
@@ -372,6 +380,9 @@ def test_ElectrodeGrid(gtype):
                           names=['53', '18', '00', '81', '11', '12'])
     npt.assert_equal([e for e in egrid.keys()],
                      ['53', '18', '00', '81', '11', '12'])
+    # Slots:
+    npt.assert_equal(hasattr(egrid, '__slots__'), True)
+    npt.assert_equal(hasattr(egrid, '__dict__'), False)
 
 
 @pytest.mark.parametrize('gtype', ('rect', 'hex'))
@@ -379,47 +390,8 @@ def test_ElectrodeGrid_get_params(gtype):
     # When the electrode_type is 'DiskElectrode'
     # test the default value
     egrid = ElectrodeGrid((2, 3), 40, type=gtype, etype=DiskElectrode, r=20)
-    params = {'shape': (2, 3), 'x': 0, 'y': 0, 'z': 0, 'etype': DiskElectrode,
-              'rot': 0, 'spacing': 40, 'name_cols': '1',
-              'name_rows': 'A', 'r': 20}
-    for key, value in params.items():
-        if isinstance(value, float):
-            npt.assert_almost_equal(getattr(egrid, key), value)
-        else:
-            npt.assert_equal(getattr(egrid, key), value)
-    # test the nondefault value for all the parameters
-    egrid = ElectrodeGrid((2, 3), 30, x=10, y=20, z=30, rot=10, type=gtype,
-                          names=('A', '1'), etype=DiskElectrode, r=20)
-    params = {'shape': (2, 3), 'x': 10, 'y': 20, 'z': 30, 'rot': 10,
-              'spacing': 30, 'name_cols': '1', 'name_rows': 'A',
-              'etype': DiskElectrode, 'r': 20}
-    for key, value in params.items():
-        if isinstance(value, float):
-            npt.assert_almost_equal(getattr(egrid, key), value)
-        else:
-            npt.assert_equal(getattr(egrid, key), value)
-    # When the electrode_type is 'PointSource'
-    # test the default value
-    egrid = ElectrodeGrid((2, 3), 20, type=gtype, etype=PointSource)
-    params = {'shape': (2, 3), 'x': 0, 'y': 0, 'z': 0, 'etype': PointSource,
-              'rot': 0, 'spacing': 20, 'name_cols': '1',
-              'name_rows': 'A'}
-    for key, value in params.items():
-        if isinstance(value, float):
-            npt.assert_almost_equal(getattr(egrid, key), value)
-        else:
-            npt.assert_equal(getattr(egrid, key), value)
-    # test the nondefault value for all the parameters
-    egrid = ElectrodeGrid((2, 3), 30, x=10, y=20, z=30, rot=10, type=gtype,
-                          names=('A', '1'), etype=PointSource)
-    params = {'shape': (2, 3), 'x': 10, 'y': 20, 'z': 30, 'rot': 10,
-              'spacing': 30, 'etype': PointSource, 'name_cols': '1',
-              'name_rows': 'A'}
-    for key, value in params.items():
-        if isinstance(value, float):
-            npt.assert_almost_equal(getattr(egrid, key), value)
-        else:
-            npt.assert_equal(getattr(egrid, key), value)
+    npt.assert_equal(egrid.shape, (2, 3))
+    npt.assert_equal(egrid.type, gtype)
 
 
 @pytest.mark.parametrize('gtype', ('rect', 'hex'))
@@ -460,3 +432,7 @@ def test_ProsthesisSystem():
     with pytest.raises(TypeError):
         # Invalid stim type:
         implant.stim = "stim"
+
+    # Slots:
+    npt.assert_equal(hasattr(implant, '__slots__'), True)
+    npt.assert_equal(hasattr(implant, '__dict__'), False)

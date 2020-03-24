@@ -18,6 +18,10 @@ def test_ArgusI(ztype, x, y, r):
 
     argus = implants.ArgusI(x, y, z=z, rot=rot)
 
+    # Slots:
+    npt.assert_equal(hasattr(argus, '__slots__'), True)
+    npt.assert_equal(hasattr(argus, '__dict__'), False)
+
     # Coordinates of first electrode
     xy = np.array([-1200, -1200]).T
 
@@ -114,6 +118,10 @@ def test_ArgusII(ztype, x, y, r):
     # Convert rotation angle to rad
     rot = np.deg2rad(r)
     argus = implants.ArgusII(x=x, y=y, z=z, rot=rot)
+
+    # Slots:
+    npt.assert_equal(hasattr(argus, '__slots__'), True)
+    npt.assert_equal(hasattr(argus, '__dict__'), False)
 
     # Coordinates of first electrode
     xy = np.array([-2362.5, -1312.5]).T

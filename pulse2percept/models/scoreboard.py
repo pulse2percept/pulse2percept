@@ -6,6 +6,8 @@ from ..models._scoreboard import scoreboard
 
 class ScoreboardModel(Watson2014ConversionMixin, BaseModel):
     """Scoreboard model"""
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('rho',)
 
     def _get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""

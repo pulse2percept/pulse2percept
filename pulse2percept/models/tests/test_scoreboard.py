@@ -10,6 +10,9 @@ def test_ScoreboardModel():
     # ScoreboardModel automatically sets `rho`:
     model = models.ScoreboardModel(engine='serial', xystep=5)
     npt.assert_equal(hasattr(model, 'rho'), True)
+    # Slots:
+    npt.assert_equal(hasattr(model, '__slots__'), True)
+    npt.assert_equal(hasattr(model, '__dict__'), False)
 
     # User can set `rho`:
     model.rho = 123

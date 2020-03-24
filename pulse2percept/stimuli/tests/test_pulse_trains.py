@@ -8,6 +8,10 @@ from pulse2percept.stimuli import (TimeSeries, MonophasicPulse, BiphasicPulse,
 
 
 def test_TimeSeries():
+    # Slots:
+    npt.assert_equal(hasattr(TimeSeries(1, [1]), '__slots__'), True)
+    npt.assert_equal(hasattr(TimeSeries(1, [1]), '__dict__'), False)
+
     max_val = 2.0
     max_idx = 156
     data_orig = np.random.rand(10, 10, 1000)
@@ -105,6 +109,9 @@ def test_MonophasicPulse(ptype, sdur):
     for pdur in range(10):
         for ddur in range(10):
             pulse = MonophasicPulse(ptype, pdur, tsample, ddur, sdur)
+            # Slots:
+            npt.assert_equal(hasattr(pulse, '__slots__'), True)
+            npt.assert_equal(hasattr(pulse, '__dict__'), False)
 
             # Make sure the pulse length is correct:
             # When stimulus duration is not specified, stimulus must
@@ -156,11 +163,16 @@ def test_BiphasicPulse(ptype, pdur, tsample):
         # generate pulse
         pulse = BiphasicPulse(ptype, pdur, tsample, interphase_dur)
 
+        # Slots:
+        npt.assert_equal(hasattr(pulse, '__slots__'), True)
+        npt.assert_equal(hasattr(pulse, '__dict__'), False)
+
         # predicted length
         pulse_gap_dur = 2 * pdur + interphase_dur
 
         # make sure length is correct
-        npt.assert_equal(pulse.shape[-1], int(np.round(pulse_gap_dur / tsample)))
+        npt.assert_equal(
+            pulse.shape[-1], int(np.round(pulse_gap_dur / tsample)))
 
         # make sure amplitude is correct: negative peak,
         # zero (in case of nonnegative interphase dur),
@@ -210,6 +222,10 @@ def test_PulseTrain(pulsetype, delay, pulseorder):
         npt.assert_equal(pt.data[0], -ampl * scale)
         npt.assert_equal(pt.data[-1], ampl * scale)
         npt.assert_equal(len(pt.data), 10)
+
+    # Slots:
+    npt.assert_equal(hasattr(pt, '__slots__'), True)
+    npt.assert_equal(hasattr(pt, '__dict__'), False)
 
     # Then some more general ones...
     # Size of array given stimulus duration

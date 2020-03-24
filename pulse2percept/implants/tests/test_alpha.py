@@ -17,6 +17,10 @@ def test_AlphaIMS(ztype, x, y, r):
     rot = np.deg2rad(r)
     alpha = implants.AlphaIMS(x=x, y=y, z=z, rot=rot)
 
+    # Slots:
+    npt.assert_equal(hasattr(alpha, '__slots__'), True)
+    npt.assert_equal(hasattr(alpha, '__dict__'), False)
+
     # Coordinates of first electrode
     # 18.5 *spacing - spacing/2 for middle coordinate if (0,0) is upper-left
     # corner
@@ -89,6 +93,10 @@ def test_AlphaAMS(ztype, x, y, r):
     # Convert rotation angle to rad
     rot = np.deg2rad(r)
     alpha = implants.AlphaAMS(x=x, y=y, z=z, rot=rot)
+
+    # Slots:
+    npt.assert_equal(hasattr(alpha, '__slots__'), True)
+    npt.assert_equal(hasattr(alpha, '__dict__'), False)
 
     # TODO
     # Coordinates of first electrode
