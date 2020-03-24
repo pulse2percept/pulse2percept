@@ -135,8 +135,8 @@ Optional packages:
 .. _Python: https://www.python.org
 .. _Cython: https://www.cython.org
 .. _NumPy: https://www.numpy.org
-.. _SciPy: https://www.scipy.orgcd
-.. _Matplotlib: https://matplotlib.org/
+.. _SciPy: https://www.scipy.org
+.. _Matplotlib: https://matplotlib.org
 .. _JobLib: https://joblib.readthedocs.io
 .. _scikit-image: https://scikit-image.org
 .. _scikit-video: https://www.scikit-video.org
