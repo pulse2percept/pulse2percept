@@ -372,8 +372,8 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
                                np.array([implant[e].y for e in electrodes],
                                         dtype=np.float32),
                                self.axon_contrib,
-                               self.axon_idx_start.astype(int),
-                               self.axon_idx_end.astype(int),
+                               self.axon_idx_start.astype(np.int32),
+                               self.axon_idx_end.astype(np.int32),
                                self.rho, self.thresh_percept)
         # TODO:
         # return utils.Percept(self.xdva, self.ydva, brightness)
