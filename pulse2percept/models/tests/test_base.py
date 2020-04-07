@@ -22,11 +22,11 @@ class ValidBaseModel(models.BaseModel):
         params.update({'valid': 1})
         return params
 
-    def get_tissue_coords(self, xdva, ydva):
-        return 290 * xdva, 290 * ydva
+    def dva2ret(self, xdva):
+        return 290 * xdva
 
-    def _predict_pixel_percept(self, xydva, img_stim, t=None):
-        return 0
+    def _predict_spatial(self, implant, t=None):
+        return np.zeros_like(self.grid.x)
 
     def set_is_built(self):
         # This is not allowed outside constructor or ``build``:

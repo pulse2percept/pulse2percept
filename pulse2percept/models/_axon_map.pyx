@@ -1,15 +1,18 @@
 import numpy as np
-cimport numpy as np
-import cython
+cimport numpy as cnp
+from cython import cdivision  # for modulo operator
+from cython.parallel import prange
 from libc.math cimport(pow as c_pow, exp as c_exp, tanh as c_tanh,
                        sin as c_sin, cos as c_cos)
 
-
+ctypedef cnp.float32_t float32
+ctypedef cnp.int32_t int32
 cdef deg2rad = 3.14159265358979323846 / 180.0
+
 
 cdef double c_min(double[:] arr):
     cdef double arr_min
-    cdef np.intp_t idx, arr_len
+    cdef cnp.intp_t idx, arr_len
 
     arr_min = 1e12
     arr_len = len(arr)
@@ -18,9 +21,10 @@ cdef double c_min(double[:] arr):
             arr_min = arr[idx]
     return arr_min
 
+
 cdef double c_max(double[:] arr):
     cdef double arr_max
-    cdef np.intp_t idx, arr_len
+    cdef cnp.intp_t idx, arr_len
 
     arr_max = -1e12
     arr_len = len(arr)
@@ -31,7 +35,7 @@ cdef double c_max(double[:] arr):
 
 
 cpdef gauss2(double[:, ::1] arr, double x, double y, double tau):
-    cdef np.intp_t idx, n_arr
+    cdef cnp.intp_t idx, n_arr
     cdef double dist2
     n_arr = arr.shape[0]
     cdef double[:] gauss = np.empty(n_arr)
@@ -44,7 +48,7 @@ cpdef gauss2(double[:, ::1] arr, double x, double y, double tau):
 
 cpdef jansonius(double[:] rho, double phi0, double beta_s, double beta_i):
     cdef double b, c, rho_min, tmp_phi, tmp_rho
-    cdef np.intp_t idx
+    cdef cnp.intp_t idx
 
     if phi0 > 0:
         # Axon is in superior retina, compute `b` (real number) from Eq. 5:
@@ -68,9 +72,9 @@ cpdef jansonius(double[:] rho, double phi0, double beta_s, double beta_i):
     return np.asarray(xprime), np.asarray(yprime)
 
 
-cdef np.intp_t argmin_segment(double[:, :] bundles, double x, double y):
+cdef cnp.intp_t argmin_segment(double[:, :] bundles, double x, double y):
     cdef double dist2, min_dist2
-    cdef np.intp_t seg, min_seg, n_seg
+    cdef cnp.intp_t seg, min_seg, n_seg
 
     min_dist2 = 1e12
     n_seg = bundles.shape[0]
@@ -83,7 +87,7 @@ cdef np.intp_t argmin_segment(double[:, :] bundles, double x, double y):
 
 
 cpdef axon_contribution(double[:, :] bundle, double[:] xy, double lmbd):
-    cdef np.intp_t p, c, argmin, n_seg
+    cdef cnp.intp_t p, c, argmin, n_seg
     cdef double dist2
     cdef double[:, :] contrib
 
@@ -113,8 +117,8 @@ cpdef axon_contribution(double[:, :] bundle, double[:] xy, double lmbd):
 
 cpdef finds_closest_axons(double[:, :] bundles, double[:] xret,
                           double[:] yret):
-    cdef np.intp_t[:] closest_seg = np.empty(len(xret), dtype=int)
-    cdef np.intp_t n_xy, n_seg
+    cdef cnp.intp_t[:] closest_seg = np.empty(len(xret), dtype=int)
+    cdef cnp.intp_t n_xy, n_seg
     n_xy = len(xret)
     n_seg = bundles.shape[0]
     for pos in range(n_xy):
@@ -122,10 +126,10 @@ cpdef finds_closest_axons(double[:, :] bundles, double[:] xret,
     return np.asarray(closest_seg)
 
 
-cpdef axon_map(double[:] stim, double[:] xel, double[:] yel,
-               double[:, ::1] axon, double rho, double th):
-    cdef np.intp_t idx, n_stim, n_ax
-    cdef double bright, gauss
+cpdef axon_map_old(float32[:] stim, float32[:] xel, float32[:] yel,
+                   double[:, ::1] axon, double rho, double th):
+    cdef cnp.intp_t i_stim, i_ax, n_stim, n_ax
+    cdef double bright, gauss, r2
     n_stim = len(stim)
     n_ax = axon.shape[0]
     cdef double[:] act = np.zeros(n_ax)
@@ -133,10 +137,56 @@ cpdef axon_map(double[:] stim, double[:] xel, double[:] yel,
         for i_stim in range(n_stim):
             for i_ax in range(n_ax):
                 r2 = c_pow(axon[i_ax, 0] - xel[i_stim], 2)
-                r2 += c_pow(axon[i_ax, 1] - yel[i_stim], 2)
+                r2 = r2 + c_pow(axon[i_ax, 1] - yel[i_stim], 2)
                 gauss = c_exp(-r2 / (2.0 * c_pow(rho, 2)))
-                act[i_ax] += stim[i_stim] * axon[i_ax, 2] * gauss
+                act[i_ax] = act[i_ax] + stim[i_stim] * axon[i_ax, 2] * gauss
     bright = c_max(act)
     if bright < th:
         bright = 0
     return bright
+
+
+@cdivision(True)
+cpdef axon_map_fast(const float32[:, ::1] stim,
+                    const float32[::1] xel,
+                    const float32[::1] yel,
+                    const float32[:, ::1] axon,
+                    const int32[::1] idx_start,
+                    const int32[::1] idx_end,
+                    float32 rho,
+                    float32 thresh_percept):
+    """Fast spatial response"""
+    cdef:
+        size_t idx_el, idx_time, idx_space, idx_ax, n_el, n_time, n_space, n_ax
+        size_t idx_bright, n_bright
+        float32[:, ::1] bright
+        float32 px_bright, r2, gauss, sgm_bright
+        size_t i0, i1
+
+    n_el = stim.shape[0]
+    n_time = stim.shape[1]
+    n_space = len(idx_start)
+    n_bright = n_time * n_space
+
+    # A flattened array containing n_time x n_space entries:
+    bright = np.empty((n_time, n_space), dtype=np.float32)
+
+    for idx_space in prange(n_space, schedule='static', nogil=True):
+        for idx_time in range(n_time):
+            px_bright = 0.0
+            # Slice `axon_contrib` but don't assign the slice to a variable:
+            for idx_ax in range(idx_start[idx_space], idx_end[idx_space]):
+                sgm_bright = 0.0
+                for idx_el in range(n_el):
+                    r2 = c_pow(axon[idx_ax, 0] - xel[idx_el], 2)
+                    r2 = r2 + c_pow(axon[idx_ax, 1] - yel[idx_el], 2)
+                    gauss = c_exp(-r2 / (2.0 * c_pow(rho, 2)))
+                    sgm_bright = sgm_bright + (stim[idx_el, idx_time] *
+                                               axon[idx_ax, 2] * gauss)
+                if sgm_bright > px_bright:
+                    px_bright = sgm_bright
+            if px_bright < thresh_percept:
+                px_bright = 0.0
+            bright[idx_time, idx_space] = px_bright
+    return np.asarray(bright)
+

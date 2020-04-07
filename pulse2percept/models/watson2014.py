@@ -31,6 +31,9 @@ class Watson2014ConversionMixin(object):
         """
         return dva2ret(xdva), dva2ret(ydva)
 
+    def dva2ret(self, xdva):
+        return dva2ret(xdva)
+
 
 class Watson2014DisplacementMixin(object):
     """Converts dva to ret coords with RGC displacement

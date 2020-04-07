@@ -163,22 +163,22 @@ class Stimulus(PrettyPrint):
         if np.isscalar(source) and not isinstance(source, str):
             # Scalar: 1 electrode, no time component
             time = None
-            data = np.array([source], dtype=float).reshape((1, -1))
+            data = np.array([source], dtype=np.float32).reshape((1, -1))
         elif isinstance(source, (list, tuple)):
             # List or touple with N elements: 1 electrode, N time points
             time = np.arange(len(source))
-            data = np.array(source, dtype=float).reshape((1, -1))
+            data = np.array(source, dtype=np.float32).reshape((1, -1))
         elif isinstance(source, np.ndarray):
             if source.ndim > 1:
                 raise ValueError("Cannot create Stimulus object from a %d-D "
                                  "NumPy array. Must be 1-D." % source.ndim)
             # 1D NumPy array with N elements: 1 electrode, N time points
             time = np.arange(len(source))
-            data = source.astype(float).reshape((1, -1))
+            data = source.astype(np.float32).reshape((1, -1))
         elif isinstance(source, TimeSeries):
             # TimeSeries with NxM time points: N electrodes, M time points
             time = np.arange(source.shape[-1]) * source.tsample
-            data = source.data.astype(float).reshape((-1, len(time)))
+            data = source.data.astype(np.float32).reshape((-1, len(time)))
         else:
             raise TypeError("Cannot create Stimulus object from %s. Choose "
                             "from: scalar, tuple, list, NumPy array, or "
@@ -219,8 +219,8 @@ class Stimulus(PrettyPrint):
             # making sure the `equal_nan` option is set to True so that two NaNs
             # are considered equal:
             for e, t in enumerate(_time):
-                if not np.allclose(np.array(t, dtype=float),
-                                   np.array(_time[0], dtype=float),
+                if not np.allclose(np.array(t, dtype=np.float32),
+                                   np.array(_time[0], dtype=np.float32),
                                    equal_nan=True):
                     raise ValueError("All stimuli must have the same time axis, "
                                      "but electrode %s has t=%s and electrode %s "
@@ -465,7 +465,7 @@ class Stimulus(PrettyPrint):
         if len(self.time) == 1:
             # Special case: Duplicate data with slightly different time points
             # so we can set up an interp1d:
-            eps = np.finfo(float).eps
+            eps = np.finfo(np.float32).eps
             time = np.array([self.time - eps, self.time + eps]).flatten()
             data = np.repeat(self.data, 2, axis=1)
         else:

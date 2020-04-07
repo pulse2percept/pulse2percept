@@ -136,9 +136,11 @@ class GridXY(object):
         nx = int(np.ceil((xdiff + 1) / step)) if xdiff != 0 else 1
         ydiff = np.diff(y_range)
         ny = int(np.ceil((ydiff + 1) / step)) if ydiff != 0 else 1
-        self.x, self.y = np.meshgrid(np.linspace(*x_range, num=nx),
-                                     np.linspace(*y_range, num=ny),
-                                     indexing='xy')
+        self.x, self.y = np.meshgrid(
+            np.linspace(*x_range, num=nx, dtype=np.float32),
+            np.linspace(*y_range, num=ny, dtype=np.float32),
+            indexing='xy'
+        )
         self.shape = self.x.shape
         self.reset()
 

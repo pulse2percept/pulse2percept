@@ -64,7 +64,7 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
     idea of how to write a complete model.
 
     """
-    __slots__ = ('xrange', 'yrange', 'xystep', 'grid', 'grid_type',
+    __slots__ = ('xrange', 'yrange', 'xystep', 'grid', 'grid_type', 'has_time',
                  'thresh_percept', 'engine', 'scheduler', 'n_jobs', 'verbose',
                  '__is_built')
 
@@ -94,8 +94,7 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
                            "from: %s." % (key, ', '.join(defaults.keys())))
                 raise AttributeError(err_str)
         # Retinal grid:
-        self.grid = GridXY(self.xrange, self.yrange, step=self.xystep,
-                           grid_type=self.grid_type)
+        self.grid = None
         # This flag will be flipped once the ``build`` method was called
         self.__is_built = False
 
@@ -109,6 +108,8 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
             'yrange': (-15, 15),  # dva
             'xystep': 0.25,  # dva
             'grid_type': 'rectangular',
+            # Whether a temporal model exists:
+            'has_time': False,
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
             # JobLib or Dask can be used to parallelize computations:
@@ -182,6 +183,11 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
         # you can't add new class attributes outside of that):
         for key, val in build_params.items():
             setattr(self, key, val)
+        # Build the spatial grid:
+        self.grid = GridXY(self.xrange, self.yrange, step=self.xystep,
+                           grid_type=self.grid_type)
+        self.grid.xret = self.dva2ret(self.grid.x)
+        self.grid.yret = self.dva2ret(self.grid.y)
         # This flag indicates that the ``build`` method has been called. It has
         # to be set to True for other methods, such as ``predict_percept``, to
         # work:
@@ -189,19 +195,13 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
         return self
 
     @abc.abstractmethod
-    def get_tissue_coords(self, xdva, ydva):
-        """Convert dva into tissue coordinates"""
+    def dva2ret(self, xdva):
+        """Convert degrees of visual angle (dva) into retinal coordinates"""
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _predict_pixel_percept(self, xygrid, implant, t=None):
-        """Calculate the percept at pixel location (xdva,ydva)
-
-        Parameters
-        ----------
-        xygrid : tuple
-
-        """
+    def _predict_spatial(self, implant, t=0):
+        """Spatial model"""
         raise NotImplementedError
 
     def predict_percept(self, implant, t=None):
@@ -217,6 +217,12 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
         n_frames : int
             If None, will simulate for the duration of the stimulus plus one
             frame (rounding up).
+
+        Returns
+        -------
+        percept : np.ndarray
+            A <T x X x Y> matrix that contains the predicted brightness values
+            at the specified (X,Y) spatial locations and times T.
         """
         if not self._is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
@@ -226,16 +232,18 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
         if implant.stim is None:
             # Nothing to see here:
             return None
-        if implant.stim.time is not None:
-            # The stimulus has a time dimension
+        if implant.stim.time is None:
+            # The stimulus does not have a time dimension. In this case, we
+            # only need to run the spatial model:
+            return self._predict_spatial(implant, t=0)
+
+        # Stimulus has a time dimension, but does the model?
+        if not self.has_time:
+            raise ValueError("The stimulus has a time dimension, but %s "
+                             "does not." % self.__class__.__name__)
+        if t is None:
+            # t must be a list of times at which to output a percept
             raise NotImplementedError
 
-        # The stimulus does not have a time dimesnion. In this case, we
-        # only need to run the spatial model:
-        return parfor(self._predict_pixel_percept,
-                      enumerate(self.grid),
-                      func_args=[implant],
-                      func_kwargs={'t': t},
-                      engine=self.engine, scheduler=self.scheduler,
-                      n_jobs=self.n_jobs,
-                      out_shape=self.grid.shape)
+        # TODO
+        raise NotImplementedError
