@@ -3,7 +3,7 @@ cimport numpy as cnp
 from cython import cdivision  # for modulo operator
 from cython.parallel import prange
 from libc.math cimport(pow as c_pow, exp as c_exp, tanh as c_tanh,
-                       sin as c_sin, cos as c_cos)
+                       sin as c_sin, cos as c_cos, fabs as c_abs)
 
 ctypedef cnp.float32_t float32
 ctypedef cnp.int32_t int32
@@ -167,7 +167,7 @@ cpdef spatial_fast(const float32[:, ::1] stim,
         size_t idx_el, idx_time, idx_space, idx_ax, n_el, n_time, n_space, n_ax
         size_t idx_bright, n_bright
         float32[:, ::1] bright
-        float32 px_bright, xdiff, ydiff, r2, contrib, sgm_bright
+        float32 px_bright, xdiff, ydiff, r2, gauss, sgm_bright, amp
         size_t i0, i1
 
     n_el = stim.shape[0]
@@ -178,7 +178,7 @@ cpdef spatial_fast(const float32[:, ::1] stim,
     # A flattened array containing n_time x n_space entries:
     bright = np.empty((n_time, n_space), dtype=np.float32)  # Py overhead
 
-    for idx_space in prange(n_space, schedule='static', nogil=True):
+    for idx_space in prange(n_space, schedule='dynamic', nogil=True):
         # Parallel loop over all pixels to be rendered:
         for idx_time in range(n_time):
             # Each frame in ``stim`` is treated independently. Find the
@@ -190,17 +190,19 @@ cpdef spatial_fast(const float32[:, ::1] stim,
                 # Calculate the activation of each axon segment:
                 sgm_bright = 0.0
                 for idx_el in range(n_el):
-                    xdiff = axon[idx_ax, 0] - xel[idx_el]
-                    ydiff = axon[idx_ax, 1] - yel[idx_el]
-                    r2 = xdiff * xdiff + ydiff * ydiff
-                    # axon[idx_ax, 2] depends on axlambda:
-                    contrib = axon[idx_ax, 2] * c_exp(-r2 / (2.0 * rho * rho))
-                    sgm_bright = sgm_bright + contrib * stim[idx_el, idx_time]
-                if sgm_bright > px_bright:
+                    amp = stim[idx_el, idx_time]
+                    if c_abs(amp) > 0:
+                        xdiff = axon[idx_ax, 0] - xel[idx_el]
+                        ydiff = axon[idx_ax, 1] - yel[idx_el]
+                        r2 = xdiff * xdiff + ydiff * ydiff
+                        # axon[idx_ax, 2] depends on axlambda:
+                        gauss = c_exp(-r2 / (2.0 * rho * rho))
+                        sgm_bright = sgm_bright + gauss * axon[idx_ax, 2] * amp
+                if c_abs(sgm_bright) > c_abs(px_bright):
                     # The strongest activated axon segment determins the
                     # brightness of the pixel:
                     px_bright = sgm_bright
-            if px_bright < thresh_percept:
+            if c_abs(px_bright) < thresh_percept:
                 px_bright = 0.0
             bright[idx_time, idx_space] = px_bright  # Py overhead
     return np.asarray(bright)  # Py overhead

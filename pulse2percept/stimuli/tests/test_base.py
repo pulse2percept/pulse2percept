@@ -281,22 +281,23 @@ def test_Stimulus___getitem__():
     npt.assert_equal(stim[...], stim.data)
     npt.assert_equal(stim[:, :], stim.data)
     npt.assert_equal(stim[:2], stim.data[:2])
-    npt.assert_equal(stim[:, 0], stim.data[:, 0])
+    npt.assert_equal(stim[:, 0], stim.data[:, 0].reshape((-1, 1)))
     npt.assert_equal(stim[0, :], stim.data[0, :])
     npt.assert_equal(stim[0, ...], stim.data[0, ...])
-    npt.assert_equal(stim[..., 0], stim.data[..., 0])
+    npt.assert_equal(stim[..., 0], stim.data[..., 0].reshape((-1, 1)))
     # More advanced slicing is not yet implemented:
     with pytest.raises(NotImplementedError):
+        # This is ambiguous because no step size is given:
         stim[1, 2:5]
     # Single element:
     npt.assert_equal(stim[0, 0], stim.data[0, 0])
     # Interpolating time:
     npt.assert_almost_equal(stim[0, 2.6], 3.6)
-    npt.assert_almost_equal(stim[..., 2.3], np.array([3.3, 7.3, 11.3]))
+    npt.assert_almost_equal(stim[..., 2.3], np.array([[3.3], [7.3], [11.3]]))
     # The second dimension is not a column index!
     npt.assert_almost_equal(stim[0, 0], 1.0)
-    npt.assert_almost_equal(stim[0, [0, 1]], np.array([1.0, 2.0]))
-    npt.assert_almost_equal(stim[0, [0.21, 1]], np.array([1.21, 2.0]))
+    npt.assert_almost_equal(stim[0, [0, 1]], np.array([[1.0, 2.0]]))
+    npt.assert_almost_equal(stim[0, [0.21, 1]], np.array([[1.21, 2.0]]))
     npt.assert_almost_equal(stim[[0, 1], [0.21, 1]],
                             np.array([[1.21, 2.0], [5.21, 6.0]]))
 

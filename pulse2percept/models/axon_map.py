@@ -346,7 +346,6 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
             stim = implant.stim.data.astype(np.float32)
         else:
             stim = implant.stim[:, np.array([t]).ravel()].astype(np.float32)
-        print(stim)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
         electrodes = implant.stim.electrodes

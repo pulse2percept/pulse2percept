@@ -239,7 +239,6 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
         # Determine the times at which to output a percept:
         if t is None:
             t = 0 if implant.stim.time is None else implant.stim.time
-
         print(t)
 
         # Calculate the spatial response at all time points:

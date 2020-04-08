@@ -324,14 +324,16 @@ class Stimulus(PrettyPrint):
         # cases like stim[:, [0, 1]] which ask for time=[0.0, 1.0] and not for
         # column index 0 and 1:
         if isinstance(item, tuple):
-            if item[1] != Ellipsis and not isinstance(item[1], slice):
-                # Convert to float so time is not mistaken for column index:
-                item = (item[0], np.float32(item[1]))
             if isinstance(item[1], slice):
                 # Currently the only supported slice is ':'
                 if item[1].start or item[1].stop or item[1].step:
                     raise NotImplementedError("Slicing the time axis not yet "
                                               "supported.")
+            else:
+                if not np.any(item[1] == Ellipsis):
+                    # Convert to float so time is not mistaken for column index
+                    item = (item[0], np.float32(item[1]))
+
         try:
             # NumPy handles most indexing and slicing:
             return self._stim['data'][item]
@@ -355,7 +357,7 @@ class Stimulus(PrettyPrint):
         # Time might be a single index or a list of indices. Convert all to
         # list so we can iterate:
         time = np.array([item[1]]).flatten()
-        data = np.squeeze([[ip(t) for t in time] for ip in interp])
+        data = np.array([[ip(t) for t in time] for ip in interp])
         # Return a single element as scalar:
         if data.size <= 1:
             data = data.ravel()[0]
