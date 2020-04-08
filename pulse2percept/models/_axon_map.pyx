@@ -7,7 +7,7 @@ from libc.math cimport(pow as c_pow, exp as c_exp, tanh as c_tanh,
 
 ctypedef cnp.float32_t float32
 ctypedef cnp.int32_t int32
-cdef deg2rad = 3.14159265358979323846 / 180.0
+cdef float32 deg2rad = 3.14159265358979323846 / 180.0
 
 
 cdef double c_min(double[:] arr):
@@ -126,41 +126,48 @@ cpdef finds_closest_axons(double[:, :] bundles, double[:] xret,
     return np.asarray(closest_seg)
 
 
-cpdef axon_map_old(float32[:] stim, float32[:] xel, float32[:] yel,
-                   double[:, ::1] axon, double rho, double th):
-    cdef cnp.intp_t i_stim, i_ax, n_stim, n_ax
-    cdef double bright, gauss, r2
-    n_stim = len(stim)
-    n_ax = axon.shape[0]
-    cdef double[:] act = np.zeros(n_ax)
-    with nogil:
-        for i_stim in range(n_stim):
-            for i_ax in range(n_ax):
-                r2 = c_pow(axon[i_ax, 0] - xel[i_stim], 2)
-                r2 = r2 + c_pow(axon[i_ax, 1] - yel[i_stim], 2)
-                gauss = c_exp(-r2 / (2.0 * c_pow(rho, 2)))
-                act[i_ax] = act[i_ax] + stim[i_stim] * axon[i_ax, 2] * gauss
-    bright = c_max(act)
-    if bright < th:
-        bright = 0
-    return bright
-
-
 @cdivision(True)
-cpdef axon_map_fast(const float32[:, ::1] stim,
-                    const float32[::1] xel,
-                    const float32[::1] yel,
-                    const float32[:, ::1] axon,
-                    const int32[::1] idx_start,
-                    const int32[::1] idx_end,
-                    float32 rho,
-                    float32 thresh_percept):
-    """Fast spatial response"""
+cpdef spatial_fast(const float32[:, ::1] stim,
+                   const float32[::1] xel,
+                   const float32[::1] yel,
+                   const float32[:, ::1] axon,
+                   const int32[::1] idx_start,
+                   const int32[::1] idx_end,
+                   float32 rho,
+                   float32 thresh_percept):
+    """Fast spatial response of the axon map model
+
+    Parameters
+    ----------
+    stim : 2D float32 array
+        A ``Stimulus.data`` container that contains electrodes as rows and
+        time points as columns. The spatial response will be calculated for
+        each column independently.
+    xel, yel : 1D float32 array
+        An array of x or y coordinates for each electrode (microns)
+    axon : 2D float32 array
+        All axon segments concatenated into an Nx3 array.
+        Each row has the x/y coordinate of a segment along with its
+        contribution to a given pixel.
+        ``idx_start`` and ``idx_end`` are used to slice the ``axon`` array.
+        For example, the axon belonging to the i-th pixel has segments
+        axon[idx_start[i]:idx_end[i]].
+        This arrangement is necessary in order to access ``axon`` in parallel.
+    idx_start, idx_end : 1D int32 array
+        Start and stop indices of the i-th axon.
+    rho : float32
+        The rho parameter of the axon map model: exponential decay constant
+        (microns) away from the axon.
+        Note that lambda was already taken into account when calculating the
+        axon contribution (stored/passed in ``axon``).
+    thresh_percept : float32
+        Spatial responses smaller than ``thresh_percept`` will be set to zero
+    """
     cdef:
         size_t idx_el, idx_time, idx_space, idx_ax, n_el, n_time, n_space, n_ax
         size_t idx_bright, n_bright
         float32[:, ::1] bright
-        float32 px_bright, r2, gauss, sgm_bright
+        float32 px_bright, xdiff, ydiff, r2, contrib, sgm_bright
         size_t i0, i1
 
     n_el = stim.shape[0]
@@ -169,24 +176,32 @@ cpdef axon_map_fast(const float32[:, ::1] stim,
     n_bright = n_time * n_space
 
     # A flattened array containing n_time x n_space entries:
-    bright = np.empty((n_time, n_space), dtype=np.float32)
+    bright = np.empty((n_time, n_space), dtype=np.float32)  # Py overhead
 
     for idx_space in prange(n_space, schedule='static', nogil=True):
+        # Parallel loop over all pixels to be rendered:
         for idx_time in range(n_time):
+            # Each frame in ``stim`` is treated independently. Find the
+            # brightness value of each pixel by finding the strongest activated
+            # axon segment:
             px_bright = 0.0
             # Slice `axon_contrib` but don't assign the slice to a variable:
             for idx_ax in range(idx_start[idx_space], idx_end[idx_space]):
+                # Calculate the activation of each axon segment:
                 sgm_bright = 0.0
                 for idx_el in range(n_el):
-                    r2 = c_pow(axon[idx_ax, 0] - xel[idx_el], 2)
-                    r2 = r2 + c_pow(axon[idx_ax, 1] - yel[idx_el], 2)
-                    gauss = c_exp(-r2 / (2.0 * c_pow(rho, 2)))
-                    sgm_bright = sgm_bright + (stim[idx_el, idx_time] *
-                                               axon[idx_ax, 2] * gauss)
+                    xdiff = axon[idx_ax, 0] - xel[idx_el]
+                    ydiff = axon[idx_ax, 1] - yel[idx_el]
+                    r2 = xdiff * xdiff + ydiff * ydiff
+                    # axon[idx_ax, 2] depends on axlambda:
+                    contrib = axon[idx_ax, 2] * c_exp(-r2 / (2.0 * rho * rho))
+                    sgm_bright = sgm_bright + contrib * stim[idx_el, idx_time]
                 if sgm_bright > px_bright:
+                    # The strongest activated axon segment determins the
+                    # brightness of the pixel:
                     px_bright = sgm_bright
             if px_bright < thresh_percept:
                 px_bright = 0.0
-            bright[idx_time, idx_space] = px_bright
-    return np.asarray(bright)
+            bright[idx_time, idx_space] = px_bright  # Py overhead
+    return np.asarray(bright)  # Py overhead
 

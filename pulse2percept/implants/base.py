@@ -700,12 +700,22 @@ class ProsthesisSystem(PrettyPrint):
         if data is None:
             self._stim = None
         else:
-            if isinstance(data, dict):
+            if isinstance(data, Stimulus):
+                # Already a stimulus object:
+                stim = data
+            elif isinstance(data, dict):
                 # Electrode names already provided by keys:
                 stim = Stimulus(data)
             else:
                 # Use electrode names as stimulus coordinates:
                 stim = Stimulus(data, electrodes=list(self.earray.keys()))
+
+            # Make sure all electrode names are valid:
+            for electrode in stim.electrodes:
+                # Invalid index will return None:
+                if not self.earray[electrode]:
+                    raise ValueError("Electrode '%s' not found in "
+                                     "implant." % electrode)
             # Perform safety checks, etc.:
             self.check_stim(stim)
             # Store safe stimulus:

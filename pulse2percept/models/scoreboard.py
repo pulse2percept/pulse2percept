@@ -12,7 +12,7 @@ class ScoreboardModel(Watson2014ConversionMixin, BaseModel):
     def _get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
         params = super(ScoreboardModel, self)._get_default_params()
-        params.update({'rho': 100, 'thresh_percept': 1.0 / np.sqrt(np.e)})
+        params.update({'rho': 100})
         return params
 
     def _predict_spatial(self, implant, t=0):

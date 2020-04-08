@@ -20,6 +20,12 @@ class Stimulus(PrettyPrint):
     including lists and dictionaries. Depending on the source type, a stimulus
     might have a time component or not.
 
+    You can access the stimulus applied to electrode ``e`` at time ``t``
+    by directly indexing into ``Stimulus[e, t]``. In this case, ``t`` is not
+    a column index but a time point. If the time point is not explicitly stored
+    in the ``data`` container, its value will be automatically interpolated
+    from neighboring values.
+
     Parameters
     ----------
     source : source type
@@ -314,6 +320,18 @@ class Stimulus(PrettyPrint):
 
     def __getitem__(self, item):
         """Returns an item from the data array, interpolated if necessary"""
+        # NumPy handles most indexing and slicing. However, we need to prevent
+        # cases like stim[:, [0, 1]] which ask for time=[0.0, 1.0] and not for
+        # column index 0 and 1:
+        if isinstance(item, tuple):
+            if item[1] != Ellipsis and not isinstance(item[1], slice):
+                # Convert to float so time is not mistaken for column index:
+                item = (item[0], np.float32(item[1]))
+            if isinstance(item[1], slice):
+                # Currently the only supported slice is ':'
+                if item[1].start or item[1].stop or item[1].step:
+                    raise NotImplementedError("Slicing the time axis not yet "
+                                              "supported.")
         try:
             # NumPy handles most indexing and slicing:
             return self._stim['data'][item]
@@ -330,14 +348,16 @@ class Stimulus(PrettyPrint):
         # indices into a list:
         if item[0] == Ellipsis:
             interp = np.array(self._interp)
+        elif isinstance(item[0], list):
+            interp = np.array([self._interp[i] for i in item[0]])
         else:
             interp = np.array([self._interp[item[0]]]).flatten()
         # Time might be a single index or a list of indices. Convert all to
         # list so we can iterate:
         time = np.array([item[1]]).flatten()
-        data = np.array([[ip(t) for t in time] for ip in interp])
+        data = np.squeeze([[ip(t) for t in time] for ip in interp])
         # Return a single element as scalar:
-        if len(data) <= 1:
+        if data.size <= 1:
             data = data.ravel()[0]
         return data
 

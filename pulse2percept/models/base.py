@@ -232,18 +232,23 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
         if implant.stim is None:
             # Nothing to see here:
             return None
-        if implant.stim.time is None:
-            # The stimulus does not have a time dimension. In this case, we
-            # only need to run the spatial model:
-            return self._predict_spatial(implant, t=0)
 
-        # Stimulus has a time dimension, but does the model?
-        if not self.has_time:
-            raise ValueError("The stimulus has a time dimension, but %s "
-                             "does not." % self.__class__.__name__)
+        # Make sure the stimulus is compressed:
+        implant.stim.compress()
+
+        # Determine the times at which to output a percept:
         if t is None:
-            # t must be a list of times at which to output a percept
-            raise NotImplementedError
+            t = 0 if implant.stim.time is None else implant.stim.time
+
+        print(t)
+
+        # Calculate the spatial response at all time points:
+        spatial = self._predict_spatial(implant, t=t)
+        if implant.stim.time is None or not self.has_time:
+            # Either the model or stimulus lack a time component:
+            return spatial
+
+        # Both stimulus and model support time:
 
         # TODO
         raise NotImplementedError

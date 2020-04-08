@@ -46,7 +46,7 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
     def __repr__(self):
         """Pretty print class as: ClassName(arg1=val1, arg2=val2)"""
         # Shorten NumPy array output:
-        np.set_printoptions(precision=2, threshold=5, edgeitems=2)
+        np.set_printoptions(precision=3, threshold=7, edgeitems=3)
         # Line width:
         lwidth = 60
         # Sort list of parameters alphabetically:

@@ -6,7 +6,7 @@ import pickle
 
 from ..utils import parfor, GridXY
 from ..models import BaseModel, Watson2014ConversionMixin, dva2ret
-from ..models._axon_map import axon_contribution, axon_map_old, axon_map_fast
+from ..models._axon_map import axon_contribution, spatial_fast
 
 
 class AxonMapModel(Watson2014ConversionMixin, BaseModel):
@@ -338,43 +338,28 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         self._is_built = True
         return self
 
-    def _predict_pixel_percept(self, xygrid, implant, t=None):
-        # ``xygrid`` is a single element in an ``enumerate``: (idx, xy-coords)
-        idx_xy, _ = xygrid
-        # Find the relevant axon at that location:
-        axon = self.axon_contrib_old[idx_xy]
-        # Abort if there is no axon at this spot:
-        if axon.shape[0] == 0:
-            return 0.0
-        # Calculate the brightness at pixel:
-        electrodes = implant.stim.electrodes
-        bright = axon_map_old(implant.stim.data[:, 0],
-                              np.array([implant[e].x for e in electrodes],
-                                       dtype=np.float32),
-                              np.array([implant[e].y for e in electrodes],
-                                       dtype=np.float32),
-                              axon,
-                              self.rho,
-                              self.thresh_percept)
-        return bright
-
     def _predict_spatial(self, implant, t=0):
         """Predicts the brightness at spatial locations"""
         assert t is not None
         # Interpolate stimulus at desired time points:
-        stim = implant.stim[:, np.array([t]).ravel()].astype(np.float32)
+        if implant.stim.time is None:
+            stim = implant.stim.data.astype(np.float32)
+        else:
+            stim = implant.stim[:, np.array([t]).ravel()].astype(np.float32)
+        print(stim)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
         electrodes = implant.stim.electrodes
-        bright = axon_map_fast(stim,
-                               np.array([implant[e].x for e in electrodes],
-                                        dtype=np.float32),
-                               np.array([implant[e].y for e in electrodes],
-                                        dtype=np.float32),
-                               self.axon_contrib,
-                               self.axon_idx_start.astype(np.int32),
-                               self.axon_idx_end.astype(np.int32),
-                               self.rho, self.thresh_percept)
+        bright = spatial_fast(stim,
+                              np.array([implant[e].x for e in electrodes],
+                                       dtype=np.float32),
+                              np.array([implant[e].y for e in electrodes],
+                                       dtype=np.float32),
+                              self.axon_contrib,
+                              self.axon_idx_start.astype(np.int32),
+                              self.axon_idx_end.astype(np.int32),
+                              self.rho,
+                              self.thresh_percept)
         # TODO:
         # return utils.Percept(self.xdva, self.ydva, brightness)
         # Reshape to T x X x Y:
