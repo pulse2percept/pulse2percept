@@ -17,9 +17,13 @@ class ScoreboardModel(Watson2014ConversionMixin, BaseModel):
 
     def _predict_spatial(self, implant, t=0):
         """Predicts the brightness at spatial locations"""
-        assert t is not None
         # Interpolate stimulus at desired time points:
-        stim = implant.stim[:, np.array([t]).ravel()].astype(np.float32)
+        assert t is not None
+        if implant.stim.time is None:
+            stim = implant.stim.data.astype(np.float32)
+        else:
+            stim = implant.stim[:, np.array([t]).ravel()].astype(np.float32)
+        print(stim)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
         electrodes = implant.stim.electrodes
