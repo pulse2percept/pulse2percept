@@ -719,8 +719,9 @@ class ProsthesisSystem(PrettyPrint):
                                      "implant." % electrode)
             # Perform safety checks, etc.:
             self.check_stim(stim)
-            # Store safe stimulus:
+            # Store and compress stimulus:
             self._stim = deepcopy(stim)
+            self._stim.compress()
 
     @property
     def eye(self):

@@ -5,6 +5,7 @@ import numpy as np
 import pickle
 
 from ..utils import parfor, GridXY
+from ..implants import ProsthesisSystem
 from ..models import BaseModel, Watson2014ConversionMixin, dva2ret
 from ..models._axon_map import axon_contribution, spatial_fast
 

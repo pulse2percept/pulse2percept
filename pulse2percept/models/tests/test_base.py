@@ -120,7 +120,7 @@ def test_BaseModel_predict_percept():
     # But then must pass through ``predict_percept`` just fine
     model.build()
     percept = model.predict_percept(implants.ArgusII(stim=img_stim))
-    npt.assert_equal(percept.shape, (9, 13))
+    npt.assert_equal(percept.shape, (1, 9, 13))
     npt.assert_almost_equal(percept, 0)
 
     # Requires ProsthesisSystem object:
@@ -139,5 +139,5 @@ def test_BaseModel_predict_percept():
     model = ValidBaseModel(engine='serial', xrange=(0.45, 0.45), yrange=(0, 0))
     model.build()
     percept = model.predict_percept(implants.ArgusII(stim=np.zeros(60)))
-    npt.assert_equal(percept.shape, (1, 1))
+    npt.assert_equal(percept.shape, (1, 1, 1))
     npt.assert_almost_equal(percept, 0)
