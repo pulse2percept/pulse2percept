@@ -3,6 +3,7 @@
 import numpy as np
 from abc import ABCMeta, abstractmethod
 import math
+from copy import deepcopy
 # Using or importing the ABCs from 'collections' instead of from
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
 from collections.abc import Sequence
@@ -719,7 +720,7 @@ class ProsthesisSystem(PrettyPrint):
             # Perform safety checks, etc.:
             self.check_stim(stim)
             # Store safe stimulus:
-            self._stim = stim
+            self._stim = deepcopy(stim)
 
     @property
     def eye(self):

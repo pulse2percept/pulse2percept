@@ -1,6 +1,8 @@
 """`BaseModel`"""
 import sys
 import abc
+from copy import deepcopy
+import numpy as np
 
 from ..implants import ProsthesisSystem
 from ..utils import PrettyPrint, GridXY, parfor
@@ -212,11 +214,8 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
         implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
             Stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
-        fps : int, double
-            Frames per second at which the percept should be rendered.
-        n_frames : int
-            If None, will simulate for the duration of the stimulus plus one
-            frame (rounding up).
+        t : float or list of floats
+            The time points at which to output a percept (seconds).
 
         Returns
         -------
@@ -233,21 +232,28 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
             # Nothing to see here:
             return None
 
-        # Make sure the stimulus is compressed:
-        implant.stim.compress()
+        # Make sure we don't change the user's Stimulus object:
+        _implant = deepcopy(implant)
+        # Calculate the spatial response at all time points where the stimulus
+        # changes. Make sure the stimulus is compressed for this:
+        _implant.stim.compress()
+        # At this point, the stimulus might be reduced to 0:
+        spatial = self._predict_spatial(_implant, _implant.stim.time)
 
-        # Determine the times at which to output a percept:
-        if t is None:
-            t = 0 if implant.stim.time is None else implant.stim.time
-        print(t)
-
-        # Calculate the spatial response at all time points:
-        spatial = self._predict_spatial(implant, t=t)
-        if implant.stim.time is None or not self.has_time:
+        if _implant.stim.time is None or not self.has_time:
             # Either the model or stimulus lack a time component:
-            return spatial
+            # TODO:
+            # return utils.Percept(self.xdva, self.ydva, brightness)
+            # Reshape to T x X x Y:
+            return spatial.reshape([-1] + list(self.grid.x.shape))
 
         # Both stimulus and model support time:
-
-        # TODO
-        raise NotImplementedError
+        if t is None:
+            # 10 Hz sampling:
+            t = np.arange(_implant.stim.time[0],
+                          _implant.stim.time[-1],
+                          np.minimum(_implant.stim.time[-1], 0.1))
+            # Make sure to include the last stimulus time point:
+            t = np.unique(np.concatenate((t, [_implant.stim.time[-1]])))
+        percept = self._predict_temporal(spatial, _implant.stim.time, t)
+        return percept.reshape([-1] + list(self.grid.x.shape))

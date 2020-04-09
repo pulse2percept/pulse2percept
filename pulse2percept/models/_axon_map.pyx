@@ -34,6 +34,7 @@ cdef double c_max(double[:] arr):
     return arr_max
 
 
+@cdivision(True)
 cpdef gauss2(double[:, ::1] arr, double x, double y, double tau):
     cdef cnp.intp_t idx, n_arr
     cdef double dist2

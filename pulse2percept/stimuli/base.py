@@ -359,7 +359,7 @@ class Stimulus(PrettyPrint):
         time = np.array([item[1]]).flatten()
         data = np.array([[ip(t) for t in time] for ip in interp])
         # Return a single element as scalar:
-        if data.size <= 1:
+        if data.size == 1:
             data = data.ravel()[0]
         return data
 

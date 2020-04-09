@@ -338,35 +338,40 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         self._is_built = True
         return self
 
-    def _predict_spatial(self, implant, t=0):
-        """Predicts the brightness at spatial locations"""
+    def _predict_spatial(self, implant, t):
+        """Predicts the brightness at specific times ``t``"""
+        if t is None:
+            t = implant.stim.time
+        if implant.stim.time is None and t is not None:
+            raise ValueError("Cannot calculate spatial response at times "
+                             "t=%s, because stimulus does not have a time "
+                             "component." % t)
         # Interpolate stimulus at desired time points:
-        assert t is not None
         if implant.stim.time is None:
             stim = implant.stim.data.astype(np.float32)
         else:
             stim = implant.stim[:, np.array([t]).ravel()].astype(np.float32)
+        # A Stimulus could be compressed to zero:
+        if stim.size == 0:
+            return np.zeros((np.array([t]).size, np.prod(self.grid.x.shape)),
+                            dtype=np.float32)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
         electrodes = implant.stim.electrodes
-        bright = spatial_fast(stim,
-                              np.array([implant[e].x for e in electrodes],
-                                       dtype=np.float32),
-                              np.array([implant[e].y for e in electrodes],
-                                       dtype=np.float32),
-                              self.axon_contrib,
-                              self.axon_idx_start.astype(np.int32),
-                              self.axon_idx_end.astype(np.int32),
-                              self.rho,
-                              self.thresh_percept)
-        # TODO:
-        # return utils.Percept(self.xdva, self.ydva, brightness)
-        # Reshape to T x X x Y:
-        return bright.reshape([-1] + list(self.grid.x.shape))
+        return spatial_fast(stim,
+                            np.array([implant[e].x for e in electrodes],
+                                     dtype=np.float32),
+                            np.array([implant[e].y for e in electrodes],
+                                     dtype=np.float32),
+                            self.axon_contrib,
+                            self.axon_idx_start.astype(np.int32),
+                            self.axon_idx_end.astype(np.int32),
+                            self.rho,
+                            self.thresh_percept)
 
     def predict_percept(self, implant, t=None):
         # Need to add an additional check before running the base method:
-        if implant.eye != self.eye:
+        if isinstance(implant, ProsthesisSystem) and implant.eye != self.eye:
             raise ValueError(("The implant is in %s but the model was built "
                               "for %s.") % (implant.eye, self.eye))
         return super(AxonMapModel, self).predict_percept(implant, t=t)

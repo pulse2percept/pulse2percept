@@ -8,13 +8,13 @@ ctypedef cnp.float32_t float32
 
 
 @cdivision(True)
-cpdef scoreboard_fast(const float32[:, ::1] stim,
-                      const float32[::1] xel,
-                      const float32[::1] yel,
-                      const float32[::1] xgrid,
-                      const float32[::1] ygrid,
-                      float32 rho,
-                      float32 thresh_percept):
+cpdef spatial_fast(const float32[:, ::1] stim,
+                   const float32[::1] xel,
+                   const float32[::1] yel,
+                   const float32[::1] xgrid,
+                   const float32[::1] ygrid,
+                   float32 rho,
+                   float32 thresh_percept):
     """Fast spatial response of the scoreboard model
 
     Parameters
@@ -38,7 +38,7 @@ cpdef scoreboard_fast(const float32[:, ::1] stim,
     cdef:
         size_t idx_el, idx_time, idx_space, n_el, n_time, n_space
         size_t idx_bright, n_bright
-        float32[::1] bright
+        float32[:, ::1] bright
         float32 px_bright, dist2, gauss, amp
 
     n_el = stim.shape[0]
@@ -47,7 +47,7 @@ cpdef scoreboard_fast(const float32[:, ::1] stim,
     n_bright = n_time * n_space
 
     # A flattened array containing n_time x n_space entries:
-    bright = np.empty(n_bright, dtype=np.float32)  # Py overhead
+    bright = np.empty((n_time, n_space), dtype=np.float32)  # Py overhead
 
     for idx_bright in prange(n_bright, schedule='dynamic', nogil=True):
         # For each entry in the output matrix:
@@ -64,5 +64,5 @@ cpdef scoreboard_fast(const float32[:, ::1] stim,
                 px_bright = px_bright + amp * gauss
         if c_abs(px_bright) < thresh_percept:
             px_bright = 0.0
-        bright[idx_bright] = px_bright  # Py overhead
+        bright[idx_time, idx_space] = px_bright  # Py overhead
     return np.asarray(bright)  # Py overhead

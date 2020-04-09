@@ -196,6 +196,16 @@ def test_Stimulus_compress(tsample):
     npt.assert_equal(ielec, stim.electrodes)
     npt.assert_equal(itime, stim.time)
 
+    # Tricky case is a Stimulus reduced to [] after compress:
+    stim = Stimulus(np.zeros((2, 4)))
+    stim.compress()
+    npt.assert_equal(stim.shape, (0, 2))
+    npt.assert_equal(stim[:], [])
+    npt.assert_equal(stim[:, :], [])
+    npt.assert_equal(stim[:, 0], [])
+    npt.assert_equal(stim[:, 0.123], [])
+    npt.assert_equal(stim[:, [0.25, 0.88]], [])
+
 
 def test_Stimulus__stim():
     stim = Stimulus(3)
