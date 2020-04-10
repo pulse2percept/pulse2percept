@@ -1,4 +1,4 @@
-"""`PrettyPrint`, `GridXY`, `gamma`, `cart2pol`, `pol2cart`"""
+"""`PrettyPrint`, `Frozen`, `GridXY`, `gamma`, `cart2pol`, `pol2cart`"""
 import numpy as np
 import sys
 import abc
@@ -88,6 +88,47 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
         # Delete last comma and add ')':
         str_params = str_params[:-2] + ')'
         return str_params
+
+
+class FreezeError(AttributeError):
+    """Exception class used to raise when trying to add attributes to Frozen
+    Classes of type Frozen do not allow for new attributes to be set outside
+    the constructor.
+    """
+
+
+def freeze_class(set):
+    """Freezes a class
+    Raise an error when trying to set an undeclared name, or when calling from
+    a method other than ``Frozen.__init__`` or the ``__init__`` method of a
+    class derived from Frozen
+    """
+
+    def set_attr(self, name, value):
+        if hasattr(self, name):
+            # If attribute already exists, simply set it
+            set(self, name, value)
+            return
+        elif sys._getframe(1).f_code.co_name == '__init__':
+            # Allow __setattr__ calls in __init__ calls of proper object types
+            if isinstance(sys._getframe(1).f_locals['self'], self.__class__):
+                set(self, name, value)
+                return
+        raise FreezeError("You cannot add attributes to "
+                          "%s" % self.__class__.__name__)
+    return set_attr
+
+
+class Frozen(object):
+    """Frozen
+    "Frozen" classes (and subclasses) do not allow for new class attributes to
+    be set outside the constructor. On attempting to add a new attribute, the
+    class will raise a FreezeError.
+    """
+    __setattr__ = freeze_class(object.__setattr__)
+
+    class __metaclass__(type):
+        __setattr__ = freeze_class(type.__setattr__)
 
 
 class GridXY(object):

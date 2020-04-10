@@ -30,6 +30,14 @@ class Nanduri2012SpatialMixin(object):
         """
         return 288.0 * xdva
 
+    def ret2dva(self, xret):
+        """Convert retinal eccentricity (um) to degrees of visual angle (dva)
+
+        Assumes that one degree of visual angle is equal to 288 um on the
+        retina.
+        """
+        return xret / 288.0
+
     def _predict_spatial(self, implant, t):
         """Predicts the brightness at spatial locations"""
         if t is None:
@@ -98,11 +106,22 @@ class Nanduri2012TemporalMixin(object):
         return base_params
 
     def _predict_temporal(self, spatial, t_spatial, t_percept):
-        # TODO what if t_percept is not a multiple of self.dt?
-        # Beware of floating point errors!!! 29.999 will be rounded down to
-        # 29 by np.uint:
+        t_percept = np.array([t_percept]).flatten()
+        # We need to make sure the requested `t_percept` are multiples of `dt`:
+        remainder = np.mod(t_percept, self.dt) / self.dt
+        atol = 1e-3
+        within_atol = (remainder < atol) | (np.abs(1 - remainder) < atol)
+        if not np.all(within_atol):
+            raise ValueError("t=%s are not multiples of dt=%.2e." %
+                             (t_percept[np.logical_not(within_atol)], self.dt))
+
+        # Beware of floating point errors! 29.999 will be rounded down to 29
+        # by np.uint, so we need to np.round it first:
         idx_percept = np.uint(np.round(t_percept / self.dt))
         t_percept = idx_percept * self.dt
+        if np.unique(idx_percept).size < t_percept.size:
+            raise ValueError("All times 't' must be distinct multiples of "
+                             "`dt`=%.2e" % self.dt)
         return temporal_fast(spatial.astype(np.float32),
                              t_spatial.astype(np.float32),
                              idx_percept,

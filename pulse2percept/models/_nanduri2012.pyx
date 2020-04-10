@@ -114,7 +114,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
     n_space = stim.shape[1]
 
     all_r3 = np.empty(n_sim, dtype=np.float32)  # Py overhead
-    percept = np.empty((n_percept, n_space), dtype=np.float32)  # Py overhead
+    percept = np.zeros((n_percept, n_space), dtype=np.float32)  # Py overhead
 
     for idx_space in prange(n_space, schedule='dynamic', nogil=True):
         # Because the stationary nonlinearity depends on `max_R3`, which is the

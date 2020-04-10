@@ -5,7 +5,7 @@ from copy import deepcopy
 import numpy as np
 
 from ..implants import ProsthesisSystem
-from ..utils import PrettyPrint, GridXY, parfor
+from ..utils import PrettyPrint, Frozen, GridXY, parfor
 
 
 class NotBuiltError(ValueError, AttributeError):
@@ -16,7 +16,7 @@ class NotBuiltError(ValueError, AttributeError):
     """
 
 
-class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
+class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
     """Base model
 
     The BaseModel class defines which methods and attributes a model must
@@ -139,7 +139,7 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
         # getframe(0) is '_is_built', getframe(1) is 'set_attr'.
         # getframe(2) is the one we are looking for, and has to be either the
         # construct or ``build``:
-        f_caller = sys._getframe(1).f_code.co_name
+        f_caller = sys._getframe(2).f_code.co_name
         if f_caller in ["__init__", "build"]:
             self.__is_built = val
         else:
