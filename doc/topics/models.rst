@@ -9,6 +9,7 @@ pulse2percept provides the following computational models:
 From [Nanduri2012]_:
 
 *  :py:class:`~pulse2percept.models.Nanduri2012Model`, consisting of two parts:
+
    *   :py:class:`~pulse2percept.models.Nanduri2012SpatialMixin`:
        spatial attenuation function of current spread as described in
        [Ahuja2008]_

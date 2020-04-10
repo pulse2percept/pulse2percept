@@ -202,7 +202,7 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _predict_spatial(self, implant, t=0):
+    def _predict_spatial(self, implant, t):
         """Spatial model"""
         raise NotImplementedError
 
@@ -249,11 +249,10 @@ class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
 
         # Both stimulus and model support time:
         if t is None:
-            # 10 Hz sampling:
+            # If no time vector given, output at model time step (make sure to
+            # include the last time point):
             t = np.arange(_implant.stim.time[0],
-                          _implant.stim.time[-1],
-                          np.minimum(_implant.stim.time[-1], 0.1))
-            # Make sure to include the last stimulus time point:
-            t = np.unique(np.concatenate((t, [_implant.stim.time[-1]])))
+                          _implant.stim.time[-1] + self.dt / 2.0,
+                          self.dt)
         percept = self._predict_temporal(spatial, _implant.stim.time, t)
         return percept.reshape([-1] + list(self.grid.x.shape))

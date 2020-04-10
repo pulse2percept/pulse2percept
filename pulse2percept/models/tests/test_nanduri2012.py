@@ -99,6 +99,6 @@ def test_Nanduri2012Model_predict_percept():
                                   pulse_dur=pdur, interphase_dur=pdur)
         bright_freq.append(model.predict_percept(implant, t=t_percept).max())
     bright_freq_ref = [0.0, 0.054586254, 0.10436389, 0.15269955, 0.19915082]
-    npt.assert_almost_equal(bright_amp, bright_amp_ref)
+    npt.assert_almost_equal(bright_freq, bright_freq_ref)
 
     # do the same for size

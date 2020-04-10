@@ -1,23 +1,14 @@
-"""This module implements the model described in [#nanduri-2012]_.
-References
-----------
-.. [#nanduri-2012] D Nanduri, I Fine, A Horsager, GM Boynton, MS Humayun,
-                   RJ Greenberg, JD Weiland (2012), Frequency and amplitude
-                   modulation have different effects on the percepts elicited
-                   by retinal stimulation. Investigative Ophthalmology & Visual
-                   Science 53:205-214, doi:`10.1167/iovs.11-8401 <https://doi.org/10.1167/iovs.11-8401>`_.
-"""
+"""`Nanduri2012Model`"""
 import numpy as np
 from .base import BaseModel
-from .scoreboard import ScoreboardModel
 from ._nanduri2012 import spatial_fast, temporal_fast
 
 
 class Nanduri2012SpatialMixin(object):
-    """Nanduri spatial mixin"""
+    """Spatial model"""
 
     def _get_default_params(self):
-        """Returns all settable parameters of the scoreboard model"""
+        """Returns all settable parameters of the Nanduri model"""
         params = super(Nanduri2012SpatialMixin, self)._get_default_params()
         params.update({'atten_a': 14000, 'atten_n': 1.69})
         return params
@@ -75,6 +66,7 @@ class Nanduri2012SpatialMixin(object):
 
 
 class Nanduri2012TemporalMixin(object):
+    """Temporal model"""
 
     def _get_default_params(self):
         base_params = super()._get_default_params()
@@ -131,4 +123,32 @@ class Nanduri2012TemporalMixin(object):
 
 class Nanduri2012Model(Nanduri2012TemporalMixin, Nanduri2012SpatialMixin,
                        BaseModel):
+    """Nanduri et al. (2012) Model
+
+    Implements the model described in [Nanduri2012]_, where percepts are
+    circular and their brightness evolves over time.
+
+    Parameters
+    ----------
+    dt : float, optional, default: 5 microseconds
+        Sampling time step (seconds)
+    tau1: float, optional, default: 0.42 ms
+        Time decay constant for the fast leaky integrater.
+    tau2: float, optional, default: 45.25 ms
+        Time decay constant for the charge accumulation.
+    tau3: float, optional, default: 26.25 ms
+        Time decay constant for the slow leaky integrator.
+        Default: 26.25 / 1000 s.
+    eps: float, optional, default: 8.73
+        Scaling factor applied to charge accumulation.
+    asymptote: float, optional, default: 14.0
+        Asymptote of the logistic function used in the stationary nonlinearity
+        stage.
+    slope: float, optional, default: 3.0
+        Slope of the logistic function in the stationary nonlinearity stage.
+    shift: float, optional, default: 16.0
+        Shift of the logistic function in the stationary nonlinearity stage.
+    thresh_percept: float, optional, default: 0
+        Below threshold, the percept has brightness zero.
+    """
     pass

@@ -298,7 +298,7 @@ def test_Stimulus___getitem__():
     # More advanced slicing is not yet implemented:
     with pytest.raises(NotImplementedError):
         # This is ambiguous because no step size is given:
-        stim[1, 2:5]
+        a = stim[1, 2:5]
     # Single element:
     npt.assert_equal(stim[0, 0], stim.data[0, 0])
     # Interpolating time:
