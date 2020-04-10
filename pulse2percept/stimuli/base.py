@@ -7,6 +7,7 @@ from scipy.interpolate import interp1d
 
 from .pulse_trains import TimeSeries
 from ..utils import PrettyPrint
+from ._base import fast_compress
 
 
 class Stimulus(PrettyPrint):
@@ -260,9 +261,9 @@ class Stimulus(PrettyPrint):
         # Store the data in the private container. Setting all elements at once
         # enforces consistency; e.g., between shape of electrodes and time:
         self._stim = {
-            'data': _data,
+            'data': _data.astype(np.float32),
             'electrodes': _electrodes,
-            'time': _time,
+            'time': _time if _time is None else _time.astype(np.float32),
         }
         # Compress the data upon request:
         if compress:
@@ -285,33 +286,10 @@ class Stimulus(PrettyPrint):
         electrodes = electrodes[keep_el]
 
         if time is not None:
-            # In time, we can't just remove empty columns. We need to walk
-            # through each column and save all the "state transitions" along
-            # with the points in time when they happened. For example, a
-            # digital signal:
-            # data = [0 0 1 1 1 1 0 0 0 1], time = [0 1 2 3 4 5 6 7 8 9]
-            # becomes
-            # data = [0 0 1 1 0 0 1],       time = [0 1 2 5 6 8 9].
-            # You always need the first and last element. You also need the
-            # high and low value (along with the time stamps) for every signal
-            # edge.
-            ticks = []  # sparsified time stamps
-            signal = []  # sparsified signal values
-            for t in range(data.shape[-1]):
-                if t == 0 or t == data.shape[-1] - 1:
-                    # Always need the first and last element:
-                    ticks.append(time[t])
-                    signal.append(data[:, t])
-                else:
-                    if not np.allclose(data[:, t], data[:, t - 1]):
-                        ticks.append(time[t - 1])
-                        signal.append(data[:, t - 1])
-                        ticks.append(time[t])
-                        signal.append(data[:, t])
-            # NumPy made the slices row vectors instead of column vectors, so
-            # now we need to vertically stack them and transpose:
-            data = np.vstack(signal).T
-            time = np.array(ticks)
+            idx_time = fast_compress(data, time)
+            data = data[:, idx_time]
+            time = time[idx_time]
+
         self._stim = {
             'data': data,
             'electrodes': electrodes,

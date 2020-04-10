@@ -111,7 +111,7 @@ def test_Stimulus():
     npt.assert_equal(stim.time, [0, 4])
     stim = Stimulus(stim, time=np.array(stim.time) / 10.0)
     npt.assert_equal(stim.electrodes, [0, 1])
-    npt.assert_equal(stim.time, [0, 0.4])
+    npt.assert_almost_equal(stim.time, [0, 0.4])
 
     # Not allowed:
     with pytest.raises(ValueError):
@@ -303,7 +303,8 @@ def test_Stimulus___getitem__():
     npt.assert_equal(stim[0, 0], stim.data[0, 0])
     # Interpolating time:
     npt.assert_almost_equal(stim[0, 2.6], 3.6)
-    npt.assert_almost_equal(stim[..., 2.3], np.array([[3.3], [7.3], [11.3]]))
+    npt.assert_almost_equal(stim[..., 2.3], np.array([[3.3], [7.3], [11.3]]),
+                            decimal=3)
     # The second dimension is not a column index!
     npt.assert_almost_equal(stim[0, 0], 1.0)
     npt.assert_almost_equal(stim[0, [0, 1]], np.array([[1.0, 2.0]]))

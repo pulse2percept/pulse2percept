@@ -234,6 +234,8 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
 
         # Make sure we don't change the user's Stimulus object:
         _implant = deepcopy(implant)
+        # Make sure to compress the stimulus:
+        _implant.stim.compress()
         # Calculate the spatial response at all time points where the stimulus
         # changes:
         spatial = self._predict_spatial(_implant, _implant.stim.time)

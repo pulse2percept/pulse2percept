@@ -43,7 +43,7 @@ class Nanduri2012SpatialMixin(object):
             stim = implant.stim.data.astype(np.float32)
         else:
             stim = implant.stim[:, np.array([t]).ravel()].astype(np.float32)
-
+        # A Stimulus could be compressed to zero:
         if stim.size == 0:
             return np.zeros((np.array([t]).size, np.prod(self.grid.x.shape)),
                             dtype=np.float32)
