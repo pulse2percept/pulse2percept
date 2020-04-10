@@ -125,6 +125,8 @@ class Frozen(object):
     be set outside the constructor. On attempting to add a new attribute, the
     class will raise a FreezeError.
     """
+    __slots__ = ()
+
     __setattr__ = freeze_class(object.__setattr__)
 
     class __metaclass__(type):

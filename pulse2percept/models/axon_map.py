@@ -26,12 +26,14 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('eye', 'rho', 'axlambda', 'loc_od_x', 'loc_od_y', 'n_axons',
                  'axons_range', 'n_ax_segments', 'ax_segments_range',
-                 'axon_pickle', 'ignore_pickle', 'axon_contrib_old',
+                 'axon_pickle', 'ignore_pickle',
                  'axon_contrib', 'axon_idx_start', 'axon_idx_end')
 
     def __init__(self, **kwargs):
         super(AxonMapModel, self).__init__(**kwargs)
         self.axon_contrib = None
+        self.axon_idx_start = None
+        self.axon_idx_end = None
 
     def _get_default_params(self):
         base_params = super(AxonMapModel, self)._get_default_params()
@@ -324,7 +326,6 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         # we need to concatenate it into a really long Nx3 array, and pass the
         # start and end indices of each slice:
         axon_contrib = self.calc_axon_contribution(axons)
-        self.axon_contrib_old = axon_contrib
         self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
         len_axons = [a.shape[0] for a in axon_contrib]
         self.axon_idx_end = np.cumsum(len_axons)
