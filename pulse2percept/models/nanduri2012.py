@@ -117,7 +117,7 @@ class Nanduri2012TemporalMixin(object):
 
         # Beware of floating point errors! 29.999 will be rounded down to 29
         # by np.uint, so we need to np.round it first:
-        idx_percept = np.uint(np.round(t_percept / self.dt))
+        idx_percept = np.uint64(np.round(t_percept / self.dt))
         t_percept = idx_percept * self.dt
         if np.unique(idx_percept).size < t_percept.size:
             raise ValueError("All times 't' must be distinct multiples of "
