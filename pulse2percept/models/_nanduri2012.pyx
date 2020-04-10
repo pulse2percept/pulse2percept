@@ -79,10 +79,10 @@ cpdef spatial_fast(const float32[:, ::1] stim,
                     d2e = (c_pow(c_sqrt(d2c) - rel[idx_el], 2) +
                            c_pow(zel[idx_el], 2))
                     denom = atten_a + c_pow(c_sqrt(d2e), atten_n)
-                    px_bright = px_bright + atten_a / denom
+                    px_bright = px_bright + amp * atten_a / denom
         if c_abs(px_bright) < thresh_percept:
             px_bright = 0.0
-        bright[idx_time, idx_space] = px_bright  # Py overhead
+        bright[idx_time, idx_space] = px_bright
     return np.asarray(bright)  # Py overhead
 
 
