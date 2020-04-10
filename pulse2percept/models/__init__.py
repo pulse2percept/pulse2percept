@@ -6,6 +6,7 @@
     base
     scoreboard
     axon_map
+    nanduri2012
     watson2014
 
 """

@@ -1,4 +1,4 @@
-"""`PrettyPrint`, `Frozen`, `GridXY`, `gamma`, `cart2pol`, `pol2cart`"""
+"""`PrettyPrint`, `GridXY`, `gamma`, `cart2pol`, `pol2cart`"""
 import numpy as np
 import sys
 import abc
