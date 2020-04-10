@@ -1,9 +1,11 @@
 """`BaseModel`"""
 import sys
 import abc
+from copy import deepcopy
+import numpy as np
 
 from ..implants import ProsthesisSystem
-from ..utils import PrettyPrint, GridXY, parfor
+from ..utils import PrettyPrint, Frozen, GridXY, parfor
 
 
 class NotBuiltError(ValueError, AttributeError):
@@ -14,7 +16,7 @@ class NotBuiltError(ValueError, AttributeError):
     """
 
 
-class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
+class BaseModel(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
     """Base model
 
     The BaseModel class defines which methods and attributes a model must
@@ -64,7 +66,7 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
     idea of how to write a complete model.
 
     """
-    __slots__ = ('xrange', 'yrange', 'xystep', 'grid', 'grid_type',
+    __slots__ = ('xrange', 'yrange', 'xystep', 'grid', 'grid_type', 'has_time',
                  'thresh_percept', 'engine', 'scheduler', 'n_jobs', 'verbose',
                  '__is_built')
 
@@ -94,8 +96,7 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
                            "from: %s." % (key, ', '.join(defaults.keys())))
                 raise AttributeError(err_str)
         # Retinal grid:
-        self.grid = GridXY(self.xrange, self.yrange, step=self.xystep,
-                           grid_type=self.grid_type)
+        self.grid = None
         # This flag will be flipped once the ``build`` method was called
         self.__is_built = False
 
@@ -109,12 +110,14 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
             'yrange': (-15, 15),  # dva
             'xystep': 0.25,  # dva
             'grid_type': 'rectangular',
+            # Whether a temporal model exists:
+            'has_time': False,
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
             # JobLib or Dask can be used to parallelize computations:
-            'engine': 'joblib',
+            'engine': 'serial',
             'scheduler': 'threading',
-            'n_jobs': -1,
+            'n_jobs': 1,
             # True: print status messages, 0: silent
             'verbose': True
         }
@@ -136,7 +139,7 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
         # getframe(0) is '_is_built', getframe(1) is 'set_attr'.
         # getframe(2) is the one we are looking for, and has to be either the
         # construct or ``build``:
-        f_caller = sys._getframe(1).f_code.co_name
+        f_caller = sys._getframe(2).f_code.co_name
         if f_caller in ["__init__", "build"]:
             self.__is_built = val
         else:
@@ -182,6 +185,11 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
         # you can't add new class attributes outside of that):
         for key, val in build_params.items():
             setattr(self, key, val)
+        # Build the spatial grid:
+        self.grid = GridXY(self.xrange, self.yrange, step=self.xystep,
+                           grid_type=self.grid_type)
+        self.grid.xret = self.dva2ret(self.grid.x)
+        self.grid.yret = self.dva2ret(self.grid.y)
         # This flag indicates that the ``build`` method has been called. It has
         # to be set to True for other methods, such as ``predict_percept``, to
         # work:
@@ -189,19 +197,13 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
         return self
 
     @abc.abstractmethod
-    def get_tissue_coords(self, xdva, ydva):
-        """Convert dva into tissue coordinates"""
+    def dva2ret(self, xdva):
+        """Convert degrees of visual angle (dva) into retinal coordinates"""
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _predict_pixel_percept(self, xygrid, implant, t=None):
-        """Calculate the percept at pixel location (xdva,ydva)
-
-        Parameters
-        ----------
-        xygrid : tuple
-
-        """
+    def _predict_spatial(self, implant, t=0):
+        """Spatial model"""
         raise NotImplementedError
 
     def predict_percept(self, implant, t=None):
@@ -212,11 +214,14 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
         implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
             Stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
-        fps : int, double
-            Frames per second at which the percept should be rendered.
-        n_frames : int
-            If None, will simulate for the duration of the stimulus plus one
-            frame (rounding up).
+        t : float or list of floats
+            The time points at which to output a percept (seconds).
+
+        Returns
+        -------
+        percept : np.ndarray
+            A <T x X x Y> matrix that contains the predicted brightness values
+            at the specified (X,Y) spatial locations and times T.
         """
         if not self._is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
@@ -226,16 +231,29 @@ class BaseModel(PrettyPrint, metaclass=abc.ABCMeta):
         if implant.stim is None:
             # Nothing to see here:
             return None
-        if implant.stim.time is not None:
-            # The stimulus has a time dimension
-            raise NotImplementedError
 
-        # The stimulus does not have a time dimesnion. In this case, we
-        # only need to run the spatial model:
-        return parfor(self._predict_pixel_percept,
-                      enumerate(self.grid),
-                      func_args=[implant],
-                      func_kwargs={'t': t},
-                      engine=self.engine, scheduler=self.scheduler,
-                      n_jobs=self.n_jobs,
-                      out_shape=self.grid.shape)
+        # Make sure we don't change the user's Stimulus object:
+        _implant = deepcopy(implant)
+        # Make sure to compress the stimulus:
+        _implant.stim.compress()
+        # Calculate the spatial response at all time points where the stimulus
+        # changes:
+        spatial = self._predict_spatial(_implant, _implant.stim.time)
+
+        if _implant.stim.time is None or not self.has_time:
+            # Either the model or stimulus lack a time component:
+            # TODO:
+            # return utils.Percept(self.xdva, self.ydva, brightness)
+            # Reshape to T x X x Y:
+            return spatial.reshape([-1] + list(self.grid.x.shape))
+
+        # Both stimulus and model support time:
+        if t is None:
+            # 10 Hz sampling:
+            t = np.arange(_implant.stim.time[0],
+                          _implant.stim.time[-1],
+                          np.minimum(_implant.stim.time[-1], 0.1))
+            # Make sure to include the last stimulus time point:
+            t = np.unique(np.concatenate((t, [_implant.stim.time[-1]])))
+        percept = self._predict_temporal(spatial, _implant.stim.time, t)
+        return percept.reshape([-1] + list(self.grid.x.shape))

@@ -13,6 +13,9 @@ Studies describing pulse2percept:
 
 Studies referenced throughout the Documentation:
 
+.. [Ahuja2008] AK Ahuja, MR Behrend, M Kuroda, MS Humayun, JD Weiland. An in
+               in vitro model of a retinal prosthesis. *IEEE Trans Biomed Eng*
+               55, 1744-1753.
 .. [Beyeler2019] M Beyeler, D Nanduri, JD Weiland, A Rokem, GM Boynton, I Fine
                  (2019). A model of ganglion axon pathways accounts for
                  percepts elicited by retinal implants. *Scientific Reports*
@@ -35,6 +38,12 @@ Studies referenced throughout the Documentation:
                 RK Shepherd, PJ Allen, for the Bionic Vision Australia
                 Research Consortium (2014). First-in-human trial of a novel
                 suprachoroidal retinal prosthesis. *PLoS ONE*  9(12): e115239.
+.. [Nanduri2012] D Nanduri, I Fine, A Horsager, GM Boynton, MS Humayun,
+                 RJ Greenberg, JD Weiland (2012), Frequency and amplitude
+                 modulation have different effects on the percepts elicited
+                 by retinal stimulation. Investigative Ophthalmology & Visual
+                 Science 53:205-214, doi:`10.1167/iovs.11-8401
+                 <https://doi.org/10.1167/iovs.11-8401>`_.
 .. [Thompson2003] RW Thompson Jr, GD Barnett, MS Humayun, G Dagnelie
                   (2003). Facial recognition using simulated prosthetic
                   pixelized vision.

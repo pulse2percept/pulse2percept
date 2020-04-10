@@ -22,11 +22,11 @@ class ValidBaseModel(models.BaseModel):
         params.update({'valid': 1})
         return params
 
-    def get_tissue_coords(self, xdva, ydva):
-        return 290 * xdva, 290 * ydva
+    def dva2ret(self, xdva):
+        return 290 * xdva
 
-    def _predict_pixel_percept(self, xydva, img_stim, t=None):
-        return 0
+    def _predict_spatial(self, implant, t=None):
+        return np.zeros_like(self.grid.x)
 
     def set_is_built(self):
         # This is not allowed outside constructor or ``build``:
@@ -120,7 +120,7 @@ def test_BaseModel_predict_percept():
     # But then must pass through ``predict_percept`` just fine
     model.build()
     percept = model.predict_percept(implants.ArgusII(stim=img_stim))
-    npt.assert_equal(percept.shape, (9, 13))
+    npt.assert_equal(percept.shape, (1, 9, 13))
     npt.assert_almost_equal(percept, 0)
 
     # Requires ProsthesisSystem object:
@@ -139,5 +139,5 @@ def test_BaseModel_predict_percept():
     model = ValidBaseModel(engine='serial', xrange=(0.45, 0.45), yrange=(0, 0))
     model.build()
     percept = model.predict_percept(implants.ArgusII(stim=np.zeros(60)))
-    npt.assert_equal(percept.shape, (1, 1))
+    npt.assert_equal(percept.shape, (1, 1, 1))
     npt.assert_almost_equal(percept, 0)

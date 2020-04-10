@@ -3,6 +3,7 @@
 import numpy as np
 from abc import ABCMeta, abstractmethod
 import math
+from copy import deepcopy
 # Using or importing the ABCs from 'collections' instead of from
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
 from collections.abc import Sequence
@@ -700,16 +701,26 @@ class ProsthesisSystem(PrettyPrint):
         if data is None:
             self._stim = None
         else:
-            if isinstance(data, dict):
+            if isinstance(data, Stimulus):
+                # Already a stimulus object:
+                stim = data
+            elif isinstance(data, dict):
                 # Electrode names already provided by keys:
                 stim = Stimulus(data)
             else:
                 # Use electrode names as stimulus coordinates:
                 stim = Stimulus(data, electrodes=list(self.earray.keys()))
+
+            # Make sure all electrode names are valid:
+            for electrode in stim.electrodes:
+                # Invalid index will return None:
+                if not self.earray[electrode]:
+                    raise ValueError("Electrode '%s' not found in "
+                                     "implant." % electrode)
             # Perform safety checks, etc.:
             self.check_stim(stim)
-            # Store safe stimulus:
-            self._stim = stim
+            # Store stimulus:
+            self._stim = deepcopy(stim)
 
     @property
     def eye(self):

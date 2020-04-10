@@ -432,6 +432,11 @@ def test_ProsthesisSystem():
     with pytest.raises(TypeError):
         # Invalid stim type:
         implant.stim = "stim"
+    # Invalid electrode names:
+    with pytest.raises(ValueError):
+        implant.stim = {'A1': 1}
+    with pytest.raises(ValueError):
+        implant.stim = Stimulus({'A1': 1})
 
     # Slots:
     npt.assert_equal(hasattr(implant, '__slots__'), True)

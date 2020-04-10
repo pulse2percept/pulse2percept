@@ -7,6 +7,7 @@ from scipy.interpolate import interp1d
 
 from .pulse_trains import TimeSeries
 from ..utils import PrettyPrint
+from ._base import fast_compress
 
 
 class Stimulus(PrettyPrint):
@@ -19,6 +20,12 @@ class Stimulus(PrettyPrint):
     A stimulus can be created from a variety of source types (see below),
     including lists and dictionaries. Depending on the source type, a stimulus
     might have a time component or not.
+
+    You can access the stimulus applied to electrode ``e`` at time ``t``
+    by directly indexing into ``Stimulus[e, t]``. In this case, ``t`` is not
+    a column index but a time point. If the time point is not explicitly stored
+    in the ``data`` container, its value will be automatically interpolated
+    from neighboring values.
 
     Parameters
     ----------
@@ -163,22 +170,22 @@ class Stimulus(PrettyPrint):
         if np.isscalar(source) and not isinstance(source, str):
             # Scalar: 1 electrode, no time component
             time = None
-            data = np.array([source], dtype=float).reshape((1, -1))
+            data = np.array([source], dtype=np.float32).reshape((1, -1))
         elif isinstance(source, (list, tuple)):
             # List or touple with N elements: 1 electrode, N time points
             time = np.arange(len(source))
-            data = np.array(source, dtype=float).reshape((1, -1))
+            data = np.array(source, dtype=np.float32).reshape((1, -1))
         elif isinstance(source, np.ndarray):
             if source.ndim > 1:
                 raise ValueError("Cannot create Stimulus object from a %d-D "
                                  "NumPy array. Must be 1-D." % source.ndim)
             # 1D NumPy array with N elements: 1 electrode, N time points
             time = np.arange(len(source))
-            data = source.astype(float).reshape((1, -1))
+            data = source.astype(np.float32).reshape((1, -1))
         elif isinstance(source, TimeSeries):
             # TimeSeries with NxM time points: N electrodes, M time points
             time = np.arange(source.shape[-1]) * source.tsample
-            data = source.data.astype(float).reshape((-1, len(time)))
+            data = source.data.astype(np.float32).reshape((-1, len(time)))
         else:
             raise TypeError("Cannot create Stimulus object from %s. Choose "
                             "from: scalar, tuple, list, NumPy array, or "
@@ -219,8 +226,8 @@ class Stimulus(PrettyPrint):
             # making sure the `equal_nan` option is set to True so that two NaNs
             # are considered equal:
             for e, t in enumerate(_time):
-                if not np.allclose(np.array(t, dtype=float),
-                                   np.array(_time[0], dtype=float),
+                if not np.allclose(np.array(t, dtype=np.float32),
+                                   np.array(_time[0], dtype=np.float32),
                                    equal_nan=True):
                     raise ValueError("All stimuli must have the same time axis, "
                                      "but electrode %s has t=%s and electrode %s "
@@ -254,9 +261,9 @@ class Stimulus(PrettyPrint):
         # Store the data in the private container. Setting all elements at once
         # enforces consistency; e.g., between shape of electrodes and time:
         self._stim = {
-            'data': _data,
+            'data': _data.astype(np.float32),
             'electrodes': _electrodes,
-            'time': _time,
+            'time': _time if _time is None else _time.astype(np.float32),
         }
         # Compress the data upon request:
         if compress:
@@ -279,33 +286,10 @@ class Stimulus(PrettyPrint):
         electrodes = electrodes[keep_el]
 
         if time is not None:
-            # In time, we can't just remove empty columns. We need to walk
-            # through each column and save all the "state transitions" along
-            # with the points in time when they happened. For example, a
-            # digital signal:
-            # data = [0 0 1 1 1 1 0 0 0 1], time = [0 1 2 3 4 5 6 7 8 9]
-            # becomes
-            # data = [0 0 1 1 0 0 1],       time = [0 1 2 5 6 8 9].
-            # You always need the first and last element. You also need the
-            # high and low value (along with the time stamps) for every signal
-            # edge.
-            ticks = []  # sparsified time stamps
-            signal = []  # sparsified signal values
-            for t in range(data.shape[-1]):
-                if t == 0 or t == data.shape[-1] - 1:
-                    # Always need the first and last element:
-                    ticks.append(time[t])
-                    signal.append(data[:, t])
-                else:
-                    if not np.allclose(data[:, t], data[:, t - 1]):
-                        ticks.append(time[t - 1])
-                        signal.append(data[:, t - 1])
-                        ticks.append(time[t])
-                        signal.append(data[:, t])
-            # NumPy made the slices row vectors instead of column vectors, so
-            # now we need to vertically stack them and transpose:
-            data = np.vstack(signal).T
-            time = np.array(ticks)
+            idx_time = fast_compress(data, time)
+            data = data[:, idx_time]
+            time = time[idx_time]
+
         self._stim = {
             'data': data,
             'electrodes': electrodes,
@@ -314,6 +298,20 @@ class Stimulus(PrettyPrint):
 
     def __getitem__(self, item):
         """Returns an item from the data array, interpolated if necessary"""
+        # NumPy handles most indexing and slicing. However, we need to prevent
+        # cases like stim[:, [0, 1]] which ask for time=[0.0, 1.0] and not for
+        # column index 0 and 1:
+        if isinstance(item, tuple):
+            if isinstance(item[1], slice):
+                # Currently the only supported slice is ':'
+                if item[1].start or item[1].stop or item[1].step:
+                    raise NotImplementedError("Slicing the time axis not yet "
+                                              "supported.")
+            else:
+                if not np.any(item[1] == Ellipsis):
+                    # Convert to float so time is not mistaken for column index
+                    item = (item[0], np.float32(item[1]))
+
         try:
             # NumPy handles most indexing and slicing:
             return self._stim['data'][item]
@@ -330,6 +328,8 @@ class Stimulus(PrettyPrint):
         # indices into a list:
         if item[0] == Ellipsis:
             interp = np.array(self._interp)
+        elif isinstance(item[0], list):
+            interp = np.array([self._interp[i] for i in item[0]])
         else:
             interp = np.array([self._interp[item[0]]]).flatten()
         # Time might be a single index or a list of indices. Convert all to
@@ -337,7 +337,7 @@ class Stimulus(PrettyPrint):
         time = np.array([item[1]]).flatten()
         data = np.array([[ip(t) for t in time] for ip in interp])
         # Return a single element as scalar:
-        if len(data) <= 1:
+        if data.size == 1:
             data = data.ravel()[0]
         return data
 
@@ -465,7 +465,7 @@ class Stimulus(PrettyPrint):
         if len(self.time) == 1:
             # Special case: Duplicate data with slightly different time points
             # so we can set up an interp1d:
-            eps = np.finfo(float).eps
+            eps = np.finfo(np.float32).eps
             time = np.array([self.time - eps, self.time + eps]).flatten()
             data = np.repeat(self.data, 2, axis=1)
         else:

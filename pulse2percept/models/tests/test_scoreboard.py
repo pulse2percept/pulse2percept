@@ -38,7 +38,7 @@ def test_ScoreboardModel_predict_percept():
     npt.assert_equal(np.sum(percept > 0.1), 1)
     npt.assert_equal(np.sum(percept > 0.00001), 9)
     # Brightest pixel is in lower right:
-    npt.assert_almost_equal(percept[18, 25], np.max(percept))
+    npt.assert_almost_equal(percept[0, 18, 25], np.max(percept))
 
     # Full Argus II: 60 bright spots
     model = models.ScoreboardModel(engine='serial', xystep=1, rho=100)

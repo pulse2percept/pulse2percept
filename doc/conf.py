@@ -267,6 +267,7 @@ sphinx_gallery_conf = {
         'pulse2percept': None},
     'examples_dirs': ['../examples'],
     'gallery_dirs': ['examples'],
+    'remove_config_comments': True,
     'subsection_order': ExplicitOrder(['../examples/implants',
                                        '../examples/stimuli',
                                        '../examples/models',

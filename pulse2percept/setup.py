@@ -17,8 +17,6 @@ def configuration(parent_package='', top_path=None):
     # we must manually add sub-submodules & tests
     config.add_subpackage('implants')
     config.add_subpackage('implants/tests')
-    config.add_subpackage('stimuli')
-    config.add_subpackage('stimuli/tests')
     config.add_subpackage('utils')
     config.add_subpackage('utils/tests')
     config.add_subpackage('io')
@@ -28,6 +26,7 @@ def configuration(parent_package='', top_path=None):
 
     # Submodules which have their own setup.py; e.g., because they use Cython:
     config.add_subpackage('models')
+    config.add_subpackage('stimuli')
 
     # add the test directory
     # config.add_subpackage('tests')

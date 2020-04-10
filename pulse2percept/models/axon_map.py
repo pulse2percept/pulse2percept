@@ -4,9 +4,10 @@ import os
 import numpy as np
 import pickle
 
-from ..utils import parfor
+from ..utils import parfor, GridXY
+from ..implants import ProsthesisSystem
 from ..models import BaseModel, Watson2014ConversionMixin, dva2ret
-from ..models._axon_map import axon_contribution, axon_map
+from ..models._axon_map import axon_contribution, spatial_fast
 
 
 class AxonMapModel(Watson2014ConversionMixin, BaseModel):
@@ -25,14 +26,14 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('eye', 'rho', 'axlambda', 'loc_od_x', 'loc_od_y', 'n_axons',
                  'axons_range', 'n_ax_segments', 'ax_segments_range',
-                 'axon_pickle', 'ignore_pickle', 'xret', 'yret',
-                 'axon_contrib')
+                 'axon_pickle', 'ignore_pickle',
+                 'axon_contrib', 'axon_idx_start', 'axon_idx_end')
 
     def __init__(self, **kwargs):
         super(AxonMapModel, self).__init__(**kwargs)
         self.axon_contrib = None
-        self.xret = None
-        self.yret = None
+        self.axon_idx_start = None
+        self.axon_idx_end = None
 
     def _get_default_params(self):
         base_params = super(AxonMapModel, self)._get_default_params()
@@ -189,8 +190,12 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         """
         if len(bundles) <= 0:
             raise ValueError("bundles must have length greater than zero")
-        xret = self.xret if xret is None else np.asarray(xret, dtype=float)
-        yret = self.yret if yret is None else np.asarray(yret, dtype=float)
+        if xret is None:
+            xret = self.grid.xret
+        if yret is None:
+            yret = self.grid.yret
+        xret = np.asarray(xret, dtype=np.float32)
+        yret = np.asarray(yret, dtype=np.float32)
         # For every axon segment, store the corresponding axon ID:
         axon_idx = [[idx] * len(ax) for idx, ax in enumerate(bundles)]
         axon_idx = [item for sublist in axon_idx for item in sublist]
@@ -213,7 +218,8 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         return [bundles[n] for n in closest_axon]
 
     def calc_axon_contribution(self, axons):
-        xyret = np.column_stack((self.xret.ravel(), self.yret.ravel()))
+        xyret = np.column_stack((self.grid.xret.ravel(),
+                                 self.grid.yret.ravel()))
         axon_contrib = []
         for xy, bundle in zip(xyret, axons):
             if self.engine == 'cython':
@@ -291,7 +297,11 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         else:
             err_str = ("Eye should be either 'LE' or 'RE', not %s." % self.eye)
             raise ValueError(err_str)
-        self.xret, self.yret = self.get_tissue_coords(self.grid.x, self.grid.y)
+        # Build the spatial grid:
+        self.grid = GridXY(self.xrange, self.yrange, step=self.xystep,
+                           grid_type=self.grid_type)
+        self.grid.xret = self.dva2ret(self.grid.x)
+        self.grid.yret = self.dva2ret(self.grid.y)
         need_axons = False
         # You can ignore pickle files and force a rebuild with this flag:
         if self.ignore_pickle:
@@ -311,7 +321,15 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
             bundles = self.grow_axon_bundles()
             axons = self.find_closest_axon(bundles)
         # Calculate axon contributions (depends on axlambda):
-        self.axon_contrib = self.calc_axon_contribution(axons)
+        # Axon contribution is a list of (differently shaped) NumPy arrays,
+        # and a list cannot be accessed in parallel without the gil. Instead
+        # we need to concatenate it into a really long Nx3 array, and pass the
+        # start and end indices of each slice:
+        axon_contrib = self.calc_axon_contribution(axons)
+        self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
+        len_axons = [a.shape[0] for a in axon_contrib]
+        self.axon_idx_end = np.cumsum(len_axons)
+        self.axon_idx_start = self.axon_idx_end - np.array(len_axons)
         # Pickle axons along with all important parameters:
         params = {'loc_od_x': self.loc_od_x, 'loc_od_y': self.loc_od_y,
                   'n_axons': self.n_axons, 'axons_range': self.axons_range,
@@ -322,27 +340,40 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         self._is_built = True
         return self
 
-    def _predict_pixel_percept(self, xygrid, implant, t=None):
-        # ``xygrid`` is a single element in an ``enumerate``: (idx, xy-coords)
-        idx_xy, _ = xygrid
-        # Find the relevant axon at that location:
-        axon = self.axon_contrib[idx_xy]
-        # Abort if there is no axon at this spot:
-        if axon.shape[0] == 0:
-            return 0.0
-        # Calculate the brightness at pixel:
+    def _predict_spatial(self, implant, t):
+        """Predicts the brightness at specific times ``t``"""
+        if t is None:
+            t = implant.stim.time
+        if implant.stim.time is None and t is not None:
+            raise ValueError("Cannot calculate spatial response at times "
+                             "t=%s, because stimulus does not have a time "
+                             "component." % t)
+        # Interpolate stimulus at desired time points:
+        if implant.stim.time is None:
+            stim = implant.stim.data.astype(np.float32)
+        else:
+            stim = implant.stim[:, np.array([t]).ravel()].astype(np.float32)
+        # A Stimulus could be compressed to zero:
+        if stim.size == 0:
+            return np.zeros((np.array([t]).size, np.prod(self.grid.x.shape)),
+                            dtype=np.float32)
+        # This does the expansion of a compact stimulus and a list of
+        # electrodes to activation values at X,Y grid locations:
         electrodes = implant.stim.electrodes
-        bright = axon_map(implant.stim.data[:, 0],
-                          np.array([implant[e].x for e in electrodes]),
-                          np.array([implant[e].y for e in electrodes]),
-                          axon,
-                          self.rho,
-                          self.thresh_percept)
-        return bright
+        return spatial_fast(stim,
+                            np.array([implant[e].x for e in electrodes],
+                                     dtype=np.float32),
+                            np.array([implant[e].y for e in electrodes],
+                                     dtype=np.float32),
+                            self.axon_contrib,
+                            self.axon_idx_start.astype(np.int32),
+                            self.axon_idx_end.astype(np.int32),
+                            self.rho,
+                            self.thresh_percept)
 
     def predict_percept(self, implant, t=None):
         # Need to add an additional check before running the base method:
-        if implant.eye != self.eye:
+        if isinstance(implant, ProsthesisSystem) and implant.eye != self.eye:
             raise ValueError(("The implant is in %s but the model was built "
                               "for %s.") % (implant.eye, self.eye))
         return super(AxonMapModel, self).predict_percept(implant, t=t)
