@@ -5,6 +5,7 @@ def configuration(parent_package='', top_path=None):
     import numpy
     config = Configuration('datasets', parent_package, top_path)
     config.add_subpackage('tests')
+    config.add_data_dir('data')
     return config
 
 if __name__ == '__main__':
