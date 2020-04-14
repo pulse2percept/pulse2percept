@@ -8,6 +8,7 @@ pulse2percept is organized into the following subpackages:
     implants
     stimuli
     models
+    datasets
     io
     viz
     utils
@@ -30,18 +31,20 @@ logging.basicConfig(level=logging.DEBUG,
                     filename='debug.log',
                     filemode='w')
 
+from . import datasets
+from . import implants
 # Avoid showing avconv/avprob error:
 logger.setLevel(logging.ERROR)
 from . import io
 logger.setLevel(logging.INFO)
-from . import implants
 from . import models
 from . import stimuli
 from . import viz
 
 __all__ = [
-    'io',
+    'datasets',
     'implants',
+    'io',
     'models',
     'stimuli',
     'utils',
