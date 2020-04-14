@@ -4,7 +4,24 @@ import pytest
 import numpy.testing as npt
 
 from pulse2percept.utils import (Frozen, FreezeError, gamma, find_files_like,
-                                 cart2pol, pol2cart)
+                                 cart2pol, pol2cart, PrettyPrint)
+
+
+class PrettyPrinter(PrettyPrint):
+
+    def _pprint_params(self):
+        return {}
+
+
+class PrettyPrinter2(PrettyPrint):
+
+    def _pprint_params(self):
+        return {'b': None, 'a': 3}
+
+
+def test_PrettyPrint():
+    npt.assert_equal(str(PrettyPrinter()), "PrettyPrinter()")
+    npt.assert_equal(str(PrettyPrinter2()), "PrettyPrinter2(a=3, b=None)")
 
 
 class FrozenChild(Frozen):

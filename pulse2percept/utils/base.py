@@ -85,8 +85,11 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
                     lc = lindent
             str_params += sparam
             lc += len(sparam)
-        # Delete last comma and add ')':
-        str_params = str_params[:-2] + ')'
+        if len(sorted_params) > 0:
+            # Delete last comma:
+            str_params = str_params[:-2]
+        # Add ')':
+        str_params += ')'
         return str_params
 
 
