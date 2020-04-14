@@ -15,6 +15,9 @@ def test_AxonMapModel():
     model = models.AxonMapModel()
     for param in set_params:
         npt.assert_equal(hasattr(model, param), True)
+    # Slots:
+    npt.assert_equal(hasattr(model, '__slots__'), True)
+    npt.assert_equal(hasattr(model, '__dict__'), False)
 
     # User can override default values
     for key, value in set_params.items():
@@ -112,7 +115,8 @@ def test_AxonMapModel_find_closest_axon():
     model.build()
     # Pretend there is an axon close to each point on the grid:
     bundles = [np.array([x + 0.001, y - 0.001]).reshape((1, 2))
-               for x, y in zip(model.xret.ravel(), model.yret.ravel())]
+               for x, y in zip(model.grid.xret.ravel(),
+                               model.grid.yret.ravel())]
     closest = model.find_closest_axon(bundles)
     for ax1, ax2 in zip(bundles, closest):
         npt.assert_almost_equal(ax1[0, 0], ax2[0, 0])
@@ -123,7 +127,7 @@ def test_AxonMapModel_calc_axon_contribution():
     model = models.AxonMapModel(xystep=2, engine='serial', n_axons=10,
                                 axons_range=(-30, 30))
     model.build()
-    xyret = np.column_stack((model.xret.ravel(), model.yret.ravel()))
+    xyret = np.column_stack((model.grid.xret.ravel(), model.grid.yret.ravel()))
     bundles = model.grow_axon_bundles()
     axons = model.find_closest_axon(bundles)
     contrib = model.calc_axon_contribution(axons)
@@ -161,11 +165,11 @@ def test_AxonMapModel_predict_percept():
     # Overall only a few bright pixels:
     npt.assert_almost_equal(np.sum(percept), 3.207, decimal=3)
     # Brightest pixel is in lower right:
-    npt.assert_almost_equal(percept[18, 25], np.max(percept))
+    npt.assert_almost_equal(percept[0, 18, 25], np.max(percept))
     # Top half is empty:
-    npt.assert_almost_equal(np.sum(percept[:15, :]), 0)
+    npt.assert_almost_equal(np.sum(percept[0, :15, :]), 0)
     # Same for lower band:
-    npt.assert_almost_equal(np.sum(percept[21:, :]), 0)
+    npt.assert_almost_equal(np.sum(percept[0, 21:, :]), 0)
 
     # Full Argus II with small lambda: 60 bright spots
     model = models.AxonMapModel(engine='serial', xystep=1, rho=100,

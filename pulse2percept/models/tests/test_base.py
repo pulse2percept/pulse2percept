@@ -10,9 +10,11 @@ from pulse2percept import implants
 class ValidBaseModel(models.BaseModel):
     """A class that implements all abstract methods of BaseModel"""
 
+    __slots__ = ('_private', 'valid')
+
     def __init__(self, **kwargs):
         super(ValidBaseModel, self).__init__(**kwargs)
-        # It must be allowed to set additional variables in the constructor:
+        # You can only add attributes that are listed in slots:
         self._private = 0
 
     def _get_default_params(self):
@@ -20,11 +22,11 @@ class ValidBaseModel(models.BaseModel):
         params.update({'valid': 1})
         return params
 
-    def get_tissue_coords(self, xdva, ydva):
-        return 290 * xdva, 290 * ydva
+    def dva2ret(self, xdva):
+        return 290 * xdva
 
-    def _predict_pixel_percept(self, xydva, img_stim, t=None):
-        return 0
+    def _predict_spatial(self, implant, t=None):
+        return np.zeros_like(self.grid.x)
 
     def set_is_built(self):
         # This is not allowed outside constructor or ``build``:
@@ -38,10 +40,13 @@ def test_BaseModel___init__():
     # Set new value for existing param:
     model.valid = 2
     npt.assert_almost_equal(model.valid, 2)
-    # However, creating new params outside the constructor is not allowed:
+    # Slots:
+    npt.assert_equal(hasattr(model, '__slots__'), True)
+    npt.assert_equal(hasattr(model, '__dict__'), False)
+    # However, creating new params is not allowed:
     with pytest.raises(AttributeError):
         model.newparam = 0
-    # Passing parameters that are not in get_params() is not allowed:
+    # Passing parameters that are not in slots is not allowed:
     with pytest.raises(AttributeError):
         ValidBaseModel(newparam=0)
     # Technically, nobody stops you from calling model.key = value on other
@@ -50,10 +55,10 @@ def test_BaseModel___init__():
     npt.assert_almost_equal(model._private, 2)
 
 
-def test_BaseModel_get_params():
-    # We can overwrite default param values if they are in ``get_params``:
+def test_BaseModel__pprint_params():
+    # We can overwrite default param values if they are in ``_pprint_params``:
     model = ValidBaseModel(engine='serial')
-    for key, value in model.get_params().items():
+    for key, value in model._pprint_params().items():
         if key in ('xrange', 'yrange', 'grid_type'):
             continue
         npt.assert_equal(getattr(model, key), value)
@@ -73,7 +78,7 @@ def test_BaseModel_build():
 
     # Params passed to ``build`` must take effect:
     model = ValidBaseModel(engine='serial')
-    model_params = model.get_params()
+    model_params = model._pprint_params()
     for key, value in model_params.items():
         if isinstance(value, (int, float)):
             set_param = {key: 0.1234}
@@ -115,7 +120,7 @@ def test_BaseModel_predict_percept():
     # But then must pass through ``predict_percept`` just fine
     model.build()
     percept = model.predict_percept(implants.ArgusII(stim=img_stim))
-    npt.assert_equal(percept.shape, (9, 13))
+    npt.assert_equal(percept.shape, (1, 9, 13))
     npt.assert_almost_equal(percept, 0)
 
     # Requires ProsthesisSystem object:
@@ -134,5 +139,5 @@ def test_BaseModel_predict_percept():
     model = ValidBaseModel(engine='serial', xrange=(0.45, 0.45), yrange=(0, 0))
     model.build()
     percept = model.predict_percept(implants.ArgusII(stim=np.zeros(60)))
-    npt.assert_equal(percept.shape, (1, 1))
+    npt.assert_equal(percept.shape, (1, 1, 1))
     npt.assert_almost_equal(percept, 0)

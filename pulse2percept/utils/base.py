@@ -2,12 +2,15 @@
 import numpy as np
 import sys
 import abc
-import collections as coll
 import random
 import copy
 from os import listdir
 import re
 from scipy.special import factorial
+# Using or importing the ABCs from 'collections' instead of from
+# 'collections.abc' is deprecated, and in 3.8 it will stop working:
+from collections.abc import Sequence
+from collections import OrderedDict
 
 
 class PrettyPrint(object, metaclass=abc.ABCMeta):
@@ -17,7 +20,7 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
     inspired by scikit-learn.
 
     Classes deriving from PrettyPrint are required to implement a
-    ``get_params`` method that returns a dictionary containing all the
+    ``_pprint_params`` method that returns a dictionary containing all the
     attributes to prettyprint.
 
     Examples
@@ -28,25 +31,26 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
     ...         self.a = a
     ...         self.b = b
     ...
-    ...     def get_params(self):
+    ...     def _pprint_params(self):
     ...         return {'a': self.a, 'b': self.b}
     >>> MyClass(1, 2)
     MyClass(a=1, b=2)
     """
+    __slots__ = ()
 
     @abc.abstractmethod
-    def get_params(self):
+    def _pprint_params(self):
         """Return a dictionary of class attributes"""
         raise NotImplementedError
 
     def __repr__(self):
         """Pretty print class as: ClassName(arg1=val1, arg2=val2)"""
         # Shorten NumPy array output:
-        np.set_printoptions(precision=2, threshold=5, edgeitems=2)
+        np.set_printoptions(precision=3, threshold=7, edgeitems=3)
         # Line width:
         lwidth = 60
         # Sort list of parameters alphabetically:
-        sorted_params = coll.OrderedDict(sorted(self.get_params().items()))
+        sorted_params = OrderedDict(sorted(self._pprint_params().items()))
         # Start string with class name, followed by all arguments:
         str_params = self.__class__.__name__ + '('
         # New line indent (align with class name on first line):
@@ -88,7 +92,6 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
 
 class FreezeError(AttributeError):
     """Exception class used to raise when trying to add attributes to Frozen
-
     Classes of type Frozen do not allow for new attributes to be set outside
     the constructor.
     """
@@ -96,7 +99,6 @@ class FreezeError(AttributeError):
 
 def freeze_class(set):
     """Freezes a class
-
     Raise an error when trying to set an undeclared name, or when calling from
     a method other than ``Frozen.__init__`` or the ``__init__`` method of a
     class derived from Frozen
@@ -119,11 +121,12 @@ def freeze_class(set):
 
 class Frozen(object):
     """Frozen
-
     "Frozen" classes (and subclasses) do not allow for new class attributes to
     be set outside the constructor. On attempting to add a new attribute, the
     class will raise a FreezeError.
     """
+    __slots__ = ()
+
     __setattr__ = freeze_class(object.__setattr__)
 
     class __metaclass__(type):
@@ -167,7 +170,7 @@ class GridXY(object):
                              "not %s.") % type(y_range))
         if len(x_range) != 2 or len(y_range) != 2:
             raise ValueError("x_range and y_range must have 2 elements.")
-        if isinstance(step, coll.Sequence):
+        if isinstance(step, Sequence):
             raise TypeError("step must be a scalar.")
         # Build the grid from `x_range`, `y_range`. If the range is 0, make
         # sure that the number of steps is 1, because linspace(0, 0, num=5)
@@ -176,9 +179,11 @@ class GridXY(object):
         nx = int(np.ceil((xdiff + 1) / step)) if xdiff != 0 else 1
         ydiff = np.diff(y_range)
         ny = int(np.ceil((ydiff + 1) / step)) if ydiff != 0 else 1
-        self.x, self.y = np.meshgrid(np.linspace(*x_range, num=nx),
-                                     np.linspace(*y_range, num=ny),
-                                     indexing='xy')
+        self.x, self.y = np.meshgrid(
+            np.linspace(*x_range, num=nx, dtype=np.float32),
+            np.linspace(*y_range, num=ny, dtype=np.float32),
+            indexing='xy'
+        )
         self.shape = self.x.shape
         self.reset()
 

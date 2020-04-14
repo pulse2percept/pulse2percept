@@ -18,12 +18,13 @@ class TimeSeries(object):
     data : array_like
         Time series data sampled at every ``tsample`` seconds.
     """
+    __slots__ = ('data', 'tsample', 'duration', 'shape')
 
     def __init__(self, tsample, data):
-        self.data = data
+        self.data = np.asarray(data)
         self.tsample = tsample
         self.duration = self.data.shape[-1] * tsample
-        self.shape = data.shape
+        self.shape = self.data.shape
 
     def __getitem__(self, y):
         return TimeSeries(self.tsample, self.data[y])
@@ -180,6 +181,7 @@ class MonophasicPulse(TimeSeries):
         the stimulus duration. Default: No additional zero padding,
         ``stim_dur`` is ``pdur`` + ``delay_dur``.
     """
+    __slots__ = ()
 
     def __init__(self, ptype, pdur, tsample, delay_dur=0, stim_dur=None):
         if tsample <= 0:
@@ -203,7 +205,7 @@ class MonophasicPulse(TimeSeries):
 
         pulse = np.concatenate((np.zeros(delay_size), pulse,
                                 np.zeros(stim_size)))
-        TimeSeries.__init__(self, tsample, pulse[:stim_size])
+        super(MonophasicPulse, self).__init__(tsample, pulse[:stim_size])
 
 
 class BiphasicPulse(TimeSeries):
@@ -225,6 +227,7 @@ class BiphasicPulse(TimeSeries):
         Duration of inter-phase interval (between positive and negative
         pulse) in seconds. Default: 0.
     """
+    __slots__ = ()
 
     def __init__(self, ptype, pdur, tsample, interphase_dur=0):
         if tsample <= 0:
@@ -248,7 +251,7 @@ class BiphasicPulse(TimeSeries):
         else:
             raise ValueError("Acceptable values for `type` are "
                              "'anodicfirst' or 'cathodicfirst'")
-        TimeSeries.__init__(self, tsample, pulse)
+        super(BiphasicPulse, self).__init__(tsample, pulse)
 
 
 class PulseTrain(TimeSeries):
@@ -279,6 +282,7 @@ class PulseTrain(TimeSeries):
         'pulsefirst' has the pulse first, followed by the gap.
         'gapfirst' has it the other way round.
     """
+    __slots__ = ()
 
     def __init__(self, tsample, freq=20, amp=20, dur=0.5, delay=0,
                  pulse_dur=0.45 / 1000, interphase_dur=0.45 / 1000,
@@ -352,4 +356,4 @@ class PulseTrain(TimeSeries):
         # Trim to correct length (takes care of too long arrays, too)
         pulse_train = pulse_train[:stim_size]
 
-        TimeSeries.__init__(self, tsample, pulse_train)
+        super(PulseTrain, self).__init__(tsample, pulse_train)

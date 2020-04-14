@@ -1,7 +1,8 @@
 dask
-numba
 scikit_image
 sk_video
+pandas
+h5py
 pytest>=5
 pytest-cov
 coveralls

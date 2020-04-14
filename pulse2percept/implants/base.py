@@ -1,7 +1,14 @@
-"""`Electrode`, `ElectrodeArray`, `ElectrodeGrid`, `ProsthesisSystem`"""
+"""`Electrode`, `PointSource`, `DiskElectrode`, `ElectrodeArray`,
+   `ElectrodeGrid`, `ProsthesisSystem`"""
 import numpy as np
 from abc import ABCMeta, abstractmethod
-import collections as coll
+import math
+from copy import deepcopy
+# Using or importing the ABCs from 'collections' instead of from
+# 'collections.abc' is deprecated, and in 3.8 it will stop working:
+from collections.abc import Sequence
+from collections import OrderedDict
+
 
 from ..stimuli import Stimulus
 from ..utils import PrettyPrint
@@ -12,20 +19,21 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
 
     Abstract base class for all electrodes.
     """
+    __slots__ = ('x', 'y', 'z')
 
     def __init__(self, x, y, z):
-        if isinstance(x, (coll.Sequence, np.ndarray)):
+        if isinstance(x, (Sequence, np.ndarray)):
             raise TypeError("x must be a scalar, not %s." % (type(x)))
-        if isinstance(y, (coll.Sequence, np.ndarray)):
+        if isinstance(y, (Sequence, np.ndarray)):
             raise TypeError("y must be a scalar, not %s." % type(y))
-        if isinstance(z, (coll.Sequence, np.ndarray)):
+        if isinstance(z, (Sequence, np.ndarray)):
             raise TypeError("z must be a scalar, not %s." % type(z))
         self.x = x
         self.y = y
         self.z = z
 
-    def get_params(self):
-        """Return a dictionary of class attributes"""
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
         return {'x': self.x, 'y': self.y, 'z': self.z}
 
     @abstractmethod
@@ -35,6 +43,8 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
 
 class PointSource(Electrode):
     """Point source"""
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ()
 
     def electric_potential(self, x, y, z, amp, sigma):
         """Calculate electric potential at (x, y, z)
@@ -82,18 +92,20 @@ class DiskElectrode(Electrode):
     r : double
         Disk radius in the x,y plane
     """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('r',)
 
     def __init__(self, x, y, z, r):
         super(DiskElectrode, self).__init__(x, y, z)
-        if isinstance(r, (coll.Sequence, np.ndarray)):
+        if isinstance(r, (Sequence, np.ndarray)):
             raise TypeError("Electrode radius must be a scalar.")
         if r <= 0:
             raise ValueError("Electrode radius must be > 0, not %f." % r)
         self.r = r
 
-    def get_params(self):
-        """Return a dictionary of class attributes"""
-        params = super().get_params()
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
+        params = super()._pprint_params()
         params.update({'r': self.r})
         return params
 
@@ -156,9 +168,9 @@ class ElectrodeArray(PrettyPrint):
         Either a single :py:class:`~pulse2percept.implants.Electrode` object
         or a dict, list, or NumPy array thereof. The keys of the dict will
         serve as electrode names. Otherwise electrodes will be indexed 0..N.
-        
+
         .. note::
-        
+
             If you pass multiple electrodes in a dictionary, the keys of the
             dictionary will automatically be sorted. Thus the original order
             of electrodes might not be preserved.
@@ -180,9 +192,11 @@ class ElectrodeArray(PrettyPrint):
     OrderedDict([('A1', DiskElectrode(r=100..., x=0..., y=0..., z=0...))])
 
     """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('_electrodes',)
 
     def __init__(self, electrodes):
-        self.electrodes = coll.OrderedDict()
+        self.electrodes = OrderedDict()
         if isinstance(electrodes, dict):
             for name, electrode in electrodes.items():
                 self.add_electrode(name, electrode)
@@ -207,8 +221,8 @@ class ElectrodeArray(PrettyPrint):
     def n_electrodes(self):
         return len(self.electrodes)
 
-    def get_params(self):
-        """Return a dictionary of class attributes"""
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
         return {'electrodes': self.electrodes,
                 'n_electrodes': self.n_electrodes}
 
@@ -240,7 +254,7 @@ class ElectrodeArray(PrettyPrint):
         """
         if name not in self.electrodes.keys():
             raise ValueError(("Cannot remove electrode: key '%s' does not "
-                             "exist") %name)
+                              "exist") % name)
         del self.electrodes[name]
 
     def __getitem__(self, item):
@@ -291,7 +305,7 @@ class ElectrodeArray(PrettyPrint):
 
 
 class ElectrodeGrid(ElectrodeArray):
-    """Rectangular grid of electrodes
+    """2D grid of electrodes
 
     Parameters
     ----------
@@ -299,6 +313,8 @@ class ElectrodeGrid(ElectrodeArray):
         A tuple containing the number of rows x columns in the grid
     spacing : double
         Electrode-to-electrode spacing in microns.
+    type : 'rect' or 'hex', optional, default: 'rect'
+        Grid type ('rect': rectangular, 'hex': hexagonal).
     x, y, z : double, optional, default: (0,0,0)
         3D coordinates of the center of the grid
     rot : double, optional, default: 0rad
@@ -322,19 +338,34 @@ class ElectrodeGrid(ElectrodeArray):
 
     Examples
     --------
-    An electrode grid with 2 rows and 4 columns, made of disk electrodes with
-    10um radius spaced 20um apart, centered at (10, 20)um, and located 500um
-    away from the retinal surface, with names like this:
+    A hexagonal electrode grid with 3 rows and 4 columns, made of disk
+    electrodes with 10um radius spaced 20um apart, centered at (10, 20)um, and
+    located 500um away from the retinal surface, with names like this:
+
+    .. raw:: html
+
+        A1    A2    A3    A4
+           B1    B2    B3    B4
+        C1    C2    C3    C4
+
+    >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
+    >>> ElectrodeGrid((3, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
+    ...               type='hex', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    ElectrodeGrid(shape=(3, 4), type='hex')
+
+    A rectangulr electrode grid with 2 rows and 4 columns, made of disk
+    electrodes with 10um radius spaced 20um apart, centered at (10, 20)um, and
+    located 500um away from the retinal surface, with names like this:
+
+    .. raw:: html
 
         A1 A2 A3 A4
         B1 B2 B3 B4
 
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> ElectrodeGrid((2, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
-    ...               etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    ElectrodeGrid(..., name_cols='1',
-                  name_rows='A', r=10..., rot=0..., shape=(2, 4),
-                  spacing=20..., x=10..., y=20..., z=500...)
+    ...               type='rect', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    ElectrodeGrid(shape=(2, 4), type='rect')
 
     There are three ways to access (e.g.) the last electrode in the grid,
     either by name (``grid['C3']``), by row/column index (``grid[2, 2]``), or
@@ -358,9 +389,11 @@ class ElectrodeGrid(ElectrodeArray):
      DiskElectrode(r=10..., x=20.0, y=-20.0, z=0...)]
 
     """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('shape', 'type')
 
     def __init__(self, shape, spacing, x=0, y=0, z=0, rot=0, names=('A', '1'),
-                 etype=PointSource, **kwargs):
+                 type='rect', etype=PointSource, **kwargs):
         if not isinstance(names, (tuple, list, np.ndarray)):
             raise TypeError("'names' must be a tuple/list of (rows, cols)")
         if not isinstance(shape, (tuple, list, np.ndarray)):
@@ -369,38 +402,26 @@ class ElectrodeGrid(ElectrodeArray):
             raise ValueError("'shape' must have two elements: (rows, cols)")
         if np.prod(shape) <= 0:
             raise ValueError("Grid must have all non-zero rows and columns.")
+        if not isinstance(type, str):
+            raise TypeError("'type' must be a string, either 'rect' or 'hex'.")
+        if type not in ['rect', 'hex']:
+            raise ValueError("'type' must be either 'rect' or 'hex'.")
         if not issubclass(etype, Electrode):
             raise TypeError("'etype' must be a valid Electrode object.")
         if issubclass(etype, DiskElectrode):
             if 'r' not in kwargs.keys():
                 raise ValueError("A DiskElectrode needs a radius ``r``.")
-            self.r = kwargs['r']
 
-        # Extract rows and columns from shape:
         self.shape = shape
-        self.x = x
-        self.y = y
-        self.z = z
-        self.rot = rot
-        self.spacing = spacing
-        self.etype = etype  # add etype variable under the class
-        # Store names for rows/cols separately:
-        if len(names) == 2:
-            self.name_rows, self.name_cols = names
-        self.names = names
+        self.type = type
         # Instantiate empty collection of electrodes. This dictionary will be
         # populated in a private method ``_set_egrid``:
-        self.electrodes = coll.OrderedDict()
-        self._set_grid()
+        self.electrodes = OrderedDict()
+        self._make_grid(spacing, x, y, z, rot, names, etype, **kwargs)
 
-    def get_params(self):
-        """Return a dictionary of class attributes"""
-        params = {'shape': self.shape, 'spacing': self.spacing,
-                  'x': self.x, 'y': self.y, 'z': self.z,
-                  'rot': self.rot, 'etype': self.etype,
-                  'name_cols': self.name_cols, 'name_rows': self.name_rows}
-        if issubclass(self.etype, DiskElectrode):
-            params.update({'r': self.r})
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
+        params = {'shape': self.shape, 'type': self.type}
         return params
 
     def __getitem__(self, item):
@@ -442,91 +463,114 @@ class ElectrodeGrid(ElectrodeArray):
                     # Index not found:
                     return None
 
-    def _set_grid(self):
+    def _make_grid(self, spacing, x, y, z, rot, names, etype, **kwargs):
         """Private method to build the electrode grid"""
         n_elecs = np.prod(self.shape)
         rows, cols = self.shape
 
         # The user did not specify a unique naming scheme:
-        if len(self.names) == 2:
+        if len(names) == 2:
+            name_rows, name_cols = names
             # Create electrode names, using either A-Z or 1-n:
-            if self.name_rows.isalpha():
-                rws = [chr(i) for i in range(
-                    ord(self.name_rows), ord(self.name_rows) + rows + 1)]
-            elif self.name_rows.isdigit():
+            if name_rows.isalpha():
+                rws = [chr(i) for i in range(ord(name_rows),
+                                             ord(name_rows) + rows + 1)]
+            elif name_rows.isdigit():
                 rws = [str(i) for i in range(
-                    int(self.name_rows), rows + int(self.name_rows))]
+                    int(name_rows), rows + int(name_rows))]
             else:
                 raise ValueError("rows must be alphabetic or numeric")
 
-            if self.name_cols.isalpha():
-                clms = [chr(i) for i in range(ord(self.name_cols),
-                                              ord(self.name_cols) + cols)]
-            elif self.name_cols.isdigit():
-                clms = [str(i) for i in range(
-                    int(self.name_cols), cols + int(self.name_cols))]
+            if name_cols.isalpha():
+                clms = [chr(i) for i in range(ord(name_cols),
+                                              ord(name_cols) + cols)]
+            elif name_cols.isdigit():
+                clms = [str(i) for i in range(int(name_cols),
+                                              cols + int(name_cols))]
             else:
                 raise ValueError("Columns must be alphabetic or numeric.")
 
             # facilitating Argus I naming scheme
-            if self.name_cols.isalpha() and not self.name_rows.isalpha():
+            if name_cols.isalpha() and not name_rows.isalpha():
                 names = [clms[j] + rws[i] for i in range(len(rws))
                          for j in range(len(clms))]
             else:
                 names = [rws[i] + clms[j] for i in range(len(rws))
                          for j in range(len(clms))]
         else:
-            if len(self.names) != n_elecs:
+            if len(names) != n_elecs:
                 raise ValueError("If `names` specifies more than row/column "
                                  "names, it must have %d entries, not "
-                                 "%d)." % (n_elecs, len(self.names)))
-            names = self.names
+                                 "%d)." % (n_elecs, len(names)))
 
-        if isinstance(self.z, (list, np.ndarray)):
+        if isinstance(z, (list, np.ndarray)):
             # Specify different height for every electrode in a list:
-            z_arr = np.asarray(self.z).flatten()
+            z_arr = np.asarray(z).flatten()
             if z_arr.size != n_elecs:
                 raise ValueError("If `h` is a list, it must have %d entries, "
-                                 "not %d." % (n_elecs, len(self.z)))
+                                 "not %d." % (n_elecs, len(z)))
         else:
             # If `z` is a scalar, choose same height for all electrodes:
-            z_arr = np.ones(n_elecs, dtype=float) * self.z
+            z_arr = np.ones(n_elecs, dtype=float) * z
 
-        # Make a 2D meshgrid from x, y coordinates:
-        # For example, cols=3 with spacing=100 should give: [-100, 0, 100]
-        x_arr = (np.arange(cols) * self.spacing -
-                 (cols / 2.0 - 0.5) * self.spacing)
-        y_arr = (np.arange(rows) * self.spacing -
-                 (rows / 2.0 - 0.5) * self.spacing)
-        x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
+        spc = spacing
+        if self.type.lower() == 'rect':
+            # Rectangular grid from x, y coordinates:
+            # For example, cols=3 with spacing=100 should give: [-100, 0, 100]
+            x_arr = (np.arange(cols) * spc - (cols / 2.0 - 0.5) * spc)
+            y_arr = (np.arange(rows) * spc - (rows / 2.0 - 0.5) * spc)
+            x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
+        elif self.type.lower() == 'hex':
+            # Hexagonal grid from x,y coordinates:
+            x_arr_lshift = (np.arange(cols) * spc - (cols / 2.0 - 0.5) * spc -
+                            spc * 0.25)
+            x_arr_rshift = (np.arange(cols) * spc - (cols / 2.0 - 0.5) * spc +
+                            spc * 0.25)
+            y_arr = (np.arange(rows) * math.sqrt(3) * spc / 2.0 -
+                     (rows / 2.0 - 0.5) * spc)
+            x_arr_lshift, y_arr_lshift = np.meshgrid(x_arr_lshift, y_arr,
+                                                     sparse=False)
+            x_arr_rshift, y_arr_rshift = np.meshgrid(x_arr_rshift, y_arr,
+                                                     sparse=False)
+            # Shift every other row to get an interleaved pattern:
+            x_arr = []
+            for row in range(rows):
+                if row % 2:
+                    x_arr.append(x_arr_rshift[row])
+                else:
+                    x_arr.append(x_arr_lshift[row])
+            x_arr = np.array(x_arr)
+            y_arr = y_arr_rshift
+        else:
+            raise NotImplementedError
 
         # Rotate the grid:
-        rotmat = np.array([np.cos(self.rot), -np.sin(self.rot),
-                           np.sin(self.rot), np.cos(self.rot)]).reshape((2, 2))
+        rotmat = np.array([np.cos(rot), -np.sin(rot),
+                           np.sin(rot), np.cos(rot)]).reshape((2, 2))
         xy = np.matmul(rotmat, np.vstack((x_arr.flatten(), y_arr.flatten())))
         x_arr = xy[0, :]
         y_arr = xy[1, :]
 
-        # Apply offset to make the grid centered at (self.x, self.y):
-        x_arr += self.x
-        y_arr += self.y
+        # Apply offset to make the grid centered at (x, y):
+        x_arr += x
+        y_arr += y
 
-        if issubclass(self.etype, DiskElectrode):
-            if isinstance(self.r, (list, np.ndarray)):
+        if issubclass(etype, DiskElectrode):
+            if isinstance(kwargs['r'], (list, np.ndarray)):
                 # Specify different radius for every electrode in a list:
-                if len(self.r) != n_elecs:
+                if len(kwargs['r']) != n_elecs:
                     err_s = ("If `r` is a list, it must have %d entries, not "
-                             "%d)." % (n_elecs, len(self.r)))
+                             "%d)." % (n_elecs, len(kwargs['r'])))
                     raise ValueError(err_s)
-                r_arr = self.r
+                r_arr = kwargs['r']
             else:
                 # If `r` is a scalar, choose same radius for all electrodes:
-                r_arr = np.ones(n_elecs, dtype=float) * self.r
+                r_arr = np.ones(n_elecs, dtype=float) * kwargs['r']
 
             # Create a grid of DiskElectrode objects:
             for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
                 self.add_electrode(name, DiskElectrode(x, y, z, r))
-        elif issubclass(self.etype, PointSource):
+        elif issubclass(etype, PointSource):
             # Create a grid of PointSource objects:
             for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
                 self.add_electrode(name, PointSource(x, y, z))
@@ -568,13 +612,16 @@ class ProsthesisSystem(PrettyPrint):
         A stimulus can also be assigned later (see
         :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim`).
     """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('_earray', '_stim', '_eye')
 
     def __init__(self, earray, stim=None, eye='RE'):
         self.earray = earray
         self.stim = stim
         self.eye = eye
 
-    def get_params(self):
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
         return {'earray': self.earray, 'stim': self.stim, 'eye': self.eye}
 
     def check_stim(self, stim):
@@ -654,16 +701,26 @@ class ProsthesisSystem(PrettyPrint):
         if data is None:
             self._stim = None
         else:
-            if isinstance(data, dict):
+            if isinstance(data, Stimulus):
+                # Already a stimulus object:
+                stim = data
+            elif isinstance(data, dict):
                 # Electrode names already provided by keys:
                 stim = Stimulus(data)
             else:
                 # Use electrode names as stimulus coordinates:
                 stim = Stimulus(data, electrodes=list(self.earray.keys()))
+
+            # Make sure all electrode names are valid:
+            for electrode in stim.electrodes:
+                # Invalid index will return None:
+                if not self.earray[electrode]:
+                    raise ValueError("Electrode '%s' not found in "
+                                     "implant." % electrode)
             # Perform safety checks, etc.:
             self.check_stim(stim)
-            # Store safe stimulus:
-            self._stim = stim
+            # Store stimulus:
+            self._stim = deepcopy(stim)
 
     @property
     def eye(self):

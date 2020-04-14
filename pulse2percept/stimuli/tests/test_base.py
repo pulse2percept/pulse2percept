@@ -8,6 +8,9 @@ from pulse2percept.stimuli import Stimulus, PulseTrain
 
 
 def test_Stimulus():
+    # Slots:
+    npt.assert_equal(hasattr(Stimulus(1), '__slots__'), True)
+    npt.assert_equal(hasattr(Stimulus(1), '__dict__'), False)
     # One electrode:
     stim = Stimulus(3)
     npt.assert_equal(stim.shape, (1, 1))
@@ -108,7 +111,7 @@ def test_Stimulus():
     npt.assert_equal(stim.time, [0, 4])
     stim = Stimulus(stim, time=np.array(stim.time) / 10.0)
     npt.assert_equal(stim.electrodes, [0, 1])
-    npt.assert_equal(stim.time, [0, 0.4])
+    npt.assert_almost_equal(stim.time, [0, 0.4])
 
     # Not allowed:
     with pytest.raises(ValueError):
@@ -193,6 +196,16 @@ def test_Stimulus_compress(tsample):
     npt.assert_equal(ielec, stim.electrodes)
     npt.assert_equal(itime, stim.time)
 
+    # Tricky case is a Stimulus reduced to [] after compress:
+    stim = Stimulus(np.zeros((2, 4)))
+    stim.compress()
+    npt.assert_equal(stim.shape, (0, 2))
+    npt.assert_equal(stim[:], np.zeros((0, 2)))
+    npt.assert_equal(stim[:, :], np.zeros((0, 2)))
+    npt.assert_equal(stim[:, 0], [])
+    npt.assert_equal(stim[:, 0.123], [])
+    npt.assert_equal(stim[:, [0.25, 0.88]], [])
+
 
 def test_Stimulus__stim():
     stim = Stimulus(3)
@@ -272,37 +285,51 @@ def test_Stimulus___eq__():
 
 
 def test_Stimulus___getitem__():
-    stim = Stimulus(np.arange(12).reshape((3, 4)))
+    stim = Stimulus(1 + np.arange(12).reshape((3, 4)))
     # Slicing:
     npt.assert_equal(stim[:], stim.data)
     npt.assert_equal(stim[...], stim.data)
     npt.assert_equal(stim[:, :], stim.data)
     npt.assert_equal(stim[:2], stim.data[:2])
-    npt.assert_equal(stim[:, 0], stim.data[:, 0])
+    npt.assert_equal(stim[:, 0], stim.data[:, 0].reshape((-1, 1)))
     npt.assert_equal(stim[0, :], stim.data[0, :])
     npt.assert_equal(stim[0, ...], stim.data[0, ...])
-    npt.assert_equal(stim[..., 0], stim.data[..., 0])
+    npt.assert_equal(stim[..., 0], stim.data[..., 0].reshape((-1, 1)))
+    # More advanced slicing is not yet implemented:
+    with pytest.raises(NotImplementedError):
+        # This is ambiguous because no step size is given:
+        a = stim[1, 2:5]
     # Single element:
     npt.assert_equal(stim[0, 0], stim.data[0, 0])
     # Interpolating time:
-    npt.assert_almost_equal(stim[0, 2.6], 2.6)
-    npt.assert_almost_equal(stim[..., 2.3], np.array([[2.3], [6.3], [10.3]]))
+    npt.assert_almost_equal(stim[0, 2.6], 3.6)
+    npt.assert_almost_equal(stim[..., 2.3], np.array([[3.3], [7.3], [11.3]]),
+                            decimal=3)
+    # The second dimension is not a column index!
+    npt.assert_almost_equal(stim[0, 0], 1.0)
+    npt.assert_almost_equal(stim[0, [0, 1]], np.array([[1.0, 2.0]]))
+    npt.assert_almost_equal(stim[0, [0.21, 1]], np.array([[1.21, 2.0]]))
+    npt.assert_almost_equal(stim[[0, 1], [0.21, 1]],
+                            np.array([[1.21, 2.0], [5.21, 6.0]]))
+
     # "Valid" index errors:
     with pytest.raises(IndexError):
         stim[10, :]
     with pytest.raises(TypeError):
         stim[3.3, 0]
+
     # Extrapolating should be disabled by default:
     with pytest.raises(ValueError):
         stim[0, 9.9]
     # But you can enable it:
-    stim = Stimulus(np.arange(12).reshape((3, 4)), extrapolate=True)
-    npt.assert_almost_equal(stim[0, 9.9], 9.9)
+    stim = Stimulus(1 + np.arange(12).reshape((3, 4)), extrapolate=True)
+    npt.assert_almost_equal(stim[0, 9.901], 10.901)
     # If time=None, you cannot interpolate/extrapolate:
     stim = Stimulus([3, 4, 5], extrapolate=True)
     npt.assert_almost_equal(stim[0], stim.data[0, 0])
     with pytest.raises(ValueError):
         stim[0, 0.2]
+
     # With a single time point, interpolate is still possible:
     stim = Stimulus(np.arange(3).reshape((-1, 1)), extrapolate=False)
     npt.assert_almost_equal(stim[0], stim.data[0, 0])
@@ -311,6 +338,7 @@ def test_Stimulus___getitem__():
         stim[0, 3.33]
     stim = Stimulus(np.arange(3).reshape((-1, 1)), extrapolate=True)
     npt.assert_almost_equal(stim[0, 3.33], stim.data[0, 0])
+
     # Annoying but possible:
     stim = Stimulus([])
     npt.assert_almost_equal(stim[:], stim.data)

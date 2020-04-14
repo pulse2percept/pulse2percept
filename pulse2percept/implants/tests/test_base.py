@@ -10,6 +10,7 @@ from pulse2percept.stimuli import Stimulus
 
 
 class ValidElectrode(Electrode):
+    __slots__ = ()
 
     def electric_potential(self, x, y, z):
         r = np.sqrt((x - self.x) ** 2 + (y - self.y) ** 2 + (z - self.z) ** 2)
@@ -28,6 +29,9 @@ def test_Electrode():
         ValidElectrode(0, np.array([1, 2]), 2)
     with pytest.raises(TypeError):
         ValidElectrode(0, 1, [2, 3])
+    # Slots:
+    npt.assert_equal(hasattr(electrode, '__slots__'), True)
+    npt.assert_equal(hasattr(electrode, '__dict__'), False)
 
 
 def test_PointSource():
@@ -38,6 +42,9 @@ def test_PointSource():
     npt.assert_almost_equal(electrode.electric_potential(0, 1, 2, 1, 1), 1)
     npt.assert_almost_equal(electrode.electric_potential(0, 0, 0, 1, 1), 0.035,
                             decimal=3)
+    # Slots:
+    npt.assert_equal(hasattr(electrode, '__slots__'), True)
+    npt.assert_equal(hasattr(electrode, '__dict__'), False)
 
 
 def test_DiskElectrode():
@@ -68,6 +75,9 @@ def test_DiskElectrode():
     # Some distance away from the electrode (z>2):
     npt.assert_almost_equal(electrode.electric_potential(0, 1, 38, 1), 0.780,
                             decimal=3)
+    # Slots:
+    npt.assert_equal(hasattr(electrode, '__slots__'), True)
+    npt.assert_equal(hasattr(electrode, '__dict__'), False)
 
 
 def test_ElectrodeArray():
@@ -101,6 +111,9 @@ def test_ElectrodeArray():
     earray = ElectrodeArray({'A01': ps1, 'D07': ps2})
     npt.assert_equal(earray['A01'], ps1)
     npt.assert_equal(earray['D07'], ps2)
+    # Slots:
+    npt.assert_equal(hasattr(earray, '__slots__'), True)
+    npt.assert_equal(hasattr(earray, '__dict__'), False)
 
 
 def test_ElectrodeArray_add_electrode():
@@ -143,6 +156,7 @@ def test_ElectrodeArray_add_electrode():
         npt.assert_equal(isinstance(selected[0], PointSource), True)
         npt.assert_equal(isinstance(selected[1], DiskElectrode), True)
 
+
 def test_ElectrodeArray_remove_electrode():
     earray1 = ElectrodeArray([])
     earray2 = ElectrodeArray([])
@@ -153,23 +167,23 @@ def test_ElectrodeArray_remove_electrode():
         earray1.remove_electrode(None)
     with pytest.raises(ValueError):
         earray1.remove_electrode("foo")
-    
+
     key = [0] * 4
     key[0] = 'D03'
     key[1] = 'A02'
     key[2] = 'F10'
     key[3] = 'E12'
 
-    earray1.add_electrode(key[0], PointSource(0,1,2))
-    earray1.add_electrode(key[1], PointSource(3,4,5)) 
-    earray1.add_electrode(key[2], PointSource(6,7,8))
-    earray1.add_electrode(key[3], PointSource(9,10,11))
+    earray1.add_electrode(key[0], PointSource(0, 1, 2))
+    earray1.add_electrode(key[1], PointSource(3, 4, 5))
+    earray1.add_electrode(key[2], PointSource(6, 7, 8))
+    earray1.add_electrode(key[3], PointSource(9, 10, 11))
     npt.assert_equal(earray1.n_electrodes, 4)
 
-    earray2.add_electrode(key[0], PointSource(0,1,2))
-    earray2.add_electrode(key[1], PointSource(3,4,5)) 
-    earray2.add_electrode(key[2], PointSource(6,7,8))
-    earray2.add_electrode(key[3], PointSource(9,10,11))
+    earray2.add_electrode(key[0], PointSource(0, 1, 2))
+    earray2.add_electrode(key[1], PointSource(3, 4, 5))
+    earray2.add_electrode(key[2], PointSource(6, 7, 8))
+    earray2.add_electrode(key[3], PointSource(9, 10, 11))
     npt.assert_equal(earray2.n_electrodes, 4)
 
     # Remove one electrode key[1] from the electrodeArray
@@ -178,7 +192,7 @@ def test_ElectrodeArray_remove_electrode():
     # Can't remove an electrode that has been removed
     with pytest.raises(ValueError):
         earray1.remove_electrode(key[0])
-    
+
     # List keeps order:
     npt.assert_equal(earray1[0], earray1[key[1]])
     npt.assert_equal(earray1[1], earray1[key[2]])
@@ -189,21 +203,23 @@ def test_ElectrodeArray_remove_electrode():
         npt.assert_equal(earray1[k].x, earray2[k].x)
         npt.assert_equal(earray1[k].y, earray2[k].y)
         npt.assert_equal(earray1[k].z, earray2[k].z)
-    
+
     # Remove two more electrodes from the electrodeArray
     # List keeps order
     earray1.remove_electrode(key[1])
     earray1.remove_electrode(key[2])
     npt.assert_equal(earray1.n_electrodes, 1)
     npt.assert_equal(earray1[0], earray1[key[3]])
-    
+
     # The last electrode stays the same
     for key in [key[3]]:
         npt.assert_equal(earray1[key].x, earray2[key].x)
         npt.assert_equal(earray1[key].y, earray2[key].y)
         npt.assert_equal(earray1[key].z, earray2[key].z)
-    
-def test_ElectrodeGrid():
+
+
+@pytest.mark.parametrize('gtype', ('rect', 'hex'))
+def test_ElectrodeGrid(gtype):
     # Must pass in tuple/list of (rows, cols) for grid shape:
     with pytest.raises(TypeError):
         ElectrodeGrid("badinstantiation")
@@ -216,48 +232,59 @@ def test_ElectrodeGrid():
 
     # Must pass in valid Electrode type:
     with pytest.raises(TypeError):
-        ElectrodeGrid((2, 3), 10, etype=ElectrodeArray)
+        ElectrodeGrid((2, 3), 10, type=gtype, etype=ElectrodeArray)
     with pytest.raises(TypeError):
-        ElectrodeGrid((2, 3), 10, etype="foo")
+        ElectrodeGrid((2, 3), 10, type=gtype, etype="foo")
 
     # Must pass in radius `r` for grid of DiskElectrode objects:
     gshape = (4, 5)
     spacing = 100
     with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, etype=DiskElectrode)
+        ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode)
     with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, etype=DiskElectrode, radius=10)
+        ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
+                      radius=10)
     # Number of radii must match number of electrodes
     with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, etype=DiskElectrode, radius=[2, 13])
-
-    # Must pass in valid Electrode type:
-    with pytest.raises(TypeError):
-        ElectrodeGrid((2, 3), 10, etype=ElectrodeArray)
-    with pytest.raises(TypeError):
-        ElectrodeGrid((2, 3), 10, etype="foo")
+        ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
+                      radius=[2, 13])
 
     # Must pass in radius `r` for grid of DiskElectrode objects:
     gshape = (4, 5)
     spacing = 100
     with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, etype=DiskElectrode)
+        ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode)
     with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, etype=DiskElectrode, radius=10)
+        ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
+                      radius=10)
     # Number of radii must match number of electrodes
     with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, etype=DiskElectrode, radius=[2, 13])
+        ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
+                      radius=[2, 13])
+
+    # Must pass in valid grid type:
+    with pytest.raises(TypeError):
+        ElectrodeGrid(gshape, spacing, type=DiskElectrode)
+    with pytest.raises(ValueError):
+        ElectrodeGrid(gshape, spacing, type='unknown')
+
+    # Verify spacing is correct:
+    grid = ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
+                         r=30)
+    npt.assert_almost_equal(np.sqrt((grid['A1'].x - grid['A2'].x) ** 2 +
+                                    (grid['A1'].y - grid['A2'].y) ** 2),
+                            spacing)
+    npt.assert_almost_equal(np.sqrt((grid['A1'].x - grid['B1'].x) ** 2 +
+                                    (grid['A1'].y - grid['B1'].y) ** 2),
+                            spacing)
 
     # A valid 2x5 grid centered at (0, 500):
     x, y = 0, 500
     radius = 30
-    egrid = ElectrodeGrid(gshape, spacing, x=x, y=y, etype=DiskElectrode,
-                          r=radius)
+    egrid = ElectrodeGrid(gshape, spacing, x=x, y=y, type='rect',
+                          etype=DiskElectrode, r=radius)
     npt.assert_equal(egrid.shape, gshape)
     npt.assert_equal(egrid.n_electrodes, np.prod(gshape))
-    npt.assert_equal(egrid.x, x)
-    npt.assert_equal(egrid.y, y)
-    npt.assert_almost_equal(egrid.spacing, spacing)
     # Make sure different electrodes have different coordinates:
     npt.assert_equal(len(np.unique([e.x for e in egrid.values()])), gshape[1])
     npt.assert_equal(len(np.unique([e.y for e in egrid.values()])), gshape[0])
@@ -272,15 +299,15 @@ def test_ElectrodeGrid():
 
     # Test whether egrid.z is set correctly, when z is a constant:
     z = 12
-    egrid = ElectrodeGrid(gshape, spacing, z=z, etype=DiskElectrode, r=radius)
-    npt.assert_equal(egrid.z, z)
+    egrid = ElectrodeGrid(gshape, spacing, z=z, type=gtype,
+                          etype=DiskElectrode, r=radius)
     for i in egrid.values():
         npt.assert_equal(i.z, z)
 
     # and when every electrode has a different z:
     z = np.arange(np.prod(gshape))
-    egrid = ElectrodeGrid(gshape, spacing, z=z, etype=DiskElectrode, r=radius)
-    npt.assert_equal(egrid.z, z)
+    egrid = ElectrodeGrid(gshape, spacing, z=z, type=gtype,
+                          etype=DiskElectrode, r=radius)
     x = -1
     for i in egrid.values():
         npt.assert_equal(i.z, x + 1)
@@ -290,134 +317,87 @@ def test_ElectrodeGrid():
     # I think we did this somewhere in the old Argus code
 
     # TODO test rotation, making sure positive angles rotate CCW
-    egrid1 = ElectrodeGrid((2, 2), spacing, r=radius)
-    egrid2 = ElectrodeGrid((2, 2), spacing, rot=np.deg2rad(10), r=radius)
+    egrid1 = ElectrodeGrid((2, 2), spacing, type=gtype, r=radius)
+    egrid2 = ElectrodeGrid((2, 2), spacing, rot=np.deg2rad(10), type=gtype,
+                           r=radius)
     npt.assert_equal(egrid1["A1"].x < egrid2["A1"].x, True)
     npt.assert_equal(egrid1["A1"].y > egrid2["A1"].y, True)
     npt.assert_equal(egrid1["B2"].x > egrid2["B2"].x, True)
     npt.assert_equal(egrid1["B2"].y < egrid2["B2"].y, True)
 
     # Smallest possible grid:
-    egrid = ElectrodeGrid((1, 1), spacing, r=radius)
+    egrid = ElectrodeGrid((1, 1), spacing, type=gtype, r=radius)
     npt.assert_equal(egrid.shape, (1, 1))
     npt.assert_equal(egrid.n_electrodes, 1)
 
     # Can't have a zero-sized grid:
     with pytest.raises(ValueError):
-        egrid = ElectrodeGrid((0, 0), spacing)
+        egrid = ElectrodeGrid((0, 0), spacing, type=gtype)
     with pytest.raises(ValueError):
-        egrid = ElectrodeGrid((5, 0), spacing)
+        egrid = ElectrodeGrid((5, 0), spacing, type=gtype)
 
     # Invalid naming conventions:
     with pytest.raises(ValueError):
-        egrid = ElectrodeGrid(gshape, spacing, names=[1])
+        egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=[1])
     with pytest.raises(ValueError):
-        egrid = ElectrodeGrid(gshape, spacing, names=[])
+        egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=[])
     with pytest.raises(TypeError):
-        egrid = ElectrodeGrid(gshape, spacing, names={1})
+        egrid = ElectrodeGrid(gshape, spacing, type=gtype, names={1})
     with pytest.raises(TypeError):
-        egrid = ElectrodeGrid(gshape, spacing, names={})
+        egrid = ElectrodeGrid(gshape, spacing, type=gtype, names={})
 
     # Test all naming conventions:
     gshape = (2, 3)
-    egrid = ElectrodeGrid(gshape, spacing, names=('A', '1'))
+    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('A', '1'))
     # print([e for e in egrid.keys()])
     npt.assert_equal([e for e in egrid.keys()],
                      ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
-    egrid = ElectrodeGrid(gshape, spacing, names=('1', 'A'))
+    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('1', 'A'))
     # print([e for e in egrid.keys()])
     # egrid = ElectrodeGrid(shape, names=('A', '1'))
     npt.assert_equal([e for e in egrid.keys()],
                      ['A1', 'B1', 'C1', 'A2', 'B2', 'C2'])
 
-    egrid = ElectrodeGrid(gshape, spacing, names=('1', '1'))
+    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('1', '1'))
     # print([e for e in egrid.keys()])
     npt.assert_equal([e for e in egrid.keys()],
                      ['11', '12', '13', '21', '22', '23'])
-    egrid = ElectrodeGrid(gshape, spacing, names=('A', 'A'))
+    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('A', 'A'))
     # print([e for e in egrid.keys()])
     npt.assert_equal([e for e in egrid.keys()],
                      ['AA', 'AB', 'AC', 'BA', 'BB', 'BC'])
 
     # rows and columns start at values other than A or 1
-    egrid = ElectrodeGrid(gshape, spacing, names=('B', '1'))
+    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('B', '1'))
     npt.assert_equal([e for e in egrid.keys()],
                      ['B1', 'B2', 'B3', 'C1', 'C2', 'C3'])
-    egrid = ElectrodeGrid(gshape, spacing, names=('A', '2'))
+    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('A', '2'))
     npt.assert_equal([e for e in egrid.keys()],
                      ['A2', 'A3', 'A4', 'B2', 'B3', 'B4'])
 
     # test unique names
-    egrid = ElectrodeGrid(gshape, spacing,
+    egrid = ElectrodeGrid(gshape, spacing, type=gtype,
                           names=['53', '18', '00', '81', '11', '12'])
     npt.assert_equal([e for e in egrid.keys()],
                      ['53', '18', '00', '81', '11', '12'])
+    # Slots:
+    npt.assert_equal(hasattr(egrid, '__slots__'), True)
+    npt.assert_equal(hasattr(egrid, '__dict__'), False)
 
 
-def test_ElectrodeGrid_get_params():
+@pytest.mark.parametrize('gtype', ('rect', 'hex'))
+def test_ElectrodeGrid_get_params(gtype):
     # When the electrode_type is 'DiskElectrode'
     # test the default value
-    egrid = ElectrodeGrid((2, 3), 40, etype=DiskElectrode, r=20)
-    params = {'shape': (2, 3), 'x': 0, 'y': 0, 'z': 0, 'etype': DiskElectrode,
-              'rot': 0, 'spacing': 40, 'name_cols': '1',
-              'name_rows': 'A', 'r': 20}
-    npt.assert_equal(egrid.get_params(), params)
-    # test the nondefault value for all the parameters
-    egrid = ElectrodeGrid((2, 3), 30, x=10, y=20, z=30, rot=10,
-                          names=('A', '1'), etype=DiskElectrode, r=20)
-    params = {'shape': (2, 3), 'x': 10, 'y': 20, 'z': 30, 'rot': 10,
-              'spacing': 30, 'name_cols': '1', 'name_rows': 'A',
-              'etype': DiskElectrode, 'r': 20}
-    npt.assert_equal(egrid.get_params(), params)
-    # When the electrode_type is 'PointSource'
-    # test the default value
-    egrid = ElectrodeGrid((2, 3), 20, etype=PointSource)
-    params = {'shape': (2, 3), 'x': 0, 'y': 0, 'z': 0, 'etype': PointSource,
-              'rot': 0, 'spacing': 20, 'name_cols': '1',
-              'name_rows': 'A'}
-    npt.assert_equal(egrid.get_params(), params)
-    # test the nondefault value for all the parameters
-    egrid = ElectrodeGrid((2, 3), 30, x=10, y=20, z=30, rot=10,
-                          names=('A', '1'), etype=PointSource)
-    params = {'shape': (2, 3), 'x': 10, 'y': 20, 'z': 30, 'rot': 10,
-              'spacing': 30, 'etype': PointSource, 'name_cols': '1',
-              'name_rows': 'A'}
-    npt.assert_equal(egrid.get_params(), params)
-
-def test_ElectrodeGrid_get_params():
-    # When the electrode_type is 'DiskElectrode'
-    # test the default value
-    egrid = ElectrodeGrid((2, 3), 40, etype=DiskElectrode, r=20)
-    params = {'shape': (2, 3), 'x': 0, 'y': 0, 'z': 0, 'etype': DiskElectrode,
-              'rot': 0, 'spacing': 40, 'name_cols': '1',
-              'name_rows': 'A', 'r': 20}
-    npt.assert_equal(egrid.get_params(), params)
-    # test the nondefault value for all the parameters
-    egrid = ElectrodeGrid((2, 3), 30, x=10, y=20, z=30, rot=10,
-                          names=('A', '1'), etype=DiskElectrode, r=20)
-    params = {'shape': (2, 3), 'x': 10, 'y': 20, 'z': 30, 'rot': 10,
-              'spacing': 30, 'name_cols': '1', 'name_rows': 'A',
-              'etype': DiskElectrode, 'r': 20}
-    npt.assert_equal(egrid.get_params(), params)
-    # When the electrode_type is 'PointSource'
-    # test the default value
-    egrid = ElectrodeGrid((2, 3), 20, etype=PointSource)
-    params = {'shape': (2, 3), 'x': 0, 'y': 0, 'z': 0, 'etype': PointSource,
-              'rot': 0, 'spacing': 20, 'name_cols': '1',
-              'name_rows': 'A'}
-    npt.assert_equal(egrid.get_params(), params)
-    # test the nondefault value for all the parameters
-    egrid = ElectrodeGrid((2, 3), 30, x=10, y=20, z=30, rot=10,
-                          names=('A', '1'), etype=PointSource)
-    params = {'shape': (2, 3), 'x': 10, 'y': 20, 'z': 30, 'rot': 10,
-              'spacing': 30, 'etype': PointSource, 'name_cols': '1',
-              'name_rows': 'A'}
-    npt.assert_equal(egrid.get_params(), params)
+    egrid = ElectrodeGrid((2, 3), 40, type=gtype, etype=DiskElectrode, r=20)
+    npt.assert_equal(egrid.shape, (2, 3))
+    npt.assert_equal(egrid.type, gtype)
 
 
-def test_ElectrodeGrid___get_item__():
-    grid = ElectrodeGrid((2, 4), 20, names=('C', '3'), etype=DiskElectrode,
-                         r=20)
+@pytest.mark.parametrize('gtype', ('rect', 'hex'))
+def test_ElectrodeGrid___get_item__(gtype):
+    grid = ElectrodeGrid((2, 4), 20, names=('C', '3'), type=gtype,
+                         etype=DiskElectrode, r=20)
     npt.assert_equal(grid[0], grid['C3'])
     npt.assert_equal(grid[0, 0], grid['C3'])
     npt.assert_equal(grid[1], grid['C4'])
@@ -452,3 +432,12 @@ def test_ProsthesisSystem():
     with pytest.raises(TypeError):
         # Invalid stim type:
         implant.stim = "stim"
+    # Invalid electrode names:
+    with pytest.raises(ValueError):
+        implant.stim = {'A1': 1}
+    with pytest.raises(ValueError):
+        implant.stim = Stimulus({'A1': 1})
+
+    # Slots:
+    npt.assert_equal(hasattr(implant, '__slots__'), True)
+    npt.assert_equal(hasattr(implant, '__dict__'), False)

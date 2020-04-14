@@ -9,7 +9,7 @@
     parallel
 
 """
-from .base import (Frozen, FreezeError, PrettyPrint, GridXY, cart2pol,
+from .base import (PrettyPrint, FreezeError, Frozen, GridXY, cart2pol,
                    find_files_like, gamma, pol2cart)
 from .convolution import center_vector, conv
 from .deprecation import deprecated

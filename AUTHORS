@@ -1,21 +1,27 @@
 pulse2percept was originally created in early 2016 as an incubator project
-at the University of Washington eScience Institute.
+at the University of Washington eScience Institute by Ariel Rokem, Ione
+Fine, and Geoff Boynton.
 
-Here is an inevitably incomplete list of MUCH-APPRECIATED CONTRIBUTORS 
+Below is an inevitably incomplete list of MUCH-APPRECIATED CONTRIBUTORS 
 in alphabetical order -- people who have submitted patches, reported bugs,
-helped answer questions, submitted user  feedback, and generally made
+helped answer questions, submitted user feedback, and generally made
 pulse2percept that much better:
 
-	Beyeler, Michael (University of Washington, Seattle, WA, USA)
-	Bismuth, Vincent (Pixium Vision SA, Paris, France )
-	Boynton, Geoffrey M. (University of Washington, Seattle, WA, USA)
+	Beyeler, Michael (University of California, Santa Barbara, CA)
+	Bismuth, Vincent (Pixium Vision SA, Paris, France)
+	Bliss, Jake (University of California, Santa Barbara, CA)
+	Boynton, Geoffrey M. (University of Washington, Seattle, WA)
 	Contier, Oliver (Otto-von-Guericke University, Magdeburg, Germany)
-	Fine, Ione (University of Washington, Seattle, WA, USA)
+	Fine, Ione (University of Washington, Seattle, WA)
 	Finn, Kate (University of Michigan, Ann Arbor, MI)
+	George, Gareth (University of California, Santa Barbara, CA)
 	Ghaffari, Dorsa H. (University of Michigan, Ann Arbor, MI)
-	Luntzel, Jon F. (University of Washington, Seattle, WA, USA)
-	Rokem, Ariel (University of Washington, Seattle, WA, USA)
-	Yucel, Ezgi I. (University of Washington, Seattle, WA, USA)
+	Lin, Hongzhen (University of California, Santa Barbara, CA)
+	Luntzel, Jon F. (University of Washington, Seattle, WA)
+	Nguyen, Dana (University of California, Santa Barbara, CA)
+	Raghulan, Rashi (University of California, Santa Barbara, CA)
+	Rokem, Ariel (University of Washington, Seattle, WA)
+	Yucel, Ezgi I. (University of Washington, Seattle, WA)
 
 With SPECIAL THANKS to the eScience Institute and the Institute for
 Neuroengineering (UWIN) at the University of Washington.
