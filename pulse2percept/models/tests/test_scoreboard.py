@@ -9,16 +9,13 @@ from pulse2percept import models
 def test_ScoreboardModel():
     # ScoreboardModel automatically sets `rho`:
     model = models.ScoreboardModel(engine='serial', xystep=5)
-    npt.assert_equal(hasattr(model, 'rho'), True)
-    # Slots:
-    npt.assert_equal(hasattr(model, '__slots__'), True)
-    npt.assert_equal(hasattr(model, '__dict__'), False)
+    npt.assert_equal(hasattr(model.spatial, 'rho'), True)
 
     # User can set `rho`:
-    model.rho = 123
-    npt.assert_equal(model.rho, 123)
+    model.spatial.rho = 123
+    npt.assert_equal(model.spatial.rho, 123)
     model.build(rho=987)
-    npt.assert_equal(model.rho, 987)
+    npt.assert_equal(model.spatial.rho, 987)
 
     # Zero in = zero out:
     implant = implants.ArgusI(stim=np.zeros(16))

@@ -10,19 +10,15 @@ from pulse2percept.utils import FreezeError
 
 
 def test_Nanduri2012Model():
-    # ScoreboardModel automatically sets `rho`:
     model = Nanduri2012Model(engine='serial', xystep=5)
     npt.assert_equal(hasattr(model, 'has_time'), True)
     npt.assert_equal(model.has_time, True)
-    # Slots:
-    # npt.assert_equal(hasattr(model, '__slots__'), True)
-    # npt.assert_equal(hasattr(model, '__dict__'), False)
 
     # User can set `dt`:
-    model.dt = 1e-5
-    npt.assert_almost_equal(model.dt, 1e-5)
+    model.temporal.dt = 1e-5
+    npt.assert_almost_equal(model.temporal.dt, 1e-5)
     model.build(dt=3e-6)
-    npt.assert_almost_equal(model.dt, 3e-6)
+    npt.assert_almost_equal(model.temporal.dt, 3e-6)
 
     # User cannot add more model parameters:
     with pytest.raises(FreezeError):
@@ -33,14 +29,14 @@ def test_Nanduri2012Model_dva2ret():
     # Nanduri model uses a linear dva2ret conversion factor:
     model = Nanduri2012Model(engine='serial', xystep=5)
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(model.dva2ret(factor), 288.0 * factor)
+        npt.assert_almost_equal(model.spatial.dva2ret(factor), 288.0 * factor)
 
 
 def test_Nanduri2012Model_ret2dva():
     # Nanduri model uses a linear dva2ret conversion factor:
     model = Nanduri2012Model(engine='serial', xystep=5)
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(model.ret2dva(288.0 * factor), factor)
+        npt.assert_almost_equal(model.spatial.ret2dva(288.0 * factor), factor)
 
 
 def test_Nanduri2012Model_predict_percept():
@@ -57,7 +53,7 @@ def test_Nanduri2012Model_predict_percept():
     implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
     tsample = 5e-6  # sampling time step (seconds)
     implant.stim = PulseTrain(tsample)
-    model.dt = 0.1
+    model.temporal.dt = 0.1
     with pytest.raises(ValueError):
         model.predict_percept(implant, t=[0.01])
     with pytest.raises(ValueError):

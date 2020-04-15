@@ -101,7 +101,7 @@ print(model)
 # To change parameter values, either pass them directly to the constructor
 # above or set them by hand, like this:
 
-model.engine = 'serial'
+model.spatial.engine = 'serial'
 
 ##############################################################################
 # Then build the model. This is a necessary step before you can actually use
@@ -171,10 +171,10 @@ percept = model.predict_percept(implant)
 import matplotlib.pyplot as plt
 plt.imshow(percept[0, ...], cmap='gray')
 plt.xticks(np.linspace(0, percept.shape[2], num=5),
-           np.linspace(*model.xrange, num=5))
+           np.linspace(*model.spatial.xrange, num=5))
 plt.xlabel('x (dva)')
 plt.yticks(np.linspace(0, percept.shape[1], num=5),
-           np.linspace(*model.yrange, num=5))
+           np.linspace(*model.spatial.yrange, num=5))
 plt.ylabel('y (dva)')
 plt.title('Predicted percept')
 
@@ -193,10 +193,10 @@ implant.stim = np.ones(60)
 percept = model.predict_percept(implant)
 plt.imshow(percept[0, ...], cmap='gray')
 plt.xticks(np.linspace(0, percept.shape[2], num=5),
-           np.linspace(*model.xrange, num=5))
+           np.linspace(*model.spatial.xrange, num=5))
 plt.xlabel('x (dva)')
 plt.yticks(np.linspace(0, percept.shape[1], num=5),
-           np.linspace(*model.yrange, num=5))
+           np.linspace(*model.spatial.yrange, num=5))
 plt.ylabel('y (dva)')
 plt.title('Predicted percept')
 

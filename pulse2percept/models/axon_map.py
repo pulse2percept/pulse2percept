@@ -6,11 +6,11 @@ import pickle
 
 from ..utils import parfor, GridXY
 from ..implants import ProsthesisSystem
-from ..models import BaseModel, Watson2014ConversionMixin, dva2ret
+from ..models import Model, SpatialModel, Watson2014ConversionMixin
 from ..models._axon_map import axon_contribution, spatial_fast
 
 
-class AxonMapModel(Watson2014ConversionMixin, BaseModel):
+class AxonMapSpatial(Watson2014ConversionMixin, SpatialModel):
     """Axon map model
 
     Implements the axon map model described in [Beyeler2019]_, where percepts
@@ -23,20 +23,15 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
     rho : double
         Exponential decay constant away from the axon (microns).
     """
-    # Frozen class: User cannot add more class attributes
-    __slots__ = ('eye', 'rho', 'axlambda', 'loc_od_x', 'loc_od_y', 'n_axons',
-                 'axons_range', 'n_ax_segments', 'ax_segments_range',
-                 'axon_pickle', 'ignore_pickle',
-                 'axon_contrib', 'axon_idx_start', 'axon_idx_end')
 
-    def __init__(self, **kwargs):
-        super(AxonMapModel, self).__init__(**kwargs)
+    def __init__(self, **params):
+        super().__init__(**params)
         self.axon_contrib = None
         self.axon_idx_start = None
         self.axon_idx_end = None
 
-    def _get_default_params(self):
-        base_params = super(AxonMapModel, self)._get_default_params()
+    def get_default_params(self):
+        base_params = super().get_default_params()
         params = {
             # Left or right eye:
             'eye': 'RE',
@@ -182,7 +177,7 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         bundles = list(filter(lambda x: len(x) > 10, bundles))
         # Convert to um:
         # FIXME logic is specific to the Watson model
-        bundles = [dva2ret(b) for b in bundles]
+        bundles = [self.dva2ret(b) for b in bundles]
         return bundles
 
     def find_closest_axon(self, bundles, xret=None, yret=None):
@@ -337,10 +332,10 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
                   'xystep': self.xystep, 'n_ax_segments': self.n_ax_segments,
                   'ax_segments_range': self.ax_segments_range}
         pickle.dump((params, axons), open(self.axon_pickle, 'wb'))
-        self._is_built = True
+        self.is_built = True
         return self
 
-    def _predict_spatial(self, implant, t):
+    def predict_spatial(self, implant, t):
         """Predicts the brightness at specific times ``t``"""
         if t is None:
             t = implant.stim.time
@@ -371,9 +366,17 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
                             self.rho,
                             self.thresh_percept)
 
+
+class AxonMapModel(Model):
+
+    def __init__(self, **params):
+        super().__init__(spatial=AxonMapSpatial(), temporal=None, **params)
+
     def predict_percept(self, implant, t=None):
         # Need to add an additional check before running the base method:
-        if isinstance(implant, ProsthesisSystem) and implant.eye != self.eye:
-            raise ValueError(("The implant is in %s but the model was built "
-                              "for %s.") % (implant.eye, self.eye))
-        return super(AxonMapModel, self).predict_percept(implant, t=t)
+        if isinstance(implant, ProsthesisSystem):
+            if implant.eye != self.spatial.eye:
+                raise ValueError(("The implant is in %s but the model was "
+                                  "built for %s.") % (implant.eye,
+                                                      self.spatial.eye))
+        return super().predict_percept(implant, t=t)

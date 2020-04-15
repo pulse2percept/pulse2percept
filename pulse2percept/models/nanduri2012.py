@@ -1,15 +1,15 @@
 """`Nanduri2012Model`"""
 import numpy as np
-from .base import BaseModel
+from .base import Model, SpatialModel, TemporalModel
 from ._nanduri2012 import spatial_fast, temporal_fast
 
 
-class Nanduri2012SpatialMixin(object):
+class Nanduri2012Spatial(SpatialModel):
     """Spatial model"""
 
-    def _get_default_params(self):
+    def get_default_params(self):
         """Returns all settable parameters of the Nanduri model"""
-        params = super(Nanduri2012SpatialMixin, self)._get_default_params()
+        params = super().get_default_params()
         params.update({'atten_a': 14000, 'atten_n': 1.69})
         return params
 
@@ -29,7 +29,7 @@ class Nanduri2012SpatialMixin(object):
         """
         return xret / 288.0
 
-    def _predict_spatial(self, implant, t):
+    def predict_spatial(self, implant, t):
         """Predicts the brightness at spatial locations"""
         if t is None:
             t = implant.stim.time
@@ -65,16 +65,12 @@ class Nanduri2012SpatialMixin(object):
                             self.thresh_percept)
 
 
-class Nanduri2012TemporalMixin(object):
+class Nanduri2012Temporal(TemporalModel):
     """Temporal model"""
 
-    def _get_default_params(self):
-        base_params = super()._get_default_params()
+    def get_default_params(self):
+        base_params = super().get_default_params()
         params = {
-            'has_time': True,
-            'thresh_percept': 0,
-            # Simulation time step:
-            'dt': 0.005 / 1000,
             # Time decay for the ganglion cell impulse response:
             'tau1': 0.42 / 1000,
             # Time decay for the charge accumulation:
@@ -97,7 +93,7 @@ class Nanduri2012TemporalMixin(object):
         base_params.update(params)
         return base_params
 
-    def _predict_temporal(self, spatial, t_spatial, t_percept):
+    def predict_temporal(self, spatial, t_spatial, t_percept):
         t_percept = np.array([t_percept]).flatten()
         # We need to make sure the requested `t_percept` are multiples of `dt`:
         remainder = np.mod(t_percept, self.dt) / self.dt
@@ -121,8 +117,7 @@ class Nanduri2012TemporalMixin(object):
                              self.asymptote, self.shift, self.slope, self.eps)
 
 
-class Nanduri2012Model(Nanduri2012TemporalMixin, Nanduri2012SpatialMixin,
-                       BaseModel):
+class Nanduri2012Model(Model):
     """Nanduri et al. (2012) Model
 
     Implements the model described in [Nanduri2012]_, where percepts are
@@ -151,4 +146,8 @@ class Nanduri2012Model(Nanduri2012TemporalMixin, Nanduri2012SpatialMixin,
     thresh_percept: float, optional, default: 0
         Below threshold, the percept has brightness zero.
     """
-    pass
+
+    def __init__(self, **params):
+        super().__init__(spatial=Nanduri2012Spatial(),
+                         temporal=Nanduri2012Temporal(),
+                         **params)

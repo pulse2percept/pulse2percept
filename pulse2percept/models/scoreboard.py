@@ -1,21 +1,18 @@
 """`ScoreboardModel`"""
 import numpy as np
-from ..models import BaseModel, Watson2014ConversionMixin
+from ..models import Model, SpatialModel, Watson2014ConversionMixin
 from ..models._scoreboard import spatial_fast
 
 
-class ScoreboardModel(Watson2014ConversionMixin, BaseModel):
-    """Scoreboard model"""
-    # Frozen class: User cannot add more class attributes
-    __slots__ = ('rho',)
+class ScoreboardSpatial(Watson2014ConversionMixin, SpatialModel):
 
-    def _get_default_params(self):
+    def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
-        params = super(ScoreboardModel, self)._get_default_params()
+        params = super().get_default_params()
         params.update({'rho': 100})
         return params
 
-    def _predict_spatial(self, implant, t):
+    def predict_spatial(self, implant, t):
         """Predicts the brightness at spatial locations"""
         if t is None:
             t = implant.stim.time
@@ -43,3 +40,9 @@ class ScoreboardModel(Watson2014ConversionMixin, BaseModel):
                             self.grid.xret.ravel(),
                             self.grid.yret.ravel(),
                             self.rho, self.thresh_percept)
+
+
+class ScoreboardModel(Model):
+
+    def __init__(self, **params):
+        super().__init__(spatial=ScoreboardSpatial(), temporal=None, **params)
