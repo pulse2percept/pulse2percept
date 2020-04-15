@@ -1,16 +1,27 @@
-"""`ScoreboardModel`"""
+"""`ScoreboardModel`, `ScoreboardSpatial`"""
 import numpy as np
-from ..models import Model, SpatialModel, Watson2014ConversionMixin
+from ..models import Model, SpatialModel
 from ..models._scoreboard import spatial_fast
+from ..utils import Watson2014Transform
 
 
-class ScoreboardSpatial(Watson2014ConversionMixin, SpatialModel):
+class ScoreboardSpatial(SpatialModel):
 
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
         params = super().get_default_params()
         params.update({'rho': 100})
         return params
+
+    @staticmethod
+    def dva2ret(xdva):
+        """Convert degrees of visual angle (dva) into retinal coords (um)"""
+        return Watson2014Transform.dva2ret(xdva)
+
+    @staticmethod
+    def ret2dva(xret):
+        """Convert retinal corods (um) to degrees of visual angle (dva)"""
+        return Watson2014Transform.ret2dva(xret)
 
     def predict_spatial(self, implant, t):
         """Predicts the brightness at spatial locations"""

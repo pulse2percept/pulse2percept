@@ -13,14 +13,19 @@ Studies describing pulse2percept:
 
 Studies referenced throughout the Documentation:
 
-.. [Ahuja2008] AK Ahuja, MR Behrend, M Kuroda, MS Humayun, JD Weiland. An in
-               in vitro model of a retinal prosthesis. *IEEE Trans Biomed Eng*
-               55, 1744-1753.
+.. [Ahuja2008] AK Ahuja, MR Behrend, M Kuroda, MS Humayun, JD Weiland (2008).
+               An in in vitro model of a retinal prosthesis.
+               *IEEE Trans Biomed Eng* 55, 1744-1753.
 .. [Beyeler2019] M Beyeler, D Nanduri, JD Weiland, A Rokem, GM Boynton, I Fine
                  (2019). A model of ganglion axon pathways accounts for
                  percepts elicited by retinal implants. *Scientific Reports*
                  9(1):9199, doi:`10.1038/s41598-019-45416-4
                  <https://doi.org/10.1038/s41598-019-45416-4>`_.
+.. [Curcio1990] CA Curcio, KR Sloan, RE Kalina, AE Hendrickson (1990). Human
+                photoreceptor topography.
+                *Journal of Comparative Neurophysiology* 292:497-523,
+                doi:`10.1002/cne.902920402
+                <https://doi.org/10.1002/cne.902920402>`_.
 .. [Hayes2003] JS Hayes et al. (2003). Visually guided performance of
                simple tasks using simulated prosthetic vision.
                *Artificial Organs* 27, 1016-1028.

@@ -1,15 +1,8 @@
-"""`PrettyPrint`, `Frozen`, `GridXY`, `gamma`, `cart2pol`, `pol2cart`"""
+"""`PrettyPrint`, `Frozen`, `gamma`"""
 import numpy as np
 import sys
 import abc
-import random
-import copy
-from os import listdir
-import re
 from scipy.special import factorial
-# Using or importing the ABCs from 'collections' instead of from
-# 'collections.abc' is deprecated, and in 3.8 it will stop working:
-from collections.abc import Sequence
 from collections import OrderedDict
 
 
@@ -136,90 +129,6 @@ class Frozen(object):
         __setattr__ = freeze_class(type.__setattr__)
 
 
-class GridXY(object):
-
-    def __init__(self, x_range, y_range, step=1, grid_type='rectangular'):
-        """2D grid
-
-        This class generates a two-dimensional grid from a range of x, y values
-        and provides an iterator to loop over elements.
-
-        Parameters
-        ----------
-        x_range : tuple
-            (x_min, x_max), includes end point
-        y_range : tuple
-            (y_min, y_max), includes end point
-        step : int, double
-            Step size
-        grid_type : {'rectangular', 'hexagonal'}
-            The grid type
-            """
-        # These could also be their own subclasses:
-        if grid_type == 'rectangular':
-            self._make_rectangular_grid(x_range, y_range, step)
-        elif grid_type == 'hexagonal':
-            self._make_hexagonal_grid(x_range, y_range, step)
-        else:
-            raise ValueError("Unknown grid type '%s'." % grid_type)
-
-    def _make_rectangular_grid(self, x_range, y_range, step):
-        """Creates a rectangular grid"""
-        if not isinstance(x_range, (tuple, list, np.ndarray)):
-            raise TypeError(("x_range must be a tuple, list or NumPy array, "
-                             "not %s.") % type(x_range))
-        if not isinstance(y_range, (tuple, list, np.ndarray)):
-            raise TypeError(("y_range must be a tuple, list or NumPy array, "
-                             "not %s.") % type(y_range))
-        if len(x_range) != 2 or len(y_range) != 2:
-            raise ValueError("x_range and y_range must have 2 elements.")
-        if isinstance(step, Sequence):
-            raise TypeError("step must be a scalar.")
-        # Build the grid from `x_range`, `y_range`. If the range is 0, make
-        # sure that the number of steps is 1, because linspace(0, 0, num=5)
-        # will return a 1x5 array:
-        xdiff = np.diff(x_range)
-        nx = int(np.ceil((xdiff + 1) / step)) if xdiff != 0 else 1
-        ydiff = np.diff(y_range)
-        ny = int(np.ceil((ydiff + 1) / step)) if ydiff != 0 else 1
-        self.x, self.y = np.meshgrid(
-            np.linspace(*x_range, num=nx, dtype=np.float32),
-            np.linspace(*y_range, num=ny, dtype=np.float32),
-            indexing='xy'
-        )
-        self.shape = self.x.shape
-        self.reset()
-
-    def _make_hexagonal_grid(self, x_range, y_range, step):
-        raise NotImplementedError
-
-    def __iter__(self):
-        """Iterator
-
-        You can iterate through the grid as if it were a list:
-
-        >>> grid = GridXY((0, 1), (2, 3))
-        >>> for x, y in grid:
-        ...     print(x, y)
-        0.0 2.0
-        1.0 2.0
-        0.0 3.0
-        1.0 3.0
-        """
-        self.reset()
-        return self
-
-    def __next__(self):
-        it = self._iter
-        if it >= self.x.size:
-            raise StopIteration
-        self._iter += 1
-        return self.x.ravel()[it], self.y.ravel()[it]
-
-    def reset(self):
-        self._iter = 0
-
-
 def gamma(n, tau, tsample, tol=0.01):
     """Returns the impulse response of ``n`` cascaded leaky integrators
 
@@ -268,43 +177,3 @@ def gamma(n, tau, tsample, tol=0.01):
         y = y[:small_vals[0] + peak]
 
     return t, y
-
-
-def cart2pol(x, y):
-    theta = np.arctan2(y, x)
-    rho = np.hypot(x, y)
-    return theta, rho
-
-
-def pol2cart(theta, rho):
-    x = rho * np.cos(theta)
-    y = rho * np.sin(theta)
-    return x, y
-
-
-def find_files_like(datapath, pattern):
-    """Finds files in a folder whose name matches a pattern
-
-    This function looks for files in folder ``datapath`` that match a regular
-    expression ``pattern``.
-
-    Parameters
-    ----------
-    datapath : str
-        Path to search
-    pattern : str
-        A valid regular expression pattern
-
-    Examples
-    --------
-    # Find all '.npz' files in parent dir
-    >>> files = find_files_like('..', r'.*\.npz$')
-    """
-    # Traverse file list and look for `pattern`
-    filenames = []
-    pattern = re.compile(pattern)
-    for file in listdir(datapath):
-        if pattern.search(file):
-            filenames.append(file)
-
-    return filenames

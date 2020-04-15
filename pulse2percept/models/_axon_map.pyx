@@ -6,13 +6,14 @@ from libc.math cimport(pow as c_pow, exp as c_exp, tanh as c_tanh,
                        sin as c_sin, cos as c_cos, fabs as c_abs)
 
 ctypedef cnp.float32_t float32
-ctypedef cnp.int32_t int32
+ctypedef cnp.uint32_t uint32
 cdef float32 deg2rad = 3.14159265358979323846 / 180.0
 
 
-cdef double c_min(double[:] arr):
-    cdef double arr_min
-    cdef cnp.intp_t idx, arr_len
+cdef float32 c_min(float32[:] arr):
+    cdef:
+        float32 arr_min
+        uint32 idx, arr_len
 
     arr_min = 1e12
     arr_len = len(arr)
@@ -22,9 +23,10 @@ cdef double c_min(double[:] arr):
     return arr_min
 
 
-cdef double c_max(double[:] arr):
-    cdef double arr_max
-    cdef cnp.intp_t idx, arr_len
+cdef float32 c_max(float32[:] arr):
+    cdef:
+        float32 arr_max
+        uint32 idx, arr_len
 
     arr_max = -1e12
     arr_len = len(arr)
@@ -35,11 +37,14 @@ cdef double c_max(double[:] arr):
 
 
 @cdivision(True)
-cpdef gauss2(double[:, ::1] arr, double x, double y, double tau):
-    cdef cnp.intp_t idx, n_arr
-    cdef double dist2
+cpdef gauss2(float32[:, ::1] arr, float32 x, float32 y,
+             float32 tau):
+    cdef:
+        uint32 idx, n_arr
+        float32 dist2
+        float32[::1] gauss
     n_arr = arr.shape[0]
-    cdef double[:] gauss = np.empty(n_arr)
+    gauss = np.empty(n_arr, dtype=np.float32)
     with nogil:
         for idx in range(n_arr):
             dist2 = c_pow(arr[idx, 0] - x, 2) + c_pow(arr[idx, 1] - y, 2)
@@ -47,9 +52,12 @@ cpdef gauss2(double[:, ::1] arr, double x, double y, double tau):
     return np.asarray(gauss)
 
 
-cpdef jansonius(double[:] rho, double phi0, double beta_s, double beta_i):
-    cdef double b, c, rho_min, tmp_phi, tmp_rho
-    cdef cnp.intp_t idx
+cpdef jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
+                float32 beta_i):
+    cdef:
+        float32[::1] xprime, yprime
+        float32 b, c, rho_min, tmp_phi, tmp_rho
+        uint32 idx
 
     if phi0 > 0:
         # Axon is in superior retina, compute `b` (real number) from Eq. 5:
@@ -62,20 +70,22 @@ cpdef jansonius(double[:] rho, double phi0, double beta_s, double beta_i):
         # Equation 4, `c` a positive real number:
         c = 1.0 + 0.5 * c_tanh((-phi0 - 90.0) / 25.0)
 
-    cdef double[:] xprime = np.empty_like(rho)
-    cdef double[:] yprime = np.empty_like(rho)
+    xprime = np.empty_like(rho)
+    yprime = np.empty_like(rho)
     rho_min = c_min(rho)
-    for idx in range(len(rho)):
-        tmp_rho = rho[idx]
-        tmp_phi = phi0 + b * c_pow(tmp_rho - rho_min, c)
-        xprime[idx] = tmp_rho * c_cos(deg2rad * tmp_phi)
-        yprime[idx] = tmp_rho * c_sin(deg2rad * tmp_phi)
+    with nogil:
+        for idx in range(len(rho)):
+            tmp_rho = rho[idx]
+            tmp_phi = phi0 + b * c_pow(tmp_rho - rho_min, c)
+            xprime[idx] = tmp_rho * c_cos(deg2rad * tmp_phi)
+            yprime[idx] = tmp_rho * c_sin(deg2rad * tmp_phi)
     return np.asarray(xprime), np.asarray(yprime)
 
 
-cdef cnp.intp_t argmin_segment(double[:, :] bundles, double x, double y):
-    cdef double dist2, min_dist2
-    cdef cnp.intp_t seg, min_seg, n_seg
+cdef uint32 argmin_segment(float32[:, ::1] bundles, float32 x, float32 y):
+    cdef:
+        float32 dist2, min_dist2
+        uint32 seg, min_seg, n_seg
 
     min_dist2 = 1e12
     n_seg = bundles.shape[0]
@@ -87,10 +97,13 @@ cdef cnp.intp_t argmin_segment(double[:, :] bundles, double x, double y):
     return min_seg
 
 
-cpdef axon_contribution(double[:, :] bundle, double[:] xy, double lmbd):
-    cdef cnp.intp_t p, c, argmin, n_seg
-    cdef double dist2
-    cdef double[:, :] contrib
+cpdef axon_contribution(float32[:, ::1] bundle,
+                        float32[::1] xy,
+                        float32 lmbd):
+    cdef:
+        uint32 p, c, argmin, n_seg
+        float32 dist2
+        float32[:, ::1] contrib
 
     # Find the segment that is closest to the soma `xy`:
     argmin = argmin_segment(bundle, xy[0], xy[1])
@@ -116,10 +129,13 @@ cpdef axon_contribution(double[:, :] bundle, double[:] xy, double lmbd):
     return np.asarray(contrib)
 
 
-cpdef finds_closest_axons(double[:, :] bundles, double[:] xret,
-                          double[:] yret):
-    cdef cnp.intp_t[:] closest_seg = np.empty(len(xret), dtype=int)
-    cdef cnp.intp_t n_xy, n_seg
+cpdef finds_closest_axons(float32[:, ::1] bundles,
+                          float32[::1] xret,
+                          float32[::1] yret):
+    cdef:
+        uint32[::1] closest_seg
+        uint32 n_xy, n_seg
+    closest_seg = np.empty(len(xret), dtype=np.uint32)
     n_xy = len(xret)
     n_seg = bundles.shape[0]
     for pos in range(n_xy):
@@ -132,8 +148,8 @@ cpdef spatial_fast(const float32[:, ::1] stim,
                    const float32[::1] xel,
                    const float32[::1] yel,
                    const float32[:, ::1] axon,
-                   const int32[::1] idx_start,
-                   const int32[::1] idx_end,
+                   const uint32[::1] idx_start,
+                   const uint32[::1] idx_end,
                    float32 rho,
                    float32 thresh_percept):
     """Fast spatial response of the axon map model
@@ -154,7 +170,7 @@ cpdef spatial_fast(const float32[:, ::1] stim,
         For example, the axon belonging to the i-th pixel has segments
         axon[idx_start[i]:idx_end[i]].
         This arrangement is necessary in order to access ``axon`` in parallel.
-    idx_start, idx_end : 1D int32 array
+    idx_start, idx_end : 1D uint32 array
         Start and stop indices of the i-th axon.
     rho : float32
         The rho parameter of the axon map model: exponential decay constant

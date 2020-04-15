@@ -24,19 +24,29 @@ def test_Nanduri2012Model():
     with pytest.raises(FreezeError):
         model.rho = 100
 
+    # Some parameters exist in both spatial and temporal model. We can set them
+    # both at once:
+    th = 0.512
+    model.set_params({'thresh_percept': th})
+    npt.assert_almost_equal(model.spatial.thresh_percept, th)
+    npt.assert_almost_equal(model.temporal.thresh_percept, th)
+    # or individually:
+    model.temporal.thresh_percept = 2 * th
+    npt.assert_almost_equal(model.temporal.thresh_percept, 2 * th)
+
 
 def test_Nanduri2012Model_dva2ret():
     # Nanduri model uses a linear dva2ret conversion factor:
     model = Nanduri2012Model(engine='serial', xystep=5)
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(model.spatial.dva2ret(factor), 288.0 * factor)
+        npt.assert_almost_equal(model.spatial.dva2ret(factor), 280.0 * factor)
 
 
 def test_Nanduri2012Model_ret2dva():
     # Nanduri model uses a linear dva2ret conversion factor:
     model = Nanduri2012Model(engine='serial', xystep=5)
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(model.spatial.ret2dva(288.0 * factor), factor)
+        npt.assert_almost_equal(model.spatial.ret2dva(280.0 * factor), factor)
 
 
 def test_Nanduri2012Model_predict_percept():

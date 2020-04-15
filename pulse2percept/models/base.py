@@ -161,20 +161,31 @@ class Model(Frozen, PrettyPrint):
                             "%s." % type(temporal))
         self.temporal = temporal
         # Use user-specified parameter values instead of defaults:
-        self._set_params(params)
+        self.set_params(params)
 
-    def _set_params(self, params):
+    def set_params(self, params):
+        """Set model parameters
+
+
+
+        """
         for key, val in params.items():
+            found = False
             try:
                 setattr(self.spatial, key, val)
+                found = True
             except (AttributeError, FreezeError):
-                try:
-                    setattr(self.temporal, key, val)
-                except (AttributeError, FreezeError):
-                    valid_params = self._pprint_params().keys()
-                    err_str = ("'%s' is not a valid model parameter. Choose "
-                               "from: %s" % (key, ', '.join(valid_params)))
-                    raise AttributeError(err_str)
+                pass
+            try:
+                setattr(self.temporal, key, val)
+                found = True
+            except (AttributeError, FreezeError):
+                pass
+            if not found:
+                valid_params = self._pprint_params().keys()
+                err_str = ("'%s' is not a valid model parameter. Choose "
+                           "from: %s" % (key, ', '.join(valid_params)))
+                raise AttributeError(err_str)
 
     def _pprint_params(self):
         params = {}
@@ -185,7 +196,7 @@ class Model(Frozen, PrettyPrint):
         return params
 
     def build(self, **build_params):
-        self._set_params(build_params)
+        self.set_params(build_params)
         if self.has_space:
             self.spatial.build()
         if self.has_time:

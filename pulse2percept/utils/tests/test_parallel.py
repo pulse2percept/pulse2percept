@@ -4,7 +4,7 @@ import pytest
 
 from pulse2percept.utils import parallel
 from unittest import mock
-from imp import reload
+from importlib import reload
 
 
 def power_it(num, n=2):

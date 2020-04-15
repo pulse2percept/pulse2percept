@@ -41,7 +41,7 @@ extensions = [
     'sphinx.ext.linkcode',
     'sphinx.ext.todo',
     'sphinx.ext.ifconfig',
-    'sphinx_gallery.gen_gallery',
+    # 'sphinx_gallery.gen_gallery',
     'versionwarning.extension',
     'IPython.sphinxext.ipython_directive',
     'IPython.sphinxext.ipython_console_highlighting',
@@ -232,8 +232,12 @@ latex_elements = {
 
     # Additional stuff for the LaTeX preamble.
     'preamble': r"""
-        \usepackage{amsmath}\usepackage{amsfonts}\usepackage{bm}
-        \usepackage{morefloats}\usepackage{enumitem} \setlistdepth{10}
+        \usepackage{amsmath}
+        \usepackage{amsfonts}
+        \usepackage{bm}
+        \usepackage{morefloats}
+        \usepackage{enumitem}
+        \setlistdepth{10}
         """
 }
 

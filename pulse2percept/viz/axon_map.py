@@ -11,7 +11,7 @@ import logging
 
 from ..implants import ProsthesisSystem
 from ..utils import parfor
-from ..models import AxonMapSpatial, dva2ret
+from ..models import AxonMapSpatial
 
 
 def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,

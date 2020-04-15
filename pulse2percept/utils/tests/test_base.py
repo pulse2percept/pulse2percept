@@ -3,8 +3,7 @@ import copy
 import pytest
 import numpy.testing as npt
 
-from pulse2percept.utils import (Frozen, FreezeError, gamma, find_files_like,
-                                 cart2pol, pol2cart, PrettyPrint)
+from pulse2percept.utils import Frozen, FreezeError, PrettyPrint, gamma
 
 
 class PrettyPrinter(PrettyPrint):
@@ -69,28 +68,3 @@ def test_gamma():
 
             # Make sure peak sits correctly
             npt.assert_almost_equal(g.argmax() * tsample, tau * (n - 1))
-
-
-def test_cart2pol():
-    npt.assert_almost_equal(cart2pol(0, 0), (0, 0))
-    npt.assert_almost_equal(cart2pol(10, 0), (0, 10))
-    npt.assert_almost_equal(cart2pol(3, 4), (np.arctan(4 / 3.0), 5))
-    npt.assert_almost_equal(cart2pol(4, 3), (np.arctan(3 / 4.0), 5))
-
-
-def test_pol2cart():
-    npt.assert_almost_equal(pol2cart(0, 0), (0, 0))
-    npt.assert_almost_equal(pol2cart(0, 10), (10, 0))
-    npt.assert_almost_equal(pol2cart(np.arctan(4 / 3.0), 5), (3, 4))
-    npt.assert_almost_equal(pol2cart(np.arctan(3 / 4.0), 5), (4, 3))
-
-
-def test_find_files_like():
-    # Not sure how to check a valid pattern match, because we
-    # don't know in which directory the test suite is
-    # executed... so smoke test
-    find_files_like(".", ".*")
-
-    # Or fail to find an unlikely file name
-    filenames = find_files_like(".", r"theresnowaythisexists\.xyz")
-    npt.assert_equal(filenames, [])

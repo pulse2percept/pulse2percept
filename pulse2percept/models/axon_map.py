@@ -1,16 +1,16 @@
-"""`AxonMapModel`"""
+"""`AxonMapModel`, `AxonMapSpatial`"""
 
 import os
 import numpy as np
 import pickle
 
-from ..utils import parfor, GridXY
+from ..utils import parfor, GridXY, Watson2014Transform
 from ..implants import ProsthesisSystem
-from ..models import Model, SpatialModel, Watson2014ConversionMixin
-from ..models._axon_map import axon_contribution, spatial_fast
+from ..models import Model, SpatialModel
+from ._axon_map import axon_contribution, spatial_fast
 
 
-class AxonMapSpatial(Watson2014ConversionMixin, SpatialModel):
+class AxonMapSpatial(SpatialModel):
     """Axon map model
 
     Implements the axon map model described in [Beyeler2019]_, where percepts
@@ -54,6 +54,16 @@ class AxonMapSpatial(Watson2014ConversionMixin, SpatialModel):
         }
         params.update(base_params)
         return params
+
+    @staticmethod
+    def dva2ret(xdva):
+        """Convert degrees of visual angle (dva) into retinal coords (um)"""
+        return Watson2014Transform.dva2ret(xdva)
+
+    @staticmethod
+    def ret2dva(xret):
+        """Convert retinal corods (um) to degrees of visual angle (dva)"""
+        return Watson2014Transform.ret2dva(xret)
 
     def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
         """Grows a single axon bundle based on the model by Jansonius (2009)
@@ -194,7 +204,7 @@ class AxonMapSpatial(Watson2014ConversionMixin, SpatialModel):
         # For every axon segment, store the corresponding axon ID:
         axon_idx = [[idx] * len(ax) for idx, ax in enumerate(bundles)]
         axon_idx = [item for sublist in axon_idx for item in sublist]
-        axon_idx = np.array(axon_idx, dtype=np.int32)
+        axon_idx = np.array(axon_idx, dtype=np.uint32)
         # Build a long list of all axon segments - their corresponding axon IDs
         # is given by `axon_idx` above:
         flat_bundles = np.concatenate(bundles)
@@ -361,8 +371,8 @@ class AxonMapSpatial(Watson2014ConversionMixin, SpatialModel):
                             np.array([implant[e].y for e in electrodes],
                                      dtype=np.float32),
                             self.axon_contrib,
-                            self.axon_idx_start.astype(np.int32),
-                            self.axon_idx_end.astype(np.int32),
+                            self.axon_idx_start.astype(np.uint32),
+                            self.axon_idx_end.astype(np.uint32),
                             self.rho,
                             self.thresh_percept)
 

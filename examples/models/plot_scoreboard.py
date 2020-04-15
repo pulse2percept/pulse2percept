@@ -85,7 +85,7 @@ print(model)
 # To change parameter values, either pass them directly to the constructor
 # above or set them by hand, like this:
 
-model.spatial.engine = 'serial'
+model.set_params({'engine': 'serial'})
 
 ##############################################################################
 # Then build the model. This is a necessary step before you can actually use

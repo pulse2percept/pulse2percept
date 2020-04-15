@@ -2,7 +2,7 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 from unittest import mock
-from imp import reload
+from importlib import reload
 
 from pulse2percept.io import image
 from pulse2percept import implants

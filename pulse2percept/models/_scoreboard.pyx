@@ -5,6 +5,7 @@ from cython.parallel import prange
 from libc.math cimport(pow as c_pow, exp as c_exp, fabs as c_abs)
 
 ctypedef cnp.float32_t float32
+ctypedef cnp.uint32_t uint32
 
 
 @cdivision(True)
@@ -36,8 +37,8 @@ cpdef spatial_fast(const float32[:, ::1] stim,
 
     """
     cdef:
-        size_t idx_el, idx_time, idx_space, n_el, n_time, n_space
-        size_t idx_bright, n_bright
+        uint32 idx_el, idx_time, idx_space, n_el, n_time, n_space
+        uint32 idx_bright, n_bright
         float32[:, ::1] bright
         float32 px_bright, dist2, gauss, amp
 
