@@ -43,10 +43,10 @@ def test_AxonMapModel():
 def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
     # With `rho` starting at 0, all axons should originate in the optic disc
     # center
-    model = models.AxonMapSpatial(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
-                                  xystep=2, engine='serial',
-                                  ax_segments_range=(0, 45),
-                                  n_ax_segments=100)
+    model = models.AxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
+                                xystep=2, engine='serial',
+                                ax_segments_range=(0, 45),
+                                n_ax_segments=100)
     for phi0 in [-135.0, 66.0, 128.0]:
         ax_pos = model.spatial._jansonius2009(phi0)
         npt.assert_almost_equal(ax_pos[0, 0], loc_od[0])
