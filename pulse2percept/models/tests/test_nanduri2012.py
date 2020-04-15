@@ -69,7 +69,7 @@ def test_Nanduri2012Model_predict_percept():
         model.predict_percept(implant, t=[0.2, 0.2])
 
     # It's ok to extrapolate beyond `stim`:
-    model.dt = 1e-5
+    model.temporal.dt = 1e-5
     npt.assert_almost_equal(model.predict_percept(implant, t=10), 0)
 
     # Output shape must be determined by t_percept:
@@ -77,7 +77,7 @@ def test_Nanduri2012Model_predict_percept():
     npt.assert_equal(model.predict_percept(implant, t=[0, 1]).shape, (2, 1, 1))
 
     # Brightness scales differently with amplitude vs frequency:
-    model.dt = 5e-6
+    model.temporal.dt = 5e-6
     sdur = 1.0  # stimulus duration (seconds)
     pdur = 0.45 / 1000
     t_percept = np.arange(0, sdur, 0.005)
