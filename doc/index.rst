@@ -16,6 +16,7 @@
    topics/implants
    topics/stimuli
    topics/models
+   topics/datasets
 
 .. toctree::
    :caption: User Guide
@@ -53,11 +54,21 @@ Installation
 ============
 
 .. include:: ../README.rst
-   :start-line: 83
+   :start-line: 82
    :end-line: 101
 
 Detailed instructions for different platforms can be found in our
 :ref:`Installation Guide <install>`.
+
+.. note::
+
+    You can also skip installation and run pulse2percept in a Jupyter Notebook
+    on `Google Colab`_. Simply make the first cell in the notebook
+    ``!pip install pulse2percept`` for the stable version or
+    ``!pip install git+https://github.com/pulse2percept/pulse2percept.git``
+    for the latest version.
+
+.. _Google Colab: https://colab.research.google.com
 
 Where to go from here
 =====================

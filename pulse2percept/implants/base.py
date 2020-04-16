@@ -654,7 +654,7 @@ class ProsthesisSystem(PrettyPrint):
         """Electrode array setter (called upon ``self.earray = earray``)"""
         # Assign the electrode array:
         if isinstance(earray, Electrode):
-            # For convenience, build an array froma single electrode:
+            # For convenience, build an array from a single electrode:
             earray = ElectrodeArray(earray)
         if not isinstance(earray, ElectrodeArray):
             raise TypeError("'earray' must be an ElectrodeArray object, not "

@@ -23,3 +23,19 @@ From [Beyeler2019]_:
 *  :py:class:`~pulse2percept.models.AxonMapModel`:
    spatial phosphene model assuming phosphene shape is determined by the
    spatial arrangement of nerve fiber bundles in the optic fiber layer
+
+A :py:class:`~pulse2percept.models.Model` consists of the following things:
+
+*  A :py:class:`~pulse2percept.models.SpatialModel` that accepts a
+   :py:class:`~pulse2percept.implants.ProsthesisSystem` object (which itself
+   contains a :py:class:`~pulse2percept.stimuli.Stimulus` object) and returns
+   the spatial response of the retina.
+
+*  A :py:class:`~pulse2percept.models.TemporalModel` that accepts the output
+   of a spatial model and returns the spatiotemporal response of the retina.
+
+To build your own model, mix and match spatial and temporal models:
+
+.. code-block:: python
+
+    model = Model(spatial=ScoreboardSpatial(), temporal=Nanduri2012Temporal())

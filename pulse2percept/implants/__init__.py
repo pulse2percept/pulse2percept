@@ -8,6 +8,9 @@
     alpha
     bva
 
+.. seealso::
+
+    *  :ref:`Basic Concepts > Visual Prostheses <topics-implants>`
 """
 from .base import (DiskElectrode,
                    Electrode,

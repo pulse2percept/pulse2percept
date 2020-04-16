@@ -1,8 +1,5 @@
 """Utilities to download and import datasets.
 
-The ``datasets`` subpackage provides two kinds of helper functions
-that can be used to load datasets from the bionic vision community:
-
 *  **Dataset loaders** can be used to load small datasets that come
    pre-packaged with the pulse2percept software.
 *  **Dataset fetchers** can be used to download larger datasets from a given
@@ -14,6 +11,11 @@ that can be used to load datasets from the bionic vision community:
     base
     horsager2009
     beyeler2019
+
+.. seealso::
+
+    *  :ref:`Basic Concepts > Datasets <topics-datasets>`
+
 """
 
 from .base import clear_data_dir, get_data_dir, fetch_url

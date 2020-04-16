@@ -1,4 +1,4 @@
-"""`AxonMapModel`, `AxonMapSpatial`"""
+"""`AxonMapModel`, `AxonMapSpatial` [Beyeler2019]_"""
 
 import os
 import numpy as np

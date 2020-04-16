@@ -1,4 +1,4 @@
-"""`ScoreboardModel`, `ScoreboardSpatial`"""
+"""`ScoreboardModel`, `ScoreboardSpatial` [Beyeler2019]_"""
 import numpy as np
 from ..models import Model, SpatialModel
 from ..models._scoreboard import spatial_fast

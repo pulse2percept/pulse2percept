@@ -17,8 +17,27 @@ class NotBuiltError(ValueError, AttributeError):
 
 
 class BuildModel(Frozen, PrettyPrint, metaclass=ABCMeta):
+    """Abstract base class for all models
+
+    Provides the following functionality:
+
+    *  Pretty-print class attributes (via ``_pprint_params`` and
+       ``PrettyPrint``)
+    *  Build a model (via ``build``) and flip the ``is_built`` switch
+    *  User-settable parameters must be listed in ``get_default_params``
+    *  New class attributes can only be added in the constructor
+       (enforced via ``Frozen`` and ``FreezeError``).
+
+    """
 
     def __init__(self, **params):
+        """BuildModel constructor
+
+        Parameters
+        ----------
+        **params : optional keyword arguments
+            All keyword arguments must be listed in ``get_default_params``
+        """
         # Set all default arguments:
         defaults = self.get_default_params()
         for key, val in defaults.items():
@@ -36,16 +55,31 @@ class BuildModel(Frozen, PrettyPrint, metaclass=ABCMeta):
 
     @abstractmethod
     def get_default_params(self):
+        """Return a dict of user-settable model parameters"""
         raise NotImplementedError
 
     def _pprint_params(self):
-        """Return dict of class attributes to pretty-print"""
+        """Return a dict of class attributes to display when pretty-printing"""
         return {key: getattr(self, key)
                 for key, _ in self.get_default_params().items()}
 
     def build(self, **build_params):
-        # Set additional parameters (they must be mentioned in the constructor;
-        # you can't add new class attributes outside of that):
+        """Build the model
+
+        Every model must have a ```build`` method, which is meant to perform
+        all expensive one-time calculations. You must call ``build`` before
+        calling ``predict_percept``.
+
+        You can override ``build`` in your own model (for a good example, see
+        the AxonMapModel). You will want to make sure that:
+
+        - all ``build_params`` take effect,
+        - the flag ``_is_built`` is set before returning,
+        - the method returns ``self``.
+        """
+        # Set additional parameters (they must be mentioned in the constructor
+        # and/or in ``get_default_params``. Trying to add new class attributes
+        # outside of that will cause a ``FreezeError``):
         for key, val in build_params.items():
             setattr(self, key, val)
         self.is_built = True
@@ -148,6 +182,7 @@ class TemporalModel(BuildModel, metaclass=ABCMeta):
 
 
 class Model(Frozen, PrettyPrint):
+    """Model"""
 
     def __init__(self, spatial=None, temporal=None, **params):
         # Set the spatial model:
@@ -381,32 +416,6 @@ class Model(Frozen, PrettyPrint):
 #         }
 #         return params
 
-#     def _pprint_params(self):
-#         """Return dict of class attributes to pretty-print"""
-#         return {key: getattr(self, key)
-#                 for key, _ in self._get_default_params().items()}
-
-#     @property
-#     def _is_built(self):
-#         """A flag indicating whether the model has been built"""
-#         return self.__is_built
-
-#     @_is_built.setter
-#     def _is_built(self, val):
-#         """This flag can only be set in the constructor or ``build``"""
-#         # getframe(0) is '_is_built', getframe(1) is 'set_attr'.
-#         # getframe(2) is the one we are looking for, and has to be either the
-#         # construct or ``build``:
-#         f_caller = sys._getframe(2).f_code.co_name
-#         if f_caller in ["__init__", "build"]:
-#             self.__is_built = val
-#         else:
-#             print(sys._getframe(0).f_code.co_name)
-#             print(sys._getframe(1).f_code.co_name)
-#             print(sys._getframe(2).f_code.co_name)
-#             err_s = ("The attribute `_is_built` can only be set in the "
-#                      "constructor or in ``build``, not in ``%s``." % f_caller)
-#             raise AttributeError(err_s)
 
 #     def build(self, **build_params):
 #         """Build the model

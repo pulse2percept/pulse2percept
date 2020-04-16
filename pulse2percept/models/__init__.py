@@ -7,7 +7,10 @@
     scoreboard
     axon_map
     nanduri2012
-    watson2014
+
+.. seealso::
+
+    *  :ref:`Basic Concepts > Computational Models <topics-models>`
 
 """
 from .base import NotBuiltError, Model, SpatialModel, TemporalModel

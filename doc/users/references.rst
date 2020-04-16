@@ -29,6 +29,11 @@ Studies referenced throughout the Documentation:
 .. [Hayes2003] JS Hayes et al. (2003). Visually guided performance of
                simple tasks using simulated prosthetic vision.
                *Artificial Organs* 27, 1016-1028.
+.. [Horsager2009] A Horsager, SH Greenwald, JD Weiland, MS Humayun, RJ
+                  Greenberg, MJ McMahon, GM Boynton, I Fine (2009). Predicting
+                  visual sensitivity in retinal prosthesis patients.
+                  *Investigative Ophthalmology & Visual Science*
+                  50(4):1483-1491.
 .. [Jansonius2009] NM Jansonius, J Nevalainen, B Selig, LM Zangwill, PA Sample,
                    WM Budde, JB Jonas, WA Lagreze, PJ Airaksinen, R Vonthein,
                    LA Levin, J Paetzold, U Schiefer (2009). A mathematical

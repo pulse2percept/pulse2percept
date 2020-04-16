@@ -5,6 +5,11 @@
 
     base
     pulse_trains
+
+.. seealso::
+
+    *  :ref:`Basic Concepts > Electrical Stimuli <topics-stimuli>`
+
 """
 
 from .base import Stimulus
