@@ -10,7 +10,7 @@
     parallel
 
 """
-from .base import PrettyPrint, FreezeError, Frozen, gamma
+from .base import PrettyPrint, FreezeError, Frozen, Data, gamma
 from .geometry import (GridXY, RetinalCoordTransform, Curcio1990Transform,
                        Watson2014Transform, Watson2014DisplaceTransform,
                        cart2pol, pol2cart)
@@ -21,6 +21,7 @@ from .parallel import parfor
 __all__ = [
     'cart2pol',
     'Curcio1990Transform',
+    'Data',
     'deprecated',
     'FreezeError',
     'Frozen',
