@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patches
 import logging
+from copy import deepcopy
 
 from ..implants import ProsthesisSystem
 from ..utils import parfor
@@ -153,7 +154,9 @@ def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
 
     # Highlight location of stimulated electrodes:
     if implant.stim is not None:
-        for e in implant.stim.electrodes:
+        _stim = deepcopy(implant.stim)
+        _stim.compress()
+        for e in _stim.electrodes:
             ax.plot(implant[e].x, implant[e].y, 'oy',
                     markersize=np.sqrt(implant[e].r) * 2)
 
