@@ -317,12 +317,17 @@ class Stimulus(PrettyPrint):
             electrodes = item[0]
             time = item[1]
             if isinstance(time, slice):
-                # Currently the only supported slice is ':'
-                # TODO: you could slice/interpolate time tstart:tend:tstep but
-                # you would need a step size to get a unique solution.
-                if time.start or time.stop or time.step:
-                    raise NotImplementedError("Slicing the time axis is not "
-                                              "yet supported.")
+                if not time.step:
+                    # We can't interpolate if we don't know the step size, so
+                    # the only allowed option is slice(None, None, None), which
+                    # is the same as ':'
+                    if time.start or time.stop:
+                        raise ValueError("You must provide a step size when "
+                                         "slicing the time axis.")
+                else:
+                    start = self.time[0] if time.start is None else time.start
+                    stop = self.time[-1] if time.stop is None else time.stop
+                    time = np.arange(start, stop, time.step)
             else:
                 if not np.any(time == Ellipsis):
                     # Convert to float so time is not mistaken for column index

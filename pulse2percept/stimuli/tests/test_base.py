@@ -295,10 +295,17 @@ def test_Stimulus___getitem__():
     npt.assert_equal(stim[0, :], stim.data[0, :])
     npt.assert_equal(stim[0, ...], stim.data[0, ...])
     npt.assert_equal(stim[..., 0], stim.data[..., 0])
-    # More advanced slicing is not yet implemented:
-    with pytest.raises(NotImplementedError):
-        # This is ambiguous because no step size is given:
-        a = stim[1, 2:5]
+    # More advanced slicing of time is possible, but needs a step size:
+    with pytest.raises(ValueError):
+        stim[:, 2:5]
+    with pytest.raises(ValueError):
+        stim[:, :3]
+    with pytest.raises(ValueError):
+        stim[:, 2:]
+    npt.assert_almost_equal(stim[0, 1.2:1.65:0.15], [[2.2, 2.35, 2.5]])
+    npt.assert_almost_equal(stim[0, :0.6:0.2], [[1.0, 1.2, 1.4]])
+    npt.assert_almost_equal(stim[0, 2.7::0.2], [[3.7, 3.9]])
+    npt.assert_almost_equal(stim[0, ::2.6], [[1.0, 3.6]])
     # Single element:
     npt.assert_equal(stim[0, 0], stim.data[0, 0])
     # Interpolating time:
