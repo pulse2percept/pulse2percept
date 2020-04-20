@@ -299,14 +299,14 @@ class Stimulus(PrettyPrint):
     def __getitem__(self, item):
         """Returns an item from the data array, interpolated if necessary
 
-        There are many potential used cases:
+        There are many potential use cases:
 
         *  ``stim[i]`` or ``stim[i, :]``: access electrode ``i`` (int or str)
         *  ``stim[[i0,i1]]`` or ``stim[[i0, i1], :]``
         *  ``stim[stim.electrodes != 'A1', :]``
         *  ``stim[:, 1]``: always interpreted as t=1.0, not index=1
         *  ``stim[:, 1.234]``: interpolated time
-        *  ``stim[:, stim.time < 0.4]``
+        *  ``stim[:, stim.time < 0.4]``, ``stim[:, 0.3:1.9:0.001]``
 
         """
         # STEP 1: AVOID CONFUSING TIME POINTS WITH COLUMN INDICES
@@ -331,13 +331,12 @@ class Stimulus(PrettyPrint):
             else:
                 if not np.any(time == Ellipsis):
                     # Convert to float so time is not mistaken for column index
-                    item = (electrodes, np.float32(time))
+                    time = np.float32(time)
         else:
             electrodes = item
             time = None
 
         # STEP 2: ELECTRODES COULD BE SPECIFIED AS INT OR STR
-        # if not isinstance(electrodes, slice) and electrodes != Ellipsis:
         if isinstance(electrodes, (list, np.ndarray)) or np.isscalar(electrodes):
             # Electrodes cannot be interpolated, so convert from slice,
             # ellipsis or indices into a list:
