@@ -291,10 +291,10 @@ def test_Stimulus___getitem__():
     npt.assert_equal(stim[...], stim.data)
     npt.assert_equal(stim[:, :], stim.data)
     npt.assert_equal(stim[:2], stim.data[:2])
-    npt.assert_equal(stim[:, 0], stim.data[:, 0])
+    npt.assert_equal(stim[:, 0.0], stim.data[:, 0].reshape((-1, 1)))
     npt.assert_equal(stim[0, :], stim.data[0, :])
     npt.assert_equal(stim[0, ...], stim.data[0, ...])
-    npt.assert_equal(stim[..., 0], stim.data[..., 0])
+    npt.assert_equal(stim[..., 0], stim.data[..., 0].reshape((-1, 1)))
     # More advanced slicing of time is possible, but needs a step size:
     with pytest.raises(ValueError):
         stim[:, 2:5]
@@ -314,7 +314,7 @@ def test_Stimulus___getitem__():
                             decimal=3)
     # The second dimension is not a column index!
     npt.assert_almost_equal(stim[0, 0], 1.0)
-    npt.assert_almost_equal(stim[0, [0, 1]], np.array([1.0, 2.0]))
+    npt.assert_almost_equal(stim[0, [0, 1]], np.array([[1.0, 2.0]]))
     npt.assert_almost_equal(stim[0, [0.21, 1]], np.array([[1.21, 2.0]]))
     npt.assert_almost_equal(stim[[0, 1], [0.21, 1]],
                             np.array([[1.21, 2.0], [5.21, 6.0]]))
@@ -356,7 +356,7 @@ def test_Stimulus___getitem__():
     stim = Stimulus([[0, 1], [2, 3]], electrodes=['A1', 'B2'])
     npt.assert_almost_equal(stim['A1'], [0, 1])
     npt.assert_almost_equal(stim['A1', :], [0, 1])
-    npt.assert_almost_equal(stim[['A1', 'B2'], 0], [0, 2])
+    npt.assert_almost_equal(stim[['A1', 'B2'], 0], [[0], [2]])
     npt.assert_almost_equal(stim[['A1', 'B2'], :], stim.data)
 
     # Electrodes by slice:

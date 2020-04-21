@@ -327,11 +327,12 @@ class Stimulus(PrettyPrint):
                 else:
                     start = self.time[0] if time.start is None else time.start
                     stop = self.time[-1] if time.stop is None else time.stop
-                    time = np.arange(start, stop, time.step)
+                    time = np.arange(start, stop, time.step, dtype=np.float32)
             else:
                 if not np.any(time == Ellipsis):
                     # Convert to float so time is not mistaken for column index
-                    time = np.float32(time)
+                    if np.array(time).dtype != np.bool:
+                        time = np.float32(time)
         else:
             electrodes = item
             time = None
@@ -517,8 +518,7 @@ class Stimulus(PrettyPrint):
         if len(self.time) == 1:
             # Special case: Duplicate data with slightly different time points
             # so we can set up an interp1d:
-            eps = np.finfo(np.float32).eps
-            time = np.array([self.time - eps, self.time + eps]).flatten()
+            time = np.array([self.time - 1e-12, self.time + 1e-12]).flatten()
             data = np.repeat(self.data, 2, axis=1)
         else:
             time = self.time
