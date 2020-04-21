@@ -278,8 +278,8 @@ def test_Stimulus___eq__():
     # Different data points:
     npt.assert_equal(stim == Stimulus(np.ones((2, 3)) * 1.1), False)
     # Different type:
-    npt.assert_equal(stim == np.ones((2, 3)), False)
-    npt.assert_equal(stim != np.ones((2, 3)), True)
+    npt.assert_equal(stim == ODict(), False)
+    npt.assert_equal(stim != ODict(), True)
     # Annoying but possible:
     npt.assert_equal(Stimulus([]), Stimulus(()))
 
@@ -291,14 +291,21 @@ def test_Stimulus___getitem__():
     npt.assert_equal(stim[...], stim.data)
     npt.assert_equal(stim[:, :], stim.data)
     npt.assert_equal(stim[:2], stim.data[:2])
-    npt.assert_equal(stim[:, 0], stim.data[:, 0].reshape((-1, 1)))
+    npt.assert_equal(stim[:, 0.0], stim.data[:, 0].reshape((-1, 1)))
     npt.assert_equal(stim[0, :], stim.data[0, :])
     npt.assert_equal(stim[0, ...], stim.data[0, ...])
     npt.assert_equal(stim[..., 0], stim.data[..., 0].reshape((-1, 1)))
-    # More advanced slicing is not yet implemented:
-    with pytest.raises(NotImplementedError):
-        # This is ambiguous because no step size is given:
-        a = stim[1, 2:5]
+    # More advanced slicing of time is possible, but needs a step size:
+    with pytest.raises(ValueError):
+        stim[:, 2:5]
+    with pytest.raises(ValueError):
+        stim[:, :3]
+    with pytest.raises(ValueError):
+        stim[:, 2:]
+    npt.assert_almost_equal(stim[0, 1.2:1.65:0.15], [[2.2, 2.35, 2.5]])
+    npt.assert_almost_equal(stim[0, :0.6:0.2], [[1.0, 1.2, 1.4]])
+    npt.assert_almost_equal(stim[0, 2.7::0.2], [[3.7, 3.9]])
+    npt.assert_almost_equal(stim[0, ::2.6], [[1.0, 3.6]])
     # Single element:
     npt.assert_equal(stim[0, 0], stim.data[0, 0])
     # Interpolating time:
@@ -315,7 +322,7 @@ def test_Stimulus___getitem__():
     # "Valid" index errors:
     with pytest.raises(IndexError):
         stim[10, :]
-    with pytest.raises(TypeError):
+    with pytest.raises(IndexError):
         stim[3.3, 0]
 
     # Extrapolating should be disabled by default:
@@ -344,3 +351,32 @@ def test_Stimulus___getitem__():
     npt.assert_almost_equal(stim[:], stim.data)
     with pytest.raises(IndexError):
         stim[0]
+
+    # Electrodes by string:
+    stim = Stimulus([[0, 1], [2, 3]], electrodes=['A1', 'B2'])
+    npt.assert_almost_equal(stim['A1'], [0, 1])
+    npt.assert_almost_equal(stim['A1', :], [0, 1])
+    npt.assert_almost_equal(stim[['A1', 'B2'], 0], [[0], [2]])
+    npt.assert_almost_equal(stim[['A1', 'B2'], :], stim.data)
+
+    # Electrodes by slice:
+    stim = Stimulus(np.arange(10))
+    npt.assert_almost_equal(stim[1::3], np.array([[1], [4], [7]]))
+
+    # Binary arrays:
+    stim = Stimulus(np.arange(6).reshape((2, 3)),
+                    electrodes=['A1', 'B2'],
+                    time=[0.1, 0.3, 0.5])
+    npt.assert_almost_equal(stim[stim.electrodes != 'A1', :], [[3, 4, 5]])
+    npt.assert_almost_equal(stim[stim.electrodes == 'B2', :], [[3, 4, 5]])
+    npt.assert_almost_equal(stim[stim.electrodes == 'C9', :], np.zeros((0, 3)))
+    npt.assert_almost_equal(stim[stim.electrodes == 'C9', 0.1], [])
+    npt.assert_almost_equal(stim[stim.electrodes == 'B2', 0.1001], 3.0005,
+                            decimal=3)
+    npt.assert_almost_equal(stim[stim.electrodes == 'B2', 0.2], 3.5)
+    npt.assert_almost_equal(stim[:, stim.time < 0.4], [[0, 1], [3, 4]])
+    npt.assert_almost_equal(stim[stim.electrodes == 'B2', stim.time < 0.4],
+                            [3, 4])
+    npt.assert_almost_equal(stim[:, stim.time > 0.6], np.zeros((2, 0)))
+    npt.assert_almost_equal(stim['A1', stim.time > 0.6], [])
+    npt.assert_almost_equal(stim['A1', np.isclose(stim.time, 0.3)], [1])
