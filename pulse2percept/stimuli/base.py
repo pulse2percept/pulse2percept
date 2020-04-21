@@ -297,44 +297,97 @@ class Stimulus(PrettyPrint):
         }
 
     def __getitem__(self, item):
-        """Returns an item from the data array, interpolated if necessary"""
+        """Returns an item from the data array, interpolated if necessary
+
+        There are many potential use cases:
+
+        *  ``stim[i]`` or ``stim[i, :]``: access electrode ``i`` (int or str)
+        *  ``stim[[i0,i1]]`` or ``stim[[i0, i1], :]``
+        *  ``stim[stim.electrodes != 'A1', :]``
+        *  ``stim[:, 1]``: always interpreted as t=1.0, not index=1
+        *  ``stim[:, 1.234]``: interpolated time
+        *  ``stim[:, stim.time < 0.4]``, ``stim[:, 0.3:1.9:0.001]``
+
+        """
+        # STEP 1: AVOID CONFUSING TIME POINTS WITH COLUMN INDICES
         # NumPy handles most indexing and slicing. However, we need to prevent
         # cases like stim[:, [0, 1]] which ask for time=[0.0, 1.0] and not for
         # column index 0 and 1:
         if isinstance(item, tuple):
-            if isinstance(item[1], slice):
-                # Currently the only supported slice is ':'
-                if item[1].start or item[1].stop or item[1].step:
-                    raise NotImplementedError("Slicing the time axis not yet "
-                                              "supported.")
+            electrodes = item[0]
+            time = item[1]
+            if isinstance(time, slice):
+                if not time.step:
+                    # We can't interpolate if we don't know the step size, so
+                    # the only allowed option is slice(None, None, None), which
+                    # is the same as ':'
+                    if time.start or time.stop:
+                        raise ValueError("You must provide a step size when "
+                                         "slicing the time axis.")
+                else:
+                    start = self.time[0] if time.start is None else time.start
+                    stop = self.time[-1] if time.stop is None else time.stop
+                    time = np.arange(start, stop, time.step, dtype=np.float32)
             else:
-                if not np.any(item[1] == Ellipsis):
+                if not np.any(time == Ellipsis):
                     # Convert to float so time is not mistaken for column index
-                    item = (item[0], np.float32(item[1]))
+                    if np.array(time).dtype != np.bool:
+                        time = np.float32(time)
+        else:
+            electrodes = item
+            time = None
 
+        # STEP 2: ELECTRODES COULD BE SPECIFIED AS INT OR STR
+        if isinstance(electrodes, (list, np.ndarray)) or np.isscalar(electrodes):
+            # Electrodes cannot be interpolated, so convert from slice,
+            # ellipsis or indices into a list:
+            parsed_electrodes = []
+            for e in np.array([electrodes]).ravel():
+                if isinstance(e, str):
+                    # Use string as index into the list of electrode names:
+                    parsed_electrodes.append(list(self.electrodes).index(e))
+                else:
+                    # Most likely an integer index:
+                    parsed_electrodes.append(e)
+            if not isinstance(electrodes, (list, np.ndarray)):
+                # If a scalar was passed, return a scalar:
+                electrodes = parsed_electrodes[0]
+            else:
+                # Otherwise return an array:
+                electrodes = np.array(parsed_electrodes)
+        # Make sure electrode index is valid:
         try:
-            # NumPy handles most indexing and slicing:
+            self._stim['data'][electrodes]
+        except IndexError:
+            raise IndexError("Invalid electrode index", electrodes)
+
+        # STEP 2: NUMPY HANDLES MOST INDEXING AND SLICING:
+        # Rebuild original index from ``electrodes`` and ``time``:
+        if time is None:
+            item = electrodes
+        else:
+            item = (electrodes, time)
+        try:
             return self._stim['data'][item]
         except IndexError as e:
             # IndexErrors must still be thrown except when `item` is a tuple,
             # in which case we might want to interpolate time:
             if not isinstance(item, tuple):
                 raise IndexError(e)
-        # Handle the special case where we interpolate time.
+
+        # STEP 3: INTERPOLATE TIME
+        # From here on out, we know that ``item`` is a tuple, otherwise we
+        # would have raised an IndexError above.
         # First of all, if time=None, then _interp=None, and we won't interp:
         if self._interp is None:
             raise ValueError("Cannot interpolate time if time=None.")
-        # Electrodes cannot be interpolated, so convert from slice, ellipsis or
-        # indices into a list:
-        if item[0] == Ellipsis:
+        # Build a list of interpolation objects:
+        if (not isinstance(electrodes, (list, np.ndarray)) and
+                electrodes == Ellipsis):
             interp = np.array(self._interp)
-        elif isinstance(item[0], list):
-            interp = np.array([self._interp[i] for i in item[0]])
         else:
-            interp = np.array([self._interp[item[0]]]).flatten()
-        # Time might be a single index or a list of indices. Convert all to
-        # list so we can iterate:
-        time = np.array([item[1]]).flatten()
+            interp = np.array([self._interp[electrodes]]).flatten()
+        time = np.array([time]).flatten()
         data = np.array([[ip(t) for t in time] for ip in interp])
         # Return a single element as scalar:
         if data.size == 1:
@@ -465,8 +518,7 @@ class Stimulus(PrettyPrint):
         if len(self.time) == 1:
             # Special case: Duplicate data with slightly different time points
             # so we can set up an interp1d:
-            eps = np.finfo(np.float32).eps
-            time = np.array([self.time - eps, self.time + eps]).flatten()
+            time = np.array([self.time - 1e-12, self.time + 1e-12]).flatten()
             data = np.repeat(self.data, 2, axis=1)
         else:
             time = self.time
@@ -477,11 +529,11 @@ class Stimulus(PrettyPrint):
         else:
             bounds_error = True
             fill_value = None
-        self._interp = [interp1d(time, row, kind=self._interp_method,
-                                 assume_sorted=True,
-                                 bounds_error=bounds_error,
-                                 fill_value=fill_value)
-                        for row in data]
+        self._interp = np.array([interp1d(time, row, kind=self._interp_method,
+                                          assume_sorted=True,
+                                          bounds_error=bounds_error,
+                                          fill_value=fill_value)
+                                 for row in data])
 
     @property
     def data(self):
