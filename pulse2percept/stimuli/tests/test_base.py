@@ -208,6 +208,75 @@ def test_Stimulus_compress(tsample):
     npt.assert_equal(stim[:, [0.25, 0.88]], [])
 
 
+def test_Stimulus_plot():
+    # Stimulus with one electrode
+    stim = Stimulus([[0, -10, 10, -10, 10, -10, 0]],
+                    time=[0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0])
+    for time in [None, Ellipsis, slice(None)]:
+        # Different ways to plot all data points:
+        ax = stim.plot(time=time)
+        npt.assert_equal(isinstance(ax, Subplot), True)
+        npt.assert_almost_equal(ax.get_yticks(), [stim.data.min(), 0,
+                                                  stim.data.max()])
+        npt.assert_equal(len(ax.lines), 1)
+        npt.assert_almost_equal(ax.lines[0].get_data()[1].min(),
+                                stim.data.min())
+        npt.assert_almost_equal(ax.lines[0].get_data()[1].max(),
+                                stim.data.max())
+
+    # Plot a range of time values (times are sliced, not interpolated):
+    ax = stim.plot(time=(0.2, 0.6))
+    npt.assert_equal(isinstance(ax, Subplot), True)
+    npt.assert_equal(len(ax.lines), 1)
+    t_vals = ax.lines[0].get_data()[0]
+    npt.assert_almost_equal(t_vals[0], 0.3)
+    npt.assert_almost_equal(t_vals[-1], 0.5)
+
+    # Plot exact time points:
+    t_vals = [0.2, 0.3, 0.4]
+    ax = stim.plot(time=t_vals)
+    npt.assert_equal(isinstance(ax, Subplot), True)
+    npt.assert_equal(len(ax.lines), 1)
+    npt.assert_almost_equal(ax.lines[0].get_data()[0], t_vals)
+    npt.assert_almost_equal(ax.lines[0].get_data()[1],
+                            np.squeeze(stim[:, t_vals]))
+
+    # Plot multiple electrodes with string names:
+    for n_electrodes in [2, 3, 4]:
+        stim = Stimulus(np.random.rand(n_electrodes, 20),
+                        electrodes=['E%d' % i for i in range(n_electrodes)])
+        axes = stim.plot()
+        npt.assert_equal(isinstance(axes, (list, np.ndarray)), True)
+        for ax, electrode in zip(axes, stim.electrodes):
+            npt.assert_equal(isinstance(ax, Subplot), True)
+            npt.assert_equal(len(ax.lines), 1)
+            npt.assert_equal(ax.get_ylabel(), electrode)
+            npt.assert_almost_equal(ax.lines[0].get_data()[0], stim.time)
+            npt.assert_almost_equal(ax.lines[0].get_data()[1],
+                                    stim[electrode, :])
+
+    # Invalid calls:
+    with pytest.raises(TypeError):
+        stim.plot(electrodes=1.2)
+    with pytest.raises(TypeError):
+        stim.plot(time=0)
+    with pytest.raises(TypeError):
+        stim.plot(ax='as')
+    with pytest.raises(TypeError):
+        stim.plot(time='0 0.1')
+    with pytest.raises(NotImplementedError):
+        Stimulus(np.ones(10)).plot()
+    with pytest.raises(ValueError):
+        stim = Stimulus(np.ones((3, 10)))
+        _, axes = plt.subplots(nrows=4)
+        stim.plot(axes=axes)
+    with pytest.raises(TypeError):
+        stim = Stimulus(np.ones((3, 10)))
+        _, axes = plt.subplots(nrows=3)
+        axes[1] = 0
+        stim.plot(axes=axes)
+
+
 def test_Stimulus__stim():
     stim = Stimulus(3)
     # User could try and motify the data container after the constructor, which
@@ -381,64 +450,3 @@ def test_Stimulus___getitem__():
     npt.assert_almost_equal(stim[:, stim.time > 0.6], np.zeros((2, 0)))
     npt.assert_almost_equal(stim['A1', stim.time > 0.6], [])
     npt.assert_almost_equal(stim['A1', np.isclose(stim.time, 0.3)], [1])
-
-
-def test_Stimulus_plot():
-    # Stimulus with one electrode
-    stim = Stimulus([[0, -10, 10, -10, 10, -10, 0]],
-            time=[0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0])
-    ax = stim.plot()
-    npt.assert_equal(isinstance(ax, Subplot), True)
-
-    # Check the labels of the plot are correct
-    npt.assert_equal(ax.get_xlabel(), 'Time (s)')
-    npt.assert_equal(ax.get_ylabel(), 'Amplitude ($\mu$A)')
-
-    with pytest.raises(TypeError):
-        stim.plot(electrodes=1.2)
-    with pytest.raises(TypeError):
-        stim.plot(ax='ax')
-    with pytest.raises(TypeError):
-        stim.plot(time='0 0.1')
-    
-    # Stimulus with one electrode but no time provided
-    stim = Stimulus(10)
-    
-    with pytest.raises(ValueError):
-        stim.plot()
-    
-    # Stimulus with where pulsetrain is the source
-    stim = Stimulus(PulseTrain(tsample=0.1 / 1000,
-                               freq=20,
-                               dur=0.2,
-                               amp=100,
-                               pulsetype='cathodicfirst',
-                               pulseorder='gapfirst'))
-    ax = stim.plot()
-    npt.assert_equal(isinstance(ax, Subplot), True)
-
-    # Check the labels of the plot are correct
-    npt.assert_equal(ax.get_xlabel(), 'Time (s)')
-    npt.assert_equal(ax.get_ylabel(), 'Amplitude ($\mu$A)')
-
-    # Stimulus with four electrodes and using customized electrodes' names
-    stim = Stimulus(np.arange(16).reshape(4,4), electrodes=['new0', 'new1', 'new2', 'new3'])
-    axes = stim.plot()
-    npt.assert_equal(isinstance(axes, np.ndarray), True)
-    npt.assert_equal(axes.size, 4)
-
-    # Check the labels of each the plot are correct
-    for ax in axes:
-        npt.assert_equal(ax.get_xlabel(), 'Time (s)')
-        npt.assert_equal(ax.get_ylabel(), 'Amplitude ($\mu$A)')
-    
-    with pytest.raises(ValueError):
-        stim.plot(ax=ax)
-    
-    stim = Stimulus(np.arange(16).reshape(4,4), electrodes=['new0', 'new1', 'new2', 'new3'])
-    ax = stim.plot(electrodes='new0')
-    npt.assert_equal(isinstance(ax, Subplot), True)
-
-    # Check the labels of the plot are correct
-    npt.assert_equal(ax.get_xlabel(), 'Time (s)')
-    npt.assert_equal(ax.get_ylabel(), 'Amplitude ($\mu$A)')
