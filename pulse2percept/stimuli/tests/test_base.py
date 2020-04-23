@@ -3,6 +3,7 @@ import numpy.testing as npt
 import pytest
 from copy import deepcopy
 from collections import OrderedDict as ODict
+from matplotlib.axes import Subplot
 
 from pulse2percept.stimuli import Stimulus, PulseTrain
 
@@ -380,3 +381,64 @@ def test_Stimulus___getitem__():
     npt.assert_almost_equal(stim[:, stim.time > 0.6], np.zeros((2, 0)))
     npt.assert_almost_equal(stim['A1', stim.time > 0.6], [])
     npt.assert_almost_equal(stim['A1', np.isclose(stim.time, 0.3)], [1])
+
+
+def test_Stimulus_plot():
+    # Stimulus with one electrode
+    stim = Stimulus([[0, -10, 10, -10, 10, -10, 0]],
+            time=[0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0])
+    ax = stim.plot()
+    npt.assert_equal(isinstance(ax, Subplot), True)
+
+    # Check the labels of the plot are correct
+    npt.assert_equal(ax.get_xlabel(), 'Time (s)')
+    npt.assert_equal(ax.get_ylabel(), 'Amplitude ($\mu$A)')
+
+    with pytest.raises(TypeError):
+        stim.plot(electrodes=1.2)
+    with pytest.raises(TypeError):
+        stim.plot(ax='ax')
+    with pytest.raises(TypeError):
+        stim.plot(time='0 0.1')
+    
+    # Stimulus with one electrode but no time provided
+    stim = Stimulus(10)
+    
+    with pytest.raises(ValueError):
+        stim.plot()
+    
+    # Stimulus with where pulsetrain is the source
+    stim = Stimulus(PulseTrain(tsample=0.1 / 1000,
+                               freq=20,
+                               dur=0.2,
+                               amp=100,
+                               pulsetype='cathodicfirst',
+                               pulseorder='gapfirst'))
+    ax = stim.plot()
+    npt.assert_equal(isinstance(ax, Subplot), True)
+
+    # Check the labels of the plot are correct
+    npt.assert_equal(ax.get_xlabel(), 'Time (s)')
+    npt.assert_equal(ax.get_ylabel(), 'Amplitude ($\mu$A)')
+
+    # Stimulus with four electrodes and using customized electrodes' names
+    stim = Stimulus(np.arange(16).reshape(4,4), electrodes=['new0', 'new1', 'new2', 'new3'])
+    axes = stim.plot()
+    npt.assert_equal(isinstance(axes, np.ndarray), True)
+    npt.assert_equal(axes.size, 4)
+
+    # Check the labels of each the plot are correct
+    for ax in axes:
+        npt.assert_equal(ax.get_xlabel(), 'Time (s)')
+        npt.assert_equal(ax.get_ylabel(), 'Amplitude ($\mu$A)')
+    
+    with pytest.raises(ValueError):
+        stim.plot(ax=ax)
+    
+    stim = Stimulus(np.arange(16).reshape(4,4), electrodes=['new0', 'new1', 'new2', 'new3'])
+    ax = stim.plot(electrodes='new0')
+    npt.assert_equal(isinstance(ax, Subplot), True)
+
+    # Check the labels of the plot are correct
+    npt.assert_equal(ax.get_xlabel(), 'Time (s)')
+    npt.assert_equal(ax.get_ylabel(), 'Amplitude ($\mu$A)')

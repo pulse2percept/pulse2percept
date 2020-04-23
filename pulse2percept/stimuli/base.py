@@ -1,5 +1,10 @@
 """`Stimulus`"""
 import numpy as np
+from sys import platform
+import matplotlib as mpl
+if platform == "darwin":  # OS X
+    mpl.use('TkAgg')
+from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 np.set_printoptions(precision=2, threshold=5, edgeitems=2)
 from copy import deepcopy as cp
@@ -568,7 +573,7 @@ class Stimulus(PrettyPrint):
         """
         return self._stim['time']
     
-    def plot(self, electrodes=None, time=None):
+    def plot(self, electrodes=None, time=None, ax=None):
         """Plot the stimulus
 
         Parameters
@@ -577,12 +582,30 @@ class Stimulus(PrettyPrint):
             The electrodes for which to plot the stimulus. If None, all electrodes are plotted.
         time : float, or list thereof; optional, default: None
             The time points at which to plot the stimulus. If None, all time points are plotted.
+    ax : matplotlib.axes._subplots.AxesSubplot, or np.ndarray; optional, default: None
+        A Matplotlib axes object. If None given, a new one will be created.
 
         Returns
         --------
         ax : matplotlib.axes.Axes or np.ndarray of them
             Returns one matplotlib.axes.Axes per electrode
         """
+
+        # Check if electrodes is provided
+        if electrodes is not None:
+            if isinstance(electrodes, (int, str)):
+                num_electrodes = 1
+            elif isinstance(electrodes, list):
+                num_electrodes = electrodes.size
+            else:
+                raise TypeError("electrodes should be int, string or list")
+        else:
+            num_electrodes = self.electrodes.size
+            if num_electrodes == 1:
+                electrodes = self.electrodes[0]
+            else:
+                electrodes = self.electrodes.tolist()
+
         # Check if time is provided
         if time is None:
             if self.time is None:
@@ -590,34 +613,33 @@ class Stimulus(PrettyPrint):
             time = self.time
         elif not isinstance(time, (float, list)):
             raise TypeError('Stimulus time should be float or list')
+
+        # Check if ax is provided
+        if ax is not None:
+            if isinstance(ax, Subplot):
+                if num_electrodes != 1:
+                    raise ValueError("Number of electrodes should be " 
+                                     "matched with number of given ax.")
+            elif isinstance(ax, np.ndarray):
+                if num_electrodes > ax.size:
+                    raise ValueError("Number of electrodes should be less " 
+                                     "or equal to number of given ax.")
+            else:
+                raise TypeError('ax should be matplotlib.axes.Axes or np.ndarray')
+        else:
+            # ax is not provided
+            # ax will be automatically created for each electrode with figsize(8,5)
+            fig, ax = plt.subplots(nrows=num_electrodes, figsize=(8,5*num_electrodes))
         
-        # all electrodes are plotted since the specific electrodes are not provided
-        # when the electrodes are more than 1
-        if electrodes is None and self.electrodes.size > 1: 
-            num_electrodes = self.electrodes.size
-            fig, ax = plt.subplots(nrows=num_electrodes, figsize=(8, 5*num_electrodes))
-            for i in range(num_electrodes):
-                ax[i].plot(time, self[i])
-                ax[i].set_xlabel('Time (s)')
-                ax[i].set_ylabel('Amplitude ($\mu$A)')
-        
-        # single electrode is provided
-        elif isinstance(electrodes, (int, str)) or self.electrodes.size == 1:
-            if electrodes is None:
-                electrodes = self.electrodes[0]
-            fig, ax = plt.subplots(nrows=1, figsize=(8,5))
-            ax.plot(self.time, self[electrodes])
+        # plot the graph for each electrode
+        if num_electrodes == 1:
+            ax.plot(time, self[electrodes])
             ax.set_xlabel('Time (s)')
             ax.set_ylabel('Amplitude ($\mu$A)')
-
-        # list of electrodes are provided
-        elif isinstance(electrodes, list):
-            num_electrodes = electrodes.size
-            fig, ax = plt.subplots(nrows=num_electrodes, figsize=(8,5*num_electrodes))
+        else:
             for i, electrode in enumerate(electrodes):
                 ax[i].plot(time, self[electrode])
                 ax[i].set_xlabel('Time (s)')
                 ax[i].set_ylabel('Amplitude ($\mu$A)')
-        else:
-            raise TypeError("electrodes should be int, string or list")
+
         return ax
