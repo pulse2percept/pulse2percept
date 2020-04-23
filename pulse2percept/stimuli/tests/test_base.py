@@ -4,6 +4,7 @@ import pytest
 from copy import deepcopy
 from collections import OrderedDict as ODict
 from matplotlib.axes import Subplot
+import matplotlib.pyplot as plt
 
 from pulse2percept.stimuli import Stimulus, PulseTrain
 
