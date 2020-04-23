@@ -3,6 +3,8 @@ import numpy.testing as npt
 import pytest
 from copy import deepcopy
 from collections import OrderedDict as ODict
+from matplotlib.axes import Subplot
+import matplotlib.pyplot as plt
 
 from pulse2percept.stimuli import Stimulus, PulseTrain
 
@@ -205,6 +207,75 @@ def test_Stimulus_compress(tsample):
     npt.assert_equal(stim[:, 0], [])
     npt.assert_equal(stim[:, 0.123], [])
     npt.assert_equal(stim[:, [0.25, 0.88]], [])
+
+
+def test_Stimulus_plot():
+    # Stimulus with one electrode
+    stim = Stimulus([[0, -10, 10, -10, 10, -10, 0]],
+                    time=[0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0])
+    for time in [None, Ellipsis, slice(None)]:
+        # Different ways to plot all data points:
+        ax = stim.plot(time=time)
+        npt.assert_equal(isinstance(ax, Subplot), True)
+        npt.assert_almost_equal(ax.get_yticks(), [stim.data.min(), 0,
+                                                  stim.data.max()])
+        npt.assert_equal(len(ax.lines), 1)
+        npt.assert_almost_equal(ax.lines[0].get_data()[1].min(),
+                                stim.data.min())
+        npt.assert_almost_equal(ax.lines[0].get_data()[1].max(),
+                                stim.data.max())
+
+    # Plot a range of time values (times are sliced, not interpolated):
+    ax = stim.plot(time=(0.2, 0.6))
+    npt.assert_equal(isinstance(ax, Subplot), True)
+    npt.assert_equal(len(ax.lines), 1)
+    t_vals = ax.lines[0].get_data()[0]
+    npt.assert_almost_equal(t_vals[0], 0.3)
+    npt.assert_almost_equal(t_vals[-1], 0.5)
+
+    # Plot exact time points:
+    t_vals = [0.2, 0.3, 0.4]
+    ax = stim.plot(time=t_vals)
+    npt.assert_equal(isinstance(ax, Subplot), True)
+    npt.assert_equal(len(ax.lines), 1)
+    npt.assert_almost_equal(ax.lines[0].get_data()[0], t_vals)
+    npt.assert_almost_equal(ax.lines[0].get_data()[1],
+                            np.squeeze(stim[:, t_vals]))
+
+    # Plot multiple electrodes with string names:
+    for n_electrodes in [2, 3, 4]:
+        stim = Stimulus(np.random.rand(n_electrodes, 20),
+                        electrodes=['E%d' % i for i in range(n_electrodes)])
+        axes = stim.plot()
+        npt.assert_equal(isinstance(axes, (list, np.ndarray)), True)
+        for ax, electrode in zip(axes, stim.electrodes):
+            npt.assert_equal(isinstance(ax, Subplot), True)
+            npt.assert_equal(len(ax.lines), 1)
+            npt.assert_equal(ax.get_ylabel(), electrode)
+            npt.assert_almost_equal(ax.lines[0].get_data()[0], stim.time)
+            npt.assert_almost_equal(ax.lines[0].get_data()[1],
+                                    stim[electrode, :])
+
+    # Invalid calls:
+    with pytest.raises(TypeError):
+        stim.plot(electrodes=1.2)
+    with pytest.raises(TypeError):
+        stim.plot(time=0)
+    with pytest.raises(TypeError):
+        stim.plot(ax='as')
+    with pytest.raises(TypeError):
+        stim.plot(time='0 0.1')
+    with pytest.raises(NotImplementedError):
+        Stimulus(np.ones(10)).plot()
+    with pytest.raises(ValueError):
+        stim = Stimulus(np.ones((3, 10)))
+        _, axes = plt.subplots(nrows=4)
+        stim.plot(axes=axes)
+    with pytest.raises(TypeError):
+        stim = Stimulus(np.ones((3, 10)))
+        _, axes = plt.subplots(nrows=3)
+        axes[1] = 0
+        stim.plot(axes=axes)
 
 
 def test_Stimulus__stim():
