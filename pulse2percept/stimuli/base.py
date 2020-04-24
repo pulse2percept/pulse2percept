@@ -1,5 +1,11 @@
 """`Stimulus`"""
-import sys
+from sys import platform
+import matplotlib as mpl
+if platform == "darwin":  # OS X
+    mpl.use('TkAgg')
+from matplotlib.axes import Subplot
+import matplotlib.pyplot as plt
+
 import numpy as np
 np.set_printoptions(precision=2, threshold=5, edgeitems=2)
 from copy import deepcopy as cp
@@ -299,6 +305,99 @@ class Stimulus(PrettyPrint):
             'time': time,
         }
         self.is_compressed = True
+
+    def plot(self, electrodes=None, time=None, axes=None):
+        """Plot the stimulus
+
+        Parameters
+        ----------
+        electrodes : int, string, or list thereof; optional, default: None
+            The electrodes for which to plot the stimulus. If None, all
+            electrodes are plotted.
+        time : (t_min, t_max) tuple, slice, or list of exact time points
+            The time points at which to plot the stimulus. Specify a range of
+            time points with a tuple or a slice, or specify the exact time
+            points to interpolate.
+            If None, all time points are plotted.
+        axes : matplotlib.axes.Axes or list thereof; optional, default: None
+            A Matplotlib Axes object or a list thereof (one per electrode to
+            plot). If None, a new Axes object will be created.
+
+        Returns
+        -------
+        axes : matplotlib.axes.Axes or np.ndarray of them
+            Returns one matplotlib.axes.Axes per electrode
+
+        """
+        if self.time is None:
+            # Cannot plot stimulus with single time point:
+            raise NotImplementedError
+        if electrodes is None:
+            # Plot all electrodes:
+            electrodes = self.electrodes
+        elif isinstance(electrodes, (int, str)):
+            # Convert to list so we can iterate over it:
+            electrodes = [electrodes]
+        if time is None:
+            # Ask for a slice instead of `self.time` to avoid interpolation,
+            # which can be time-consuming for an uncompressed stimulus:
+            time = slice(None)
+        if isinstance(time, tuple):
+            # Return a range of time points:
+            t_idx = (self.time >= time[0]) & (self.time < time[1])
+            t_vals = self.time[t_idx]
+        elif isinstance(time, (list, np.ndarray)):
+            # Return list of exact time points:
+            t_idx = time
+            t_vals = time
+        elif isinstance(time, slice) or time == Ellipsis:
+            # Return a slice of time points:
+            t_idx = time
+            t_vals = self.time[t_idx]
+        else:
+            raise TypeError('"time" must be a tuple, slice, list, or NumPy '
+                            'array, not %s.' % type(time))
+        if axes is None:
+            _, axes = plt.subplots(nrows=len(electrodes),
+                                   figsize=(8, 1.2 * len(electrodes)))
+        if not isinstance(axes, (list, np.ndarray)):
+            # Convert to list so w can iterate over it:
+            axes = [axes]
+        for i, ax in enumerate(axes):
+            if not isinstance(ax, Subplot):
+                raise TypeError("'axes' must be a list of subplots, but "
+                                "axes[%d] is %s." % (i, type(ax)))
+        if len(axes) != len(electrodes):
+            raise ValueError("Number of subplots (%d) must be equal to the "
+                             "number of electrodes (%d)." % (len(axes),
+                                                             len(electrodes)))
+        # Plot each electrode in its own subplot:
+        for ax, electrode in zip(axes, electrodes):
+            # Slice or interpolate stimulus:
+            slc = self.__getitem__((electrode, t_idx))
+            ax.plot(t_vals, np.squeeze(slc), 'k-', linewidth=2)
+            # Turn off the ugly box spines:
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['bottom'].set_visible(False)
+            # Annotate the subplot:
+            ax.set_xticks([])
+            ax.set_yticks([slc.min(), 0, slc.max()])
+            x_pad = 0.02 * (t_vals[-1] - t_vals[0])
+            ax.set_xlim(t_vals[0] - x_pad, t_vals[-1] + x_pad)
+            y_pad = np.maximum(1, 0.02 * (slc.max() - slc.min()))
+            ax.set_ylim(slc.min() - y_pad, slc.max() + y_pad)
+            ax.set_ylabel(electrode)
+        # Show x-ticks only on last subplot:
+        axes[-1].set_xticks(np.linspace(t_vals[0], t_vals[-1], num=5))
+        # Labels are common to all subplots:
+        axes[-1].figure.text(0.5, 0, 'Time (s)', va='top', ha='center')
+        axes[-1].figure.text(0, 0.5, r'Amplitude ($\mu$A)', va='center',
+                             ha='center', rotation='vertical')
+        axes[-1].figure.tight_layout()
+        if len(axes) == 1:
+            return axes[0]
+        return axes
 
     def __getitem__(self, item):
         """Returns an item from the data array, interpolated if necessary
