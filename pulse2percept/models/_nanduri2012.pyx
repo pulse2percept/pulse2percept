@@ -61,7 +61,7 @@ cpdef spatial_fast(const float32[:, ::1] stim,
     n_bright = n_time * n_space
 
     # A flattened array containing n_time x n_space entries:
-    bright = np.empty((n_time, n_space), dtype=np.float32)  # Py overhead
+    bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
 
     for idx_bright in prange(n_bright, schedule='dynamic', nogil=True):
         # For each entry in the output matrix:
@@ -92,7 +92,7 @@ cpdef spatial_fast(const float32[:, ::1] stim,
                 px_bright = px_bright + amp * atten_a / denom
         if c_abs(px_bright) < thresh_percept:
             px_bright = 0.0
-        bright[idx_time, idx_space] = px_bright
+        bright[idx_space, idx_time] = px_bright
     return np.asarray(bright)  # Py overhead
 
 
@@ -114,8 +114,8 @@ cpdef temporal_fast(const float32[:, ::1] stim,
     Parameters
     ----------
     stim : 2D float32 array
-        A ``Stimulus.data`` container that contains time points as rows and
-        spatial locations as columns. This is the output of the spatial model.
+        A ``Stimulus.data`` container that contains spatial locations as rows
+        and time points as columns. This is the output of the spatial model.
         The time points are specified in ``t_stim``.
     t_stim : 1D float32 array
         The time points for ``stim`` above.
@@ -151,10 +151,10 @@ cpdef temporal_fast(const float32[:, ::1] stim,
     n_percept = len(idx_t_percept)  # Py overhead
     n_stim = len(t_stim)  # Py overhead
     n_sim = idx_t_percept[n_percept - 1] + 1  # no negative indices
-    n_space = stim.shape[1]
+    n_space = stim.shape[0]
 
     all_r3 = np.empty(n_sim, dtype=np.float32)  # Py overhead
-    percept = np.zeros((n_percept, n_space), dtype=np.float32)  # Py overhead
+    percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
 
     for idx_space in prange(n_space, schedule='dynamic', nogil=True):
         # Because the stationary nonlinearity depends on `max_R3`, which is the
@@ -176,7 +176,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             if idx_stim + 1 < n_stim:
                 if t_sim >= t_stim[idx_stim + 1]:
                     idx_stim = idx_stim + 1
-            amp = stim[idx_stim, idx_space]
+            amp = stim[idx_space, idx_stim]
             # Fast ganglion cell response:
             r1 = r1 + dt * (-amp - r1) / tau1  # += in threads is a reduction
             # Charge accumulation:
@@ -217,7 +217,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
                 # (fast) way to compare two floating point numbers:
                 if c_abs(r4c) < thresh_percept:
                     r4c = 0.0
-                percept[idx_frame, idx_space] = r4c
+                percept[idx_space, idx_frame] = r4c
                 idx_frame = idx_frame + 1
 
     return np.asarray(percept)  # Py overhead

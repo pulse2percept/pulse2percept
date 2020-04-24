@@ -27,9 +27,9 @@ def test_AxonMapModel():
 
     # Zeros in, zeros out:
     implant = implants.ArgusII(stim=np.zeros(60))
-    npt.assert_almost_equal(model.predict_percept(implant), 0)
+    npt.assert_almost_equal(model.predict_percept(implant).data, 0)
     implant.stim = np.zeros(60)
-    npt.assert_almost_equal(model.predict_percept(implant), 0)
+    npt.assert_almost_equal(model.predict_percept(implant).data, 0)
 
     # Implant and model must be built for same eye:
     with pytest.raises(ValueError):
@@ -158,18 +158,18 @@ def test_AxonMapModel_predict_percept():
     img_stim[47] = 1
     percept = model.predict_percept(implants.ArgusII(stim=img_stim))
     # Single bright pixel, rest of arc is less bright:
-    npt.assert_equal(np.sum(percept > 0.9), 1)
-    npt.assert_equal(np.sum(percept > 0.5), 2)
-    npt.assert_equal(np.sum(percept > 0.1), 8)
-    npt.assert_equal(np.sum(percept > 0.0001), 28)
+    npt.assert_equal(np.sum(percept.data > 0.9), 1)
+    npt.assert_equal(np.sum(percept.data > 0.5), 2)
+    npt.assert_equal(np.sum(percept.data > 0.1), 8)
+    npt.assert_equal(np.sum(percept.data > 0.0001), 28)
     # Overall only a few bright pixels:
-    npt.assert_almost_equal(np.sum(percept), 3.207, decimal=3)
+    npt.assert_almost_equal(np.sum(percept.data), 3.207, decimal=3)
     # Brightest pixel is in lower right:
-    npt.assert_almost_equal(percept[0, 18, 25], np.max(percept))
+    npt.assert_almost_equal(percept.data[18, 25, 0], np.max(percept.data))
     # Top half is empty:
-    npt.assert_almost_equal(np.sum(percept[0, :15, :]), 0)
+    npt.assert_almost_equal(np.sum(percept.data[:15, :, 0]), 0)
     # Same for lower band:
-    npt.assert_almost_equal(np.sum(percept[0, 21:, :]), 0)
+    npt.assert_almost_equal(np.sum(percept.data[21:, :, 0]), 0)
 
     # Full Argus II with small lambda: 60 bright spots
     model = models.AxonMapModel(engine='serial', xystep=1, rho=100,
@@ -178,5 +178,5 @@ def test_AxonMapModel_predict_percept():
     percept = model.predict_percept(implants.ArgusII(stim=np.ones(60)))
     # Most spots are pretty bright, but there are 2 dimmer ones (due to their
     # location on the retina):
-    npt.assert_equal(np.sum(percept > 0.5), 58)
-    npt.assert_equal(np.sum(percept > 0.275), 60)
+    npt.assert_equal(np.sum(percept.data > 0.5), 58)
+    npt.assert_equal(np.sum(percept.data > 0.275), 60)

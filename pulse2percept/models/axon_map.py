@@ -5,7 +5,8 @@ import numpy as np
 import pickle
 
 from ..utils import parfor, GridXY, Watson2014Transform
-from ..implants import ProsthesisSystem
+from ..implants import ProsthesisSystem, ElectrodeArray
+from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
 from ._axon_map import axon_contribution, spatial_fast
 
@@ -25,13 +26,13 @@ class AxonMapSpatial(SpatialModel):
     """
 
     def __init__(self, **params):
-        super().__init__(**params)
+        super(AxonMapSpatial, self).__init__(**params)
         self.axon_contrib = None
         self.axon_idx_start = None
         self.axon_idx_end = None
 
     def get_default_params(self):
-        base_params = super().get_default_params()
+        base_params = super(AxonMapSpatial, self).get_default_params()
         params = {
             # Left or right eye:
             'eye': 'RE',
@@ -345,30 +346,16 @@ class AxonMapSpatial(SpatialModel):
         self.is_built = True
         return self
 
-    def predict_spatial(self, implant, t):
+    def _predict_spatial(self, earray, stim):
         """Predicts the brightness at specific times ``t``"""
-        if t is None:
-            t = implant.stim.time
-        if implant.stim.time is None and t is not None:
-            raise ValueError("Cannot calculate spatial response at times "
-                             "t=%s, because stimulus does not have a time "
-                             "component." % t)
-        # Interpolate stimulus at desired time points:
-        if implant.stim.time is None:
-            stim = implant.stim.data.astype(np.float32)
-        else:
-            stim = implant.stim[:, np.array([t]).ravel()].astype(np.float32)
-        # A Stimulus could be compressed to zero:
-        if stim.size == 0:
-            return np.zeros((np.array([t]).size, np.prod(self.grid.x.shape)),
-                            dtype=np.float32)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        electrodes = implant.stim.electrodes
-        return spatial_fast(stim,
-                            np.array([implant[e].x for e in electrodes],
+        assert isinstance(earray, ElectrodeArray)
+        assert isinstance(stim, Stimulus)
+        return spatial_fast(stim.data,
+                            np.array([earray[e].x for e in stim.electrodes],
                                      dtype=np.float32),
-                            np.array([implant[e].y for e in electrodes],
+                            np.array([earray[e].y for e in stim.electrodes],
                                      dtype=np.float32),
                             self.axon_contrib,
                             self.axon_idx_start.astype(np.uint32),
@@ -380,7 +367,8 @@ class AxonMapSpatial(SpatialModel):
 class AxonMapModel(Model):
 
     def __init__(self, **params):
-        super().__init__(spatial=AxonMapSpatial(), temporal=None, **params)
+        super(AxonMapModel, self).__init__(spatial=AxonMapSpatial(),
+                                           temporal=None, **params)
 
     def predict_percept(self, implant, t=None):
         # Need to add an additional check before running the base method:
@@ -389,4 +377,4 @@ class AxonMapModel(Model):
                 raise ValueError(("The implant is in %s but the model was "
                                   "built for %s.") % (implant.eye,
                                                       self.spatial.eye))
-        return super().predict_percept(implant, t=t)
+        return super(AxonMapModel, self).predict_percept(implant, t=t)

@@ -3,9 +3,34 @@ import pytest
 import numpy.testing as npt
 
 from pulse2percept.utils import (RetinalCoordTransform, Curcio1990Transform,
-                                 Watson2014Transform,
+                                 GridXY, Watson2014Transform,
                                  Watson2014DisplaceTransform,
                                  cart2pol, pol2cart)
+
+
+@pytest.mark.parametrize('x_range', [(0, 0), (-3, 3), (4, -2), (1, -1)])
+@pytest.mark.parametrize('y_range', [(0, 0), (0, 7), (-3, 3), (2, -2)])
+def test_GridXY(x_range, y_range):
+    grid = GridXY(x_range, y_range, step=1, grid_type='rectangular')
+    npt.assert_equal(grid.x_range, x_range)
+    npt.assert_equal(grid.y_range, y_range)
+    npt.assert_equal(grid.step, 1)
+    npt.assert_equal(grid.type, 'rectangular')
+
+    # Grid is created with indexing='xy', so check coordinates:
+    npt.assert_equal(grid.x.shape,
+                     (np.abs(np.diff(y_range)) + 1,
+                      np.abs(np.diff(x_range)) + 1))
+    npt.assert_equal(grid.x.shape, grid.y.shape)
+    npt.assert_equal(grid.x.shape, grid.shape)
+    npt.assert_almost_equal(grid.x[0, 0], x_range[0])
+    npt.assert_almost_equal(grid.x[0, -1], x_range[1])
+    npt.assert_almost_equal(grid.x[-1, 0], x_range[0])
+    npt.assert_almost_equal(grid.x[-1, -1], x_range[1])
+    npt.assert_almost_equal(grid.y[0, 0], y_range[0])
+    npt.assert_almost_equal(grid.y[0, -1], y_range[0])
+    npt.assert_almost_equal(grid.y[-1, 0], y_range[1])
+    npt.assert_almost_equal(grid.y[-1, -1], y_range[1])
 
 
 class ValidCoordTransform(RetinalCoordTransform):

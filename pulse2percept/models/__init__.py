@@ -13,7 +13,8 @@
     *  :ref:`Basic Concepts > Computational Models <topics-models>`
 
 """
-from .base import NotBuiltError, Model, SpatialModel, TemporalModel
+from .base import (Percept, BuildModel, NotBuiltError, Model, SpatialModel,
+                   TemporalModel)
 from .scoreboard import ScoreboardModel, ScoreboardSpatial
 from .axon_map import AxonMapModel, AxonMapSpatial
 from .nanduri2012 import (Nanduri2012Model, Nanduri2012Spatial,
@@ -22,11 +23,13 @@ from .nanduri2012 import (Nanduri2012Model, Nanduri2012Spatial,
 __all__ = [
     'AxonMapModel',
     'AxonMapSpatial',
+    'BuildModel',
     'Model',
     'Nanduri2012Model',
     'Nanduri2012Spatial',
     'Nanduri2012Temporal',
     'NotBuiltError',
+    'Percept',
     'ScoreboardModel',
     'ScoreboardSpatial',
     'SpatialModel',

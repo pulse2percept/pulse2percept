@@ -70,6 +70,17 @@ def test_Data():
     npt.assert_equal(data.axis1, np.arange(ndarray.shape[1]))
     npt.assert_equal(hasattr(data, 'axis2'), False)
 
+    # Order is preserved even if None:
+    data = Data(np.zeros(12).reshape((3, 4, 1)),
+                axes=[('x', None), ('y', None), ('t', None)])
+    npt.assert_equal(hasattr(data, 'x'), True)
+    npt.assert_equal(data.x, [0, 1, 2])
+    npt.assert_equal(hasattr(data, 'y'), True)
+    npt.assert_equal(data.y, [0, 1, 2, 3])
+    npt.assert_equal(hasattr(data, 't'), True)
+    npt.assert_equal(data.t, [0])
+    npt.assert_equal(hasattr(data, 'axis0'), False)
+
     # Some axes given, others inferred automatically:
     data = Data(ndarray, axes=[('c', None), ('a', [0.1, 0.2, 0.5])])
     npt.assert_almost_equal(data.c, [0, 1])

@@ -3,6 +3,8 @@
 import numpy as np
 from .base import Model, SpatialModel, TemporalModel
 from ._nanduri2012 import spatial_fast, temporal_fast
+from ..implants import ElectrodeArray, DiskElectrode
+from ..stimuli import Stimulus
 from ..utils import Curcio1990Transform
 
 
@@ -42,7 +44,7 @@ class Nanduri2012Spatial(SpatialModel):
 
     def get_default_params(self):
         """Returns all settable parameters of the Nanduri model"""
-        params = super().get_default_params()
+        params = super(Nanduri2012Spatial, self).get_default_params()
         params.update({'atten_a': 14000, 'atten_n': 1.69})
         return params
 
@@ -62,40 +64,35 @@ class Nanduri2012Spatial(SpatialModel):
         """
         return Curcio1990Transform.ret2dva(xret)
 
-    def predict_spatial(self, implant, t):
+    def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
-        if t is None:
-            t = implant.stim.time
-        if implant.stim.time is None and t is not None:
-            raise ValueError("Cannot calculate spatial response at times "
-                             "t=%s, because stimulus does not have a time "
-                             "component." % t)
-        # Interpolate stimulus at desired time points:
-        if implant.stim.time is None:
-            stim = implant.stim.data.astype(np.float32)
-        else:
-            stim = implant.stim[:, np.array([t]).ravel()].astype(np.float32)
-        # A Stimulus could be compressed to zero:
-        if stim.size == 0:
-            return np.zeros((np.array([t]).size, np.prod(self.grid.x.shape)),
-                            dtype=np.float32)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        electrodes = implant.stim.electrodes
-        return spatial_fast(stim,
-                            np.array([implant[e].x for e in electrodes],
+        assert isinstance(earray, ElectrodeArray)
+        assert isinstance(stim, Stimulus)
+        return spatial_fast(stim.data,
+                            np.array([earray[e].x for e in stim.electrodes],
                                      dtype=np.float32),
-                            np.array([implant[e].y for e in electrodes],
+                            np.array([earray[e].y for e in stim.electrodes],
                                      dtype=np.float32),
-                            np.array([implant[e].z for e in electrodes],
+                            np.array([earray[e].z for e in stim.electrodes],
                                      dtype=np.float32),
-                            np.array([implant[e].r for e in electrodes],
+                            np.array([earray[e].r for e in stim.electrodes],
                                      dtype=np.float32),
                             self.grid.xret.ravel(),
                             self.grid.yret.ravel(),
                             self.atten_a,
                             self.atten_n,
                             self.thresh_percept)
+
+    def predict_percept(self, implant, t_percept=None):
+        if not np.all([isinstance(e, DiskElectrode)
+                       for e in implant.values()]):
+            raise TypeError("The Nanduri2012 spatial model only supports "
+                            "DiskElectrode arrays.")
+        return super(Nanduri2012Spatial, self).predict_percept(
+            implant, t_percept=t_percept
+        )
 
 
 class Nanduri2012Temporal(TemporalModel):
@@ -136,7 +133,7 @@ class Nanduri2012Temporal(TemporalModel):
     """
 
     def get_default_params(self):
-        base_params = super().get_default_params()
+        base_params = super(Nanduri2012Temporal, self).get_default_params()
         params = {
             # Time decay for the ganglion cell impulse response:
             'tau1': 0.42 / 1000,
@@ -160,7 +157,7 @@ class Nanduri2012Temporal(TemporalModel):
         base_params.update(params)
         return base_params
 
-    def predict_temporal(self, spatial, t_spatial, t_percept):
+    def _predict_temporal(self, stim, t_percept):
         t_percept = np.array([t_percept]).flatten()
         # We need to make sure the requested `t_percept` are multiples of `dt`:
         remainder = np.mod(t_percept, self.dt) / self.dt
@@ -177,8 +174,8 @@ class Nanduri2012Temporal(TemporalModel):
         if np.unique(idx_percept).size < t_percept.size:
             raise ValueError("All times 't' must be distinct multiples of "
                              "`dt`=%.2e" % self.dt)
-        return temporal_fast(spatial.astype(np.float32),
-                             t_spatial.astype(np.float32),
+        return temporal_fast(stim.data.astype(np.float32),
+                             stim.time.astype(np.float32),
                              idx_percept,
                              self.dt, self.tau1, self.tau2, self.tau3,
                              self.asymptote, self.shift, self.slope, self.eps,
@@ -230,6 +227,6 @@ class Nanduri2012Model(Model):
     """
 
     def __init__(self, **params):
-        super().__init__(spatial=Nanduri2012Spatial(),
-                         temporal=Nanduri2012Temporal(),
-                         **params)
+        super(Nanduri2012Model, self).__init__(spatial=Nanduri2012Spatial(),
+                                               temporal=Nanduri2012Temporal(),
+                                               **params)

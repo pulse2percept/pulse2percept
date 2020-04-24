@@ -192,8 +192,8 @@ cpdef spatial_fast(const float32[:, ::1] stim,
     n_space = len(idx_start)
     n_bright = n_time * n_space
 
-    # A flattened array containing n_time x n_space entries:
-    bright = np.empty((n_time, n_space), dtype=np.float32)  # Py overhead
+    # A flattened array containing n_space x n_time entries:
+    bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
 
     for idx_space in prange(n_space, schedule='dynamic', nogil=True):
         # Parallel loop over all pixels to be rendered:
@@ -216,11 +216,11 @@ cpdef spatial_fast(const float32[:, ::1] stim,
                         gauss = c_exp(-r2 / (2.0 * rho * rho))
                         sgm_bright = sgm_bright + gauss * axon[idx_ax, 2] * amp
                 if c_abs(sgm_bright) > c_abs(px_bright):
-                    # The strongest activated axon segment determins the
+                    # The strongest activated axon segment determines the
                     # brightness of the pixel:
                     px_bright = sgm_bright
             if c_abs(px_bright) < thresh_percept:
                 px_bright = 0.0
-            bright[idx_time, idx_space] = px_bright  # Py overhead
+            bright[idx_space, idx_time] = px_bright  # Py overhead
     return np.asarray(bright)  # Py overhead
 

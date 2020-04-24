@@ -706,10 +706,11 @@ class ProsthesisSystem(PrettyPrint):
                 stim = data
             elif isinstance(data, dict):
                 # Electrode names already provided by keys:
-                stim = Stimulus(data)
+                stim = Stimulus(data, extrapolate=True)
             else:
                 # Use electrode names as stimulus coordinates:
-                stim = Stimulus(data, electrodes=list(self.earray.keys()))
+                stim = Stimulus(data, electrodes=list(self.earray.keys()),
+                                extrapolate=True)
 
             # Make sure all electrode names are valid:
             for electrode in stim.electrodes:

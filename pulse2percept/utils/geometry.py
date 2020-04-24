@@ -6,27 +6,51 @@ import scipy.stats as spst
 # Using or importing the ABCs from 'collections' instead of from
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
 from collections.abc import Sequence
+from .base import PrettyPrint
 
 
-class GridXY(object):
+class GridXY(PrettyPrint):
+    """2D spatial grid
+
+    This class generates a two-dimensional mesh grid from a range of x, y
+    values and provides an iterator to loop over elements.
+
+    Parameters
+    ----------
+    x_range : tuple
+        (x_min, x_max), includes end point
+    y_range : tuple
+        (y_min, y_max), includes end point
+    step : int, double
+        Step size, same for x and y
+    grid_type : {'rectangular', 'hexagonal'}
+        The grid type
+
+    .. note::
+
+        The grid uses Cartesian indexing (``indexing='xy'`` for NumPy's
+        ``meshgrid`` function). This implies that the grid's shape will be
+        (number of y coordinates) x (number of x coordinates).
+
+    Examples
+    --------
+    You can iterate through a grid as if it were a list:
+
+    >>> grid = GridXY((0, 1), (2, 3))
+    >>> for x, y in grid:
+    ...     print(x, y)
+    0.0 2.0
+    1.0 2.0
+    0.0 3.0
+    1.0 3.0
+
+    """
 
     def __init__(self, x_range, y_range, step=1, grid_type='rectangular'):
-        """2D grid
-
-        This class generates a two-dimensional grid from a range of x, y values
-        and provides an iterator to loop over elements.
-
-        Parameters
-        ----------
-        x_range : tuple
-            (x_min, x_max), includes end point
-        y_range : tuple
-            (y_min, y_max), includes end point
-        step : int, double
-            Step size
-        grid_type : {'rectangular', 'hexagonal'}
-            The grid type
-            """
+        self.x_range = x_range
+        self.y_range = y_range
+        self.step = step
+        self.type = grid_type
         # These could also be their own subclasses:
         if grid_type == 'rectangular':
             self._make_rectangular_grid(x_range, y_range, step)
@@ -34,6 +58,12 @@ class GridXY(object):
             self._make_hexagonal_grid(x_range, y_range, step)
         else:
             raise ValueError("Unknown grid type '%s'." % grid_type)
+
+    def _pprint_params(self):
+        """Return dictionary of class arguments to pretty-print"""
+        return {'x_range': self.x_range, 'y_range': self.y_range,
+                'step': self.step, 'shape': self.shape,
+                'type': self.type}
 
     def _make_rectangular_grid(self, x_range, y_range, step):
         """Creates a rectangular grid"""
@@ -50,15 +80,13 @@ class GridXY(object):
         # Build the grid from `x_range`, `y_range`. If the range is 0, make
         # sure that the number of steps is 1, because linspace(0, 0, num=5)
         # will return a 1x5 array:
-        xdiff = np.diff(x_range)
+        xdiff = np.abs(np.diff(x_range))
         nx = int(np.ceil((xdiff + 1) / step)) if xdiff != 0 else 1
-        ydiff = np.diff(y_range)
+        self._xflat = np.linspace(*x_range, num=nx, dtype=np.float32)
+        ydiff = np.abs(np.diff(y_range))
         ny = int(np.ceil((ydiff + 1) / step)) if ydiff != 0 else 1
-        self.x, self.y = np.meshgrid(
-            np.linspace(*x_range, num=nx, dtype=np.float32),
-            np.linspace(*y_range, num=ny, dtype=np.float32),
-            indexing='xy'
-        )
+        self._yflat = np.linspace(*y_range, num=ny, dtype=np.float32)
+        self.x, self.y = np.meshgrid(self._xflat, self._yflat, indexing='xy')
         self.shape = self.x.shape
         self.reset()
 
@@ -66,18 +94,7 @@ class GridXY(object):
         raise NotImplementedError
 
     def __iter__(self):
-        """Iterator
-
-        You can iterate through the grid as if it were a list:
-
-        >>> grid = GridXY((0, 1), (2, 3))
-        >>> for x, y in grid:
-        ...     print(x, y)
-        0.0 2.0
-        1.0 2.0
-        0.0 3.0
-        1.0 3.0
-        """
+        """Iterator"""
         self.reset()
         return self
 

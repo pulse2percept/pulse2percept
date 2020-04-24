@@ -4,6 +4,28 @@
 Computational Models
 ====================
 
+The :py:mod:`~pulse2percept.models` subpackage provides ...
+
+TODO
+
+ALSO NEED TO COMMENT MODEL
+
+ALSO NEED TO FIX THE TIME VECTOR IN TEMPORALMODEL AND MOVE SOME STUFF TO THE
+BASE CLASS
+
+ALSO NEED TO FIX THE INCONSISTENCY BETWEEN WHAT SPATIAL AND TEMPORAL MODEL
+ARE ACCEPTING
+
+.. warning::
+
+	If a parameter exists in both spatial and temporal models (e.g.,
+	``thresh_percept``), then calling ``model.thresh_percept = 0`` will update
+	both the spatial and temporal model.
+
+	Alternatively, use ``model.spatial.thresh_percept = 0`` or
+	``model.temporal.thresh_percept = 0``.
+
+
 pulse2percept provides the following computational models:
 
 From [Nanduri2012]_:
