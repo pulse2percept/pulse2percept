@@ -3,7 +3,7 @@ import pytest
 import numpy.testing as npt
 
 from pulse2percept.implants import ArgusI
-from pulse2percept.models import (BuildModel, Model, NotBuiltError,
+from pulse2percept.models import (BaseModel, Model, NotBuiltError,
                                   Percept, SpatialModel, TemporalModel)
 from pulse2percept.utils import FreezeError, GridXY
 
@@ -14,47 +14,47 @@ def test_Percept():
     percept = Percept(ndarray, metadata='meta')
     npt.assert_equal(percept.shape, ndarray.shape)
     npt.assert_equal(percept.metadata, 'meta')
-    npt.assert_equal(hasattr(percept, 'x'), True)
-    npt.assert_almost_equal(percept.x, np.arange(ndarray.shape[1]))
-    npt.assert_equal(hasattr(percept, 'y'), True)
-    npt.assert_almost_equal(percept.y, np.arange(ndarray.shape[0]))
-    npt.assert_equal(hasattr(percept, 't'), True)
-    npt.assert_almost_equal(percept.t, np.arange(ndarray.shape[2]))
+    npt.assert_equal(hasattr(percept, 'xdva'), True)
+    npt.assert_almost_equal(percept.xdva, np.arange(ndarray.shape[1]))
+    npt.assert_equal(hasattr(percept, 'ydva'), True)
+    npt.assert_almost_equal(percept.ydva, np.arange(ndarray.shape[0]))
+    npt.assert_equal(hasattr(percept, 'time'), True)
+    npt.assert_almost_equal(percept.time, np.arange(ndarray.shape[2]))
 
     # Specific labels:
     percept = Percept(ndarray, time=0.4)
-    npt.assert_almost_equal(percept.t, [0.4])
+    npt.assert_almost_equal(percept.time, [0.4])
     percept = Percept(ndarray, time=[0.4])
-    npt.assert_almost_equal(percept.t, [0.4])
+    npt.assert_almost_equal(percept.time, [0.4])
 
     # Labels from a grid.
     y_range = (-1, 1)
     x_range = (-2, 2)
     grid = GridXY(x_range, y_range)
     percept = Percept(ndarray, space=grid)
-    npt.assert_almost_equal(percept.x, grid._xflat)
-    npt.assert_almost_equal(percept.y, grid._yflat)
-    npt.assert_almost_equal(percept.t, [0])
+    npt.assert_almost_equal(percept.xdva, grid._xflat)
+    npt.assert_almost_equal(percept.ydva, grid._yflat)
+    npt.assert_almost_equal(percept.time, [0])
     grid = GridXY(x_range, y_range)
     percept = Percept(ndarray, space=grid)
-    npt.assert_almost_equal(percept.x, grid._xflat)
-    npt.assert_almost_equal(percept.y, grid._yflat)
-    npt.assert_almost_equal(percept.t, [0])
+    npt.assert_almost_equal(percept.xdva, grid._xflat)
+    npt.assert_almost_equal(percept.ydva, grid._yflat)
+    npt.assert_almost_equal(percept.time, [0])
 
 
-class ValidBuildModel(BuildModel):
+class ValidBaseModel(BaseModel):
 
     def get_default_params(self):
         return {'a': 1, 'b': 2}
 
 
-def test_BuildModel():
+def test_BaseModel():
     # Test PrettyPrint:
-    model = ValidBuildModel()
-    npt.assert_equal(str(model), 'ValidBuildModel(a=1, b=2)')
+    model = ValidBaseModel()
+    npt.assert_equal(str(model), 'ValidBaseModel(a=1, b=2)')
 
     # Can overwrite default values:
-    model = ValidBuildModel(b=3)
+    model = ValidBaseModel(b=3)
     npt.assert_almost_equal(model.b, 3)
 
     # Cannot add more attributes:
@@ -69,7 +69,7 @@ def test_BuildModel():
 
     # Attributes must be in `get_default_params`:
     with pytest.raises(AttributeError):
-        ValidBuildModel(c=3)
+        ValidBaseModel(c=3)
 
 
 class ValidSpatialModel(SpatialModel):
@@ -124,14 +124,42 @@ def test_SpatialModel():
 
 class ValidTemporalModel(TemporalModel):
 
-    def _predict_temporal(self, stim, t):
+    def _predict_temporal(self, stim_data, t_stim, t_percept):
         if not self.is_built:
             raise NotBuiltError
-        return implant.stim[:, t]
+        return np.zeros((stim_data.shape[0], len(t_percept)), dtype=np.float32)
 
 
 def test_TemporalModel():
-    pass
+    # Build grid:
+    model = ValidTemporalModel()
+    npt.assert_equal(model.is_built, False)
+    model.build()
+    npt.assert_equal(model.is_built, True)
+
+    # Can overwrite default values:
+    model = ValidTemporalModel(dt=2e-5)
+    npt.assert_almost_equal(model.dt, 2e-5)
+    model.build(dt=1.234)
+    npt.assert_almost_equal(model.dt, 1.234)
+
+    # Cannot add more attributes:
+    with pytest.raises(AttributeError):
+        ValidTemporalModel(newparam=1)
+    with pytest.raises(FreezeError):
+        model.newparam = 1
+
+    # Returns Percept object of proper size:
+    npt.assert_equal(model.predict_percept(ArgusI().stim), None)
+    for stim in [np.ones((16, 3)), np.zeros((16, 3)),
+                 {'A1': [1, 2]}, np.ones((16, 2))]:
+        implant = ArgusI(stim=stim)
+        percept = model.predict_percept(implant.stim)
+        npt.assert_equal(isinstance(percept, Percept), True)
+        n_time = 1 if implant.stim.time is None else len(implant.stim.time)
+        npt.assert_equal(percept.shape, (len(implant.stim.electrodes), 1,
+                                         n_time))
+        npt.assert_almost_equal(percept.data, 0)
 
 
 def test_Model():
@@ -262,3 +290,4 @@ def test_Model_predict_percept():
     # A None Model has nothing to build, nothing to perceive:
     model = Model()
     npt.assert_equal(model.predict_percept(ArgusI()), None)
+    npt.assert_equal(model.predict_percept(ArgusI(stim={'A1': 1})), None)

@@ -13,7 +13,7 @@
     *  :ref:`Basic Concepts > Computational Models <topics-models>`
 
 """
-from .base import (Percept, BuildModel, NotBuiltError, Model, SpatialModel,
+from .base import (BaseModel, Model, NotBuiltError, Percept, SpatialModel,
                    TemporalModel)
 from .scoreboard import ScoreboardModel, ScoreboardSpatial
 from .axon_map import AxonMapModel, AxonMapSpatial
@@ -23,7 +23,7 @@ from .nanduri2012 import (Nanduri2012Model, Nanduri2012Spatial,
 __all__ = [
     'AxonMapModel',
     'AxonMapSpatial',
-    'BuildModel',
+    'BaseModel',
     'Model',
     'Nanduri2012Model',
     'Nanduri2012Spatial',

@@ -157,25 +157,16 @@ class Nanduri2012Temporal(TemporalModel):
         base_params.update(params)
         return base_params
 
-    def _predict_temporal(self, stim, t_percept):
-        t_percept = np.array([t_percept]).flatten()
-        # We need to make sure the requested `t_percept` are multiples of `dt`:
-        remainder = np.mod(t_percept, self.dt) / self.dt
-        atol = 1e-3
-        within_atol = (remainder < atol) | (np.abs(1 - remainder) < atol)
-        if not np.all(within_atol):
-            raise ValueError("t=%s are not multiples of dt=%.2e." %
-                             (t_percept[np.logical_not(within_atol)], self.dt))
-
+    def _predict_temporal(self, stim_data, t_stim, t_percept):
         # Beware of floating point errors! 29.999 will be rounded down to 29
         # by np.uint, so we need to np.round it first:
         idx_percept = np.uint32(np.round(t_percept / self.dt))
-        t_percept = idx_percept * self.dt
         if np.unique(idx_percept).size < t_percept.size:
             raise ValueError("All times 't' must be distinct multiples of "
                              "`dt`=%.2e" % self.dt)
-        return temporal_fast(stim.data.astype(np.float32),
-                             stim.time.astype(np.float32),
+        t_percept = idx_percept * self.dt
+        return temporal_fast(stim_data.astype(np.float32),
+                             t_stim.astype(np.float32),
                              idx_percept,
                              self.dt, self.tau1, self.tau2, self.tau3,
                              self.asymptote, self.shift, self.slope, self.eps,

@@ -1,4 +1,5 @@
-"""`BaseModel`"""
+"""`BaseModel`, `Model`, `NotBuiltError`, `Percept`, `SpatialModel`,
+   `TemporalModel`"""
 import sys
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
@@ -12,19 +13,19 @@ from ..utils import PrettyPrint, Frozen, FreezeError, GridXY, parfor, Data
 class Percept(Data):
 
     def __init__(self, data, space=None, time=None, metadata=None):
-        x = None
-        y = None
+        xdva = None
+        ydva = None
         if space is not None:
             if not isinstance(space, GridXY):
                 raise TypeError("'space' must be a GridXY object, not "
                                 "%s." % type(space))
-            x = space._xflat
-            y = space._yflat
+            xdva = space._xflat
+            ydva = space._yflat
         if time is not None:
             time = np.array([time]).flatten()
         self._internal = {
             'data': data,
-            'axes': [('y', y), ('x', x), ('t', time)],
+            'axes': [('ydva', ydva), ('xdva', xdva), ('time', time)],
             'metadata': metadata
         }
         # def f(a1, a2):
@@ -40,8 +41,7 @@ class NotBuiltError(ValueError, AttributeError):
     """
 
 
-# TODO RENAME, THIS CAN BE BASEMODEL
-class BuildModel(Frozen, PrettyPrint, metaclass=ABCMeta):
+class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
     """Abstract base class for all models
 
     Provides the following functionality:
@@ -56,7 +56,7 @@ class BuildModel(Frozen, PrettyPrint, metaclass=ABCMeta):
     """
 
     def __init__(self, **params):
-        """BuildModel constructor
+        """BaseModel constructor
 
         Parameters
         ----------
@@ -130,7 +130,7 @@ class BuildModel(Frozen, PrettyPrint, metaclass=ABCMeta):
             raise AttributeError(err_s)
 
 
-class SpatialModel(BuildModel, metaclass=ABCMeta):
+class SpatialModel(BaseModel, metaclass=ABCMeta):
 
     def __init__(self, **params):
         super().__init__(**params)
@@ -221,7 +221,6 @@ class SpatialModel(BuildModel, metaclass=ABCMeta):
             Customize ``_predict_spatial`` instead.
 
         """
-        print("predict spatial:")
         if not self.is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
@@ -234,15 +233,13 @@ class SpatialModel(BuildModel, metaclass=ABCMeta):
             raise ValueError("Cannot calculate spatial response at times "
                              "t_percept=%s, because stimulus does not "
                              "have a time component." % t_percept)
-        if t_percept is None:
-            t_percept = implant.stim.time
         # Make sure we don't change the user's Stimulus object:
         stim = deepcopy(implant.stim)
         # Make sure to operate on the compressed stim:
-        print("- stim before", stim.shape)
         if not stim.is_compressed:
             stim.compress()
-        print("- stim after", stim.shape)
+        if t_percept is None:
+            t_percept = stim.time
         n_time = 1 if t_percept is None else np.array([t_percept]).size
         if stim.data.size == 0:
             # Stimulus was compressed to zero:
@@ -253,12 +250,11 @@ class SpatialModel(BuildModel, metaclass=ABCMeta):
                 stim = Stimulus(stim[:, t_percept].reshape((-1, n_time)),
                                 electrodes=stim.electrodes, time=t_percept)
             resp = self._predict_spatial(implant.earray, stim)
-        print(resp.shape)
         return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
                        space=self.grid, time=t_percept)
 
 
-class TemporalModel(BuildModel, metaclass=ABCMeta):
+class TemporalModel(BaseModel, metaclass=ABCMeta):
 
     def get_default_params(self):
         params = {
@@ -272,7 +268,7 @@ class TemporalModel(BuildModel, metaclass=ABCMeta):
         return params
 
     @abstractmethod
-    def _predict_temporal(self, stim, t):
+    def _predict_temporal(self, stim_data, t_stim, t_percept):
         """Called from ``predict_percept`` after error checking
 
         MUST RETURN: NxT
@@ -308,24 +304,29 @@ class TemporalModel(BuildModel, metaclass=ABCMeta):
             Customize ``_predict_temporal`` instead.
 
         """
-        print("predict temporal:")
         if not self.is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
         if stim is None:
             # Nothing to see here:
             return None
-        if isinstance(stim, Percept):
-            # Percept has shape (Y, X, T), needs to be (XY, T):
-            _stim = stim.data.reshape((-1, stim.shape[-1]))
-            _space = [len(stim.y), len(stim.x)]
-            _time = stim.t
-        elif isinstance(stim, Stimulus):
+        if isinstance(stim, Stimulus):
             # Make sure we don't change the user's Stimulus object:
             _stim = deepcopy(stim)
-            _space = [len(stim.electrodes)]
+            # THE PROBLEM OCCURS WHEN OUTPUTTING THE RESULT. PERCEPT ASSUMES
+            # A REGULAR XY GRID, WHICH WILL FAIL FOR HEXAGONAL AND FOR STIMULI.
+            # WE WANT TO BE ABLE TO ASSOCIATE A RANDOM XY COORDINATE WITH A
+            # TIMESERIES.
+            _space = [len(stim.electrodes), 1]
             # Make sure to operate on the compressed stim:
             if not _stim.is_compressed:
                 _stim.compress()
+            _time = _stim.time
+            _stim = _stim.data
+        elif isinstance(stim, Percept):
+            # raise NotImplementedError
+            # Percept has shape (Y, X, T), needs to be (XY, T):
+            _stim = stim.data.reshape((-1, stim.shape[-1]))
+            _space = [len(stim.ydva), len(stim.xdva)]
             _time = stim.time
         else:
             raise TypeError(("'stim' must be a Stimulus or Percept object, "
@@ -339,55 +340,26 @@ class TemporalModel(BuildModel, metaclass=ABCMeta):
             # If no time vector is given, output at model time step (and make
             # sure to include the last time point). We always start at zero:
             t_percept = np.arange(0, _time[-1] + self.dt / 2.0, self.dt)
-        if stim.data.size == 0:
+        else:
+            t_percept = np.array([t_percept]).flatten()
+            # We need to make sure the requested `t_percept` are multiples
+            # of `dt`:
+            remainder = np.mod(t_percept, self.dt) / self.dt
+            atol = 1e-3
+            within_atol = (remainder < atol) | (np.abs(1 - remainder) < atol)
+            if not np.all(within_atol):
+                raise ValueError("t=%s are not multiples of dt=%.2e." %
+                                 (t_percept[np.logical_not(within_atol)],
+                                  self.dt))
+        if _stim.size == 0:
+            print("stim size 0")
             # Stimulus was compressed to zero:
-            resp = np.zeros([_space] + [t_percept.size], dtype=np.float32)
+            resp = np.zeros(_space + [t_percept.size], dtype=np.float32)
         else:
             # Calculate the Stimulus at requested time points:
-            resp = self._predict_temporal(stim, t_stim, t_percept)
+            resp = self._predict_temporal(_stim, _time, t_percept)
         return Percept(resp.reshape(_space + [t_percept.size]),
-                       space=self.grid, time=t_percept)
-
-        # A Stimulus could be compressed to zero:
-        if stim.data.size == 0:
-            resp = np.zeros()
-        print("predict temporal:")
-        print("- stim:", stim)
-        print("- time:", t)
-        assert isinstance(stim, Stimulus) or isinstance(stim, Data)
-        # Make sure we don't change the user's Stimulus object:
-        _stim = deepcopy(stim)
-        # Make sure to operate on the compressed stim:
-        print("- stim before", _stim.shape)
-        if isinstance(_stim, Stimulus) and not _stim.is_compressed:
-            _stim.compress()
-        print("- stim after", _stim.shape)
-
-        if t is None:
-            if len(_stim.time) == 1 and _stim.time[0] is None:
-                # FIXME
-                t = np.array([0], dtype=np.float32)
-            else:
-                # If no time vector given, output at model time step (make sure to
-                # include the last time point):
-                t = np.arange(_stim.time[0],
-                              _stim.time[-1] + self.dt / 2.0,
-                              self.dt)
-        else:
-            t = np.array([t]).flatten()
-        print("- t after:", t)
-        # A Stimulus could be compressed to zero:
-        print("- compressed stim:", stim)
-        if stim.data.size == 0:
-            # TODO: Percept object
-            print("stim.data.size==0")
-            resp = np.zeros((np.prod(self.grid.x.shape), t.size),
-                            dtype=np.float32)
-        else:
-            resp = self._predict_temporal(_stim, t)
-        assert resp.ndim == 2
-        assert resp.shape[1] == t.size
-        return Data(resp, axes=[('space', None), ('time', t)])
+                       space=None, time=t_percept)
 
 
 class Model(PrettyPrint):
@@ -406,7 +378,7 @@ class Model(PrettyPrint):
     """
 
     def __init__(self, spatial=None, temporal=None, **params):
-        """A Model provides the glue between a spatial and / or temporal model"""
+        """A Model provides the glue between a spatial and/or temporal model"""
         # Set the spatial model:
         if spatial is not None and not isinstance(spatial, SpatialModel):
             raise TypeError("'spatial' must be a SpatialModel, not "
@@ -433,9 +405,9 @@ class Model(PrettyPrint):
             Checks both spatial and temporal models and:
 
             *  returns the attribute if found.
-            * if the attribute exists in both spatial / temporal model, returns
-               a dictionary ``{'spatial': attr, 'temporal': attr}``.
-            * if the attribtue is not found, raises an AttributeError.
+            *  if the attribute exists in both spatial / temporal model,
+               returns a dictionary ``{'spatial': attr, 'temporal': attr}``.
+            *  if the attribtue is not found, raises an AttributeError.
 
         """
         if sys._getframe(2).f_code.co_name == '__init__':
@@ -542,6 +514,7 @@ class Model(PrettyPrint):
             self.temporal.build()
         return self
 
+    # TODO CHANGE TO T_PERCEPT FOR CONSISTENCY
     def predict_percept(self, implant, t=None):
         """Predict a percept
 
@@ -556,38 +529,48 @@ class Model(PrettyPrint):
         Returns
         -------
         percept: np.ndarray
-            A < X x Y x T > matrix that contains the predicted brightness values
+            A (X, Y, T) matrix that contains the predicted brightness values
             at the specified(X, Y) spatial locations and times T.
         """
-        print("")
-        print("predict_percept:")
-        print("- implant:", implant)
-        print("- time:", t)
         if not self.is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError("'implant' must be a ProsthesisSystem object, not "
                             "%s." % type(implant))
-        if implant.stim is None:
+        if implant.stim is None or (not self.has_space and not self.has_time):
             # Nothing to see here:
             return None
 
-        # Calculate the spatial response at all time points where the stimulus
-        # changes:
-        if self.has_space:
-            resp = self.spatial.predict_percept(implant, t_percept=t)
-        else:
-            resp = implant.stim
-
-        if self.has_time:
-            # Problem: spatial comes first, must agree on format.
-            # Could be no spatial, in which case it should just be the stimulus
-            # (so stim and spatial should have the same format)
+        if self.has_space and self.has_time:
+            # Need to calculate the spatial response at all stimulus points:
+            resp = self.spatial.predict_percept(implant, t_percept=None)
+            print("ST Model spatial resp", resp.shape)
+            # Then pass that to the temporal model:
             resp = self.temporal.predict_percept(resp, t_percept=t)
+            print("ST Model temp resp", resp.shape)
+        elif self.has_space:
+            resp = self.spatial.predict_percept(implant, t_percept=t)
+            print("S Model space resp", resp.shape)
+        elif self.has_time:
+            resp = self.temporal.predict_percept(implant.stim, t_percept=t)
+            print("T Model temp resp", resp.shape)
+        else:
+            raise ValueError("What are you doing???")
 
-        # TODO: Percept object
+        # # Calculate the spatial response at all time points where the stimulus
+        # # changes:
+        # if self.has_space:
+        #     resp = self.spatial.predict_percept(implant, t_percept=t)
+        # else:
+        #     resp = implant.stim
+        # print("predict_percept: resp", resp.shape)
+        # # Calculate the temporal response:
+        # if self.has_time:
+        #     # Problem: spatial comes first, must agree on format.
+        #     # Could be no spatial, in which case it should just be the stimulus
+        #     # (so stim and spatial should have the same format)
+        #     resp = self.temporal.predict_percept(resp, t_percept=t)
         return resp
-        # return resp.data.reshape(list(self.spatial.grid.x.shape) + [-1])
 
     @property
     def has_space(self):

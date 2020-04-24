@@ -19,8 +19,8 @@ def test_ScoreboardSpatial():
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(ArgusI()), None)
 
-    # Zero in = zero out:
     implant = ArgusI(stim=np.zeros(16))
+    # Zero in = zero out:
     percept = model.predict_percept(implant)
     npt.assert_equal(isinstance(percept, Percept), True)
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [1])
@@ -29,11 +29,13 @@ def test_ScoreboardSpatial():
     # Multiple frames are processed independently:
     model = ScoreboardSpatial(engine='serial', rho=200, xystep=5)
     model.build()
-    percept = model.predict_percept(ArgusI(stim={'A1': [1, 2]}))
+    percept = model.predict_percept(ArgusI(stim={'A1': [1, 0], 'B3': [0, 2]}))
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
     pmax = percept.data.max(axis=(0, 1))
-    npt.assert_almost_equal(percept.data[2, 3, :], pmax)
-    npt.assert_almost_equal(pmax[1] / pmax[0], 2.0)
+    npt.assert_almost_equal(percept.data[2, 3, 0], pmax[0])
+    npt.assert_almost_equal(percept.data[2, 3, 1], 0)
+    npt.assert_almost_equal(percept.data[3, 4, 0], 0)
+    npt.assert_almost_equal(percept.data[3, 4, 1], pmax[1])
 
 
 def test_ScoreboardModel():
@@ -89,3 +91,9 @@ def test_ScoreboardModel_predict_percept():
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     npt.assert_equal(np.sum(np.isclose(percept.data, 0.9, rtol=0.1, atol=0.1)),
                      60)
+
+    # Model gives same outcome as Spatial:
+    spatial = ScoreboardSpatial(engine='serial', xystep=1, rho=100)
+    spatial.build()
+    spatial_percept = model.predict_percept(ArgusII(stim=np.ones(60)))
+    npt.assert_almost_equal(percept.data, spatial_percept.data)

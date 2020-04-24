@@ -102,7 +102,7 @@ percept = model.predict_percept(implant, t=t_percept)
 # "brightness of a stimulus" is defined as the maximum brightness value
 # encountered over time:
 
-bright_th = percept.max()
+bright_th = percept.data.max()
 bright_th
 
 ###############################################################################
@@ -115,7 +115,7 @@ fig, ax = plt.subplots(figsize=(12, 5))
 ax.plot(np.arange(0, stim_dur, tsample),
         -0.02 + 0.01 * implant.stim[0, :] / implant.stim.data.max(),
         linewidth=3, label='pulse')
-ax.plot(t_percept, percept[0, 0, :], linewidth=3, label='percept')
+ax.plot(t_percept, percept.data[0, 0, :], linewidth=3, label='percept')
 ax.plot([0, stim_dur], [bright_th, bright_th], 'k--', label='max brightness')
 ax.plot([0, stim_dur], [0, 0], 'k')
 
@@ -159,7 +159,7 @@ for amp in amps:
     percept = model.predict_percept(implant, t=t_percept)
     # 3. Find the largest value in percept, this will be the predicted
     # brightness:
-    bright_pred = percept.max()
+    bright_pred = percept.data.max()
     # 4. Append this value to `bright_amp`:
     bright_amp.append(bright_pred)
 
@@ -182,7 +182,7 @@ for freq in freqs:
     percept = model.predict_percept(implant, t=t_percept)
     # 3. Find the largest value in percept, this will be the predicted
     # brightness:
-    bright_pred = percept.max()
+    bright_pred = percept.data.max()
     # 4. Append this value to `bright_amp`:
     bright_freq.append(bright_pred)
 
@@ -202,99 +202,101 @@ ax[1].set_xlabel('frequency (Hz)')
 
 fig.tight_layout()
 
-# ###############################################################################
-# # Phosphene size as a function of amplitude/frequency
-# # ---------------------------------------------------
-# #
-# # The paper also reports that phosphene size is affected differently by
-# # amplitude vs. frequency modulation.
-# #
-# # To introduce space into the model, we need to re-instantiate the model and
-# # this time provide a range of (x,y) values to simulate. These values are
-# # specified in degrees of visual angle (dva). They are sampled at ``xydva``
-# # dva:
+###############################################################################
+# Phosphene size as a function of amplitude/frequency
+# ---------------------------------------------------
+#
+# The paper also reports that phosphene size is affected differently by
+# amplitude vs. frequency modulation.
+#
+# To introduce space into the model, we need to re-instantiate the model and
+# this time provide a range of (x,y) values to simulate. These values are
+# specified in degrees of visual angle (dva). They are sampled at ``xydva``
+# dva:
 
-# model = Nanduri2012Model(xystep=0.5, xrange=(-4, 4), yrange=(-4, 4))
-# model.build()
+model = Nanduri2012Model(xystep=0.5, xrange=(-4, 4), yrange=(-4, 4))
+model.build()
 
-# ###############################################################################
-# # We will again apply the model to a whole range of amplitude and frequency
-# # values taken directly from the paper:
+###############################################################################
+# We will again apply the model to a whole range of amplitude and frequency
+# values taken directly from the paper:
 
-# # Use the amplitude values from the paper:
-# amp_factors = [1, 1.25, 1.5, 2, 4, 6]
+# Use the amplitude values from the paper:
+amp_factors = [1, 1.25, 1.5, 2, 4, 6]
 
-# # Initialize an empty list that will contain the brightest frames:
-# frames_amp = []
+# Initialize an empty list that will contain the brightest frames:
+frames_amp = []
 
-# for amp_f in amp_factors:
-#     # For each value in the `amp_factors` vector, now stored as `amp_f`, do:
-#     # 1. Generate a pulse train with amplitude `amp_f` * `amp_th`, frequency
-#     #    20Hz, 0.5s duration, pulse duration `pdur`, and interphase gap `pdur`:
-#     implant.stim = PulseTrain(tsample, amp=amp_f * amp_th, freq=20,
-#                               dur=stim_dur, pulse_dur=pdur,
-#                               interphase_dur=pdur)
-#     # 2. Run the temporal model using the 'GCL' layer:
-#     percept = model.predict_percept(implant, t=t_percept)
-#     # 3. Find the brightest frame:
-#     brightest_frame = percept[..., np.argmax(np.max(percept, axis=(0, 1)))]
-#     # 4. Append the `data` container of that frame to `frames_amp`:
-#     frames_amp.append(brightest_frame)
+for amp_f in amp_factors:
+    # For each value in the `amp_factors` vector, now stored as `amp_f`, do:
+    # 1. Generate a pulse train with amplitude `amp_f` * `amp_th`, frequency
+    #    20Hz, 0.5s duration, pulse duration `pdur`, and interphase gap `pdur`:
+    implant.stim = PulseTrain(tsample, amp=amp_f * amp_th, freq=20,
+                              dur=stim_dur, pulse_dur=pdur,
+                              interphase_dur=pdur)
+    # 2. Run the temporal model using the 'GCL' layer:
+    percept = model.predict_percept(implant, t=t_percept)
+    # 3. Find the brightest frame:
+    idx_brightest = np.argmax(np.max(percept.data, axis=(0, 1)))
+    brightest_frame = percept.data[..., idx_brightest]
+    # 4. Append the `data` container of that frame to `frames_amp`:
+    frames_amp.append(brightest_frame)
 
-# # Use the amplitude values from the paper:
-# freqs = [40.0 / 3, 20, 2.0 * 40 / 3, 40, 80, 120]
+# Use the amplitude values from the paper:
+freqs = [40.0 / 3, 20, 2.0 * 40 / 3, 40, 80, 120]
 
-# # Initialize an empty list that will contain the brightest frames:
-# frames_freq = []
+# Initialize an empty list that will contain the brightest frames:
+frames_freq = []
 
-# for freq in freqs:
-#     # For each value in the `freqs` vector, now stored as `freq`, do:
-#     # 1. Generate a pulse train with amplitude 1.25 * `amp_th`, frequency
-#     #    `freq`, 0.5s duration, pulse duration `pdur`, and interphase gap
-#     #    `pdur`:
-#     implant.stim = PulseTrain(tsample, amp=1.25 * amp_th, freq=freq,
-#                               dur=stim_dur, pulse_dur=pdur,
-#                               interphase_dur=pdur)
-#     # 2. Run the temporal model using the 'GCL' layer:
-#     percept = model.predict_percept(implant, t=t_percept)
-#     # 3. Find the brightest frame:
-#     brightest_frame = percept[..., np.argmax(np.max(percept, axis=(0, 1)))]
-#     # 4. Append the `data` container of that frame to `frames_amp`:
-#     frames_freq.append(brightest_frame)
+for freq in freqs:
+    # For each value in the `freqs` vector, now stored as `freq`, do:
+    # 1. Generate a pulse train with amplitude 1.25 * `amp_th`, frequency
+    #    `freq`, 0.5s duration, pulse duration `pdur`, and interphase gap
+    #    `pdur`:
+    implant.stim = PulseTrain(tsample, amp=1.25 * amp_th, freq=freq,
+                              dur=stim_dur, pulse_dur=pdur,
+                              interphase_dur=pdur)
+    # 2. Run the temporal model using the 'GCL' layer:
+    percept = model.predict_percept(implant, t=t_percept)
+    # 3. Find the brightest frame:
+    idx_brightest = np.argmax(np.max(percept.data, axis=(0, 1)))
+    brightest_frame = percept.data[..., idx_brightest]
+    # 4. Append the `data` container of that frame to `frames_amp`:
+    frames_freq.append(brightest_frame)
 
-# ###############################################################################
-# # This allows us to reproduce Fig. 7 of [Nanduri2012]_:
+###############################################################################
+# This allows us to reproduce Fig. 7 of [Nanduri2012]_:
 
-# fig, axes = plt.subplots(nrows=2, ncols=len(amp_factors), figsize=(16, 6))
+fig, axes = plt.subplots(nrows=2, ncols=len(amp_factors), figsize=(16, 6))
 
-# for ax, amp, frame in zip(axes[0], amp_factors, frames_amp):
-#     ax.imshow(frame, vmax=0.3, cmap='gray')
-#     ax.set_title('%.2g xTh / 20 Hz' % amp, fontsize=16)
-#     ax.set_xticks([])
-#     ax.set_yticks([])
-# axes[0][0].set_ylabel('amplitude\nmodulation')
+for ax, amp, frame in zip(axes[0], amp_factors, frames_amp):
+    ax.imshow(frame, vmin=0, vmax=0.3, cmap='gray')
+    ax.set_title('%.2g xTh / 20 Hz' % amp, fontsize=16)
+    ax.set_xticks([])
+    ax.set_yticks([])
+axes[0][0].set_ylabel('amplitude\nmodulation')
 
-# for ax, freq, frame in zip(axes[1], freqs, frames_freq):
-#     ax.imshow(frame, vmax=0.3, cmap='gray')
-#     ax.set_title('1.25xTh / %d Hz' % freq, fontsize=16)
-#     ax.set_xticks([])
-#     ax.set_yticks([])
-# axes[1][0].set_ylabel('frequency\nmodulation')
+for ax, freq, frame in zip(axes[1], freqs, frames_freq):
+    ax.imshow(frame, vmin=0, vmax=0.3, cmap='gray')
+    ax.set_title('1.25xTh / %d Hz' % freq, fontsize=16)
+    ax.set_xticks([])
+    ax.set_yticks([])
+axes[1][0].set_ylabel('frequency\nmodulation')
 
-# ###############################################################################
-# # Phosphene size as a function of brightness
-# # ------------------------------------------
-# #
-# # Lastly, the above data can also be visualized as a function of brightness to
-# # highlight the difference between frequency and amplitude modulation (see
-# # Fig.8 of [Nanduri2012]_):
+###############################################################################
+# Phosphene size as a function of brightness
+# ------------------------------------------
+#
+# Lastly, the above data can also be visualized as a function of brightness to
+# highlight the difference between frequency and amplitude modulation (see
+# Fig.8 of [Nanduri2012]_):
 
-# plt.plot([np.max(frame) for frame in frames_amp],
-#          [np.sum(frame >= bright_th) for frame in frames_amp],
-#          'o-', label='amplitude modulation')
-# plt.plot([np.max(frame) for frame in frames_freq],
-#          [np.sum(frame >= bright_th) for frame in frames_freq],
-#          'o-', label='frequency modulation')
-# plt.xlabel('brightness (a.u.)')
-# plt.ylabel('area (# pixels)')
-# plt.legend()
+plt.plot([np.max(frame) for frame in frames_amp],
+         [np.sum(frame >= bright_th) for frame in frames_amp],
+         'o-', label='amplitude modulation')
+plt.plot([np.max(frame) for frame in frames_freq],
+         [np.sum(frame >= bright_th) for frame in frames_freq],
+         'o-', label='frequency modulation')
+plt.xlabel('brightness (a.u.)')
+plt.ylabel('area (# pixels)')
+plt.legend()

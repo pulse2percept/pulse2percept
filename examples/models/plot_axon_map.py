@@ -169,7 +169,7 @@ percept = model.predict_percept(implant)
 # The percept can be plotted using Matplotlib:
 
 import matplotlib.pyplot as plt
-plt.imshow(percept[..., 0], cmap='gray')
+plt.imshow(percept.data[..., 0], cmap='gray')
 plt.xticks(np.linspace(0, percept.shape[1], num=5),
            np.linspace(*model.spatial.xrange, num=5))
 plt.xlabel('x (dva)')
@@ -191,7 +191,7 @@ plot_implant_on_axon_map(implant)
 
 implant.stim = np.ones(60)
 percept = model.predict_percept(implant)
-plt.imshow(percept[..., 0], cmap='gray')
+plt.imshow(percept.data[..., 0], cmap='gray')
 plt.xticks(np.linspace(0, percept.shape[1], num=5),
            np.linspace(*model.spatial.xrange, num=5))
 plt.xlabel('x (dva)')
