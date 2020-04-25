@@ -73,7 +73,7 @@ release can be installed with pip:
 
 .. code-block:: bash
 
-    pip3 install -U pulse2percept
+    pip3 install pulse2percept
 
 You can also install a specific version:
 

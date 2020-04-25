@@ -125,6 +125,29 @@ The same is true for a dictionary of pulse trains:
     # Sending the same pulse train to three specific electrodes:
     Stimulus({'A1': pt, 'B1': pt, 'C1': pt})
 
+Plotting a stimulus
+-------------------
+
+The easiest way to visualize a stimulus is to use the built-in
+:py:meth:`~pulse2percept.stimuli.Stimulus.plot` method:
+
+.. ipython:: python
+
+    from pulse2percept.stimuli import Stimulus, PulseTrain
+
+    # Create a multi-electrode stimulus
+    stim = Stimulus({'E%d' % i: PulseTrain(1e-6, freq=i, dur=1)
+                     for i in np.arange(5)})
+    # Plot it:
+    stim.plot()
+
+You can also select individual electrodes, or specify a range of time points:
+
+.. ipython:: python
+
+    # Plot two electrodes with available time points in the range t=[0, 0.5]:
+    stim.plot(electrodes=['E2', 'E4'], time=(0, 0.5))
+
 Assigning new coordinates to an existing stimulus
 -------------------------------------------------
 
