@@ -352,7 +352,6 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                                  (t_percept[np.logical_not(within_atol)],
                                   self.dt))
         if _stim.size == 0:
-            print("stim size 0")
             # Stimulus was compressed to zero:
             resp = np.zeros(_space + [t_percept.size], dtype=np.float32)
         else:
@@ -457,13 +456,11 @@ class Model(PrettyPrint):
         found = False
         try:
             self.spatial.__setattr__(name, value)
-            print("SET spatial", name, value)
             found = True
         except (AttributeError, FreezeError):
             pass
         try:
             self.temporal.__setattr__(name, value)
-            print("SET temporal", name, value)
             found = True
         except (AttributeError, FreezeError):
             pass
@@ -514,8 +511,7 @@ class Model(PrettyPrint):
             self.temporal.build()
         return self
 
-    # TODO CHANGE TO T_PERCEPT FOR CONSISTENCY
-    def predict_percept(self, implant, t=None):
+    def predict_percept(self, implant, t_percept=None):
         """Predict a percept
 
         Parameters
@@ -523,7 +519,7 @@ class Model(PrettyPrint):
         implant: : py: class: `~pulse2percept.implants.ProsthesisSystem`
             Stimulus can be passed via
             : py: meth: `~pulse2percept.implants.ProsthesisSystem.stim`.
-        t: float or list of floats
+        t_percept: float or list of floats
             The time points at which to output a percept(seconds).
 
         Returns
@@ -542,34 +538,17 @@ class Model(PrettyPrint):
             return None
 
         if self.has_space and self.has_time:
-            # Need to calculate the spatial response at all stimulus points:
+            # Need to calculate the spatial response at all stimulus points
+            # (i.e., whenever the stimulus changes):
             resp = self.spatial.predict_percept(implant, t_percept=None)
-            print("ST Model spatial resp", resp.shape)
-            # Then pass that to the temporal model:
-            resp = self.temporal.predict_percept(resp, t_percept=t)
-            print("ST Model temp resp", resp.shape)
+            # Then pass that to the temporal model, which will output at all
+            # `t_percept` time steps:
+            resp = self.temporal.predict_percept(resp, t_percept=t_percept)
         elif self.has_space:
-            resp = self.spatial.predict_percept(implant, t_percept=t)
-            print("S Model space resp", resp.shape)
+            resp = self.spatial.predict_percept(implant, t_percept=t_percept)
         elif self.has_time:
-            resp = self.temporal.predict_percept(implant.stim, t_percept=t)
-            print("T Model temp resp", resp.shape)
-        else:
-            raise ValueError("What are you doing???")
-
-        # # Calculate the spatial response at all time points where the stimulus
-        # # changes:
-        # if self.has_space:
-        #     resp = self.spatial.predict_percept(implant, t_percept=t)
-        # else:
-        #     resp = implant.stim
-        # print("predict_percept: resp", resp.shape)
-        # # Calculate the temporal response:
-        # if self.has_time:
-        #     # Problem: spatial comes first, must agree on format.
-        #     # Could be no spatial, in which case it should just be the stimulus
-        #     # (so stim and spatial should have the same format)
-        #     resp = self.temporal.predict_percept(resp, t_percept=t)
+            resp = self.temporal.predict_percept(implant.stim,
+                                                 t_percept=t_percept)
         return resp
 
     @property

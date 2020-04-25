@@ -1,5 +1,5 @@
 """`Stimulus`"""
-from sys import platform
+from sys import platform, _getframe
 import matplotlib as mpl
 if platform == "darwin":  # OS X
     mpl.use('TkAgg')
@@ -679,7 +679,7 @@ class Stimulus(PrettyPrint):
         """This flag can only be set in ``compress``"""
         # getframe(0) is 'is_compressed'
         # getframe(1) is the one we are looking for:
-        f_caller = sys._getframe(1).f_code.co_name
+        f_caller = _getframe(1).f_code.co_name
         if f_caller in ["__init__", "compress"]:
             self._is_compressed = val
         else:

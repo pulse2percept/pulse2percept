@@ -370,11 +370,12 @@ class AxonMapModel(Model):
         super(AxonMapModel, self).__init__(spatial=AxonMapSpatial(),
                                            temporal=None, **params)
 
-    def predict_percept(self, implant, t=None):
+    def predict_percept(self, implant, t_percept=None):
         # Need to add an additional check before running the base method:
         if isinstance(implant, ProsthesisSystem):
             if implant.eye != self.spatial.eye:
                 raise ValueError(("The implant is in %s but the model was "
                                   "built for %s.") % (implant.eye,
                                                       self.spatial.eye))
-        return super(AxonMapModel, self).predict_percept(implant, t=t)
+        return super(AxonMapModel, self).predict_percept(implant,
+                                                         t_percept=t_percept)

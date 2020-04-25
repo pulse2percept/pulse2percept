@@ -23,12 +23,12 @@ at 30uA that lasts for a second:
 
 """
 # sphinx_gallery_thumbnail_number = 4
-from pulse2percept.stimuli import PulseTrain
+from pulse2percept.stimuli import PulseTrain, Stimulus
 tsample = 5e-6  # sampling time step (seconds)
 stim_dur = 1.0  # stimulus duration (seconds)
 amp_th = 30  # threshold current (uA)
-stim = PulseTrain(tsample, freq=20, amp=amp_th,
-                  dur=stim_dur, pulse_dur=0.45 / 1000)
+stim = Stimulus(PulseTrain(tsample, freq=20, amp=amp_th,
+                           dur=stim_dur, pulse_dur=0.45 / 1000))
 
 # Configure Matplotlib:
 import matplotlib.pyplot as plt
@@ -36,11 +36,9 @@ plt.style.use('ggplot')
 from matplotlib import rc
 rc('font', size=12)
 
-# Plot the stimulus:
-import numpy as np
-plt.plot(np.arange(0, tsample * 12000, tsample), stim.data[:12000])
-plt.xlabel('time (s)')
-plt.ylabel('current amplitude (uA)')
+# Plot the stimulus in the range t=[0, 0.06]:
+stim.plot(time=(0, 0.06))
+plt.tight_layout()
 
 ###############################################################################
 # Creating an implant
@@ -86,20 +84,28 @@ model = Nanduri2012Model(xrange=(0, 0), yrange=(0, 0))
 model.build()
 
 ###############################################################################
+# .. note::
+#
+#     You can also directly instantiate
+#     :py:class:`~pulse2percept.models.Nanduri2012Temporal` and pass a stimulus
+#     to it. However, please note that there might be subtle differences; e.g.,
+#     :py:class:`~pulse2percept.models.Nanduri2012Model` will pass the stimulus
+#     through the spatial model first.
+#
 # After building the model, we are ready to predict the percept.
-# We also need to specify the time points at which to calculate the percept.
-# We can choose a specific point in time, or pass a list of time points:
-t_percept = np.arange(0, stim_dur, 0.005)
-percept = model.predict_percept(implant, t=t_percept)
+#
+# The input to the model is an implant containing a stimulus (usually a pulse
+# train), which is processed in time by a number of linear filtering steps as
+# well as a stationary nonlinearity (a sigmoid).
+
+percept = model.predict_percept(implant)
 
 ###############################################################################
-# The input to the model is a stimulus (usually a pulse train), which is
-# processed by a number of linear filtering steps as well as a stationary
-# nonlinearity (a sigmoid).
+# The output of the model is a :py:class:`~pulse2percept.models.Percept`
+# object that contains a time series with the predicted brightness of the
+# visual percept at every time step.
 #
-# The output of the model is a time series containing the predicted brightness
-# of the visual percept at every time step. In [Nanduri2012]_, the perceived
-# "brightness of a stimulus" is defined as the maximum brightness value
+# "Brightness of a stimulus" is defined as the maximum brightness value
 # encountered over time:
 
 bright_th = percept.data.max()
@@ -111,11 +117,12 @@ bright_th
 # then drop off slowly (over the time course of seconds).
 # This is consistent with behavioral reports from Argus II users.
 
+import numpy as np
 fig, ax = plt.subplots(figsize=(12, 5))
 ax.plot(np.arange(0, stim_dur, tsample),
         -0.02 + 0.01 * implant.stim[0, :] / implant.stim.data.max(),
         linewidth=3, label='pulse')
-ax.plot(t_percept, percept.data[0, 0, :], linewidth=3, label='percept')
+ax.plot(percept.time, percept.data[0, 0, :], linewidth=3, label='percept')
 ax.plot([0, stim_dur], [bright_th, bright_th], 'k--', label='max brightness')
 ax.plot([0, stim_dur], [0, 0], 'k')
 
@@ -156,7 +163,7 @@ for amp in amps:
     implant.stim = PulseTrain(tsample, amp=amp, freq=20, dur=stim_dur,
                               pulse_dur=pdur, interphase_dur=pdur)
     # 2. Run the temporal model:
-    percept = model.predict_percept(implant, t=t_percept)
+    percept = model.predict_percept(implant)
     # 3. Find the largest value in percept, this will be the predicted
     # brightness:
     bright_pred = percept.data.max()
@@ -179,7 +186,7 @@ for freq in freqs:
     implant.stim = PulseTrain(tsample, amp=20, freq=freq, dur=stim_dur,
                               pulse_dur=pdur, interphase_dur=pdur)
     # 2. Run the temporal model
-    percept = model.predict_percept(implant, t=t_percept)
+    percept = model.predict_percept(implant)
     # 3. Find the largest value in percept, this will be the predicted
     # brightness:
     bright_pred = percept.data.max()
@@ -224,6 +231,9 @@ model.build()
 # Use the amplitude values from the paper:
 amp_factors = [1, 1.25, 1.5, 2, 4, 6]
 
+# Output brightness in 1ms time steps:
+t_percept = np.arange(0, stim_dur, 1e-3)
+
 # Initialize an empty list that will contain the brightest frames:
 frames_amp = []
 
@@ -234,8 +244,8 @@ for amp_f in amp_factors:
     implant.stim = PulseTrain(tsample, amp=amp_f * amp_th, freq=20,
                               dur=stim_dur, pulse_dur=pdur,
                               interphase_dur=pdur)
-    # 2. Run the temporal model using the 'GCL' layer:
-    percept = model.predict_percept(implant, t=t_percept)
+    # 2. Run the temporal model:
+    percept = model.predict_percept(implant, t_percept=t_percept)
     # 3. Find the brightest frame:
     idx_brightest = np.argmax(np.max(percept.data, axis=(0, 1)))
     brightest_frame = percept.data[..., idx_brightest]
@@ -256,8 +266,8 @@ for freq in freqs:
     implant.stim = PulseTrain(tsample, amp=1.25 * amp_th, freq=freq,
                               dur=stim_dur, pulse_dur=pdur,
                               interphase_dur=pdur)
-    # 2. Run the temporal model using the 'GCL' layer:
-    percept = model.predict_percept(implant, t=t_percept)
+    # 2. Run the temporal model:
+    percept = model.predict_percept(implant, t_percept=t_percept)
     # 3. Find the brightest frame:
     idx_brightest = np.argmax(np.max(percept.data, axis=(0, 1)))
     brightest_frame = percept.data[..., idx_brightest]

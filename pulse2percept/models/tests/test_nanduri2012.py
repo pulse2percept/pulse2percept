@@ -152,7 +152,7 @@ def test_Nanduri2012Model_predict_percept():
     implant = ProsthesisSystem(DiskElectrode(0, 0, 0, 100))
     implant.stim = PulseTrain(5e-6)
     t_percept = [0, 0.01, 1.0]
-    percept = model.predict_percept(implant, t=t_percept)
+    percept = model.predict_percept(implant, t_percept=t_percept)
     temp = Nanduri2012Temporal().build()
     temp = temp.predict_percept(implant.stim, t_percept=t_percept)
     npt.assert_almost_equal(percept.data, temp.data, decimal=4)
@@ -174,27 +174,29 @@ def test_Nanduri2012Model_predict_percept():
     implant.stim = PulseTrain(tsample)
     model.temporal.dt = 0.1
     with pytest.raises(ValueError):
-        model.predict_percept(implant, t=[0.01])
+        model.predict_percept(implant, t_percept=[0.01])
     with pytest.raises(ValueError):
-        model.predict_percept(implant, t=[0.01, 1.0])
+        model.predict_percept(implant, t_percept=[0.01, 1.0])
     with pytest.raises(ValueError):
-        model.predict_percept(implant, t=np.arange(0, 0.5, 0.1001))
-    model.predict_percept(implant, t=np.arange(0, 0.5, 0.1000001))
+        model.predict_percept(implant, t_percept=np.arange(0, 0.5, 0.1001))
+    model.predict_percept(implant, t_percept=np.arange(0, 0.5, 0.1000001))
 
     # Can't request the same time more than once (this would break the Cython
     # loop, because `idx_frame` is incremented after a write; also doesn't
     # make much sense):
     with pytest.raises(ValueError):
-        model.predict_percept(implant, t=[0.2, 0.2])
+        model.predict_percept(implant, t_percept=[0.2, 0.2])
 
     # It's ok to extrapolate beyond `stim` if the `extrapolate` flag is set:
     model.temporal.dt = 1e-5
-    npt.assert_almost_equal(model.predict_percept(implant, t=10).data, 0)
+    npt.assert_almost_equal(model.predict_percept(implant, t_percept=10).data,
+                            0)
 
     # Output shape must be determined by t_percept:
-    print(model.predict_percept(implant, t=0).shape)
-    npt.assert_equal(model.predict_percept(implant, t=0).shape, (1, 1, 1))
-    npt.assert_equal(model.predict_percept(implant, t=[0, 1]).shape, (1, 1, 2))
+    npt.assert_equal(model.predict_percept(implant, t_percept=0).shape,
+                     (1, 1, 1))
+    npt.assert_equal(model.predict_percept(implant, t_percept=[0, 1]).shape,
+                     (1, 1, 2))
 
     # Brightness vs. size (use values from Nanduri paper):
     model = Nanduri2012Model(xystep=0.5, xrange=(-4, 4), yrange=(-4, 4))
@@ -212,7 +214,7 @@ def test_Nanduri2012Model_predict_percept():
         implant.stim = PulseTrain(tsample, amp=amp_f * amp_th, freq=20,
                                   dur=stim_dur, pulse_dur=pdur,
                                   interphase_dur=pdur)
-        percept = model.predict_percept(implant, t=t_percept)
+        percept = model.predict_percept(implant, t_percept=t_percept)
         idx_frame = np.argmax(np.max(percept.data, axis=(0, 1)))
         brightest_frame = percept.data[..., idx_frame]
         frames_amp.append(brightest_frame)
@@ -223,7 +225,7 @@ def test_Nanduri2012Model_predict_percept():
         implant.stim = PulseTrain(tsample, amp=1.25 * amp_th, freq=freq,
                                   dur=stim_dur, pulse_dur=pdur,
                                   interphase_dur=pdur)
-        percept = model.predict_percept(implant, t=t_percept)
+        percept = model.predict_percept(implant, t_percept=t_percept)
         idx_frame = np.argmax(np.max(percept.data, axis=(0, 1)))
         brightest_frame = percept.data[..., idx_frame]
         frames_freq.append(brightest_frame)

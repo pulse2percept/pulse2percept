@@ -177,9 +177,6 @@ cpdef temporal_fast(const float32[:, ::1] stim,
                 if t_sim >= t_stim[idx_stim + 1]:
                     idx_stim = idx_stim + 1
             amp = stim[idx_space, idx_stim]
-            # with gil:
-            #     print(idx_sim, "space:", idx_space, "stim:", idx_stim,
-            #         "amp:", amp)
             # Fast ganglion cell response:
             r1 = r1 + dt * (-amp - r1) / tau1  # += in threads is a reduction
             # Charge accumulation:

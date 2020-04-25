@@ -155,10 +155,8 @@ def test_TemporalModel():
                  {'A1': [1, 2]}, np.ones((16, 2))]:
         implant = ArgusI(stim=stim)
         percept = model.predict_percept(implant.stim)
-        npt.assert_equal(isinstance(percept, Percept), True)
         n_time = 1 if implant.stim.time is None else len(implant.stim.time)
-        npt.assert_equal(percept.shape, (len(implant.stim.electrodes), 1,
-                                         n_time))
+        npt.assert_equal(percept.shape, (implant.stim.shape[0], 1, n_time))
         npt.assert_almost_equal(percept.data, 0)
 
 
@@ -291,3 +289,5 @@ def test_Model_predict_percept():
     model = Model()
     npt.assert_equal(model.predict_percept(ArgusI()), None)
     npt.assert_equal(model.predict_percept(ArgusI(stim={'A1': 1})), None)
+    npt.assert_equal(model.predict_percept(ArgusI(stim={'A1': 1}),
+                                           t_percept=[0, 1]), None)
