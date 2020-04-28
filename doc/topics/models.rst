@@ -32,7 +32,7 @@ Reference         Model                      Type
 .. note::
 
     Spatial and temporal models can be mix-and-matched to create new models.
-    See `Creating your own model <>`.
+    See `Creating your own model <topics-models-building-your-own>`.
 
 Basic usage
 -----------
@@ -50,7 +50,7 @@ Here is how to run the :py:class:`~pulse2percept.models.ScoreboardModel`:
 
 .. ipython:: python
 
-	# Initialize the model:
+    # Initialize the model:
     from pulse2percept.models import ScoreboardModel
     model = ScoreboardModel(rho=200)
 
@@ -62,9 +62,7 @@ Here is how to run the :py:class:`~pulse2percept.models.ScoreboardModel`:
     from pulse2percept.implants import ArgusII
     percept = model.predict_percept(ArgusII(stim={'A8': 30}))
 
-.. seealso::
-
-    Gallery Examples
+.. _topics-models-building-your-own:
 
 Building your own model
 -----------------------
@@ -74,13 +72,14 @@ will.
 
 For example, to create a model that combines the scoreboard model
 described in [Beyeler2019]_ with the temporal model cascade described in
-[Nanduri2012]_
+[Nanduri2012]_, use the following:
 
 .. code-block:: python
 
-	# Instantiate:
+    # Instantiate:
     model = Model(spatial=ScoreboardSpatial(),
                   temporal=Nanduri2012Temporal())
+
     # Build:
     model.build()
     # etc.
@@ -141,17 +140,20 @@ In general, you will want to work with :py:class:`~pulse2percept.models.Model`
 objects, which provide all the necessary glue between a spatial and/or a 
 temporal model component. Objects are named accordingly:
 
-*  **\*Model** is based on :py:class:`~pulse2percept.models.Model`
-*  **\*Spatial** is based on :py:class:`~pulse2percept.models.SpatialModel`
-*  **\*Temporal** is based on :py:class:`~pulse2percept.models.TemporalModel`
+*  An object named **\*Model** is based on
+   :py:class:`~pulse2percept.models.Model`
+*  An object named **\*Spatial** is based on
+   :py:class:`~pulse2percept.models.SpatialModel`
+*  An object named **\*Temporal** is based on 
+   :py:class:`~pulse2percept.models.TemporalModel`
 
 However, nobody stops you from instantiating a spatial or temporal model
 directly:
 
 .. code-block::
 
-	# Option 1 (preferred): Work with `Model` objects:
-	from pulse2percept.models import Model, Nanduri2012Temporal
+    # Option 1 (preferred): Work with `Model` objects:
+    from pulse2percept.models import Model, Nanduri2012Temporal
     model = Model(temporal=Nanduri2012Temporal())
     model.build()
     model.predict_percept(implant)
@@ -161,14 +163,19 @@ directly:
     model.build()
     model.predict_percept(implant.stim)
 
-The differences between the two are subtle.
-As you can see from the example above, a temporal model will expect a
-:py:class:`~pulse2percept.stimuli.Stimulus` object in its
-:py:meth:`~pulse2percept.models.TemporalModel.predict_percept` method
-(because it has no notion of space), whereas the stand-alone model will expect
-a :py:class:`~pulse2percept.implants.ProsthesisSystem` object (which provides
-a notion of space and itself contains a
-:py:class:`~pulse2percept.stimuli.Stimulus`).
+The differences between the two are subtle:
+
+*  As you can see from the example above, a temporal model will expect a
+   :py:class:`~pulse2percept.stimuli.Stimulus` object in its
+   :py:meth:`~pulse2percept.models.TemporalModel.predict_percept` method
+   (because it has no notion of space).
+   It will return a 2-D NumPy array (space x time).
+
+*  In contrast, the stand-alone model will expect a
+   :py:class:`~pulse2percept.implants.ProsthesisSystem` object (which provides
+   a notion of space and itself contains a
+   :py:class:`~pulse2percept.stimuli.Stimulus`), and will return a
+   :py:class:`~pulse2percept.models.Percept` object.
 
 Getting and setting parameters
 ------------------------------
@@ -180,15 +187,17 @@ Consider the following model:
 
 .. ipython:: python
 
-	from pulse2percept.models import (Model, ScoreboardSpatial,
-	                                  Nanduri2012Temporal)
+    from pulse2percept.models import (Model, ScoreboardSpatial,
+                                      Nanduri2012Temporal)
     model = Model(spatial=ScoreboardSpatial(),
                   temporal=Nanduri2012Temporal())
 
-    # Set `rho` param of the scoreboard model:
+    # Set `rho` param of the scoreboard model (works even though it's really
+    # `model.spatial.rho`):
     model.rho = 123
     
-    # Print the simulation time step of the Nanduri model:
+    # Print the simulation time step of the Nanduri model (works even though
+    # it's really `model.temporal.dt`):
     print(model.dt)
 
 Although ``rho`` exists only in the scoreboard model, and ``dt`` exists only
@@ -197,10 +206,10 @@ main model.
 
 .. warning::
 
-	If a parameter exists in both spatial and temporal models (e.g.,
-	``thresh_percept``), then calling ``model.thresh_percept = 0`` will update
-	both the spatial and temporal model.
+    If a parameter exists in both spatial and temporal models (e.g.,
+    ``thresh_percept``), then calling ``model.thresh_percept = 0`` will update
+    both the spatial and temporal model.
 
-	Alternatively, use ``model.spatial.thresh_percept = 0`` or
-	``model.temporal.thresh_percept = 0``.
+    Alternatively, use ``model.spatial.thresh_percept = 0`` or
+    ``model.temporal.thresh_percept = 0``.
 

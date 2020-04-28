@@ -22,7 +22,7 @@ following categories:
    dictated by the :py:class:`~pulse2percept.implants.ProsthesisSystem` base
    class.
 
-.. _topcis-implants-prosthesis-system:
+.. _topics-implants-prosthesis-system:
 
 Prosthesis systems
 ------------------
