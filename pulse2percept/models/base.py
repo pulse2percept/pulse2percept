@@ -4,6 +4,12 @@ import sys
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
 import numpy as np
+import matplotlib as mpl
+if sys.platform == "darwin":  # OS X
+    mpl.use('TkAgg')
+import matplotlib.pyplot as plt
+from matplotlib.axes import Subplot
+
 
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
@@ -31,6 +37,76 @@ class Percept(Data):
         # def f(a1, a2):
         #     # https://stackoverflow.com/a/26410051
         #     return (((a1 - a2[:,:,np.newaxis])).prod(axis=1)<=0).any(axis=0)
+
+    def plot(self, time=None, kind='pcolor', ax=None, **kwargs):
+        """Plot the percept
+
+        Parameters
+        ----------
+        kind : { 'pcolor' | 'hex' }, optional, default: 'pcolor'
+            Kind of plot to draw:
+            *  'pcolor': using Matplotlib's ``pcolor``. Additional parameters
+               (e.g., ``vmin``, ``vmax``) can be passed as keyword arguments.
+            *  'hex': using Matplotlib's ``hexbin``. Additional parameters
+               (e.g., ``gridsize``) can be passed as keyword arguments.
+        time : None, optional, default: None
+            The time point to plot.
+        ax : matplotlib.axes.Axes; optional, default: None
+            A Matplotlib Axes object. If None, a new Axes object will be
+            created.
+
+        Returns
+        -------
+        ax : matplotlib.axes.Axes
+            Returns the axes with the plot on it
+
+        """
+        if time is not None:
+            # Need to be smart about what to do when plotting more than one
+            # frame.
+            raise NotImplementedError
+        if ax is None:
+            if 'figsize' in kwargs:
+                figsize = kwargs['figsize']
+            else:
+                figsize = np.int32(np.array(self.shape[:2][::-1]) / 15)
+            _, ax = plt.subplots(figsize=figsize)
+        else:
+            if not isinstance(ax, Subplot):
+                raise TypeError("'ax' must be a Matplotlib axis, not "
+                                "%s." % type(ax))
+
+        cmap = kwargs['cmap'] if 'cmap' in kwargs else 'gray'
+        if kind == 'pcolor':
+            # Create a pseudocolor plot. Make sure to pass additional keyword
+            # arguments that have not already been extracted:
+            other_kwargs = {key: kwargs[key]
+                            for key in (kwargs.keys() - ['figsize', 'cmap'])}
+            ax.pcolor(np.flipud(self.data[..., 0]), cmap=cmap, **other_kwargs)
+            ax.set_xticks(np.linspace(0, self.shape[1], num=5))
+            ax.set_yticks(np.linspace(self.shape[0], 0, num=5))
+        elif kind == 'hex':
+            # Create a hexbin plot:
+            gridsize = kwargs['gridsize'] if 'gridsize' in kwargs else 80
+            X, Y = np.meshgrid(self.xdva, self.ydva, indexing='xy')
+            # Make sure to pass additional keyword arguments that have not
+            # already been extracted:
+            other_kwargs = {key: kwargs[key]
+                            for key in (kwargs.keys() - ['figsize', 'cmap',
+                                                         'gridsize'])}
+            ax.hexbin(X.ravel(), Y.ravel()[::-1], self.data[..., 0].ravel(),
+                      cmap=cmap, gridsize=gridsize, **other_kwargs)
+            ax.axis([self.xdva[0], self.xdva[-1], self.ydva[0], self.ydva[-1]])
+            ax.set_xticks(np.linspace(self.xdva[0], self.xdva[-1], num=5))
+            ax.set_yticks(np.linspace(self.ydva[0], self.ydva[-1], num=5))
+        else:
+            raise ValueError("Unknown plot option '%s'. Choose either 'pcolor'"
+                             "or 'hex'." % kind)
+        ax.set_xticklabels(np.linspace(self.xdva[0], self.xdva[-1], num=5))
+        ax.set_xlabel('x (dva)')
+        ax.set_yticklabels(np.linspace(self.ydva[0], self.ydva[-1], num=5))
+        ax.set_ylabel('y (dva)')
+        return ax
 
 
 class NotBuiltError(ValueError, AttributeError):
@@ -88,6 +164,10 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
         return {key: getattr(self, key)
                 for key, _ in self.get_default_params().items()}
 
+    def _build(self):
+        """Customize the building process by implementing this method"""
+        pass
+
     def build(self, **build_params):
         """Build the model
 
@@ -95,18 +175,23 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
         all expensive one-time calculations. You must call ``build`` before
         calling ``predict_percept``.
 
-        You can override ``build`` in your own model (for a good example, see
-        the AxonMapModel). You will want to make sure that:
+        .. note::
 
-        - all ``build_params`` take effect,
-        - the flag ``_is_built`` is set before returning,
-        - the method returns ``self``.
+            Don't override this method if you are building your own model.
+            Customize ``_build`` instead.
+
+        Parameters
+        ----------
+        build_params : additional parameters to set
+            You can overwrite parameters that are listed in
+            ``get_default_params``. Trying to add new class attributes outside
+            of that will cause a ``FreezeError``.
+            Example: ``model.build(param1=val)``
+
         """
-        # Set additional parameters (they must be mentioned in the constructor
-        # and/or in ``get_default_params``. Trying to add new class attributes
-        # outside of that will cause a ``FreezeError``):
         for key, val in build_params.items():
             setattr(self, key, val)
+        self._build()
         self.is_built = True
         return self
 
@@ -168,8 +253,26 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         raise NotImplementedError
 
     def build(self, **build_params):
-        # Set additional parameters (they must be mentioned in the constructor;
-        # you can't add new class attributes outside of that):
+        """Build the model
+
+        Every model must have a ```build`` method, which is meant to perform
+        all expensive one-time calculations. You must call ``build`` before
+        calling ``predict_percept``.
+
+        .. note::
+
+            Don't override this method if you are building your own model.
+            Customize ``_build`` instead.
+
+        Parameters
+        ----------
+        build_params : additional parameters to set
+            You can overwrite parameters that are listed in
+            ``get_default_params``. Trying to add new class attributes outside
+            of that will cause a ``FreezeError``.
+            Example: ``model.build(param1=val)``
+
+        """
         for key, val in build_params.items():
             setattr(self, key, val)
         # Build the spatial grid:
@@ -177,6 +280,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                            grid_type=self.grid_type)
         self.grid.xret = self.dva2ret(self.grid.x)
         self.grid.yret = self.dva2ret(self.grid.y)
+        self._build()
         self.is_built = True
         return self
 

@@ -285,11 +285,7 @@ class AxonMapSpatial(SpatialModel):
             tangent -= np.deg2rad(180)
         return tangent
 
-    def build(self, **build_params):
-        # Set additional parameters (they must be mentioned in the constructor;
-        # you can't add new class attributes outside of that):
-        for key, val in build_params.items():
-            setattr(self, key, val)
+    def _build(self):
         if self.eye == 'LE':
             if self.loc_od_x > 0:
                 err_str = ("In a left eye, the x-coordinate of the optic"
@@ -303,11 +299,6 @@ class AxonMapSpatial(SpatialModel):
         else:
             err_str = ("Eye should be either 'LE' or 'RE', not %s." % self.eye)
             raise ValueError(err_str)
-        # Build the spatial grid:
-        self.grid = GridXY(self.xrange, self.yrange, step=self.xystep,
-                           grid_type=self.grid_type)
-        self.grid.xret = self.dva2ret(self.grid.x)
-        self.grid.yret = self.dva2ret(self.grid.y)
         need_axons = False
         # You can ignore pickle files and force a rebuild with this flag:
         if self.ignore_pickle:
@@ -343,8 +334,6 @@ class AxonMapSpatial(SpatialModel):
                   'xystep': self.xystep, 'n_ax_segments': self.n_ax_segments,
                   'ax_segments_range': self.ax_segments_range}
         pickle.dump((params, axons), open(self.axon_pickle, 'wb'))
-        self.is_built = True
-        return self
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at specific times ``t``"""

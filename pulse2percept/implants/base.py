@@ -2,7 +2,6 @@
    `ElectrodeGrid`, `ProsthesisSystem`"""
 import numpy as np
 from abc import ABCMeta, abstractmethod
-import math
 from copy import deepcopy
 # Using or importing the ABCs from 'collections' instead of from
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
@@ -526,7 +525,7 @@ class ElectrodeGrid(ElectrodeArray):
                             spc * 0.25)
             x_arr_rshift = (np.arange(cols) * spc - (cols / 2.0 - 0.5) * spc +
                             spc * 0.25)
-            y_arr = (np.arange(rows) * math.sqrt(3) * spc / 2.0 -
+            y_arr = (np.arange(rows) * np.sqrt(3) * spc / 2.0 -
                      (rows / 2.0 - 0.5) * spc)
             x_arr_lshift, y_arr_lshift = np.meshgrid(x_arr_lshift, y_arr,
                                                      sparse=False)

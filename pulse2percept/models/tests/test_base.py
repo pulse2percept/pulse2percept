@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
 import numpy.testing as npt
+import matplotlib.pyplot as plt
+from matplotlib.axes import Subplot
 
 from pulse2percept.implants import ArgusI
 from pulse2percept.models import (BaseModel, Model, NotBuiltError,
@@ -40,6 +42,45 @@ def test_Percept():
     npt.assert_almost_equal(percept.xdva, grid._xflat)
     npt.assert_almost_equal(percept.ydva, grid._yflat)
     npt.assert_almost_equal(percept.time, [0])
+
+
+def test_Percept_plot():
+    y_range = (-1, 1)
+    x_range = (-2, 2)
+    grid = GridXY(x_range, y_range)
+    percept = Percept(np.arange(15).reshape((3, 5, 1)), space=grid)
+
+    # Basic usage of pcolor:
+    ax = percept.plot(kind='pcolor')
+    npt.assert_equal(isinstance(ax, Subplot), True)
+    npt.assert_almost_equal(ax.axis(), [0, len(percept.xdva),
+                                        0, len(percept.ydva)])
+    npt.assert_almost_equal(ax.collections[0].get_clim(),
+                            [percept.data.min(), percept.data.max()])
+
+    # Basic usage of hex:
+    ax = percept.plot(kind='hex')
+    npt.assert_equal(isinstance(ax, Subplot), True)
+    npt.assert_almost_equal(ax.axis(), [percept.xdva[0], percept.xdva[-1],
+                                        percept.ydva[0], percept.ydva[-1]])
+    npt.assert_almost_equal(ax.collections[0].get_clim(),
+                            [percept.data[..., 0].min(),
+                             percept.data[..., 0].max()])
+
+    # Verify color map:
+    npt.assert_equal(ax.collections[0].cmap, plt.cm.gray)
+    ax = percept.plot(cmap='inferno')
+    npt.assert_equal(ax.collections[0].cmap, plt.cm.inferno)
+
+    # Invalid calls:
+    with pytest.raises(ValueError):
+        percept.plot(kind='invalid')
+    with pytest.raises(TypeError):
+        percept.plot(ax='invalid')
+
+    # TODO
+    with pytest.raises(NotImplementedError):
+        percept.plot(time=3.3)
 
 
 class ValidBaseModel(BaseModel):
