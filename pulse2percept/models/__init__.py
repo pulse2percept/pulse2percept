@@ -4,8 +4,7 @@
     :toctree: _api
 
     base
-    scoreboard
-    axon_map
+    beyeler2019
     nanduri2012
 
 .. seealso::
@@ -15,8 +14,8 @@
 """
 from .base import (BaseModel, Model, NotBuiltError, Percept, SpatialModel,
                    TemporalModel)
-from .scoreboard import ScoreboardModel, ScoreboardSpatial
-from .axon_map import AxonMapModel, AxonMapSpatial
+from .beyeler2019 import (ScoreboardModel, ScoreboardSpatial, AxonMapSpatial,
+                          AxonMapModel)
 from .nanduri2012 import (Nanduri2012Model, Nanduri2012Spatial,
                           Nanduri2012Temporal)
 

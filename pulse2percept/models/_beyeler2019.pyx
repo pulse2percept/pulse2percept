@@ -37,19 +37,66 @@ cdef float32 c_max(float32[:] arr):
 
 
 @cdivision(True)
-cpdef gauss2(float32[:, ::1] arr, float32 x, float32 y,
-             float32 tau):
+cpdef scoreboard_fast(const float32[:, ::1] stim,
+                      const float32[::1] xel,
+                      const float32[::1] yel,
+                      const float32[::1] xgrid,
+                      const float32[::1] ygrid,
+                      float32 rho,
+                      float32 thresh_percept):
+    """Fast spatial response of the scoreboard model
+
+    Parameters
+    ----------
+    stim : 2D float32 array
+        A ``Stimulus.data`` container that contains electrodes as rows and
+        time points as columns. The spatial response will be calculated for
+        each column independently.
+    xel, yel : 1D float32 array
+        An array of x or y coordinates for each electrode (microns)
+    xgrid, ygrid : 1D float32 array
+        An array of x or y coordinates at which to calculate the spatial
+        response (microns)
+    rho : float32
+        The rho parameter of the scoreboard model (microns): exponential decay
+        constant for the current spread
+    thresh_percept : float32
+        Spatial responses smaller than ``thresh_percept`` will be set to zero
+
+    """
     cdef:
-        uint32 idx, n_arr
-        float32 dist2
-        float32[::1] gauss
-    n_arr = arr.shape[0]
-    gauss = np.empty(n_arr, dtype=np.float32)
-    with nogil:
-        for idx in range(n_arr):
-            dist2 = c_pow(arr[idx, 0] - x, 2) + c_pow(arr[idx, 1] - y, 2)
-            gauss[idx] = c_exp(-dist2 / (2.0 * c_pow(tau, 2)))
-    return np.asarray(gauss)
+        uint32 idx_el, idx_time, idx_space, n_el, n_time, n_space
+        uint32 idx_bright, n_bright
+        float32[:, ::1] bright
+        float32 px_bright, dist2, gauss, amp
+
+    n_el = stim.shape[0]
+    n_time = stim.shape[1]
+    n_space = len(xgrid)
+    n_bright = n_time * n_space
+
+    # A flattened array containing n_time x n_space entries:
+    bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
+
+    for idx_bright in prange(n_bright, schedule='dynamic', nogil=True):
+        # For each entry in the output matrix:
+        idx_space = idx_bright % n_space
+        idx_time = idx_bright / n_space
+
+        px_bright = 0.0
+        for idx_el in range(n_el):
+            amp = stim[idx_el, idx_time]
+            if c_abs(amp) > 0:
+                dist2 = (c_pow(xgrid[idx_space] - xel[idx_el], 2) +
+                         c_pow(ygrid[idx_space] - yel[idx_el], 2))
+                gauss = c_exp(-dist2 / (2.0 * rho * rho))
+                px_bright = px_bright + amp * gauss
+        if c_abs(px_bright) < thresh_percept:
+            px_bright = 0.0
+        bright[idx_space, idx_time] = px_bright  # Py overhead
+    return np.asarray(bright)  # Py overhead
+
+
 
 
 cpdef jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
@@ -144,14 +191,14 @@ cpdef finds_closest_axons(float32[:, ::1] bundles,
 
 
 @cdivision(True)
-cpdef spatial_fast(const float32[:, ::1] stim,
-                   const float32[::1] xel,
-                   const float32[::1] yel,
-                   const float32[:, ::1] axon,
-                   const uint32[::1] idx_start,
-                   const uint32[::1] idx_end,
-                   float32 rho,
-                   float32 thresh_percept):
+cpdef axon_map_fast(const float32[:, ::1] stim,
+                    const float32[::1] xel,
+                    const float32[::1] yel,
+                    const float32[:, ::1] axon,
+                    const uint32[::1] idx_start,
+                    const uint32[::1] idx_end,
+                    float32 rho,
+                    float32 thresh_percept):
     """Fast spatial response of the axon map model
 
     Parameters
