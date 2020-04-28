@@ -108,6 +108,21 @@ class Percept(Data):
         ax.set_ylabel('y (dva)')
         return ax
 
+    def get_brightest_frame(self):
+        """Return the brightest frame
+
+        Looks for the brightest pixel in the percept, determines at what point
+        in time it happened, and returns all brightness values at that point
+        in a 2D NumPy array
+
+        Returns
+        -------
+        frame : 2D NumPy array
+            A slice ``percept.data[..., tmax]`` where ``tmax`` is the time at
+            which the percept reached its maximum brightness.
+        """
+        return self.data[..., np.argmax(np.max(self.data, axis=(0, 1)))]
+
 
 class NotBuiltError(ValueError, AttributeError):
     """Exception class used to raise if model is used before building

@@ -85,7 +85,7 @@ print(model)
 # To change parameter values, either pass them directly to the constructor
 # above or set them by hand, like this:
 
-model.set_params({'engine': 'serial'})
+model.engine = 'serial'
 
 ##############################################################################
 # Then build the model. This is a necessary step before you can actually use
@@ -140,17 +140,24 @@ implant.stim = 10 * np.ones(60)
 percept = model.predict_percept(implant)
 
 ##############################################################################
-# The resulting percept is stored in a NumPy array whose dimensions correspond
-# to the values specified by ``xrange``, ``yrange``, and ``xystep``.
+# The resulting percept is stored in a
+# :py:class:`~pulse2percept.models.Percept` object, which is similar in
+# organization to the :py:class:`~pulse2percept.stimuli.Stimulus` object:
+# the ``data`` container is a 3D NumPy array (Y, X, T) with labeled axes
+# ``xdva``, ``ydva``, and ``time``.
 #
-# The percept can be plotted using Matplotlib:
+# The percept can be plotted as follows:
 
-import matplotlib.pyplot as plt
-plt.imshow(percept.data[..., 0], cmap='gray')
-plt.xticks(np.linspace(0, percept.shape[1], num=5),
-           np.linspace(*model.spatial.xrange, num=5))
-plt.xlabel('x (dva)')
-plt.yticks(np.linspace(0, percept.shape[0], num=5),
-           np.linspace(*model.spatial.yrange, num=5))
-plt.ylabel('y (dva)')
-plt.title('Predicted percept')
+ax = percept.plot()
+ax.set_title('Predicted percept')
+
+##############################################################################
+# By default, the :py:meth:`~pulse2percept.models.Percept.plot` method uses
+# Matplotlib's ``pcolor`` function.
+# However, it can also be configured to use a hex grid (using Matplotlib's
+# ``hexbin`` function). Additional parameters can be passed to ``hexbin`` as
+# keyword arguments of :py:meth:`~pulse2percept.models.Percept.plot`:
+
+implant.stim = np.arange(60)
+percept = model.predict_percept(implant)
+percept.plot(kind='hex', cmap='inferno')

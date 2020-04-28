@@ -83,6 +83,12 @@ def test_Percept_plot():
         percept.plot(time=3.3)
 
 
+def test_Percept_get_brightest_frame():
+    percept = Percept(np.arange(30).reshape((3, 5, 2)))
+    npt.assert_almost_equal(percept.get_brightest_frame(),
+                            percept.data[..., 1])
+
+
 class ValidBaseModel(BaseModel):
 
     def get_default_params(self):
