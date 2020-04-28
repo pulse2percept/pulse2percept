@@ -157,16 +157,21 @@ class Nanduri2012Temporal(TemporalModel):
         base_params.update(params)
         return base_params
 
-    def _predict_temporal(self, stim_data, t_stim, t_percept):
-        # Beware of floating point errors! 29.999 will be rounded down to 29
-        # by np.uint, so we need to np.round it first:
+    def _predict_temporal(self, stim, t_percept):
+        """Predict the temporal response"""
+        # Pass the stimulus as a 2D NumPy array to the fast Cython function:
+        stim_data = stim.data.reshape((-1, len(stim.time)))
+        # Calculate at which simulation time steps we need to output a percept.
+        # This is basically t_percept/self.dt, but we need to beware of
+        # floating point rounding errors! 29.999 will be rounded down to 29 by
+        # np.uint32, so we need to np.round it first:
         idx_percept = np.uint32(np.round(t_percept / self.dt))
         if np.unique(idx_percept).size < t_percept.size:
-            raise ValueError("All times 't' must be distinct multiples of "
-                             "`dt`=%.2e" % self.dt)
-        t_percept = idx_percept * self.dt
+            raise ValueError("All times 't_percept' must be distinct multiples "
+                             "of `dt`=%.2e" % self.dt)
+        # Cython returns a 2D (space x time) NumPy array:
         return temporal_fast(stim_data.astype(np.float32),
-                             t_stim.astype(np.float32),
+                             stim.time.astype(np.float32),
                              idx_percept,
                              self.dt, self.tau1, self.tau2, self.tau3,
                              self.asymptote, self.shift, self.slope, self.eps,

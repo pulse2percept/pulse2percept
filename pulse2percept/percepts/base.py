@@ -63,6 +63,7 @@ class Percept(Data):
                 figsize = kwargs['figsize']
             else:
                 figsize = np.int32(np.array(self.shape[:2][::-1]) / 15)
+                figsize = np.maximum(figsize, 1)
             _, ax = plt.subplots(figsize=figsize)
         else:
             if not isinstance(ax, Subplot):

@@ -87,11 +87,13 @@ described in [Beyeler2019]_ with the temporal model cascade described in
 To create a more advanced model, you will need to subclass the appropriate base
 class. For example, to create a new spatial model, you will need to subclass
 :py:class:`~pulse2percept.models.SpatialModel` and provide implementations for
-its three abstract methods:
+the following methods:
 
 *  ``dva2ret``: a means to convert from degrees of visual angle (dva) to
    retinal coordinates (microns).
 *  ``ret2dva``: a means to convert from retinal coordinates to dva.
+*  ``_build`` (optional): a way to add one-time computations to the build
+   process
 *  ``_predict_spatial``: a method that accepts an
    :py:class:`~pulse2percept.implants.ElectrodeArray` as well as a
    :py:class:`~pulse2percept.stimuli.Stimulus` and computes the brightness at
@@ -111,6 +113,10 @@ For example:
             """Convert retinal corods (um) to degrees of visual angle (dva)"""
             return ret / 280.0
 
+        def _build(self):
+            """Perform heavy computations during the build process"""
+            self.heavy = fibonacci(100)  # some heavy computation
+
         def _predict_spatial(self, earray, stim):
             """Calculate the spatial response at different time points"""
             resp = np.zeros(self.grid.size, stim.time.size)
@@ -128,10 +134,11 @@ Similarly, a new temporal model needs to subclass from
 .. code-block:: python
 
     class MyTemporalModel(TemporalModel):
-        def _predict_temporal(self, stim_data, t_stim, t_percept):
+        def _predict_temporal(self, stim, t_percept):
             """Calculates the temporal response at different time points"""
-            resp = np.zeros(len(stim_data), len(t_percept))
-            return resp
+            # Response at (x,y,t) is the stimulus at (x,y,t). Use stim's smart
+            # indexing to do automatic interpolation:
+            return stim[:, t_percept]
 
 Stand-alone models vs. spatial/temporal model components
 --------------------------------------------------------

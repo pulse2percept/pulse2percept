@@ -93,10 +93,10 @@ def test_SpatialModel():
 
 class ValidTemporalModel(TemporalModel):
 
-    def _predict_temporal(self, stim_data, t_stim, t_percept):
+    def _predict_temporal(self, stim, t_percept):
         if not self.is_built:
             raise NotBuiltError
-        return np.zeros((stim_data.shape[0], len(t_percept)), dtype=np.float32)
+        return np.zeros((stim.data.shape[0], len(t_percept)), dtype=np.float32)
 
 
 def test_TemporalModel():

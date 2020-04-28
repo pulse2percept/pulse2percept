@@ -274,7 +274,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         return params
 
     @abstractmethod
-    def _predict_temporal(self, stim_data, t_stim, t_percept):
+    def _predict_temporal(self, stim, t_percept):
         """Called from ``predict_percept`` after error checking
 
         MUST RETURN: NxT
@@ -315,33 +315,24 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         if stim is None:
             # Nothing to see here:
             return None
-        if isinstance(stim, Stimulus):
-            # Make sure we don't change the user's Stimulus object:
-            _stim = deepcopy(stim)
-            # THE PROBLEM OCCURS WHEN OUTPUTTING THE RESULT. PERCEPT ASSUMES
-            # A REGULAR XY GRID, WHICH WILL FAIL FOR HEXAGONAL AND FOR STIMULI.
-            # WE WANT TO BE ABLE TO ASSOCIATE A RANDOM XY COORDINATE WITH A
-            # TIMESERIES.
-            _space = [len(stim.electrodes), 1]
-            # Make sure to operate on the compressed stim:
-            if not _stim.is_compressed:
-                _stim.compress()
-            _time = _stim.time
-            _stim = _stim.data
-        elif isinstance(stim, Percept):
-            # raise NotImplementedError
-            # Percept has shape (Y, X, T), needs to be (XY, T):
-            _stim = stim.data.reshape((-1, stim.shape[-1]))
-            _space = [len(stim.ydva), len(stim.xdva)]
-            _time = stim.time
-        else:
+        if not isinstance(stim, (Stimulus, Percept)):
             raise TypeError(("'stim' must be a Stimulus or Percept object, "
                              "not %s.") % type(stim))
-
-        if _time is None and t_percept is not None:
+        if stim.time is None and t_percept is not None:
             raise ValueError("Cannot calculate temporal response at times "
                              "t_percept=%s, because stimulus/percept does not "
                              "have a time component." % t_percept)
+        # Make sure we don't change the user's Stimulus/Percept object:
+        _stim = deepcopy(stim)
+        if isinstance(stim, Stimulus):
+            # Make sure to operate on the compressed stim:
+            if not _stim.is_compressed:
+                _stim.compress()
+            _space = [len(stim.electrodes), 1]
+        elif isinstance(stim, Percept):
+            _space = [len(stim.ydva), len(stim.xdva)]
+        _time = stim.time
+
         if t_percept is None:
             # If no time vector is given, output at model time step (and make
             # sure to include the last time point). We always start at zero:
@@ -357,12 +348,12 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                 raise ValueError("t=%s are not multiples of dt=%.2e." %
                                  (t_percept[np.logical_not(within_atol)],
                                   self.dt))
-        if _stim.size == 0:
+        if _stim.data.size == 0:
             # Stimulus was compressed to zero:
             resp = np.zeros(_space + [t_percept.size], dtype=np.float32)
         else:
             # Calculate the Stimulus at requested time points:
-            resp = self._predict_temporal(_stim, _time, t_percept)
+            resp = self._predict_temporal(_stim, t_percept)
         return Percept(resp.reshape(_space + [t_percept.size]),
                        space=None, time=t_percept)
 
