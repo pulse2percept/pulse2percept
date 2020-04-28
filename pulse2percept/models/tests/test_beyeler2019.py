@@ -3,7 +3,8 @@ import pytest
 import numpy.testing as npt
 
 from pulse2percept.implants import ArgusI, ArgusII
-from pulse2percept.models import (AxonMapSpatial, AxonMapModel, Percept,
+from pulse2percept.percepts import Percept
+from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
                                   ScoreboardSpatial, ScoreboardModel)
 
 

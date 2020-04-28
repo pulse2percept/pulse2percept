@@ -12,7 +12,7 @@
     *  :ref:`Basic Concepts > Computational Models <topics-models>`
 
 """
-from .base import (BaseModel, Model, NotBuiltError, Percept, SpatialModel,
+from .base import (BaseModel, Model, NotBuiltError, SpatialModel,
                    TemporalModel)
 from .beyeler2019 import (ScoreboardModel, ScoreboardSpatial, AxonMapSpatial,
                           AxonMapModel)
@@ -28,7 +28,6 @@ __all__ = [
     'Nanduri2012Spatial',
     'Nanduri2012Temporal',
     'NotBuiltError',
-    'Percept',
     'ScoreboardModel',
     'ScoreboardSpatial',
     'SpatialModel',

@@ -164,7 +164,7 @@ percept = model.predict_percept(implant)
 
 ##############################################################################
 # The resulting percept is stored in a
-# :py:class:`~pulse2percept.models.Percept` object, which is similar in
+# :py:class:`~pulse2percept.percepts.Percept` object, which is similar in
 # organization to the :py:class:`~pulse2percept.stimuli.Stimulus` object:
 # the ``data`` container is a 3D NumPy array (Y, X, T) with labeled axes
 # ``xdva``, ``ydva``, and ``time``.

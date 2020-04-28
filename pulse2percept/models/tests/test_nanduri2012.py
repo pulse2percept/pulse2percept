@@ -2,11 +2,12 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.models import (Nanduri2012Model, Nanduri2012Spatial,
-                                  Nanduri2012Temporal, Percept)
 from pulse2percept.implants import (DiskElectrode, PointSource, ElectrodeArray,
                                     ProsthesisSystem, ArgusI)
 from pulse2percept.stimuli import Stimulus, PulseTrain
+from pulse2percept.percepts import Percept
+from pulse2percept.models import (Nanduri2012Model, Nanduri2012Spatial,
+                                  Nanduri2012Temporal)
 from pulse2percept.utils import FreezeError
 
 

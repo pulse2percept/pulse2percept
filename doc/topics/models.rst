@@ -43,7 +43,7 @@ All models follow the same basic work flow:
 *  **Build** the model to perform one-time heavy computations such as building
    the axon map in :py:class:`~pulse2percept.models.AxonMapModel`.
 *  **Predict a percept** by passing an implant that contains a stimulus. The
-   model will return a :py:class:`~pulse2percept.models.Percept` object that
+   model will return a :py:class:`~pulse2percept.percepts.Percept` object that
    acts as a data container with labeled axes.
 
 Here is how to run the :py:class:`~pulse2percept.models.ScoreboardModel`:
@@ -175,7 +175,7 @@ The differences between the two are subtle:
    :py:class:`~pulse2percept.implants.ProsthesisSystem` object (which provides
    a notion of space and itself contains a
    :py:class:`~pulse2percept.stimuli.Stimulus`), and will return a
-   :py:class:`~pulse2percept.models.Percept` object.
+   :py:class:`~pulse2percept.percepts.Percept` object.
 
 Getting and setting parameters
 ------------------------------

@@ -101,7 +101,7 @@ model.build()
 percept = model.predict_percept(implant)
 
 ###############################################################################
-# The output of the model is a :py:class:`~pulse2percept.models.Percept`
+# The output of the model is a :py:class:`~pulse2percept.percepts.Percept`
 # object that contains a time series with the predicted brightness of the
 # visual percept at every time step.
 #

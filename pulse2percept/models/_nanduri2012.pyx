@@ -48,6 +48,11 @@ cpdef spatial_fast(const float32[:, ::1] stim,
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
 
+    Returns
+    -------
+    bright : 2D float32 array
+        space x time
+
     """
     cdef:
         uint32 idx_el, idx_time, idx_space, n_el, n_time, n_space
@@ -84,11 +89,11 @@ cpdef spatial_fast(const float32[:, ::1] stim,
                     denom = atten_a + c_pow(zel[idx_el], atten_n)
                 else:
                     # Away from the electrode surface, calculate the distance
-                    # to the electrode egde:
+                    # to the electrode egde (`d2e`):
                     d2e = (c_pow(c_sqrt(d2c) - rel[idx_el], 2) +
                            c_pow(zel[idx_el], 2))
                     denom = atten_a + c_pow(c_sqrt(d2e), atten_n)
-                # Add the contribution of this electrode:
+                # Add the contribution of this electrode to the px brightness:
                 px_bright = px_bright + amp * atten_a / denom
         if c_abs(px_bright) < thresh_percept:
             px_bright = 0.0
@@ -138,6 +143,11 @@ cpdef temporal_fast(const float32[:, ::1] stim,
         Shift of the logistic function in the stationary nonlinearity stage.
     thresh_percept: float32
         Below threshold, the percept has brightness zero.
+
+    Returns
+    -------
+    percept : 2D float32 array
+        space x time
 
     """
     cdef:
