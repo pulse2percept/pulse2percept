@@ -8,10 +8,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patches
 import logging
+from copy import deepcopy
 
 from ..implants import ProsthesisSystem
 from ..utils import parfor
-from ..models import AxonMapModel, dva2ret
+from ..models import AxonMapSpatial
 
 
 def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
@@ -68,17 +69,17 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
         ax.set_axis_bgcolor('black')
 
     # Draw axon pathways:
-    axon_map = AxonMapModel(n_axons=n_bundles, loc_od_x=loc_od[0],
-                            loc_od_y=loc_od[1], eye=eye)
+    axon_map = AxonMapSpatial(n_axons=n_bundles, loc_od_x=loc_od[0],
+                              loc_od_y=loc_od[1], eye=eye)
     axon_bundles = axon_map.grow_axon_bundles()
     for bundle in axon_bundles:
         ax.plot(bundle[:, 0], bundle[:, 1], c=(0.5, 1.0, 0.5))
 
     # Show circular optic disc:
-    ax.add_patch(patches.Circle(dva2ret(loc_od), radius=900, alpha=1,
+    ax.add_patch(patches.Circle(axon_map.dva2ret(loc_od), radius=900, alpha=1,
                                 color='black', zorder=10))
 
-    xmin, xmax, ymin, ymax = dva2ret([-20, 20, -15, 15])
+    xmin, xmax, ymin, ymax = axon_map.dva2ret([-20, 20, -15, 15])
     ax.set_aspect('equal')
     ax.set_xlim(xmin, xmax)
     ax.set_xlabel('x (microns)')
@@ -153,7 +154,9 @@ def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
 
     # Highlight location of stimulated electrodes:
     if implant.stim is not None:
-        for e in implant.stim.electrodes:
+        _stim = deepcopy(implant.stim)
+        _stim.compress()
+        for e in _stim.electrodes:
             ax.plot(implant[e].x, implant[e].y, 'oy',
                     markersize=np.sqrt(implant[e].r) * 2)
 

@@ -3,8 +3,24 @@ import copy
 import pytest
 import numpy.testing as npt
 
-from pulse2percept.utils import (Frozen, FreezeError, gamma, find_files_like,
-                                 cart2pol, pol2cart)
+from pulse2percept.utils import Frozen, FreezeError, PrettyPrint, Data, gamma
+
+
+class PrettyPrinter(PrettyPrint):
+
+    def _pprint_params(self):
+        return {}
+
+
+class PrettyPrinter2(PrettyPrint):
+
+    def _pprint_params(self):
+        return {'b': None, 'a': 3}
+
+
+def test_PrettyPrint():
+    npt.assert_equal(str(PrettyPrinter()), "PrettyPrinter()")
+    npt.assert_equal(str(PrettyPrinter2()), "PrettyPrinter2(a=3, b=None)")
 
 
 class FrozenChild(Frozen):
@@ -27,6 +43,97 @@ def test_Frozen():
     # But not outside constructor:
     with pytest.raises(FreezeError):
         frozen_child.c = 3
+
+
+def test_Data():
+    # Test basic usage:
+    ndarray = np.arange(6).reshape((2, 3))
+    data = Data(ndarray, axes=[('b', [0.3, 1]), ('a', [2, 3.1, 4.5])],
+                metadata='meta')
+    npt.assert_equal(data.shape, ndarray.shape)
+    npt.assert_equal(hasattr(data, 'b'), True)
+    npt.assert_almost_equal(data.b, [0.3, 1])
+    npt.assert_equal(hasattr(data, 'a'), True)
+    npt.assert_almost_equal(data.a, [2, 3.1, 4.5])
+    npt.assert_equal(hasattr(data, 'metadata'), True)
+    npt.assert_equal(data.metadata, 'meta')
+    # Cannot overwrite any of the properties:
+    for param in data._pprint_params().keys():
+        with pytest.raises(AttributeError):
+            setattr(data, param, 0)
+
+    # Automatic axes:
+    data = Data(ndarray)
+    npt.assert_equal(hasattr(data, 'axis0'), True)
+    npt.assert_equal(data.axis0, np.arange(ndarray.shape[0]))
+    npt.assert_equal(hasattr(data, 'axis1'), True)
+    npt.assert_equal(data.axis1, np.arange(ndarray.shape[1]))
+    npt.assert_equal(hasattr(data, 'axis2'), False)
+
+    # Order is preserved even if None:
+    data = Data(np.zeros(12).reshape((3, 4, 1)),
+                axes=[('x', None), ('y', None), ('t', None)])
+    npt.assert_equal(hasattr(data, 'x'), True)
+    npt.assert_equal(data.x, [0, 1, 2])
+    npt.assert_equal(hasattr(data, 'y'), True)
+    npt.assert_equal(data.y, [0, 1, 2, 3])
+    npt.assert_equal(hasattr(data, 't'), True)
+    npt.assert_equal(data.t, [0])
+    npt.assert_equal(hasattr(data, 'axis0'), False)
+
+    # Some axes given, others inferred automatically:
+    data = Data(ndarray, axes=[('c', None), ('a', [0.1, 0.2, 0.5])])
+    npt.assert_almost_equal(data.c, [0, 1])
+    npt.assert_almost_equal(data.a, [0.1, 0.2, 0.5])
+
+    # Invalid axes:
+    with pytest.raises(TypeError):
+        # Not iterable:
+        Data(ndarray, axes=3)
+    with pytest.raises(TypeError):
+        # Not iterable:
+        Data(ndarray, axes={'x': 0, 'y': list})
+    with pytest.raises(ValueError):
+        # Wrong number of labels:
+        Data(ndarray, axes=[('x', [0, 1])])
+    with pytest.raises(ValueError):
+        # Wrong number of data points for 'y':
+        Data(ndarray, axes=[('x', [0, 1]), ('y', [0, 1])])
+    with pytest.raises(ValueError):
+        # Duplicate labels:
+        Data(ndarray, axes=[('x', [0, 1]), ('x', [0, 1, 2])])
+
+    # Special cases:
+    data = Data([])
+    npt.assert_equal(data.shape, (0,))
+    npt.assert_equal(hasattr(data, 'axis0'), True)
+    npt.assert_equal(data.axis0, [])
+    data = Data([[0]])
+    npt.assert_equal(data.shape, (1, 1))
+    npt.assert_equal(hasattr(data, 'axis0'), True)
+    npt.assert_equal(data.axis0, [0])
+    npt.assert_equal(hasattr(data, 'axis1'), True)
+    npt.assert_equal(data.axis1, [0])
+    data = Data(0)
+    npt.assert_equal(data.shape, (1,))
+    npt.assert_equal(hasattr(data, 'axis0'), True)
+    npt.assert_equal(data.axis0, [0])
+
+    # Column vector:
+    data = Data([0, 1])
+    npt.assert_equal(data.shape, (2,))
+    npt.assert_equal(hasattr(data, 'axis0'), True)
+    npt.assert_equal(data.axis0, [0, 1])
+    npt.assert_equal(hasattr(data, 'axis1'), False)
+
+    # Row vector:
+    data = Data([[0, 1]])
+    npt.assert_equal(data.shape, (1, 2))
+    npt.assert_equal(hasattr(data, 'axis0'), True)
+    npt.assert_equal(data.axis0, [0])
+    npt.assert_equal(hasattr(data, 'axis1'), True)
+    npt.assert_equal(data.axis1, [0, 1])
+    npt.assert_equal(hasattr(data, 'axis2'), False)
 
 
 def test_gamma():
@@ -52,28 +159,3 @@ def test_gamma():
 
             # Make sure peak sits correctly
             npt.assert_almost_equal(g.argmax() * tsample, tau * (n - 1))
-
-
-def test_cart2pol():
-    npt.assert_almost_equal(cart2pol(0, 0), (0, 0))
-    npt.assert_almost_equal(cart2pol(10, 0), (0, 10))
-    npt.assert_almost_equal(cart2pol(3, 4), (np.arctan(4 / 3.0), 5))
-    npt.assert_almost_equal(cart2pol(4, 3), (np.arctan(3 / 4.0), 5))
-
-
-def test_pol2cart():
-    npt.assert_almost_equal(pol2cart(0, 0), (0, 0))
-    npt.assert_almost_equal(pol2cart(0, 10), (10, 0))
-    npt.assert_almost_equal(pol2cart(np.arctan(4 / 3.0), 5), (3, 4))
-    npt.assert_almost_equal(pol2cart(np.arctan(3 / 4.0), 5), (4, 3))
-
-
-def test_find_files_like():
-    # Not sure how to check a valid pattern match, because we
-    # don't know in which directory the test suite is
-    # executed... so smoke test
-    find_files_like(".", ".*")
-
-    # Or fail to find an unlikely file name
-    filenames = find_files_like(".", r"theresnowaythisexists\.xyz")
-    npt.assert_equal(filenames, [])

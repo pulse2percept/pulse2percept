@@ -2,7 +2,6 @@
    `ElectrodeGrid`, `ProsthesisSystem`"""
 import numpy as np
 from abc import ABCMeta, abstractmethod
-import math
 from copy import deepcopy
 # Using or importing the ABCs from 'collections' instead of from
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
@@ -526,7 +525,7 @@ class ElectrodeGrid(ElectrodeArray):
                             spc * 0.25)
             x_arr_rshift = (np.arange(cols) * spc - (cols / 2.0 - 0.5) * spc +
                             spc * 0.25)
-            y_arr = (np.arange(rows) * math.sqrt(3) * spc / 2.0 -
+            y_arr = (np.arange(rows) * np.sqrt(3) * spc / 2.0 -
                      (rows / 2.0 - 0.5) * spc)
             x_arr_lshift, y_arr_lshift = np.meshgrid(x_arr_lshift, y_arr,
                                                      sparse=False)
@@ -654,7 +653,7 @@ class ProsthesisSystem(PrettyPrint):
         """Electrode array setter (called upon ``self.earray = earray``)"""
         # Assign the electrode array:
         if isinstance(earray, Electrode):
-            # For convenience, build an array froma single electrode:
+            # For convenience, build an array from a single electrode:
             earray = ElectrodeArray(earray)
         if not isinstance(earray, ElectrodeArray):
             raise TypeError("'earray' must be an ElectrodeArray object, not "
@@ -706,10 +705,11 @@ class ProsthesisSystem(PrettyPrint):
                 stim = data
             elif isinstance(data, dict):
                 # Electrode names already provided by keys:
-                stim = Stimulus(data)
+                stim = Stimulus(data, extrapolate=True)
             else:
                 # Use electrode names as stimulus coordinates:
-                stim = Stimulus(data, electrodes=list(self.earray.keys()))
+                stim = Stimulus(data, electrodes=list(self.earray.keys()),
+                                extrapolate=True)
 
             # Make sure all electrode names are valid:
             for electrode in stim.electrodes:

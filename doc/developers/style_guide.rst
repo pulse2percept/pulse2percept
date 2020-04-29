@@ -1,7 +1,7 @@
 .. _dev-style_guide:
 
 ==================
-Coding style guide
+Coding Style Guide
 ==================
 
 The main principles behind pulse2percept development are:

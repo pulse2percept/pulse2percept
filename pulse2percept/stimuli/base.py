@@ -1,5 +1,5 @@
 """`Stimulus`"""
-from sys import platform
+from sys import platform, _getframe
 import matplotlib as mpl
 if platform == "darwin":  # OS X
     mpl.use('TkAgg')
@@ -149,7 +149,7 @@ class Stimulus(PrettyPrint):
     """
     # Frozen class: Only the following class attributes are allowed
     __slots__ = ('metadata', '_interp', '_interp_method', '_extrapolate',
-                 '__stim')
+                 '_is_compressed', '__stim')
 
     def __init__(self, source, electrodes=None, time=None, metadata=None,
                  compress=False, interp_method='linear', extrapolate=False):
@@ -157,6 +157,8 @@ class Stimulus(PrettyPrint):
         # Private: User is not supposed to overwrite these later on:
         self._interp_method = interp_method
         self._extrapolate = extrapolate
+        # Flag will be flipped in the compress method:
+        self.is_compressed = False
         # Extract the data and coordinates (electrodes, time) from the source:
         self._factory(source, electrodes, time, compress)
 
@@ -302,6 +304,7 @@ class Stimulus(PrettyPrint):
             'electrodes': electrodes,
             'time': time,
         }
+        self.is_compressed = True
 
     def plot(self, electrodes=None, time=None, axes=None):
         """Plot the stimulus
@@ -666,3 +669,20 @@ class Stimulus(PrettyPrint):
         container.
         """
         return self._stim['time']
+
+    @property
+    def is_compressed(self):
+        return self._is_compressed
+
+    @is_compressed.setter
+    def is_compressed(self, val):
+        """This flag can only be set in ``compress``"""
+        # getframe(0) is 'is_compressed'
+        # getframe(1) is the one we are looking for:
+        f_caller = _getframe(1).f_code.co_name
+        if f_caller in ["__init__", "compress"]:
+            self._is_compressed = val
+        else:
+            err_s = ("The attribute `is_compressed` can only be set in the "
+                     "constructor or in `compress`, not in `%s`." % f_caller)
+            raise AttributeError(err_s)

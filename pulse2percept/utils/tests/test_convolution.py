@@ -5,7 +5,7 @@ import pytest
 # Import whole module so we can reload it to test ImportErrors:
 from pulse2percept.utils import convolution, gamma
 from unittest import mock
-from imp import reload
+from importlib import reload
 
 
 @pytest.mark.parametrize('mode', ('full', 'valid', 'same'))

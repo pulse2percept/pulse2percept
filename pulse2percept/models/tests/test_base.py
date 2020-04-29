@@ -1,143 +1,262 @@
 import numpy as np
 import pytest
 import numpy.testing as npt
+import matplotlib.pyplot as plt
+from matplotlib.axes import Subplot
 
-from pulse2percept import models
-from pulse2percept import stimuli
-from pulse2percept import implants
-
-
-class ValidBaseModel(models.BaseModel):
-    """A class that implements all abstract methods of BaseModel"""
-
-    __slots__ = ('_private', 'valid')
-
-    def __init__(self, **kwargs):
-        super(ValidBaseModel, self).__init__(**kwargs)
-        # You can only add attributes that are listed in slots:
-        self._private = 0
-
-    def _get_default_params(self):
-        params = super(ValidBaseModel, self)._get_default_params()
-        params.update({'valid': 1})
-        return params
-
-    def dva2ret(self, xdva):
-        return 290 * xdva
-
-    def _predict_spatial(self, implant, t=None):
-        return np.zeros_like(self.grid.x)
-
-    def set_is_built(self):
-        # This is not allowed outside constructor or ``build``:
-        self._is_built = True
+from pulse2percept.implants import ArgusI
+from pulse2percept.percepts import Percept
+from pulse2percept.models import (BaseModel, Model, NotBuiltError,
+                                  SpatialModel, TemporalModel)
+from pulse2percept.utils import FreezeError, GridXY
 
 
-def test_BaseModel___init__():
-    # Smoke test: Use default params:
+class ValidBaseModel(BaseModel):
+
+    def get_default_params(self):
+        return {'a': 1, 'b': 2}
+
+
+def test_BaseModel():
+    # Test PrettyPrint:
     model = ValidBaseModel()
-    npt.assert_almost_equal(model.valid, 1)
-    # Set new value for existing param:
-    model.valid = 2
-    npt.assert_almost_equal(model.valid, 2)
-    # Slots:
-    npt.assert_equal(hasattr(model, '__slots__'), True)
-    npt.assert_equal(hasattr(model, '__dict__'), False)
-    # However, creating new params is not allowed:
+    npt.assert_equal(str(model), 'ValidBaseModel(a=1, b=2)')
+
+    # Can overwrite default values:
+    model = ValidBaseModel(b=3)
+    npt.assert_almost_equal(model.b, 3)
+
+    # Cannot add more attributes:
+    with pytest.raises(FreezeError):
+        model.c = 3
+
+    # Check the build switch:
+    npt.assert_equal(model.is_built, False)
+    model.build(a=3)
+    npt.assert_almost_equal(model.a, 3)
+    npt.assert_equal(model.is_built, True)
+
+    # Attributes must be in `get_default_params`:
     with pytest.raises(AttributeError):
-        model.newparam = 0
-    # Passing parameters that are not in slots is not allowed:
-    with pytest.raises(AttributeError):
-        ValidBaseModel(newparam=0)
-    # Technically, nobody stops you from calling model.key = value on other
-    # variables, such as private variables (given you know they exist):
-    model._private = 2
-    npt.assert_almost_equal(model._private, 2)
+        ValidBaseModel(c=3)
 
 
-def test_BaseModel__pprint_params():
-    # We can overwrite default param values if they are in ``_pprint_params``:
-    model = ValidBaseModel(engine='serial')
-    for key, value in model._pprint_params().items():
-        if key in ('xrange', 'yrange', 'grid_type'):
-            continue
-        npt.assert_equal(getattr(model, key), value)
-        setattr(model, key, 1234)
-        npt.assert_equal(getattr(model, key), 1234)
+class ValidSpatialModel(SpatialModel):
 
-        newmodel = ValidBaseModel(**{key: 1234})
-        npt.assert_equal(getattr(newmodel, key), 1234)
+    def dva2ret(self, dva):
+        return dva
+
+    def ret2dva(self, ret):
+        return ret
+
+    def _predict_spatial(self, earray, stim):
+        if not self.is_built:
+            raise NotBuiltError
+        n_time = 1 if stim.time is None else stim.time.size
+        return np.zeros((self.grid.x.size, n_time), dtype=np.float32)
 
 
-def test_BaseModel_build():
-    # Model must be built first thing
-    model = ValidBaseModel(engine='serial')
-    npt.assert_equal(model._is_built, False)
+def test_SpatialModel():
+    # Build grid:
+    model = ValidSpatialModel()
+    npt.assert_equal(model.grid, None)
+    npt.assert_equal(model.is_built, False)
     model.build()
-    npt.assert_equal(model._is_built, True)
+    npt.assert_equal(model.is_built, True)
+    npt.assert_equal(isinstance(model.grid, GridXY), True)
+    npt.assert_equal(isinstance(model.grid.xret, np.ndarray), True)
 
-    # Params passed to ``build`` must take effect:
-    model = ValidBaseModel(engine='serial')
-    model_params = model._pprint_params()
-    for key, value in model_params.items():
-        if isinstance(value, (int, float)):
-            set_param = {key: 0.1234}
-        elif isinstance(value, (list, set, tuple, np.ndarray)):
-            set_param = {key: np.array([0, 0])}
-        else:
-            continue
-        # Passing `set_param` during ``build`` must overwrite the earlier
-        # value:
-        model.build(**set_param)
-        npt.assert_equal(getattr(model, key), set_param[key])
+    # Can overwrite default values:
+    model = ValidSpatialModel(xystep=1.234)
+    npt.assert_almost_equal(model.xystep, 1.234)
+    model.build(xystep=2.345)
+    npt.assert_almost_equal(model.xystep, 2.345)
 
-
-def test_BaseModel__is_built():
-    # You cannot set `_is_built` outside the constructor or ``build``:
-    model = ValidBaseModel(engine='serial')
-    npt.assert_equal(model._is_built, False)
+    # Cannot add more attributes:
     with pytest.raises(AttributeError):
-        model._is_built = True
+        ValidSpatialModel(newparam=1)
+    with pytest.raises(FreezeError):
+        model.newparam = 1
+
+    # Returns Percept object of proper size:
+    npt.assert_equal(model.predict_percept(ArgusI()), None)
+    for stim in [np.ones(16), np.zeros(16), {'A1': 2}, np.ones((16, 2))]:
+        implant = ArgusI(stim=stim)
+        percept = model.predict_percept(implant)
+        npt.assert_equal(isinstance(percept, Percept), True)
+        n_time = 1 if implant.stim.time is None else len(implant.stim.time)
+        npt.assert_equal(percept.shape, (model.grid.x.shape[0],
+                                         model.grid.x.shape[1],
+                                         n_time))
+        npt.assert_almost_equal(percept.data, 0)
+
+
+class ValidTemporalModel(TemporalModel):
+
+    def _predict_temporal(self, stim, t_percept):
+        if not self.is_built:
+            raise NotBuiltError
+        return np.zeros((stim.data.shape[0], len(t_percept)), dtype=np.float32)
+
+
+def test_TemporalModel():
+    # Build grid:
+    model = ValidTemporalModel()
+    npt.assert_equal(model.is_built, False)
+    model.build()
+    npt.assert_equal(model.is_built, True)
+
+    # Can overwrite default values:
+    model = ValidTemporalModel(dt=2e-5)
+    npt.assert_almost_equal(model.dt, 2e-5)
+    model.build(dt=1.234)
+    npt.assert_almost_equal(model.dt, 1.234)
+
+    # Cannot add more attributes:
     with pytest.raises(AttributeError):
-        model.__is_built = True
-    # After calling build, the flag should be set to True:
-    model.build()
-    npt.assert_equal(model._is_built, True)
-    # You cannot set the flag in a new method you added, it has to be in
-    # ``build``:
+        ValidTemporalModel(newparam=1)
+    with pytest.raises(FreezeError):
+        model.newparam = 1
+
+    # Returns Percept object of proper size:
+    npt.assert_equal(model.predict_percept(ArgusI().stim), None)
+    for stim in [np.ones((16, 3)), np.zeros((16, 3)),
+                 {'A1': [1, 2]}, np.ones((16, 2))]:
+        implant = ArgusI(stim=stim)
+        percept = model.predict_percept(implant.stim)
+        n_time = 1 if implant.stim.time is None else len(implant.stim.time)
+        npt.assert_equal(percept.shape, (implant.stim.shape[0], 1, n_time))
+        npt.assert_almost_equal(percept.data, 0)
+
+
+def test_Model():
+    # A None Model:
+    model = Model()
+    npt.assert_equal(model.has_space, False)
+    npt.assert_equal(model.has_time, False)
+    npt.assert_equal(str(model), "Model(spatial=None, temporal=None)")
+
+    # Cannot add attributes outside the constructor:
     with pytest.raises(AttributeError):
-        model.set_is_built()
+        model.a
+    with pytest.raises(FreezeError):
+        model.a = 1
+
+    # SpatialModel, but no TemporalModel:
+    model = Model(spatial=ValidSpatialModel())
+    npt.assert_equal(model.has_space, True)
+    npt.assert_equal(model.has_time, False)
+    npt.assert_almost_equal(model.xystep, 0.25)
+    npt.assert_almost_equal(model.spatial.xystep, 0.25)
+    model.xystep = 2
+    npt.assert_almost_equal(model.xystep, 2)
+    npt.assert_almost_equal(model.spatial.xystep, 2)
+    # Cannot add more attributes:
+    with pytest.raises(AttributeError):
+        model.a
+    with pytest.raises(FreezeError):
+        model.a = 1
+
+    # TemporalModel, but no SpatialModel:
+    model = Model(temporal=ValidTemporalModel())
+    npt.assert_equal(model.has_space, False)
+    npt.assert_equal(model.has_time, True)
+    npt.assert_almost_equal(model.dt, 5e-6)
+    npt.assert_almost_equal(model.temporal.dt, 5e-6)
+    model.dt = 1
+    npt.assert_almost_equal(model.dt, 1)
+    npt.assert_almost_equal(model.temporal.dt, 1)
+    # Cannot add more attributes:
+    with pytest.raises(AttributeError):
+        model.a
+    with pytest.raises(FreezeError):
+        model.a = 1
+
+    # SpatialModel and TemporalModel:
+    model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
+    npt.assert_equal(model.has_space, True)
+    npt.assert_equal(model.has_time, True)
+    npt.assert_almost_equal(model.xystep, 0.25)
+    npt.assert_almost_equal(model.spatial.xystep, 0.25)
+    npt.assert_almost_equal(model.dt, 5e-6)
+    npt.assert_almost_equal(model.temporal.dt, 5e-6)
+    # Setting a new spatial parameter:
+    model.xystep = 2
+    npt.assert_almost_equal(model.xystep, 2)
+    npt.assert_almost_equal(model.spatial.xystep, 2)
+    # Setting a new temporal parameter:
+    model.dt = 1
+    npt.assert_almost_equal(model.dt, 1)
+    npt.assert_almost_equal(model.temporal.dt, 1)
+    # Setting a parameter that's part of both spatial/temporal:
+    npt.assert_equal(model.thresh_percept, {'spatial': 0, 'temporal': 0})
+    model.thresh_percept = 1.234
+    npt.assert_almost_equal(model.spatial.thresh_percept, 1.234)
+    npt.assert_almost_equal(model.temporal.thresh_percept, 1.234)
+    # Cannot add more attributes:
+    with pytest.raises(AttributeError):
+        model.a
+    with pytest.raises(FreezeError):
+        model.a = 1
 
 
-def test_BaseModel_predict_percept():
-    img_stim = np.zeros(60)
-    model = ValidBaseModel(engine='serial', xystep=5, xrange=(-30, 30),
-                           yrange=(-20, 20))
-    # Model must be built first:
-    with pytest.raises(models.NotBuiltError):
-        model.predict_percept(implants.ArgusII())
+def test_Model_set_params():
+    # SpatialModel, but no TemporalModel:
+    model = Model(spatial=ValidSpatialModel())
+    model.set_params({'xystep': 2.33})
+    npt.assert_almost_equal(model.xystep, 2.33)
+    npt.assert_almost_equal(model.spatial.xystep, 2.33)
 
-    # But then must pass through ``predict_percept`` just fine
+    # TemporalModel, but no SpatialModel:
+    model = Model(temporal=ValidTemporalModel())
+    model.set_params({'dt': 2.33})
+    npt.assert_almost_equal(model.dt, 2.33)
+    npt.assert_almost_equal(model.temporal.dt, 2.33)
+
+    # SpatialModel and TemporalModel:
+    model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
+    # Setting both using the convenience function:
+    model.set_params({'xystep': 5, 'dt': 2.33})
+    npt.assert_almost_equal(model.xystep, 5)
+    npt.assert_almost_equal(model.spatial.xystep, 5)
+    npt.assert_equal(hasattr(model.temporal, 'xystep'), False)
+    npt.assert_almost_equal(model.dt, 2.33)
+    npt.assert_almost_equal(model.temporal.dt, 2.33)
+    npt.assert_equal(hasattr(model.spatial, 'dt'), False)
+
+
+def test_Model_build():
+    # A None model:
+    model = Model()
+    # Nothing to build, so `is_built` is always True (we want to be able to
+    # call `predict_percept`):
+    npt.assert_equal(model.is_built, True)
     model.build()
-    percept = model.predict_percept(implants.ArgusII(stim=img_stim))
-    npt.assert_equal(percept.shape, (1, 9, 13))
-    npt.assert_almost_equal(percept, 0)
+    npt.assert_equal(model.is_built, True)
 
-    # Requires ProsthesisSystem object:
-    with pytest.raises(TypeError):
-        model.predict_percept(img_stim)
-
-    # None in, None out:
-    npt.assert_equal(model.predict_percept(implants.ArgusII(stim=None)), None)
-
-    # `img_stim` must have right size:
-    for shape in [(2, 60), (59,), (2, 3, 4)]:
-        with pytest.raises(ValueError):
-            model.predict_percept(implants.ArgusII(stim=np.zeros(shape)))
-
-    # Single-pixel percept:
-    model = ValidBaseModel(engine='serial', xrange=(0.45, 0.45), yrange=(0, 0))
+    # SpatialModel, but no TemporalModel:
+    model = Model(spatial=ValidSpatialModel())
+    npt.assert_equal(model.is_built, False)
     model.build()
-    percept = model.predict_percept(implants.ArgusII(stim=np.zeros(60)))
-    npt.assert_equal(percept.shape, (1, 1, 1))
-    npt.assert_almost_equal(percept, 0)
+    npt.assert_equal(model.is_built, True)
+
+    # TemporalModel, but no SpatialModel:
+    model = Model(temporal=ValidTemporalModel())
+    npt.assert_equal(model.is_built, False)
+    model.build()
+    npt.assert_equal(model.is_built, True)
+
+    # SpatialModel and TemporalModel:
+    model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
+    npt.assert_equal(model.is_built, False)
+    model.build()
+    npt.assert_equal(model.is_built, True)
+
+
+def test_Model_predict_percept():
+    # A None Model has nothing to build, nothing to perceive:
+    model = Model()
+    npt.assert_equal(model.predict_percept(ArgusI()), None)
+    npt.assert_equal(model.predict_percept(ArgusI(stim={'A1': 1})), None)
+    npt.assert_equal(model.predict_percept(ArgusI(stim={'A1': 1}),
+                                           t_percept=[0, 1]), None)
