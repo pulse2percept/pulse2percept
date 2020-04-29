@@ -4,6 +4,7 @@
     :toctree: _api
 
     base
+    pulses
     pulse_trains
 
 .. seealso::
@@ -12,12 +13,16 @@
 
 """
 
-from .base import Stimulus
-from .pulse_trains import (TimeSeries, MonophasicPulse, BiphasicPulse,
-                           PulseTrain)
+from .base import Stimulus, TimeSeries
+from .pulses import AsymmetricBiphasicPulse, BiphasicPulse, MonophasicPulse
+from .pulse_trains import (PulseTrain, BiphasicPulseTrain,
+                           AsymmetricBiphasicPulseTrain)
 
 __all__ = [
+    'AsymmetricBiphasicPulse',
+    'AsymmetricBiphasicPulseTrain',
     'BiphasicPulse',
+    'BiphasicPulseTrain',
     'MonophasicPulse',
     'PulseTrain',
     'Stimulus',
