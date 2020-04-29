@@ -77,7 +77,7 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
         all expensive one-time calculations. You must call ``build`` before
         calling ``predict_percept``.
 
-        .. note::
+        .. important::
 
             Don't override this method if you are building your own model.
             Customize ``_build`` instead.
@@ -118,13 +118,53 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
 
 
 class SpatialModel(BaseModel, metaclass=ABCMeta):
+    """Abstract base class for all spatial models
+
+    Provides basic functionality for all spatial models:
+
+    *  ``build``: builds the spatial grid used to calculate the percept.
+       You can add your own ``_build`` method (note the underscore) that
+       performs additional expensive one-time calculations.
+    *  ``predict_percept``: predicts the percepts based on an implant/stimulus.
+       You can add your own ``_predict_spatial`` method to customize this step.
+       A user must call ``build`` before calling ``predict_percept``.
+
+    To create your own spatial model, you must subclass ``SpatialModel`` and
+    provide implementations for its three abstract methods:
+
+    *  ``dva2ret``: a means to convert from degrees of visual angle (dva) to
+       retinal coordinates (microns).
+    *  ``ret2dva``: a means to convert from retinal coordinates to dva.
+    *  ``_predict_spatial``: a method that accepts an ElectrodeArray as well as
+       a Stimulus and computes the brightness at all spatial coordinates of
+       ``self.grid``, returned as a 2D NumPy array (space x time).
+
+    In addition, you can customize the following:
+
+    *  ``__init__``: the constructor can be used to define additional
+       parameters (note that you cannot add parameters on-the-fly)
+    *  ``get_default_params``: all settable model parameters must be listed by
+       this method
+    *  ``_build`` (optional): a way to add one-time computations to the build
+       process
+
+    .. note ::
+
+        You will not be able to add more parameters outside the constructor;
+        e.g., ``model.newparam = 1`` will lead to a ``FreezeError``.
+
+    .. seealso ::
+
+        *  `Basic Concepts > Computational Models > Building your own model
+           <topics-models-building-your-own>`
+    """
 
     def __init__(self, **params):
         super().__init__(**params)
         self.grid = None
 
     def get_default_params(self):
-        """Get a dictionary of default values for all model parameters"""
+        """Return a dictionary of default values for all model parameters"""
         params = {
             # We will be simulating a patch of the visual field (xrange/yrange
             # in degrees of visual angle), at a given spatial resolution (step
@@ -157,18 +197,18 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def build(self, **build_params):
         """Build the model
 
-        Every model must have a ```build`` method, which is meant to perform
-        all expensive one-time calculations. You must call ``build`` before
+        Performs expensive one-time calculations, such as building the spatial
+        grid used to predict a percept. You must call ``build`` before
         calling ``predict_percept``.
 
-        .. note::
+        .. important::
 
             Don't override this method if you are building your own model.
             Customize ``_build`` instead.
 
         Parameters
         ----------
-        build_params : additional parameters to set
+        build_params: additional parameters to set
             You can overwrite parameters that are listed in
             ``get_default_params``. Trying to add new class attributes outside
             of that will cause a ``FreezeError``.
@@ -188,43 +228,47 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
     @abstractmethod
     def _predict_spatial(self, earray, stim):
-        """Called from ``predict_percept`` after error checking
+        """Customized spatial response
 
-        The problem is: if you instantiate SpatialModel, you want to be able to
-        run it at any t. For example, you have a really long pulse train but
-        you only care about current spread at a particular time point.
+        Called by the user from ``predict_percept`` after error checking.
 
-        This is in conflict with a Model() instance, where you need to calculate
-        current spread at all stimulus times for the temporal model.
+        Parameters
+        ----------
+        earray: :py:class:`~pulse2percept.implants.ElectrodeArray`
+            A valid electrode array.
+        stim : :py:meth:`~pulse2percept.stimuli.Stimulus`
+            A valid stimulus with a 2D data container (n_electrodes, n_time).
 
-        MUST RETURN: SPACE x TIME
+        Returns
+        -------
+        percept: np.ndarray
+            A 2D NumPy array that has the same dimensions as the input stimulus
+            (n_electrodes, n_time).
         """
         raise NotImplementedError
 
     def predict_percept(self, implant, t_percept=None):
         """Predict the spatial response
 
+        .. important::
+
+            Don't override this method if you are creating your own model.
+            Customize ``_predict_spatial`` instead.
+
         Parameters
         ----------
-        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
             A valid prosthesis system. A stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
-        t_percept : float or list of floats, optional, default: None
-            The time points at which to output a percept (seconds).
+        t_percept: float or list of floats, optional, default: None
+            The time points at which to output a percept(seconds).
             If None, ``implant.stim.time`` is used.
 
         Returns
         -------
-        percept : :py:class:`~pulse2percept.models.Percept`
+        percept: :py:class:`~pulse2percept.models.Percept`
             A Percept object whose ``data`` container has dimensions Y x X x T.
             Will return None if ``implant.stim`` is None.
-
-        .. note ::
-
-            Do not override this method if you are writing your own model.
-            It performs error checks and reshaping of the stimulus container,
-            before calling out to ``_predict_spatial``.
-            Customize ``_predict_spatial`` instead.
 
         """
         if not self.is_built:
@@ -261,35 +305,94 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
 
 class TemporalModel(BaseModel, metaclass=ABCMeta):
+    """Abstract base class for all temporal models
+
+    Provides basic functionality for all temporal models:
+
+    *  ``build``: builds the model in order to calculate the percept.
+       You can add your own ``_build`` method (note the underscore) that
+       performs additional expensive one-time calculations.
+    *  ``predict_percept``: predicts the percepts based on an implant/stimulus.
+       You can add your own ``_predict_temporal`` method to customize this
+       step. A user must call ``build`` before calling ``predict_percept``.
+
+    To create your own temporal model, you must subclass ``SpatialModel`` and
+    provide implementations for its three abstract methods:
+
+    *  ``dva2ret``: a means to convert from degrees of visual angle (dva) to
+       retinal coordinates (microns).
+    *  ``ret2dva``: a means to convert from retinal coordinates to dva.
+    *  ``_predict_temporal``: a method that accepts either a
+       :py:class:`~pulse2percept.stimuli.Stimulus` or a
+       :py:class:`~pulse2percept.percepts.Percept` object and a list of time
+       points at which to calculate the resulting percept, returned as a 2D
+       NumPy array (space x time).
+
+    In addition, you can customize the following:
+
+    *  ``__init__``: the constructor can be used to define additional
+       parameters (note that you cannot add parameters on-the-fly)
+    *  ``get_default_params``: all settable model parameters must be listed by
+       this method
+    *  ``_build`` (optional): a way to add one-time computations to the build
+       process
+
+    .. note ::
+
+        You will not be able to add more parameters outside the constructor;
+        e.g., ``model.newparam = 1`` will lead to a ``FreezeError``.
+
+    .. seealso ::
+
+        *  `Basic Concepts > Computational Models > Building your own model
+           <topics-models-building-your-own>`
+    """
 
     def get_default_params(self):
+        """Return a dictionary of default values for all model parameters"""
         params = {
             # Simulation time step:
             'dt': 5e-6,
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
-            # True: print status messages, 0: silent
+            # True: print status messages, False: silent
             'verbose': True
         }
         return params
 
     @abstractmethod
     def _predict_temporal(self, stim, t_percept):
-        """Called from ``predict_percept`` after error checking
+        """Customized temporal response
 
-        MUST RETURN: NxT
-        we need to know the time points for outputting and in case there's a
-        temporal model up next
+        Called by the user from ``predict_percept`` after error checking.
+
+        Parameters
+        ----------
+        stim : :py:meth:`~pulse2percept.stimuli.Stimulus`
+            A valid stimulus with a 2D data container (n_electrodes, n_time).
+        t_percept : list of floats
+            The time points at which to output a percept (seconds).
+
+        Returns
+        -------
+        percept: np.ndarray
+            A 2D NumPy array (space x time) that specifies the percept at each
+            spatial location and time step.
         """
         raise NotImplementedError
 
     def predict_percept(self, stim, t_percept=None):
         """Predict the temporal response
 
+        .. important ::
+
+            Don't override this method if you are creating your own model.
+            Customize ``_predict_temporal`` instead.
+
         Parameters
         ----------
-        stim : :py:class:`~pulse2percept.stimuli.Stimulus` or
-               :py:class:`~pulse2percept.models.Percept`
+        stim: : py: class: `~pulse2percept.stimuli.Stimulus` or
+               : py: class: `~pulse2percept.models.Percept`
             Either a Stimulus or a Percept object. The temporal model will be
             applied to each spatial location in the stimulus/percept.
         t_percept : float or list of floats, optional, default: None
@@ -301,13 +404,6 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         percept : :py:class:`~pulse2percept.models.Percept`
             A Percept object whose ``data`` container has dimensions Y x X x T.
             Will return None if ``stim`` is None.
-
-        .. note ::
-
-            Do not override this method if you are writing your own model.
-            It performs error checks and reshaping of the stimulus container,
-            before calling out to ``_predict_temporal``.
-            Customize ``_predict_temporal`` instead.
 
         """
         if not self.is_built:
@@ -359,13 +455,30 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
 
 
 class Model(PrettyPrint):
-    """Model
+    """Computational model
+
+    To build your own model, you can mix and match spatial and temporal models
+    at will.
+
+    For example, to create a model that combines the scoreboard model described
+    in [Beyeler2019]_ with the temporal model cascade described in
+    [Nanduri2012]_, use the following:
+
+    .. code-block :: python
+
+        model = Model(spatial=ScoreboardSpatial(),
+                      temporal=Nanduri2012Temporal())
+
+    .. seealso ::
+
+        *  `Basic Concepts > Computational Models > Building your own model
+           <topics-models-building-your-own>`
 
     Parameters
     ----------
-    spatial: : py: class: `~pulse2percept.models.SpatialModel` or None
+    spatial: :py:class:`~pulse2percept.models.SpatialModel` or None
         blah
-    temporal: : py: class: `~pulse2percept.models.TemporalModel` or None
+    temporal: :py:class:`~pulse2percept.models.TemporalModel` or None
         blah
     **params:
         Additional keyword arguments(e.g., ``verbose=True``) to be passed to
@@ -374,7 +487,6 @@ class Model(PrettyPrint):
     """
 
     def __init__(self, spatial=None, temporal=None, **params):
-        """A Model provides the glue between a spatial and/or temporal model"""
         # Set the spatial model:
         if spatial is not None and not isinstance(spatial, SpatialModel):
             raise TypeError("'spatial' must be a SpatialModel, not "
@@ -500,7 +612,24 @@ class Model(PrettyPrint):
             setattr(self, key, val)
 
     def build(self, **build_params):
-        """Builds the model"""
+        """Build the model
+
+        Performs expensive one-time calculations, such as building the spatial
+        grid used to predict a percept.
+
+        Parameters
+        ----------
+        build_params: additional parameters to set
+            You can overwrite parameters that are listed in
+            ``get_default_params``. Trying to add new class attributes outside
+            of that will cause a ``FreezeError``.
+            Example: ``model.build(param1=val)``
+
+        Returns
+        -------
+        self
+
+        """
         self.set_params(build_params)
         if self.has_space:
             self.spatial.build()
@@ -511,19 +640,24 @@ class Model(PrettyPrint):
     def predict_percept(self, implant, t_percept=None):
         """Predict a percept
 
+        .. important ::
+
+            You must call ``build`` before calling ``predict_percept``.
+
         Parameters
         ----------
-        implant: : py: class: `~pulse2percept.implants.ProsthesisSystem`
-            Stimulus can be passed via
-            : py: meth: `~pulse2percept.implants.ProsthesisSystem.stim`.
-        t_percept: float or list of floats
+        implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
+            A valid prosthesis system. A stimulus can be passed via
+            :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
+        t_percept: float or list of floats, optional, default: None
             The time points at which to output a percept(seconds).
+            If None, ``implant.stim.time`` is used.
 
         Returns
         -------
-        percept: np.ndarray
-            A (X, Y, T) matrix that contains the predicted brightness values
-            at the specified(X, Y) spatial locations and times T.
+        percept: :py:class:`~pulse2percept.models.Percept`
+            A Percept object whose ``data`` container has dimensions Y x X x T.
+            Will return None if ``implant.stim`` is None.
         """
         if not self.is_built:
             raise NotBuiltError("Yout must call ``build`` first.")

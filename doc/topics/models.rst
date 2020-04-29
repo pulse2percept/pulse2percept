@@ -92,19 +92,44 @@ the following methods:
 *  ``dva2ret``: a means to convert from degrees of visual angle (dva) to
    retinal coordinates (microns).
 *  ``ret2dva``: a means to convert from retinal coordinates to dva.
-*  ``_build`` (optional): a way to add one-time computations to the build
-   process
 *  ``_predict_spatial``: a method that accepts an
    :py:class:`~pulse2percept.implants.ElectrodeArray` as well as a
    :py:class:`~pulse2percept.stimuli.Stimulus` and computes the brightness at
    all spatial coordinates of ``self.grid``, returned as a 2D NumPy array
    (space x time).
 
-For example:
+In addition, you can customize the following methods:
+
+*  ``__init__``: the constructor can be used to define additional parameters
+   (note that you cannot add parameters on-the-fly)
+*  ``get_default_params``: all settable model parameters must be listed by
+   this method
+*  ``_build`` (optional): a way to add one-time computations to the build
+   process
+
+A full working example:
 
 .. code-block:: python
 
     class MySpatialModel(SpatialModel):
+        def __init__(self, **params):
+            """Constructor"""
+            # Make sure to call the parent's (SpatialModel's constructor):
+            super(MySpatialModel, self).__init__(self, **params)
+            # You can set additional parameters here (e.g., stuff you will
+            # need later on in ``_build``). You will not be able to add
+            # parameters outside the constructor or ``get_default_params``.
+            self.n_fib = 100
+
+        def get_default_params(self):
+            """Return a dictionary of settable model parameters"""
+            # Get all parameters already set by the parent (SpatialModel):
+            params = super(MySpatialModel, self).get_default_params()
+            # Add our own:
+            params.update(myparam=1)
+            # Return the combined dictionary:
+            return params
+
         def dva2ret(self, dva):
             """Convert degrees of visual angle (dva) into retinal coords (um)"""
             return 280.0 * dva
@@ -115,7 +140,9 @@ For example:
 
         def _build(self):
             """Perform heavy computations during the build process"""
-            self.heavy = fibonacci(100)  # some heavy computation
+            # Perform some expensive computation using parameters you
+            # initialized in the constructor:
+            self.heavy = some_heavy_comp(self.n_fib)
 
         def _predict_spatial(self, earray, stim):
             """Calculate the spatial response at different time points"""
