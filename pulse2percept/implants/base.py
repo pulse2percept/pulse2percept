@@ -678,13 +678,13 @@ class ProsthesisSystem(PrettyPrint):
 
         Examples
         --------
-        Send a biphasic pulse to an implant made from a single
-        :py:class:`~pulse2percept.implants.DiskElectrode`:
+        Send a biphasic pulse (30uA, 0.45ms phase duration) to an implant made
+        from a single :py:class:`~pulse2percept.implants.DiskElectrode`:
 
         >>> from pulse2percept.implants import DiskElectrode, ProsthesisSystem
         >>> from pulse2percept.stimuli import BiphasicPulse
         >>> implant = ProsthesisSystem(DiskElectrode(0, 0, 0, 100))
-        >>> implant.stim = BiphasicPulse('cathodicfirst', 1e-4, 1e-6)
+        >>> implant.stim = BiphasicPulse(30, 0.45)
 
         Stimulate Electrode B7 in Argus II with 13 uA:
 
