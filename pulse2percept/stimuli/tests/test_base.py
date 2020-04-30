@@ -177,6 +177,9 @@ def test_Stimulus_compress():
     npt.assert_equal(stim.shape, (len(time), len(time)))
     npt.assert_almost_equal(stim.time, time)
 
+    with pytest.raises(AttributeError):
+        stim.is_compressed = True
+
 
 def test_Stimulus_plot():
     # Stimulus with one electrode
@@ -316,10 +319,15 @@ def test_Stimulus___eq__():
     npt.assert_equal(stim == Stimulus(np.ones((2, 4))), False)
     npt.assert_equal(stim == Stimulus(np.ones(2)), False)
     # Different data points:
-    npt.assert_equal(stim == Stimulus(np.ones((2, 3)) * 1.1), False)
+    npt.assert_equal(stim == Stimulus(np.ones((2, 3)) * 1.1, compress=True),
+                     False)
+    # Different shape
+    npt.assert_equal(stim == Stimulus(np.ones((2, 5))), False)
     # Different type:
     npt.assert_equal(stim == ODict(), False)
     npt.assert_equal(stim != ODict(), True)
+    # Time vs no time:
+    npt.assert_equal(Stimulus(2) == stim, False)
     # Annoying but possible:
     npt.assert_equal(Stimulus([]), Stimulus(()))
 

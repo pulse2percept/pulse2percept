@@ -40,6 +40,8 @@ def test_BaseModel():
     # Attributes must be in `get_default_params`:
     with pytest.raises(AttributeError):
         ValidBaseModel(c=3)
+    with pytest.raises(AttributeError):
+        ValidBaseModel().is_built = True
 
 
 class ValidSpatialModel(SpatialModel):
@@ -91,6 +93,19 @@ def test_SpatialModel():
                                          n_time))
         npt.assert_almost_equal(percept.data, 0)
 
+    # Invalid calls:
+    with pytest.raises(ValueError):
+        # stim.time==None but requesting t_percept != None
+        implant.stim = np.ones(16)
+        model.predict_percept(implant, t_percept=[0, 1, 2])
+    with pytest.raises(NotBuiltError):
+        # must call build first
+        model = ValidSpatialModel()
+        model.predict_percept(ArgusI())
+    with pytest.raises(TypeError):
+        # must pass an implant
+        ValidSpatialModel().build().predict_percept(Stimulus(3))
+
 
 class ValidTemporalModel(TemporalModel):
 
@@ -135,9 +150,19 @@ def test_TemporalModel():
                                     t_percept=[0.1, 0.8, 0.6])
     npt.assert_almost_equal(percept.time, [0.1, 0.6, 0.8])
 
-    # Cannot request t_percepts that are not multiples of dt:
+    # Invalid calls:
     with pytest.raises(ValueError):
+        # Cannot request t_percepts that are not multiples of dt:
         model.predict_percept(Stimulus(np.ones((3, 9))), t_percept=[0.1, 0.11])
+    with pytest.raises(ValueError):
+        # stim.time==None but requesting t_percept != None
+        ValidTemporalModel().predict_percept(Stimulus(3), t_percept=[0, 1, 2])
+    with pytest.raises(NotBuiltError):
+        # Must call build first:
+        ValidTemporalModel().predict_percept(Stimulus(3))
+    with pytest.raises(TypeError):
+        # Must pass a stimulus:
+        ValidTemporalModel().build().predict_percept(ArgusI())
 
 
 def test_Model():
@@ -152,6 +177,12 @@ def test_Model():
         model.a
     with pytest.raises(FreezeError):
         model.a = 1
+
+    # Wrong model type:
+    with pytest.raises(TypeError):
+        Model(spatial=ValidTemporalModel())
+    with pytest.raises(TypeError):
+        Model(temporal=ValidSpatialModel())
 
     # SpatialModel, but no TemporalModel:
     model = Model(spatial=ValidSpatialModel())
@@ -271,3 +302,28 @@ def test_Model_predict_percept():
     npt.assert_equal(model.predict_percept(ArgusI(stim={'A1': 1})), None)
     npt.assert_equal(model.predict_percept(ArgusI(stim={'A1': 1}),
                                            t_percept=[0, 1]), None)
+
+    # Just the spatial model:
+    model = Model(spatial=ValidSpatialModel()).build()
+    npt.assert_equal(model.predict_percept(ArgusI()), None)
+    # Just the temporal model:
+    model = Model(temporal=ValidTemporalModel()).build()
+    npt.assert_equal(model.predict_percept(ArgusI()), None)
+
+    # Invalid calls:
+    model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
+    with pytest.raises(NotBuiltError):
+        # Must call build first:
+        model.predict_percept(ArgusI())
+    model.build()
+    with pytest.raises(ValueError):
+        # Cannot request t_percepts that are not multiples of dt:
+        model.predict_percept(ArgusI(stim=np.ones(16)),
+                              t_percept=[0.1, 0.11])
+    with pytest.raises(ValueError):
+        # stim.time==None but requesting t_percept != None
+        model.predict_percept(ArgusI(stim=np.ones(16)),
+                              t_percept=[0, 1, 2])
+    with pytest.raises(TypeError):
+        # Must pass an implant:
+        model.predict_percept(Stimulus(3))
