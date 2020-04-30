@@ -4,30 +4,32 @@
     :toctree: _api
 
     base
-    scoreboard
-    axon_map
+    beyeler2019
     nanduri2012
-    watson2014
+
+.. seealso::
+
+    *  :ref:`Basic Concepts > Computational Models <topics-models>`
 
 """
-from .base import BaseModel, NotBuiltError
-from .watson2014 import (Watson2014ConversionMixin, dva2ret, ret2dva,
-                         Watson2014DisplacementMixin)
-from .scoreboard import ScoreboardModel
-from .axon_map import AxonMapModel
-from .nanduri2012 import (Nanduri2012Model, Nanduri2012SpatialMixin,
-                          Nanduri2012TemporalMixin)
+from .base import (BaseModel, Model, NotBuiltError, SpatialModel,
+                   TemporalModel)
+from .beyeler2019 import (ScoreboardModel, ScoreboardSpatial, AxonMapSpatial,
+                          AxonMapModel)
+from .nanduri2012 import (Nanduri2012Model, Nanduri2012Spatial,
+                          Nanduri2012Temporal)
 
 __all__ = [
     'AxonMapModel',
+    'AxonMapSpatial',
     'BaseModel',
-    'dva2ret',
+    'Model',
     'Nanduri2012Model',
-    'Nanduri2012SpatialMixin',
-    'Nanduri2012TemporalMixin',
+    'Nanduri2012Spatial',
+    'Nanduri2012Temporal',
     'NotBuiltError',
-    'ret2dva',
     'ScoreboardModel',
-    'Watson2014ConversionMixin',
-    'Watson2014DisplacementMixin'
+    'ScoreboardSpatial',
+    'SpatialModel',
+    'TemporalModel',
 ]

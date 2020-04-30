@@ -73,7 +73,7 @@ release can be installed with pip:
 
 .. code-block:: bash
 
-    pip3 install -U pulse2percept
+    pip3 install pulse2percept
 
 You can also install a specific version:
 
@@ -161,8 +161,8 @@ Dependencies
 ------------
 
 .. include:: ../README.rst
-   :start-line: 112
-   :end-line: 146
+   :start-line: 115
+   :end-line: 148
 
 Obtaining the latest code from GitHub
 -------------------------------------

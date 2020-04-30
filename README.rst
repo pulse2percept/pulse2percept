@@ -80,7 +80,7 @@ If you use pulse2percept in a scholarly publication, please cite as:
 Installation
 ============
 
-Once you have Python and pip, the latest `stable release`_ of pulse2percept
+Once you have Python and pip, the `stable release`_ of pulse2percept
 can be installed with pip:
 
 .. code-block:: bash
@@ -128,9 +128,10 @@ Optional packages:
     need an FFMPEG codec (see next bullet point).
 3.  `ffmpeg codec`_ if you're on Windows and want to use functions in the `io`
     module.
-4.  `Dask`_ for parallel processing (a joblib alternative).
+4.  `Pandas`_ for loading datasets in the ``datasets`` module.
+5.  `Dask`_ for parallel processing (a joblib alternative).
     Use conda to install.
-5.  `Pytest`_ to run the test suite.
+6.  `Pytest`_ to run the test suite.
 
 .. _Python: https://www.python.org
 .. _Cython: https://www.cython.org
@@ -141,6 +142,7 @@ Optional packages:
 .. _scikit-image: https://scikit-image.org
 .. _scikit-video: https://www.scikit-video.org
 .. _ffmpeg codec: http://adaptivesamples.com/how-to-install-ffmpeg-on-windows
+.. _Pandas: https://pandas.pydata.org
 .. _Dask: https://github.com/dask/dask
 .. _Pytest: https://docs.pytest.org/en/latest
 

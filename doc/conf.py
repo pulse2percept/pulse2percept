@@ -232,8 +232,12 @@ latex_elements = {
 
     # Additional stuff for the LaTeX preamble.
     'preamble': r"""
-        \usepackage{amsmath}\usepackage{amsfonts}\usepackage{bm}
-        \usepackage{morefloats}\usepackage{enumitem} \setlistdepth{10}
+        \usepackage{amsmath}
+        \usepackage{amsfonts}
+        \usepackage{bm}
+        \usepackage{morefloats}
+        \usepackage{enumitem}
+        \setlistdepth{10}
         """
 }
 

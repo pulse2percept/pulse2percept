@@ -163,20 +163,16 @@ implant.stim = np.ones(60)
 percept = model.predict_percept(implant)
 
 ##############################################################################
-# The resulting percept is stored in a NumPy array whose dimensions correspond
-# to the values specified by ``xrange``, ``yrange``, and ``xystep``.
+# The resulting percept is stored in a
+# :py:class:`~pulse2percept.percepts.Percept` object, which is similar in
+# organization to the :py:class:`~pulse2percept.stimuli.Stimulus` object:
+# the ``data`` container is a 3D NumPy array (Y, X, T) with labeled axes
+# ``xdva``, ``ydva``, and ``time``.
 #
-# The percept can be plotted using Matplotlib:
+# The percept can be plotted as follows:
 
-import matplotlib.pyplot as plt
-plt.imshow(percept[0, ...], cmap='gray')
-plt.xticks(np.linspace(0, percept.shape[2], num=5),
-           np.linspace(*model.xrange, num=5))
-plt.xlabel('x (dva)')
-plt.yticks(np.linspace(0, percept.shape[1], num=5),
-           np.linspace(*model.yrange, num=5))
-plt.ylabel('y (dva)')
-plt.title('Predicted percept')
+ax = percept.plot()
+ax.set_title('Predicted percept')
 
 ##############################################################################
 # A major prediction of the axon map model is that the percept changes
@@ -191,14 +187,8 @@ plot_implant_on_axon_map(implant)
 
 implant.stim = np.ones(60)
 percept = model.predict_percept(implant)
-plt.imshow(percept[0, ...], cmap='gray')
-plt.xticks(np.linspace(0, percept.shape[2], num=5),
-           np.linspace(*model.xrange, num=5))
-plt.xlabel('x (dva)')
-plt.yticks(np.linspace(0, percept.shape[1], num=5),
-           np.linspace(*model.yrange, num=5))
-plt.ylabel('y (dva)')
-plt.title('Predicted percept')
+ax = percept.plot()
+ax.set_title('Predicted percept')
 
 ##############################################################################
 # .. important::

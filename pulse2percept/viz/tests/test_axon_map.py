@@ -5,7 +5,7 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Subplot
 
 from pulse2percept.implants import ArgusII, DiskElectrode
-from pulse2percept.models import dva2ret
+from pulse2percept.models import AxonMapSpatial
 from pulse2percept.viz import plot_axon_map, plot_implant_on_axon_map
 
 
@@ -15,7 +15,8 @@ def test_plot_axon_map():
     npt.assert_equal(isinstance(ax, Subplot), True)
 
     # Check axis limits:
-    xmin, xmax, ymin, ymax = dva2ret([-20, 20, -15, 15])
+    model = AxonMapSpatial()
+    xmin, xmax, ymin, ymax = model.dva2ret([-20, 20, -15, 15])
     npt.assert_equal(ax.get_xlim(), (xmin, xmax))
     npt.assert_equal(ax.get_ylim(), (ymin, ymax))
 
@@ -25,7 +26,8 @@ def test_plot_axon_map():
             od = (-loc_od[0], loc_od[1]) if eye == 'LE' else loc_od
             _, ax = plot_axon_map(eye=eye, loc_od=od)
             npt.assert_equal(len(ax.patches), 1)
-            npt.assert_almost_equal(ax.patches[0].center, dva2ret(od))
+            npt.assert_almost_equal(
+                ax.patches[0].center, model.dva2ret(od))
 
     # Electrodes and quadrants can be annotated:
     for ann_q, n_q in [(True, 4), (False, 0)]:
@@ -51,7 +53,8 @@ def test_plot_implant_on_axon_map():
     npt.assert_equal(isinstance(ax, Subplot), True)
 
     # Check axis limits:
-    xmin, xmax, ymin, ymax = dva2ret([-20, 20, -15, 15])
+    model = AxonMapSpatial()
+    xmin, xmax, ymin, ymax = model.dva2ret([-20, 20, -15, 15])
     npt.assert_equal(ax.get_xlim(), (xmin, xmax))
     npt.assert_equal(ax.get_ylim(), (ymin, ymax))
 
@@ -61,7 +64,7 @@ def test_plot_implant_on_axon_map():
             od = (-loc_od[0], loc_od[1]) if eye == 'LE' else loc_od
             _, ax = plot_implant_on_axon_map(ArgusII(eye=eye), loc_od=od)
             npt.assert_equal(len(ax.patches), 1)
-            npt.assert_almost_equal(ax.patches[0].center, dva2ret(od))
+            npt.assert_almost_equal(ax.patches[0].center, model.dva2ret(od))
 
     # Electrodes and quadrants can be annotated:
     for ann_el, n_el in [(True, 60), (False, 0)]:

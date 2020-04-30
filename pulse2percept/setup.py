@@ -21,6 +21,8 @@ def configuration(parent_package='', top_path=None):
     config.add_subpackage('utils/tests')
     config.add_subpackage('io')
     config.add_subpackage('io/tests')
+    config.add_subpackage('percepts')
+    config.add_subpackage('percepts/tests')
     config.add_subpackage('viz')
     config.add_subpackage('viz/tests')
     config.add_subpackage('datasets')

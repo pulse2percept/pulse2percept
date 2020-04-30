@@ -8,6 +8,7 @@ pulse2percept is organized into the following subpackages:
     implants
     stimuli
     models
+    percepts
     datasets
     io
     viz

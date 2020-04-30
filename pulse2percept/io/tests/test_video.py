@@ -3,7 +3,7 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 from unittest import mock
-from imp import reload
+from importlib import reload
 
 # Import the whole module so we can reload it:
 from pulse2percept.io import video

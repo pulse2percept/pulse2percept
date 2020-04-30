@@ -1,16 +1,59 @@
-"""`AxonMapModel`"""
+"""`AxonMapModel`, `AxonMapSpatial` [Beyeler2019]_"""
 
 import os
 import numpy as np
 import pickle
 
-from ..utils import parfor, GridXY
-from ..implants import ProsthesisSystem
-from ..models import BaseModel, Watson2014ConversionMixin, dva2ret
-from ..models._axon_map import axon_contribution, spatial_fast
+from ..utils import parfor, GridXY, Watson2014Transform
+from ..implants import ProsthesisSystem, ElectrodeArray
+from ..stimuli import Stimulus
+from ..models import Model, SpatialModel
+from ._beyeler2019 import scoreboard_fast, axon_contribution, axon_map_fast
 
 
-class AxonMapModel(Watson2014ConversionMixin, BaseModel):
+class ScoreboardSpatial(SpatialModel):
+
+    def get_default_params(self):
+        """Returns all settable parameters of the scoreboard model"""
+        params = super(ScoreboardSpatial, self).get_default_params()
+        params.update({'rho': 100})
+        return params
+
+    @staticmethod
+    def dva2ret(xdva):
+        """Convert degrees of visual angle (dva) into retinal coords (um)"""
+        return Watson2014Transform.dva2ret(xdva)
+
+    @staticmethod
+    def ret2dva(xret):
+        """Convert retinal corods (um) to degrees of visual angle (dva)"""
+        return Watson2014Transform.ret2dva(xret)
+
+    def _predict_spatial(self, earray, stim):
+        """Predicts the brightness at spatial locations"""
+        # This does the expansion of a compact stimulus and a list of
+        # electrodes to activation values at X,Y grid locations:
+        assert isinstance(earray, ElectrodeArray)
+        assert isinstance(stim, Stimulus)
+        return scoreboard_fast(stim.data,
+                               np.array([earray[e].x for e in stim.electrodes],
+                                        dtype=np.float32),
+                               np.array([earray[e].y for e in stim.electrodes],
+                                        dtype=np.float32),
+                               self.grid.xret.ravel(),
+                               self.grid.yret.ravel(),
+                               self.rho,
+                               self.thresh_percept)
+
+
+class ScoreboardModel(Model):
+
+    def __init__(self, **params):
+        super(ScoreboardModel, self).__init__(spatial=ScoreboardSpatial(),
+                                              temporal=None, **params)
+
+
+class AxonMapSpatial(SpatialModel):
     """Axon map model
 
     Implements the axon map model described in [Beyeler2019]_, where percepts
@@ -23,20 +66,15 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
     rho : double
         Exponential decay constant away from the axon (microns).
     """
-    # Frozen class: User cannot add more class attributes
-    __slots__ = ('eye', 'rho', 'axlambda', 'loc_od_x', 'loc_od_y', 'n_axons',
-                 'axons_range', 'n_ax_segments', 'ax_segments_range',
-                 'axon_pickle', 'ignore_pickle',
-                 'axon_contrib', 'axon_idx_start', 'axon_idx_end')
 
-    def __init__(self, **kwargs):
-        super(AxonMapModel, self).__init__(**kwargs)
+    def __init__(self, **params):
+        super(AxonMapSpatial, self).__init__(**params)
         self.axon_contrib = None
         self.axon_idx_start = None
         self.axon_idx_end = None
 
-    def _get_default_params(self):
-        base_params = super(AxonMapModel, self)._get_default_params()
+    def get_default_params(self):
+        base_params = super(AxonMapSpatial, self).get_default_params()
         params = {
             # Left or right eye:
             'eye': 'RE',
@@ -59,6 +97,16 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         }
         params.update(base_params)
         return params
+
+    @staticmethod
+    def dva2ret(xdva):
+        """Convert degrees of visual angle (dva) into retinal coords (um)"""
+        return Watson2014Transform.dva2ret(xdva)
+
+    @staticmethod
+    def ret2dva(xret):
+        """Convert retinal corods (um) to degrees of visual angle (dva)"""
+        return Watson2014Transform.ret2dva(xret)
 
     def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
         """Grows a single axon bundle based on the model by Jansonius (2009)
@@ -182,7 +230,7 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         bundles = list(filter(lambda x: len(x) > 10, bundles))
         # Convert to um:
         # FIXME logic is specific to the Watson model
-        bundles = [dva2ret(b) for b in bundles]
+        bundles = [self.dva2ret(b) for b in bundles]
         return bundles
 
     def find_closest_axon(self, bundles, xret=None, yret=None):
@@ -199,7 +247,7 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         # For every axon segment, store the corresponding axon ID:
         axon_idx = [[idx] * len(ax) for idx, ax in enumerate(bundles)]
         axon_idx = [item for sublist in axon_idx for item in sublist]
-        axon_idx = np.array(axon_idx, dtype=np.int32)
+        axon_idx = np.array(axon_idx, dtype=np.uint32)
         # Build a long list of all axon segments - their corresponding axon IDs
         # is given by `axon_idx` above:
         flat_bundles = np.concatenate(bundles)
@@ -279,11 +327,7 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
             tangent -= np.deg2rad(180)
         return tangent
 
-    def build(self, **build_params):
-        # Set additional parameters (they must be mentioned in the constructor;
-        # you can't add new class attributes outside of that):
-        for key, val in build_params.items():
-            setattr(self, key, val)
+    def _build(self):
         if self.eye == 'LE':
             if self.loc_od_x > 0:
                 err_str = ("In a left eye, the x-coordinate of the optic"
@@ -297,11 +341,6 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
         else:
             err_str = ("Eye should be either 'LE' or 'RE', not %s." % self.eye)
             raise ValueError(err_str)
-        # Build the spatial grid:
-        self.grid = GridXY(self.xrange, self.yrange, step=self.xystep,
-                           grid_type=self.grid_type)
-        self.grid.xret = self.dva2ret(self.grid.x)
-        self.grid.yret = self.dva2ret(self.grid.y)
         need_axons = False
         # You can ignore pickle files and force a rebuild with this flag:
         if self.ignore_pickle:
@@ -337,43 +376,37 @@ class AxonMapModel(Watson2014ConversionMixin, BaseModel):
                   'xystep': self.xystep, 'n_ax_segments': self.n_ax_segments,
                   'ax_segments_range': self.ax_segments_range}
         pickle.dump((params, axons), open(self.axon_pickle, 'wb'))
-        self._is_built = True
-        return self
 
-    def _predict_spatial(self, implant, t):
+    def _predict_spatial(self, earray, stim):
         """Predicts the brightness at specific times ``t``"""
-        if t is None:
-            t = implant.stim.time
-        if implant.stim.time is None and t is not None:
-            raise ValueError("Cannot calculate spatial response at times "
-                             "t=%s, because stimulus does not have a time "
-                             "component." % t)
-        # Interpolate stimulus at desired time points:
-        if implant.stim.time is None:
-            stim = implant.stim.data.astype(np.float32)
-        else:
-            stim = implant.stim[:, np.array([t]).ravel()].astype(np.float32)
-        # A Stimulus could be compressed to zero:
-        if stim.size == 0:
-            return np.zeros((np.array([t]).size, np.prod(self.grid.x.shape)),
-                            dtype=np.float32)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        electrodes = implant.stim.electrodes
-        return spatial_fast(stim,
-                            np.array([implant[e].x for e in electrodes],
-                                     dtype=np.float32),
-                            np.array([implant[e].y for e in electrodes],
-                                     dtype=np.float32),
-                            self.axon_contrib,
-                            self.axon_idx_start.astype(np.int32),
-                            self.axon_idx_end.astype(np.int32),
-                            self.rho,
-                            self.thresh_percept)
+        assert isinstance(earray, ElectrodeArray)
+        assert isinstance(stim, Stimulus)
+        return axon_map_fast(stim.data,
+                             np.array([earray[e].x for e in stim.electrodes],
+                                      dtype=np.float32),
+                             np.array([earray[e].y for e in stim.electrodes],
+                                      dtype=np.float32),
+                             self.axon_contrib,
+                             self.axon_idx_start.astype(np.uint32),
+                             self.axon_idx_end.astype(np.uint32),
+                             self.rho,
+                             self.thresh_percept)
 
-    def predict_percept(self, implant, t=None):
+
+class AxonMapModel(Model):
+
+    def __init__(self, **params):
+        super(AxonMapModel, self).__init__(spatial=AxonMapSpatial(),
+                                           temporal=None, **params)
+
+    def predict_percept(self, implant, t_percept=None):
         # Need to add an additional check before running the base method:
-        if isinstance(implant, ProsthesisSystem) and implant.eye != self.eye:
-            raise ValueError(("The implant is in %s but the model was built "
-                              "for %s.") % (implant.eye, self.eye))
-        return super(AxonMapModel, self).predict_percept(implant, t=t)
+        if isinstance(implant, ProsthesisSystem):
+            if implant.eye != self.spatial.eye:
+                raise ValueError(("The implant is in %s but the model was "
+                                  "built for %s.") % (implant.eye,
+                                                      self.spatial.eye))
+        return super(AxonMapModel, self).predict_percept(implant,
+                                                         t_percept=t_percept)
