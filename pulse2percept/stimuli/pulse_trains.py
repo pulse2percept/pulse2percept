@@ -60,41 +60,47 @@ class BiphasicPulseTrain(Stimulus):
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
                  stim_dur=1000.0, cathodic_first=True, dt=1e-3):
-        # Window duration is the inverse of pulse train frequency. If it is too
-        # small for phase_dur/interphase_dur/delay_dur, the BiphasicPulse
-        # constructor will catch it:
-        window_dur = 1000.0 / freq
-        pulse = BiphasicPulse(amp, phase_dur, delay_dur=delay_dur, dt=dt,
-                              interphase_dur=interphase_dur,
-                              cathodic_first=cathodic_first,
-                              stim_dur=window_dur)
-        # How many pulses depends on stim_dur:
-        n_pulses = int(np.ceil(freq * stim_dur / 1000.0))
-        data = []
-        time = []
-        for i in range(n_pulses):
-            d_win = pulse.data
-            t_win = pulse.time + i * window_dur
-            if t_win[-1] > stim_dur:
-                # Interpolate the data point at t=stim_dur:
-                last_d = interp1d(t_win, d_win)(stim_dur)[0]
-                # Keep only the data points < stim_dur, but append the interpolated
-                # point:
-                idx = t_win <= stim_dur
-                d_win = np.append(d_win[:, idx], [[last_d]], axis=1)
-                t_win = np.append(t_win[idx], stim_dur)
-                data.append(d_win)
-                time.append(t_win)
-            else:
-                data.append(d_win)
-                time.append(t_win)
-        data = np.concatenate(data, axis=1)
-        time = np.concatenate(time, axis=0)
-        # There is an edge case for delay_dur=0: There will be two identical
-        # `time` entries, which messes with the SciPy interpolation function.
-        # Thus retain only the unique time points:
-        time, idx = np.unique(time, return_index=True)
-        data = data[:, idx]
+        # 0 Hz is allowed:
+        if np.isclose(freq, 0):
+            time = [0, stim_dur]
+            data = [[0, 0]]
+        else:
+            # Window duration is the inverse of pulse train frequency. If it is
+            # too small for phase_dur/interphase_dur/delay_dur (or negative),
+            # the BiphasicPulse constructor will catch it:
+            window_dur = 1000.0 / freq
+            pulse = BiphasicPulse(amp, phase_dur, delay_dur=delay_dur, dt=dt,
+                                  interphase_dur=interphase_dur,
+                                  cathodic_first=cathodic_first,
+                                  stim_dur=window_dur)
+            # How many pulses depends on stim_dur:
+            n_pulses = int(np.ceil(freq * stim_dur / 1000.0))
+            data = []
+            time = []
+            for i in range(n_pulses):
+                d_win = pulse.data
+                t_win = pulse.time + i * window_dur
+                if t_win[-1] > stim_dur:
+                    # Interpolate the data point at t=stim_dur:
+                    last_d = interp1d(t_win, d_win)(stim_dur)[0]
+                    # Keep only the data points < stim_dur, but append the
+                    # interpolated point:
+                    idx = t_win <= stim_dur
+                    d_win = np.append(d_win[:, idx], [[last_d]], axis=1)
+                    t_win = np.append(t_win[idx], stim_dur)
+                    data.append(d_win)
+                    time.append(t_win)
+                else:
+                    data.append(d_win)
+                    time.append(t_win)
+            data = np.concatenate(data, axis=1)
+            time = np.concatenate(time, axis=0)
+            # There is an edge case for delay_dur=0: There will be two
+            # identical `time` entries, which messes with the SciPy
+            # interpolation function.
+            # Thus retain only the unique time points:
+            time, idx = np.unique(time, return_index=True)
+            data = data[:, idx]
         super().__init__(data, time=time, compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
@@ -151,40 +157,46 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
     def __init__(self, freq, amp1, amp2, phase_dur1, phase_dur2,
                  interphase_dur=0, delay_dur=0, stim_dur=1000.0,
                  cathodic_first=True, dt=1e-3):
-        # Window duration is 1/f:
-        window_dur = 1000.0 / freq
-        pulse = AsymmetricBiphasicPulse(amp1, amp2, phase_dur1, phase_dur2,
-                                        delay_dur=delay_dur, dt=dt,
-                                        interphase_dur=interphase_dur,
-                                        cathodic_first=cathodic_first,
-                                        stim_dur=window_dur)
-        # How many pulses depends on stim_dur:
-        n_pulses = int(np.ceil(freq * stim_dur / 1000.0))
-        data = []
-        time = []
-        for i in range(n_pulses):
-            d_win = pulse.data
-            t_win = pulse.time + i * window_dur
-            if t_win[-1] > stim_dur:
-                # Interpolate the data point at t=stim_dur:
-                last_d = interp1d(t_win, d_win)(stim_dur)[0]
-                # Keep only the data points < stim_dur, but append the interpolated
-                # point:
-                idx = t_win <= stim_dur
-                d_win = np.append(d_win[:, idx], [[last_d]], axis=1)
-                t_win = np.append(t_win[idx], stim_dur)
-                data.append(d_win)
-                time.append(t_win)
-            else:
-                data.append(d_win)
-                time.append(t_win)
-        data = np.concatenate(data, axis=1)
-        time = np.concatenate(time, axis=0)
-        # There is an edge case for delay_dur=0: There will be two identical
-        # `time` entries, which messes with the SciPy interpolation function.
-        # Thus retain only the unique time points:
-        time, idx = np.unique(time, return_index=True)
-        data = data[:, idx]
+        # 0 Hz is allowed:
+        if np.isclose(freq, 0):
+            time = [0, stim_dur]
+            data = [[0, 0]]
+        else:
+            # Window duration is 1/f:
+            window_dur = 1000.0 / freq
+            pulse = AsymmetricBiphasicPulse(amp1, amp2, phase_dur1, phase_dur2,
+                                            delay_dur=delay_dur, dt=dt,
+                                            interphase_dur=interphase_dur,
+                                            cathodic_first=cathodic_first,
+                                            stim_dur=window_dur)
+            # How many pulses depends on stim_dur:
+            n_pulses = int(np.ceil(freq * stim_dur / 1000.0))
+            data = []
+            time = []
+            for i in range(n_pulses):
+                d_win = pulse.data
+                t_win = pulse.time + i * window_dur
+                if t_win[-1] > stim_dur:
+                    # Interpolate the data point at t=stim_dur:
+                    last_d = interp1d(t_win, d_win)(stim_dur)[0]
+                    # Keep only the data points < stim_dur, but append the
+                    # interpolated point:
+                    idx = t_win <= stim_dur
+                    d_win = np.append(d_win[:, idx], [[last_d]], axis=1)
+                    t_win = np.append(t_win[idx], stim_dur)
+                    data.append(d_win)
+                    time.append(t_win)
+                else:
+                    data.append(d_win)
+                    time.append(t_win)
+            data = np.concatenate(data, axis=1)
+            time = np.concatenate(time, axis=0)
+            # There is an edge case for delay_dur=0: There will be two
+            # identical `time` entries, which messes with the SciPy
+            # interpolation function.
+            # Thus retain only the unique time points:
+            time, idx = np.unique(time, return_index=True)
+            data = data[:, idx]
         super().__init__(data, time=time, compress=False)
         self.cathodic_first = cathodic_first
         self.charge_balanced = np.isclose(np.trapz(data, time)[0], 0)

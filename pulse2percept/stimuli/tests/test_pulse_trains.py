@@ -39,6 +39,14 @@ def test_BiphasicPulseTrain(amp, interphase_dur, delay_dur, cathodic_first):
     npt.assert_equal(pt.charge_balanced,
                      np.isclose(np.trapz(pt.data, pt.time)[0], 0, atol=1e-5))
 
+    # Zero frequency:
+    pt = BiphasicPulseTrain(0, amp, phase_dur)
+    npt.assert_almost_equal(pt.time, [0, 1000])
+    npt.assert_almost_equal(pt.data, 0)
+    # Zero amp:
+    pt = BiphasicPulseTrain(freq, 0, phase_dur)
+    npt.assert_almost_equal(pt.data, 0)
+
 
 @pytest.mark.parametrize('amp1', (-1, 13))
 @pytest.mark.parametrize('amp2', (4, -8))
@@ -75,6 +83,14 @@ def test_AsymmetricBiphasicPulseTrain(amp1, amp2, interphase_dur, delay_dur,
     npt.assert_equal(pt.cathodic_first, cathodic_first)
     npt.assert_equal(pt.charge_balanced,
                      np.isclose(np.trapz(pt.data, pt.time)[0], 0, atol=1e-5))
+
+    # Zero frequency:
+    pt = AsymmetricBiphasicPulseTrain(0, amp1, amp2, phase_dur1, phase_dur2)
+    npt.assert_almost_equal(pt.time, [0, 1000])
+    npt.assert_almost_equal(pt.data, [[0, 0]])
+    # Zero amp:
+    pt = AsymmetricBiphasicPulseTrain(freq, 0, 0, phase_dur1, phase_dur2)
+    npt.assert_almost_equal(pt.data, 0)
 
 
 def test_TimeSeries():

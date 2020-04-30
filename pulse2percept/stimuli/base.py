@@ -192,8 +192,8 @@ class Stimulus(PrettyPrint):
             electrodes = source.electrodes
         elif isinstance(source, TimeSeries):
             # TimeSeries with NxM time points: N electrodes, M time points
-            data = source.data.astype(np.float32).reshape((-1, len(time)))
             time = np.arange(source.shape[-1]) * source.tsample
+            data = source.data.astype(np.float32).reshape((-1, len(time)))
             electrodes = None
         else:
             raise TypeError("Cannot create Stimulus object from %s. Choose "
@@ -243,9 +243,7 @@ class Stimulus(PrettyPrint):
             # time axes:
             if len(_time) > 1 and _time[0] is not None:
                 # Keep only the unique time points across stimuli:
-                print('time:', _time)
                 new_time = np.unique(np.concatenate(_time))
-                print('new_time:', new_time)
                 # Now we need to interpolate the data values at each of these
                 # new time points:
                 new_data = []
@@ -258,8 +256,6 @@ class Stimulus(PrettyPrint):
                     itp = interp1d(t.ravel(), d, bounds_error=None,
                                    fill_value='extrapolate')
                     new_data.append(itp(new_time))
-                print('data:', _data)
-                print('new_data:', new_data)
                 _data = new_data
                 _time = [new_time]
             # Now make `_data` a 2-D NumPy array, with `_electrodes` as rows
@@ -426,10 +422,10 @@ class Stimulus(PrettyPrint):
         # Show x-ticks only on last subplot:
         axes[-1].set_xticks(np.linspace(t_vals[0], t_vals[-1], num=5))
         # Labels are common to all subplots:
-        axes[-1].figure.text(0.5, 0, 'Time (s)', va='top', ha='center')
+        axes[-1].figure.subplots_adjust(bottom=0.2)
+        axes[-1].figure.text(0.5, 0, 'Time (ms)', va='top', ha='center')
         axes[-1].figure.text(0, 0.5, r'Amplitude ($\mu$A)', va='center',
                              ha='center', rotation='vertical')
-        axes[-1].figure.tight_layout()
         if len(axes) == 1:
             return axes[0]
         return axes

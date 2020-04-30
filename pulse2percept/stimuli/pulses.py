@@ -136,10 +136,6 @@ class BiphasicPulse(Stimulus):
     >>> from pulse2percept.stimuli import BiphasicPulse
     >>> pulse = BiphasicPulse(-20, 1, delay_dur=2, stim_dur=10)
 
-    Generate 3 identical pulses assigned to different electrodes:
-
-    >>> pulse = BiphasicPulse(20, 1, electrodes=['A1', 'C9', 'D2'])
-
     """
 
     def __init__(self, amp, phase_dur, interphase_dur=0, delay_dur=0,

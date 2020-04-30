@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
 
 from pulse2percept.implants import ArgusI
+from pulse2percept.stimuli import Stimulus
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (BaseModel, Model, NotBuiltError,
                                   SpatialModel, TemporalModel)
@@ -128,6 +129,16 @@ def test_TemporalModel():
         npt.assert_equal(percept.shape, (implant.stim.shape[0], 1, n_time))
         npt.assert_almost_equal(percept.data, 0)
 
+    # t_percept is automatically sorted:
+    model.dt = 0.1
+    percept = model.predict_percept(Stimulus(np.zeros((3, 17))),
+                                    t_percept=[0.1, 0.8, 0.6])
+    npt.assert_almost_equal(percept.time, [0.1, 0.6, 0.8])
+
+    # Cannot request t_percepts that are not multiples of dt:
+    with pytest.raises(ValueError):
+        model.predict_percept(Stimulus(np.ones((3, 9))), t_percept=[0.1, 0.11])
+
 
 def test_Model():
     # A None Model:
@@ -161,8 +172,8 @@ def test_Model():
     model = Model(temporal=ValidTemporalModel())
     npt.assert_equal(model.has_space, False)
     npt.assert_equal(model.has_time, True)
-    npt.assert_almost_equal(model.dt, 5e-6)
-    npt.assert_almost_equal(model.temporal.dt, 5e-6)
+    npt.assert_almost_equal(model.dt, 5e-3)
+    npt.assert_almost_equal(model.temporal.dt, 5e-3)
     model.dt = 1
     npt.assert_almost_equal(model.dt, 1)
     npt.assert_almost_equal(model.temporal.dt, 1)
@@ -178,8 +189,8 @@ def test_Model():
     npt.assert_equal(model.has_time, True)
     npt.assert_almost_equal(model.xystep, 0.25)
     npt.assert_almost_equal(model.spatial.xystep, 0.25)
-    npt.assert_almost_equal(model.dt, 5e-6)
-    npt.assert_almost_equal(model.temporal.dt, 5e-6)
+    npt.assert_almost_equal(model.dt, 5e-3)
+    npt.assert_almost_equal(model.temporal.dt, 5e-3)
     # Setting a new spatial parameter:
     model.xystep = 2
     npt.assert_almost_equal(model.xystep, 2)

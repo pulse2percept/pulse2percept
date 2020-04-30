@@ -23,12 +23,13 @@ at 30uA that lasts for a second:
 
 """
 # sphinx_gallery_thumbnail_number = 4
-from pulse2percept.stimuli import PulseTrain, Stimulus
-tsample = 5e-6  # sampling time step (seconds)
-stim_dur = 1.0  # stimulus duration (seconds)
+from pulse2percept.stimuli import BiphasicPulseTrain, Stimulus
+tsample = 0.005  # sampling time step (ms)
+phase_dur = 0.45  # duration of the cathodic/anodic phase (ms)
+stim_dur = 1000  # stimulus duration (ms)
 amp_th = 30  # threshold current (uA)
-stim = Stimulus(PulseTrain(tsample, freq=20, amp=amp_th,
-                           dur=stim_dur, pulse_dur=0.45 / 1000))
+stim = BiphasicPulseTrain(20, amp_th, phase_dur, interphase_dur=phase_dur,
+                          stim_dur=stim_dur)
 
 # Configure Matplotlib:
 import matplotlib.pyplot as plt
@@ -36,9 +37,8 @@ plt.style.use('ggplot')
 from matplotlib import rc
 rc('font', size=12)
 
-# Plot the stimulus in the range t=[0, 0.06]:
-stim.plot(time=(0, 0.06))
-plt.tight_layout()
+# Plot the stimulus in the range t=[0, 60] ms:
+stim.plot(time=(0, 60))
 
 ###############################################################################
 # Creating an implant
@@ -119,8 +119,8 @@ bright_th
 
 import numpy as np
 fig, ax = plt.subplots(figsize=(12, 5))
-ax.plot(np.arange(0, stim_dur, tsample),
-        -0.02 + 0.01 * implant.stim[0, :] / implant.stim.data.max(),
+ax.plot(implant.stim.time,
+        -0.02 + 0.01 * implant.stim.data[0, :] / implant.stim.data.max(),
         linewidth=3, label='pulse')
 ax.plot(percept.time, percept.data[0, 0, :], linewidth=3, label='percept')
 ax.plot([0, stim_dur], [bright_th, bright_th], 'k--', label='max brightness')
@@ -149,8 +149,8 @@ fig.tight_layout()
 # To study these effects, we will apply the model to a number of amplitudes and
 # frequencies:
 
-# Use the following pulse duration:
-pdur = 0.45 / 1000
+# Use the following pulse duration (ms):
+pdur = 0.45
 # Generate values in the range [0, 50] uA with a step size of 5 uA or smaller:
 amps = np.linspace(0, 50, 11)
 # Initialize an empty list that will contain the predicted brightness values:
@@ -160,8 +160,8 @@ for amp in amps:
     # following:
     # 1. Generate a pulse train with amplitude `amp`, 20 Hz frequency, 0.5 s
     #    duration, pulse duration `pdur`, and interphase gap `pdur`:
-    implant.stim = PulseTrain(tsample, amp=amp, freq=20, dur=stim_dur,
-                              pulse_dur=pdur, interphase_dur=pdur)
+    implant.stim = BiphasicPulseTrain(20, amp, pdur, interphase_dur=pdur,
+                                      stim_dur=stim_dur)
     # 2. Run the temporal model:
     percept = model.predict_percept(implant)
     # 3. Find the largest value in percept, this will be the predicted
@@ -183,8 +183,8 @@ for freq in freqs:
     # following:
     # 1. Generate a pulse train with amplitude `amp`, 20 Hz frequency, 0.5 s
     #    duration, pulse duration `pdur`, and interphase gap `pdur`:
-    implant.stim = PulseTrain(tsample, amp=20, freq=freq, dur=stim_dur,
-                              pulse_dur=pdur, interphase_dur=pdur)
+    implant.stim = BiphasicPulseTrain(freq, 20, pdur, interphase_dur=pdur,
+                                      stim_dur=stim_dur)
     # 2. Run the temporal model
     percept = model.predict_percept(implant)
     # 3. Find the largest value in percept, this will be the predicted
@@ -232,7 +232,7 @@ model.build()
 amp_factors = [1, 1.25, 1.5, 2, 4, 6]
 
 # Output brightness in 1ms time steps:
-t_percept = np.arange(0, stim_dur, 1e-3)
+t_percept = np.arange(0, stim_dur, 1)
 
 # Initialize an empty list that will contain the brightest frames:
 frames_amp = []
@@ -241,9 +241,8 @@ for amp_f in amp_factors:
     # For each value in the `amp_factors` vector, now stored as `amp_f`, do:
     # 1. Generate a pulse train with amplitude `amp_f` * `amp_th`, frequency
     #    20Hz, 0.5s duration, pulse duration `pdur`, and interphase gap `pdur`:
-    implant.stim = PulseTrain(tsample, amp=amp_f * amp_th, freq=20,
-                              dur=stim_dur, pulse_dur=pdur,
-                              interphase_dur=pdur)
+    implant.stim = BiphasicPulseTrain(20, amp_f * amp_th, pdur,
+                                      interphase_dur=pdur, stim_dur=stim_dur)
     # 2. Run the temporal model:
     percept = model.predict_percept(implant, t_percept=t_percept)
     # 3. Save the brightest frame:
@@ -260,9 +259,8 @@ for freq in freqs:
     # 1. Generate a pulse train with amplitude 1.25 * `amp_th`, frequency
     #    `freq`, 0.5s duration, pulse duration `pdur`, and interphase gap
     #    `pdur`:
-    implant.stim = PulseTrain(tsample, amp=1.25 * amp_th, freq=freq,
-                              dur=stim_dur, pulse_dur=pdur,
-                              interphase_dur=pdur)
+    implant.stim = BiphasicPulseTrain(freq, 1.25 * amp_th, pdur,
+                                      interphase_dur=pdur, stim_dur=stim_dur)
     # 2. Run the temporal model:
     percept = model.predict_percept(implant, t_percept=t_percept)
     # 3. Save the brightest frame:
