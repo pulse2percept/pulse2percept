@@ -13,15 +13,28 @@ Electrical Stimuli
     mpl.rcdefaults()
 
 The :py:class:`~pulse2percept.stimuli.Stimulus` object defines a common
-interface for all electrical stimuli.
-It provides a 2-D data array with labeled axes, where rows denote electrodes
-and columns denote points in time.
+interface for all electrical stimuli, consisting of a 2D data array with 
+labeled axes, where rows denote electrodes and columns denote points in time.
+
+pulse2percept provides the following stimuli:
+
 Stimuli can be assigned to electrodes of a
 :py:class:`~pulse2percept.implants.ProsthesisSystem` object, who will deliver
 them to the retina.
 
 A stimulus can be created from a variety of source types, such as the
 following:
+
+================  ==========  ======
+Source type       electrodes  time
+----------------  ----------  ------
+Scalar            1           None
+Nx1 NumPy array   N           None
+NxM NumPy array   N           M
+----------------  ----------  ------
+list
+dict
+================  ==========  ======
 
 * Scalar value: interpreted as the current amplitude delivered to a single
   electrode (no time component).
@@ -76,10 +89,10 @@ To create stimuli in time, you can pass a
 
 .. ipython:: python
 
-    # Stimulate Electrode 'A001' with a cathodic-first 20Hz pulse train
-    # with 10uA amplitude, lasting for 0.5s, sampled at 0.1ms:
-    from pulse2percept.stimuli import PulseTrain
-    pt = PulseTrain(0.0001, freq=20, amp=10, dur=0.5)
+    # Stimulate Electrode 'A001' with a 20Hz pulse train lasting 0.5s
+    # (pulses: cathodic-first, 10uA amplitude, 0.45ms phase duration):
+    from pulse2percept.stimuli import BiphasicPulseTrain
+    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=500)
     stim = Stimulus(pt)
     stim
 
@@ -133,10 +146,10 @@ The easiest way to visualize a stimulus is to use the built-in
 
 .. ipython:: python
 
-    from pulse2percept.stimuli import Stimulus, PulseTrain
+    from pulse2percept.stimuli import Stimulus, BiphasicPulseTrain
 
     # Create a multi-electrode stimulus
-    stim = Stimulus({'E%d' % i: PulseTrain(1e-6, freq=i, dur=1)
+    stim = Stimulus({'E%d' % i: BiphasicPulseTrain(i, 10, 0.45)
                      for i in np.arange(5)})
     # Plot it:
     stim.plot()
@@ -186,7 +199,7 @@ before and after compression:
 .. ipython:: python
 
     # An uncompressed stimulus:
-    stim = Stimulus(PulseTrain(0.0001, freq=10), compress=False)
+    stim = Stimulus(BiphasicPulseTrain(20, 10, 0.45), compress=False)
     stim
 
     # Now compress the data:

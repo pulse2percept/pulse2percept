@@ -5,10 +5,202 @@ import logging
 from scipy.interpolate import interp1d
 
 
+from . import MIN_AMP
 from .base import TimeSeries, Stimulus
-from .pulses import BiphasicPulse, AsymmetricBiphasicPulse
+from .pulses import BiphasicPulse, AsymmetricBiphasicPulse, LegacyBiphasicPulse
+from ..utils import deprecated
 
 
+class BiphasicPulseTrain(Stimulus):
+    """Symmetric biphasic pulse train
+
+    .. versionadded:: 0.6
+
+    A train of symmetric biphasic pulses.
+
+    Parameters
+    ----------
+    freq : float
+        Pulse train frequency (Hz).
+    amp : float
+        Current amplitude (uA). Negative currents: cathodic, positive: anodic.
+        The sign will be converted automatically depending on
+        ``cathodic_first``.
+    phase_dur : float
+        Duration (ms) of the cathodic/anodic phase.
+    interphase_dur : float, optional, default: 0
+        Duration (ms) of the gap between cathodic and anodic phases.
+    delay_dur : float
+        Delay duration (ms). Zeros will be inserted at the beginning of the
+        stimulus to deliver the first pulse phase after ``delay_dur`` ms.
+    stim_dur : float, optional, default: 1000 ms
+        Total stimulus duration (ms). The pulse train will be trimmed to make
+        the stimulus last ``stim_dur`` ms overall.
+    cathodic_first : bool, optional, default: True
+        If True, will deliver the cathodic pulse phase before the anodic one.
+    dt : float, optional, default: 1e-3 ms
+        Sampling time step (ms); defines the duration of the signal edge
+        transitions.
+
+    Notes
+    -----
+    *  Each cycle ("window") of the pulse train consists of a symmetric
+       biphasic pulse, created with
+       :py:class:`~pulse2percept.stimuli.BiphasicPulse`.
+    *  The order and sign of the two phases (cathodic/anodic) of each pulse
+       in the train is automatically adjusted depending on the
+       ``cathodic_first`` flag.
+    *  A pulse train will be considered "charge-balanced" if its net current is
+       smaller than 10 picoamps.
+    *  A pulse train will be trimmed to the right length given by ``stim_dur``.
+       Consequently, it's possible to cut off parts of a pulse and thus create
+       a pulse train that is not charge-balanced.
+
+    """
+
+    def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
+                 stim_dur=1000.0, cathodic_first=True, dt=1e-3):
+        # Window duration is the inverse of pulse train frequency. If it is too
+        # small for phase_dur/interphase_dur/delay_dur, the BiphasicPulse
+        # constructor will catch it:
+        window_dur = 1000.0 / freq
+        pulse = BiphasicPulse(amp, phase_dur, delay_dur=delay_dur, dt=dt,
+                              interphase_dur=interphase_dur,
+                              cathodic_first=cathodic_first,
+                              stim_dur=window_dur)
+        # How many pulses depends on stim_dur:
+        n_pulses = int(np.ceil(freq * stim_dur / 1000.0))
+        data = []
+        time = []
+        for i in range(n_pulses):
+            d_win = pulse.data
+            t_win = pulse.time + i * window_dur
+            if t_win[-1] > stim_dur:
+                # Interpolate the data point at t=stim_dur:
+                last_d = interp1d(t_win, d_win)(stim_dur)[0]
+                # Keep only the data points < stim_dur, but append the interpolated
+                # point:
+                idx = t_win <= stim_dur
+                d_win = np.append(d_win[:, idx], [[last_d]], axis=1)
+                t_win = np.append(t_win[idx], stim_dur)
+                data.append(d_win)
+                time.append(t_win)
+            else:
+                data.append(d_win)
+                time.append(t_win)
+        data = np.concatenate(data, axis=1)
+        time = np.concatenate(time, axis=0)
+        # There is an edge case for delay_dur=0: There will be two identical
+        # `time` entries, which messes with the SciPy interpolation function.
+        # Thus retain only the unique time points:
+        time, idx = np.unique(time, return_index=True)
+        data = data[:, idx]
+        super().__init__(data, time=time, compress=False)
+        self.freq = freq
+        self.cathodic_first = cathodic_first
+        self.charge_balanced = np.isclose(np.trapz(data, time)[0], 0,
+                                          atol=MIN_AMP)
+
+    def _pprint_params(self):
+        """Return a dict of class arguments to pretty-print"""
+        params = super(BiphasicPulseTrain, self)._pprint_params()
+        params.update({'cathodic_first': self.cathodic_first,
+                       'charge_balanced': self.charge_balanced,
+                       'freq': self.freq})
+        return params
+
+
+class AsymmetricBiphasicPulseTrain(Stimulus):
+    """Asymmetric biphasic pulse
+
+    .. versionadded:: 0.6
+
+    A simple stimulus consisting of a single biphasic pulse: a cathodic and an
+    anodic phase, optionally separated by an interphase gap.
+    The two pulse phases can have different amplitudes and duration
+    ("asymmetric").
+    The order of the two phases is given by the ``cathodic_first`` flag.
+
+    Parameters
+    ----------
+    freq : float
+        Pulse train frequency (Hz).
+    amp1, amp2 : float
+        Current amplitude (uA) of the first and second pulse phases.
+        Negative currents: cathodic, positive: anodic.
+        The signs will be converted automatically depending on
+        ``cathodic_first``.
+    phase_dur1, phase_dur2 : float
+        Duration (ms) of the first and second pulse phases.
+    interphase_dur : float, optional, default: 0
+        Duration (ms) of the gap between cathodic and anodic phases.
+    delay_dur : float
+        Delay duration (ms). Zeros will be inserted at the beginning of the
+        stimulus to deliver the first pulse phase after ``delay_dur`` ms.
+    stim_dur : float, optional, default: 1000 ms
+        Total stimulus duration (ms). Zeros will be inserted at the end of the
+        stimulus to make the the stimulus last ``stim_dur`` ms overall.
+    cathodic_first : bool, optional, default: True
+        If True, will deliver the cathodic pulse phase before the anodic one.
+    dt : float, optional, default: 1e-3 ms
+        Sampling time step (ms); defines the duration of the signal edge
+        transitions.
+
+    """
+
+    def __init__(self, freq, amp1, amp2, phase_dur1, phase_dur2,
+                 interphase_dur=0, delay_dur=0, stim_dur=1000.0,
+                 cathodic_first=True, dt=1e-3):
+        # Window duration is 1/f:
+        window_dur = 1000.0 / freq
+        pulse = AsymmetricBiphasicPulse(amp1, amp2, phase_dur1, phase_dur2,
+                                        delay_dur=delay_dur, dt=dt,
+                                        interphase_dur=interphase_dur,
+                                        cathodic_first=cathodic_first,
+                                        stim_dur=window_dur)
+        # How many pulses depends on stim_dur:
+        n_pulses = int(np.ceil(freq * stim_dur / 1000.0))
+        data = []
+        time = []
+        for i in range(n_pulses):
+            d_win = pulse.data
+            t_win = pulse.time + i * window_dur
+            if t_win[-1] > stim_dur:
+                # Interpolate the data point at t=stim_dur:
+                last_d = interp1d(t_win, d_win)(stim_dur)[0]
+                # Keep only the data points < stim_dur, but append the interpolated
+                # point:
+                idx = t_win <= stim_dur
+                d_win = np.append(d_win[:, idx], [[last_d]], axis=1)
+                t_win = np.append(t_win[idx], stim_dur)
+                data.append(d_win)
+                time.append(t_win)
+            else:
+                data.append(d_win)
+                time.append(t_win)
+        data = np.concatenate(data, axis=1)
+        time = np.concatenate(time, axis=0)
+        # There is an edge case for delay_dur=0: There will be two identical
+        # `time` entries, which messes with the SciPy interpolation function.
+        # Thus retain only the unique time points:
+        time, idx = np.unique(time, return_index=True)
+        data = data[:, idx]
+        super().__init__(data, time=time, compress=False)
+        self.cathodic_first = cathodic_first
+        self.charge_balanced = np.isclose(np.trapz(data, time)[0], 0)
+        self.freq = freq
+
+    def _pprint_params(self):
+        """Return a dict of class arguments to pretty-print"""
+        params = super(AsymmetricBiphasicPulseTrain, self)._pprint_params()
+        params.update({'cathodic_first': self.cathodic_first,
+                       'charge_balanced': self.charge_balanced,
+                       'freq': self.freq})
+        return params
+
+
+@deprecated(alt_func='BiphasicPulseTrain', deprecated_version='0.6',
+            removed_version='0.7')
 class PulseTrain(TimeSeries):
     """A train of biphasic pulses
 
@@ -74,8 +266,8 @@ class PulseTrain(TimeSeries):
         delay = np.zeros(delay_size)
 
         # Single pulse given by `pulse_dur`
-        pulse = amp * BiphasicPulse(pulsetype, pulse_dur, tsample,
-                                    interphase_dur).data
+        pulse = amp * LegacyBiphasicPulse(pulsetype, pulse_dur, tsample,
+                                          interphase_dur).data
         pulse_size = pulse.size
         if pulse_size < 0:
             raise ValueError("Single pulse must fit within 1/freq interval.")

@@ -702,7 +702,7 @@ class ProsthesisSystem(PrettyPrint):
         else:
             if isinstance(data, Stimulus):
                 # Already a stimulus object:
-                stim = data
+                stim = Stimulus(data, extrapolate=True)
             elif isinstance(data, dict):
                 # Electrode names already provided by keys:
                 stim = Stimulus(data, extrapolate=True)

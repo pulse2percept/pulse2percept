@@ -6,7 +6,7 @@ from collections import OrderedDict as ODict
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
-from pulse2percept.stimuli import Stimulus, PulseTrain
+from pulse2percept.stimuli import Stimulus
 
 
 def test_Stimulus():
@@ -50,23 +50,16 @@ def test_Stimulus():
     stim = Stimulus(np.ones((6, 100)), compress=True)
     npt.assert_equal(stim.shape, (6, 2))
     # Single electrode in time:
-    stim = Stimulus(PulseTrain(0.01 / 1000, dur=0.005), compress=False)
+    stim = Stimulus([[1, 5, 7, 2, 4]])
     npt.assert_equal(stim.electrodes, [0])
-    npt.assert_equal(stim.shape, (1, 500))
-    stim = Stimulus(PulseTrain(0.01 / 1000, dur=0.005), compress=True)
-    npt.assert_equal(stim.electrodes, [0])
-    npt.assert_equal(stim.shape, (1, 8))
+    npt.assert_equal(stim.shape, (1, 5))
     # Specific electrode in time:
-    stim = Stimulus({'C3': PulseTrain(0.01 / 1000, dur=0.004)}, compress=False)
+    stim = Stimulus({'C3': [[1, 4, 4, 3, 6]]})
     npt.assert_equal(stim.electrodes, ['C3'])
-    npt.assert_equal(stim.shape, (1, 400))
-    stim = Stimulus({'C3': PulseTrain(0.01 / 1000, dur=0.004)}, compress=True)
-    npt.assert_equal(stim.electrodes, ['C3'])
-    npt.assert_equal(stim.shape, (1, 8))
+    npt.assert_equal(stim.shape, (1, 5))
     # Multiple specific electrodes in time:
-    stim = Stimulus({'C3': PulseTrain(0.01 / 1000, dur=0.004),
-                     'F4': PulseTrain(0.01 / 1000, delay=0.0001, dur=0.004)},
-                    compress=True)
+    stim = Stimulus({'C3': [[0, 1, 2, 3]],
+                     'F4': [[4, -1, 4, -1]]})
     # Stimulus from a Stimulus (might happen in ProsthesisSystem):
     stim = Stimulus(Stimulus(4), electrodes='B3')
     npt.assert_equal(stim.shape, (1, 1))
@@ -108,6 +101,17 @@ def test_Stimulus():
     npt.assert_equal(stim.electrodes, ['A3', 'B8'])
     npt.assert_equal(stim.time, [0, 4])
 
+    # Individual stimuli might already have electrode names:
+    stim = Stimulus([Stimulus(1, electrodes='B1')])
+    npt.assert_equal(stim.electrodes, ['B1'])
+    # Duplicate names will be fixed (with a warning message):
+    stim = Stimulus([Stimulus(1), Stimulus(2)])
+    npt.assert_equal(stim.electrodes, [0, 1])
+    # When passing a dict and the stimuli already have electrode names, the
+    # keys of the dict prevail:
+    stim = Stimulus({'A1': Stimulus(1, electrodes='B2')})
+    npt.assert_equal(stim.electrodes, ['A1'])
+
     # Specify new time points:
     stim = Stimulus(np.ones((2, 5)), compress=True)
     npt.assert_equal(stim.time, [0, 4])
@@ -117,12 +121,8 @@ def test_Stimulus():
 
     # Not allowed:
     with pytest.raises(ValueError):
-        # Multiple electrodes in time, different time stamps:
-        stim = Stimulus([PulseTrain(0.01 / 1000, dur=0.004),
-                         PulseTrain(0.005 / 1000, dur=0.002)])
-    with pytest.raises(ValueError):
         # First one doesn't have time:
-        stim = Stimulus({'A2': 1, 'C3': PulseTrain(0.01 / 1000, dur=0.004)})
+        stim = Stimulus({'A2': 1, 'C3': [[1, 2, 3]]})
     with pytest.raises(ValueError):
         # Invalid source type:
         stim = Stimulus(np.ones((3, 4, 5, 6)))
@@ -140,80 +140,42 @@ def test_Stimulus():
         stim = Stimulus(3, time=[0.4])
 
 
-@pytest.mark.parametrize('tsample', (5e-6, 1e-7))
-def test_Stimulus_compress(tsample):
-    # Single pulse train:
-    pdur = 0.00045
-    pt = PulseTrain(tsample, pulse_dur=pdur, dur=0.005)
-    idata = pt.data.reshape((1, -1))
-    ielec = np.array([0])
-    itime = np.arange(idata.shape[-1]) * pt.tsample
-    stim = Stimulus(idata, electrodes=ielec, time=itime, compress=False)
-    npt.assert_equal(stim.is_compressed, False)
-    # Compress the data. The original `tsample` shouldn't matter as long as the
-    # resolution is fine enough to capture all of the pulse train:
-    stim.compress()
-    npt.assert_equal(stim.is_compressed, True)
-    npt.assert_equal(stim.shape, (1, 8))
-    # Electrodes are unchanged:
-    npt.assert_equal(ielec, stim.electrodes)
-    # First and last time step are always preserved:
-    npt.assert_almost_equal(itime[0], stim.time[0])
-    npt.assert_almost_equal(itime[-1], stim.time[-1])
-    # The first rising edge happens at t=`pdur`:
-    npt.assert_almost_equal(stim.time[1], pdur - tsample)
-    npt.assert_almost_equal(stim.data[0, 1], -20)
-    npt.assert_almost_equal(stim.time[2], pdur)
-    npt.assert_almost_equal(stim.data[0, 2], 0)
-
-    # Two pulse trains with slight delay/offset, and a third that's all 0:
-    delay = 0.0001
-    pt = PulseTrain(tsample, delay=0, dur=0.005)
-    pt2 = PulseTrain(tsample, delay=delay, dur=0.005)
-    pt3 = PulseTrain(tsample, amp=0, dur=0.005)
-    idata = np.vstack((pt.data, pt2.data, pt3.data))
-    ielec = np.array([0, 1, 2])
-    itime = np.arange(idata.shape[-1]) * pt.tsample
-    stim = Stimulus(idata, electrodes=ielec, time=itime, compress=False)
-    npt.assert_equal(stim.is_compressed, False)
-    # Compress the data:
-    stim.compress()
-    npt.assert_equal(stim.is_compressed, True)
-    npt.assert_equal(stim.shape, (2, 16))
-    # Zero electrodes should be deselected:
-    npt.assert_equal(stim.electrodes, np.array([0, 1]))
-    # First and last time step are always preserved:
-    npt.assert_almost_equal(itime[0], stim.time[0])
-    npt.assert_almost_equal(itime[-1], stim.time[-1])
-    # The first rising edge happens at t=`delay`:
-    npt.assert_almost_equal(stim.time[1], delay - tsample)
-    npt.assert_almost_equal(stim.data[0, 1], -20)
-    npt.assert_almost_equal(stim.data[1, 1], 0)
-    npt.assert_almost_equal(stim.time[2], delay)
-    npt.assert_almost_equal(stim.data[0, 2], -20)
-    npt.assert_almost_equal(stim.data[1, 2], -20)
-
-    # Repeated calls to compress won't change the result:
-    idata = stim.data
-    ielec = stim.electrodes
-    itime = stim.time
-    stim.compress()
-    npt.assert_equal(stim.is_compressed, True)
-    npt.assert_equal(idata, stim.data)
-    npt.assert_equal(ielec, stim.electrodes)
-    npt.assert_equal(itime, stim.time)
-
-    # Tricky case is a Stimulus reduced to [] after compress:
-    stim = Stimulus(np.zeros((2, 4)))
+def test_Stimulus_compress():
+    data = np.zeros((2, 7))
+    data[0, 0] = 1
+    stim = Stimulus(data)
+    npt.assert_equal(stim.shape, (2, 7))
     npt.assert_equal(stim.is_compressed, False)
     stim.compress()
     npt.assert_equal(stim.is_compressed, True)
+    # Compress gets rid of the second electrode, and only keeps the signal
+    # edges:
+    npt.assert_equal(stim.shape, (1, 3))
+    npt.assert_almost_equal(stim.time, [0, 1, 6])
+    # Repeated calls don't change the outcome:
+    stim.compress()
+    npt.assert_equal(stim.is_compressed, True)
+    npt.assert_equal(stim.shape, (1, 3))
+    npt.assert_almost_equal(stim.time, [0, 1, 6])
+
+    # All zeros:
+    stim = Stimulus(np.zeros((3, 6)))
+    npt.assert_equal(stim.shape, ((3, 6)))
+    stim.compress()
+    # Empty:
     npt.assert_equal(stim.shape, (0, 2))
-    npt.assert_equal(stim[:], np.zeros((0, 2)))
-    npt.assert_equal(stim[:, :], np.zeros((0, 2)))
-    npt.assert_equal(stim[:, 0], [])
-    npt.assert_equal(stim[:, 0.123], [])
-    npt.assert_equal(stim[:, [0.25, 0.88]], [])
+    npt.assert_almost_equal(stim.time, [0, 5])
+
+    # Compress has no effect:
+    time = [3, 6, 7, 9, 10]
+    stim = Stimulus(np.eye(len(time)), time=time)
+    npt.assert_equal(stim.shape, (len(time), len(time)))
+    npt.assert_almost_equal(stim.time, time)
+    npt.assert_equal(stim.is_compressed, False)
+    stim.compress()
+    npt.assert_equal(stim.is_compressed, True)
+    npt.assert_equal(stim.shape, (len(time), len(time)))
+    npt.assert_almost_equal(stim.time, time)
 
 
 def test_Stimulus_plot():
