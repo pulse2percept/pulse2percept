@@ -47,7 +47,7 @@ pulse2percept |version| documentation
 =====================================
 
 .. include:: ../README.rst
-   :start-line: 29
+   :start-line: 28
    :end-line: 79
 
 Installation
