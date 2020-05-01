@@ -77,7 +77,7 @@ def test_ScoreboardModel():
 
 
 def test_ScoreboardModel_predict_percept():
-    model = ScoreboardModel(xystep=1, rho=100, thresh_percept=0)
+    model = ScoreboardModel(xystep=0.55, rho=100, thresh_percept=0)
     model.build()
     # Single-electrode stim:
     img_stim = np.zeros(60)
@@ -86,13 +86,13 @@ def test_ScoreboardModel_predict_percept():
     # Single bright pixel, very small Gaussian kernel:
     npt.assert_equal(np.sum(percept.data > 0.9), 1)
     npt.assert_equal(np.sum(percept.data > 0.5), 1)
-    npt.assert_equal(np.sum(percept.data > 0.1), 1)
-    npt.assert_equal(np.sum(percept.data > 0.00001), 9)
+    npt.assert_equal(np.sum(percept.data > 0.1), 7)
+    npt.assert_equal(np.sum(percept.data > 0.00001), 35)
     # Brightest pixel is in lower right:
-    npt.assert_almost_equal(percept.data[18, 25, 0], np.max(percept.data))
+    npt.assert_almost_equal(percept.data[34, 47, 0], np.max(percept.data))
 
     # Full Argus II: 60 bright spots
-    model = ScoreboardModel(engine='serial', xystep=1, rho=100)
+    model = ScoreboardModel(engine='serial', xystep=0.55, rho=100)
     model.build()
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     npt.assert_equal(np.sum(np.isclose(percept.data, 0.9, rtol=0.1, atol=0.1)),
@@ -293,7 +293,7 @@ def test_AxonMapModel__calc_bundle_tangent():
 
 
 def test_AxonMapModel_predict_percept():
-    model = AxonMapModel(xystep=1, axlambda=100, thresh_percept=0)
+    model = AxonMapModel(xystep=0.55, axlambda=100, thresh_percept=0)
     model.build()
     # Single-electrode stim:
     img_stim = np.zeros(60)
@@ -301,17 +301,17 @@ def test_AxonMapModel_predict_percept():
     percept = model.predict_percept(ArgusII(stim=img_stim))
     # Single bright pixel, rest of arc is less bright:
     npt.assert_equal(np.sum(percept.data > 0.9), 1)
-    npt.assert_equal(np.sum(percept.data > 0.5), 2)
-    npt.assert_equal(np.sum(percept.data > 0.1), 8)
-    npt.assert_equal(np.sum(percept.data > 0.0001), 28)
+    npt.assert_equal(np.sum(percept.data > 0.7), 2)
+    npt.assert_equal(np.sum(percept.data > 0.1), 28)
+    npt.assert_equal(np.sum(percept.data > 0.0001), 96)
     # Overall only a few bright pixels:
-    npt.assert_almost_equal(np.sum(percept.data), 3.207, decimal=3)
+    npt.assert_almost_equal(np.sum(percept.data), 10.0812, decimal=3)
     # Brightest pixel is in lower right:
-    npt.assert_almost_equal(percept.data[18, 25, 0], np.max(percept.data))
+    npt.assert_almost_equal(percept.data[34, 47, 0], np.max(percept.data))
     # Top half is empty:
-    npt.assert_almost_equal(np.sum(percept.data[:15, :, 0]), 0)
+    npt.assert_almost_equal(np.sum(percept.data[:27, :, 0]), 0)
     # Same for lower band:
-    npt.assert_almost_equal(np.sum(percept.data[21:, :, 0]), 0)
+    npt.assert_almost_equal(np.sum(percept.data[39:, :, 0]), 0)
 
     # Full Argus II with small lambda: 60 bright spots
     model = AxonMapModel(engine='serial', xystep=1, rho=100, axlambda=40)
@@ -319,8 +319,8 @@ def test_AxonMapModel_predict_percept():
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     # Most spots are pretty bright, but there are 2 dimmer ones (due to their
     # location on the retina):
-    npt.assert_equal(np.sum(percept.data > 0.5), 58)
-    npt.assert_equal(np.sum(percept.data > 0.275), 60)
+    npt.assert_equal(np.sum(percept.data > 0.5), 33)
+    npt.assert_equal(np.sum(percept.data > 0.275), 62)
 
     # Model gives same outcome as Spatial:
     spatial = AxonMapSpatial(engine='serial', xystep=1, rho=100, axlambda=40)
