@@ -261,7 +261,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             A valid prosthesis system. A stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
         t_percept: float or list of floats, optional, default: None
-            The time points at which to output a percept(seconds).
+            The time points at which to output a percept (ms).
             If None, ``implant.stim.time`` is used.
 
         Returns
@@ -351,8 +351,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
         params = {
-            # Simulation time step:
-            'dt': 5e-6,
+            # Simulation time step (ms):
+            'dt': 0.005,
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
             # True: print status messages, False: silent
@@ -371,7 +371,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         stim : :py:meth:`~pulse2percept.stimuli.Stimulus`
             A valid stimulus with a 2D data container (n_electrodes, n_time).
         t_percept : list of floats
-            The time points at which to output a percept (seconds).
+            The time points at which to output a percept (ms).
 
         Returns
         -------
@@ -396,14 +396,19 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             Either a Stimulus or a Percept object. The temporal model will be
             applied to each spatial location in the stimulus/percept.
         t_percept : float or list of floats, optional, default: None
-            The time points at which to output a percept (seconds).
-            If None, the time axis of the stimulus/percept is used.
+            The time points at which to output a percept (ms).
+            If None, the percept will be output at model step size (``dt``).
 
         Returns
         -------
         percept : :py:class:`~pulse2percept.models.Percept`
             A Percept object whose ``data`` container has dimensions Y x X x T.
             Will return None if ``stim`` is None.
+
+        Notes
+        -----
+        *  If a list of time points is provided for ``t_percept``, the values
+           will automatically be sorted.
 
         """
         if not self.is_built:
@@ -434,9 +439,9 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # sure to include the last time point). We always start at zero:
             t_percept = np.arange(0, _time[-1] + self.dt / 2.0, self.dt)
         else:
-            t_percept = np.array([t_percept]).flatten()
-            # We need to make sure the requested `t_percept` are multiples
-            # of `dt`:
+            # We need to make sure the requested `t_percept` are sorted and
+            # multiples of `dt`:
+            t_percept = np.sort([t_percept]).flatten()
             remainder = np.mod(t_percept, self.dt) / self.dt
             atol = 1e-3
             within_atol = (remainder < atol) | (np.abs(1 - remainder) < atol)
@@ -650,7 +655,7 @@ class Model(PrettyPrint):
             A valid prosthesis system. A stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
         t_percept: float or list of floats, optional, default: None
-            The time points at which to output a percept(seconds).
+            The time points at which to output a percept (ms).
             If None, ``implant.stim.time`` is used.
 
         Returns

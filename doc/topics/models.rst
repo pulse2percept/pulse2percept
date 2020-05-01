@@ -184,9 +184,9 @@ temporal model component. Objects are named accordingly:
 However, nobody stops you from instantiating a spatial or temporal model
 directly:
 
-.. code-block::
+.. code-block:: python
 
-    # Option 1 (preferred): Work with `Model` objects:
+    # Option 1 (preferred): Work with Model objects:
     from pulse2percept.models import Model, Nanduri2012Temporal
     model = Model(temporal=Nanduri2012Temporal())
     model.build()

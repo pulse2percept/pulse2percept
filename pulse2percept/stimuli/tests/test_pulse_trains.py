@@ -3,8 +3,94 @@ import copy
 import pytest
 import numpy.testing as npt
 
-from pulse2percept.stimuli import (TimeSeries, MonophasicPulse, BiphasicPulse,
-                                   PulseTrain)
+from pulse2percept.stimuli import (TimeSeries, PulseTrain, BiphasicPulseTrain,
+                                   AsymmetricBiphasicPulseTrain)
+
+
+@pytest.mark.parametrize('amp', (-3, 4))
+@pytest.mark.parametrize('interphase_dur', (0, 1))
+@pytest.mark.parametrize('delay_dur', (0, 4))
+@pytest.mark.parametrize('cathodic_first', (True, False))
+def test_BiphasicPulseTrain(amp, interphase_dur, delay_dur, cathodic_first):
+    freq = 23.456
+    stim_dur = 657.456
+    phase_dur = 2
+    window_dur = 1000.0 / freq
+    n_pulses = int(np.ceil(freq * stim_dur / 1000.0))
+    mid_first_pulse = delay_dur + phase_dur / 2.0
+    mid_interphase = delay_dur + phase_dur + interphase_dur / 2.0
+    mid_second_pulse = delay_dur + interphase_dur + 1.5 * phase_dur
+    first_amp = -np.abs(amp) if cathodic_first else np.abs(amp)
+    second_amp = -first_amp
+
+    # Basic usage:
+    pt = BiphasicPulseTrain(freq, amp, phase_dur,
+                            interphase_dur=interphase_dur, delay_dur=delay_dur,
+                            stim_dur=stim_dur, cathodic_first=cathodic_first)
+    for i in range(n_pulses):
+        t_win = i * window_dur
+        npt.assert_almost_equal(pt[0, t_win], 0)
+        npt.assert_almost_equal(pt[0, t_win + mid_first_pulse], first_amp)
+        npt.assert_almost_equal(pt[0, t_win + mid_interphase], 0)
+        npt.assert_almost_equal(pt[0, t_win + mid_second_pulse], second_amp)
+    npt.assert_almost_equal(pt.time[0], 0)
+    npt.assert_almost_equal(pt.time[-1], stim_dur, decimal=2)
+    npt.assert_equal(pt.cathodic_first, cathodic_first)
+    npt.assert_equal(pt.charge_balanced,
+                     np.isclose(np.trapz(pt.data, pt.time)[0], 0, atol=1e-5))
+
+    # Zero frequency:
+    pt = BiphasicPulseTrain(0, amp, phase_dur)
+    npt.assert_almost_equal(pt.time, [0, 1000])
+    npt.assert_almost_equal(pt.data, 0)
+    # Zero amp:
+    pt = BiphasicPulseTrain(freq, 0, phase_dur)
+    npt.assert_almost_equal(pt.data, 0)
+
+
+@pytest.mark.parametrize('amp1', (-1, 13))
+@pytest.mark.parametrize('amp2', (4, -8))
+@pytest.mark.parametrize('interphase_dur', (0, 1))
+@pytest.mark.parametrize('delay_dur', (0, 6))
+@pytest.mark.parametrize('cathodic_first', (True, False))
+def test_AsymmetricBiphasicPulseTrain(amp1, amp2, interphase_dur, delay_dur,
+                                      cathodic_first):
+    freq = 23.456
+    phase_dur1 = 2
+    phase_dur2 = 4
+    stim_dur = 876.311
+    window_dur = 1000.0 / freq
+    n_pulses = int(np.ceil(freq * stim_dur / 1000.0))
+    mid_first_pulse = delay_dur + phase_dur1 / 2
+    mid_interphase = delay_dur + phase_dur1 + interphase_dur / 2
+    mid_second_pulse = delay_dur + phase_dur1 + interphase_dur + phase_dur2 / 2
+    first_amp = -np.abs(amp1) if cathodic_first else np.abs(amp1)
+    second_amp = np.abs(amp2) if cathodic_first else -np.abs(amp2)
+
+    # Basic usage:
+    pt = AsymmetricBiphasicPulseTrain(freq, amp1, amp2, phase_dur1, phase_dur2,
+                                      interphase_dur=interphase_dur,
+                                      delay_dur=delay_dur, stim_dur=stim_dur,
+                                      cathodic_first=cathodic_first)
+    for i in range(n_pulses):
+        t_win = i * window_dur
+        npt.assert_almost_equal(pt[0, t_win], 0)
+        npt.assert_almost_equal(pt[0, t_win + mid_first_pulse], first_amp)
+        npt.assert_almost_equal(pt[0, t_win + mid_interphase], 0)
+        npt.assert_almost_equal(pt[0, t_win + mid_second_pulse], second_amp)
+    npt.assert_almost_equal(pt.time[0], 0)
+    npt.assert_almost_equal(pt.time[-1], stim_dur, decimal=2)
+    npt.assert_equal(pt.cathodic_first, cathodic_first)
+    npt.assert_equal(pt.charge_balanced,
+                     np.isclose(np.trapz(pt.data, pt.time)[0], 0, atol=1e-5))
+
+    # Zero frequency:
+    pt = AsymmetricBiphasicPulseTrain(0, amp1, amp2, phase_dur1, phase_dur2)
+    npt.assert_almost_equal(pt.time, [0, 1000])
+    npt.assert_almost_equal(pt.data, [[0, 0]])
+    # Zero amp:
+    pt = AsymmetricBiphasicPulseTrain(freq, 0, 0, phase_dur1, phase_dur2)
+    npt.assert_almost_equal(pt.data, 0)
 
 
 def test_TimeSeries():
@@ -99,103 +185,6 @@ def test_TimeSeries_append():
     ts_add.append(ts_orig)
     npt.assert_equal(ts_add.shape[: -1], ts_new.shape[: -1])
     npt.assert_equal(ts_add.shape[-1], ts_new.shape[-1] * 2)
-
-
-@pytest.mark.parametrize('ptype', ('anodic', 'cathodic'))
-@pytest.mark.parametrize('sdur', [None, 5, 10, 100])
-def test_MonophasicPulse(ptype, sdur):
-    tsample = 1.0
-
-    for pdur in range(10):
-        for ddur in range(10):
-            pulse = MonophasicPulse(ptype, pdur, tsample, ddur, sdur)
-            # Slots:
-            npt.assert_equal(hasattr(pulse, '__slots__'), True)
-            npt.assert_equal(hasattr(pulse, '__dict__'), False)
-
-            # Make sure the pulse length is correct:
-            # When stimulus duration is not specified, stimulus must
-            # tightly fit pulse + delay. When stimulus direction is
-            # specified, pulse duration must match that number exactly.
-            if sdur is None:
-                npt.assert_equal(pulse.data.size, pdur + ddur)
-            else:
-                npt.assert_equal(pulse.data.size, sdur)
-
-            # Make sure delay is correct
-            delay = pulse.data[:ddur]
-            npt.assert_equal(np.allclose(delay, 0.0), True)
-
-            # Make sure pulse length and amplitude are correct
-            if pdur > 0:
-                # Actually, depending on settings, pulse duration might
-                # be different from what was specified:
-                if sdur is not None and pdur + ddur > sdur:
-                    # Stim is trimmed, adjust pdur
-                    actual_pdur = np.maximum(0, sdur - ddur)
-                else:
-                    actual_pdur = pdur
-
-                # Find maximma/minima
-                idx_min = np.isclose(pulse.data, -1.0)
-                idx_max = np.isclose(pulse.data, 1.0)
-                if ptype == 'anodic':
-                    npt.assert_equal(np.sum(idx_max), actual_pdur)
-                    if actual_pdur > 0:
-                        npt.assert_equal(pulse.data.max(), 1.0)
-                else:
-                    npt.assert_equal(np.sum(idx_min), actual_pdur)
-                    if actual_pdur > 0:
-                        npt.assert_equal(pulse.data.min(), -1.0)
-
-    # Invalid pulsetype
-    with pytest.raises(ValueError):
-        MonophasicPulse('anodicfirst', 10, 0.1)
-    with pytest.raises(ValueError):
-        MonophasicPulse('cathodicfirst', 10, 0.1)
-
-
-@pytest.mark.parametrize('ptype', ('cathodicfirst', 'anodicfirst'))
-@pytest.mark.parametrize('pdur', (0.25 / 1000, 0.45 / 1000))
-@pytest.mark.parametrize('tsample', (5e-6, 5e-5))
-def test_BiphasicPulse(ptype, pdur, tsample):
-    for interphase_dur in [0, 0.25 / 1000, 0.45 / 1000, 0.65 / 1000]:
-        # generate pulse
-        pulse = BiphasicPulse(ptype, pdur, tsample, interphase_dur)
-
-        # Slots:
-        npt.assert_equal(hasattr(pulse, '__slots__'), True)
-        npt.assert_equal(hasattr(pulse, '__dict__'), False)
-
-        # predicted length
-        pulse_gap_dur = 2 * pdur + interphase_dur
-
-        # make sure length is correct
-        npt.assert_equal(
-            pulse.shape[-1], int(np.round(pulse_gap_dur / tsample)))
-
-        # make sure amplitude is correct: negative peak,
-        # zero (in case of nonnegative interphase dur),
-        # positive peak
-        if interphase_dur > 0:
-            npt.assert_equal(np.unique(pulse.data), np.array([-1, 0, 1]))
-        else:
-            npt.assert_equal(np.unique(pulse.data), np.array([-1, 1]))
-
-        # make sure pulse order is correct
-        idx_min = np.where(pulse.data == pulse.data.min())
-        idx_max = np.where(pulse.data == pulse.data.max())
-        if ptype == 'cathodicfirst':
-            # cathodicfirst should have min first
-            npt.assert_equal(idx_min[0] < idx_max[0], True)
-        else:
-            npt.assert_equal(idx_min[0] < idx_max[0], False)
-
-    # Invalid pulsetype
-    with pytest.raises(ValueError):
-        BiphasicPulse('anodic', 10, 0.1)
-    with pytest.raises(ValueError):
-        BiphasicPulse('cathodic', 10, 0.1)
 
 
 @pytest.mark.parametrize('pulsetype', ['cathodicfirst', 'anodicfirst'])

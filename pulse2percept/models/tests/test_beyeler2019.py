@@ -21,6 +21,10 @@ def test_ScoreboardSpatial():
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(ArgusI()), None)
 
+    # Converting ret <=> dva
+    npt.assert_almost_equal(model.ret2dva(0), 0)
+    npt.assert_almost_equal(model.dva2ret(0), 0)
+
     implant = ArgusI(stim=np.zeros(16))
     # Zero in = zero out:
     percept = model.predict_percept(implant)
@@ -111,6 +115,10 @@ def test_AxonMapSpatial():
     model.build(rho=987)
     npt.assert_equal(model.rho, 987)
 
+    # Converting ret <=> dva
+    npt.assert_almost_equal(model.ret2dva(0), 0)
+    npt.assert_almost_equal(model.dva2ret(0), 0)
+
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(ArgusI()), None)
 
@@ -161,6 +169,10 @@ def test_AxonMapModel():
     with pytest.raises(ValueError):
         implant = ArgusII(eye='LE', stim=np.zeros(60))
         model.predict_percept(implant)
+    with pytest.raises(ValueError):
+        AxonMapModel(eye='invalid').build()
+    with pytest.raises(ValueError):
+        AxonMapModel(xystep=5).build(eye='invalid')
 
 
 @pytest.mark.parametrize('eye', ('LE', 'RE'))
@@ -274,6 +286,10 @@ def test_AxonMapModel__calc_bundle_tangent():
                             decimal=3)
     npt.assert_almost_equal(model.spatial.calc_bundle_tangent(0, 1000),
                             -0.5532, decimal=3)
+    with pytest.raises(TypeError):
+        model.spatial.calc_bundle_tangent([0], 1000)
+    with pytest.raises(TypeError):
+        model.spatial.calc_bundle_tangent(0, [1000])
 
 
 def test_AxonMapModel_predict_percept():

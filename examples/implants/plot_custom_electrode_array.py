@@ -3,8 +3,8 @@
 Creating your own electrode array
 ============================================================================
 
-This example shows how to create a new
-:py:class:`~pulse2percept.implants.ElectrodeArray` object.
+*This example shows how to create a new
+:py:class:`~pulse2percept.implants.ElectrodeArray` object.*
 
 As the base class for all electrode arrays in pulse2percept, the
 :py:class:`~pulse2percept.implants.ElectrodeArray` class provides a blue print
@@ -35,7 +35,7 @@ a child of :py:class:`~pulse2percept.implants.ElectrodeArray`:
 #     class CircleElectrodeArray(ElectrodeArray):
 #         """Electrodes arranged in a circle"""
 #         ...
-#        
+#
 # This way, the ``CircleElectrodeArray`` class can access all public methods
 # of :py:class:`~pulse2percept.implants.ElectrodeArray`.
 #
@@ -58,13 +58,14 @@ from pulse2percept.implants import ElectrodeArray, DiskElectrode
 import collections as coll
 import numpy as np
 
-class CircleElectrodeArray(ElectrodeArray): 
+
+class CircleElectrodeArray(ElectrodeArray):
 
     def __init__(self, n_electrodes, radius, x_center, y_center):
         """Electrodes arranged in a circle
-        
+
         Electrodes will be named 'A0', 'A1', ...
-        
+
         Parameters
         ----------
         n_electrodes : int
@@ -97,9 +98,9 @@ class CircleElectrodeArray(ElectrodeArray):
 # to the constructor:
 
 n_electrodes = 10
-radius = 1000 # radius in microns
-x_center = 0 # x-coordinate of circle center (microns)
-y_center = 0 # y-coordinate of circle center (microns)
+radius = 1000  # radius in microns
+x_center = 0  # x-coordinate of circle center (microns)
+y_center = 0  # y-coordinate of circle center (microns)
 
 # Create a new instance of type CircleElectrodeArray:
 earray = CircleElectrodeArray(n_electrodes, radius, x_center, y_center)
@@ -152,11 +153,12 @@ plot_implant_on_axon_map(implant)
 # For example, we could build a ``FlexibleCircleElectrodeArray`` that allows us to
 # remove individual electrodes from the array:
 
+
 class FlexibleCircleElectrodeArray(CircleElectrodeArray):
 
     def remove(self, name):
         """Deletean electrode from the array
-        
+
         Parameters
         ----------
         name : int, string
@@ -170,7 +172,8 @@ class FlexibleCircleElectrodeArray(CircleElectrodeArray):
 # including its constructor. So the following line will create the same
 # electrode array as above:
 
-flex_earray = FlexibleCircleElectrodeArray(n_electrodes, radius, x_center, y_center)
+flex_earray = FlexibleCircleElectrodeArray(
+    n_electrodes, radius, x_center, y_center)
 print(flex_earray)
 
 ##############################################################################

@@ -3,9 +3,10 @@
 Creating a grid of electrodes
 ============================================================================
 
+*This example shows how to use
+:py:class:`~pulse2percept.implants.ElectrodeGrid`.*
+
 Most current electrode arrays arrange their electrodes in a 2D grid.
-A 2D grid of electrodes can be quickly created using the
-:py:class:`~pulse2percept.implants.ElectrodeGrid` object.
 
 Creating a rectangular grid
 ---------------------------
