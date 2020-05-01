@@ -7,6 +7,8 @@ from pulse2percept.implants.base import (ProsthesisSystem, ElectrodeArray,
 class BVA24(ProsthesisSystem):
     """24-channel suprachoroidal retinal prosthesis
 
+    .. versionadded:: 0.6
+
     This class creates a 24-channel suprachoroidal retinal prosthesis as
     described in [Layton2014]_, where the center of the array is located
     at (x,y,z), given in microns, and the array is rotated by rotation

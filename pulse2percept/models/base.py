@@ -494,13 +494,21 @@ class Model(PrettyPrint):
     def __init__(self, spatial=None, temporal=None, **params):
         # Set the spatial model:
         if spatial is not None and not isinstance(spatial, SpatialModel):
-            raise TypeError("'spatial' must be a SpatialModel, not "
-                            "%s." % type(spatial))
+            if issubclass(spatial, SpatialModel):
+                # User should have passed an instance, not a class:
+                spatial = spatial()
+            else:
+                raise TypeError("'spatial' must be a SpatialModel instance, "
+                                "not %s." % type(spatial))
         self.spatial = spatial
         # Set the temporal model:
         if temporal is not None and not isinstance(temporal, TemporalModel):
-            raise TypeError("'temporal' must be a TemporalModel, not "
-                            "%s." % type(temporal))
+            if issubclass(temporal, TemporalModel):
+                # User should have passed an instance, not a class:
+                temporal = temporal()
+            else:
+                raise TypeError("'temporal' must be a TemporalModel instance, "
+                                "not %s." % type(temporal))
         self.temporal = temporal
         # Use user-specified parameter values instead of defaults:
         self.set_params(params)

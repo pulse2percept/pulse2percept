@@ -11,6 +11,8 @@ except ImportError:
 def load_horsager2009(shuffle=False, random_state=0):
     """Load data from [Horsager2009]_
 
+    .. versionadded:: 0.6
+
     Load the threshold data described in [Horsager2009]_. Average thresholds
     were extracted from the figures of the paper using WebplotDigitizer.
 

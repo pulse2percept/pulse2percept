@@ -15,14 +15,22 @@ v0.6.0 (2020, planned)
 Highlights
 ~~~~~~~~~~
 
-*   New API (:pull:`96`)
+*   New API (:pull:`96`, :pull:`174`, :pull:`178`)
+*   New implants: :py:class:`~pulse2percept.implants.BVA24` (:pull:`161`)
 *   New models: :py:class:`~pulse2percept.models.ScoreboardModel` (:pull:`96`),
-    :py:class:`~pulse2percept.models.AxonMapModel` (:pull:`96`).
+    :py:class:`~pulse2percept.models.AxonMapModel` (:pull:`96`),
+    :py:class:`~pulse2percept.models.Nanduri2012Model` (:pull:`168`)
+*   New stimuli: :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`,
+    :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulse`,
+    :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`
+    (:pull:`178`)
+*   New :py:mod:`~pulse2percept.percepts` subpackage (:pull:`174`)
+*   New :py:mod:`~pulse2percept.datasets` subpackage (:pull:`167`)
 *   New build process: Compile code and run tests via ``Makefile``
-    (:pull:`96`).
+    (:pull:`96`)
 *   Documentation now includes a tutorial, user guide, developer's guide, and
-    a gallery.
-*   Python 2.7 and 3.4 are no longer supported (:pull:`96`).
+    a gallery
+*   Python 2.7 and 3.4 are no longer supported (:pull:`96`)
 
 New features
 ~~~~~~~~~~~~
@@ -31,9 +39,12 @@ New features
     :py:class:`~pulse2percept.implants.ProsthesisSystem` consisting of an
     :py:class:`~pulse2percept.implants.ElectrodeArray` and optionally a
     :py:class:`~pulse2percept.stimuli.Stimulus` (:pull:`96`).
+*   A :py:class:`~pulse2percept.models.Model` can be built by mix-and-matching
+    spatial and temporal models from different publications (:pull:`174`).
 *   A :py:class:`~pulse2percept.stimuli.Stimulus` can be created from various
-    source types, such as scalars, NumPy arrays, dictionaries, and
-    :py:class:`~pulse2percept.stimuli.TimeSeries` objects.
+    source types, such as scalars, NumPy arrays, lists, and dictionaries.
+    There are also a variety of built-in pulses and pulse trains
+    (e.g., :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`).
 *   :py:class:`~pulse2percept.implants.ElectrodeArray` now stores electrodes in
     a dictionary (:issue:`74`).
 *   :py:class:`~pulse2percept.implants.ElectrodeGrid` can be used to create
@@ -45,10 +56,13 @@ API changes
 Backward-incompatible changes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-*   The ``Simulation`` object has been removed. Please directly
-    :ref:`instantiate a model <topics-models>` instead.
-*   ``pulse2percept.retina``: use :py:mod:`~pulse2percept.models` instead
-*   ``pulse2percept.files``: use :py:mod:`~pulse2percept.io` instead
+*  Times are now specified in milliseconds.
+*  The ``TimeSeries`` object is deprecated. Please use 
+   :py:class:`~pulse2percept.stimuli.Stimulus` instead.
+*  The ``Simulation`` object has been removed. Please directly
+   :ref:`instantiate a model <topics-models>` instead.
+*  ``pulse2percept.retina``: use :py:mod:`~pulse2percept.models` instead
+*  ``pulse2percept.files``: use :py:mod:`~pulse2percept.io` instead
 
 v0.5.2 (2020-02-25)
 -------------------

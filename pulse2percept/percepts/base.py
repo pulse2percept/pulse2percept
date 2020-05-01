@@ -10,6 +10,22 @@ from ..utils import Data, GridXY
 
 
 class Percept(Data):
+    """Visual percept
+
+    .. versionadded:: 0.6
+
+    Parameters
+    ----------
+    data : 3D NumPy array
+        A NumPy array specifying the percept in (Y, X, T) dimensions
+    space : :py:class:`~pulse2percept.utils.GridXY`
+        A grid object specifying the (x,y) coordinates in space
+    time : 1D array
+        A list of time points
+    metadata : dict, optional, default: None
+        Additional stimulus metadata can be stored in a dictionary.
+
+    """
 
     def __init__(self, data, space=None, time=None, metadata=None):
         xdva = None
