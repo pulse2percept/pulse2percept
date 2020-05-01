@@ -4,8 +4,8 @@
 Nanduri et al. (2012): Frequency vs. amplitude modulation
 ===============================================================================
 
-This example shows how to use the
-:py:class:`~pulse2percept.models.Nanduri2012Model`.
+*This example shows how to use the
+:py:class:`~pulse2percept.models.Nanduri2012Model`.*
 
 The model introduced in [Nanduri2012]_ assumes that electrical stimulation
 leads to percepts that quickly increase in brightness (over the time course

@@ -95,6 +95,7 @@ class BiphasicPulse(Stimulus):
 
     A simple stimulus consisting of a single biphasic pulse: a cathodic and an
     anodic phase, optionally separated by an interphase gap.
+    Both cathodic and anodic phases have the same duration ("symmetric").
 
     Parameters
     ----------
@@ -123,7 +124,6 @@ class BiphasicPulse(Stimulus):
 
     Notes
     -----
-    *  Both cathodic and anodic phases have the same duration ("symmetric").
     *  The order of the two phases is given by the ``cathodic_first`` flag.
     *  A biphasic pulse created with this class will always be considered
        "charge-balanced".
@@ -192,6 +192,8 @@ class AsymmetricBiphasicPulse(Stimulus):
 
     A simple stimulus consisting of a single biphasic pulse: a cathodic and an
     anodic phase, optionally separated by an interphase gap.
+    The two pulse phases can have different amplitudes and duration
+    ("asymmetric").
 
     Parameters
     ----------
@@ -221,8 +223,6 @@ class AsymmetricBiphasicPulse(Stimulus):
 
     Notes
     -----
-    *  The two pulse phases can have different amplitudes and duration
-       ("asymmetric").
     *  The order of the two phases is given by the ``cathodic_first`` flag.
     *  The sign of ``amp`` will be automatically adjusted depending on the
        ``cathodic_first`` flag.
