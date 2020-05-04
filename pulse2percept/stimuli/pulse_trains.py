@@ -1,4 +1,4 @@
-"""`TimeSeries`, `MonophasicPulse`, `BiphasicPulse`, `PulseTrain`"""
+"""`PulseTrain`, `BiphasicPulseTrain`, `AsymmetricBiphasicPulseTrain`"""
 import numpy as np
 import copy
 import logging
@@ -9,6 +9,102 @@ from . import MIN_AMP
 from .base import TimeSeries, Stimulus
 from .pulses import BiphasicPulse, AsymmetricBiphasicPulse, LegacyBiphasicPulse
 from ..utils import deprecated
+
+
+class PulseTrain(Stimulus):
+    """Generic pulse train
+
+    .. versionadded:: 0.6
+
+    Can be used to concatenate single pulses into a pulse train.
+
+    .. seealso ::
+
+        * :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`
+        * :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`
+
+    Parameters
+    ----------
+    freq : float
+        Pulse train frequency (Hz).
+    pulse : :py:class:`~pulse2percept.stimuli.Stimulus`
+        A Stimulus object containing a single pulse that will be concatenated.
+    n_pulses : int
+        Number of pulses requested in the pulse train. If None, the entire
+        stimulation window (``stim_dur``) is filled.
+    stim_dur : float, optional, default: 1000 ms
+        Total stimulus duration (ms). The pulse train will be trimmed to make
+        the stimulus last ``stim_dur`` ms overall.
+    dt : float, optional, default: 1e-3 ms
+        Sampling time step (ms); defines the duration of the signal edge
+        transitions.
+    metadata : dict
+        A dictionary of meta-data
+
+    Notes
+    -----
+    *  If the pulse train frequency does not exactly divide ``stim_dur``, the
+       number of pulses will be rounded down. For example, when trying to fit
+       a 11 Hz pulse train into a 100 ms window, there will be 9 pulses.
+
+    """
+
+    def __init__(self, freq, pulse, n_pulses=None, stim_dur=1000.0, dt=1e-3,
+                 metadata=None):
+        if not isinstance(pulse, Stimulus):
+            raise TypeError("'pulse' must be a Stimulus object, not "
+                            "%s." % type(pulse))
+        # 0 Hz is allowed:
+        if np.isclose(freq, 0):
+            time = [0, stim_dur]
+            data = [[0, 0]]
+        else:
+            # Window duration is the inverse of pulse train frequency:
+            window_dur = 1000.0 / freq
+            if pulse.time[-1] > window_dur:
+                raise ValueError("Pulse (dur=%.2f ms) does not fit into "
+                                 "pulse train window (dur=%.2f "
+                                 "ms)" % (pulse.time[-1], window_dur))
+            pulse_data = pulse.data
+            pulse_time = pulse.time
+            # We have to be careful not to create duplicate time points, which
+            # will be trimmed (and produce artifacts) upon compression:
+            if np.isclose(pulse_time[-1], window_dur):
+                pulse_time[-1] -= dt
+            # How many pulses fit into stim dur:
+            n_max_pulses = int(freq * stim_dur / 1000.0)
+            if n_pulses is not None:
+                n_pulses = int(n_pulses)
+                if n_pulses > n_max_pulses:
+                    raise ValueError("stim_dur=%.2f cannot fit more than "
+                                     "%d pulses." % (stim_dur, n_max_pulses))
+            else:
+                n_pulses = n_max_pulses
+            # Concatenate the pulses:
+            data = []
+            time = []
+            for i in range(n_pulses):
+                data.append(pulse_data)
+                time.append(pulse_time + i * window_dur)
+            # Make sure the last point in the stimulus is at `stim_dur`:
+            if time[-1][-1] < stim_dur:
+                data.append(np.zeros((pulse.data.shape[0], 1)))
+                time.append([stim_dur])
+            data = np.concatenate(data, axis=1)
+            time = np.concatenate(time, axis=0)
+        super().__init__(data, time=time, metadata=None, compress=False)
+        self.freq = freq
+        self.pulse_type = pulse.__class__.__name__
+        self.charge_balanced = np.isclose(np.trapz(data, time)[0], 0,
+                                          atol=MIN_AMP)
+
+    def _pprint_params(self):
+        """Return a dict of class arguments to pretty-print"""
+        params = super(PulseTrain, self)._pprint_params()
+        params.update({'freq': self.freq,
+                       'pulse_type': self.pulse_type,
+                       'charge_balanced': self.charge_balanced})
+        return params
 
 
 class BiphasicPulseTrain(Stimulus):
@@ -44,6 +140,8 @@ class BiphasicPulseTrain(Stimulus):
     dt : float, optional, default: 1e-3 ms
         Sampling time step (ms); defines the duration of the signal edge
         transitions.
+    metadata : dict
+        A dictionary of meta-data
 
     Notes
     -----
@@ -62,63 +160,19 @@ class BiphasicPulseTrain(Stimulus):
     """
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
-                 n_pulses=None, stim_dur=1000.0, cathodic_first=True, dt=1e-3):
-        # 0 Hz is allowed:
-        if np.isclose(freq, 0):
-            time = [0, stim_dur]
-            data = [[0, 0]]
-        else:
-            # Window duration is the inverse of pulse train frequency. If it is
-            # too small for phase_dur/interphase_dur/delay_dur (or negative),
-            # the BiphasicPulse constructor will catch it:
-            window_dur = 1000.0 / freq
-            pulse = BiphasicPulse(amp, phase_dur, delay_dur=delay_dur, dt=dt,
-                                  interphase_dur=interphase_dur,
-                                  cathodic_first=cathodic_first,
-                                  stim_dur=window_dur)
-            # How many pulses fit into stim dur:
-            n_max_pulses = int(np.ceil(freq * stim_dur / 1000.0))
-            if n_pulses is not None:
-                n_pulses = int(n_pulses)
-                if n_pulses > n_max_pulses:
-                    raise ValueError("stim_dur=%.2f cannot fit more than "
-                                     "%d pulses." % (stim_dur, n_max_pulses))
-            else:
-                n_pulses = n_max_pulses
-            data = []
-            time = []
-            for i in range(n_pulses):
-                d_win = pulse.data
-                t_win = pulse.time + i * window_dur
-                if t_win[-1] > stim_dur:
-                    # Interpolate the data point at t=stim_dur:
-                    last_d = interp1d(t_win, d_win)(stim_dur)[0]
-                    # Keep only the data points < stim_dur, but append the
-                    # interpolated point:
-                    idx = t_win <= stim_dur
-                    d_win = np.append(d_win[:, idx], [[last_d]], axis=1)
-                    t_win = np.append(t_win[idx], stim_dur)
-                    data.append(d_win)
-                    time.append(t_win)
-                else:
-                    data.append(d_win)
-                    time.append(t_win)
-            # Make sure the last point in the stimulus is at `stim_dur`:
-            data.append(np.zeros((pulse.data.shape[0], 1)))
-            time.append([stim_dur])
-            data = np.concatenate(data, axis=1)
-            time = np.concatenate(time, axis=0)
-            # There is an edge case for delay_dur=0: There will be two
-            # identical `time` entries, which messes with the SciPy
-            # interpolation function.
-            # Thus retain only the unique time points:
-            time, idx = np.unique(time, return_index=True)
-            data = data[:, idx]
-        super().__init__(data, time=time, compress=False)
+                 n_pulses=None, stim_dur=1000.0, cathodic_first=True, dt=1e-3,
+                 metadata=None):
+        # Create the individual pulse:
+        pulse = BiphasicPulse(amp, phase_dur, delay_dur=delay_dur, dt=dt,
+                              interphase_dur=interphase_dur,
+                              cathodic_first=cathodic_first)
+        # Concatenate the pulses:
+        pt = PulseTrain(freq, pulse, n_pulses=n_pulses, stim_dur=stim_dur,
+                        dt=dt, metadata=metadata)
+        super().__init__(pt.data, time=pt.time, compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
-        self.charge_balanced = np.isclose(np.trapz(data, time)[0], 0,
-                                          atol=MIN_AMP)
+        self.charge_balanced = pt.charge_balanced
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
@@ -167,66 +221,26 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
     dt : float, optional, default: 1e-3 ms
         Sampling time step (ms); defines the duration of the signal edge
         transitions.
+    metadata : dict
+        A dictionary of meta-data
 
     """
 
     def __init__(self, freq, amp1, amp2, phase_dur1, phase_dur2,
                  interphase_dur=0, delay_dur=0, n_pulses=None, stim_dur=1000.0,
-                 cathodic_first=True, dt=1e-3):
-        # 0 Hz is allowed:
-        if np.isclose(freq, 0):
-            time = [0, stim_dur]
-            data = [[0, 0]]
-        else:
-            # Window duration is 1/f:
-            window_dur = 1000.0 / freq
-            pulse = AsymmetricBiphasicPulse(amp1, amp2, phase_dur1, phase_dur2,
-                                            delay_dur=delay_dur, dt=dt,
-                                            interphase_dur=interphase_dur,
-                                            cathodic_first=cathodic_first,
-                                            stim_dur=window_dur)
-            # How many pulses fit into stim dur:
-            n_max_pulses = int(np.ceil(freq * stim_dur / 1000.0))
-            if n_pulses is not None:
-                n_pulses = int(n_pulses)
-                if n_pulses > n_max_pulses:
-                    raise ValueError("stim_dur=%.2f cannot fit more than "
-                                     "%d pulses." % (stim_dur, n_max_pulses))
-            else:
-                n_pulses = n_max_pulses
-            data = []
-            time = []
-            for i in range(n_pulses):
-                d_win = pulse.data
-                t_win = pulse.time + i * window_dur
-                if t_win[-1] > stim_dur:
-                    # Interpolate the data point at t=stim_dur:
-                    last_d = interp1d(t_win, d_win)(stim_dur)[0]
-                    # Keep only the data points < stim_dur, but append the
-                    # interpolated point:
-                    idx = t_win <= stim_dur
-                    d_win = np.append(d_win[:, idx], [[last_d]], axis=1)
-                    t_win = np.append(t_win[idx], stim_dur)
-                    data.append(d_win)
-                    time.append(t_win)
-                else:
-                    data.append(d_win)
-                    time.append(t_win)
-            # Make sure the last point in the stimulus is at `stim_dur`:
-            data.append(np.zeros((pulse.data.shape[0], 1)))
-            time.append([stim_dur])
-            data = np.concatenate(data, axis=1)
-            time = np.concatenate(time, axis=0)
-            # There is an edge case for delay_dur=0: There will be two
-            # identical `time` entries, which messes with the SciPy
-            # interpolation function.
-            # Thus retain only the unique time points:
-            time, idx = np.unique(time, return_index=True)
-            data = data[:, idx]
-        super().__init__(data, time=time, compress=False)
-        self.cathodic_first = cathodic_first
-        self.charge_balanced = np.isclose(np.trapz(data, time)[0], 0)
+                 cathodic_first=True, dt=1e-3, metadata=None):
+        # Create the individual pulse:
+        pulse = AsymmetricBiphasicPulse(amp1, amp2, phase_dur1, phase_dur2,
+                                        delay_dur=delay_dur, dt=dt,
+                                        interphase_dur=interphase_dur,
+                                        cathodic_first=cathodic_first)
+        # Concatenate the pulses:
+        pt = PulseTrain(freq, pulse, n_pulses=n_pulses, stim_dur=stim_dur,
+                        dt=dt, metadata=metadata)
+        super().__init__(pt.data, time=pt.time, compress=False)
         self.freq = freq
+        self.cathodic_first = cathodic_first
+        self.charge_balanced = pt.charge_balanced
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
