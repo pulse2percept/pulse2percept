@@ -33,6 +33,9 @@ class BiphasicPulseTrain(Stimulus):
     delay_dur : float
         Delay duration (ms). Zeros will be inserted at the beginning of the
         stimulus to deliver the first pulse phase after ``delay_dur`` ms.
+    n_pulses : int
+        Number of pulses requested in the pulse train. If None, the entire
+        stimulation window (``stim_dur``) is filled.
     stim_dur : float, optional, default: 1000 ms
         Total stimulus duration (ms). The pulse train will be trimmed to make
         the stimulus last ``stim_dur`` ms overall.
@@ -59,7 +62,7 @@ class BiphasicPulseTrain(Stimulus):
     """
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
-                 stim_dur=1000.0, cathodic_first=True, dt=1e-3):
+                 n_pulses=None, stim_dur=1000.0, cathodic_first=True, dt=1e-3):
         # 0 Hz is allowed:
         if np.isclose(freq, 0):
             time = [0, stim_dur]
@@ -73,8 +76,15 @@ class BiphasicPulseTrain(Stimulus):
                                   interphase_dur=interphase_dur,
                                   cathodic_first=cathodic_first,
                                   stim_dur=window_dur)
-            # How many pulses depends on stim_dur:
-            n_pulses = int(np.ceil(freq * stim_dur / 1000.0))
+            # How many pulses fit into stim dur:
+            n_max_pulses = int(np.ceil(freq * stim_dur / 1000.0))
+            if n_pulses is not None:
+                n_pulses = int(n_pulses)
+                if n_pulses > n_max_pulses:
+                    raise ValueError("stim_dur=%.2f cannot fit more than "
+                                     "%d pulses." % (stim_dur, n_max_pulses))
+            else:
+                n_pulses = n_max_pulses
             data = []
             time = []
             for i in range(n_pulses):
@@ -93,6 +103,9 @@ class BiphasicPulseTrain(Stimulus):
                 else:
                     data.append(d_win)
                     time.append(t_win)
+            # Make sure the last point in the stimulus is at `stim_dur`:
+            data.append(np.zeros((pulse.data.shape[0], 1)))
+            time.append([stim_dur])
             data = np.concatenate(data, axis=1)
             time = np.concatenate(time, axis=0)
             # There is an edge case for delay_dur=0: There will be two
@@ -143,6 +156,9 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
     delay_dur : float
         Delay duration (ms). Zeros will be inserted at the beginning of the
         stimulus to deliver the first pulse phase after ``delay_dur`` ms.
+    n_pulses : int
+        Number of pulses requested in the pulse train. If None, the entire
+        stimulation window (``stim_dur``) is filled.
     stim_dur : float, optional, default: 1000 ms
         Total stimulus duration (ms). Zeros will be inserted at the end of the
         stimulus to make the the stimulus last ``stim_dur`` ms overall.
@@ -155,7 +171,7 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
     """
 
     def __init__(self, freq, amp1, amp2, phase_dur1, phase_dur2,
-                 interphase_dur=0, delay_dur=0, stim_dur=1000.0,
+                 interphase_dur=0, delay_dur=0, n_pulses=None, stim_dur=1000.0,
                  cathodic_first=True, dt=1e-3):
         # 0 Hz is allowed:
         if np.isclose(freq, 0):
@@ -169,8 +185,15 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
                                             interphase_dur=interphase_dur,
                                             cathodic_first=cathodic_first,
                                             stim_dur=window_dur)
-            # How many pulses depends on stim_dur:
-            n_pulses = int(np.ceil(freq * stim_dur / 1000.0))
+            # How many pulses fit into stim dur:
+            n_max_pulses = int(np.ceil(freq * stim_dur / 1000.0))
+            if n_pulses is not None:
+                n_pulses = int(n_pulses)
+                if n_pulses > n_max_pulses:
+                    raise ValueError("stim_dur=%.2f cannot fit more than "
+                                     "%d pulses." % (stim_dur, n_max_pulses))
+            else:
+                n_pulses = n_max_pulses
             data = []
             time = []
             for i in range(n_pulses):
@@ -189,6 +212,9 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
                 else:
                     data.append(d_win)
                     time.append(t_win)
+            # Make sure the last point in the stimulus is at `stim_dur`:
+            data.append(np.zeros((pulse.data.shape[0], 1)))
+            time.append([stim_dur])
             data = np.concatenate(data, axis=1)
             time = np.concatenate(time, axis=0)
             # There is an edge case for delay_dur=0: There will be two
@@ -213,7 +239,7 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
 
 @deprecated(alt_func='BiphasicPulseTrain', deprecated_version='0.6',
             removed_version='0.7')
-class PulseTrain(TimeSeries):
+class LegacyPulseTrain(TimeSeries):
     """A train of biphasic pulses
 
     Parameters
@@ -315,4 +341,4 @@ class PulseTrain(TimeSeries):
         # Trim to correct length (takes care of too long arrays, too)
         pulse_train = pulse_train[:stim_size]
 
-        super(PulseTrain, self).__init__(tsample, pulse_train)
+        super(LegacyPulseTrain, self).__init__(tsample, pulse_train)

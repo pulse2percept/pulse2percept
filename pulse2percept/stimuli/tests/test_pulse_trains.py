@@ -3,8 +3,9 @@ import copy
 import pytest
 import numpy.testing as npt
 
-from pulse2percept.stimuli import (TimeSeries, PulseTrain, BiphasicPulseTrain,
+from pulse2percept.stimuli import (TimeSeries, BiphasicPulseTrain,
                                    AsymmetricBiphasicPulseTrain)
+from pulse2percept.stimuli.pulse_trains import LegacyPulseTrain
 
 
 @pytest.mark.parametrize('amp', (-3, 4))
@@ -46,6 +47,13 @@ def test_BiphasicPulseTrain(amp, interphase_dur, delay_dur, cathodic_first):
     # Zero amp:
     pt = BiphasicPulseTrain(freq, 0, phase_dur)
     npt.assert_almost_equal(pt.data, 0)
+
+    # Specific number of pulses
+    for n_pulses in [2, 4, 5]:
+        pt = BiphasicPulseTrain(500, 30, 0.05, n_pulses=n_pulses, stim_dur=9,
+                                dt=0.05)
+        npt.assert_almost_equal(np.sum(np.isclose(pt.data, 30)), n_pulses)
+        npt.assert_almost_equal(pt.time[-1], 9)
 
 
 @pytest.mark.parametrize('amp1', (-1, 13))
@@ -91,6 +99,14 @@ def test_AsymmetricBiphasicPulseTrain(amp1, amp2, interphase_dur, delay_dur,
     # Zero amp:
     pt = AsymmetricBiphasicPulseTrain(freq, 0, 0, phase_dur1, phase_dur2)
     npt.assert_almost_equal(pt.data, 0)
+
+    # Specific number of pulses
+    for n_pulses in [2, 4, 5]:
+        pt = AsymmetricBiphasicPulseTrain(500, -30, 40, 0.05, 0.05,
+                                          n_pulses=n_pulses, stim_dur=9,
+                                          dt=0.05)
+        npt.assert_almost_equal(np.sum(np.isclose(pt.data, 40)), n_pulses)
+        npt.assert_almost_equal(pt.time[-1], 9)
 
 
 def test_TimeSeries():
@@ -190,7 +206,7 @@ def test_TimeSeries_append():
 @pytest.mark.parametrize('pulsetype', ['cathodicfirst', 'anodicfirst'])
 @pytest.mark.parametrize('delay', [0, 10 / 1000])
 @pytest.mark.parametrize('pulseorder', ['pulsefirst', 'gapfirst'])
-def test_PulseTrain(pulsetype, delay, pulseorder):
+def test_LegacyPulseTrain(pulsetype, delay, pulseorder):
     dur = 0.5
     pdur = 0.45 / 1000
     tsample = 5e-6
@@ -199,13 +215,13 @@ def test_PulseTrain(pulsetype, delay, pulseorder):
 
     # First an easy one (sawtooth)...
     for scale in [1.0, 5.0, 10.0]:
-        pt = PulseTrain(tsample=0.1 * scale,
-                        dur=1.0 * scale, freq=freq / scale,
-                        amp=ampl * scale,
-                        pulse_dur=0.1 * scale,
-                        interphase_dur=0,
-                        pulsetype='cathodicfirst',
-                        pulseorder='pulsefirst')
+        pt = LegacyPulseTrain(tsample=0.1 * scale,
+                              dur=1.0 * scale, freq=freq / scale,
+                              amp=ampl * scale,
+                              pulse_dur=0.1 * scale,
+                              interphase_dur=0,
+                              pulsetype='cathodicfirst',
+                              pulseorder='pulsefirst')
         npt.assert_equal(np.sum(np.isclose(pt.data, ampl * scale)), freq)
         npt.assert_equal(np.sum(np.isclose(pt.data, -ampl * scale)), freq)
         npt.assert_equal(pt.data[0], -ampl * scale)
@@ -222,23 +238,23 @@ def test_PulseTrain(pulsetype, delay, pulseorder):
 
     # All empty pulse trains: Expect no division by zero errors
     for amp in [0, 20]:
-        p2pt = PulseTrain(freq=0, amp=amp, dur=dur,
-                          pulse_dur=pdur,
-                          interphase_dur=pdur,
-                          tsample=tsample)
+        p2pt = LegacyPulseTrain(freq=0, amp=amp, dur=dur,
+                                pulse_dur=pdur,
+                                interphase_dur=pdur,
+                                tsample=tsample)
         npt.assert_equal(p2pt.data, np.zeros(stim_size))
 
     # Non-zero pulse trains: Expect right length, pulse order, etc.
     for freq in [9, 13.8, 20]:
-        p2pt = PulseTrain(freq=freq,
-                          dur=dur,
-                          pulse_dur=pdur,
-                          interphase_dur=pdur,
-                          delay=delay,
-                          tsample=tsample,
-                          amp=ampl,
-                          pulsetype=pulsetype,
-                          pulseorder=pulseorder)
+        p2pt = LegacyPulseTrain(freq=freq,
+                                dur=dur,
+                                pulse_dur=pdur,
+                                interphase_dur=pdur,
+                                delay=delay,
+                                tsample=tsample,
+                                amp=ampl,
+                                pulsetype=pulsetype,
+                                pulseorder=pulseorder)
 
         # make sure length is correct
         npt.assert_equal(p2pt.data.size, stim_size)
@@ -282,15 +298,15 @@ def test_PulseTrain(pulsetype, delay, pulseorder):
 
     # Invalid values
     with pytest.raises(ValueError):
-        PulseTrain(0.1, delay=-10)
+        LegacyPulseTrain(0.1, delay=-10)
     with pytest.raises(ValueError):
-        PulseTrain(0.1, pulse_dur=-10)
+        LegacyPulseTrain(0.1, pulse_dur=-10)
     with pytest.raises(ValueError):
-        PulseTrain(0.1, freq=1000, pulse_dur=10)
+        LegacyPulseTrain(0.1, freq=1000, pulse_dur=10)
     with pytest.raises(ValueError):
-        PulseTrain(0.1, pulseorder='cathodicfirst')
+        LegacyPulseTrain(0.1, pulseorder='cathodicfirst')
     with pytest.raises(ValueError):
-        PulseTrain(0)
+        LegacyPulseTrain(0)
 
     # Smoke test envelope_size > stim_size
-    PulseTrain(1, freq=0.01, dur=0.01)
+    LegacyPulseTrain(1, freq=0.01, dur=0.01)
