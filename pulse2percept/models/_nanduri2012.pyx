@@ -158,6 +158,10 @@ cpdef temporal_fast(const float32[:, ::1] stim,
         uint32 idx_space, idx_sim, idx_stim, idx_frame
         uint32 n_space, n_stim, n_percept, n_sim
 
+    # Note that eps must be divided by 1000, because the original model was fit
+    # with a microsecond time step and now we are running milliseconds:
+    eps = eps / 1000.0
+
     n_percept = len(idx_t_percept)  # Py overhead
     n_stim = len(t_stim)  # Py overhead
     n_sim = idx_t_percept[n_percept - 1] + 1  # no negative indices

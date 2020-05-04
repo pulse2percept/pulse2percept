@@ -142,7 +142,7 @@ class Nanduri2012Temporal(TemporalModel):
             # Time decay for the slow leaky integrator:
             'tau3': 26.25,
             # Scaling factor applied to charge accumulation:
-            'eps': 0.00873,
+            'eps': 8.73,
             # Asymptote of the sigmoid:
             'asymptote': 14.0,
             # Slope of the sigmoid:
