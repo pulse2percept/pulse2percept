@@ -4,9 +4,9 @@
 Beyeler et al. (2019): Axonal streaks with the axon map model
 ============================================================================
 
-*This example shows how to apply the
+This example shows how to apply the
 :py:class:`~pulse2percept.models.AxonMapModel` to an
-:py:class:`~pulse2percept.implants.ArgusII` implant.*
+:py:class:`~pulse2percept.implants.ArgusII` implant.
 
 The axon map model assumes that electrical stimulation leads to percepts that
 are elongated along the direction of the underlying nerve fiber bundle

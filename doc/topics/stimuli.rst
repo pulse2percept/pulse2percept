@@ -4,7 +4,7 @@
 Electrical Stimuli
 ==================
 
-The :py:mod:`~pulse2percept.stimuli` subpackage provides a number of common
+The :py:mod:`~pulse2percept.stimuli` module provides a number of common
 electrical stimulus types, which can be assigned to electrodes of a
 :py:class:`~pulse2percept.implants.ProsthesisSystem` object:
 
@@ -14,12 +14,15 @@ Stimulus                          Description
 `MonophasicPulse`                 single phase: cathodic or anodic
 `BiphasicPulse`                   biphasic: cathodic + anodic
 `AsymmetricBiphasicPulse`         biphasic with unequal amplitude/duration
+`PulseTrain`                      combine any Stimulus into a pulse train
 `BiphasicPulseTrain`              series of (symmetric) biphasic pulses
 `AsymmetricBiphasicPulseTrain`    series of asymmetric biphasic pulses
+`BiphasicTripletTrain`            series of biphasic pulse triplets
 ================================  ==========================================
 
 In addition, pulse2percept provides convenience functions to convert
-images and videos into :py:class:`~pulse2percept.stimuli.Stimulus` objects.
+images and videos into :py:class:`~pulse2percept.stimuli.Stimulus` objects
+(see the :py:mod:`~pulse2percept.io` module).
 
 .. important ::
 

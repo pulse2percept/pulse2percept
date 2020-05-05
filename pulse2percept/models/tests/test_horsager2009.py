@@ -9,7 +9,7 @@ from pulse2percept.models import Horsager2009Model, Horsager2009Temporal
 from pulse2percept.utils import FreezeError
 
 
-def test_Nanduri2012Temporal():
+def test_Horsager2009Temporal():
     model = Horsager2009Temporal()
     # User can set their own params:
     model.dt = 0.1

@@ -2,39 +2,11 @@
 import numpy as np
 from os.path import dirname, join
 
-from ..stimuli import Stimulus, BiphasicPulseTrain
 try:
     import pandas as pd
     has_pandas = True
 except ImportError:
     has_pandas = False
-
-
-class VariableDuration(Stimulus):
-
-    def __init__(self, freq, amp, n_pulses, phase_dur, interphase_dur=0,
-                 delay_dur=0, stim_dur=1000.0, cathodic_first=True, dt=1e-3):
-        # A biphasic pulse train with a number of pulses:
-        self.n_pulses = n_pulses
-        pt = BiphasicPulseTrain(freq, amp, phase_dur,
-                                interphase_dur=interphase_dur,
-                                delay_dur=delay_dur,
-                                cathodic_first=cathodic_first,
-                                stim_dur=n_pulses * 1000.0 / freq,
-                                dt=dt)
-        # Pad the stimulus with zeros until the desired stimulus duration:
-        data = np.concatenate((pt.data, np.zeros((pt.data.shape[0], 1))),
-                              axis=1)
-        time = np.concatenate(pt.time, [stim_dur], axis=0)
-        return super(VariableDuration, self).__init__(self, data, time=time,
-                                                      electrodes=pt.electrodes)
-
-    def _pprint_params(self):
-        """Return a dict of class arguments to pretty-print"""
-        params = super(VariableDuration, self)._pprint_params()
-        params.update({'cathodic_first': self.cathodic_first,
-                       'charge_balanced': self.charge_balanced,
-                       'freq': self.freq, 'n_pulses': self.n_pulses})
 
 
 def load_horsager2009(shuffle=False, random_state=0):

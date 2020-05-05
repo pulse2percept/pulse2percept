@@ -17,22 +17,22 @@ You have the same options as when setting up a single
 :py:class:`~pulse2percept.stimuli.BiphasicPulse`, in addition to specifying
 a pulse train frequency (``freq``) and total stimulus duration (``stim_dur``).
 
-For example, a 20 Hz pulse train lasting 500 ms and made from anodic-first
-biphasic pulses (30 uA, 0.075 ms pulse duration, no interphase gap) can be
+For example, a 20 Hz pulse train lasting 200 ms and made from anodic-first
+biphasic pulses (30 uA, 2 ms pulse duration, no interphase gap) can be
 created as follows:
 """
-# sphinx_gallery_thumbnail_number = 3
+# sphinx_gallery_thumbnail_number = 4
 
 from pulse2percept.stimuli import BiphasicPulseTrain
 
-pt = BiphasicPulseTrain(20, 30, 0.075, stim_dur=500, cathodic_first=False)
+pt = BiphasicPulseTrain(20, 30, 2, stim_dur=200, cathodic_first=False)
 pt.plot()
 
 ###############################################################################
 # You can also limit the number of pulses in the train, but still make the
-# stimulus last 500 ms:
+# stimulus last 200 ms:
 
-pt = BiphasicPulseTrain(20, 30, 0.075, n_pulses=3, stim_dur=500,
+pt = BiphasicPulseTrain(20, 30, 2, n_pulses=3, stim_dur=200,
                         cathodic_first=False)
 pt.plot()
 
@@ -40,21 +40,21 @@ pt.plot()
 # Asymmetric biphasic pulse trains
 # --------------------------------
 #
-# To create a 20 Hz pulse train lasting 500 ms created from asymmetric biphasic
+# To create a 20 Hz pulse train lasting 200 ms created from asymmetric biphasic
 # pulses, use :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`:
 
 from pulse2percept.stimuli import AsymmetricBiphasicPulseTrain
 
 # First pulse:
 amp1 = 10
-phase_dur1 = 1
+phase_dur1 = 2
 
 # Second pulse
 amp2 = 2
-phase_dur2 = 5
+phase_dur2 = 10
 
 pt = AsymmetricBiphasicPulseTrain(20, amp1, amp2, phase_dur1, phase_dur2,
-                                  stim_dur=500)
+                                  stim_dur=200)
 pt.plot()
 
 ###############################################################################
@@ -67,9 +67,9 @@ pt.plot()
 from pulse2percept.stimuli import BiphasicTripletTrain
 
 amp = 15
-phase_dur = 0.075
+phase_dur = 2
 
-pt = BiphasicTripletTrain(20, amp, phase_dur, stim_dur=500)
+pt = BiphasicTripletTrain(20, amp, phase_dur, stim_dur=200)
 pt.plot()
 
 ###############################################################################

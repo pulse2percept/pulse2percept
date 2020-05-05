@@ -4,8 +4,8 @@
 Horsager et al. (2009): Predicting temporal sensitivity
 ===============================================================================
 
-*This example shows how to use the
-:py:class:`~pulse2percept.models.Horsager2009Model`.*
+This example shows how to use the
+:py:class:`~pulse2percept.models.Horsager2009Model`.
 
 The model introduced in [Horsager2009]_ assumes that electrical stimulation
 leads to percepts that quickly increase in brightness (over the time course
@@ -54,7 +54,7 @@ phase_dur = 0.075
 stim_dur = 200
 pulse = BiphasicPulse(180, phase_dur, interphase_dur=phase_dur,
                       stim_dur=stim_dur, cathodic_first=True)
-pulse.plot(time=np.arange(0, 10, 0.005))
+pulse.plot(time=np.linspace(0, 10, num=10000))
 
 ###############################################################################
 # Simulating the model response
@@ -162,3 +162,96 @@ plt.xlabel('frequency (Hz)')
 plt.ylabel('threshold current (uA)')
 plt.legend()
 plt.title('Fig. 4B: S05 (C3), 0.075 ms pulse width')
+
+
+###############################################################################
+# Other stimuli
+# -------------
+#
+# Bursting pulse triplets
+# ^^^^^^^^^^^^^^^^^^^^^^^
+#
+# "Bursting pulse triplets" as shown in Fig. 7 are readily supported via the
+# :py:class:`~pulse2percept.stimuli.BiphasicTripletTrain` class.
+#
+# Variable-duration pulse trains
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#
+# A "variable-duration" pulse train is essentially
+# :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` cut to the length of
+# N pulses.
+#
+# For example, the following recreates a pulse train used in Fig. 5B:
+
+from pulse2percept.stimuli import BiphasicPulseTrain
+
+n_pulses = 2
+freq = 3
+amp = 180
+phase_dur = 0.075
+pt = BiphasicPulseTrain(freq, amp, phase_dur, interphase_dur=phase_dur,
+                        n_pulses=n_pulses, cathodic_first=True,
+                        stim_dur=np.maximum(np.ceil(n_pulses * 1000.0 / freq),
+                                            200))
+pt.plot()
+
+###############################################################################
+# Latent addition
+# ---------------
+#
+# "Latent addition" stimuli only show up in the supplementary materials
+# (see Fig. S2.2).
+#
+# They are pseudo-monophasic pulse pairs, where the anodic phases were
+# presented 20 ms after the end of the second cathodic pulse.
+#
+# The initial cathodic pulse always has a fixed amplitude of 50% of the single
+# pulse threshold:
+
+from pulse2percept.stimuli import MonophasicPulse
+
+# Phase duration:
+phase_dur = 0.075
+
+# Single-pulse threshold determines this current:
+amp_th = 20
+
+# Cathodic phase of the standard pulse::
+cath_standard = MonophasicPulse(-0.5 * amp_th, phase_dur)
+
+###############################################################################
+# The delay between the start of the conditioning pulse and the start of the
+# test pulse was varied systematically (between 0.15 and 12 ms).
+# The amplitude of the second pulse was varied to determine thresholds.
+
+# Delay was varied between 0.15 and 12 ms:
+delay_dur = 12
+
+# Vary this current to determine threshold:
+amp_test = 45
+
+# Cathodic phase of the test pulse (delivered after a delay):
+cath_test = MonophasicPulse(-amp_test, phase_dur, delay_dur=delay_dur)
+
+###############################################################################
+# The anodic phase were always presented 20 ms after the second cathodic phase:
+
+anod_standard = MonophasicPulse(0.5 * amp_th, phase_dur, delay_dur=20)
+
+anod_test = MonophasicPulse(amp_test, phase_dur, delay_dur=delay_dur)
+
+###############################################################################
+# The last step is to concatenate all the pulses into a single stimulus:
+
+from pulse2percept.stimuli import Stimulus
+
+data = []
+time = []
+time_tracker = 0
+for pulse in (cath_standard, cath_test, anod_standard, anod_test):
+    data.append(pulse.data)
+    time.append(pulse.time + time_tracker)
+    time_tracker += pulse.time[-1]
+
+latent_add = Stimulus(np.concatenate(data, axis=1), time=np.concatenate(time))
+latent_add.plot()
