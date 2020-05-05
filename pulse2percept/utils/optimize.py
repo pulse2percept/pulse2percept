@@ -2,7 +2,7 @@ import numpy as np
 import logging
 
 
-def bisect(y_target, func, args=[], kwargs={}, x_lo=0, x_hi=1,
+def bisect(y_target, func, args=None, kwargs=None, x_lo=0, x_hi=1,
            x_tol=1e-6, y_tol=1e-3, max_iter=100):
     """Binary search (bisection method) to find `x` value that gives `y_target`
 
@@ -38,10 +38,19 @@ def bisect(y_target, func, args=[], kwargs={}, x_lo=0, x_hi=1,
        the conventional bisection method.
 
     """
-    assert x_lo < x_hi
-    assert x_tol > 0
-    assert y_tol > 0
-    assert max_iter > 0
+    if x_lo >= x_hi:
+        raise ValueError("x_lo (%f) must be lower than x_hi "
+                         "(%f)." % (x_lo, x_hi))
+    if x_tol <= 0:
+        raise ValueError("x_tol (%f) must be greater than zero." % x_tol)
+    if y_tol <= 0:
+        raise ValueError("y_tol (%f) must be greater than zero." % y_tol)
+    if max_iter <= 0:
+        raise ValueError("max_iter (%d) must be greater than zero." % max_iter)
+    if args is None:
+        args = []
+    if kwargs is None:
+        kwargs = {}
 
     n_iter = 1
     while n_iter < max_iter:

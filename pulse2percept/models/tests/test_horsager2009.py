@@ -3,7 +3,7 @@ import numpy.testing as npt
 import pytest
 
 from pulse2percept.implants import ProsthesisSystem, PointSource
-from pulse2percept.stimuli import Stimulus, BiphasicPulse, BiphasicPulseTrain
+from pulse2percept.stimuli import BiphasicPulse, BiphasicPulseTrain
 from pulse2percept.percepts import Percept
 from pulse2percept.models import Horsager2009Model, Horsager2009Temporal
 from pulse2percept.utils import FreezeError
@@ -74,8 +74,6 @@ def test_Horsager2009Model():
     with pytest.raises(FreezeError):
         model.rho = 100
 
-
-def test_Horsager2009Model():
     # Model and TemporalModel give the same result
     for amp, freq in zip([136.02, 120.35, 57.71], [5, 15, 225]):
         stim = BiphasicPulseTrain(freq, amp, 0.075, interphase_dur=0.075,
