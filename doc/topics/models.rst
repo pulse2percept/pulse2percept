@@ -4,7 +4,7 @@
 Computational Models
 ====================
 
-The :py:mod:`~pulse2percept.models` subpackage provides a number of published
+The :py:mod:`~pulse2percept.models` module provides a number of published
 and verified computational models that can be used to predict neural responses
 or visual percepts resulting from electrical stimulation.
 
@@ -21,7 +21,8 @@ pulse2percept provides the following computational models:
 ================  =========================  ===================
 Reference         Model                      Type
 ----------------  -------------------------  -------------------
-[Horsager2009]_   (*Horsager2009Model*)      (*temporal*)
+[Horsager2009]_   `Horsager2009Model`        temporal
+[Horsager2009]_   `Horsager2009Temporal`     temporal
 [Nanduri2012]_    `Nanduri2012Model`         spatial + temporal
 [Nanduri2012]_    `Nanduri2012Spatial`       spatial
 [Nanduri2012]_    `Nanduri2012Temporal`      temporal

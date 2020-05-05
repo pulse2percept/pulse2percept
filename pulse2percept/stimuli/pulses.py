@@ -1,3 +1,4 @@
+"""`MonophasicPulse`, `BiphasicPulse`, `AsymmetricBiphasicPulse`"""
 import numpy as np
 
 from . import MIN_AMP
@@ -70,6 +71,7 @@ class MonophasicPulse(Stimulus):
         time = np.array([0, delay_dur,
                          delay_dur + dt, delay_dur + phase_dur - dt,
                          delay_dur + phase_dur, stim_dur])
+
         # There is an edge case for delay_dur=0: There will be two identical
         # `time` entries, which messes with the SciPy interpolation function.
         # Thus retain only the unique time points:

@@ -4,9 +4,9 @@
 Beyeler et al. (2019): Focal percepts with the scoreboard model
 ============================================================================
 
-*This example shows how to apply the
+This example shows how to apply the
 :py:class:`~pulse2percept.models.ScoreboardModel` to an
-:py:class:`~pulse2percept.implants.ArgusII` implant.*
+:py:class:`~pulse2percept.implants.ArgusII` implant.
 
 The scoreboard model is a standard baseline model of retinal prosthesis
 stimulation, which assumes that electrical stimulation leads to the percept

@@ -28,5 +28,5 @@ __all__ = [
     'fetch_url',
     'fetch_beyeler2019',
     'get_data_dir',
-    'load_horsager2009'
+    'load_horsager2009',
 ]

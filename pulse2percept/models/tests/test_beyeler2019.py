@@ -105,9 +105,10 @@ def test_ScoreboardModel_predict_percept():
     npt.assert_almost_equal(percept.data, spatial_percept.data)
 
 
-def test_AxonMapSpatial():
+@pytest.mark.parametrize('engine', ('serial', 'cython'))
+def test_AxonMapSpatial(engine):
     # AxonMapSpatial automatically sets `rho`, `axlambda`:
-    model = AxonMapSpatial(engine='serial', xystep=5)
+    model = AxonMapSpatial(engine=engine, xystep=5)
 
     # User can set `rho`:
     model.rho = 123
@@ -130,7 +131,7 @@ def test_AxonMapSpatial():
     npt.assert_almost_equal(percept.data, 0)
 
     # Multiple frames are processed independently:
-    model = AxonMapSpatial(engine='serial', rho=200, axlambda=100, xystep=5)
+    model = AxonMapSpatial(engine=engine, rho=200, axlambda=100, xystep=5)
     model.build()
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 0], 'B3': [0, 2]}))
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
@@ -141,8 +142,9 @@ def test_AxonMapSpatial():
     npt.assert_almost_equal(percept.data[3, 4, 1], pmax[1])
 
 
-def test_AxonMapModel():
-    set_params = {'xystep': 2, 'engine': 'serial', 'rho': 432, 'axlambda': 2,
+@pytest.mark.parametrize('engine', ('serial', 'cython'))
+def test_AxonMapModel(engine):
+    set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 2,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
                   'loc_od_x': 5, 'loc_od_y': 6}
@@ -178,11 +180,12 @@ def test_AxonMapModel():
 @pytest.mark.parametrize('eye', ('LE', 'RE'))
 @pytest.mark.parametrize('loc_od', ((15.5, 1.5), (7.0, 3.0), (-2.0, -2.0)))
 @pytest.mark.parametrize('sign', (-1.0, 1.0))
-def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
+@pytest.mark.parametrize('engine', ('serial', 'cython'))
+def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
     # With `rho` starting at 0, all axons should originate in the optic disc
     # center
     model = AxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
-                         xystep=2, engine='serial',
+                         xystep=2, engine=engine,
                          ax_segments_range=(0, 45),
                          n_ax_segments=100)
     for phi0 in [-135.0, 66.0, 128.0]:
@@ -193,42 +196,41 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
     # These axons should all end at the meridian
     for phi0 in [110.0, 135.0, 160.0]:
         model = AxonMapModel(loc_od_x=15, loc_od_y=2,
-                             xystep=2, engine='serial',
+                             xystep=2, engine=engine,
                              n_ax_segments=801,
                              ax_segments_range=(0, 45))
         ax_pos = model.spatial._jansonius2009(sign * phi0)
-        print(ax_pos[-1, :])
         npt.assert_almost_equal(ax_pos[-1, 1], 0.0, decimal=1)
 
     # `phi0` must be within [-180, 180]
     for phi0 in [-200.0, 181.0]:
         with pytest.raises(ValueError):
-            failed = AxonMapModel(xystep=2, engine='serial')
+            failed = AxonMapModel(xystep=2, engine=engine)
             failed.spatial._jansonius2009(phi0)
 
     # `n_rho` must be >= 1
     for n_rho in [-1, 0]:
         with pytest.raises(ValueError):
             model = AxonMapModel(n_ax_segments=n_rho, xystep=2,
-                                 engine='serial')
+                                 engine=engine)
             model.spatial._jansonius2009(0.0)
 
     # `ax_segments_range` must have min <= max
     for lorho in [-200.0, 90.0]:
         with pytest.raises(ValueError):
             model = AxonMapModel(ax_segments_range=(lorho, 45), xystep=2,
-                                 engine='serial')
+                                 engine=engine)
             model.spatial._jansonius2009(0)
     for hirho in [-200.0, 40.0]:
         with pytest.raises(ValueError):
             model = AxonMapModel(ax_segments_range=(45, hirho), xystep=2,
-                                 engine='serial')
+                                 engine=engine)
             model.spatial._jansonius2009(0)
 
     # A single axon fiber with `phi0`=0 should return a single pixel location
     # that corresponds to the optic disc
         model = AxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
-                             xystep=2, engine='serial', eye=eye,
+                             xystep=2, engine=engine, eye=eye,
                              ax_segments_range=(0, 0),
                              n_ax_segments=1)
         single_fiber = model.spatial._jansonius2009(0)
@@ -236,21 +238,23 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
         npt.assert_almost_equal(single_fiber[0], loc_od)
 
 
-def test_AxonMapModel_grow_axon_bundles():
+@pytest.mark.parametrize('engine', ('serial', 'cython'))
+def test_AxonMapModel_grow_axon_bundles(engine):
     for n_axons in [1, 2, 3, 5, 10]:
-        model = AxonMapModel(xystep=2, engine='serial', n_axons=n_axons,
+        model = AxonMapModel(xystep=2, engine=engine, n_axons=n_axons,
                              axons_range=(-20, 20))
-        model.build()
         bundles = model.spatial.grow_axon_bundles()
         npt.assert_equal(len(bundles), n_axons)
 
 
-def test_AxonMapModel_find_closest_axon():
-    model = AxonMapModel(xystep=1, engine='serial', n_axons=5,
+@pytest.mark.parametrize('engine', ('serial', 'cython'))
+def test_AxonMapModel_find_closest_axon(engine):
+    model = AxonMapModel(xystep=1, engine=engine, n_axons=5,
                          axons_range=(-45, 45))
     model.build()
     # Pretend there is an axon close to each point on the grid:
-    bundles = [np.array([x + 0.001, y - 0.001]).reshape((1, 2))
+    bundles = [np.array([x + 0.001, y - 0.001],
+                        dtype=np.float32).reshape((1, 2))
                for x, y in zip(model.spatial.grid.xret.ravel(),
                                model.spatial.grid.yret.ravel())]
     closest = model.spatial.find_closest_axon(bundles)
@@ -259,8 +263,9 @@ def test_AxonMapModel_find_closest_axon():
         npt.assert_almost_equal(ax1[0, 1], ax2[0, 1])
 
 
-def test_AxonMapModel_calc_axon_contribution():
-    model = AxonMapModel(xystep=2, engine='serial', n_axons=10,
+@pytest.mark.parametrize('engine', ('serial', 'cython'))
+def test_AxonMapModel_calc_axon_contribution(engine):
+    model = AxonMapModel(xystep=2, engine=engine, n_axons=10,
                          axons_range=(-30, 30))
     model.build()
     xyret = np.column_stack((model.spatial.grid.xret.ravel(),
@@ -278,8 +283,9 @@ def test_AxonMapModel_calc_axon_contribution():
         npt.assert_almost_equal(sensitivity, ax[:, 2])
 
 
-def test_AxonMapModel__calc_bundle_tangent():
-    model = AxonMapModel(xystep=5, engine='serial', n_axons=500,
+@pytest.mark.parametrize('engine', ('serial', 'cython'))
+def test_AxonMapModel_calc_bundle_tangent(engine):
+    model = AxonMapModel(xystep=5, engine=engine, n_axons=500,
                          n_ax_segments=500, axons_range=(-180, 180),
                          ax_segments_range=(3, 50))
     npt.assert_almost_equal(model.spatial.calc_bundle_tangent(0, 0), 0.4819,
@@ -292,8 +298,10 @@ def test_AxonMapModel__calc_bundle_tangent():
         model.spatial.calc_bundle_tangent(0, [1000])
 
 
-def test_AxonMapModel_predict_percept():
-    model = AxonMapModel(xystep=0.55, axlambda=100, thresh_percept=0)
+@pytest.mark.parametrize('engine', ('serial', 'cython'))
+def test_AxonMapModel_predict_percept(engine):
+    model = AxonMapModel(xystep=0.55, axlambda=100, thresh_percept=0,
+                         engine=engine)
     model.build()
     # Single-electrode stim:
     img_stim = np.zeros(60)

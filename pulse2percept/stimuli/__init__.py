@@ -20,13 +20,14 @@ MIN_AMP = 1e-5
 from .base import Stimulus, TimeSeries
 from .pulses import AsymmetricBiphasicPulse, BiphasicPulse, MonophasicPulse
 from .pulse_trains import (PulseTrain, BiphasicPulseTrain,
-                           AsymmetricBiphasicPulseTrain)
+                           BiphasicTripletTrain, AsymmetricBiphasicPulseTrain)
 
 __all__ = [
     'AsymmetricBiphasicPulse',
     'AsymmetricBiphasicPulseTrain',
     'BiphasicPulse',
     'BiphasicPulseTrain',
+    'BiphasicTripletTrain',
     'MonophasicPulse',
     'PulseTrain',
     'Stimulus',

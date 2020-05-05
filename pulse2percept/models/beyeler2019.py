@@ -8,7 +8,8 @@ from ..utils import parfor, GridXY, Watson2014Transform
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
-from ._beyeler2019 import scoreboard_fast, axon_contribution, axon_map_fast
+from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
+                           fast_find_closest_axon)
 
 
 class ScoreboardSpatial(SpatialModel):
@@ -35,7 +36,7 @@ class ScoreboardSpatial(SpatialModel):
         # electrodes to activation values at X,Y grid locations:
         assert isinstance(earray, ElectrodeArray)
         assert isinstance(stim, Stimulus)
-        return scoreboard_fast(stim.data,
+        return fast_scoreboard(stim.data,
                                np.array([earray[e].x for e in stim.electrodes],
                                         dtype=np.float32),
                                np.array([earray[e].y for e in stim.electrodes],
@@ -160,9 +161,10 @@ class AxonMapSpatial(SpatialModel):
             raise ValueError('Lower bound on rho cannot be larger than the '
                              ' upper bound.')
         is_superior = phi0 > 0
-        rho = np.linspace(*self.ax_segments_range, num=self.n_ax_segments)
+        rho = np.linspace(*self.ax_segments_range, num=self.n_ax_segments,
+                          dtype=np.float32)
         if self.engine == 'cython':
-            xprime, yprime = jansonius(rho, phi0, beta_sup, beta_inf)
+            xprime, yprime = fast_jansonius(rho, phi0, beta_sup, beta_inf)
         else:
             if is_superior:
                 # Axon is in superior retina, compute `b` (real number) from
@@ -208,7 +210,7 @@ class AxonMapSpatial(SpatialModel):
         if eye.upper() == 'LE':
             xmodel *= -1
         # Return as Nx2 array:
-        return np.vstack((xmodel, ymodel)).T
+        return np.vstack((xmodel, ymodel)).astype(np.float32).T
 
     def grow_axon_bundles(self):
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
@@ -218,18 +220,17 @@ class AxonMapSpatial(SpatialModel):
                          func_kwargs={'eye': self.eye},
                          engine=engine, n_jobs=self.n_jobs,
                          scheduler=self.scheduler)
-        if len(bundles) != self.n_axons:
-            raise ValueError("bundles must have the same length as n_axons")
+        # Keep only non-zero sized bundles:
+        bundles = list(filter(lambda x: len(x) > 0, bundles))
         # Remove axon bundles outside the simulated area:
         bundles = list(filter(lambda x: (np.max(x[:, 0]) >= self.xrange[0] and
                                          np.min(x[:, 0]) <= self.xrange[1] and
                                          np.max(x[:, 1]) >= self.yrange[0] and
                                          np.min(x[:, 1]) <= self.yrange[1]),
                               bundles))
-        # Remove short axon bundles:
+        # Keep only reasonably sized axon bundles:
         bundles = list(filter(lambda x: len(x) > 10, bundles))
         # Convert to um:
-        # FIXME logic is specific to the Watson model
         bundles = [self.dva2ret(b) for b in bundles]
         return bundles
 
@@ -253,9 +254,9 @@ class AxonMapSpatial(SpatialModel):
         flat_bundles = np.concatenate(bundles)
         # For every pixel on the grid, find the closest axon segment:
         if self.engine == 'cython':
-            closest_seg = fastfind_closest_axon(flat_bundles,
-                                                xret.ravel(),
-                                                yret.ravel())
+            closest_seg = fast_find_closest_axon(flat_bundles,
+                                                 xret.ravel(),
+                                                 yret.ravel())
         else:
             closest_seg = [np.argmin((flat_bundles[:, 0] - x) ** 2 +
                                      (flat_bundles[:, 1] - y) ** 2)
@@ -270,22 +271,19 @@ class AxonMapSpatial(SpatialModel):
                                  self.grid.yret.ravel()))
         axon_contrib = []
         for xy, bundle in zip(xyret, axons):
-            if self.engine == 'cython':
-                contrib = axon_contribution(bundle, xy, self.axlambda)
-            else:
-                idx = np.argmin((bundle[:, 0] - xy[0]) ** 2 +
-                                (bundle[:, 1] - xy[1]) ** 2)
-                # Cut off the part of the fiber that goes beyond the soma:
-                axon = np.flipud(bundle[0: idx + 1, :])
-                # Add the exact location of the soma:
-                axon = np.insert(axon, 0, xy, axis=0)
-                # For every axon segment, calculate distance from soma by
-                # summing up the individual distances between neighboring axon
-                # segments (by "walking along the axon"):
-                d2 = np.cumsum(np.diff(axon[:, 0], axis=0) ** 2 +
-                               np.diff(axon[:, 1], axis=0) ** 2)
-                sensitivity = np.exp(-d2 / (2.0 * self.axlambda ** 2))
-                contrib = np.column_stack((axon[1:, :], sensitivity))
+            idx = np.argmin((bundle[:, 0] - xy[0]) ** 2 +
+                            (bundle[:, 1] - xy[1]) ** 2)
+            # Cut off the part of the fiber that goes beyond the soma:
+            axon = np.flipud(bundle[0: idx + 1, :])
+            # Add the exact location of the soma:
+            axon = np.insert(axon, 0, xy, axis=0)
+            # For every axon segment, calculate distance from soma by
+            # summing up the individual distances between neighboring axon
+            # segments (by "walking along the axon"):
+            d2 = np.cumsum(np.diff(axon[:, 0], axis=0) ** 2 +
+                           np.diff(axon[:, 1], axis=0) ** 2)
+            sensitivity = np.exp(-d2 / (2.0 * self.axlambda ** 2))
+            contrib = np.column_stack((axon[1:, :], sensitivity))
             axon_contrib.append(contrib)
         return axon_contrib
 
@@ -383,7 +381,7 @@ class AxonMapSpatial(SpatialModel):
         # electrodes to activation values at X,Y grid locations:
         assert isinstance(earray, ElectrodeArray)
         assert isinstance(stim, Stimulus)
-        return axon_map_fast(stim.data,
+        return fast_axon_map(stim.data,
                              np.array([earray[e].x for e in stim.electrodes],
                                       dtype=np.float32),
                              np.array([earray[e].y for e in stim.electrodes],

@@ -7,6 +7,7 @@
     geometry
     convolution
     deprecation
+    optimize
     parallel
 
 """
@@ -16,9 +17,11 @@ from .geometry import (GridXY, RetinalCoordTransform, Curcio1990Transform,
                        cart2pol, pol2cart)
 from .convolution import center_vector, conv
 from .deprecation import deprecated
+from .optimize import bisect
 from .parallel import parfor
 
 __all__ = [
+    'bisect',
     'cart2pol',
     'Curcio1990Transform',
     'Data',

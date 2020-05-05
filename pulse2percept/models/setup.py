@@ -16,6 +16,10 @@ def configuration(parent_package='', top_path=None):
                              sources=['_beyeler2019.pyx'],
                              include_dirs=[numpy.get_include()],
                              libraries=libraries)
+        config.add_extension('_horsager2009',
+                             sources=['_horsager2009.pyx'],
+                             include_dirs=[numpy.get_include()],
+                             libraries=libraries)
         config.add_extension('_nanduri2012',
                              sources=['_nanduri2012.pyx'],
                              include_dirs=[numpy.get_include()],

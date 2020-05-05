@@ -3,8 +3,8 @@
 Creating your own electrode array
 ============================================================================
 
-*This example shows how to create a new
-:py:class:`~pulse2percept.implants.ElectrodeArray` object.*
+This example shows how to create a new
+:py:class:`~pulse2percept.implants.ElectrodeArray` object.
 
 As the base class for all electrode arrays in pulse2percept, the
 :py:class:`~pulse2percept.implants.ElectrodeArray` class provides a blue print

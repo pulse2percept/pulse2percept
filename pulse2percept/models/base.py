@@ -8,7 +8,7 @@ import numpy as np
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
 from ..percepts import Percept
-from ..utils import PrettyPrint, Frozen, FreezeError, GridXY, parfor
+from ..utils import PrettyPrint, Frozen, FreezeError, GridXY, parfor, bisect
 
 
 class NotBuiltError(ValueError, AttributeError):
@@ -303,6 +303,55 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
                        space=self.grid, time=t_percept)
 
+    def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
+                       bright_tol=0.1, max_iter=100):
+        """Find the threshold current for a certain stimulus
+
+        Estimates ``amp_th`` such that the output of
+        ``model.predict_percept(stim(amp_th))`` is approximately ``bright_th``.
+
+        Parameters
+        ----------
+        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+            The implant and its stimulus to use. Stimulus amplitude will be
+            up and down regulated until ``amp_th`` is found.
+        bright_th : float
+            Model output (brightness) that's considered "at threshold".
+        amp_range : (amp_lo, amp_hi), optional, default: (0, 999)
+            Range of amplitudes to search (uA).
+        amp_tol : float, optional, default: 1.0
+            Search will stop if candidate range of amplitudes is within
+            ``amp_tol``
+        bright_tol : float, optional, default: 0.1
+            Search will stop if model brightness is within ``bright_tol`` of
+            ``bright_th``
+        max_iter : int, optional, default: 100
+            Search will stop after ``max_iter`` iterations
+
+        Returns
+        -------
+        amp_th : float
+            Threshold current (uA), estimated so that the output of
+            ``model.predict_percept(stim(amp_th))`` is within ``bright_tol`` of
+            ``bright_th``.
+        """
+        if not isinstance(implant, ProsthesisSystem):
+            raise TypeError("'implant' must be a ProsthesisSystem, not "
+                            "%s." % type(stim))
+
+        def inner_predict(amp, fnc_predict, implant):
+            _implant = deepcopy(implant)
+            scale = amp / implant.stim.data.max()
+            _implant.stim = Stimulus(scale * implant.stim.data,
+                                     electrodes=implant.stim.electrodes,
+                                     time=implant.stim.time)
+            return fnc_predict(_implant).data.max()
+
+        return bisect(bright_th, inner_predict,
+                      args=[self.predict_percept, implant],
+                      x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
+                      y_tol=bright_tol, max_iter=max_iter)
+
 
 class TemporalModel(BaseModel, metaclass=ABCMeta):
     """Abstract base class for all temporal models
@@ -457,6 +506,51 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             resp = self._predict_temporal(_stim, t_percept)
         return Percept(resp.reshape(_space + [t_percept.size]),
                        space=None, time=t_percept)
+
+    def find_threshold(self, stim, bright_th, amp_range=(0, 999), amp_tol=1,
+                       bright_tol=0.1, max_iter=100):
+        """Find the threshold current for a certain stimulus
+
+        Estimates ``amp_th`` such that the output of
+        ``model.predict_percept(stim(amp_th))`` is approximately ``bright_th``.
+
+        Parameters
+        ----------
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
+            The stimulus to use. Stimulus amplitude will be up and down
+            regulated until ``amp_th`` is found.
+        bright_th : float
+            Model output (brightness) that's considered "at threshold".
+        amp_range : (amp_lo, amp_hi), optional, default: (0, 999)
+            Range of amplitudes to search (uA).
+        amp_tol : float, optional, default: 1.0
+            Search will stop if candidate range of amplitudes is within
+            ``amp_tol``
+        bright_tol : float, optional, default: 0.1
+            Search will stop if model brightness is within ``bright_tol`` of
+            ``bright_th``
+        max_iter : int, optional, default: 100
+            Search will stop after ``max_iter`` iterations
+
+        Returns
+        -------
+        amp_th : float
+            Threshold current (uA), estimated so that the output of
+            ``model.predict_percept(stim(amp_th))`` is within ``bright_tol`` of
+            ``bright_th``.
+        """
+        if not isinstance(stim, Stimulus):
+            raise TypeError("'stim' must be a Stimulus, not %s." % type(stim))
+
+        def inner_predict(amp, fnc_predict, stim):
+            _stim = Stimulus(amp * stim.data / stim.data.max(),
+                             electrodes=stim.electrodes, time=stim.time)
+            return fnc_predict(_stim).data.max()
+
+        return bisect(bright_th, inner_predict,
+                      args=[self.predict_percept, stim],
+                      x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
+                      y_tol=bright_tol, max_iter=max_iter)
 
 
 class Model(PrettyPrint):
@@ -694,6 +788,55 @@ class Model(PrettyPrint):
             resp = self.temporal.predict_percept(implant.stim,
                                                  t_percept=t_percept)
         return resp
+
+    def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
+                       bright_tol=0.1, max_iter=100):
+        """Find the threshold current for a certain stimulus
+
+        Estimates ``amp_th`` such that the output of
+        ``model.predict_percept(stim(amp_th))`` is approximately ``bright_th``.
+
+        Parameters
+        ----------
+        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+            The implant and its stimulus to use. Stimulus amplitude will be
+            up and down regulated until ``amp_th`` is found.
+        bright_th : float
+            Model output (brightness) that's considered "at threshold".
+        amp_range : (amp_lo, amp_hi), optional, default: (0, 999)
+            Range of amplitudes to search (uA).
+        amp_tol : float, optional, default: 1.0
+            Search will stop if candidate range of amplitudes is within
+            ``amp_tol``
+        bright_tol : float, optional, default: 0.1
+            Search will stop if model brightness is within ``bright_tol`` of
+            ``bright_th``
+        max_iter : int, optional, default: 100
+            Search will stop after ``max_iter`` iterations
+
+        Returns
+        -------
+        amp_th : float
+            Threshold current (uA), estimated so that the output of
+            ``model.predict_percept(stim(amp_th))`` is within ``bright_tol`` of
+            ``bright_th``.
+        """
+        if not isinstance(implant, ProsthesisSystem):
+            raise TypeError("'implant' must be a ProsthesisSystem, not "
+                            "%s." % type(stim))
+
+        def inner_predict(amp, fnc_predict, implant):
+            _implant = deepcopy(implant)
+            scale = amp / implant.stim.data.max()
+            _implant.stim = Stimulus(scale * implant.stim.data,
+                                     electrodes=implant.stim.electrodes,
+                                     time=implant.stim.time)
+            return fnc_predict(_implant).data.max()
+
+        return bisect(bright_th, inner_predict,
+                      args=[self.predict_percept, implant],
+                      x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
+                      y_tol=bright_tol, max_iter=max_iter)
 
     @property
     def has_space(self):

@@ -1,4 +1,5 @@
-"""`load_horsager2009`"""
+"""`load_horsager2009`, `VariableDuration`"""
+import numpy as np
 from os.path import dirname, join
 
 try:
@@ -31,19 +32,19 @@ def load_horsager2009(shuffle=False, random_state=0):
     electrode             Electrode ID, A1-F10
     task                  'threshold' or 'matching'
     stim_type             'single_pulse', 'fixed_duration', ...
-    stim_dur              Stimulus duration (seconds)
+    stim_dur              Stimulus duration (ms)
     stim_freq             Stimulus frequency (Hz)
     stim_amp              Stimulus amplitude (uA)
     pulse_type            'cathodic_first'
-    pulse_dur             Pulse duration (seconds)
-    interphase_dur        Interphase gap (seconds)
-    delay_dur             Stimulus delivered after delay (seconds)
+    pulse_dur             Pulse duration (ms)
+    interphase_dur        Interphase gap (ms)
+    delay_dur             Stimulus delivered after delay (ms)
     ref_stim_type         Reference stimulus type ('single_pulse', ...)
     ref_freq              Reference stimulus frequency (Hz)
     ref_amp               Reference stimulus amplitude (uA)
     ref_amp_factor        Reference stimulus amplitude factor (xThreshold)
-    ref_pulse_dur         Reference stimulus pulse duration (seconds)
-    ref_interphase_dur    Reference stimulus interphase gap (seconds)
+    ref_pulse_dur         Reference stimulus pulse duration (ms)
+    ref_interphase_dur    Reference stimulus interphase gap (ms)
     theta                 Temporal model output at threshold (a.u.)
     source                Figure from which data was extracted
     ====================  ================================================
