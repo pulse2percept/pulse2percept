@@ -13,7 +13,7 @@ except (ImportError, AttributeError):
     has_skimage = False
 
 from ..implants import ArgusI, ArgusII
-from ..stimuli import PulseTrain
+from ..stimuli.pulse_trains import LegacyPulseTrain as PulseTrain
 from ..utils import deprecated
 
 

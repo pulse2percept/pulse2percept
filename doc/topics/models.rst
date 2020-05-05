@@ -21,7 +21,8 @@ pulse2percept provides the following computational models:
 ================  =========================  ===================
 Reference         Model                      Type
 ----------------  -------------------------  -------------------
-[Horsager2009]_   (*Horsager2009Model*)      (*temporal*)
+[Horsager2009]_   `Horsager2009Model`        temporal
+[Horsager2009]_   `Horsager2009Temporal`     temporal
 [Nanduri2012]_    `Nanduri2012Model`         spatial + temporal
 [Nanduri2012]_    `Nanduri2012Spatial`       spatial
 [Nanduri2012]_    `Nanduri2012Temporal`      temporal

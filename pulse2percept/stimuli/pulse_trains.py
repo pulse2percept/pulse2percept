@@ -153,9 +153,6 @@ class BiphasicPulseTrain(Stimulus):
        ``cathodic_first`` flag.
     *  A pulse train will be considered "charge-balanced" if its net current is
        smaller than 10 picoamps.
-    *  A pulse train will be trimmed to the right length given by ``stim_dur``.
-       Consequently, it's possible to cut off parts of a pulse and thus create
-       a pulse train that is not charge-balanced.
 
     """
 
@@ -245,6 +242,83 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         params = super(AsymmetricBiphasicPulseTrain, self)._pprint_params()
+        params.update({'cathodic_first': self.cathodic_first,
+                       'charge_balanced': self.charge_balanced,
+                       'freq': self.freq})
+        return params
+
+
+class BiphasicTripletTrain(Stimulus):
+    """Biphasic pulse triplets
+
+    .. versionadded:: 0.6
+
+    A train of symmetric biphasic pulse triplets.
+
+    Parameters
+    ----------
+    freq : float
+        Pulse train frequency (Hz).
+    amp : float
+        Current amplitude (uA). Negative currents: cathodic, positive: anodic.
+        The sign will be converted automatically depending on
+        ``cathodic_first``.
+    phase_dur : float
+        Duration (ms) of the cathodic/anodic phase.
+    interphase_dur : float, optional, default: 0
+        Duration (ms) of the gap between cathodic and anodic phases.
+    delay_dur : float
+        Delay duration (ms). Zeros will be inserted at the beginning of the
+        stimulus to deliver the first pulse phase after ``delay_dur`` ms.
+    n_pulses : int
+        Number of pulses requested in the pulse train. If None, the entire
+        stimulation window (``stim_dur``) is filled.
+    stim_dur : float, optional, default: 1000 ms
+        Total stimulus duration (ms). The pulse train will be trimmed to make
+        the stimulus last ``stim_dur`` ms overall.
+    cathodic_first : bool, optional, default: True
+        If True, will deliver the cathodic pulse phase before the anodic one.
+    dt : float, optional, default: 1e-3 ms
+        Sampling time step (ms); defines the duration of the signal edge
+        transitions.
+    metadata : dict
+        A dictionary of meta-data
+
+    Notes
+    -----
+    *  Each cycle ("window") of the pulse train consists of three biphasic
+       pulses, created with
+       :py:class:`~pulse2percept.stimuli.BiphasicPulse`.
+    *  The order and sign of the two phases (cathodic/anodic) of each pulse
+       in the train is automatically adjusted depending on the
+       ``cathodic_first`` flag.
+    *  A pulse train will be considered "charge-balanced" if its net current is
+       smaller than 10 picoamps.
+
+    """
+
+    def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
+                 n_pulses=None, stim_dur=1000.0, cathodic_first=True, dt=1e-3,
+                 metadata=None):
+        # Create the pulse:
+        pulse = BiphasicPulse(amp, phase_dur, interphase_dur=interphase_dur,
+                              delay_dur=delay_dur, dt=dt,
+                              cathodic_first=cathodic_first)
+        # Create the pulse triplet:
+        triplet_dur = 3 * (2 * phase_dur + interphase_dur + delay_dur + dt)
+        triplet = PulseTrain(3 * 1000.0 / triplet_dur, pulse, n_pulses=3,
+                             stim_dur=triplet_dur)
+        # Create the triplet train:
+        pt = PulseTrain(freq, triplet, n_pulses=n_pulses, stim_dur=stim_dur)
+        # Set up the Stimulus object through the constructor:
+        super().__init__(pt.data, time=pt.time, compress=False)
+        self.freq = freq
+        self.cathodic_first = cathodic_first
+        self.charge_balanced = pt.charge_balanced
+
+    def _pprint_params(self):
+        """Return a dict of class arguments to pretty-print"""
+        params = super(BiphasicPulseTrain, self)._pprint_params()
         params.update({'cathodic_first': self.cathodic_first,
                        'charge_balanced': self.charge_balanced,
                        'freq': self.freq})

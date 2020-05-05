@@ -4,7 +4,7 @@ import pytest
 import numpy.testing as npt
 
 from pulse2percept.stimuli import (Stimulus, TimeSeries, PulseTrain,
-                                   BiphasicPulseTrain,
+                                   BiphasicPulseTrain, BiphasicTripletTrain,
                                    AsymmetricBiphasicPulseTrain)
 from pulse2percept.stimuli.pulse_trains import LegacyPulseTrain
 
@@ -53,7 +53,6 @@ def test_BiphasicPulseTrain(amp, interphase_dur, delay_dur, cathodic_first):
                             stim_dur=stim_dur, cathodic_first=cathodic_first)
     for i in range(n_pulses):
         t_win = i * window_dur
-        print(t_win)
         npt.assert_almost_equal(pt[0, t_win], 0)
         npt.assert_almost_equal(pt[0, t_win + mid_first_pulse], first_amp)
         npt.assert_almost_equal(pt[0, t_win + mid_interphase], 0)
@@ -130,6 +129,57 @@ def test_AsymmetricBiphasicPulseTrain(amp1, amp2, interphase_dur, delay_dur,
                                           n_pulses=n_pulses, stim_dur=19,
                                           dt=0.05)
         npt.assert_almost_equal(np.sum(np.isclose(pt.data, 40)), n_pulses)
+        npt.assert_almost_equal(pt.time[-1], 19)
+
+
+@pytest.mark.parametrize('amp', (-3, 4))
+@pytest.mark.parametrize('interphase_dur', (0, 1))
+@pytest.mark.parametrize('delay_dur', (4, 0))
+@pytest.mark.parametrize('cathodic_first', (True, False))
+def test_BiphasicTripletTrain(amp, interphase_dur, delay_dur, cathodic_first):
+    freq = 23.456
+    stim_dur = 657.456
+    phase_dur = 2
+    window_dur = 1000.0 / freq
+    n_pulses = int(freq * stim_dur / 1000.0)
+    dt = 1e-6
+    mid_first_pulse = delay_dur + phase_dur / 2.0
+    mid_interphase = delay_dur + phase_dur + interphase_dur / 2.0
+    mid_second_pulse = delay_dur + interphase_dur + 1.5 * phase_dur
+    first_amp = -np.abs(amp) if cathodic_first else np.abs(amp)
+    second_amp = -first_amp
+
+    # Basic usage:
+    pt = BiphasicTripletTrain(freq, amp, phase_dur,
+                              interphase_dur=interphase_dur,
+                              delay_dur=delay_dur, stim_dur=stim_dur,
+                              cathodic_first=cathodic_first, dt=1e-6)
+    for i in range(n_pulses):
+        t_win = i * window_dur
+        npt.assert_almost_equal(pt[0, t_win], 0)
+        npt.assert_almost_equal(pt[0, t_win + mid_first_pulse], first_amp)
+        if interphase_dur > 0:
+            npt.assert_almost_equal(pt[0, t_win + mid_interphase], 0)
+        npt.assert_almost_equal(pt[0, t_win + mid_second_pulse], second_amp)
+    npt.assert_almost_equal(pt.time[0], 0)
+    npt.assert_almost_equal(pt.time[-1], stim_dur, decimal=2)
+    npt.assert_equal(pt.cathodic_first, cathodic_first)
+    npt.assert_equal(pt.charge_balanced,
+                     np.isclose(np.trapz(pt.data, pt.time)[0], 0, atol=1e-5))
+
+    # Zero frequency:
+    pt = BiphasicPulseTrain(0, amp, phase_dur)
+    npt.assert_almost_equal(pt.time, [0, 1000])
+    npt.assert_almost_equal(pt.data, 0)
+    # Zero amp:
+    pt = BiphasicPulseTrain(freq, 0, phase_dur)
+    npt.assert_almost_equal(pt.data, 0)
+
+    # Specific number of pulses
+    for n_pulses in [2, 4, 5]:
+        pt = BiphasicPulseTrain(500, 30, 0.05, n_pulses=n_pulses, stim_dur=19,
+                                dt=0.05)
+        npt.assert_almost_equal(np.sum(np.isclose(pt.data, 30)), n_pulses)
         npt.assert_almost_equal(pt.time[-1], 19)
 
 
