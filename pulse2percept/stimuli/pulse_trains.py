@@ -33,7 +33,7 @@ class PulseTrain(Stimulus):
     stim_dur : float, optional, default: 1000 ms
         Total stimulus duration (ms). The pulse train will be trimmed to make
         the stimulus last ``stim_dur`` ms overall.
-    dt : float, optional, default: 1e-6 ms
+    dt : float, optional, default: 1e-3 ms
         Sampling time step (ms); defines the duration of the signal edge
         transitions.
     metadata : dict
@@ -47,7 +47,7 @@ class PulseTrain(Stimulus):
 
     """
 
-    def __init__(self, freq, pulse, n_pulses=None, stim_dur=1000.0, dt=1e-6,
+    def __init__(self, freq, pulse, n_pulses=None, stim_dur=1000.0, dt=1e-3,
                  metadata=None):
         if not isinstance(pulse, Stimulus):
             raise TypeError("'pulse' must be a Stimulus object, not "
@@ -135,7 +135,7 @@ class BiphasicPulseTrain(Stimulus):
         the stimulus last ``stim_dur`` ms overall.
     cathodic_first : bool, optional, default: True
         If True, will deliver the cathodic pulse phase before the anodic one.
-    dt : float, optional, default: 1e-6 ms
+    dt : float, optional, default: 1e-3 ms
         Sampling time step (ms); defines the duration of the signal edge
         transitions.
     metadata : dict
@@ -155,7 +155,7 @@ class BiphasicPulseTrain(Stimulus):
     """
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
-                 n_pulses=None, stim_dur=1000.0, cathodic_first=True, dt=1e-6,
+                 n_pulses=None, stim_dur=1000.0, cathodic_first=True, dt=1e-3,
                  metadata=None):
         # Create the individual pulse:
         pulse = BiphasicPulse(amp, phase_dur, delay_dur=delay_dur, dt=dt,
@@ -213,7 +213,7 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
         stimulus to make the the stimulus last ``stim_dur`` ms overall.
     cathodic_first : bool, optional, default: True
         If True, will deliver the cathodic pulse phase before the anodic one.
-    dt : float, optional, default: 1e-6 ms
+    dt : float, optional, default: 1e-3 ms
         Sampling time step (ms); defines the duration of the signal edge
         transitions.
     metadata : dict
@@ -223,7 +223,7 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
 
     def __init__(self, freq, amp1, amp2, phase_dur1, phase_dur2,
                  interphase_dur=0, delay_dur=0, n_pulses=None, stim_dur=1000.0,
-                 cathodic_first=True, dt=1e-6, metadata=None):
+                 cathodic_first=True, dt=1e-3, metadata=None):
         # Create the individual pulse:
         pulse = AsymmetricBiphasicPulse(amp1, amp2, phase_dur1, phase_dur2,
                                         delay_dur=delay_dur, dt=dt,
@@ -276,7 +276,7 @@ class BiphasicTripletTrain(Stimulus):
         the stimulus last ``stim_dur`` ms overall.
     cathodic_first : bool, optional, default: True
         If True, will deliver the cathodic pulse phase before the anodic one.
-    dt : float, optional, default: 1e-6 ms
+    dt : float, optional, default: 1e-3 ms
         Sampling time step (ms); defines the duration of the signal edge
         transitions.
     metadata : dict
@@ -296,7 +296,7 @@ class BiphasicTripletTrain(Stimulus):
     """
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
-                 n_pulses=None, stim_dur=1000.0, cathodic_first=True, dt=1e-6,
+                 n_pulses=None, stim_dur=1000.0, cathodic_first=True, dt=1e-3,
                  metadata=None):
         # Create the pulse:
         pulse = BiphasicPulse(amp, phase_dur, interphase_dur=interphase_dur,
