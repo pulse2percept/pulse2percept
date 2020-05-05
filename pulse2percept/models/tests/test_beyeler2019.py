@@ -253,7 +253,8 @@ def test_AxonMapModel_find_closest_axon(engine):
                          axons_range=(-45, 45))
     model.build()
     # Pretend there is an axon close to each point on the grid:
-    bundles = [np.array([x + 0.001, y - 0.001]).reshape((1, 2))
+    bundles = [np.array([x + 0.001, y - 0.001],
+                        dtype=np.float32).reshape((1, 2))
                for x, y in zip(model.spatial.grid.xret.ravel(),
                                model.spatial.grid.yret.ravel())]
     closest = model.spatial.find_closest_axon(bundles)
