@@ -32,7 +32,7 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
         Location of the optic disc center (deg).
     n_bundles : int, optional, default: 100
         Number of nerve fiber bundles to plot.
-    ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
+    ax : ``matplotlib.axes.Axes``, optional, default: None
         A Matplotlib axes object. If None given, a new one will be created.
     upside_down : bool, optional, default: False
         Flag whether to plot the retina upside-down, such that the upper
@@ -47,6 +47,12 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
     ylim: (ymin, ymax), optional, default: (-4000, 4000)
         Range of y coordinates to visualize. If None, the center 8 mm of the
         retina will be shown.
+
+    Returns
+    -------
+    ax : ``matplotlib.axes.Axes``
+        Returns the axis object of the plot
+
     """
     loc_od = np.asarray(loc_od)
     if len(loc_od) != 2:
@@ -64,17 +70,11 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
                                                              -loc_od[0]))
         logging.getLogger(__name__).info(logstr)
         loc_od = (-loc_od[0], loc_od[1])
-    if ax is None:
-        # No axes object given: create
-        fig, ax = plt.subplots(1, figsize=(10, 8))
-    else:
-        fig = ax.figure
 
-    # Matplotlib<2 compatibility
-    if hasattr(ax, 'set_facecolor'):
-        ax.set_facecolor('white')
-    elif hasattr(ax, 'set_axis_bgcolor'):
-        ax.set_axis_bgcolor('white')
+    # No axes object given: create
+    if ax is None:
+        _, ax = plt.subplots(1, figsize=(10, 8))
+    ax.set_facecolor('white')
 
     # Draw axon pathways:
     axon_map = AxonMapSpatial(n_axons=n_bundles, loc_od_x=loc_od[0],
@@ -131,7 +131,7 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
     if upside_down:
         ax.invert_yaxis()
 
-    return fig, ax
+    return ax
 
 
 def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
@@ -168,6 +168,12 @@ def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
     ylim : (ymin, ymax), optional, default: None
         Range of y values to plot. If None, the plot will be centered over the
         implant.
+
+    Returns
+    -------
+    ax : ``matplotlib.axes.Axes``
+        Returns the axis object of the plot
+
     """
     if not isinstance(implant, ProsthesisSystem):
         e_s = "`implant` must be of type ProsthesisSystem"
@@ -184,10 +190,10 @@ def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
         ymax = np.ceil(np.max([el.y + pad for el in implant.values()]) / prec)
         ylim = (prec * ymin, prec * ymax)
 
-    fig, ax = plot_axon_map(eye=implant.eye, loc_od=loc_od, ax=ax,
-                            n_bundles=n_bundles, upside_down=upside_down,
-                            annotate_quadrants=annotate_quadrants, xlim=xlim,
-                            ylim=ylim)
+    ax = plot_axon_map(eye=implant.eye, loc_od=loc_od, ax=ax,
+                       n_bundles=n_bundles, upside_down=upside_down,
+                       annotate_quadrants=annotate_quadrants, xlim=xlim,
+                       ylim=ylim)
 
     # Determine marker size for electrodes:
     radii = []
@@ -225,4 +231,4 @@ def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
 
     ax.set_title(implant)
 
-    return fig, ax
+    return ax
