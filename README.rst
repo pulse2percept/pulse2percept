@@ -37,20 +37,11 @@ However, interactions between the device electronics and the retinal
 neurophysiology result in perceptual distortions that may severely limit the
 quality of the generated visual experience:
 
-.. raw:: html
-
-   <div style="width: 100%; margin: 0; padding: 0 30%">
-    <div style="float: right; width: 20%; text-align: center">
-      Predicted percept
-    </div>
-    <div style="width: 20%; text-align: center">
-      Input stimulus
-    </div>
-  </div>
-
 .. image:: https://raw.githubusercontent.com/pulse2percept/pulse2percept/master/doc/_static/boston-train-combined.gif
    :align: center
    :alt: Input stimulus and predicted percept
+
+*(left: input stimulus, right: predicted percept)*
 
 Built on the NumPy and SciPy stacks, `pulse2percept`_ provides an open-source
 implementation of a number of computational models for state-of-the-art

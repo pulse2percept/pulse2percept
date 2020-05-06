@@ -161,8 +161,8 @@ Dependencies
 ------------
 
 .. include:: ../README.rst
-   :start-line: 115
-   :end-line: 148
+   :start-line: 105
+   :end-line: 139
 
 Obtaining the latest code from GitHub
 -------------------------------------
