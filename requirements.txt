@@ -1,9 +1,5 @@
-numpy
-cython
-scipy
-matplotlib
-scikit_image
-sk_video
-joblib
-dask
-numba
+cython>=0.28
+numpy>=1.9
+scipy>=1.0
+matplotlib>=2.1
+joblib>=0.11

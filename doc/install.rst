@@ -4,75 +4,82 @@
 Installation
 ============
 
-pulse2percept is in active development.
-To get the latest stable version, we recommend installing our
-:ref:`latest release <install-release>`.
-If you wish to contribute to the project or require
-the bleeding-edge version, you will want to install
-:ref:`from source <install-source>` instead.
+Because pulse2percept is in active development, there are at least two versions
+to choose from:
+
+-  ``stable``: Our :ref:`stable release <install-release>` can be installed via
+   pip (see `docs <https://pulse2percept.readthedocs.io/en/stable>`_,
+   `code <https://github.com/pulse2percept/pulse2percept/tree/stable>`_).
+-  ``latest``: Our bleeding-edge version must be installed 
+   :ref:`from source <install-source>`, and may contain experimental features
+   (see `docs <https://pulse2percept.readthedocs.io/en/latest/>`_,
+   `code <https://github.com/pulse2percept/pulse2percept/tree/master>`_).
 
 .. note::
 
     Having trouble with the installation?
     Please refer to our :ref:`Troubleshooting Guide <install-troubleshooting>`.
 
-.. _install-prerequisites:
+.. _install-python:
 
-Prerequisites
-=============
+Installing Python
+=================
 
-*  **Python** (3.5 - 3.7): Before getting started, you will need to have to
-   `install Python`_ on your computer. Check if Python is installed on your
-   system by typing ``python --version`` in a terminal or command prompt.
+Before getting started, you will need to install Python on your computer.
+You can check if Python is already installed by typing ``python --version`` in
+a terminal or command prompt.
 
-   .. important::
+If you don't have Python, you have several options:
 
-       pulse2percept 0.4.3 was the last release to support Python 2.7 and 3.4.
-       pulse2percept 0.5+ will require **Python 3.5 - 3.7**.
+- If you're unsure where to start, check out the `Python Wiki`_.
+- `Python Anaconda`_ (good but slow in 2020): comes with the conda package
+  manager and a range of scientific software pre-installed (NumPy, SciPy,
+  Matplotlib, etc.).
+- `Python Miniconda`_ (fast but minimal): comes with the conda package manager
+  but nothing else.
 
-*  **Cython** (>= 0.28): pulse2percept relies on C extension modules for code
-   acceleration. These require a C compiler, which on Unix platforms is
-   already installed (``gcc``). However, on Windows you will have to install a
-   compiler yourself:
+.. important::
 
-   1.  Install **Build Tools for Visual Studio 2019** from the
-       `Microsoft website`_.
-       Note that the build tools for Visual Studio 2015 or 2017 should work as
-       well (Python >= 3.5 requires C++ 14.X to be exact).
-       Also note that you don't need to install Visual Studio itself.
+    pulse2percept 0.4.3 was the last release to support Python 2.7 and 3.4.
+    pulse2percept 0.5+ requires **Python 3.5+**.
 
-   2.  `Install Cython`_:
+On some platforms (e.g., macOS), you might also have to install pip yourself.
+You can check if pip is installed on your system by typing ``pip --version``
+in a terminal or command prompt.
 
-       .. code-block:: bash
+If you don't have pip, do the following:
 
-           pip3 install Cython
+-  Download `get-pip.py`_ to your computer.
+-  Open a terminal or command prompt and navigate to the directory containing
+   ``get-pip.py``.
+-  Run the following command:
 
-       If you get an error saying ``unable to find vcvarsall.bat``, then there
-       is a problem with your Build Tools installation, in which case you
-       should follow `this guide`_.
+   .. code-block:: bash
 
-   .. warning::
+       python get-pip.py
 
-       Some guides on the web tell you to install MinGW instead of Visual Studio.
-       However, this is not recommended for 64-bit platforms.
-       When in doubt, follow `this guide`_.
-
-.. _install Python: https://wiki.python.org/moin/BeginnersGuide/Download
-.. _Microsoft website: https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2019
-.. _Install Cython: https://cython.readthedocs.io/en/latest/src/quickstart/install.html
-.. _this guide: https://github.com/cython/cython/wiki/CythonExtensionsOnWindows
+.. _Python Anaconda: https://www.anaconda.com/distribution
+.. _Python Wiki: https://wiki.python.org/moin/BeginnersGuide/Download
+.. _Python Miniconda: https://docs.conda.io/en/latest/miniconda.html
+.. _get-pip.py: https://bootstrap.pypa.io/get-pip.py
 
 .. _install-release:
 
-Installing a release
-====================
+Installing the stable pulse2percept release
+===========================================
 
-After taking care of the :ref:`prerequisites <install-prerequisites>`,
-the latest pulse2percept release can be installed using pip:
+After :ref:`installing Python <install-python>` above, the stable pulse2percept
+release can be installed with pip:
 
 .. code-block:: bash
 
     pip3 install pulse2percept
+
+You can also install a specific version:
+
+.. code-block:: bash
+
+    pip3 install pulse2percept==0.5.2
 
 Then from any Python console or script, try:
 
@@ -80,52 +87,82 @@ Then from any Python console or script, try:
 
     import pulse2percept as p2p
 
+.. important::
+
+    Make sure you are reading the right version of the documentation:
+    https://pulse2percept.readthedocs.io/en/stable
+    (<-- "stable", not "latest").
+
+.. note::
+
+    Find out what's new in the :ref:`Release Notes <users-release-notes>`.
+
 .. _install-source:
 
-Installing from source
-======================
+Installing version |version| from source
+========================================
 
 .. _install-source-prerequisites:
 
 Prerequisites
 -------------
 
-**Git**: On Unix, you can install git from the `command line`_. On Windows,
-make sure to download `Git for Windows`_.
+1.  **Python** (>= 3.5): Make sure to :ref:`install Python <install-python>`
+    first.
 
+2.  **XCode**: On macOS, make sure to install `Apple XCode`_.
+
+3.  **Cython** (>= 0.28): pulse2percept relies on C extension modules for code
+    acceleration. These require a C compiler, which on Unix platforms is
+    already installed (``gcc``). However, on Windows you will have to install a
+    compiler yourself:
+
+    1.  Install **Build Tools for Visual Studio 2019** from the
+        `Microsoft website`_.
+        Note that the build tools for Visual Studio 2015 or 2017 should work as
+        well (Python >= 3.5 requires C++ 14.X to be exact).
+        Also note that you don't need to install Visual Studio itself.
+
+    2.  `Install Cython`_:
+
+        .. code-block:: bash
+
+            pip3 install Cython
+
+        If you get an error saying ``unable to find vcvarsall.bat``, then there
+        is a problem with your Build Tools installation, in which case you
+        should follow `this guide`_.
+
+    .. warning::
+
+        Some guides on the web tell you to install MinGW instead of Visual Studio.
+        However, this is not recommended for 64-bit platforms.
+        When in doubt, follow `this guide`_.
+
+4.  **Git**: On Unix, you can install git from the `command line`_. On Windows,
+    make sure to download `Git for Windows`_.
+
+5.  **make** (optional): pulse2percept provides a Makefile to simplify the
+    build process.
+    ``make`` is part of `build-essentials`_ on Ubuntu, `XCode`_ on Mac OS X,
+    and can be downloaded from `ezwinports`_ on Windows.
+
+.. _Apple XCode: https://developer.apple.com/xcode
+.. _Microsoft website: https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2019
+.. _Install Cython: https://cython.readthedocs.io/en/latest/src/quickstart/install.html
+.. _this guide: https://github.com/cython/cython/wiki/CythonExtensionsOnWindows
 .. _command line: https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
 .. _Git for Windows: https://gitforwindows.org
+.. _build-essentials: https://stackoverflow.com/questions/11934997/how-to-install-make-in-ubuntu
+.. _XCode: https://developer.apple.com/support/xcode
+.. _ezwinports: https://gist.github.com/evanwill/0207876c3243bbb6863e65ec5dc3f058#make
 
 Dependencies
 ------------
 
-**pulse2percept 0.4.3 was the last version to support Python 2.7 and 3.4. pulse2percept 0.5+ require Python 3.5 or newer.**
-
-pulse2percept requires:
-
-- Python (3.5 - 3.7)
-- Cython (>= 0.28)
-- NumPy (>= 1.9)
-- SciPy (>= 1.0)
-- Matplotlib (>= 2.0)
-- JobLib (>= 0.11)
-
-Optional packages:
-
-- scikit-image for image functionality in the ``files`` module.
-- scikit-video for video functionality in the ``files`` module. You will also need an FFMPEG codec (see next bullet point).
-- ffmpeg codec if you're on Windows and want to use functions in the ``files`` module.
-- Dask for parallel processing (a joblib alternative). Use ``conda`` to install.
-- Numba for just-in-time compilation. Use ``conda`` to install.
-- Pytest to run the test suite.
-
-All required packages are listed in requirements.txt in the root directory of the git repository, and can be installed with the following command:
-
-.. code-block:: bash
-
-    git clone https://github.com/pulse2percept/pulse2percept.git
-    cd pulse2percept
-    pip3 install -r requirements.txt
+.. include:: ../README.rst
+   :start-line: 105
+   :end-line: 139
 
 Obtaining the latest code from GitHub
 -------------------------------------
@@ -164,7 +201,7 @@ Obtaining the latest code from GitHub
         pip3 install -r requirements.txt
 
     This includes Cython. If you are on Windows, you will also need a suitable
-    C compiler (see :ref:`Prerequisites <install-prerequisites>` above).
+    C compiler (see :ref:`Prerequisites <install-source-prerequisites>` above).
 
     If you plan on :ref:`contributing to pulse2percept <dev-contributing>`,
     you should also install all developer dependencies listed in
@@ -180,7 +217,8 @@ Obtaining the latest code from GitHub
 Building pulse2percept
 ----------------------
 
-Assuming you are still in the root directory of the git clone, type:
+Assuming you are still in the root directory of the git clone, type
+(note the ``.``):
 
 .. code-block:: bash
 
@@ -192,15 +230,35 @@ Then from any Python console or script, try:
 
     import pulse2percept as p2p
 
+.. important::
+
+    Make sure you are reading the right version of the documentation:
+    https://pulse2percept.readthedocs.io/en/latest
+    (<-- "latest", not "stable").
+
+Building with make
+------------------
+
+pulse2percept provides a Makefile to simplify the build process.
+If you followed the :ref:`above guide <install-source-prerequisites>` to
+install ``make``, the following commands are available:
+
+*  ``make``: Installs pulse2percept
+*  ``make uninstall``: Uninstalls pulse2percept
+*  ``make tests``: Installs pulse2percept and runs the test suite
+*  ``make doc``: Installs pulse2percept and generates the documentation
+*  ``make clean``: Cleans out all build files
+*  ``make help``: Prints a help message with this menu of options
+
 .. _install-upgrade:
 
 Upgrading pulse2percept
 =======================
 
 If you have previously installed pulse2percept, but wish to upgrade to the
-latest version, you have two options.
+newest release, you have two options.
 
-To upgrade to the latest stable release, use the ``-U`` option with pip:
+To upgrade to the newest stable release, use the ``-U`` option with pip:
 
 .. code-block:: bash
 
@@ -235,6 +293,8 @@ You can uninstall pulse2percept using pip:
 
    pip3 uninstall pulse2percept
 
+This works for both stable and latest releases.
+
 In addition, if you installed :ref:`from source <install-source>`, you may want
 to manually delete the directory where you cloned the git repository that
 contains all the source code.
@@ -244,8 +304,28 @@ contains all the source code.
 Troubleshooting
 ===============
 
-I'm getting an error in fast_retina.pyx when installing with pip on Windows
----------------------------------------------------------------------------
+Python ImportError: No module named pulse2percept
+-------------------------------------------------
+
+This is usually an issue related to ``$PATH``, the environment variable that
+keeps track of all locations where pip should be looking for pulse2percept.
+Chances are that pip installed pulse2percept somewhere outside of ``$PATH``.
+
+You can check the installation location:
+
+.. code-block:: python
+
+   pip3 show pulse2percept
+
+Then add the specificed location to ``$PATH``; see `PATH on Windows`_, 
+`PATH on macOS`_, `PATH on Linux`_.
+
+.. _PATH on Windows: https://helpdeskgeek.com/windows-10/add-windows-path-environment-variable/
+.. _PATH on macOS: https://www.architectryan.com/2012/10/02/add-to-the-path-on-mac-os-x-mountain-lion/
+.. _PATH on Linux: https://linuxize.com/post/how-to-add-directory-to-path-in-linux/
+
+Error in fast_retina.pyx when installing with pip on Windows
+------------------------------------------------------------
 
 Early builds of pulse2percept 0.4 mistakingly omitted the Windows binary
 for the Cython-dependent ``fast_retina`` module (see :issue:`88`).

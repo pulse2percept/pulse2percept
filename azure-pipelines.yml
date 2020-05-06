@@ -1,9 +1,8 @@
 trigger:
-  # Whenever someone pushes to master or stable:
+  # Whenever someone pushes to master:
   branches:
     include:
     - master
-    - stable
   # Whenever a tag is pushed:
   tags:
     include:
@@ -11,7 +10,7 @@ trigger:
 
 pr:
 - master
-- stable
+- develop
 
 variables:
   # Install p2p in Docker container
@@ -19,8 +18,8 @@ variables:
   CIBW_BEFORE_BUILD: $(install_p2p)
   # On Linux, need to install Matplotlib depedencies in Docker container:
   CIBW_BEFORE_BUILD_LINUX: "yum -y install freetype-devel pkg-config libpng-devel && $(install_p2p)"
-  # Skip building on Python 2.7 and 3.8 on all platforms
-  CIBW_SKIP: "cp27-* cp38-*"
+  # Skip building on Python 2.7 on all platforms
+  CIBW_SKIP: "cp27-*"
 
 jobs:
 - job: linux
@@ -36,7 +35,7 @@ jobs:
     - task: PublishBuildArtifacts@1
       inputs: {pathtoPublish: 'wheelhouse'}
 - job: macos
-  pool: {vmImage: 'macOS-10.13'}
+  pool: {vmImage: 'macOS-10.14'}
   steps: 
     - task: UsePythonVersion@0
       inputs:
