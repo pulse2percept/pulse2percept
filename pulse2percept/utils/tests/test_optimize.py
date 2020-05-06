@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.testing as npt
+import pytest
 from pulse2percept.utils import bisect
 
 
@@ -12,3 +13,12 @@ def test_bisect():
                            max_iter=100)
             decimal = int(np.abs(np.log10(y_tol))) - 1
             npt.assert_almost_equal(func(x_mid), y_target, decimal=decimal)
+
+    with pytest.raises(ValueError):
+        bisect(0, func, x_lo=1, x_hi=0)
+    with pytest.raises(ValueError):
+        bisect(0, func, x_tol=-1)
+    with pytest.raises(ValueError):
+        bisect(0, func, y_tol=-1)
+    with pytest.raises(ValueError):
+        bisect(0, func, max_iter=0)

@@ -9,7 +9,7 @@ Release Notes
     pulse2percept 0.4.3 is the last release to support Python 2.7 and 3.4.
     pulse2percept 0.5+ require **Python 3.5 or newer**.
 
-v0.6.0 (2020, planned)
+v0.6.0 (2020-05-05)
 ----------------------
 
 Highlights
@@ -19,7 +19,8 @@ Highlights
 *   New implants: :py:class:`~pulse2percept.implants.BVA24` (:pull:`161`)
 *   New models: :py:class:`~pulse2percept.models.ScoreboardModel` (:pull:`96`),
     :py:class:`~pulse2percept.models.AxonMapModel` (:pull:`96`),
-    :py:class:`~pulse2percept.models.Nanduri2012Model` (:pull:`168`)
+    :py:class:`~pulse2percept.models.Nanduri2012Model` (:pull:`168`),
+    :py:class:`~pulse2percept.models.Horsager2009Model` (:pull:`180`)
 *   New stimuli: :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`,
     :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulse`,
     :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`
@@ -57,12 +58,17 @@ Backward-incompatible changes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 *  Times are now specified in milliseconds.
-*  The ``TimeSeries`` object is deprecated. Please use 
-   :py:class:`~pulse2percept.stimuli.Stimulus` instead.
 *  The ``Simulation`` object has been removed. Please directly
    :ref:`instantiate a model <topics-models>` instead.
 *  ``pulse2percept.retina``: use :py:mod:`~pulse2percept.models` instead
 *  ``pulse2percept.files``: use :py:mod:`~pulse2percept.io` instead
+
+Deprecations
+^^^^^^^^^^^^
+
+*  ``TimeSeries``: use :py:class:`~pulse2percept.stimuli.Stimulus` instead
+*  Old pulses got renamed to ``LegacyMonophasicPulse``, ``LegacyBiphasicPulse``
+   and ``LegacyPulseTrain``
 
 v0.5.2 (2020-02-25)
 -------------------

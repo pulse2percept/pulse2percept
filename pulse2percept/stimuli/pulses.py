@@ -219,7 +219,7 @@ class AsymmetricBiphasicPulse(Stimulus):
         If True, will deliver the cathodic pulse phase before the anodic one.
     electrode : { int | string }, optional, default: 0
         Optionally, you can provide your own electrode name.
-    dt : float, optional, default: 1e-3 ms
+    dt : float, optional, default: 1e-6 ms
         Sampling time step (ms); defines the duration of the signal edge
         transitions.
 
@@ -245,7 +245,7 @@ class AsymmetricBiphasicPulse(Stimulus):
 
     def __init__(self, amp1, amp2, phase_dur1, phase_dur2, interphase_dur=0,
                  delay_dur=0, stim_dur=None, cathodic_first=True,
-                 electrode=None, dt=1e-3):
+                 electrode=None, dt=1e-6):
         if phase_dur1 <= 0:
             raise ValueError("'phase_dur1' must be greater than 0.")
         if phase_dur2 <= 0:

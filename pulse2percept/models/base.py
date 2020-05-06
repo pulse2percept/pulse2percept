@@ -8,7 +8,7 @@ import numpy as np
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
 from ..percepts import Percept
-from ..utils import PrettyPrint, Frozen, FreezeError, GridXY, parfor, bisect
+from ..utils import PrettyPrint, Frozen, FreezeError, GridXY, bisect
 
 
 class NotBuiltError(ValueError, AttributeError):

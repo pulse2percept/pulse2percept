@@ -2,8 +2,6 @@
 import numpy as np
 import copy
 import logging
-from scipy.interpolate import interp1d
-
 
 from . import MIN_AMP
 from .base import TimeSeries, Stimulus

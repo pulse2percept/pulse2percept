@@ -1,5 +1,4 @@
 """`load_horsager2009`, `VariableDuration`"""
-import numpy as np
 from os.path import dirname, join
 
 try:
