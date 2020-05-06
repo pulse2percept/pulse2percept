@@ -9,6 +9,18 @@ Release Notes
     pulse2percept 0.4.3 is the last release to support Python 2.7 and 3.4.
     pulse2percept 0.5+ require **Python 3.5 or newer**.
 
+v0.7.0 (2020, planned)
+----------------------
+
+Highlights
+~~~~~~~~~~
+
+New features
+~~~~~~~~~~~~
+
+API changes
+~~~~~~~~~~~
+
 v0.6.0 (2020-05-05)
 ----------------------
 
