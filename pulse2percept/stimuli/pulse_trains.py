@@ -52,8 +52,22 @@ class PulseTrain(Stimulus):
         if not isinstance(pulse, Stimulus):
             raise TypeError("'pulse' must be a Stimulus object, not "
                             "%s." % type(pulse))
+        if pulse.shape[0] == 0:
+            raise ValueError("'pulse' has invalid shape "
+                             "(%d, %d)." % (pulse.shape[0], pulse.shape[1]))
+        if pulse.time is None:
+            raise ValueError("'pulse' does not have a time component.")
+        # How many pulses fit into stim dur:
+        n_max_pulses = int(freq * stim_dur / 1000.0)
+        if n_pulses is not None:
+            n_pulses = int(n_pulses)
+            if n_pulses > n_max_pulses:
+                raise ValueError("stim_dur=%.2f cannot fit more than "
+                                 "%d pulses." % (stim_dur, n_max_pulses))
+        else:
+            n_pulses = n_max_pulses
         # 0 Hz is allowed:
-        if np.isclose(freq, 0):
+        if n_pulses <= 0:
             time = [0, stim_dur]
             data = [[0, 0]]
         else:
@@ -69,15 +83,6 @@ class PulseTrain(Stimulus):
             # will be trimmed (and produce artifacts) upon compression:
             if np.isclose(pulse_time[-1], window_dur):
                 pulse_time[-1] -= dt
-            # How many pulses fit into stim dur:
-            n_max_pulses = int(freq * stim_dur / 1000.0)
-            if n_pulses is not None:
-                n_pulses = int(n_pulses)
-                if n_pulses > n_max_pulses:
-                    raise ValueError("stim_dur=%.2f cannot fit more than "
-                                     "%d pulses." % (stim_dur, n_max_pulses))
-            else:
-                n_pulses = n_max_pulses
             # Concatenate the pulses:
             data = []
             time = []
@@ -90,6 +95,7 @@ class PulseTrain(Stimulus):
                 time.append([stim_dur])
             data = np.concatenate(data, axis=1)
             time = np.concatenate(time, axis=0)
+        print(data, time)
         super().__init__(data, time=time, metadata=None, compress=False)
         self.freq = freq
         self.pulse_type = pulse.__class__.__name__

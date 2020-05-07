@@ -19,6 +19,9 @@ def test_PulseTrain():
         pt = PulseTrain(10, pulse, n_pulses=n_pulses)
         npt.assert_equal(np.sum(np.isclose(pt.data, -1)), n_pulses)
 
+    # stim_dur too short:
+    npt.assert_almost_equal(PulseTrain(2, pulse, stim_dur=10).data, 0)
+
     # Invalid calls:
     with pytest.raises(TypeError):
         # Wrong stimulus type:
@@ -29,6 +32,13 @@ def test_PulseTrain():
     with pytest.raises(ValueError):
         # n_pulses does not fit:
         PulseTrain(10, pulse, n_pulses=100000)
+    with pytest.raises(ValueError):
+        # No time component:
+        PulseTrain(10, Stimulus(1))
+    with pytest.raises(ValueError):
+        # Empty stim:
+        pulse = Stimulus([[0, 0, 0]], time=[0, 0.1, 0.2], compress=True)
+        PulseTrain(10, pulse)
 
 
 @pytest.mark.parametrize('amp', (-3, 4))
