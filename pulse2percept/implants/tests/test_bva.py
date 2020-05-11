@@ -61,3 +61,23 @@ def test_BVA24(x, y, r):
     bva_le = BVA24(eye='LE', x=xc, y=yc)
     npt.assert_equal(bva_le['1'].x > bva_le['6'].x, True)
     npt.assert_equal(bva_le['1'].y, bva_le['1'].y)
+
+
+def test_BVA24_stim():
+    # Assign a stimulus:
+    implant = BVA24()
+    implant.stim = {'1': 1}
+    npt.assert_equal(implant.stim.electrodes, ['1'])
+    npt.assert_equal(implant.stim.time, None)
+    npt.assert_equal(implant.stim.data, [[1]])
+
+    # You can also assign the stimulus in the constructor:
+    BVA24(stim={'1': 1})
+    npt.assert_equal(implant.stim.electrodes, ['1'])
+    npt.assert_equal(implant.stim.time, None)
+    npt.assert_equal(implant.stim.data, [[1]])
+
+    # Set a stimulus via array:
+    implant = BVA24(stim=np.ones(35))
+    npt.assert_equal(implant.stim.shape, (35, 1))
+    npt.assert_almost_equal(implant.stim.data, 1)
