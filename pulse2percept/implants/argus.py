@@ -99,7 +99,8 @@ class ArgusI(ProsthesisSystem):
                                     rot=rot, etype=DiskElectrode, r=r_arr,
                                     names=names)
 
-        # Set stimulus if available:
+        # Beware of race condition: Stim must be set last, because it requires
+        # indexing into self.electrodes:
         self.stim = stim
 
         # Set left/right eye:
@@ -213,7 +214,8 @@ class ArgusII(ProsthesisSystem):
         self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, r=r,
                                     rot=rot, names=names, etype=DiskElectrode)
 
-        # Set stimulus if available:
+        # Beware of race condition: Stim must be set last, because it requires
+        # indexing into self.electrodes:
         self.stim = stim
 
         # Set left/right eye:

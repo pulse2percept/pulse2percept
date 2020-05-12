@@ -56,7 +56,6 @@ class BVA24(ProsthesisSystem):
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
         self.earray = ElectrodeArray([])
-        self.stim = stim
         n_elecs = 35
 
         # Set left/right eye:
@@ -121,3 +120,7 @@ class BVA24(ProsthesisSystem):
 
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
             self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
+
+        # Beware of race condition: Stim must be set last, because it requires
+        # indexing into self.electrodes:
+        self.stim = stim
