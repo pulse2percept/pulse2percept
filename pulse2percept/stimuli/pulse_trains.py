@@ -94,8 +94,7 @@ class PulseTrain(Stimulus):
                 data.append(np.zeros((pulse.data.shape[0], 1)))
                 time.append([stim_dur])
             data = np.concatenate(data, axis=1)
-            time = np.concatenate(time, axis=0)
-        print(data, time)
+            time = np.concatenate(time, axis=0) 
         super().__init__(data, time=time, metadata=None, compress=False)
         self.freq = freq
         self.pulse_type = pulse.__class__.__name__
