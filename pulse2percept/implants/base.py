@@ -549,11 +549,12 @@ class ElectrodeGrid(ElectrodeArray):
             # When orientation is vertical, y_arr is shifting to create the hex grid
             elif orientation == 'vertical':
                 # Hexagonal grid from x,y coordinates:
-                x_arr = (np.arange(cols) * spc - (cols / 2.0 - 0.5) * spc)
-                y_arr_downshift = (np.arange(rows) * np.sqrt(3) * spc / 2.0 -
-                                  (rows / 2.0 - 0.5) * spc - spc * 0.25)
-                y_arr_upshift = (np.arange(rows) * np.sqrt(3) * spc / 2.0 - 
-                                (rows / 2.0 - 0.5) * spc + spc * 0.25)
+                x_arr = (np.arange(cols) * np.sqrt(3) * spc / 2.0 - 
+                (cols / 2.0 - 0.5) * spc)
+                y_arr_downshift = (np.arange(rows) * spc - (rows / 2.0 - 0.5) * spc - 
+                                   spc * 0.25)
+                y_arr_upshift = (np.arange(rows) * spc  - (rows / 2.0 - 0.5) * spc + 
+                                 spc * 0.25)
                 x_arr_downshift, y_arr_downshift = np.meshgrid(x_arr, y_arr_downshift,
                                                               sparse=False)
                 x_arr_upshift, y_arr_upshift = np.meshgrid(x_arr, y_arr_upshift,
