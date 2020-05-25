@@ -239,7 +239,7 @@ def test_ElectrodeGrid(gtype):
     # Must pass in valid Orientation value:
     with pytest.raises(ValueError):
         ElectrodeGrid((2,3), 10, type=gtype, orientation="foo")
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         ElectrodeGrid((2,3),10, type=gtype, orientation=False)
 
     # Must pass in radius `r` for grid of DiskElectrode objects:
