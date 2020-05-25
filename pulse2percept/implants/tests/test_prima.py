@@ -2,20 +2,20 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 
-from pulse2percept import implants
+from pulse2percept.implants import PRIMA
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
 @pytest.mark.parametrize('r', (-45, 60))
-def test_Prima(ztype, x, y, r):
+def test_PRIMA(ztype, x, y, r):
     # Create an Prima and make sure location is correct
     # Height `z` can either be a float or a list
     z = 100 if ztype == 'float' else np.ones(378) * 20
     # Convert rotation angle to rad
     rot = r * np.pi / 180
 
-    prima = implants.Prima(x, y, z=z, rot=rot)
+    prima = PRIMA(x, y, z=z, rot=rot)
 
     # Slots:
     npt.assert_equal(hasattr(prima, '__slots__'), True)
