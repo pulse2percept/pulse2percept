@@ -5,6 +5,7 @@ from sys import platform
 import matplotlib as mpl
 if platform == "darwin":  # OS X
     mpl.use('TkAgg')
+import matplotlib.pyplot as plt
 
 import numpy as np
 from .base import ElectrodeGrid, ProsthesisSystem, DiskElectrode
