@@ -67,3 +67,7 @@ Studies referenced throughout the Documentation:
                       current distribution under circular dispersive 
                       electrodes. *IEEE Transactions on Biomedical Engineering*
                       5, 381-385.
+.. [Yue2020] L Yue, V Wuyyuru, A Gonzalez-Calle, JD Dorn, MS Humayun (2020).
+             Retina–electrode interface properties and vision restoration by
+             two generations of retinal prostheses in one patient—one in each
+             eye. *Journal of Neural Engineering* 026020.

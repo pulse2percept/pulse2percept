@@ -110,8 +110,8 @@ class Nanduri2012Temporal(TemporalModel):
 
     Parameters
     ----------
-    dt : float, optional, default: 5 microseconds
-        Sampling time step (seconds)
+    dt : float, optional, default: 0.005 ms
+        Sampling time step (ms)
     tau1: float, optional, default: 0.42 ms
         Time decay constant for the fast leaky integrater.
     tau2: float, optional, default: 45.25 ms
@@ -136,11 +136,11 @@ class Nanduri2012Temporal(TemporalModel):
         base_params = super(Nanduri2012Temporal, self).get_default_params()
         params = {
             # Time decay for the ganglion cell impulse response:
-            'tau1': 0.42 / 1000,
+            'tau1': 0.42,
             # Time decay for the charge accumulation:
-            'tau2': 45.25 / 1000,
+            'tau2': 45.25,
             # Time decay for the slow leaky integrator:
-            'tau3': 26.25 / 1000,
+            'tau3': 26.25,
             # Scaling factor applied to charge accumulation:
             'eps': 8.73,
             # Asymptote of the sigmoid:
@@ -201,8 +201,8 @@ class Nanduri2012Model(Model):
         Nominator of the attentuation function (Eq.2 in the paper)
     atten_n : float32, optional, default: 1.69
         Exponent of the attenuation function's denominator (Eq.2 in the paper)
-    dt : float, optional, default: 5 microseconds
-        Sampling time step (seconds)
+    dt : float, optional, default: 0.005 ms
+        Sampling time step (ms)
     tau1: float, optional, default: 0.42 ms
         Time decay constant for the fast leaky integrater.
     tau2: float, optional, default: 45.25 ms

@@ -161,8 +161,8 @@ Dependencies
 ------------
 
 .. include:: ../README.rst
-   :start-line: 115
-   :end-line: 148
+   :start-line: 105
+   :end-line: 139
 
 Obtaining the latest code from GitHub
 -------------------------------------
@@ -217,7 +217,8 @@ Obtaining the latest code from GitHub
 Building pulse2percept
 ----------------------
 
-Assuming you are still in the root directory of the git clone, type:
+Assuming you are still in the root directory of the git clone, type
+(note the ``.``):
 
 .. code-block:: bash
 

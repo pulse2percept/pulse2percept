@@ -71,7 +71,8 @@ class AlphaIMS(ProsthesisSystem):
                                     rot=rot, etype=DiskElectrode,
                                     r=elec_radius)
 
-        # Set stimulus if available:
+        # Beware of race condition: Stim must be set last, because it requires
+        # indexing into self.electrodes:
         self.stim = stim
 
         # Set left/right eye:
@@ -171,7 +172,8 @@ class AlphaAMS(ProsthesisSystem):
                                     rot=rot, etype=DiskElectrode,
                                     r=elec_radius)
 
-        # Set stimulus if available:
+        # Beware of race condition: Stim must be set last, because it requires
+        # indexing into self.electrodes:
         self.stim = stim
 
         # Set left/right eye:

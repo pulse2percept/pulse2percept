@@ -30,27 +30,18 @@ By 2020 roughly 20 million people will suffer from retinal diseases such as
 macular degeneration or retinitis pigmentosa, and a variety of sight
 restoration technologies are being developed to target these diseases.
 
-Retinal prostheses, now implanted in over 300 patients worldwide, electrically
+Retinal prostheses, now implanted in over 500 patients worldwide, electrically
 stimulate surviving cells in order to evoke neuronal responses that are
 interpreted by the brain as visual percepts ('phosphenes').
 However, interactions between the device electronics and the retinal
 neurophysiology result in perceptual distortions that may severely limit the
 quality of the generated visual experience:
 
-.. raw:: html
-
-   <div style="width: 100%; margin: 0; padding: 0 30%">
-    <div style="float: right; width: 20%; text-align: center">
-      Predicted percept
-    </div>
-    <div style="width: 20%; text-align: center">
-      Input stimulus
-    </div>
-  </div>
-
 .. image:: https://raw.githubusercontent.com/pulse2percept/pulse2percept/master/doc/_static/boston-train-combined.gif
    :align: center
    :alt: Input stimulus and predicted percept
+
+*(left: input stimulus, right: predicted percept)*
 
 Built on the NumPy and SciPy stacks, `pulse2percept`_ provides an open-source
 implementation of a number of computational models for state-of-the-art
@@ -80,12 +71,12 @@ If you use pulse2percept in a scholarly publication, please cite as:
 Installation
 ============
 
-Once you have Python and pip, the `stable release`_ of pulse2percept
+Once you have Python 3 and pip, the `stable release`_ of pulse2percept
 can be installed with pip:
 
 .. code-block:: bash
 
-    pip3 install -U pulse2percept
+    pip3 install pulse2percept
 
 In order to get the `bleeding-edge version`_ of pulse2percept, use the
 commands:
@@ -94,7 +85,7 @@ commands:
 
     git clone https://github.com/pulse2percept/pulse2percept.git
     cd pulse2percept
-    pip3 install -e .
+    pip3 install .
 
 .. _stable release: https://pulse2percept.readthedocs.io/en/stable/index.html
 .. _bleeding-edge version: https://pulse2percept.readthedocs.io/en/latest/index.html

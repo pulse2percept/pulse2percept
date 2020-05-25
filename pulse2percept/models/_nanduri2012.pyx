@@ -125,13 +125,13 @@ cpdef temporal_fast(const float32[:, ::1] stim,
     t_stim : 1D float32 array
         The time points for ``stim`` above.
     dt : float32
-        Sampling time step (seconds)
+        Sampling time step (ms)
     tau1: float32
-        Time decay constant for the fast leaky integrater (seconds).
+        Time decay constant for the fast leaky integrater (ms).
     tau2: float32
-        Time decay constant for the charge accumulation (seconds).
+        Time decay constant for the charge accumulation (ms).
     tau3: float32
-        Time decay constant for the slow leaky integrator (seconds).
+        Time decay constant for the slow leaky integrator (ms).
     eps: float32
         Scaling factor applied to charge accumulation.
     asymptote: float32
@@ -157,6 +157,10 @@ cpdef temporal_fast(const float32[:, ::1] stim,
         float32[:, ::1] percept
         uint32 idx_space, idx_sim, idx_stim, idx_frame
         uint32 n_space, n_stim, n_percept, n_sim
+
+    # Note that eps must be divided by 1000, because the original model was fit
+    # with a microsecond time step and now we are running milliseconds:
+    eps = eps / 1000.0
 
     n_percept = len(idx_t_percept)  # Py overhead
     n_stim = len(t_stim)  # Py overhead
@@ -188,7 +192,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
                     idx_stim = idx_stim + 1
             amp = stim[idx_space, idx_stim]
             # Fast ganglion cell response:
-            r1 = r1 + dt * (-amp - r1) / tau1  # += in threads is a reduction
+            r1 = r1 + dt * (amp - r1) / tau1  # += in threads is a reduction
             # Charge accumulation:
             ca = ca + dt * float_max(amp, 0)
             r2 = r2 + dt * (ca - r2) / tau2

@@ -37,7 +37,7 @@ cdef float32 c_max(float32[:] arr):
 
 
 @cdivision(True)
-cpdef scoreboard_fast(const float32[:, ::1] stim,
+cpdef fast_scoreboard(const float32[:, ::1] stim,
                       const float32[::1] xel,
                       const float32[::1] yel,
                       const float32[::1] xgrid,
@@ -99,8 +99,8 @@ cpdef scoreboard_fast(const float32[:, ::1] stim,
 
 
 
-cpdef jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
-                float32 beta_i):
+cpdef fast_jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
+                     float32 beta_i):
     cdef:
         float32[::1] xprime, yprime
         float32 b, c, rho_min, tmp_phi, tmp_rho
@@ -129,72 +129,41 @@ cpdef jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
     return np.asarray(xprime), np.asarray(yprime)
 
 
-cdef uint32 argmin_segment(float32[:, ::1] bundles, float32 x, float32 y):
+cdef uint32 argmin_segment(float32[:, :] flat_bundles, float32 x, float32 y):
     cdef:
         float32 dist2, min_dist2
         uint32 seg, min_seg, n_seg
 
     min_dist2 = 1e12
-    n_seg = bundles.shape[0]
+    n_seg = flat_bundles.shape[0]
     for seg in range(n_seg):
-        dist2 = c_pow(bundles[seg, 0] - x, 2) + c_pow(bundles[seg, 1] - y, 2)
+        dist2 = (c_pow(flat_bundles[seg, 0] - x, 2) +
+                 c_pow(flat_bundles[seg, 1] - y, 2))
         if dist2 < min_dist2:
             min_dist2 = dist2
             min_seg = seg
     return min_seg
 
 
-cpdef axon_contribution(float32[:, ::1] bundle,
-                        float32[::1] xy,
-                        float32 lmbd):
-    cdef:
-        uint32 p, c, argmin, n_seg
-        float32 dist2
-        float32[:, ::1] contrib
-
-    # Find the segment that is closest to the soma `xy`:
-    argmin = argmin_segment(bundle, xy[0], xy[1])
-
-    # Add the exact location of the soma:
-    bundle[argmin + 1, 0] = xy[0]
-    bundle[argmin + 1, 1] = xy[1]
-
-    # For every axon segment, calculate distance from soma by summing up the
-    # individual distances between neighboring axon segments
-    # (by "walking along the axon"):
-    n_seg = argmin + 1
-    contrib = np.zeros((n_seg, 3))
-    dist2 = 0
-    c = 0
-    for p in range(argmin, -1, -1):
-        dist2 += (c_pow(bundle[p, 0] - bundle[p + 1, 0], 2) +
-                  c_pow(bundle[p, 1] - bundle[p + 1, 1], 2))
-        contrib[c, 0] = bundle[p, 0]
-        contrib[c, 1] = bundle[p, 1]
-        contrib[c, 2] = c_exp(-dist2 / (2.0 * c_pow(lmbd, 2)))
-        c += 1
-    return np.asarray(contrib)
-
-
-cpdef finds_closest_axons(float32[:, ::1] bundles,
-                          float32[::1] xret,
-                          float32[::1] yret):
+cpdef fast_find_closest_axon(float32[:, :] flat_bundles,
+                             float32[::1] xret,
+                             float32[::1] yret):
     cdef:
         uint32[::1] closest_seg
         uint32 n_xy, n_seg
     closest_seg = np.empty(len(xret), dtype=np.uint32)
     n_xy = len(xret)
-    n_seg = bundles.shape[0]
+    n_seg = flat_bundles.shape[0]
     for pos in range(n_xy):
-        closest_seg[pos] = argmin_segment(bundles, xret[pos], yret[pos])
+        closest_seg[pos] = argmin_segment(flat_bundles, xret[pos], yret[pos])
     return np.asarray(closest_seg)
 
 
 @cdivision(True)
-cpdef axon_map_fast(const float32[:, ::1] stim,
+cpdef fast_axon_map(const float32[:, ::1] stim,
                     const float32[::1] xel,
                     const float32[::1] yel,
-                    const float32[:, ::1] axon,
+                    const float32[:, ::1] axon_segments,
                     const uint32[::1] idx_start,
                     const uint32[::1] idx_end,
                     float32 rho,
@@ -209,7 +178,7 @@ cpdef axon_map_fast(const float32[:, ::1] stim,
         each column independently.
     xel, yel : 1D float32 array
         An array of x or y coordinates for each electrode (microns)
-    axon : 2D float32 array
+    axon_segments : 2D float32 array
         All axon segments concatenated into an Nx3 array.
         Each row has the x/y coordinate of a segment along with its
         contribution to a given pixel.
@@ -242,29 +211,46 @@ cpdef axon_map_fast(const float32[:, ::1] stim,
     # A flattened array containing n_space x n_time entries:
     bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
 
+    # Parallel loop over all pixels to be rendered:
     for idx_space in prange(n_space, schedule='dynamic', nogil=True):
-        # Parallel loop over all pixels to be rendered:
+        # Each frame in `stim` is treated independently, so we can have an
+        # inner loop over all points in time:
         for idx_time in range(n_time):
-            # Each frame in ``stim`` is treated independently. Find the
-            # brightness value of each pixel by finding the strongest activated
-            # axon segment:
+            # Find the brightness value of each pixel (`px_bright`) by finding
+            # the strongest activated axon segment:
             px_bright = 0.0
-            # Slice `axon_contrib` but don't assign the slice to a variable:
+            # Slice `axon_contrib` (but don't assign the slice to a variable).
+            # `idx_start` and `idx_end` serve as indexes into `axon_segments`.
+            # For example, the axon belonging to the neuron sitting at pixel
+            # `idx_space` has segments
+            # `axon_segments[idx_start[idx_space]:idx_end[idx_space]]`:
             for idx_ax in range(idx_start[idx_space], idx_end[idx_space]):
-                # Calculate the activation of each axon segment:
+                # Calculate the activation of each axon segment by adding up
+                # the contribution of each electrode:
                 sgm_bright = 0.0
                 for idx_el in range(n_el):
                     amp = stim[idx_el, idx_time]
                     if c_abs(amp) > 0:
-                        xdiff = axon[idx_ax, 0] - xel[idx_el]
-                        ydiff = axon[idx_ax, 1] - yel[idx_el]
+                        # Calculate the distance between this axon segment and
+                        # the center of the stimulating electrode:
+                        xdiff = axon_segments[idx_ax, 0] - xel[idx_el]
+                        ydiff = axon_segments[idx_ax, 1] - yel[idx_el]
                         r2 = xdiff * xdiff + ydiff * ydiff
-                        # axon[idx_ax, 2] depends on axlambda:
+                        # Determine the activation level of this axon segment,
+                        # consisting of two things:
+                        # - activation as a function of distance to the
+                        #   stimulating electrode (depends on `rho`):
                         gauss = c_exp(-r2 / (2.0 * rho * rho))
-                        sgm_bright = sgm_bright + gauss * axon[idx_ax, 2] * amp
+                        # - activation as a function of distance to the cell
+                        #   body (depends on `axlambda`, precalculated during
+                        #   `build` and stored in `axon_segments[idx_ax, 2]`:
+                        sgm_bright = (sgm_bright +
+                                      gauss * axon_segments[idx_ax, 2] * amp)
+                # After summing up the currents from all the electrodes, we
+                # compare the brightness of the segment (`sgm_bright`) to the
+                # previously brightest segment. The brightest segment overall
+                # determines the brightness of the pixel (`px_bright`):
                 if c_abs(sgm_bright) > c_abs(px_bright):
-                    # The strongest activated axon segment determines the
-                    # brightness of the pixel:
                     px_bright = sgm_bright
             if c_abs(px_bright) < thresh_percept:
                 px_bright = 0.0

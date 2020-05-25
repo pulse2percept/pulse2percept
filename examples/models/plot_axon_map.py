@@ -39,14 +39,14 @@ The first step is to instantiate the
 :py:class:`~pulse2percept.models.AxonMapModel` class by calling its
 constructor method.
 The two most important parameters to set are ``rho`` and ``axlambda`` from
-the equation above (here set to 100 micrometers and 200 micrometers,
+the equation above (here set to 100 micrometers and 150 micrometers,
 respectively):
 
 """
 # sphinx_gallery_thumbnail_number = 2
 
 from pulse2percept.models import AxonMapModel
-model = AxonMapModel(rho=100, axlambda=200)
+model = AxonMapModel(rho=100, axlambda=150)
 
 ##############################################################################
 # Parameters you don't specify will take on default values. You can inspect

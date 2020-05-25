@@ -4,7 +4,7 @@
 Datasets
 ========
 
-The :py:mod:`~pulse2percept.datasets` subpackage provides two kinds of helper
+The :py:mod:`~pulse2percept.datasets` module provides two kinds of helper
 functions that can be used to load datasets from the bionic vision community:
 
 *  **Dataset loaders** can be used to load small datasets that come

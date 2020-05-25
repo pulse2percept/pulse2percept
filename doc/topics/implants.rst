@@ -37,7 +37,6 @@ Implant     Implant location  Manufacturer
 `ArgusII`   epiretinal        Second Sight Medical Products Inc
 `AlphaIMS`  subretinal        Retina Implant AG
 `AlphaAMS`  subretinal        Retina Implant AG
-(*PRIMA*)   (*subretinal*)    (*Pixium Vision SA*)
 `BVA24`     suprachoroidal    Bionic Vision Technologies
 ==========  ================  =================================
 

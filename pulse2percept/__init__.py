@@ -39,6 +39,7 @@ logger.setLevel(logging.ERROR)
 from . import io
 logger.setLevel(logging.INFO)
 from . import models
+from . import percepts
 from . import stimuli
 from . import viz
 
@@ -47,6 +48,7 @@ __all__ = [
     'implants',
     'io',
     'models',
+    'percepts',
     'stimuli',
     'utils',
     'viz'

@@ -13,9 +13,14 @@ class ArgusI(ProsthesisSystem):
     given in microns, and the array is rotated by rotation angle ``rot``,
     given in radians.
 
+    Argus I is a modified cochlear implant containing 16 electrodes in a 4x4
+    array with a center-to-center separation of 800 um, and two electrode
+    diameters (250 um and 500 um) arranged in a checkerboard pattern
+    [Yue2020]_.
+
     The array is oriented in the visual field as shown in Fig. 1 of
-    Horsager et al. (2009); that is, if placed in (0,0), the top two
-    rows will lie in the lower retina (upper visual field):
+    [Horsager2009]_; that is, if placed in (0,0), the top two rows will lie in
+    the lower retina (upper visual field):
 
     .. raw:: html
 
@@ -67,9 +72,9 @@ class ArgusI(ProsthesisSystem):
 
     >>> argus = ArgusI(x=0, y=0, z=100, rot=0)
     >>> argus['B1']
-    DiskElectrode(r=260.0, x=-400.0, y=-1200.0, z=100.0)
+    DiskElectrode(r=250.0, x=-400.0, y=-1200.0, z=100.0)
     >>> argus[0, 1]
-    DiskElectrode(r=260.0, x=-400.0, y=-1200.0, z=100.0)
+    DiskElectrode(r=250.0, x=-400.0, y=-1200.0, z=100.0)
 
     """
     # Frozen class: User cannot add more class attributes
@@ -77,12 +82,9 @@ class ArgusI(ProsthesisSystem):
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
                  use_legacy_names=False):
-        # Argus I is a 4x4 grid of electrodes with 200um in diamater, spaced
-        # 525um apart, with rows labeled alphabetically and columsn
-        # numerically:
         self.eye = eye
         self.shape = (4, 4)
-        r_arr = np.array([260, 520, 260, 520]) / 2.0
+        r_arr = np.array([250, 500, 250, 500]) / 2.0
         r_arr = np.concatenate((r_arr, r_arr[::-1], r_arr, r_arr[::-1]),
                                axis=0)
         spacing = 800.0
@@ -97,7 +99,8 @@ class ArgusI(ProsthesisSystem):
                                     rot=rot, etype=DiskElectrode, r=r_arr,
                                     names=names)
 
-        # Set stimulus if available:
+        # Beware of race condition: Stim must be set last, because it requires
+        # indexing into self.electrodes:
         self.stim = stim
 
         # Set left/right eye:
@@ -137,6 +140,9 @@ class ArgusII(ProsthesisSystem):
     such that the center of the array is located at (x,y,z), given in
     microns, and the array is rotated by rotation angle ``rot``, given in
     radians.
+
+    Argus II contains 60 electrodes of 225 um diameter arranged in a 6 x 10
+    grid (575 um center-to-center separation) [Yue2020]_.
 
     The array is oriented upright in the visual field, such that an
     array with center (0,0) has the top three rows lie in the lower
@@ -192,26 +198,24 @@ class ArgusII(ProsthesisSystem):
 
     >>> argus = ArgusII(x=0, y=0, z=100, rot=0)
     >>> argus['E7']
-    DiskElectrode(r=100.0, x=787.5, y=787.5, z=100.0)
+    DiskElectrode(r=112.5, x=862.5, y=862.5, z=100.0)
     >>> argus[4, 6]
-    DiskElectrode(r=100.0, x=787.5, y=787.5, z=100.0)
+    DiskElectrode(r=112.5, x=862.5, y=862.5, z=100.0)
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
-        # Argus II is a 6x10 grid of electrodes with 200um in diamater, spaced
-        # 525um apart, with rows labeled alphabetically and columsn
-        # numerically:
         self.shape = (6, 10)
-        r = 100.0
-        spacing = 525.0
+        r = 225.0 / 2.0
+        spacing = 575.0
         names = ('A', '1')
         self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, r=r,
                                     rot=rot, names=names, etype=DiskElectrode)
 
-        # Set stimulus if available:
+        # Beware of race condition: Stim must be set last, because it requires
+        # indexing into self.electrodes:
         self.stim = stim
 
         # Set left/right eye:
