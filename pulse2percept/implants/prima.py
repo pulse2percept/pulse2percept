@@ -6,10 +6,11 @@ import matplotlib as mpl
 if platform == "darwin":  # OS X
     mpl.use('TkAgg')
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, RegularPolygon
 
 import numpy as np
-from .base import ElectrodeGrid, ProsthesisSystem, DiskElectrode
 from collections import OrderedDict
+from .base import ElectrodeGrid, ProsthesisSystem, DiskElectrode
 
 
 class PRIMA(ProsthesisSystem):
@@ -42,29 +43,40 @@ class PRIMA(ProsthesisSystem):
     __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
-        self.shape = (19, 22) # total number of columns is 22
-                              # maximum number of electrodes of each row is 19
-        self.eye= eye
+        # Total number of columns is 22, max number of electrodes
+        # of each row is 19:
+        self.shape = (19, 22)
+        self.eye = eye
         elec_radius = 10 # um
         e_spacing = 75  # um
-        self.earray = ElectrodeGrid(self.shape, e_spacing, x=x, y=y, z=z,
-                                    rot=rot, type='hex', orientation='vertical',etype=DiskElectrode,
-                                    r=elec_radius)
-        # Set stimulus if available:
-        self.stim = stim
         
-        # remove extra electrodes to fit the actual implant
-        extra_elecs = ['A1','A2','A3','A4','A14','A16','A17',
-                       'A18','A19','A20','A21','A22','B1',
-                       'B2','B18','B19','B20','B21','B22',
-                       'C1','C20','C21','C22','D22','E22','P1',
-                       'Q1','Q22','R1','R2','R21','R22','S1',
-                       'S2','S3','S5','S19','S20','S21','S22']
-
+        # The user might provide a list of z values for each of the
+        # 378 resulting electrodes, not for the 22x19 initial ones.
+        # In this case, don't pass it to ElectrodeGrid, but overwrite
+        # the z values later:
+        overwrite_z = isinstance(z, (list, np.ndarray))
+        zarr = 0 if overwrite_z else z
+        self.earray = ElectrodeGrid(self.shape, e_spacing, x=x, y=y,
+                                    z=zarr, rot=rot, type='hex',
+                                    orientation='vertical',
+                                    etype=DiskElectrode, r=elec_radius)
+        
+        # Remove extra electrodes to fit the actual implant:
+        extra_elecs = ['A1', 'A2', 'A3', 'A4', 'A14', 'A16', 'A17',
+                       'A18', 'A19', 'A20', 'A21', 'A22', 'B1',
+                       'B2', 'B18', 'B19', 'B20', 'B21', 'B22',
+                       'C1', 'C20', 'C21', 'C22', 'D22', 'E22', 'P1',
+                       'Q1', 'Q22', 'R1', 'R2', 'R21', 'R22', 'S1',
+                       'S2', 'S3', 'S5', 'S19', 'S20', 'S21', 'S22']
         for elec in extra_elecs:
             self.earray.remove_electrode(elec)
         
-        # rename all electrodes
+        # Adjust the z values:
+        if overwrite_z:
+            for elec, z_elec in zip(prima.values(), z):
+                elec.z = z_elec
+        
+        # Rename all electrodes:
         idx_col = 0
         rows, cols = self.shape
         idx_update_row = chr(ord('A') + rows - 1) # start from the last electrode
@@ -81,6 +93,10 @@ class PRIMA(ProsthesisSystem):
             new_name = idx_update_row + str(idx_col)
             new_earray.update({new_name: orig_earray[name]})
         self.earray.electrodes = new_earray
+        
+        # Beware of race condition: Stim must be set last, because it requires
+        # indexing into self.electrodes:
+        self.stim = stim
         
     def plot(self, ax=None, annotate=False, xlim=None, ylim=None):
         """Plot the PRIMA implant
