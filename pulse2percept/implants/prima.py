@@ -14,13 +14,12 @@ from .base import ElectrodeGrid, ProsthesisSystem, DiskElectrode
 
 
 class PRIMA(ProsthesisSystem):
-    """Create a PRIMA array on retina
+    """Create a PRIMA array on the retina
 
-    This function creates a PRIMA array and places it on the retina
-    such that the center of the array is located at 3D location (x,y,z),
-    given in microns, and the array is rotated by rotation angle ``rot``,
-    given in radians.
-
+    This function creates a PRIMA array and places it in the subretinal
+    space such that the center of the array is located at 3D location
+    (x,y,z), given in microns, and the array is rotated by rotation angle
+    ``rot``, given in radians.
 
     Parameters
     ----------
@@ -28,7 +27,7 @@ class PRIMA(ProsthesisSystem):
         x coordinate of the array center (um)
     y : float, optional: default: 0
         y coordinate of the array center (um)
-    z: float || array_like, optional, default: 0
+    z: float || array_like, optional, default: -100
         Distance of the array to the retinal surface (um). Either a list
         with 378 entries or a scalar.
     rot : float, optional, default: 0
@@ -42,7 +41,7 @@ class PRIMA(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
+    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None):
         # Total number of columns is 22, max number of electrodes
         # of each row is 19:
         self.shape = (19, 22)
@@ -55,7 +54,7 @@ class PRIMA(ProsthesisSystem):
         # In this case, don't pass it to ElectrodeGrid, but overwrite
         # the z values later:
         overwrite_z = isinstance(z, (list, np.ndarray))
-        zarr = 0 if overwrite_z else z
+        zarr = -100 if overwrite_z else z
         self.earray = ElectrodeGrid(self.shape, e_spacing, x=x, y=y,
                                     z=zarr, rot=rot, type='hex',
                                     orientation='vertical',
@@ -73,7 +72,7 @@ class PRIMA(ProsthesisSystem):
         
         # Adjust the z values:
         if overwrite_z:
-            for elec, z_elec in zip(prima.values(), z):
+            for elec, z_elec in zip(self.earray.values(), z):
                 elec.z = z_elec
         
         # Rename all electrodes:
