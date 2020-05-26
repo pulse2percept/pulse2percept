@@ -392,7 +392,8 @@ class ElectrodeGrid(ElectrodeArray):
     __slots__ = ('shape', 'type')
 
     def __init__(self, shape, spacing, x=0, y=0, z=0, rot=0, names=('A', '1'),
-                 type='rect', orientation='horizontal', etype=PointSource, **kwargs):
+                 type='rect', orientation='horizontal', etype=PointSource,
+                 **kwargs):
         if not isinstance(names, (tuple, list, np.ndarray)):
             raise TypeError("'names' must be a tuple/list of (rows, cols)")
         if not isinstance(shape, (tuple, list, np.ndarray)):
@@ -404,11 +405,13 @@ class ElectrodeGrid(ElectrodeArray):
         if not isinstance(type, str):
             raise TypeError("'type' must be a string, either 'rect' or 'hex'.")
         if not isinstance(orientation, str):
-            raise TypeError("'orientation' must be a string, either 'horizontal' or 'veritical'.")
+            raise TypeError("'orientation' must be a string, either "
+                            "'horizontal' or 'veritical'.")
         if type not in ['rect', 'hex']:
             raise ValueError("'type' must be either 'rect' or 'hex'.")
         if orientation not in ['horizontal', 'vertical']:
-            raise ValueError("'orientation' must be either 'horizontal' or 'vertical'.")
+            raise ValueError(
+                "'orientation' must be either 'horizontal' or 'vertical'.")
         if not issubclass(etype, Electrode):
             raise TypeError("'etype' must be a valid Electrode object.")
         if issubclass(etype, DiskElectrode):
@@ -420,7 +423,8 @@ class ElectrodeGrid(ElectrodeArray):
         # Instantiate empty collection of electrodes. This dictionary will be
         # populated in a private method ``_set_egrid``:
         self.electrodes = OrderedDict()
-        self._make_grid(spacing, x, y, z, rot, names, orientation, etype, **kwargs)
+        self._make_grid(spacing, x, y, z, rot, names,
+                        orientation, etype, **kwargs)
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -466,7 +470,8 @@ class ElectrodeGrid(ElectrodeArray):
                     # Index not found:
                     return None
 
-    def _make_grid(self, spacing, x, y, z, rot, names, orientation, etype, **kwargs):
+    def _make_grid(self, spacing, x, y, z, rot, names, orientation, etype,
+                   **kwargs):
         """Private method to build the electrode grid"""
         n_elecs = np.prod(self.shape)
         rows, cols = self.shape
@@ -524,19 +529,20 @@ class ElectrodeGrid(ElectrodeArray):
             y_arr = (np.arange(rows) * spc - (rows / 2.0 - 0.5) * spc)
             x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
         elif self.type.lower() == 'hex':
-            # When orientation is horizontal, x_arr is shifting to create the hex grid
-            if orientation == 'horizontal':            
+            # When orientation is horizontal, x_arr is shifting to create the
+            # hex grid
+            if orientation == 'horizontal':
                 # Hexagonal grid from x,y coordinates:
-                x_arr_lshift = (np.arange(cols) * spc - (cols / 2.0 - 0.5) * spc -
-                                spc * 0.25)
-                x_arr_rshift = (np.arange(cols) * spc - (cols / 2.0 - 0.5) * spc +
-                                spc * 0.25)
+                x_arr_lshift = ((np.arange(cols) * spc -
+                                 (cols / 2.0 - 0.5) * spc - spc * 0.25))
+                x_arr_rshift = ((np.arange(cols) * spc -
+                                 (cols / 2.0 - 0.5) * spc + spc * 0.25))
                 y_arr = (np.arange(rows) * np.sqrt(3) * spc / 2.0 -
-                        (rows / 2.0 - 0.5) * spc)
+                         (rows / 2.0 - 0.5) * spc)
                 x_arr_lshift, y_arr_lshift = np.meshgrid(x_arr_lshift, y_arr,
-                                                        sparse=False)
+                                                         sparse=False)
                 x_arr_rshift, y_arr_rshift = np.meshgrid(x_arr_rshift, y_arr,
-                                                        sparse=False)                                            
+                                                         sparse=False)
                 # Shift every other row to get an interleaved pattern:
                 x_arr = []
                 for row in range(rows):
@@ -546,21 +552,24 @@ class ElectrodeGrid(ElectrodeArray):
                         x_arr.append(x_arr_lshift[row])
                 x_arr = np.array(x_arr)
                 y_arr = y_arr_rshift
-            # When orientation is vertical, y_arr is shifting to create the hex grid
+            # When orientation is vertical, y_arr is shifting to create the hex
+            # grid
             elif orientation == 'vertical':
                 # Hexagonal grid from x,y coordinates:
-                x_arr = (np.arange(cols) * np.sqrt(3) * spc / 2.0 - 
-                (cols / 2.0 - 0.5) * spc)
-                y_arr_downshift = (np.arange(rows) * spc - (rows / 2.0 - 0.5) * spc - 
-                                   spc * 0.25)
-                y_arr_upshift = (np.arange(rows) * spc  - (rows / 2.0 - 0.5) * spc + 
-                                 spc * 0.25)
-                x_arr_downshift, y_arr_downshift = np.meshgrid(x_arr, y_arr_downshift,
-                                                              sparse=False)
-                x_arr_upshift, y_arr_upshift = np.meshgrid(x_arr, y_arr_upshift,
-                                                          sparse=False)
+                x_arr = (np.arange(cols) * np.sqrt(3) * spc / 2.0 -
+                         (cols / 2.0 - 0.5) * spc)
+                y_arr_downshift = ((np.arange(rows) * spc -
+                                    (rows / 2.0 - 0.5) * spc - spc * 0.25))
+                y_arr_upshift = ((np.arange(rows) * spc -
+                                  (rows / 2.0 - 0.5) * spc + spc * 0.25))
+                x_arr_downshift, y_arr_downshift = np.meshgrid(x_arr,
+                                                               y_arr_downshift,
+                                                               sparse=False)
+                x_arr_upshift, y_arr_upshift = np.meshgrid(x_arr,
+                                                           y_arr_upshift,
+                                                           sparse=False)
                 # Shift every other column to get an interleaved pattern:
-                y_arr = np.zeros(shape=(rows,cols))
+                y_arr = np.zeros(shape=(rows, cols))
                 for row in range(rows):
                     for col in range(cols):
                         if col % 2:
@@ -569,7 +578,7 @@ class ElectrodeGrid(ElectrodeArray):
                             y_arr[row][col] = y_arr_upshift[row][col]
                 x_arr = x_arr_upshift
                 y_arr = np.array(y_arr)
-                
+
         else:
             raise NotImplementedError
 
