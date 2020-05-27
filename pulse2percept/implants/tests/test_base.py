@@ -235,6 +235,12 @@ def test_ElectrodeGrid(gtype):
         ElectrodeGrid((2, 3), 10, type=gtype, etype=ElectrodeArray)
     with pytest.raises(TypeError):
         ElectrodeGrid((2, 3), 10, type=gtype, etype="foo")
+    
+    # Must pass in valid Orientation value:
+    with pytest.raises(ValueError):
+        ElectrodeGrid((2,3), 10, type=gtype, orientation="foo")
+    with pytest.raises(TypeError):
+        ElectrodeGrid((2,3),10, type=gtype, orientation=False)
 
     # Must pass in radius `r` for grid of DiskElectrode objects:
     gshape = (4, 5)
@@ -273,6 +279,14 @@ def test_ElectrodeGrid(gtype):
                          r=30)
     npt.assert_almost_equal(np.sqrt((grid['A1'].x - grid['A2'].x) ** 2 +
                                     (grid['A1'].y - grid['A2'].y) ** 2),
+                            spacing)
+    npt.assert_almost_equal(np.sqrt((grid['A1'].x - grid['B1'].x) ** 2 +
+                                    (grid['A1'].y - grid['B1'].y) ** 2),
+                            spacing)
+    grid = ElectrodeGrid(gshape, spacing, type=gtype, orientation='vertical',
+                         etype=DiskElectrode, r=30)
+    npt.assert_almost_equal(np.sqrt((grid['B1'].x - grid['B2'].x) ** 2 +
+                                (grid['B1'].y - grid['B2'].y) ** 2),
                             spacing)
     npt.assert_almost_equal(np.sqrt((grid['A1'].x - grid['B1'].x) ** 2 +
                                     (grid['A1'].y - grid['B1'].y) ** 2),
