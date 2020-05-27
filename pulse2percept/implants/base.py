@@ -350,7 +350,7 @@ class ElectrodeGrid(ElectrodeArray):
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> ElectrodeGrid((3, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
     ...               type='hex', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    ElectrodeGrid(shape=(3, 4), type='hex')
+    ElectrodeGrid(shape=(3, 4), spacing=20, type='hex')
 
     A rectangulr electrode grid with 2 rows and 4 columns, made of disk
     electrodes with 10um radius spaced 20um apart, centered at (10, 20)um, and
@@ -364,7 +364,7 @@ class ElectrodeGrid(ElectrodeArray):
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> ElectrodeGrid((2, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
     ...               type='rect', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    ElectrodeGrid(shape=(2, 4), type='rect')
+    ElectrodeGrid(shape=(2, 4), spacing=20, type='rect')
 
     There are three ways to access (e.g.) the last electrode in the grid,
     either by name (``grid['C3']``), by row/column index (``grid[2, 2]``), or
@@ -389,7 +389,7 @@ class ElectrodeGrid(ElectrodeArray):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('shape', 'type')
+    __slots__ = ('shape', 'type', 'spacing')
 
     def __init__(self, shape, spacing, x=0, y=0, z=0, rot=0, names=('A', '1'),
                  type='rect', orientation='horizontal', etype=PointSource,
@@ -420,6 +420,7 @@ class ElectrodeGrid(ElectrodeArray):
 
         self.shape = shape
         self.type = type
+        self.spacing = spacing
         # Instantiate empty collection of electrodes. This dictionary will be
         # populated in a private method ``_set_egrid``:
         self.electrodes = OrderedDict()
@@ -428,7 +429,8 @@ class ElectrodeGrid(ElectrodeArray):
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
-        params = {'shape': self.shape, 'type': self.type}
+        params = {'shape': self.shape, 'spacing': self.spacing,
+                  'type': self.type}
         return params
 
     def __getitem__(self, item):

@@ -48,12 +48,19 @@ Studies referenced throughout the Documentation:
                 RK Shepherd, PJ Allen, for the Bionic Vision Australia
                 Research Consortium (2014). First-in-human trial of a novel
                 suprachoroidal retinal prosthesis. *PLoS ONE*  9(12): e115239.
+.. [Lorach2015] H Lorach, G Goetz, R Smith, X Lei, Y Mandel, T Kamins,
+                K Mathieson, P Huie, J Harris, A Sher, D Palanker (2015).
+                Photovoltaic restoration of sight with high visual acuity.
+                *Nature Medicine* 21(5):476-482
 .. [Nanduri2012] D Nanduri, I Fine, A Horsager, GM Boynton, MS Humayun,
                  RJ Greenberg, JD Weiland (2012), Frequency and amplitude
                  modulation have different effects on the percepts elicited
                  by retinal stimulation. Investigative Ophthalmology & Visual
                  Science 53:205-214, doi:`10.1167/iovs.11-8401
                  <https://doi.org/10.1167/iovs.11-8401>`_.
+.. [Palanker2020] D Palanker, Y LeMer, S Mohand-Said, M Muqit, JA Sahel (2020).
+                  Photovoltaic restoration of central vision in atrophic
+                  age-related macular degeneration. *Ophthalmology* 1-8
 .. [Thompson2003] RW Thompson Jr, GD Barnett, MS Humayun, G Dagnelie
                   (2003). Facial recognition using simulated prosthetic
                   pixelized vision.
