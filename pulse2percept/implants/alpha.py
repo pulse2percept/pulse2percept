@@ -61,7 +61,7 @@ class AlphaIMS(ProsthesisSystem):
     >>> alpha_ims['A3']
     SquareElectrode(a=50.0, x=-1224.0, y=-1368.0, z=100.0)
     >>> alpha_ims[0, 2]
-    SquareElectrode(r=50.0, x=-1224.0, y=-1368.0, z=100.0)
+    SquareElectrode(a=50.0, x=-1224.0, y=-1368.0, z=100.0)
 
     """
     # Frozen class: User cannot add more class attributes
