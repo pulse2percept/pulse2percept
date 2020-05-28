@@ -3,11 +3,12 @@
 import numpy as np
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
+from string import ascii_uppercase
+from itertools import product
 # Using or importing the ABCs from 'collections' instead of from
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
 from collections.abc import Sequence
 from collections import OrderedDict
-
 
 from ..stimuli import Stimulus
 from ..utils import PrettyPrint
@@ -374,7 +375,8 @@ class ElectrodeGrid(ElectrodeArray):
         rotation on the retinal surface)
     names: (name_rows, name_cols), each of which either 'A' or '1'
         Naming convention for rows and columns, respectively.
-        If 'A', rows or columns will be labeled alphabetically.
+        If 'A', rows or columns will be labeled alphabetically: A-Z, AA-AZ,
+        BA-BZ, CA-CZ, etc.
         If '1', rows or columns will be labeled numerically.
         Columns and rows may only be strings and integers.
         For example ('1', 'A') will number rows numerically and columns
@@ -403,7 +405,7 @@ class ElectrodeGrid(ElectrodeArray):
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> ElectrodeGrid((3, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
     ...               type='hex', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    ElectrodeGrid(shape=(3, 4), type='hex')
+    ElectrodeGrid(shape=(3, 4), spacing=20, type='hex')
 
     A rectangulr electrode grid with 2 rows and 4 columns, made of disk
     electrodes with 10um radius spaced 20um apart, centered at (10, 20)um, and
@@ -417,7 +419,7 @@ class ElectrodeGrid(ElectrodeArray):
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> ElectrodeGrid((2, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
     ...               type='rect', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    ElectrodeGrid(shape=(2, 4), type='rect')
+    ElectrodeGrid(shape=(2, 4), spacing=20, type='rect')
 
     There are three ways to access (e.g.) the last electrode in the grid,
     either by name (``grid['C3']``), by row/column index (``grid[2, 2]``), or
@@ -442,7 +444,7 @@ class ElectrodeGrid(ElectrodeArray):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('shape', 'type')
+    __slots__ = ('shape', 'type', 'spacing')
 
     def __init__(self, shape, spacing, x=0, y=0, z=0, rot=0, names=('A', '1'),
                  type='rect', orientation='horizontal', etype=PointSource,
@@ -473,6 +475,7 @@ class ElectrodeGrid(ElectrodeArray):
 
         self.shape = shape
         self.type = type
+        self.spacing = spacing
         # Instantiate empty collection of electrodes. This dictionary will be
         # populated in a private method ``_set_egrid``:
         self.electrodes = OrderedDict()
@@ -481,7 +484,8 @@ class ElectrodeGrid(ElectrodeArray):
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
-        params = {'shape': self.shape, 'type': self.type}
+        params = {'shape': self.shape, 'spacing': self.spacing,
+                  'type': self.type}
         return params
 
     def __getitem__(self, item):
@@ -532,22 +536,24 @@ class ElectrodeGrid(ElectrodeArray):
         # The user did not specify a unique naming scheme:
         if len(names) == 2:
             name_rows, name_cols = names
-            # Create electrode names, using either A-Z or 1-n:
             if name_rows.isalpha():
-                rws = [chr(i) for i in range(ord(name_rows),
-                                             ord(name_rows) + rows + 1)]
+                # Create electrode names A-Z, AA-AZ, BA-BZ, etc.:
+                n_times = int(np.ceil(rows / 26))
+                rws = [''.join(chars) for r in range(1, n_times + 1)
+                       for chars in product(ascii_uppercase, repeat=r)][:rows]
             elif name_rows.isdigit():
-                rws = [str(i) for i in range(
-                    int(name_rows), rows + int(name_rows))]
+                # Create electrode names 1-n:
+                rws = [str(i) for i in range(1, rows + 1)]
             else:
                 raise ValueError("rows must be alphabetic or numeric")
 
             if name_cols.isalpha():
-                clms = [chr(i) for i in range(ord(name_cols),
-                                              ord(name_cols) + cols)]
+                # Create electrode names A-Z, AA-AZ, BA-BZ, etc.:
+                n_times = int(np.ceil(cols / 26))
+                clms = [''.join(chars) for r in range(1, n_times + 1)
+                        for chars in product(ascii_uppercase, repeat=r)][:cols]
             elif name_cols.isdigit():
-                clms = [str(i) for i in range(int(name_cols),
-                                              cols + int(name_cols))]
+                clms = [str(i) for i in range(1, cols + 1)]
             else:
                 raise ValueError("Columns must be alphabetic or numeric.")
 
@@ -631,7 +637,6 @@ class ElectrodeGrid(ElectrodeArray):
                             y_arr[row][col] = y_arr_upshift[row][col]
                 x_arr = x_arr_upshift
                 y_arr = np.array(y_arr)
-
         else:
             raise NotImplementedError
 
@@ -657,7 +662,6 @@ class ElectrodeGrid(ElectrodeArray):
             else:
                 # If `r` is a scalar, choose same radius for all electrodes:
                 r_arr = np.ones(n_elecs, dtype=float) * kwargs['r']
-
             # Create a grid of DiskElectrode objects:
             for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
                 self.add_electrode(name, DiskElectrode(x, y, z, r))

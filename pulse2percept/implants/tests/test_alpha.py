@@ -42,7 +42,7 @@ def test_AlphaIMS(ztype, x, y, r):
     x_center = alpha['A15'].x + (alpha['AM25'].x - alpha['A15'].x) / 2
     npt.assert_almost_equal(x_center, x)
 
-    # Check width of sqaure electrodes
+    # Check width of square electrodes
     for e in ['A1', 'B2', 'C3']:
         npt.assert_equal(alpha[e].a, 50)
 
