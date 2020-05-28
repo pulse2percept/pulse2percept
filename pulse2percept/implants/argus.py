@@ -65,8 +65,8 @@ class ArgusI(ProsthesisSystem):
 
     >>> from pulse2percept.implants import ArgusI
     >>> ArgusI(x=0, y=0, z=100, rot=0)  # doctest: +NORMALIZE_WHITESPACE
-    ArgusI(earray=ElectrodeGrid(shape=(4, 4), type='rect'),
-           eye='RE', shape=(4, 4), stim=None)
+    ArgusI(earray=ElectrodeGrid, eye='RE', shape=(4, 4),
+           stim=None)
 
     Get access to electrode 'B1', either by name or by row/column index:
 
@@ -191,8 +191,8 @@ class ArgusII(ProsthesisSystem):
 
     >>> from pulse2percept.implants import ArgusII
     >>> ArgusII(x=0, y=0, z=100, rot=0)  # doctest: +NORMALIZE_WHITESPACE
-    ArgusII(earray=ElectrodeGrid(shape=(6, 10), type='rect'),
-            eye='RE', shape=(6, 10), stim=None)
+    ArgusII(earray=ElectrodeGrid, eye='RE', shape=(6, 10),
+            stim=None)
 
     Get access to electrode 'E7', either by name or by row/column index:
 
