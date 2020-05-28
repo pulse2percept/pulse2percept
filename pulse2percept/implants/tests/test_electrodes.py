@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 import numpy.testing as npt
-from matplotlib.patches import Circle, Rectangle, RegularPolygon
+from matplotlib.patches import Circle
 
 from pulse2percept.implants import (Electrode, DiskElectrode, PointSource,
                                     SquareElectrode, HexElectrode)
