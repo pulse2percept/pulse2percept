@@ -155,6 +155,19 @@ class ElectrodeArray(PrettyPrint):
         return self.electrodes.items()
 
 
+def _get_alphabetic_names(n_electrodes):
+    """Create alphabetic electrode names: A-Z, AA-AZ, BA-BZ, etc. """
+    n_times = int(np.ceil(n_electrodes / 26))
+    names = [''.join(chars) for r in range(1, n_times + 1)
+             for chars in product(ascii_uppercase, repeat=r)]
+    return names[:n_electrodes]
+
+
+def _get_numeric_names(n_electrodes):
+    """Create numeric electrode names: 1-n"""
+    return [str(i) for i in range(1, n_electrodes + 1)]
+
+
 class ElectrodeGrid(ElectrodeArray):
     """2D grid of electrodes
 
@@ -285,8 +298,7 @@ class ElectrodeGrid(ElectrodeArray):
         # Instantiate empty collection of electrodes. This dictionary will be
         # populated in a private method ``_set_egrid``:
         self.electrodes = OrderedDict()
-        self._make_grid(spacing, x, y, z, rot, names,
-                        orientation, etype, **kwargs)
+        self._make_grid(x, y, z, rot, names, orientation, etype, **kwargs)
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -333,14 +345,13 @@ class ElectrodeGrid(ElectrodeArray):
                     # Index not found:
                     return None
 
-    def _make_grid(self, spacing, x, y, z, rot, names, orientation, etype,
-                   **kwargs):
+    def _make_grid(self, x, y, z, rot, names, orientation, etype, **kwargs):
         """Private method to build the electrode grid"""
         n_elecs = np.prod(self.shape)
         rows, cols = self.shape
 
         # The user did not specify a unique naming scheme:
-        if len(names) == 2:
+        if len(names) == 2 and np.prod(self.shape) != 2:
             name_rows, name_cols = names
             if not isinstance(name_rows, str):
                 raise TypeError("Row name must be a string, not "
@@ -348,28 +359,20 @@ class ElectrodeGrid(ElectrodeArray):
             if not isinstance(name_cols, str):
                 raise TypeError("Column name must be a string, not "
                                 "%s." % type(name_cols))
-
+            # Row names:
             if name_rows.isalpha():
-                # Create electrode names A-Z, AA-AZ, BA-BZ, etc.:
-                n_times = int(np.ceil(rows / 26))
-                rws = [''.join(chars) for r in range(1, n_times + 1)
-                       for chars in product(ascii_uppercase, repeat=r)][:rows]
+                rws = _get_alphabetic_names(rows)
             elif name_rows.isdigit():
-                # Create electrode names 1-n:
-                rws = [str(i) for i in range(1, rows + 1)]
+                rws = _get_numeric_names(rows)
             else:
                 raise ValueError("Row name must be alphabetic or numeric.")
-
+            # Column names:
             if name_cols.isalpha():
-                # Create electrode names A-Z, AA-AZ, BA-BZ, etc.:
-                n_times = int(np.ceil(cols / 26))
-                clms = [''.join(chars) for r in range(1, n_times + 1)
-                        for chars in product(ascii_uppercase, repeat=r)][:cols]
+                clms = _get_alphabetic_names(cols)
             elif name_cols.isdigit():
-                clms = [str(i) for i in range(1, cols + 1)]
+                clms = _get_numeric_names(cols)
             else:
                 raise ValueError("Column name must be alphabetic or numeric.")
-
             # Letters before digits:
             if name_cols.isalpha() and not name_rows.isalpha():
                 names = [clms[j] + rws[i] for i in range(len(rws))
@@ -377,11 +380,6 @@ class ElectrodeGrid(ElectrodeArray):
             else:
                 names = [rws[i] + clms[j] for i in range(len(rws))
                          for j in range(len(clms))]
-        else:
-            if len(names) != n_elecs:
-                raise ValueError("If `names` specifies more than row/column "
-                                 "names, it must have %d entries, not "
-                                 "%d)." % (n_elecs, len(names)))
 
         if isinstance(z, (list, np.ndarray)):
             # Specify different height for every electrode in a list:
@@ -393,7 +391,7 @@ class ElectrodeGrid(ElectrodeArray):
             # If `z` is a scalar, choose same height for all electrodes:
             z_arr = np.ones(n_elecs, dtype=float) * z
 
-        spc = spacing
+        spc = self.spacing
         if self.type.lower() == 'rect':
             # Rectangular grid from x, y coordinates:
             # For example, cols=3 with spacing=100 should give: [-100, 0, 100]
@@ -478,13 +476,7 @@ class ElectrodeGrid(ElectrodeArray):
             # Create a grid of DiskElectrode objects:
             for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
                 self.add_electrode(name, DiskElectrode(x, y, z, r))
-        elif issubclass(etype, SquareElectrode):
-            # Create the grid:
+        else:
+            # Pass keyword arguments to the electrode constructor:
             for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
                 self.add_electrode(name, etype(x, y, z, **kwargs))
-        elif issubclass(etype, PointSource):
-            # Create a grid of PointSource objects:
-            for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
-                self.add_electrode(name, PointSource(x, y, z))
-        else:
-            raise NotImplementedError

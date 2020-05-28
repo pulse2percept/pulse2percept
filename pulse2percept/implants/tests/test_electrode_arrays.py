@@ -191,6 +191,9 @@ def test_ElectrodeGrid(gtype):
     with pytest.raises(ValueError):
         ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
                       radius=[2, 13])
+    # Only DiskElectrode needs r, not PointSource:
+    with pytest.raises(TypeError):
+        ElectrodeGrid(gshape, spacing, type=gtype, r=10)
 
     # Must pass in radius `r` for grid of DiskElectrode objects:
     gshape = (4, 5)
@@ -268,18 +271,25 @@ def test_ElectrodeGrid(gtype):
     # I think we did this somewhere in the old Argus code
 
     # TODO test rotation, making sure positive angles rotate CCW
-    egrid1 = ElectrodeGrid((2, 2), spacing, type=gtype, r=radius)
-    egrid2 = ElectrodeGrid((2, 2), spacing, rot=np.deg2rad(10), type=gtype,
+    egrid1 = ElectrodeGrid((2, 2), spacing, type=gtype, etype=DiskElectrode,
                            r=radius)
+    egrid2 = ElectrodeGrid((2, 2), spacing, rot=np.deg2rad(10), type=gtype,
+                           etype=DiskElectrode, r=radius)
     npt.assert_equal(egrid1["A1"].x < egrid2["A1"].x, True)
     npt.assert_equal(egrid1["A1"].y > egrid2["A1"].y, True)
     npt.assert_equal(egrid1["B2"].x > egrid2["B2"].x, True)
     npt.assert_equal(egrid1["B2"].y < egrid2["B2"].y, True)
 
     # Smallest possible grid:
-    egrid = ElectrodeGrid((1, 1), spacing, type=gtype, r=radius)
+    egrid = ElectrodeGrid((1, 1), spacing, type=gtype, etype=DiskElectrode,
+                          r=radius)
     npt.assert_equal(egrid.shape, (1, 1))
     npt.assert_equal(egrid.n_electrodes, 1)
+
+    # Grid has same size as 'names':
+    egrid = ElectrodeGrid((1, 2), spacing, type=gtype, names=('C1', '4'))
+    npt.assert_equal(egrid[0, 0], egrid['C1'])
+    npt.assert_equal(egrid[0, 1], egrid['4'])
 
     # Can't have a zero-sized grid:
     with pytest.raises(ValueError):
