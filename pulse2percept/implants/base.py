@@ -665,6 +665,10 @@ class ElectrodeGrid(ElectrodeArray):
             # Create a grid of DiskElectrode objects:
             for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
                 self.add_electrode(name, DiskElectrode(x, y, z, r))
+        elif issubclass(etype, SquareElectrode):
+            # Create the grid:
+            for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
+                self.add_electrode(name, etype(x, y, z, **kwargs))
         elif issubclass(etype, PointSource):
             # Create a grid of PointSource objects:
             for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
