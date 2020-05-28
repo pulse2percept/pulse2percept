@@ -235,12 +235,12 @@ def test_ElectrodeGrid(gtype):
         ElectrodeGrid((2, 3), 10, type=gtype, etype=ElectrodeArray)
     with pytest.raises(TypeError):
         ElectrodeGrid((2, 3), 10, type=gtype, etype="foo")
-    
+
     # Must pass in valid Orientation value:
     with pytest.raises(ValueError):
-        ElectrodeGrid((2,3), 10, type=gtype, orientation="foo")
+        ElectrodeGrid((2, 3), 10, type=gtype, orientation="foo")
     with pytest.raises(TypeError):
-        ElectrodeGrid((2,3),10, type=gtype, orientation=False)
+        ElectrodeGrid((2, 3), 10, type=gtype, orientation=False)
 
     # Must pass in radius `r` for grid of DiskElectrode objects:
     gshape = (4, 5)
@@ -286,7 +286,7 @@ def test_ElectrodeGrid(gtype):
     grid = ElectrodeGrid(gshape, spacing, type=gtype, orientation='vertical',
                          etype=DiskElectrode, r=30)
     npt.assert_almost_equal(np.sqrt((grid['B1'].x - grid['B2'].x) ** 2 +
-                                (grid['B1'].y - grid['B2'].y) ** 2),
+                                    (grid['B1'].y - grid['B2'].y) ** 2),
                             spacing)
     npt.assert_almost_equal(np.sqrt((grid['A1'].x - grid['B1'].x) ** 2 +
                                     (grid['A1'].y - grid['B1'].y) ** 2),
@@ -381,13 +381,13 @@ def test_ElectrodeGrid(gtype):
     npt.assert_equal([e for e in egrid.keys()],
                      ['AA', 'AB', 'AC', 'BA', 'BB', 'BC'])
 
-    # rows and columns start at values other than A or 1
+    # Still starts at A:
     egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('B', '1'))
     npt.assert_equal([e for e in egrid.keys()],
-                     ['B1', 'B2', 'B3', 'C1', 'C2', 'C3'])
+                     ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
     egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('A', '2'))
     npt.assert_equal([e for e in egrid.keys()],
-                     ['A2', 'A3', 'A4', 'B2', 'B3', 'B4'])
+                     ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
 
     # test unique names
     egrid = ElectrodeGrid(gshape, spacing, type=gtype,
@@ -410,14 +410,14 @@ def test_ElectrodeGrid_get_params(gtype):
 
 @pytest.mark.parametrize('gtype', ('rect', 'hex'))
 def test_ElectrodeGrid___get_item__(gtype):
-    grid = ElectrodeGrid((2, 4), 20, names=('C', '3'), type=gtype,
+    grid = ElectrodeGrid((2, 4), 20, names=('A', '1'), type=gtype,
                          etype=DiskElectrode, r=20)
-    npt.assert_equal(grid[0], grid['C3'])
-    npt.assert_equal(grid[0, 0], grid['C3'])
-    npt.assert_equal(grid[1], grid['C4'])
-    npt.assert_equal(grid[0, 1], grid['C4'])
-    npt.assert_equal(grid[['C3', 1, (0, 2)]],
-                     [grid['C3'], grid['C4'], grid['C5']])
+    npt.assert_equal(grid[0], grid['A1'])
+    npt.assert_equal(grid[0, 0], grid['A1'])
+    npt.assert_equal(grid[1], grid['A2'])
+    npt.assert_equal(grid[0, 1], grid['A2'])
+    npt.assert_equal(grid[['A1', 1, (0, 2)]],
+                     [grid['A1'], grid['A2'], grid['A3']])
 
 
 def test_ProsthesisSystem():
