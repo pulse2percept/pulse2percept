@@ -17,6 +17,8 @@ from .electrode_arrays import ElectrodeGrid
 class PhotovoltaicPixel(HexElectrode):
     """Photovoltaic pixel
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     x/y/z : double
@@ -79,6 +81,8 @@ class PhotovoltaicPixel(HexElectrode):
 
 class PRIMA(ProsthesisSystem):
     """Create a PRIMA-100 array on the retina
+
+    .. versionadded:: 0.7
 
     This class creates a PRIMA array with 378 photovoltaic pixels (each
     100um in diameter) as used in the clinical trial [Palanker2020]_, and
@@ -166,6 +170,8 @@ class PRIMA(ProsthesisSystem):
 class PRIMA75(ProsthesisSystem):
     """Create a PRIMA-75 array on the retina
 
+    .. versionadded:: 0.7
+
     This class creates a PRIMA array with 142 photovoltaic pixels (each 75um
     in diameter) as described in [Lorach2015]_, and places it in the subretinal
     space, such that that the center of the array is located at 3D location
@@ -249,6 +255,8 @@ class PRIMA75(ProsthesisSystem):
 
 class PRIMA55(ProsthesisSystem):
     """Create a PRIMA-55 array on the retina
+
+    .. versionadded:: 0.7
 
     This class creates a PRIMA array with 273 photovoltaic pixels (each 55um
     in diameter) as described in [Lorach2015]_, and places it in the subretinal
@@ -344,6 +352,8 @@ class PRIMA55(ProsthesisSystem):
 
 class PRIMA40(ProsthesisSystem):
     """Create a PRIMA-40 array on the retina
+
+    .. versionadded:: 0.7
 
     This class creates a PRIMA array with 532 photovoltaic pixels (each 55um
     in diameter) as described in [Lorach2015]_, and places it in the subretinal

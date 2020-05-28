@@ -210,6 +210,8 @@ class DiskElectrode(Electrode):
 class SquareElectrode(Electrode):
     """Photovoltaic pixel
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     x/y/z : double
@@ -262,6 +264,8 @@ class SquareElectrode(Electrode):
 
 class HexElectrode(Electrode):
     """Hexagonal electrode
+
+    .. versionadded:: 0.7
 
     Parameters
     ----------

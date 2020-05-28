@@ -2,6 +2,7 @@ import numpy as np
 import collections as coll
 import pytest
 import numpy.testing as npt
+from matplotlib.patches import Circle
 
 from pulse2percept.implants import (PointSource, ElectrodeArray,
                                     ProsthesisSystem)
@@ -31,6 +32,11 @@ def test_ProsthesisSystem():
     npt.assert_equal(implant.stim.shape, (1, 1))
     npt.assert_equal(implant.stim.time, None)
     npt.assert_equal(implant.stim.electrodes, [0])
+
+    ax = implant.plot()
+    npt.assert_equal(len(ax.texts), 0)
+    npt.assert_equal(len(ax.patches), 1)
+    npt.assert_equal(isinstance(ax.patches[0], Circle), True)
 
     with pytest.raises(ValueError):
         # Wrong number of stimuli

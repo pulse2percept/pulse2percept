@@ -22,6 +22,7 @@ def test_ElectrodeArray():
     npt.assert_equal(earray['A01'], None)
     with pytest.raises(TypeError):
         earray[PointSource(0, 0, 0)]
+    ElectrodeArray([])
 
     # A single electrode:
     earray = ElectrodeArray(PointSource(0, 1, 2))
@@ -157,7 +158,7 @@ def test_ElectrodeGrid(gtype):
     with pytest.raises(ValueError):
         ElectrodeGrid([1, 2, 3], 10)
     with pytest.raises(TypeError):
-        ElectrodeGrid("(1, 2)")
+        ElectrodeGrid({'1': 2})
 
     # Must pass in valid Electrode type:
     with pytest.raises(TypeError):
@@ -190,7 +191,7 @@ def test_ElectrodeGrid(gtype):
     # Number of radii must match number of electrodes
     with pytest.raises(ValueError):
         ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
-                      radius=[2, 13])
+                      radius=[2, 13, 14])
     # Only DiskElectrode needs r, not PointSource:
     with pytest.raises(TypeError):
         ElectrodeGrid(gshape, spacing, type=gtype, r=10)
@@ -306,6 +307,18 @@ def test_ElectrodeGrid(gtype):
         egrid = ElectrodeGrid(gshape, spacing, type=gtype, names={1})
     with pytest.raises(TypeError):
         egrid = ElectrodeGrid(gshape, spacing, type=gtype, names={})
+    with pytest.raises(TypeError):
+        ElectrodeGrid(gshape, spacing, names={'1': 2})
+    with pytest.raises(ValueError):
+        ElectrodeGrid(gshape, spacing, names=('A', '1', 'A'))
+    with pytest.raises(TypeError):
+        ElectrodeGrid(gshape, spacing, names=(1, 'A'))
+    with pytest.raises(TypeError):
+        ElectrodeGrid(gshape, spacing, names=('A', 1))
+    with pytest.raises(ValueError):
+        ElectrodeGrid(gshape, spacing, names=('A', '~'))
+    with pytest.raises(ValueError):
+        ElectrodeGrid(gshape, spacing, names=('~', 'A'))
 
     # Test all naming conventions:
     gshape = (2, 3)
@@ -341,19 +354,6 @@ def test_ElectrodeGrid(gtype):
                           names=['53', '18', '00', '81', '11', '12'])
     npt.assert_equal([e for e in egrid.keys()],
                      ['53', '18', '00', '81', '11', '12'])
-
-    with pytest.raises(TypeError):
-        ElectrodeGrid(gshape, spacing, names='a')
-    with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, names=('A', '1', 'A'))
-    with pytest.raises(TypeError):
-        ElectrodeGrid(gshape, spacing, names=(1, 'A'))
-    with pytest.raises(TypeError):
-        ElectrodeGrid(gshape, spacing, names=('A', 1))
-    with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, names=('A', '~'))
-    with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, names=('~', 'A'))
 
     # Slots:
     npt.assert_equal(hasattr(egrid, '__slots__'), True)

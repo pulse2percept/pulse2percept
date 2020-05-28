@@ -1,4 +1,5 @@
 """`ProsthesisSystem`"""
+import numpy as np
 from copy import deepcopy
 import matplotlib.pyplot as plt
 
@@ -119,9 +120,9 @@ class ProsthesisSystem(PrettyPrint):
         ymin, ymax = np.min(ypos), np.max(ypos)
         if pad is None:
             pad = 100 * np.ceil((xmax - xmin) / 1000)
-            pad = np.maximum(pad, 100 * np.ceil((xmax - xmin) / 1000))
+            pad = np.max([100, pad, 100 * np.ceil((xmax - xmin) / 1000)])
         if step is None:
-            step = 2 * pad
+            step = np.maximum(100, 2 * pad)
         xlim, ylim = None, None
         if xlim is None:
             xlim = (step * np.floor((xmin - pad) / step),

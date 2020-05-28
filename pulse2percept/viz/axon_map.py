@@ -12,7 +12,7 @@ import logging
 from copy import deepcopy
 
 from ..implants import ProsthesisSystem
-from ..utils import parfor
+from ..utils import parfor, deprecated
 from ..models import AxonMapSpatial
 
 
@@ -134,6 +134,7 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
     return ax
 
 
+@deprecated(deprecated_version='0.7', removed_version='0.8')
 def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
                              ax=None, upside_down=False,
                              annotate_implant=False, annotate_quadrants=True,

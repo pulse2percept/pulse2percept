@@ -1,8 +1,29 @@
 import numpy as np
 import pytest
 import numpy.testing as npt
+from matplotlib.patches import Circle, RegularPolygon
 
-from pulse2percept.implants import PRIMA, PRIMA75, PRIMA55, PRIMA40
+from pulse2percept.implants import (PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55,
+                                    PRIMA40)
+
+
+def test_PhotovoltaicPixel():
+    electrode = PhotovoltaicPixel(0, 1, 2, 3, 4)
+    npt.assert_almost_equal(electrode.x, 0)
+    npt.assert_almost_equal(electrode.y, 1)
+    npt.assert_almost_equal(electrode.z, 2)
+    npt.assert_almost_equal(electrode.r, 3)
+    npt.assert_almost_equal(electrode.a, 4)
+    # Slots:
+    npt.assert_equal(hasattr(electrode, '__slots__'), True)
+    npt.assert_equal(hasattr(electrode, '__dict__'), False)
+    # Plots:
+    ax = electrode.plot()
+    npt.assert_equal(len(ax.texts), 0)
+    npt.assert_equal(len(ax.patches), 2)
+    npt.assert_equal(isinstance(ax.patches[0], RegularPolygon), True)
+    npt.assert_equal(isinstance(ax.patches[1], Circle), True)
+    PhotovoltaicPixel(0, 1, 2, 3, 4)
 
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))

@@ -7,7 +7,7 @@ Release Notes
 .. important::
 
     pulse2percept 0.4.3 is the last release to support Python 2.7 and 3.4.
-    pulse2percept 0.5+ require **Python 3.5 or newer**.
+    pulse2percept 0.5+ requires **Python 3.5 or newer**.
 
 v0.7.0 (2020, planned)
 ----------------------
@@ -15,11 +15,49 @@ v0.7.0 (2020, planned)
 Highlights
 ~~~~~~~~~~
 
+*  New implants: :py:class:`~pulse2percept.implants.PRIMA`, 
+   :py:class:`~pulse2percept.implants.PRIMA75`,
+   :py:class:`~pulse2percept.implants.PRIMA55`, 
+   :py:class:`~pulse2percept.implants.PRIMA40` (:pull:`188`)
+*  New electrodes: :py:class:`~pulse2percept.implants.SquareElectrode`,
+   :py:class:`~pulse2percept.implants.HexElectrode`,
+   :py:class:`~pulse2percept.implants.PhotovoltaicPixel` (:pull:`188`, 
+   :pull:`193`)
+
 New features
 ~~~~~~~~~~~~
 
+*  Electrodes, electrode arrays, and prosthesis systems now have their own
+   plot method (:pull:`188`, :pull:`195`)
+
 API changes
 ~~~~~~~~~~~
+
+Backward-incompatible changes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+*  ``TimeSeries`` has been removed. Please use
+   :py:class:`~pulse2percept.stimuli.Stimulus` instead
+*  ``LegacyMonophasicPulse``, ``LegacyBiphasicPulse`` and ``LegacyPulseTrain``
+   have been removed. Use their equivalents without the "Legacy" prefix.
+
+Deprecations
+^^^^^^^^^^^^
+
+*  ``plot_implant_on_axon_map``: Use
+   :py:meth:`~pulse2percept.implants.ProsthesisSystem.plot` on top of
+   :py:func:`~pulse2percept.viz.plot_axon_map`
+
+Bug fixes
+~~~~~~~~~
+
+*  :py:class:`~pulse2percept.implants.AlphaIMS`: Implant now uses
+   :py:class:`~pulse2percept.implants.SquareElectrode` objects and has exactly
+   1500 electrodes (:pull:`193`)
+*  :py:class:`~pulse2percept.implants.ElectrodeGrid`: Alphabetic names now
+   follow A-Z, AA-AZ, BA-BZ, etc. (:pull:`192`)
+*  :py:class:`~pulse2percept.implants.BVA24`: Setting a stimulus in the
+   constructor now has the desired effect (:pull:`186`)
 
 v0.6.0 (2020-05-05)
 ----------------------
