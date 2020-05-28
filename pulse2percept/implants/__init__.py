@@ -5,6 +5,8 @@
     : toctree: _api
 
     base
+    electrodes
+    electrode_arrays
     argus
     alpha
     bva
@@ -14,13 +16,9 @@
 
     *  :ref:`Basic Concepts > Visual Prostheses <topics-implants>`
 """
-from .base import (DiskElectrode,
-                   Electrode,
-                   ElectrodeArray,
-                   ElectrodeGrid,
-                   PointSource,
-                   ProsthesisSystem,
-                   SquareElectrode)
+from .base import ProsthesisSystem
+from .electrodes import Electrode, PointSource, DiskElectrode, SquareElectrode
+from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from .argus import ArgusI, ArgusII
 from .alpha import AlphaIMS, AlphaAMS
 from .bva import BVA24

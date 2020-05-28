@@ -1,7 +1,9 @@
 """`BVA24`"""
 import numpy as np
-from pulse2percept.implants.base import (ProsthesisSystem, ElectrodeArray,
-                                         DiskElectrode)
+
+from .base import ProsthesisSystem
+from .electrodes import DiskElectrode
+from .electrode_arrays import ElectrodeArray
 
 
 class BVA24(ProsthesisSystem):

@@ -1,8 +1,10 @@
 """`AlphaIMS`, `AlphaAMS`"""
 import numpy as np
 from collections import OrderedDict
-from .base import (SquareElectrode, DiskElectrode, ElectrodeArray,
-                   ElectrodeGrid, ProsthesisSystem)
+
+from .base import ProsthesisSystem
+from .electrodes import SquareElectrode, DiskElectrode
+from .electrode_arrays import ElectrodeGrid
 
 
 class AlphaIMS(ProsthesisSystem):
