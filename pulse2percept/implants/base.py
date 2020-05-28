@@ -157,6 +157,59 @@ class DiskElectrode(Electrode):
             return 2.0 * v0 / np.pi * np.arcsin(numer / denom)
 
 
+class SquareElectrode(Electrode):
+    """Photovoltaic pixel
+
+    Parameters
+    ----------
+    x/y/z : double
+        3D location that is the center of the disk electrode
+    a : double
+        Side length of the square
+    """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('a')
+
+    def __init__(self, x, y, z, a):
+        super(SquareElectrode, self).__init__(x, y, z)
+        if isinstance(a, (Sequence, np.ndarray)):
+            raise TypeError("Side length must be a scalar.")
+        if a <= 0:
+            raise ValueError("Side length must be > 0, not %f." % a)
+        self.a = a
+
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
+        params = super()._pprint_params()
+        params.update({'a': self.a})
+        return params
+
+    def electric_potential(self, x, y, z, v0):
+        raise NotImplementedError
+
+    def plot(self, ax=None):
+        """Plot
+
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
+            A Matplotlib axes object. If None given, a new one will be created.
+
+        Returns
+        -------
+        ax : ``matplotlib.axes.Axes``
+            Returns the axis object of the plot
+
+        """
+        if ax is None:
+            _, ax = plt.subplots(figsize=(15, 8))
+        # Square electrode:
+        square = Rectangle((self.x, self.y), self.a, self.a, angle=0,
+                           fc='k', alpha=0.2, ec='k', zorder=1)
+        ax.add_patch(square)
+        return ax
+
+
 class ElectrodeArray(PrettyPrint):
     """Electrode array
 
@@ -325,9 +378,9 @@ class ElectrodeGrid(ElectrodeArray):
         If 'A', rows or columns will be labeled alphabetically: A-Z, AA-AZ,
         BA-BZ, CA-CZ, etc.
         If '1', rows or columns will be labeled numerically.
-        Columns and rows may only be strings and integers.
+        Letters will always precede numbers in electrode names.
         For example ('1', 'A') will number rows numerically and columns
-        alphabetically.
+        alphabetically; first row: 'A1', 'B1', 'C1', NOT '1A', '1B', '1C'.
     etype : :py:class:`~pulse2percept.implants.Electrode`, optional
         A valid Electrode class. By default,
         :py:class:`~pulse2percept.implants.PointSource` is used.
@@ -419,6 +472,14 @@ class ElectrodeGrid(ElectrodeArray):
         if issubclass(etype, DiskElectrode):
             if 'r' not in kwargs.keys():
                 raise ValueError("A DiskElectrode needs a radius ``r``.")
+        if not isinstance(names, (tuple, list, np.ndarray)):
+            raise TypeError("'names' must be a tuple or list, not "
+                            "%s." % type(names))
+        else:
+            if len(names) != 2 and len(names) != np.prod(shape):
+                raise ValueError("'names' must either have two entries for "
+                                 "rows/columns or %d entries, not "
+                                 "%d" % (np.prod(shape), len(names)))
 
         self.shape = shape
         self.type = type
@@ -483,6 +544,13 @@ class ElectrodeGrid(ElectrodeArray):
         # The user did not specify a unique naming scheme:
         if len(names) == 2:
             name_rows, name_cols = names
+            if not isinstance(name_rows, str):
+                raise TypeError("Row name must be a string, not "
+                                "%s." % type(name_rows))
+            if not isinstance(name_cols, str):
+                raise TypeError("Column name must be a string, not "
+                                "%s." % type(name_cols))
+
             if name_rows.isalpha():
                 # Create electrode names A-Z, AA-AZ, BA-BZ, etc.:
                 n_times = int(np.ceil(rows / 26))
@@ -492,7 +560,7 @@ class ElectrodeGrid(ElectrodeArray):
                 # Create electrode names 1-n:
                 rws = [str(i) for i in range(1, rows + 1)]
             else:
-                raise ValueError("rows must be alphabetic or numeric")
+                raise ValueError("Row name must be alphabetic or numeric.")
 
             if name_cols.isalpha():
                 # Create electrode names A-Z, AA-AZ, BA-BZ, etc.:
@@ -502,9 +570,9 @@ class ElectrodeGrid(ElectrodeArray):
             elif name_cols.isdigit():
                 clms = [str(i) for i in range(1, cols + 1)]
             else:
-                raise ValueError("Columns must be alphabetic or numeric.")
+                raise ValueError("Column name must be alphabetic or numeric.")
 
-            # facilitating Argus I naming scheme
+            # Letters before digits:
             if name_cols.isalpha() and not name_rows.isalpha():
                 names = [clms[j] + rws[i] for i in range(len(rws))
                          for j in range(len(clms))]
@@ -612,6 +680,10 @@ class ElectrodeGrid(ElectrodeArray):
             # Create a grid of DiskElectrode objects:
             for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
                 self.add_electrode(name, DiskElectrode(x, y, z, r))
+        elif issubclass(etype, SquareElectrode):
+            # Create the grid:
+            for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
+                self.add_electrode(name, etype(x, y, z, **kwargs))
         elif issubclass(etype, PointSource):
             # Create a grid of PointSource objects:
             for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
@@ -787,7 +859,10 @@ class ProsthesisSystem(PrettyPrint):
     @eye.setter
     def eye(self, eye):
         """Eye setter (called upon `self.eye = eye`)"""
-        if eye not in ['LE', 'RE']:
+        if not isinstance(eye, str):
+            raise TypeError("'eye' must be a string, not %s." % type(eye))
+        eye = eye.upper()
+        if eye != 'LE' and eye != 'RE':
             raise ValueError("'eye' must be either 'LE' or 'RE', not "
                              "%s." % eye)
         self._eye = eye
