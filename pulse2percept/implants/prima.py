@@ -10,7 +10,10 @@ from matplotlib.patches import Circle, RegularPolygon
 
 import numpy as np
 from collections import OrderedDict
-from .base import ElectrodeGrid, ProsthesisSystem, DiskElectrode
+
+from .base import ProsthesisSystem
+from .electrodes import DiskElectrode
+from .electrode_arrays import ElectrodeGrid
 
 
 class PRIMA(ProsthesisSystem):
@@ -46,9 +49,9 @@ class PRIMA(ProsthesisSystem):
         # of each row is 19:
         self.shape = (19, 22)
         self.eye = eye
-        elec_radius = 10 # um
+        elec_radius = 10  # um
         e_spacing = 75  # um
-        
+
         # The user might provide a list of z values for each of the
         # 378 resulting electrodes, not for the 22x19 initial ones.
         # In this case, don't pass it to ElectrodeGrid, but overwrite
@@ -59,7 +62,7 @@ class PRIMA(ProsthesisSystem):
                                     z=zarr, rot=rot, type='hex',
                                     orientation='vertical',
                                     etype=DiskElectrode, r=elec_radius)
-        
+
         # Remove extra electrodes to fit the actual implant:
         extra_elecs = ['A1', 'A2', 'A3', 'A4', 'A14', 'A16', 'A17',
                        'A18', 'A19', 'A20', 'A21', 'A22', 'B1',
@@ -69,16 +72,17 @@ class PRIMA(ProsthesisSystem):
                        'S2', 'S3', 'S5', 'S19', 'S20', 'S21', 'S22']
         for elec in extra_elecs:
             self.earray.remove_electrode(elec)
-        
+
         # Adjust the z values:
         if overwrite_z:
             for elec, z_elec in zip(self.earray.values(), z):
                 elec.z = z_elec
-        
+
         # Rename all electrodes:
         idx_col = 0
         rows, cols = self.shape
-        idx_update_row = chr(ord('A') + rows - 1) # start from the last electrode
+        # start from the last electrode
+        idx_update_row = chr(ord('A') + rows - 1)
         idx_prev_row = 'A'
         orig_earray = self.earray.electrodes
         new_earray = OrderedDict()
@@ -92,14 +96,14 @@ class PRIMA(ProsthesisSystem):
             new_name = idx_update_row + str(idx_col)
             new_earray.update({new_name: orig_earray[name]})
         self.earray.electrodes = new_earray
-        
+
         # Beware of race condition: Stim must be set last, because it requires
         # indexing into self.electrodes:
         self.stim = stim
-        
+
     def plot(self, ax=None, annotate=False, xlim=None, ylim=None):
         """Plot the PRIMA implant
-        
+
         Parameters
         ----------
         ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
@@ -124,22 +128,22 @@ class PRIMA(ProsthesisSystem):
 
         for name, el in self.items():
             # Hexagonal return electrode:
-            honeycomb = RegularPolygon((el.x, el.y), numVertices=6, radius=35, 
+            honeycomb = RegularPolygon((el.x, el.y), numVertices=6, radius=35,
                                        orientation=np.radians(30), facecolor='k',
                                        alpha=0.2, edgecolor='k', zorder=1)
             ax.add_patch(honeycomb)
 
             # Circular center electrode:
-            circle = Circle((el.x, el.y), radius=el.r, linewidth=0, color='k', 
+            circle = Circle((el.x, el.y), radius=el.r, linewidth=0, color='k',
                             alpha=0.5, zorder=2)
             ax.add_patch(circle)
 
             if annotate:
                 ax.text(el.x, el.y, name, ha='center', va='center',
-                                color='black', size='large',
-                                bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
-                                      'fc': (1, 1, 1, 0.7)},
-                                zorder=3)
+                        color='black', size='large',
+                        bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
+                              'fc': (1, 1, 1, 0.7)},
+                        zorder=3)
 
         # Determine xlim, ylim: Allow for some padding `pad` and round to the
         # nearest `step`:
@@ -147,11 +151,13 @@ class PRIMA(ProsthesisSystem):
         step = 200
         xlim, ylim = None, None
         if xlim is None:
-            xmin = np.floor(np.min([el.x - pad for el in self.values()]) / step)
+            xmin = np.floor(
+                np.min([el.x - pad for el in self.values()]) / step)
             xmax = np.ceil(np.max([el.x + pad for el in self.values()]) / step)
             xlim = (step * xmin, step * xmax)
         if ylim is None:
-            ymin = np.floor(np.min([el.y - pad for el in self.values()]) / step)
+            ymin = np.floor(
+                np.min([el.y - pad for el in self.values()]) / step)
             ymax = np.ceil(np.max([el.y + pad for el in self.values()]) / step)
             ylim = (step * ymin, step * ymax)
         ax.set_xlim(xlim)
