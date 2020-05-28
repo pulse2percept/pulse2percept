@@ -229,6 +229,8 @@ def test_ElectrodeGrid(gtype):
         ElectrodeGrid([0], 10)
     with pytest.raises(ValueError):
         ElectrodeGrid([1, 2, 3], 10)
+    with pytest.raises(TypeError):
+        ElectrodeGrid("(1, 2)")
 
     # Must pass in valid Electrode type:
     with pytest.raises(TypeError):
@@ -245,6 +247,14 @@ def test_ElectrodeGrid(gtype):
     # Must pass in radius `r` for grid of DiskElectrode objects:
     gshape = (4, 5)
     spacing = 100
+    grid = ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
+                         r=13)
+    for e in grid.values():
+        npt.assert_almost_equal(e.r, 13)
+    grid = ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
+                         r=np.arange(1, np.prod(gshape) + 1))
+    for i, e in enumerate(grid.values()):
+        npt.assert_almost_equal(e.r, i + 1)
     with pytest.raises(ValueError):
         ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode)
     with pytest.raises(ValueError):
@@ -394,6 +404,20 @@ def test_ElectrodeGrid(gtype):
                           names=['53', '18', '00', '81', '11', '12'])
     npt.assert_equal([e for e in egrid.keys()],
                      ['53', '18', '00', '81', '11', '12'])
+
+    with pytest.raises(TypeError):
+        ElectrodeGrid(gshape, spacing, names='a')
+    with pytest.raises(ValueError):
+        ElectrodeGrid(gshape, spacing, names=('A', '1', 'A'))
+    with pytest.raises(TypeError):
+        ElectrodeGrid(gshape, spacing, names=(1, 'A'))
+    with pytest.raises(TypeError):
+        ElectrodeGrid(gshape, spacing, names=('A', 1))
+    with pytest.raises(ValueError):
+        ElectrodeGrid(gshape, spacing, names=('A', '~'))
+    with pytest.raises(ValueError):
+        ElectrodeGrid(gshape, spacing, names=('~', 'A'))
+
     # Slots:
     npt.assert_equal(hasattr(egrid, '__slots__'), True)
     npt.assert_equal(hasattr(egrid, '__dict__'), False)
@@ -425,12 +449,16 @@ def test_ProsthesisSystem():
     with pytest.raises(ValueError):
         ProsthesisSystem(ElectrodeArray(PointSource(0, 0, 0)),
                          eye='both')
+    with pytest.raises(TypeError):
+        ProsthesisSystem(Stimulus)
 
     # Iterating over the electrode array:
     implant = ProsthesisSystem(PointSource(0, 0, 0))
     npt.assert_equal(implant.n_electrodes, 1)
     npt.assert_equal(implant[0], implant.earray[0])
     npt.assert_equal(implant.keys(), implant.earray.keys())
+    for i, e in zip(implant, implant.earray):
+        npt.assert_equal(i, e)
 
     # Set a stimulus after the constructor:
     npt.assert_equal(implant.stim, None)
