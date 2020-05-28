@@ -9,8 +9,9 @@ from collections import OrderedDict
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
 from collections.abc import Sequence
 
+from .base import ProsthesisSystem
 from .electrodes import HexElectrode
-from .base import ElectrodeGrid, ProsthesisSystem
+from .electrode_arrays import ElectrodeGrid
 
 
 class PhotovoltaicPixel(HexElectrode):

@@ -1,8 +1,10 @@
 """`AlphaIMS`, `AlphaAMS`"""
 import numpy as np
 from collections import OrderedDict
+
+from .base import ProsthesisSystem
 from .electrodes import SquareElectrode, DiskElectrode
-from .base import ElectrodeArray, ElectrodeGrid, ProsthesisSystem
+from .electrode_arrays import ElectrodeGrid
 
 
 class AlphaIMS(ProsthesisSystem):
@@ -83,11 +85,6 @@ class AlphaIMS(ProsthesisSystem):
                                     rot=rot, etype=SquareElectrode,
                                     a=elec_width)
 
-        # Set left/right eye:
-        if not isinstance(eye, str):
-            raise TypeError("'eye' must be a string, either 'LE' or 'RE'.")
-        if eye != 'LE' and eye != 'RE':
-            raise ValueError("'eye' must be either 'LE' or 'RE'.")
         # Unfortunately, in the left eye the labeling of columns is reversed...
         if eye == 'LE':
             # FIXME: Would be better to have more flexibility in the naming
@@ -212,10 +209,6 @@ class AlphaAMS(ProsthesisSystem):
         self.stim = stim
 
         # Set left/right eye:
-        if not isinstance(eye, str):
-            raise TypeError("'eye' must be a string, either 'LE' or 'RE'.")
-        if eye != 'LE' and eye != 'RE':
-            raise ValueError("'eye' must be either 'LE' or 'RE'.")
         # Unfortunately, in the left eye the labeling of columns is reversed...
         if eye == 'LE':
             # FIXME: Would be better to have more flexibility in the naming
