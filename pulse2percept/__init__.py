@@ -14,9 +14,20 @@ pulse2percept is organized into the following subpackages:
     viz
     utils
 """
+# This import is necessary to ensure consistency of the generated images across
+# platforms, and for the tests to run on Travis:
+# https://stackoverflow.com/questions/35403127/testing-matplotlib-based-plots-in-travis-ci
+# https://stackoverflow.com/questions/21784641/installation-issue-with-matplotlib-python
+# http://www.davidketcheson.info/2015/01/13/using_matplotlib_image_comparison.html
+from sys import platform
+import matplotlib as mpl
+if platform == "darwin":  # OS X
+    mpl.use('TkAgg')
+else:
+    mpl.use('agg')
+
 import logging
 from .version import __version__
-
 
 # Disable Jupyter Notebook handlers
 # https://github.com/ipython/ipython/issues/8282

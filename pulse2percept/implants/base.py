@@ -1,159 +1,22 @@
-"""`Electrode`, `PointSource`, `DiskElectrode`, `ElectrodeArray`,
-   `ElectrodeGrid`, `ProsthesisSystem`"""
+"""`Electrode`, `PointSource`, `DiskElectrode`, `PhotovoltaicPixel`,
+   `ElectrodeArray`, `ElectrodeGrid`, `ProsthesisSystem`"""
+
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, RegularPolygon
+
 import numpy as np
-from abc import ABCMeta, abstractmethod
 from copy import deepcopy
+from string import ascii_uppercase
+from itertools import product
 # Using or importing the ABCs from 'collections' instead of from
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
 from collections.abc import Sequence
 from collections import OrderedDict
 
-
+from .electrodes import (Electrode, PointSource, DiskElectrode,
+                         SquareElectrode, HexElectrode)
 from ..stimuli import Stimulus
 from ..utils import PrettyPrint
-
-
-class Electrode(PrettyPrint, metaclass=ABCMeta):
-    """Electrode
-
-    Abstract base class for all electrodes.
-    """
-    __slots__ = ('x', 'y', 'z')
-
-    def __init__(self, x, y, z):
-        if isinstance(x, (Sequence, np.ndarray)):
-            raise TypeError("x must be a scalar, not %s." % (type(x)))
-        if isinstance(y, (Sequence, np.ndarray)):
-            raise TypeError("y must be a scalar, not %s." % type(y))
-        if isinstance(z, (Sequence, np.ndarray)):
-            raise TypeError("z must be a scalar, not %s." % type(z))
-        self.x = x
-        self.y = y
-        self.z = z
-
-    def _pprint_params(self):
-        """Return dict of class attributes to pretty-print"""
-        return {'x': self.x, 'y': self.y, 'z': self.z}
-
-    @abstractmethod
-    def electric_potential(self, x, y, z, *args, **kwargs):
-        raise NotImplementedError
-
-
-class PointSource(Electrode):
-    """Point source"""
-    # Frozen class: User cannot add more class attributes
-    __slots__ = ()
-
-    def electric_potential(self, x, y, z, amp, sigma):
-        """Calculate electric potential at (x, y, z)
-
-        Parameters
-        ----------
-        x/y/z : double
-            3D location at which to evaluate the electric potential
-        amp : double
-            amplitude of the constant current pulse
-        sigma : double
-            resistivity of the extracellular solution
-
-        Returns
-        -------
-        pot : double
-            The electric potential at (x, y, z)
-
-        The electric potential :math:`V(r)` of a point source is given by:
-
-        .. math::
-
-            V(r) = \\frac{\\sigma I}{4 \\pi r},
-
-        where :math:`\\sigma` is the resistivity of the extracellular solution
-        (typically Ames medium, :math:`\\sigma = 110 \\Ohm cm`),
-        :math:`I` is the amplitude of the constant current pulse,
-        and :math:`r` is the distance from the stimulating electrode to the
-        point at which the voltage is being computed.
-
-        """
-        r = np.sqrt((x - self.x) ** 2 + (y - self.y) ** 2 + (z - self.z) ** 2)
-        if np.isclose(r, 0):
-            return sigma * amp
-        return sigma * amp / (4.0 * np.pi * r)
-
-
-class DiskElectrode(Electrode):
-    """Circular disk electrode
-
-    Parameters
-    ----------
-    x/y/z : double
-        3D location that is the center of the disk electrode
-    r : double
-        Disk radius in the x,y plane
-    """
-    # Frozen class: User cannot add more class attributes
-    __slots__ = ('r',)
-
-    def __init__(self, x, y, z, r):
-        super(DiskElectrode, self).__init__(x, y, z)
-        if isinstance(r, (Sequence, np.ndarray)):
-            raise TypeError("Electrode radius must be a scalar.")
-        if r <= 0:
-            raise ValueError("Electrode radius must be > 0, not %f." % r)
-        self.r = r
-
-    def _pprint_params(self):
-        """Return dict of class attributes to pretty-print"""
-        params = super()._pprint_params()
-        params.update({'r': self.r})
-        return params
-
-    def electric_potential(self, x, y, z, v0):
-        """Calculate electric potential at (x, y, z)
-
-        Parameters
-        ----------
-        x/y/z : double
-            3D location at which to evaluate the electric potential
-        v0 : double
-            The quasi-static disk potential relative to a ground electrode at
-            infinity
-
-        Returns
-        -------
-        pot : double
-            The electric potential at (x, y, z).
-
-
-        The electric potential :math:`V(r,z)` of a disk electrode is given by
-        [WileyWebster1982]_:
-
-        .. math::
-
-            V(r,z) = \\sin^{-1} \\bigg\\{ \\frac{2a}{\\sqrt{(r-a)^2 + z^2} + \\sqrt{(r+a)^2 + z^2}} \\bigg\\} \\times \\frac{2 V_0}{\\pi},
-
-        for :math:`z \\neq 0`, where :math:`r` and :math:`z` are the radial
-        and axial distances from the center of the disk, :math:`V_0` is the
-        disk potential, :math:`\\sigma` is the medium conductivity,
-        and :math:`a` is the disk radius.
-
-        """
-        radial_dist = np.sqrt((x - self.x) ** 2 + (y - self.y) ** 2)
-        axial_dist = z - self.z
-        if np.isclose(axial_dist, 0):
-            # Potential on the electrode surface (Eq. 9 in Wiley & Webster):
-            if radial_dist > self.r:
-                # Outside the electrode:
-                return 2.0 * v0 / np.pi * np.arcsin(self.r / radial_dist)
-            else:
-                # On the electrode:
-                return v0
-        else:
-            # Off the electrode surface (Eq. 10):
-            numer = 2 * self.r
-            denom = np.sqrt((radial_dist - self.r) ** 2 + axial_dist ** 2)
-            denom += np.sqrt((radial_dist + self.r) ** 2 + axial_dist ** 2)
-            return 2.0 * v0 / np.pi * np.arcsin(numer / denom)
 
 
 class ElectrodeArray(PrettyPrint):
@@ -321,7 +184,8 @@ class ElectrodeGrid(ElectrodeArray):
         rotation on the retinal surface)
     names: (name_rows, name_cols), each of which either 'A' or '1'
         Naming convention for rows and columns, respectively.
-        If 'A', rows or columns will be labeled alphabetically.
+        If 'A', rows or columns will be labeled alphabetically: A-Z, AA-AZ,
+        BA-BZ, CA-CZ, etc.
         If '1', rows or columns will be labeled numerically.
         Columns and rows may only be strings and integers.
         For example ('1', 'A') will number rows numerically and columns
@@ -481,22 +345,24 @@ class ElectrodeGrid(ElectrodeArray):
         # The user did not specify a unique naming scheme:
         if len(names) == 2:
             name_rows, name_cols = names
-            # Create electrode names, using either A-Z or 1-n:
             if name_rows.isalpha():
-                rws = [chr(i) for i in range(ord(name_rows),
-                                             ord(name_rows) + rows + 1)]
+                # Create electrode names A-Z, AA-AZ, BA-BZ, etc.:
+                n_times = int(np.ceil(rows / 26))
+                rws = [''.join(chars) for r in range(1, n_times + 1)
+                       for chars in product(ascii_uppercase, repeat=r)][:rows]
             elif name_rows.isdigit():
-                rws = [str(i) for i in range(
-                    int(name_rows), rows + int(name_rows))]
+                # Create electrode names 1-n:
+                rws = [str(i) for i in range(1, rows + 1)]
             else:
                 raise ValueError("rows must be alphabetic or numeric")
 
             if name_cols.isalpha():
-                clms = [chr(i) for i in range(ord(name_cols),
-                                              ord(name_cols) + cols)]
+                # Create electrode names A-Z, AA-AZ, BA-BZ, etc.:
+                n_times = int(np.ceil(cols / 26))
+                clms = [''.join(chars) for r in range(1, n_times + 1)
+                        for chars in product(ascii_uppercase, repeat=r)][:cols]
             elif name_cols.isdigit():
-                clms = [str(i) for i in range(int(name_cols),
-                                              cols + int(name_cols))]
+                clms = [str(i) for i in range(1, cols + 1)]
             else:
                 raise ValueError("Columns must be alphabetic or numeric.")
 
@@ -580,7 +446,6 @@ class ElectrodeGrid(ElectrodeArray):
                             y_arr[row][col] = y_arr_upshift[row][col]
                 x_arr = x_arr_upshift
                 y_arr = np.array(y_arr)
-
         else:
             raise NotImplementedError
 
@@ -606,10 +471,13 @@ class ElectrodeGrid(ElectrodeArray):
             else:
                 # If `r` is a scalar, choose same radius for all electrodes:
                 r_arr = np.ones(n_elecs, dtype=float) * kwargs['r']
-
             # Create a grid of DiskElectrode objects:
             for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
                 self.add_electrode(name, DiskElectrode(x, y, z, r))
+        elif issubclass(etype, (SquareElectrode, HexElectrode)):
+            # Create the grid:
+            for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
+                self.add_electrode(name, etype(x, y, z, **kwargs))
         elif issubclass(etype, PointSource):
             # Create a grid of PointSource objects:
             for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
@@ -681,6 +549,77 @@ class ProsthesisSystem(PrettyPrint):
             NumPy array, pulse train).
         """
         pass
+
+    def plot(self, ax=None, annotate=False, upside_down=False, xlim=None,
+             ylim=None, pad=None, step=None):
+        """Plot
+
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
+            A Matplotlib axes object. If None given, a new one will be created.
+        annotate : bool, optional, default: False
+            Flag whether to label electrodes in the implant.
+        upside_down : bool, optional, default: False
+            Flag whether to plot the retina upside-down, such that the upper
+            half of the plot corresponds to the upper visual field. In general,
+            inferior retina == upper visual field (and superior == lower).
+        xlim : (xmin, xmax), optional, default: None
+            Range of x values to plot. If None, the plot will be centered over
+            the implant.
+        ylim : (ymin, ymax), optional, default: None
+            Range of y values to plot. If None, the plot will be centered over
+            the implant.
+
+        Returns
+        -------
+        ax : ``matplotlib.axes.Axes``
+            Returns the axis object of the plot
+        """
+
+        if ax is None:
+            _, ax = plt.subplots(figsize=(15, 8))
+
+        for name, electrode in self.items():
+            electrode.plot(ax=ax)
+            if annotate:
+                ax.text(electrode.x, electrode.y, name, ha='center',
+                        va='center',  color='black', size='large',
+                        bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
+                              'fc': (1, 1, 1, 0.7)},
+                        zorder=3)
+
+        # Determine xlim, ylim: Allow for some padding `pad` and round to the
+        # nearest `step`:
+        xpos = [el.x for el in self.values()]
+        ypos = [el.y for el in self.values()]
+        xmin, xmax = np.min(xpos), np.max(xpos)
+        ymin, ymax = np.min(ypos), np.max(ypos)
+        if pad is None:
+            pad = 100 * np.ceil((xmax - xmin) / 1000)
+            pad = np.maximum(pad, 100 * np.ceil((xmax - xmin) / 1000))
+        if step is None:
+            step = 2 * pad
+        xlim, ylim = None, None
+        if xlim is None:
+            xlim = (step * np.floor((xmin - pad) / step),
+                    step * np.ceil((ymax + pad) / step))
+        if ylim is None:
+            ylim = (step * np.floor((ymin - pad) / step),
+                    step * np.ceil((ymax + pad) / step))
+        ax.set_xlim(xlim)
+        ax.set_xticks(np.linspace(*xlim, num=5))
+        ax.set_xlabel('x (microns)')
+        ax.set_ylim(ylim)
+        ax.set_yticks(np.linspace(*ylim, num=5))
+        ax.set_ylabel('y (microns)')
+        ax.set_aspect('equal')
+
+        # Need to flip y axis to have upper half == upper visual field
+        if upside_down:
+            ax.invert_yaxis()
+
+        return ax
 
     @property
     def earray(self):

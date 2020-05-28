@@ -53,6 +53,9 @@ def test_PRIMA(ztype, x, y, r):
                        (prima['E7'].y - prima['F6'].y) ** 2)
     npt.assert_almost_equal(distF6E7, spacing)
 
+    with pytest.raises(ValueError):
+        PRIMA(0, 0, z=np.ones(16))
+
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
@@ -65,7 +68,7 @@ def test_PRIMA75(ztype, x, y, r):
     n_elec = 142
     # Create an Prima and make sure location is correct
     # Height `z` can either be a float or a list
-    z = -100 if ztype == 'float' else -np.ones(378) * 20
+    z = -100 if ztype == 'float' else -np.ones(142) * 20
     # Convert rotation angle to rad
     rot = r * np.pi / 180
 
@@ -102,6 +105,9 @@ def test_PRIMA75(ztype, x, y, r):
                        (prima['E7'].y - prima['F6'].y) ** 2)
     npt.assert_almost_equal(distF6E7, spacing)
 
+    with pytest.raises(ValueError):
+        PRIMA75(0, 0, z=np.ones(16))
+
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
@@ -114,7 +120,7 @@ def test_PRIMA55(ztype, x, y, r):
     n_elec = 273
     # Create an Prima and make sure location is correct
     # Height `z` can either be a float or a list
-    z = -100 if ztype == 'float' else -np.ones(378) * 20
+    z = -100 if ztype == 'float' else -np.ones(273) * 20
     # Convert rotation angle to rad
     rot = r * np.pi / 180
 
@@ -151,6 +157,9 @@ def test_PRIMA55(ztype, x, y, r):
                        (prima['E7'].y - prima['F6'].y) ** 2)
     npt.assert_almost_equal(distF6E7, spacing)
 
+    with pytest.raises(ValueError):
+        PRIMA55(0, 0, z=np.ones(16))
+
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
@@ -163,7 +172,7 @@ def test_PRIMA40(ztype, x, y, r):
     n_elec = 532
     # Create an Prima and make sure location is correct
     # Height `z` can either be a float or a list
-    z = -100 if ztype == 'float' else -np.ones(378) * 20
+    z = -100 if ztype == 'float' else -np.ones(532) * 20
     # Convert rotation angle to rad
     rot = r * np.pi / 180
 
@@ -199,3 +208,6 @@ def test_PRIMA40(ztype, x, y, r):
     distF6E7 = np.sqrt((prima['E7'].x - prima['F6'].x) ** 2 +
                        (prima['E7'].y - prima['F6'].y) ** 2)
     npt.assert_almost_equal(distF6E7, spacing)
+
+    with pytest.raises(ValueError):
+        PRIMA40(0, 0, z=np.ones(16))

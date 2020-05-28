@@ -61,6 +61,20 @@ Studies referenced throughout the Documentation:
 .. [Palanker2020] D Palanker, Y LeMer, S Mohand-Said, M Muqit, JA Sahel (2020).
                   Photovoltaic restoration of central vision in atrophic
                   age-related macular degeneration. *Ophthalmology* 1-8
+.. [Stingl2013] K Stingl, KU Bartz-Schmidt, D Besch, A Braun, A Bruckmann,
+                F Gekeler, U Greppmaier, S Hipp, G Hortdorfer, C Kernstock,
+                A Koitschev, A Kusnyerik, H Sachs, A Schatz, KT Stingl,
+                T Peters, B Wilhelm, E Zrenner (2013). Artificial vision with
+                wirelessly powered subretinal electronic implant alpha-IMS.
+                *Proc R Soc B 280:20130077*.
+.. [Stingl2017] K Stingl, R Schippert, KU Bartz-Schmidt, D Besch, CL Cottriall,
+                TL Edwards, F Gekeler, U Greppmaier, K Kiel, A Koitschev,
+                L Kuhlewein, RE MacLaren, JD Ramsden, J Roider, A Rothermel,
+                H Sachs, GS Schroder, J Tode, N Troelenberg, E Zrenner (2017).
+                Interim results of a multicenter trial with the new electronic
+                subretinal implant Alpha AMS in 15 patients blind from
+                inherited retinal degenerations. *Frontiers in Neuroscience*
+                11:445.
 .. [Thompson2003] RW Thompson Jr, GD Barnett, MS Humayun, G Dagnelie
                   (2003). Facial recognition using simulated prosthetic
                   pixelized vision.

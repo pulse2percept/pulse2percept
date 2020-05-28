@@ -1,109 +1,85 @@
-"""`PRIMA`"""
+"""`PhotovoltaicPixel`, `PRIMA`, `PRIMA75`, `PRIMA55`, `PRIMA40`"""
 
-# https://stackoverflow.com/questions/21784641/installation-issue-with-matplotlib-python
-from sys import platform
-import matplotlib as mpl
-if platform == "darwin":  # OS X
-    mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, RegularPolygon
 
 import numpy as np
 from collections import OrderedDict
-from .base import ElectrodeGrid, ProsthesisSystem, DiskElectrode
+# Using or importing the ABCs from 'collections' instead of from
+# 'collections.abc' is deprecated, and in 3.8 it will stop working:
+from collections.abc import Sequence
+
+from .electrodes import HexElectrode
+from .base import ElectrodeGrid, ProsthesisSystem
 
 
-class PRIMAPlotMixin(object):
+class PhotovoltaicPixel(HexElectrode):
+    """Photovoltaic pixel
 
+    Parameters
+    ----------
+    x/y/z : double
+        3D location that is the center of the disk electrode
+    r : double
+        Disk radius in the x,y plane
+    a : double
+        Length of line drawn from the center of the hexagon to the midpoint of
+        one of its sides.
+    """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ()
+    __slots__ = ('r', 'a')
 
-    def plot(self, ax=None, annotate=False, upside_down=False, xlim=None,
-             ylim=None):
-        """Plot the PRIMA implant
+    def __init__(self, x, y, z, r, a):
+        super(PhotovoltaicPixel, self).__init__(x, y, z, a)
+        if isinstance(r, (Sequence, np.ndarray)):
+            raise TypeError("Radius of the active electrode must be a scalar.")
+        if r <= 0:
+            raise ValueError("Radius of the active electrode must be > 0, not "
+                             "%f." % r)
+        self.r = r
+
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
+        params = super()._pprint_params()
+        params.update({'r': self.r, 'a': self.a})
+        return params
+
+    def electric_potential(self, x, y, z, v0):
+        raise NotImplementedError
+
+    def plot(self, ax=None):
+        """Plot
 
         Parameters
         ----------
         ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
             A Matplotlib axes object. If None given, a new one will be created.
-        annotate : bool, optional, default: False
-            Flag whether to label electrodes in the implant.
-        upside_down : bool, optional, default: False
-            Flag whether to plot the retina upside-down, such that the upper
-            half of the plot corresponds to the upper visual field. In general,
-            inferior retina == upper visual field (and superior == lower).
-        xlim : (xmin, xmax), optional, default: None
-            Range of x values to plot. If None, the plot will be centered over
-            the implant.
-        ylim : (ymin, ymax), optional, default: None
-            Range of y values to plot. If None, the plot will be centered over
-            the implant.
 
         Returns
         -------
         ax : ``matplotlib.axes.Axes``
             Returns the axis object of the plot
-        """
 
+        """
         if ax is None:
             _, ax = plt.subplots(figsize=(15, 8))
-
-        for name, el in self.items():
-            # Hexagonal return electrode:
-            honeycomb = RegularPolygon((el.x, el.y), numVertices=6,
-                                       radius=(self.spacing -
-                                               self.trench) // 2,
-                                       orientation=np.radians(30),
-                                       facecolor='k', alpha=0.2, edgecolor='k',
-                                       zorder=1)
-            ax.add_patch(honeycomb)
-
-            # Circular center electrode:
-            circle = Circle((el.x, el.y), radius=el.r, linewidth=0, color='k',
-                            alpha=0.5, zorder=2)
-            ax.add_patch(circle)
-
-            if annotate:
-                ax.text(el.x, el.y, name, ha='center', va='center',
-                        color='black', size='large',
-                        bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
-                              'fc': (1, 1, 1, 0.7)},
-                        zorder=3)
-
-        # Determine xlim, ylim: Allow for some padding `pad` and round to the
-        # nearest `step`:
-        pad = 100
-        step = 200
-        xlim, ylim = None, None
-        if xlim is None:
-            xmin = np.floor(
-                np.min([el.x - pad for el in self.values()]) / step)
-            xmax = np.ceil(np.max([el.x + pad for el in self.values()]) / step)
-            xlim = (step * xmin, step * xmax)
-        if ylim is None:
-            ymin = np.floor(
-                np.min([el.y - pad for el in self.values()]) / step)
-            ymax = np.ceil(np.max([el.y + pad for el in self.values()]) / step)
-            ylim = (step * ymin, step * ymax)
-        ax.set_xlim(xlim)
-        ax.set_xticks(np.linspace(*xlim, num=5))
-        ax.set_xlabel('x (microns)')
-        ax.set_ylim(ylim)
-        ax.set_yticks(np.linspace(*ylim, num=5))
-        ax.set_ylabel('y (microns)')
-        ax.set_aspect('equal')
-
-        # Need to flip y axis to have upper half == upper visual field
-        if upside_down:
-            ax.invert_yaxis()
-
+        # Hexagonal return electrode:
+        honeycomb = RegularPolygon((self.x, self.y), numVertices=6,
+                                   radius=self.a, orientation=np.radians(30),
+                                   facecolor='k', alpha=0.2, edgecolor='k',
+                                   zorder=1)
+        ax.add_patch(honeycomb)
+        # Circular center electrode:
+        circle = Circle((self.x, self.y), radius=self.r, linewidth=0,
+                        color='k', alpha=0.5, zorder=2)
+        ax.add_patch(circle)
         return ax
 
 
-class PRIMA(PRIMAPlotMixin, ProsthesisSystem):
+class PRIMA(ProsthesisSystem):
     """Create a PRIMA-100 array on the retina
 
-    This function creates a PRIMA array with 378 photovoltaic pixels (each
+    This class creates a PRIMA array with 378 photovoltaic pixels (each
     100um in diameter) as used in the clinical trial [Palanker2020]_, and
     places it in the subretinal space such that the center of the array is
     located at 3D location (x,y,z), given in microns, and the array is rotated
@@ -158,7 +134,8 @@ class PRIMA(PRIMAPlotMixin, ProsthesisSystem):
         self.earray = ElectrodeGrid(self.shape, self.spacing, x=x, y=y,
                                     z=zarr, rot=rot, type='hex',
                                     orientation='vertical',
-                                    etype=DiskElectrode, r=elec_radius)
+                                    etype=PhotovoltaicPixel, r=elec_radius,
+                                    a=(self.spacing - self.trench) / 2)
 
         # Remove extra electrodes to fit the actual implant:
         extra_elecs = ['A1', 'A2', 'A3', 'A4', 'A14', 'A16', 'A17',
@@ -172,6 +149,11 @@ class PRIMA(PRIMAPlotMixin, ProsthesisSystem):
 
         # Adjust the z values:
         if overwrite_z:
+            # Specify different height for every electrode in a list:
+            z_arr = np.asarray(z).flatten()
+            if z_arr.size != self.n_electrodes:
+                raise ValueError("If `z` is a list, it must have %d entries, "
+                                 "not %d." % (self.n_electrodes, z_arr.size))
             for elec, z_elec in zip(self.earray.values(), z):
                 elec.z = z_elec
 
@@ -180,10 +162,10 @@ class PRIMA(PRIMAPlotMixin, ProsthesisSystem):
         self.stim = stim
 
 
-class PRIMA75(PRIMAPlotMixin, ProsthesisSystem):
+class PRIMA75(ProsthesisSystem):
     """Create a PRIMA-75 array on the retina
 
-    This function creates a PRIMA array with 142 photovoltaic pixels (each 75um
+    This class creates a PRIMA array with 142 photovoltaic pixels (each 75um
     in diameter) as described in [Lorach2015]_, and places it in the subretinal
     space, such that that the center of the array is located at 3D location
     (x,y,z), given in microns, and the array is rotated by rotation angle
@@ -233,7 +215,8 @@ class PRIMA75(PRIMAPlotMixin, ProsthesisSystem):
         self.earray = ElectrodeGrid(self.shape, self.spacing, x=x, y=y,
                                     z=zarr, rot=rot, type='hex',
                                     orientation='vertical',
-                                    etype=DiskElectrode, r=elec_radius)
+                                    etype=PhotovoltaicPixel, r=elec_radius,
+                                    a=(self.spacing - self.trench) / 2)
 
         # Remove extra electrodes to fit the actual implant:
         extra_elecs = ['A1', 'B1', 'C1', 'D1', 'E1', 'I1', 'J1', 'K1', 'L1',
@@ -250,6 +233,11 @@ class PRIMA75(PRIMAPlotMixin, ProsthesisSystem):
 
         # Adjust the z values:
         if overwrite_z:
+            # Specify different height for every electrode in a list:
+            z_arr = np.asarray(z).flatten()
+            if z_arr.size != self.n_electrodes:
+                raise ValueError("If `z` is a list, it must have %d entries, "
+                                 "not %d." % (self.n_electrodes, z_arr.size))
             for elec, z_elec in zip(self.earray.values(), z):
                 elec.z = z_elec
 
@@ -258,10 +246,10 @@ class PRIMA75(PRIMAPlotMixin, ProsthesisSystem):
         self.stim = stim
 
 
-class PRIMA55(PRIMAPlotMixin, ProsthesisSystem):
+class PRIMA55(ProsthesisSystem):
     """Create a PRIMA-55 array on the retina
 
-    This function creates a PRIMA array with 273 photovoltaic pixels (each 55um
+    This class creates a PRIMA array with 273 photovoltaic pixels (each 55um
     in diameter) as described in [Lorach2015]_, and places it in the subretinal
     space, such that that the center of the array is located at 3D location
     (x,y,z), given in microns, and the array is rotated by rotation angle
@@ -317,7 +305,8 @@ class PRIMA55(PRIMAPlotMixin, ProsthesisSystem):
         self.earray = ElectrodeGrid(self.shape, self.spacing, x=x, y=y,
                                     z=zarr, rot=rot, type='hex',
                                     orientation='vertical',
-                                    etype=DiskElectrode, r=elec_radius)
+                                    etype=PhotovoltaicPixel, r=elec_radius,
+                                    a=(self.spacing - self.trench) / 2)
 
         # Note that the exact shape of this implant is not known. We remove
         # all electrodes that don't fit on a circular 1mm x 1mm substrate:
@@ -339,6 +328,11 @@ class PRIMA55(PRIMAPlotMixin, ProsthesisSystem):
 
         # Adjust the z values:
         if overwrite_z:
+            # Specify different height for every electrode in a list:
+            z_arr = np.asarray(z).flatten()
+            if z_arr.size != self.n_electrodes:
+                raise ValueError("If `z` is a list, it must have %d entries, "
+                                 "not %d." % (self.n_electrodes, z_arr.size))
             for elec, z_elec in zip(self.earray.values(), z):
                 elec.z = z_elec
 
@@ -347,10 +341,10 @@ class PRIMA55(PRIMAPlotMixin, ProsthesisSystem):
         self.stim = stim
 
 
-class PRIMA40(PRIMAPlotMixin, ProsthesisSystem):
+class PRIMA40(ProsthesisSystem):
     """Create a PRIMA-40 array on the retina
 
-    This function creates a PRIMA array with 532 photovoltaic pixels (each 55um
+    This class creates a PRIMA array with 532 photovoltaic pixels (each 55um
     in diameter) as described in [Lorach2015]_, and places it in the subretinal
     space, such that that the center of the array is located at 3D location
     (x,y,z), given in microns, and the array is rotated by rotation angle
@@ -406,7 +400,8 @@ class PRIMA40(PRIMAPlotMixin, ProsthesisSystem):
         self.earray = ElectrodeGrid(self.shape, self.spacing, x=x, y=y,
                                     z=zarr, rot=rot, type='hex',
                                     orientation='vertical',
-                                    etype=DiskElectrode, r=elec_radius)
+                                    etype=PhotovoltaicPixel, r=elec_radius,
+                                    a=(self.spacing - self.trench) / 2)
 
         # Note that the exact shape of this implant is not known. We remove
         # all electrodes that don't fit on a circular 1mm x 1mm substrate:
@@ -435,6 +430,11 @@ class PRIMA40(PRIMAPlotMixin, ProsthesisSystem):
 
         # Adjust the z values:
         if overwrite_z:
+            # Specify different height for every electrode in a list:
+            z_arr = np.asarray(z).flatten()
+            if z_arr.size != self.n_electrodes:
+                raise ValueError("If `z` is a list, it must have %d entries, "
+                                 "not %d." % (self.n_electrodes, z_arr.size))
             for elec, z_elec in zip(self.earray.values(), z):
                 elec.z = z_elec
 

@@ -3,81 +3,9 @@ import collections as coll
 import pytest
 import numpy.testing as npt
 
-from pulse2percept.implants import (Electrode, DiskElectrode, PointSource,
-                                    ElectrodeArray, ElectrodeGrid,
-                                    ProsthesisSystem)
+from pulse2percept.implants import (DiskElectrode, PointSource, ElectrodeArray,
+                                    ElectrodeGrid, ProsthesisSystem)
 from pulse2percept.stimuli import Stimulus
-
-
-class ValidElectrode(Electrode):
-    __slots__ = ()
-
-    def electric_potential(self, x, y, z):
-        r = np.sqrt((x - self.x) ** 2 + (y - self.y) ** 2 + (z - self.z) ** 2)
-        return r
-
-
-def test_Electrode():
-    electrode = ValidElectrode(0, 1, 2)
-    npt.assert_almost_equal(electrode.x, 0)
-    npt.assert_almost_equal(electrode.y, 1)
-    npt.assert_almost_equal(electrode.z, 2)
-    npt.assert_almost_equal(electrode.electric_potential(0, 1, 2), 0)
-    with pytest.raises(TypeError):
-        ValidElectrode([0], 1, 2)
-    with pytest.raises(TypeError):
-        ValidElectrode(0, np.array([1, 2]), 2)
-    with pytest.raises(TypeError):
-        ValidElectrode(0, 1, [2, 3])
-    # Slots:
-    npt.assert_equal(hasattr(electrode, '__slots__'), True)
-    npt.assert_equal(hasattr(electrode, '__dict__'), False)
-
-
-def test_PointSource():
-    electrode = PointSource(0, 1, 2)
-    npt.assert_almost_equal(electrode.x, 0)
-    npt.assert_almost_equal(electrode.y, 1)
-    npt.assert_almost_equal(electrode.z, 2)
-    npt.assert_almost_equal(electrode.electric_potential(0, 1, 2, 1, 1), 1)
-    npt.assert_almost_equal(electrode.electric_potential(0, 0, 0, 1, 1), 0.035,
-                            decimal=3)
-    # Slots:
-    npt.assert_equal(hasattr(electrode, '__slots__'), True)
-    npt.assert_equal(hasattr(electrode, '__dict__'), False)
-
-
-def test_DiskElectrode():
-    with pytest.raises(TypeError):
-        DiskElectrode(0, 0, 0, [1, 2])
-    with pytest.raises(TypeError):
-        DiskElectrode(0, np.array([0, 1]), 0, 1)
-    # Invalid radius:
-    with pytest.raises(ValueError):
-        DiskElectrode(0, 0, 0, -5)
-    # Check params:
-    electrode = DiskElectrode(0, 1, 2, 100)
-    npt.assert_almost_equal(electrode.x, 0)
-    npt.assert_almost_equal(electrode.y, 1)
-    npt.assert_almost_equal(electrode.z, 2)
-    # On the electrode surface (z=2, x^2+y^2<=100^2)
-    npt.assert_almost_equal(electrode.electric_potential(0, 1, 2, 1), 1)
-    npt.assert_almost_equal(electrode.electric_potential(30, -30, 2, 1), 1)
-    npt.assert_almost_equal(electrode.electric_potential(0, 101, 2, 1), 1)
-    npt.assert_almost_equal(electrode.electric_potential(0, -99, 2, 1), 1)
-    npt.assert_almost_equal(electrode.electric_potential(100, 1, 2, 1), 1)
-    npt.assert_almost_equal(electrode.electric_potential(-100, 1, 2, 1), 1)
-    # Right off the surface (z=2, x^2+y^2>100^2)
-    npt.assert_almost_equal(electrode.electric_potential(0, 102, 2, 1), 0.910,
-                            decimal=3)
-    npt.assert_almost_equal(electrode.electric_potential(0, -100, 2, 1), 0.910,
-                            decimal=3)
-    # Some distance away from the electrode (z>2):
-    npt.assert_almost_equal(electrode.electric_potential(0, 1, 38, 1), 0.780,
-                            decimal=3)
-    # Slots:
-    npt.assert_equal(hasattr(electrode, '__slots__'), True)
-    npt.assert_equal(hasattr(electrode, '__dict__'), False)
 
 
 def test_ElectrodeArray():
@@ -235,12 +163,12 @@ def test_ElectrodeGrid(gtype):
         ElectrodeGrid((2, 3), 10, type=gtype, etype=ElectrodeArray)
     with pytest.raises(TypeError):
         ElectrodeGrid((2, 3), 10, type=gtype, etype="foo")
-    
+
     # Must pass in valid Orientation value:
     with pytest.raises(ValueError):
-        ElectrodeGrid((2,3), 10, type=gtype, orientation="foo")
+        ElectrodeGrid((2, 3), 10, type=gtype, orientation="foo")
     with pytest.raises(TypeError):
-        ElectrodeGrid((2,3),10, type=gtype, orientation=False)
+        ElectrodeGrid((2, 3), 10, type=gtype, orientation=False)
 
     # Must pass in radius `r` for grid of DiskElectrode objects:
     gshape = (4, 5)
@@ -286,7 +214,7 @@ def test_ElectrodeGrid(gtype):
     grid = ElectrodeGrid(gshape, spacing, type=gtype, orientation='vertical',
                          etype=DiskElectrode, r=30)
     npt.assert_almost_equal(np.sqrt((grid['B1'].x - grid['B2'].x) ** 2 +
-                                (grid['B1'].y - grid['B2'].y) ** 2),
+                                    (grid['B1'].y - grid['B2'].y) ** 2),
                             spacing)
     npt.assert_almost_equal(np.sqrt((grid['A1'].x - grid['B1'].x) ** 2 +
                                     (grid['A1'].y - grid['B1'].y) ** 2),
@@ -381,13 +309,13 @@ def test_ElectrodeGrid(gtype):
     npt.assert_equal([e for e in egrid.keys()],
                      ['AA', 'AB', 'AC', 'BA', 'BB', 'BC'])
 
-    # rows and columns start at values other than A or 1
+    # Still starts at A:
     egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('B', '1'))
     npt.assert_equal([e for e in egrid.keys()],
-                     ['B1', 'B2', 'B3', 'C1', 'C2', 'C3'])
+                     ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
     egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('A', '2'))
     npt.assert_equal([e for e in egrid.keys()],
-                     ['A2', 'A3', 'A4', 'B2', 'B3', 'B4'])
+                     ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
 
     # test unique names
     egrid = ElectrodeGrid(gshape, spacing, type=gtype,
@@ -410,14 +338,14 @@ def test_ElectrodeGrid_get_params(gtype):
 
 @pytest.mark.parametrize('gtype', ('rect', 'hex'))
 def test_ElectrodeGrid___get_item__(gtype):
-    grid = ElectrodeGrid((2, 4), 20, names=('C', '3'), type=gtype,
+    grid = ElectrodeGrid((2, 4), 20, names=('A', '1'), type=gtype,
                          etype=DiskElectrode, r=20)
-    npt.assert_equal(grid[0], grid['C3'])
-    npt.assert_equal(grid[0, 0], grid['C3'])
-    npt.assert_equal(grid[1], grid['C4'])
-    npt.assert_equal(grid[0, 1], grid['C4'])
-    npt.assert_equal(grid[['C3', 1, (0, 2)]],
-                     [grid['C3'], grid['C4'], grid['C5']])
+    npt.assert_equal(grid[0], grid['A1'])
+    npt.assert_equal(grid[0, 0], grid['A1'])
+    npt.assert_equal(grid[1], grid['A2'])
+    npt.assert_equal(grid[0, 1], grid['A2'])
+    npt.assert_equal(grid[['A1', 1, (0, 2)]],
+                     [grid['A1'], grid['A2'], grid['A3']])
 
 
 def test_ProsthesisSystem():
