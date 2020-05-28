@@ -156,6 +156,59 @@ class DiskElectrode(Electrode):
             return 2.0 * v0 / np.pi * np.arcsin(numer / denom)
 
 
+class SquareElectrode(Electrode):
+    """Photovoltaic pixel
+
+    Parameters
+    ----------
+    x/y/z : double
+        3D location that is the center of the disk electrode
+    a : double
+        Side length of the square
+    """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('a')
+
+    def __init__(self, x, y, z, a):
+        super(SquareElectrode, self).__init__(x, y, z)
+        if isinstance(a, (Sequence, np.ndarray)):
+            raise TypeError("Side length must be a scalar.")
+        if a <= 0:
+            raise ValueError("Side length must be > 0, not %f." % a)
+        self.a = a
+
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
+        params = super()._pprint_params()
+        params.update({'a': self.a})
+        return params
+
+    def electric_potential(self, x, y, z, v0):
+        raise NotImplementedError
+
+    def plot(self, ax=None):
+        """Plot
+
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
+            A Matplotlib axes object. If None given, a new one will be created.
+
+        Returns
+        -------
+        ax : ``matplotlib.axes.Axes``
+            Returns the axis object of the plot
+
+        """
+        if ax is None:
+            _, ax = plt.subplots(figsize=(15, 8))
+        # Square electrode:
+        square = Rectangle((self.x, self.y), self.a, self.a, angle=0,
+                           fc='k', alpha=0.2, ec='k', zorder=1)
+        ax.add_patch(square)
+        return ax
+
+
 class ElectrodeArray(PrettyPrint):
     """Electrode array
 

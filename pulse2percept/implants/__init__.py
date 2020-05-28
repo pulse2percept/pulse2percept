@@ -19,7 +19,8 @@ from .base import (DiskElectrode,
                    ElectrodeArray,
                    ElectrodeGrid,
                    PointSource,
-                   ProsthesisSystem)
+                   ProsthesisSystem,
+                   SquareElectrode)
 from .argus import ArgusI, ArgusII
 from .alpha import AlphaIMS, AlphaAMS
 from .bva import BVA24
@@ -37,5 +38,6 @@ __all__ = [
     'ElectrodeGrid',
     'PointSource',
     'PRIMA',
-    'ProsthesisSystem'
+    'ProsthesisSystem',
+    'SquareElectrode'
 ]
