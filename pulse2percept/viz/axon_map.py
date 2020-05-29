@@ -12,13 +12,12 @@ import logging
 from copy import deepcopy
 
 from ..implants import ProsthesisSystem
-from ..utils import parfor
+from ..utils import parfor, deprecated
 from ..models import AxonMapSpatial
 
 
 def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
-                  upside_down=False, annotate_quadrants=True, xlim=None,
-                  ylim=None):
+                  upside_down=False, annotate=True, xlim=None, ylim=None):
     """Plot an axon map
 
     This function generates an axon map for a left/right eye and a given
@@ -38,7 +37,7 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
         Flag whether to plot the retina upside-down, such that the upper
         half of the plot corresponds to the upper visual field. In general,
         inferior retina == upper visual field (and superior == lower).
-    annotate_quadrants : bool, optional, default: True
+    annotate : bool, optional, default: True
         Flag whether to annotate the four retinal quadrants
         (inferior/superior x temporal/nasal).
     xlim: (xmin, xmax), optional, default: (-5000, 5000)
@@ -106,7 +105,7 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
 
     # Annotate the four retinal quadrants near the corners of the plot:
     # superior/inferior x temporal/nasal
-    if annotate_quadrants:
+    if annotate:
         if upside_down:
             topbottom = ['bottom', 'top']
         else:
@@ -125,7 +124,7 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
                         verticalalignment=valign,
                         bbox={'boxstyle': 'square,pad=-0.1', 'ec': 'none',
                               'fc': (1, 1, 1, 0.7)},
-                        zorder=10)
+                        zorder=99)
 
     # Need to flip y axis to have upper half == upper visual field
     if upside_down:
@@ -134,6 +133,7 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
     return ax
 
 
+@deprecated(deprecated_version='0.7', removed_version='0.8')
 def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
                              ax=None, upside_down=False,
                              annotate_implant=False, annotate_quadrants=True,
@@ -192,7 +192,7 @@ def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
 
     ax = plot_axon_map(eye=implant.eye, loc_od=loc_od, ax=ax,
                        n_bundles=n_bundles, upside_down=upside_down,
-                       annotate_quadrants=annotate_quadrants, xlim=xlim,
+                       annotate=annotate_quadrants, xlim=xlim,
                        ylim=ylim)
 
     # Determine marker size for electrodes:

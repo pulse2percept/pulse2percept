@@ -57,15 +57,9 @@ class BVA24(ProsthesisSystem):
     __slots__ = ()
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
+        self.eye = eye
         self.earray = ElectrodeArray([])
         n_elecs = 35
-
-        # Set left/right eye:
-        if not isinstance(eye, str):
-            raise TypeError("'eye' must be a string, either 'LE' or 'RE'.")
-        if eye != 'LE' and eye != 'RE':
-            raise ValueError("'eye' must be either 'LE' or 'RE'.")
-        self.eye = eye
 
         # the positions of the electrodes 1-20, 21a-21m, R1-R2
         x_arr = [-1275.0, -850.0, -1275.0, -850.0, -1275.0,

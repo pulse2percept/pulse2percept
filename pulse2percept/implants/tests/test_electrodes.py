@@ -1,8 +1,10 @@
 import numpy as np
 import pytest
 import numpy.testing as npt
+from matplotlib.patches import Circle
 
-from pulse2percept.implants import Electrode, DiskElectrode, PointSource
+from pulse2percept.implants import (Electrode, DiskElectrode, PointSource,
+                                    SquareElectrode, HexElectrode)
 
 
 class ValidElectrode(Electrode):
@@ -41,6 +43,11 @@ def test_PointSource():
     # Slots:
     npt.assert_equal(hasattr(electrode, '__slots__'), True)
     npt.assert_equal(hasattr(electrode, '__dict__'), False)
+    # Plots:
+    ax = electrode.plot()
+    npt.assert_equal(len(ax.texts), 0)
+    npt.assert_equal(len(ax.patches), 1)
+    npt.assert_equal(isinstance(ax.patches[0], Circle), True)
 
 
 def test_DiskElectrode():

@@ -48,12 +48,33 @@ Studies referenced throughout the Documentation:
                 RK Shepherd, PJ Allen, for the Bionic Vision Australia
                 Research Consortium (2014). First-in-human trial of a novel
                 suprachoroidal retinal prosthesis. *PLoS ONE*  9(12): e115239.
+.. [Lorach2015] H Lorach, G Goetz, R Smith, X Lei, Y Mandel, T Kamins,
+                K Mathieson, P Huie, J Harris, A Sher, D Palanker (2015).
+                Photovoltaic restoration of sight with high visual acuity.
+                *Nature Medicine* 21(5):476-482
 .. [Nanduri2012] D Nanduri, I Fine, A Horsager, GM Boynton, MS Humayun,
                  RJ Greenberg, JD Weiland (2012), Frequency and amplitude
                  modulation have different effects on the percepts elicited
                  by retinal stimulation. Investigative Ophthalmology & Visual
                  Science 53:205-214, doi:`10.1167/iovs.11-8401
                  <https://doi.org/10.1167/iovs.11-8401>`_.
+.. [Palanker2020] D Palanker, Y LeMer, S Mohand-Said, M Muqit, JA Sahel (2020).
+                  Photovoltaic restoration of central vision in atrophic
+                  age-related macular degeneration. *Ophthalmology* 1-8
+.. [Stingl2013] K Stingl, KU Bartz-Schmidt, D Besch, A Braun, A Bruckmann,
+                F Gekeler, U Greppmaier, S Hipp, G Hortdorfer, C Kernstock,
+                A Koitschev, A Kusnyerik, H Sachs, A Schatz, KT Stingl,
+                T Peters, B Wilhelm, E Zrenner (2013). Artificial vision with
+                wirelessly powered subretinal electronic implant alpha-IMS.
+                *Proc R Soc B 280:20130077*.
+.. [Stingl2017] K Stingl, R Schippert, KU Bartz-Schmidt, D Besch, CL Cottriall,
+                TL Edwards, F Gekeler, U Greppmaier, K Kiel, A Koitschev,
+                L Kuhlewein, RE MacLaren, JD Ramsden, J Roider, A Rothermel,
+                H Sachs, GS Schroder, J Tode, N Troelenberg, E Zrenner (2017).
+                Interim results of a multicenter trial with the new electronic
+                subretinal implant Alpha AMS in 15 patients blind from
+                inherited retinal degenerations. *Frontiers in Neuroscience*
+                11:445.
 .. [Thompson2003] RW Thompson Jr, GD Barnett, MS Humayun, G Dagnelie
                   (2003). Facial recognition using simulated prosthetic
                   pixelized vision.

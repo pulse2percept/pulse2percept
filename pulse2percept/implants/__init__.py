@@ -17,12 +17,13 @@
     *  :ref:`Basic Concepts > Visual Prostheses <topics-implants>`
 """
 from .base import ProsthesisSystem
-from .electrodes import Electrode, PointSource, DiskElectrode, SquareElectrode
+from .electrodes import (Electrode, PointSource, DiskElectrode,
+                         SquareElectrode, HexElectrode)
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from .argus import ArgusI, ArgusII
 from .alpha import AlphaIMS, AlphaAMS
 from .bva import BVA24
-from .prima import PRIMA
+from .prima import PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55, PRIMA40
 
 __all__ = [
     'AlphaAMS',
@@ -34,8 +35,13 @@ __all__ = [
     'Electrode',
     'ElectrodeArray',
     'ElectrodeGrid',
+    'HexElectrode',
+    'PhotovoltaicPixel',
     'PointSource',
     'PRIMA',
+    'PRIMA75',
+    'PRIMA55',
+    'PRIMA40',
     'ProsthesisSystem',
     'SquareElectrode'
 ]
