@@ -93,6 +93,12 @@ class ProsthesisSystem(PrettyPrint):
         ylim : (ymin, ymax), optional, default: None
             Range of y values to plot. If None, the plot will be centered over
             the implant.
+        pad : float, optional, default: 10%
+            Padding (microns) to be added to the plot if ``xlim`` and ``ylim``
+            are None. Will default to 10% of the implant size.
+        step : float, optional, default: 20%
+            Step size of axis ticks (microns) if ``xlim`` and ``ylim`` are
+            None. Will default to 20% of the implant size.
 
         Returns
         -------
@@ -110,7 +116,7 @@ class ProsthesisSystem(PrettyPrint):
                         va='center',  color='black', size='large',
                         bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
                               'fc': (1, 1, 1, 0.7)},
-                        zorder=3)
+                        zorder=11)
 
         # Determine xlim, ylim: Allow for some padding `pad` and round to the
         # nearest `step`:
@@ -126,7 +132,7 @@ class ProsthesisSystem(PrettyPrint):
         xlim, ylim = None, None
         if xlim is None:
             xlim = (step * np.floor((xmin - pad) / step),
-                    step * np.ceil((ymax + pad) / step))
+                    step * np.ceil((xmax + pad) / step))
         if ylim is None:
             ylim = (step * np.floor((ymin - pad) / step),
                     step * np.ceil((ymax + pad) / step))

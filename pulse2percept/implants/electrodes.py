@@ -17,7 +17,7 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
 
     Abstract base class for all electrodes.
     """
-    __slots__ = ('x', 'y', 'z')
+    __slots__ = ('x', 'y', 'z', 'plot_patch', 'plot_kwargs')
 
     def __init__(self, x, y, z):
         if isinstance(x, (Sequence, np.ndarray)):
@@ -29,6 +29,12 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
         self.x = x
         self.y = y
         self.z = z
+        # A matplotlib.patches object (e.g., Circle, Rectangle) that can be
+        # used to plot the electrode:
+        self.plot_patch = None
+        # Any keyword arguments that should be passed to the call above:
+        # (e.g., {'radius': 5}):
+        self.plot_kwargs = {}
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -38,15 +44,50 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
     def electric_potential(self, x, y, z, *args, **kwargs):
         raise NotImplementedError
 
-    @abstractmethod
-    def plot(self, ax=None, annotate=False):
-        raise NotImplementedError
+    def plot(self, ax=None, pad=100):
+        """Plot
+
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
+            A Matplotlib axes object. If None given, a new one will be created.
+        pad : float, optional, default: 100
+            Padding (microns) to be added to the plot if ``xlim`` and ``ylim``
+            are None.
+
+        Returns
+        -------
+        ax : ``matplotlib.axes.Axes``
+            Returns the axis object of the plot
+
+        """
+        if ax is None:
+            _, ax = plt.subplots(figsize=(8, 8))
+        if self.plot_patch is not None:
+            if isinstance(self.plot_patch, list):
+                # Special case: draw multiple objects
+                for p, kw in zip(self.plot_patch, self.plot_kwargs):
+                    ax.add_patch(p((self.x, self.y), zorder=10, **kw))
+            else:
+                # Regular use case: single object
+                ax.add_patch(self.plot_patch((self.x, self.y), zorder=10,
+                                             **self.plot_kwargs))
+        ax.set_xlim(self.x - pad, self.x + pad)
+        ax.set_ylim(self.y - pad, self.y + pad)
+        return ax
 
 
 class PointSource(Electrode):
     """Point source"""
     # Frozen class: User cannot add more class attributes
     __slots__ = ()
+
+    def __init__(self, x, y, z):
+        super(PointSource, self).__init__(x, y, z)
+        self.plot_patch = Circle
+        self.plot_kwargs = {'radius': 5, 'linewidth': 2,
+                            'ec': (0.3, 0.3, 0.3, 1),
+                            'fc': (0.8, 0.8, 0.8, 0.7)}
 
     def electric_potential(self, x, y, z, amp, sigma):
         """Calculate electric potential at (x, y, z)
@@ -83,29 +124,6 @@ class PointSource(Electrode):
             return sigma * amp
         return sigma * amp / (4.0 * np.pi * r)
 
-    def plot(self, ax=None):
-        """Plot
-
-        Parameters
-        ----------
-        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
-            A Matplotlib axes object. If None given, a new one will be created.
-
-        Returns
-        -------
-        ax : ``matplotlib.axes.Axes``
-            Returns the axis object of the plot
-
-        """
-        if ax is None:
-            _, ax = plt.subplots(figsize=(15, 8))
-        # Small circle:
-        circle = Circle((self.x, self.y), radius=5, linewidth=3,
-                        ec=(0.3, 0.3, 0.3, 1), fc=(0.8, 0.8, 0.8, 0.7),
-                        zorder=2)
-        ax.add_patch(circle)
-        return ax
-
 
 class DiskElectrode(Electrode):
     """Circular disk electrode
@@ -127,6 +145,10 @@ class DiskElectrode(Electrode):
         if r <= 0:
             raise ValueError("Electrode radius must be > 0, not %f." % r)
         self.r = r
+        self.plot_patch = Circle
+        self.plot_kwargs = {'radius': r, 'linewidth': 2,
+                            'ec': (0.3, 0.3, 0.3, 1),
+                            'fc': (0.8, 0.8, 0.8, 0.7)}
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -181,31 +203,6 @@ class DiskElectrode(Electrode):
             denom += np.sqrt((radial_dist + self.r) ** 2 + axial_dist ** 2)
             return 2.0 * v0 / np.pi * np.arcsin(numer / denom)
 
-    def plot(self, ax=None):
-        """Plot
-
-        Parameters
-        ----------
-        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
-            A Matplotlib axes object. If None given, a new one will be created.
-
-        Returns
-        -------
-        ax : ``matplotlib.axes.Axes``
-            Returns the axis object of the plot
-
-        """
-        if ax is None:
-            _, ax = plt.subplots(figsize=(15, 8))
-
-        # Circular electrode:
-        circle = Circle((self.x, self.y), radius=self.r, linewidth=3,
-                        ec=(0.3, 0.3, 0.3, 1), fc=(0.8, 0.8, 0.8, 0.7),
-                        zorder=2)
-        ax.add_patch(circle)
-
-        return ax
-
 
 class SquareElectrode(Electrode):
     """Photovoltaic pixel
@@ -229,6 +226,10 @@ class SquareElectrode(Electrode):
         if a <= 0:
             raise ValueError("Side length must be > 0, not %f." % a)
         self.a = a
+        self.plot_patch = Rectangle
+        self.plot_kwargs = {'width': a, 'height': a, 'angle': 0,
+                            'linewidth': 2, 'ec': (0.3, 0.3, 0.3, 1),
+                            'fc': (0.8, 0.8, 0.8, 0.7)}
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -238,28 +239,6 @@ class SquareElectrode(Electrode):
 
     def electric_potential(self, x, y, z, v0):
         raise NotImplementedError
-
-    def plot(self, ax=None):
-        """Plot
-
-        Parameters
-        ----------
-        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
-            A Matplotlib axes object. If None given, a new one will be created.
-
-        Returns
-        -------
-        ax : ``matplotlib.axes.Axes``
-            Returns the axis object of the plot
-
-        """
-        if ax is None:
-            _, ax = plt.subplots(figsize=(15, 8))
-        # Square electrode:
-        square = Rectangle((self.x, self.y), self.a, self.a, angle=0,
-                           fc='k', alpha=0.2, ec='k', zorder=1)
-        ax.add_patch(square)
-        return ax
 
 
 class HexElectrode(Electrode):
@@ -286,6 +265,10 @@ class HexElectrode(Electrode):
             raise ValueError("Apothem of the hexagon must be > 0, not "
                              "%f." % a)
         self.a = a
+        self.plot_patch = RegularPolygon
+        self.plot_kwargs = {'numVertices': 6, 'radius': a, 'alpha': 0.2,
+                            'orientation': np.radians(30), 'fc': 'k',
+                            'ec': 'k'}
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -295,27 +278,3 @@ class HexElectrode(Electrode):
 
     def electric_potential(self, x, y, z, v0):
         raise NotImplementedError
-
-    def plot(self, ax=None):
-        """Plot
-
-        Parameters
-        ----------
-        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
-            A Matplotlib axes object. If None given, a new one will be created.
-
-        Returns
-        -------
-        ax : ``matplotlib.axes.Axes``
-            Returns the axis object of the plot
-
-        """
-        if ax is None:
-            _, ax = plt.subplots(figsize=(15, 8))
-        # Hexagonal return electrode:
-        honeycomb = RegularPolygon((self.x, self.y), numVertices=6,
-                                   radius=self.a, orientation=np.radians(30),
-                                   facecolor='k', alpha=0.2, edgecolor='k',
-                                   zorder=1)
-        ax.add_patch(honeycomb)
-        return ax

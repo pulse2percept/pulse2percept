@@ -14,9 +14,6 @@ class ValidElectrode(Electrode):
         r = np.sqrt((x - self.x) ** 2 + (y - self.y) ** 2 + (z - self.z) ** 2)
         return r
 
-    def plot(self, ax=None):
-        return ax
-
 
 def test_Electrode():
     electrode = ValidElectrode(0, 1, 2)

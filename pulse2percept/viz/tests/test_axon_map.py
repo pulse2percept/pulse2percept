@@ -39,7 +39,7 @@ def test_plot_axon_map():
 
     # Electrodes and quadrants can be annotated:
     for ann_q, n_q in [(True, 4), (False, 0)]:
-        ax = plot_axon_map(annotate_quadrants=ann_q)
+        ax = plot_axon_map(annotate=ann_q)
         npt.assert_equal(len(ax.texts), n_q)
 
     # Setting upside_down flips y axis:

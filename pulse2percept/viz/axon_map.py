@@ -17,8 +17,7 @@ from ..models import AxonMapSpatial
 
 
 def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
-                  upside_down=False, annotate_quadrants=True, xlim=None,
-                  ylim=None):
+                  upside_down=False, annotate=True, xlim=None, ylim=None):
     """Plot an axon map
 
     This function generates an axon map for a left/right eye and a given
@@ -38,7 +37,7 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
         Flag whether to plot the retina upside-down, such that the upper
         half of the plot corresponds to the upper visual field. In general,
         inferior retina == upper visual field (and superior == lower).
-    annotate_quadrants : bool, optional, default: True
+    annotate : bool, optional, default: True
         Flag whether to annotate the four retinal quadrants
         (inferior/superior x temporal/nasal).
     xlim: (xmin, xmax), optional, default: (-5000, 5000)
@@ -106,7 +105,7 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
 
     # Annotate the four retinal quadrants near the corners of the plot:
     # superior/inferior x temporal/nasal
-    if annotate_quadrants:
+    if annotate:
         if upside_down:
             topbottom = ['bottom', 'top']
         else:
@@ -125,7 +124,7 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
                         verticalalignment=valign,
                         bbox={'boxstyle': 'square,pad=-0.1', 'ec': 'none',
                               'fc': (1, 1, 1, 0.7)},
-                        zorder=10)
+                        zorder=99)
 
     # Need to flip y axis to have upper half == upper visual field
     if upside_down:

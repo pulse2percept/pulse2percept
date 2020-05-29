@@ -40,6 +40,13 @@ class PhotovoltaicPixel(HexElectrode):
             raise ValueError("Radius of the active electrode must be > 0, not "
                              "%f." % r)
         self.r = r
+        # Plot two objects: hex honeycomb and circular active electrode
+        self.plot_patch = [RegularPolygon, Circle]
+        self.plot_kwargs = [{'radius': a, 'numVertices': 6, 'alpha': 0.2,
+                             'orientation': np.radians(30), 'fc': 'k',
+                             'ec': 'k'},
+                            {'radius': r, 'linewidth': 0, 'color': 'k',
+                             'alpha': 0.5}]
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -49,34 +56,6 @@ class PhotovoltaicPixel(HexElectrode):
 
     def electric_potential(self, x, y, z, v0):
         raise NotImplementedError
-
-    def plot(self, ax=None):
-        """Plot
-
-        Parameters
-        ----------
-        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
-            A Matplotlib axes object. If None given, a new one will be created.
-
-        Returns
-        -------
-        ax : ``matplotlib.axes.Axes``
-            Returns the axis object of the plot
-
-        """
-        if ax is None:
-            _, ax = plt.subplots(figsize=(15, 8))
-        # Hexagonal return electrode:
-        honeycomb = RegularPolygon((self.x, self.y), numVertices=6,
-                                   radius=self.a, orientation=np.radians(30),
-                                   facecolor='k', alpha=0.2, edgecolor='k',
-                                   zorder=1)
-        ax.add_patch(honeycomb)
-        # Circular center electrode:
-        circle = Circle((self.x, self.y), radius=self.r, linewidth=0,
-                        color='k', alpha=0.5, zorder=2)
-        ax.add_patch(circle)
-        return ax
 
 
 class PRIMA(ProsthesisSystem):
@@ -259,10 +238,9 @@ class PRIMA55(ProsthesisSystem):
     .. versionadded:: 0.7
 
     This class creates a PRIMA array with 273 photovoltaic pixels (each 55um
-    in diameter) as described in [Lorach2015]_, and places it in the subretinal
-    space, such that that the center of the array is located at 3D location
-    (x,y,z), given in microns, and the array is rotated by rotation angle
-    ``rot``, given in radians.
+    in diameter), and places it in the subretinal space, such that that the
+    center of the array is located at 3D location (x,y,z), given in microns,
+    and the array is rotated by rotation angle ``rot``, given in radians.
 
     The device consists of 273 50um-wide pixels separated by 5um trenches,
     arranged in a 1-mm wide hexagonal pattern.
@@ -355,11 +333,10 @@ class PRIMA40(ProsthesisSystem):
 
     .. versionadded:: 0.7
 
-    This class creates a PRIMA array with 532 photovoltaic pixels (each 55um
-    in diameter) as described in [Lorach2015]_, and places it in the subretinal
-    space, such that that the center of the array is located at 3D location
-    (x,y,z), given in microns, and the array is rotated by rotation angle
-    ``rot``, given in radians.
+    This class creates a PRIMA array with 532 photovoltaic pixels (each 40um
+    in diameter), and places it in the subretinal space, such that that the
+    center of the array is located at 3D location (x,y,z), given in microns,
+    and the array is rotated by rotation angle ``rot``, given in radians.
 
     The device consists of 532 35um-wide pixels separated by 5um trenches,
     arranged in a 1-mm wide hexagonal pattern.
