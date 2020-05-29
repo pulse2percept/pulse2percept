@@ -192,7 +192,7 @@ def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
 
     ax = plot_axon_map(eye=implant.eye, loc_od=loc_od, ax=ax,
                        n_bundles=n_bundles, upside_down=upside_down,
-                       annotate_quadrants=annotate_quadrants, xlim=xlim,
+                       annotate=annotate_quadrants, xlim=xlim,
                        ylim=ylim)
 
     # Determine marker size for electrodes:
