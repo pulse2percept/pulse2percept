@@ -46,13 +46,13 @@ quality of the generated visual experience:
 Built on the NumPy and SciPy stacks, `pulse2percept`_ provides an open-source
 implementation of a number of computational models for state-of-the-art
 `visual prostheses`_ (also known as the 'bionic eye'),
-such as `ArgusII`_, `AlphaIMS`_, and `PRIMA`_, to provide insight into the
+such as `ArgusII`_, `BVA24`_, and `PRIMA`_, to provide insight into the
 visual experience provided by these devices.
 
 .. _pulse2percept: https://github.com/pulse2percept/pulse2percept
 .. _visual prostheses: https://en.wikipedia.org/wiki/Visual_prosthesis
 .. _ArgusII: https://www.secondsight.com/discover-argus
-.. _AlphaIMS: https://www.retina-implant.de
+.. _BVA24: https://bionicvis.com/products-technology
 .. _PRIMA: https://www.pixium-vision.com/prima-bionic-vision-system
 
 Simulations such as the above are likely to be critical for providing realistic
