@@ -4,7 +4,7 @@ from string import ascii_uppercase
 from itertools import product
 from collections import OrderedDict
 
-from .electrodes import Electrode, PointSource, DiskElectrode, SquareElectrode
+from .electrodes import Electrode, PointSource, DiskElectrode
 from ..utils import PrettyPrint
 
 

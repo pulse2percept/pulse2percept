@@ -158,7 +158,7 @@ def test_ElectrodeGrid(gtype):
     with pytest.raises(ValueError):
         ElectrodeGrid([1, 2, 3], 10)
     with pytest.raises(TypeError):
-        ElectrodeGrid({'1': 2})
+        ElectrodeGrid({'1': 2}, 10)
 
     # Must pass in valid Electrode type:
     with pytest.raises(TypeError):

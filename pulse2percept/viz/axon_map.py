@@ -12,7 +12,7 @@ import logging
 from copy import deepcopy
 
 from ..implants import ProsthesisSystem
-from ..utils import parfor, deprecated
+from ..utils import deprecated
 from ..models import AxonMapSpatial
 
 

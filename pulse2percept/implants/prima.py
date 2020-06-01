@@ -1,10 +1,8 @@
 """`PhotovoltaicPixel`, `PRIMA`, `PRIMA75`, `PRIMA55`, `PRIMA40`"""
 
-import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, RegularPolygon
 
 import numpy as np
-from collections import OrderedDict
 # Using or importing the ABCs from 'collections' instead of from
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
 from collections.abc import Sequence

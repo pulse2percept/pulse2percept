@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 import numpy.testing as npt
-from matplotlib.patches import Circle
+from matplotlib.patches import Circle, Rectangle, RegularPolygon
 
 from pulse2percept.implants import (Electrode, DiskElectrode, PointSource,
                                     SquareElectrode, HexElectrode)
@@ -81,3 +81,56 @@ def test_DiskElectrode():
     # Slots:
     npt.assert_equal(hasattr(electrode, '__slots__'), True)
     npt.assert_equal(hasattr(electrode, '__dict__'), False)
+    # Plots:
+    ax = electrode.plot()
+    npt.assert_equal(len(ax.texts), 0)
+    npt.assert_equal(len(ax.patches), 1)
+    npt.assert_equal(isinstance(ax.patches[0], Circle), True)
+
+
+def test_SquareElectrode():
+    with pytest.raises(TypeError):
+        SquareElectrode(0, 0, 0, [1, 2])
+    with pytest.raises(TypeError):
+        SquareElectrode(0, np.array([0, 1]), 0, 1)
+    # Invalid radius:
+    with pytest.raises(ValueError):
+        SquareElectrode(0, 0, 0, -5)
+    # Check params:
+    electrode = SquareElectrode(0, 1, 2, 100)
+    npt.assert_almost_equal(electrode.x, 0)
+    npt.assert_almost_equal(electrode.y, 1)
+    npt.assert_almost_equal(electrode.z, 2)
+    npt.assert_almost_equal(electrode.a, 100)
+    # Slots:
+    npt.assert_equal(hasattr(electrode, '__slots__'), True)
+    npt.assert_equal(hasattr(electrode, '__dict__'), False)
+    # Plots:
+    ax = electrode.plot()
+    npt.assert_equal(len(ax.texts), 0)
+    npt.assert_equal(len(ax.patches), 1)
+    npt.assert_equal(isinstance(ax.patches[0], Rectangle), True)
+
+
+def test_HexElectrode():
+    with pytest.raises(TypeError):
+        HexElectrode(0, 0, 0, [1, 2])
+    with pytest.raises(TypeError):
+        HexElectrode(0, np.array([0, 1]), 0, 1)
+    # Invalid radius:
+    with pytest.raises(ValueError):
+        HexElectrode(0, 0, 0, -5)
+    # Check params:
+    electrode = HexElectrode(0, 1, 2, 100)
+    npt.assert_almost_equal(electrode.x, 0)
+    npt.assert_almost_equal(electrode.y, 1)
+    npt.assert_almost_equal(electrode.z, 2)
+    npt.assert_almost_equal(electrode.a, 100)
+    # Slots:
+    npt.assert_equal(hasattr(electrode, '__slots__'), True)
+    npt.assert_equal(hasattr(electrode, '__dict__'), False)
+    # Plots:
+    ax = electrode.plot()
+    npt.assert_equal(len(ax.texts), 0)
+    npt.assert_equal(len(ax.patches), 1)
+    npt.assert_equal(isinstance(ax.patches[0], RegularPolygon), True)
