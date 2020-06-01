@@ -95,7 +95,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'pulse2percept'
-copyright = '2016 - 2019, pulse2percept developers (BSD License)'
+copyright = '2016 - 2020, pulse2percept developers (BSD License)'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -272,7 +272,7 @@ sphinx_gallery_conf = {
     'examples_dirs': ['../examples'],
     'gallery_dirs': ['examples'],
     'remove_config_comments': True,
-    'thumbnail_size': (250, 250),
+    'thumbnail_size': (280, 280),
     'subsection_order': ExplicitOrder(['../examples/implants',
                                        '../examples/stimuli',
                                        '../examples/models',
