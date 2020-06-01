@@ -2,8 +2,7 @@
 import numpy as np
 
 from . import MIN_AMP
-from .base import Stimulus, TimeSeries
-from ..utils import deprecated
+from .base import Stimulus
 
 
 class MonophasicPulse(Stimulus):
@@ -296,97 +295,3 @@ class AsymmetricBiphasicPulse(Stimulus):
         params.update({'cathodic_first': self.cathodic_first,
                        'charge_balanced': self.charge_balanced})
         return params
-
-
-@deprecated(alt_func='MonophasicPulse', deprecated_version='0.6',
-            removed_version='0.7')
-class LegacyMonophasicPulse(TimeSeries):
-    """A pulse with a single phase
-    Parameters
-    ----------
-    ptype : {'anodic', 'cathodic'}
-        Pulse type. Anodic pulses have positive current amplitude,
-        cathodic pulses have negative amplitude.
-    pdur : float
-        Pulse duration (s).
-    tsample : float
-        Sampling time step (s).
-    delay_dur : float, optional
-        Pulse delay (s). Pulse will be zero-padded (prepended) to deliver
-        the pulse only after ``delay_dur`` milliseconds. Default: 0.
-    stim_dur : float, optional
-        Stimulus duration (ms). Pulse will be zero-padded (appended) to fit
-        the stimulus duration. Default: No additional zero padding,
-        ``stim_dur`` is ``pdur`` + ``delay_dur``.
-    """
-    __slots__ = ()
-
-    def __init__(self, ptype, pdur, tsample, delay_dur=0, stim_dur=None):
-        if tsample <= 0:
-            raise ValueError("tsample must be a non-negative float.")
-
-        if stim_dur is None:
-            stim_dur = pdur + delay_dur
-
-        # Convert durations to number of samples
-        pulse_size = int(np.round(pdur / tsample))
-        delay_size = int(np.round(delay_dur / tsample))
-        stim_size = int(np.round(stim_dur / tsample))
-
-        if ptype == 'cathodic':
-            pulse = -np.ones(pulse_size)
-        elif ptype == 'anodic':
-            pulse = np.ones(pulse_size)
-        else:
-            raise ValueError("Acceptable values for `ptype` are 'anodic', "
-                             "'cathodic'.")
-
-        pulse = np.concatenate((np.zeros(delay_size), pulse,
-                                np.zeros(stim_size)))
-        super(LegacyMonophasicPulse, self).__init__(tsample, pulse[:stim_size])
-
-
-@deprecated(alt_func='BiphasicPulse', deprecated_version='0.6',
-            removed_version='0.7')
-class LegacyBiphasicPulse(TimeSeries):
-    """A charge-balanced pulse with a cathodic and anodic phase
-    A single biphasic pulse with duration ``pdur`` per phase,
-    separated by ``interphase_dur`` is returned.
-    Parameters
-    ----------
-    ptype : {'cathodicfirst', 'anodicfirst'}
-        A cathodic-first pulse has the negative phase first, whereas an
-        anodic-first pulse has the positive phase first.
-    pdur : float
-        Duration of single (positive or negative) pulse phase in seconds.
-    tsample : float
-        Sampling time step in seconds.
-    interphase_dur : float, optional
-        Duration of inter-phase interval (between positive and negative
-        pulse) in seconds. Default: 0.
-    """
-    __slots__ = ()
-
-    def __init__(self, ptype, pdur, tsample, interphase_dur=0):
-        if tsample <= 0:
-            raise ValueError("tsample must be a non-negative float.")
-
-        # Get the two monophasic pulses
-        on = LegacyMonophasicPulse('anodic', pdur, tsample, 0, pdur)
-        off = LegacyMonophasicPulse('cathodic', pdur, tsample, 0, pdur)
-
-        # Insert interphase gap if necessary
-        gap = np.zeros(int(round(interphase_dur / tsample)))
-
-        # Order the pulses
-        if ptype == 'cathodicfirst':
-            # has negative current first
-            pulse = np.concatenate((off.data, gap), axis=0)
-            pulse = np.concatenate((pulse, on.data), axis=0)
-        elif ptype == 'anodicfirst':
-            pulse = np.concatenate((on.data, gap), axis=0)
-            pulse = np.concatenate((pulse, off.data), axis=0)
-        else:
-            raise ValueError("Acceptable values for `type` are "
-                             "'anodicfirst' or 'cathodicfirst'")
-        super(LegacyBiphasicPulse, self).__init__(tsample, pulse)

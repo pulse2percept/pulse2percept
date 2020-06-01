@@ -17,7 +17,7 @@
 # charge-balanced (here expressed in microamps):
 MIN_AMP = 1e-5
 
-from .base import Stimulus, TimeSeries
+from .base import Stimulus
 from .pulses import AsymmetricBiphasicPulse, BiphasicPulse, MonophasicPulse
 from .pulse_trains import (PulseTrain, BiphasicPulseTrain,
                            BiphasicTripletTrain, AsymmetricBiphasicPulseTrain)
@@ -30,6 +30,5 @@ __all__ = [
     'BiphasicTripletTrain',
     'MonophasicPulse',
     'PulseTrain',
-    'Stimulus',
-    'TimeSeries'
+    'Stimulus'
 ]
