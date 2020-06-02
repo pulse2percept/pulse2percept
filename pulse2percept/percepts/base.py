@@ -45,6 +45,7 @@ class Percept(Data):
             'axes': [('ydva', ydva), ('xdva', xdva), ('time', time)],
             'metadata': metadata
         }
+        self._frame = 0
         # def f(a1, a2):
         #     # https://stackoverflow.com/a/26410051
         #     return (((a1 - a2[:,:,np.newaxis])).prod(axis=1)<=0).any(axis=0)
@@ -107,8 +108,7 @@ class Percept(Data):
             idx = np.argmax(np.max(self.data, axis=(0, 1)))
             times = [self.time[idx]]
             frames = [self.data[..., idx]]
-        else:
-            if
+        else: 
             # Need to be smart about what to do when plotting more than one
             # frame.
             raise NotImplementedError

@@ -13,6 +13,7 @@ import logging
 from scipy.interpolate import interp1d
 import skimage.color as skic
 import skimage.transform as skit
+import imageio
 
 from ..utils import PrettyPrint
 from ._base import fast_compress
@@ -711,7 +712,7 @@ class Stimulus(PrettyPrint):
             raise AttributeError(err_s)
 
 
-class VideoStimulus(p2p.stimuli.Stimulus):
+class VideoStimulus(Stimulus):
 
     def __init__(self, fname, resize=None):
         reader = imageio.get_reader(fname)
@@ -725,7 +726,7 @@ class VideoStimulus(p2p.stimuli.Stimulus):
             if resize is not None:
                 frame = skit.resize(frame, resize)
             vid.append(frame)
-        vid = np.array(vid)
+        vid = np.array(vid).transpose((1, 2, 0))
         # Call the Stimulus constructor:
         n_frames = vid.shape[-1]
         time = np.arange(n_frames) * meta['fps']
