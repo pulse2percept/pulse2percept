@@ -3,3 +3,5 @@ numpy>=1.9
 scipy>=1.0
 matplotlib>=2.1
 joblib>=0.11
+imageio>=2.8
+imageio_ffmpeg>=0.4
