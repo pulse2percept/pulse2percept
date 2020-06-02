@@ -8,8 +8,11 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 np.set_printoptions(precision=2, threshold=5, edgeitems=2)
+
 import logging
 from scipy.interpolate import interp1d
+import skimage.color as skic
+import skimage.transform as skit
 
 from ..utils import PrettyPrint
 from ._base import fast_compress
@@ -706,3 +709,25 @@ class Stimulus(PrettyPrint):
             err_s = ("The attribute `is_compressed` can only be set in the "
                      "constructor or in `compress`, not in `%s`." % f_caller)
             raise AttributeError(err_s)
+
+
+class VideoStimulus(p2p.stimuli.Stimulus):
+
+    def __init__(self, fname, resize=None):
+        reader = imageio.get_reader(fname)
+        meta = reader.get_meta_data()
+        meta['source'] = fname
+        # Build the NumPy array:
+        vid = []
+        for frame in reader:
+            if frame.shape[-1] == 3:
+                frame = skic.rgb2gray(frame)
+            if resize is not None:
+                frame = skit.resize(frame, resize)
+            vid.append(frame)
+        vid = np.array(vid)
+        # Call the Stimulus constructor:
+        n_frames = vid.shape[-1]
+        time = np.arange(n_frames) * meta['fps']
+        super(VideoStimulus, self).__init__(vid.reshape((-1, n_frames)),
+                                            time=time, metadata=meta)
