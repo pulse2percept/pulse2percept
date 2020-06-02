@@ -714,7 +714,7 @@ class Stimulus(PrettyPrint):
 
 class VideoStimulus(Stimulus):
 
-    def __init__(self, fname, resize=None, format='?'):
+    def __init__(self, fname, resize=None, format=None):
         reader = imageio.get_reader(fname, format=format)
         meta = reader.get_meta_data()
         meta['source'] = fname

@@ -124,18 +124,17 @@ class Percept(Data):
                                 "%s." % type(ax))
 
         cmap = kwargs['cmap'] if 'cmap' in kwargs else 'gray'
+        X, Y = np.meshgrid(self.xdva, self.ydva, indexing='xy')
         if kind == 'pcolor':
             # Create a pseudocolor plot. Make sure to pass additional keyword
             # arguments that have not already been extracted:
             other_kwargs = {key: kwargs[key]
                             for key in (kwargs.keys() - ['figsize', 'cmap'])}
-            ax.pcolor(np.flipud(frame), cmap=cmap, **other_kwargs)
-            ax.set_xticks(np.linspace(0, self.shape[1], num=5))
-            ax.set_yticks(np.linspace(self.shape[0], 0, num=5))
+            ax.pcolormesh(X, Y, np.flipud(frame), cmap=cmap, **other_kwargs)
         elif kind == 'hex':
             # Create a hexbin plot:
             gridsize = kwargs['gridsize'] if 'gridsize' in kwargs else 80
-            X, Y = np.meshgrid(self.xdva, self.ydva, indexing='xy')
+            #X, Y = np.meshgrid(self.xdva, self.ydva, indexing='xy')
             # Make sure to pass additional keyword arguments that have not
             # already been extracted:
             other_kwargs = {key: kwargs[key]
@@ -143,16 +142,14 @@ class Percept(Data):
                                                          'gridsize'])}
             ax.hexbin(X.ravel(), Y.ravel()[::-1], frame.ravel(),
                       cmap=cmap, gridsize=gridsize, **other_kwargs)
-            ax.axis([self.xdva[0], self.xdva[-1], self.ydva[0], self.ydva[-1]])
-            ax.set_xticks(np.linspace(self.xdva[0], self.xdva[-1], num=5))
-            ax.set_yticks(np.linspace(self.ydva[0], self.ydva[-1], num=5))
         else:
             raise ValueError("Unknown plot option '%s'. Choose either 'pcolor'"
                              "or 'hex'." % kind)
-        ax.set_xticklabels(np.linspace(self.xdva[0], self.xdva[-1], num=5))
+        ax.set_aspect('equal', adjustable='box')
+        ax.set_xticks(np.linspace(self.xdva[0], self.xdva[-1], num=5))
         ax.set_xlabel('x (dva)')
-        ax.set_yticklabels(np.linspace(self.ydva[0], self.ydva[-1], num=5))
-        ax.set_ylabel('y (dva)')
+        ax.set_yticks(np.linspace(self.ydva[0], self.ydva[-1], num=5))
+        ax.set_ylabel('y (dva)') 
         return ax
 
     def play(self, ax=None, fps=None):

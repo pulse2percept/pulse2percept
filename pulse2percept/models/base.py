@@ -169,7 +169,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # We will be simulating a patch of the visual field (xrange/yrange
             # in degrees of visual angle), at a given spatial resolution (step
             # size):
-            'xrange': (-20, 20),  # dva
+            'xrange': (-15, 15),  # dva
             'yrange': (-15, 15),  # dva
             'xystep': 0.25,  # dva
             'grid_type': 'rectangular',
