@@ -106,8 +106,7 @@ class Percept(Data):
         """
         if time is None:
             idx = np.argmax(np.max(self.data, axis=(0, 1)))
-            times = [self.time[idx]]
-            frames = [self.data[..., idx]]
+            frame = self.data[..., idx]
         else: 
             # Need to be smart about what to do when plotting more than one
             # frame.
@@ -179,6 +178,7 @@ class Percept(Data):
             fig, ax = plt.subplots(figsize=(8, 5))
         else:
             fig = ax.figure
+        self.reset()
         mat = ax.imshow(next(self), cmap='gray', vmax=self.data.max())
         fig.colorbar(mat)
         plt.close(fig)
