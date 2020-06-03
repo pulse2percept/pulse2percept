@@ -1,4 +1,4 @@
-"""`GridXY`, `RetinalCoordTrafo`, `Watson2014Trafo`, `Watson2014DisplaceTrafo`,
+"""`Grid2D`, `RetinalCoordTrafo`, `Watson2014Trafo`, `Watson2014DisplaceTrafo`,
    `cart2pol`, `pol2cart`"""
 import numpy as np
 from abc import ABCMeta, abstractmethod
@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from .base import PrettyPrint
 
 
-class GridXY(PrettyPrint):
+class Grid2D(PrettyPrint):
     """2D spatial grid
 
     This class generates a two-dimensional mesh grid from a range of x, y
@@ -17,20 +17,22 @@ class GridXY(PrettyPrint):
 
     Parameters
     ----------
-    x_range : tuple
-        (x_min, x_max), includes end point
-    y_range : tuple
-        (y_min, y_max), includes end point
-    step : int, double
-        Step size, same for x and y
+    x_range : (x_min, x_max)
+        A tuple indicating the range of x values (includes end points)
+    y_range : tuple, (y_min, y_max)
+        A tuple indicating the range of y values (includes end points)
+    step : int, double, tuple
+        Step size. If int or double, the same step will apply to both x and
+        y ranges. If a tuple, it is interpreted as (x_step, y_step).
     grid_type : {'rectangular', 'hexagonal'}
         The grid type
 
-    .. note::
-
-        The grid uses Cartesian indexing (``indexing='xy'`` for NumPy's
-        ``meshgrid`` function). This implies that the grid's shape will be
-        (number of y coordinates) x (number of x coordinates).
+    Notes
+    -----
+    *  The grid uses Cartesian indexing (``indexing='xy'`` for NumPy's
+       ``meshgrid`` function). This implies that the grid's shape will be
+       (number of y coordinates) x (number of x coordinates).
+    *  If a range is zero, the step size is irrelevant.
 
     Examples
     --------
@@ -75,16 +77,23 @@ class GridXY(PrettyPrint):
                              "not %s.") % type(y_range))
         if len(x_range) != 2 or len(y_range) != 2:
             raise ValueError("x_range and y_range must have 2 elements.")
-        if isinstance(step, Sequence):
-            raise TypeError("step must be a scalar.")
+        if isinstance(step, (tuple, list, np.ndarray)):
+            if len(step) != 2:
+                raise ValueError("If 'step' is a tuple, it must provide "
+                                 "two values (x_step, y_step), not "
+                                 "%d." % len(step))
+            x_step = step[0]
+            y_step = step[1]
+        else:
+            x_step = y_step = step
         # Build the grid from `x_range`, `y_range`. If the range is 0, make
         # sure that the number of steps is 1, because linspace(0, 0, num=5)
         # will return a 1x5 array:
         xdiff = np.abs(np.diff(x_range))
-        nx = int(np.ceil((xdiff + 1) / step)) if xdiff != 0 else 1
+        nx = int(np.round(xdiff / x_step) + 1) if xdiff != 0 else 1
         self._xflat = np.linspace(*x_range, num=nx, dtype=np.float32)
         ydiff = np.abs(np.diff(y_range))
-        ny = int(np.ceil((ydiff + 1) / step)) if ydiff != 0 else 1
+        ny = int(np.round(ydiff / y_step) + 1) if ydiff != 0 else 1
         self._yflat = np.linspace(*y_range, num=ny, dtype=np.float32)
         self.x, self.y = np.meshgrid(self._xflat, self._yflat, indexing='xy')
         self.shape = self.x.shape

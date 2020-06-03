@@ -8,7 +8,7 @@ import numpy as np
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
 from ..percepts import Percept
-from ..utils import PrettyPrint, Frozen, FreezeError, GridXY, bisect
+from ..utils import PrettyPrint, Frozen, FreezeError, Grid2D, bisect
 
 
 class NotBuiltError(ValueError, AttributeError):
@@ -218,7 +218,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         for key, val in build_params.items():
             setattr(self, key, val)
         # Build the spatial grid:
-        self.grid = GridXY(self.xrange, self.yrange, step=self.xystep,
+        self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
                            grid_type=self.grid_type)
         self.grid.xret = self.dva2ret(self.grid.x)
         self.grid.yret = self.dva2ret(self.grid.y)
