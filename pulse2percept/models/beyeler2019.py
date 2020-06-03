@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pickle
 
-from ..utils import parfor, GridXY, Watson2014Transform
+from ..utils import parfor, Grid2D, Watson2014Transform
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel

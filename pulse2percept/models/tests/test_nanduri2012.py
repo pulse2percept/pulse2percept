@@ -224,7 +224,7 @@ def test_Nanduri2012Model_predict_percept():
         idx_frame = np.argmax(np.max(percept.data, axis=(0, 1)))
         brightest_frame = percept.data[..., idx_frame]
         frames_amp.append(brightest_frame)
-    npt.assert_equal([np.sum(f > bright_th) for f in frames_amp], [0, 180])
+    npt.assert_equal([np.sum(f > bright_th) for f in frames_amp], [0, 161])
     freqs = [20, 120]
     frames_freq = []
     for freq in freqs:
@@ -235,4 +235,4 @@ def test_Nanduri2012Model_predict_percept():
         idx_frame = np.argmax(np.max(percept.data, axis=(0, 1)))
         brightest_frame = percept.data[..., idx_frame]
         frames_freq.append(brightest_frame)
-    npt.assert_equal([np.sum(f > bright_th) for f in frames_freq], [32, 60])
+    npt.assert_equal([np.sum(f > bright_th) for f in frames_freq], [21, 49])
