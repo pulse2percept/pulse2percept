@@ -38,7 +38,7 @@ class Grid2D(PrettyPrint):
     --------
     You can iterate through a grid as if it were a list:
 
-    >>> grid = GridXY((0, 1), (2, 3))
+    >>> grid = Grid2D((0, 1), (2, 3))
     >>> for x, y in grid:
     ...     print(x, y)
     0.0 2.0
