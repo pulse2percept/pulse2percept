@@ -16,6 +16,7 @@ from ..utils import deprecated
 from ..models import AxonMapSpatial
 
 
+@deprecated(deprecated_version='0.7', removed_version='0.8')
 def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
                   upside_down=False, annotate=False, xlim=None, ylim=None):
     """Plot an axon map
