@@ -51,6 +51,8 @@ Deprecations
 Bug fixes
 ~~~~~~~~~
 
+*  :py:class:`~pulse2percept.utils.Grid2D`: Grid now produces correct step size
+   even when range is not divisible by step (:pull:`201`)
 *  :py:class:`~pulse2percept.implants.AlphaIMS`: Implant now uses
    :py:class:`~pulse2percept.implants.SquareElectrode` objects and has exactly
    1500 electrodes (:pull:`193`)
