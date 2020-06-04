@@ -319,10 +319,10 @@ def test_AxonMapModel_predict_percept(engine):
     # Single bright pixel, rest of arc is less bright:
     npt.assert_equal(np.sum(percept.data > 0.8), 1)
     npt.assert_equal(np.sum(percept.data > 0.6), 3)
-    npt.assert_equal(np.sum(percept.data > 0.1), 26)
-    npt.assert_equal(np.sum(percept.data > 0.0001), 95)
+    npt.assert_equal(np.sum(percept.data > 0.1), 21)
+    npt.assert_equal(np.sum(percept.data > 0.0001), 70)
     # Overall only a few bright pixels:
-    npt.assert_almost_equal(np.sum(percept.data), 9.9933, decimal=3)
+    npt.assert_almost_equal(np.sum(percept.data), 8.0898, decimal=3)
     # Brightest pixel is in lower right:
     npt.assert_almost_equal(percept.data[33, 46, 0], np.max(percept.data))
     # Top half is empty:
@@ -337,8 +337,8 @@ def test_AxonMapModel_predict_percept(engine):
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     # Most spots are pretty bright, but there are 2 dimmer ones (due to their
     # location on the retina):
-    npt.assert_equal(np.sum(percept.data > 0.5), 33)
-    npt.assert_equal(np.sum(percept.data > 0.275), 62)
+    npt.assert_equal(np.sum(percept.data > 0.5), 28)
+    npt.assert_equal(np.sum(percept.data > 0.275), 58)
 
     # Model gives same outcome as Spatial:
     spatial = AxonMapSpatial(engine='serial', xystep=1, rho=100, axlambda=40)
