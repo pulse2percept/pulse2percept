@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
 
 from pulse2percept.percepts import Percept
-from pulse2percept.utils import GridXY
+from pulse2percept.utils import Grid2D
 
 
 def test_Percept():
@@ -30,12 +30,12 @@ def test_Percept():
     # Labels from a grid.
     y_range = (-1, 1)
     x_range = (-2, 2)
-    grid = GridXY(x_range, y_range)
+    grid = Grid2D(x_range, y_range)
     percept = Percept(ndarray, space=grid)
     npt.assert_almost_equal(percept.xdva, grid._xflat)
     npt.assert_almost_equal(percept.ydva, grid._yflat)
     npt.assert_almost_equal(percept.time, [0])
-    grid = GridXY(x_range, y_range)
+    grid = Grid2D(x_range, y_range)
     percept = Percept(ndarray, space=grid)
     npt.assert_almost_equal(percept.xdva, grid._xflat)
     npt.assert_almost_equal(percept.ydva, grid._yflat)
@@ -45,7 +45,7 @@ def test_Percept():
 def test_Percept_plot():
     y_range = (-1, 1)
     x_range = (-2, 2)
-    grid = GridXY(x_range, y_range)
+    grid = Grid2D(x_range, y_range)
     percept = Percept(np.arange(15).reshape((3, 5, 1)), space=grid)
 
     # Basic usage of pcolor:

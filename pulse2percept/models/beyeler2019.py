@@ -7,7 +7,7 @@ import pickle
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
-from ..utils import parfor, GridXY, Watson2014Transform
+from ..utils import parfor, Grid2D, Watson2014Transform
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel

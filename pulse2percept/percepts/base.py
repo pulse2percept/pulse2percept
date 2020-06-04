@@ -8,7 +8,7 @@ from matplotlib.axes import Subplot
 from matplotlib.animation import FuncAnimation
 import imageio
 
-from ..utils import Data, GridXY
+from ..utils import Data, Grid2D
 
 
 class Percept(Data):
@@ -20,7 +20,7 @@ class Percept(Data):
     ----------
     data : 3D NumPy array
         A NumPy array specifying the percept in (Y, X, T) dimensions
-    space : :py:class:`~pulse2percept.utils.GridXY`
+    space : :py:class:`~pulse2percept.utils.Grid2D`
         A grid object specifying the (x,y) coordinates in space
     time : 1D array
         A list of time points
@@ -33,8 +33,8 @@ class Percept(Data):
         xdva = None
         ydva = None
         if space is not None:
-            if not isinstance(space, GridXY):
-                raise TypeError("'space' must be a GridXY object, not "
+            if not isinstance(space, Grid2D):
+                raise TypeError("'space' must be a Grid2D object, not "
                                 "%s." % type(space))
             xdva = space._xflat
             ydva = space._yflat
