@@ -117,22 +117,26 @@ class Percept(Data):
             if 'figsize' in kwargs:
                 figsize = kwargs['figsize']
             else:
-                figsize = np.int32(np.array(self.shape[:2][::-1]) / 15)
-                figsize = np.maximum(figsize, 1)
+                figsize = (12, 8)
+                # figsize = np.int32(np.array(self.shape[:2][::-1]) / 15)
+                # figsize = np.maximum(figsize, 1)
             _, ax = plt.subplots(figsize=figsize)
         else:
             if not isinstance(ax, Subplot):
                 raise TypeError("'ax' must be a Matplotlib axis, not "
                                 "%s." % type(ax))
 
+        vmin, vmax = frame.min(), frame.max()
         cmap = kwargs['cmap'] if 'cmap' in kwargs else 'gray'
         X, Y = np.meshgrid(self.xdva, self.ydva, indexing='xy')
         if kind == 'pcolor':
             # Create a pseudocolor plot. Make sure to pass additional keyword
             # arguments that have not already been extracted:
             other_kwargs = {key: kwargs[key]
-                            for key in (kwargs.keys() - ['figsize', 'cmap'])}
-            ax.pcolormesh(X, Y, np.flipud(frame), cmap=cmap, **other_kwargs)
+                            for key in (kwargs.keys() - ['figsize', 'cmap',
+                                                         'vmin', 'vmax'])}
+            ax.pcolormesh(X, Y, np.flipud(frame), cmap=cmap, vmin=vmin,
+                          vmax=vmax, **other_kwargs)
         elif kind == 'hex':
             # Create a hexbin plot:
             gridsize = kwargs['gridsize'] if 'gridsize' in kwargs else 80
@@ -141,15 +145,19 @@ class Percept(Data):
             # already been extracted:
             other_kwargs = {key: kwargs[key]
                             for key in (kwargs.keys() - ['figsize', 'cmap',
-                                                         'gridsize'])}
+                                                         'gridsize', 'vmin',
+                                                         'vmax'])}
             ax.hexbin(X.ravel(), Y.ravel()[::-1], frame.ravel(),
-                      cmap=cmap, gridsize=gridsize, **other_kwargs)
+                      cmap=cmap, gridsize=gridsize, vmin=vmin, vmax=vmax,
+                      **other_kwargs)
         else:
             raise ValueError("Unknown plot option '%s'. Choose either 'pcolor'"
                              "or 'hex'." % kind)
         ax.set_aspect('equal', adjustable='box')
+        ax.set_xlim(self.xdva[0], self.xdva[-1])
         ax.set_xticks(np.linspace(self.xdva[0], self.xdva[-1], num=5))
         ax.set_xlabel('x (dva)')
+        ax.set_ylim(self.ydva[0], self.ydva[-1])
         ax.set_yticks(np.linspace(self.ydva[0], self.ydva[-1], num=5))
         ax.set_ylabel('y (dva)')
         return ax
@@ -181,6 +189,9 @@ class Percept(Data):
             while True:
                 yield next(self)
 
+        if self.time is None:
+            raise ValueError("Cannot animate a percept with time=None.")
+
         # There are several options to animate a percept in Jupyter/IPython
         # (see https://stackoverflow.com/a/46878531). Displaying the animation
         # as HTML with JavaScript is compatible with most browsers and even
@@ -207,7 +218,7 @@ class Percept(Data):
         ani = FuncAnimation(fig, update, data_gen, interval=interval)
         return ani
 
-    def save(self, fname='percept.mp4', fps=None):
+    def save(self, fname, fps=None):
         """Save the percept as an MP4 or GIF
 
         Parameters
@@ -215,10 +226,13 @@ class Percept(Data):
         fname : str
             The filename to be created.
         """
-        if fps is None:
-            interval = np.unique(np.diff(self.time))
-            if len(interval) > 1:
-                raise NotImplementedError
-            fps = 1000.0 / interval[0]
-        imageio.mimwrite(fname, self.data.transpose((2, 0, 1)), fps=fps)
+        if self.time is None:
+            imageio.imwrite(fname, self.data)
+        else:
+            if fps is None:
+                interval = np.unique(np.diff(self.time))
+                if len(interval) > 1:
+                    raise NotImplementedError
+                fps = 1000.0 / interval[0]
+            imageio.mimwrite(fname, self.data.transpose((2, 0, 1)), fps=fps)
         print('Created %s' % fname)

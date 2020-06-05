@@ -468,10 +468,10 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         if not isinstance(stim, (Stimulus, Percept)):
             raise TypeError(("'stim' must be a Stimulus or Percept object, "
                              "not %s.") % type(stim))
-        if stim.time is None and t_percept is not None:
-            raise ValueError("Cannot calculate temporal response at times "
-                             "t_percept=%s, because stimulus/percept does not "
-                             "have a time component." % t_percept)
+        if stim.time is None:
+            raise ValueError("Cannot calculate temporal response, because "
+                             "stimulus/percept does not have a time "
+                             "component." % t_percept)
         # Make sure we don't change the user's Stimulus/Percept object:
         _stim = deepcopy(stim)
         if isinstance(stim, Stimulus):
@@ -774,14 +774,19 @@ class Model(PrettyPrint):
         if implant.stim is None or (not self.has_space and not self.has_time):
             # Nothing to see here:
             return None
+        if implant.stim.time is None and t_percept is not None:
+            raise ValueError("Cannot calculate temporal response at times "
+                             "t_percept=%s, because stimulus/percept does not "
+                             "have a time component." % t_percept)
 
         if self.has_space and self.has_time:
             # Need to calculate the spatial response at all stimulus points
             # (i.e., whenever the stimulus changes):
             resp = self.spatial.predict_percept(implant, t_percept=None)
-            # Then pass that to the temporal model, which will output at all
-            # `t_percept` time steps:
-            resp = self.temporal.predict_percept(resp, t_percept=t_percept)
+            if implant.stim.time is not None:
+                # Then pass that to the temporal model, which will output at
+                # all `t_percept` time steps:
+                resp = self.temporal.predict_percept(resp, t_percept=t_percept)
         elif self.has_space:
             resp = self.spatial.predict_percept(implant, t_percept=t_percept)
         elif self.has_time:

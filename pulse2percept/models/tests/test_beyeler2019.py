@@ -43,6 +43,7 @@ def test_ScoreboardSpatial():
     npt.assert_almost_equal(percept.data[2, 3, 1], 0)
     npt.assert_almost_equal(percept.data[3, 4, 0], 0)
     npt.assert_almost_equal(percept.data[3, 4, 1], pmax[1])
+    npt.assert_almost_equal(percept.time, [0, 1])
 
 
 def test_ScoreboardModel():
@@ -76,6 +77,7 @@ def test_ScoreboardModel():
     pmax = percept.data.max(axis=(0, 1))
     npt.assert_almost_equal(percept.data[2, 3, :], pmax)
     npt.assert_almost_equal(pmax[1] / pmax[0], 2.0)
+    npt.assert_almost_equal(percept.time, [0, 1])
 
 
 def test_ScoreboardModel_predict_percept():
@@ -106,6 +108,7 @@ def test_ScoreboardModel_predict_percept():
     spatial.build()
     spatial_percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     npt.assert_almost_equal(percept.data, spatial_percept.data)
+    npt.assert_equal(percept.time, None)
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
@@ -132,6 +135,7 @@ def test_AxonMapSpatial(engine):
     npt.assert_equal(isinstance(percept, Percept), True)
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [1])
     npt.assert_almost_equal(percept.data, 0)
+    npt.assert_equal(percept.time, None)
 
     # Multiple frames are processed independently:
     model = AxonMapSpatial(engine=engine, rho=200, axlambda=100, xystep=5,
@@ -144,6 +148,7 @@ def test_AxonMapSpatial(engine):
     npt.assert_almost_equal(percept.data[2, 3, 1], 0)
     npt.assert_almost_equal(percept.data[3, 4, 0], 0)
     npt.assert_almost_equal(percept.data[3, 4, 1], pmax[1])
+    npt.assert_almost_equal(percept.time, [0, 1])
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
@@ -345,3 +350,4 @@ def test_AxonMapModel_predict_percept(engine):
     spatial.build()
     spatial_percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     npt.assert_almost_equal(percept.data, spatial_percept.data)
+    npt.assert_equal(percept.time, None)

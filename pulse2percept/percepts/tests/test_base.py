@@ -18,8 +18,9 @@ def test_Percept():
     npt.assert_almost_equal(percept.xdva, np.arange(ndarray.shape[1]))
     npt.assert_equal(hasattr(percept, 'ydva'), True)
     npt.assert_almost_equal(percept.ydva, np.arange(ndarray.shape[0]))
+    # Singleton dimensions can be None:
     npt.assert_equal(hasattr(percept, 'time'), True)
-    npt.assert_almost_equal(percept.time, np.arange(ndarray.shape[2]))
+    npt.assert_equal(percept.time, None)
 
     # Specific labels:
     percept = Percept(ndarray, time=0.4)
@@ -34,12 +35,16 @@ def test_Percept():
     percept = Percept(ndarray, space=grid)
     npt.assert_almost_equal(percept.xdva, grid._xflat)
     npt.assert_almost_equal(percept.ydva, grid._yflat)
-    npt.assert_almost_equal(percept.time, [0])
+    npt.assert_equal(percept.time, None)
     grid = Grid2D(x_range, y_range)
-    percept = Percept(ndarray, space=grid)
+    percept = Percept(ndarray, space=grid, time=0)
     npt.assert_almost_equal(percept.xdva, grid._xflat)
     npt.assert_almost_equal(percept.ydva, grid._yflat)
     npt.assert_almost_equal(percept.time, [0])
+
+    # Single time point with t=0 vs t=None:
+    percept = Percept(np.ones((3, 4, 1)), time=None)
+    npt.assert_equal(percept.time, None)
 
 
 def test_Percept_plot():
@@ -51,10 +56,10 @@ def test_Percept_plot():
     # Basic usage of pcolor:
     ax = percept.plot(kind='pcolor')
     npt.assert_equal(isinstance(ax, Subplot), True)
-    npt.assert_almost_equal(ax.axis(), [0, len(percept.xdva),
-                                        0, len(percept.ydva)])
+    npt.assert_almost_equal(ax.axis(), [*x_range, *y_range])
+    frame = percept.get_brightest_frame()
     npt.assert_almost_equal(ax.collections[0].get_clim(),
-                            [percept.data.min(), percept.data.max()])
+                            [frame.min(), frame.max()])
 
     # Basic usage of hex:
     ax = percept.plot(kind='hex')
