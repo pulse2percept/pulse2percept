@@ -43,7 +43,8 @@ def test_Nanduri2012Spatial():
         model.predict_percept(implant)
 
     # Multiple frames are processed independently:
-    model = Nanduri2012Spatial(engine='serial', atten_a=14000, xystep=5)
+    model = Nanduri2012Spatial(engine='serial', atten_a=14000, xystep=5,
+                               xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 2]}))
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
