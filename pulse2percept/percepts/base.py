@@ -215,7 +215,7 @@ class Percept(Data):
         fname : str
             The filename to be created.
         """
-                if fps is None:
+        if fps is None:
             interval = np.unique(np.diff(self.time))
             if len(interval) > 1:
                 raise NotImplementedError
