@@ -6,7 +6,9 @@ if platform == "darwin":  # OS X
 import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
 from matplotlib.animation import FuncAnimation
+
 import imageio
+import logging
 
 from ..utils import Data, Grid2D
 
@@ -235,4 +237,4 @@ class Percept(Data):
                     raise NotImplementedError
                 fps = 1000.0 / interval[0]
             imageio.mimwrite(fname, self.data.transpose((2, 0, 1)), fps=fps)
-        print('Created %s' % fname)
+        logging.getLogger(__name__).info('Created %s' % fname)
