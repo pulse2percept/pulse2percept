@@ -2,6 +2,10 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 
+from matplotlib.axes import Subplot
+from matplotlib.pyplot import close
+
+
 from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
@@ -149,6 +153,23 @@ def test_AxonMapSpatial(engine):
     npt.assert_almost_equal(percept.data[3, 4, 0], 0)
     npt.assert_almost_equal(percept.data[3, 4, 1], pmax[1])
     npt.assert_almost_equal(percept.time, [0, 1])
+
+
+def test_AxonMapSpatial_plot():
+    model = AxonMapSpatial()
+    ax = model.plot()
+    npt.assert_equal(isinstance(ax, Subplot), True)
+
+    # Electrodes and quadrants can be annotated:
+    for ann_q, n_q in [(True, 4), (False, 0)]:
+        ax = model.plot(annotate=ann_q)
+        npt.assert_equal(len(ax.texts), n_q)
+        close(ax.figure)
+
+    # Setting upside_down flips y axis:
+    ax = model.plot(upside_down=True, autoscale=True)
+    npt.assert_equal(ax.get_xlim(), (-5000, 5000))
+    npt.assert_equal(ax.get_ylim(), (4000, -4000))
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))

@@ -9,6 +9,7 @@ from matplotlib.animation import FuncAnimation
 
 import imageio
 import logging
+from skimage.transform import resize
 
 from ..utils import Data, Grid2D
 
@@ -69,7 +70,7 @@ class Percept(Data):
 
     def rewind(self):
         """Rewind the iterator"""
-        self._frame = 0
+        self._next_frame = 0
 
     def __iter__(self):
         """Iterate over all frames in self.data"""
@@ -78,11 +79,12 @@ class Percept(Data):
 
     def __next__(self):
         """Returns the next frame when iterating over all frames"""
-        frame = self._frame
-        if frame >= self.data.shape[-1]:
+        this_frame = self._next_frame
+        print('next, frame:', this_frame, 'shape:', self.data.shape[-1])
+        if this_frame >= self.data.shape[-1]:
             raise StopIteration
-        self._frame += 1
-        return self.data[..., frame]
+        self._next_frame += 1
+        return self.data[..., this_frame]
 
     def plot(self, time=None, kind='pcolor', ax=None, **kwargs):
         """Plot the percept
@@ -170,8 +172,8 @@ class Percept(Data):
         Parameters
         ----------
         fps : float or None
-            If None, uses time axis. Not supported for non-homogeneous
-            time axis.
+            If None, uses the percept's time axis. Not supported for
+            non-homogeneous time axis.
         ax : matplotlib.axes.Axes; optional, default: None
             A Matplotlib Axes object. If None, a new Axes object will be
             created.
@@ -220,21 +222,52 @@ class Percept(Data):
         ani = FuncAnimation(fig, update, data_gen, interval=interval)
         return ani
 
-    def save(self, fname, fps=None):
+    def save(self, fname, shape=None, fps=None):
         """Save the percept as an MP4 or GIF
 
         Parameters
         ----------
         fname : str
-            The filename to be created.
+            The filename to be created, with the file extension indicating the
+            file type. Percepts with time=None can be saved as images (e.g.,
+            '.jpg', '.png', '.gif'). Multi-frame percepts can be saved as
+            movies (e.g., '.mp4', '.avi', '.mov') or '.gif'.
+        shape : (height, width) or None, optional, default: (320,)
+            The desired width x height of the resulting image/video.
+            Use (h, None) to use a specified height and automatically infer the
+            width from the percept's aspect ratio.
+            Analogously, use (None, w) to use a specified width.
+            If shape is None, width will be set to 320px and height will be
+            inferred accordingly.
+        fps : float or None
+            If None, uses the percept's time axis. Not supported for
+            non-homogeneous time axis.
         """
+        if shape is None:
+            # Use 320px width and infer height from aspect ratio:
+            shape = (None, 320)
+        height, width = shape
+        if height is None and width is None:
+            raise ValueError('If shape is a tuple, must specify either height '
+                             'or width or both.')
+        # Infer height or width if necessary:
+        if height is None and width is not None:
+            height = width / self.data.shape[1] * self.data.shape[0]
+        elif height is not None and width is None:
+            width = height / self.data.shape[0] * self.data.shape[1]
+        # Rescale percept to desired shape:
+        data = resize(self.data, (np.int32(height), np.int32(width)))
+        data = (data - data.min()) / (data.max() - data.min())
+
         if self.time is None:
-            imageio.imwrite(fname, self.data)
+            # No time component, store as an image:
+            imageio.imwrite(fname, data)
         else:
+            # With time component, store as a movie:
             if fps is None:
                 interval = np.unique(np.diff(self.time))
                 if len(interval) > 1:
                     raise NotImplementedError
                 fps = 1000.0 / interval[0]
-            imageio.mimwrite(fname, self.data.transpose((2, 0, 1)), fps=fps)
-        logging.getLogger(__name__).info('Created %s' % fname)
+            imageio.mimwrite(fname, data.transpose((2, 0, 1)), fps=fps)
+        logging.getLogger(__name__).info('Created %s.' % fname)

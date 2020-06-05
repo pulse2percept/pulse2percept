@@ -435,7 +435,7 @@ class AxonMapSpatial(SpatialModel):
                 topbottom = ['bottom', 'top']
             else:
                 topbottom = ['top', 'bottom']
-            if eye == 'RE':
+            if self.eye == 'RE':
                 temporalnasal = ['temporal', 'nasal']
             else:
                 temporalnasal = ['nasal', 'temporal']
