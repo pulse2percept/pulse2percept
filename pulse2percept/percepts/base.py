@@ -242,6 +242,12 @@ class Percept(Data):
         fps : float or None
             If None, uses the percept's time axis. Not supported for
             non-homogeneous time axis.
+
+        Notes
+        -----
+        *  ``shape`` will be adjusted so that width and height are multiples
+            of 16 to ensure compatibility with most codecs and players.
+
         """
         if shape is None:
             # Use 320px width and infer height from aspect ratio:
@@ -257,11 +263,13 @@ class Percept(Data):
             width = height / self.data.shape[0] * self.data.shape[1]
         # Rescale percept to desired shape:
         data = resize(self.data, (np.int32(height), np.int32(width)))
-        data = (data - data.min()) / (data.max() - data.min())
+        data -= data.min()
+        if not np.isclose(data.max(), 0):
+            data /= data.max()
 
         if self.time is None:
             # No time component, store as an image:
-            imageio.imwrite(fname, data)
+            imageio.imwrite(fname, data.astype(np.uint8))
         else:
             # With time component, store as a movie:
             if fps is None:
@@ -269,5 +277,6 @@ class Percept(Data):
                 if len(interval) > 1:
                     raise NotImplementedError
                 fps = 1000.0 / interval[0]
-            imageio.mimwrite(fname, data.transpose((2, 0, 1)), fps=fps)
+            imageio.mimwrite(fname, data.transpose((2, 0, 1)).astype(np.uint8),
+                             fps=fps)
         logging.getLogger(__name__).info('Created %s.' % fname)
