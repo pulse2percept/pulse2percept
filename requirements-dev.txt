@@ -1,5 +1,4 @@
 dask
-scikit_image
 pandas
 h5py
 pytest>=5

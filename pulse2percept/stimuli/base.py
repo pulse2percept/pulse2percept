@@ -11,8 +11,10 @@ np.set_printoptions(precision=2, threshold=5, edgeitems=2)
 
 import logging
 from scipy.interpolate import interp1d
-import skimage.color as skic
-import skimage.transform as skit
+from skimage.io import imread
+from skimage.color import rgb2gray
+from skimage.transform import resize as img_resize
+from skimage import img_as_float
 import imageio
 
 from ..utils import PrettyPrint
@@ -712,23 +714,163 @@ class Stimulus(PrettyPrint):
             raise AttributeError(err_s)
 
 
-class VideoStimulus(Stimulus):
+class ImageStimulus(Stimulus):
+    """ImageStimulus
 
-    def __init__(self, fname, resize=None, format=None):
+    .. versionadded:: 0.7
+
+    A stimulus made from an image, where each pixel gets assigned to an
+    electrode, and grayscale values in the range [0, 255] get converted to
+    activation values in the range [0, 1].
+
+    .. seealso ::
+
+        *  `Basic Concepts > Electrical Stimuli <topics-stimuli>`
+        *  :py:class:`~pulse2percept.stimuli.VideoStimulus`
+
+    Parameters
+    ----------
+    fname : str
+        Path to image file. Supported image types include JPG, PNG, and TIF;
+        and are inferred from the file ending. If the file does not have a
+        proper file ending, specify the file type via ``format``.
+        Use :py:class:`~pulse2percept.stimuli.VideoStimulus` for GIFs.
+
+    format : str
+        An image format string supported by imageio, such as 'JPG', 'PNG', or
+        'TIFF'. Use if the file type cannot be inferred from ``fname``.
+        For a full list of supported formats, see
+        https://imageio.readthedocs.io/en/stable/formats.html.
+
+    resize : (height, width) or None
+        A tuple specifying the desired height and the width of the image
+        stimulus.
+
+    electrodes : int, string or list thereof; optional, default: None
+        Optionally, you can provide your own electrode names. If none are
+        given, electrode names will be numbered 0..N.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional, default: None
+        Additional stimulus metadata can be stored in a dictionary.
+
+    compress : bool, optional, default: False
+        If True, will remove pixels with 0 grayscale value.
+
+    """
+
+    def __init__(self, fname, format=None, resize=None, electrodes=None,
+                 metadata=None, compress=False):
+        # Read the image and convert to float array in [0, 1]:
+        img = img_as_float(imread(fname, as_gray=True, format=format))
+        # Build the metadata container:
+        if metadata is None:
+            metadata = {}
+        metadata['source'] = fname
+        metadata['source_shape'] = img.shape
+        # Resize if necessary:
+        if resize is not None:
+            img = img_resize(img, resize)
+        # Call the Stimulus constructor:
+        super(ImageStimulus, self).__init__(img.ravel(), time=None,
+                                            electrodes=electrodes,
+                                            metadata=metadata,
+                                            compress=compress)
+
+
+class VideoStimulus(Stimulus):
+    """VideoStimulus
+
+    .. versionadded:: 0.7
+
+    A stimulus made from a movie file, where each pixel gets assigned to an
+    electrode, and grayscale values in the range [0, 255] get assigned to
+    activation values in the range [0, 1].
+
+    The frame rate of the movie is used to infer the time points at which to
+    stimulate.
+
+    .. seealso ::
+
+        *  `Basic Concepts > Electrical Stimuli <topics-stimuli>`
+        *  :py:class:`~pulse2percept.stimuli.ImageStimulus`
+
+    Parameters
+    ----------
+    fname : str
+        Path to video file. Supported file types include MP4, AVI, MOV, and
+        GIF; and are inferred from the file ending. If the file does not have
+        a proper file ending, specify the file type via ``format``.
+
+    format : str
+        An image format string supported by imageio, such as 'JPG', 'PNG', or
+        'TIFF'. Use if the file type cannot be inferred from ``fname``.
+        For a full list of supported formats, see
+        https://imageio.readthedocs.io/en/stable/formats.html.
+
+    resize : (height, width) or None
+        A tuple specifying the desired height and the width of the image
+        stimulus.
+
+    electrodes : int, string or list thereof; optional, default: None
+        Optionally, you can provide your own electrode names. If none are
+        given, electrode names will be numbered 0..N.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional, default: None
+        Additional stimulus metadata can be stored in a dictionary.
+
+    compress : bool, optional, default: False
+        If True, will compress the source data in two ways:
+        * Remove electrodes with all-zero activation.
+        * Retain only the time points at which the stimulus changes.
+
+    interp_method : str or int, optional, default: 'linear'
+        For SciPy's ``interp1`` method, specifies the kind of interpolation as
+        a string ('linear', 'nearest', 'zero', 'slinear', 'quadratic', 'cubic',
+        'previous', 'next') or as an integer specifying the order of the spline
+        interpolator to use.
+        Here, 'zero', 'slinear', 'quadratic' and 'cubic' refer to a spline
+        interpolation of zeroth, first, second or third order; 'previous' and
+        'next' simply return the previous or next value of the point.
+
+    extrapolate : bool, optional, default: False
+        Whether to extrapolate data points outside the given range.
+
+    """
+
+    def __init__(self, fname, format=None, resize=None, electrodes=None,
+                 metadata=None, compress=False, interp_method='linear',
+                 extrapolate=False):
+        # Open the video reader:
         reader = imageio.get_reader(fname, format=format)
+        # Combine video metadata with user-specified metadata:
         meta = reader.get_meta_data()
+        if metadata is not None:
+            meta.update(metadata)
         meta['source'] = fname
-        # Build the NumPy array:
+        # meta['source_shape'] =
+        # Build the NumPy data array:
         vid = []
         for frame in reader:
             if frame.shape[-1] == 3:
-                frame = skic.rgb2gray(frame)
+                frame = rgb2gray(frame)
             if resize is not None:
-                frame = skit.resize(frame, resize)
-            vid.append(frame)
+                frame = img_resize(frame, resize)
+            vid.append(img_as_float(frame))
         vid = np.array(vid).transpose((1, 2, 0))
-        # Call the Stimulus constructor:
+        # Infer the time points from the video frame rate:
         n_frames = vid.shape[-1]
         time = np.arange(n_frames) * meta['fps']
+        # Call the Stimulus constructor:
         super(VideoStimulus, self).__init__(vid.reshape((-1, n_frames)),
-                                            time=time, metadata=meta)
+                                            time=time, electrodes=electrodes,
+                                            metadata=meta, compress=compress,
+                                            interp_method=interp_method,
+                                            extrapolate=extrapolate)

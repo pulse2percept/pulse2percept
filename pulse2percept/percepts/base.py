@@ -265,7 +265,7 @@ class Percept(Data):
         data = resize(self.data, (np.int32(height), np.int32(width)))
         data -= data.min()
         if not np.isclose(data.max(), 0):
-            data /= data.max()
+            data /= data.max() * 255
 
         if self.time is None:
             # No time component, store as an image:
