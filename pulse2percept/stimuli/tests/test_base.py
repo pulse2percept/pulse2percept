@@ -1,4 +1,3 @@
-import os
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -7,10 +6,8 @@ from copy import deepcopy
 from collections import OrderedDict as ODict
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
-from skimage.io import imsave
-from imageio import mimwrite
 
-from pulse2percept.stimuli import Stimulus, ImageStimulus, VideoStimulus
+from pulse2percept.stimuli import Stimulus
 
 
 def test_Stimulus():
@@ -432,65 +429,3 @@ def test_Stimulus___getitem__():
     npt.assert_almost_equal(stim[:, stim.time > 0.6], np.zeros((2, 0)))
     npt.assert_almost_equal(stim['A1', stim.time > 0.6], [])
     npt.assert_almost_equal(stim['A1', np.isclose(stim.time, 0.3)], [1])
-
-
-def test_ImageStimulus():
-    # Create a dummy image:
-    fname = 'test.png'
-    shape = (25, 37)
-    ndarray = np.random.rand(*shape)
-    imsave(fname, (255 * ndarray).astype(np.uint8))
-
-    # Make sure ImageStimulus loaded is identical to dummy image:
-    stim = ImageStimulus(fname)
-    npt.assert_equal(stim.shape, (np.prod(shape), 1))
-    npt.assert_almost_equal(stim.data, ndarray.reshape((-1, 1)), decimal=2)
-    npt.assert_equal(stim.metadata['source'], fname)
-    npt.assert_equal(stim.metadata['source_shape'], shape)
-    npt.assert_equal(stim.time, None)
-    npt.assert_equal(stim.electrodes, np.arange(np.prod(shape)))
-    os.remove(fname)
-
-    # Resize the dummy image:
-    ndarray = np.ones(shape)
-    imsave(fname, (255 * ndarray).astype(np.uint8))
-    resize = (12, 18)
-    stim = ImageStimulus(fname, resize=resize)
-    npt.assert_equal(stim.shape, (np.prod(resize), 1))
-    npt.assert_almost_equal(stim.data, np.ones((np.prod(resize), 1)),
-                            decimal=2)
-    npt.assert_equal(stim.metadata['source'], fname)
-    npt.assert_equal(stim.metadata['source_shape'], shape)
-    os.remove(fname)
-
-
-def test_VideoStimulus():
-    # Create a dummy video:
-    fname = 'test.mp4'
-    shape = (10, 32, 48)
-    ndarray = np.random.rand(*shape)
-    mimwrite(fname, (255 * ndarray).astype(np.uint8), fps=1)
-    stim = VideoStimulus(fname)
-    npt.assert_equal(stim.shape, (np.prod(shape[1:]), shape[0]))
-    npt.assert_almost_equal(stim.data,
-                            ndarray.reshape((shape[0], -1)).transpose(),
-                            decimal=1)
-    npt.assert_equal(stim.metadata['source'], fname)
-    npt.assert_equal(stim.metadata['source_size'], (shape[2], shape[1]))
-    npt.assert_equal(stim.time, np.arange(shape[0]))
-    npt.assert_equal(stim.electrodes, np.arange(np.prod(shape[1:])))
-    os.remove(fname)
-
-    # Resize the video:
-    ndarray = np.ones(shape)
-    mimwrite(fname, (255 * ndarray).astype(np.uint8), fps=1)
-    resize = (16, 32)
-    stim = VideoStimulus(fname, resize=resize)
-    npt.assert_equal(stim.shape, (np.prod(resize), shape[0]))
-    npt.assert_almost_equal(stim.data,
-                            np.ones((np.prod(resize), shape[0])), decimal=1)
-    npt.assert_equal(stim.metadata['source'], fname)
-    npt.assert_equal(stim.metadata['source_size'], (shape[2], shape[1]))
-    npt.assert_equal(stim.time, np.arange(shape[0]))
-    npt.assert_equal(stim.electrodes, np.arange(np.prod(resize)))
-    os.remove(fname)

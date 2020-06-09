@@ -109,31 +109,27 @@ pulse2percept requires:
 1.  `Python`_ (>= 3.5)
 2.  `Cython`_ (>= 0.28)
 3.  `NumPy`_ (>= 1.9)
-4.  `SciPy`_ (>= 1.0)
-5.  `Matplotlib`_ (>= 2.1)
-6.  `JobLib`_ (>= 0.11)
+4.  `SciPy`_ (>= 1.0.1)
+5.  `scikit-image` (>=0.14)
+6.  `Matplotlib`_ (>= 2.1)
+7.  `imageio-ffmpeg` (>=0.4)
+8.  `JobLib`_ (>= 0.11)
 
 Optional packages:
 
-1.  `scikit-image`_ for image functionality in the ``io`` module.
-2.  `scikit-video`_ for video functionality in the ``io`` module. You will also
-    need an FFMPEG codec (see next bullet point).
-3.  `ffmpeg codec`_ if you're on Windows and want to use functions in the `io`
-    module.
-4.  `Pandas`_ for loading datasets in the ``datasets`` module.
-5.  `Dask`_ for parallel processing (a joblib alternative).
+1.  `Pandas`_ for loading datasets in the ``datasets`` module.
+2.  `Dask`_ for parallel processing (a joblib alternative).
     Use conda to install.
-6.  `Pytest`_ to run the test suite.
+3.  `Pytest`_ to run the test suite.
 
 .. _Python: https://www.python.org
 .. _Cython: https://www.cython.org
 .. _NumPy: https://www.numpy.org
 .. _SciPy: https://www.scipy.org
-.. _Matplotlib: https://matplotlib.org
-.. _JobLib: https://joblib.readthedocs.io
 .. _scikit-image: https://scikit-image.org
-.. _scikit-video: https://www.scikit-video.org
-.. _ffmpeg codec: http://adaptivesamples.com/how-to-install-ffmpeg-on-windows
+.. _Matplotlib: https://matplotlib.org
+.. _imageio-ffmpeg: https://github.com/imageio/imageio-ffmpeg
+.. _JobLib: https://joblib.readthedocs.io
 .. _Pandas: https://pandas.pydata.org
 .. _Dask: https://github.com/dask/dask
 .. _Pytest: https://docs.pytest.org/en/latest
