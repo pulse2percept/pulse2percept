@@ -4,7 +4,7 @@ import numpy.testing as npt
 import pytest
 from imageio import mimwrite
 
-from pulse2percept.stimuli import VideoStimulus, BostonTrain
+from pulse2percept.stimuli import VideoStimulus
 
 
 def test_VideoStimulus():
