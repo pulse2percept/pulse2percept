@@ -1,4 +1,4 @@
-name: build
+name: build_wheels
 
 on: [push, pull_request]
 
@@ -7,16 +7,16 @@ on: [push, pull_request]
 # dependencies with the "needs" attribute.
 jobs: 
 
-  # Continuous integration: Run unit tests on all supported platforms whenever
-  # someone pushes a new commit or creates a pull request. 
-  build:
+  # Build wheels for all supported platforms and upload the generated
+  # artifacts to GitHub:
+  build_wheels:
     name: Building on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       # Test on all supported platforms using all supported Python versions:
       matrix:
-        python-version: [3.5, 3.6, 3.7, 3.8]
-        os: [ubuntu-latest, ubuntu-16.04, windows-latest, macOS-latest]
+        python-version: [3.5]
+        os: [ubuntu-18.04, windows-latest, macOS-latest]
     
     steps:
     - uses: actions/checkout@v1
@@ -50,18 +50,13 @@ jobs:
       if: matrix.os != 'windows-latest'
       run: |
         pip install -e .
-    - name: Run test suite with pytest
+    - name: Install cibuildwheel
       run: |
-        mkdir test_dir
-        cd test_dir
-        pytest --pyargs pulse2percept --cov-report=xml --cov=pulse2percept --doctest-modules
-    - name: Upload coveragei report to codecov.io
-      uses: codecov/codecov-action@v1
-      # Cannot yet post coverage report as comments on the PR, but see:
-      # https://github.com/codecov/codecov-python/pull/214
+        python -m pip install cibuildwheel==1.4.2
+    - name: Build wheel
+      run: |
+        python -m cibuildwheel --output-dir wheelhouse
+    - uses: actions/upload-artifact@v1
       with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./test_dir/coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-        yml: ./codecov.yml
+        name: wheels
+        path: ./wheelhouse
