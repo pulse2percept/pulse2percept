@@ -17,6 +17,8 @@ jobs:
       matrix:
         python-version: [3.5]
         os: [ubuntu-18.04, windows-latest, macOS-latest]
+    env:
+      CIBW_SKIP: cp27-*
     
     steps:
     - uses: actions/checkout@v1
