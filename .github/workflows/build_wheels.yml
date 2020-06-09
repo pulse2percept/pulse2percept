@@ -10,10 +10,17 @@ jobs:
       matrix:
         os: [ubuntu-18.04, windows-latest, macos-latest]
     env:
-      # Skip building on Python 2.7 on all platforms
+      # Skip building on Python 2.7 on all platforms:
       CIBW_SKIP: cp27-*
-      CIBW_BEFORE_BUILD: "python -m pip install --upgrade pip && pip install -r requirements.txt"
-      
+      # Need an up-to-date pip:
+      update_pip: "python -m pip install --upgrade pip"
+      # Need to install p2p depedencies:
+      p2p_deps: "python -m pip install -r requirements.txt"
+      CIBW_BEFORE_BUILD: "$(update_pip) && $(p2p_deps)"
+      # On Linux, need to install Matplotlib depedencies in Docker container:
+      mpl_deps: "yum -y install freetype-devel pkg-config libpng-devel"
+      CIBW_BEFORE_BUILD_LINUX: "$(mpl_deps) && $(update_pip) && $(p2p_deps)"
+
     steps:
     - uses: actions/checkout@v1
 
