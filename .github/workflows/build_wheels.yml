@@ -12,14 +12,12 @@ jobs:
     env:
       # Skip building on Python 2.7 on all platforms:
       CIBW_SKIP: cp27-*
-      # Need an up-to-date pip:
-      UPDATE_PIP: "python -m pip install --upgrade pip"
-      # Need to install p2p depedencies:
-      P2P_DEPS: "python -m pip install -r requirements.txt"
-      CIBW_BEFORE_BUILD: "$(UPDATE_PIP) && $(P2P_DEPS)"
       # On Linux, need to install Matplotlib depedencies in Docker container:
-      MPL_DEPS: "yum -y install freetype-devel pkg-config libpng-devel"
-      CIBW_BEFORE_BUILD_LINUX: "$(MPL_DEPS) && $(UPDATE_PIP) && $(P2P_DEPS)"
+      CIBW_BEFORE_BUILD_LINUX: yum -y install freetype-devel pkg-config libpng-devel
+      # Need an up-to-date pip:
+      CIBW_BEFORE_BUILD: python -m pip install --upgrade pip
+      # Need to install p2p depedencies:
+      CIBW_BEFORE_BUILD: python -m pip install -r requirements.txt
 
     steps:
     - uses: actions/checkout@v1
