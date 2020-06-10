@@ -13,7 +13,7 @@ jobs:
       # Skip building on Python 2.7 on all platforms:
       CIBW_SKIP: cp27-*
       # On Linux, need to install Matplotlib depedencies in Docker container:
-      CIBW_BEFORE_BUILD_LINUX: "yum -y install freetype-devel pkg-config libpng-devel libblas-dev liblapack-dev gfortran && pip install -U pip && pip install -r requirements.txt"
+      CIBW_BEFORE_BUILD_LINUX: "yum -y install freetype-devel pkg-config libpng-devel python-scipy && pip install -U pip && pip install -r requirements.txt"
       CIBW_BEFORE_BUILD: "python -m pip install --upgrade pip && python -m pip install -r requirements.txt"
 
     steps:
