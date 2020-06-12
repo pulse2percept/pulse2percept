@@ -1,19 +1,15 @@
-"""`Stimulus`"""
+"""`Stimulus`, `ImageStimulus`"""
 from sys import platform, _getframe
-import matplotlib as mpl
-if platform == "darwin":  # OS X
-    mpl.use('TkAgg')
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
 import numpy as np
 np.set_printoptions(precision=2, threshold=5, edgeitems=2)
+
 import logging
-from copy import deepcopy
-from collections import OrderedDict as ODict
 from scipy.interpolate import interp1d
 
-from ..utils import PrettyPrint, deprecated
+from ..utils import PrettyPrint, parfor
 from ._base import fast_compress
 
 
@@ -44,14 +40,10 @@ class Stimulus(PrettyPrint):
              electrodes (no time component).
            * NxM array: interpreted as N electrodes each receiving M current
              amplitudes in time.
-        * :py:class:`~pulse2percept.stimuli.TimeSeries`: interpreted as the
-          stimulus in time for a single electrode (e.g.,
-          :py:class:`~pulse2percept.stimuli.BiphasicPulse`,
-          :py:class:`~pulse2percept.stimuli.PulseTrain`).
 
         In addition, you can also pass a collection of source types.
         Each element must be a valid source type for a single electrode (e.g.,
-        scalar, 1-D array, :py:class:`~pulse2percept.stimuli.TimeSeries`).
+        scalar, 1-D array, :py:class:`~pulse2percept.stimuli.Stimulus`).
 
         * List or tuple: List elements will be assigned to electrodes in order.
         * Dictionary: Dictionary keys are used to address electrodes by name.
@@ -190,15 +182,10 @@ class Stimulus(PrettyPrint):
             data = source.data
             time = source.time
             electrodes = source.electrodes
-        elif isinstance(source, TimeSeries):
-            # TimeSeries with NxM time points: N electrodes, M time points
-            time = np.arange(source.shape[-1]) * source.tsample
-            data = source.data.astype(np.float32).reshape((-1, len(time)))
-            electrodes = None
         else:
             raise TypeError("Cannot create Stimulus object from %s. Choose "
                             "from: scalar, tuple, list, NumPy array, or "
-                            "TimeSeries." % type(source))
+                            "Stimulus." % type(source))
         return time, data, electrodes
 
     def _factory(self, source, electrodes, time, compress):
@@ -717,161 +704,3 @@ class Stimulus(PrettyPrint):
             err_s = ("The attribute `is_compressed` can only be set in the "
                      "constructor or in `compress`, not in `%s`." % f_caller)
             raise AttributeError(err_s)
-
-
-@deprecated(alt_func='Stimulus', deprecated_version='0.6',
-            removed_version='0.7')
-class TimeSeries(object):
-    """Container for time series data
-
-    Provides a container for time series data. Every time series has a
-    sampling step ``tsample``, and some ``data`` sampled at that rate.
-
-    Parameters
-    ----------
-    tsample : float
-        Sampling time step (milliseconds).
-    data : array_like
-        Time series data sampled at every ``tsample`` milliseconds.
-    """
-    __slots__ = ('data', 'tsample', 'duration', 'shape')
-
-    def __init__(self, tsample, data):
-        self.data = np.asarray(data)
-        self.tsample = tsample
-        self.duration = self.data.shape[-1] * tsample
-        self.shape = self.data.shape
-
-    def __getitem__(self, y):
-        return TimeSeries(self.tsample, self.data[y])
-
-    def append(self, other):
-        """Appends the data of another TimeSeries object (in time)
-
-        This function concatenates the data of another TimeSeries object to
-        the current object, along the last dimension (time). To make this work,
-        all but the last dimension of the two objects must be the same.
-
-        If the two objects have different time sampling steps, the other object
-        is resampled to fit the current ``tsample``.
-
-        Parameters
-        ----------
-        other : :py:class:`~pulse2percept.stimuli.TimeSeries`
-            A TimeSeries object whose content should be appended.
-
-        Examples
-        --------
-        >>> from pulse2percept import stimuli
-        >>> pt = stimuli.TimeSeries(1.0, np.zeros((2, 2, 10)))
-        >>> num_frames = pt.shape[-1]
-        >>> pt.append(pt)
-        >>> pt.shape[-1] == 2 * num_frames
-        True
-        """
-        # Make sure type is correct
-        if not isinstance(other, TimeSeries):
-            raise TypeError("Other object must be of type "
-                            "p2p.stimuli.TimeSeries.")
-
-        # Make sure size is correct for all but the last dimension (number
-        # of frames)
-        if self.shape[:-1] != other.shape[:-1]:
-            raise ValueError("Shape mismatch: ", self.shape[:-1], " vs. ",
-                             other.shape[:-1])
-
-        # Then resample the other to current `tsample`
-        resampled = other.resample(self.tsample)
-
-        # Then concatenate the two
-        self.data = np.concatenate((self.data, resampled.data), axis=-1)
-        self.duration = self.data.shape[-1] * self.tsample
-        self.shape = self.data.shape
-
-    def max(self):
-        """Returns the time and value of the largest data point
-
-        This function returns the the largest value in the TimeSeries data,
-        as well as the time at which it occurred.
-
-        Returns
-        -------
-        t : float
-            time (s) at which max occurred
-        val : float
-            max value
-        """
-        # Find index and value of largest element
-        idx = self.data.argmax()
-        val = self.data.max()
-
-        # Find frame that contains the brightest data point using `unravel`,
-        # which maps the flat index `idx_px` onto the high-dimensional
-        # indices (x,y,z).
-        # What we want is index `z` (i.e., the frame index), given by the last
-        # dimension in the return argument.
-        idx_frame = np.unravel_index(idx, self.data.shape)[-1]
-
-        # Convert index to time
-        t = idx_frame * self.tsample
-
-        return t, val
-
-    def max_frame(self):
-        """Returns the time frame that contains the largest data point
-
-        This function returns the time frame in the TimeSeries data that
-        contains the largest data point, as well as the time at which
-        it occurred.
-
-        Returns
-        -------
-        t : float
-            time (s) at which max occurred
-        frame : TimeSeries
-            A TimeSeries object.
-        """
-        # Find index and value of largest element
-        idx = self.data.argmax()
-
-        # Find frame that contains the brightest data point using `unravel`,
-        # which maps the flat index `idx_px` onto the high-dimensional
-        # indices (x,y,z).
-        # What we want is index `z` (i.e., the frame index), given by the last
-        # dimension in the return argument.
-        idx_frame = np.unravel_index(idx, self.data.shape)[-1]
-        t = idx_frame * self.tsample
-        frame = self.data[..., idx_frame]
-
-        return t, TimeSeries(self.tsample, deepcopy(frame))
-
-    def resample(self, tsample_new):
-        """Returns data sampled according to new time step
-
-        This function returns a TimeSeries object whose data points were
-        resampled according to a new time step ``tsample_new``. New values
-        are found using linear interpolation.
-
-        Parameters
-        ----------
-        tsample_new : float
-            New sampling time step (s)
-
-        Returns
-        -------
-        TimeSeries object
-        """
-        if tsample_new is None or tsample_new == self.tsample:
-            return TimeSeries(self.tsample, self.data)
-
-        # Try to avoid rounding errors in arr size by making sure `t_old` is
-        # too long at first, then cutting it to the right size
-        y_old = self.data
-        t_old = np.arange(0, self.duration + self.tsample, self.tsample)
-        t_old = t_old[:y_old.shape[-1]]
-        f = interp1d(t_old, y_old, axis=-1, fill_value='extrapolate')
-
-        t_new = np.arange(0, self.duration, tsample_new)
-        y_new = f(t_new)
-
-        return TimeSeries(tsample_new, y_new)

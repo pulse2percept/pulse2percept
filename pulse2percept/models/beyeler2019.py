@@ -4,6 +4,9 @@ import os
 import numpy as np
 import pickle
 
+import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
+
 from ..utils import parfor, Grid2D, Watson2014Transform
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
@@ -66,6 +69,11 @@ class AxonMapSpatial(SpatialModel):
         Exponential decay constant along the axon (microns).
     rho : double
         Exponential decay constant away from the axon (microns).
+
+    Notes
+    -----
+    *  The axon map is not very accurate when the upper bound of
+       `ax_segments_range` is greater than 90 deg.
     """
 
     def __init__(self, **params):
@@ -90,7 +98,7 @@ class AxonMapSpatial(SpatialModel):
             'n_ax_segments': 500,
             # Lower and upper bounds for the radial position values(polar
             # coordinates):
-            'ax_segments_range': (3, 50),
+            'ax_segments_range': (0, 50),
             # Precomputed axon maps stored in the following file:
             'axon_pickle': 'axons.pickle',
             # You can force a build by ignoring pickles:
@@ -212,9 +220,11 @@ class AxonMapSpatial(SpatialModel):
         # Return as Nx2 array:
         return np.vstack((xmodel, ymodel)).astype(np.float32).T
 
-    def grow_axon_bundles(self):
+    def grow_axon_bundles(self, n_bundles=None):
+        if n_bundles is None:
+            n_bundles = self.n_axons
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
-        phi = np.linspace(*self.axons_range, num=self.n_axons)
+        phi = np.linspace(*self.axons_range, num=n_bundles)
         engine = 'serial' if self.engine == 'cython' else self.engine
         bundles = parfor(self._jansonius2009, phi,
                          func_kwargs={'eye': self.eye},
@@ -391,6 +401,61 @@ class AxonMapSpatial(SpatialModel):
                              self.axon_idx_end.astype(np.uint32),
                              self.rho,
                              self.thresh_percept)
+
+    def plot(self, annotate=False, upside_down=False, ax=None, autoscale=True):
+        if ax is None:
+            ax = plt.gca()
+        ax.set_facecolor('white')
+        ax.set_aspect('equal')
+
+        # Draw axon pathways:
+        axon_bundles = self.grow_axon_bundles(n_bundles=100)
+        for bundle in axon_bundles:
+            ax.plot(bundle[:, 0], bundle[:, 1], c=(0.6, 0.6, 0.6), linewidth=2,
+                    zorder=1)
+
+        # Show elliptic optic nerve head (width/height are averages from the
+        # human retina literature):
+        ax.add_patch(Ellipse(self.dva2ret((self.loc_od_x, self.loc_od_y)),
+                             width=1770, height=1880, alpha=1, color='white',
+                             zorder=2))
+
+        if autoscale:
+            ax.axis([-5000, 5000, -4000, 4000])
+        xmin, xmax, ymin, ymax = ax.axis()
+        ax.set_xticks(np.linspace(xmin, xmax, num=5))
+        ax.set_yticks(np.linspace(ymin, ymax, num=5))
+        ax.set_xlabel('x (microns)')
+        ax.set_ylabel('y (microns)')
+
+        # Annotate the four retinal quadrants near the corners of the plot:
+        # superior/inferior x temporal/nasal
+        if annotate:
+            if upside_down:
+                topbottom = ['bottom', 'top']
+            else:
+                topbottom = ['top', 'bottom']
+            if self.eye == 'RE':
+                temporalnasal = ['temporal', 'nasal']
+            else:
+                temporalnasal = ['nasal', 'temporal']
+            for yy, valign, si in zip([ymax, ymin], topbottom,
+                                      ['superior', 'inferior']):
+                for xx, halign, tn in zip([xmin, xmax], ['left', 'right'],
+                                          temporalnasal):
+                    ax.text(xx, yy, si + ' ' + tn,
+                            color='black', fontsize=14,
+                            horizontalalignment=halign,
+                            verticalalignment=valign,
+                            bbox={'boxstyle': 'square,pad=-0.1', 'ec': 'none',
+                                  'fc': (1, 1, 1, 0.7)},
+                            zorder=99)
+
+        # Need to flip y axis to have upper half == upper visual field
+        if upside_down:
+            ax.invert_yaxis()
+
+        return ax
 
 
 class AxonMapModel(Model):

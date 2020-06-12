@@ -6,6 +6,8 @@
     base
     pulses
     pulse_trains
+    images
+    videos
 
 .. seealso::
 
@@ -17,10 +19,12 @@
 # charge-balanced (here expressed in microamps):
 MIN_AMP = 1e-5
 
-from .base import Stimulus, TimeSeries
+from .base import Stimulus
 from .pulses import AsymmetricBiphasicPulse, BiphasicPulse, MonophasicPulse
 from .pulse_trains import (PulseTrain, BiphasicPulseTrain,
                            BiphasicTripletTrain, AsymmetricBiphasicPulseTrain)
+from .images import ImageStimulus
+from .videos import VideoStimulus
 
 __all__ = [
     'AsymmetricBiphasicPulse',
@@ -28,8 +32,9 @@ __all__ = [
     'BiphasicPulse',
     'BiphasicPulseTrain',
     'BiphasicTripletTrain',
+    'ImageStimulus',
     'MonophasicPulse',
     'PulseTrain',
     'Stimulus',
-    'TimeSeries'
+    'VideoStimulus'
 ]

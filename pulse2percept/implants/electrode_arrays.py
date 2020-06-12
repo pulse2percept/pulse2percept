@@ -336,12 +336,12 @@ class ElectrodeGrid(ElectrodeArray):
             # Access by index into flattened array, e.g. grid[0]:
             try:
                 return list(self.electrodes.values())[item]
-            except (KeyError, TypeError):
+            except (IndexError, KeyError, TypeError):
                 # Access by [r, c] into 2D grid, e.g. grid[0, 3]:
                 try:
                     idx = np.ravel_multi_index(item, self.shape)
                     return list(self.electrodes.values())[idx]
-                except (KeyError, ValueError):
+                except (KeyError, TypeError, ValueError):
                     # Index not found:
                     return None
 

@@ -155,6 +155,9 @@ def test_TemporalModel():
         # Cannot request t_percepts that are not multiples of dt:
         model.predict_percept(Stimulus(np.ones((3, 9))), t_percept=[0.1, 0.11])
     with pytest.raises(ValueError):
+        # Has temporal model but stim.time is None:
+        ValidTemporalModel().predict_percept(Stimulus(3))
+    with pytest.raises(ValueError):
         # stim.time==None but requesting t_percept != None
         ValidTemporalModel().predict_percept(Stimulus(3), t_percept=[0, 1, 2])
     with pytest.raises(NotBuiltError):
@@ -309,6 +312,7 @@ def test_Model_predict_percept():
     # Just the temporal model:
     model = Model(temporal=ValidTemporalModel()).build()
     npt.assert_equal(model.predict_percept(ArgusI()), None)
+    # Both spatial and temporal:
 
     # Invalid calls:
     model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
@@ -318,8 +322,11 @@ def test_Model_predict_percept():
     model.build()
     with pytest.raises(ValueError):
         # Cannot request t_percepts that are not multiples of dt:
-        model.predict_percept(ArgusI(stim=np.ones(16)),
+        model.predict_percept(ArgusI(stim={'A1': np.ones(16)}),
                               t_percept=[0.1, 0.11])
+    with pytest.raises(ValueError):
+        # Has temporal model but stim.time is None:
+        ValidTemporalModel().predict_percept(Stimulus(3))
     with pytest.raises(ValueError):
         # stim.time==None but requesting t_percept != None
         model.predict_percept(ArgusI(stim=np.ones(16)),

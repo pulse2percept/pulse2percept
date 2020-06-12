@@ -19,8 +19,6 @@ def configuration(parent_package='', top_path=None):
     config.add_subpackage('implants/tests')
     config.add_subpackage('utils')
     config.add_subpackage('utils/tests')
-    config.add_subpackage('io')
-    config.add_subpackage('io/tests')
     config.add_subpackage('percepts')
     config.add_subpackage('percepts/tests')
     config.add_subpackage('viz')
@@ -34,6 +32,7 @@ def configuration(parent_package='', top_path=None):
 
     # Data directories
     config.add_data_dir('datasets/data')
+    config.add_data_dir('stimuli/data')
 
     # https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html#compiler-directives
     config.ext_modules = cythonize(config.ext_modules,

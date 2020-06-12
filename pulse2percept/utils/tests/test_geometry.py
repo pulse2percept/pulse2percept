@@ -47,7 +47,6 @@ def test_Grid2D_make_rectangular_grid():
 
     # Another way to verify this is to manually check the step size:
     for step in [0.25, 0.5, 1, 2]:
-        print(step)
         grid = Grid2D((-20, 20), (-40, 40), step=step)
         npt.assert_equal(len(np.unique(np.diff(grid.x[0, :]))), 1)
         npt.assert_equal(len(np.unique(np.diff(grid.y[:, 0]))), 1)

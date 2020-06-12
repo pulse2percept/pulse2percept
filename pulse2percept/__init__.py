@@ -10,7 +10,6 @@ pulse2percept is organized into the following subpackages:
     models
     percepts
     datasets
-    io
     viz
     utils
 """
@@ -45,10 +44,6 @@ logging.basicConfig(level=logging.DEBUG,
 
 from . import datasets
 from . import implants
-# Avoid showing avconv/avprob error:
-logger.setLevel(logging.ERROR)
-from . import io
-logger.setLevel(logging.INFO)
 from . import models
 from . import percepts
 from . import stimuli
@@ -57,7 +52,6 @@ from . import viz
 __all__ = [
     'datasets',
     'implants',
-    'io',
     'models',
     'percepts',
     'stimuli',

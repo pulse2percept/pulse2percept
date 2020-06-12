@@ -71,14 +71,16 @@ def test_Data():
     npt.assert_equal(hasattr(data, 'axis2'), False)
 
     # Order is preserved even if None:
-    data = Data(np.zeros(12).reshape((3, 4, 1)),
-                axes=[('x', None), ('y', None), ('t', None)])
+    data = Data(np.zeros(12).reshape((3, 4, 1, 1)),
+                axes=[('x', None), ('y', None), ('t', None), ('t2', 0)])
     npt.assert_equal(hasattr(data, 'x'), True)
     npt.assert_equal(data.x, [0, 1, 2])
     npt.assert_equal(hasattr(data, 'y'), True)
     npt.assert_equal(data.y, [0, 1, 2, 3])
     npt.assert_equal(hasattr(data, 't'), True)
-    npt.assert_equal(data.t, [0])
+    npt.assert_equal(data.t, None)
+    npt.assert_equal(hasattr(data, 't2'), True)
+    npt.assert_equal(data.t2, [0])
     npt.assert_equal(hasattr(data, 'axis0'), False)
 
     # Some axes given, others inferred automatically:
@@ -92,7 +94,7 @@ def test_Data():
         Data(ndarray, axes=3)
     with pytest.raises(TypeError):
         # Not iterable:
-        Data(ndarray, axes={'x': 0, 'y': list})
+        Data(ndarray, axes={'x': 0, 'y': [0, 1]})
     with pytest.raises(ValueError):
         # Wrong number of labels:
         Data(ndarray, axes=[('x', [0, 1])])

@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
+
 from copy import deepcopy
 from collections import OrderedDict as ODict
 from matplotlib.axes import Subplot
