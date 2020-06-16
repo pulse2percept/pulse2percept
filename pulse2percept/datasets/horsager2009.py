@@ -32,7 +32,10 @@ def load_horsager2009(subjects=None, electrodes=None, stim_types=None,
     implant               Argus I
     electrode             Electrode ID, A1-F10
     task                  'threshold' or 'matching'
-    stim_type             'single_pulse', 'fixed_duration', ...
+    stim_type             'single_pulse', 'fixed_duration',
+                          'variable_duration', 'fixed_duration_supra',
+                          'bursting_triplets', 'bursting_triplets_supra',
+                          'latent_addition'
     stim_dur              Stimulus duration (ms)
     stim_freq             Stimulus frequency (Hz)
     stim_amp              Stimulus amplitude (uA)
@@ -59,8 +62,15 @@ def load_horsager2009(subjects=None, electrodes=None, stim_types=None,
 
     Parameters
     ----------
-    subjects : str or None, optional, default: None
-
+    subjects : str | list of strings | None, optional, default: None
+        Select data from a subject or list of subjects. By default, all
+        subjects are selected.
+    electrodes : str | list of strings | None, optional, default: None
+        Select data from a single electrode or a list of electrodes.
+        By default, all electrodes are selected.
+    stim_types : str | list of strings | None, optional, default: None
+        Select data from a single stimulus type or a list of stimulus types.
+        By default, all stimulus types are selected.
     shuffle : boolean, optional, default: False
         If True, the rows of the DataFrame are shuffled.
     random_state : int | numpy.random.RandomState | None, optional, default: 0
@@ -70,7 +80,7 @@ def load_horsager2009(subjects=None, electrodes=None, stim_types=None,
     Returns
     -------
     data: pd.DataFrame
-        The whole dataset is returned in a 400x16 Pandas DataFrame
+        The whole dataset is returned in a 552x21 Pandas DataFrame
     """
     if not has_pandas:
         raise ImportError("You do not have pandas installed. "
