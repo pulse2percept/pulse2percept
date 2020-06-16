@@ -29,13 +29,13 @@ data.shape
 #
 # Loading the data
 # ^^^^^^^^^^^^^^^^
+#
 # The data includes a number of thresholds measured on single-pulse stimuli.
 # We can load a subset of these data; for example, for subject S05 and
 # Electrode C3:
 
-single_pulse = data[(data.stim_type == 'single_pulse') &
-                    (data.subject == 'S05') &
-                    (data.electrode == 'C3')]
+single_pulse = load_horsager2009(subjects='S05', electrodes='C3',
+                                 stim_types == 'single_pulse')
 single_pulse
 
 ###############################################################################
