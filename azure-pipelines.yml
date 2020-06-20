@@ -16,8 +16,10 @@ variables:
   # Install p2p in Docker container
   install_p2p: "pip install -r requirements.txt && pip install -e ."
   CIBW_BEFORE_BUILD: $(install_p2p)
-  # On Linux, need to install Matplotlib depedencies in Docker container:
-  CIBW_BEFORE_BUILD_LINUX: "yum -y install freetype-devel pkg-config libpng-devel && $(install_p2p)"
+  # On Linux, need to install Matplotlib depedencies in Docker container.
+  # Also need Cython/NumPy before installing all the other requirements,
+  # because skimage uses NumPy in their setup.py:
+  CIBW_BEFORE_BUILD_LINUX: "yum -y install freetype-devel pkgconfig libpng-devel && pip install Cython numpy && $(install_p2p)"
   # Skip building on Python 2.7 on all platforms
   CIBW_SKIP: "cp27-*"
 

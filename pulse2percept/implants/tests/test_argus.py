@@ -32,8 +32,6 @@ def test_ArgusI(ztype, x, y, r):
 
     # Then off-set: Make sure first electrode is placed
     # correctly
-    print("argus x set to", argus['A1'].x)
-    print("artifical array set to", xy[0] + x)
     npt.assert_almost_equal(argus['A1'].x, xy[0] + x)
     npt.assert_almost_equal(argus['A1'].y, xy[1] + y)
 
@@ -45,9 +43,9 @@ def test_ArgusI(ztype, x, y, r):
 
     # Check radii of electrodes
     for e in ['A1', 'A3', 'B2', 'C1', 'D4']:
-        npt.assert_almost_equal(argus[e].r, 130)
+        npt.assert_almost_equal(argus[e].r, 125)
     for e in ['A2', 'A4', 'B1', 'C2', 'D3']:
-        npt.assert_almost_equal(argus[e].r, 260)
+        npt.assert_almost_equal(argus[e].r, 250)
 
     # Check location of the tack
     tack = np.matmul(R, [-2000, 0])
@@ -124,7 +122,7 @@ def test_ArgusII(ztype, x, y, r):
     npt.assert_equal(hasattr(argus, '__dict__'), False)
 
     # Coordinates of first electrode
-    xy = np.array([-2362.5, -1312.5]).T
+    xy = np.array([-2587.5, -1437.5]).T
 
     # Rotate
     R = np.array([np.cos(rot), -np.sin(rot),
@@ -144,7 +142,7 @@ def test_ArgusII(ztype, x, y, r):
 
     # Make sure radius is correct
     for e in ['A1', 'B3', 'C5', 'D7', 'E9', 'F10']:
-        npt.assert_almost_equal(argus[e].r, 100)
+        npt.assert_almost_equal(argus[e].r, 112.5)
 
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
@@ -178,8 +176,6 @@ def test_ArgusII(ztype, x, y, r):
         # cases are testing an electrode with x>0, y>0:
         before = implants.ArgusII(eye=eye)
         after = implants.ArgusII(eye=eye, rot=np.deg2rad(20))
-        print(after[el].x, before[el].x)
-        print(after[el].y, before[el].y)
         npt.assert_equal(after[el].x < before[el].x, True)
         npt.assert_equal(after[el].y > before[el].y, True)
 

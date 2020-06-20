@@ -12,15 +12,19 @@ Media coverage
 Scholarly articles referencing pulse2percept
 ============================================
 
+* C Erickson-Davis, H Korzybska (2020). What do blind people "see" with retinal prostheses? Observations and qualitative reports of epiretinal implant users. *bioRxiv*, doi:`10.1101/2020.02.03.932905 <https://doi.org/10.1101/2020.02.03.932905>`_.
+
 * BW Brunton, M Beyeler (2019). Data-driven models in human neuroscience and neuroengineering. *Current Opinion in Neurobiology* 58, 21-29, doi:`10.1016/j.conb.2019.06.008 <https://doi.org/10.1016/j.conb.2019.06.008>`_.
 
 * A Lozano, JS Suarez, C Soto-Sanchez, J Garrigos, J-J Martinez, JM Ferrandez Vicente, E Fernandez-Jover (2019). Neurolight Alpha: Interfacing Computational Neural Models for Stimulus Modulation in Cortical Visual Neuroprostheses. *International Work-Conference on the Interplay Between Natural and Artificial Computation (IWINAC)*, doi:`10.1007/978-3-030-19591-5_12 <https://doi.org/10.1007/978-3-030-19591-5_12>`_.
 
+* M Beyeler (2019). Biophysical model of axonal stimulation in epiretinal visual prostheses. *IEEE/EMBS Conference on Neural Engineering*, doi:`10.1109/NER.2019.8716969 <https://doi.org/10.1109/NER.2019.8716969>`_.
+
 * NP Cottaris, H Jiang, X Ding, BA Wandell, DH Brainard (2019). A computational-observer model of spatial contrast sensitivity: Effects of wave-front-based optics, cone-mosaic structure, and inference engine. *Journal of Vision* 19(8), doi:`10.1167/19.4.8 <https://doi.org/10.1167/19.4.8>`_.
 
-* L Wang, F Sharifian, J Napp, C Nath, S Pollmann (2018). Cross-task perceptual learning of object recognition in simulated retinal implant perception. *Journal of Vision* 18(22), doi:`10.1167/18.13.22 <https://doi.org/10.1167/18.13.22>`_.
-
 * M Beyeler, D Nanduri, JD Weiland, A Rokem, GM Boynton, I Fine (2019). A model of ganglion axon pathways accounts for percepts elicited by retinal implants. *Scientific Reports 9(1):9199*, doi:`10.1038/s41598-019-45416-4 <https://doi.org/10.1038/s41598-019-45416-4>`_.
+
+* L Wang, F Sharifian, J Napp, C Nath, S Pollmann (2018). Cross-task perceptual learning of object recognition in simulated retinal implant perception. *Journal of Vision* 18(22), doi:`10.1167/18.13.22 <https://doi.org/10.1167/18.13.22>`_.
 
 * J Huth, T Masquelier, A Arleo (2018). Convis: A toolbox to fit and simulate filter-based models of early visual processing. *Frontiers in Neuroinformatics*, doi:`10.3389/fninf.2018.00009 <https://doi.org/10.3389/fninf.2018.00009>`_.
 

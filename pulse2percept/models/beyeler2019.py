@@ -4,14 +4,35 @@ import os
 import numpy as np
 import pickle
 
-from ..utils import parfor, GridXY, Watson2014Transform
+import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
+
+from ..utils import parfor, Grid2D, Watson2014Transform
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
-from ._beyeler2019 import scoreboard_fast, axon_contribution, axon_map_fast
+from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
+                           fast_find_closest_axon)
 
 
 class ScoreboardSpatial(SpatialModel):
+    """Scoreboard model of [Beyeler2019]_ (spatial module only)
+
+    Implements the scoreboard model described in [Beyeler2019]_, where all
+    percepts are Gaussian blobs.
+
+    .. note ::
+
+        Use this class if you want to combine the spatial model with a temporal
+        model.
+        Use :py:class:`~pulse2percept.models.ScoreboardModel` if you want a
+        a standalone model.
+
+    Parameters
+    ----------
+    rho : double, optional, default: 100
+        Exponential decay constant describing phosphene size (microns).
+    """
 
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
@@ -35,7 +56,7 @@ class ScoreboardSpatial(SpatialModel):
         # electrodes to activation values at X,Y grid locations:
         assert isinstance(earray, ElectrodeArray)
         assert isinstance(stim, Stimulus)
-        return scoreboard_fast(stim.data,
+        return fast_scoreboard(stim.data,
                                np.array([earray[e].x for e in stim.electrodes],
                                         dtype=np.float32),
                                np.array([earray[e].y for e in stim.electrodes],
@@ -47,6 +68,22 @@ class ScoreboardSpatial(SpatialModel):
 
 
 class ScoreboardModel(Model):
+    """Scoreboard model of [Beyeler2019]_ (standalone model)
+
+    Implements the scoreboard model described in [Beyeler2019]_, where all
+    percepts are Gaussian blobs.
+
+    .. note ::
+
+        Use this class if you want a standalone model.
+        Use :py:class:`~pulse2percept.models.ScoreboardSpatial` if you want
+        to combine the spatial model with a temporal model.
+
+    Parameters
+    ----------
+    rho : double, optional, default: 100
+        Exponential decay constant describing phosphene size (microns).
+    """
 
     def __init__(self, **params):
         super(ScoreboardModel, self).__init__(spatial=ScoreboardSpatial(),
@@ -54,17 +91,54 @@ class ScoreboardModel(Model):
 
 
 class AxonMapSpatial(SpatialModel):
-    """Axon map model
+    """Axon map model of [Beyeler2019]_ (spatial module only)
 
     Implements the axon map model described in [Beyeler2019]_, where percepts
     are elongated along nerve fiber bundle trajectories of the retina.
 
+    .. note: :
+
+        Use this class if you want to combine the spatial model with a temporal
+        model.
+        Use: py: class: `~pulse2percept.models.AxonMapModel` if you want a
+        a standalone model.
+
     Parameters
     ----------
-    axlambda : double
-        Exponential decay constant along the axon (microns).
-    rho : double
-        Exponential decay constant away from the axon (microns).
+    axlambda: double, optional, default: 100
+        Exponential decay constant along the axon(microns).
+    rho: double, optional, default: 100
+        Exponential decay constant away from the axon(microns).
+    eye: {'LE', 'RE'}, optional, default: 'RE'
+        Eye for which to generate the axon map.
+    loc_od_x, loc_od_y: float, optional, default: (15.5, 1.5)
+        Location of the optic disc in degrees. Note that the optic disc in a
+        left eye should have a negative x coordinate.
+    n_axons: int, optional, default: 500
+        Number of axons to generate.
+    axons_range: (min, max), optional, default: (-180, 180)
+        The range of angles(in degrees) at which axons exit the optic disc.
+        This corresponds to the range of $\\phi_0$ values used in
+        [Jansonius2009]_.
+    n_ax_segments: int, optional, default: 500
+        Number of segments an axon is made of.
+    ax_segments_range: (min, max), optional, default: (0, 50)
+        Lower and upper bounds for the radial position values(polar coords)
+        for each axon.
+    min_ax_sensitivity: float, optional, default: 1e-3
+        Axon segments whose contribution to brightness is smaller than this
+        value will be pruned to improve computational efficiency. Set to a
+        value between 0 and 1.
+    axon_pickle: str, optional, default: 'axons.pickle'
+        File name in which to store precomputed axon maps.
+    ignore_pickle: bool, optional, default: False
+        A flag whether to ignore the pickle file in future calls to
+        ``model.build()``.
+
+    Notes
+    -----
+    *  The axon map is not very accurate when the upper bound of
+       `ax_segments_range` is greater than 90 deg.
     """
 
     def __init__(self, **params):
@@ -87,9 +161,12 @@ class AxonMapSpatial(SpatialModel):
             'axons_range': (-180, 180),
             # Number of sampling points along the radial axis (polar coords):
             'n_ax_segments': 500,
-            # Lower and upper bounds for the radial position values(polar
+            # Lower and upper bounds for the radial position values (polar
             # coordinates):
-            'ax_segments_range': (3, 50),
+            'ax_segments_range': (0, 50),
+            # Axon segments whose contribution to brightness is smaller than
+            # this value will be pruned:
+            'min_ax_sensitivity': 1e-3,
             # Precomputed axon maps stored in the following file:
             'axon_pickle': 'axons.pickle',
             # You can force a build by ignoring pickles:
@@ -160,9 +237,10 @@ class AxonMapSpatial(SpatialModel):
             raise ValueError('Lower bound on rho cannot be larger than the '
                              ' upper bound.')
         is_superior = phi0 > 0
-        rho = np.linspace(*self.ax_segments_range, num=self.n_ax_segments)
+        rho = np.linspace(*self.ax_segments_range, num=self.n_ax_segments,
+                          dtype=np.float32)
         if self.engine == 'cython':
-            xprime, yprime = jansonius(rho, phi0, beta_sup, beta_inf)
+            xprime, yprime = fast_jansonius(rho, phi0, beta_sup, beta_inf)
         else:
             if is_superior:
                 # Axon is in superior retina, compute `b` (real number) from
@@ -208,28 +286,29 @@ class AxonMapSpatial(SpatialModel):
         if eye.upper() == 'LE':
             xmodel *= -1
         # Return as Nx2 array:
-        return np.vstack((xmodel, ymodel)).T
+        return np.vstack((xmodel, ymodel)).astype(np.float32).T
 
-    def grow_axon_bundles(self):
+    def grow_axon_bundles(self, n_bundles=None):
+        if n_bundles is None:
+            n_bundles = self.n_axons
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
-        phi = np.linspace(*self.axons_range, num=self.n_axons)
+        phi = np.linspace(*self.axons_range, num=n_bundles)
         engine = 'serial' if self.engine == 'cython' else self.engine
         bundles = parfor(self._jansonius2009, phi,
                          func_kwargs={'eye': self.eye},
                          engine=engine, n_jobs=self.n_jobs,
                          scheduler=self.scheduler)
-        if len(bundles) != self.n_axons:
-            raise ValueError("bundles must have the same length as n_axons")
+        # Keep only non-zero sized bundles:
+        bundles = list(filter(lambda x: len(x) > 0, bundles))
         # Remove axon bundles outside the simulated area:
         bundles = list(filter(lambda x: (np.max(x[:, 0]) >= self.xrange[0] and
                                          np.min(x[:, 0]) <= self.xrange[1] and
                                          np.max(x[:, 1]) >= self.yrange[0] and
                                          np.min(x[:, 1]) <= self.yrange[1]),
                               bundles))
-        # Remove short axon bundles:
+        # Keep only reasonably sized axon bundles:
         bundles = list(filter(lambda x: len(x) > 10, bundles))
         # Convert to um:
-        # FIXME logic is specific to the Watson model
         bundles = [self.dva2ret(b) for b in bundles]
         return bundles
 
@@ -253,9 +332,9 @@ class AxonMapSpatial(SpatialModel):
         flat_bundles = np.concatenate(bundles)
         # For every pixel on the grid, find the closest axon segment:
         if self.engine == 'cython':
-            closest_seg = fastfind_closest_axon(flat_bundles,
-                                                xret.ravel(),
-                                                yret.ravel())
+            closest_seg = fast_find_closest_axon(flat_bundles,
+                                                 xret.ravel(),
+                                                 yret.ravel())
         else:
             closest_seg = [np.argmin((flat_bundles[:, 0] - x) ** 2 +
                                      (flat_bundles[:, 1] - y) ** 2)
@@ -268,34 +347,36 @@ class AxonMapSpatial(SpatialModel):
     def calc_axon_contribution(self, axons):
         xyret = np.column_stack((self.grid.xret.ravel(),
                                  self.grid.yret.ravel()))
+        # Only include axon segments that are < `max_d2` from the soma. These
+        # axon segments will have `sensitivity` > `self.min_ax_sensitivity`:
+        max_d2 = -2.0 * self.axlambda ** 2 * np.log(self.min_ax_sensitivity)
         axon_contrib = []
         for xy, bundle in zip(xyret, axons):
-            if self.engine == 'cython':
-                contrib = axon_contribution(bundle, xy, self.axlambda)
-            else:
-                idx = np.argmin((bundle[:, 0] - xy[0]) ** 2 +
-                                (bundle[:, 1] - xy[1]) ** 2)
-                # Cut off the part of the fiber that goes beyond the soma:
-                axon = np.flipud(bundle[0: idx + 1, :])
-                # Add the exact location of the soma:
-                axon = np.insert(axon, 0, xy, axis=0)
-                # For every axon segment, calculate distance from soma by
-                # summing up the individual distances between neighboring axon
-                # segments (by "walking along the axon"):
-                d2 = np.cumsum(np.diff(axon[:, 0], axis=0) ** 2 +
-                               np.diff(axon[:, 1], axis=0) ** 2)
-                sensitivity = np.exp(-d2 / (2.0 * self.axlambda ** 2))
-                contrib = np.column_stack((axon[1:, :], sensitivity))
+            idx = np.argmin((bundle[:, 0] - xy[0]) ** 2 +
+                            (bundle[:, 1] - xy[1]) ** 2)
+            # Cut off the part of the fiber that goes beyond the soma:
+            axon = np.flipud(bundle[0: idx + 1, :])
+            # Add the exact location of the soma:
+            axon = np.insert(axon, 0, xy, axis=0)
+            # For every axon segment, calculate distance from soma by
+            # summing up the individual distances between neighboring axon
+            # segments (by "walking along the axon"):
+            d2 = np.cumsum(np.diff(axon[:, 0], axis=0) ** 2 +
+                           np.diff(axon[:, 1], axis=0) ** 2)
+            idx_d2 = d2 < max_d2
+            sensitivity = np.exp(-d2[idx_d2] / (2.0 * self.axlambda ** 2))
+            idx_d2 = np.insert(idx_d2, 0, False)
+            contrib = np.column_stack((axon[idx_d2, :], sensitivity))
             axon_contrib.append(contrib)
         return axon_contrib
 
     def calc_bundle_tangent(self, xc, yc):
-        """Calculates orientation of fiber bundle tangent at (xc,yc)
+        """Calculates orientation of fiber bundle tangent at (xc, yc)
 
         Parameters
         ----------
-        xc, yc : float
-            (x,y) location of point at which to calculate bundle orientation
+        xc, yc: float
+            (x, y) location of point at which to calculate bundle orientation
             in microns.
         """
         # Check for scalar:
@@ -383,7 +464,7 @@ class AxonMapSpatial(SpatialModel):
         # electrodes to activation values at X,Y grid locations:
         assert isinstance(earray, ElectrodeArray)
         assert isinstance(stim, Stimulus)
-        return axon_map_fast(stim.data,
+        return fast_axon_map(stim.data,
                              np.array([earray[e].x for e in stim.electrodes],
                                       dtype=np.float32),
                              np.array([earray[e].y for e in stim.electrodes],
@@ -394,8 +475,111 @@ class AxonMapSpatial(SpatialModel):
                              self.rho,
                              self.thresh_percept)
 
+    def plot(self, annotate=False, upside_down=False, ax=None, autoscale=True):
+        if ax is None:
+            ax = plt.gca()
+        ax.set_facecolor('white')
+        ax.set_aspect('equal')
+
+        # Draw axon pathways:
+        axon_bundles = self.grow_axon_bundles(n_bundles=100)
+        for bundle in axon_bundles:
+            ax.plot(bundle[:, 0], bundle[:, 1], c=(0.6, 0.6, 0.6), linewidth=2,
+                    zorder=1)
+
+        # Show elliptic optic nerve head (width/height are averages from the
+        # human retina literature):
+        ax.add_patch(Ellipse(self.dva2ret((self.loc_od_x, self.loc_od_y)),
+                             width=1770, height=1880, alpha=1, color='white',
+                             zorder=2))
+
+        if autoscale:
+            ax.axis([-5000, 5000, -4000, 4000])
+        xmin, xmax, ymin, ymax = ax.axis()
+        ax.set_xticks(np.linspace(xmin, xmax, num=5))
+        ax.set_yticks(np.linspace(ymin, ymax, num=5))
+        ax.set_xlabel('x (microns)')
+        ax.set_ylabel('y (microns)')
+
+        # Annotate the four retinal quadrants near the corners of the plot:
+        # superior/inferior x temporal/nasal
+        if annotate:
+            if upside_down:
+                topbottom = ['bottom', 'top']
+            else:
+                topbottom = ['top', 'bottom']
+            if self.eye == 'RE':
+                temporalnasal = ['temporal', 'nasal']
+            else:
+                temporalnasal = ['nasal', 'temporal']
+            for yy, valign, si in zip([ymax, ymin], topbottom,
+                                      ['superior', 'inferior']):
+                for xx, halign, tn in zip([xmin, xmax], ['left', 'right'],
+                                          temporalnasal):
+                    ax.text(xx, yy, si + ' ' + tn,
+                            color='black', fontsize=14,
+                            horizontalalignment=halign,
+                            verticalalignment=valign,
+                            bbox={'boxstyle': 'square,pad=-0.1', 'ec': 'none',
+                                  'fc': (1, 1, 1, 0.7)},
+                            zorder=99)
+
+        # Need to flip y axis to have upper half == upper visual field
+        if upside_down:
+            ax.invert_yaxis()
+
+        return ax
+
 
 class AxonMapModel(Model):
+    """Axon map model of [Beyeler2019]_ (standalone model)
+
+    Implements the axon map model described in [Beyeler2019]_, where percepts
+    are elongated along nerve fiber bundle trajectories of the retina.
+
+    .. note: :
+
+        Use this class if you want a standalone model.
+        Use: py: class: `~pulse2percept.models.AxonMapSpatial` if you want
+        to combine the spatial model with a temporal model.
+
+    Parameters
+    ----------
+    axlambda: double, optional, default: 100
+        Exponential decay constant along the axon(microns).
+    rho: double, optional, default: 100
+        Exponential decay constant away from the axon(microns).
+    eye: {'LE', 'RE'}, optional, default: 'RE'
+        Eye for which to generate the axon map.
+    loc_od_x, loc_od_y: float, optional, default: (15.5, 1.5)
+        Location of the optic disc in degrees. Note that the optic disc in a
+        left eye should have a negative x coordinate.
+    n_axons: int, optional, default: 500
+        Number of axons to generate.
+    axons_range: (min, max), optional, default: (-180, 180)
+        The range of angles(in degrees) at which axons exit the optic disc.
+        This corresponds to the range of $\\phi_0$ values used in
+        [Jansonius2009]_.
+    n_ax_segments: int, optional, default: 500
+        Number of segments an axon is made of.
+    ax_segments_range: (min, max), optional, default: (0, 50)
+        Lower and upper bounds for the radial position values(polar coords)
+        for each axon.
+    min_ax_sensitivity: float, optional, default: 1e-3
+        Axon segments whose contribution to brightness is smaller than this
+        value will be pruned to improve computational efficiency. Set to a
+        value between 0 and 1.
+    axon_pickle: str, optional, default: 'axons.pickle'
+        File name in which to store precomputed axon maps.
+    ignore_pickle: bool, optional, default: False
+        A flag whether to ignore the pickle file in future calls to
+        ``model.build()``.
+
+    Notes
+    -----
+    *  The axon map is not very accurate when the upper bound of
+       `ax_segments_range` is greater than 90 deg.
+    """
 
     def __init__(self, **params):
         super(AxonMapModel, self).__init__(spatial=AxonMapSpatial(),

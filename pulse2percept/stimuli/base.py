@@ -1,38 +1,32 @@
-"""`Stimulus`"""
+"""`Stimulus`, `ImageStimulus`"""
 from sys import platform, _getframe
-import matplotlib as mpl
-if platform == "darwin":  # OS X
-    mpl.use('TkAgg')
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
 import numpy as np
 np.set_printoptions(precision=2, threshold=5, edgeitems=2)
-from copy import deepcopy as cp
-from collections import OrderedDict as ODict
+
+import logging
 from scipy.interpolate import interp1d
 
-from .pulse_trains import TimeSeries
-from ..utils import PrettyPrint
+from ..utils import PrettyPrint, parfor
 from ._base import fast_compress
 
 
 class Stimulus(PrettyPrint):
     """Stimulus
 
-    A stimulus is comprised of a labeled 2-D NumPy array that contains the
-    data, where the rows denote electrodes and the columns denote points in
-    time.
+    .. versionadded:: 0.6
 
-    A stimulus can be created from a variety of source types (see below),
-    including lists and dictionaries. Depending on the source type, a stimulus
-    might have a time component or not.
+    A stimulus is comprised of a labeled 2D NumPy array that contains the data,
+    where the rows denote electrodes and the columns denote points in time.
 
-    You can access the stimulus applied to electrode ``e`` at time ``t``
-    by directly indexing into ``Stimulus[e, t]``. In this case, ``t`` is not
-    a column index but a time point. If the time point is not explicitly stored
-    in the ``data`` container, its value will be automatically interpolated
-    from neighboring values.
+    A stimulus can be created from a variety of source types (e.g., scalars,
+    lists, NumPy arrays, and dictionaries).
+
+    .. seealso ::
+
+        *  `Basic Concepts > Electrical Stimuli <topics-stimuli>`
 
     Parameters
     ----------
@@ -46,14 +40,10 @@ class Stimulus(PrettyPrint):
              electrodes (no time component).
            * NxM array: interpreted as N electrodes each receiving M current
              amplitudes in time.
-        * :py:class:`~pulse2percept.stimuli.TimeSeries`: interpreted as the
-          stimulus in time for a single electrode (e.g.,
-          :py:class:`~pulse2percept.stimuli.BiphasicPulse`,
-          :py:class:`~pulse2percept.stimuli.PulseTrain`).
 
         In addition, you can also pass a collection of source types.
         Each element must be a valid source type for a single electrode (e.g.,
-        scalar, 1-D array, :py:class:`~pulse2percept.stimuli.TimeSeries`).
+        scalar, 1-D array, :py:class:`~pulse2percept.stimuli.Stimulus`).
 
         * List or tuple: List elements will be assigned to electrodes in order.
         * Dictionary: Dictionary keys are used to address electrodes by name.
@@ -101,7 +91,16 @@ class Stimulus(PrettyPrint):
     extrapolate : bool, optional, default: False
         Whether to extrapolate data points outside the given range.
 
-    .. versionadded:: 0.6
+    Notes
+    -----
+
+    *  Depending on the source type, a stimulus might have a time component or
+       not (e.g., scalars: time=None).
+    *  You can access the stimulus applied to electrode ``e`` at time ``t``
+       by directly indexing into ``Stimulus[e, t]``. In this case, ``t`` is not
+       a column index but a time point.
+    *  If the time point is not explicitly stored in the ``data`` container,
+       its value will be automatically interpolated from neighboring values.
 
     Examples
     --------
@@ -109,23 +108,6 @@ class Stimulus(PrettyPrint):
 
     >>> from pulse2percept.stimuli import Stimulus
     >>> stim = Stimulus(-13)
-
-    Stimulate Electrode 'B9' with a 10Hz cathodic-first pulse train lasting
-    0.2 seconds, with 0.45ms pulse duration, 40uA current amplitude, and the
-    time series resolved at 0.1ms resolution:
-
-    >>> from pulse2percept.stimuli import Stimulus, PulseTrain
-    >>> stim = Stimulus({'B9': PulseTrain(0.0001, freq=10, amp=40, dur=0.2)})
-
-    Compress an existing Stimulus:
-
-    >>> from pulse2percept.stimuli import Stimulus, PulseTrain
-    >>> stim = Stimulus({'B9': PulseTrain(0.0001, freq=10, amp=40, dur=0.5)})
-    >>> stim.shape
-    (1, 5000)
-    >>> stim.compress()
-    >>> stim.shape
-    (1, 40)
 
     Stimulate ten electrodes with 0uA:
 
@@ -170,6 +152,7 @@ class Stimulus(PrettyPrint):
 
     def _from_source(self, source):
         """Extract the data container and time information from source data
+
         This private method converts input data from allowable source types
         into a 2D NumPy array, where the first dimension denotes electrodes
         and the second dimension denotes points in time.
@@ -178,34 +161,39 @@ class Stimulus(PrettyPrint):
         """
         if np.isscalar(source) and not isinstance(source, str):
             # Scalar: 1 electrode, no time component
-            time = None
             data = np.array([source], dtype=np.float32).reshape((1, -1))
+            time = None
+            electrodes = None
         elif isinstance(source, (list, tuple)):
             # List or touple with N elements: 1 electrode, N time points
-            time = np.arange(len(source))
             data = np.array(source, dtype=np.float32).reshape((1, -1))
+            time = np.arange(data.shape[-1], dtype=np.float32)
+            electrodes = None
         elif isinstance(source, np.ndarray):
             if source.ndim > 1:
                 raise ValueError("Cannot create Stimulus object from a %d-D "
                                  "NumPy array. Must be 1-D." % source.ndim)
             # 1D NumPy array with N elements: 1 electrode, N time points
-            time = np.arange(len(source))
             data = source.astype(np.float32).reshape((1, -1))
-        elif isinstance(source, TimeSeries):
-            # TimeSeries with NxM time points: N electrodes, M time points
-            time = np.arange(source.shape[-1]) * source.tsample
-            data = source.data.astype(np.float32).reshape((-1, len(time)))
+            time = np.arange(data.shape[-1], dtype=np.float32)
+            electrodes = None
+        elif isinstance(source, Stimulus):
+            # e.g. from a dictionary of Stimulus objects
+            data = source.data
+            time = source.time
+            electrodes = source.electrodes
         else:
             raise TypeError("Cannot create Stimulus object from %s. Choose "
                             "from: scalar, tuple, list, NumPy array, or "
-                            "TimeSeries." % type(source))
-        return time, data
+                            "Stimulus." % type(source))
+        return time, data, electrodes
 
     def _factory(self, source, electrodes, time, compress):
+        """Build the Stimulus object from the specified source type"""
         if isinstance(source, self.__class__):
             # Stimulus: We're done. This might happen in ProsthesisSystem if
             # the user builds the stimulus themselves. It can also be used to
-            # overwrite the time axis or provide new electrode names.
+            # overwrite the time axis or provide new electrode names:
             _data = source.data
             _time = source.time
             _electrodes = source.electrodes
@@ -222,40 +210,67 @@ class Stimulus(PrettyPrint):
             _time = []
             _electrodes = []
             _data = []
-            for e, s in iterator:
+            for ele, src in iterator:
                 # Extract times and data from source:
-                t, d = self._from_source(s)
+                t, d, e = self._from_source(src)
                 _time.append(t)
-                _electrodes.append(e)
                 _data.append(d)
-            # All elements of `times` must be the same, but they can either be
-            # None or a NumPy array, so comparing with == will fail. Therefore,
-            # convert all elements to NumPy float arrays, which will convert
-            # None to NaN. Then you can compare two entries with np.allclose,
-            # making sure the `equal_nan` option is set to True so that two NaNs
-            # are considered equal:
-            for e, t in enumerate(_time):
-                if not np.allclose(np.array(t, dtype=np.float32),
-                                   np.array(_time[0], dtype=np.float32),
-                                   equal_nan=True):
-                    raise ValueError("All stimuli must have the same time axis, "
-                                     "but electrode %s has t=%s and electrode %s "
-                                     "has t=%s." % (_electrodes[0], _time[0],
-                                                    _electrodes[e], t))
-            _time = _time[0] if _time else None
-            # Now make `data` a 2-D NumPy array, with `electrodes` as rows and
-            # `times` as columns (except sometimes `times` is None).
+                if isinstance(source, dict):
+                    # Special case, electrode names are specified in a dict:
+                    _electrodes.append(ele)
+                else:
+                    # In all other cases, use the electrode names specified by
+                    # the source (unless they're None):
+                    _electrodes.append(e if e is not None else ele)
+            # Make sure all stimuli have time=None or none of them do:
+            if len(np.unique([t is None for t in _time])) > 1:
+                raise ValueError("If one stimulus has time=None, all others "
+                                 "must have time=None as well.")
+            # When none of the stimuliu have time=None, we need to merge the
+            # time axes:
+            if len(_time) > 1 and _time[0] is not None:
+                # Keep only the unique time points across stimuli:
+                new_time = np.unique(np.concatenate(_time))
+                # Now we need to interpolate the data values at each of these
+                # new time points:
+                new_data = []
+                for t, d in zip(_time, _data):
+                    if len(t) == 1:
+                        # Special case: Duplicate data with slightly different
+                        # time points so we can set up an interp1d:
+                        t = np.array([t - 1e-12, t + 1e-12], dtype=np.float32)
+                        d = np.repeat(d, 2, axis=1)
+                    itp = interp1d(t.ravel(), d, bounds_error=None,
+                                   fill_value='extrapolate')
+                    new_data.append(itp(new_time))
+                _data = new_data
+                _time = [new_time]
+            # Now make `_data` a 2-D NumPy array, with `_electrodes` as rows
+            # and `_time` as columns (except sometimes `_time` is None).
             _data = np.vstack(_data) if _data else np.array([])
+            _time = _time[0] if _time else None
+
         # User can overwrite the names of the electrodes:
         if electrodes is not None:
-            electrodes = np.array(electrodes).flatten()
-            if len(electrodes) != _data.shape[0]:
-                raise ValueError("Number of electrodes provided (%d) does not "
-                                 "match the number of electrodes in the data "
-                                 "(%d)." % (len(electrodes), _data.shape[0]))
-            _electrodes = electrodes
+            _electrodes = np.array([electrodes]).flatten()
         else:
-            _electrodes = np.array(_electrodes)
+            try:
+                _electrodes = np.concatenate(_electrodes)
+            except ValueError:
+                _electrodes = np.array(_electrodes)
+        if len(_electrodes) != _data.shape[0]:
+            raise ValueError("Number of electrodes provided (%d) does not "
+                             "match the number of electrodes in the data "
+                             "(%d)." % (len(_electrodes), _data.shape[0]))
+        unq, nunq = np.unique(_electrodes, return_index=True)
+        if len(unq) != _data.shape[0]:
+            # We found duplicate names: replace them by integer index
+            idx = np.delete(np.arange(len(_electrodes)), nunq)
+            msg = ("Duplicate electrode names detected %s, and replaced with "
+                   "integer values" % _electrodes[idx])
+            logging.getLogger(__name__).warning(msg)
+            _electrodes[idx] = idx
+
         # User can overwrite time:
         if time is not None:
             if _time is None:
@@ -267,6 +282,7 @@ class Stimulus(PrettyPrint):
                                  "match the number of time steps in the data "
                                  "(%d)." % (len(time), _data.shape[1]))
             _time = time
+
         # Store the data in the private container. Setting all elements at once
         # enforces consistency; e.g., between shape of electrodes and time:
         self._stim = {
@@ -306,7 +322,7 @@ class Stimulus(PrettyPrint):
         }
         self.is_compressed = True
 
-    def plot(self, electrodes=None, time=None, axes=None):
+    def plot(self, electrodes=None, time=None, fmt='k-', axes=None):
         """Plot the stimulus
 
         Parameters
@@ -319,6 +335,8 @@ class Stimulus(PrettyPrint):
             time points with a tuple or a slice, or specify the exact time
             points to interpolate.
             If None, all time points are plotted.
+        fmt : str, optional, default: 'k-'
+            A Matplotlib format string; e.g., 'ro' for red circles.
         axes : matplotlib.axes.Axes or list thereof; optional, default: None
             A Matplotlib Axes object or a list thereof (one per electrode to
             plot). If None, a new Axes object will be created.
@@ -375,7 +393,7 @@ class Stimulus(PrettyPrint):
         for ax, electrode in zip(axes, electrodes):
             # Slice or interpolate stimulus:
             slc = self.__getitem__((electrode, t_idx))
-            ax.plot(t_vals, np.squeeze(slc), 'k-', linewidth=2)
+            ax.plot(t_vals, np.squeeze(slc), fmt, linewidth=2)
             # Turn off the ugly box spines:
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
@@ -391,10 +409,10 @@ class Stimulus(PrettyPrint):
         # Show x-ticks only on last subplot:
         axes[-1].set_xticks(np.linspace(t_vals[0], t_vals[-1], num=5))
         # Labels are common to all subplots:
-        axes[-1].figure.text(0.5, 0, 'Time (s)', va='top', ha='center')
+        axes[-1].figure.subplots_adjust(bottom=0.2)
+        axes[-1].figure.text(0.5, 0, 'Time (ms)', va='top', ha='center')
         axes[-1].figure.text(0, 0.5, r'Amplitude ($\mu$A)', va='center',
                              ha='center', rotation='vertical')
-        axes[-1].figure.tight_layout()
         if len(axes) == 1:
             return axes[0]
         return axes

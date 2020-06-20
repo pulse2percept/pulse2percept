@@ -13,7 +13,6 @@ jobs:
     name: Building on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      max-parallel: 4
       # Test on all supported platforms using all supported Python versions:
       matrix:
         python-version: [3.5, 3.6, 3.7, 3.8]

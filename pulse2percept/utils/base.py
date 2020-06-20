@@ -183,14 +183,22 @@ class Data(PrettyPrint):
                 raise ValueError("All axis labels must be unique.")
             for i, (key, values) in enumerate(axes.items()):
                 if values is None:
-                    # Fill in omitted axis:
-                    axes[key] = np.arange(data.shape[i])
-                    continue
-                if len(values) != data.shape[i]:
-                    err_str = ("Number of values for axis '%s' (%d) does not "
-                               "match data.shape[%d] "
-                               "(%d)" % (key, len(values), i, data.shape[i]))
-                    raise ValueError(err_str)
+                    if data.shape[i] > 1:
+                        # If there's 1 data point, then None is None. If
+                        # there's > 1 data points, it's an omitted axis we need
+                        # to fill in:
+                        axes[key] = np.arange(data.shape[i])
+                        continue
+                else:
+                    if data.shape[i] == 1 and np.isscalar(values):
+                        values = np.array([values])
+                    if len(values) != data.shape[i]:
+                        err_str = ("Number of values for axis '%s' (%d) does "
+                                   "not match data.shape[%d] "
+                                   "(%d)" % (key, len(values), i,
+                                             data.shape[i]))
+                        raise ValueError(err_str)
+                    axes[key] = values
 
         # Create a property for each of the following:
         pprint_params = ['data', 'dtype', 'shape', 'metadata']
