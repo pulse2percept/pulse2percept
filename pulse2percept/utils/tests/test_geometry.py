@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import numpy.testing as npt
+from matplotlib.axes import Axes
 
 from pulse2percept.utils import (RetinalCoordTransform, Curcio1990Transform,
                                  Grid2D, Watson2014Transform,
@@ -74,6 +75,12 @@ def test_Grid2D_make_rectangular_grid():
     # Same step size, but given explicitly:
     npt.assert_almost_equal(Grid2D((-3, 3), (8, 12), step=0.123).x,
                             Grid2D((-3, 3), (8, 12), step=(0.123, 0.123)).x)
+
+
+def test_Grid2D_plot():
+    grid = Grid2D((-20, 20), (-40, 40), step=0.5)
+    ax = grid.plot()
+    npt.assert_equal(isinstance(ax, Axes), True)
 
 
 class ValidCoordTransform(RetinalCoordTransform):

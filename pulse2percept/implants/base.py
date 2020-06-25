@@ -107,7 +107,7 @@ class ProsthesisSystem(PrettyPrint):
         """
 
         if ax is None:
-            _, ax = plt.subplots(figsize=(15, 8))
+            ax = plt.gca()
 
         for name, electrode in self.items():
             electrode.plot(ax=ax)

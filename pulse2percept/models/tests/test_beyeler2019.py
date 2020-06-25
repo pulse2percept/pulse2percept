@@ -177,7 +177,7 @@ def test_AxonMapModel(engine):
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 2,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
-                  'loc_od_x': 5, 'loc_od_y': 6}
+                  'loc_od': (5, 6)}
     model = AxonMapModel()
     for param in set_params:
         npt.assert_equal(hasattr(model.spatial, param), True)
@@ -214,8 +214,7 @@ def test_AxonMapModel(engine):
 def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
     # With `rho` starting at 0, all axons should originate in the optic disc
     # center
-    model = AxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
-                         xystep=2, engine=engine,
+    model = AxonMapModel(loc_od=loc_od, xystep=2, engine=engine,
                          ax_segments_range=(0, 45),
                          n_ax_segments=100)
     for phi0 in [-135.0, 66.0, 128.0]:
@@ -225,8 +224,7 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
 
     # These axons should all end at the meridian
     for phi0 in [110.0, 135.0, 160.0]:
-        model = AxonMapModel(loc_od_x=15, loc_od_y=2,
-                             xystep=2, engine=engine,
+        model = AxonMapModel(loc_od=(15, 2), xystep=2, engine=engine,
                              n_ax_segments=801,
                              ax_segments_range=(0, 45))
         ax_pos = model.spatial._jansonius2009(sign * phi0)
@@ -259,8 +257,7 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
 
     # A single axon fiber with `phi0`=0 should return a single pixel location
     # that corresponds to the optic disc
-        model = AxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
-                             xystep=2, engine=engine, eye=eye,
+        model = AxonMapModel(loc_od=loc_od, xystep=2, engine=engine, eye=eye,
                              ax_segments_range=(0, 0),
                              n_ax_segments=1)
         single_fiber = model.spatial._jansonius2009(0)
