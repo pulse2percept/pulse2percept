@@ -169,7 +169,7 @@ def test_AxonMapSpatial_plot():
     # Setting upside_down flips y axis:
     ax = model.plot(upside_down=True, autoscale=True)
     npt.assert_equal(ax.get_xlim(), (-5000, 5000))
-    npt.assert_equal(ax.get_ylim(), (4000, -4000))
+    npt.assert_equal(ax.get_ylim(), (5000, -5000))
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
