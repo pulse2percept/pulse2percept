@@ -15,17 +15,23 @@ from ._base import fast_compress
 
 class Stimulus(PrettyPrint):
     """Stimulus
+
     .. versionadded:: 0.6
+
     A stimulus is comprised of a labeled 2D NumPy array that contains the data,
     where the rows denote electrodes and the columns denote points in time.
     A stimulus can be created from a variety of source types (e.g., scalars,
     lists, NumPy arrays, and dictionaries).
+
     .. seealso ::
+
         *  `Basic Concepts > Electrical Stimuli <topics-stimuli>`
+
     Parameters
     ----------
     source : source type
         A valid source type is one of the following:
+
         * Scalar value: interpreted as the current amplitude delivered to a
           single electrode (no time component).
         * NumPy array:
@@ -33,45 +39,61 @@ class Stimulus(PrettyPrint):
              electrodes (no time component).
            * NxM array: interpreted as N electrodes each receiving M current
              amplitudes in time.
+
         In addition, you can also pass a collection of source types.
         Each element must be a valid source type for a single electrode (e.g.,
         scalar, 1-D array, :py:class:`~pulse2percept.stimuli.Stimulus`).
+
         * List or tuple: List elements will be assigned to electrodes in order.
         * Dictionary: Dictionary keys are used to address electrodes by name.
+
     electrodes : int, string or list thereof; optional, default: None
         Optionally, you can provide your own electrode names. If none are
         given, electrode names will be extracted from the source type (e.g.,
         the keys from a dictionary). If a scalar or NumPy array is passed,
         electrode names will be numbered 0..N.
+
         .. note::
+
            The number of electrode names provided must match the number of
            electrodes extracted from the source type (i.e., N).
+
     time : int, float or list thereof; optional, default: None
         Optionally, you can provide the time points of the source data.
         If none are given, time steps will be numbered 0..M.
+
         .. note::
+
            The number of time points provided must match the number of time
            points extracted from the source type (i.e., M).
            Stimuli created from scalars or 1-D NumPy arrays will have no time
            componenet, in which case you cannot provide your own time points.
+
     metadata : dict, optional, default: None
         Additional stimulus metadata can be stored in a dictionary.
+
     compress : bool, optional, default: False
         If True, will compress the source data in two ways:
+
         * Remove electrodes with all-zero activation.
         * Retain only the time points at which the stimulus changes.
+
         For example, in a pulse train, only the signal edges are saved. This
         drastically reduces the memory footprint of the stimulus.
+
     interp_method : str or int, optional, default: 'linear'
         For SciPy's ``interp1`` method, specifies the kind of interpolation as
         a string ('linear', 'nearest', 'zero', 'slinear', 'quadratic', 'cubic',
         'previous', 'next') or as an integer specifying the order of the spline
         interpolator to use.
+
         Here, 'zero', 'slinear', 'quadratic' and 'cubic' refer to a spline
         interpolation of zeroth, first, second or third order; 'previous' and
         'next' simply return the previous or next value of the point.
+
     extrapolate : bool, optional, default: False
         Whether to extrapolate data points outside the given range.
+
     Notes
     -----
     *  Depending on the source type, a stimulus might have a time component or
@@ -81,24 +103,33 @@ class Stimulus(PrettyPrint):
        a column index but a time point.
     *  If the time point is not explicitly stored in the ``data`` container,
        its value will be automatically interpolated from neighboring values.
+
     Examples
     --------
     Stimulate a single electrode with -13uA:
+
     >>> from pulse2percept.stimuli import Stimulus
     >>> stim = Stimulus(-13)
+
     Stimulate ten electrodes with 0uA:
+
     >>> from pulse2percept.stimuli import Stimulus
     >>> stim = Stimulus(np.zeros(10))
+
     Provide new electrode names for an existing Stimulus object:
+
     >>> from pulse2percept.stimuli import Stimulus
     >>> old_stim = Stimulus([3, 5])
     >>> new_stim = Stimulus(old_stim, electrodes=['new0', 'new1'])
+
     Interpolate the stimulus value at some point in time. Here, the stimulus
     is a single-electrode ramp stimulus (stimulus value == point in time):
+
     >>> from pulse2percept.stimuli import Stimulus
     >>> stim = Stimulus(np.arange(10).reshape((1, -1)))
     >>> stim[:, 3.45] # doctest: +ELLIPSIS
     3.45...
+
     """
     # Frozen class: Only the following class attributes are allowed
     __slots__ = ('metadata', '_interp', '_interp_method', '_extrapolate',
@@ -123,6 +154,7 @@ class Stimulus(PrettyPrint):
 
     def _merge_time_axes(self, _data, _time):
         """Merge time axes
+
         When a collection of source types is passed, it is possible that they
         have different time axes (e.g., different time steps, or a different
         stimulus duration). In this case, we need to merge all time axes into a
@@ -146,9 +178,11 @@ class Stimulus(PrettyPrint):
 
     def _from_source(self, source):
         """Extract the data container and time information from source data
+
         This private method converts input data from allowable source types
         into a 2D NumPy array, where the first dimension denotes electrodes
         and the second dimension denotes points in time.
+
         Some stimuli don't have a time component (such as a stimulus created
         from a scalar or 1D NumPy array. In this case, times=None.
         """
@@ -287,6 +321,7 @@ class Stimulus(PrettyPrint):
 
     def compress(self):
         """Compress the source data
+
         Returns
         -------
         compressed : :py:class:`~pulse2percept.stimuli.Stimulus`
@@ -313,6 +348,7 @@ class Stimulus(PrettyPrint):
 
     def plot(self, electrodes=None, time=None, fmt='k-', axes=None):
         """Plot the stimulus
+
         Parameters
         ----------
         electrodes : int, string, or list thereof; optional, default: None
@@ -328,6 +364,7 @@ class Stimulus(PrettyPrint):
         axes : matplotlib.axes.Axes or list thereof; optional, default: None
             A Matplotlib Axes object or a list thereof (one per electrode to
             plot). If None, a new Axes object will be created.
+
         Returns
         -------
         axes : matplotlib.axes.Axes or np.ndarray of them
@@ -408,13 +445,16 @@ class Stimulus(PrettyPrint):
 
     def __getitem__(self, item):
         """Returns an item from the data array, interpolated if necessary
+
         There are many potential use cases:
+
         *  ``stim[i]`` or ``stim[i, :]``: access electrode ``i`` (int or str)
         *  ``stim[[i0,i1]]`` or ``stim[[i0, i1], :]``
         *  ``stim[stim.electrodes != 'A1', :]``
         *  ``stim[:, 1]``: always interpreted as t=1.0, not index=1
         *  ``stim[:, 1.234]``: interpolated time
         *  ``stim[:, stim.time < 0.4]``, ``stim[:, 0.3:1.9:0.001]``
+
         """
         # STEP 1: AVOID CONFUSING TIME POINTS WITH COLUMN INDICES
         # NumPy handles most indexing and slicing. However, we need to prevent
@@ -503,23 +543,30 @@ class Stimulus(PrettyPrint):
 
     def __eq__(self, other):
         """Returns True if two Stimulus objects are identical
+
         Two Stimulus objects are considered identical if they have the same
         electrode names, time steps, and data points.
+
         Parameters
         ----------
         other : any
             Another object or variable to which the current object should be
             compared.
+
         Examples
         --------
         >>> from pulse2percept.stimuli import Stimulus
         >>> Stimulus([1, 2, 3]) == Stimulus([1, 2, 3])
         True
+
         >>> Stimulus(np.ones(3)) == Stimulus(np.zeros(5))
         False
+
         Compare a Stimulus with something else entirely:
+
         >>> Stimulus(np.ones(3)) == 1
         False
+
         """
         if not isinstance(other, Stimulus):
             return False
@@ -545,21 +592,26 @@ class Stimulus(PrettyPrint):
 
     def __ne__(self, other):
         """Returns True if two Stimulus objects are different
+
         Two Stimulus objects are considered different if they store different
         electrode names, time steps, or data points.
+
         Parameters
         ----------
         other : any
             Another object or variable to which the current object should be
             compared.
+
         Examples
         --------
         Compare two Stimulus objects:
+
         >>> from pulse2percept.stimuli import Stimulus
         >>> stim1 = Stimulus(np.ones(3))
         >>> stim2 = Stimulus(np.zeros(5))
         >>> stim1 != stim2
         True
+
         """
         return not self.__eq__(other)
 
