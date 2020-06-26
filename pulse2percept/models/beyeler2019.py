@@ -517,7 +517,23 @@ class AxonMapSpatial(SpatialModel):
                              self.rho,
                              self.thresh_percept)
 
-    def plot(self, annotate=False, upside_down=False, ax=None, autoscale=True):
+    def plot(self, annotate=False, upside_down=False, autoscale=True, ax=None):
+        """Plot the axon map
+
+        Parameters
+        ----------
+        annotate : bool, optional
+            Flag whether to label the four retinal quadrants
+        upside_down : bool, optional
+            Flag whether to flip the y axis upside-down (such that the upper
+            half of the plot corresponds to the upper visual field)
+        autoscale : bool, optional
+            Whether to adjust the x,y limits of the plot
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
+            A Matplotlib axes object. If None, will either use the current axes
+            (if exists) or create a new Axes object
+
+        """
         if ax is None:
             ax = plt.gca()
         ax.set_facecolor('white')
@@ -533,6 +549,9 @@ class AxonMapSpatial(SpatialModel):
         # human retina literature):
         ax.add_patch(Ellipse(self.dva2ret(self.loc_od), width=1770,
                              height=1880, alpha=1, color='white', zorder=2))
+
+        # Show extent of simulated grid:
+        self.grid.plot(ax=ax, transform=self.dva2ret, zorder=10)
 
         if autoscale:
             ax.axis([-5000, 5000, -4000, 4000])

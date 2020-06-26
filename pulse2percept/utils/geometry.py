@@ -123,15 +123,19 @@ class Grid2D(PrettyPrint):
     def reset(self):
         self._iter = 0
 
-    def plot(self, ax=None, transform=None):
+    def plot(self, transform=None, zorder=1, ax=None):
         """Plot the extension of the grid
 
         Parameters
         ----------
-        ax :
-        transform : function
+        transform : function, optional
             A coordinate transform to be applied to the (x,y) coordinates of
-            the grid (e.g., :py:meth:`pulse2percept.utils.)
+            the grid (e.g., :py:meth:`Curcio1990Transform.dva2ret`)
+        zorder : int, optional
+            The Matplotlib zorder at which to plot the grid
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
+            A Matplotlib axes object. If None, will either use the current axes
+            (if exists) or create a new Axes object
         """
         if ax is None:
             ax = plt.gca()
@@ -155,7 +159,7 @@ class Grid2D(PrettyPrint):
                 xy.append(border)
             # Draw border:
             ax.add_patch(Polygon(np.array(xy).T, alpha=0.5, ec='k', fc='gray',
-                                 ls='--'))
+                                 ls='--'), zorder=zorder)
         else:
             raise NotImplementedError
         return ax
