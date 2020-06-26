@@ -333,7 +333,7 @@ class AxonMapSpatial(SpatialModel):
         # Return as Nx2 array:
         return np.vstack((xmodel, ymodel)).astype(np.float32).T
 
-    def grow_axon_bundles(self, n_bundles=None):
+    def grow_axon_bundles(self, n_bundles=None, prune=True):
         if n_bundles is None:
             n_bundles = self.n_axons
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
@@ -345,14 +345,17 @@ class AxonMapSpatial(SpatialModel):
                          scheduler=self.scheduler)
         # Keep only non-zero sized bundles:
         bundles = list(filter(lambda x: len(x) > 0, bundles))
-        # Remove axon bundles outside the simulated area:
-        bundles = list(filter(lambda x: (np.max(x[:, 0]) >= self.xrange[0] and
-                                         np.min(x[:, 0]) <= self.xrange[1] and
-                                         np.max(x[:, 1]) >= self.yrange[0] and
-                                         np.min(x[:, 1]) <= self.yrange[1]),
-                              bundles))
-        # Keep only reasonably sized axon bundles:
-        bundles = list(filter(lambda x: len(x) > 10, bundles))
+        if prune:
+            # Remove axon bundles outside the simulated area:
+            xmin, xmax = self.xrange
+            ymin, ymax = self.yrange
+            bundles = list(filter(lambda x: (np.max(x[:, 0]) >= xmin and
+                                             np.min(x[:, 0]) <= xmax and
+                                             np.max(x[:, 1]) >= ymin and
+                                             np.min(x[:, 1]) <= ymax),
+                                  bundles))
+            # Keep only reasonably sized axon bundles:
+            bundles = list(filter(lambda x: len(x) > 10, bundles))
         # Convert to um:
         bundles = [self.dva2ret(b) for b in bundles]
         return bundles
@@ -540,7 +543,7 @@ class AxonMapSpatial(SpatialModel):
         ax.set_aspect('equal')
 
         # Draw axon pathways:
-        axon_bundles = self.grow_axon_bundles(n_bundles=100)
+        axon_bundles = self.grow_axon_bundles(n_bundles=100, prune=False)
         for bundle in axon_bundles:
             ax.plot(bundle[:, 0], bundle[:, 1], c=(0.6, 0.6, 0.6), linewidth=2,
                     zorder=1)
