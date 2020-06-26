@@ -554,7 +554,7 @@ class AxonMapSpatial(SpatialModel):
         self.grid.plot(ax=ax, transform=self.dva2ret, zorder=10)
 
         if autoscale:
-            ax.axis([-5000, 5000, -4000, 4000])
+            ax.axis([-5000, 5000, -5000, 5000])
         xmin, xmax, ymin, ymax = ax.axis()
         ax.set_xticks(np.linspace(xmin, xmax, num=5))
         ax.set_yticks(np.linspace(ymin, ymax, num=5))

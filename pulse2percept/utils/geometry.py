@@ -159,7 +159,7 @@ class Grid2D(PrettyPrint):
                 xy.append(border)
             # Draw border:
             ax.add_patch(Polygon(np.array(xy).T, alpha=0.5, ec='k', fc='gray',
-                                 ls='--'), zorder=zorder)
+                                 ls='--', zorder=zorder))
         else:
             raise NotImplementedError
         return ax
