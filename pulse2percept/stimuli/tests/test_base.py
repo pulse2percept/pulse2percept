@@ -197,6 +197,7 @@ def test_Stimulus_plot():
                                 stim.data.min())
         npt.assert_almost_equal(ax.lines[0].get_data()[1].max(),
                                 stim.data.max())
+        ax.clear()
 
     # Plot a range of time values (times are sliced, not interpolated):
     ax = stim.plot(time=(0.2, 0.6))
@@ -205,6 +206,7 @@ def test_Stimulus_plot():
     t_vals = ax.lines[0].get_data()[0]
     npt.assert_almost_equal(t_vals[0], 0.3)
     npt.assert_almost_equal(t_vals[-1], 0.5)
+    ax.clear()
 
     # Plot exact time points:
     t_vals = [0.2, 0.3, 0.4]
