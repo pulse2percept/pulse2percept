@@ -170,8 +170,7 @@ class Percept(Data):
             If None, uses the percept's time axis. Not supported for
             non-homogeneous time axis.
         ax : matplotlib.axes._subplots.AxesSubplot, optional
-            A Matplotlib axes object. If None, will either use the current axes
-            (if exists) or create a new Axes object
+            A Matplotlib axes object. If None, will create a new Axes object
 
         Returns
         -------
@@ -197,7 +196,9 @@ class Percept(Data):
         # %matplotlib inline (although it can be kind of slow):
         plt.rcParams["animation.html"] = 'jshtml'
         if ax is None:
-            ax = plt.gca()
+            fig, ax = plt.subplots(figsize=(8, 5))
+        else:
+            fig = ax.figure
         # Rewind the percept and show the first frame:
         self.rewind()
         mat = ax.imshow(next(self), cmap='gray', vmax=self.data.max())

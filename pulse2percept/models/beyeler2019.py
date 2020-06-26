@@ -554,7 +554,8 @@ class AxonMapSpatial(SpatialModel):
                              height=1880, alpha=1, color='white', zorder=2))
 
         # Show extent of simulated grid:
-        self.grid.plot(ax=ax, transform=self.dva2ret, zorder=10)
+        if self.is_built:
+            self.grid.plot(ax=ax, transform=self.dva2ret, zorder=10)
 
         if autoscale:
             ax.axis([-5000, 5000, -5000, 5000])
