@@ -32,6 +32,21 @@ class ScoreboardSpatial(SpatialModel):
     ----------
     rho : double, optional, default: 100
         Exponential decay constant describing phosphene size (microns).
+    x_range : (x_min, x_max), optional
+        A tuple indicating the range of x values to simulate (in degrees of
+        visual angle). In a right eye, negative x values correspond to the
+        temporal retina, and positive x values to the nasal retina. In a left
+        eye, the opposite is true.
+    y_range : tuple, (y_min, y_max)
+        A tuple indicating the range of y values to simulate (in degrees of
+        visual angle). Negative y values correspond to the superior retina,
+        and positive y values to the inferior retina.
+    xystep : int, double, tuple
+        Step size for the range of (x,y) values to simulate (in degrees of
+        visual angle). For example, to create a grid with x values [0, 0.5, 1]
+        use ``x_range=(0, 1)`` and ``xystep=0.5``.
+    grid_type : {'rectangular', 'hexagonal'}
+        Whether to simulate points on a rectangular or hexagonal grid
     """
 
     def get_default_params(self):
@@ -83,6 +98,21 @@ class ScoreboardModel(Model):
     ----------
     rho : double, optional, default: 100
         Exponential decay constant describing phosphene size (microns).
+    x_range : (x_min, x_max), optional
+        A tuple indicating the range of x values to simulate (in degrees of
+        visual angle). In a right eye, negative x values correspond to the
+        temporal retina, and positive x values to the nasal retina. In a left
+        eye, the opposite is true.
+    y_range : tuple, (y_min, y_max)
+        A tuple indicating the range of y values to simulate (in degrees of
+        visual angle). Negative y values correspond to the superior retina,
+        and positive y values to the inferior retina.
+    xystep : int, double, tuple
+        Step size for the range of (x,y) values to simulate (in degrees of
+        visual angle). For example, to create a grid with x values [0, 0.5, 1]
+        use ``x_range=(0, 1)`` and ``xystep=0.5``.
+    grid_type : {'rectangular', 'hexagonal'}
+        Whether to simulate points on a rectangular or hexagonal grid
     """
 
     def __init__(self, **params):
@@ -109,11 +139,27 @@ class AxonMapSpatial(SpatialModel):
         Exponential decay constant along the axon(microns).
     rho: double, optional, default: 100
         Exponential decay constant away from the axon(microns).
-    eye: {'LE', 'RE'}, optional, default: 'RE'
+    eye: {'RE', LE'}, optional
         Eye for which to generate the axon map.
-    loc_od_x, loc_od_y: float, optional, default: (15.5, 1.5)
-        Location of the optic disc in degrees. Note that the optic disc in a
-        left eye should have a negative x coordinate.
+    x_range : (x_min, x_max), optional
+        A tuple indicating the range of x values to simulate (in degrees of
+        visual angle). In a right eye, negative x values correspond to the
+        temporal retina, and positive x values to the nasal retina. In a left
+        eye, the opposite is true.
+    y_range : tuple, (y_min, y_max)
+        A tuple indicating the range of y values to simulate (in degrees of
+        visual angle). Negative y values correspond to the superior retina,
+        and positive y values to the inferior retina.
+    xystep : int, double, tuple
+        Step size for the range of (x,y) values to simulate (in degrees of
+        visual angle). For example, to create a grid with x values [0, 0.5, 1]
+        use ``x_range=(0, 1)`` and ``xystep=0.5``.
+    grid_type : {'rectangular', 'hexagonal'}
+        Whether to simulate points on a rectangular or hexagonal grid
+    loc_od, loc_od: (x,y), optional, default: (15.5, 1.5)
+        Location of the optic disc in degrees of visual angle. Note that the
+        optic disc in a left eye will be corrected to have a negative x
+        coordinate.
     n_axons: int, optional, default: 500
         Number of axons to generate.
     axons_range: (min, max), optional, default: (-180, 180)
@@ -155,8 +201,7 @@ class AxonMapSpatial(SpatialModel):
             'rho': 100,
             'axlambda': 100,
             # Set the (x,y) location of the optic disc:
-            'loc_od_x': 15.5,
-            'loc_od_y': 1.5,
+            'loc_od': (15.5, 1.5),
             'n_axons': 500,
             'axons_range': (-180, 180),
             # Number of sampling points along the radial axis (polar coords):
@@ -218,7 +263,7 @@ class AxonMapSpatial(SpatialModel):
 
         """
         # Check for the location of the optic disc:
-        loc_od = (self.loc_od_x, self.loc_od_y)
+        loc_od = self.loc_od
         if eye.upper() not in ['LE', 'RE']:
             e_s = "Unknown eye string '%s': Choose from 'LE', 'RE'." % eye
             raise ValueError(e_s)
@@ -288,7 +333,7 @@ class AxonMapSpatial(SpatialModel):
         # Return as Nx2 array:
         return np.vstack((xmodel, ymodel)).astype(np.float32).T
 
-    def grow_axon_bundles(self, n_bundles=None):
+    def grow_axon_bundles(self, n_bundles=None, prune=True):
         if n_bundles is None:
             n_bundles = self.n_axons
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
@@ -300,14 +345,17 @@ class AxonMapSpatial(SpatialModel):
                          scheduler=self.scheduler)
         # Keep only non-zero sized bundles:
         bundles = list(filter(lambda x: len(x) > 0, bundles))
-        # Remove axon bundles outside the simulated area:
-        bundles = list(filter(lambda x: (np.max(x[:, 0]) >= self.xrange[0] and
-                                         np.min(x[:, 0]) <= self.xrange[1] and
-                                         np.max(x[:, 1]) >= self.yrange[0] and
-                                         np.min(x[:, 1]) <= self.yrange[1]),
-                              bundles))
-        # Keep only reasonably sized axon bundles:
-        bundles = list(filter(lambda x: len(x) > 10, bundles))
+        if prune:
+            # Remove axon bundles outside the simulated area:
+            xmin, xmax = self.xrange
+            ymin, ymax = self.yrange
+            bundles = list(filter(lambda x: (np.max(x[:, 0]) >= xmin and
+                                             np.min(x[:, 0]) <= xmax and
+                                             np.max(x[:, 1]) >= ymin and
+                                             np.min(x[:, 1]) <= ymax),
+                                  bundles))
+            # Keep only reasonably sized axon bundles:
+            bundles = list(filter(lambda x: len(x) > 10, bundles))
         # Convert to um:
         bundles = [self.dva2ret(b) for b in bundles]
         return bundles
@@ -409,16 +457,12 @@ class AxonMapSpatial(SpatialModel):
         return tangent
 
     def _build(self):
-        if self.eye == 'LE':
-            if self.loc_od_x > 0:
-                err_str = ("In a left eye, the x-coordinate of the optic"
-                           "disc should be negative, not %f" % self.loc_od_x)
-                raise ValueError(err_str)
-        elif self.eye == 'RE':
-            if self.loc_od_x < 0:
-                err_str = ("In a right eye, the x-coordinate of the optic"
-                           "disc should be positive, not %f" % self.loc_od_x)
-                raise ValueError(err_str)
+        if self.eye.upper() == 'LE':
+            # In a left eye, the optic disc must have a negative x coordinate:
+            self.loc_od = (-np.abs(self.loc_od[0]), self.loc_od[1])
+        elif self.eye.upper() == 'RE':
+            # In a right eye, the optic disc must have a positive x coordinate:
+            self.loc_od = (np.abs(self.loc_od[0]), self.loc_od[1])
         else:
             err_str = ("Eye should be either 'LE' or 'RE', not %s." % self.eye)
             raise ValueError(err_str)
@@ -431,7 +475,8 @@ class AxonMapSpatial(SpatialModel):
             if os.path.isfile(self.axon_pickle):
                 params, axons = pickle.load(open(self.axon_pickle, 'rb'))
                 for key, value in params.items():
-                    if not np.allclose(getattr(self, key), value):
+                    if (not hasattr(self, key) or
+                            not np.allclose(getattr(self, key), value)):
                         need_axons = True
                         break
             else:
@@ -451,7 +496,7 @@ class AxonMapSpatial(SpatialModel):
         self.axon_idx_end = np.cumsum(len_axons)
         self.axon_idx_start = self.axon_idx_end - np.array(len_axons)
         # Pickle axons along with all important parameters:
-        params = {'loc_od_x': self.loc_od_x, 'loc_od_y': self.loc_od_y,
+        params = {'loc_od': self.loc_od,
                   'n_axons': self.n_axons, 'axons_range': self.axons_range,
                   'xrange': self.xrange, 'yrange': self.yrange,
                   'xystep': self.xystep, 'n_ax_segments': self.n_ax_segments,
@@ -475,26 +520,45 @@ class AxonMapSpatial(SpatialModel):
                              self.rho,
                              self.thresh_percept)
 
-    def plot(self, annotate=False, upside_down=False, ax=None, autoscale=True):
+    def plot(self, annotate=False, upside_down=False, autoscale=True, ax=None):
+        """Plot the axon map
+
+        Parameters
+        ----------
+        annotate : bool, optional
+            Flag whether to label the four retinal quadrants
+        upside_down : bool, optional
+            Flag whether to flip the y axis upside-down (such that the upper
+            half of the plot corresponds to the upper visual field)
+        autoscale : bool, optional
+            Whether to adjust the x,y limits of the plot
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
+            A Matplotlib axes object. If None, will either use the current axes
+            (if exists) or create a new Axes object
+
+        """
         if ax is None:
             ax = plt.gca()
         ax.set_facecolor('white')
         ax.set_aspect('equal')
 
         # Draw axon pathways:
-        axon_bundles = self.grow_axon_bundles(n_bundles=100)
+        axon_bundles = self.grow_axon_bundles(n_bundles=100, prune=False)
         for bundle in axon_bundles:
             ax.plot(bundle[:, 0], bundle[:, 1], c=(0.6, 0.6, 0.6), linewidth=2,
                     zorder=1)
 
         # Show elliptic optic nerve head (width/height are averages from the
         # human retina literature):
-        ax.add_patch(Ellipse(self.dva2ret((self.loc_od_x, self.loc_od_y)),
-                             width=1770, height=1880, alpha=1, color='white',
-                             zorder=2))
+        ax.add_patch(Ellipse(self.dva2ret(self.loc_od), width=1770,
+                             height=1880, alpha=1, color='white', zorder=2))
+
+        # Show extent of simulated grid:
+        if self.is_built:
+            self.grid.plot(ax=ax, transform=self.dva2ret, zorder=10)
 
         if autoscale:
-            ax.axis([-5000, 5000, -4000, 4000])
+            ax.axis([-5000, 5000, -5000, 5000])
         xmin, xmax, ymin, ymax = ax.axis()
         ax.set_xticks(np.linspace(xmin, xmax, num=5))
         ax.set_yticks(np.linspace(ymin, ymax, num=5))
@@ -549,11 +613,27 @@ class AxonMapModel(Model):
         Exponential decay constant along the axon(microns).
     rho: double, optional, default: 100
         Exponential decay constant away from the axon(microns).
-    eye: {'LE', 'RE'}, optional, default: 'RE'
+    eye: {'RE', LE'}, optional
         Eye for which to generate the axon map.
-    loc_od_x, loc_od_y: float, optional, default: (15.5, 1.5)
-        Location of the optic disc in degrees. Note that the optic disc in a
-        left eye should have a negative x coordinate.
+    x_range : (x_min, x_max), optional
+        A tuple indicating the range of x values to simulate (in degrees of
+        visual angle). In a right eye, negative x values correspond to the
+        temporal retina, and positive x values to the nasal retina. In a left
+        eye, the opposite is true.
+    y_range : tuple, (y_min, y_max)
+        A tuple indicating the range of y values to simulate (in degrees of
+        visual angle). Negative y values correspond to the superior retina,
+        and positive y values to the inferior retina.
+    xystep : int, double, tuple
+        Step size for the range of (x,y) values to simulate (in degrees of
+        visual angle). For example, to create a grid with x values [0, 0.5, 1]
+        use ``x_range=(0, 1)`` and ``xystep=0.5``.
+    grid_type : {'rectangular', 'hexagonal'}
+        Whether to simulate points on a rectangular or hexagonal grid
+    loc_od, loc_od: (x,y), optional, default: (15.5, 1.5)
+        Location of the optic disc in degrees of visual angle. Note that the
+        optic disc in a left eye will be corrected to have a negative x
+        coordinate.
     n_axons: int, optional, default: 500
         Number of axons to generate.
     axons_range: (min, max), optional, default: (-180, 180)

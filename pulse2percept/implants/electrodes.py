@@ -44,16 +44,15 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
     def electric_potential(self, x, y, z, *args, **kwargs):
         raise NotImplementedError
 
-    def plot(self, ax=None, pad=100):
+    def plot(self, autoscale=False, ax=None):
         """Plot
 
         Parameters
         ----------
+        autoscale : bool, optional
+            Whether to adjust the x,y limits of the plot
         ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
             A Matplotlib axes object. If None given, a new one will be created.
-        pad : float, optional, default: 100
-            Padding (microns) to be added to the plot if ``xlim`` and ``ylim``
-            are None.
 
         Returns
         -------
@@ -72,8 +71,9 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
                 # Regular use case: single object
                 ax.add_patch(self.plot_patch((self.x, self.y), zorder=10,
                                              **self.plot_kwargs))
-        ax.set_xlim(self.x - pad, self.x + pad)
-        ax.set_ylim(self.y - pad, self.y + pad)
+        if autoscale:
+            ax.set_xlim(self.x - pad, self.x + pad)
+            ax.set_ylim(self.y - pad, self.y + pad)
         return ax
 
 

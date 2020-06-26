@@ -73,81 +73,57 @@ class ProsthesisSystem(PrettyPrint):
         """
         pass
 
-    def plot(self, ax=None, annotate=False, upside_down=False, xlim=None,
-             ylim=None, pad=None, step=None):
+    def plot(self, annotate=False, autoscale=False, ax=None):
         """Plot
 
         Parameters
         ----------
-        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
-            A Matplotlib axes object. If None given, a new one will be created.
         annotate : bool, optional, default: False
             Flag whether to label electrodes in the implant.
-        upside_down : bool, optional, default: False
-            Flag whether to plot the retina upside-down, such that the upper
-            half of the plot corresponds to the upper visual field. In general,
-            inferior retina == upper visual field (and superior == lower).
-        xlim : (xmin, xmax), optional, default: None
-            Range of x values to plot. If None, the plot will be centered over
-            the implant.
-        ylim : (ymin, ymax), optional, default: None
-            Range of y values to plot. If None, the plot will be centered over
-            the implant.
-        pad : float, optional, default: 10%
-            Padding (microns) to be added to the plot if ``xlim`` and ``ylim``
-            are None. Will default to 10% of the implant size.
-        step : float, optional, default: 20%
-            Step size of axis ticks (microns) if ``xlim`` and ``ylim`` are
-            None. Will default to 20% of the implant size.
+        autoscale : bool, optional
+            Whether to adjust the x,y limits of the plot to fit the implant
+        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
+            A Matplotlib axes object. If None, will either use the current axes
+            (if exists) or create a new Axes object.
 
         Returns
         -------
         ax : ``matplotlib.axes.Axes``
             Returns the axis object of the plot
         """
-
         if ax is None:
-            _, ax = plt.subplots(figsize=(15, 8))
-
+            ax = plt.gca()
         for name, electrode in self.items():
-            electrode.plot(ax=ax)
+            electrode.plot(autoscale=False, ax=ax)
             if annotate:
                 ax.text(electrode.x, electrode.y, name, ha='center',
                         va='center',  color='black', size='large',
                         bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
                               'fc': (1, 1, 1, 0.7)},
                         zorder=11)
-
-        # Determine xlim, ylim: Allow for some padding `pad` and round to the
-        # nearest `step`:
-        xpos = [el.x for el in self.values()]
-        ypos = [el.y for el in self.values()]
-        xmin, xmax = np.min(xpos), np.max(xpos)
-        ymin, ymax = np.min(ypos), np.max(ypos)
-        if pad is None:
+        if autoscale:
+            # Determine xlim, ylim: Allow for some padding `pad` and round to the
+            # nearest `step`:
+            xpos = [el.x for el in self.values()]
+            ypos = [el.y for el in self.values()]
+            xmin, xmax = np.min(xpos), np.max(xpos)
+            ymin, ymax = np.min(ypos), np.max(ypos)
+            # Add some padding:
             pad = 100 * np.ceil((xmax - xmin) / 1000)
             pad = np.max([100, pad, 100 * np.ceil((xmax - xmin) / 1000)])
-        if step is None:
+            # Step size for the axis:
             step = np.maximum(100, 2 * pad)
-        xlim, ylim = None, None
-        if xlim is None:
             xlim = (step * np.floor((xmin - pad) / step),
                     step * np.ceil((xmax + pad) / step))
-        if ylim is None:
             ylim = (step * np.floor((ymin - pad) / step),
                     step * np.ceil((ymax + pad) / step))
-        ax.set_xlim(xlim)
-        ax.set_xticks(np.linspace(*xlim, num=5))
-        ax.set_xlabel('x (microns)')
-        ax.set_ylim(ylim)
-        ax.set_yticks(np.linspace(*ylim, num=5))
-        ax.set_ylabel('y (microns)')
-        ax.set_aspect('equal')
-
-        # Need to flip y axis to have upper half == upper visual field
-        if upside_down:
-            ax.invert_yaxis()
-
+            ax.set_xlim(xlim)
+            ax.set_xticks(np.linspace(*xlim, num=5))
+            ax.set_xlabel('x (microns)')
+            ax.set_ylim(ylim)
+            ax.set_yticks(np.linspace(*ylim, num=5))
+            ax.set_ylabel('y (microns)')
+            ax.set_aspect('equal')
         return ax
 
     @property

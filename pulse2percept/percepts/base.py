@@ -1,8 +1,4 @@
 import numpy as np
-from sys import platform
-import matplotlib as mpl
-if platform == "darwin":  # OS X
-    mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
 from matplotlib.animation import FuncAnimation
@@ -80,7 +76,6 @@ class Percept(Data):
     def __next__(self):
         """Returns the next frame when iterating over all frames"""
         this_frame = self._next_frame
-        print('next, frame:', this_frame, 'shape:', self.data.shape[-1])
         if this_frame >= self.data.shape[-1]:
             raise StopIteration
         self._next_frame += 1
@@ -100,9 +95,9 @@ class Percept(Data):
         time : None, optional, default: None
             The time point to plot. If None, plots the brightest frame.
             Use ``play`` to play the percept frame-by-frame.
-        ax : matplotlib.axes.Axes; optional, default: None
-            A Matplotlib Axes object. If None, a new Axes object will be
-            created.
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
+            A Matplotlib axes object. If None, will either use the current axes
+            (if exists) or create a new Axes object
 
         Returns
         -------
@@ -174,9 +169,8 @@ class Percept(Data):
         fps : float or None
             If None, uses the percept's time axis. Not supported for
             non-homogeneous time axis.
-        ax : matplotlib.axes.Axes; optional, default: None
-            A Matplotlib Axes object. If None, a new Axes object will be
-            created.
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
+            A Matplotlib axes object. If None, will create a new Axes object
 
         Returns
         -------

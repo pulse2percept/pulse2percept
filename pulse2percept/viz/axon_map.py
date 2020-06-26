@@ -77,8 +77,7 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
     ax.set_facecolor('white')
 
     # Draw axon pathways:
-    axon_map = AxonMapSpatial(n_axons=n_bundles, loc_od_x=loc_od[0],
-                              loc_od_y=loc_od[1], eye=eye)
+    axon_map = AxonMapSpatial(n_axons=n_bundles, loc_od=loc_od, eye=eye)
     axon_bundles = axon_map.grow_axon_bundles()
     for bundle in axon_bundles:
         ax.plot(bundle[:, 0], bundle[:, 1], c=(0.6, 0.6, 0.6), linewidth=2,

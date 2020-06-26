@@ -1,11 +1,17 @@
-"""`Grid2D`, `RetinalCoordTrafo`, `Watson2014Trafo`, `Watson2014DisplaceTrafo`,
-   `cart2pol`, `pol2cart`"""
+"""
+`Grid2D`, `RetinalCoordTransform`, `Curcio1990Transform`,`Watson2014Transform`,
+`Watson2014DisplaceTransform`, `cart2pol`, `pol2cart`
+
+"""
 import numpy as np
 from abc import ABCMeta, abstractmethod
 import scipy.stats as spst
 # Using or importing the ABCs from 'collections' instead of from
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
 from collections.abc import Sequence
+import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
+
 from .base import PrettyPrint
 
 
@@ -116,6 +122,47 @@ class Grid2D(PrettyPrint):
 
     def reset(self):
         self._iter = 0
+
+    def plot(self, transform=None, zorder=1, ax=None):
+        """Plot the extension of the grid
+
+        Parameters
+        ----------
+        transform : function, optional
+            A coordinate transform to be applied to the (x,y) coordinates of
+            the grid (e.g., :py:meth:`Curcio1990Transform.dva2ret`)
+        zorder : int, optional
+            The Matplotlib zorder at which to plot the grid
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
+            A Matplotlib axes object. If None, will either use the current axes
+            (if exists) or create a new Axes object
+        """
+        if ax is None:
+            ax = plt.gca()
+
+        x, y = self.x, self.y
+        if transform is not None:
+            x, y = transform(self.x), transform(self.y)
+
+        if self.type == 'rectangular':
+            xy = []
+            for array in (x, y):
+                border = []
+                # Top row (left to right), not the last element:
+                border += list(array[0, :-1])
+                # Right column (top to bottom), not the last element:
+                border += list(array[:-1, -1])
+                # Bottom row (right to left), not the last element:
+                border += list(array[-1, :0:-1])
+                # Left column (bottom to top), all elements element:
+                border += list(array[::-1, 0])
+                xy.append(border)
+            # Draw border:
+            ax.add_patch(Polygon(np.array(xy).T, alpha=0.5, ec='k', fc='gray',
+                                 ls='--', zorder=zorder))
+        else:
+            raise NotImplementedError
+        return ax
 
 
 class RetinalCoordTransform(object, metaclass=ABCMeta):
