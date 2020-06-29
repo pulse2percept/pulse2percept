@@ -240,7 +240,7 @@ class ImageStimulus(Stimulus):
         return ImageStimulus(img, electrodes=electrodes,
                              metadata=self.metadata)
 
-    def rotate(self, angle, center=None, mode='constant'):
+    def rotate(self, angle, center=None, mode='reflect'):
         """Rotate the image
 
         Parameters
@@ -273,7 +273,7 @@ class ImageStimulus(Stimulus):
             Positive: to the right, negative: to the left
         shift_rows : float
             Number of rows by which to shift the CoM.
-            Positive: upward, negative: downward
+            Positive: downward, negative: upward
 
         Returns
         -------
@@ -337,6 +337,8 @@ class ImageStimulus(Stimulus):
             A copy of the stimulus object containing the scaled image
 
         """
+        if scaling_factor <= 0:
+            raise ValueError("Scaling factor must be greater than zero")
         # Calculate center of mass:
         img = self.data.reshape(self.img_shape)
         m = img_moments(img, order=1)
@@ -397,12 +399,12 @@ class ImageStimulus(Stimulus):
 
         vmin, vmax = frame.min(), frame.max()
         cmap = kwargs['cmap'] if 'cmap' in kwargs else 'gray'
-        xdva = np.arange(frame.shape[1])
-        ydva = np.arange(frame.shape[0])
-        X, Y = np.meshgrid(xdva, ydva, indexing='xy')
         if kind == 'pcolor':
             # Create a pseudocolor plot. Make sure to pass additional keyword
             # arguments that have not already been extracted:
+            xdva = np.arange(frame.shape[1] + 1)
+            ydva = np.arange(frame.shape[0] + 1)
+            X, Y = np.meshgrid(xdva, ydva, indexing='xy')
             other_kwargs = {key: kwargs[key]
                             for key in (kwargs.keys() - ['figsize', 'cmap',
                                                          'vmin', 'vmax'])}
@@ -413,7 +415,10 @@ class ImageStimulus(Stimulus):
             if 'gridsize' in kwargs:
                 gridsize = kwargs['gridsize']
             else:
-                gridsize = np.min(frame.shape[:2]) // 2
+                gridsize = np.maximum(2, np.min(frame.shape[:2]) // 2)
+            xdva = np.arange(frame.shape[1])
+            ydva = np.arange(frame.shape[0])
+            X, Y = np.meshgrid(xdva, ydva, indexing='xy')
             # X, Y = np.meshgrid(self.xdva, self.ydva, indexing='xy')
             # Make sure to pass additional keyword arguments that have not
             # already been extracted:
@@ -428,10 +433,10 @@ class ImageStimulus(Stimulus):
             raise ValueError("Unknown plot option '%s'. Choose either 'pcolor'"
                              "or 'hex'." % kind)
         ax.set_aspect('equal', adjustable='box')
-        ax.set_xlim(xdva[0], xdva[-1])
-        ax.set_xticks([])
-        ax.set_ylim(ydva[0], ydva[-1])
-        ax.set_yticks([])
+        # ax.set_xlim(xdva[0], xdva[-1])
+        # ax.set_xticks([])
+        # ax.set_ylim(ydva[0], ydva[-1])
+        # ax.set_yticks([])
         return ax
 
     def save(self, fname):
