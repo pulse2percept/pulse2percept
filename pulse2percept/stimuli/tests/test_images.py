@@ -189,6 +189,27 @@ def test_ImageStimulus_scale():
     os.remove(fname)
 
 
+def test_ImageStimulus_encode():
+    stim = ImageStimulus(np.random.rand(4, 5))
+
+    # Amplitude encoding in default range:
+    enc = stim.encode()
+    npt.assert_almost_equal(enc.time[-1], 500)
+    npt.assert_almost_equal(enc.data.max(axis=1).min(), 0)
+    npt.assert_almost_equal(enc.data.max(axis=1).max(), 50)
+
+    # Amplitude encoding in custom range:
+    enc = stim.encode(amp_range=(2, 43))
+    npt.assert_almost_equal(enc.time[-1], 500)
+    npt.assert_almost_equal(enc.data.max(axis=1).min(), 2)
+    npt.assert_almost_equal(enc.data.max(axis=1).max(), 43)
+
+    with pytest.raises(TypeError):
+        stim.encode(pulse={'invalid': 1})
+    with pytest.raises(ValueError):
+        stim.encode(pulse=LogoUCSB())
+
+
 def test_ImageStimulus_plot():
     # Create a horizontal bar:
     fname = 'test.png'

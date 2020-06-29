@@ -160,7 +160,17 @@ class Stimulus(PrettyPrint):
         stimulus duration). In this case, we need to merge all time axes into a
         single, coherent one. This is expensive, because of interp1d.
         """
-        # Keep only the unique time points across stimuli:
+        # We can skip the costly interpolation if all `_time` vectors are
+        # identical:
+        identical = True
+        for t in _time:
+            if not (t == _time[0]).all():
+                identical = False
+                break
+        if identical:
+            return _data, [_time[0]]
+        # Otherwise, we need to interpolate. Keep only the unique time points
+        # across stimuli:
         new_time = np.unique(np.concatenate(_time))
         # Now we need to interpolate the data values at each of these
         # new time points:
@@ -174,6 +184,7 @@ class Stimulus(PrettyPrint):
             itp = interp1d(t.ravel(), d, bounds_error=None,
                            fill_value='extrapolate')
             new_data.append(itp(new_time))
+            print('interpolating merge')
         return new_data, [new_time]
 
     def _from_source(self, source):

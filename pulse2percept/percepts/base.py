@@ -257,13 +257,11 @@ class Percept(Data):
             width = height / self.data.shape[0] * self.data.shape[1]
         # Rescale percept to desired shape:
         data = resize(self.data, (np.int32(height), np.int32(width)))
-        data -= data.min()
-        if not np.isclose(data.max(), 0):
-            data /= data.max() * 255
 
         if self.time is None:
-            # No time component, store as an image:
-            imageio.imwrite(fname, data.astype(np.uint8))
+            # No time component, store as an image. imwrite will automatically
+            # scale the gray levels:
+            imageio.imwrite(fname, data)
         else:
             # With time component, store as a movie:
             if fps is None:
@@ -271,6 +269,9 @@ class Percept(Data):
                 if len(interval) > 1:
                     raise NotImplementedError
                 fps = 1000.0 / interval[0]
+            data -= data.min()
+            if not np.isclose(data.max(), 0):
+                data /= data.max() * 255
             imageio.mimwrite(fname, data.transpose((2, 0, 1)).astype(np.uint8),
                              fps=fps)
         logging.getLogger(__name__).info('Created %s.' % fname)
