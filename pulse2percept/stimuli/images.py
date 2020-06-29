@@ -434,9 +434,99 @@ class ImageStimulus(Stimulus):
                              "or 'hex'." % kind)
         ax.set_aspect('equal', adjustable='box')
         ax.set_xlim(xdva[0], xdva[-1])
-        ax.set_xticks(np.linspace(xdva[0], xdva[-1], num=5))
-        ax.set_xlabel('x (dva)')
+        ax.set_xticks([])
         ax.set_ylim(ydva[0], ydva[-1])
-        ax.set_yticks(np.linspace(ydva[0], ydva[-1], num=5))
-        ax.set_ylabel('y (dva)')
+        ax.set_yticks([])
         return ax
+
+    def save(self, fname):
+        """Save the stimulus as an image
+
+        Parameters
+        ----------
+        fname : str
+            The name of the image file to be created. Image type will be
+            inferred from the file extension.
+
+        """
+        imsave(fname, self.data.reshape(self.img_shape))
+
+
+class LogoBVL(ImageStimulus):
+    """Bionic Vision Lab (BVL) logo
+
+    .. versionadded:: 0.7
+
+    Load the 576x720x4 Bionic Vision Lab (BVL) logo.
+
+    Parameters
+    ----------
+    resize : (height, width) or None
+        A tuple specifying the desired height and the width of the image
+        stimulus.
+
+    electrodes : int, string or list thereof; optional, default: None
+        Optionally, you can provide your own electrode names. If none are
+        given, electrode names will be numbered 0..N.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional, default: None
+        Additional stimulus metadata can be stored in a dictionary.
+
+    """
+
+    def __init__(self, resize=None, electrodes=None, metadata=None,
+                 as_gray=False):
+        # Load logo from data dir:
+        module_path = dirname(__file__)
+        source = join(module_path, 'data', 'bionic-vision-lab.png')
+        # Call ImageStimulus constructor:
+        super(LogoBVL, self).__init__(source, format="PNG",
+                                      resize=resize,
+                                      as_gray=as_gray,
+                                      electrodes=electrodes,
+                                      metadata=metadata,
+                                      compress=False)
+
+
+class LogoUCSB(ImageStimulus):
+    """UCSB logo
+
+    .. versionadded:: 0.7
+
+    Load a 324x727 white-on-black logo of the University of California, Santa
+    Barbara.
+
+    Parameters
+    ----------
+    resize : (height, width) or None
+        A tuple specifying the desired height and the width of the image
+        stimulus.
+
+    electrodes : int, string or list thereof; optional, default: None
+        Optionally, you can provide your own electrode names. If none are
+        given, electrode names will be numbered 0..N.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional, default: None
+        Additional stimulus metadata can be stored in a dictionary.
+
+    """
+
+    def __init__(self, resize=None, electrodes=None, metadata=None):
+        # Load logo from data dir:
+        module_path = dirname(__file__)
+        source = join(module_path, 'data', 'ucsb.png')
+        # Call ImageStimulus constructor:
+        super(LogoUCSB, self).__init__(source, format="PNG",
+                                       resize=resize,
+                                       as_gray=True,
+                                       electrodes=electrodes,
+                                       metadata=metadata,
+                                       compress=False)
