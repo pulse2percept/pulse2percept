@@ -23,7 +23,7 @@ from .base import Stimulus
 from .pulses import AsymmetricBiphasicPulse, BiphasicPulse, MonophasicPulse
 from .pulse_trains import (PulseTrain, BiphasicPulseTrain,
                            BiphasicTripletTrain, AsymmetricBiphasicPulseTrain)
-from .images import ImageStimulus
+from .images import ImageStimulus, LogoBVL, LogoUCSB
 from .videos import VideoStimulus
 
 __all__ = [
@@ -33,6 +33,8 @@ __all__ = [
     'BiphasicPulseTrain',
     'BiphasicTripletTrain',
     'ImageStimulus',
+    'LogoBVL',
+    'LogoUCSB',
     'MonophasicPulse',
     'PulseTrain',
     'Stimulus',
