@@ -164,7 +164,7 @@ class Stimulus(PrettyPrint):
         # identical:
         identical = True
         for t in _time:
-            if not (t == _time[0]).all():
+            if not np.all(t == _time[0]):
                 identical = False
                 break
         if identical:
