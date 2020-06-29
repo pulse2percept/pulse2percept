@@ -15,8 +15,9 @@ def test_PulseTrain():
     # Simple fake pulse:
     pulse = Stimulus([[0, -1, 0]], time=[0, 0.1, 0.2])
     for n_pulses in [2, 3, 10]:
-        pt = PulseTrain(10, pulse, n_pulses=n_pulses)
+        pt = PulseTrain(10, pulse, n_pulses=n_pulses, electrode='A4')
         npt.assert_equal(np.sum(np.isclose(pt.data, -1)), n_pulses)
+        npt.assert_equal(pt.electrodes, 'A4')
 
     # stim_dur too short:
     npt.assert_almost_equal(PulseTrain(2, pulse, stim_dur=10).data, 0)

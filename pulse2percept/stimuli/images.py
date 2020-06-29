@@ -14,6 +14,7 @@ from skimage.filters import (threshold_mean, threshold_minimum, threshold_otsu,
                              threshold_local, threshold_isodata)
 
 from .base import Stimulus
+from .pulses import BiphasicPulse
 
 
 class ImageStimulus(Stimulus):
@@ -357,6 +358,53 @@ class ImageStimulus(Stimulus):
         img = img_warp(img, tf.inverse)
         return ImageStimulus(img, electrodes=self.electrodes,
                              metadata=self.metadata)
+
+    def encode(self, amp_range=(0, 50), pulse=None):
+        """Encode image using amplitude modulation
+
+        Encodes the image as a series of pulse trains, where the gray levels
+        of the image are interpreted as the amplitude of a pulse or pulse train
+        with values in ``amp_range``.
+
+        Parameters
+        ----------
+        amp_range : (min_amp, max_amp)
+            Range of amplitude values to use for the encoding. The image's
+            gray levels will be scaled such that the smallest value is mapped
+            onto ``min_amp`` and the largest onto ``max_amp``.
+        pulse : :py:class:`~pulse2percept.stimuli.Stimulus`, optional
+            A valid pulse or pulse train to be used for the encoding.
+            If None given, a :py:class:`~pulse2percept.stimuli.BiphasicPulse`
+            (0.46 ms phase duration, 500 ms total duration) will be used.
+
+        Returns
+        -------
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
+            Encoded stimulus
+
+        """
+        if pulse is None:
+            pulse = BiphasicPulse(1, 0.46, stim_dur=500)
+        else:
+            if not isinstance(pulse, Stimulus):
+                raise TypeError("'pulse' must be a Stimulus object.")
+            if pulse.time is None:
+                raise ValueError("'pulse' must have a time component.")
+        # Make sure the provided pulse has max amp 1:
+        enc_data = pulse.data
+        if not np.isclose(np.abs(enc_data).max(), 0):
+            enc_data /= np.abs(enc_data).max()
+        # Normalize the range of pixel values:
+        px_data = self.data - self.data.min()
+        if not np.isclose(np.abs(px_data).max(), 0):
+            px_data /= np.abs(px_data).max()
+        # Amplitude modulation:
+        stim = []
+        for px, e in zip(px_data.ravel(), self.electrodes):
+            amp = px * (amp_range[1] - amp_range[0]) + amp_range[0]
+            stim.append(Stimulus(amp * enc_data, time=pulse.time,
+                                 electrodes=e))
+        return Stimulus(stim)
 
     def plot(self, kind='pcolor', ax=None, **kwargs):
         """Plot the stimulus
