@@ -520,16 +520,16 @@ class AxonMapSpatial(SpatialModel):
                              self.rho,
                              self.thresh_percept)
 
-    def plot(self, annotate=False, upside_down=False, autoscale=True, ax=None):
+    def plot(self, use_dva=False, annotate=False, autoscale=True, ax=None):
         """Plot the axon map
 
         Parameters
         ----------
+        use_dva : bool, optional
+            Uses degrees of visual angle (dva) if True, else retinal
+            coordinates (microns)
         annotate : bool, optional
             Flag whether to label the four retinal quadrants
-        upside_down : bool, optional
-            Flag whether to flip the y axis upside-down (such that the upper
-            half of the plot corresponds to the upper visual field)
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot
         ax : matplotlib.axes._subplots.AxesSubplot, optional
@@ -542,56 +542,69 @@ class AxonMapSpatial(SpatialModel):
         ax.set_facecolor('white')
         ax.set_aspect('equal')
 
-        # Draw axon pathways:
+        # Grow axon bundles to be drawn:
         axon_bundles = self.grow_axon_bundles(n_bundles=100, prune=False)
+
+        if use_dva:
+            # Use degrees of visual angle (dva) as axis unit:
+            units = 'degrees of visual angle'
+            xmin, xmax, ymin, ymax = -18, 18, -18, 18
+            od_xy = self.loc_od
+            od_w = 6.44
+            od_h = 6.85
+            grid_transform = None
+            # Flip y upside down for dva:
+            axon_bundles = [self.ret2dva(bundle) * [1, -1]
+                            for bundle in axon_bundles]
+        else:
+            # Use retinal coordinates (microns) as axis unit.
+            units = 'microns'
+            xmin, xmax, ymin, ymax = -5000, 5000, -5000, 5000
+            od_xy = self.dva2ret(self.loc_od)
+            od_w = 1770
+            od_h = 1880
+            grid_transform = self.dva2ret
+
+        # Draw axon pathways:
         for bundle in axon_bundles:
-            ax.plot(bundle[:, 0], bundle[:, 1], c=(0.6, 0.6, 0.6), linewidth=2,
-                    zorder=1)
-
-        # Show elliptic optic nerve head (width/height are averages from the
-        # human retina literature):
-        ax.add_patch(Ellipse(self.dva2ret(self.loc_od), width=1770,
-                             height=1880, alpha=1, color='white', zorder=2))
-
+            # Trim segments outside the drawing window:
+            idx = np.logical_and(np.logical_and(bundle[:, 0] >= xmin,
+                                                bundle[:, 0] <= xmax),
+                                 np.logical_and(bundle[:, 1] >= ymin,
+                                                bundle[:, 1] <= ymax))
+            ax.plot(bundle[idx, 0], bundle[idx, 1], c=(0.6, 0.6, 0.6),
+                    linewidth=2, zorder=1)
+        # Show elliptic optic nerve head (width/height are averages from
+        # the human retina literature):
+        ax.add_patch(Ellipse(od_xy, width=od_w, height=od_h, alpha=1,
+                             color='white', zorder=2))
         # Show extent of simulated grid:
         if self.is_built:
-            self.grid.plot(ax=ax, transform=self.dva2ret, zorder=10)
-
+            self.grid.plot(ax=ax, transform=grid_transform, zorder=10)
+        ax.set_xlabel('x (%s)' % units)
+        ax.set_ylabel('y (%s)' % units)
         if autoscale:
-            ax.axis([-5000, 5000, -5000, 5000])
-        xmin, xmax, ymin, ymax = ax.axis()
-        ax.set_xticks(np.linspace(xmin, xmax, num=5))
-        ax.set_yticks(np.linspace(ymin, ymax, num=5))
-        ax.set_xlabel('x (microns)')
-        ax.set_ylabel('y (microns)')
-
-        # Annotate the four retinal quadrants near the corners of the plot:
-        # superior/inferior x temporal/nasal
-        if annotate:
-            if upside_down:
-                topbottom = ['bottom', 'top']
-            else:
-                topbottom = ['top', 'bottom']
-            if self.eye == 'RE':
-                temporalnasal = ['temporal', 'nasal']
-            else:
-                temporalnasal = ['nasal', 'temporal']
-            for yy, valign, si in zip([ymax, ymin], topbottom,
-                                      ['superior', 'inferior']):
-                for xx, halign, tn in zip([xmin, xmax], ['left', 'right'],
-                                          temporalnasal):
-                    ax.text(xx, yy, si + ' ' + tn,
-                            color='black', fontsize=14,
-                            horizontalalignment=halign,
-                            verticalalignment=valign,
-                            bbox={'boxstyle': 'square,pad=-0.1', 'ec': 'none',
-                                  'fc': (1, 1, 1, 0.7)},
-                            zorder=99)
-
-        # Need to flip y axis to have upper half == upper visual field
-        if upside_down:
-            ax.invert_yaxis()
-
+            ax.axis((xmin, xmax, ymin, ymax))
+        # if annotate:
+        #     if upside_down:
+        #         topbottom = ['bottom', 'top']
+        #     else:
+        #         topbottom = ['top', 'bottom']
+        #     if self.eye == 'RE':
+        #         temporalnasal = ['temporal', 'nasal']
+        #     else:
+        #         temporalnasal = ['nasal', 'temporal']
+        #     for yy, valign, si in zip([ymax, ymin], topbottom,
+        #                               ['superior', 'inferior']):
+        #         for xx, halign, tn in zip([xmin, xmax], ['left', 'right'],
+        #                                   temporalnasal):
+        #             ax.text(xx, yy, si + ' ' + tn,
+        #                     color='black', fontsize=14,
+        #                     horizontalalignment=halign,
+        #                     verticalalignment=valign,
+        #                     bbox={'boxstyle': 'square,pad=-0.1', 'ec': 'none',
+        #                           'fc': (1, 1, 1, 0.7)},
+        #                     zorder=99)
         return ax
 
 

@@ -352,6 +352,36 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                       x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
                       y_tol=bright_tol, max_iter=max_iter)
 
+    def plot(self, use_dva=False, autoscale=True, ax=None):
+        """Plot the model
+
+        Parameters
+        ----------
+        use_dva : bool, optional
+            Uses degrees of visual angle (dva) if True, else retinal
+            coordinates (microns)
+        autoscale : bool, optional
+            Whether to adjust the x,y limits of the plot to fit the implant
+        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
+            A Matplotlib axes object. If None, will either use the current axes
+            (if exists) or create a new Axes object.
+
+        Returns
+        -------
+        ax : ``matplotlib.axes.Axes``
+            Returns the axis object of the plot
+        """
+        if use_dva:
+            ax = self.grid.plot(autoscale=autoscale, ax=ax, zorder=10)
+            ax.set_xlabel('x (dva)')
+            ax.set_ylabel('y (dva)')
+        else:
+            ax = self.grid.plot(transform=self.dva2ret, autoscale=autoscale,
+                                ax=ax, zorder=10)
+            ax.set_xlabel('x (microns)')
+            ax.set_ylabel('y (microns)')
+        return ax
+
 
 class TemporalModel(BaseModel, metaclass=ABCMeta):
     """Abstract base class for all temporal models

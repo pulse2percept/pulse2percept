@@ -1,7 +1,6 @@
 """`ProsthesisSystem`"""
 import numpy as np
 from copy import deepcopy
-import matplotlib.pyplot as plt
 
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
@@ -73,13 +72,13 @@ class ProsthesisSystem(PrettyPrint):
         """
         pass
 
-    def plot(self, annotate=False, autoscale=False, ax=None):
+    def plot(self, annotate=False, autoscale=True, ax=None):
         """Plot
 
         Parameters
         ----------
         annotate : bool, optional, default: False
-            Flag whether to label electrodes in the implant.
+            Whether to scale the axes view to the data
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot to fit the implant
         ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
@@ -91,40 +90,7 @@ class ProsthesisSystem(PrettyPrint):
         ax : ``matplotlib.axes.Axes``
             Returns the axis object of the plot
         """
-        if ax is None:
-            ax = plt.gca()
-        for name, electrode in self.items():
-            electrode.plot(autoscale=False, ax=ax)
-            if annotate:
-                ax.text(electrode.x, electrode.y, name, ha='center',
-                        va='center',  color='black', size='large',
-                        bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
-                              'fc': (1, 1, 1, 0.7)},
-                        zorder=11)
-        if autoscale:
-            # Determine xlim, ylim: Allow for some padding `pad` and round to the
-            # nearest `step`:
-            xpos = [el.x for el in self.values()]
-            ypos = [el.y for el in self.values()]
-            xmin, xmax = np.min(xpos), np.max(xpos)
-            ymin, ymax = np.min(ypos), np.max(ypos)
-            # Add some padding:
-            pad = 100 * np.ceil((xmax - xmin) / 1000)
-            pad = np.max([100, pad, 100 * np.ceil((xmax - xmin) / 1000)])
-            # Step size for the axis:
-            step = np.maximum(100, 2 * pad)
-            xlim = (step * np.floor((xmin - pad) / step),
-                    step * np.ceil((xmax + pad) / step))
-            ylim = (step * np.floor((ymin - pad) / step),
-                    step * np.ceil((ymax + pad) / step))
-            ax.set_xlim(xlim)
-            ax.set_xticks(np.linspace(*xlim, num=5))
-            ax.set_xlabel('x (microns)')
-            ax.set_ylim(ylim)
-            ax.set_yticks(np.linspace(*ylim, num=5))
-            ax.set_ylabel('y (microns)')
-            ax.set_aspect('equal')
-        return ax
+        return self.earray.plot(annotate=annotate, autoscale=autoscale, ax=ax)
 
     @property
     def earray(self):
