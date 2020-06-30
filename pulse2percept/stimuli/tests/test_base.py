@@ -212,7 +212,8 @@ def test_Stimulus_plot():
 
     # Plot exact time points:
     t_vals = [0.2, 0.3, 0.4]
-    ax = stim.plot(time=t_vals)
+    fig, ax = plt.subplots()
+    stim.plot(time=t_vals, ax=ax)
     npt.assert_equal(isinstance(ax, Subplot), True)
     npt.assert_equal(len(ax.lines), 1)
     npt.assert_almost_equal(ax.lines[0].get_data()[0], t_vals)
