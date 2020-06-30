@@ -123,7 +123,7 @@ class Grid2D(PrettyPrint):
     def reset(self):
         self._iter = 0
 
-    def plot(self, transform=None, zorder=1, ax=None):
+    def plot(self, transform=None, autoscale=True, zorder=1, ax=None):
         """Plot the extension of the grid
 
         Parameters
@@ -131,6 +131,8 @@ class Grid2D(PrettyPrint):
         transform : function, optional
             A coordinate transform to be applied to the (x,y) coordinates of
             the grid (e.g., :py:meth:`Curcio1990Transform.dva2ret`)
+        autoscale : bool, optional
+            Whether to adjust the x,y limits of the plot to fit the implant
         zorder : int, optional
             The Matplotlib zorder at which to plot the grid
         ax : matplotlib.axes._subplots.AxesSubplot, optional
@@ -139,6 +141,9 @@ class Grid2D(PrettyPrint):
         """
         if ax is None:
             ax = plt.gca()
+        ax.set_aspect('equal')
+        if autoscale:
+            ax.autoscale(True)
 
         x, y = self.x, self.y
         if transform is not None:

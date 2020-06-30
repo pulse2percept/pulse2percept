@@ -29,18 +29,19 @@ grid (575 um center-to-center separation) [Yue2020]_.
 
 import matplotlib.pyplot as plt
 from pulse2percept.implants import *
-from pulse2percept.viz import plot_axon_map
+from pulse2percept.models import AxonMapModel
 
 fig, ax = plt.subplots(ncols=2, figsize=(10, 6))
 
 # For illustrative purpose, also show the map of fiber
 # bundles in the optic fiber layer:
-plot_axon_map(ax=ax[0], annotate=False)
+model = AxonMapModel()
+model.plot(ax=ax[0])
 # Argus I is typically implanted at a 30-45deg angle:
 ArgusI(rot=-0.52).plot(ax=ax[0], annotate=True)
 ax[0].set_title('Argus I')
 
-plot_axon_map(ax=ax[1], annotate=False)
+model.plot(ax=ax[1])
 # Argus II is typically implanted at a 30-45deg angle:
 ArgusII(rot=-0.52).plot(ax=ax[1], annotate=False)
 ax[1].set_title('Argus II')

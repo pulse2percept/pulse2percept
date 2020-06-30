@@ -265,14 +265,15 @@ intersphinx_mapping = {
 }
 
 sphinx_gallery_conf = {
-    'doc_module': 'pulse2percept',
+    # Mini gallery:
     'backreferences_dir': '_api',
+    'doc_module': 'pulse2percept',
     'reference_url': {
         'pulse2percept': None},
     'examples_dirs': ['../examples'],
     'gallery_dirs': ['examples'],
     'remove_config_comments': True,
-    'thumbnail_size': (280, 280),
+    'thumbnail_size': (320, 224),
     'subsection_order': ExplicitOrder(['../examples/implants',
                                        '../examples/stimuli',
                                        '../examples/models',

@@ -3,7 +3,7 @@ import pytest
 import numpy.testing as npt
 
 from matplotlib.axes import Subplot
-from matplotlib.pyplot import close
+import matplotlib.pyplot as plt
 
 
 from pulse2percept.implants import ArgusI, ArgusII
@@ -157,19 +157,19 @@ def test_AxonMapSpatial(engine):
 
 def test_AxonMapSpatial_plot():
     model = AxonMapSpatial()
-    ax = model.plot()
-    npt.assert_equal(isinstance(ax, Subplot), True)
+    for use_dva, xlim in zip([True, False], [(-18, 18), (-5000, 5000)]):
+        ax = model.plot(use_dva=use_dva)
+        npt.assert_equal(isinstance(ax, Subplot), True)
+        npt.assert_equal(ax.get_xlim(), xlim)
 
-    # Electrodes and quadrants can be annotated:
-    for ann_q, n_q in [(True, 4), (False, 0)]:
-        ax = model.plot(annotate=ann_q)
-        npt.assert_equal(len(ax.texts), n_q)
-        close(ax.figure)
-
-    # Setting upside_down flips y axis:
-    ax = model.plot(upside_down=True, autoscale=True)
-    npt.assert_equal(ax.get_xlim(), (-5000, 5000))
-    npt.assert_equal(ax.get_ylim(), (5000, -5000))
+    # Quadrants can be annotated:
+    for ann_q, n_q in [(True, 6), (False, 0)]:
+        fig, ax = plt.subplots()
+        model.plot(annotate=ann_q, ax=ax)
+        npt.assert_equal(len(ax.child_axes), int(n_q > 0))
+        if len(ax.child_axes) > 0:
+            npt.assert_equal(len(ax.child_axes[0].texts), n_q)
+        plt.close(fig)
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))

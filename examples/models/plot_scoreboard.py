@@ -5,8 +5,8 @@ Beyeler et al. (2019): Focal percepts with the scoreboard model
 ============================================================================
 
 This example shows how to apply the
-:py:class:`~pulse2percept.models.ScoreboardModel` to an
-:py:class:`~pulse2percept.implants.ArgusII` implant.
+:py:class:`~pulse2percept.models.ScoreboardModel` to a
+:py:class:`~pulse2percept.implants.PRIMA75` implant.
 
 The scoreboard model is a standard baseline model of retinal prosthesis
 stimulation, which assumes that electrical stimulation leads to the percept
@@ -38,13 +38,21 @@ Creating the model
 The first step is to instantiate the
 :py:class:`~pulse2percept.models.ScoreboardModel` class by calling its
 constructor method.
-The most important parameter to set is ``rho`` from the above equation (here
-set to 100 micrometers):
+
+The model simulates a patch of the visual field specified by ``xrange`` and
+``yrange`` (in degrees of visual angle), sampled at a step size of ``xystep``.
+The grid that is created from these parameters is equivalent to calling NumPy's
+``linspace(xrange[0], xrange[1], num=xystep)``.
+
+By default, this patch is quite large, spanning 30deg x 30deg.
+Because PRIMA is rather small, we want to reduce the window size to 6deg x 6deg
+and sample it at 0.05deg resolution:
 
 """
+# sphinx_gallery_thumbnail_number = 2
 
 from pulse2percept.models import ScoreboardModel
-model = ScoreboardModel(rho=100)
+model = ScoreboardModel(xrange=(-3, 3), yrange=(-3, 3), xystep=0.05)
 
 ##############################################################################
 # Parameters you don't specify will take on default values. You can inspect
@@ -67,25 +75,10 @@ print(model)
 #   ``1/sqrt(e)``, because that will make the radius of the predicted percept
 #   equal to ``rho``.
 #
-# In addition, you can choose the parallelization back end used to speed up
-# simulations:
-#
-# * ``engine``:
-#    * 'serial': single-core processing (no parallelization)
-#    * 'joblib': parallelization using the `JobLib`_ library
-#    * 'dask': parallelization using the `Dask`_ library
-#
-# * ``scheduler``:
-#    * 'threading': a scheduler backed by a thread pool
-#    * 'multiprocessing': a scheduler backed by a process pool
-#
-# .. _JobLib: https://joblib.readthedocs.io
-# .. _Dask: https://dask.org
-#
 # To change parameter values, either pass them directly to the constructor
 # above or set them by hand, like this:
 
-model.engine = 'serial'
+model.rho = 20
 
 ##############################################################################
 # Then build the model. This is a necessary step before you can actually use
@@ -108,32 +101,45 @@ model.build()
 # :py:mod:`~pulse2percept.implants` module.
 #
 # In the following, we will create an
-# :py:class:`~pulse2percept.implants.ArgusII` implant. By default, the implant
+# :py:class:`~pulse2percept.implants.PRIMA75` implant. By default, the implant
 # will be centered over the fovea (at x=0, y=0) and aligned with the horizontal
 # meridian (rot=0):
 
-from pulse2percept.implants import ArgusII
-implant = ArgusII()
+from pulse2percept.implants import PRIMA75
+implant = PRIMA75()
 
 ##############################################################################
+# We can visualize the implant and verify that we are simulating the correct
+# patch of retina as follows:
+
+model.plot()
+implant.plot()
+
+##############################################################################
+# The gray window indicates the extent of the grid that was created during
+# ``model.build()`` using the values specified by ``xrange``, ``yrange``, and
+# ``xystep``. As we can see, the window well-covers the implant that we want
+# to simulate.
+#
 # The easiest way to assign a stimulus to the implant is to pass a NumPy array
 # that specifies the current amplitude to be applied to every electrode in the
 # implant.
 #
-# For example, the following sends 10 microamps to all 60 electrodes of the
+# For example, the following sends 10 microamps to all 142 electrodes of the
 # implant:
 
 import numpy as np
-implant.stim = 10 * np.ones(60)
+implant.stim = 10 * np.ones(142)
 
 ##############################################################################
 # .. note::
 #
 #     Some models can handle stimuli that have both a spatial and a temporal
-#     component. the scoreboard model cannot.
+#     component. The scoreboard model cannot.
 #
 # Predicting the percept
 # ----------------------
+#
 # The third step is to apply the model to predict the percept resulting from
 # the specified stimulus. Note that this may take some time on your machine:
 
@@ -152,12 +158,38 @@ ax = percept.plot()
 ax.set_title('Predicted percept')
 
 ##############################################################################
+# .. note::
+#
+#     Stimulation of the inferior retina leads to percepts appearing in the
+#     upper visual field. This is why the percept (with axes showing the visual
+#     field in degrees of visual angle) appears upside down with respect to
+#     the earlier figure of the implant (with axes showing retinal coordinates
+#     in microns).
+#
 # By default, the :py:meth:`~pulse2percept.percepts.Percept.plot` method uses
 # Matplotlib's ``pcolor`` function.
 # However, it can also be configured to use a hex grid (using Matplotlib's
 # ``hexbin`` function). Additional parameters can be passed to ``hexbin`` as
 # keyword arguments of :py:meth:`~pulse2percept.percepts.Percept.plot`:
 
-implant.stim = np.arange(60)
 percept = model.predict_percept(implant)
 percept.plot(kind='hex', cmap='inferno')
+
+
+##############################################################################
+# Addressing individual electrodes
+# --------------------------------
+#
+# Alternatively, we can address an individual electrode. To show the electrode
+# names, the implant can be plotted with ``annotate=True``:
+
+implant.plot(annotate=True)
+
+##############################################################################
+# This makes it easier to pick an electrode; e.g., F7:
+
+implant.stim = {'F7': 10}
+
+percept = model.predict_percept(implant)
+
+percept.plot()

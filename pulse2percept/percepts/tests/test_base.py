@@ -89,8 +89,6 @@ def test_Percept_plot():
 
     # Verify color map:
     npt.assert_equal(ax.collections[0].cmap, plt.cm.gray)
-    ax = percept.plot(cmap='inferno')
-    npt.assert_equal(ax.collections[0].cmap, plt.cm.inferno)
 
     # Specify figsize:
     ax = percept.plot(kind='pcolor', figsize=(6, 4))
