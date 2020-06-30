@@ -132,17 +132,15 @@ implant = ArgusII()
 
 ##############################################################################
 # You can inspect the location of the implant with respect to the underlying
-# nerve fiber bundles using the
-# :py:meth:`~pulse2percept.viz.plot_implant_on_axon_map`:
+# nerve fiber bundles using the built-in plot methods:
 
-from pulse2percept.viz import plot_implant_on_axon_map
-plot_implant_on_axon_map(implant)
+model.plot()
+implant.plot()
+
 
 ##############################################################################
-# .. note::
-#
-#     You can also plot just the axon map with
-#     :py:meth:`~pulse2percept.viz.plot_axon_map`.
+# By default, the plots will be added to the current Axes object.
+# Alternatively, you can pass ``ax=`` to specify in which Axes to plot.
 #
 # The easiest way to assign a stimulus to the implant is to pass a NumPy array
 # that specifies the current amplitude to be applied to every electrode in the
@@ -180,7 +178,8 @@ ax.set_title('Predicted percept')
 # by re-running the model on an implant shifted and rotated across the retina:
 
 implant = ArgusII(x=-50, y=50, rot=np.deg2rad(-45))
-plot_implant_on_axon_map(implant)
+model.plot()
+implant.plot()
 
 ##############################################################################
 # The resulting percepts should look very different from the previous example:

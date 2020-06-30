@@ -184,7 +184,6 @@ class Stimulus(PrettyPrint):
             itp = interp1d(t.ravel(), d, bounds_error=None,
                            fill_value='extrapolate')
             new_data.append(itp(new_time))
-            print('interpolating merge')
         return new_data, [new_time]
 
     def _from_source(self, source):

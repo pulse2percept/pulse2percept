@@ -272,7 +272,7 @@ sphinx_gallery_conf = {
     'examples_dirs': ['../examples'],
     'gallery_dirs': ['examples'],
     'remove_config_comments': True,
-    'thumbnail_size': (280, 280),
+    'thumbnail_size': (320, 224),
     'subsection_order': ExplicitOrder(['../examples/implants',
                                        '../examples/stimuli',
                                        '../examples/models',

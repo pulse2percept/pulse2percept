@@ -60,9 +60,9 @@ dictionary).
 
     # Use defaults so we don't get gridlines in generated docs
     import matplotlib as mpl
-
     mpl.rcdefaults()
-
+    mpl.use('TkAgg')
+    
 Single-electrode stimuli
 ^^^^^^^^^^^^^^^^^^^^^^^^
 

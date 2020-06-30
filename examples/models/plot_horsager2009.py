@@ -35,7 +35,7 @@ data.shape
 # Electrode C3:
 
 single_pulse = load_horsager2009(subjects='S05', electrodes='C3',
-                                 stim_types == 'single_pulse')
+                                 stim_types='single_pulse')
 single_pulse
 
 ###############################################################################
