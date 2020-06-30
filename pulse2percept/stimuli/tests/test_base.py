@@ -223,7 +223,8 @@ def test_Stimulus_plot():
     for n_electrodes in [2, 3, 4]:
         stim = Stimulus(np.random.rand(n_electrodes, 20),
                         electrodes=['E%d' % i for i in range(n_electrodes)])
-        axes = stim.plot()
+        fig, axes = plt.subplots(ncols=n_electrodes)
+        stim.plot(ax=axes)
         npt.assert_equal(isinstance(axes, (list, np.ndarray)), True)
         for ax, electrode in zip(axes, stim.electrodes):
             npt.assert_equal(isinstance(ax, Subplot), True)
@@ -232,6 +233,7 @@ def test_Stimulus_plot():
             npt.assert_almost_equal(ax.lines[0].get_data()[0], stim.time)
             npt.assert_almost_equal(ax.lines[0].get_data()[1],
                                     stim[electrode, :])
+        plt.close(fig)
 
     # Invalid calls:
     with pytest.raises(TypeError):
