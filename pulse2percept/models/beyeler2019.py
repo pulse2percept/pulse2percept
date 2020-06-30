@@ -520,7 +520,7 @@ class AxonMapSpatial(SpatialModel):
                              self.rho,
                              self.thresh_percept)
 
-    def plot(self, use_dva=False, annotate=False, autoscale=True, ax=None):
+    def plot(self, use_dva=False, annotate=True, autoscale=True, ax=None):
         """Plot the axon map
 
         Parameters
@@ -556,6 +556,7 @@ class AxonMapSpatial(SpatialModel):
             # Flip y upside down for dva:
             axon_bundles = [self.ret2dva(bundle) * [1, -1]
                             for bundle in axon_bundles]
+            labels = ['upper', 'lower', 'left', 'right']
         else:
             # Use retinal coordinates (microns) as axis unit.
             units = 'microns'
@@ -564,6 +565,10 @@ class AxonMapSpatial(SpatialModel):
             od_w = 1770
             od_h = 1880
             grid_transform = self.dva2ret
+            if self.eye == 'RE':
+                labels = ['superior', 'inferior', 'temporal', 'nasal']
+            else:
+                labels = ['superior', 'inferior', 'nasal', 'temporal']
 
         # Draw axon pathways:
         for bundle in axon_bundles:
@@ -585,26 +590,20 @@ class AxonMapSpatial(SpatialModel):
         ax.set_ylabel('y (%s)' % units)
         if autoscale:
             ax.axis((xmin, xmax, ymin, ymax))
-        # if annotate:
-        #     if upside_down:
-        #         topbottom = ['bottom', 'top']
-        #     else:
-        #         topbottom = ['top', 'bottom']
-        #     if self.eye == 'RE':
-        #         temporalnasal = ['temporal', 'nasal']
-        #     else:
-        #         temporalnasal = ['nasal', 'temporal']
-        #     for yy, valign, si in zip([ymax, ymin], topbottom,
-        #                               ['superior', 'inferior']):
-        #         for xx, halign, tn in zip([xmin, xmax], ['left', 'right'],
-        #                                   temporalnasal):
-        #             ax.text(xx, yy, si + ' ' + tn,
-        #                     color='black', fontsize=14,
-        #                     horizontalalignment=halign,
-        #                     verticalalignment=valign,
-        #                     bbox={'boxstyle': 'square,pad=-0.1', 'ec': 'none',
-        #                           'fc': (1, 1, 1, 0.7)},
-        #                     zorder=99)
+        if annotate:
+            ann = ax.inset_axes([0.05, 0.05, 0.2, 0.2], zorder=99)
+            ann.annotate('', (0.5, 1), (0.5, 0),
+                         arrowprops={'arrowstyle': '<->'})
+            ann.annotate('', (1, 0.5), (0, 0.5),
+                         arrowprops={'arrowstyle': '<->'})
+            positions = [(0.5, 1), (0.5, 0), (0, 0.5), (1, 0.5)]
+            valign = ['bottom', 'top', 'center', 'center']
+            rots = [0, 0, 90, -90]
+            for label, pos, va, rot in zip(labels, positions, valign, rots):
+                ann.annotate(label, pos, ha='center', va=va, rotation=rot)
+            ann.axis('off')
+            ann.set_xticks([])
+            ann.set_yticks([])
         return ax
 
 
