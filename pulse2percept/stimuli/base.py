@@ -356,7 +356,7 @@ class Stimulus(PrettyPrint):
         }
         self.is_compressed = True
 
-    def plot(self, electrodes=None, time=None, fmt='k-', axes=None):
+    def plot(self, electrodes=None, time=None, fmt='k-', ax=None):
         """Plot the stimulus
 
         Parameters
@@ -371,7 +371,7 @@ class Stimulus(PrettyPrint):
             If None, all time points are plotted.
         fmt : str, optional, default: 'k-'
             A Matplotlib format string; e.g., 'ro' for red circles.
-        axes : matplotlib.axes.Axes or list thereof; optional, default: None
+        ax : matplotlib.axes.Axes or list thereof; optional, default: None
             A Matplotlib Axes object or a list thereof (one per electrode to
             plot). If None, a new Axes object will be created.
 
@@ -408,6 +408,7 @@ class Stimulus(PrettyPrint):
         else:
             raise TypeError('"time" must be a tuple, slice, list, or NumPy '
                             'array, not %s.' % type(time))
+        axes = ax
         if axes is None:
             if len(electrodes) == 1:
                 axes = plt.gca()

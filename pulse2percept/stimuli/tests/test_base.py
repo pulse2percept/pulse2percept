@@ -246,12 +246,12 @@ def test_Stimulus_plot():
     with pytest.raises(ValueError):
         stim = Stimulus(np.ones((3, 10)))
         _, axes = plt.subplots(nrows=4)
-        stim.plot(axes=axes)
+        stim.plot(ax=axes)
     with pytest.raises(TypeError):
         stim = Stimulus(np.ones((3, 10)))
         _, axes = plt.subplots(nrows=3)
         axes[1] = 0
-        stim.plot(axes=axes)
+        stim.plot(ax=axes)
 
 
 def test_Stimulus__stim():
