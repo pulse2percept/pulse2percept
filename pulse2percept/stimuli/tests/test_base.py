@@ -197,7 +197,7 @@ def test_Stimulus_plot():
                                 stim.data.min())
         npt.assert_almost_equal(ax.lines[0].get_data()[1].max(),
                                 stim.data.max())
-        ax.clear()
+        plt.close(ax.figure)
 
     # Plot a range of time values (times are sliced, not interpolated):
     ax = stim.plot(time=(0.2, 0.6))
@@ -431,3 +431,8 @@ def test_Stimulus___getitem__():
     npt.assert_almost_equal(stim[:, stim.time > 0.6], np.zeros((2, 0)))
     npt.assert_almost_equal(stim['A1', stim.time > 0.6], [])
     npt.assert_almost_equal(stim['A1', np.isclose(stim.time, 0.3)], [1])
+
+
+def test_Stimulus_merge():
+    stim = Stimulus([[1, 0.3, 0.0, 0.6, 2.0]], time=np.arange(5))
+    merge = Stimulus([stim, stim])
