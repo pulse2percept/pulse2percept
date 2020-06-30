@@ -188,7 +188,8 @@ def test_Stimulus_plot():
                     time=[0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0])
     for time in [None, Ellipsis, slice(None)]:
         # Different ways to plot all data points:
-        ax = stim.plot(time=time)
+        fig, ax = plt.subplots()
+        stim.plot(time=time, ax=ax)
         npt.assert_equal(isinstance(ax, Subplot), True)
         npt.assert_almost_equal(ax.get_yticks(), [stim.data.min(), 0,
                                                   stim.data.max()])
@@ -197,7 +198,7 @@ def test_Stimulus_plot():
                                 stim.data.min())
         npt.assert_almost_equal(ax.lines[0].get_data()[1].max(),
                                 stim.data.max())
-        plt.close(ax.figure)
+        plt.close(fig)
 
     # Plot a range of time values (times are sliced, not interpolated):
     ax = stim.plot(time=(0.2, 0.6))
