@@ -22,8 +22,6 @@ from sys import platform
 import matplotlib as mpl
 if platform == "darwin":  # OS X
     mpl.use('TkAgg')
-else:
-    mpl.use('agg')
 
 import logging
 from .version import __version__

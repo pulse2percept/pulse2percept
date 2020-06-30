@@ -134,21 +134,7 @@ from pulse2percept.models import AxonMapModel
 AxonMapModel().plot()
 earray.plot()
 
-# Please note that an electrode array is only one part of a
-# :py:class:`~pulse2percept.implants.ProsthesisSystem`. Other parts include the
-# stimulus to be applied to each electrode, stimulus preprocessing methods,
-# and safety checks.
-#
-# However, the easiest way to turn an electrode array into a functioning
-# prosthesis system, is to wrap it with
-# :py:class:`~pulse2percept.implants.ProsthesisSystem`:
-from pulse2percept.implants import ProsthesisSystem
-implant = ProsthesisSystem(earray)
-
 ##############################################################################
-# It can then be assigned a stimulus and used in a model's ``predict_percept``
-# method.
-#
 # Extending the CircleElectrodeArray class
 # ----------------------------------------
 #

@@ -265,8 +265,9 @@ intersphinx_mapping = {
 }
 
 sphinx_gallery_conf = {
-    'doc_module': 'pulse2percept',
+    # Mini gallery:
     'backreferences_dir': '_api',
+    'doc_module': 'pulse2percept',
     'reference_url': {
         'pulse2percept': None},
     'examples_dirs': ['../examples'],

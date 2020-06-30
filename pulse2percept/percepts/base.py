@@ -113,13 +113,9 @@ class Percept(Data):
             # frame.
             raise NotImplementedError
         if ax is None:
+            ax = plt.gca()
             if 'figsize' in kwargs:
-                figsize = kwargs['figsize']
-            else:
-                figsize = (12, 8)
-                # figsize = np.int32(np.array(self.shape[:2][::-1]) / 15)
-                # figsize = np.maximum(figsize, 1)
-            _, ax = plt.subplots(figsize=figsize)
+                ax.figure.set_size_inches(kwargs['figsize'])
         else:
             if not isinstance(ax, Subplot):
                 raise TypeError("'ax' must be a Matplotlib axis, not "
@@ -155,10 +151,10 @@ class Percept(Data):
         ax.set_aspect('equal', adjustable='box')
         ax.set_xlim(self.xdva[0], self.xdva[-1])
         ax.set_xticks(np.linspace(self.xdva[0], self.xdva[-1], num=5))
-        ax.set_xlabel('x (dva)')
+        ax.set_xlabel('x (degrees of visual angle)')
         ax.set_ylim(self.ydva[0], self.ydva[-1])
         ax.set_yticks(np.linspace(self.ydva[0], self.ydva[-1], num=5))
-        ax.set_ylabel('y (dva)')
+        ax.set_ylabel('y (degrees of visual angle)')
         return ax
 
     def play(self, fps=None, ax=None):

@@ -61,7 +61,6 @@ dictionary).
     # Use defaults so we don't get gridlines in generated docs
     import matplotlib as mpl
     mpl.rcdefaults()
-    mpl.use('TkAgg')
     
 Single-electrode stimuli
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -144,29 +143,6 @@ The same is true for a dictionary of pulse trains:
     from pulse2percept.stimuli import BiphasicPulse
     Stimulus({'A1': BiphasicPulse(10, 0.45, stim_dur=100),
               'C9': BiphasicPulse(-30, 1, delay_dur=10, stim_dur=100)})
-
-Plotting stimuli
-----------------
-
-The easiest way to visualize a stimulus is to use the built-in
-:py:meth:`~pulse2percept.stimuli.Stimulus.plot` method:
-
-.. ipython:: python
-
-    from pulse2percept.stimuli import Stimulus, BiphasicPulseTrain
-
-    # Create a multi-electrode stimulus
-    stim = Stimulus({'E%d' % i: BiphasicPulseTrain(i, 10, 0.45)
-                     for i in np.arange(5)})
-    # Plot it:
-    stim.plot()
-
-You can also select individual electrodes, or specify a range of time points:
-
-.. ipython:: python
-
-    # Plot two electrodes with available time points in the range t=[0, 0.5]:
-    stim.plot(electrodes=['E2', 'E4'], time=(0, 0.5))
 
 Interacting with stimuli
 ------------------------
@@ -310,3 +286,6 @@ before and after compression:
     # Notice how the time axis have changed:
     stim
 
+.. minigallery:: pulse2percept.stimuli.Stimulus
+    :add-heading: Examples using ``Stimulus``
+    :heading-level: -
