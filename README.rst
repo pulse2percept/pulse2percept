@@ -26,9 +26,9 @@
 pulse2percept: A Python-based simulation framework for bionic vision
 ====================================================================
 
-By 2020 roughly 20 million people will be affected by retinal diseases such as
-retinitis pigmentosa and age-related macular degeneration, and a variety of sight
-restoration technologies are being developed to target these diseases.
+Retinal degenerative diseases such as retinitis pigmentosa and macular degeneration
+result in profound visual impairment in more than 10 million people worldwide, and a variety
+of sight restoration technologies are being developed to target these diseases.
 
 Retinal prostheses, now implanted in over 500 patients worldwide, electrically
 stimulate surviving cells in order to evoke neuronal responses that are
