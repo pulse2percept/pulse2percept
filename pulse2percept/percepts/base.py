@@ -230,7 +230,6 @@ class Percept(Data):
             interval = interval[0]
         else:
             interval = 1000.0 / fps
-        print('interval:', interval)
         # Create the animation:
         return FuncAnimation(fig, update, data_gen, interval=interval,
                              repeat=repeat)
