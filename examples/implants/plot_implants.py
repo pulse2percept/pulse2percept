@@ -46,8 +46,6 @@ model.plot(ax=ax[1])
 ArgusII(rot=-0.52).plot(ax=ax[1], annotate=False)
 ax[1].set_title('Argus II')
 
-fig.tight_layout()
-
 ###############################################################################
 # PRIMA Bionic Vision System (Pixium Vision SA)
 # ----------------------------------------------
@@ -75,8 +73,6 @@ ax[0].set_title('PRIMA-100')
 PRIMA75().plot(ax=ax[1])
 ax[1].set_title('PRIMA-75')
 
-fig.tight_layout()
-
 ###############################################################################
 # In addition, the developers are working on miniaturizing the device. At least
 # two other prototypes are currently in development:
@@ -100,9 +96,6 @@ ax[0].set_title('PRIMA-55')
 
 PRIMA40().plot(ax=ax[1])
 ax[1].set_title('PRIMA-40')
-
-fig.tight_layout()
-
 
 ###############################################################################
 # BVT Bionic Eye System (Bionic Vision Technologies)
@@ -131,8 +124,6 @@ fig, ax = plt.subplots(figsize=(10, 6))
 
 BVA24().plot(ax=ax, annotate=True)
 ax.set_title('BVA-24')
-fig.tight_layout()
-
 
 ###############################################################################
 # Alpha-IMS and Alpha-AMS Retinal Implant System (Retina Implant AG)
@@ -157,5 +148,3 @@ ax[0].set_title('Alpha-IMS')
 
 AlphaAMS().plot(ax=ax[1])
 ax[1].set_title('Alpha-AMS')
-
-fig.tight_layout()

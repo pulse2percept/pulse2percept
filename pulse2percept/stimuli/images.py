@@ -1,6 +1,7 @@
 """`ImageStimulus`, `LogoBVL`, `LogoUCSB`"""
 from os.path import dirname, join
 import numpy as np
+from copy import deepcopy
 import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
 
@@ -11,7 +12,9 @@ from skimage.measure import moments as img_moments
 from skimage.transform import (resize as img_resize, rotate as img_rotate,
                                warp as img_warp, SimilarityTransform)
 from skimage.filters import (threshold_mean, threshold_minimum, threshold_otsu,
-                             threshold_local, threshold_isodata)
+                             threshold_local, threshold_isodata, scharr, sobel,
+                             median)
+from skimage.feature import canny
 
 from .base import Stimulus
 from .pulses import BiphasicPulse
@@ -110,6 +113,11 @@ class ImageStimulus(Stimulus):
                                             metadata=metadata,
                                             compress=compress)
 
+    def _pprint_params(self):
+        params = super(ImageStimulus, self)._pprint_params()
+        params.update({'img_shape': self.img_shape})
+        return params
+
     def invert(self):
         """Invert the gray levels of the image
 
@@ -120,10 +128,11 @@ class ImageStimulus(Stimulus):
             in the range [0, 1].
 
         """
+        img = deepcopy(self.data.reshape(self.img_shape))
         if len(self.img_shape) > 2:
-            raise ValueError("Only grayscale images can be inverted. Use "
-                             "``rgb2gray`` first.")
-        img = 1.0 - self.data.reshape(self.img_shape)
+            img[..., :3] = 1.0 - img[..., :3]
+        else:
+            img = 1.0 - img
         return ImageStimulus(img, electrodes=self.electrodes,
                              metadata=self.metadata)
 
@@ -241,7 +250,7 @@ class ImageStimulus(Stimulus):
         return ImageStimulus(img, electrodes=electrodes,
                              metadata=self.metadata)
 
-    def rotate(self, angle, center=None, mode='reflect'):
+    def rotate(self, angle, center=None, mode='constant'):
         """Rotate the image
 
         Parameters
@@ -359,12 +368,77 @@ class ImageStimulus(Stimulus):
         return ImageStimulus(img, electrodes=self.electrodes,
                              metadata=self.metadata)
 
+    def filter(self, filt, **kwargs):
+        """Filter the image
+
+        Parameters
+        ----------
+        filt : str
+            Image filter. Additional parameters can be passed as keyword
+            arguments. The following filters are supported:
+
+            *  'sobel': Edge filter the image using the `Sobel filter
+               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.sobel>`_.
+            *  'scharr': Edge filter the image using the `Scarr filter
+               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.scharr>`_.
+            *  'canny': Edge filter the image using the `Canny algorithm
+               <https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.canny>`_.
+               You can also specify ``sigma``, ``low_threshold``,
+               ``high_threshold``, ``mask``, and ``use_quantiles``.
+            *  'median': Return local median of the image.
+        **kwargs :
+            Additional parameters passed to the filter
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with the filtered image
+        """
+        if not isinstance(filt, str):
+            raise TypeError("'filt' must be a string, not %s." % type(filt))
+        img = self.data.reshape(self.img_shape)
+        if filt.lower() == 'sobel':
+            img = sobel(img, **kwargs)
+        elif filt.lower() == 'scharr':
+            img = scharr(img, **kwargs)
+        elif filt.lower() == 'canny':
+            img = canny(img, **kwargs)
+        elif filt.lower() == 'median':
+            img = median(img, **kwargs)
+        else:
+            raise ValueError("Unknown filter '%s'." % filt)
+        return ImageStimulus(img, electrodes=self.electrodes,
+                             metadata=self.metadata)
+
+    def apply(self, func, **kwargs):
+        """Apply a function to the image
+
+        Parameters
+        ----------
+        func : function
+            The function to apply to the image. Must accept a 2D or 3D image
+            and return an image with the same dimensions
+        **kwargs :
+            Additional parameters passed to the function
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with the new image
+        """
+        img = func(self.data.reshape(self.img_shape), **kwargs)
+        return ImageStimulus(img, electrodes=self.electrodes,
+                             metadata=self.metadata)
+
     def encode(self, amp_range=(0, 50), pulse=None):
         """Encode image using amplitude modulation
 
-        Encodes the image as a series of pulse trains, where the gray levels
-        of the image are interpreted as the amplitude of a pulse or pulse train
-        with values in ``amp_range``.
+        Encodes the image as a series of pulses, where the gray levels of the
+        image are interpreted as the amplitude of a pulse with values in
+        ``amp_range``.
+
+        By default, a single biphasic pulse is used for each pixel, with 0.46ms
+        phase duration, and 500ms total stimulus duration.
 
         Parameters
         ----------
@@ -406,23 +480,14 @@ class ImageStimulus(Stimulus):
                                  electrodes=e))
         return Stimulus(stim)
 
-    def plot(self, kind='pcolor', ax=None, **kwargs):
+    def plot(self, ax=None, **kwargs):
         """Plot the stimulus
 
         Parameters
         ----------
-        kind: {'pcolor' | 'hex'}, optional, default: 'pcolor'
-            Kind of plot to draw:
-            *  'pcolor': using Matplotlib's ``pcolor``. Additional parameters
-               (e.g., ``vmin``, ``vmax``) can be passed as keyword arguments.
-            *  'hex': using Matplotlib's ``hexbin``. Additional parameters
-               (e.g., ``gridsize``) can be passed as keyword arguments.
-        ax: matplotlib.axes.Axes; optional, default: None
-            A Matplotlib Axes object. If None, a new Axes object will be
-            created.
-        **kwargs
-            Additional keyword arguments are passed to Matplotlib's
-            ``pcolormesh`` (kind='pcolor') or ``hexbin`` (kind='hex')
+        ax : matplotlib.axes.Axes or list thereof; optional, default: None
+            A Matplotlib Axes object or a list thereof (one per electrode to
+            plot). If None, a new Axes object will be created.
 
         Returns
         -------
@@ -430,61 +495,17 @@ class ImageStimulus(Stimulus):
             Returns the axes with the plot on it
 
         """
-        frame = self.data.reshape(self.img_shape)
-        print(frame.shape)
         if ax is None:
-            if 'figsize' in kwargs:
-                figsize = kwargs['figsize']
-            else:
-                figsize = (12, 8)
-                # figsize = np.int32(np.array(self.shape[:2][::-1]) / 15)
-                # figsize = np.maximum(figsize, 1)
-            _, ax = plt.subplots(figsize=figsize)
-        else:
-            if not isinstance(ax, Subplot):
-                raise TypeError("'ax' must be a Matplotlib axis, not "
-                                "%s." % type(ax))
+            ax = plt.gca()
+        if 'figsize' in kwargs:
+            ax.figure.set_size_inches(kwargs.pop('figsize'))
 
-        vmin, vmax = frame.min(), frame.max()
-        cmap = kwargs['cmap'] if 'cmap' in kwargs else 'gray'
-        if kind == 'pcolor':
-            # Create a pseudocolor plot. Make sure to pass additional keyword
-            # arguments that have not already been extracted:
-            xdva = np.arange(frame.shape[1] + 1)
-            ydva = np.arange(frame.shape[0] + 1)
-            X, Y = np.meshgrid(xdva, ydva, indexing='xy')
-            other_kwargs = {key: kwargs[key]
-                            for key in (kwargs.keys() - ['figsize', 'cmap',
-                                                         'vmin', 'vmax'])}
-            ax.pcolormesh(X, Y, np.flipud(frame), cmap=cmap, vmin=vmin,
-                          vmax=vmax, **other_kwargs)
-        elif kind == 'hex':
-            # Create a hexbin plot:
-            if 'gridsize' in kwargs:
-                gridsize = kwargs['gridsize']
-            else:
-                gridsize = np.maximum(2, np.min(frame.shape[:2]) // 2)
-            xdva = np.arange(frame.shape[1])
-            ydva = np.arange(frame.shape[0])
-            X, Y = np.meshgrid(xdva, ydva, indexing='xy')
-            # X, Y = np.meshgrid(self.xdva, self.ydva, indexing='xy')
-            # Make sure to pass additional keyword arguments that have not
-            # already been extracted:
-            other_kwargs = {key: kwargs[key]
-                            for key in (kwargs.keys() - ['figsize', 'cmap',
-                                                         'gridsize', 'vmin',
-                                                         'vmax'])}
-            ax.hexbin(X.ravel(), Y.ravel()[::-1], frame.ravel(),
-                      cmap=cmap, gridsize=gridsize, vmin=vmin, vmax=vmax,
-                      **other_kwargs)
-        else:
-            raise ValueError("Unknown plot option '%s'. Choose either 'pcolor'"
-                             "or 'hex'." % kind)
-        ax.set_aspect('equal', adjustable='box')
-        ax.set_xlim(xdva[0], xdva[-1])
-        ax.set_xticks([])
-        ax.set_ylim(ydva[0], ydva[-1])
-        ax.set_yticks([])
+        cmap = None
+        if len(self.img_shape) == 2:
+            cmap = 'gray'
+        if 'cmap' in kwargs:
+            cmap = kwargs.pop('cmap')
+        ax.imshow(self.data.reshape(self.img_shape), cmap=cmap, **kwargs)
         return ax
 
     def save(self, fname):

@@ -476,7 +476,13 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             applied to each spatial location in the stimulus/percept.
         t_percept : float or list of floats, optional, default: None
             The time points at which to output a percept (ms).
-            If None, the percept will be output at model step size (``dt``).
+            If None, the percept will be output once very 20 ms (50 Hz frame
+            rate).
+
+            .. note ::
+
+                If your stimulus is shorter than 20 ms, you should specify
+                the desired time points manually.
 
         Returns
         -------
@@ -514,20 +520,19 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         _time = stim.time
 
         if t_percept is None:
-            # If no time vector is given, output at model time step (and make
-            # sure to include the last time point). We always start at zero:
-            t_percept = np.arange(0, _time[-1] + self.dt / 2.0, self.dt)
-        else:
-            # We need to make sure the requested `t_percept` are sorted and
-            # multiples of `dt`:
-            t_percept = np.sort([t_percept]).flatten()
-            remainder = np.mod(t_percept, self.dt) / self.dt
-            atol = 1e-3
-            within_atol = (remainder < atol) | (np.abs(1 - remainder) < atol)
-            if not np.all(within_atol):
-                raise ValueError("t=%s are not multiples of dt=%.2e." %
-                                 (t_percept[np.logical_not(within_atol)],
-                                  self.dt))
+            # If no time vector is given, output at 50 Hz frame rate. We always
+            # start at zero and include the last time point:
+            t_percept = np.arange(0, np.maximum(20, _time[-1]) + 1, 20)
+        # We need to make sure the requested `t_percept` are sorted and
+        # multiples of `dt`:
+        t_percept = np.sort([t_percept]).flatten()
+        remainder = np.mod(t_percept, self.dt) / self.dt
+        atol = 1e-3
+        within_atol = (remainder < atol) | (np.abs(1 - remainder) < atol)
+        if not np.all(within_atol):
+            raise ValueError("t=%s are not multiples of dt=%.2e." %
+                             (t_percept[np.logical_not(within_atol)],
+                              self.dt))
         if _stim.data.size == 0:
             # Stimulus was compressed to zero:
             resp = np.zeros(_space + [t_percept.size], dtype=np.float32)

@@ -51,12 +51,6 @@ def test_ImageStimulus_invert():
     npt.assert_almost_equal(stim.data, gray)
     os.remove(fname)
 
-    # Cannot invert RGB:
-    fname = 'test.png'
-    create_dummy_img(fname, (25, 37, 4), 'ones')
-    with pytest.raises(ValueError):
-        ImageStimulus(fname).invert()
-
 
 def test_ImageStimulus_rgb2gray():
     # Create a dummy image:
@@ -109,21 +103,21 @@ def test_ImageStimulus_rotate():
     imsave(fname, ndarray)
     stim = ImageStimulus(fname)
     # Vertical line:
-    vert = stim.rotate(90)
+    vert = stim.rotate(90, mode='reflect')
     npt.assert_almost_equal(vert.data.reshape(stim.img_shape)[:, 0], 0)
     npt.assert_almost_equal(vert.data.reshape(stim.img_shape)[:, 1], 0)
     npt.assert_almost_equal(vert.data.reshape(stim.img_shape)[:, 2], 1)
     npt.assert_almost_equal(vert.data.reshape(stim.img_shape)[:, 3], 0)
     npt.assert_almost_equal(vert.data.reshape(stim.img_shape)[:, 4], 0)
     # Diagonal, bottom-left to top-right:
-    diag = stim.rotate(45)
+    diag = stim.rotate(45, mode='reflect')
     npt.assert_almost_equal(diag.data.reshape(stim.img_shape)[0, 4], 1)
     npt.assert_almost_equal(diag.data.reshape(stim.img_shape)[2, 2], 1)
     npt.assert_almost_equal(diag.data.reshape(stim.img_shape)[4, 0], 1)
     npt.assert_almost_equal(diag.data.reshape(stim.img_shape)[0, 0], 0)
     npt.assert_almost_equal(diag.data.reshape(stim.img_shape)[4, 4], 0)
     # Diagonal, top-left to bottom-right:
-    diag = stim.rotate(-45)
+    diag = stim.rotate(-45, mode='reflect')
     npt.assert_almost_equal(diag.data.reshape(stim.img_shape)[0, 0], 1)
     npt.assert_almost_equal(diag.data.reshape(stim.img_shape)[2, 2], 1)
     npt.assert_almost_equal(diag.data.reshape(stim.img_shape)[4, 4], 1)
@@ -219,7 +213,8 @@ def test_ImageStimulus_plot():
     imsave(fname, ndarray)
     stim = ImageStimulus(fname)
     ax = stim.plot()
-    npt.assert_equal(ax.axis(), (0, 5, 0, 5))
+    print(ax.axis())
+    npt.assert_equal(ax.axis(), (-0.5, 4.5, 4.5, -0.5))
     os.remove(fname)
 
 
