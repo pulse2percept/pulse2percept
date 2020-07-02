@@ -5,6 +5,7 @@ from matplotlib.animation import FuncAnimation
 
 import imageio
 import logging
+from skimage import img_as_uint
 from skimage.transform import resize
 
 from ..utils import Data, Grid2D
@@ -157,7 +158,18 @@ class Percept(Data):
         ax.set_ylabel('y (degrees of visual angle)')
         return ax
 
-    def play(self, fps=None, ax=None):
+    def _get_interval(self):
+        # Determine the frame rate from the time axis. Problem is that
+        # np.unique doesn't work well with floats, so we need to specify a
+        # tolerance `TOL`:
+        interval = np.diff(self.time)
+        TOL = interval.min()
+        # Two time points are the same if they are within `TOL` from each
+        # other:
+        interval = np.unique(np.floor(interval / TOL).astype(int)) * TOL
+        return interval
+
+    def play(self, fps=None, repeat=True, ax=None):
         """Animate the percept as HTML with JavaScript
 
         Parameters
@@ -165,6 +177,9 @@ class Percept(Data):
         fps : float or None
             If None, uses the percept's time axis. Not supported for
             non-homogeneous time axis.
+        repeat : bool, optional
+            Whether the animation should repeat when the sequence of frames is
+            completed.
         ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None, will create a new Axes object
 
@@ -180,8 +195,13 @@ class Percept(Data):
             return mat
 
         def data_gen():
-            while True:
-                yield next(self)
+            try:
+                # Advance to the next frame:
+                while True:
+                    yield next(self)
+            except StopIteration:
+                # End of the sequence, exit:
+                pass
 
         if self.time is None:
             raise ValueError("Cannot animate a percept with time=None.")
@@ -195,30 +215,25 @@ class Percept(Data):
             fig, ax = plt.subplots(figsize=(8, 5))
         else:
             fig = ax.figure
-        # Rewind the percept and show the first frame:
+        # Rewind the percept and show an empty frame:
         self.rewind()
-        mat = ax.imshow(next(self), cmap='gray', vmax=self.data.max())
+        mat = ax.imshow(np.zeros_like(self.data[..., 0]), cmap='gray',
+                        vmax=self.data.max())
         cbar = fig.colorbar(mat)
         cbar.ax.set_ylabel('Phosphene brightness (a.u.)', rotation=-90,
                            va='center')
         plt.close(fig)
         if fps is None:
-            # Determine the frame rate from the time axis. Problem is that
-            # np.unique doesn't work well with floats, so we need to specify a
-            # tolerance `TOL`:
-            interval = np.diff(self.time)
-            TOL = interval.min()
-            # Two time points are the same if they are within `TOL` from each
-            # other:
-            interval = np.unique(np.floor(interval / TOL).astype(int)) * TOL
+            interval = self._get_interval()
             if len(interval) > 1:
                 raise NotImplementedError
             interval = interval[0]
         else:
             interval = 1000.0 / fps
+        print('interval:', interval)
         # Create the animation:
-        ani = FuncAnimation(fig, update, data_gen, interval=interval)
-        return ani
+        return FuncAnimation(fig, update, data_gen, interval=interval,
+                             repeat=repeat)
 
     def save(self, fname, shape=None, fps=None):
         """Save the percept as an MP4 or GIF
@@ -247,6 +262,11 @@ class Percept(Data):
             of 16 to ensure compatibility with most codecs and players.
 
         """
+        data = self.data - self.data.min()
+        if not np.isclose(np.max(data), 0):
+            data /= np.max(data)
+        data = img_as_uint(data)
+
         if shape is None:
             # Use 320px width and infer height from aspect ratio:
             shape = (None, 320)
@@ -260,7 +280,7 @@ class Percept(Data):
         elif height is not None and width is None:
             width = height / self.data.shape[0] * self.data.shape[1]
         # Rescale percept to desired shape:
-        data = resize(self.data, (np.int32(height), np.int32(width)))
+        data = resize(data, (np.int32(height), np.int32(width)))
 
         if self.time is None:
             # No time component, store as an image. imwrite will automatically
@@ -269,13 +289,9 @@ class Percept(Data):
         else:
             # With time component, store as a movie:
             if fps is None:
-                interval = np.unique(np.diff(self.time))
+                interval = self._get_interval()
                 if len(interval) > 1:
                     raise NotImplementedError
                 fps = 1000.0 / interval[0]
-            data -= data.min()
-            if not np.isclose(data.max(), 0):
-                data /= data.max() * 255
-            imageio.mimwrite(fname, data.transpose((2, 0, 1)).astype(np.uint8),
-                             fps=fps)
+            imageio.mimwrite(fname, data.transpose((2, 0, 1)), fps=fps)
         logging.getLogger(__name__).info('Created %s.' % fname)
