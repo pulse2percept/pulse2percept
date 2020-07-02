@@ -111,7 +111,7 @@ pulse2percept requires:
 3.  `NumPy`_ (>= 1.9)
 4.  `SciPy`_ (>= 1.0.1)
 5.  `scikit-image` (>=0.14)
-6.  `Matplotlib`_ (>= 2.1)
+6.  `Matplotlib`_ (>= 3.0.2)
 7.  `imageio-ffmpeg` (>=0.4)
 8.  `JobLib`_ (>= 0.11)
 

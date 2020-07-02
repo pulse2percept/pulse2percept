@@ -71,6 +71,8 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
                 # Regular use case: single object
                 ax.add_patch(self.plot_patch((self.x, self.y), zorder=10,
                                              **self.plot_kwargs))
+            # This is needed in MPL 3.0.X to set the axis limit correctly:
+            ax.autoscale_view()
         if autoscale:
             ax.set_xlim(self.x - pad, self.x + pad)
             ax.set_ylim(self.y - pad, self.y + pad)

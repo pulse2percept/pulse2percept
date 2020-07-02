@@ -198,11 +198,19 @@ class Percept(Data):
         # Rewind the percept and show the first frame:
         self.rewind()
         mat = ax.imshow(next(self), cmap='gray', vmax=self.data.max())
-        fig.colorbar(mat)
+        cbar = fig.colorbar(mat)
+        cbar.ax.set_ylabel('Phosphene brightness (a.u.)', rotation=-90,
+                           va='center')
         plt.close(fig)
-        # Determine the frame rate:
         if fps is None:
-            interval = np.unique(np.diff(self.time))
+            # Determine the frame rate from the time axis. Problem is that
+            # np.unique doesn't work well with floats, so we need to specify a
+            # tolerance `TOL`:
+            interval = np.diff(self.time)
+            TOL = interval.min()
+            # Two time points are the same if they are within `TOL` from each
+            # other:
+            interval = np.unique(np.floor(interval / TOL).astype(int)) * TOL
             if len(interval) > 1:
                 raise NotImplementedError
             interval = interval[0]
