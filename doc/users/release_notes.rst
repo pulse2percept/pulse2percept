@@ -23,12 +23,20 @@ Highlights
    :py:class:`~pulse2percept.implants.HexElectrode`,
    :py:class:`~pulse2percept.implants.PhotovoltaicPixel` (:pull:`188`, 
    :pull:`193`)
+*  New stimuli: :py:class:`~pulse2percept.stimuli.ImageStimulus` and
+   :py:class:`~pulse2percept.stimuli.VideoStimulus` (:pull:`196`, :pull:`220`,
+   :pull:`221`)
+*  Computational cost and memory usage of
+   :py:class:`~pulse2percept.models.AxonMapModel` have been drastically reduced
+   (:pull:`215`)
 
 New features
 ~~~~~~~~~~~~
 
+*  Percepts can be animated directly in IPython / Jupyter Notebook, and saved
+   as a movie file (:pull:`196`, :pull:`226`)
 *  Electrodes, electrode arrays, and prosthesis systems now have their own
-   plot method (:pull:`188`, :pull:`195`)
+   plot method (:pull:`188`, :pull:`195`, :pull:`222`)
 
 API changes
 ~~~~~~~~~~~
@@ -36,6 +44,8 @@ API changes
 Backward-incompatible changes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+*  pulse2percept now requires Matplotlib 3.0.2 or newer (:pull:`223`)
+*  FFMPEG and scikit-video dependencies have been removed (:pull:`196`)
 *  ``TimeSeries`` has been removed. Please use
    :py:class:`~pulse2percept.stimuli.Stimulus` instead
 *  ``LegacyMonophasicPulse``, ``LegacyBiphasicPulse`` and ``LegacyPulseTrain``
@@ -44,9 +54,10 @@ Backward-incompatible changes
 Deprecations
 ^^^^^^^^^^^^
 
+*  ``plot_axon_map``: Use :py:meth`pulse2percept.models.AxonMapModel.plot`
 *  ``plot_implant_on_axon_map``: Use
-   :py:meth:`~pulse2percept.implants.ProsthesisSystem.plot` on top of
-   :py:func:`~pulse2percept.viz.plot_axon_map`
+   :py:meth:`pulse2percept.implants.ProsthesisSystem.plot` on top of
+   :py:meth`pulse2percept.models.AxonMapModel.plot`
 
 Bug fixes
 ~~~~~~~~~
