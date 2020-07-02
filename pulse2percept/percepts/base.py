@@ -215,9 +215,10 @@ class Percept(Data):
             fig, ax = plt.subplots(figsize=(8, 5))
         else:
             fig = ax.figure
-        # Rewind the percept and show the first frame:
+        # Rewind the percept and show an empty frame:
         self.rewind()
-        mat = ax.imshow(next(self), cmap='gray', vmax=self.data.max())
+        mat = ax.imshow(np.zeros_like(self.data[..., 0]), cmap='gray',
+                        vmax=self.data.max())
         cbar = fig.colorbar(mat)
         cbar.ax.set_ylabel('Phosphene brightness (a.u.)', rotation=-90,
                            va='center')
@@ -229,10 +230,10 @@ class Percept(Data):
             interval = interval[0]
         else:
             interval = 1000.0 / fps
+        print('interval:', interval)
         # Create the animation:
-        ani = FuncAnimation(fig, update, data_gen, interval=interval,
-                            repeat=repeat)
-        return ani
+        return FuncAnimation(fig, update, data_gen, interval=interval,
+                             repeat=repeat)
 
     def save(self, fname, shape=None, fps=None):
         """Save the percept as an MP4 or GIF
@@ -262,8 +263,8 @@ class Percept(Data):
 
         """
         data = self.data - self.data.min()
-        if not np.isclose(data.max(), 0):
-            data /= data.max()
+        if not np.isclose(np.max(data), 0):
+            data /= np.max(data)
         data = img_as_uint(data)
 
         if shape is None:

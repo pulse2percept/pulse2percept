@@ -5,6 +5,9 @@ import numpy.testing as npt
 import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
 from matplotlib.animation import FuncAnimation
+from imageio import mimread
+from skimage import img_as_float
+from skimage.io import imread
 
 from pulse2percept.percepts import Percept
 from pulse2percept.utils import Grid2D
@@ -105,27 +108,28 @@ def test_Percept_plot():
         percept.plot(time=3.3)
 
 
-def test_Percept_play():
-    ndarray = np.zeros((2, 4, 3))
-    ndarray[..., 1] = 1
-    ndarray[..., 2] = 2
+@pytest.mark.parametrize('n_frames', (2, 3, 10, 14))
+def test_Percept_play(n_frames):
+    ndarray = np.random.rand(2, 4, n_frames)
     percept = Percept(ndarray)
     ani = percept.play()
     npt.assert_equal(isinstance(ani, FuncAnimation), True)
+    npt.assert_equal(len(list(ani.frame_seq)), n_frames)
 
 
 def test_Percept_save():
-    ndarray = np.zeros((2, 3, 4))
-    ndarray[..., 1] = 1
-    ndarray[..., 2] = 2
-    ndarray[..., 3] = 3
-    percept = Percept(ndarray)
+    ndarray = np.arange(256, dtype=np.float32).repeat(31).reshape((-1, 16, 16))
+    percept = Percept(ndarray.transpose((2, 0, 1)))
 
     # Save multiple frames as a gif or movie:
     for fname in ['test.mp4', 'test.avi', 'test.mov', 'test.wmv', 'test.gif']:
         print(fname)
         percept.save(fname)
         npt.assert_equal(os.path.isfile(fname), True)
+        # Normalized to [0, 255] with some loss of precision:
+        mov = mimread(fname)
+        npt.assert_equal(np.min(mov) <= 2, True)
+        npt.assert_equal(np.max(mov) >= 250, True)
         os.remove(fname)
 
     # Cannot save multiple frames image:
@@ -138,4 +142,7 @@ def test_Percept_save():
     for fname in ['test.jpg', 'test.png', 'test.tif', 'test.gif']:
         percept.save(fname)
         npt.assert_equal(os.path.isfile(fname), True)
+        img = img_as_float(imread(fname))
+        npt.assert_almost_equal(np.min(img), 0, decimal=3)
+        npt.assert_almost_equal(np.max(img), 1.0, decimal=3)
         os.remove(fname)
