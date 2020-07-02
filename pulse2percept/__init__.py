@@ -20,8 +20,13 @@ pulse2percept is organized into the following subpackages:
 # http://www.davidketcheson.info/2015/01/13/using_matplotlib_image_comparison.html
 from sys import platform
 import matplotlib as mpl
-if platform == "darwin":  # OS X
-    mpl.use('TkAgg')
+import os
+import matplotlib as mpl
+if os.environ.get('DISPLAY', '') == '':
+    print('no display found. Using non-interactive Agg backend')
+    mpl.use('Agg')
+# if platform == "darwin":  # OS X
+#     mpl.use('TkAgg')
 
 import logging
 from .version import __version__
