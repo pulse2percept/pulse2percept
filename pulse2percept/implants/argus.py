@@ -10,7 +10,7 @@ from .electrode_arrays import ElectrodeGrid
 class ArgusI(ProsthesisSystem):
     """Create an ArgusI array on the retina
 
-    This function creates an ArgusI array and places it on the retina
+    This function creates an Argus I array and places it on the retina
     such that the center of the array is located at 3D location (x,y,z),
     given in microns, and the array is rotated by rotation angle ``rot``,
     given in radians.
