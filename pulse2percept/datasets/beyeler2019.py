@@ -55,15 +55,15 @@ def fetch_beyeler2019(data_path=None, shuffle=False, random_state=0,
 
     Parameters
     ----------
-    data_path: string, optional, default: None
+    data_path: string, optional
         Specify another download and cache folder for the dataset. By default
         all pulse2percept data is stored in '~/pulse2percept_data' subfolders.
-    shuffle : boolean, optional, default: False
+    shuffle : boolean, optional
         If True, the rows of the DataFrame are shuffled.
     random_state : int | numpy.random.RandomState | None, optional, default: 0
         Determines random number generation for dataset shuffling. Pass an int
         for reproducible output across multiple function calls.
-    download_if_missing : optional, default: True
+    download_if_missing : optional
         If False, raise an IOError if the data is not locally available
         instead of trying to download it from the source site.
 

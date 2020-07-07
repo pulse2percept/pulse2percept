@@ -30,7 +30,7 @@ class ScoreboardSpatial(SpatialModel):
 
     Parameters
     ----------
-    rho : double, optional, default: 100
+    rho : double, optional
         Exponential decay constant describing phosphene size (microns).
     x_range : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
@@ -96,7 +96,7 @@ class ScoreboardModel(Model):
 
     Parameters
     ----------
-    rho : double, optional, default: 100
+    rho : double, optional
         Exponential decay constant describing phosphene size (microns).
     x_range : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
@@ -135,9 +135,9 @@ class AxonMapSpatial(SpatialModel):
 
     Parameters
     ----------
-    axlambda: double, optional, default: 100
+    axlambda: double, optional
         Exponential decay constant along the axon(microns).
-    rho: double, optional, default: 100
+    rho: double, optional
         Exponential decay constant away from the axon(microns).
     eye: {'RE', LE'}, optional
         Eye for which to generate the axon map.
@@ -156,28 +156,28 @@ class AxonMapSpatial(SpatialModel):
         use ``x_range=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}
         Whether to simulate points on a rectangular or hexagonal grid
-    loc_od, loc_od: (x,y), optional, default: (15.5, 1.5)
+    loc_od, loc_od: (x,y), optional
         Location of the optic disc in degrees of visual angle. Note that the
         optic disc in a left eye will be corrected to have a negative x
         coordinate.
-    n_axons: int, optional, default: 500
+    n_axons: int, optional
         Number of axons to generate.
-    axons_range: (min, max), optional, default: (-180, 180)
+    axons_range: (min, max), optional
         The range of angles(in degrees) at which axons exit the optic disc.
         This corresponds to the range of $\\phi_0$ values used in
         [Jansonius2009]_.
-    n_ax_segments: int, optional, default: 500
+    n_ax_segments: int, optional
         Number of segments an axon is made of.
-    ax_segments_range: (min, max), optional, default: (0, 50)
+    ax_segments_range: (min, max), optional
         Lower and upper bounds for the radial position values(polar coords)
         for each axon.
-    min_ax_sensitivity: float, optional, default: 1e-3
+    min_ax_sensitivity: float, optional
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
-    axon_pickle: str, optional, default: 'axons.pickle'
+    axon_pickle: str, optional
         File name in which to store precomputed axon maps.
-    ignore_pickle: bool, optional, default: False
+    ignore_pickle: bool, optional
         A flag whether to ignore the pickle file in future calls to
         ``model.build()``.
 
@@ -241,10 +241,10 @@ class AxonMapSpatial(SpatialModel):
         phi0: float
             Angular position of the axon at its starting point(polar
             coordinates, degrees). Must be within[-180, 180].
-        beta_sup: float, optional, default: -1.9
+        beta_sup: float, optional
             Scalar value for the superior retina(see Eq. 5, `\beta_s` in the
             paper).
-        beta_inf: float, optional, default: 0.5
+        beta_inf: float, optional
             Scalar value for the inferior retina(see Eq. 6, `\beta_i` in the
             paper.)
 
@@ -621,9 +621,9 @@ class AxonMapModel(Model):
 
     Parameters
     ----------
-    axlambda: double, optional, default: 100
+    axlambda: double, optional
         Exponential decay constant along the axon(microns).
-    rho: double, optional, default: 100
+    rho: double, optional
         Exponential decay constant away from the axon(microns).
     eye: {'RE', LE'}, optional
         Eye for which to generate the axon map.
@@ -642,28 +642,28 @@ class AxonMapModel(Model):
         use ``x_range=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}
         Whether to simulate points on a rectangular or hexagonal grid
-    loc_od, loc_od: (x,y), optional, default: (15.5, 1.5)
+    loc_od, loc_od: (x,y), optional
         Location of the optic disc in degrees of visual angle. Note that the
         optic disc in a left eye will be corrected to have a negative x
         coordinate.
-    n_axons: int, optional, default: 500
+    n_axons: int, optional
         Number of axons to generate.
-    axons_range: (min, max), optional, default: (-180, 180)
+    axons_range: (min, max), optional
         The range of angles(in degrees) at which axons exit the optic disc.
         This corresponds to the range of $\\phi_0$ values used in
         [Jansonius2009]_.
-    n_ax_segments: int, optional, default: 500
+    n_ax_segments: int, optional
         Number of segments an axon is made of.
-    ax_segments_range: (min, max), optional, default: (0, 50)
+    ax_segments_range: (min, max), optional
         Lower and upper bounds for the radial position values(polar coords)
         for each axon.
-    min_ax_sensitivity: float, optional, default: 1e-3
+    min_ax_sensitivity: float, optional
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
-    axon_pickle: str, optional, default: 'axons.pickle'
+    axon_pickle: str, optional
         File name in which to store precomputed axon maps.
-    ignore_pickle: bool, optional, default: False
+    ignore_pickle: bool, optional
         A flag whether to ignore the pickle file in future calls to
         ``model.build()``.
 

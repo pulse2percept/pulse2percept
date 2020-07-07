@@ -43,7 +43,7 @@ class AlphaIMS(ProsthesisSystem):
         Rotation angle of the array (rad). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
-    eye : 'LE' or 'RE', optional, default: 'RE'
+    eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
 
     Examples
@@ -161,14 +161,14 @@ class AlphaAMS(ProsthesisSystem):
         x coordinate of the array center (um)
     y : float
         y coordinate of the array center (um)
-    z: float || array_like
+    z: float or array_like
         Distance of the array to the retinal surface (um). Either a list
         with 60 entries or a scalar.
     rot : float
         Rotation angle of the array (rad). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
-    eye : {'LE', 'RE'}, optional, default: 'RE'
+    eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
 
     Examples

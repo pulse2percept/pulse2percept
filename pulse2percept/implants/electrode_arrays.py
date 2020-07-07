@@ -213,11 +213,11 @@ class ElectrodeGrid(ElectrodeArray):
         A tuple containing the number of rows x columns in the grid
     spacing : double
         Electrode-to-electrode spacing in microns.
-    type : 'rect' or 'hex', optional, default: 'rect'
+    type : {'rect', 'hex'}, optional
         Grid type ('rect': rectangular, 'hex': hexagonal).
-    x, y, z : double, optional, default: (0,0,0)
+    x, y, z : double, optional
         3D coordinates of the center of the grid
-    rot : double, optional, default: 0rad
+    rot : double, optional
         Rotation of the grid in radians (positive angle: counter-clockwise
         rotation on the retinal surface)
     names: (name_rows, name_cols), each of which either 'A' or '1'

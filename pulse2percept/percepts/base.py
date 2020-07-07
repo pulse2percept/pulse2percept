@@ -1,3 +1,4 @@
+"""`Percept`"""
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
@@ -24,7 +25,7 @@ class Percept(Data):
         A grid object specifying the (x,y) coordinates in space
     time : 1D array
         A list of time points
-    metadata : dict, optional, default: None
+    metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.
 
     """
@@ -87,16 +88,18 @@ class Percept(Data):
 
         Parameters
         ----------
-        kind : { 'pcolor' | 'hex' }, optional, default: 'pcolor'
+        kind : { 'pcolor', 'hex' }, optional
             Kind of plot to draw:
+
             *  'pcolor': using Matplotlib's ``pcolor``. Additional parameters
                (e.g., ``vmin``, ``vmax``) can be passed as keyword arguments.
             *  'hex': using Matplotlib's ``hexbin``. Additional parameters
                (e.g., ``gridsize``) can be passed as keyword arguments.
-        time : None, optional, default: None
+
+        time : None, optional
             The time point to plot. If None, plots the brightest frame.
             Use ``play`` to play the percept frame-by-frame.
-        ax : matplotlib.axes._subplots.AxesSubplot, optional
+        ax : matplotlib.axes.AxesSubplot, optional
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object
 
@@ -172,6 +175,9 @@ class Percept(Data):
     def play(self, fps=None, repeat=True, ax=None):
         """Animate the percept as HTML with JavaScript
 
+        The percept will be played in an interactive player in IPython or
+        Jupyter Notebook.
+
         Parameters
         ----------
         fps : float or None
@@ -180,7 +186,7 @@ class Percept(Data):
         repeat : bool, optional
             Whether the animation should repeat when the sequence of frames is
             completed.
-        ax : matplotlib.axes._subplots.AxesSubplot, optional
+        ax : matplotlib.axes.AxesSubplot, optional
             A Matplotlib axes object. If None, will create a new Axes object
 
         Returns
@@ -244,7 +250,7 @@ class Percept(Data):
             file type. Percepts with time=None can be saved as images (e.g.,
             '.jpg', '.png', '.gif'). Multi-frame percepts can be saved as
             movies (e.g., '.mp4', '.avi', '.mov') or '.gif'.
-        shape : (height, width) or None, optional, default: (320,)
+        shape : (height, width) or None, optional
             The desired width x height of the resulting image/video.
             Use (h, None) to use a specified height and automatically infer the
             width from the percept's aspect ratio.

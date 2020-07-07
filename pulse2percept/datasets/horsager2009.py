@@ -62,18 +62,18 @@ def load_horsager2009(subjects=None, electrodes=None, stim_types=None,
 
     Parameters
     ----------
-    subjects : str | list of strings | None, optional, default: None
+    subjects : str | list of strings | None, optional
         Select data from a subject or list of subjects. By default, all
         subjects are selected.
-    electrodes : str | list of strings | None, optional, default: None
+    electrodes : str | list of strings | None, optional
         Select data from a single electrode or a list of electrodes.
         By default, all electrodes are selected.
-    stim_types : str | list of strings | None, optional, default: None
+    stim_types : str | list of strings | None, optional
         Select data from a single stimulus type or a list of stimulus types.
         By default, all stimulus types are selected.
-    shuffle : boolean, optional, default: False
+    shuffle : boolean, optional
         If True, the rows of the DataFrame are shuffled.
-    random_state : int | numpy.random.RandomState | None, optional, default: 0
+    random_state : int | numpy.random.RandomState | None, optional
         Determines random number generation for dataset shuffling. Pass an int
         for reproducible output across multiple function calls.
 

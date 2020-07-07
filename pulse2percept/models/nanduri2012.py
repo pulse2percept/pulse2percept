@@ -35,9 +35,9 @@ class Nanduri2012Spatial(SpatialModel):
 
     Parameters
     ----------
-    atten_a : float, optional, default: 14000.0
+    atten_a : float, optional
         Nominator of the attentuation function
-    atten_n : float32, optional, default: 1.69
+    atten_n : float32, optional
         Exponent of the attenuation function's denominator
 
     """
@@ -110,24 +110,24 @@ class Nanduri2012Temporal(TemporalModel):
 
     Parameters
     ----------
-    dt : float, optional, default: 0.005 ms
+    dt : float, optional
         Sampling time step (ms)
-    tau1: float, optional, default: 0.42 ms
+    tau1: float, optional
         Time decay constant for the fast leaky integrater.
-    tau2: float, optional, default: 45.25 ms
+    tau2: float, optional
         Time decay constant for the charge accumulation.
-    tau3: float, optional, default: 26.25 ms
+    tau3: float, optional
         Time decay constant for the slow leaky integrator.
-    eps: float, optional, default: 8.73
+    eps: float, optional
         Scaling factor applied to charge accumulation.
-    asymptote: float, optional, default: 14.0
+    asymptote: float, optional
         Asymptote of the logistic function used in the stationary nonlinearity
         stage.
-    slope: float, optional, default: 3.0
+    slope: float, optional
         Slope of the logistic function in the stationary nonlinearity stage.
-    shift: float, optional, default: 16.0
+    shift: float, optional
         Shift of the logistic function in the stationary nonlinearity stage.
-    thresh_percept: float, optional, default: 0
+    thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
 
     """
@@ -197,28 +197,28 @@ class Nanduri2012Model(Model):
 
     Parameters
     ----------
-    atten_a : float, optional, default: 14000.0
+    atten_a : float, optional
         Nominator of the attentuation function (Eq.2 in the paper)
-    atten_n : float32, optional, default: 1.69
+    atten_n : float32, optional
         Exponent of the attenuation function's denominator (Eq.2 in the paper)
-    dt : float, optional, default: 0.005 ms
+    dt : float, optional
         Sampling time step (ms)
-    tau1: float, optional, default: 0.42 ms
+    tau1: float, optional
         Time decay constant for the fast leaky integrater.
-    tau2: float, optional, default: 45.25 ms
+    tau2: float, optional
         Time decay constant for the charge accumulation.
-    tau3: float, optional, default: 26.25 ms
+    tau3: float, optional
         Time decay constant for the slow leaky integrator.
-    eps: float, optional, default: 8.73
+    eps: float, optional
         Scaling factor applied to charge accumulation.
-    asymptote: float, optional, default: 14.0
+    asymptote: float, optional
         Asymptote of the logistic function used in the stationary nonlinearity
         stage.
-    slope: float, optional, default: 3.0
+    slope: float, optional
         Slope of the logistic function in the stationary nonlinearity stage.
-    shift: float, optional, default: 16.0
+    shift: float, optional
         Shift of the logistic function in the stationary nonlinearity stage.
-    thresh_percept: float, optional, default: 0
+    thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
     """
 

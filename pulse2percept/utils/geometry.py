@@ -1,6 +1,6 @@
 """
-`Grid2D`, `RetinalCoordTransform`, `Curcio1990Transform`,`Watson2014Transform`,
-`Watson2014DisplaceTransform`, `cart2pol`, `pol2cart`
+`Grid2D`, `RetinalCoordTransform`, `Curcio1990Transform`,
+`Watson2014Transform`, `Watson2014DisplaceTransform`, `cart2pol`, `pol2cart`
 
 """
 import numpy as np

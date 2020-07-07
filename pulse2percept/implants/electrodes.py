@@ -51,7 +51,7 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
         ----------
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot
-        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None given, a new one will be created.
 
         Returns

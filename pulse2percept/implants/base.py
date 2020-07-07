@@ -77,11 +77,11 @@ class ProsthesisSystem(PrettyPrint):
 
         Parameters
         ----------
-        annotate : bool, optional, default: False
+        annotate : bool, optional
             Whether to scale the axes view to the data
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot to fit the implant
-        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object.
 

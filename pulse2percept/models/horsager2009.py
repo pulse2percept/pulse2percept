@@ -20,21 +20,21 @@ class Horsager2009Temporal(TemporalModel):
 
     Parameters
     ----------
-    dt : float, optional, default: 0.005 ms
+    dt : float, optional
         Sampling time step (ms)
-    tau1 : float, optional, default: 0.42 ms
+    tau1 : float, optional
         Time decay constant for the fast leaky integrater.
-    tau2 : float, optional, default: 45.25 ms
+    tau2 : float, optional
         Time decay constant for the charge accumulation.
-    tau3 : float, optional, default: 26.25 ms
+    tau3 : float, optional
         Time decay constant for the slow leaky integrator.
-    eps : float, optional, default: 2.25
+    eps : float, optional
         Scaling factor applied to charge accumulation. Common values at
         threshold: 2.25, suprathreshold: 8.73.
-    beta : float, optional, default: 3.43
+    beta : float, optional
         Power nonlinearity (exponent of the half-wave rectification).
         Common values at threshold: 3.43, suprathreshold: 0.83.
-    thresh_percept: float, optional, default: 0
+    thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
 
     """
@@ -95,20 +95,20 @@ class Horsager2009Model(Model):
 
     Parameters
     ----------
-    dt : float, optional, default: 0.005 ms
+    dt : float, optional
         Sampling time step (ms)
-    tau1 : float, optional, default: 0.42 ms
+    tau1 : float, optional
         Time decay constant for the fast leaky integrater.
-    tau2 : float, optional, default: 45.25 ms
+    tau2 : float, optional
         Time decay constant for the charge accumulation.
-    tau3 : float, optional, default: 26.25 ms
+    tau3 : float, optional
         Time decay constant for the slow leaky integrator.
-    eps : float, optional, default: 0.00225
+    eps : float, optional
         Scaling factor applied to charge accumulation. Common values at
         threshold: 0.00225, suprathreshold: 0.00873.
         Power nonlinearity (exponent of the half-wave rectification).
         Common values at threshold: 3.43, suprathreshold: 0.83.
-    thresh_percept: float, optional, default: 0
+    thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
 
     """

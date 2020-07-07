@@ -22,7 +22,7 @@ def get_data_dir(data_dir=None):
 
     Parameters
     ----------
-    data_dir : str | None
+    data_dir : str or None
         The path to the pulse2percept data directory.
     """
     if data_dir is None:
@@ -44,7 +44,7 @@ def clear_data_dir(data_dir=None):
 
     Parameters
     ----------
-    data_dir : str | None
+    data_dir : str or None
         The path to the pulse2percept data directory.
     """
     data_dir = get_data_dir(data_dir)
@@ -87,10 +87,10 @@ def fetch_url(url, file_path, progress_bar=_report_hook, remote_checksum=None):
         URL of file to download
     file_path: string
         Path to the local file that will be created
-    progress_bar : func callback, optional, default: built-in
+    progress_bar : func callback, optional
         A callback to a function ``func(count, block_size, total_size)`` that
         will display a progress bar.
-    remote_checksum : str, optional, default: None
+    remote_checksum : str, optional
         The expected SHA-256 checksum of the file.
     """
     urlretrieve(url, file_path, progress_bar)

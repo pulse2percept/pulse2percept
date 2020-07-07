@@ -260,7 +260,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
             A valid prosthesis system. A stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
-        t_percept: float or list of floats, optional, default: None
+        t_percept: float or list of floats, optional
             The time points at which to output a percept (ms).
             If None, ``implant.stim.time`` is used.
 
@@ -317,15 +317,15 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             up and down regulated until ``amp_th`` is found.
         bright_th : float
             Model output (brightness) that's considered "at threshold".
-        amp_range : (amp_lo, amp_hi), optional, default: (0, 999)
+        amp_range : (amp_lo, amp_hi), optional
             Range of amplitudes to search (uA).
-        amp_tol : float, optional, default: 1.0
+        amp_tol : float, optional
             Search will stop if candidate range of amplitudes is within
             ``amp_tol``
-        bright_tol : float, optional, default: 0.1
+        bright_tol : float, optional
             Search will stop if model brightness is within ``bright_tol`` of
             ``bright_th``
-        max_iter : int, optional, default: 100
+        max_iter : int, optional
             Search will stop after ``max_iter`` iterations
 
         Returns
@@ -362,7 +362,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             coordinates (microns)
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot to fit the implant
-        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object.
 
@@ -474,7 +474,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                : py: class: `~pulse2percept.models.Percept`
             Either a Stimulus or a Percept object. The temporal model will be
             applied to each spatial location in the stimulus/percept.
-        t_percept : float or list of floats, optional, default: None
+        t_percept : float or list of floats, optional
             The time points at which to output a percept (ms).
             If None, the percept will be output once very 20 ms (50 Hz frame
             rate).
@@ -556,15 +556,15 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             regulated until ``amp_th`` is found.
         bright_th : float
             Model output (brightness) that's considered "at threshold".
-        amp_range : (amp_lo, amp_hi), optional, default: (0, 999)
+        amp_range : (amp_lo, amp_hi), optional
             Range of amplitudes to search (uA).
-        amp_tol : float, optional, default: 1.0
+        amp_tol : float, optional
             Search will stop if candidate range of amplitudes is within
             ``amp_tol``
-        bright_tol : float, optional, default: 0.1
+        bright_tol : float, optional
             Search will stop if model brightness is within ``bright_tol`` of
             ``bright_th``
-        max_iter : int, optional, default: 100
+        max_iter : int, optional
             Search will stop after ``max_iter`` iterations
 
         Returns
@@ -791,7 +791,7 @@ class Model(PrettyPrint):
         implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
             A valid prosthesis system. A stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
-        t_percept: float or list of floats, optional, default: None
+        t_percept: float or list of floats, optional
             The time points at which to output a percept (ms).
             If None, ``implant.stim.time`` is used.
 
@@ -843,15 +843,15 @@ class Model(PrettyPrint):
             up and down regulated until ``amp_th`` is found.
         bright_th : float
             Model output (brightness) that's considered "at threshold".
-        amp_range : (amp_lo, amp_hi), optional, default: (0, 999)
+        amp_range : (amp_lo, amp_hi), optional
             Range of amplitudes to search (uA).
-        amp_tol : float, optional, default: 1.0
+        amp_tol : float, optional
             Search will stop if candidate range of amplitudes is within
             ``amp_tol``
-        bright_tol : float, optional, default: 0.1
+        bright_tol : float, optional
             Search will stop if model brightness is within ``bright_tol`` of
             ``bright_th``
-        max_iter : int, optional, default: 100
+        max_iter : int, optional
             Search will stop after ``max_iter`` iterations
 
         Returns

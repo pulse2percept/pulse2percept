@@ -75,18 +75,18 @@ class PRIMA(ProsthesisSystem):
 
     Parameters
     ----------
-    x : float, optional, default: 0
+    x : float, optional
         x coordinate of the array center (um)
-    y : float, optional: default: 0
+    y : float, optional
         y coordinate of the array center (um)
-    z: float || array_like, optional, default: -100
+    z: float or array_like, optional
         Distance of the array to the retinal surface (um). Either a list
         with 378 entries or a scalar.
-    rot : float, optional, default: 0
+    rot : float, optional
         Rotation angle of the array (rad). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
-    eye : {'LE', 'RE'}, optional, default: 'RE'
+    eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
 
     Notes
@@ -163,18 +163,18 @@ class PRIMA75(ProsthesisSystem):
 
     Parameters
     ----------
-    x : float, optional, default: 0
+    x : float, optional
         x coordinate of the array center (um)
-    y : float, optional: default: 0
+    y : float, optional
         y coordinate of the array center (um)
-    z: float || array_like, optional, default: -100
+    z: float or array_like, optional
         Distance of the array to the retinal surface (um). Either a list
         with 142 entries or a scalar.
-    rot : float, optional, default: 0
+    rot : float, optional
         Rotation angle of the array (rad). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
-    eye : {'LE', 'RE'}, optional, default: 'RE'
+    eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
 
     """
@@ -254,18 +254,18 @@ class PRIMA55(ProsthesisSystem):
 
     Parameters
     ----------
-    x : float, optional, default: 0
+    x : float, optional
         x coordinate of the array center (um)
-    y : float, optional: default: 0
+    y : float, optional
         y coordinate of the array center (um)
-    z: float || array_like, optional, default: -100
+    z: float or array_like, optional
         Distance of the array to the retinal surface (um). Either a list
         with 378 entries or a scalar.
-    rot : float, optional, default: 0
+    rot : float, optional
         Rotation angle of the array (rad). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
-    eye : {'LE', 'RE'}, optional, default: 'RE'
+    eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
 
     """
@@ -350,18 +350,18 @@ class PRIMA40(ProsthesisSystem):
 
     Parameters
     ----------
-    x : float, optional, default: 0
+    x : float, optional
         x coordinate of the array center (um)
-    y : float, optional: default: 0
+    y : float, optional
         y coordinate of the array center (um)
-    z: float || array_like, optional, default: -100
+    z: float or array_like, optional
         Distance of the array to the retinal surface (um). Either a list
         with 378 entries or a scalar.
-    rot : float, optional, default: 0
+    rot : float, optional
         Rotation angle of the array (rad). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
-    eye : {'LE', 'RE'}, optional, default: 'RE'
+    eye : {'LE', 'RE'}, optional
         Eye in which array is implanted.
 
     """
