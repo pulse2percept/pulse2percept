@@ -101,9 +101,9 @@ ax[1].set_title('PRIMA-40')
 # BVT Bionic Eye System (Bionic Vision Technologies)
 # --------------------------------------------------
 #
-# :py:class:`~pulse2percept.implants.BVA24` is a 24-channel suprachoroidal
+# :py:class:`~pulse2percept.implants.BVT24` is a 24-channel suprachoroidal
 # retinal prosthesis [Layton2014]_, which was developed by the Bionic Vision
-# Australia (BVA) Consortium and commercialized by Bionic Vision Technologies.
+# Australia Consortium and commercialized by Bionic Vision Technologies (BVT).
 #
 # Note that the array actually consists of a total of 35 electrodes:
 #
@@ -122,8 +122,8 @@ ax[1].set_title('PRIMA-40')
 
 fig, ax = plt.subplots(figsize=(10, 6))
 
-BVA24().plot(ax=ax, annotate=True)
-ax.set_title('BVA-24')
+BVT24().plot(ax=ax, annotate=True)
+ax.set_title('BVT-24')
 
 ###############################################################################
 # Alpha-IMS and Alpha-AMS Retinal Implant System (Retina Implant AG)

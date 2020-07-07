@@ -2,17 +2,17 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 from pulse2percept.implants.base import ProsthesisSystem
-from pulse2percept.implants.bva import BVA24
+from pulse2percept.implants.bvt import BVT24
 
 
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
 @pytest.mark.parametrize('r', (-45, 60))
-def test_BVA24(x, y, r):
-    # Create a BVA24 and make sure location is correct
+def test_BVT24(x, y, r):
+    # Create a BVT24 and make sure location is correct
     # Convert rotation angle to rad
     rot = np.deg2rad(r)
-    bva = BVA24(x=x, y=y, rot=rot)
+    bva = BVT24(x=x, y=y, rot=rot)
 
     # Slots:
     npt.assert_equal(hasattr(bva, '__slots__'), True)
@@ -52,32 +52,32 @@ def test_BVA24(x, y, r):
 
     # Right-eye implant:
     xc, yc = 500, -500
-    bva_re = BVA24(eye='RE', x=xc, y=yc)
+    bva_re = BVT24(eye='RE', x=xc, y=yc)
     npt.assert_equal(bva_re['1'].x < bva_re['6'].x, True)
     npt.assert_equal(bva_re['1'].y, bva_re['1'].y)
 
     # Left-eye implant:
     xc, yc = 500, -500
-    bva_le = BVA24(eye='LE', x=xc, y=yc)
+    bva_le = BVT24(eye='LE', x=xc, y=yc)
     npt.assert_equal(bva_le['1'].x > bva_le['6'].x, True)
     npt.assert_equal(bva_le['1'].y, bva_le['1'].y)
 
 
-def test_BVA24_stim():
+def test_BVT24_stim():
     # Assign a stimulus:
-    implant = BVA24()
+    implant = BVT24()
     implant.stim = {'1': 1}
     npt.assert_equal(implant.stim.electrodes, ['1'])
     npt.assert_equal(implant.stim.time, None)
     npt.assert_equal(implant.stim.data, [[1]])
 
     # You can also assign the stimulus in the constructor:
-    BVA24(stim={'1': 1})
+    BVT24(stim={'1': 1})
     npt.assert_equal(implant.stim.electrodes, ['1'])
     npt.assert_equal(implant.stim.time, None)
     npt.assert_equal(implant.stim.data, [[1]])
 
     # Set a stimulus via array:
-    implant = BVA24(stim=np.ones(35))
+    implant = BVT24(stim=np.ones(35))
     npt.assert_equal(implant.stim.shape, (35, 1))
     npt.assert_almost_equal(implant.stim.data, 1)
