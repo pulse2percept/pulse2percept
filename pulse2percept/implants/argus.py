@@ -8,7 +8,7 @@ from .electrode_arrays import ElectrodeGrid
 
 
 class ArgusI(ProsthesisSystem):
-    """Create an ArgusI array on the retina
+    """Create an Argus I array on the retina
 
     This function creates an Argus I array and places it on the retina
     such that the center of the array is located at 3D location (x,y,z),
@@ -27,10 +27,10 @@ class ArgusI(ProsthesisSystem):
     .. raw:: html
 
         <pre>
-          -y      A1 B1 C1 D1                     260 520 260 520
-          ^       A2 B2 C2 D2   where electrode   520 260 520 260
-          |       A3 B3 C3 D3   diameters are:    260 520 260 520
-          -->x    A4 B4 C4 D4                     520 260 520 260
+          -->x    A1 B1 C1 D1                     260 520 260 520
+          |       A2 B2 C2 D2   where electrode   520 260 520 260
+          v       A3 B3 C3 D3   diameters are:    260 520 260 520
+           y      A4 B4 C4 D4                     520 260 520 260
         </pre>
 
     Electrode order is: A1, B1, C1, D1, A2, B2, ..., D4.
@@ -62,7 +62,7 @@ class ArgusI(ProsthesisSystem):
 
     Examples
     --------
-    Create an ArgusI array centered on the fovea, at 100um distance from
+    Create an Argus I array centered on the fovea, at 100um distance from
     the retina:
 
     >>> from pulse2percept.implants import ArgusI
@@ -136,9 +136,9 @@ class ArgusI(ProsthesisSystem):
 
 
 class ArgusII(ProsthesisSystem):
-    """Create an ArgusII array on the retina
+    """Create an Argus II array on the retina
 
-    This function creates an ArgusII array and places it on the retina
+    This function creates an Argus II array and places it on the retina
     such that the center of the array is located at (x,y,z), given in
     microns, and the array is rotated by rotation angle ``rot``, given in
     radians.
@@ -154,10 +154,10 @@ class ArgusII(ProsthesisSystem):
 
         <pre>
                   A1 A2 A3 A4 A5 A6 A7 A8 A9 A10
-          -y      B1 B2 B3 B4 B5 B6 B7 B8 B9 B10
-          ^       C1 C2 C3 C4 C5 C6 C7 C8 C9 C10
-          |       D1 D2 D3 D4 D5 D6 D7 D8 D9 D10
-          -->x    E1 E2 E3 E4 E5 E6 E7 E8 E9 E10
+          -- x    B1 B2 B3 B4 B5 B6 B7 B8 B9 B10
+          |       C1 C2 C3 C4 C5 C6 C7 C8 C9 C10
+          v       D1 D2 D3 D4 D5 D6 D7 D8 D9 D10
+           y      E1 E2 E3 E4 E5 E6 E7 E8 E9 E10
                   F1 F2 F3 F4 F5 F6 F7 F8 F9 F10
         </pre>
 
@@ -228,7 +228,7 @@ class ArgusII(ProsthesisSystem):
         self.eye = eye
         # Unfortunately, in the left eye the labeling of columns is reversed...
         if eye == 'LE':
-            # FIXME: Would be better to have more flexibility in the naming
+            # TODO: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
             names = list(self.earray.keys())
             objects = list(self.earray.values())
