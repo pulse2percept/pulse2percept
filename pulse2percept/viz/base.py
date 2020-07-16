@@ -22,6 +22,9 @@ def scatter_correlation(x, y, marker='o', color='k', ax=None, autoscale=True):
     .. versionadded:: 0.7
 
     """
+    # If data are Pandas series, use their names to label the axes:
+    x_label = x.name if hasattr(x, 'name') else ''
+    y_label = y.name if hasattr(y, 'name') else ''
     x = np.asarray(x)
     y = np.asarray(y)
     # Ignore NaN:
@@ -45,6 +48,8 @@ def scatter_correlation(x, y, marker='o', color='k', ax=None, autoscale=True):
     a = ax.axis()
     ax.text(a[1], a[2], "$N$=%d\n$r$=%.3f, $p$=%s" % (len(y), rval, pval),
             va='bottom', ha='right')
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
     if autoscale:
         ax.autoscale(True)
     return ax

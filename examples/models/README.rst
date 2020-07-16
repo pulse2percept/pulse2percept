@@ -3,4 +3,4 @@
 Models
 ======
 
-Examples concerning the :mod:`pulse2percept.models` module.
+Examples using the :mod:`pulse2percept.models` module.

@@ -3,4 +3,4 @@
 Implants
 ========
 
-Examples concerning the :mod:`pulse2percept.implants` module.
+Examples using the :mod:`pulse2percept.implants` module.

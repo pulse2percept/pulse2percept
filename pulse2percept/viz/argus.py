@@ -1,14 +1,16 @@
 import numpy as np
-import scipy.stats as spst
-import skimage.io as skio
-import skimage.transform as skit
+import pandas as pd
+from skimage.io import imread
+from skimage.measure import moments as img_moments
+from skimage.transform import (estimate_transform as img_transform,
+                               warp as img_warp, SimilarityTransform)
 
-import pulse2percept.implants as p2pi
-import pulse2percept.retina as p2pr
-import pulse2percept.utils as p2pu
-
+import matplotlib.pyplot as plt
 from matplotlib import patches
 from pkg_resources import resource_filename
+
+from ..implants import ArgusI, ArgusII
+from ..utils import Watson2014Transform
 
 PATH_ARGUS1 = resource_filename('pulse2percept', 'viz/data/argus1.png')
 PATH_ARGUS2 = resource_filename('pulse2percept', 'viz/data/argus2.png')
@@ -58,129 +60,167 @@ PX_ARGUS2 = np.array([
 ])
 
 
-def plot_argus_phosphenes(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
-                          thresh_fg=0.95, show_fovea=True):
+def center_phosphene(img, loc=None):
+    """Center the image foreground
+
+    This function shifts the center of mass (CoM) to the image center.
+
+    Parameters
+    ----------
+    loc : (col, row), optional
+        The pixel location at which to center the CoM. By default, shifts
+        the CoM to the image center.
+
+    Returns
+    -------
+    stim : `ImageStimulus`
+        A copy of the stimulus object containing the centered image
+
+    """
+    # Calculate center of mass:
+    m = img_moments(img, order=1)
+    # No area found:
+    if np.isclose(m[0, 0], 0):
+        return img
+    # Center location:
+    if loc is None:
+        loc = np.array(self.img_shape[::-1]) / 2.0 - 0.5
+    # Shift the image by -centroid, +image center:
+    transl = (loc[0] - m[0, 1] / m[0, 0], loc[1] - m[1, 0] / m[0, 0])
+    tf_shift = SimilarityTransform(translation=transl)
+    img = img_warp(img, tf_shift.inverse)
+    return img
+
+
+def scale_phosphene(img, scaling_factor):
+    """Scale the image foreground
+
+    This function scales the image foreground (excluding black pixels)
+    by a factor.
+
+    Parameters
+    ----------
+    scaling_factor : float
+        Factory by which to scale the image
+
+    Returns
+    -------
+    stim : `ImageStimulus`
+        A copy of the stimulus object containing the scaled image
+
+    """
+    if scaling_factor <= 0:
+        raise ValueError("Scaling factor must be greater than zero")
+    # Calculate center of mass:
+    m = img_moments(img, order=1)
+    # No area found:
+    if np.isclose(m[0, 0], 0):
+        return img
+    # Shift the phosphene to (0, 0):
+    center_mass = np.array([m[0, 1] / m[0, 0], m[1, 0] / m[0, 0]])
+    tf_shift = SimilarityTransform(translation=-center_mass)
+    # Scale the phosphene:
+    tf_scale = SimilarityTransform(scale=scaling_factor)
+    # Shift the phosphene back to where it was:
+    tf_shift_inv = SimilarityTransform(translation=center_mass)
+    # Combine all three transforms:
+    tf = tf_shift + tf_scale + tf_shift_inv
+    img = img_warp(img, tf.inverse)
+    return img
+
+
+def plot_argus_phosphenes(X, argus, scale=1.0, axon_map=None, show_fovea=True,
+                          ax=None):
     """Plots phosphenes centered over the corresponding electrodes
 
     Parameters
     ----------
-    ax : axis
-        Matplotlib axis
-    subject : str
-        Subject ID, must be a valid value for column 'subject' in `Xymu` and
-        `subjectdata`.
-    Xymu : pd.DataFrame
-        DataFrame with required columns 'electrode', 'image'. May contain data
-        from more than one subject, in which case a column 'subject' must
-        exist. May also have a column 'img_shape' indicating the shape of each
-        phosphene image.
-    subjectdata : pd.DataFrame
-        DataFrame with Subject ID as index. Must have columns 'implant_x',
-        'implant_y', 'implant_rot', 'implant_type', and 'eye'. May also have a
-        column 'scale' containing a scaling factor applied to phosphene size.
-    alpha_bg : float
-        Alpha value for the array in the background
-    thresh_fg : float
-        Grayscale value above which to mask the drawings
+    X : pd.DataFrame
+    argus : :py:class:`~pulse2percept.implants.ArgusI` or :py:class:`~pulse2percept.implants.ArgusII`
+        Either an Argus I or Argus II implant
+    scale : float
+        Scaling factor to apply to the phosphenes
     show_fovea : bool
         Whether to indicate the location of the fovea with a square
+    ax : axis
+        Matplotlib axis
     """
-    for col in ['electrode', 'image']:
-        if col not in Xymu.columns:
-            raise ValueError('Xymu must contain column "%s".' % col)
-    # If subject column not present, choose all entries:
-    if 'subject' in Xymu.columns:
-        Xymu = Xymu[Xymu.subject == subject]
-    for col in ['implant_x', 'implant_y', 'implant_rot', 'implant_type',
-                'eye']:
-        if col not in subjectdata.columns:
-            raise ValueError('subjectdata must contain column "%s".' % col)
-    if subject not in subjectdata.index:
-        raise ValueError('Subject "%s" not an index in subjectdata.' % subject)
-    if 'scale' not in subjectdata.columns:
-        print("'scale' not in subjectdata, setting scale=1.0")
-        subjectdata['scale'] = 1.0
+    if not isinstance(X, pd.DataFrame):
+        raise TypeError('"X" must be a Pandas DataFrame, not %s.' % type(X))
+    if not all(col in X.columns for col in ['electrode', 'image']):
+        raise ValueError('"X" must have columns "electrode" and "image".')
+    if not isinstance(argus, (ArgusI, ArgusII)):
+        raise TypeError('"argus" must be an Argus I or Argus II implant, not '
+                        '%s.' % type(argus))
+    if ax is None:
+        ax = plt.gca()
+    alpha_bg = 0.5  # alpha value for the array in the background
+    thresh_fg = 0.95  # Grayscale value above which to mask the drawings
 
-    eye = subjectdata.loc[subject, 'eye']
-
-    # Choose the appropriate image / electrode locations based on implant type:
-    implant_type = subjectdata.loc[subject, 'implant_type']
-    is_argus2 = isinstance(implant_type(), p2pi.ArgusII)
-    if is_argus2:
-        px_argus = PX_ARGUS2
-        img_argus = skio.imread(IMG_ARGUS2)
-    else:
+    if isinstance(argus, ArgusI):
         px_argus = PX_ARGUS1
-        img_argus = skio.imread(IMG_ARGUS1)
+        img_argus = imread(PATH_ARGUS1)
+    else:
+        px_argus = PX_ARGUS2
+        img_argus = imread(PATH_ARGUS2)
 
     # To simulate an implant in a left eye, flip the image left-right (along
     # with the electrode x-coordinates):
-    if eye == 'LE':
+    if argus.eye == 'LE':
         img_argus = np.fliplr(img_argus)
         px_argus[:, 0] = img_argus.shape[1] - px_argus[:, 0] - 1
 
-    # Create an instance of the array using p2p:
-    argus = implant_type(x_center=subjectdata.loc[subject, 'implant_x'],
-                         y_center=subjectdata.loc[subject, 'implant_y'],
-                         rot=subjectdata.loc[subject, 'implant_rot'],
-                         eye=eye)
-
     # Add some padding to the output image so the array is not cut off:
-    padding = 2000  # microns
-    x_range = (p2pr.ret2dva(np.min([e.x_center for e in argus]) - padding),
-               p2pr.ret2dva(np.max([e.x_center for e in argus]) + padding))
-    y_range = (p2pr.ret2dva(np.min([e.y_center for e in argus]) - padding),
-               p2pr.ret2dva(np.max([e.y_center for e in argus]) + padding))
-
-    # If img_shape column not present, choose shape of first entry:
-    if 'img_shape' in Xymu.columns:
-        out_shape = Xymu.img_shape.unique()[0]
-    else:
-        out_shape = Xymu.image.values[0].shape
+    pad = 2000  # microns
+    x_el = [e.x for e in argus.values()]
+    y_el = [e.y for e in argus.values()]
+    x_min = Watson2014Transform.ret2dva(np.min(x_el) - pad)
+    x_max = Watson2014Transform.ret2dva(np.max(x_el) + pad)
+    y_min = Watson2014Transform.ret2dva(np.min(y_el) - pad)
+    y_max = Watson2014Transform.ret2dva(np.max(y_el) + pad)
 
     # Coordinate transform from degrees of visual angle to output, and from
     # image coordinates to output image:
     pts_in = []
     pts_dva = []
     pts_out = []
-    for xy, e in zip(px_argus, argus):
+    out_shape = X.image.values[0].shape
+    for xy, e in zip(px_argus, argus.values()):
+        x_dva, y_dva = Watson2014Transform.ret2dva([e.x, e.y])
+        x_out = (x_dva - x_min) / (x_max - x_min) * (out_shape[1] - 1)
+        y_out = (y_dva - y_min) / (y_max - y_min) * (out_shape[0] - 1)
         pts_in.append(xy)
-        dva = p2pr.ret2dva([e.x_center, e.y_center])
-        pts_dva.append(dva)
-        xout = (dva[0] - x_range[0]) / \
-            (x_range[1] - x_range[0]) * (out_shape[1] - 1)
-        yout = (dva[1] - y_range[0]) / \
-            (y_range[1] - y_range[0]) * (out_shape[0] - 1)
-        pts_out.append([xout, yout])
-    dva2out = skit.estimate_transform('similarity', np.array(pts_dva),
-                                      np.array(pts_out))
-    argus2out = skit.estimate_transform('similarity', np.array(pts_in),
-                                        np.array(pts_out))
+        pts_dva.append([x_dva, y_dva])
+        pts_out.append([x_out, y_out])
+    pts_in = np.array(pts_in)
+    pts_dva = np.array(pts_dva)
+    pts_out = np.array(pts_out)
+    dva2out = img_transform('similarity', pts_dva, pts_out)
+    argus2out = img_transform('similarity', pts_in, pts_out)
 
-    # Top left, top right, bottom left, bottom right:
-    x_range = subjectdata.loc[subject, 'xrange']
-    y_range = subjectdata.loc[subject, 'yrange']
+    # Top left, top right, bottom left, bottom right corners:
+    x_range = X.img_x_dva
+    y_range = X.img_y_dva
     pts_dva = [[x_range[0], y_range[0]], [x_range[0], y_range[1]],
                [x_range[1], y_range[0]], [x_range[1], y_range[1]]]
 
     # Calculate average drawings, but don't binarize:
     all_imgs = np.zeros(out_shape)
-    for _, row in Xymu.iterrows():
-        e_pos = p2pr.ret2dva((argus[row['electrode']].x_center,
-                              argus[row['electrode']].y_center))
+    num_imgs = X.groupby('electrode')['image'].count()
+    for _, row in X.iterrows():
+        e_pos = Watson2014Transform.ret2dva((argus[row['electrode']].x,
+                                             argus[row['electrode']].y))
         align_center = dva2out(e_pos)[0]
-        img_drawing = imgproc.scale_phosphene(
-            row['image'], subjectdata.loc[subject, 'scale']
-        )
-        img_drawing = imgproc.center_phosphene(
-            img_drawing, center=align_center[::-1]
-        )
-        all_imgs += img_drawing
-    all_imgs = 1 - np.minimum(1, np.maximum(0, all_imgs))
+        img_drawing = scale_phosphene(row['image'], scale)
+        img_drawing = center_phosphene(img_drawing, loc=align_center)
+        # We normalize by the number of phosphenes per electrode, so that if
+        # all phosphenes are the same, their brightness would add up to 1:
+        all_imgs += 1.0 / num_imgs[row['electrode']] * img_drawing
+    all_imgs = 1 - all_imgs
 
     # Draw array schematic with specific alpha level:
-    img_arr = skit.warp(img_argus, argus2out.inverse, cval=1.0,
-                        output_shape=out_shape)
+    img_arr = img_warp(img_argus, argus2out.inverse, cval=1.0,
+                       output_shape=out_shape)
     img_arr[:, :, 3] = alpha_bg
 
     # Replace pixels where drawings are dark enough, set alpha=1:
@@ -190,9 +230,25 @@ def plot_argus_phosphenes(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
         img_arr[rr, cc, channel] = all_imgs[rr, cc]
     img_arr[rr, cc, 3] = 1
 
-    ax.imshow(img_arr, cmap='gray')
+    ax.imshow(img_arr, cmap='gray', zorder=1)
 
     if show_fovea:
-        fovea = fovea = dva2out([0, 0])[0]
-        ax.scatter(fovea[0], fovea[1], s=100,
-                   marker='s', c='w', edgecolors='k')
+        fovea = dva2out([0, 0])[0]
+        ax.scatter(*fovea, s=100, marker='s', c='w', edgecolors='k', zorder=99)
+
+    if axon_map is not None:
+        axon_bundles = axon_map.grow_axon_bundles(n_bundles=100, prune=False)
+        # Draw axon pathways:
+        for bundle in axon_bundles:
+            # Flip y upside down for dva:
+            bundle = Watson2014Transform.ret2dva(bundle) * [1, -1]
+            # Trim segments outside the drawing window:
+            idx = np.logical_and(np.logical_and(bundle[:, 0] >= x_min,
+                                                bundle[:, 0] <= x_max),
+                                 np.logical_and(bundle[:, 1] >= y_min,
+                                                bundle[:, 1] <= y_max))
+            bundle = dva2out(bundle)
+            ax.plot(bundle[idx, 0], bundle[idx, 1], c=(0.6, 0.6, 0.6),
+                    linewidth=2, zorder=1)
+
+    return ax

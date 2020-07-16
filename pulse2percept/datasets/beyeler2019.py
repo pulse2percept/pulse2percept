@@ -17,8 +17,8 @@ except ImportError:
     has_h5py = False
 
 
-def fetch_beyeler2019(data_path=None, shuffle=False, random_state=0,
-                      download_if_missing=True):
+def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
+                      shuffle=False, random_state=0, download_if_missing=True):
     """Load the phosphene drawing dataset from [Beyeler2019]_
 
     Download the phosphene drawing dataset described in [Beyeler2019]_ from
@@ -53,6 +53,12 @@ def fetch_beyeler2019(data_path=None, shuffle=False, random_state=0,
 
     Parameters
     ----------
+    subjects : str | list of strings | None, optional
+        Select data from a subject or list of subjects. By default, all
+        subjects are selected.
+    electrodes : str | list of strings | None, optional
+        Select data from a single electrode or a list of electrodes.
+        By default, all electrodes are selected.
     data_path: string, optional
         Specify another download and cache folder for the dataset. By default
         all pulse2percept data is stored in '~/pulse2percept_data' subfolders.
@@ -95,13 +101,11 @@ def fetch_beyeler2019(data_path=None, shuffle=False, random_state=0,
     # Open the HDF5 file:
     f = h5py.File(file_path, 'r')
 
-    # Fields names are 'subject.field_name', so we split by '.' to find the
-    # subject ID:
-    subjects = np.unique([k.split('.')[0] for k in f.keys()])
-
     # Create a DataFrame for every subject, then concatenate:
     dfs = []
-    for subject in subjects:
+    # Fields names are 'subject.field_name', so we split by '.' to find the
+    # subject ID:
+    for subject in np.unique([k.split('.')[0] for k in f.keys()]):
         df = pd.DataFrame()
         df['subject'] = subject
         for key in f.keys():
@@ -124,6 +128,24 @@ def fetch_beyeler2019(data_path=None, shuffle=False, random_state=0,
     df['img_shape'] = df.apply(lambda x: (x['img_shape_x'], x['img_shape_y']),
                                axis=1)
     df.drop(columns=['img_shape_x', 'img_shape_y'], inplace=True)
+
+    # Select subset of data:
+    idx = np.ones_like(df.index, dtype=np.bool)
+    if subjects is not None:
+        if isinstance(subjects, str):
+            subjects = [subjects]
+        idx_subject = np.zeros_like(df.index, dtype=np.bool)
+        for subject in subjects:
+            idx_subject |= df.subject == subject
+        idx &= idx_subject
+    if electrodes is not None:
+        if isinstance(electrodes, str):
+            electrodes = [electrodes]
+        idx_electrode = np.zeros_like(df.index, dtype=np.bool)
+        for electrode in electrodes:
+            idx_electrode |= df.electrode == electrode
+        idx &= idx_electrode
+    df = df[idx]
 
     if shuffle:
         df = df.sample(n=len(df), random_state=random_state)
