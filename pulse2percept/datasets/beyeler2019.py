@@ -39,11 +39,11 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     electrode             Electrode ID, A1-F10
     image                 Phosphene drawing
     img_shape             x,y shape of the phosphene drawing
-    date                  Experiment date
+    date                  Experiment date (YYYY/mm/dd)
     stim_class            Stimulus type used to stimulate the array
     amp                   Pulse amplitude used (x Threshold)
-    freq                  Pulse frequency used
-    pdur                  Pulse duration used
+    freq                  Pulse frequency used (Hz)
+    pdur                  Pulse duration used (ms)
     area                  Phosphene area (see [Beyeler2019]_ for details)
     orientation           Phosphene orientation (see [Beyeler2019]_)
     eccentricity          Phosphene elongation (see [Beyeler2019]_)

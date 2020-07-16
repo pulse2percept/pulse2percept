@@ -5,15 +5,20 @@ Threshold data from Horsager et al. (2009)
 
 This example shows how to use the Horsager et al. (2009) dataset.
 
-pulse2percept provides all the threshold data published in [Horsager2009]_.
-This paper used a set of psychophysical detection tasks to determine perceptual
-thresholds in Argus I users.
-A typical task involved turning on a single electrode in the array, and asking
+[Horsager2009]_ used a set of psychophysical detection tasks to determine
+perceptual thresholds in two Argus I users.
+
+.. important ::
+
+	You will need to install `Pandas <https://pandas.pydata.org>`_
+	(``pip install pandas``) for this dataset.
+
+A typical task involved turning on a single electrode in the array and asking
 the subject if they saw something. If the subject did not detect a visual
 percept (i.e., a phosphene), the stimulus amplitude was increased.
 Using a staircase procedure, the researchers were able to determine the current
-at which subjects were able to detect a phosphene 50% of the time.
-This current is called the threshold current, and it is stored in the
+amplitude at which subjects were able to detect a phosphene 50% of the time.
+This amplitude is called the threshold current, and it is stored in the
 "stim_amp" column of the dataset.
 
 .. note ::
@@ -28,7 +33,7 @@ Loading the dataset
 
 The dataset can be loaded as a Pandas ``DataFrame``:
 """
-# sphinx_gallery_thumbnail_number = 3
+# sphinx_gallery_thumbnail_number = 1
 
 from pulse2percept.datasets import load_horsager2009
 data = load_horsager2009()
@@ -36,7 +41,7 @@ print(data)
 
 ###############################################################################
 # Inspecting the DataFrame tells us that there are 552 threshold measurements
-# (the rows) each with 21 different attributes.
+# (the rows) each with 21 different attributes (the columns).
 #
 # These attributes include specifiers such as "subject", "electrode", and
 # "stim_type". We can print all column names using:
@@ -52,7 +57,7 @@ data.columns
 # For example, "stim_type" corresponds to the different stimulus types that
 # were used in the paper:
 
-list(data.stim_type.unique())
+data.stim_type.unique()
 
 ###############################################################################
 # The first entry, "single_pulse", corresponds to the single biphasic pulse
@@ -71,7 +76,7 @@ print(data[data.stim_type == 'single_pulse'])
 # An alternative to indexing into the DataFrame is to load only a subset of
 # the data:
 
-load_horsager2009(stim_types='single_pulse')
+print(load_horsager2009(stim_types='single_pulse'))
 
 ###############################################################################
 # Plotting the data
@@ -117,4 +122,10 @@ from pulse2percept.stimuli import BiphasicPulse
 stim = BiphasicPulse(row['stim_amp'], row['pulse_dur'],
                      interphase_dur=row['interphase_dur'],
                      stim_dur=row['stim_dur'], electrode=row['electrode'])
-stim.plot()
+
+
+###############################################################################
+# We can zoom in on the first 10 ms to see the stimulus waveform:
+
+import numpy as np
+stim.plot(time=np.arange(0, 10, 0.01))

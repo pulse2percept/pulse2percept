@@ -147,8 +147,12 @@ def plot_argus_phosphenes(X, argus, scale=1.0, axon_map=None, show_fovea=True,
     """
     if not isinstance(X, pd.DataFrame):
         raise TypeError('"X" must be a Pandas DataFrame, not %s.' % type(X))
-    if not all(col in X.columns for col in ['electrode', 'image']):
-        raise ValueError('"X" must have columns "electrode" and "image".')
+    if not all(col in X.columns for col in ['electrode', 'image', 'img_x_dva',
+                                            'img_y_dva']):
+        raise ValueError('"X" must have columns "electrode", "image", '
+                         '"img_x_dva", and "img_y_dva".')
+    if len(X.subject.unique()) > 1:
+        raise ValueError('"X" cannot contain data from more than one subject.')
     if not isinstance(argus, (ArgusI, ArgusII)):
         raise TypeError('"argus" must be an Argus I or Argus II implant, not '
                         '%s.' % type(argus))
