@@ -15,8 +15,6 @@ from .electrode_arrays import ElectrodeGrid
 class PhotovoltaicPixel(HexElectrode):
     """Photovoltaic pixel
 
-    .. versionadded:: 0.7
-
     Parameters
     ----------
     x/y/z : double
@@ -26,6 +24,9 @@ class PhotovoltaicPixel(HexElectrode):
     a : double
         Length of line drawn from the center of the hexagon to the midpoint of
         one of its sides.
+
+    .. versionadded:: 0.7
+
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('r', 'a')
@@ -59,8 +60,6 @@ class PhotovoltaicPixel(HexElectrode):
 class PRIMA(ProsthesisSystem):
     """Create a PRIMA-100 array on the retina
 
-    .. versionadded:: 0.7
-
     This class creates a PRIMA array with 378 photovoltaic pixels (each
     100um in diameter) as used in the clinical trial [Palanker2020]_, and
     places it in the subretinal space such that the center of the array is
@@ -93,6 +92,8 @@ class PRIMA(ProsthesisSystem):
     -----
     *  The diameter of the active electrode and the trench width were estimated
        from Fig.1 in [Palanker2020]_.
+
+    .. versionadded:: 0.7
 
     """
     # Frozen class: User cannot add more class attributes
@@ -147,8 +148,6 @@ class PRIMA(ProsthesisSystem):
 class PRIMA75(ProsthesisSystem):
     """Create a PRIMA-75 array on the retina
 
-    .. versionadded:: 0.7
-
     This class creates a PRIMA array with 142 photovoltaic pixels (each 75um
     in diameter) as described in [Lorach2015]_, and places it in the subretinal
     space, such that that the center of the array is located at 3D location
@@ -176,6 +175,8 @@ class PRIMA75(ProsthesisSystem):
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
+
+    .. versionadded:: 0.7
 
     """
     # Frozen class: User cannot add more class attributes
@@ -233,8 +234,6 @@ class PRIMA75(ProsthesisSystem):
 class PRIMA55(ProsthesisSystem):
     """Create a PRIMA-55 array on the retina
 
-    .. versionadded:: 0.7
-
     This class creates a PRIMA array with 273 photovoltaic pixels (each 55um
     in diameter), and places it in the subretinal space, such that that the
     center of the array is located at 3D location (x,y,z), given in microns,
@@ -267,6 +266,8 @@ class PRIMA55(ProsthesisSystem):
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
+
+    .. versionadded:: 0.7
 
     """
     # Frozen class: User cannot add more class attributes
@@ -329,8 +330,6 @@ class PRIMA55(ProsthesisSystem):
 class PRIMA40(ProsthesisSystem):
     """Create a PRIMA-40 array on the retina
 
-    .. versionadded:: 0.7
-
     This class creates a PRIMA array with 532 photovoltaic pixels (each 40um
     in diameter), and places it in the subretinal space, such that that the
     center of the array is located at 3D location (x,y,z), given in microns,
@@ -363,6 +362,8 @@ class PRIMA40(ProsthesisSystem):
         system.
     eye : {'LE', 'RE'}, optional
         Eye in which array is implanted.
+
+    .. versionadded:: 0.7
 
     """
     # Frozen class: User cannot add more class attributes

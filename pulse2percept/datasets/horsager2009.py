@@ -13,8 +13,6 @@ def load_horsager2009(subjects=None, electrodes=None, stim_types=None,
                       shuffle=False, random_state=0):
     """Load data from [Horsager2009]_
 
-    .. versionadded:: 0.6
-
     Load the threshold data described in [Horsager2009]_. Average thresholds
     were extracted from the figures of the paper using WebplotDigitizer.
 
@@ -81,6 +79,9 @@ def load_horsager2009(subjects=None, electrodes=None, stim_types=None,
     -------
     data: pd.DataFrame
         The whole dataset is returned in a 552x21 Pandas DataFrame
+
+    .. versionadded:: 0.6
+
     """
     if not has_pandas:
         raise ImportError("You do not have pandas installed. "

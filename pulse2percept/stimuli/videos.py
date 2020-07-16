@@ -1,4 +1,4 @@
-"""`BostonTrain`"""
+"""`VideoStimulus`, `BostonTrain`"""
 from os.path import dirname, join
 import numpy as np
 from skimage.color import rgb2gray
@@ -12,8 +12,6 @@ from ..utils import parfor
 
 class VideoStimulus(Stimulus):
     """VideoStimulus
-
-    .. versionadded:: 0.7
 
     A stimulus made from a movie file, where each pixel gets assigned to an
     electrode, and grayscale values in the range [0, 255] get assigned to
@@ -76,6 +74,8 @@ class VideoStimulus(Stimulus):
 
     extrapolate : bool, optional, default: False
         Whether to extrapolate data points outside the given range.
+
+    .. versionadded:: 0.7
 
     """
 

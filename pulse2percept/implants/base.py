@@ -41,6 +41,9 @@ class ProsthesisSystem(PrettyPrint):
 
         A stimulus can also be assigned later (see
         :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim`).
+
+    .. versionadded:: 0.6
+
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_earray', '_stim', '_eye')

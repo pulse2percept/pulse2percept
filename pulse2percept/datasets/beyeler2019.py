@@ -21,8 +21,6 @@ def fetch_beyeler2019(data_path=None, shuffle=False, random_state=0,
                       download_if_missing=True):
     """Load the phosphene drawing dataset from [Beyeler2019]_
 
-    .. versionadded:: 0.6
-
     Download the phosphene drawing dataset described in [Beyeler2019]_ from
     https://osf.io/6v2tb (263MB) to ``data_path``. By default, all datasets are
     stored in '~/pulse2percept_data/', but a different path can be specified.
@@ -71,6 +69,9 @@ def fetch_beyeler2019(data_path=None, shuffle=False, random_state=0,
     -------
     data: pd.DataFrame
         The whole dataset is returned in a 400x16 Pandas DataFrame
+
+    .. versionadded:: 0.6
+
     """
     if not has_h5py:
         raise ImportError("You do not have h5py installed. "

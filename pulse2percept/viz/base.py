@@ -19,9 +19,9 @@ def scatter_correlation(x, y, marker='o', color='k', ax=None, autoscale=True):
     autoscale : {True, False}
         Flag whether to automatically adjust the axis limits
 
+    .. versionadded:: 0.7
+
     """
-    if ax is None:
-        ax = plt.gca()
     x = np.asarray(x)
     y = np.asarray(y)
     # Ignore NaN:
@@ -30,10 +30,11 @@ def scatter_correlation(x, y, marker='o', color='k', ax=None, autoscale=True):
     y = y[~isnan]
     if not np.all(x.shape == y.shape):
         raise ValueError("x and y must have the same shape")
-    # Need at least two data points to fit the regression curve:
     if len(x) < 2:
-        return
+        raise ValueError("x and y must at least have 2 data points.")
     # Scatter plot the data:
+    if ax is None:
+        ax = plt.gca()
     ax.scatter(x, y, marker=marker, s=50, c=color, edgecolors='w', alpha=0.5)
     # Fit the regression curve:
     slope, intercept, rval, pval, _ = spst.linregress(x, y)
@@ -50,7 +51,7 @@ def scatter_correlation(x, y, marker='o', color='k', ax=None, autoscale=True):
 
 
 def correlation_matrix(X, cols=None, dropna=True, ax=None):
-    """Plot feature correlation matrix
+    """Plot feature correlation matrix (requires seaborn)
 
     Parameters
     ----------
@@ -64,12 +65,16 @@ def correlation_matrix(X, cols=None, dropna=True, ax=None):
         A Matplotlib Axes object or a list thereof (one per electrode to
         plot). If None, a new Axes object will be created.
 
+    .. versionadded:: 0.7
+
     """
     try:
         import seaborn as sns
     except ImportError:
         raise ImportError("This function requires seaborn. "
                           "You can install it via $ pip install seaborn.")
+    if not isinstance(X, pd.DataFrame):
+        raise TypeError('"X" must be a Pandas DataFrame, not %s.' % type(X))
     if cols is not None:
         X = X[cols]
     # Calculate column-wise correlation:
