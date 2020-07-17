@@ -8,8 +8,6 @@ from .base import Stimulus
 class MonophasicPulse(Stimulus):
     """Monophasic pulse
 
-    .. versionadded:: 0.6
-
     A simple stimulus consisting of a single monophasic pulse (either
     cathodic/negative or anodic/positive).
 
@@ -46,6 +44,8 @@ class MonophasicPulse(Stimulus):
 
     >>> from pulse2percept.stimuli import MonophasicPulse
     >>> pulse = MonophasicPulse(-20, 1, delay_dur=2, stim_dur=10)
+
+    .. versionadded:: 0.6
 
     """
 
@@ -92,8 +92,6 @@ class MonophasicPulse(Stimulus):
 class BiphasicPulse(Stimulus):
     """Symmetric biphasic pulse
 
-    .. versionadded:: 0.6
-
     A simple stimulus consisting of a single biphasic pulse: a cathodic and an
     anodic phase, optionally separated by an interphase gap.
     Both cathodic and anodic phases have the same duration ("symmetric").
@@ -136,6 +134,8 @@ class BiphasicPulse(Stimulus):
 
     >>> from pulse2percept.stimuli import BiphasicPulse
     >>> pulse = BiphasicPulse(-20, 1, delay_dur=2, stim_dur=10)
+
+    .. versionadded:: 0.6
 
     """
 
@@ -189,8 +189,6 @@ class BiphasicPulse(Stimulus):
 class AsymmetricBiphasicPulse(Stimulus):
     """Asymmetric biphasic pulse
 
-    .. versionadded:: 0.6
-
     A simple stimulus consisting of a single biphasic pulse: a cathodic and an
     anodic phase, optionally separated by an interphase gap.
     The two pulse phases can have different amplitudes and duration
@@ -239,6 +237,8 @@ class AsymmetricBiphasicPulse(Stimulus):
     >>> from pulse2percept.stimuli import AsymmetricBiphasicPulse
     >>> pulse = AsymmetricBiphasicPulse(-40, 10, 1, 4, interphase_dur=1,
     ...                                 delay_dur=2, stim_dur=15)
+
+    .. versionadded:: 0.6
 
     """
 

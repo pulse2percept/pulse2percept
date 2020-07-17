@@ -4,4 +4,5 @@
 Example Gallery
 ===============
 
-Miscellaneous and introductory examples for pulse2percept.
+This gallery contains a number of usage examples and case studies to highlight
+the ease-of-use and flexibility of pulse2percept.

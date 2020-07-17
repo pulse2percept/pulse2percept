@@ -271,11 +271,12 @@ model.build(xrange=(-7, 7), yrange=(-7, 7), xystep=0.1, rho=50)
 # each frame of the movie) is primarily determined by the scoreboard model, but
 # the temporal evolution of these frames is determined by the Nanduri model.
 #
-# By default, the temporal model will use a simulation step size of 5ns.
-# This is necessary to solve the model equations in time, but we are only
-# interested in the percept every (e.g.) 1ms, so we ask for the percept to be
-# output at ``t_percept`` = 0, 1, ..., 499 ms:
-percept = model.predict_percept(implant, t_percept=np.arange(500))
+# By default, the model will output a movie frame every 20 ms (corresponding to
+# a 50 Hz frame rate). The frame rate can be adjusted by passing a list of
+# time points to :py:meth:`~pulse2percept.Model.predict_percept` (e.g.,
+# ``t_percept=np.arange(500)`` to get an output every millisecond):
+
+percept = model.predict_percept(implant)
 
 ##############################################################################
 # The output of the model is a :py:class:`~pulse2percept.percepts.Percept`

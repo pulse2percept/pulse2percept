@@ -28,6 +28,7 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
     ...         return {'a': self.a, 'b': self.b}
     >>> MyClass(1, 2)
     MyClass(a=1, b=2)
+
     """
     __slots__ = ()
 
@@ -139,7 +140,6 @@ class Frozen(object):
 
 class Data(PrettyPrint):
     """N-dimensional data container
-
 
     Parameters
     ----------

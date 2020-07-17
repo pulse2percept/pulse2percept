@@ -38,6 +38,8 @@ def bisect(y_target, func, args=None, kwargs=None, x_lo=0, x_hi=1,
     *  Does **not** require ``x_lo`` and ``x_hi`` to have opposite signs as in
        the conventional bisection method.
 
+    .. versionadded:: 0.7
+
     """
     if x_lo >= x_hi:
         raise ValueError("x_lo (%f) must be lower than x_hi "

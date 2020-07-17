@@ -277,6 +277,7 @@ sphinx_gallery_conf = {
     'subsection_order': ExplicitOrder(['../examples/implants',
                                        '../examples/stimuli',
                                        '../examples/models',
+                                       '../examples/datasets',
                                        '../examples/developers'])
 }
 

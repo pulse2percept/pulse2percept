@@ -11,8 +11,6 @@ from .pulses import BiphasicPulse, AsymmetricBiphasicPulse
 class PulseTrain(Stimulus):
     """Generic pulse train
 
-    .. versionadded:: 0.6
-
     Can be used to concatenate single pulses into a pulse train.
 
     .. seealso ::
@@ -45,6 +43,8 @@ class PulseTrain(Stimulus):
     *  If the pulse train frequency does not exactly divide ``stim_dur``, the
        number of pulses will be rounded down. For example, when trying to fit
        a 11 Hz pulse train into a 100 ms window, there will be 9 pulses.
+
+    .. versionadded:: 0.6
 
     """
 
@@ -115,8 +115,6 @@ class PulseTrain(Stimulus):
 class BiphasicPulseTrain(Stimulus):
     """Symmetric biphasic pulse train
 
-    .. versionadded:: 0.6
-
     A train of symmetric biphasic pulses.
 
     Parameters
@@ -161,6 +159,8 @@ class BiphasicPulseTrain(Stimulus):
     *  A pulse train will be considered "charge-balanced" if its net current is
        smaller than 10 picoamps.
 
+    .. versionadded:: 0.6
+
     """
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
@@ -190,8 +190,6 @@ class BiphasicPulseTrain(Stimulus):
 
 class AsymmetricBiphasicPulseTrain(Stimulus):
     """Asymmetric biphasic pulse
-
-    .. versionadded:: 0.6
 
     A simple stimulus consisting of a single biphasic pulse: a cathodic and an
     anodic phase, optionally separated by an interphase gap.
@@ -231,6 +229,8 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
     metadata : dict
         A dictionary of meta-data
 
+    .. versionadded:: 0.6
+
     """
 
     def __init__(self, freq, amp1, amp2, phase_dur1, phase_dur2,
@@ -261,8 +261,6 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
 
 class BiphasicTripletTrain(Stimulus):
     """Biphasic pulse triplets
-
-    .. versionadded:: 0.6
 
     A train of symmetric biphasic pulse triplets.
 
@@ -308,6 +306,8 @@ class BiphasicTripletTrain(Stimulus):
     *  A pulse train will be considered "charge-balanced" if its net current is
        smaller than 10 picoamps.
 
+    .. versionadded:: 0.6
+]
     """
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,

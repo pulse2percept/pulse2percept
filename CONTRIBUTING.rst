@@ -285,6 +285,24 @@ choice, e.g.:
 
 .. _NumPy docstrings: https://numpydoc.readthedocs.io/en/latest/format.html 
 
+.. _dev-contributing-changes:
+
+Documenting API changes
+=======================
+
+API changes that affect the user should be documented in order to help the user
+sort out version differences (see `reST directives`_):
+
+*  Whenever a new API call is added, include a ``.. versionadded::`` statement
+   at the end of the docstring that mentions the pulse2percept version where
+   the feature first appeared.
+*  Whenever the API of a function/class is changed, include a
+   ``.. versionchanged::`` statement at the end of the docstring that explains
+   what/how functionality changed in a particular pulse2percept version.
+
+.. _reST directives: https://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html
+
+
 .. _dev-contributing-test:
 
 Testing your code

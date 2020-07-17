@@ -23,8 +23,6 @@ from .pulses import BiphasicPulse
 class ImageStimulus(Stimulus):
     """ImageStimulus
 
-    .. versionadded:: 0.7
-
     A stimulus made from an image, where each pixel gets assigned to an
     electrode, and grayscale values in the range [0, 255] get converted to
     activation values in the range [0, 1].
@@ -70,6 +68,8 @@ class ImageStimulus(Stimulus):
 
     compress : bool, optional
         If True, will remove pixels with 0 grayscale value.
+
+    .. versionadded:: 0.7
 
     """
     __slots__ = ('img_shape',)
@@ -524,8 +524,6 @@ class ImageStimulus(Stimulus):
 class LogoBVL(ImageStimulus):
     """Bionic Vision Lab (BVL) logo
 
-    .. versionadded:: 0.7
-
     Load the 576x720x4 Bionic Vision Lab (BVL) logo.
 
     Parameters
@@ -544,6 +542,8 @@ class LogoBVL(ImageStimulus):
 
     metadata : dict, optional, default: None
         Additional stimulus metadata can be stored in a dictionary.
+
+    .. versionadded:: 0.7
 
     """
 
@@ -564,8 +564,6 @@ class LogoBVL(ImageStimulus):
 class LogoUCSB(ImageStimulus):
     """UCSB logo
 
-    .. versionadded:: 0.7
-
     Load a 324x727 white-on-black logo of the University of California, Santa
     Barbara.
 
@@ -585,6 +583,8 @@ class LogoUCSB(ImageStimulus):
 
     metadata : dict, optional, default: None
         Additional stimulus metadata can be stored in a dictionary.
+
+    .. versionadded:: 0.7
 
     """
 

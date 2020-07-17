@@ -9,8 +9,6 @@ from .electrode_arrays import ElectrodeArray
 class BVT24(ProsthesisSystem):
     """24-channel suprachoroidal retinal prosthesis
 
-    .. versionadded:: 0.6
-
     This class creates a 24-channel suprachoroidal retinal prosthesis
     [Layton2014]_, which was developed by the Bionic Vision Australia
     Consortium and commercialized by Bionic Vision Technologies (BVT).
@@ -52,6 +50,8 @@ class BVT24(ProsthesisSystem):
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
+
+    .. versionadded:: 0.6
 
     """
     # Frozen class: User cannot add more class attributes

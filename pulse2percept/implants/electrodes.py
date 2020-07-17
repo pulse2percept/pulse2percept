@@ -80,7 +80,14 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
 
 
 class PointSource(Electrode):
-    """Point source"""
+    """Idealized current point source
+
+    Parameters
+    ----------
+    x/y/z : double
+        3D location of the point source
+
+    """
     # Frozen class: User cannot add more class attributes
     __slots__ = ()
 
@@ -136,6 +143,7 @@ class DiskElectrode(Electrode):
         3D location that is the center of the disk electrode
     r : double
         Disk radius in the x,y plane
+
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('r',)
@@ -207,16 +215,17 @@ class DiskElectrode(Electrode):
 
 
 class SquareElectrode(Electrode):
-    """Photovoltaic pixel
-
-    .. versionadded:: 0.7
+    """Square electrode
 
     Parameters
     ----------
     x/y/z : double
-        3D location that is the center of the disk electrode
+        3D location that is the center of the square electrode
     a : double
         Side length of the square
+
+    .. versionadded:: 0.7
+
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('a')
@@ -246,15 +255,16 @@ class SquareElectrode(Electrode):
 class HexElectrode(Electrode):
     """Hexagonal electrode
 
-    .. versionadded:: 0.7
-
     Parameters
     ----------
     x/y/z : double
-        3D location that is the center of the disk electrode
+        3D location that is the center of the hexagonal electrode
     a : double
         Length of line drawn from the center of the hexagon to the midpoint of
         one of its sides.
+
+    .. versionadded:: 0.7
+
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('a')
