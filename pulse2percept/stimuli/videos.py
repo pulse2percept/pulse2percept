@@ -1,4 +1,4 @@
-"""`VideoStimulus`, `BostonTrain`"""
+"""`VideoStimulus`"""
 from os.path import dirname, join
 import numpy as np
 from skimage.color import rgb2gray
@@ -24,6 +24,8 @@ class VideoStimulus(Stimulus):
 
         *  `Basic Concepts > Electrical Stimuli <topics-stimuli>`
         *  :py:class:`~pulse2percept.stimuli.ImageStimulus`
+
+    .. versionadded:: 0.7
 
     Parameters
     ----------
@@ -74,8 +76,6 @@ class VideoStimulus(Stimulus):
 
     extrapolate : bool, optional, default: False
         Whether to extrapolate data points outside the given range.
-
-    .. versionadded:: 0.7
 
     """
 

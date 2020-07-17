@@ -11,6 +11,8 @@ def bisect(y_target, func, args=None, kwargs=None, x_lo=0, x_hi=1,
     which ``func(x_opt, *args, **kwargs)`` is approximately equal to
     ``y_target``.
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     y_target : float
@@ -37,8 +39,6 @@ def bisect(y_target, func, args=None, kwargs=None, x_lo=0, x_hi=1,
     *  Assumes ``func`` is a monotonously increasing function of ``x``.
     *  Does **not** require ``x_lo`` and ``x_hi`` to have opposite signs as in
        the conventional bisection method.
-
-    .. versionadded:: 0.7
 
     """
     if x_lo >= x_hi:

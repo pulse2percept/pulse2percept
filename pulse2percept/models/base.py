@@ -148,6 +148,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     *  ``_build`` (optional): a way to add one-time computations to the build
        process
 
+    .. versionadded:: 0.6
+
     .. note ::
 
         You will not be able to add more parameters outside the constructor;
@@ -416,6 +418,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
     *  ``_build`` (optional): a way to add one-time computations to the build
        process
 
+    .. versionadded:: 0.6
+
     .. note ::
 
         You will not be able to add more parameters outside the constructor;
@@ -607,6 +611,8 @@ class Model(PrettyPrint):
 
         *  `Basic Concepts > Computational Models > Building your own model
            <topics-models-building-your-own>`
+
+    .. versionadded:: 0.6
 
     Parameters
     ----------

@@ -16,6 +16,8 @@ class ProsthesisSystem(PrettyPrint):
     :py:class:`~pulse2percept.implants.ArgusII` and
     :py:class:`~pulse2percept.implants.AlphaIMS`.
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
     earray : :py:class:`~pulse2percept.implants.ElectrodeArray` or
@@ -41,8 +43,6 @@ class ProsthesisSystem(PrettyPrint):
 
         A stimulus can also be assigned later (see
         :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim`).
-
-    .. versionadded:: 0.6
 
     """
     # Frozen class: User cannot add more class attributes

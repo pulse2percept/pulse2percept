@@ -31,9 +31,6 @@ You can also write your own
 
 In any case, note that stimulation of the inferior (superior) retina leads to
 phosphenes appearing in the upper (lower) visual field.
-This is why visualization functions such as
-:py:meth:`~pulse2percept.viz.plot_axon_map` provide an option to flip the image
-upside down.
 
 Practical
 =========

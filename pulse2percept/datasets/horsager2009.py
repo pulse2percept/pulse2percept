@@ -1,4 +1,4 @@
-"""`load_horsager2009`, `VariableDuration`"""
+"""`load_horsager2009`"""
 from os.path import dirname, join
 import numpy as np
 
@@ -58,6 +58,8 @@ def load_horsager2009(subjects=None, electrodes=None, stim_types=None,
 
     Missing values are denoted by NaN.
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
     subjects : str | list of strings | None, optional
@@ -79,8 +81,6 @@ def load_horsager2009(subjects=None, electrodes=None, stim_types=None,
     -------
     data: pd.DataFrame
         The whole dataset is returned in a 552x21 Pandas DataFrame
-
-    .. versionadded:: 0.6
 
     """
     if not has_pandas:

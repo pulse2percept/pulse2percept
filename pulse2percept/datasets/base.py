@@ -20,12 +20,12 @@ def get_data_dir(data_dir=None):
 
     If the directory does not already exist, it is automatically created.
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
     data_dir : str or None
         The path to the pulse2percept data directory.
-
-    .. versionadded:: 0.6
 
     """
     if data_dir is None:
@@ -45,12 +45,12 @@ def clear_data_dir(data_dir=None):
     Alternatively, it can be set by a ``PULSE2PERCEPT_DATA`` environment
     variable or set programmatically by specifying a path.
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
     data_dir : str or None
         The path to the pulse2percept data directory.
-
-    .. versionadded:: 0.6
 
     """
     data_dir = get_data_dir(data_dir)
@@ -87,6 +87,8 @@ def fetch_url(url, file_path, progress_bar=_report_hook, remote_checksum=None):
     Fetch a dataset pointed to by ``url``, check its SHA-256 checksum for
     integrity, and save it to ``file_path``.
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
     url : string
@@ -98,8 +100,6 @@ def fetch_url(url, file_path, progress_bar=_report_hook, remote_checksum=None):
         will display a progress bar.
     remote_checksum : str, optional
         The expected SHA-256 checksum of the file.
-
-    .. versionadded:: 0.6
 
     """
     urlretrieve(url, file_path, progress_bar)

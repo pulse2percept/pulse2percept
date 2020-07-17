@@ -217,14 +217,14 @@ class DiskElectrode(Electrode):
 class SquareElectrode(Electrode):
     """Square electrode
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     x/y/z : double
         3D location that is the center of the square electrode
     a : double
         Side length of the square
-
-    .. versionadded:: 0.7
 
     """
     # Frozen class: User cannot add more class attributes
@@ -255,6 +255,8 @@ class SquareElectrode(Electrode):
 class HexElectrode(Electrode):
     """Hexagonal electrode
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     x/y/z : double
@@ -262,8 +264,6 @@ class HexElectrode(Electrode):
     a : double
         Length of line drawn from the center of the hexagon to the midpoint of
         one of its sides.
-
-    .. versionadded:: 0.7
 
     """
     # Frozen class: User cannot add more class attributes

@@ -18,6 +18,8 @@ class PulseTrain(Stimulus):
         * :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`
         * :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
     freq : float
@@ -43,8 +45,6 @@ class PulseTrain(Stimulus):
     *  If the pulse train frequency does not exactly divide ``stim_dur``, the
        number of pulses will be rounded down. For example, when trying to fit
        a 11 Hz pulse train into a 100 ms window, there will be 9 pulses.
-
-    .. versionadded:: 0.6
 
     """
 
@@ -117,6 +117,8 @@ class BiphasicPulseTrain(Stimulus):
 
     A train of symmetric biphasic pulses.
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
     freq : float
@@ -159,8 +161,6 @@ class BiphasicPulseTrain(Stimulus):
     *  A pulse train will be considered "charge-balanced" if its net current is
        smaller than 10 picoamps.
 
-    .. versionadded:: 0.6
-
     """
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
@@ -197,6 +197,8 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
     ("asymmetric").
     The order of the two phases is given by the ``cathodic_first`` flag.
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
     freq : float
@@ -228,8 +230,6 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
         transitions.
     metadata : dict
         A dictionary of meta-data
-
-    .. versionadded:: 0.6
 
     """
 
@@ -263,6 +263,8 @@ class BiphasicTripletTrain(Stimulus):
     """Biphasic pulse triplets
 
     A train of symmetric biphasic pulse triplets.
+
+    .. versionadded:: 0.6
 
     Parameters
     ----------
@@ -306,8 +308,6 @@ class BiphasicTripletTrain(Stimulus):
     *  A pulse train will be considered "charge-balanced" if its net current is
        smaller than 10 picoamps.
 
-    .. versionadded:: 0.6
-]
     """
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,

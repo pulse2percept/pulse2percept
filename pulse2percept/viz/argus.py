@@ -65,6 +65,8 @@ def center_phosphene(img, loc=None):
 
     This function shifts the center of mass (CoM) to the image center.
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     loc : (col, row), optional
@@ -97,6 +99,8 @@ def scale_phosphene(img, scaling_factor):
 
     This function scales the image foreground (excluding black pixels)
     by a factor.
+
+    .. versionadded:: 0.7
 
     Parameters
     ----------
@@ -132,6 +136,8 @@ def scale_phosphene(img, scaling_factor):
 def plot_argus_phosphenes(X, argus, scale=1.0, axon_map=None, show_fovea=True,
                           ax=None):
     """Plots phosphenes centered over the corresponding electrodes
+
+    .. versionadded:: 0.7
 
     Parameters
     ----------

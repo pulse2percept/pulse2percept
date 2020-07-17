@@ -35,6 +35,8 @@ class BVT24(ProsthesisSystem):
         Column order for electrode numbering is reversed in a left-eye
         implant.
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
     x : float
@@ -50,8 +52,6 @@ class BVT24(ProsthesisSystem):
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
-
-    .. versionadded:: 0.6
 
     """
     # Frozen class: User cannot add more class attributes
