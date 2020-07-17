@@ -19,11 +19,13 @@ from .convolution import center_vector, conv
 from .deprecation import deprecated
 from .optimize import bisect
 from .parallel import parfor
+from .stats import r2_score, circ_r2_score
 
 __all__ = [
     'bisect',
     'cached',
     'cart2pol',
+    'circ_r2_score',
     'Curcio1990Transform',
     'Data',
     'deprecated',
@@ -34,6 +36,7 @@ __all__ = [
     'parfor',
     'pol2cart',
     'PrettyPrint',
+    'r2_score',
     'RetinalCoordTransform',
     'Watson2014DisplaceTransform',
     'Watson2014Transform'
