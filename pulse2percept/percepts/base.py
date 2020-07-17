@@ -396,7 +396,7 @@ class Percept(Data):
         .. versionadded:: 0.7
 
         """
-        elongation = np.squeeze([[r.elongation for r in p]
+        elongation = np.squeeze([[r.eccentricity for r in p]
                                  for p in self.regionprops])
         if elongation.size == 1:
             return elongation.ravel()[0]

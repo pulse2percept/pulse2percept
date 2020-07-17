@@ -3,7 +3,8 @@ import copy
 import pytest
 import numpy.testing as npt
 
-from pulse2percept.utils import Frozen, FreezeError, PrettyPrint, Data, gamma
+from pulse2percept.utils import (Frozen, FreezeError, PrettyPrint, Data,
+                                 cached, gamma)
 
 
 class PrettyPrinter(PrettyPrint):
@@ -136,6 +137,33 @@ def test_Data():
     npt.assert_equal(hasattr(data, 'axis1'), True)
     npt.assert_equal(data.axis1, [0, 1])
     npt.assert_equal(hasattr(data, 'axis2'), False)
+
+
+class AreaCache(object):
+
+    def __init__(self, img, cache=True):
+        self.img
+        self._cache_active = cache
+        self._cache = {}
+
+    @property
+    @cached
+    def area(self):
+        return np.sum(img > 0)
+
+
+def test_cache():
+    # Change underlying image, but area stays the same (is cached):
+    cache = AreaCache(np.ones((10, 20)))
+    area0 = cache.area
+    cache.img[3, 4] = 0
+    area1 = cache.area
+    npt.assert_almost_equal(area0, area1)
+
+    # Now invalidate cache:
+    cache._cache_active = False
+    area2 = cache.are
+    npt.assert_equal(area1 != area2, True)
 
 
 def test_gamma():
