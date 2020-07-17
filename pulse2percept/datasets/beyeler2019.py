@@ -51,6 +51,8 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     x_center, y_center    Phosphene center of mass (see [Beyeler2019]_)
     ====================  ================================================
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
     subjects : str | list of strings | None, optional
@@ -75,8 +77,6 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     -------
     data: pd.DataFrame
         The whole dataset is returned in a 400x16 Pandas DataFrame
-
-    .. versionadded:: 0.6
 
     """
     if not has_h5py:

@@ -15,6 +15,8 @@ from .electrode_arrays import ElectrodeGrid
 class PhotovoltaicPixel(HexElectrode):
     """Photovoltaic pixel
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     x/y/z : double
@@ -24,8 +26,6 @@ class PhotovoltaicPixel(HexElectrode):
     a : double
         Length of line drawn from the center of the hexagon to the midpoint of
         one of its sides.
-
-    .. versionadded:: 0.7
 
     """
     # Frozen class: User cannot add more class attributes
@@ -72,6 +72,8 @@ class PRIMA(ProsthesisSystem):
     This corresponds to a 100um pitch, with adjacent rows separated by 87um.
     The active electrode is a disk with 28um diameter.
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     x : float, optional
@@ -92,8 +94,6 @@ class PRIMA(ProsthesisSystem):
     -----
     *  The diameter of the active electrode and the trench width were estimated
        from Fig.1 in [Palanker2020]_.
-
-    .. versionadded:: 0.7
 
     """
     # Frozen class: User cannot add more class attributes
@@ -160,6 +160,8 @@ class PRIMA75(ProsthesisSystem):
     This corresponds to a 75um pitch, with adjacent rows separated by 65um.
     The active electrode is a disk with 20um diameter.
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     x : float, optional
@@ -175,8 +177,6 @@ class PRIMA75(ProsthesisSystem):
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
-
-    .. versionadded:: 0.7
 
     """
     # Frozen class: User cannot add more class attributes
@@ -251,6 +251,8 @@ class PRIMA55(ProsthesisSystem):
         array fits on a circular 1mm-diameter substrate, which leaves us with
         273 electrodes.
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     x : float, optional
@@ -266,8 +268,6 @@ class PRIMA55(ProsthesisSystem):
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
-
-    .. versionadded:: 0.7
 
     """
     # Frozen class: User cannot add more class attributes
@@ -347,6 +347,8 @@ class PRIMA40(ProsthesisSystem):
         array fits on a circular 1mm-diameter substrate, which leaves us with
         532 electrodes.
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     x : float, optional
@@ -362,8 +364,6 @@ class PRIMA40(ProsthesisSystem):
         system.
     eye : {'LE', 'RE'}, optional
         Eye in which array is implanted.
-
-    .. versionadded:: 0.7
 
     """
     # Frozen class: User cannot add more class attributes

@@ -141,6 +141,8 @@ class Frozen(object):
 class Data(PrettyPrint):
     """N-dimensional data container
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
     data : np.ndarray

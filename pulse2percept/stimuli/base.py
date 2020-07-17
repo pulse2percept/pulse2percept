@@ -16,8 +16,6 @@ from ._base import fast_compress
 class Stimulus(PrettyPrint):
     """Stimulus
 
-    .. versionadded:: 0.6
-
     A stimulus is comprised of a labeled 2D NumPy array that contains the data,
     where the rows denote electrodes and the columns denote points in time.
     A stimulus can be created from a variety of source types (e.g., scalars,
@@ -26,6 +24,8 @@ class Stimulus(PrettyPrint):
     .. seealso ::
 
         *  `Basic Concepts > Electrical Stimuli <topics-stimuli>`
+
+    .. versionadded:: 0.6
 
     Parameters
     ----------

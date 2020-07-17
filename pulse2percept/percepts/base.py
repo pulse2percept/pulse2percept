@@ -15,6 +15,8 @@ from ..utils import Data, Grid2D
 class Percept(Data):
     """Visual percept
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
     data : 3D NumPy array
@@ -25,8 +27,6 @@ class Percept(Data):
         A list of time points
     metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.
-
-    .. versionadded:: 0.6
 
     """
 

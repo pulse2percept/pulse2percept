@@ -32,6 +32,8 @@ class ImageStimulus(Stimulus):
         *  `Basic Concepts > Electrical Stimuli <topics-stimuli>`
         *  :py:class:`~pulse2percept.stimuli.VideoStimulus`
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     source : str
@@ -68,8 +70,6 @@ class ImageStimulus(Stimulus):
 
     compress : bool, optional
         If True, will remove pixels with 0 grayscale value.
-
-    .. versionadded:: 0.7
 
     """
     __slots__ = ('img_shape',)
@@ -526,6 +526,8 @@ class LogoBVL(ImageStimulus):
 
     Load the 576x720x4 Bionic Vision Lab (BVL) logo.
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     resize : (height, width) or None
@@ -542,8 +544,6 @@ class LogoBVL(ImageStimulus):
 
     metadata : dict, optional, default: None
         Additional stimulus metadata can be stored in a dictionary.
-
-    .. versionadded:: 0.7
 
     """
 
@@ -567,6 +567,8 @@ class LogoUCSB(ImageStimulus):
     Load a 324x727 white-on-black logo of the University of California, Santa
     Barbara.
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     resize : (height, width) or None
@@ -583,8 +585,6 @@ class LogoUCSB(ImageStimulus):
 
     metadata : dict, optional, default: None
         Additional stimulus metadata can be stored in a dictionary.
-
-    .. versionadded:: 0.7
 
     """
 

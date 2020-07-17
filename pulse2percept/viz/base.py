@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 def scatter_correlation(x, y, marker='o', color='k', ax=None, autoscale=True):
     """Scatter plots some data points and fits a regression curve to them
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     x, y : array-like
@@ -19,8 +21,6 @@ def scatter_correlation(x, y, marker='o', color='k', ax=None, autoscale=True):
         Matplotlib axis
     autoscale : {True, False}
         Flag whether to automatically adjust the axis limits
-
-    .. versionadded:: 0.7
 
     """
     # If data are Pandas series, use their names to label the axes:
@@ -59,6 +59,8 @@ def scatter_correlation(x, y, marker='o', color='k', ax=None, autoscale=True):
 def correlation_matrix(X, cols=None, dropna=True, ax=None):
     """Plot feature correlation matrix (requires seaborn)
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
     X : pd.DataFrame
@@ -70,8 +72,6 @@ def correlation_matrix(X, cols=None, dropna=True, ax=None):
     ax : matplotlib.axes.Axes or list thereof; optional, default: None
         A Matplotlib Axes object or a list thereof (one per electrode to
         plot). If None, a new Axes object will be created.
-
-    .. versionadded:: 0.7
 
     """
     try:

@@ -21,6 +21,8 @@ class Grid2D(PrettyPrint):
     This class generates a two-dimensional mesh grid from a range of x, y
     values and provides an iterator to loop over elements.
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
     x_range : (x_min, x_max)
