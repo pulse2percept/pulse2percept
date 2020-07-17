@@ -3,3 +3,5 @@ sphinx_gallery>=0.7
 sphinx_rtd_theme
 ipython
 sphinx_version_warning
+pandas
+h5py
