@@ -9,13 +9,17 @@ import logging
 from skimage import img_as_uint
 from skimage.transform import resize
 
-from ..utils import Data, Grid2D
+from ..utils import Data, Grid2D, cached
 
 
 class Percept(Data):
     """Visual percept
 
-    .. versionadded:: 0.6
+    .. versionadded :: 0.6
+
+    .. versionchanged :: 0.7
+        Add ``play`` and various ``regionprops``, such as ``area``,
+        ``orientation``, and ``elongation``.
 
     Parameters
     ----------
@@ -30,7 +34,7 @@ class Percept(Data):
 
     """
 
-    def __init__(self, data, space=None, time=None, metadata=None):
+    def __init__(self, data, space=None, time=None, cache=True, metadata=None):
         xdva = None
         ydva = None
         if space is not None:
@@ -46,7 +50,10 @@ class Percept(Data):
             'axes': [('ydva', ydva), ('xdva', xdva), ('time', time)],
             'metadata': metadata
         }
+        self._cache_active = cache
+        self._cache = {}
         self.rewind()
+        # Interpolate:
         # def f(a1, a2):
         #     # https://stackoverflow.com/a/26410051
         #     return (((a1 - a2[:,:,np.newaxis])).prod(axis=1)<=0).any(axis=0)
