@@ -272,6 +272,8 @@ def cached(f):
         When making use of a cached property, the class should also maintain
         a ``_cache_active`` flag set to True or False.
 
+    .. versionadded:: 0.7
+
     """
     @wraps(f)
     def wrapper(obj):
