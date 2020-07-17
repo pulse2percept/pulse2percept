@@ -865,16 +865,17 @@ class Model(PrettyPrint):
             raise TypeError("'implant' must be a ProsthesisSystem, not "
                             "%s." % type(stim))
 
-        def inner_predict(amp, fnc_predict, implant):
+        def inner_predict(amp, fnc_predict, implant, **kwargs):
             _implant = deepcopy(implant)
             scale = amp / implant.stim.data.max()
             _implant.stim = Stimulus(scale * implant.stim.data,
                                      electrodes=implant.stim.electrodes,
                                      time=implant.stim.time)
-            return fnc_predict(_implant).data.max()
+            return fnc_predict(_implant, **kwargs).data.max()
 
         return bisect(bright_th, inner_predict,
                       args=[self.predict_percept, implant],
+                      kwargs={'t_percept': t_percept},
                       x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
                       y_tol=bright_tol, max_iter=max_iter)
 
