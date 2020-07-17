@@ -7,13 +7,18 @@ from matplotlib.animation import FuncAnimation
 import imageio
 import logging
 from skimage import img_as_uint
+from skimage.measure import label, regionprops
 from skimage.transform import resize
 
-from ..utils import Data, Grid2D
+from ..utils import Data, Grid2D, cached
 
 
 class Percept(Data):
     """Visual percept
+
+    .. versionchanged :: 0.7
+        Add ``play`` and various ``regionprops``, such as ``area``,
+        ``orientation``, and ``elongation``.
 
     Parameters
     ----------
@@ -30,7 +35,7 @@ class Percept(Data):
 
     """
 
-    def __init__(self, data, space=None, time=None, metadata=None):
+    def __init__(self, data, space=None, time=None, cache=True, metadata=None):
         xdva = None
         ydva = None
         if space is not None:
@@ -46,7 +51,10 @@ class Percept(Data):
             'axes': [('ydva', ydva), ('xdva', xdva), ('time', time)],
             'metadata': metadata
         }
+        self._cache_active = cache
+        self._cache = {}
         self.rewind()
+        # Interpolate:
         # def f(a1, a2):
         #     # https://stackoverflow.com/a/26410051
         #     return (((a1 - a2[:,:,np.newaxis])).prod(axis=1)<=0).any(axis=0)
@@ -300,3 +308,35 @@ class Percept(Data):
                 fps = 1000.0 / interval[0]
             imageio.mimwrite(fname, data.transpose((2, 0, 1)), fps=fps)
         logging.getLogger(__name__).info('Created %s.' % fname)
+
+    @property
+    @cached
+    def regionprops(self):
+        return [regionprops(label(frame > 0)) for frame in self]
+
+    @property
+    @cached
+    def area(self):
+        area = np.squeeze([[r.area for r in p]
+                           for p in self.regionprops])
+        if area.size == 1:
+            return area.ravel()[0]
+        return area
+
+    @property
+    @cached
+    def orientation(self):
+        orientation = np.squeeze([[r.orientation for r in p]
+                                  for p in self.regionprops])
+        if orientation.size == 1:
+            return orientation.ravel()[0]
+        return orientation
+
+    @property
+    @cached
+    def elongation(self):
+        elongation = np.squeeze([[r.elongation for r in p]
+                                 for p in self.regionprops])
+        if elongation.size == 1:
+            return elongation.ravel()[0]
+        return elongation
