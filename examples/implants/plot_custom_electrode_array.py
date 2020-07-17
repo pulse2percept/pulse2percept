@@ -127,14 +127,6 @@ earray.plot()
 # By default, the method will use the current Axes object or create a new one
 # if none exists. Alternatively, you can specify ``ax=`` yourself.
 #
-# Different plot methods can be combined in the same plot. For example, you can
-# plot the implant on a map of the retinal nerve fiber bundles:
-
-from pulse2percept.models import AxonMapModel
-AxonMapModel().plot()
-earray.plot()
-
-##############################################################################
 # Extending the CircleElectrodeArray class
 # ----------------------------------------
 #
@@ -177,6 +169,5 @@ print(flex_earray)
 # Remove electrode 'A1'
 flex_earray.remove('A1')
 
-# Replot the implant on the axon map:
-AxonMapModel().plot()
+# Replot the implant:
 flex_earray.plot()
