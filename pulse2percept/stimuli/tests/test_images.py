@@ -90,7 +90,11 @@ def test_ImageStimulus_resize():
     # Gray levels are between 0 and 1, and can be inverted:
     stim = ImageStimulus(fname)
     npt.assert_almost_equal(stim.data, gray)
-    npt.assert_equal(stim.resize((13, 24)).img_shape, (13, 24, 3))
+    npt.assert_equal(stim.resize((13, -1)).img_shape, (13, 19, 3))
+    # Resize with one dimension -1:
+    npt.assert_equal(stim.resize((-1, 24)).img_shape, (16, 24, 3))
+    with pytest.raises(ValueError):
+        stim.resize((-1, -1))
     os.remove(fname)
 
 
