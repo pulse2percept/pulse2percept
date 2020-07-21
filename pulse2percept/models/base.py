@@ -547,7 +547,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                        space=None, time=t_percept)
 
     def find_threshold(self, stim, bright_th, amp_range=(0, 999), amp_tol=1,
-                       bright_tol=0.1, max_iter=100):
+                       bright_tol=0.1, max_iter=100, t_percept=None):
         """Find the threshold current for a certain stimulus
 
         Estimates ``amp_th`` such that the output of
@@ -570,6 +570,9 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             ``bright_th``
         max_iter : int, optional
             Search will stop after ``max_iter`` iterations
+        t_percept: float or list of floats, optional
+            The time points at which to output a percept (ms).
+            If None, ``implant.stim.time`` is used.
 
         Returns
         -------
@@ -581,13 +584,14 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         if not isinstance(stim, Stimulus):
             raise TypeError("'stim' must be a Stimulus, not %s." % type(stim))
 
-        def inner_predict(amp, fnc_predict, stim):
+        def inner_predict(amp, fnc_predict, stim, **kwargs):
             _stim = Stimulus(amp * stim.data / stim.data.max(),
                              electrodes=stim.electrodes, time=stim.time)
-            return fnc_predict(_stim).data.max()
+            return fnc_predict(_stim, **kwargs).data.max()
 
         return bisect(bright_th, inner_predict,
                       args=[self.predict_percept, stim],
+                      kwargs={'t_percept': t_percept},
                       x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
                       y_tol=bright_tol, max_iter=max_iter)
 
@@ -836,7 +840,7 @@ class Model(PrettyPrint):
         return resp
 
     def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
-                       bright_tol=0.1, max_iter=100):
+                       bright_tol=0.1, max_iter=100, t_percept=None):
         """Find the threshold current for a certain stimulus
 
         Estimates ``amp_th`` such that the output of
@@ -859,6 +863,9 @@ class Model(PrettyPrint):
             ``bright_th``
         max_iter : int, optional
             Search will stop after ``max_iter`` iterations
+        t_percept: float or list of floats, optional
+            The time points at which to output a percept (ms).
+            If None, ``implant.stim.time`` is used.
 
         Returns
         -------

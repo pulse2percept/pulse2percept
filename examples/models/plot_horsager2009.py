@@ -66,7 +66,7 @@ from pulse2percept.models import Horsager2009Temporal
 model = Horsager2009Temporal()
 model.build()
 
-percept = model.predict_percept(pulse)
+percept = model.predict_percept(pulse, t_percept=np.arange(stim_dur))
 
 max_bright = percept.data.max()
 

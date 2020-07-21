@@ -127,6 +127,8 @@ class Nanduri2012Temporal(TemporalModel):
         Slope of the logistic function in the stationary nonlinearity stage.
     shift: float, optional
         Shift of the logistic function in the stationary nonlinearity stage.
+    scale_out : float32, optional
+        A scaling factor applied to the output of the model
     thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
 
@@ -149,6 +151,8 @@ class Nanduri2012Temporal(TemporalModel):
             'slope': 3.0,
             # Shift of the sigmoid:
             'shift': 16.0,
+            # Scale the output:
+            'scale_out': 1.0
         }
         # This is subtle: Rather than calling `params.update(base_params)`, we
         # call `base_params.update(params)`. This will overwrite `base_params`
@@ -175,7 +179,7 @@ class Nanduri2012Temporal(TemporalModel):
                              idx_percept,
                              self.dt, self.tau1, self.tau2, self.tau3,
                              self.asymptote, self.shift, self.slope, self.eps,
-                             self.thresh_percept)
+                             self.scale_out, self.thresh_percept)
 
 
 class Nanduri2012Model(Model):
@@ -218,6 +222,8 @@ class Nanduri2012Model(Model):
         Slope of the logistic function in the stationary nonlinearity stage.
     shift: float, optional
         Shift of the logistic function in the stationary nonlinearity stage.
+    scale_out : float32, optional
+        A scaling factor applied to the output of the model
     thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
     """
