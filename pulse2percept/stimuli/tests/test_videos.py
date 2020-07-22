@@ -37,3 +37,12 @@ def test_VideoStimulus():
     npt.assert_equal(stim.time, np.arange(shape[0]))
     npt.assert_equal(stim.electrodes, np.arange(np.prod(resize)))
     os.remove(fname)
+
+
+@pytest.mark.parametrize('n_frames', (2, 3, 10, 14))
+def test_VideoStimulus_play(n_frames):
+    ndarray = np.random.rand(2, 4, n_frames)
+    video = VideoStimulus(ndarray)
+    ani = video.play()
+    npt.assert_equal(isinstance(ani, FuncAnimation), True)
+    npt.assert_equal(len(list(ani.frame_seq)), n_frames)

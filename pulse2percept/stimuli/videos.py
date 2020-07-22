@@ -1,6 +1,9 @@
 """`VideoStimulus`"""
 from os.path import dirname, join
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+
 from skimage.color import rgb2gray
 from skimage.transform import resize as img_resize
 from skimage import img_as_float
@@ -99,6 +102,7 @@ class VideoStimulus(Stimulus):
         if vid[0].ndim == 3 and vid[0].shape[-1] == 3:
             vid = parfor(rgb2gray, vid)
         vid = np.array(parfor(img_as_float, vid)).transpose((1, 2, 0))
+        self.vid_shape = vid.shape
         # Infer the time points from the video frame rate:
         n_frames = vid.shape[-1]
         time = np.arange(n_frames) * meta['fps']
@@ -108,3 +112,102 @@ class VideoStimulus(Stimulus):
                                             metadata=meta, compress=compress,
                                             interp_method=interp_method,
                                             extrapolate=extrapolate)
+        self.rewind()
+
+    def _pprint_params(self):
+        params = super(VideoStimulus, self)._pprint_params()
+        params.update({'vid_shape': self.vid_shape})
+        return params
+
+    def rewind(self):
+        """Rewind the iterator"""
+        self._next_frame = 0
+
+    def __iter__(self):
+        """Iterate over all frames in self.data"""
+        self.rewind()
+        return self
+
+    def __next__(self):
+        """Returns the next frame when iterating over all frames"""
+        this_frame = self._next_frame
+        if this_frame >= self.data.shape[-1]:
+            raise StopIteration
+        self._next_frame += 1
+        return self.data[..., this_frame]
+
+    def _get_interval(self):
+        # Determine the frame rate from the time axis. Problem is that
+        # np.unique doesn't work well with floats, so we need to specify a
+        # tolerance `TOL`:
+        interval = np.diff(self.time)
+        TOL = interval.min()
+        # Two time points are the same if they are within `TOL` from each
+        # other:
+        interval = np.unique(np.floor(interval / TOL).astype(int)) * TOL
+        return interval
+
+    def play(self, fps=None, repeat=True, ax=None):
+        """Animate the percept as HTML with JavaScript
+
+        The percept will be played in an interactive player in IPython or
+        Jupyter Notebook.
+
+        Parameters
+        ----------
+        fps : float or None
+            If None, uses the percept's time axis. Not supported for
+            non-homogeneous time axis.
+        repeat : bool, optional
+            Whether the animation should repeat when the sequence of frames is
+            completed.
+        ax : matplotlib.axes.AxesSubplot, optional
+            A Matplotlib axes object. If None, will create a new Axes object
+
+        Returns
+        -------
+        ani : matplotlib.animation.FuncAnimation
+            A Matplotlib animation object that will play the percept
+            frame-by-frame.
+
+        """
+        def update(data):
+            mat.set_data(data.reshape(self.vid_shape[:-1]))
+            return mat
+
+        def data_gen():
+            try:
+                # Advance to the next frame:
+                while True:
+                    yield next(self)
+            except StopIteration:
+                # End of the sequence, exit:
+                pass
+
+        # There are several options to animate a percept in Jupyter/IPython
+        # (see https://stackoverflow.com/a/46878531). Displaying the animation
+        # as HTML with JavaScript is compatible with most browsers and even
+        # %matplotlib inline (although it can be kind of slow):
+        plt.rcParams["animation.html"] = 'jshtml'
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 5))
+        else:
+            fig = ax.figure
+        # Rewind the percept and show an empty frame:
+        self.rewind()
+        mat = ax.imshow(np.zeros(self.vid_shape[:-1]), cmap='gray',
+                        vmax=self.data.max())
+        cbar = fig.colorbar(mat)
+        cbar.ax.set_ylabel('Phosphene brightness (a.u.)', rotation=-90,
+                           va='center')
+        plt.close(fig)
+        if fps is None:
+            interval = self._get_interval()
+            if len(interval) > 1:
+                raise NotImplementedError
+            interval = interval[0]
+        else:
+            interval = 1000.0 / fps
+        # Create the animation:
+        return FuncAnimation(fig, update, data_gen, interval=interval,
+                             repeat=repeat)
