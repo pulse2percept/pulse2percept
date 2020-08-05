@@ -572,12 +572,12 @@ class AxonMapSpatial(SpatialModel):
 
         # Draw axon pathways:
         for bundle in axon_bundles:
-            # Trim segments outside the drawing window:
-            idx = np.logical_and(np.logical_and(bundle[:, 0] >= xmin,
-                                                bundle[:, 0] <= xmax),
-                                 np.logical_and(bundle[:, 1] >= ymin,
-                                                bundle[:, 1] <= ymax))
-            ax.plot(bundle[idx, 0], bundle[idx, 1], c=(0.6, 0.6, 0.6),
+            # Set segments outside the drawing window to NaN:
+            x_idx = np.logical_or(bundle[:, 0] < xmin, bundle[:, 0] > xmax)
+            bundle[x_idx, 0] = np.nan
+            y_idx = np.logical_or(bundle[:, 1] < ymin, bundle[:, 1] > ymax)
+            bundle[y_idx, 1] = np.nan
+            ax.plot(bundle[:, 0], bundle[:, 1], c=(0.6, 0.6, 0.6),
                     linewidth=2, zorder=1)
         # Show elliptic optic nerve head (width/height are averages from
         # the human retina literature):
