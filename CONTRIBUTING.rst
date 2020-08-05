@@ -5,21 +5,19 @@ Contributing to pulse2percept
 .. note::
 
     If you found a bug or want to request a feature, please open an issue in our
-    `Issue Tracker`_ on GitHub. Make sure to
-    :ref:`label your issue appropriately <dev-contributing-issue-labels>`.
-
-We are excited that you are here and want to contribute!
-If you have any questions that aren't discussed below, please let us know
-by opening an issue in our `Issue Tracker`_ on GitHub.
+    `Issue Tracker`_ on GitHub.
 
 .. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues
+
+We are excited that you are here and want to contribute!
 
 Already know what you're looking for in this guide? Jump to the following
 sections:
 
 *   `Recommended workflow`_
-*   `Understanding issue labels`_
 *   `Contributing code`_
+*   `Documenting your code`_
+*   `Documenting API changes`_
 *   `Testing your code`_
 
 .. _dev-contributing-workflow:
@@ -34,26 +32,61 @@ workflow similar to the following:
     Before getting started, you will need to set up a free `GitHub account`_.
 
 2.  **Claim an issue on GitHub**:
-    Check the `Issue Tracker`_ to find an issue you want to work on (look for
-    issues labeled `good-first-issue`_ or `help-wanted`_), and add a comment
-    announcing your intention to work on it.
-    If no such issue exists, create a new one (see
-    `Understanding issue labels`_).
+    Check the `Issue Tracker`_ to find an issue you want to work on, and add a
+    comment announcing your intention to work on it.
     This allows other members of the development team to confirm that you
     aren't overlapping with existing work and that everyone is on the same page
     with the goal of your proposed work.
 
+    .. image:: https://img.shields.io/badge/-bug-fc2929.svg
+       :target: https://github.com/pulse2percept/pulse2percept/labels/bug
+       :alt: Bug
+       :align: left
+
+    These issues point to problems in the project.
+
+    .. image:: https://img.shields.io/badge/-enhancement-00FF09.svg
+       :target: https://github.com/pulse2percept/pulse2percept/labels/enhancement
+       :alt: Enhancement
+       :align: left
+
+    These issues are asking for new features to be added to the project.
+
+    .. image:: https://img.shields.io/badge/-doc-FEF2C0.svg
+       :target: https://github.com/pulse2percept/pulse2percept/labels/doc
+       :alt: Documentation
+       :align: left
+
+    These issues concern the documentation / user guide of the project.
+
+    .. image:: https://img.shields.io/badge/-help%20wanted-c2e0c6.svg
+       :target: https://github.com/pulse2percept/pulse2percept/labels/help-wanted
+       :alt: Help wanted
+       :align: left
+
+    These issues contain a task that a member of the team has determined we
+    need additional help with.
+
+    .. image:: https://img.shields.io/badge/-good%20first%20issue-5fe28d.svg
+       :target: https://github.com/pulse2percept/pulse2percept/labels/good-first-issue
+       :alt: Good first issue
+       :align: left
+
+    These issues are good entry points if you're new to the project and should
+    only require minimal code changes.    
+
 3.  **Fork the repo**:
     Follow the :ref:`Installation Guide <install-source>` to fork the repo and
-    install all developer dependencies. Make sure to keep your code up-to-date
-    with the :ref:`upstream repository <install-upgrade>`.
+    install all developer dependencies.
     This is now your own unique pulse2percept copy - changes here won't affect
     anyone else's work.
+    Make sure to keep your code up-to-date
+    with the :ref:`upstream repository <install-upgrade>`.
 
 4.  **Create a new branch**:
-    You should always work on a `new branch`_. "git add" and "git commit" the
-    work you proposed to do, and "git push" it to your remote repository on
-    GitHub.
+    You should always work on a `new branch`_ on your fork.
+    Once you made the code changes, "git add" and "git commit" them, and then
+    "git push" them to your remote repository on GitHub.
 
     .. important::
 
@@ -62,8 +95,12 @@ workflow similar to the following:
         See `Contributing code`_ below for more detailed instructions.
 
 5.  **Submit a pull request**:
-    When opening a `pull request`_ (PR) against the pulse2percept master branch,
-    please use one of the following prefixes:
+    You can open a `pull request`_ (PR) as soon as you have pushed a new branch
+    on your fork.
+    This will trigger the :ref:`test suite <dev-contributing-test>` to make
+    sure your code does not introduce any new issues.
+
+    Choose one of the following prefixes for your PR:
 
     * **[ENH]** for enhancements
     * **[FIX]** for bug fixes
@@ -72,17 +109,20 @@ workflow similar to the following:
     * **[STY]** for stylistic changes
     * **[REF]** for refactoring existing code
 
-    Once your PR is ready, request a review from `@arokem`_ and/or
-    `@mbeyeler`_, who will review your changes before merging them into the
+    Once your PR is ready, request a review from `@mbeyeler`_ and/or
+    `@arokem`_, who will review your changes before merging them into the
     main codebase.
 
     .. note:: 
  
-        If your PR is not yet ready to be merged, click on the dropdown arrow next to
-        the "Create pull request" button and choose "Create draft pull request" instead.
+        If your PR is not yet ready to be merged, click on the dropdown arrow
+        next to the "Create pull request" button and choose "Create draft pull
+        request" instead.
 
-        This will put your PR in `draft state`_ and block merging until you change the status
-        of the PR to "Ready for review".
+        This will put your PR in `draft state`_ and block merging until you
+        change the status of the PR to "Ready for review".
+
+More detailed instructions can be found below.
 
 .. _GitHub account: https://help.github.com/articles/signing-up-for-a-new-github-account
 .. _good-first-issue: https://github.com/pulse2percept/pulse2percept/labels/good-first-issue
@@ -92,65 +132,6 @@ workflow similar to the following:
 .. _@arokem: https://github.com/arokem
 .. _@mbeyeler: https://github.com/mbeyeler
 .. _draft state: https://github.blog/2019-02-14-introducing-draft-pull-requests
-
-.. _dev-contributing-issue-labels:
-
-Understanding issue labels
-==========================
-
-Make sure to check out the current list of `issue labels`_:
-
-*   .. image:: https://img.shields.io/badge/-bug-fc2929.svg
-       :target: https://github.com/pulse2percept/pulse2percept/labels/bug
-       :alt: Bug
-       :align: left
-
-    *These issues point to problems in the project.*
-
-    If you find new a bug, please provide as much information as possible to
-    recreate the error.
-    The issue template will automatically populate any new issue you open, and
-    contains information we've found to be helpful in addressing bug reports.
-    Please fill it out to the best of your ability!
-
-    .. note::
-
-        If you experience the same bug as one already listed in an open issue,
-        please add any additional information that you have as a comment.
-
-*   .. image:: https://img.shields.io/badge/-enhancement-00FF09.svg
-       :target: https://github.com/pulse2percept/pulse2percept/labels/enhancement
-       :alt: Enhancement
-       :align: left
-
-    *These issues are asking for new features to be added to the project.*
-
-    Please try to make sure that your requested enhancement is distinct from
-    any others that have already been requested or implemented.
-
-    .. note::
-
-        If you find one that's similar but there are subtle differences, please
-        reference the other request in your issue.
-
-*   .. image:: https://img.shields.io/badge/-help%20wanted-c2e0c6.svg
-       :target: https://github.com/pulse2percept/pulse2percept/labels/help-wanted
-       :alt: Help wanted
-       :align: left
-
-    *These issues contain a task that a member of the team has determined we
-    need additional help with.*
-
-    If you feel that you can contribute to one of these issues, we especially
-    encourage you to do so!
-
-    .. note::
-
-        Issues that are also labelled as `good first issue`_ are a great place
-        to start if you're looking to make your first contribution.
-
-.. _issue labels: https://github.com/pulse2percept/pulse2percept/labels
-.. _good first issue: https://github.com/pulse2percept/pulse2percept/issues?q=is%3Aopen+is%3Aissue+label%3Agood-first-issue
 
 Contributing code
 =================
