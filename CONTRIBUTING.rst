@@ -44,6 +44,9 @@ workflow similar to the following:
        :align: left
 
     These issues point to problems in the project.
+    The bug report should already contain steps for you to reproduce the issue.
+    Make sure to include a :ref:`test case <dev-contributing-test>` verifying
+    that the issue was indeed solved.
 
     .. image:: https://img.shields.io/badge/-enhancement-00FF09.svg
        :target: https://github.com/pulse2percept/pulse2percept/labels/enhancement
@@ -51,6 +54,10 @@ workflow similar to the following:
        :align: left
 
     These issues are asking for new features to be added to the project.
+    Make sure to include a :ref:`test case <dev-contributing-test>` for every
+    new function/class that you write.
+    Each API change should be :ref:`annotated in the docstring 
+    <dev-contributing-changes>`.
 
     .. image:: https://img.shields.io/badge/-doc-FEF2C0.svg
        :target: https://github.com/pulse2percept/pulse2percept/labels/doc
@@ -58,6 +65,8 @@ workflow similar to the following:
        :align: left
 
     These issues concern the documentation / user guide of the project.
+    Code changes should therefore be limited to the user guide and docstrings
+    only.
 
     .. image:: https://img.shields.io/badge/-help%20wanted-c2e0c6.svg
        :target: https://github.com/pulse2percept/pulse2percept/labels/help-wanted
@@ -72,8 +81,11 @@ workflow similar to the following:
        :alt: Good first issue
        :align: left
 
-    These issues are good entry points if you're new to the project and should
-    only require minimal code changes.    
+    These issues are good entry points if you're new to the project.
+    They usually require only minimal code changes or are restricted to a
+    single file.
+    If you run into trouble, add a comment to the issue on GitHub or reach out
+    to `@mbeyeler`_ and/or `@arokem`_ directly.
 
 3.  **Fork the repo**:
     Follow the :ref:`Installation Guide <install-source>` to fork the repo and
