@@ -61,6 +61,17 @@ def test_Percept__iter__():
         npt.assert_almost_equal(frame, i)
 
 
+def test_Percept_max():
+    percept = Percept(np.arange(30).reshape((3, 5, 2)))
+    npt.assert_almost_equal(percept.max(), 29)
+    npt.assert_almost_equal(percept.max(axis='frames'),
+                            percept.data[..., 1])
+    with pytest.raises(TypeError):
+        percept.max(axis=(0, 1))
+    with pytest.raises(ValueError):
+        percept.max(axis='invalid')
+
+
 def test_Percept_get_brightest_frame():
     percept = Percept(np.arange(30).reshape((3, 5, 2)))
     npt.assert_almost_equal(percept.get_brightest_frame(),
