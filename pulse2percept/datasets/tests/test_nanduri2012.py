@@ -12,10 +12,8 @@ def test_load_nanduri2012():
 
     npt.assert_equal(isinstance(data, pd.DataFrame), True)
     columns = ['subject', 'implant', 'electrode', 'task', 'stim_type',
-               'stim_dur', 'stim_freq', 'stim_amp', 'pulse_type', 'pulse_dur',
-               'pulse_num', 'interphase_dur', 'delay_dur', 'ref_stim_type',
-               'ref_freq', 'ref_amp', 'ref_amp_factor', 'ref_pulse_dur',
-               'ref_interphase_dur', 'theta', 'source']
+               'stim_dur', 'stim_freq', 'stim_amp_factor', 'brightness', 'pulse_dur', 'pulse_type',
+               'interphase_dur', 'delay_dur', 'source']
     for expected_col in columns:
         npt.assert_equal(expected_col in data.columns, True)
 
@@ -25,50 +23,49 @@ def test_load_nanduri2012():
     # Shuffle dataset (index will always be range(552), but rows are shuffled):
     data = load_nanduri2012(shuffle=True, random_state=42)
     npt.assert_equal(data.loc[0, 'subject'], 'S06')
-    npt.assert_equal(data.loc[0, 'electrode'], 'D1')
-    npt.assert_equal(data.loc[0, 'stim_type'], 'latent_addition')
-    npt.assert_equal(data.loc[551, 'subject'], 'S06')
-    npt.assert_equal(data.loc[551, 'electrode'], 'A1')
-    npt.assert_equal(data.loc[551, 'stim_type'], 'fixed_duration')
+    npt.assert_equal(data.loc[0, 'electrode'], 'C1')
+    npt.assert_equal(data.loc[0, 'stim_type'], 'fixed_duration')
+    npt.assert_equal(data.loc[94, 'subject'], 'S06')
+    npt.assert_equal(data.loc[94, 'electrode'], 'A2')
+    npt.assert_equal(data.loc[94, 'stim_type'], 'fixed_duration')
 
-    # Select subjects:
-    data = load_nanduri2012(subjects='S05')
-    npt.assert_equal(data.shape, (272, 21))
-    npt.assert_equal(data.subject.unique(), 'S05')
-    data = load_nanduri2012(subjects=['S05', 'S07'])  # 'S07' doesnt' exist
-    npt.assert_equal(data.shape, (272, 21))
-    npt.assert_equal(data.subject.unique(), 'S05')
-    data = load_nanduri2012(subjects=['S05', 'S06'])  # same as None
-    npt.assert_equal(data.shape, (552, 21))
+    # Select subjects: *Pointless with one subject*
+    data = load_nanduri2012(subjects='S06')
+    npt.assert_equal(data.shape, (95, 14))
+    npt.assert_equal(data.subject.unique(), 'S06')
+    data = load_nanduri2012(subjects=['S06', 'S07'])  # 'S07' doesnt' exist
+    npt.assert_equal(data.shape, (95, 14))
+    npt.assert_equal(data.subject.unique(), 'S06')
+    # data = load_nanduri2012(subjects=['S05', 'S06'])  # same as None
+    # npt.assert_equal(data.shape, (552, 21))   -- Only one subject exists, can't test for two subjects that exist
     data = load_nanduri2012(subjects='S6')  # 'S6' doesn't exist
-    npt.assert_equal(data.shape, (0, 21))
+    npt.assert_equal(data.shape, (0, 14))
     npt.assert_equal(data.subject.unique(), [])
 
     # Select electrodes:
     data = load_nanduri2012(electrodes='A1')
-    npt.assert_equal(data.shape, (106, 21))
+    npt.assert_equal(data.shape, (0, 14))
     npt.assert_equal(data.electrode.unique(), 'A1')
-    npt.assert_equal(data.subject.unique(), ['S06', 'S05'])
+    npt.assert_equal(data.subject.unique(), 'S06')
     data = load_nanduri2012(electrodes=['A1', 'A9'])  # 'A9' doesn't exist
-    npt.assert_equal(data.shape, (106, 21))
+    npt.assert_equal(data.shape, (0, 14))
     npt.assert_equal(data.electrode.unique(), 'A1')
-    npt.assert_equal(data.subject.unique(), ['S06', 'S05'])
+    npt.assert_equal(data.subject.unique(), 'S06')
 
     # Select stimulus types:
-    data = load_nanduri2012(stim_types='single_pulse')
-    npt.assert_equal(data.shape, (80, 21))
-    npt.assert_equal(data.stim_type.unique(), 'single_pulse')
-    npt.assert_equal(list(data.subject.unique()), ['S05', 'S06'])
-    data = load_nanduri2012(stim_types=['single_pulse', 'fixed_duration'])
-    npt.assert_equal(data.shape, (200, 21))
+    #data = load_nanduri2012(stim_types='single_pulse')
+    #npt.assert_equal(data.shape, (0, 14))
+    #npt.assert_equal(data.stim_type.unique(), 'single_pulse')
+    #npt.assert_equal(list(data.subject.unique()), ['S05', 'S06'])
+    data = load_nanduri2012(stim_types='fixed_duration')
+    npt.assert_equal(data.shape, (95, 14))
     npt.assert_equal(list(data.stim_type.unique()),
-                     ['single_pulse', 'fixed_duration'])
-    npt.assert_equal(list(data.subject.unique()), ['S05', 'S06'])
+                      ['fixed_duration'])
+    npt.assert_equal(list(data.subject.unique()), ['S06'])
 
     # Subject + electrode + stim type:
-    data = load_nanduri2012(subjects='S05', electrodes=['A1', 'C3'],
-                             stim_types='single_pulse')
-    npt.assert_equal(data.shape, (16, 21))
-    npt.assert_equal(data.subject.unique(), 'S05')
-    npt.assert_equal(list(data.electrode.unique()), ['C3', 'A1'])
-    npt.assert_equal(data.stim_type.unique(), 'single_pulse')
+    data = load_nanduri2012(subjects='S06', electrodes=['A2', 'C3'],
+                             stim_types='fixed_duration')
+    npt.assert_equal(data.shape, (12, 14))
+    npt.assert_equal(data.subject.unique(), 'S06')
+    npt.assert_equal(list(data.electrode.unique()), ['A2'])

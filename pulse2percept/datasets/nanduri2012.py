@@ -11,7 +11,7 @@ except ImportError:
 
 def load_nanduri2012(subjects=None, electrodes=None, stim_types=None,
                       shuffle=False, random_state=0):
-    """Load data from [Horsager2009]_
+    """Load data from [Nanduri2012]_
 
     Load the threshold data described in [Nanduri2012]_. Average thresholds
     were extracted from the figures of the paper using WebplotDigitizer.
