@@ -9,7 +9,7 @@ import logging
 from skimage import img_as_uint
 from skimage.transform import resize
 
-from ..utils import Data, Grid2D
+from ..utils import Data, Grid2D, deprecated
 
 
 class Percept(Data):
@@ -51,6 +51,34 @@ class Percept(Data):
         #     # https://stackoverflow.com/a/26410051
         #     return (((a1 - a2[:,:,np.newaxis])).prod(axis=1)<=0).any(axis=0)
 
+    def max(self, axis=None):
+        """Brightest pixel or frame
+
+        Parameters
+        ----------
+        axis : None or 'frames'
+            Axis along which to operate.
+            By default, the value of the brightest pixel is returned.
+            Set ``axis='frames'`` to get the brightest frame.
+
+        Returns
+        -------
+        pmax : ndarray or scalar
+            Maximum of ``percept.data``.
+            If `axis` is None, the result is a scalar value.
+            If `axis` is 'frames', the result is the brightest frame.
+        """
+        if axis is not None and not isinstance(axis, str):
+            raise TypeError('"axis" must be a string or None.')
+        if axis is None:
+            return self.data.max()
+        elif axis.lower() == 'frames':
+            return self.data[..., np.argmax(np.max(self.data, axis=(0, 1)))]
+        raise ValueError('Unknown axis value "%s". Use "frames" or '
+                         'None.' % axis)
+
+    @deprecated(deprecated_version='0.7', removed_version='0.8',
+                alt_func='percept.max()')
     def get_brightest_frame(self):
         """Return the brightest frame
 
