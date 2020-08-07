@@ -13,7 +13,7 @@ def test_load_nanduri2012():
     npt.assert_equal(isinstance(data, pd.DataFrame), True)
     columns = ['subject', 'implant', 'electrode', 'task', 'stim_type',
                'stim_dur', 'stim_freq', 'stim_amp_factor', 'brightness', 'pulse_dur', 'pulse_type',
-               'interphase_dur', 'delay_dur', 'source', 'test']
+               'interphase_dur', 'delay_dur', 'source']
     for expected_col in columns:
         npt.assert_equal(expected_col in data.columns, True)
 
