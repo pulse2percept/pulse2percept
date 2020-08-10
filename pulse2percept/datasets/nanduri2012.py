@@ -9,8 +9,7 @@ except ImportError:
     has_pandas = False
 
 
-def load_nanduri2012(subjects=None, electrodes=None, stim_types=None,
-                      shuffle=False, random_state=0):
+def load_nanduri2012(electrodes=None, shuffle=False, random_state=0):
     """Load data from [Nanduri2012]_
 
     Load the threshold data described in [Nanduri2012]_. Average thresholds
@@ -30,11 +29,12 @@ def load_nanduri2012(subjects=None, electrodes=None, stim_types=None,
     implant               Argus I
     electrode             Electrode ID, A2, A4, B1, C1, C4, D2, D3, D4
     task                  'rate'
-    stim_type             'fixed_duration',
+    stim_type             'fixed_duration'
     stim_dur              Stimulus duration (ms)
     stim_freq             Stimulus frequency (Hz)
     stim_amp_factor       Stimulus amplitude ratio over threshold
-    brightness            Patient rated brightness compared to reference stimulus
+    brightness            Patient rated brightness compared to reference
+                          stimulus
     pulse_dur             Pulse duration (ms)
     pulse_type            'cathodic_first'
     interphase_dur        Interphase gap (ms)
@@ -42,19 +42,13 @@ def load_nanduri2012(subjects=None, electrodes=None, stim_types=None,
     source                Figure from which data was extracted
     ====================  ================================================
 
-    .. versionadded:: 0.6
+    .. versionadded:: 0.7
 
     Parameters
     ----------
-    subjects : str | list of strings | None, optional
-        Select data from a subject or list of subjects. By default, all
-        subjects are selected.
     electrodes : str | list of strings | None, optional
         Select data from a single electrode or a list of electrodes.
         By default, all electrodes are selected.
-    stim_types : str | list of strings | None, optional
-        Select data from a single stimulus type or a list of stimulus types.
-        By default, all stimulus types are selected.
     shuffle : boolean, optional
         If True, the rows of the DataFrame are shuffled.
     random_state : int | numpy.random.RandomState | None, optional
@@ -76,29 +70,8 @@ def load_nanduri2012(subjects=None, electrodes=None, stim_types=None,
     df = pd.read_csv(file_path)
 
     # Select subset of data:
-    idx = np.ones_like(df.index, dtype=np.bool)
-    if subjects is not None:
-        if isinstance(subjects, str):
-            subjects = [subjects]
-        idx_subject = np.zeros_like(df.index, dtype=np.bool)
-        for subject in subjects:
-            idx_subject |= df.subject == subject
-        idx &= idx_subject
     if electrodes is not None:
-        if isinstance(electrodes, str):
-            electrodes = [electrodes]
-        idx_electrode = np.zeros_like(df.index, dtype=np.bool)
-        for electrode in electrodes:
-            idx_electrode |= df.electrode == electrode
-        idx &= idx_electrode
-    if stim_types is not None:
-        if isinstance(stim_types, str):
-            stim_types = [stim_types]
-        idx_type = np.zeros_like(df.index, dtype=np.bool)
-        for stim_type in stim_types:
-            idx_type |= df.stim_type == stim_type
-        idx &= idx_type
-    df = df[idx]
+        df = df[df.electrode == electrode]
 
     if shuffle:
         df = df.sample(n=len(df), random_state=random_state)
