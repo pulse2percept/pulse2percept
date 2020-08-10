@@ -29,19 +29,6 @@ def test_load_nanduri2012():
     npt.assert_equal(data.loc[94, 'electrode'], 'A2')
     npt.assert_equal(data.loc[94, 'stim_type'], 'fixed_duration')
 
-    # Select subjects: *Pointless with one subject*
-    data = load_nanduri2012(subjects='S06')
-    npt.assert_equal(data.shape, (95, 14))
-    npt.assert_equal(data.subject.unique(), 'S06')
-    data = load_nanduri2012(subjects=['S06', 'S07'])  # 'S07' doesnt' exist
-    npt.assert_equal(data.shape, (95, 14))
-    npt.assert_equal(data.subject.unique(), 'S06')
-    # data = load_nanduri2012(subjects=['S05', 'S06'])  # same as None
-    # npt.assert_equal(data.shape, (552, 21))   -- Only one subject exists, can't test for two subjects that exist
-    data = load_nanduri2012(subjects='S6')  # 'S6' doesn't exist
-    npt.assert_equal(data.shape, (0, 14))
-    npt.assert_equal(data.subject.unique(), [])
-
     # Select electrodes:
     data = load_nanduri2012(electrodes='A1')
     npt.assert_equal(data.shape, (0, 14))
@@ -51,21 +38,3 @@ def test_load_nanduri2012():
     npt.assert_equal(data.shape, (0, 14))
     npt.assert_equal(data.electrode.unique(), 'A1')
     npt.assert_equal(data.subject.unique(), 'S06')
-
-    # Select stimulus types:
-    #data = load_nanduri2012(stim_types='single_pulse')
-    #npt.assert_equal(data.shape, (0, 14))
-    #npt.assert_equal(data.stim_type.unique(), 'single_pulse')
-    #npt.assert_equal(list(data.subject.unique()), ['S05', 'S06'])
-    data = load_nanduri2012(stim_types='fixed_duration')
-    npt.assert_equal(data.shape, (95, 14))
-    npt.assert_equal(list(data.stim_type.unique()),
-                      ['fixed_duration'])
-    npt.assert_equal(list(data.subject.unique()), ['S06'])
-
-    # Subject + electrode + stim type:
-    data = load_nanduri2012(subjects='S06', electrodes=['A2', 'C3'],
-                             stim_types='fixed_duration')
-    npt.assert_equal(data.shape, (12, 14))
-    npt.assert_equal(data.subject.unique(), 'S06')
-    npt.assert_equal(list(data.electrode.unique()), ['A2'])
