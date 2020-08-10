@@ -70,9 +70,15 @@ def load_nanduri2012(electrodes=None, shuffle=False, random_state=0):
     df = pd.read_csv(file_path)
 
     # Select subset of data:
+    idx = np.ones_like(df.index, dtype=np.bool)
     if electrodes is not None:
-        df = df[df.electrode == electrode]
-
+        if isinstance(electrodes, str):
+            electrodes = [electrodes]
+        idx_electrode = np.zeros_like(df.index, dtype=np.bool)
+        for electrode in electrodes:
+            idx_electrode |= df.electrode == electrode
+        idx &= idx_electrode
+    df = df[idx]
     if shuffle:
         df = df.sample(n=len(df), random_state=random_state)
 
