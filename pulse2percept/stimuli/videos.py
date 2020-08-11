@@ -6,6 +6,9 @@ from matplotlib.animation import FuncAnimation
 
 from skimage.color import rgb2gray
 from skimage.transform import resize as vid_resize
+from skimage.filters import scharr, sobel, median
+from skimage.feature import canny
+
 from skimage import img_as_float32
 from imageio import get_reader as video_reader
 
@@ -151,13 +154,58 @@ class VideoStimulus(Stimulus):
         params.update({'vid_shape': self.vid_shape})
         return params
 
+    def invert(self):
+        """Invert the gray levels of the video
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object with all grayscale values inverted
+            in the range [0, 1].
+
+        """
+        return VideoStimulus(1.0 - self.data.reshape(self.vid_shape),
+                             electrodes=self.electrodes, time=self.time,
+                             metadata=self.metadata,
+                             interp_method=self._interp_method,
+                             extrapolate=self._extrapolate)
+
+    def rgb2gray(self, electrodes=None):
+        """Convert the video to grayscale
+
+        Parameters
+        ----------
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, electrode names will be numbered 0..N.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in the grayscale video.
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object with all RGB values converted to
+            grayscale in the range [0, 1].
+
+        """
+        vid = self.data.reshape(self.vid_shape)
+        vid = rgb2gray(vid.transpose((0, 1, 3, 2)))
+        return VideoStimulus(vid, electrodes=electrodes, time=self.time,
+                             metadata=self.metadata,
+                             interp_method=self._interp_method,
+                             extrapolate=self._extrapolate)
+
     def resize(self, shape, electrodes=None):
         """Resize the video
 
         Parameters
         ----------
         shape : (rows, cols)
-            Shape of each frame in the resized video
+            Shape of each frame in the resized video. If one of the dimensions
+            is set to -1, its value will be inferred by keeping a constant
+            aspect ratio.
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
             given, electrode names will be numbered 0..N.
@@ -182,6 +230,74 @@ class VideoStimulus(Stimulus):
         vid = vid_resize(self.data.reshape(self.vid_shape),
                          (height, width, *self.vid_shape[2:]))
         return VideoStimulus(vid, electrodes=electrodes, time=self.time,
+                             metadata=self.metadata,
+                             interp_method=self._interp_method,
+                             extrapolate=self._extrapolate)
+
+    def filter(self, filt, **kwargs):
+        """Filter each frame of the video
+
+        Parameters
+        ----------
+        filt : str
+            Image filter that will be applied to every frame of the video.
+            Additional parameters can be passed as keyword arguments.
+            The following filters are supported:
+
+            *  'sobel': Edge filter the image using the `Sobel filter
+               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.sobel>`_.
+            *  'scharr': Edge filter the image using the `Scarr filter
+               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.scharr>`_.
+            *  'canny': Edge filter the image using the `Canny algorithm
+               <https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.canny>`_.
+               You can also specify ``sigma``, ``low_threshold``,
+               ``high_threshold``, ``mask``, and ``use_quantiles``.
+            *  'median': Return local median of the image.
+        **kwargs :
+            Additional parameters passed to the filter
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object with the filtered image
+        """
+        if not isinstance(filt, str):
+            raise TypeError("'filt' must be a string, not %s." % type(filt))
+        if len(self.vid_shape) == 4:
+            raise ValueError('Cannot apply filter to RGB video. Convert to '
+                             'grayscale first.')
+        filters = {'sobel': sobel, 'scharr': scharr, 'canny': canny,
+                   'median': median}
+        try:
+            filt = filters[filt.lower()]
+        except KeyError:
+            raise ValueError("Unknown filter '%s'." % filt)
+        vid = np.array([filt(frame.reshape(self.vid_shape[:-1]), **kwargs)
+                        for frame in self]).transpose((1, 2, 0))
+        return VideoStimulus(vid, electrodes=self.electrodes, time=self.time,
+                             metadata=self.metadata,
+                             interp_method=self._interp_method,
+                             extrapolate=self._extrapolate)
+
+    def apply(self, func, **kwargs):
+        """Apply a function to each frame of the video
+
+        Parameters
+        ----------
+        func : function
+            The function to apply to each frame in the video. Must accept a 2D
+            or 3D image and return an image with the same dimensions
+        **kwargs :
+            Additional parameters passed to the function
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with the new image
+        """
+        vid = np.array([func(frame.reshape(self.vid_shape[:-1]), **kwargs)
+                        for frame in self]).transpose((1, 2, 0))
+        return VideoStimulus(vid, electrodes=self.electrodes, time=self.time,
                              metadata=self.metadata,
                              interp_method=self._interp_method,
                              extrapolate=self._extrapolate)
@@ -264,9 +380,7 @@ class VideoStimulus(Stimulus):
         self.rewind()
         mat = ax.imshow(np.zeros(self.vid_shape[:-1]), cmap='gray',
                         vmax=self.data.max())
-        cbar = fig.colorbar(mat)
-        cbar.ax.set_ylabel('Phosphene brightness (a.u.)', rotation=-90,
-                           va='center')
+        fig.colorbar(mat)
         plt.close(fig)
         if fps is None:
             interval = self._get_interval()
@@ -275,7 +389,6 @@ class VideoStimulus(Stimulus):
             interval = interval[0]
         else:
             interval = 1000.0 / fps
-        print(interval, fps)
         # Create the animation:
         return FuncAnimation(fig, update, data_gen, interval=interval,
                              repeat=repeat)
