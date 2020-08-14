@@ -190,7 +190,7 @@ say you want to add "feature1" to the latest version of pulse2percept:
 
 5.  Go to GitHub and `submit a pull request`_:
 
-    1.  Click on "compare across forks" at the top of the page.
+    1.  Click on "compare & pull request" at the top of the page.
 
     2.  Choose "pulse2percept/pulse2percept" as the base repository and "master"
         as the base branch.
