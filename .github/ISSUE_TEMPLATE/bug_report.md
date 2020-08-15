@@ -2,7 +2,7 @@
 name: Bug report
 about: Create a report to help us improve
 title: "[BUG]"
-labels: ''
+labels: bug
 assignees: ''
 
 ---
@@ -24,9 +24,9 @@ A clear and concise description of what you expected to happen.
 If applicable, add screenshots to help explain your problem.
 
 **System specifications (please complete the following information):**
-- OS: [e.g. iOS]
+- OS: [e.g. macOS]
 - Python version: [e.g. 3.6]
-- pulse2percept version: [e.g. 0.4]
+- pulse2percept version: [e.g. 0.6.0]
 
 **Additional context**
 Add any other context about the problem here.

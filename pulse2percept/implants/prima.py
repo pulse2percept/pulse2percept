@@ -26,6 +26,7 @@ class PhotovoltaicPixel(HexElectrode):
     a : double
         Length of line drawn from the center of the hexagon to the midpoint of
         one of its sides.
+
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('r', 'a')
@@ -59,8 +60,6 @@ class PhotovoltaicPixel(HexElectrode):
 class PRIMA(ProsthesisSystem):
     """Create a PRIMA-100 array on the retina
 
-    .. versionadded:: 0.7
-
     This class creates a PRIMA array with 378 photovoltaic pixels (each
     100um in diameter) as used in the clinical trial [Palanker2020]_, and
     places it in the subretinal space such that the center of the array is
@@ -73,20 +72,22 @@ class PRIMA(ProsthesisSystem):
     This corresponds to a 100um pitch, with adjacent rows separated by 87um.
     The active electrode is a disk with 28um diameter.
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
-    x : float, optional, default: 0
+    x : float, optional
         x coordinate of the array center (um)
-    y : float, optional: default: 0
+    y : float, optional
         y coordinate of the array center (um)
-    z: float || array_like, optional, default: -100
+    z: float or array_like, optional
         Distance of the array to the retinal surface (um). Either a list
         with 378 entries or a scalar.
-    rot : float, optional, default: 0
+    rot : float, optional
         Rotation angle of the array (rad). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
-    eye : {'LE', 'RE'}, optional, default: 'RE'
+    eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
 
     Notes
@@ -147,8 +148,6 @@ class PRIMA(ProsthesisSystem):
 class PRIMA75(ProsthesisSystem):
     """Create a PRIMA-75 array on the retina
 
-    .. versionadded:: 0.7
-
     This class creates a PRIMA array with 142 photovoltaic pixels (each 75um
     in diameter) as described in [Lorach2015]_, and places it in the subretinal
     space, such that that the center of the array is located at 3D location
@@ -161,20 +160,22 @@ class PRIMA75(ProsthesisSystem):
     This corresponds to a 75um pitch, with adjacent rows separated by 65um.
     The active electrode is a disk with 20um diameter.
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
-    x : float, optional, default: 0
+    x : float, optional
         x coordinate of the array center (um)
-    y : float, optional: default: 0
+    y : float, optional
         y coordinate of the array center (um)
-    z: float || array_like, optional, default: -100
+    z: float or array_like, optional
         Distance of the array to the retinal surface (um). Either a list
         with 142 entries or a scalar.
-    rot : float, optional, default: 0
+    rot : float, optional
         Rotation angle of the array (rad). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
-    eye : {'LE', 'RE'}, optional, default: 'RE'
+    eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
 
     """
@@ -233,8 +234,6 @@ class PRIMA75(ProsthesisSystem):
 class PRIMA55(ProsthesisSystem):
     """Create a PRIMA-55 array on the retina
 
-    .. versionadded:: 0.7
-
     This class creates a PRIMA array with 273 photovoltaic pixels (each 55um
     in diameter), and places it in the subretinal space, such that that the
     center of the array is located at 3D location (x,y,z), given in microns,
@@ -252,20 +251,22 @@ class PRIMA55(ProsthesisSystem):
         array fits on a circular 1mm-diameter substrate, which leaves us with
         273 electrodes.
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
-    x : float, optional, default: 0
+    x : float, optional
         x coordinate of the array center (um)
-    y : float, optional: default: 0
+    y : float, optional
         y coordinate of the array center (um)
-    z: float || array_like, optional, default: -100
+    z: float or array_like, optional
         Distance of the array to the retinal surface (um). Either a list
         with 378 entries or a scalar.
-    rot : float, optional, default: 0
+    rot : float, optional
         Rotation angle of the array (rad). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
-    eye : {'LE', 'RE'}, optional, default: 'RE'
+    eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
 
     """
@@ -329,8 +330,6 @@ class PRIMA55(ProsthesisSystem):
 class PRIMA40(ProsthesisSystem):
     """Create a PRIMA-40 array on the retina
 
-    .. versionadded:: 0.7
-
     This class creates a PRIMA array with 532 photovoltaic pixels (each 40um
     in diameter), and places it in the subretinal space, such that that the
     center of the array is located at 3D location (x,y,z), given in microns,
@@ -348,20 +347,22 @@ class PRIMA40(ProsthesisSystem):
         array fits on a circular 1mm-diameter substrate, which leaves us with
         532 electrodes.
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
-    x : float, optional, default: 0
+    x : float, optional
         x coordinate of the array center (um)
-    y : float, optional: default: 0
+    y : float, optional
         y coordinate of the array center (um)
-    z: float || array_like, optional, default: -100
+    z: float or array_like, optional
         Distance of the array to the retinal surface (um). Either a list
         with 378 entries or a scalar.
-    rot : float, optional, default: 0
+    rot : float, optional
         Rotation angle of the array (rad). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
-    eye : {'LE', 'RE'}, optional, default: 'RE'
+    eye : {'LE', 'RE'}, optional
         Eye in which array is implanted.
 
     """

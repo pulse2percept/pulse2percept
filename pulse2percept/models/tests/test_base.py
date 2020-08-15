@@ -136,11 +136,15 @@ def test_TemporalModel():
 
     # Returns Percept object of proper size:
     npt.assert_equal(model.predict_percept(ArgusI().stim), None)
+    model.dt = 1
     for stim in [np.ones((16, 3)), np.zeros((16, 3)),
                  {'A1': [1, 2]}, np.ones((16, 2))]:
         implant = ArgusI(stim=stim)
         percept = model.predict_percept(implant.stim)
-        n_time = 1 if implant.stim.time is None else len(implant.stim.time)
+        # By default, percept is output every 20ms. If stimulus is too short,
+        # output at t=[0, 20]. This is mentioned in the docs - for really short
+        # stimuli, users should specify the desired time points manually.
+        n_time = 1 if implant.stim.time is None else 2
         npt.assert_equal(percept.shape, (implant.stim.shape[0], 1, n_time))
         npt.assert_almost_equal(percept.data, 0)
 

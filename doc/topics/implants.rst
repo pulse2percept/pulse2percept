@@ -132,6 +132,10 @@ class:
                 for s in stim:
                     assert np.isclose(np.sum(s), 0)
 
+.. minigallery:: pulse2percept.implants.ProsthesisSystem
+    :add-heading: Examples using ``ProsthesisSystem``
+    :heading-level: ~
+
 .. _topics-implants-electrode-array:
 
 Electrode arrays
@@ -200,6 +204,10 @@ ordered dictionary (``OrderedDict``):
             self.electrodes = OrderedDict()
             self.add_electrode(name, DiskElectrode(0, 0, 0, 100))
 
+.. minigallery:: pulse2percept.implants.ElectrodeArray
+    :add-heading: Examples using ``ElectrodeArray``
+    :heading-level: ~
+
 .. _topics-implants-electrode:
 
 Electrodes
@@ -254,3 +262,7 @@ Make sure to specify an ``electric_potential`` method for your class:
 
         def electric_potential(self, x, y, z):
             return 0.0
+
+.. minigallery:: pulse2percept.implants.Electrode
+    :add-heading: Examples using ``Electrode``
+    :heading-level: ~

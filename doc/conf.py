@@ -11,12 +11,12 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+import sphinx_gallery
+from sphinx_gallery.sorting import ExplicitOrder
+import sphinx_rtd_theme
 import sys
 import os
 import warnings
-import sphinx_rtd_theme
-import sphinx_gallery
-from sphinx_gallery.sorting import ExplicitOrder
 
 # If extensions (or modules to document with autodoc) are in another
 # directory, add these directories to sys.path here. If the directory
@@ -265,17 +265,19 @@ intersphinx_mapping = {
 }
 
 sphinx_gallery_conf = {
-    'doc_module': 'pulse2percept',
+    # Mini gallery:
     'backreferences_dir': '_api',
+    'doc_module': 'pulse2percept',
     'reference_url': {
         'pulse2percept': None},
     'examples_dirs': ['../examples'],
     'gallery_dirs': ['examples'],
     'remove_config_comments': True,
-    'thumbnail_size': (280, 280),
+    'thumbnail_size': (320, 224),
     'subsection_order': ExplicitOrder(['../examples/implants',
                                        '../examples/stimuli',
                                        '../examples/models',
+                                       '../examples/datasets',
                                        '../examples/developers'])
 }
 

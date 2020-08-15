@@ -1,4 +1,4 @@
-"""`BVA24`"""
+"""`BVT24`"""
 import numpy as np
 
 from .base import ProsthesisSystem
@@ -6,15 +6,14 @@ from .electrodes import DiskElectrode
 from .electrode_arrays import ElectrodeArray
 
 
-class BVA24(ProsthesisSystem):
+class BVT24(ProsthesisSystem):
     """24-channel suprachoroidal retinal prosthesis
 
-    .. versionadded:: 0.6
-
-    This class creates a 24-channel suprachoroidal retinal prosthesis as
-    described in [Layton2014]_, where the center of the array is located
-    at (x,y,z), given in microns, and the array is rotated by rotation
-    angle ``rot``, given in radians.
+    This class creates a 24-channel suprachoroidal retinal prosthesis
+    [Layton2014]_, which was developed by the Bionic Vision Australia
+    Consortium and commercialized by Bionic Vision Technologies (BVT).
+    The center of the array is located at (x,y,z), given in microns, and the
+    array is rotated by rotation angle ``rot``, given in radians.
 
     The array consists of:
 
@@ -36,20 +35,22 @@ class BVA24(ProsthesisSystem):
         Column order for electrode numbering is reversed in a left-eye
         implant.
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
     x : float
         x coordinate of the array center (um)
     y : float
         y coordinate of the array center (um)
-    z: float || array_like
+    z: float or array_like
         Distance of the array to the retinal surface (um). Either a list
         with 60 entries or a scalar.
     rot : float
         Rotation angle of the array (rad). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
-    eye : {'LE', 'RE'}, optional, default: 'RE'
+    eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
 
     """

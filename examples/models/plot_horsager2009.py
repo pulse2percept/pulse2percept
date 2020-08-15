@@ -35,7 +35,7 @@ data.shape
 # Electrode C3:
 
 single_pulse = load_horsager2009(subjects='S05', electrodes='C3',
-                                 stim_types == 'single_pulse')
+                                 stim_types='single_pulse')
 single_pulse
 
 ###############################################################################
@@ -66,7 +66,7 @@ from pulse2percept.models import Horsager2009Temporal
 model = Horsager2009Temporal()
 model.build()
 
-percept = model.predict_percept(pulse)
+percept = model.predict_percept(pulse, t_percept=np.arange(stim_dur))
 
 max_bright = percept.data.max()
 

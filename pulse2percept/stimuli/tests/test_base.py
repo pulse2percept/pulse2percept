@@ -188,7 +188,8 @@ def test_Stimulus_plot():
                     time=[0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0])
     for time in [None, Ellipsis, slice(None)]:
         # Different ways to plot all data points:
-        ax = stim.plot(time=time)
+        fig, ax = plt.subplots()
+        stim.plot(time=time, ax=ax)
         npt.assert_equal(isinstance(ax, Subplot), True)
         npt.assert_almost_equal(ax.get_yticks(), [stim.data.min(), 0,
                                                   stim.data.max()])
@@ -197,18 +198,22 @@ def test_Stimulus_plot():
                                 stim.data.min())
         npt.assert_almost_equal(ax.lines[0].get_data()[1].max(),
                                 stim.data.max())
+        plt.close(fig)
 
     # Plot a range of time values (times are sliced, not interpolated):
-    ax = stim.plot(time=(0.2, 0.6))
+    fig, ax = plt.subplots()
+    ax = stim.plot(time=(0.2, 0.6), ax=ax)
     npt.assert_equal(isinstance(ax, Subplot), True)
     npt.assert_equal(len(ax.lines), 1)
     t_vals = ax.lines[0].get_data()[0]
     npt.assert_almost_equal(t_vals[0], 0.3)
     npt.assert_almost_equal(t_vals[-1], 0.5)
+    plt.close(fig)
 
     # Plot exact time points:
     t_vals = [0.2, 0.3, 0.4]
-    ax = stim.plot(time=t_vals)
+    fig, ax = plt.subplots()
+    stim.plot(time=t_vals, ax=ax)
     npt.assert_equal(isinstance(ax, Subplot), True)
     npt.assert_equal(len(ax.lines), 1)
     npt.assert_almost_equal(ax.lines[0].get_data()[0], t_vals)
@@ -219,7 +224,8 @@ def test_Stimulus_plot():
     for n_electrodes in [2, 3, 4]:
         stim = Stimulus(np.random.rand(n_electrodes, 20),
                         electrodes=['E%d' % i for i in range(n_electrodes)])
-        axes = stim.plot()
+        fig, axes = plt.subplots(ncols=n_electrodes)
+        stim.plot(ax=axes)
         npt.assert_equal(isinstance(axes, (list, np.ndarray)), True)
         for ax, electrode in zip(axes, stim.electrodes):
             npt.assert_equal(isinstance(ax, Subplot), True)
@@ -228,6 +234,7 @@ def test_Stimulus_plot():
             npt.assert_almost_equal(ax.lines[0].get_data()[0], stim.time)
             npt.assert_almost_equal(ax.lines[0].get_data()[1],
                                     stim[electrode, :])
+        plt.close(fig)
 
     # Invalid calls:
     with pytest.raises(TypeError):
@@ -243,12 +250,12 @@ def test_Stimulus_plot():
     with pytest.raises(ValueError):
         stim = Stimulus(np.ones((3, 10)))
         _, axes = plt.subplots(nrows=4)
-        stim.plot(axes=axes)
+        stim.plot(ax=axes)
     with pytest.raises(TypeError):
         stim = Stimulus(np.ones((3, 10)))
         _, axes = plt.subplots(nrows=3)
         axes[1] = 0
-        stim.plot(axes=axes)
+        stim.plot(ax=axes)
 
 
 def test_Stimulus__stim():
@@ -429,3 +436,8 @@ def test_Stimulus___getitem__():
     npt.assert_almost_equal(stim[:, stim.time > 0.6], np.zeros((2, 0)))
     npt.assert_almost_equal(stim['A1', stim.time > 0.6], [])
     npt.assert_almost_equal(stim['A1', np.isclose(stim.time, 0.3)], [1])
+
+
+def test_Stimulus_merge():
+    stim = Stimulus([[1, 0.3, 0.0, 0.6, 2.0]], time=np.arange(5))
+    merge = Stimulus([stim, stim])

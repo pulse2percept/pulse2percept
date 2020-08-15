@@ -44,16 +44,15 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
     def electric_potential(self, x, y, z, *args, **kwargs):
         raise NotImplementedError
 
-    def plot(self, ax=None, pad=100):
+    def plot(self, autoscale=False, ax=None):
         """Plot
 
         Parameters
         ----------
-        ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
+        autoscale : bool, optional
+            Whether to adjust the x,y limits of the plot
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None given, a new one will be created.
-        pad : float, optional, default: 100
-            Padding (microns) to be added to the plot if ``xlim`` and ``ylim``
-            are None.
 
         Returns
         -------
@@ -72,13 +71,23 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
                 # Regular use case: single object
                 ax.add_patch(self.plot_patch((self.x, self.y), zorder=10,
                                              **self.plot_kwargs))
-        ax.set_xlim(self.x - pad, self.x + pad)
-        ax.set_ylim(self.y - pad, self.y + pad)
+            # This is needed in MPL 3.0.X to set the axis limit correctly:
+            ax.autoscale_view()
+        if autoscale:
+            ax.set_xlim(self.x - pad, self.x + pad)
+            ax.set_ylim(self.y - pad, self.y + pad)
         return ax
 
 
 class PointSource(Electrode):
-    """Point source"""
+    """Idealized current point source
+
+    Parameters
+    ----------
+    x/y/z : double
+        3D location of the point source
+
+    """
     # Frozen class: User cannot add more class attributes
     __slots__ = ()
 
@@ -134,6 +143,7 @@ class DiskElectrode(Electrode):
         3D location that is the center of the disk electrode
     r : double
         Disk radius in the x,y plane
+
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('r',)
@@ -205,16 +215,17 @@ class DiskElectrode(Electrode):
 
 
 class SquareElectrode(Electrode):
-    """Photovoltaic pixel
+    """Square electrode
 
     .. versionadded:: 0.7
 
     Parameters
     ----------
     x/y/z : double
-        3D location that is the center of the disk electrode
+        3D location that is the center of the square electrode
     a : double
         Side length of the square
+
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('a')
@@ -249,10 +260,11 @@ class HexElectrode(Electrode):
     Parameters
     ----------
     x/y/z : double
-        3D location that is the center of the disk electrode
+        3D location that is the center of the hexagonal electrode
     a : double
         Length of line drawn from the center of the hexagon to the midpoint of
         one of its sides.
+
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('a')

@@ -248,3 +248,6 @@ main model.
     Alternatively, use ``model.spatial.thresh_percept = 0`` or
     ``model.temporal.thresh_percept = 0``.
 
+.. minigallery:: pulse2percept.models.Model
+    :add-heading: Examples using ``Model``
+    :heading-level: -

@@ -59,8 +59,9 @@ def test_Nanduri2012Spatial():
         npt.assert_almost_equal(model.ret2dva(280.0 * factor), factor)
 
 
-def test_Nanduri2012Temporal():
-    model = Nanduri2012Temporal()
+@pytest.mark.parametrize('scale_out', (1, 2))
+def test_Nanduri2012Temporal(scale_out):
+    model = Nanduri2012Temporal(scale_out=scale_out)
     # User can set their own params:
     model.dt = 0.1
     npt.assert_equal(model.dt, 0.1)
@@ -88,7 +89,7 @@ def test_Nanduri2012Temporal():
         model.predict_percept(implant.stim, t_percept=[0.2, 0.2])
 
     # Brightness scales differently with amplitude vs frequency:
-    model = Nanduri2012Temporal(dt=5e-3)
+    model = Nanduri2012Temporal(dt=5e-3, scale_out=scale_out)
     model.build()
     sdur = 1000.0  # stimulus duration (ms)
     pdur = 0.45  # (ms)
@@ -102,8 +103,8 @@ def test_Nanduri2012Temporal():
                                           stim_dur=sdur)
         percept = model.predict_percept(implant.stim, t_percept=t_percept)
         bright_amp.append(percept.data.max())
-    bright_amp_ref = [0.0, 0.00890, 0.0657, 0.1500, 0.1691]
-    npt.assert_almost_equal(bright_amp, bright_amp_ref, decimal=3)
+    bright_amp_ref = np.array([0.0, 0.00890, 0.0657, 0.1500, 0.1691])
+    npt.assert_almost_equal(bright_amp, scale_out * bright_amp_ref, decimal=3)
 
     bright_freq = []
     for freq in np.linspace(0, 100, 5):
@@ -113,8 +114,9 @@ def test_Nanduri2012Temporal():
                                           stim_dur=sdur)
         percept = model.predict_percept(implant.stim, t_percept=t_percept)
         bright_freq.append(percept.data.max())
-    bright_freq_ref = [0.0, 0.0394, 0.0741, 0.1073, 0.1385]
-    npt.assert_almost_equal(bright_freq, bright_freq_ref, decimal=3)
+    bright_freq_ref = np.array([0.0, 0.0394, 0.0741, 0.1073, 0.1385])
+    npt.assert_almost_equal(bright_freq, scale_out * bright_freq_ref,
+                            decimal=3)
 
 
 def test_Nanduri2012Model():

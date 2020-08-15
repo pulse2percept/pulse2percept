@@ -29,23 +29,22 @@ grid (575 um center-to-center separation) [Yue2020]_.
 
 import matplotlib.pyplot as plt
 from pulse2percept.implants import *
-from pulse2percept.viz import plot_axon_map
+from pulse2percept.models import AxonMapModel
 
 fig, ax = plt.subplots(ncols=2, figsize=(10, 6))
 
 # For illustrative purpose, also show the map of fiber
 # bundles in the optic fiber layer:
-plot_axon_map(ax=ax[0], annotate=False)
+model = AxonMapModel()
+model.plot(ax=ax[0])
 # Argus I is typically implanted at a 30-45deg angle:
 ArgusI(rot=-0.52).plot(ax=ax[0], annotate=True)
 ax[0].set_title('Argus I')
 
-plot_axon_map(ax=ax[1], annotate=False)
+model.plot(ax=ax[1])
 # Argus II is typically implanted at a 30-45deg angle:
 ArgusII(rot=-0.52).plot(ax=ax[1], annotate=False)
 ax[1].set_title('Argus II')
-
-fig.tight_layout()
 
 ###############################################################################
 # PRIMA Bionic Vision System (Pixium Vision SA)
@@ -74,8 +73,6 @@ ax[0].set_title('PRIMA-100')
 PRIMA75().plot(ax=ax[1])
 ax[1].set_title('PRIMA-75')
 
-fig.tight_layout()
-
 ###############################################################################
 # In addition, the developers are working on miniaturizing the device. At least
 # two other prototypes are currently in development:
@@ -100,16 +97,13 @@ ax[0].set_title('PRIMA-55')
 PRIMA40().plot(ax=ax[1])
 ax[1].set_title('PRIMA-40')
 
-fig.tight_layout()
-
-
 ###############################################################################
 # BVT Bionic Eye System (Bionic Vision Technologies)
 # --------------------------------------------------
 #
-# :py:class:`~pulse2percept.implants.BVA24` is a 24-channel suprachoroidal
+# :py:class:`~pulse2percept.implants.BVT24` is a 24-channel suprachoroidal
 # retinal prosthesis [Layton2014]_, which was developed by the Bionic Vision
-# Australia (BVA) Consortium and commercialized by Bionic Vision Technologies.
+# Australia Consortium and commercialized by Bionic Vision Technologies (BVT).
 #
 # Note that the array actually consists of a total of 35 electrodes:
 #
@@ -128,10 +122,8 @@ fig.tight_layout()
 
 fig, ax = plt.subplots(figsize=(10, 6))
 
-BVA24().plot(ax=ax, annotate=True)
-ax.set_title('BVA-24')
-fig.tight_layout()
-
+BVT24().plot(ax=ax, annotate=True)
+ax.set_title('BVT-24')
 
 ###############################################################################
 # Alpha-IMS and Alpha-AMS Retinal Implant System (Retina Implant AG)
@@ -156,5 +148,3 @@ ax[0].set_title('Alpha-IMS')
 
 AlphaAMS().plot(ax=ax[1])
 ax[1].set_title('Alpha-AMS')
-
-fig.tight_layout()

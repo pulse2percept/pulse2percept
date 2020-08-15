@@ -13,17 +13,20 @@ pulse2percept is organized into the following subpackages:
     viz
     utils
 """
-# This import is necessary to ensure consistency of the generated images across
-# platforms, and for the tests to run on Travis:
-# https://stackoverflow.com/questions/35403127/testing-matplotlib-based-plots-in-travis-ci
-# https://stackoverflow.com/questions/21784641/installation-issue-with-matplotlib-python
-# http://www.davidketcheson.info/2015/01/13/using_matplotlib_image_comparison.html
-from sys import platform
 import matplotlib as mpl
-if platform == "darwin":  # OS X
+from os import environ
+from sys import platform
+# Use TkAgg on OS X:
+# https://stackoverflow.com/a/32082076
+# https://stackoverflow.com/a/21789908
+if platform == "darwin":
     mpl.use('TkAgg')
 else:
-    mpl.use('agg')
+    # Use Agg if there's no display:
+    # https://stackoverflow.com/a/40931739
+    if 'inline' not in mpl.get_backend():
+        if environ.get('DISPLAY', '') == '':
+            mpl.use('Agg')
 
 import logging
 from .version import __version__

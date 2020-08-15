@@ -33,6 +33,7 @@ def configuration(parent_package='', top_path=None):
     # Data directories
     config.add_data_dir('datasets/data')
     config.add_data_dir('stimuli/data')
+    config.add_data_dir('viz/data')
 
     # https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html#compiler-directives
     config.ext_modules = cythonize(config.ext_modules,

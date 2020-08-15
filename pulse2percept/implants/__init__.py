@@ -1,5 +1,6 @@
-"""Different retinal prosthetic implants, such as Argus II, Alpha-IMS,
-   BVA-24, and PRIMA.
+"""
+Different retinal prosthetic implants, such as Argus II, Alpha-IMS, BVT-24,
+and PRIMA.
 
 .. autosummary::
     : toctree: _api
@@ -9,7 +10,7 @@
     electrode_arrays
     argus
     alpha
-    bva
+    bvt
     prima
 
 .. seealso::
@@ -22,7 +23,7 @@ from .electrodes import (Electrode, PointSource, DiskElectrode,
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from .argus import ArgusI, ArgusII
 from .alpha import AlphaIMS, AlphaAMS
-from .bva import BVA24
+from .bvt import BVT24
 from .prima import PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55, PRIMA40
 
 __all__ = [
@@ -30,7 +31,7 @@ __all__ = [
     'AlphaIMS',
     'ArgusI',
     'ArgusII',
-    'BVA24',
+    'BVT24',
     'DiskElectrode',
     'Electrode',
     'ElectrodeArray',

@@ -1,4 +1,4 @@
-"""`load_horsager2009`, `VariableDuration`"""
+"""`load_horsager2009`"""
 from os.path import dirname, join
 import numpy as np
 
@@ -12,8 +12,6 @@ except ImportError:
 def load_horsager2009(subjects=None, electrodes=None, stim_types=None,
                       shuffle=False, random_state=0):
     """Load data from [Horsager2009]_
-
-    .. versionadded:: 0.6
 
     Load the threshold data described in [Horsager2009]_. Average thresholds
     were extracted from the figures of the paper using WebplotDigitizer.
@@ -60,20 +58,22 @@ def load_horsager2009(subjects=None, electrodes=None, stim_types=None,
 
     Missing values are denoted by NaN.
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
-    subjects : str | list of strings | None, optional, default: None
+    subjects : str | list of strings | None, optional
         Select data from a subject or list of subjects. By default, all
         subjects are selected.
-    electrodes : str | list of strings | None, optional, default: None
+    electrodes : str | list of strings | None, optional
         Select data from a single electrode or a list of electrodes.
         By default, all electrodes are selected.
-    stim_types : str | list of strings | None, optional, default: None
+    stim_types : str | list of strings | None, optional
         Select data from a single stimulus type or a list of stimulus types.
         By default, all stimulus types are selected.
-    shuffle : boolean, optional, default: False
+    shuffle : boolean, optional
         If True, the rows of the DataFrame are shuffled.
-    random_state : int | numpy.random.RandomState | None, optional, default: 0
+    random_state : int | numpy.random.RandomState | None, optional
         Determines random number generation for dataset shuffling. Pass an int
         for reproducible output across multiple function calls.
 
@@ -81,6 +81,7 @@ def load_horsager2009(subjects=None, electrodes=None, stim_types=None,
     -------
     data: pd.DataFrame
         The whole dataset is returned in a 552x21 Pandas DataFrame
+
     """
     if not has_pandas:
         raise ImportError("You do not have pandas installed. "
@@ -92,21 +93,21 @@ def load_horsager2009(subjects=None, electrodes=None, stim_types=None,
 
     # Select subset of data:
     idx = np.ones_like(df.index, dtype=np.bool)
-    if subjects:
+    if subjects is not None:
         if isinstance(subjects, str):
             subjects = [subjects]
         idx_subject = np.zeros_like(df.index, dtype=np.bool)
         for subject in subjects:
             idx_subject |= df.subject == subject
         idx &= idx_subject
-    if electrodes:
+    if electrodes is not None:
         if isinstance(electrodes, str):
             electrodes = [electrodes]
         idx_electrode = np.zeros_like(df.index, dtype=np.bool)
         for electrode in electrodes:
             idx_electrode |= df.electrode == electrode
         idx &= idx_electrode
-    if stim_types:
+    if stim_types is not None:
         if isinstance(stim_types, str):
             stim_types = [stim_types]
         idx_type = np.zeros_like(df.index, dtype=np.bool)

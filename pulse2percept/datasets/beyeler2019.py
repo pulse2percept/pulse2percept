@@ -17,11 +17,9 @@ except ImportError:
     has_h5py = False
 
 
-def fetch_beyeler2019(data_path=None, shuffle=False, random_state=0,
-                      download_if_missing=True):
+def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
+                      shuffle=False, random_state=0, download_if_missing=True):
     """Load the phosphene drawing dataset from [Beyeler2019]_
-
-    .. versionadded:: 0.6
 
     Download the phosphene drawing dataset described in [Beyeler2019]_ from
     https://osf.io/6v2tb (263MB) to ``data_path``. By default, all datasets are
@@ -41,11 +39,11 @@ def fetch_beyeler2019(data_path=None, shuffle=False, random_state=0,
     electrode             Electrode ID, A1-F10
     image                 Phosphene drawing
     img_shape             x,y shape of the phosphene drawing
-    date                  Experiment date
+    date                  Experiment date (YYYY/mm/dd)
     stim_class            Stimulus type used to stimulate the array
     amp                   Pulse amplitude used (x Threshold)
-    freq                  Pulse frequency used
-    pdur                  Pulse duration used
+    freq                  Pulse frequency used (Hz)
+    pdur                  Pulse duration used (ms)
     area                  Phosphene area (see [Beyeler2019]_ for details)
     orientation           Phosphene orientation (see [Beyeler2019]_)
     eccentricity          Phosphene elongation (see [Beyeler2019]_)
@@ -53,17 +51,25 @@ def fetch_beyeler2019(data_path=None, shuffle=False, random_state=0,
     x_center, y_center    Phosphene center of mass (see [Beyeler2019]_)
     ====================  ================================================
 
+    .. versionadded:: 0.6
+
     Parameters
     ----------
-    data_path: string, optional, default: None
+    subjects : str | list of strings | None, optional
+        Select data from a subject or list of subjects. By default, all
+        subjects are selected.
+    electrodes : str | list of strings | None, optional
+        Select data from a single electrode or a list of electrodes.
+        By default, all electrodes are selected.
+    data_path: string, optional
         Specify another download and cache folder for the dataset. By default
         all pulse2percept data is stored in '~/pulse2percept_data' subfolders.
-    shuffle : boolean, optional, default: False
+    shuffle : boolean, optional
         If True, the rows of the DataFrame are shuffled.
     random_state : int | numpy.random.RandomState | None, optional, default: 0
         Determines random number generation for dataset shuffling. Pass an int
         for reproducible output across multiple function calls.
-    download_if_missing : optional, default: True
+    download_if_missing : optional
         If False, raise an IOError if the data is not locally available
         instead of trying to download it from the source site.
 
@@ -71,6 +77,7 @@ def fetch_beyeler2019(data_path=None, shuffle=False, random_state=0,
     -------
     data: pd.DataFrame
         The whole dataset is returned in a 400x16 Pandas DataFrame
+
     """
     if not has_h5py:
         raise ImportError("You do not have h5py installed. "
@@ -94,13 +101,11 @@ def fetch_beyeler2019(data_path=None, shuffle=False, random_state=0,
     # Open the HDF5 file:
     f = h5py.File(file_path, 'r')
 
-    # Fields names are 'subject.field_name', so we split by '.' to find the
-    # subject ID:
-    subjects = np.unique([k.split('.')[0] for k in f.keys()])
-
     # Create a DataFrame for every subject, then concatenate:
     dfs = []
-    for subject in subjects:
+    # Fields names are 'subject.field_name', so we split by '.' to find the
+    # subject ID:
+    for subject in np.unique([k.split('.')[0] for k in f.keys()]):
         df = pd.DataFrame()
         df['subject'] = subject
         for key in f.keys():
@@ -123,6 +128,24 @@ def fetch_beyeler2019(data_path=None, shuffle=False, random_state=0,
     df['img_shape'] = df.apply(lambda x: (x['img_shape_x'], x['img_shape_y']),
                                axis=1)
     df.drop(columns=['img_shape_x', 'img_shape_y'], inplace=True)
+
+    # Select subset of data:
+    idx = np.ones_like(df.index, dtype=np.bool)
+    if subjects is not None:
+        if isinstance(subjects, str):
+            subjects = [subjects]
+        idx_subject = np.zeros_like(df.index, dtype=np.bool)
+        for subject in subjects:
+            idx_subject |= df.subject == subject
+        idx &= idx_subject
+    if electrodes is not None:
+        if isinstance(electrodes, str):
+            electrodes = [electrodes]
+        idx_electrode = np.zeros_like(df.index, dtype=np.bool)
+        for electrode in electrodes:
+            idx_electrode |= df.electrode == electrode
+        idx &= idx_electrode
+    df = df[idx]
 
     if shuffle:
         df = df.sample(n=len(df), random_state=random_state)

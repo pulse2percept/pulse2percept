@@ -1,20 +1,27 @@
-"""`ImageStimulus`, `BionicVisionLabLogo`"""
+"""`ImageStimulus`, `LogoBVL`, `LogoUCSB`"""
+from os.path import dirname, join
 import numpy as np
+from copy import deepcopy
 import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
 
-from skimage import img_as_float
-from skimage.io import imread
+from skimage import img_as_float32
+from skimage.io import imread, imsave
 from skimage.color import rgba2rgb, rgb2gray
-from skimage.transform import resize as img_resize
+from skimage.measure import moments as img_moments
+from skimage.transform import (resize as img_resize, rotate as img_rotate,
+                               warp as img_warp, SimilarityTransform)
+from skimage.filters import (threshold_mean, threshold_minimum, threshold_otsu,
+                             threshold_local, threshold_isodata, scharr, sobel,
+                             median)
+from skimage.feature import canny
 
 from .base import Stimulus
+from .pulses import BiphasicPulse
 
 
 class ImageStimulus(Stimulus):
     """ImageStimulus
-
-    .. versionadded:: 0.7
 
     A stimulus made from an image, where each pixel gets assigned to an
     electrode, and grayscale values in the range [0, 255] get converted to
@@ -25,20 +32,520 @@ class ImageStimulus(Stimulus):
         *  `Basic Concepts > Electrical Stimuli <topics-stimuli>`
         *  :py:class:`~pulse2percept.stimuli.VideoStimulus`
 
+    .. versionadded:: 0.7
+
     Parameters
     ----------
-    fname : str
+    source : str
         Path to image file. Supported image types include JPG, PNG, and TIF;
         and are inferred from the file ending. If the file does not have a
         proper file ending, specify the file type via ``format``.
         Use :py:class:`~pulse2percept.stimuli.VideoStimulus` for GIFs.
 
-    format : str
+    format : str, optional
         An image format string supported by imageio, such as 'JPG', 'PNG', or
-        'TIFF'. Use if the file type cannot be inferred from ``fname``.
+        'TIFF'. Use if the file type cannot be inferred from ``source``.
         For a full list of supported formats, see
         https://imageio.readthedocs.io/en/stable/formats.html.
 
+    resize : (height, width) or None, optional
+        A tuple specifying the desired height and the width of the image
+        stimulus. One shape dimension can be -1. In this case, the value is
+        inferred from the other dimension by keeping a constant aspect ratio.
+
+    as_gray : bool, optional
+        Flag whether to convert the image to grayscale.
+        A four-channel image is interpreted as RGBA (e.g., a PNG), and the
+        alpha channel will be blended with the color black.
+
+    electrodes : int, string or list thereof; optional
+        Optionally, you can provide your own electrode names. If none are
+        given, electrode names will be numbered 0..N.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional
+        Additional stimulus metadata can be stored in a dictionary.
+
+    compress : bool, optional
+        If True, will remove pixels with 0 grayscale value.
+
+    """
+    __slots__ = ('img_shape',)
+
+    def __init__(self, source, format=None, resize=None, as_gray=False,
+                 electrodes=None, metadata=None, compress=False):
+        if metadata is None:
+            metadata = {}
+        if isinstance(source, str):
+            # Filename provided:
+            img = imread(source, format=format)
+            metadata['source'] = source
+            metadata['source_shape'] = img.shape
+        elif isinstance(source, ImageStimulus):
+            img = source.data.reshape(source.img_shape)
+            metadata.update(source.metadata)
+            if electrodes is None:
+                electrodes = source.electrodes
+        elif isinstance(source, np.ndarray):
+            img = source
+        else:
+            raise TypeError("Source must be a filename or another "
+                            "ImageStimulus, not %s." % type(source))
+        if img.ndim < 2 or img.ndim > 3:
+            raise ValueError("Images must have 2 or 3 dimensions, not "
+                             "%d." % img.ndim)
+        # Convert to grayscale if necessary:
+        if as_gray:
+            if img.ndim == 3 and img.shape[2] == 4:
+                # Blend the background with black:
+                img = rgba2rgb(img, background=(0, 0, 0))
+            img = rgb2gray(img)
+        # Resize if necessary:
+        if resize is not None:
+            height, width = resize
+            if height < 0 and width < 0:
+                raise ValueError('"height" and "width" cannot both be -1.')
+            if height < 0:
+                height = int(img.shape[0] * width / img.shape[1])
+            if width < 0:
+                width = int(img.shape[1] * height / img.shape[0])
+            img = img_resize(img, (height, width))
+        # Store the original image shape for resizing and color conversion:
+        self.img_shape = img.shape
+        # Convert to float array in [0, 1] and call the Stimulus constructor:
+        super(ImageStimulus, self).__init__(img_as_float32(img).ravel(),
+                                            time=None, electrodes=electrodes,
+                                            metadata=metadata,
+                                            compress=compress)
+
+    def _pprint_params(self):
+        params = super(ImageStimulus, self)._pprint_params()
+        params.update({'img_shape': self.img_shape})
+        return params
+
+    def invert(self):
+        """Invert the gray levels of the image
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with all grayscale values inverted
+            in the range [0, 1].
+
+        """
+        img = deepcopy(self.data.reshape(self.img_shape))
+        if len(self.img_shape) > 2:
+            img[..., :3] = 1.0 - img[..., :3]
+        else:
+            img = 1.0 - img
+        return ImageStimulus(img, electrodes=self.electrodes,
+                             metadata=self.metadata)
+
+    def rgb2gray(self, electrodes=None):
+        """Convert the image to grayscale
+
+        Parameters
+        ----------
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, electrode names will be numbered 0..N.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in the grayscale image.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with all grayscale values inverted
+            in the range [0, 1].
+
+        Notes
+        -----
+        *  A four-channel image is interpreted as RGBA (e.g., a PNG), and the
+           alpha channel will be blended with the color black.
+
+        """
+        img = self.data.reshape(self.img_shape)
+        if img.ndim == 3 and img.shape[2] == 4:
+            # Blend the background with black:
+            img = rgba2rgb(img, background=(0, 0, 0))
+        return ImageStimulus(rgb2gray(img), electrodes=electrodes,
+                             metadata=self.metadata)
+
+    def threshold(self, thresh, **kwargs):
+        """Threshold the image
+
+        Parameters
+        ----------
+        thresh : str or float
+            If a float in [0,1] is provided, pixels whose grayscale value is
+            above said threshold will be white, others black.
+
+            A number of additional methods are supported:
+
+            *  'mean': Threshold image based on the mean of grayscale values.
+            *  'minimum': Threshold image based on the minimum method, where
+                          the histogram of the input image is computed and
+                          smoothed until there are only two maxima.
+            *  'local': Threshold image based on `local pixel neighborhood
+                        <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_local>_.
+                        Requires ``block_size``: odd number of pixels in the
+                        neighborhood.
+            *  'otsu': `Otsu's method
+                       <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_otsu>_
+            *  'isodata': `ISODATA method
+                          <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_isodata>`_,
+                          also known as the Ridler-Calvard method or
+                          intermeans.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with two gray levels 0.0 and 1.0
+        """
+        if len(self.img_shape) > 2:
+            raise ValueError("Thresholding is only supported for grayscale "
+                             "(i.e., single-channel) images. Use `rgb2gray` "
+                             "first.")
+        img = self.data.reshape(self.img_shape)
+        if isinstance(thresh, str):
+            if thresh.lower() == 'mean':
+                img = img > threshold_mean(img)
+            elif thresh.lower() == 'minimum':
+                img = img > threshold_minimum(img, **kwargs)
+            elif thresh.lower() == 'local':
+                img = img > threshold_local(img, **kwargs)
+            elif thresh.lower() == 'otsu':
+                img = img > threshold_otsu(img, **kwargs)
+            elif thresh.lower() == 'isodata':
+                img = img > threshold_isodata(img, **kwargs)
+            else:
+                raise ValueError("Unknown threshold method '%s'." % thresh)
+        elif np.isscalar(thresh):
+            img = self.data.reshape(self.img_shape) > thresh
+        else:
+            raise TypeError("Threshold type must be str or float, not "
+                            "%s." % type(thresh))
+        return ImageStimulus(img, electrodes=self.electrodes,
+                             metadata=self.metadata)
+
+    def resize(self, shape, electrodes=None):
+        """Resize the image
+
+        Parameters
+        ----------
+        shape : (rows, cols)
+            Shape of the resized image
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, electrode names will be numbered 0..N.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in the grayscale image.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the resized image
+
+        """
+        height, width = shape
+        if height < 0 and width < 0:
+            raise ValueError('"height" and "width" cannot both be -1.')
+        if height < 0:
+            height = int(self.img_shape[0] * width / self.img_shape[1])
+        if width < 0:
+            width = int(self.img_shape[1] * height / self.img_shape[0])
+        img = img_resize(self.data.reshape(self.img_shape), (height, width))
+
+        return ImageStimulus(img, electrodes=electrodes,
+                             metadata=self.metadata)
+
+    def rotate(self, angle, center=None, mode='constant'):
+        """Rotate the image
+
+        Parameters
+        ----------
+        angle : float
+            Angle by which to rotate the image (degrees).
+            Positive: counter-clockwise, negative: clockwise
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the rotated image
+
+        """
+        img = img_rotate(self.data.reshape(self.img_shape), angle, mode=mode,
+                         resize=False)
+        return ImageStimulus(img, electrodes=self.electrodes,
+                             metadata=self.metadata)
+
+    def shift(self, shift_cols, shift_rows):
+        """Shift the image foreground
+
+        This function shifts the center of mass (CoM) of the image by the
+        specified number of rows and columns.
+
+        Parameters
+        ----------
+        shift_cols : float
+            Number of columns by which to shift the CoM.
+            Positive: to the right, negative: to the left
+        shift_rows : float
+            Number of rows by which to shift the CoM.
+            Positive: downward, negative: upward
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the shifted image
+
+        """
+        img = self.data.reshape(self.img_shape)
+        tf = SimilarityTransform(translation=[shift_cols, shift_rows])
+        img = img_warp(img, tf.inverse)
+        return ImageStimulus(img, electrodes=self.electrodes,
+                             metadata=self.metadata)
+
+    def center(self, loc=None):
+        """Center the image foreground
+
+        This function shifts the center of mass (CoM) to the image center.
+
+        Parameters
+        ----------
+        loc : (col, row), optional
+            The pixel location at which to center the CoM. By default, shifts
+            the CoM to the image center.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the centered image
+
+        """
+        # Calculate center of mass:
+        img = self.data.reshape(self.img_shape)
+        m = img_moments(img, order=1)
+        # No area found:
+        if np.isclose(m[0, 0], 0):
+            return img
+        # Center location:
+        if loc is None:
+            loc = np.array(self.img_shape[::-1]) / 2.0 - 0.5
+        # Shift the image by -centroid, +image center:
+        transl = (loc[0] - m[0, 1] / m[0, 0], loc[1] - m[1, 0] / m[0, 0])
+        tf_shift = SimilarityTransform(translation=transl)
+        img = img_warp(img, tf_shift.inverse)
+        return ImageStimulus(img, electrodes=self.electrodes,
+                             metadata=self.metadata)
+
+    def scale(self, scaling_factor):
+        """Scale the image foreground
+
+        This function scales the image foreground (excluding black pixels)
+        by a factor.
+
+        Parameters
+        ----------
+        scaling_factor : float
+            Factory by which to scale the image
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the scaled image
+
+        """
+        if scaling_factor <= 0:
+            raise ValueError("Scaling factor must be greater than zero")
+        # Calculate center of mass:
+        img = self.data.reshape(self.img_shape)
+        m = img_moments(img, order=1)
+        # No area found:
+        if np.isclose(m[0, 0], 0):
+            return img
+        # Shift the phosphene to (0, 0):
+        center_mass = np.array([m[0, 1] / m[0, 0], m[1, 0] / m[0, 0]])
+        tf_shift = SimilarityTransform(translation=-center_mass)
+        # Scale the phosphene:
+        tf_scale = SimilarityTransform(scale=scaling_factor)
+        # Shift the phosphene back to where it was:
+        tf_shift_inv = SimilarityTransform(translation=center_mass)
+        # Combine all three transforms:
+        tf = tf_shift + tf_scale + tf_shift_inv
+        img = img_warp(img, tf.inverse)
+        return ImageStimulus(img, electrodes=self.electrodes,
+                             metadata=self.metadata)
+
+    def filter(self, filt, **kwargs):
+        """Filter the image
+
+        Parameters
+        ----------
+        filt : str
+            Image filter. Additional parameters can be passed as keyword
+            arguments. The following filters are supported:
+
+            *  'sobel': Edge filter the image using the `Sobel filter
+               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.sobel>`_.
+            *  'scharr': Edge filter the image using the `Scarr filter
+               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.scharr>`_.
+            *  'canny': Edge filter the image using the `Canny algorithm
+               <https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.canny>`_.
+               You can also specify ``sigma``, ``low_threshold``,
+               ``high_threshold``, ``mask``, and ``use_quantiles``.
+            *  'median': Return local median of the image.
+        **kwargs :
+            Additional parameters passed to the filter
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with the filtered image
+        """
+        if not isinstance(filt, str):
+            raise TypeError("'filt' must be a string, not %s." % type(filt))
+        img = self.data.reshape(self.img_shape)
+        if filt.lower() == 'sobel':
+            img = sobel(img, **kwargs)
+        elif filt.lower() == 'scharr':
+            img = scharr(img, **kwargs)
+        elif filt.lower() == 'canny':
+            img = canny(img, **kwargs)
+        elif filt.lower() == 'median':
+            img = median(img, **kwargs)
+        else:
+            raise ValueError("Unknown filter '%s'." % filt)
+        return ImageStimulus(img, electrodes=self.electrodes,
+                             metadata=self.metadata)
+
+    def apply(self, func, **kwargs):
+        """Apply a function to the image
+
+        Parameters
+        ----------
+        func : function
+            The function to apply to the image. Must accept a 2D or 3D image
+            and return an image with the same dimensions
+        **kwargs :
+            Additional parameters passed to the function
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with the new image
+        """
+        img = func(self.data.reshape(self.img_shape), **kwargs)
+        return ImageStimulus(img, electrodes=self.electrodes,
+                             metadata=self.metadata)
+
+    def encode(self, amp_range=(0, 50), pulse=None):
+        """Encode image using amplitude modulation
+
+        Encodes the image as a series of pulses, where the gray levels of the
+        image are interpreted as the amplitude of a pulse with values in
+        ``amp_range``.
+
+        By default, a single biphasic pulse is used for each pixel, with 0.46ms
+        phase duration, and 500ms total stimulus duration.
+
+        Parameters
+        ----------
+        amp_range : (min_amp, max_amp)
+            Range of amplitude values to use for the encoding. The image's
+            gray levels will be scaled such that the smallest value is mapped
+            onto ``min_amp`` and the largest onto ``max_amp``.
+        pulse : :py:class:`~pulse2percept.stimuli.Stimulus`, optional
+            A valid pulse or pulse train to be used for the encoding.
+            If None given, a :py:class:`~pulse2percept.stimuli.BiphasicPulse`
+            (0.46 ms phase duration, 500 ms total duration) will be used.
+
+        Returns
+        -------
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
+            Encoded stimulus
+
+        """
+        if pulse is None:
+            pulse = BiphasicPulse(1, 0.46, stim_dur=500)
+        else:
+            if not isinstance(pulse, Stimulus):
+                raise TypeError("'pulse' must be a Stimulus object.")
+            if pulse.time is None:
+                raise ValueError("'pulse' must have a time component.")
+        # Make sure the provided pulse has max amp 1:
+        enc_data = pulse.data
+        if not np.isclose(np.abs(enc_data).max(), 0):
+            enc_data /= np.abs(enc_data).max()
+        # Normalize the range of pixel values:
+        px_data = self.data - self.data.min()
+        if not np.isclose(np.abs(px_data).max(), 0):
+            px_data /= np.abs(px_data).max()
+        # Amplitude modulation:
+        stim = []
+        for px, e in zip(px_data.ravel(), self.electrodes):
+            amp = px * (amp_range[1] - amp_range[0]) + amp_range[0]
+            stim.append(Stimulus(amp * enc_data, time=pulse.time,
+                                 electrodes=e))
+        return Stimulus(stim)
+
+    def plot(self, ax=None, **kwargs):
+        """Plot the stimulus
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes or list thereof; optional, default: None
+            A Matplotlib Axes object or a list thereof (one per electrode to
+            plot). If None, a new Axes object will be created.
+
+        Returns
+        -------
+        ax: matplotlib.axes.Axes
+            Returns the axes with the plot on it
+
+        """
+        if ax is None:
+            ax = plt.gca()
+        if 'figsize' in kwargs:
+            ax.figure.set_size_inches(kwargs.pop('figsize'))
+
+        cmap = None
+        if len(self.img_shape) == 2:
+            cmap = 'gray'
+        if 'cmap' in kwargs:
+            cmap = kwargs.pop('cmap')
+        ax.imshow(self.data.reshape(self.img_shape), cmap=cmap, **kwargs)
+        return ax
+
+    def save(self, fname):
+        """Save the stimulus as an image
+
+        Parameters
+        ----------
+        fname : str
+            The name of the image file to be created. Image type will be
+            inferred from the file extension.
+
+        """
+        imsave(fname, self.data.reshape(self.img_shape))
+
+
+class LogoBVL(ImageStimulus):
+    """Bionic Vision Lab (BVL) logo
+
+    Load the 576x720x4 Bionic Vision Lab (BVL) logo.
+
+    .. versionadded:: 0.7
+
+    Parameters
+    ----------
     resize : (height, width) or None
         A tuple specifying the desired height and the width of the image
         stimulus.
@@ -54,142 +561,57 @@ class ImageStimulus(Stimulus):
     metadata : dict, optional, default: None
         Additional stimulus metadata can be stored in a dictionary.
 
-    compress : bool, optional, default: False
-        If True, will remove pixels with 0 grayscale value.
+    """
+
+    def __init__(self, resize=None, electrodes=None, metadata=None,
+                 as_gray=False):
+        # Load logo from data dir:
+        module_path = dirname(__file__)
+        source = join(module_path, 'data', 'bionic-vision-lab.png')
+        # Call ImageStimulus constructor:
+        super(LogoBVL, self).__init__(source, format="PNG",
+                                      resize=resize,
+                                      as_gray=as_gray,
+                                      electrodes=electrodes,
+                                      metadata=metadata,
+                                      compress=False)
+
+
+class LogoUCSB(ImageStimulus):
+    """UCSB logo
+
+    Load a 324x727 white-on-black logo of the University of California, Santa
+    Barbara.
+
+    .. versionadded:: 0.7
+
+    Parameters
+    ----------
+    resize : (height, width) or None
+        A tuple specifying the desired height and the width of the image
+        stimulus.
+
+    electrodes : int, string or list thereof; optional, default: None
+        Optionally, you can provide your own electrode names. If none are
+        given, electrode names will be numbered 0..N.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional, default: None
+        Additional stimulus metadata can be stored in a dictionary.
 
     """
-    __slots__ = ('img_shape',)
 
-    def __init__(self, fname, format=None, resize=None, as_gray=False,
-                 electrodes=None, metadata=None, compress=False):
-        img = imread(fname, format=format)
-        # Build the metadata container:
-        if metadata is None:
-            metadata = {}
-        metadata['source'] = fname
-        metadata['source_shape'] = img.shape
-        # Convert to grayscale if necessary:
-        if as_gray:
-            if img.shape[-1] == 4:
-                # Convert the transparent background to black:
-                img = rgba2rgb(img, background=(0, 0, 0))
-            img = rgb2gray(img)
-        # Resize if necessary:
-        if resize is not None:
-            img = img_resize(img, resize)
-        # Store the original image shape for resizing and color conversion:
-        self.img_shape = img.shape
-        # Convert to float array in [0, 1] and call the Stimulus constructor:
-        super(ImageStimulus, self).__init__(img_as_float(img).ravel(),
-                                            time=None, electrodes=electrodes,
-                                            metadata=metadata,
-                                            compress=compress)
-
-    def resize(self, shape, electrodes=None):
-        img = img_resize(self.data.reshape(self.img_shape), shape)
-        if electrodes is None:
-            electrodes = np.arange(img.size)
-        self._stim = {
-            'data': img.reshape((-1, 1)),
-            'electrodes': electrodes,
-            'time': None
-        }
-        self.img_shape = img.shape
-        return self
-
-    def rgb2gray(self, electrodes=None):
-        img = rgb2gray(self.data.reshape(self.img_shape))
-        if electrodes is None:
-            electrodes = np.arange(img.size)
-        self._stim = {
-            'data': img.reshape((-1, 1)),
-            'electrodes': electrodes,
-            'time': None
-        }
-        self.img_shape = img.shape
-        return self
-
-    def invert(self):
-        self._stim = {
-            'data': 1.0 - self.data,
-            'electrodes': self.electrodes,
-            'time': None
-        }
-        return self
-
-    def plot(self, kind='pcolor', ax=None, **kwargs):
-        """Plot the percept
-
-        Parameters
-        ----------
-        kind : { 'pcolor' | 'hex' }, optional, default: 'pcolor'
-            Kind of plot to draw:
-            *  'pcolor': using Matplotlib's ``pcolor``. Additional parameters
-               (e.g., ``vmin``, ``vmax``) can be passed as keyword arguments.
-            *  'hex': using Matplotlib's ``hexbin``. Additional parameters
-               (e.g., ``gridsize``) can be passed as keyword arguments.
-        ax : matplotlib.axes.Axes; optional, default: None
-            A Matplotlib Axes object. If None, a new Axes object will be
-            created.
-
-        Returns
-        -------
-        ax : matplotlib.axes.Axes
-            Returns the axes with the plot on it
-
-        """
-        frame = self.data.reshape(self.img_shape)
-        print(frame.shape)
-        if ax is None:
-            if 'figsize' in kwargs:
-                figsize = kwargs['figsize']
-            else:
-                figsize = (12, 8)
-                # figsize = np.int32(np.array(self.shape[:2][::-1]) / 15)
-                # figsize = np.maximum(figsize, 1)
-            _, ax = plt.subplots(figsize=figsize)
-        else:
-            if not isinstance(ax, Subplot):
-                raise TypeError("'ax' must be a Matplotlib axis, not "
-                                "%s." % type(ax))
-
-        vmin, vmax = frame.min(), frame.max()
-        cmap = kwargs['cmap'] if 'cmap' in kwargs else 'gray'
-        xdva = np.arange(frame.shape[1])
-        ydva = np.arange(frame.shape[0])
-        X, Y = np.meshgrid(xdva, ydva, indexing='xy')
-        if kind == 'pcolor':
-            # Create a pseudocolor plot. Make sure to pass additional keyword
-            # arguments that have not already been extracted:
-            other_kwargs = {key: kwargs[key]
-                            for key in (kwargs.keys() - ['figsize', 'cmap',
-                                                         'vmin', 'vmax'])}
-            ax.pcolormesh(X, Y, np.flipud(frame), cmap=cmap, vmin=vmin,
-                          vmax=vmax, **other_kwargs)
-        elif kind == 'hex':
-            # Create a hexbin plot:
-            if 'gridsize' in kwargs:
-                gridsize = kwargs['gridsize']
-            else:
-                gridsize = np.min(frame.shape[:2]) // 2
-            # X, Y = np.meshgrid(self.xdva, self.ydva, indexing='xy')
-            # Make sure to pass additional keyword arguments that have not
-            # already been extracted:
-            other_kwargs = {key: kwargs[key]
-                            for key in (kwargs.keys() - ['figsize', 'cmap',
-                                                         'gridsize', 'vmin',
-                                                         'vmax'])}
-            ax.hexbin(X.ravel(), Y.ravel()[::-1], frame.ravel(),
-                      cmap=cmap, gridsize=gridsize, vmin=vmin, vmax=vmax,
-                      **other_kwargs)
-        else:
-            raise ValueError("Unknown plot option '%s'. Choose either 'pcolor'"
-                             "or 'hex'." % kind)
-        ax.set_aspect('equal', adjustable='box')
-        ax.set_xlim(xdva[0], xdva[-1])
-        ax.set_xticks(np.linspace(xdva[0], xdva[-1], num=5))
-        ax.set_xlabel('x (dva)')
-        ax.set_ylim(ydva[0], ydva[-1])
-        ax.set_yticks(np.linspace(ydva[0], ydva[-1], num=5))
-        ax.set_ylabel('y (dva)')
-        return ax
+    def __init__(self, resize=None, electrodes=None, metadata=None):
+        # Load logo from data dir:
+        module_path = dirname(__file__)
+        source = join(module_path, 'data', 'ucsb.png')
+        # Call ImageStimulus constructor:
+        super(LogoUCSB, self).__init__(source, format="PNG",
+                                       resize=resize,
+                                       as_gray=True,
+                                       electrodes=electrodes,
+                                       metadata=metadata,
+                                       compress=False)

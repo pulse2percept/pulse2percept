@@ -3,6 +3,7 @@ import numpy as np
 from string import ascii_uppercase
 from itertools import product
 from collections import OrderedDict
+import matplotlib.pyplot as plt
 
 from .electrodes import Electrode, PointSource, DiskElectrode
 from ..utils import PrettyPrint
@@ -108,6 +109,41 @@ class ElectrodeArray(PrettyPrint):
                               "exist") % name)
         del self.electrodes[name]
 
+    def plot(self, annotate=False, autoscale=True, ax=None):
+        """Plot the electrode array
+
+        Parameters
+        ----------
+        annotate : bool, optional
+            Flag whether to label electrodes in the implant.
+        autoscale : bool, optional
+            Whether to adjust the x,y limits of the plot to fit the implant
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
+            A Matplotlib axes object. If None, will either use the current axes
+            (if exists) or create a new Axes object.
+
+        Returns
+        -------
+        ax : ``matplotlib.axes.Axes``
+            Returns the axis object of the plot
+        """
+        if ax is None:
+            ax = plt.gca()
+        if autoscale:
+            ax.autoscale(True)
+        ax.set_aspect('equal')
+        for name, electrode in self.items():
+            electrode.plot(autoscale=False, ax=ax)
+            if annotate:
+                ax.text(electrode.x, electrode.y, name, ha='center',
+                        va='center',  color='black', size='large',
+                        bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
+                              'fc': (1, 1, 1, 0.7)},
+                        zorder=11)
+        ax.set_xlabel('x (microns)')
+        ax.set_ylabel('y (microns)')
+        return ax
+
     def __getitem__(self, item):
         """Return an electrode from the array
 
@@ -177,11 +213,11 @@ class ElectrodeGrid(ElectrodeArray):
         A tuple containing the number of rows x columns in the grid
     spacing : double
         Electrode-to-electrode spacing in microns.
-    type : 'rect' or 'hex', optional, default: 'rect'
+    type : {'rect', 'hex'}, optional
         Grid type ('rect': rectangular, 'hex': hexagonal).
-    x, y, z : double, optional, default: (0,0,0)
+    x, y, z : double, optional
         3D coordinates of the center of the grid
-    rot : double, optional, default: 0rad
+    rot : double, optional
         Rotation of the grid in radians (positive angle: counter-clockwise
         rotation on the retinal surface)
     names: (name_rows, name_cols), each of which either 'A' or '1'

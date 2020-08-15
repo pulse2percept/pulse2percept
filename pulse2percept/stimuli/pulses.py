@@ -8,10 +8,10 @@ from .base import Stimulus
 class MonophasicPulse(Stimulus):
     """Monophasic pulse
 
-    .. versionadded:: 0.6
-
     A simple stimulus consisting of a single monophasic pulse (either
     cathodic/negative or anodic/positive).
+
+    .. versionadded:: 0.6
 
     Parameters
     ----------
@@ -92,11 +92,11 @@ class MonophasicPulse(Stimulus):
 class BiphasicPulse(Stimulus):
     """Symmetric biphasic pulse
 
-    .. versionadded:: 0.6
-
     A simple stimulus consisting of a single biphasic pulse: a cathodic and an
     anodic phase, optionally separated by an interphase gap.
     Both cathodic and anodic phases have the same duration ("symmetric").
+
+    .. versionadded:: 0.6
 
     Parameters
     ----------
@@ -189,12 +189,12 @@ class BiphasicPulse(Stimulus):
 class AsymmetricBiphasicPulse(Stimulus):
     """Asymmetric biphasic pulse
 
-    .. versionadded:: 0.6
-
     A simple stimulus consisting of a single biphasic pulse: a cathodic and an
     anodic phase, optionally separated by an interphase gap.
     The two pulse phases can have different amplitudes and duration
     ("asymmetric").
+
+    .. versionadded:: 0.6
 
     Parameters
     ----------

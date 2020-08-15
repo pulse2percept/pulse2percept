@@ -26,9 +26,9 @@
 pulse2percept: A Python-based simulation framework for bionic vision
 ====================================================================
 
-By 2020 roughly 20 million people will suffer from retinal diseases such as
-macular degeneration or retinitis pigmentosa, and a variety of sight
-restoration technologies are being developed to target these diseases.
+Retinal degenerative diseases such as retinitis pigmentosa and macular degeneration
+result in profound visual impairment in more than 10 million people worldwide, and a variety
+of sight restoration technologies are being developed to target these diseases.
 
 Retinal prostheses, now implanted in over 500 patients worldwide, electrically
 stimulate surviving cells in order to evoke neuronal responses that are
@@ -111,7 +111,7 @@ pulse2percept requires:
 3.  `NumPy`_ (>= 1.9)
 4.  `SciPy`_ (>= 1.0.1)
 5.  `scikit-image` (>=0.14)
-6.  `Matplotlib`_ (>= 2.1)
+6.  `Matplotlib`_ (>= 3.0.2)
 7.  `imageio-ffmpeg` (>=0.4)
 8.  `JobLib`_ (>= 0.11)
 

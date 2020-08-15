@@ -3,7 +3,7 @@ import pytest
 import numpy.testing as npt
 
 from matplotlib.axes import Subplot
-from matplotlib.pyplot import close
+import matplotlib.pyplot as plt
 
 
 from pulse2percept.implants import ArgusI, ArgusII
@@ -157,19 +157,19 @@ def test_AxonMapSpatial(engine):
 
 def test_AxonMapSpatial_plot():
     model = AxonMapSpatial()
-    ax = model.plot()
-    npt.assert_equal(isinstance(ax, Subplot), True)
+    for use_dva, xlim in zip([True, False], [(-18, 18), (-5000, 5000)]):
+        ax = model.plot(use_dva=use_dva)
+        npt.assert_equal(isinstance(ax, Subplot), True)
+        npt.assert_equal(ax.get_xlim(), xlim)
 
-    # Electrodes and quadrants can be annotated:
-    for ann_q, n_q in [(True, 4), (False, 0)]:
-        ax = model.plot(annotate=ann_q)
-        npt.assert_equal(len(ax.texts), n_q)
-        close(ax.figure)
-
-    # Setting upside_down flips y axis:
-    ax = model.plot(upside_down=True, autoscale=True)
-    npt.assert_equal(ax.get_xlim(), (-5000, 5000))
-    npt.assert_equal(ax.get_ylim(), (4000, -4000))
+    # Quadrants can be annotated:
+    for ann_q, n_q in [(True, 6), (False, 0)]:
+        fig, ax = plt.subplots()
+        model.plot(annotate=ann_q, ax=ax)
+        npt.assert_equal(len(ax.child_axes), int(n_q > 0))
+        if len(ax.child_axes) > 0:
+            npt.assert_equal(len(ax.child_axes[0].texts), n_q)
+        plt.close(fig)
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
@@ -177,7 +177,7 @@ def test_AxonMapModel(engine):
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 2,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
-                  'loc_od_x': 5, 'loc_od_y': 6}
+                  'loc_od': (5, 6)}
     model = AxonMapModel()
     for param in set_params:
         npt.assert_equal(hasattr(model.spatial, param), True)
@@ -214,8 +214,7 @@ def test_AxonMapModel(engine):
 def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
     # With `rho` starting at 0, all axons should originate in the optic disc
     # center
-    model = AxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
-                         xystep=2, engine=engine,
+    model = AxonMapModel(loc_od=loc_od, xystep=2, engine=engine,
                          ax_segments_range=(0, 45),
                          n_ax_segments=100)
     for phi0 in [-135.0, 66.0, 128.0]:
@@ -225,8 +224,7 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
 
     # These axons should all end at the meridian
     for phi0 in [110.0, 135.0, 160.0]:
-        model = AxonMapModel(loc_od_x=15, loc_od_y=2,
-                             xystep=2, engine=engine,
+        model = AxonMapModel(loc_od=(15, 2), xystep=2, engine=engine,
                              n_ax_segments=801,
                              ax_segments_range=(0, 45))
         ax_pos = model.spatial._jansonius2009(sign * phi0)
@@ -259,8 +257,7 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
 
     # A single axon fiber with `phi0`=0 should return a single pixel location
     # that corresponds to the optic disc
-        model = AxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
-                             xystep=2, engine=engine, eye=eye,
+        model = AxonMapModel(loc_od=loc_od, xystep=2, engine=engine, eye=eye,
                              ax_segments_range=(0, 0),
                              n_ax_segments=1)
         single_fiber = model.spatial._jansonius2009(0)

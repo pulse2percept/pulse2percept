@@ -28,6 +28,7 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
     ...         return {'a': self.a, 'b': self.b}
     >>> MyClass(1, 2)
     MyClass(a=1, b=2)
+
     """
     __slots__ = ()
 
@@ -138,6 +139,20 @@ class Frozen(object):
 
 
 class Data(PrettyPrint):
+    """N-dimensional data container
+
+    .. versionadded:: 0.6
+
+    Parameters
+    ----------
+    data : np.ndarray
+        An N-dimensional NumPy array containing the data to store
+    axes : dict or tuple, optional
+        For each dimension in ``data``, specify axis name and labels.
+    metadata : dict, optional
+        A dictionary that can store arbitrary metadata
+
+    """
 
     def __init__(self, data, axes=None, metadata=None):
         self._internal = {
