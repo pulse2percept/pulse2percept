@@ -113,6 +113,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
                     float32 shift,
                     float32 slope,
                     float32 eps,
+                    float32 scale_out,
                     float32 thresh_percept):
     """Cython implementation of the Nanduri 2012 temporal model
 
@@ -141,6 +142,8 @@ cpdef temporal_fast(const float32[:, ::1] stim,
         Slope of the logistic function in the stationary nonlinearity stage.
     shift: float32
         Shift of the logistic function in the stationary nonlinearity stage.
+    scale_out : float32, optional
+        A scaling factor applied to the output of the model
     thresh_percept: float32
         Below threshold, the percept has brightness zero.
 
@@ -231,7 +234,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
                 # (fast) way to compare two floating point numbers:
                 if c_abs(r4c) < thresh_percept:
                     r4c = 0.0
-                percept[idx_space, idx_frame] = r4c
+                percept[idx_space, idx_frame] = r4c * scale_out
                 idx_frame = idx_frame + 1
 
     return np.asarray(percept)  # Py overhead

@@ -66,6 +66,34 @@ class Percept(Data):
         #     # https://stackoverflow.com/a/26410051
         #     return (((a1 - a2[:,:,np.newaxis])).prod(axis=1)<=0).any(axis=0)
 
+    def max(self, axis=None):
+        """Brightest pixel or frame
+
+        Parameters
+        ----------
+        axis : None or 'frames'
+            Axis along which to operate.
+            By default, the value of the brightest pixel is returned.
+            Set ``axis='frames'`` to get the brightest frame.
+
+        Returns
+        -------
+        pmax : ndarray or scalar
+            Maximum of ``percept.data``.
+            If `axis` is None, the result is a scalar value.
+            If `axis` is 'frames', the result is the brightest frame.
+        """
+        if axis is not None and not isinstance(axis, str):
+            raise TypeError('"axis" must be a string or None.')
+        if axis is None:
+            return self.data.max()
+        elif axis.lower() == 'frames':
+            return self.data[..., np.argmax(np.max(self.data, axis=(0, 1)))]
+        raise ValueError('Unknown axis value "%s". Use "frames" or '
+                         'None.' % axis)
+
+    @deprecated(deprecated_version='0.7', removed_version='0.8',
+                alt_func='percept.max()')
     def get_brightest_frame(self):
         """Return the brightest frame
 
@@ -315,89 +343,3 @@ class Percept(Data):
                 fps = 1000.0 / interval[0]
             imageio.mimwrite(fname, data.transpose((2, 0, 1)), fps=fps)
         logging.getLogger(__name__).info('Created %s.' % fname)
-
-    @property
-    @cached
-    def regionprops(self):
-        """Measure properties of labeled image regions.
-
-        Measure properties such as area, orientation, and elongation for each
-        phosphene (i.e., for each connected region) in the percept.
-        This is done for every frame of the percept.
-
-        Calculated properties can be accessed as attributes or keys, and
-        include:
-
-        *  **area**: Number of pixels in a region
-        *  **centroid**: Centroid coordinate tuple ``(row, col)``
-        *  **moments**: Spatial moments up to 3rd order
-        *  **moments_central**: Central moments (translation-invariant)
-        *  **moments_hu**: Hu moments
-        *  **orientation**: Angle between the 0th axis (rows) and the major
-           axis of the ellipse that has the same second moments as the region,
-           ranging from `-pi/2` to `pi/2` counter-clockwise.
-
-        .. versionadded:: 0.7
-
-        """
-        return [regionprops(label(frame > 0)) for frame in self]
-
-    @property
-    @cached
-    def area(self):
-        """Phosphene area
-
-        For every frame of the percept, and for every connected region within
-        that frame (i.e., phosphene), calculate the number of non-zero
-        pixels.
-
-        .. versionadded:: 0.7
-
-        """
-        area = np.squeeze([[r.area for r in p]
-                           for p in self.regionprops])
-        if area.size == 1:
-            return area.ravel()[0]
-        return area
-
-    @property
-    @cached
-    def orientation(self):
-        """Phosphene orientation
-
-        For every frame of the percept, and for every connected region within
-        that frame (i.e., phosphene), calculate the angle between the 0th axis
-        (rows) and the major axis of the ellipse that has the same second
-        moments as the region, ranging from `-pi/2` to `pi/2`
-        counter-clockwise.
-
-        .. versionadded:: 0.7
-
-        """
-        orientation = np.squeeze([[r.orientation for r in p]
-                                  for p in self.regionprops])
-        if orientation.size == 1:
-            return orientation.ravel()[0]
-        return orientation
-
-    @property
-    @cached
-    def elongation(self):
-        """Phosphene elongation
-
-        For every frame of the percept, and for every connected region within
-        that frame (i.e., a phosphene), calculate the elongation of the ellipse
-        that has the same second-moments as the region.
-        The elongation is the ratio of the focal distance (distance between
-        focal points) over the major axis length.
-        The value is in the interval [0, 1).
-        When it is 0, the ellipse becomes a circle.
-
-        .. versionadded:: 0.7
-
-        """
-        elongation = np.squeeze([[r.eccentricity for r in p]
-                                 for p in self.regionprops])
-        if elongation.size == 1:
-            return elongation.ravel()[0]
-        return elongation

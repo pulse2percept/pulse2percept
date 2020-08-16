@@ -21,6 +21,7 @@
 from .base import clear_data_dir, get_data_dir, fetch_url
 from .beyeler2019 import fetch_beyeler2019
 from .horsager2009 import load_horsager2009
+from .nanduri2012 import load_nanduri2012
 
 
 __all__ = [
@@ -29,4 +30,5 @@ __all__ = [
     'fetch_beyeler2019',
     'get_data_dir',
     'load_horsager2009',
+    'load_nanduri2012',
 ]

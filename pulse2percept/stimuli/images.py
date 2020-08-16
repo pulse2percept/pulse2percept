@@ -50,7 +50,8 @@ class ImageStimulus(Stimulus):
 
     resize : (height, width) or None, optional
         A tuple specifying the desired height and the width of the image
-        stimulus.
+        stimulus. One shape dimension can be -1. In this case, the value is
+        inferred from the other dimension by keeping a constant aspect ratio.
 
     as_gray : bool, optional
         Flag whether to convert the image to grayscale.
@@ -104,7 +105,14 @@ class ImageStimulus(Stimulus):
             img = rgb2gray(img)
         # Resize if necessary:
         if resize is not None:
-            img = img_resize(img, resize)
+            height, width = resize
+            if height < 0 and width < 0:
+                raise ValueError('"height" and "width" cannot both be -1.')
+            if height < 0:
+                height = int(img.shape[0] * width / img.shape[1])
+            if width < 0:
+                width = int(img.shape[1] * height / img.shape[0])
+            img = img_resize(img, (height, width))
         # Store the original image shape for resizing and color conversion:
         self.img_shape = img.shape
         # Convert to float array in [0, 1] and call the Stimulus constructor:
@@ -246,7 +254,15 @@ class ImageStimulus(Stimulus):
             A copy of the stimulus object containing the resized image
 
         """
-        img = img_resize(self.data.reshape(self.img_shape), shape)
+        height, width = shape
+        if height < 0 and width < 0:
+            raise ValueError('"height" and "width" cannot both be -1.')
+        if height < 0:
+            height = int(self.img_shape[0] * width / self.img_shape[1])
+        if width < 0:
+            width = int(self.img_shape[1] * height / self.img_shape[0])
+        img = img_resize(self.data.reshape(self.img_shape), (height, width))
+
         return ImageStimulus(img, electrodes=electrodes,
                              metadata=self.metadata)
 
