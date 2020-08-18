@@ -9,6 +9,7 @@ import tempfile
 from distutils.command.build_py import build_py
 from distutils.command.sdist import sdist
 from distutils.command.clean import clean as Clean
+from distutils.errors import CompileError, LinkError
 from pkg_resources import parse_version
 import traceback
 
