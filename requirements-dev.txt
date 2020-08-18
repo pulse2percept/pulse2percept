@@ -7,4 +7,5 @@ coveralls
 flake8
 mock
 seaborn
+sklearn
 -r doc/requirements.txt

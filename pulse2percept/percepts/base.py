@@ -10,7 +10,7 @@ from skimage import img_as_uint
 from skimage.measure import label, regionprops
 from skimage.transform import resize
 
-from ..utils import Data, Grid2D, cached
+from ..utils import Data, Grid2D, cached, deprecated
 
 
 class Percept(Data):
