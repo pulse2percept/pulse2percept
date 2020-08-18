@@ -1,7 +1,7 @@
 import numpy as np
 cimport numpy as cnp
 from cython import cdivision  # modulo, division by zero
-from cython.parallel import prange, parallel
+from cython.parallel import prange
 from libc.math cimport(pow as c_pow, exp as c_exp, fabs as c_abs,
                        sqrt as c_sqrt)
 
@@ -77,7 +77,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
 
     percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
 
-    for idx_space in prange(n_space, schedule='dynamic', nogil=True):
+    for idx_space in prange(n_space, schedule='static', nogil=True):
         # Because the stationary nonlinearity depends on `max_R3`, which is the
         # largest value of R3 over all time points, we have to process the
         # stimulus in two steps.
