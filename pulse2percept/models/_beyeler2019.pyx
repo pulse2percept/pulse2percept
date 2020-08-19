@@ -13,7 +13,7 @@ cdef float32 deg2rad = 3.14159265358979323846 / 180.0
 cdef float32 c_min(float32[:] arr):
     cdef:
         float32 arr_min
-        uint32 idx, arr_len
+        size_t idx, arr_len
 
     arr_min = 1e12
     arr_len = len(arr)
@@ -26,7 +26,7 @@ cdef float32 c_min(float32[:] arr):
 cdef float32 c_max(float32[:] arr):
     cdef:
         float32 arr_max
-        uint32 idx, arr_len
+        size_t idx, arr_len
 
     arr_max = -1e12
     arr_len = len(arr)
