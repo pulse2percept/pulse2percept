@@ -147,6 +147,13 @@ Prerequisites
     ``make`` is part of `build-essentials`_ on Ubuntu, `XCode`_ on Mac OS X,
     and can be downloaded from `ezwinports`_ on Windows.
 
+6.  **OpenMP** (optional): OpenMP is used to parallelize code written in Cython
+    or C. OpenMP is part of the GCC compiler on Unix, and part of the
+    `MinGW compiler <https://stackoverflow.com/a/38389181>`_ on Windows.
+    Follow `these instructions 
+    <https://dipy.org/documentation/1.0.0./installation/#openmp-with-osx>`_ 
+    to get it to work on macOS.
+
 .. _Apple XCode: https://developer.apple.com/xcode
 .. _Microsoft website: https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2019
 .. _Install Cython: https://cython.readthedocs.io/en/latest/src/quickstart/install.html
@@ -161,8 +168,8 @@ Dependencies
 ------------
 
 .. include:: ../README.rst
-   :start-line: 105
-   :end-line: 139
+   :start-line: 103
+   :end-line: 151
 
 Obtaining the latest code from GitHub
 -------------------------------------
