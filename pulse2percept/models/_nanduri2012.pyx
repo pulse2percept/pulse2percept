@@ -55,8 +55,8 @@ cpdef spatial_fast(const float32[:, ::1] stim,
 
     """
     cdef:
-        uint32 idx_el, idx_time, idx_space, n_el, n_time, n_space
-        uint32 idx_bright, n_bright
+        size_t idx_el, idx_time, idx_space, idx_bright
+        uint32 n_el, n_time, n_space, n_bright
         float32[:, ::1] bright
         float32 px_bright, denom, d2c, d2e, amp
 
@@ -158,7 +158,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
         float32 t_sim, amp, scale
         float32[:, ::1] all_r3
         float32[:, ::1] percept
-        uint32 idx_space, idx_sim, idx_stim, idx_frame
+        size_t idx_space, idx_sim, idx_stim, idx_frame
         uint32 n_space, n_stim, n_percept, n_sim
 
     # Note that eps must be divided by 1000, because the original model was fit

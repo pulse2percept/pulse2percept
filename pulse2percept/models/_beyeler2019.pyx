@@ -65,8 +65,8 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
 
     """
     cdef:
-        uint32 idx_el, idx_time, idx_space, n_el, n_time, n_space
-        uint32 idx_bright, n_bright
+        size_t idx_el, idx_time, idx_space, idx_bright
+        uint32 n_el, n_time, n_space, n_bright
         float32[:, ::1] bright
         float32 px_bright, dist2, gauss, amp
 
@@ -104,7 +104,7 @@ cpdef fast_jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
     cdef:
         float32[::1] xprime, yprime
         float32 b, c, rho_min, tmp_phi, tmp_rho
-        uint32 idx
+        size_t idx
 
     if phi0 > 0:
         # Axon is in superior retina, compute `b` (real number) from Eq. 5:
@@ -132,7 +132,8 @@ cpdef fast_jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
 cdef uint32 argmin_segment(float32[:, :] flat_bundles, float32 x, float32 y):
     cdef:
         float32 dist2, min_dist2
-        uint32 seg, min_seg, n_seg
+        size_t seg
+        uint32 min_seg, n_seg
 
     min_dist2 = 1e12
     n_seg = flat_bundles.shape[0]
@@ -151,6 +152,7 @@ cpdef fast_find_closest_axon(float32[:, :] flat_bundles,
     cdef:
         uint32[::1] closest_seg
         uint32 n_xy, n_seg
+        size_t pos
     closest_seg = np.empty(len(xret), dtype=np.uint32)
     n_xy = len(xret)
     n_seg = flat_bundles.shape[0]
@@ -197,8 +199,8 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
         Spatial responses smaller than ``thresh_percept`` will be set to zero
     """
     cdef:
-        size_t idx_el, idx_time, idx_space, idx_ax, n_el, n_time, n_space, n_ax
-        size_t idx_bright, n_bright
+        size_t idx_el, idx_time, idx_space, idx_ax, idx_bright
+        uint32 n_el, n_time, n_space, n_ax, n_bright
         float32[:, ::1] bright
         float32 px_bright, xdiff, ydiff, r2, gauss, sgm_bright, amp
         size_t i0, i1
