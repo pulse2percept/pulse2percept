@@ -156,7 +156,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
     cdef:
         float32 ca, r1, r2, r3, max_r3, r4a, r4b, r4c
         float32 t_sim, amp, scale
-        float32[::1] all_r3
+        float32[:, ::1] all_r3
         float32[:, ::1] percept
         uint32 idx_space, idx_sim, idx_stim, idx_frame
         uint32 n_space, n_stim, n_percept, n_sim
@@ -170,7 +170,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
     n_sim = idx_t_percept[n_percept - 1] + 1  # no negative indices
     n_space = stim.shape[0]
 
-    all_r3 = np.empty(n_sim, dtype=np.float32)  # Py overhead
+    all_r3 = np.empty((n_space, n_sim), dtype=np.float32)  # Py overhead
     percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
 
     for idx_space in prange(n_space, schedule='static', nogil=True):
@@ -202,7 +202,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             # Half-rectification:
             r3 = float_max(r1 - eps * r2, 0)
             # Store `r3` for Step 2:
-            all_r3[idx_sim] = r3
+            all_r3[idx_space, idx_sim] = r3
             # Find the largest `r3` across time for Step 2:
             if r3 > max_r3:
                 max_r3 = r3
@@ -224,7 +224,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
                 if t_sim >= t_stim[idx_stim + 1]:
                     idx_stim = idx_stim + 1
             # Slow response (3-stage leaky integrator):
-            r4a = r4a + dt * (all_r3[idx_sim] * scale - r4a) / tau3
+            r4a = r4a + dt * (all_r3[idx_space, idx_sim] * scale - r4a) / tau3
             r4b = r4b + dt * (r4a - r4b) / tau3
             r4c = r4c + dt * (r4b - r4c) / tau3
             if idx_sim == idx_t_percept[idx_frame]:
