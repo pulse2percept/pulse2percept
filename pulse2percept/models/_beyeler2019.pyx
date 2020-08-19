@@ -7,13 +7,14 @@ from libc.math cimport(pow as c_pow, exp as c_exp, tanh as c_tanh,
 
 ctypedef cnp.float32_t float32
 ctypedef cnp.uint32_t uint32
+ctypedef cnp.int32_t int32
 cdef float32 deg2rad = 3.14159265358979323846 / 180.0
 
 
 cdef float32 c_min(float32[:] arr):
     cdef:
         float32 arr_min
-        size_t idx, arr_len
+        int32 idx, arr_len
 
     arr_min = 1e12
     arr_len = len(arr)
@@ -26,7 +27,7 @@ cdef float32 c_min(float32[:] arr):
 cdef float32 c_max(float32[:] arr):
     cdef:
         float32 arr_max
-        size_t idx, arr_len
+        int32 idx, arr_len
 
     arr_max = -1e12
     arr_len = len(arr)
@@ -65,8 +66,8 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
 
     """
     cdef:
-        size_t idx_el, idx_time, idx_space, idx_bright
-        size_t n_el, n_time, n_space, n_bright
+        int32 idx_el, idx_time, idx_space, idx_bright
+        int32 n_el, n_time, n_space, n_bright
         float32[:, ::1] bright
         float32 px_bright, dist2, gauss, amp
 
@@ -104,7 +105,7 @@ cpdef fast_jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
     cdef:
         float32[::1] xprime, yprime
         float32 b, c, rho_min, tmp_phi, tmp_rho
-        size_t idx
+        int32 idx
 
     if phi0 > 0:
         # Axon is in superior retina, compute `b` (real number) from Eq. 5:
@@ -132,7 +133,7 @@ cpdef fast_jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
 cdef uint32 argmin_segment(float32[:, :] flat_bundles, float32 x, float32 y):
     cdef:
         float32 dist2, min_dist2
-        size_t seg, n_seg
+        int32 seg, n_seg
         uint32 min_seg
 
     min_dist2 = 1e12
@@ -151,8 +152,8 @@ cpdef fast_find_closest_axon(float32[:, :] flat_bundles,
                              float32[::1] yret):
     cdef:
         uint32[::1] closest_seg
-        size_t n_xy, n_seg
-        size_t pos
+        int32 n_xy, n_seg
+        int32 pos
     closest_seg = np.empty(len(xret), dtype=np.uint32)
     n_xy = len(xret)
     n_seg = flat_bundles.shape[0]
@@ -199,11 +200,11 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
         Spatial responses smaller than ``thresh_percept`` will be set to zero
     """
     cdef:
-        size_t idx_el, idx_time, idx_space, idx_ax, idx_bright
-        size_t n_el, n_time, n_space, n_ax, n_bright
+        int32 idx_el, idx_time, idx_space, idx_ax, idx_bright
+        int32 n_el, n_time, n_space, n_ax, n_bright
         float32[:, ::1] bright
         float32 px_bright, xdiff, ydiff, r2, gauss, sgm_bright, amp
-        size_t i0, i1
+        int32 i0, i1
 
     n_el = stim.shape[0]
     n_time = stim.shape[1]
