@@ -7,13 +7,14 @@ from libc.math cimport(pow as c_pow, exp as c_exp, tanh as c_tanh,
 
 ctypedef cnp.float32_t float32
 ctypedef cnp.uint32_t uint32
+ctypedef cnp.int32_t int32
 cdef float32 deg2rad = 3.14159265358979323846 / 180.0
 
 
 cdef float32 c_min(float32[:] arr):
     cdef:
         float32 arr_min
-        uint32 idx, arr_len
+        int32 idx, arr_len
 
     arr_min = 1e12
     arr_len = len(arr)
@@ -26,7 +27,7 @@ cdef float32 c_min(float32[:] arr):
 cdef float32 c_max(float32[:] arr):
     cdef:
         float32 arr_max
-        uint32 idx, arr_len
+        int32 idx, arr_len
 
     arr_max = -1e12
     arr_len = len(arr)
@@ -65,8 +66,8 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
 
     """
     cdef:
-        uint32 idx_el, idx_time, idx_space, n_el, n_time, n_space
-        uint32 idx_bright, n_bright
+        int32 idx_el, idx_time, idx_space, idx_bright
+        int32 n_el, n_time, n_space, n_bright
         float32[:, ::1] bright
         float32 px_bright, dist2, gauss, amp
 
@@ -78,7 +79,7 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
     # A flattened array containing n_time x n_space entries:
     bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
 
-    for idx_bright in prange(n_bright, schedule='dynamic', nogil=True):
+    for idx_bright in prange(n_bright, schedule='static', nogil=True):
         # For each entry in the output matrix:
         idx_space = idx_bright % n_space
         idx_time = idx_bright / n_space
@@ -104,7 +105,7 @@ cpdef fast_jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
     cdef:
         float32[::1] xprime, yprime
         float32 b, c, rho_min, tmp_phi, tmp_rho
-        uint32 idx
+        int32 idx
 
     if phi0 > 0:
         # Axon is in superior retina, compute `b` (real number) from Eq. 5:
@@ -132,7 +133,8 @@ cpdef fast_jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
 cdef uint32 argmin_segment(float32[:, :] flat_bundles, float32 x, float32 y):
     cdef:
         float32 dist2, min_dist2
-        uint32 seg, min_seg, n_seg
+        int32 seg, n_seg
+        uint32 min_seg
 
     min_dist2 = 1e12
     n_seg = flat_bundles.shape[0]
@@ -150,7 +152,8 @@ cpdef fast_find_closest_axon(float32[:, :] flat_bundles,
                              float32[::1] yret):
     cdef:
         uint32[::1] closest_seg
-        uint32 n_xy, n_seg
+        int32 n_xy, n_seg
+        int32 pos
     closest_seg = np.empty(len(xret), dtype=np.uint32)
     n_xy = len(xret)
     n_seg = flat_bundles.shape[0]
@@ -197,11 +200,11 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
         Spatial responses smaller than ``thresh_percept`` will be set to zero
     """
     cdef:
-        size_t idx_el, idx_time, idx_space, idx_ax, n_el, n_time, n_space, n_ax
-        size_t idx_bright, n_bright
+        int32 idx_el, idx_time, idx_space, idx_ax, idx_bright
+        int32 n_el, n_time, n_space, n_ax, n_bright
         float32[:, ::1] bright
         float32 px_bright, xdiff, ydiff, r2, gauss, sgm_bright, amp
-        size_t i0, i1
+        int32 i0, i1
 
     n_el = stim.shape[0]
     n_time = stim.shape[1]
@@ -212,7 +215,7 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
     bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
 
     # Parallel loop over all pixels to be rendered:
-    for idx_space in prange(n_space, schedule='dynamic', nogil=True):
+    for idx_space in prange(n_space, schedule='static', nogil=True):
         # Each frame in `stim` is treated independently, so we can have an
         # inner loop over all points in time:
         for idx_time in range(n_time):

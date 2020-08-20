@@ -79,14 +79,11 @@ can be installed with pip:
 
     pip3 install pulse2percept
 
-In order to get the `bleeding-edge version`_ of pulse2percept, use the
-commands:
+The `bleeding-edge version`_ of pulse2percept can be installed via:
 
 .. code-block:: bash
 
-    git clone https://github.com/pulse2percept/pulse2percept.git
-    cd pulse2percept
-    pip3 install .
+    pip3 install git+https://github.com/pulse2percept/pulse2percept
 
 .. _stable release: https://pulse2percept.readthedocs.io/en/stable/index.html
 .. _bleeding-edge version: https://pulse2percept.readthedocs.io/en/latest/index.html
@@ -121,6 +118,7 @@ Optional packages:
 2.  `Dask`_ for parallel processing (a joblib alternative).
     Use conda to install.
 3.  `Pytest`_ to run the test suite.
+4.  `OpenMP`_ for parallel processing support.
 
 .. _Python: https://www.python.org
 .. _Cython: https://www.cython.org
@@ -133,6 +131,7 @@ Optional packages:
 .. _Pandas: https://pandas.pydata.org
 .. _Dask: https://github.com/dask/dask
 .. _Pytest: https://docs.pytest.org/en/latest
+.. _OpenMP: https://openmp.org
 
 All required packages are listed in ``requirements.txt`` in the root directory
 of the git repository, and can be installed with the following command:

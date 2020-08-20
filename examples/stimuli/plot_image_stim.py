@@ -244,10 +244,10 @@ implant.stim = logo_dilate.resize(implant.shape).encode()
 # model (in space) to every time point in the stimulus.
 # To get a proper temporal response, we need to extend the scoreboard model
 # with a proper temporal model, such as
-# :py:class:`~pulse2percept.models.Nanduri2012Temporal`:
+# :py:class:`~pulse2percept.models.Horsager2009Temporal`:
 
 model = p2p.models.Model(spatial=p2p.models.ScoreboardSpatial,
-                         temporal=p2p.models.Nanduri2012Temporal)
+                         temporal=p2p.models.Horsager2009Temporal)
 
 ##############################################################################
 # .. note::
@@ -269,7 +269,7 @@ model.build(xrange=(-7, 7), yrange=(-7, 7), xystep=0.1, rho=50)
 ##############################################################################
 # The predicted percept will now be a movie, where the spatial response (i.e.,
 # each frame of the movie) is primarily determined by the scoreboard model, but
-# the temporal evolution of these frames is determined by the Nanduri model.
+# the temporal evolution of these frames is determined by the Horsager model.
 #
 # By default, the model will output a movie frame every 20 ms (corresponding to
 # a 50 Hz frame rate). The frame rate can be adjusted by passing a list of
