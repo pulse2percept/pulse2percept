@@ -39,7 +39,7 @@ New features
    plot method (:pull:`188`, :pull:`195`, :pull:`222`)
 *  Image processing methods can be directly applied to
    :py:class:`~pulse2percept.stimuli.ImageStimulus` and
-   :py:class:`~pulse2percept.stimuli.ImageStimulus` objects
+   :py:class:`~pulse2percept.stimuli.VideoStimulus` objects
    (:pull:`241`, :pull:`253`)
 *  Feature matrix and phosphene visualizations (:pull:`232`)
 
