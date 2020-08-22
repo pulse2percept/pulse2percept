@@ -348,7 +348,8 @@ or to :ref:`build from source <install-source>`.
 .. _open an issue: https://github.com/pulse2percept/pulse2percept/issues
 
 Python ModuleNotFoundError: No module named 'Cython'
--------------------------------------------------
+----------------------------------------------------
 
-This is an issue relating to Cython not installing correctly. You can install Cython manually 
-by running `pip3 install Cython`. After Cython is installed, you can complete the installation process for pulse2percept.
+This issue indicates that Cython is not correctly installed. 
+Make sure to follow the installation guide on :ref:`required prerequisites <install-source-prerequisites>`_.
+After Cython is installed, you can complete the installation process for pulse2percept.
