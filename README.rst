@@ -107,9 +107,9 @@ pulse2percept requires:
 2.  `Cython`_ (>= 0.28)
 3.  `NumPy`_ (>= 1.9)
 4.  `SciPy`_ (>= 1.0.1)
-5.  `scikit-image` (>=0.14)
+5.  `ScikitImage` (>=0.14)
 6.  `Matplotlib`_ (>= 3.0.2)
-7.  `imageio-ffmpeg` (>=0.4)
+7.  `ImageIO FFMPEG` (>=0.4)
 8.  `JobLib`_ (>= 0.11)
 
 Optional packages:
@@ -124,9 +124,9 @@ Optional packages:
 .. _Cython: https://www.cython.org
 .. _NumPy: https://www.numpy.org
 .. _SciPy: https://www.scipy.org
-.. _scikit-image: https://scikit-image.org
+.. _ScikitImage: https://scikit-image.org
 .. _Matplotlib: https://matplotlib.org
-.. _imageio-ffmpeg: https://github.com/imageio/imageio-ffmpeg
+.. _ImageIO FFMPEG: https://github.com/imageio/imageio-ffmpeg
 .. _JobLib: https://joblib.readthedocs.io
 .. _Pandas: https://pandas.pydata.org
 .. _Dask: https://github.com/dask/dask
