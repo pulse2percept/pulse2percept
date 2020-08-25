@@ -5,7 +5,8 @@ import pytest
 
 from skimage.io import imsave
 
-from pulse2percept.stimuli import ImageStimulus, LogoBVL, LogoUCSB
+from pulse2percept.stimuli import (ImageStimulus, LogoBVL, LogoUCSB,
+                                   SnellenChart)
 
 
 def create_dummy_img(fname, shape, mode, gray=1.0, return_data=False):
@@ -237,9 +238,30 @@ def test_ImageStimulus_save():
     os.remove(fname2)
 
 
+@pytest.mark.parametrize('show_annotations', (True, False))
+def test_SnellenChart(show_annotations):
+    width = 840 if show_annotations else 444
+    snellen = SnellenChart(show_annotations=show_annotations)
+    npt.assert_equal(snellen.img_shape, (1348, width))
+    npt.assert_equal(snellen.time, None)
+    npt.assert_almost_equal(snellen.data.max(), 1)
+    npt.assert_almost_equal(snellen.data.min(), 0)
+
+    snellen = SnellenChart(row=1, show_annotations=show_annotations)
+    npt.assert_equal(snellen.img_shape, (255, width))
+
+    with pytest.raises(ValueError):
+        SnellenChart(row=0)
+    with pytest.raises(ValueError):
+        SnellenChart(row=12)
+    with pytest.raises(ValueError):
+        SnellenChart(row=[1, 3])
+
+
 def test_LogoBVL():
     logo = LogoBVL()
     npt.assert_equal(logo.img_shape, (576, 720, 4))
+    npt.assert_equal(logo.time, None)
     npt.assert_almost_equal(logo.data.min(), 0)
     npt.assert_almost_equal(logo.data.max(), 1)
 
@@ -247,5 +269,6 @@ def test_LogoBVL():
 def test_LogoUCSB():
     logo = LogoUCSB()
     npt.assert_equal(logo.img_shape, (324, 727))
+    npt.assert_equal(logo.time, None)
     npt.assert_almost_equal(logo.data.min(), 0)
     npt.assert_almost_equal(logo.data.max(), 1)
