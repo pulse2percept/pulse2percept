@@ -156,9 +156,8 @@ plot_argus_phosphenes(data, argus, axon_map=model)
 # that most phosphenes are in fact elongated:
 
 data = fetch_beyeler2019()
-plt.hist(data.eccentricity)
+data.eccentricity.plot(kind='hist')
 plt.xlabel('phosphene elongation')
-plt.ylabel('count')
 
 ###############################################################################
 # Phosphenes are not pixels!
