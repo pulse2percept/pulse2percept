@@ -102,7 +102,8 @@ class ImageStimulus(Stimulus):
             if img.ndim == 3 and img.shape[2] == 4:
                 # Blend the background with black:
                 img = rgba2rgb(img, background=(0, 0, 0))
-            img = rgb2gray(img)
+            if img.ndim == 3:
+                img = rgb2gray(img)
         # Resize if necessary:
         if resize is not None:
             height, width = resize
