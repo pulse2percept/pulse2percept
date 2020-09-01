@@ -325,14 +325,15 @@ class BiphasicTripletTrain(Stimulus):
         # Create the triplet train:
         pt = PulseTrain(freq, triplet, n_pulses=n_pulses, stim_dur=stim_dur)
         # Set up the Stimulus object through the constructor:
-        super().__init__(pt.data, time=pt.time, compress=False)
+        super(BiphasicTripletTrain, self).__init__(pt.data, time=pt.time,
+                                                   compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
         self.charge_balanced = pt.charge_balanced
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        params = super(BiphasicPulseTrain, self)._pprint_params()
+        params = super(BiphasicTripletTrain, self)._pprint_params()
         params.update({'cathodic_first': self.cathodic_first,
                        'charge_balanced': self.charge_balanced,
                        'freq': self.freq})
