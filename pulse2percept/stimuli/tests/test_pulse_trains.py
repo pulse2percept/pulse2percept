@@ -20,7 +20,7 @@ def test_PulseTrain():
         npt.assert_equal(pt.electrodes, 'A4')
 
     # PulseTrains can cut off/trim individual pulses if necessary:
-    pt = PulseTrain(2, pulse, stim_dur=11)
+    pt = PulseTrain(3, pulse, stim_dur=11)
     npt.assert_almost_equal(pt.time[-1], 11)
     npt.assert_almost_equal(pt[0, 11], 0)
 
