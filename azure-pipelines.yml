@@ -14,7 +14,7 @@ pr:
 
 variables:
   # Install p2p in Docker container
-  install_p2p: "pip install -r requirements.txt && pip install -e ."
+  install_p2p: "pip install -r requirements.txt && pip install -U setuptools!=50.0 && pip install -e ."
   CIBW_BEFORE_BUILD: $(install_p2p)
   # On Linux, need to install Matplotlib depedencies in Docker container.
   # Also need Cython/NumPy before installing all the other requirements,
@@ -55,7 +55,7 @@ jobs:
       inputs:
         versionSpec: 3.5
     - bash: |
-        python -m pip install --upgrade pip setuptools!=50.0
+        python -m pip install --upgrade pip
         pip install cibuildwheel==1.0.0
         cibuildwheel --output-dir wheelhouse .
     - task: PublishBuildArtifacts@1
