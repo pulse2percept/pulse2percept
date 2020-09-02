@@ -46,7 +46,7 @@ class Stimulus(PrettyPrint):
         * List or tuple: List elements will be assigned to electrodes in order.
         * Dictionary: Dictionary keys are used to address electrodes by name.
 
-    electrodes : int, string or list thereof; optional, default: None
+    electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. If none are
         given, electrode names will be extracted from the source type (e.g.,
         the keys from a dictionary). If a scalar or NumPy array is passed,
@@ -57,7 +57,7 @@ class Stimulus(PrettyPrint):
            The number of electrode names provided must match the number of
            electrodes extracted from the source type (i.e., N).
 
-    time : int, float or list thereof; optional, default: None
+    time : int, float or list thereof; optional
         Optionally, you can provide the time points of the source data.
         If none are given, time steps will be numbered 0..M.
 
@@ -68,10 +68,10 @@ class Stimulus(PrettyPrint):
            Stimuli created from scalars or 1-D NumPy arrays will have no time
            componenet, in which case you cannot provide your own time points.
 
-    metadata : dict, optional, default: None
+    metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.
 
-    compress : bool, optional, default: False
+    compress : bool, optional
         If True, will compress the source data in two ways:
 
         * Remove electrodes with all-zero activation.
@@ -155,6 +155,7 @@ class Stimulus(PrettyPrint):
             return _data, [_time[0]]
         # Otherwise, we need to interpolate. Keep only the unique time points
         # across stimuli:
+        # TODO: consider unique within a range TOL
         new_time = np.unique(np.concatenate(_time))
         # Now we need to interpolate the data values at each of these
         # new time points.
@@ -340,6 +341,8 @@ class Stimulus(PrettyPrint):
     def plot(self, electrodes=None, time=None, fmt='k-', ax=None):
         """Plot the stimulus
 
+        .. versionadded:: 0.7
+
         Parameters
         ----------
         electrodes : int, string, or list thereof; optional, default: None
@@ -370,14 +373,18 @@ class Stimulus(PrettyPrint):
         elif isinstance(electrodes, (int, str)):
             # Convert to list so we can iterate over it:
             electrodes = [electrodes]
+        # The user can ask for a range, slice, or list of time points, which
+        # are either interpolated or loaded directly.
         if time is None:
             # Ask for a slice instead of `self.time` to avoid interpolation,
             # which can be time-consuming for an uncompressed stimulus:
             time = slice(None)
         if isinstance(time, tuple):
             # Return a range of time points:
-            t_idx = (self.time >= time[0]) & (self.time < time[1])
-            t_vals = self.time[t_idx]
+            t_idx = (self.time > time[0]) & (self.time < time[1])
+            # Include the end points (might have to be interpolated):
+            t_vals = [time[0]] + list(self.time[t_idx]) + [time[1]]
+            t_idx = t_vals
         elif isinstance(time, (list, np.ndarray)):
             # Return list of exact time points:
             t_idx = time
