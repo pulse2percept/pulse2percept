@@ -156,14 +156,13 @@ class ProsthesisSystem(PrettyPrint):
         else:
             if isinstance(data, Stimulus):
                 # Already a stimulus object:
-                stim = Stimulus(data, extrapolate=True)
+                stim = data
             elif isinstance(data, dict):
                 # Electrode names already provided by keys:
-                stim = Stimulus(data, extrapolate=True)
+                stim = Stimulus(data)
             else:
                 # Use electrode names as stimulus coordinates:
-                stim = Stimulus(data, electrodes=list(self.earray.keys()),
-                                extrapolate=True)
+                stim = Stimulus(data, electrodes=list(self.earray.keys()))
 
             # Make sure all electrode names are valid:
             for electrode in stim.electrodes:
