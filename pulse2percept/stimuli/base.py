@@ -171,6 +171,7 @@ class Stimulus(PrettyPrint):
             return _data, [_time[0]]
         # Otherwise, we need to interpolate. Keep only the unique time points
         # across stimuli:
+        # TODO: consider unique within a range TOL
         new_time = np.unique(np.concatenate(_time))
         # Now we need to interpolate the data values at each of these
         # new time points:
