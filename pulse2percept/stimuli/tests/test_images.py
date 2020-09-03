@@ -190,7 +190,7 @@ def test_ImageStimulus_scale():
 def test_ImageStimulus_filter():
     # Create a dummy image:
     fname = 'test.png'
-    shape = (25, 37, 4)
+    shape = (25, 37)
     create_dummy_img(fname, shape, 'rand')
     stim = ImageStimulus(fname)
 
