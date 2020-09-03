@@ -266,7 +266,7 @@ class Percept(Data):
             interval = 1000.0 / fps
         # Create the animation:
         return FuncAnimation(fig, update, data_gen, interval=interval,
-                             repeat=repeat)
+                             save_count=len(self.time), repeat=repeat)
 
     def save(self, fname, shape=None, fps=None):
         """Save the percept as an MP4 or GIF
