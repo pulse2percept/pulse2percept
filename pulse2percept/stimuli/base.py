@@ -652,6 +652,14 @@ class Stimulus(PrettyPrint):
                                  "number of columns in the data array "
                                  "(%d)." % (len(stim['time']),
                                             stim['data'].shape[1]))
+            if len(stim['time']) > 1:
+                dt = np.diff(stim['time'])
+                if np.isclose(np.min(dt), 0):
+                    idx_min = np.argmin(dt)
+                    err_str = ("Time points must be unique, but time[%d] == "
+                               "time[%d] == %f." % (idx_min, idx_min + 1,
+                                                    stim['time'][idx_min]))
+                    raise ValueError(err_str)
         elif len(stim['data']) > 0:
             if stim['data'].shape[1] > 1:
                 raise ValueError("Number of columns in the data array must be "
@@ -704,3 +712,11 @@ class Stimulus(PrettyPrint):
             err_s = ("The attribute `is_compressed` can only be set in the "
                      "constructor or in `compress`, not in `%s`." % f_caller)
             raise AttributeError(err_s)
+
+    @property
+    def dt(self):
+        """Sampling time step (ms)
+
+        Defines the duration of the signal edge transitions.
+        """
+        return np.min(np.diff(self.time))

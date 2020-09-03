@@ -294,6 +294,12 @@ def test_Stimulus__stim():
         data['electrodes'] = np.arange(3)
         data['time'] = np.arange(7)
         stim._stim = data
+    with pytest.raises(ValueError):
+        # Time points must be unique:
+        data['data'] = np.array([[1, 0, 1, 0, 2, 0, 1]])
+        data['time'] = np.array([0, 1, 1.5, 2, 2.1, 2.10000000000001, 2.2])
+        data['electrodes'] = np.arange(1)
+        stim._stim = data
     # But if you do all the things right, you can reset the stimulus by hand:
     data['data'] = np.ones((3, 1))
     data['electrodes'] = np.arange(3)
@@ -307,7 +313,7 @@ def test_Stimulus__stim():
 
     data['data'] = np.ones((3, 7))
     data['electrodes'] = np.arange(3)
-    data['time'] = np.ones(7)
+    data['time'] = np.arange(7)
     stim._stim = data
 
 
