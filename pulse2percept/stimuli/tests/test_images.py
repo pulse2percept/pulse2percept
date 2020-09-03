@@ -187,6 +187,28 @@ def test_ImageStimulus_scale():
         stim.scale(0)
     os.remove(fname)
 
+def test_ImageStimulus_filter():
+    # Create a dummy image:
+    fname = 'test.png'
+    shape = (25, 37, 4)
+    create_dummy_img(fname, shape, 'rand')
+    stim = ImageStimulus(fname)
+
+    for filt in ['sobel', 'scharr', 'canny', 'median']:
+        filt_stim = stim.filter(filt)
+        npt.assert_equal(filt_stim.shape, stim.shape)
+        npt.assert_equal(filt_stim.img_shape, stim.img_shape)
+        npt.assert_equal(filt_stim.electrodes, stim.electrodes)
+        npt.assert_equal(filt_stim.time, None)
+
+    # Invalid filter name:
+    with pytest.raises(TypeError):
+        stim.filter({'invalid'})
+    with pytest.raises(ValueError):
+        stim.filter('invalid')
+
+    os.remove(fname)
+
 
 def test_ImageStimulus_encode():
     stim = ImageStimulus(np.random.rand(4, 5))
