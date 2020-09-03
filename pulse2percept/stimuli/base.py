@@ -7,7 +7,6 @@ import numpy as np
 np.set_printoptions(precision=2, threshold=5, edgeitems=2)
 
 import logging
-from scipy.interpolate import interp1d
 
 from ..utils import PrettyPrint, parfor
 from ._base import fast_compress
@@ -81,19 +80,6 @@ class Stimulus(PrettyPrint):
         For example, in a pulse train, only the signal edges are saved. This
         drastically reduces the memory footprint of the stimulus.
 
-    interp_method : str or int, optional
-        For SciPy's ``interp1`` method, specifies the kind of interpolation as
-        a string ('linear', 'nearest', 'zero', 'slinear', 'quadratic', 'cubic',
-        'previous', 'next') or as an integer specifying the order of the spline
-        interpolator to use.
-
-        Here, 'zero', 'slinear', 'quadratic' and 'cubic' refer to a spline
-        interpolation of zeroth, first, second or third order; 'previous' and
-        'next' simply return the previous or next value of the point.
-
-    extrapolate : bool, optional
-        Whether to allow extrapolation of data points outside the given range.
-
     Notes
     -----
     *  Depending on the source type, a stimulus might have a time component or
@@ -103,6 +89,8 @@ class Stimulus(PrettyPrint):
        a column index but a time point.
     *  If the time point is not explicitly stored in the ``data`` container,
        its value will be automatically interpolated from neighboring values.
+    *  If a requested time point lies outside the range of stored data,
+       the value of its closest end point will be returned.
 
     Examples
     --------
@@ -132,15 +120,11 @@ class Stimulus(PrettyPrint):
 
     """
     # Frozen class: Only the following class attributes are allowed
-    __slots__ = ('metadata', '_interp', '_interp_method', '_extrapolate',
-                 '_is_compressed', '__stim')
+    __slots__ = ('metadata', '_is_compressed', '__stim')
 
     def __init__(self, source, electrodes=None, time=None, metadata=None,
-                 compress=False, interp_method='linear', extrapolate=False):
+                 compress=False):
         self.metadata = metadata
-        # Private: User is not supposed to overwrite these later on:
-        self._interp_method = interp_method
-        self._extrapolate = extrapolate
         # Flag will be flipped in the compress method:
         self.is_compressed = False
         # Extract the data and coordinates (electrodes, time) from the source:
@@ -158,7 +142,7 @@ class Stimulus(PrettyPrint):
         When a collection of source types is passed, it is possible that they
         have different time axes (e.g., different time steps, or a different
         stimulus duration). In this case, we need to merge all time axes into a
-        single, coherent one. This is expensive, because of interp1d.
+        single, coherent one. This is expensive, because of interpolation.
         """
         # We can skip the costly interpolation if all `_time` vectors are
         # identical:
@@ -174,17 +158,14 @@ class Stimulus(PrettyPrint):
         # TODO: consider unique within a range TOL
         new_time = np.unique(np.concatenate(_time))
         # Now we need to interpolate the data values at each of these
-        # new time points:
+        # new time points.
         new_data = []
         for t, d in zip(_time, _data):
-            if len(t) == 1:
-                # Special case: Duplicate data with slightly different
-                # time points so we can set up an interp1d:
-                t = np.array([t - 1e-12, t + 1e-12], dtype=np.float32)
-                d = np.repeat(d, 2, axis=1)
-            itp = interp1d(t.ravel(), d, bounds_error=None,
-                           fill_value='extrapolate')
-            new_data.append(itp(new_time))
+            # t is a 1D vector, d is a 2D data matrix and might have more than
+            # one row:
+            new_rows = [np.interp(new_time, t, row) for row in d]
+            new_rows = np.array(new_rows).reshape((-1, len(new_time)))
+            new_data.append(new_rows)
         return new_data, [new_time]
 
     def _from_source(self, source):
@@ -278,7 +259,7 @@ class Stimulus(PrettyPrint):
                 raise ValueError("If one stimulus has time=None, all others "
                                  "must have time=None as well.")
             # When none of the stimuli have time=None, we need to merge the
-            # time axes (this is expensive because of interp1d):
+            # time axes (this is expensive because of interpolation):
             if len(_time) > 1 and _time[0] is not None:
                 _data, _time = self._merge_time_axes(_data, _time)
             # Now make `_data` a 2-D NumPy array, with `_electrodes` as rows
@@ -543,17 +524,17 @@ class Stimulus(PrettyPrint):
         # STEP 3: INTERPOLATE TIME
         # From here on out, we know that ``item`` is a tuple, otherwise we
         # would have raised an IndexError above.
-        # First of all, if time=None, then _interp=None, and we won't interp:
-        if self._interp is None:
+        # First of all, if time=None, we won't interp:
+        if self.time is None:
             raise ValueError("Cannot interpolate time if time=None.")
-        # Build a list of interpolation objects:
+        time = np.array([time]).flatten()
         if (not isinstance(electrodes, (list, np.ndarray)) and
                 electrodes == Ellipsis):
-            interp = np.array(self._interp)
+            data = self.data
         else:
-            interp = np.array([self._interp[electrodes]]).flatten()
-        time = np.array([time]).flatten()
-        data = np.array([[ip(t) for t in time] for ip in interp])
+            data = self.data[electrodes, :].reshape(-1, len(self.time))
+        data = [np.interp(time, self.time, row) for row in data]
+        data = np.array(data).reshape((-1, len(time)))
         # Return a single element as scalar:
         if data.size == 1:
             data = data.ravel()[0]
@@ -677,29 +658,6 @@ class Stimulus(PrettyPrint):
                                  "1 if time=None.")
         # All checks passed, store the data:
         self.__stim = stim
-        # Set up the interpolator:
-        self._interp = None
-        if self.time is None or self._interp_method is None:
-            return
-        if len(self.time) == 1:
-            # Special case: Duplicate data with slightly different time points
-            # so we can set up an interp1d:
-            time = np.array([self.time - 1e-12, self.time + 1e-12]).flatten()
-            data = np.repeat(self.data, 2, axis=1)
-        else:
-            time = self.time
-            data = self.data
-        if self._extrapolate:
-            bounds_error = False
-            fill_value = 'extrapolate'
-        else:
-            bounds_error = True
-            fill_value = None
-        self._interp = np.array([interp1d(time, row, kind=self._interp_method,
-                                          assume_sorted=True,
-                                          bounds_error=bounds_error,
-                                          fill_value=fill_value)
-                                 for row in data])
 
     @property
     def data(self):

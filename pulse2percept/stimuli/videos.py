@@ -72,23 +72,10 @@ class VideoStimulus(Stimulus):
         * Remove electrodes with all-zero activation.
         * Retain only the time points at which the stimulus changes.
 
-    interp_method : str or int, optional, default: 'linear'
-        For SciPy's ``interp1`` method, specifies the kind of interpolation as
-        a string ('linear', 'nearest', 'zero', 'slinear', 'quadratic', 'cubic',
-        'previous', 'next') or as an integer specifying the order of the spline
-        interpolator to use.
-        Here, 'zero', 'slinear', 'quadratic' and 'cubic' refer to a spline
-        interpolation of zeroth, first, second or third order; 'previous' and
-        'next' simply return the previous or next value of the point.
-
-    extrapolate : bool, optional, default: False
-        Whether to extrapolate data points outside the given range.
-
     """
 
     def __init__(self, source, format=None, resize=None, as_gray=False,
-                 electrodes=None, time=None, metadata=None, compress=False,
-                 interp_method='linear', extrapolate=False):
+                 electrodes=None, time=None, metadata=None, compress=False):
         if metadata is None:
             metadata = {}
         if isinstance(source, str):
@@ -144,9 +131,7 @@ class VideoStimulus(Stimulus):
         super(VideoStimulus, self).__init__(vid.reshape((-1, vid.shape[-1])),
                                             time=time, electrodes=electrodes,
                                             metadata=metadata,
-                                            compress=compress,
-                                            interp_method=interp_method,
-                                            extrapolate=extrapolate)
+                                            compress=compress)
         self.rewind()
 
     def _pprint_params(self):
@@ -166,9 +151,7 @@ class VideoStimulus(Stimulus):
         """
         return VideoStimulus(1.0 - self.data.reshape(self.vid_shape),
                              electrodes=self.electrodes, time=self.time,
-                             metadata=self.metadata,
-                             interp_method=self._interp_method,
-                             extrapolate=self._extrapolate)
+                             metadata=self.metadata)
 
     def rgb2gray(self, electrodes=None):
         """Convert the video to grayscale
@@ -193,9 +176,7 @@ class VideoStimulus(Stimulus):
         vid = self.data.reshape(self.vid_shape)
         vid = rgb2gray(vid.transpose((0, 1, 3, 2)))
         return VideoStimulus(vid, electrodes=electrodes, time=self.time,
-                             metadata=self.metadata,
-                             interp_method=self._interp_method,
-                             extrapolate=self._extrapolate)
+                             metadata=self.metadata)
 
     def resize(self, shape, electrodes=None):
         """Resize the video
@@ -230,9 +211,7 @@ class VideoStimulus(Stimulus):
         vid = vid_resize(self.data.reshape(self.vid_shape),
                          (height, width, *self.vid_shape[2:]))
         return VideoStimulus(vid, electrodes=electrodes, time=self.time,
-                             metadata=self.metadata,
-                             interp_method=self._interp_method,
-                             extrapolate=self._extrapolate)
+                             metadata=self.metadata)
 
     def filter(self, filt, **kwargs):
         """Filter each frame of the video
@@ -275,9 +254,7 @@ class VideoStimulus(Stimulus):
         vid = np.array([filt(frame.reshape(self.vid_shape[:-1]), **kwargs)
                         for frame in self]).transpose((1, 2, 0))
         return VideoStimulus(vid, electrodes=self.electrodes, time=self.time,
-                             metadata=self.metadata,
-                             interp_method=self._interp_method,
-                             extrapolate=self._extrapolate)
+                             metadata=self.metadata)
 
     def apply(self, func, **kwargs):
         """Apply a function to each frame of the video
@@ -298,9 +275,7 @@ class VideoStimulus(Stimulus):
         vid = np.array([func(frame.reshape(self.vid_shape[:-1]), **kwargs)
                         for frame in self]).transpose((1, 2, 0))
         return VideoStimulus(vid, electrodes=self.electrodes, time=self.time,
-                             metadata=self.metadata,
-                             interp_method=self._interp_method,
-                             extrapolate=self._extrapolate)
+                             metadata=self.metadata)
 
     def rewind(self):
         """Rewind the iterator"""

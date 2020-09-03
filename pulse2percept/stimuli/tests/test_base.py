@@ -382,25 +382,19 @@ def test_Stimulus___getitem__():
     with pytest.raises(IndexError):
         stim[3.3, 0]
 
-    # Extrapolating should be disabled by default:
-    with pytest.raises(ValueError):
-        stim[0, 9.9]
-    # But you can enable it:
-    stim = Stimulus(1 + np.arange(12).reshape((3, 4)), extrapolate=True)
-    npt.assert_almost_equal(stim[0, 9.901], 10.901)
+    # Times can be extrapolated (take on value of end points):
+    stim = Stimulus(1 + np.arange(12).reshape((3, 4)))
+    npt.assert_almost_equal(stim[0, 9.901], 4)
     # If time=None, you cannot interpolate/extrapolate:
-    stim = Stimulus([3, 4, 5], extrapolate=True)
+    stim = Stimulus([3, 4, 5])
     npt.assert_almost_equal(stim[0], stim.data[0, 0])
     with pytest.raises(ValueError):
         stim[0, 0.2]
 
     # With a single time point, interpolate is still possible:
-    stim = Stimulus(np.arange(3).reshape((-1, 1)), extrapolate=False)
+    stim = Stimulus(np.arange(3).reshape((-1, 1)))
     npt.assert_almost_equal(stim[0], stim.data[0, 0])
     npt.assert_almost_equal(stim[0, 0], stim.data[0, 0])
-    with pytest.raises(ValueError):
-        stim[0, 3.33]
-    stim = Stimulus(np.arange(3).reshape((-1, 1)), extrapolate=True)
     npt.assert_almost_equal(stim[0, 3.33], stim.data[0, 0])
 
     # Annoying but possible:
@@ -427,7 +421,7 @@ def test_Stimulus___getitem__():
     npt.assert_almost_equal(stim[stim.electrodes != 'A1', :], [[3, 4, 5]])
     npt.assert_almost_equal(stim[stim.electrodes == 'B2', :], [[3, 4, 5]])
     npt.assert_almost_equal(stim[stim.electrodes == 'C9', :], np.zeros((0, 3)))
-    npt.assert_almost_equal(stim[stim.electrodes == 'C9', 0.1], [])
+    npt.assert_almost_equal(stim[stim.electrodes == 'C9', 0.1].size, 0)
     npt.assert_almost_equal(stim[stim.electrodes == 'B2', 0.1001], 3.0005,
                             decimal=3)
     npt.assert_almost_equal(stim[stim.electrodes == 'B2', 0.2], 3.5)
@@ -435,10 +429,26 @@ def test_Stimulus___getitem__():
     npt.assert_almost_equal(stim[stim.electrodes == 'B2', stim.time < 0.4],
                             [3, 4])
     npt.assert_almost_equal(stim[:, stim.time > 0.6], np.zeros((2, 0)))
-    npt.assert_almost_equal(stim['A1', stim.time > 0.6], [])
+    npt.assert_almost_equal(stim['A1', stim.time > 0.6].size, 0)
     npt.assert_almost_equal(stim['A1', np.isclose(stim.time, 0.3)], [1])
 
 
 def test_Stimulus_merge():
-    stim = Stimulus([[1, 0.3, 0.0, 0.6, 2.0]], time=np.arange(5))
-    merge = Stimulus([stim, stim])
+    # We can stack multiple stimuli together - their time axes will be merged:
+    stim1 = Stimulus([[0, 1, 2, 3, 4]], time=[0, 1, 2, 3, 4])
+    stim2 = Stimulus([[0, 1, 2]], time=[-0.5, 1.5, 4.5])
+    merge = Stimulus([stim1, stim2])
+    npt.assert_almost_equal(merge.time, np.unique(np.hstack((stim1.time,
+                                                             stim2.time))))
+    npt.assert_almost_equal(merge[0, [0, -1]], stim1[0, [0, -1]])
+    npt.assert_almost_equal(merge[1, [0, -1]], stim2[0, [0, -1]])
+
+    # We can keep stacking - even when nested:
+    stim3 = Stimulus([[14]], time=[9.7])
+    merge2 = Stimulus([merge, stim3])
+    npt.assert_almost_equal(merge2.time, np.unique((np.hstack((stim1.time,
+                                                               stim2.time,
+                                                               stim3.time)))))
+    npt.assert_almost_equal(merge2[0, [0, -1]], stim1[0, [0, -1]])
+    npt.assert_almost_equal(merge2[1, [0, -1]], stim2[0, [0, -1]])
+    npt.assert_almost_equal(merge2[2, [0, -1]], stim3[0, [0, -1]])

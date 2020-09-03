@@ -168,7 +168,7 @@ def test_BiphasicTripletTrain(amp, interphase_dur, delay_dur, cathodic_first):
                               cathodic_first=cathodic_first, dt=dt)
     for i in range(n_pulses):
         t_win = i * window_dur
-        npt.assert_almost_equal(pt[0, t_win], 0)
+        npt.assert_almost_equal(pt[0, np.floor(t_win)], 0)
         npt.assert_almost_equal(pt[0, t_win + mid_first_pulse], first_amp)
         if interphase_dur > 0:
             npt.assert_almost_equal(pt[0, t_win + mid_interphase], 0)
