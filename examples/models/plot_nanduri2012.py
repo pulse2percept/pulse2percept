@@ -97,8 +97,8 @@ model.build()
 # The input to the model is an implant containing a stimulus (usually a pulse
 # train), which is processed in time by a number of linear filtering steps as
 # well as a stationary nonlinearity (a sigmoid).
-
-percept = model.predict_percept(implant)
+import numpy as np
+percept = model.predict_percept(implant, t_percept=np.arange(1000))
 
 ###############################################################################
 # The output of the model is a :py:class:`~pulse2percept.percepts.Percept`
@@ -117,7 +117,6 @@ bright_th
 # then drop off slowly (over the time course of seconds).
 # This is consistent with behavioral reports from Argus II users.
 
-import numpy as np
 fig, ax = plt.subplots(figsize=(12, 5))
 ax.plot(implant.stim.time,
         -0.02 + 0.01 * implant.stim.data[0, :] / implant.stim.data.max(),

@@ -59,14 +59,17 @@ class PulseTrain(Stimulus):
         if pulse.time is None:
             raise ValueError("'pulse' does not have a time component.")
         # How many pulses fit into stim dur:
-        n_max_pulses = int(freq * stim_dur / 1000.0)
+        n_max_pulses = freq * stim_dur / 1000.0
+        # The requested number of pulses cannot be greater than max pulses:
         if n_pulses is not None:
             n_pulses = int(n_pulses)
             if n_pulses > n_max_pulses:
                 raise ValueError("stim_dur=%.2f cannot fit more than "
                                  "%d pulses." % (stim_dur, n_max_pulses))
         else:
-            n_pulses = n_max_pulses
+            # `freq` might not perfectly divide `stim_dur`, so we will create
+            # one extra pulse and trim to the right length:
+            n_pulses = int(np.ceil(n_max_pulses))
         # 0 Hz is allowed:
         if n_pulses <= 0:
             time = [0, stim_dur]
@@ -90,12 +93,20 @@ class PulseTrain(Stimulus):
             for i in range(n_pulses):
                 data.append(pulse_data)
                 time.append(pulse_time + i * window_dur)
-            # Make sure the last point in the stimulus is at `stim_dur`:
-            if time[-1][-1] < stim_dur:
-                data.append(np.zeros((pulse.data.shape[0], 1)))
-                time.append([stim_dur])
             data = np.concatenate(data, axis=1)
             time = np.concatenate(time, axis=0)
+        # If stimulus is longer than the requested `stim_dur`, trim it. Make
+        # sure to interpolate the end point:
+        if time[-1] > stim_dur:
+            last_col = [np.interp(stim_dur, time, row) for row in data]
+            last_col = np.array(last_col).reshape((-1, 1))
+            t_idx = time < stim_dur
+            data = np.hstack((data[:, t_idx], last_col))
+            time = np.append(time[t_idx], stim_dur)
+        # If stimulus is shorter than the requested `stim_dur`, add a zero:
+        if time[-1] < stim_dur:
+            data = np.hstack((data, np.zeros((pulse.data.shape[0], 1))))
+            time = np.append(time, stim_dur)
         super().__init__(data, time=time, electrodes=electrode, metadata=None,
                          compress=False)
         self.freq = freq
