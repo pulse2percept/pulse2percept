@@ -205,26 +205,8 @@ In that case, the value is automatically interpolated (using SciPy's
     # This also works for multiple time points:
     stim[0, [3.45, 6.78]]
     
-    # Extrapolating is disabled by default, but you can enable it:
-    stim = Stimulus(np.arange(10).reshape((1, -1)), extrapolate=True)
+    # Time points above the valid range will return the largest stored value:
     stim[0, 123.45]
-
-You can choose different interpolation methods, as long as
-`scipy.interpolate.interp1d <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ accepts them.
-For example, the 'nearest' method will return the value of the nearest
-data point:
-
-.. ipython:: python
-
-    # A single-electrode ramp stimulus:
-    stim = Stimulus(np.arange(10).reshape((1, -1)), interp_method='nearest',
-                    extrapolate=True)
-
-    # Interpolate:
-    stim[0, 3.45]
-
-    # Outside the data range:
-    stim[0, 12.2]
 
 Accessing the raw data
 ^^^^^^^^^^^^^^^^^^^^^^
