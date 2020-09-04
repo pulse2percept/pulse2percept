@@ -70,6 +70,8 @@ print(logo)
 #    :py:meth:`~pulse2percept.stimuli.ImageStimulus.shift`, and
 #    :py:meth:`~pulse2percept.stimuli.ImageStimulus.rotate` the image
 #    foreground (i.e., anything that's not black),
+# -  :py:meth:`~pulse2percept.stimuli.ImageStimulus.trim` any black borders
+#    around the image.
 # -  :py:meth:`~pulse2percept.stimuli.ImageStimulus.threshold` the image using
 #    a number of commonly used techniques (e.g., Otsu's method, adaptive
 #    thresholding, ISODATA),
@@ -102,7 +104,18 @@ logo.plot(ax=ax1)
 logo_gray.plot(ax=ax2)
 
 ##############################################################################
-# As mentioned above, the
+# As demonstrated above, multiple image processing steps can be performed in
+# one line. This is possible because each method returns a copy of the
+# processed image (without altering the original).
+#
+# The following example takes the grayscale logo, shrinks it to 75% of its
+# original size, rotates it by 30 degrees (counter-clockwise), and trims the
+# black border around the image:
+
+logo_gray.scale(0.75).rotate(30).trim().plot()
+
+##############################################################################
+# As mentioned in the introduction above, the
 # :py:meth:`~pulse2percept.stimuli.ImageStimulus.filter` method provides
 # a number of popular techniques to extract edges from the image, such as:
 #
@@ -203,7 +216,7 @@ percept_gray = model.predict_percept(implant)
 # resulting percept, we can re-run the model on ``logo_dilate`` and plot the
 # two percepts side-by-side:
 
-implant.stim = logo_dilate.resize(implant.shape)
+implant.stim = logo_dilate.trim().resize(implant.shape)
 percept_dilate = model.predict_percept(implant)
 
 fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(10, 4))
@@ -224,7 +237,7 @@ percept_dilate.plot(ax=ax2)
 # with 0.46ms phase duration (500ms total stimulus duration). Gray levels in
 # the range [0, 1] will be mapped onto currents in the range [0, 50] uA:
 
-implant.stim = logo_dilate.resize(implant.shape).encode()
+implant.stim = logo_dilate.trim().resize(implant.shape).encode()
 
 ##############################################################################
 # We can customize the range of amplitudes to be used by passing a keyword
