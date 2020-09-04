@@ -3,18 +3,16 @@
 .. autosummary::
     :toctree: _api
 
-    base
-    predictors
     optimizers
 
 """
-from .base import cross_val_predict
-from .optimizers import (FunctionMinimizer, GridSearchOptimizer,
-                         ParticleSwarmOptimizer)
+from .optimizers import (BaseOptimizer, FunctionMinimizer, GridSearchOptimizer,
+                         NotFittedError, ParticleSwarmOptimizer)
 
 __all__ = [
-    'cross_val_predict',
+    'BaseOptimizer'
     'FunctionMinimizer',
     'GridSearchOptimizer',
+    'NotFittedError',
     'ParticleSwarmOptimizer'
 ]

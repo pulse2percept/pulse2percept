@@ -4,10 +4,12 @@ import pytest
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
-from sklearn.exceptions import NotFittedError
-from sklearn.model_selection import ParameterGrid
+# from sklearn.model_selection import ParameterGrid
 
-from pulse2percept import model_selection as ms
+
+from pulse2percept.model_selection import (FunctionMinimizer, NotFittedError,
+                                           GridSearchOptimizer,
+                                           ParticleSwarmOptimizer)
 
 
 def generate_dummy_data():
@@ -45,7 +47,7 @@ def test_FunctionMinimizer():
     # DummyPredictor always predicts 'feature1'.
     # The best `dummy_var` value is 1.
     X, y = generate_dummy_data()
-    fmin = ms.FunctionMinimizer(DummyPredictor(), {'dummy_var': (0.5, 2.5)})
+    fmin = FunctionMinimizer(DummyPredictor(), {'dummy_var': (0.5, 2.5)})
     with pytest.raises(NotFittedError):
         fmin.predict(X)
     fmin.fit(X, y)
@@ -57,9 +59,9 @@ def test_GridSearchOptimizer():
     # DummyPredictor always predicts 'feature1'.
     # The best `dummy_var` value is 1.
     X, y = generate_dummy_data()
-    search_params = {'dummy_var': np.linspace(0.5, 2, 4)}
-    fmin = ms.GridSearchOptimizer(DummyPredictor(),
-                                  ParameterGrid(search_params))
+    search_params = {'dummy_var': np.linspace(0.5, 2, num=4)}
+    fmin = GridSearchOptimizer(DummyPredictor(), search_params)
+    # ParameterGrid(search_params))
     with pytest.raises(NotFittedError):
         fmin.predict(X)
     fmin.fit(X, y)
@@ -71,9 +73,9 @@ def test_ParticleSwarmOptimizer():
     # DummyPredictor always predicts 'feature1'.
     # The best `dummy_var` value is 1.
     X, y = generate_dummy_data()
-    fmin = ms.ParticleSwarmOptimizer(DummyPredictor(),
-                                     {'dummy_var': (0.5, 2.5)},
-                                     min_func=1e-6, min_step=1e-6)
+    fmin = ParticleSwarmOptimizer(DummyPredictor(),
+                                  {'dummy_var': (0.5, 2.5)},
+                                  min_func=1e-6, min_step=1e-6)
     with pytest.raises(NotFittedError):
         fmin.predict(X)
     # Test both {} and None:

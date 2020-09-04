@@ -8,4 +8,5 @@ flake8
 mock
 seaborn
 sklearn
+pyswarm
 -r doc/requirements.txt
