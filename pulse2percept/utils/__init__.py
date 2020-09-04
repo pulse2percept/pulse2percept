@@ -11,7 +11,7 @@
     parallel
 
 """
-from .base import PrettyPrint, FreezeError, Frozen, Data, gamma
+from .base import PrettyPrint, FreezeError, Frozen, Data, gamma, unique
 from .geometry import (Grid2D, RetinalCoordTransform, Curcio1990Transform,
                        Watson2014Transform, Watson2014DisplaceTransform,
                        cart2pol, pol2cart)
@@ -34,6 +34,7 @@ __all__ = [
     'pol2cart',
     'PrettyPrint',
     'RetinalCoordTransform',
+    'unique',
     'Watson2014DisplaceTransform',
     'Watson2014Transform'
 ]

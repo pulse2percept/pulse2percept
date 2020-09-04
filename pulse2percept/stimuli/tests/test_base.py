@@ -7,7 +7,7 @@ from collections import OrderedDict as ODict
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
-from pulse2percept.stimuli import Stimulus
+from pulse2percept.stimuli import Stimulus, DT
 
 
 def test_Stimulus():
@@ -294,6 +294,12 @@ def test_Stimulus__stim():
         data['electrodes'] = np.arange(3)
         data['time'] = np.arange(7)
         stim._stim = data
+    with pytest.raises(ValueError):
+        # Time points must be unique:
+        data['data'] = np.array([[1, 0, 1, 0, 2, 0, 1]])
+        data['time'] = np.array([0, 1, 1.5, 2, 2.1, 2.10000000000001, 2.2])
+        data['electrodes'] = np.arange(1)
+        stim._stim = data
     # But if you do all the things right, you can reset the stimulus by hand:
     data['data'] = np.ones((3, 1))
     data['electrodes'] = np.arange(3)
@@ -305,9 +311,9 @@ def test_Stimulus__stim():
     data['time'] = np.arange(1)
     stim._stim = data
 
-    data['data'] = np.ones((3, 7))
+    data['data'] = np.ones((3, 4))
     data['electrodes'] = np.arange(3)
-    data['time'] = np.ones(7)
+    data['time'] = np.array([0, 1, 1 + DT, 2])
     stim._stim = data
 
 
@@ -439,7 +445,8 @@ def test_Stimulus_merge():
     stim2 = Stimulus([[0, 1, 2]], time=[-0.5, 1.5, 4.5])
     merge = Stimulus([stim1, stim2])
     npt.assert_almost_equal(merge.time, np.unique(np.hstack((stim1.time,
-                                                             stim2.time))))
+                                                             stim2.time))),
+                            decimal=6)
     npt.assert_almost_equal(merge[0, [0, -1]], stim1[0, [0, -1]])
     npt.assert_almost_equal(merge[1, [0, -1]], stim2[0, [0, -1]])
 
@@ -448,7 +455,8 @@ def test_Stimulus_merge():
     merge2 = Stimulus([merge, stim3])
     npt.assert_almost_equal(merge2.time, np.unique((np.hstack((stim1.time,
                                                                stim2.time,
-                                                               stim3.time)))))
+                                                               stim3.time)))),
+                            decimal=6)
     npt.assert_almost_equal(merge2[0, [0, -1]], stim1[0, [0, -1]])
     npt.assert_almost_equal(merge2[1, [0, -1]], stim2[0, [0, -1]])
     npt.assert_almost_equal(merge2[2, [0, -1]], stim3[0, [0, -1]])
