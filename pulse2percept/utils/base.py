@@ -311,22 +311,24 @@ def gamma(n, tau, tsample, tol=0.01):
 
 
 def unique(a, tol=1e-6, return_index=False):
-    """Find the unique elements of an array
+    """Find the unique elements of a sorted 1D array
 
-    Extends ``numpy.unique`` with a tolerance level ``tol``.
+    Special case of ``numpy.unique`` (array is flat, sortened) with a tolerance
+    level ``tol``.
 
     .. versionadded:: 0.7
 
     Parameters
     ----------
     a : array_like
-        Input array. This will be flattened if it is not already 1-D.
+        Input array: must be sorted, and will be flattened if it is not
+        already 1-D.
     tol : float, optional
         If the difference between two elements in the array is smaller than
         ``tol``, the two elements are considered equal.
     return_index : bool, optional
-        If True, also return the indices of `ar` (along the specified axis,
-        if provided, or in the flattened array) that result in the unique array.
+        If True, also return the indices of ``a`` that result in the unique
+        array.
 
     Returns
     -------

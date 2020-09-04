@@ -168,7 +168,7 @@ def test_unique():
     a = [0, 0.001, 0.1, 0.2, 1]
     npt.assert_almost_equal(unique(a, tol=1e-6), a)
     npt.assert_almost_equal(unique(a, tol=0.001), a)
-    npt.assert_almost_equal(unique(a, tol=0.01), [0, 0.1, 0.2, 1])
+    npt.assert_almost_equal(unique(a, tol=0.1), [0, 0.1, 0.2, 1])
     npt.assert_almost_equal(unique(a, tol=1), [0, 1])
 
     val, idx = unique(a, tol=1e-6, return_index=True)

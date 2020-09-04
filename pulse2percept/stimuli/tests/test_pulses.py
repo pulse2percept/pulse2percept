@@ -3,19 +3,23 @@ import numpy.testing as npt
 import pytest
 
 from pulse2percept.stimuli import (AsymmetricBiphasicPulse, BiphasicPulse,
-                                   MonophasicPulse, Stimulus)
+                                   MonophasicPulse, Stimulus, DT)
+
+DECIMAL = int(-np.log10(DT))
 
 
 @pytest.mark.parametrize('amp', (-1, 13))
-@pytest.mark.parametrize('delay_dur', (0, 2.2))
+@pytest.mark.parametrize('delay_dur', (0, 2.2, np.pi))
 def test_MonophasicPulse(amp, delay_dur):
     phase_dur = 3.456
     # Basic usage:
     pulse = MonophasicPulse(amp, phase_dur, delay_dur=delay_dur)
     npt.assert_almost_equal(pulse[0, 0], 0)
-    npt.assert_almost_equal(pulse[0, delay_dur + phase_dur / 2.0], amp)
+    npt.assert_almost_equal(pulse[0, delay_dur + phase_dur / 2.0], amp,
+                            decimal=DECIMAL)
     npt.assert_almost_equal(pulse.time[0], 0)
-    npt.assert_almost_equal(pulse.time[-1], phase_dur + delay_dur)
+    npt.assert_almost_equal(pulse.time[-1], phase_dur + delay_dur,
+                            decimal=DECIMAL)
     npt.assert_equal(pulse.cathodic, amp <= 0)
     npt.assert_equal(pulse.charge_balanced, False)
 
@@ -26,11 +30,19 @@ def test_MonophasicPulse(amp, delay_dur):
     npt.assert_almost_equal(pulse.time[0], 0)
     npt.assert_almost_equal(pulse.time[-1], 100)
 
+    # Exact stim dur:
+    stim_dur = phase_dur + delay_dur
+    pulse = MonophasicPulse(amp, phase_dur, delay_dur=delay_dur,
+                            stim_dur=stim_dur)
+    npt.assert_almost_equal(pulse.time[0], 0)
+    npt.assert_almost_equal(pulse.time[-1], stim_dur, decimal=6)
+
     # Zero amplitude:
     pulse = MonophasicPulse(0, phase_dur, delay_dur=delay_dur, electrode='A1')
     npt.assert_almost_equal(pulse.data, 0)
     npt.assert_almost_equal(pulse.time[0], 0)
-    npt.assert_almost_equal(pulse.time[-1], phase_dur + delay_dur)
+    npt.assert_almost_equal(pulse.time[-1], phase_dur + delay_dur,
+                            decimal=DECIMAL)
     npt.assert_equal(pulse.charge_balanced, True)
     npt.assert_equal(pulse.electrodes, 'A1')
 
@@ -96,6 +108,14 @@ def test_BiphasicPulse(amp, interphase_dur, delay_dur, cathodic_first):
     npt.assert_almost_equal(pulse.time[-1], 100)
     npt.assert_equal(pulse.electrodes, 'B1')
 
+    # Exact stim dur:
+    stim_dur = 2 * phase_dur + interphase_dur + delay_dur
+    pulse = BiphasicPulse(amp, phase_dur, interphase_dur=interphase_dur,
+                          delay_dur=delay_dur, cathodic_first=cathodic_first,
+                          stim_dur=stim_dur)
+    npt.assert_almost_equal(pulse.time[0], 0)
+    npt.assert_almost_equal(pulse.time[-1], stim_dur, decimal=6)
+
     # Zero amplitude:
     pulse = BiphasicPulse(0, phase_dur, interphase_dur=interphase_dur,
                           delay_dur=delay_dur, cathodic_first=cathodic_first)
@@ -116,6 +136,10 @@ def test_BiphasicPulse(amp, interphase_dur, delay_dur, cathodic_first):
     # Concatenate and rename:
     stim = Stimulus([pulse, pulse], electrodes=['C1', 'D2'])
     npt.assert_equal(stim.electrodes, ['C1', 'D2'])
+
+    # Floating point math with np.unique is tricky, but this works:
+    BiphasicPulse(10, np.pi, interphase_dur=np.pi, delay_dur=np.pi,
+                  stim_dur=5 * np.pi)
 
     # Invalid calls:
     with pytest.raises(ValueError):
@@ -177,6 +201,16 @@ def test_AsymmetricBiphasicPulse(amp1, amp2, interphase_dur, delay_dur,
     npt.assert_almost_equal(pulse.time[0], 0)
     npt.assert_almost_equal(pulse.time[-1], 100)
     npt.assert_equal(pulse.electrodes, 'A1')
+
+    # Exact stim dur:
+    stim_dur = delay_dur + phase_dur1 + interphase_dur + phase_dur2
+    pulse = AsymmetricBiphasicPulse(amp1, amp2, phase_dur1, phase_dur2,
+                                    interphase_dur=interphase_dur,
+                                    delay_dur=delay_dur,
+                                    cathodic_first=cathodic_first,
+                                    stim_dur=stim_dur, electrode='A1')
+    npt.assert_almost_equal(pulse.time[0], 0)
+    npt.assert_almost_equal(pulse.time[-1], stim_dur, decimal=6)
 
     # Zero amplitude:
     pulse = AsymmetricBiphasicPulse(0, 0, phase_dur1, phase_dur2,

@@ -8,8 +8,9 @@ np.set_printoptions(precision=2, threshold=5, edgeitems=2)
 
 import logging
 
-from ..utils import PrettyPrint, parfor
+from . import DT
 from ._base import fast_compress
+from ..utils import PrettyPrint, parfor, unique
 
 
 class Stimulus(PrettyPrint):
@@ -148,15 +149,14 @@ class Stimulus(PrettyPrint):
         # identical:
         identical = True
         for t in _time:
-            if not np.all(t == _time[0]):
+            if len(t) != len(_time[0]) or not np.allclose(t, _time[0]):
                 identical = False
                 break
         if identical:
             return _data, [_time[0]]
         # Otherwise, we need to interpolate. Keep only the unique time points
         # across stimuli:
-        # TODO: consider unique within a range TOL
-        new_time = np.unique(np.concatenate(_time))
+        new_time = unique(np.concatenate(_time), tol=DT)
         # Now we need to interpolate the data values at each of these
         # new time points.
         new_data = []
@@ -653,12 +653,15 @@ class Stimulus(PrettyPrint):
                                  "(%d)." % (len(stim['time']),
                                             stim['data'].shape[1]))
             if len(stim['time']) > 1:
-                dt = np.diff(stim['time'])
-                if np.isclose(np.min(dt), 0):
-                    idx_min = np.argmin(dt)
-                    err_str = ("Time points must be unique, but time[%d] == "
-                               "time[%d] == %f." % (idx_min, idx_min + 1,
-                                                    stim['time'][idx_min]))
+                # Beware of floating point issues by slightly decreasing the
+                # tolerance level (relative to how the stimuli are built):
+                n_unique = len(unique(stim['time'], tol=0.9 * DT))
+                if n_unique != len(stim['time']):
+                    idx_min = np.argmin(np.diff(stim['time']))
+                    err_str = ("Time points must be unique up to %d "
+                               "decimals, but time [%d] == time[%d] == "
+                               "(%f)." % (int(-np.log10(DT)), idx_min,
+                                          idx_min + 1, stim['time'][idx_min]))
                     raise ValueError(err_str)
         elif len(stim['data']) > 0:
             if stim['data'].shape[1] > 1:
@@ -718,5 +721,8 @@ class Stimulus(PrettyPrint):
         """Sampling time step (ms)
 
         Defines the duration of the signal edge transitions.
+
+        .. versionadded:: 0.7
+
         """
-        return np.min(np.diff(self.time))
+        return DT
