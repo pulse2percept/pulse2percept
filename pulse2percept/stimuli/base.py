@@ -655,7 +655,7 @@ class Stimulus(PrettyPrint):
             if len(stim['time']) > 1:
                 # Beware of floating point issues by slightly decreasing the
                 # tolerance level (relative to how the stimuli are built):
-                n_unique = len(unique(stim['time'], tol=0.9 * DT))
+                n_unique = len(unique(stim['time'], tol=0.8 * DT))
                 if n_unique != len(stim['time']):
                     idx_min = np.argmin(np.diff(stim['time']))
                     err_str = ("Time points must be unique up to %d "
