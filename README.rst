@@ -79,14 +79,11 @@ can be installed with pip:
 
     pip3 install pulse2percept
 
-In order to get the `bleeding-edge version`_ of pulse2percept, use the
-commands:
+The `bleeding-edge version`_ of pulse2percept can be installed via:
 
 .. code-block:: bash
 
-    git clone https://github.com/pulse2percept/pulse2percept.git
-    cd pulse2percept
-    pip3 install .
+    pip3 install git+https://github.com/pulse2percept/pulse2percept
 
 .. _stable release: https://pulse2percept.readthedocs.io/en/stable/index.html
 .. _bleeding-edge version: https://pulse2percept.readthedocs.io/en/latest/index.html
@@ -110,9 +107,9 @@ pulse2percept requires:
 2.  `Cython`_ (>= 0.28)
 3.  `NumPy`_ (>= 1.9)
 4.  `SciPy`_ (>= 1.0.1)
-5.  `Scikit Image` (>=0.14)
+5.  `ScikitImage`_ (>=0.14)
 6.  `Matplotlib`_ (>= 3.0.2)
-7.  `ImageIO FFMPEG` (>=0.4)
+7.  `ImageIO FFMPEG`_ (>=0.4)
 8.  `JobLib`_ (>= 0.11)
 
 Optional packages:
@@ -123,12 +120,13 @@ Optional packages:
 3.  `Dask`_ for parallel processing (a joblib alternative).
     Use conda to install.
 4.  `Pytest`_ to run the test suite.
+5.  `OpenMP`_ for parallel processing support.
 
 .. _Python: https://www.python.org
 .. _Cython: https://www.cython.org
 .. _NumPy: https://www.numpy.org
 .. _SciPy: https://www.scipy.org
-.. _Scikit Image: https://scikit-image.org
+.. _ScikitImage: https://scikit-image.org
 .. _Matplotlib: https://matplotlib.org
 .. _ImageIO FFMPEG: https://github.com/imageio/imageio-ffmpeg
 .. _JobLib: https://joblib.readthedocs.io
@@ -136,6 +134,7 @@ Optional packages:
 .. _Scikit Learn: https://scikit-learn.org
 .. _Dask: https://github.com/dask/dask
 .. _Pytest: https://docs.pytest.org/en/latest
+.. _OpenMP: https://openmp.org
 
 All required packages are listed in ``requirements.txt`` in the root directory
 of the git repository, and can be installed with the following command:

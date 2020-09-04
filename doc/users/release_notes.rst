@@ -26,9 +26,9 @@ Highlights
 *  New stimuli: :py:class:`~pulse2percept.stimuli.ImageStimulus` and
    :py:class:`~pulse2percept.stimuli.VideoStimulus` (:pull:`196`, :pull:`220`,
    :pull:`221`)
-*  Computational cost and memory usage of
-   :py:class:`~pulse2percept.models.AxonMapModel` have been drastically reduced
-   (:pull:`215`)
+*  New datasets: :py:class:`~pulse2percept.datasets.load_nanduri2012`
+   (:pull:`250`)
+*  OpenMP support (:pull:`260`)
 
 New features
 ~~~~~~~~~~~~
@@ -37,6 +37,11 @@ New features
    as a movie file (:pull:`196`, :pull:`226`)
 *  Electrodes, electrode arrays, and prosthesis systems now have their own
    plot method (:pull:`188`, :pull:`195`, :pull:`222`)
+*  Image processing methods can be directly applied to
+   :py:class:`~pulse2percept.stimuli.ImageStimulus` and
+   :py:class:`~pulse2percept.stimuli.VideoStimulus` objects
+   (:pull:`241`, :pull:`253`)
+*  Feature matrix and phosphene visualizations (:pull:`232`)
 
 API changes
 ~~~~~~~~~~~
@@ -71,6 +76,12 @@ Bug fixes
    follow A-Z, AA-AZ, BA-BZ, etc. (:pull:`192`)
 *  :py:class:`~pulse2percept.implants.BVA24`: Setting a stimulus in the
    constructor now has the desired effect (:pull:`186`)
+*  Computational cost and memory usage of
+   :py:class:`~pulse2percept.models.AxonMapModel` have been drastically reduced
+   (:pull:`215`)
+*  Fix data boundaries in :py:meth:`~pulse2percept.models.AxonMapModel.plot`
+   (:pull:`244`)
+
 
 v0.6.0 (2020-05-05)
 ----------------------

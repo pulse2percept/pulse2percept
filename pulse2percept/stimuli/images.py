@@ -102,7 +102,8 @@ class ImageStimulus(Stimulus):
             if img.ndim == 3 and img.shape[2] == 4:
                 # Blend the background with black:
                 img = rgba2rgb(img, background=(0, 0, 0))
-            img = rgb2gray(img)
+            if img.ndim == 3:
+                img = rgb2gray(img)
         # Resize if necessary:
         if resize is not None:
             height, width = resize
@@ -537,18 +538,26 @@ class ImageStimulus(Stimulus):
         imsave(fname, self.data.reshape(self.img_shape))
 
 
-class LogoBVL(ImageStimulus):
-    """Bionic Vision Lab (BVL) logo
+class SnellenChart(ImageStimulus):
+    """Snellen chart
 
-    Load the 576x720x4 Bionic Vision Lab (BVL) logo.
+    Load the 1348x840 Snellen chart commonly used to measure visual acuity.
 
     .. versionadded:: 0.7
 
     Parameters
     ----------
-    resize : (height, width) or None
+    resize : (height, width) or None, optional
         A tuple specifying the desired height and the width of the image
         stimulus.
+
+    show_annotations : {True, False}, optional
+        If True, show the full Snellen chart including annotations of the rows
+        and corresponding acuity measures.
+
+    row : None, optional
+        Select a single row (between 1 and 11) from the Snellen chart.
+        For example, row 1 corresponds to 20/200, row 2 to 20/100.
 
     electrodes : int, string or list thereof; optional, default: None
         Optionally, you can provide your own electrode names. If none are
@@ -559,6 +568,78 @@ class LogoBVL(ImageStimulus):
            pixels in the (resized) image.
 
     metadata : dict, optional, default: None
+        Additional stimulus metadata can be stored in a dictionary.
+
+    """
+
+    def __init__(self, resize=None, show_annotations=True, row=None,
+                 electrodes=None, metadata=None):
+        # Load image from data dir:
+        module_path = dirname(__file__)
+        source = join(module_path, 'data', 'snellen.png')
+        if row is not None or show_annotations is False:
+            # Need to crop the image before passing it on:
+            source = imread(source)
+            if show_annotations is False:
+                # Crop the line numbers and acuity annotations:
+                source = source[:, :444]
+            if row is not None:
+                # Select a single row of the chart, using the following as
+                # start and stop indices:
+                row_bounds = (
+                    [5, 260],  # line 1
+                    [310, 450],  # line 2
+                    [505, 600],
+                    [645, 715],
+                    [755, 810],
+                    [840, 883],
+                    [965, 1003],
+                    [1057, 1088],
+                    [1170, 1193],
+                    [1243, 1263],
+                    [1317, 1335]  # line 11
+                )
+                try:
+                    # It's 1-indexed, so make sure row=0 does not return the
+                    # last row:
+                    idx = row - 1
+                    if idx < 0:
+                        idx += 12
+                    source = source[row_bounds[idx][0]:row_bounds[idx][1]]
+                except (IndexError, TypeError):
+                    raise ValueError('Invalid value for "row": %s. Choose '
+                                     'an int between 1 and 11.' % row)
+        # Call ImageStimulus constructor:
+        super(SnellenChart, self).__init__(source, format="PNG",
+                                           resize=resize,
+                                           as_gray=True,
+                                           electrodes=electrodes,
+                                           metadata=metadata,
+                                           compress=False)
+
+
+class LogoBVL(ImageStimulus):
+    """Bionic Vision Lab (BVL) logo
+
+    Load the 576x720x4 Bionic Vision Lab (BVL) logo.
+
+    .. versionadded:: 0.7
+
+    Parameters
+    ----------
+    resize : (height, width) or None, optional
+        A tuple specifying the desired height and the width of the image
+        stimulus.
+
+    electrodes : int, string or list thereof; optional
+        Optionally, you can provide your own electrode names. If none are
+        given, electrode names will be numbered 0..N.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.
 
     """
@@ -587,11 +668,11 @@ class LogoUCSB(ImageStimulus):
 
     Parameters
     ----------
-    resize : (height, width) or None
+    resize : (height, width) or None, optional
         A tuple specifying the desired height and the width of the image
         stimulus.
 
-    electrodes : int, string or list thereof; optional, default: None
+    electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. If none are
         given, electrode names will be numbered 0..N.
 
@@ -599,7 +680,7 @@ class LogoUCSB(ImageStimulus):
            The number of electrode names provided must match the number of
            pixels in the (resized) image.
 
-    metadata : dict, optional, default: None
+    metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.
 
     """

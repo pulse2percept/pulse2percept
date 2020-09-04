@@ -19,8 +19,10 @@ def test_PulseTrain():
         npt.assert_equal(np.sum(np.isclose(pt.data, -1)), n_pulses)
         npt.assert_equal(pt.electrodes, 'A4')
 
-    # stim_dur too short:
-    npt.assert_almost_equal(PulseTrain(2, pulse, stim_dur=10).data, 0)
+    # PulseTrains can cut off/trim individual pulses if necessary:
+    pt = PulseTrain(3, pulse, stim_dur=11)
+    npt.assert_almost_equal(pt.time[-1], 11)
+    npt.assert_almost_equal(pt[0, 11], 0)
 
     # Invalid calls:
     with pytest.raises(TypeError):
@@ -166,7 +168,7 @@ def test_BiphasicTripletTrain(amp, interphase_dur, delay_dur, cathodic_first):
                               cathodic_first=cathodic_first, dt=dt)
     for i in range(n_pulses):
         t_win = i * window_dur
-        npt.assert_almost_equal(pt[0, t_win], 0)
+        npt.assert_almost_equal(pt[0, np.floor(t_win)], 0)
         npt.assert_almost_equal(pt[0, t_win + mid_first_pulse], first_amp)
         if interphase_dur > 0:
             npt.assert_almost_equal(pt[0, t_win + mid_interphase], 0)
