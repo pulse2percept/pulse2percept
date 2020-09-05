@@ -65,7 +65,7 @@ biphasic.plot()
 # A biphasic pulse is typically considered "charge-balanced" (i.e., its net
 # current sums to zero over time):
 
-biphasic.charge_balanced
+biphasic.is_charge_balanced
 
 ##############################################################################
 # .. note ::
@@ -92,7 +92,7 @@ asymmetric.plot()
 # When choosing amplitudes and durations accordingly, it is still possible to
 # generate a charge-balanced pulse:
 
-asymmetric.charge_balanced
+asymmetric.is_charge_balanced
 
 ##############################################################################
 # Multi-electrode stimuli

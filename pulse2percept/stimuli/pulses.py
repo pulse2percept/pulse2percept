@@ -1,11 +1,9 @@
 """`MonophasicPulse`, `BiphasicPulse`, `AsymmetricBiphasicPulse`"""
 import numpy as np
 
-# MIN_AMP: Pulses with net currents smaller than MIN_AMP uA are considered
-# charge-balanced
 # DT: Sampling time step (ms); defines the duration of the signal edge
 # transitions:
-from . import MIN_AMP, DT
+from . import DT
 from .base import Stimulus
 from ..utils import unique
 
@@ -89,14 +87,11 @@ class MonophasicPulse(Stimulus):
         time = np.array(time, dtype=np.float32)
         super().__init__(data, electrodes=electrode, time=time, compress=False)
         self.cathodic = amp <= 0
-        self.charge_balanced = np.isclose(np.trapz(data, time)[0], 0,
-                                          atol=MIN_AMP)
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         params = super(MonophasicPulse, self)._pprint_params()
-        params.update({'cathodic': self.cathodic,
-                       'charge_balanced': self.charge_balanced})
+        params.update({'cathodic': self.cathodic})
         return params
 
 
@@ -195,14 +190,11 @@ class BiphasicPulse(Stimulus):
         time = np.array(time, dtype=np.float32)
         super().__init__(data, electrodes=electrode, time=time, compress=False)
         self.cathodic_first = cathodic_first
-        self.charge_balanced = np.isclose(np.trapz(data, time)[0], 0,
-                                          atol=MIN_AMP)
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         params = super(BiphasicPulse, self)._pprint_params()
-        params.update({'cathodic_first': self.cathodic_first,
-                       'charge_balanced': self.charge_balanced})
+        params.update({'cathodic_first': self.cathodic_first})
         return params
 
 
@@ -315,12 +307,9 @@ class AsymmetricBiphasicPulse(Stimulus):
         time = np.array(time, dtype=np.float32)
         super().__init__(data, electrodes=electrode, time=time, compress=False)
         self.cathodic_first = cathodic_first
-        self.charge_balanced = np.isclose(np.trapz(data, time)[0], 0,
-                                          atol=MIN_AMP)
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         params = super(AsymmetricBiphasicPulse, self)._pprint_params()
-        params.update({'cathodic_first': self.cathodic_first,
-                       'charge_balanced': self.charge_balanced})
+        params.update({'cathodic_first': self.cathodic_first})
         return params

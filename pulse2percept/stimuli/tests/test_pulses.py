@@ -21,7 +21,7 @@ def test_MonophasicPulse(amp, delay_dur):
     npt.assert_almost_equal(pulse.time[-1], phase_dur + delay_dur,
                             decimal=DECIMAL)
     npt.assert_equal(pulse.cathodic, amp <= 0)
-    npt.assert_equal(pulse.charge_balanced, False)
+    npt.assert_equal(pulse.is_charge_balanced, False)
 
     # Custom stim dur:
     pulse = MonophasicPulse(amp, phase_dur, delay_dur=delay_dur, stim_dur=100)
@@ -43,7 +43,7 @@ def test_MonophasicPulse(amp, delay_dur):
     npt.assert_almost_equal(pulse.time[0], 0)
     npt.assert_almost_equal(pulse.time[-1], phase_dur + delay_dur,
                             decimal=DECIMAL)
-    npt.assert_equal(pulse.charge_balanced, True)
+    npt.assert_equal(pulse.is_charge_balanced, True)
     npt.assert_equal(pulse.electrodes, 'A1')
 
     # You can wrap a pulse in a Stimulus to overwrite attributes:
@@ -94,7 +94,7 @@ def test_BiphasicPulse(amp, interphase_dur, delay_dur, cathodic_first):
     npt.assert_almost_equal(pulse.time[0], 0)
     npt.assert_almost_equal(pulse.time[-1], min_dur, decimal=3)
     npt.assert_equal(pulse.cathodic_first, cathodic_first)
-    npt.assert_equal(pulse.charge_balanced, True)
+    npt.assert_equal(pulse.is_charge_balanced, True)
 
     # Custom stim dur:
     pulse = BiphasicPulse(amp, phase_dur, interphase_dur=interphase_dur,
@@ -122,7 +122,7 @@ def test_BiphasicPulse(amp, interphase_dur, delay_dur, cathodic_first):
     npt.assert_almost_equal(pulse.data, 0)
     npt.assert_almost_equal(pulse.time[0], 0)
     npt.assert_almost_equal(pulse.time[-1], min_dur, decimal=3)
-    npt.assert_equal(pulse.charge_balanced, True)
+    npt.assert_equal(pulse.is_charge_balanced, True)
 
     # You can wrap a pulse in a Stimulus to overwrite attributes:
     stim = Stimulus(pulse, electrodes='AA1')
@@ -185,7 +185,7 @@ def test_AsymmetricBiphasicPulse(amp1, amp2, interphase_dur, delay_dur,
     npt.assert_almost_equal(pulse.time[0], 0)
     npt.assert_almost_equal(pulse.time[-1], min_dur, decimal=3)
     npt.assert_equal(pulse.cathodic_first, cathodic_first)
-    npt.assert_equal(pulse.charge_balanced,
+    npt.assert_equal(pulse.is_charge_balanced,
                      np.isclose(np.trapz(pulse.data, pulse.time)[0], 0))
 
     # Custom stim dur:
@@ -220,7 +220,7 @@ def test_AsymmetricBiphasicPulse(amp1, amp2, interphase_dur, delay_dur,
     npt.assert_almost_equal(pulse.data, 0)
     npt.assert_almost_equal(pulse.time[0], 0)
     npt.assert_almost_equal(pulse.time[-1], min_dur, decimal=3)
-    npt.assert_equal(pulse.charge_balanced,
+    npt.assert_equal(pulse.is_charge_balanced,
                      np.isclose(np.trapz(pulse.data, pulse.time)[0], 0))
 
     # If both phases have the same values, it's basically a symmetric biphasic

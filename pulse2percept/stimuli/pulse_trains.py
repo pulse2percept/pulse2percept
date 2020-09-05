@@ -3,11 +3,9 @@ import numpy as np
 import copy
 import logging
 
-# MIN_AMP: Pulses with net currents smaller than MIN_AMP uA are considered
-# charge-balanced
 # DT: Sampling time step (ms); defines the duration of the signal edge
 # transitions:
-from . import MIN_AMP, DT
+from . import DT
 from .base import Stimulus
 from .pulses import BiphasicPulse, AsymmetricBiphasicPulse
 from ..utils import unique
@@ -113,15 +111,12 @@ class PulseTrain(Stimulus):
                          compress=False)
         self.freq = freq
         self.pulse_type = pulse.__class__.__name__
-        self.charge_balanced = np.isclose(np.trapz(data, time)[0], 0,
-                                          atol=MIN_AMP)
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         params = super(PulseTrain, self)._pprint_params()
         params.update({'freq': self.freq,
-                       'pulse_type': self.pulse_type,
-                       'charge_balanced': self.charge_balanced})
+                       'pulse_type': self.pulse_type})
         return params
 
 
@@ -187,13 +182,11 @@ class BiphasicPulseTrain(Stimulus):
         super().__init__(pt.data, time=pt.time, compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
-        self.charge_balanced = pt.charge_balanced
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         params = super(BiphasicPulseTrain, self)._pprint_params()
         params.update({'cathodic_first': self.cathodic_first,
-                       'charge_balanced': self.charge_balanced,
                        'freq': self.freq})
         return params
 
@@ -255,13 +248,11 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
         super().__init__(pt.data, time=pt.time, compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
-        self.charge_balanced = pt.charge_balanced
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         params = super(AsymmetricBiphasicPulseTrain, self)._pprint_params()
         params.update({'cathodic_first': self.cathodic_first,
-                       'charge_balanced': self.charge_balanced,
                        'freq': self.freq})
         return params
 
@@ -333,12 +324,10 @@ class BiphasicTripletTrain(Stimulus):
                                                    compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
-        self.charge_balanced = pt.charge_balanced
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         params = super(BiphasicTripletTrain, self)._pprint_params()
         params.update({'cathodic_first': self.cathodic_first,
-                       'charge_balanced': self.charge_balanced,
                        'freq': self.freq})
         return params

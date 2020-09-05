@@ -10,7 +10,7 @@ np.set_printoptions(precision=2, threshold=5, edgeitems=2)
 
 import logging
 
-from . import DT
+from . import DT, MIN_AMP
 from ._base import fast_compress
 from ..utils import PrettyPrint, parfor, unique
 
@@ -136,7 +136,8 @@ class Stimulus(PrettyPrint):
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         return {'data': self.data, 'electrodes': self.electrodes,
-                'time': self.time, 'shape': self.shape,
+                'time': self.time, 'shape': self.shape, 'dt': self.dt,
+                'is_charge_balanced': self.is_charge_balanced,
                 'metadata': self.metadata}
 
     def _merge_time_axes(self, _data, _time):
@@ -772,3 +773,14 @@ class Stimulus(PrettyPrint):
 
         """
         return DT
+
+    @property
+    def is_charge_balanced(self):
+        """Flag indicating whether the stimulus is charge-balanced
+
+        A stimulus with a time component is considered charge-balanced if its
+        net current is smaller than 10 pico Amps
+        """
+        if self.time is None:
+            return None
+        return np.isclose(np.trapz(self.data, self.time)[0], 0, atol=MIN_AMP)
