@@ -139,6 +139,9 @@ def test_Stimulus():
     with pytest.raises(ValueError):
         # Can't force time:
         stim = Stimulus(3, time=[0.4])
+    with pytest.raises(ValueError):
+        # Time points not stricly monotonically increasing:
+        stim = Stimulus([[1, 2, 3]], time=[1, 2, 1.9])
 
 
 def test_Stimulus_compress():
@@ -180,6 +183,31 @@ def test_Stimulus_compress():
 
     with pytest.raises(AttributeError):
         stim.is_compressed = True
+
+
+def test_Stimulus_append():
+    # Basic usage:
+    stim = Stimulus([[0, 1, 0]], time=[0, 1, 2])
+    stim2 = Stimulus([[0, 2]], time=[0, 0.5])
+    comb = stim.append(stim2)
+    npt.assert_almost_equal(comb.data, [[0, 1, 0, 0, 2]])
+    npt.assert_almost_equal(comb.time, [0, 1, 2 - DT, 2, 2.5])
+
+    # When other stimulus is shifted:
+    comb = stim.append(stim2 >> 10)
+    npt.assert_almost_equal(comb.time, [0, 1, 2 - DT, 12, 12.5])
+
+    with pytest.raises(TypeError):
+        # 'other' must be Stimulus:
+        stim.append(np.array([[0, 1, 2]]))
+    with pytest.raises(ValueError):
+        # other cannot have time=None:
+        stim.append(Stimulus(3))
+    with pytest.raises(ValueError):
+        # self cannot have time=None:
+        Stimulus(3).append(stim)
+    with pytest.raises(ValueError):
+        stim.append(Stimulus([[1, 2]], electrodes='B1'))
 
 
 def test_Stimulus_plot():
@@ -462,25 +490,29 @@ def test_Stimulus_merge():
     npt.assert_almost_equal(merge2[2, [0, -1]], stim3[0, [0, -1]])
 
 
-@pytest.mark.parametrize('scalar', (10, np.pi))
+@pytest.mark.parametrize('scalar', (10, -2.3, np.pi))
 def test_Stimulus_arithmetic(scalar):
     stim = Stimulus([[0, 21, -13, 0, 0]], time=[0, 1, 2, 3, 4])
-    npt.assert_almost_equal((stim + scalar).data.max(),
-                            stim.data.max() + scalar, decimal=5)
-    npt.assert_almost_equal((scalar + stim).data.max(),
-                            scalar + stim.data.max(), decimal=5)
-    npt.assert_almost_equal((stim - scalar).data.max(),
-                            stim.data.max() - scalar, decimal=5)
-    npt.assert_almost_equal((scalar - stim).data.max(),
-                            (scalar - stim.data).max(), decimal=5)
-    npt.assert_almost_equal((stim * scalar).data.max(),
-                            stim.data.max() * scalar, decimal=5)
-    npt.assert_almost_equal((scalar * stim).data.max(),
-                            scalar * stim.data.max(), decimal=5)
-    npt.assert_almost_equal((stim / scalar).data.max(),
-                            stim.data.max() / scalar, decimal=5)
-    npt.assert_almost_equal((-stim).data.max(),
-                            (-1 * stim.data).max(), decimal=5)
+    npt.assert_almost_equal((stim + scalar).data,
+                            stim.data + scalar, decimal=5)
+    npt.assert_almost_equal((scalar + stim).data,
+                            scalar + stim.data, decimal=5)
+    npt.assert_almost_equal((stim - scalar).data,
+                            stim.data - scalar, decimal=5)
+    npt.assert_almost_equal((scalar - stim).data,
+                            scalar - stim.data, decimal=5)
+    npt.assert_almost_equal((stim * scalar).data,
+                            stim.data * scalar, decimal=5)
+    npt.assert_almost_equal((scalar * stim).data,
+                            scalar * stim.data, decimal=5)
+    npt.assert_almost_equal((stim / scalar).data,
+                            stim.data / scalar, decimal=5)
+    npt.assert_almost_equal((-stim).data,
+                            -1 * stim.data, decimal=5)
+    npt.assert_almost_equal((stim >> scalar).time,
+                            stim.time + scalar, decimal=5)
+    npt.assert_almost_equal((stim << scalar).time,
+                            stim.time - scalar, decimal=5)
     # 10 / stim is not supported because it will always give a division by
     # zero error:
     with pytest.raises(TypeError):
@@ -493,3 +525,11 @@ def test_Stimulus_arithmetic(scalar):
         stim * stim
     with pytest.raises(TypeError):
         stim / stim
+    with pytest.raises(TypeError):
+        stim + [1, 1]
+    with pytest.raises(TypeError):
+        stim * np.array([2, 3])
+    with pytest.raises(TypeError):
+        stim >> np.array([2, 3])
+    with pytest.raises(TypeError):
+        stim << np.array([2, 3])

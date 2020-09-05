@@ -341,6 +341,45 @@ class Stimulus(PrettyPrint):
         }
         self.is_compressed = True
 
+    def append(self, other):
+        """Append another stimulus
+
+        This method appends another stimulus (with matching electrodes) in
+        time. The combined stimulus duration will be the sum of the two
+        individual stimuli.
+
+        .. versionadded:: 0.7
+
+        Parameters
+        ----------
+        other : :py:class:`~pulse2percept.stimuli.Stimulus`
+            Another stimulus with matching electrodes.
+
+        Returns
+        -------
+        comb : :py:class:`~pulse2percept.stimuli.Stimulus`
+            A combined stimulus with the same number of electrodes and new
+            stimulus duration equal to the sum of the two individual stimuli.
+
+        """
+        if not isinstance(other, Stimulus):
+            raise TypeError("Other object must be a Stimulus, not "
+                            "%s." % type(other))
+        if self.time is None or other.time is None:
+            raise ValueError("Cannot append another stimulus if time=None.")
+        if not np.all(other.electrodes == self.electrodes):
+            raise ValueError("Both stimuli must have the same electrodes.")
+        stim = deepcopy(self)
+        # Careful not to create identical time points:
+        time = np.hstack((self.time[:-1], self.time[-1] - DT,
+                          other.time + self.time[-1]))
+        # Append the data points. If there's something wrong with the
+        # concatenated list of time points, the stim setter will catch it:
+        stim._stim = {'data': np.hstack((self.data, other.data)),
+                      'electrodes': self.electrodes,
+                      'time': time}
+        return stim
+
     def plot(self, electrodes=None, time=None, fmt='k-', ax=None):
         """Plot the stimulus
 
@@ -617,7 +656,7 @@ class Stimulus(PrettyPrint):
         """
         return not self.__eq__(other)
 
-    def _apply_operator(self, a, op, b):
+    def _apply_operator(self, a, op, b, field='data'):
         """Template for all arithmetic operators"""
         # One of the arguments must be a scalar (the other being self.data):
         a_supported = np.isscalar(a) and not isinstance(a, str)
@@ -627,9 +666,9 @@ class Stimulus(PrettyPrint):
                             "%s" % (type(a), type(b)))
         # Return a copy of the current object with the new data:
         stim = deepcopy(self)
-        stim._stim = {'data': op(a, b),
+        stim._stim = {'data': op(a, b) if field == 'data' else stim.data,
                       'electrodes': stim.electrodes,
-                      'time': stim.time}
+                      'time': op(a, b) if field == 'time' else stim.time}
         return stim
 
     def __add__(self, scalar):
@@ -661,7 +700,16 @@ class Stimulus(PrettyPrint):
         return self._apply_operator(self.data, ops.truediv, scalar)
 
     def __neg__(self):
+        """Flip the sign of every data point in the stimulus"""
         return self.__mul__(-1)
+
+    def __rshift__(self, scalar):
+        """Shift every time point in the stimulus some ms into the future"""
+        return self._apply_operator(self.time, ops.add, scalar, field='time')
+
+    def __lshift__(self, scalar):
+        """Shift every time point in the stimulus some ms into the past"""
+        return self.__rshift__(-scalar)
 
     @property
     def _stim(self):
@@ -701,17 +749,21 @@ class Stimulus(PrettyPrint):
                                  "number of columns in the data array "
                                  "(%d)." % (len(stim['time']),
                                             stim['data'].shape[1]))
-            if len(stim['time']) > 1:
+            n_time = len(stim['time'])
+            if n_time > 1:
                 # Beware of floating point issues by slightly decreasing the
                 # tolerance level (relative to how the stimuli are built):
                 n_unique = len(unique(stim['time'], tol=0.8 * DT))
-                if n_unique != len(stim['time']):
+                if n_unique != n_time:
                     idx_min = np.argmin(np.diff(stim['time']))
                     err_str = ("Time points must be unique up to %d "
                                "decimals, but time [%d] == time[%d] == "
                                "(%f)." % (int(-np.log10(DT)), idx_min,
                                           idx_min + 1, stim['time'][idx_min]))
                     raise ValueError(err_str)
+            if not np.all(np.argsort(stim['time']) == np.arange(n_time)):
+                raise ValueError("Time points must be stricly monotonically "
+                                 "increasing.")
         elif len(stim['data']) > 0:
             if stim['data'].shape[1] > 1:
                 raise ValueError("Number of columns in the data array must be "
