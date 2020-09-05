@@ -460,3 +460,36 @@ def test_Stimulus_merge():
     npt.assert_almost_equal(merge2[0, [0, -1]], stim1[0, [0, -1]])
     npt.assert_almost_equal(merge2[1, [0, -1]], stim2[0, [0, -1]])
     npt.assert_almost_equal(merge2[2, [0, -1]], stim3[0, [0, -1]])
+
+
+@pytest.mark.parametrize('scalar', (10, np.pi))
+def test_Stimulus_arithmetic(scalar):
+    stim = Stimulus([[0, 21, -13, 0, 0]], time=[0, 1, 2, 3, 4])
+    npt.assert_almost_equal((stim + scalar).data.max(),
+                            stim.data.max() + scalar, decimal=5)
+    npt.assert_almost_equal((scalar + stim).data.max(),
+                            scalar + stim.data.max(), decimal=5)
+    npt.assert_almost_equal((stim - scalar).data.max(),
+                            stim.data.max() - scalar, decimal=5)
+    npt.assert_almost_equal((scalar - stim).data.max(),
+                            (scalar - stim.data).max(), decimal=5)
+    npt.assert_almost_equal((stim * scalar).data.max(),
+                            stim.data.max() * scalar, decimal=5)
+    npt.assert_almost_equal((scalar * stim).data.max(),
+                            scalar * stim.data.max(), decimal=5)
+    npt.assert_almost_equal((stim / scalar).data.max(),
+                            stim.data.max() / scalar, decimal=5)
+    npt.assert_almost_equal((-stim).data.max(),
+                            (-1 * stim.data).max(), decimal=5)
+    # 10 / stim is not supported because it will always give a division by
+    # zero error:
+    with pytest.raises(TypeError):
+        scalar / stim
+    with pytest.raises(TypeError):
+        stim + stim
+    with pytest.raises(TypeError):
+        stim - stim
+    with pytest.raises(TypeError):
+        stim * stim
+    with pytest.raises(TypeError):
+        stim / stim

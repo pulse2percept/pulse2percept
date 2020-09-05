@@ -660,6 +660,9 @@ class Stimulus(PrettyPrint):
         """Divide every data point in the stimulus by a scalar"""
         return self._apply_operator(self.data, ops.truediv, scalar)
 
+    def __neg__(self):
+        return self.__mul__(-1)
+
     @property
     def _stim(self):
         """A dictionary containing all the stimulus data"""
