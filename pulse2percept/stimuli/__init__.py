@@ -21,7 +21,7 @@ MIN_AMP = 1e-5
 
 # Sampling time step (ms); defines the duration of the signal edge
 # transitions:
-DT = 1e-3
+DT = 1e-2
 
 from .base import Stimulus
 from .pulses import AsymmetricBiphasicPulse, BiphasicPulse, MonophasicPulse
