@@ -2,6 +2,8 @@
 from sys import platform, _getframe
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
+from copy import deepcopy
+import operator as ops
 
 import numpy as np
 np.set_printoptions(precision=2, threshold=5, edgeitems=2)
@@ -614,6 +616,49 @@ class Stimulus(PrettyPrint):
         """
         return not self.__eq__(other)
 
+    def _apply_operator(self, a, op, b):
+        """Template for all arithmetic operators"""
+        # One of the arguments must be a scalar (the other being self.data):
+        a_supported = np.isscalar(a) and not isinstance(a, str)
+        b_supported = np.isscalar(b) and not isinstance(b, str)
+        if not a_supported and not b_supported:
+            raise TypeError("Unsupported operand for types %s and "
+                            "%s" % (type(a), type(b)))
+        # Return a copy of the current object with the new data:
+        stim = deepcopy(self)
+        stim._stim = {'data': op(a, b),
+                      'electrodes': stim.electrodes,
+                      'time': stim.time}
+        return stim
+
+    def __add__(self, scalar):
+        """Add a scalar to every data point in the stimulus"""
+        return self._apply_operator(self.data, ops.add, scalar)
+
+    def __radd__(self, scalar):
+        """Add a scalar to every data point in the stimulus"""
+        return self.__add__(scalar)
+
+    def __sub__(self, scalar):
+        """Subtract a scalar from every data point in the stimulus"""
+        return self._apply_operator(self.data, ops.sub, scalar)
+
+    def __rsub__(self, scalar):
+        """Subtract every data point in the stimulus from a scalar"""
+        return self._apply_operator(scalar, ops.sub, self.data)
+
+    def __mul__(self, scalar):
+        """Multiply every data point in the stimulus with a scalar"""
+        return self._apply_operator(self.data, ops.mul, scalar)
+
+    def __rmul__(self, scalar):
+        """Multiply every data point in the stimulus with a scalar"""
+        return self.__mul__(scalar)
+
+    def __truediv__(self, scalar):
+        """Divide every data point in the stimulus by a scalar"""
+        return self._apply_operator(self.data, ops.truediv, scalar)
+
     @property
     def _stim(self):
         """A dictionary containing all the stimulus data"""
@@ -701,6 +746,7 @@ class Stimulus(PrettyPrint):
 
     @property
     def is_compressed(self):
+        """Flag indicating whether the stimulus has been compressed"""
         return self._is_compressed
 
     @is_compressed.setter
