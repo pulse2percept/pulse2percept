@@ -1,6 +1,6 @@
 """
 `Grid2D`, `RetinalCoordTransform`, `Curcio1990Transform`,
-`Watson2014Transform`, `Watson2014DisplaceTransform`, `cart2pol`, `pol2cart`
+`Watson2014Transform`, `Watson2014DisplaceTransform`, `cart2pol`, `pol2cart`, 'delta_angle'
 
 """
 import numpy as np
@@ -360,3 +360,28 @@ def pol2cart(theta, rho):
     x = rho * np.cos(theta)
     y = rho * np.sin(theta)
     return x, y
+
+def delta_angle(source_angle, target_angle, hi=2 * np.pi):
+    """Returns the signed difference between two angles (rad)
+
+    The difference is calculated as target_angle - source_angle.
+    The difference will thus be positive if target_angle > source_angle.
+
+    .. versionadded:: 0.7
+
+    Parameters
+    ----------
+    source_angle, target_angle : array_like
+        Input arrays with circular data in the range [0, hi]
+    hi : float, optional
+        Sets the upper bounds of the range (e.g., 2*np.pi or 360).
+        Lower bound is always 0
+
+    Returns
+    -------
+    The signed difference target_angle - source_angle in [0, hi]
+
+    """
+    diff = target_angle - source_angle
+    mod = lambda a, n: (a % n + n) % n
+    return mod(diff + hi / 2, hi) - hi / 2
