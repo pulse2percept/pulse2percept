@@ -6,7 +6,7 @@ from matplotlib.axes import Axes
 from pulse2percept.utils import (RetinalCoordTransform, Curcio1990Transform,
                                  Grid2D, Watson2014Transform,
                                  Watson2014DisplaceTransform,
-                                 cart2pol, pol2cart)
+                                 cart2pol, pol2cart, delta_angle)
 
 
 @pytest.mark.parametrize('x_range', [(0, 0), (-3, 3), (4, -2), (1, -1)])
@@ -160,3 +160,23 @@ def test_pol2cart():
     npt.assert_almost_equal(pol2cart(0, 10), (10, 0))
     npt.assert_almost_equal(pol2cart(np.arctan(4 / 3.0), 5), (3, 4))
     npt.assert_almost_equal(pol2cart(np.arctan(3 / 4.0), 5), (4, 3))
+
+def test_delta_angle():
+    npt.assert_almost_equal(delta_angle(0.1, 0.2), 0.1)
+    npt.assert_almost_equal(delta_angle(0.1, 0.2 + 2 * np.pi), 0.1)
+    npt.assert_almost_equal(delta_angle(0.1, 0.2 - 2 * np.pi), 0.1)
+    npt.assert_almost_equal(delta_angle(0.1 + 2 * np.pi, 0.2), 0.1)
+    npt.assert_almost_equal(delta_angle(0.1 - 2 * np.pi, 0.2), 0.1)
+
+    npt.assert_almost_equal(delta_angle(0.2, 0.1), -0.1)
+    npt.assert_almost_equal(delta_angle(0.2, 0.1 + 2 * np.pi), -0.1)
+    npt.assert_almost_equal(delta_angle(0.2, 0.1 - 2 * np.pi), -0.1)
+    npt.assert_almost_equal(delta_angle(0.2 + 2 * np.pi, 0.1), -0.1)
+    npt.assert_almost_equal(delta_angle(0.2 - 2 * np.pi, 0.1), -0.1)
+
+    npt.assert_almost_equal(delta_angle(0, 2 * np.pi), 0)
+    npt.assert_almost_equal(delta_angle(-np.pi, np.pi), 0)
+
+    npt.assert_almost_equal(delta_angle(0, np.pi / 2), np.pi / 2)
+    npt.assert_almost_equal(delta_angle(-np.pi / 2, 0), np.pi / 2)
+    npt.assert_almost_equal(delta_angle(4*np.pi, np.pi, np.pi/2), 0)
