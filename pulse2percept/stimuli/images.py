@@ -49,9 +49,8 @@ class ImageStimulus(Stimulus):
         https://imageio.readthedocs.io/en/stable/formats.html.
 
     resize : (height, width) or None, optional
-        A tuple specifying the desired height and the width of the image
-        stimulus. One shape dimension can be -1. In this case, the value is
-        inferred from the other dimension by keeping a constant aspect ratio.
+        Shape of the resized image. If one of the dimensions is set to -1, 
+        its value will be inferred by keeping a constant aspect ratio.
 
     as_gray : bool, optional
         Flag whether to convert the image to grayscale.
@@ -161,8 +160,8 @@ class ImageStimulus(Stimulus):
         Returns
         -------
         stim : `ImageStimulus`
-            A copy of the stimulus object with all grayscale values inverted
-            in the range [0, 1].
+            A copy of the stimulus object with all RGB values converted to 
+            grayscale in the range [0, 1].
 
         Notes
         -----
