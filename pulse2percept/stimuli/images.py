@@ -1,4 +1,4 @@
-"""`ImageStimulus`, `LogoBVL`, `LogoUCSB`"""
+"""`ImageStimulus`, `LogoBVL`, `LogoUCSB`, `SnellenChart`"""
 from os.path import dirname, join
 import numpy as np
 from copy import deepcopy
