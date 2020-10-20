@@ -1,6 +1,7 @@
 """`r2_score`, `circ_r2_score`"""
 import numpy as np
 from scipy.stats import circvar
+from .geometry import delta_angle
 
 
 def r2_score(y_true, y_pred):
@@ -99,12 +100,11 @@ def circ_r2_score(y_true, y_pred):
     if y_true.size < 2:
         raise ValueError('Need at least two data points.')
     # Difference between two angles in [-pi/2, pi/2]:
-    err = np.abs(y_true - y_pred)
-    err = np.where(err > np.pi, err - 2 * np.pi, err)
+    err = delta_angle(y_true, y_pred)
     # Use circular variance in `ss_tot`, which divides by len(y_true).
     # Therefore, we also need to divide `ss_res` by len(y_true), which
     # is the same as taking the mean instead of the sum:
-    ss_res = np.mean(err, dtype=np.float32)
+    ss_res = np.mean(err ** 2, dtype=np.float32)
     ss_tot = np.asarray(circvar(y_true, low=-np.pi / 2, high=np.pi / 2),
                         dtype=np.float32)
     if np.isclose(ss_tot, 0):
