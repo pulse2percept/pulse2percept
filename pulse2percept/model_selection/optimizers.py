@@ -33,12 +33,23 @@ class NotFittedError(ValueError, AttributeError):
 class BaseOptimizer(Frozen, PrettyPrint, metaclass=ABCMeta):
     """BaseOptimizer
 
+    Abstract base class for all optimizers.
+
     .. versionadded:: 0.7
 
     Parameters
     ----------
-    **params : optional keyword arguments
-        All keyword arguments must be listed in ``get_default_params``
+    estimator : ``sklearn.base.estimator``
+        A scikit-learn estimator, such as a classifier or regressor, that
+        contains ``fit`` and ``predict`` methods.
+    serch_params : dict
+        Initial values of all search parameters.
+    has_loss_function : {False | True}
+        If True, the estimator's scoring function is really a loss function
+        (where smaller values indicate better performance) rather than a true
+        scoring function.
+    verbose : {False | True}
+        If True, will print debug information.
 
     """
 
@@ -46,9 +57,6 @@ class BaseOptimizer(Frozen, PrettyPrint, metaclass=ABCMeta):
         if not has_sklearn:
             raise ImportError("You do not have scikit-learn installed. "
                               "You can install it via $ pip install sklearn.")
-        if not hasattr(estimator, 'greater_is_better'):
-            raise ValueError(("%s must have an attribute "
-                              "'greater_is_better'" % estimator))
         # Set all default arguments:
         defaults = self.get_default_params()
         for key, val in defaults.items():
@@ -73,7 +81,10 @@ class BaseOptimizer(Frozen, PrettyPrint, metaclass=ABCMeta):
 
     def get_default_params(self):
         """Return a dict of user-settable model parameters"""
-        return {'estimator': None, 'search_params': {}, 'verbose': False}
+        return {'estimator': None,
+                'search_params': {},
+                'has_loss_function': False,
+                'verbose': False}
 
     def _pprint_params(self):
         """Return a dict of class attributes to display when pretty-printing"""
@@ -82,14 +93,55 @@ class BaseOptimizer(Frozen, PrettyPrint, metaclass=ABCMeta):
 
     @abstractmethod
     def _optimize(self, X, y, fit_params=None):
+        """Optimization function
+
+        This function must be implemented by every optimizer. Its purpose is
+        to run the optimization algorithm to determine the optimal search
+        parameters (to be stored in ``self._best_params``) alongside the best
+        achieved score (to be stored in ``self._best_score``).
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Sample data.
+        y : array-like of shape (n_samples,) or (n_samples, n_outputs)
+            True labels for X.
+        fit_params : dict, optional
+            Additional parameters that should be passed to the estimator's
+            ``fit`` method.
+
+        """
         raise NotImplementedError
 
     def fit(self, X, y=None, fit_params=None):
-        """Performs the search"""
+        """Optimizes the values of the search parameters
+
+        Runs the optimizer to determine the optimal values of the search
+        parameters. After optimization, two new attributes are available:
+
+        *  ``best_score``: contains the best score achieved with optimal
+           parameter values
+        *  ``best_params``: a dict containing the optimal parameter values
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Sample data.
+        y : array-like of shape (n_samples,) or (n_samples, n_outputs)
+            True labels for X.
+        fit_params : dict, optional
+            Additional parameters that should be passed to the estimator's
+            ``fit`` method.
+
+        """
+        # Optimize must set the attributes `self._best_score` and
+        # `self._best_params`:
         self._optimize(X, y, fit_params=fit_params)
         if self.verbose:
             print('Best score: %f, Best params: %f' % (self._best_score,
                                                        self._best_params))
+        # Use the parameter values found during optimiziation to set the
+        # estimator one more time, then fit it:
         self.estimator.set_params(**self._best_params)
         if fit_params is None:
             fit_params = {}
@@ -98,12 +150,41 @@ class BaseOptimizer(Frozen, PrettyPrint, metaclass=ABCMeta):
         return self
 
     def predict(self, X):
+        """Predicts the labels of X
+
+        Uses the estimator's ``predict`` method to predict the labels of X.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Sample data.
+
+        Returns
+        -------
+        y_pred : array-like of shape (n_samples,) or (n_samples, n_outputs)
+            Predicted labels for X.
+
+        """
         if not self._is_fitted:
             raise NotFittedError("Yout must call ``fit`` first.")
         return self.estimator.predict(X)
 
     def score(self, X, y, sample_weight=None):
-        """Scoring function"""
+        """Return the score of the model on the data X
+
+        Uses the estimator's ``score`` method to determine the model score.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+        y : array-like of shape (n_samples,) or (n_samples, n_outputs)
+            True labels for X.
+
+        Returns
+        -------
+        score : float
+
+        """
         return self.estimator.score(X, y, sample_weight=None)
 
     @property
@@ -129,20 +210,24 @@ class BaseOptimizer(Frozen, PrettyPrint, metaclass=ABCMeta):
 class GridSearchOptimizer(BaseOptimizer):
     """Performs a grid search
 
+    Exhaustive search over specified parameter values for an estimator.
+
     .. versionadded:: 0.7
 
     Parameters
     ----------
-    estimator :
-        A scikit-learn estimator. Make sure it has an attribute called
-        `greater_is_better` that is set to True if greater values of
-        ``estimator.score`` mean that the score is better (else False).
-    search_params : sklearn.model_selection.ParameterGrid
-        Grid of parameters with a discrete number of values for each.
-        Can be generated from a dictionary:
-        ParameterGrid({'param1': np.linspace(lb, ub, num=11)}).
-    verbose : bool, optional, default: True
-        Flag whether to print more stuff
+    estimator : ``sklearn.base.estimator``
+        A scikit-learn estimator, such as a classifier or regressor, that
+        contains ``fit`` and ``predict`` methods.
+    serch_params : dict
+        Dictionary of search parameters with a discrete number of values for
+        each.
+    has_loss_function : {False | True}
+        If True, the estimator's scoring function is really a loss function
+        (where smaller values indicate better performance) rather than a true
+        scoring function.
+    verbose : {False | True}
+        If True, will print debug information.
 
     """
 
@@ -156,7 +241,7 @@ class GridSearchOptimizer(BaseOptimizer):
             estimator.set_params(**params)
             estimator.fit(X, y=y, **fit_params)
             loss = estimator.score(X, y)
-            loss = -loss if estimator.greater_is_better else loss
+            loss = loss if self.has_loss_function else -loss
             if loss < best_loss:
                 best_loss = loss
                 best_params = params
@@ -167,23 +252,21 @@ class GridSearchOptimizer(BaseOptimizer):
 class FunctionMinimizer(BaseOptimizer):
     """Loss function minimization
 
-    This class uses SciPy's `minimize
+    Function minimization using SciPy's `minimize
     <https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html>`_
-    to find the ``search_params`` that optimizes an ``estimator``'s
+    to find the ``search_params`` that optimize an ``estimator``'s
     score.
-
-    The ``estimator`` should have an attribute called
-    ``greater_is_better``.
 
     .. versionadded:: 0.7
 
     Parameters
     ----------
-    estimator :
-        A scikit-learn estimator. Make sure its scoring function has
-        greater equals better.
-    search_params : dict of tupels (lower bound, upper bound)
-        Search parameters
+    estimator : ``sklearn.base.estimator``
+        A scikit-learn estimator, such as a classifier or regressor, that
+        contains ``fit`` and ``predict`` methods.
+    serch_params : dict of tupels (lower bound, upper bound)
+        Dictionary of tupels containing the lower and upper bound of values
+        for each search parameter.
     search_params_init : dict of floats, optional
         Initial values of all search parameters. If None, initialize to
         midpoint between lower and upper bounds
@@ -194,8 +277,12 @@ class FunctionMinimizer(BaseOptimizer):
         options.
     options: dict, optional
         A dictionary of solver-specific options.
-    verbose : bool, optional
-        Flag whether to print progress
+    has_loss_function : {False | True}
+        If True, the estimator's scoring function is really a loss function
+        (where smaller values indicate better performance) rather than a true
+        scoring function.
+    verbose : {False | True}
+        If True, will print debug information.
 
     """
 
@@ -218,18 +305,15 @@ class FunctionMinimizer(BaseOptimizer):
         search_params = {}
         for k, v in zip(list(self.search_params.keys()), search_vals):
             search_params[k] = v
-
-        # Clone the estimator to make sure we have a clean slate
+        # Clone the estimator to make sure we have a clean slate, then fit:
         if fit_params is None:
             fit_params = {}
         estimator = clone_estimator(self.estimator)
         estimator.set_params(**search_params)
         estimator.fit(X, y=y, **fit_params)
-
-        # Loss function: if `greater_is_better`, the estimator's ``score``
-        # method is a true scoring function => invert to get an error function
+        # If score is not a loss function, we need to invert here:
         loss = estimator.score(X, y)
-        loss = -loss if estimator.greater_is_better else loss
+        loss = loss if self.has_loss_function else -loss
         return loss
 
     def _optimize(self, X, y, fit_params=None):
@@ -256,16 +340,18 @@ class FunctionMinimizer(BaseOptimizer):
 class ParticleSwarmOptimizer(BaseOptimizer):
     """Performs particle swarm optimization
 
+    Optimizes the search parameter values using a particle swarm.
+
     .. versionadded:: 0.7
 
     Parameters
     ----------
-    estimator :
-        A scikit-learn estimator. Make sure it has an attribute called
-        `greater_is_better` that is set to True if greater values of
-        ``estimator.score`` mean that the score is better (else False).
-    search_params : dict of tupels (lower bound, upper bound)
-        Search parameters
+    estimator : ``sklearn.base.estimator``
+        A scikit-learn estimator, such as a classifier or regressor, that
+        contains ``fit`` and ``predict`` methods.
+    serch_params : dict of tupels (lower bound, upper bound)
+        Dictionary of tupels containing the lower and upper bound of values
+        for each search parameter.
     swarm_size : int, optional, default: 10 * number of search params
         The number of particles in the swarm.
     max_iter : int, optional, default: 100
@@ -276,6 +362,10 @@ class ParticleSwarmOptimizer(BaseOptimizer):
     min_step : float, optional, default: 0.01
         The minimum step size of swarm's best objective value before
         the search terminates.
+    has_loss_function : {False | True}
+        If True, the estimator's scoring function is really a loss function
+        (where smaller values indicate better performance) rather than a true
+        scoring function.
     verbose : bool, optional, default: True
         Flag whether to print more stuff
 
@@ -310,18 +400,15 @@ class ParticleSwarmOptimizer(BaseOptimizer):
         search_params = {}
         for k, v in zip(list(self.search_params.keys()), search_vals):
             search_params[k] = v
-
-        # Clone the estimator to make sure we have a clean slate
+        # Clone the estimator to make sure we have a clean slate, then fit:
         if fit_params is None:
             fit_params = {}
         estimator = clone_estimator(self.estimator)
         estimator.set_params(**search_params)
         estimator.fit(X, y=y, **fit_params)
-
-        # Loss function: if `greater_is_better`, the estimator's ``score``
-        # method is a true scoring function => invert to get an error function
+        # If score is not a loss function, we need to invert here:
         loss = estimator.score(X, y)
-        loss = -loss if estimator.greater_is_better else loss
+        loss = loss if self.has_loss_function else -loss
         return loss
 
     def _optimize(self, X, y, fit_params=None):
