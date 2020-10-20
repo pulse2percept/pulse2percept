@@ -31,7 +31,6 @@ class DummyPredictor(BaseEstimator):
 
     def __init__(self, dummy_var=1):
         self.dummy_var = dummy_var
-        self.greater_is_better = False
 
     def fit(self, X, y=None, **fit_params):
         return self
@@ -47,7 +46,8 @@ def test_FunctionMinimizer():
     # DummyPredictor always predicts 'feature1'.
     # The best `dummy_var` value is 1.
     X, y = generate_dummy_data()
-    fmin = FunctionMinimizer(DummyPredictor(), {'dummy_var': (0.5, 2.5)})
+    fmin = FunctionMinimizer(DummyPredictor(), {'dummy_var': (0.5, 2.5)},
+                             has_loss_function=True)
     with pytest.raises(NotFittedError):
         fmin.predict(X)
     fmin.fit(X, y)
@@ -60,7 +60,8 @@ def test_GridSearchOptimizer():
     # The best `dummy_var` value is 1.
     X, y = generate_dummy_data()
     search_params = {'dummy_var': np.linspace(0.5, 2, num=4)}
-    fmin = GridSearchOptimizer(DummyPredictor(), search_params)
+    fmin = GridSearchOptimizer(DummyPredictor(), search_params,
+                               has_loss_function=True)
     # ParameterGrid(search_params))
     with pytest.raises(NotFittedError):
         fmin.predict(X)
@@ -75,7 +76,8 @@ def test_ParticleSwarmOptimizer():
     X, y = generate_dummy_data()
     fmin = ParticleSwarmOptimizer(DummyPredictor(),
                                   {'dummy_var': (0.5, 2.5)},
-                                  min_func=1e-6, min_step=1e-6)
+                                  min_func=1e-6, min_step=1e-6,
+                                  has_loss_function=True)
     with pytest.raises(NotFittedError):
         fmin.predict(X)
     # Test both {} and None:
