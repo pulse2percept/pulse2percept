@@ -169,7 +169,7 @@ Dependencies
 
 .. include:: ../README.rst
    :start-line: 103
-   :end-line: 151
+   :end-line: 155
 
 Obtaining the latest code from GitHub
 -------------------------------------
@@ -346,10 +346,3 @@ or to :ref:`build from source <install-source>`.
    installing using pip or from source.
 
 .. _open an issue: https://github.com/pulse2percept/pulse2percept/issues
-
-Python ModuleNotFoundError: No module named 'Cython'
-----------------------------------------------------
-
-This issue indicates that Cython is not correctly installed. 
-Make sure to follow the installation guide on :ref:`required prerequisites <install-source-prerequisites>`_.
-After Cython is installed, you can complete the installation process for pulse2percept.

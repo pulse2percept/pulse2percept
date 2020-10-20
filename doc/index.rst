@@ -54,7 +54,7 @@ Installation
 
 .. include:: ../README.rst
    :start-line: 74
-   :end-line: 90
+   :end-line: 93
 
 Detailed instructions for different platforms can be found in our
 :ref:`Installation Guide <install>`.

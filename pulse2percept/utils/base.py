@@ -1,3 +1,11 @@
+"""`PrettyPrint`, `Frozen`, `Data`, `cached`, `gamma`, `unique`"""
+import numpy as np
+import sys
+import abc
+from scipy.special import factorial
+from collections import OrderedDict as ODict
+from functools import wraps
+
 """`PrettyPrint`, `Frozen`, `gamma`, `unique`"""
 import numpy as np
 import sys
@@ -345,3 +353,32 @@ def unique(a, tol=1e-6, return_index=False):
         unique, unique_indices = result
         return tol * unique, unique_indices
     return tol * result
+
+
+def cached(f):
+    """Cached property decorator
+
+    Decorator can be added to the property of a class to maintain a cache.
+    This is useful when computing the property is computationall expensive.
+    The property will only be computed on first call, and subsequent calls will
+    refer to the cached result.
+
+    .. important ::
+
+        When making use of a cached property, the class should also maintain
+        a ``_cache_active`` flag set to True or False.
+
+    .. versionadded:: 0.7
+
+    """
+    @wraps(f)
+    def wrapper(obj):
+        cache = obj._cache
+        prop = f.__name__
+
+        if not ((prop in cache) and obj._cache_active):
+            cache[prop] = f(obj)
+
+        return cache[prop]
+
+    return wrapper

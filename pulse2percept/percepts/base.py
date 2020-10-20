@@ -7,15 +7,23 @@ from matplotlib.animation import FuncAnimation
 import imageio
 import logging
 from skimage import img_as_uint
+from skimage.measure import label, regionprops
 from skimage.transform import resize
 
-from ..utils import Data, Grid2D, deprecated
+from ..utils import Data, Grid2D, cached, deprecated
 
 
 class Percept(Data):
     """Visual percept
 
+    A visual percept in space and time (optional). Typically the output of a
+    computational model.
+
     .. versionadded:: 0.6
+
+    .. versionchanged:: 0.7
+        Add ``play`` and various ``regionprops``, such as ``area``,
+        ``orientation``, and ``elongation``.
 
     Parameters
     ----------
@@ -25,12 +33,15 @@ class Percept(Data):
         A grid object specifying the (x,y) coordinates in space
     time : 1D array
         A list of time points
+    cache : bool, optional
+        Flag whether to cache calculated properties. The computation is much
+        faster for cached properties, whereas the memory consumption increases.
     metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.
 
     """
 
-    def __init__(self, data, space=None, time=None, metadata=None):
+    def __init__(self, data, space=None, time=None, cache=True, metadata=None):
         xdva = None
         ydva = None
         if space is not None:
@@ -46,7 +57,11 @@ class Percept(Data):
             'axes': [('ydva', ydva), ('xdva', xdva), ('time', time)],
             'metadata': metadata
         }
+        # Initialize the cache:
+        self._cache_active = cache
+        self._cache = {}
         self.rewind()
+        # Interpolate:
         # def f(a1, a2):
         #     # https://stackoverflow.com/a/26410051
         #     return (((a1 - a2[:,:,np.newaxis])).prod(axis=1)<=0).any(axis=0)

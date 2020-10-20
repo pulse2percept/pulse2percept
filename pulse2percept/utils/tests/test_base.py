@@ -4,7 +4,7 @@ import pytest
 import numpy.testing as npt
 
 from pulse2percept.utils import (Frozen, FreezeError, PrettyPrint, Data, gamma,
-                                 unique)
+                                 unique, cached)
 
 
 class PrettyPrinter(PrettyPrint):
@@ -177,3 +177,30 @@ def test_unique():
     val, idx = unique(a, tol=1, return_index=True)
     npt.assert_almost_equal(val, [0, 1])
     npt.assert_almost_equal(idx, [0, 4])
+
+
+class AreaCache(object):
+
+    def __init__(self, img, cache=True):
+        self.img = img
+        self._cache_active = cache
+        self._cache = {}
+
+    @property
+    @cached
+    def area(self):
+        return np.sum(self.img > 0)
+
+
+def test_cache():
+    # Change underlying image, but area stays the same (is cached):
+    cache = AreaCache(np.ones((10, 20)))
+    area0 = cache.area
+    cache.img[3, 4] = 0
+    area1 = cache.area
+    npt.assert_almost_equal(area0, area1)
+
+    # Now invalidate cache:
+    cache._cache_active = False
+    area2 = cache.area
+    npt.assert_equal(area1 != area2, True)
