@@ -4,7 +4,7 @@ import pytest
 import numpy.testing as npt
 
 from pulse2percept.utils import (Frozen, FreezeError, PrettyPrint, Data,
-                                 cached, gamma)
+                                 cached, gamma, unique)
 
 
 class PrettyPrinter(PrettyPrint):

@@ -215,7 +215,7 @@ class Percept(Data):
         interval = np.unique(np.floor(interval / TOL).astype(int)) * TOL
         return interval
 
-    def play(self, fps=None, repeat=True, ax=None):
+    def play(self, fps=None, repeat=True, annotate_time=True, ax=None):
         """Animate the percept as HTML with JavaScript
 
         The percept will be played in an interactive player in IPython or
@@ -229,6 +229,9 @@ class Percept(Data):
         repeat : bool, optional
             Whether the animation should repeat when the sequence of frames is
             completed.
+        annotate_time : bool, optional
+            If True, the time of the frame will be shown as t = X ms in the
+            title of the panel.
         ax : matplotlib.axes.AxesSubplot, optional
             A Matplotlib axes object. If None, will create a new Axes object
 
@@ -279,9 +282,11 @@ class Percept(Data):
             interval = interval[0]
         else:
             interval = 1000.0 / fps
+        if annotate_time:
+            mat.axes.set_title('t = %d ms' % self.time[self._next_frame - 1])
         # Create the animation:
         return FuncAnimation(fig, update, data_gen, interval=interval,
-                             repeat=repeat)
+                             save_count=len(self.time), repeat=repeat)
 
     def save(self, fname, shape=None, fps=None):
         """Save the percept as an MP4 or GIF

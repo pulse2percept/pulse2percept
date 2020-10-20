@@ -1,4 +1,4 @@
-"""`PrettyPrint`, `Frozen`, `Data`, `cached`, `gamma`"""
+"""`PrettyPrint`, `Frozen`, `Data`, `cached`, `gamma`, `unique`"""
 import numpy as np
 import sys
 import abc

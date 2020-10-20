@@ -1,4 +1,4 @@
-"""`ImageStimulus`, `LogoBVL`, `LogoUCSB`"""
+"""`ImageStimulus`, `LogoBVL`, `LogoUCSB`, `SnellenChart`"""
 from os.path import dirname, join
 import numpy as np
 from copy import deepcopy
@@ -49,9 +49,8 @@ class ImageStimulus(Stimulus):
         https://imageio.readthedocs.io/en/stable/formats.html.
 
     resize : (height, width) or None, optional
-        A tuple specifying the desired height and the width of the image
-        stimulus. One shape dimension can be -1. In this case, the value is
-        inferred from the other dimension by keeping a constant aspect ratio.
+        Shape of the resized image. If one of the dimensions is set to -1, 
+        its value will be inferred by keeping a constant aspect ratio.
 
     as_gray : bool, optional
         Flag whether to convert the image to grayscale.
@@ -161,8 +160,8 @@ class ImageStimulus(Stimulus):
         Returns
         -------
         stim : `ImageStimulus`
-            A copy of the stimulus object with all grayscale values inverted
-            in the range [0, 1].
+            A copy of the stimulus object with all RGB values converted to 
+            grayscale in the range [0, 1].
 
         Notes
         -----
@@ -175,6 +174,83 @@ class ImageStimulus(Stimulus):
             # Blend the background with black:
             img = rgba2rgb(img, background=(0, 0, 0))
         return ImageStimulus(rgb2gray(img), electrodes=electrodes,
+                             metadata=self.metadata)
+
+    def resize(self, shape, electrodes=None):
+        """Resize the image
+
+        Parameters
+        ----------
+        shape : (rows, cols)
+            Shape of the resized image
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, electrode names will be numbered 0..N.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in the grayscale image.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the resized image
+
+        """
+        height, width = shape
+        if height < 0 and width < 0:
+            raise ValueError('"height" and "width" cannot both be -1.')
+        if height < 0:
+            height = int(self.img_shape[0] * width / self.img_shape[1])
+        if width < 0:
+            width = int(self.img_shape[1] * height / self.img_shape[0])
+        img = img_resize(self.data.reshape(self.img_shape), (height, width))
+
+        return ImageStimulus(img, electrodes=electrodes,
+                             metadata=self.metadata)
+
+    def trim(self, tol=0, electrodes=None):
+        """Remove any black border around the image
+
+        .. versionadded:: 0.7
+
+        Parameters
+        ----------
+        tol : float
+            Any pixels with gray levels > tol will be trimmed.
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, electrode names will be numbered 0..N.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in the trimmed image.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with trimmed borders.
+
+        """
+        img = self.data.reshape(self.img_shape)
+        # Convert to grayscale if necessary:
+        if len(self.img_shape) == 3:
+            gray = self.rgb2gray()
+            m, n = gray.img_shape
+            mask = gray.data.reshape(gray.img_shape) > tol
+        else:
+            m, n = self.img_shape
+            mask = img > tol
+        if not np.any(mask):
+            return ImageStimulus(np.array([[]]), electrodes=electrodes,
+                                 metadata=self.metadata)
+        # Determine the extent of the non-zero region:
+        mask0, mask1 = mask.any(0), mask.any(1)
+        col_start, col_end = mask0.argmax(), n - mask0[::-1].argmax()
+        row_start, row_end = mask1.argmax(), m - mask1[::-1].argmax()
+        # Trim the border by cropping out the relevant part:
+        img = img[row_start:row_end, col_start:col_end, ...]
+        return ImageStimulus(img, electrodes=electrodes,
                              metadata=self.metadata)
 
     def threshold(self, thresh, **kwargs):
@@ -232,39 +308,6 @@ class ImageStimulus(Stimulus):
             raise TypeError("Threshold type must be str or float, not "
                             "%s." % type(thresh))
         return ImageStimulus(img, electrodes=self.electrodes,
-                             metadata=self.metadata)
-
-    def resize(self, shape, electrodes=None):
-        """Resize the image
-
-        Parameters
-        ----------
-        shape : (rows, cols)
-            Shape of the resized image
-        electrodes : int, string or list thereof; optional
-            Optionally, you can provide your own electrode names. If none are
-            given, electrode names will be numbered 0..N.
-
-            .. note::
-               The number of electrode names provided must match the number of
-               pixels in the grayscale image.
-
-        Returns
-        -------
-        stim : `ImageStimulus`
-            A copy of the stimulus object containing the resized image
-
-        """
-        height, width = shape
-        if height < 0 and width < 0:
-            raise ValueError('"height" and "width" cannot both be -1.')
-        if height < 0:
-            height = int(self.img_shape[0] * width / self.img_shape[1])
-        if width < 0:
-            width = int(self.img_shape[1] * height / self.img_shape[0])
-        img = img_resize(self.data.reshape(self.img_shape), (height, width))
-
-        return ImageStimulus(img, electrodes=electrodes,
                              metadata=self.metadata)
 
     def rotate(self, angle, center=None, mode='constant'):
@@ -516,13 +559,18 @@ class ImageStimulus(Stimulus):
             ax = plt.gca()
         if 'figsize' in kwargs:
             ax.figure.set_size_inches(kwargs.pop('figsize'))
+        if 'vmin' in kwargs:
+            vmin = kwargs.pop('vmin')
+        else:
+            vmin = 0
 
         cmap = None
         if len(self.img_shape) == 2:
             cmap = 'gray'
         if 'cmap' in kwargs:
             cmap = kwargs.pop('cmap')
-        ax.imshow(self.data.reshape(self.img_shape), cmap=cmap, **kwargs)
+        ax.imshow(self.data.reshape(self.img_shape), cmap=cmap, vmin=vmin,
+                  **kwargs)
         return ax
 
     def save(self, fname):

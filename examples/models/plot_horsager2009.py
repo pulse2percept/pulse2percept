@@ -251,7 +251,7 @@ time_tracker = 0
 for pulse in (cath_standard, cath_test, anod_standard, anod_test):
     data.append(pulse.data)
     time.append(pulse.time + time_tracker)
-    time_tracker += pulse.time[-1]
+    time_tracker += pulse.time[-1] + 1e-3
 
 latent_add = Stimulus(np.concatenate(data, axis=1), time=np.concatenate(time))
 latent_add.plot()

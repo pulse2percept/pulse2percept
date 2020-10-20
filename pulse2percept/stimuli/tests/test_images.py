@@ -16,6 +16,8 @@ def create_dummy_img(fname, shape, mode, gray=1.0, return_data=False):
         ndarray = np.zeros(shape)
     elif mode == 'rand':
         ndarray = np.random.rand(*shape) * gray
+    elif mode == 'custom':
+        ndarray = shape
     imsave(fname, (255 * ndarray).astype(np.uint8))
     if return_data:
         return ndarray
@@ -69,20 +71,6 @@ def test_ImageStimulus_rgb2gray():
     os.remove(fname)
 
 
-def test_ImageStimulus_threshold():
-    # Create a dummy image:
-    fname = 'test.png'
-    shape = (25, 37, 3)
-    gray = 129 / 255.0
-    create_dummy_img(fname, shape, 'ones', gray=gray)
-    # Gray levels are between 0 and 1, and can be inverted:
-    stim = ImageStimulus(fname, as_gray=True)
-    stim_th = stim.threshold(0.5)
-    npt.assert_almost_equal(stim.data, gray)
-    npt.assert_equal(stim.img_shape, shape[:2])
-    os.remove(fname)
-
-
 def test_ImageStimulus_resize():
     fname = 'test.png'
     shape = (25, 37, 3)
@@ -96,6 +84,36 @@ def test_ImageStimulus_resize():
     npt.assert_equal(stim.resize((-1, 24)).img_shape, (16, 24, 3))
     with pytest.raises(ValueError):
         stim.resize((-1, -1))
+    os.remove(fname)
+
+
+def test_ImageStimulus_trim():
+    shape = (13, 29)
+    ndarray = np.zeros(shape)
+    ndarray[1:-1, 1:-1] = 0.1
+    ndarray[2:-2, 2:-2] = 0.2
+    stim = ImageStimulus(ndarray)
+    npt.assert_equal(stim.trim().img_shape, (shape[0] - 2, shape[1] - 2))
+    npt.assert_equal(stim.trim(tol=0.05).img_shape,
+                     (shape[0] - 2, shape[1] - 2))
+    npt.assert_equal(stim.trim(tol=0.1).img_shape,
+                     (shape[0] - 4, shape[1] - 4))
+    npt.assert_equal(stim.trim(tol=0.2).img_shape, (1, 0))
+    npt.assert_equal(stim.trim(tol=0.1).img_shape,
+                     stim.trim().trim(tol=0.1).img_shape)
+
+
+def test_ImageStimulus_threshold():
+    # Create a dummy image:
+    fname = 'test.png'
+    shape = (25, 37, 3)
+    gray = 129 / 255.0
+    create_dummy_img(fname, shape, 'ones', gray=gray)
+    # Gray levels are between 0 and 1, and can be inverted:
+    stim = ImageStimulus(fname, as_gray=True)
+    stim_th = stim.threshold(0.5)
+    npt.assert_almost_equal(stim.data, gray)
+    npt.assert_equal(stim.img_shape, shape[:2])
     os.remove(fname)
 
 
@@ -185,6 +203,29 @@ def test_ImageStimulus_scale():
     npt.assert_almost_equal(stim.scale(0.1)[13:], 0)
     with pytest.raises(ValueError):
         stim.scale(0)
+    os.remove(fname)
+
+
+def test_ImageStimulus_filter():
+    # Create a dummy image:
+    fname = 'test.png'
+    shape = (25, 37)
+    create_dummy_img(fname, shape, 'rand')
+    stim = ImageStimulus(fname)
+
+    for filt in ['sobel', 'scharr', 'canny', 'median']:
+        filt_stim = stim.filter(filt)
+        npt.assert_equal(filt_stim.shape, stim.shape)
+        npt.assert_equal(filt_stim.img_shape, stim.img_shape)
+        npt.assert_equal(filt_stim.electrodes, stim.electrodes)
+        npt.assert_equal(filt_stim.time, None)
+
+    # Invalid filter name:
+    with pytest.raises(TypeError):
+        stim.filter({'invalid'})
+    with pytest.raises(ValueError):
+        stim.filter('invalid')
+
     os.remove(fname)
 
 

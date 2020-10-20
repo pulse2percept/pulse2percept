@@ -11,10 +11,10 @@
     parallel
 
 """
-from .base import PrettyPrint, FreezeError, Frozen, Data, cached, gamma
+from .base import PrettyPrint, FreezeError, Frozen, Data, cached, gamma, unique
 from .geometry import (Grid2D, RetinalCoordTransform, Curcio1990Transform,
                        Watson2014Transform, Watson2014DisplaceTransform,
-                       cart2pol, pol2cart)
+                       cart2pol, pol2cart, delta_angle)
 from .convolution import center_vector, conv
 from .deprecation import deprecated
 from .optimize import bisect
@@ -28,6 +28,7 @@ __all__ = [
     'circ_r2_score',
     'Curcio1990Transform',
     'Data',
+    'delta_angle',
     'deprecated',
     'FreezeError',
     'Frozen',
@@ -38,6 +39,7 @@ __all__ = [
     'PrettyPrint',
     'r2_score',
     'RetinalCoordTransform',
+    'unique',
     'Watson2014DisplaceTransform',
     'Watson2014Transform'
 ]
