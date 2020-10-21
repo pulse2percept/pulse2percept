@@ -490,7 +490,7 @@ def test_Stimulus_merge():
     npt.assert_almost_equal(merge2[2, [0, -1]], stim3[0, [0, -1]])
 
 
-@pytest.mark.parametrize('scalar', (10, -2.3, np.pi))
+@pytest.mark.parametrize('scalar', (12345.678, -2.3, np.pi))
 def test_Stimulus_arithmetic(scalar):
     stim = Stimulus([[0, 21, -13, 0, 0]], time=[0, 1, 2, 3, 4])
     npt.assert_almost_equal((stim + scalar).data,

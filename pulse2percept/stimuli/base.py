@@ -370,12 +370,24 @@ class Stimulus(PrettyPrint):
         if not np.all(other.electrodes == self.electrodes):
             raise ValueError("Both stimuli must have the same electrodes.")
         stim = deepcopy(self)
-        # Careful not to create identical time points:
-        time = np.hstack((self.time[:-1], self.time[-1] - DT,
-                          other.time + self.time[-1]))
+
+        print('append:')
+        if np.isclose(other.time[0], 0, atol=DT):
+            print("isclose")
+            if not np.allclose(other.data[:, 0], self.data[:, -1]):
+                raise ValueError("Can't fuse time points")
+            time = np.hstack((self.time, other.time[1:] + self.time[-1]))
+            data = np.hstack((self.data, other.data[:, 1:]))
+        else:
+            time = np.hstack((self.time, other.time + self.time[-1]))
+            data = np.hstack((self.data, other.data))
+
+        print(list(time))
+        print(list(data.ravel()))
+
         # Append the data points. If there's something wrong with the
         # concatenated list of time points, the stim setter will catch it:
-        stim._stim = {'data': np.hstack((self.data, other.data)),
+        stim._stim = {'data': data,
                       'electrodes': self.electrodes,
                       'time': time}
         return stim
@@ -619,7 +631,7 @@ class Stimulus(PrettyPrint):
                 return False
             if len(self.time) != len(other.time):
                 return False
-            if not np.allclose(self.time, other.time):
+            if not np.allclose(self.time, other.time, atol=DT):
                 return False
         if len(self.electrodes) != len(other.electrodes):
             return False
@@ -751,19 +763,27 @@ class Stimulus(PrettyPrint):
                                             stim['data'].shape[1]))
             n_time = len(stim['time'])
             if n_time > 1:
-                # Beware of floating point issues by slightly decreasing the
-                # tolerance level (relative to how the stimuli are built):
-                n_unique = len(unique(stim['time'], tol=0.8 * DT))
+                # All time points must be unique, but we have to be careful
+                # with the floatin-point math. We consider two time points as
+                # being unique if they differ by more than half a DT:
+                idx_unique = [True] + list(np.diff(stim['time']) > 0.5 * DT)
+                n_unique = np.sum(idx_unique)
                 if n_unique != n_time:
-                    idx_min = np.argmin(np.diff(stim['time']))
-                    err_str = ("Time points must be unique up to %d "
-                               "decimals, but time [%d] == time[%d] == "
-                               "(%f)." % (int(-np.log10(DT)), idx_min,
-                                          idx_min + 1, stim['time'][idx_min]))
+                    print(list(stim['time']))
+                    print(idx_unique)
+                    print(n_unique, n_time)
+                    err_str = ("The following time points are separated by "
+                               "less than DT=%.0ems: " % DT)
+                    err_str += ", ".join([
+                        "time[%d]=%f and time[%d]=%f" % (i - 1,
+                                                         stim['time'][i - 1],
+                                                         i, stim['time'][i])
+                        for i in np.where(np.bitwise_not(idx_unique))[0]
+                    ])
                     raise ValueError(err_str)
             if not np.all(np.argsort(stim['time']) == np.arange(n_time)):
                 raise ValueError("Time points must be stricly monotonically "
-                                 "increasing.")
+                                 "increasing:", list(stim['time']))
         elif len(stim['data']) > 0:
             if stim['data'].shape[1] > 1:
                 raise ValueError("Number of columns in the data array must be "
