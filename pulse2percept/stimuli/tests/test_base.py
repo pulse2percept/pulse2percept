@@ -190,12 +190,13 @@ def test_Stimulus_append():
     stim = Stimulus([[0, 1, 0]], time=[0, 1, 2])
     stim2 = Stimulus([[0, 2]], time=[0, 0.5])
     comb = stim.append(stim2)
-    npt.assert_almost_equal(comb.data, [[0, 1, 0, 0, 2]])
-    npt.assert_almost_equal(comb.time, [0, 1, 2 - DT, 2, 2.5])
+    # End point of stim and starting point of stim2 will be merged:
+    npt.assert_almost_equal(comb.data, [[0, 1, 0, 2]])
+    npt.assert_almost_equal(comb.time, [0, 1, 2, 2.5])
 
     # When other stimulus is shifted:
     comb = stim.append(stim2 >> 10)
-    npt.assert_almost_equal(comb.time, [0, 1, 2 - DT, 12, 12.5])
+    npt.assert_almost_equal(comb.time, [0, 1, 2, 12, 12.5])
 
     with pytest.raises(TypeError):
         # 'other' must be Stimulus:
@@ -208,6 +209,9 @@ def test_Stimulus_append():
         Stimulus(3).append(stim)
     with pytest.raises(ValueError):
         stim.append(Stimulus([[1, 2]], electrodes='B1'))
+    with pytest.raises(NotImplementedError):
+        # negative time axis:
+        stim.append(Stimulus([[0, 2]], time=[-1, 0]))
 
 
 def test_Stimulus_plot():

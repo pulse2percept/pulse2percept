@@ -88,24 +88,18 @@ class PulseTrain(Stimulus):
                 pt = pt.append(pulse >> shift)
             data = pt.data
             time = pt.time
-        # If stimulus is longer than the requested `stim_dur`, trim it. Make
-        # sure to interpolate the end point:
         if time[-1] > stim_dur + DT:
-            print('stim too long')
+            # If stimulus is longer than the requested `stim_dur`, trim it.
+            # Make sure to interpolate the end point:
             last_col = [np.interp(stim_dur, time, row) for row in data]
             last_col = np.array(last_col).reshape((-1, 1))
             t_idx = time < stim_dur
             data = np.hstack((data[:, t_idx], last_col))
             time = np.append(time[t_idx], stim_dur)
-        # If stimulus is shorter than the requested `stim_dur`, add a zero:
-        if time[-1] < stim_dur - DT:
-            print('stim too short')
+        elif time[-1] < stim_dur - DT:
+            # If stimulus is shorter than the requested `stim_dur`, add a zero:
             data = np.hstack((data, np.zeros((pulse.data.shape[0], 1))))
             time = np.append(time, stim_dur)
-        # Finally, if the last point is not exactly `stim_dur`, correct it:
-        if np.abs(time[-1] - stim_dur) < DT:
-            print('stim not exact')
-            time[-1] = stim_dur
         super().__init__(data, time=time, electrodes=electrode, metadata=None,
                          compress=False)
         self.freq = freq

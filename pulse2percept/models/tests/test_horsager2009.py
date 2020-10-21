@@ -54,7 +54,7 @@ def test_Horsager2009Temporal():
                                   stim_dur=200, cathodic_first=True)
         t_percept = np.arange(0, stim.time[-1] + model.dt / 2, model.dt)
         percept = model.predict_percept(stim, t_percept=t_percept)
-        npt.assert_almost_equal(percept.data.max(), 36.3, decimal=2)
+        npt.assert_almost_equal(percept.data.max(), 37.02, decimal=2)
 
 
 def test_Horsager2009Model():

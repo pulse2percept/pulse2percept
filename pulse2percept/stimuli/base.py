@@ -369,21 +369,24 @@ class Stimulus(PrettyPrint):
             raise ValueError("Cannot append another stimulus if time=None.")
         if not np.all(other.electrodes == self.electrodes):
             raise ValueError("Both stimuli must have the same electrodes.")
+        if other.time[0] < 0:
+            raise NotImplementedError("Appending a stimulus with a negative "
+                                      "time axis is currently not supported.")
         stim = deepcopy(self)
-
-        print('append:')
+        # Last time point of `self` can be merged with first point of `other`
+        # but only if they have the same amplitude(s):
         if np.isclose(other.time[0], 0, atol=DT):
-            print("isclose")
             if not np.allclose(other.data[:, 0], self.data[:, -1]):
-                raise ValueError("Can't fuse time points")
+                err_str = ("Data mismatch: Cannot append other stimulus "
+                           "because other[t=0] != this[t=%fms]. You may need "
+                           "to shift the other stimulus in time by at least "
+                           "%.1e ms." % (this.time[-1], DT))
+                raise ValueError(err_str)
             time = np.hstack((self.time, other.time[1:] + self.time[-1]))
             data = np.hstack((self.data, other.data[:, 1:]))
         else:
             time = np.hstack((self.time, other.time + self.time[-1]))
             data = np.hstack((self.data, other.data))
-
-        print(list(time))
-        print(list(data.ravel()))
 
         # Append the data points. If there's something wrong with the
         # concatenated list of time points, the stim setter will catch it:
@@ -769,9 +772,6 @@ class Stimulus(PrettyPrint):
                 idx_unique = [True] + list(np.diff(stim['time']) > 0.5 * DT)
                 n_unique = np.sum(idx_unique)
                 if n_unique != n_time:
-                    print(list(stim['time']))
-                    print(idx_unique)
-                    print(n_unique, n_time)
                     err_str = ("The following time points are separated by "
                                "less than DT=%.0ems: " % DT)
                     err_str += ", ".join([
