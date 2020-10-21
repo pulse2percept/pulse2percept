@@ -128,8 +128,9 @@ def test_Percept_play(n_frames):
     npt.assert_equal(len(list(ani.frame_seq)), n_frames)
 
 
-def test_Percept_save():
-    ndarray = np.arange(256, dtype=np.float32).repeat(31).reshape((-1, 16, 16))
+@pytest.mark.parametrize('dtype', (np.float32, np.uint8))
+def test_Percept_save(dtype):
+    ndarray = np.arange(256, dtype=dtype).repeat(31).reshape((-1, 16, 16))
     percept = Percept(ndarray.transpose((2, 0, 1)))
 
     # Save multiple frames as a gif or movie:
