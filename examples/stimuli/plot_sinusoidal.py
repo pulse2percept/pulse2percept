@@ -47,7 +47,7 @@ plt.legend()
 # We can turn this signal into a :py:class:`~pulse2percept.stimuli.Stimulus`
 # object as follows:
 
-from pulse2percept.stimuli import Stimulus
+from pulse2percept.stimuli import Stimulus, DT
 
 stim = Stimulus(10 * data.reshape((1, -1)), time=t)
 stim.plot()
@@ -59,7 +59,7 @@ stim.plot()
 
 class SinusoidalPulse(Stimulus):
 
-    def __init__(self, amp, freq, phase, stim_dur, n_levels=5, dt=0.001):
+    def __init__(self, amp, freq, phase, stim_dur, n_levels=5, dt=DT):
         """Sinusoidal pulse
 
         Parameters

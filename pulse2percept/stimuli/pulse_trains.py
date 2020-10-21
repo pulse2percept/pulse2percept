@@ -3,11 +3,9 @@ import numpy as np
 import copy
 import logging
 
-# MIN_AMP: Pulses with net currents smaller than MIN_AMP uA are considered
-# charge-balanced
 # DT: Sampling time step (ms); defines the duration of the signal edge
 # transitions:
-from . import MIN_AMP, DT
+from . import DT
 from .base import Stimulus
 from .pulses import BiphasicPulse, AsymmetricBiphasicPulse
 from ..utils import unique
@@ -60,6 +58,7 @@ class PulseTrain(Stimulus):
                              "(%d, %d)." % (pulse.shape[0], pulse.shape[1]))
         if pulse.time is None:
             raise ValueError("'pulse' does not have a time component.")
+
         # How many pulses fit into stim dur:
         n_max_pulses = freq * stim_dur / 1000.0
         # The requested number of pulses cannot be greater than max pulses:
@@ -83,45 +82,34 @@ class PulseTrain(Stimulus):
                 raise ValueError("Pulse (dur=%.2f ms) does not fit into "
                                  "pulse train window (dur=%.2f "
                                  "ms)" % (pulse.time[-1], window_dur))
-            pulse_data = np.asarray(pulse.data, dtype=np.float32)
-            pulse_time = np.asarray(pulse.time, dtype=np.float32)
-            # We have to be careful not to create duplicate time points, which
-            # will be trimmed (and produce artifacts) upon compression:
-            if window_dur - pulse_time[-1] < DT:
-                pulse_time[-1] -= 2 * DT
-            # Concatenate the pulses:
-            data = []
-            time = []
-            for i in range(n_pulses):
-                data.append(pulse_data)
-                time.append(pulse_time + i * window_dur)
-            data = np.concatenate(data, axis=1)
-            time = np.concatenate(time, axis=0)
-        # If stimulus is longer than the requested `stim_dur`, trim it. Make
-        # sure to interpolate the end point:
-        if time[-1] > stim_dur:
+            shift = np.maximum(0, window_dur - pulse.time[-1])
+            pt = pulse
+            for i in range(1, n_pulses):
+                pt = pt.append(pulse >> shift)
+            data = pt.data
+            time = pt.time
+        if time[-1] > stim_dur + DT:
+            # If stimulus is longer than the requested `stim_dur`, trim it.
+            # Make sure to interpolate the end point:
             last_col = [np.interp(stim_dur, time, row) for row in data]
             last_col = np.array(last_col).reshape((-1, 1))
             t_idx = time < stim_dur
             data = np.hstack((data[:, t_idx], last_col))
             time = np.append(time[t_idx], stim_dur)
-        # If stimulus is shorter than the requested `stim_dur`, add a zero:
-        if time[-1] < stim_dur:
+        elif time[-1] < stim_dur - DT:
+            # If stimulus is shorter than the requested `stim_dur`, add a zero:
             data = np.hstack((data, np.zeros((pulse.data.shape[0], 1))))
             time = np.append(time, stim_dur)
         super().__init__(data, time=time, electrodes=electrode, metadata=None,
                          compress=False)
         self.freq = freq
         self.pulse_type = pulse.__class__.__name__
-        self.charge_balanced = np.isclose(np.trapz(data, time)[0], 0,
-                                          atol=MIN_AMP)
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         params = super(PulseTrain, self)._pprint_params()
         params.update({'freq': self.freq,
-                       'pulse_type': self.pulse_type,
-                       'charge_balanced': self.charge_balanced})
+                       'pulse_type': self.pulse_type})
         return params
 
 
@@ -187,13 +175,11 @@ class BiphasicPulseTrain(Stimulus):
         super().__init__(pt.data, time=pt.time, compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
-        self.charge_balanced = pt.charge_balanced
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         params = super(BiphasicPulseTrain, self)._pprint_params()
         params.update({'cathodic_first': self.cathodic_first,
-                       'charge_balanced': self.charge_balanced,
                        'freq': self.freq})
         return params
 
@@ -255,13 +241,11 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
         super().__init__(pt.data, time=pt.time, compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
-        self.charge_balanced = pt.charge_balanced
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         params = super(AsymmetricBiphasicPulseTrain, self)._pprint_params()
         params.update({'cathodic_first': self.cathodic_first,
-                       'charge_balanced': self.charge_balanced,
                        'freq': self.freq})
         return params
 
@@ -323,9 +307,7 @@ class BiphasicTripletTrain(Stimulus):
                               cathodic_first=cathodic_first,
                               electrode=electrode)
         # Create the pulse triplet:
-        triplet_dur = 3 * (2 * phase_dur + interphase_dur + delay_dur + DT)
-        triplet = PulseTrain(3 * 1000.0 / triplet_dur, pulse, n_pulses=3,
-                             stim_dur=triplet_dur)
+        triplet = pulse.append(pulse).append(pulse)
         # Create the triplet train:
         pt = PulseTrain(freq, triplet, n_pulses=n_pulses, stim_dur=stim_dur)
         # Set up the Stimulus object through the constructor:
@@ -333,12 +315,10 @@ class BiphasicTripletTrain(Stimulus):
                                                    compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
-        self.charge_balanced = pt.charge_balanced
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         params = super(BiphasicTripletTrain, self)._pprint_params()
         params.update({'cathodic_first': self.cathodic_first,
-                       'charge_balanced': self.charge_balanced,
                        'freq': self.freq})
         return params
