@@ -340,7 +340,7 @@ def test_AxonMapModel_predict_percept(engine):
     img_stim[47] = 1
     percept = model.predict_percept(ArgusII(stim=img_stim))
     # Single bright pixel, rest of arc is less bright:
-    npt.assert_equal(np.sum(percept.data > 0.8), 1)
+    npt.assert_equal(np.sum(percept.data > 0.8), 3)
     npt.assert_equal(np.sum(percept.data > 0.6), 3)
     npt.assert_equal(np.sum(percept.data > 0.1), 21)
     npt.assert_equal(np.sum(percept.data > 0.0001), 70)
