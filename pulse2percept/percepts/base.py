@@ -317,7 +317,7 @@ class Percept(Data):
         """
         data = self.data - self.data.min()
         if not np.isclose(np.max(data), 0):
-            data /= np.max(data)
+            data = data / np.max(data)
         data = img_as_uint(data)
 
         if shape is None:
