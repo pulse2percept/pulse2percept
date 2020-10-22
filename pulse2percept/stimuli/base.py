@@ -387,7 +387,6 @@ class Stimulus(PrettyPrint):
         else:
             time = np.hstack((self.time, other.time + self.time[-1]))
             data = np.hstack((self.data, other.data))
-
         # Append the data points. If there's something wrong with the
         # concatenated list of time points, the stim setter will catch it:
         stim._stim = {'data': data,
