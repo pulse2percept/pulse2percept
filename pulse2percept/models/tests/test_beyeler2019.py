@@ -331,16 +331,16 @@ def test_AxonMapModel_calc_bundle_tangent(engine):
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
 def test_AxonMapModel_predict_percept(engine):
-    model = AxonMapModel(xystep=0.55, axlambda=100, thresh_percept=0,
-                         xrange=(-20, 20), yrange=(-15, 15),
-                         engine=engine)
+    model = AxonMapModel(xystep=0.55, axlambda=100, rho=100,
+                         thresh_percept=0, engine=engine,
+                         xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     # Single-electrode stim:
     img_stim = np.zeros(60)
     img_stim[47] = 1
     percept = model.predict_percept(ArgusII(stim=img_stim))
     # Single bright pixel, rest of arc is less bright:
-    npt.assert_equal(np.sum(percept.data > 0.8), 3)
+    npt.assert_equal(np.sum(percept.data > 0.8), 1)
     npt.assert_equal(np.sum(percept.data > 0.6), 3)
     npt.assert_equal(np.sum(percept.data > 0.1), 21)
     npt.assert_equal(np.sum(percept.data > 0.0001), 70)
