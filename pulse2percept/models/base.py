@@ -61,6 +61,11 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
         """Return a dict of user-settable model parameters"""
         raise NotImplementedError
 
+    def set_params(self, **params):
+        """Set the parameters of this model"""
+        for key, value in params.items():
+            setattr(self, key, value)
+
     def _pprint_params(self):
         """Return a dict of class attributes to display when pretty-printing"""
         return {key: getattr(self, key)
