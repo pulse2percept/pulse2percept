@@ -282,7 +282,7 @@ def test_AsymmetricBiphasicPulse(amp1, amp2, interphase_dur, delay_dur,
 
 
 @pytest.mark.parametrize('amp', (-1.234, -13))
-@pytest.mark.parametrize('phase_dur', (0.001, 2.2, np.pi))
+@pytest.mark.parametrize('phase_dur', (0.022, 2.2, np.pi))
 def test_pulse_append(amp, phase_dur):
     # Build a biphasic pulse from two monophasic pulses:
     mono = MonophasicPulse(amp, phase_dur)
