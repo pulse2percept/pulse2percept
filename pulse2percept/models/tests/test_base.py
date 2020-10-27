@@ -27,6 +27,11 @@ def test_BaseModel():
     model = ValidBaseModel(b=3)
     npt.assert_almost_equal(model.b, 3)
 
+    # Use the sklearn syntax:
+    model.set_params(a=5, b=5)
+    npt.assert_almost_equal(model.a, 5)
+    npt.assert_almost_equal(model.b, 5)
+
     # Cannot add more attributes:
     with pytest.raises(FreezeError):
         model.c = 3
