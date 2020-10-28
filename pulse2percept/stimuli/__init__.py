@@ -29,6 +29,7 @@ from .pulse_trains import (PulseTrain, BiphasicPulseTrain,
                            BiphasicTripletTrain, AsymmetricBiphasicPulseTrain)
 from .images import ImageStimulus, LogoBVL, LogoUCSB, SnellenChart
 from .videos import VideoStimulus, BostonTrain
+from .psychophysics import GratingStimulus
 
 __all__ = [
     'AsymmetricBiphasicPulse',
@@ -37,6 +38,7 @@ __all__ = [
     'BiphasicPulseTrain',
     'BiphasicTripletTrain',
     'BostonTrain',
+    'GratingStimulus',
     'ImageStimulus',
     'LogoBVL',
     'LogoUCSB',
