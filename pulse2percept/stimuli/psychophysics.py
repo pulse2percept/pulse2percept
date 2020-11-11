@@ -9,7 +9,7 @@ from ..utils import radial_mask
 class GratingStimulus(VideoStimulus):
     """Drifting sinusoidal grating
 
-    A drifting sinusoidal grating of a giving spatial and temporal frequency.
+    A drifting sinusoidal grating of a given spatial and temporal frequency.
 
     .. versionadded:: 0.7
 
@@ -99,29 +99,89 @@ class GratingStimulus(VideoStimulus):
 class BarStimulus(VideoStimulus):
     """Drifting bar
 
+    A drifting bar stimulus.
+
+    .. versionadded:: 0.7
+
+    Parameters
+    ----------
+    shape : (height, width)
+        A tuple specifying the desired height and the width of the bar
+        stimulus.
+
+    direction : scalar in [0, 360) degrees, optional
+        Drift direction of the bar.
+
+    speed : scalar in pixels/frame, optional
+        Drift speed of the bar.
+
+    bar_width : scalar in pixels, optional
+        The width of the center of the bar.
+
+    edge_width : scalar in pixels, optional
+        The width of the cosine edges of the bar. An edge of width `edge_width`
+        will be tacked onto both sides of the bar, so the total width will be
+        `bar_width` + 2 * `edge_width`
+
+    px_btw_bars : scalar in pixels, optional
+        The number of pixels between the bars in the stimulus.
+
+    start_pos : scalar in pixels, optional
+        The starting position of the first bar. The coordinate system is a line
+        lying along the direction of the bar motion passing through the center
+        of the stimulus. The point 0 is the center of the stimulus.
+
+    contrast : scalar in [0, 1], optional
+        Stimulus contrast between 0 and 1
+
+    time : scalar, array-like, or None; optional
+        The time points at which to evaluate the drifting bar:
+
+        -  If a scalar, ``time`` is interpreted as the end time (in
+           milliseconds) of a time series with 50 Hz frame rate.
+        -  If array-like, ``time`` is interpreted as the exact time points (in
+           milliseconds) at which to draw the bar (end point included).
+        -  If None, ``time`` defaults to a 1-second time series at 50 Hz frame
+           rate (end point included).
+
+    mask : {'gauss', 'circle', None}
+        Stimulus mask:
+
+        -  "gauss": a 2D Gaussian designed such that the border of the image
+           lies at 3 standard deviations
+        -  "circle": a circle that fits into the ``shape`` of the stimulus
+        -  None: no mask
+
+    electrodes : int, string or list thereof; optional, default: None
+        Optionally, you can provide your own electrode names. If none are
+        given, electrode names will be numbered 0..N.
+
+    metadata : dict, optional, default: None
+        Additional stimulus metadata can be stored in a dictionary.
+
     """
 
-    def __init__(self, shape, time=None, electrodes=None, direction=0,
-                 speed=0.1, bar_width=1, edge_width=3, px_btw_bars=None,
-                 start_pos=0, contrast=1, mask='gauss', metadata=None):
+    def __init__(self, shape, direction=0, speed=0.1, bar_width=1,
+                 edge_width=3, px_btw_bars=None, start_pos=0, contrast=1,
+                 time=None, mask='gauss', electrodes=None, metadata=None):
         height, width = shape
         if px_btw_bars is None:
             px_btw_bars = width
         half_width = bar_width / 2.0
 
-        # A bar is basically a single period of a sinusoidal grating:
+        # A bar is basically a single period of a sinusoidal grating. We don't
+        # apply the mask and contrast here, but later:
         spatial_freq = 1.0 / px_btw_bars
         temporal_freq = spatial_freq * speed
         phase = start_pos * spatial_freq
         grating = GratingStimulus(shape, time=time, direction=direction,
-                                  contrast=1.0, mask=mask, phase=phase,
+                                  contrast=1.0, mask=None, phase=phase,
                                   spatial_freq=spatial_freq,
                                   temporal_freq=temporal_freq)
 
         bar = grating.data.reshape(grating.vid_shape)
-
         for i in range(bar.shape[-1]):
-            frame = 1.0 - bar[..., i]
+            frame = bar[..., i]
             # There are 3 regions:
             # - where stim should be one (center of the bar)
             # - where stim should be zero (outside the bar)
@@ -134,8 +194,8 @@ class BarStimulus(VideoStimulus):
                                       frame > bar_outer_th)
             bar_zero = frame <= bar_outer_th
             # Set the regions to the appropriate level:
-            frame[bar_one] = bar.max()
-            frame[bar_zero] = bar.min()
+            frame[bar_one] = 1.0
+            frame[bar_zero] = 0.0
             # Adjust the range to [0, 2*pi):
             frame[bar_edge] = np.arccos(frame[bar_edge])
             # Adjust the range to [0, 1] spatial period:
@@ -143,9 +203,15 @@ class BarStimulus(VideoStimulus):
             frame[bar_edge] = 0.5 * np.pi * (frame[bar_edge] - half_width)
             frame[bar_edge] /= edge_width
             frame[bar_edge] = np.cos(frame[bar_edge])
-            # Flip contrast back:
-            bar[..., i] = 1.0 - frame
+            bar[..., i] = frame
 
+        # Adjust to range [-1, 1]:
+        bar = 2.0 * bar - 1.0
+        # Apply mask:
+        if mask is not None:
+            mask = radial_mask((height, width), mask=mask)
+            bar *= mask[..., np.newaxis]
+        # Apply contrast:
         bar = contrast * bar / 2.0 + 0.5
 
         # Call VideoStimulus constructor:
