@@ -361,8 +361,7 @@ class VideoStimulus(Stimulus):
         mat = ax.imshow(np.zeros(self.vid_shape[:-1]), cmap='gray',
                         vmax=self.data.max())
         cbar = fig.colorbar(mat)
-        cbar.ax.set_ylabel('Phosphene brightness (a.u.)', rotation=-90,
-                           va='center')
+        cbar.ax.set_ylabel('Brightness (a.u.)', rotation=-90, va='center')
         plt.close(fig)
         if fps is None:
             interval = self._get_interval()

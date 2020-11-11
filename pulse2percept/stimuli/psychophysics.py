@@ -70,14 +70,15 @@ class GratingStimulus(VideoStimulus):
         x = np.arange(width) - np.ceil(width / 2.0)
         y = np.arange(height) - np.ceil(height / 2.0)
         if time is None:
-            t = np.arange(0, 1001, 20)
+            time = np.arange(0, 1001, 20)
         elif isinstance(time, (list, np.ndarray)):
-            t = np.asarray(time)
+            time = np.asarray(time)
         else:
-            t = np.arange(0, time + 1, 20)
+            time = np.arange(0, time + 1, 20)
 
-        X, Y, T = np.meshgrid(x, y, t, indexing='xy')
-
+        # Since `temporal_freq` is in cycles/frame, we need to pass the frame
+        # indices as time, not the actual time points:
+        X, Y, T = np.meshgrid(x, y, np.arange(len(time)), indexing='xy')
         channel = np.cos(-2 * np.pi * spatial_freq * np.cos(direction) * X +
                          2 * np.pi * spatial_freq * np.sin(direction) * Y +
                          2 * np.pi * temporal_freq * T +
@@ -90,7 +91,7 @@ class GratingStimulus(VideoStimulus):
 
         # Call VideoStimulus constructor:
         super(GratingStimulus, self).__init__(channel, as_gray=True,
-                                              time=t,
+                                              time=time,
                                               electrodes=electrodes,
                                               metadata=metadata,
                                               compress=False)
@@ -163,7 +164,7 @@ class BarStimulus(VideoStimulus):
 
     def __init__(self, shape, direction=0, speed=0.1, bar_width=1,
                  edge_width=3, px_btw_bars=None, start_pos=0, contrast=1,
-                 time=None, mask='gauss', electrodes=None, metadata=None):
+                 time=None, mask=None, electrodes=None, metadata=None):
         height, width = shape
         if px_btw_bars is None:
             px_btw_bars = width
@@ -173,7 +174,7 @@ class BarStimulus(VideoStimulus):
         # apply the mask and contrast here, but later:
         spatial_freq = 1.0 / px_btw_bars
         temporal_freq = spatial_freq * speed
-        phase = start_pos * spatial_freq
+        phase = start_pos * spatial_freq * 360  # deg
         grating = GratingStimulus(shape, time=time, direction=direction,
                                   contrast=1.0, mask=None, phase=phase,
                                   spatial_freq=spatial_freq,

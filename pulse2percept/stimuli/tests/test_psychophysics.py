@@ -55,8 +55,8 @@ def test_BarStimulus():
         bar = BarStimulus(shape, contrast=0.45, mask=mask)
         npt.assert_almost_equal(bar.data.max() - bar.data.min(), 0.45,
                                 decimal=2)
-        npt.assert_almost_equal(bar.data.min(), 0.275, decimal=3)
-        npt.assert_almost_equal(bar.data.max(), 0.725, decimal=3)
+        npt.assert_almost_equal(bar.data.min(), 0.275, decimal=2)
+        npt.assert_almost_equal(bar.data.max(), 0.725, decimal=2)
 
     # Masks:
     for mask in ['circle', 'gauss']:
