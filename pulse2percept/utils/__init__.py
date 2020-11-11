@@ -5,21 +5,24 @@
 
     base
     geometry
+    array
     convolution
-    deprecation
     optimize
+    stats
     parallel
+    deprecation
 
 """
-from .base import PrettyPrint, FreezeError, Frozen, Data, cached, gamma, unique
+from .base import PrettyPrint, FreezeError, Frozen, Data, cached, gamma
 from .geometry import (Grid2D, RetinalCoordTransform, Curcio1990Transform,
                        Watson2014Transform, Watson2014DisplaceTransform,
                        cart2pol, pol2cart, delta_angle)
+from .array import radial_mask, unique
 from .convolution import center_vector, conv
-from .deprecation import deprecated
 from .optimize import bisect
-from .parallel import parfor
 from .stats import r2_score, circ_r2_score
+from .parallel import parfor
+from .deprecation import deprecated
 
 __all__ = [
     'bisect',
@@ -38,6 +41,7 @@ __all__ = [
     'pol2cart',
     'PrettyPrint',
     'r2_score',
+    'radial_mask',
     'RetinalCoordTransform',
     'unique',
     'Watson2014DisplaceTransform',

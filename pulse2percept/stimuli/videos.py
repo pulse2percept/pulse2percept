@@ -329,6 +329,9 @@ class VideoStimulus(Stimulus):
             frame-by-frame.
         """
         def update(data):
+            if annotate_time:
+                mat.axes.set_title('t = %d ms' %
+                                   self.time[self._next_frame - 1])
             mat.set_data(data.reshape(self.vid_shape[:-1]))
             return mat
 
@@ -368,8 +371,6 @@ class VideoStimulus(Stimulus):
             interval = interval[0]
         else:
             interval = 1000.0 / fps
-        if annotate_time:
-            mat.axes.set_title('t = %d ms' % self.time[self._next_frame - 1])
         # Create the animation:
         return FuncAnimation(fig, update, data_gen, interval=interval,
                              save_count=len(self.time), repeat=repeat)
