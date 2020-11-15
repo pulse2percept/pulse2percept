@@ -4,7 +4,7 @@ import pytest
 import numpy.testing as npt
 
 from pulse2percept.utils import (Frozen, FreezeError, PrettyPrint, Data, gamma,
-                                 unique, cached)
+                                 cached)
 
 
 class PrettyPrinter(PrettyPrint):
@@ -162,21 +162,6 @@ def test_gamma():
 
             # Make sure peak sits correctly
             npt.assert_almost_equal(g.argmax() * tsample, tau * (n - 1))
-
-
-def test_unique():
-    a = [0, 0.001, 0.1, 0.2, 1]
-    npt.assert_almost_equal(unique(a, tol=1e-6), a)
-    npt.assert_almost_equal(unique(a, tol=0.001), a)
-    npt.assert_almost_equal(unique(a, tol=0.1), [0, 0.1, 0.2, 1])
-    npt.assert_almost_equal(unique(a, tol=1), [0, 1])
-
-    val, idx = unique(a, tol=1e-6, return_index=True)
-    npt.assert_almost_equal(val, a)
-    npt.assert_almost_equal(idx, np.arange(len(a)))
-    val, idx = unique(a, tol=1, return_index=True)
-    npt.assert_almost_equal(val, [0, 1])
-    npt.assert_almost_equal(idx, [0, 4])
 
 
 class AreaCache(object):
