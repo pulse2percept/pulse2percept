@@ -22,14 +22,14 @@ def test_load_horsager2009():
     npt.assert_equal(data.shape, (608, 21))
     npt.assert_equal(data.subject.unique(), ['S05', 'S06'])
 
-    # Shuffle dataset (index will always be range(607), but rows are shuffled):
+    # Shuffle dataset (index will always be range(608), but rows are shuffled):
     data = load_horsager2009(shuffle=True, random_state=42)
-    npt.assert_equal(data.loc[0, 'subject'], 'S06')
+    npt.assert_equal(data.loc[0, 'subject'], 'S05')
     npt.assert_equal(data.loc[0, 'electrode'], 'B3')
     npt.assert_equal(data.loc[0, 'stim_type'], 'fixed_duration')
     npt.assert_equal(data.loc[607, 'subject'], 'S06')
-    npt.assert_equal(data.loc[607, 'electrode'], 'D1')
-    npt.assert_equal(data.loc[607, 'stim_type'], 'latent_addition')
+    npt.assert_equal(data.loc[607, 'electrode'], 'A1')
+    npt.assert_equal(data.loc[607, 'stim_type'], 'fixed_duration')
 
     # Select subjects:
     data = load_horsager2009(subjects='S05')
