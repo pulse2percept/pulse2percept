@@ -19,38 +19,38 @@ def test_load_horsager2009():
     for expected_col in columns:
         npt.assert_equal(expected_col in data.columns, True)
 
-    npt.assert_equal(data.shape, (552, 21))
+    npt.assert_equal(data.shape, (608, 21))
     npt.assert_equal(data.subject.unique(), ['S05', 'S06'])
 
-    # Shuffle dataset (index will always be range(552), but rows are shuffled):
+    # Shuffle dataset (index will always be range(608), but rows are shuffled):
     data = load_horsager2009(shuffle=True, random_state=42)
-    npt.assert_equal(data.loc[0, 'subject'], 'S06')
-    npt.assert_equal(data.loc[0, 'electrode'], 'D1')
-    npt.assert_equal(data.loc[0, 'stim_type'], 'latent_addition')
-    npt.assert_equal(data.loc[551, 'subject'], 'S06')
-    npt.assert_equal(data.loc[551, 'electrode'], 'A1')
-    npt.assert_equal(data.loc[551, 'stim_type'], 'fixed_duration')
+    npt.assert_equal(data.loc[0, 'subject'], 'S05')
+    npt.assert_equal(data.loc[0, 'electrode'], 'B3')
+    npt.assert_equal(data.loc[0, 'stim_type'], 'fixed_duration')
+    npt.assert_equal(data.loc[607, 'subject'], 'S06')
+    npt.assert_equal(data.loc[607, 'electrode'], 'A1')
+    npt.assert_equal(data.loc[607, 'stim_type'], 'fixed_duration')
 
     # Select subjects:
     data = load_horsager2009(subjects='S05')
-    npt.assert_equal(data.shape, (272, 21))
+    npt.assert_equal(data.shape, (296, 21))
     npt.assert_equal(data.subject.unique(), 'S05')
     data = load_horsager2009(subjects=['S05', 'S07'])  # 'S07' doesnt' exist
-    npt.assert_equal(data.shape, (272, 21))
+    npt.assert_equal(data.shape, (296, 21))
     npt.assert_equal(data.subject.unique(), 'S05')
     data = load_horsager2009(subjects=['S05', 'S06'])  # same as None
-    npt.assert_equal(data.shape, (552, 21))
+    npt.assert_equal(data.shape, (608, 21))
     data = load_horsager2009(subjects='S6')  # 'S6' doesn't exist
     npt.assert_equal(data.shape, (0, 21))
     npt.assert_equal(data.subject.unique(), [])
 
     # Select electrodes:
     data = load_horsager2009(electrodes='A1')
-    npt.assert_equal(data.shape, (106, 21))
+    npt.assert_equal(data.shape, (114, 21))
     npt.assert_equal(data.electrode.unique(), 'A1')
     npt.assert_equal(data.subject.unique(), ['S06', 'S05'])
     data = load_horsager2009(electrodes=['A1', 'A9'])  # 'A9' doesn't exist
-    npt.assert_equal(data.shape, (106, 21))
+    npt.assert_equal(data.shape, (114, 21))
     npt.assert_equal(data.electrode.unique(), 'A1')
     npt.assert_equal(data.subject.unique(), ['S06', 'S05'])
 
