@@ -7,7 +7,7 @@ import logging
 # transitions:
 from . import DT
 from .base import Stimulus
-from .pulses import BiphasicPulse, AsymmetricBiphasicPulse
+from .pulses import BiphasicPulse, AsymmetricBiphasicPulse, MonophasicPulse
 from ..utils import unique
 
 
@@ -272,6 +272,9 @@ class BiphasicTripletTrain(Stimulus):
     delay_dur : float
         Delay duration (ms). Zeros will be inserted at the beginning of the
         stimulus to deliver the first pulse phase after ``delay_dur`` ms.
+    interpulse_dur : float, optional, default: 0
+        Delay duration (ms) between each biphasic pulse within the train. Note,
+        this delay is also applied after the third biphasic pulse
     n_pulses : int
         Number of pulses requested in the pulse train. If None, the entire
         stimulation window (``stim_dur``) is filled.
@@ -298,16 +301,23 @@ class BiphasicTripletTrain(Stimulus):
 
     """
 
-    def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
-                 n_pulses=None, stim_dur=1000.0, cathodic_first=True,
+    def __init__(self, freq, amp, phase_dur, interphase_dur=0, interpulse_dur=0,
+                 delay_dur=0, n_pulses=None, stim_dur=1000.0, cathodic_first=True,
                  electrode=None, metadata=None):
         # Create the pulse:
         pulse = BiphasicPulse(amp, phase_dur, interphase_dur=interphase_dur,
                               delay_dur=delay_dur,
                               cathodic_first=cathodic_first,
                               electrode=electrode)
+
+        if interpulse_dur != 0:
+            # Create an interpulse 'delay' pulse:
+            delay_pulse = MonophasicPulse(0, interpulse_dur)
+            pulse = pulse.append(delay_pulse)
+
         # Create the pulse triplet:
         triplet = pulse.append(pulse).append(pulse)
+            
         # Create the triplet train:
         pt = PulseTrain(freq, triplet, n_pulses=n_pulses, stim_dur=stim_dur)
         # Set up the Stimulus object through the constructor:
