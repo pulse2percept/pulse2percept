@@ -308,16 +308,13 @@ class BiphasicTripletTrain(Stimulus):
         pulse = BiphasicPulse(amp, phase_dur, interphase_dur=interphase_dur,
                               delay_dur=delay_dur,
                               cathodic_first=cathodic_first,
-                              electrode=electrode)
-
+                              electrode=electrode)                            
         if interpulse_dur != 0:
             # Create an interpulse 'delay' pulse:
             delay_pulse = MonophasicPulse(0, interpulse_dur)
             pulse = pulse.append(delay_pulse)
-
         # Create the pulse triplet:
-        triplet = pulse.append(pulse).append(pulse)
-            
+        triplet = pulse.append(pulse).append(pulse)   
         # Create the triplet train:
         pt = PulseTrain(freq, triplet, n_pulses=n_pulses, stim_dur=stim_dur)
         # Set up the Stimulus object through the constructor:
