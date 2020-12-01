@@ -31,11 +31,7 @@ The data itself will be provided as a Pandas ``DataFrame``:
 """
 # sphinx_gallery_thumbnail_number = 2
 
-from pulse2percept.datasets import fetch_beyeler2019, get_data_dir
-data = fetch_beyeler2019()
-print(data)
-
-print(get_data_dir())
+from pulse2percept.datasets import fetch_beyeler2019
 
 data = fetch_beyeler2019(data_path='.')
 print(data)
@@ -111,8 +107,10 @@ argus = ArgusII(x=-1331, y=-850, rot=-0.495, eye='RE')
 # For now, we add the necessary columns ourselves.)
 import pandas as pd
 data = fetch_beyeler2019(subjects='S2')
-data['img_x_dva'] = pd.Series([(-30, 30)] * len(data), index=data.index)
-data['img_y_dva'] = pd.Series([(-22.5, 22.5)] * len(data), index=data.index)
+data['img_x_dva'] = pd.Series([(-30, 30)] * len(data), index=data.index,
+                              dtype=float)
+data['img_y_dva'] = pd.Series([(-22.5, 22.5)] * len(data), index=data.index,
+                              dtype=float)
 
 ###############################################################################
 # Passing both ``data`` and ``argus`` to
@@ -122,7 +120,7 @@ data['img_y_dva'] = pd.Series([(-22.5, 22.5)] * len(data), index=data.index)
 # the center of the electrode that was used to obtain the drawing:
 
 from pulse2percept.viz import plot_argus_phosphenes
-# plot_argus_phosphenes(data, argus)
+plot_argus_phosphenes(data, argus)
 
 ###############################################################################
 # Great! We have just reproduced a panel from Figure 2 in [Beyeler2019]_.
@@ -139,7 +137,7 @@ from pulse2percept.viz import plot_argus_phosphenes
 
 from pulse2percept.models import AxonMapModel
 model = AxonMapModel(loc_od=(14, 2.4))
-# plot_argus_phosphenes(data, argus, axon_map=model)
+plot_argus_phosphenes(data, argus, axon_map=model)
 
 ###############################################################################
 # Analyzing phosphene shape
@@ -166,4 +164,4 @@ plt.xlabel('phosphene elongation')
 
 ###############################################################################
 # Phosphenes are not pixels!
-# And we have just reproduced Fig. 3C of [Beyeler2019]_.
+# And with that we have just reproduced Fig. 3C of [Beyeler2019]_.
