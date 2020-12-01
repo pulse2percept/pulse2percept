@@ -31,11 +31,11 @@ The data itself will be provided as a Pandas ``DataFrame``:
 """
 # sphinx_gallery_thumbnail_number = 2
 
-from pulse2percept.datasets import fetch_beyeler2019
+from pulse2percept.datasets import fetch_beyeler2019, get_data_dir
 data = fetch_beyeler2019()
 print(data)
 
-print(p2p.datasets.get_data_dir())
+print(get_data_dir())
 
 data = fetch_beyeler2019(data_path='.')
 print(data)
