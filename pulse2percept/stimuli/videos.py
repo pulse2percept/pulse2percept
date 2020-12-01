@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
 from skimage.color import rgb2gray
-from skimage.transform import resize as vid_resize
+from skimage.transform import (resize as vid_resize, rotate as vid_rotate)
 from skimage.filters import scharr, sobel, median
 from skimage.feature import canny
 
@@ -211,6 +211,26 @@ class VideoStimulus(Stimulus):
         vid = vid_resize(self.data.reshape(self.vid_shape),
                          (height, width, *self.vid_shape[2:]))
         return VideoStimulus(vid, electrodes=electrodes, time=self.time,
+                             metadata=self.metadata)
+
+    def rotate(self, angle, mode='constant'):
+        """Rotate each frame of the video
+
+        Parameters
+        ----------
+        angle : float
+            Angle by which to rotate each video frame (degrees).
+            Positive: counter-clockwise, negative: clockwise
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object containing the rotated video
+
+        """
+        vid = vid_rotate(self.data.reshape(self.vid_shape), angle, mode=mode,
+                         resize=False)
+        return VideoStimulus(vid, electrodes=self.electrodes,
                              metadata=self.metadata)
 
     def filter(self, filt, **kwargs):

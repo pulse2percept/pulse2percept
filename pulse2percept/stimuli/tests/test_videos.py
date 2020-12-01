@@ -4,6 +4,7 @@ import numpy.testing as npt
 import pytest
 from imageio import mimwrite
 from matplotlib.animation import FuncAnimation
+from skimage.io import imsave
 
 from pulse2percept.stimuli import VideoStimulus, BostonTrain
 
@@ -88,6 +89,44 @@ def test_VideoStimulus_resize():
     npt.assert_equal(stim.resize((-1, 24)).vid_shape, (16, 24, 3, 10))
     with pytest.raises(ValueError):
         stim.resize((-1, -1))
+    os.remove(fname)
+
+
+def test_VideoStimulus_rotate():
+    # Create a horizontal bar:
+    fname = 'test.mp4'
+    shape = (5, 5, 3)
+    ndarray = np.zeros(shape, dtype=np.uint8)
+    ndarray[2, :, :] = 255
+    mimwrite(fname, ndarray, fps=1)
+    stim = VideoStimulus(fname)
+    # Vertical line:
+    vert = stim.rotate(90, mode='constant')
+    data = vert.data.reshape(vert.vid_shape)
+    for i in data.shape[-1]:
+        npt.assert_almost_equal(data[:, 0, i], 0)
+        npt.assert_almost_equal(data[:, 1, i], 0)
+        npt.assert_almost_equal(data[:, 2, i], 1)
+        npt.assert_almost_equal(data[:, 3, i], 0)
+        npt.assert_almost_equal(data[:, 4, i], 0)
+    # Diagonal, bottom-left to top-right:
+    diag = stim.rotate(45, mode='constant')
+    data = diag.data.reshape(diag.vid_shape)
+    for i in data.shape[-1]:
+        npt.assert_almost_equal(data[0, 4, i], 1)
+        npt.assert_almost_equal(data[2, 2, i], 1)
+        npt.assert_almost_equal(data[4, 0, i], 1)
+        npt.assert_almost_equal(data[0, 0, i], 0)
+        npt.assert_almost_equal(data[4, 4, i], 0)
+    # Diagonal, top-left to bottom-right:
+    diag = stim.rotate(-45, mode='constant')
+    data = diag.data.reshape(diag.vid_shape)
+    for i in data.shape[-1]:
+        npt.assert_almost_equal(data[0, 0, i], 1)
+        npt.assert_almost_equal(data[2, 2, i], 1)
+        npt.assert_almost_equal(data[4, 4, i], 1)
+        npt.assert_almost_equal(data[0, 4, i], 0)
+        npt.assert_almost_equal(data[4, 0, i], 0)
     os.remove(fname)
 
 

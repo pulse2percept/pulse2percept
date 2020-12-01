@@ -49,7 +49,7 @@ class ImageStimulus(Stimulus):
         https://imageio.readthedocs.io/en/stable/formats.html.
 
     resize : (height, width) or None, optional
-        Shape of the resized image. If one of the dimensions is set to -1, 
+        Shape of the resized image. If one of the dimensions is set to -1,
         its value will be inferred by keeping a constant aspect ratio.
 
     as_gray : bool, optional
@@ -160,7 +160,7 @@ class ImageStimulus(Stimulus):
         Returns
         -------
         stim : `ImageStimulus`
-            A copy of the stimulus object with all RGB values converted to 
+            A copy of the stimulus object with all RGB values converted to
             grayscale in the range [0, 1].
 
         Notes
@@ -310,7 +310,7 @@ class ImageStimulus(Stimulus):
         return ImageStimulus(img, electrodes=self.electrodes,
                              metadata=self.metadata)
 
-    def rotate(self, angle, center=None, mode='constant'):
+    def rotate(self, angle, mode='constant'):
         """Rotate the image
 
         Parameters
