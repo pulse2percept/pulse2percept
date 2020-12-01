@@ -56,6 +56,9 @@ data.columns
 
 data.subject.unique()
 
+import pandas as pd
+print(pd.__version__)
+
 ###############################################################################
 # To select all drawings from Subject 2, we can index into the DataFrame as
 # follows:
