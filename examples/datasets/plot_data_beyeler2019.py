@@ -60,7 +60,7 @@ data.subject.unique()
 # To select all drawings from Subject 2, we can index into the DataFrame as
 # follows:
 
-print(data[data.subject == b'S2'])
+print(data[data.subject == 'S2'])
 
 ###############################################################################
 # This leaves us with 110 rows, each of which correspond to one phosphene
@@ -120,7 +120,7 @@ data['img_y_dva'] = pd.Series([(-22.5, 22.5)] * len(data), index=data.index,
 # the center of the electrode that was used to obtain the drawing:
 
 from pulse2percept.viz import plot_argus_phosphenes
-# plot_argus_phosphenes(data, argus)
+plot_argus_phosphenes(data, argus)
 
 ###############################################################################
 # Great! We have just reproduced a panel from Figure 2 in [Beyeler2019]_.
@@ -137,7 +137,7 @@ from pulse2percept.viz import plot_argus_phosphenes
 
 from pulse2percept.models import AxonMapModel
 model = AxonMapModel(loc_od=(14, 2.4))
-# plot_argus_phosphenes(data, argus, axon_map=model)
+plot_argus_phosphenes(data, argus, axon_map=model)
 
 ###############################################################################
 # Analyzing phosphene shape
