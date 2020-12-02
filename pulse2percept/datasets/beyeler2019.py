@@ -133,6 +133,16 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     if len(df) != 400:
         raise ValueError("Try reloading the dataset: only %d/400 rows "
                          "found" % len(df))
+    # Convert byte string to regular string, otherwise subset selection won't
+    # work:
+    try:
+        df['subject'] = df['subject'].apply(lambda x: x.decode("utf-8"))
+    except (UnicodeDecodeError, AttributeError):
+        pass
+    try:
+        df['electrode'] = df['electrode'].apply(lambda x: x.decode("utf-8"))
+    except (UnicodeDecodeError, AttributeError):
+        pass
 
     # Select subset of data:
     idx = np.ones_like(df.index, dtype=np.bool)

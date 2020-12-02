@@ -36,6 +36,20 @@ def test_fetch_beyeler2019():
     npt.assert_equal(list(data[data.subject != 'S1'].img_shape.unique()[0]),
                      [768, 1024])
 
+    # Subset selection:
+    subset = datasets.fetch_beyeler2019(subjects='S2')
+    npt.assert_equal(subset.shape, (110, 16))
+    subset = datasets.fetch_beyeler2019(subjects=['S2', 'S3'])
+    npt.assert_equal(subset.shape, (220, 16))
+    subset = datasets.fetch_beyeler2019(subjects='invalid')
+    npt.assert_equal(subset.shape, (0, 16))
+    subset = datasets.fetch_beyeler2019(electrodes=['A1'])
+    npt.assert_equal(subset.shape, (10, 16))
+    subset = datasets.fetch_beyeler2019(electrodes=['A1', 'C3'])
+    npt.assert_equal(subset.shape, (20, 16))
+    subset = datasets.fetch_beyeler2019(electrodes='invalid')
+    npt.assert_equal(subset.shape, (0, 16))
+
     # Shuffle dataset (index will always be range(400), but rows are shuffled):
     data = datasets.fetch_beyeler2019(shuffle=True, random_state=42)
     npt.assert_equal(data.loc[0, 'subject'], 'S3')
