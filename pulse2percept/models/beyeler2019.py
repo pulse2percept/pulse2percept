@@ -4,7 +4,6 @@ import os
 import numpy as np
 import pickle
 from sklearn.neighbors import KDTree
-import time
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
