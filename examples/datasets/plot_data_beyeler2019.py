@@ -33,7 +33,7 @@ The data itself will be provided as a Pandas ``DataFrame``:
 
 from pulse2percept.datasets import fetch_beyeler2019
 
-data = fetch_beyeler2019(data_path='.')
+data = fetch_beyeler2019()
 print(data)
 
 ###############################################################################
@@ -56,14 +56,11 @@ data.columns
 
 data.subject.unique()
 
-import pandas as pd
-print(pd.__version__)
-
 ###############################################################################
 # To select all drawings from Subject 2, we can index into the DataFrame as
 # follows:
 
-print(data[data.subject == 'S2'])
+print(data[data.subject == b'S2'])
 
 ###############################################################################
 # This leaves us with 110 rows, each of which correspond to one phosphene
