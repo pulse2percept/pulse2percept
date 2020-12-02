@@ -3,7 +3,7 @@
 import os
 import numpy as np
 import pickle
-from sklearn.neighbors import KDTree
+from scipy.spatial import cKDTree
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
@@ -396,11 +396,11 @@ class AxonMapSpatial(SpatialModel):
                                for x, y in zip(xret.ravel(),
                                                yret.ravel())]
         else: 
-            kdtree = KDTree(flat_bundles, leaf_size=60)
+            kdtree = cKDTree(flat_bundles, leafsize=60)
             # Create query list of xy pairs
             query = np.stack((xret.ravel(), yret.ravel()), axis=1)
             # Find index of closest segment
-            closest_seg = [x[0] for x in kdtree.query(query, return_distance=False)]
+            _, closest_seg = kdtree.query(query)
 
         # Look up the axon ID for every axon segment:
         closest_axon = axon_idx[closest_seg]
