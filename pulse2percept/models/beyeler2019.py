@@ -206,7 +206,7 @@ class AxonMapSpatial(SpatialModel):
             'axlambda': 200,
             # Set the (x,y) location of the optic disc:
             'loc_od': (15.5, 1.5),
-            'n_axons': 500,
+            'n_axons': 1000,
             'axons_range': (-180, 180),
             # Number of sampling points along the radial axis (polar coords):
             'n_ax_segments': 500,
@@ -641,12 +641,12 @@ class AxonMapModel(Model):
         Exponential decay constant away from the axon(microns).
     eye: {'RE', LE'}, optional
         Eye for which to generate the axon map.
-    x_range : (x_min, x_max), optional
+    xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). In a right eye, negative x values correspond to the
         temporal retina, and positive x values to the nasal retina. In a left
         eye, the opposite is true.
-    y_range : tuple, (y_min, y_max)
+    yrange : tuple, (y_min, y_max)
         A tuple indicating the range of y values to simulate (in degrees of
         visual angle). Negative y values correspond to the superior retina,
         and positive y values to the inferior retina.
@@ -675,6 +675,9 @@ class AxonMapModel(Model):
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
+    use_legacy_build: bool, optional
+        If true, searches over axons instead of using KDTree. Build will 
+        likely be slower if True
     axon_pickle: str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle: bool, optional
