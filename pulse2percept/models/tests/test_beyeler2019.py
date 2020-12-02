@@ -337,7 +337,8 @@ def test_AxonMapModel_calc_bundle_tangent(engine):
 def test_AxonMapModel_predict_percept(engine):
     model = AxonMapModel(xystep=0.55, axlambda=100, rho=100,
                          thresh_percept=0, engine=engine,
-                         xrange=(-20, 20), yrange=(-15, 15))
+                         xrange=(-20, 20), yrange=(-15, 15),
+                         n_axons=500)
     model.build()
     # Single-electrode stim:
     img_stim = np.zeros(60)
@@ -359,7 +360,7 @@ def test_AxonMapModel_predict_percept(engine):
 
     # Full Argus II with small lambda: 60 bright spots
     model = AxonMapModel(engine='serial', xystep=1, rho=100, axlambda=40,
-                         xrange=(-20, 20), yrange=(-15, 15))
+                         xrange=(-20, 20), yrange=(-15, 15), n_axons=500)
     model.build()
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     # Most spots are pretty bright, but there are 2 dimmer ones (due to their
