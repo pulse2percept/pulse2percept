@@ -116,9 +116,10 @@ def test_ScoreboardModel_predict_percept():
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
-def test_AxonMapSpatial(engine):
+@pytest.mark.parametrize('use_legacy_build', (True, False))
+def test_AxonMapSpatial(engine, use_legacy_build):
     # AxonMapSpatial automatically sets `rho`, `axlambda`:
-    model = AxonMapSpatial(engine=engine, xystep=5)
+    model = AxonMapSpatial(engine=engine, xystep=5, use_legacy_build=use_legacy_build)
 
     # User can set `rho`:
     model.rho = 123
@@ -173,11 +174,12 @@ def test_AxonMapSpatial_plot():
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
-def test_AxonMapModel(engine):
+@pytest.mark.parametrize('use_legacy_build', (True, False))
+def test_AxonMapModel(engine, use_legacy_build):
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 2,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
-                  'loc_od': (5, 6)}
+                  'loc_od': (5, 6), 'use_legacy_build' : use_legacy_build}
     model = AxonMapModel()
     for param in set_params:
         npt.assert_equal(hasattr(model.spatial, param), True)
@@ -276,10 +278,12 @@ def test_AxonMapModel_grow_axon_bundles(engine):
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
-def test_AxonMapModel_find_closest_axon(engine):
+@pytest.mark.parametrize('use_legacy_build', (True, False))
+def test_AxonMapModel_find_closest_axon(engine, use_legacy_build):
     model = AxonMapModel(xystep=1, engine=engine, n_axons=5,
                          xrange=(-20, 20), yrange=(-15, 15),
-                         axons_range=(-45, 45))
+                         axons_range=(-45, 45), 
+                         use_legacy_build=use_legacy_build)
     model.build()
     # Pretend there is an axon close to each point on the grid:
     bundles = [np.array([x + 0.001, y - 0.001],
@@ -333,7 +337,8 @@ def test_AxonMapModel_calc_bundle_tangent(engine):
 def test_AxonMapModel_predict_percept(engine):
     model = AxonMapModel(xystep=0.55, axlambda=100, rho=100,
                          thresh_percept=0, engine=engine,
-                         xrange=(-20, 20), yrange=(-15, 15))
+                         xrange=(-20, 20), yrange=(-15, 15),
+                         n_axons=500)
     model.build()
     # Single-electrode stim:
     img_stim = np.zeros(60)
@@ -355,7 +360,7 @@ def test_AxonMapModel_predict_percept(engine):
 
     # Full Argus II with small lambda: 60 bright spots
     model = AxonMapModel(engine='serial', xystep=1, rho=100, axlambda=40,
-                         xrange=(-20, 20), yrange=(-15, 15))
+                         xrange=(-20, 20), yrange=(-15, 15), n_axons=500)
     model.build()
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     # Most spots are pretty bright, but there are 2 dimmer ones (due to their
