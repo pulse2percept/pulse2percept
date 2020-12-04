@@ -156,6 +156,8 @@ def plot_argus_phosphenes(X, argus, scale=1.0, axon_map=None, show_fovea=True,
     req_cols = ['subject', 'electrode', 'image', 'img_x_dva', 'img_y_dva']
     if not all(col in X.columns for col in req_cols):
         raise ValueError('"X" must have columns %s.' % req_cols)
+    if len(X) == 0:
+        raise ValueError('"X" is empty.')
     if len(X.subject.unique()) > 1:
         raise ValueError('"X" cannot contain data from more than one subject.')
     if not isinstance(argus, (ArgusI, ArgusII)):
@@ -193,7 +195,14 @@ def plot_argus_phosphenes(X, argus, scale=1.0, axon_map=None, show_fovea=True,
     pts_in = []
     pts_dva = []
     pts_out = []
-    out_shape = X.image.values[0].shape
+    try:
+        out_shape = X.img_shape.values[0]
+    except AttributeError:
+        # Dataset does not have 'img_shape' column:
+        try:
+            out_shape = X.image.values[0].shape
+        except IndexError:
+            out_shape = (768, 1024)
     for xy, e in zip(px_argus, argus.values()):
         x_dva, y_dva = Watson2014Transform.ret2dva([e.x, e.y])
         x_out = (x_dva - x_min) / (x_max - x_min) * (out_shape[1] - 1)

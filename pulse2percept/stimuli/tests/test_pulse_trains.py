@@ -157,9 +157,10 @@ def test_AsymmetricBiphasicPulseTrain(amp1, amp2, interphase_dur, delay_dur,
 
 @pytest.mark.parametrize('amp', (-3, 4))
 @pytest.mark.parametrize('interphase_dur', (0, 1))
+@pytest.mark.parametrize('interpulse_dur', (0, 1))
 @pytest.mark.parametrize('delay_dur', (4, 0))
 @pytest.mark.parametrize('cathodic_first', (True, False))
-def test_BiphasicTripletTrain(amp, interphase_dur, delay_dur, cathodic_first):
+def test_BiphasicTripletTrain(amp, interphase_dur, interpulse_dur, delay_dur, cathodic_first):
     freq = 23.456
     stim_dur = 657.456
     phase_dur = 2
@@ -168,12 +169,14 @@ def test_BiphasicTripletTrain(amp, interphase_dur, delay_dur, cathodic_first):
     mid_first_pulse = delay_dur + phase_dur / 2.0
     mid_interphase = delay_dur + phase_dur + interphase_dur / 2.0
     mid_second_pulse = delay_dur + interphase_dur + 1.5 * phase_dur
+    mid_interpulse = delay_dur + 2.0*phase_dur + interphase_dur + interpulse_dur / 2.0
     first_amp = -np.abs(amp) if cathodic_first else np.abs(amp)
     second_amp = -first_amp
 
     # Basic usage:
     pt = BiphasicTripletTrain(freq, amp, phase_dur,
                               interphase_dur=interphase_dur,
+                              interpulse_dur=interpulse_dur,
                               delay_dur=delay_dur, stim_dur=stim_dur,
                               cathodic_first=cathodic_first)
     for i in range(n_pulses):
@@ -183,6 +186,8 @@ def test_BiphasicTripletTrain(amp, interphase_dur, delay_dur, cathodic_first):
         if interphase_dur > 0:
             npt.assert_almost_equal(pt[0, t_win + mid_interphase], 0)
         npt.assert_almost_equal(pt[0, t_win + mid_second_pulse], second_amp)
+        if interpulse_dur > 0:
+            npt.assert_almost_equal(pt[0, mid_interpulse], 0)
     npt.assert_almost_equal(pt.time[0], 0)
     npt.assert_almost_equal(pt.time[-1], stim_dur, decimal=2)
     npt.assert_equal(pt.cathodic_first, cathodic_first)

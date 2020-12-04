@@ -3,6 +3,7 @@
 import os
 import numpy as np
 import pickle
+from scipy.spatial import cKDTree
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
@@ -141,12 +142,12 @@ class AxonMapSpatial(SpatialModel):
         Exponential decay constant away from the axon(microns).
     eye: {'RE', LE'}, optional
         Eye for which to generate the axon map.
-    x_range : (x_min, x_max), optional
+    xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). In a right eye, negative x values correspond to the
         temporal retina, and positive x values to the nasal retina. In a left
         eye, the opposite is true.
-    y_range : tuple, (y_min, y_max)
+    yrange : tuple, (y_min, y_max)
         A tuple indicating the range of y values to simulate (in degrees of
         visual angle). Negative y values correspond to the superior retina,
         and positive y values to the inferior retina.
@@ -175,6 +176,9 @@ class AxonMapSpatial(SpatialModel):
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
+    use_legacy_build: bool, optional
+        If true, searches over axons instead of using KDTree. Build will 
+        likely be slower if True
     axon_pickle: str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle: bool, optional
@@ -202,7 +206,7 @@ class AxonMapSpatial(SpatialModel):
             'axlambda': 200,
             # Set the (x,y) location of the optic disc:
             'loc_od': (15.5, 1.5),
-            'n_axons': 500,
+            'n_axons': 1000,
             'axons_range': (-180, 180),
             # Number of sampling points along the radial axis (polar coords):
             'n_ax_segments': 500,
@@ -212,6 +216,8 @@ class AxonMapSpatial(SpatialModel):
             # Axon segments whose contribution to brightness is smaller than
             # this value will be pruned:
             'min_ax_sensitivity': 1e-3,
+            # Use legacy build, searching over axons instead of using KDTree
+            'use_legacy_build' : False,
             # Precomputed axon maps stored in the following file:
             'axon_pickle': 'axons.pickle',
             # You can force a build by ignoring pickles:
@@ -378,16 +384,24 @@ class AxonMapSpatial(SpatialModel):
         # Build a long list of all axon segments - their corresponding axon IDs
         # is given by `axon_idx` above:
         flat_bundles = np.concatenate(bundles)
-        # For every pixel on the grid, find the closest axon segment:
-        if self.engine == 'cython':
-            closest_seg = fast_find_closest_axon(flat_bundles,
-                                                 xret.ravel(),
-                                                 yret.ravel())
-        else:
-            closest_seg = [np.argmin((flat_bundles[:, 0] - x) ** 2 +
-                                     (flat_bundles[:, 1] - y) ** 2)
-                           for x, y in zip(xret.ravel(),
-                                           yret.ravel())]
+        if self.use_legacy_build:
+            # For every pixel on the grid, find the closest axon segment:
+            if self.engine == 'cython':
+                closest_seg = fast_find_closest_axon(flat_bundles,
+                                                     xret.ravel(),
+                                                     yret.ravel())
+            else:
+                closest_seg = [np.argmin((flat_bundles[:, 0] - x) ** 2 +
+                                         (flat_bundles[:, 1] - y) ** 2)
+                               for x, y in zip(xret.ravel(),
+                                               yret.ravel())]
+        else: 
+            kdtree = cKDTree(flat_bundles, leafsize=60)
+            # Create query list of xy pairs
+            query = np.stack((xret.ravel(), yret.ravel()), axis=1)
+            # Find index of closest segment
+            _, closest_seg = kdtree.query(query)
+
         # Look up the axon ID for every axon segment:
         closest_axon = axon_idx[closest_seg]
         return [bundles[n] for n in closest_axon]
@@ -627,12 +641,12 @@ class AxonMapModel(Model):
         Exponential decay constant away from the axon(microns).
     eye: {'RE', LE'}, optional
         Eye for which to generate the axon map.
-    x_range : (x_min, x_max), optional
+    xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). In a right eye, negative x values correspond to the
         temporal retina, and positive x values to the nasal retina. In a left
         eye, the opposite is true.
-    y_range : tuple, (y_min, y_max)
+    yrange : tuple, (y_min, y_max)
         A tuple indicating the range of y values to simulate (in degrees of
         visual angle). Negative y values correspond to the superior retina,
         and positive y values to the inferior retina.
@@ -661,6 +675,9 @@ class AxonMapModel(Model):
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
+    use_legacy_build: bool, optional
+        If true, searches over axons instead of using KDTree. Build will 
+        likely be slower if True
     axon_pickle: str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle: bool, optional
