@@ -18,6 +18,7 @@ from skimage.feature import canny
 
 from .base import Stimulus
 from .pulses import BiphasicPulse
+from ..utils import center_image, shift_image, scale_image, trim_image
 
 
 class ImageStimulus(Stimulus):
@@ -126,6 +127,28 @@ class ImageStimulus(Stimulus):
         params.update({'img_shape': self.img_shape})
         return params
 
+    def apply(self, func, *args, **kwargs):
+        """Apply a function to the image
+
+        Parameters
+        ----------
+        func : function
+            The function to apply to the image. Must accept a 2D or 3D image
+            and return an image with the same dimensions
+        * args :
+            Additional positional arguments passed to the function
+        **kwargs :
+            Additional keyword arguments passed to the function
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with the new image
+        """
+        img = func(self.data.reshape(self.img_shape), *args, **kwargs)
+        return ImageStimulus(img, electrodes=self.electrodes,
+                             metadata=self.metadata)
+
     def invert(self):
         """Invert the gray levels of the image
 
@@ -233,24 +256,7 @@ class ImageStimulus(Stimulus):
 
         """
         img = self.data.reshape(self.img_shape)
-        # Convert to grayscale if necessary:
-        if len(self.img_shape) == 3:
-            gray = self.rgb2gray()
-            m, n = gray.img_shape
-            mask = gray.data.reshape(gray.img_shape) > tol
-        else:
-            m, n = self.img_shape
-            mask = img > tol
-        if not np.any(mask):
-            return ImageStimulus(np.array([[]]), electrodes=electrodes,
-                                 metadata=self.metadata)
-        # Determine the extent of the non-zero region:
-        mask0, mask1 = mask.any(0), mask.any(1)
-        col_start, col_end = mask0.argmax(), n - mask0[::-1].argmax()
-        row_start, row_end = mask1.argmax(), m - mask1[::-1].argmax()
-        # Trim the border by cropping out the relevant part:
-        img = img[row_start:row_end, col_start:col_end, ...]
-        return ImageStimulus(img, electrodes=electrodes,
+        return ImageStimulus(trim_image(img, tol=tol), electrodes=electrodes,
                              metadata=self.metadata)
 
     def threshold(self, thresh, **kwargs):
@@ -351,11 +357,7 @@ class ImageStimulus(Stimulus):
             A copy of the stimulus object containing the shifted image
 
         """
-        img = self.data.reshape(self.img_shape)
-        tf = SimilarityTransform(translation=[shift_cols, shift_rows])
-        img = img_warp(img, tf.inverse)
-        return ImageStimulus(img, electrodes=self.electrodes,
-                             metadata=self.metadata)
+        return self.apply(shift_image, shift_cols, shift_rows)
 
     def center(self, loc=None):
         """Center the image foreground
@@ -376,18 +378,8 @@ class ImageStimulus(Stimulus):
         """
         # Calculate center of mass:
         img = self.data.reshape(self.img_shape)
-        m = img_moments(img, order=1)
-        # No area found:
-        if np.isclose(m[0, 0], 0):
-            return img
-        # Center location:
-        if loc is None:
-            loc = np.array(self.img_shape[::-1]) / 2.0 - 0.5
-        # Shift the image by -centroid, +image center:
-        transl = (loc[0] - m[0, 1] / m[0, 0], loc[1] - m[1, 0] / m[0, 0])
-        tf_shift = SimilarityTransform(translation=transl)
-        img = img_warp(img, tf_shift.inverse)
-        return ImageStimulus(img, electrodes=self.electrodes,
+        return ImageStimulus(center_image(img, loc=None),
+                             electrodes=self.electrodes,
                              metadata=self.metadata)
 
     def scale(self, scaling_factor):
@@ -407,25 +399,9 @@ class ImageStimulus(Stimulus):
             A copy of the stimulus object containing the scaled image
 
         """
-        if scaling_factor <= 0:
-            raise ValueError("Scaling factor must be greater than zero")
-        # Calculate center of mass:
         img = self.data.reshape(self.img_shape)
-        m = img_moments(img, order=1)
-        # No area found:
-        if np.isclose(m[0, 0], 0):
-            return img
-        # Shift the phosphene to (0, 0):
-        center_mass = np.array([m[0, 1] / m[0, 0], m[1, 0] / m[0, 0]])
-        tf_shift = SimilarityTransform(translation=-center_mass)
-        # Scale the phosphene:
-        tf_scale = SimilarityTransform(scale=scaling_factor)
-        # Shift the phosphene back to where it was:
-        tf_shift_inv = SimilarityTransform(translation=center_mass)
-        # Combine all three transforms:
-        tf = tf_shift + tf_scale + tf_shift_inv
-        img = img_warp(img, tf.inverse)
-        return ImageStimulus(img, electrodes=self.electrodes,
+        return ImageStimulus(scale_image(img, scaling_factor),
+                             electrodes=self.electrodes,
                              metadata=self.metadata)
 
     def filter(self, filt, **kwargs):
@@ -456,39 +432,13 @@ class ImageStimulus(Stimulus):
         """
         if not isinstance(filt, str):
             raise TypeError("'filt' must be a string, not %s." % type(filt))
-        img = self.data.reshape(self.img_shape)
-        if filt.lower() == 'sobel':
-            img = sobel(img, **kwargs)
-        elif filt.lower() == 'scharr':
-            img = scharr(img, **kwargs)
-        elif filt.lower() == 'canny':
-            img = canny(img, **kwargs)
-        elif filt.lower() == 'median':
-            img = median(img, **kwargs)
-        else:
+        filters = {'sobel': sobel, 'scharr': scharr, 'canny': canny,
+                   'median': median}
+        try:
+            filt = filters[filt.lower()]
+        except KeyError:
             raise ValueError("Unknown filter '%s'." % filt)
-        return ImageStimulus(img, electrodes=self.electrodes,
-                             metadata=self.metadata)
-
-    def apply(self, func, **kwargs):
-        """Apply a function to the image
-
-        Parameters
-        ----------
-        func : function
-            The function to apply to the image. Must accept a 2D or 3D image
-            and return an image with the same dimensions
-        **kwargs :
-            Additional parameters passed to the function
-
-        Returns
-        -------
-        stim : `ImageStimulus`
-            A copy of the stimulus object with the new image
-        """
-        img = func(self.data.reshape(self.img_shape), **kwargs)
-        return ImageStimulus(img, electrodes=self.electrodes,
-                             metadata=self.metadata)
+        return self.apply(filt, **kwargs)
 
     def encode(self, amp_range=(0, 50), pulse=None):
         """Encode image using amplitude modulation

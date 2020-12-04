@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
 from skimage.color import rgb2gray
-from skimage.transform import (resize as vid_resize, rotate as vid_rotate)
+from skimage.transform import (resize as vid_resize, rotate as vid_rotate,
+                               warp as vid_warp, SimilarityTransform)
 from skimage.filters import scharr, sobel, median
 from skimage.feature import canny
 
@@ -13,6 +14,7 @@ from skimage import img_as_float32
 from imageio import get_reader as video_reader
 
 from .base import Stimulus
+from ..utils import center_image, shift_image, scale_image
 
 
 class VideoStimulus(Stimulus):
@@ -139,6 +141,32 @@ class VideoStimulus(Stimulus):
         params.update({'vid_shape': self.vid_shape})
         return params
 
+    def apply(self, func, *args, **kwargs):
+        """Apply a function to each frame of the video
+
+        Parameters
+        ----------
+        func : function
+            The function to apply to each frame in the video. Must accept a 2D
+            or 3D image and return an image with the same dimensions
+        *args :
+            Additional positional arguments passed to the function
+        **kwargs :
+            Additional keyword arguments passed to the function
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with the new image
+        """
+        vid = np.array([func(frame.reshape(self.vid_shape[:-1]), *args,
+                             **kwargs)
+                        for frame in self])
+        # Move first axis (frames) to last:
+        vid = np.moveaxis(vid, 0, -1)
+        return VideoStimulus(vid, electrodes=self.electrodes, time=self.time,
+                             metadata=self.metadata)
+
     def invert(self):
         """Invert the gray levels of the video
 
@@ -237,6 +265,67 @@ class VideoStimulus(Stimulus):
         # Else need to feed in each frame individually:
         return self.apply(vid_rotate, angle, mode=mode, resize=False)
 
+    def shift(self, shift_cols, shift_rows):
+        """Shift the image foreground
+
+        This function shifts the center of mass (CoM) of the image by the
+        specified number of rows and columns.
+
+        Parameters
+        ----------
+        shift_cols : float
+            Number of columns by which to shift the CoM.
+            Positive: to the right, negative: to the left
+        shift_rows : float
+            Number of rows by which to shift the CoM.
+            Positive: downward, negative: upward
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the shifted image
+
+        """
+        return self.apply(shift_image, shift_cols, shift_rows)
+
+    def center(self, loc=None):
+        """Center the image foreground
+
+        This function shifts the center of mass (CoM) to the image center.
+
+        Parameters
+        ----------
+        loc : (col, row), optional
+            The pixel location at which to center the CoM. By default, shifts
+            the CoM to the image center.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the centered image
+
+        """
+        return self.apply(center_image, loc=loc)
+
+    def scale(self, scaling_factor):
+        """Scale the image foreground
+
+        This function scales the image foreground (excluding black pixels)
+        by a factor.
+
+        Parameters
+        ----------
+        scaling_factor : float
+            Factory by which to scale the image
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the scaled image
+
+        """
+        return self.apply(scale_image, scaling_factor)
+
     def filter(self, filt, **kwargs):
         """Filter each frame of the video
 
@@ -275,36 +364,7 @@ class VideoStimulus(Stimulus):
             filt = filters[filt.lower()]
         except KeyError:
             raise ValueError("Unknown filter '%s'." % filt)
-        vid = np.array([filt(frame.reshape(self.vid_shape[:-1]), **kwargs)
-                        for frame in self]).transpose((1, 2, 0))
-        return VideoStimulus(vid, electrodes=self.electrodes, time=self.time,
-                             metadata=self.metadata)
-
-    def apply(self, func, *args, **kwargs):
-        """Apply a function to each frame of the video
-
-        Parameters
-        ----------
-        func : function
-            The function to apply to each frame in the video. Must accept a 2D
-            or 3D image and return an image with the same dimensions
-        *args :
-            Additional positional arguments passed to the function
-        **kwargs :
-            Additional keyword arguments passed to the function
-
-        Returns
-        -------
-        stim : `ImageStimulus`
-            A copy of the stimulus object with the new image
-        """
-        vid = np.array([func(frame.reshape(self.vid_shape[:-1]), *args,
-                             **kwargs)
-                        for frame in self])
-        # Move first axis (frames) to last:
-        vid = np.moveaxis(vid, 0, -1)
-        return VideoStimulus(vid, electrodes=self.electrodes, time=self.time,
-                             metadata=self.metadata)
+        return self.apply(filt, **kwargs)
 
     def rewind(self):
         """Rewind the iterator"""

@@ -127,6 +127,62 @@ def test_VideoStimulus_rotate():
         npt.assert_almost_equal(data[4, 0, i], 0)
 
 
+def test_VideoStimulus_shift():
+    # Create a horizontal bar:
+    shape = (5, 5, 3)
+    ndarray = np.zeros(shape, dtype=np.uint8)
+    ndarray[2, :, :] = 255
+    stim = VideoStimulus(ndarray)
+    # Top row:
+    top = stim.shift(0, -2)
+    data = top.data.reshape(top.vid_shape)
+    for i in range(data.shape[-1]):
+        npt.assert_almost_equal(top.data.reshape(stim.vid_shape)[0, :, i], 1)
+        npt.assert_almost_equal(top.data.reshape(stim.vid_shape)[1:, :, i], 0)
+    # Bottom row:
+    bottom = stim.shift(0, 2)
+    data = bottom.data.reshape(bottom.vid_shape)
+    for i in range(data.shape[-1]):
+        npt.assert_almost_equal(bottom.data.reshape(stim.vid_shape)[:4, :, i],
+                                0)
+        npt.assert_almost_equal(bottom.data.reshape(stim.vid_shape)[4, :, i],
+                                1)
+    # Bottom right pixel:
+    bottom = stim.shift(4, 2)
+    data = bottom.data.reshape(bottom.vid_shape)
+    for i in range(data.shape[-1]):
+        npt.assert_almost_equal(bottom.data.reshape(stim.vid_shape)[4, 4, i],
+                                1)
+        npt.assert_almost_equal(bottom.data.reshape(stim.vid_shape)[:4, :, i],
+                                0)
+        npt.assert_almost_equal(bottom.data.reshape(stim.vid_shape)[:, :4, i],
+                                0)
+
+
+def test_ImageStimulus_center():
+    # Create a horizontal bar:
+    ndarray = np.zeros((5, 5, 3), dtype=np.uint8)
+    ndarray[2, :, :] = 255
+    # Center phosphene:
+    stim = VideoStimulus(ndarray)
+    npt.assert_almost_equal(stim.data, stim.center().data)
+    npt.assert_almost_equal(stim.data, stim.shift(0, 2).center().data)
+
+
+def test_ImageStimulus_scale():
+    # Create a horizontal bar:
+    ndarray = np.zeros((5, 5, 3), dtype=np.uint8)
+    ndarray[2, :, :] = 255
+    stim = VideoStimulus(ndarray)
+    npt.assert_almost_equal(stim.data, stim.scale(1).data)
+    for i in range(stim.shape[-1]):
+        npt.assert_almost_equal(stim.scale(0.1)[12, i], 1)
+        npt.assert_almost_equal(stim.scale(0.1)[:12, i], 0)
+        npt.assert_almost_equal(stim.scale(0.1)[13:, i], 0)
+    with pytest.raises(ValueError):
+        stim.scale(0)
+
+
 def test_VideoStimulus_filter():
     fname = 'test.mp4'
     shape = (10, 32, 48)
