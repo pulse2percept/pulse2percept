@@ -1,6 +1,7 @@
 """`center_image`, `scale_image`, `shift_image`, `trim_image`"""
 import numpy as np
 from skimage import img_as_bool, img_as_ubyte, img_as_float32
+from skimage.color import rgba2rgb, rgb2gray
 from skimage.measure import moments
 from skimage.transform import warp, SimilarityTransform
 
