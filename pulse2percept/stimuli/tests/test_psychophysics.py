@@ -6,7 +6,7 @@ from pulse2percept.stimuli import GratingStimulus, BarStimulus
 
 def test_GratingStimulus():
     shape = (5, 5)
-    grating = GratingStimulus(shape)
+    grating = GratingStimulus(shape, spatial_freq=0.25)
     npt.assert_equal(grating.shape, (np.prod(shape), 51))
     npt.assert_equal(grating.vid_shape, (shape[0], shape[1], 51))
     npt.assert_almost_equal(grating.data.min(), 0)
@@ -27,9 +27,10 @@ def test_GratingStimulus():
                 npt.assert_almost_equal(data[:, nx - i - 1, i], 1)
 
     # Contrast vs. mask:
-    for mask in ['circle', 'gauss', None]:
+    for mask in ['circle', None]:
         # Mask will have value 0.5, so contrast still defines the min/max:
-        grating = GratingStimulus(shape, contrast=0.45, mask=mask)
+        grating = GratingStimulus(shape, spatial_freq=0.25, contrast=0.45,
+                                  mask=mask)
         npt.assert_almost_equal(grating.data.max() - grating.data.min(), 0.45)
         npt.assert_almost_equal(grating.data.min(), 0.275)
         npt.assert_almost_equal(grating.data.max(), 0.725)
@@ -55,8 +56,8 @@ def test_BarStimulus():
         bar = BarStimulus(shape, contrast=0.45, mask=mask)
         npt.assert_almost_equal(bar.data.max() - bar.data.min(), 0.45,
                                 decimal=2)
-        npt.assert_almost_equal(bar.data.min(), 0.275, decimal=3)
-        npt.assert_almost_equal(bar.data.max(), 0.725, decimal=3)
+        npt.assert_almost_equal(bar.data.min(), 0.275, decimal=2)
+        npt.assert_almost_equal(bar.data.max(), 0.725, decimal=2)
 
     # Masks:
     for mask in ['circle', 'gauss']:
