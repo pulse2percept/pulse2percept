@@ -228,10 +228,14 @@ class VideoStimulus(Stimulus):
             A copy of the stimulus object containing the rotated video
 
         """
-        vid = vid_rotate(self.data.reshape(self.vid_shape), angle, mode=mode,
-                         resize=False)
-        return VideoStimulus(vid, electrodes=self.electrodes,
-                             metadata=self.metadata)
+        data = self.data.reshape(self.vid_shape)
+        if len(self.vid_shape) == 3:
+            # Grayscale videos can be fed directly into rotate:
+            data = vid_rotate(data, angle, mode=mode, resize=False)
+            return VideoStimulus(data, electrodes=self.electrodes,
+                                 metadata=self.metadata)
+        # Else need to feed in each frame individually:
+        return self.apply(vid_rotate, angle, mode=mode, resize=False)
 
     def filter(self, filt, **kwargs):
         """Filter each frame of the video
@@ -276,7 +280,7 @@ class VideoStimulus(Stimulus):
         return VideoStimulus(vid, electrodes=self.electrodes, time=self.time,
                              metadata=self.metadata)
 
-    def apply(self, func, **kwargs):
+    def apply(self, func, *args, **kwargs):
         """Apply a function to each frame of the video
 
         Parameters
@@ -284,16 +288,21 @@ class VideoStimulus(Stimulus):
         func : function
             The function to apply to each frame in the video. Must accept a 2D
             or 3D image and return an image with the same dimensions
+        *args :
+            Additional positional arguments passed to the function
         **kwargs :
-            Additional parameters passed to the function
+            Additional keyword arguments passed to the function
 
         Returns
         -------
         stim : `ImageStimulus`
             A copy of the stimulus object with the new image
         """
-        vid = np.array([func(frame.reshape(self.vid_shape[:-1]), **kwargs)
-                        for frame in self]).transpose((1, 2, 0))
+        vid = np.array([func(frame.reshape(self.vid_shape[:-1]), *args,
+                             **kwargs)
+                        for frame in self])
+        # Move first axis (frames) to last:
+        vid = np.moveaxis(vid, 0, -1)
         return VideoStimulus(vid, electrodes=self.electrodes, time=self.time,
                              metadata=self.metadata)
 
