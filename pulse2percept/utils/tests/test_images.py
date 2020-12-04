@@ -58,20 +58,20 @@ def test_scale_image():
         scale_image(img, 0)
 
 
-@pytest.mark.parametrize('n_channels', (1, 3, 4))
+@pytest.mark.parametrize('n_channels', (1, 3))
 def test_trim_image(n_channels):
-    shape = (13, 29, n_channels)
-    img = np.zeros(shape, dtype=float)
-    img[1:-1, 1:-1, :3] = 0.1
-    img[2:-2, 2:-2, :3] = 0.2
-    npt.assert_equal(trim_image(img).shape, (shape[0] - 2, shape[1] - 2))
-    npt.assert_equal(trim_image(img, tol=0.05).shape,
+    img = np.squeeze(np.zeros((13, 29, n_channels), dtype=float))
+    shape = img.shape
+    img[1:-1, 1:-1, ...] = 0.1
+    img[2:-2, 2:-2, ...] = 0.2
+    npt.assert_equal(trim_image(img).shape[:2], (shape[0] - 2, shape[1] - 2))
+    npt.assert_equal(trim_image(img, tol=0.05).shape[:2],
                      (shape[0] - 2, shape[1] - 2))
-    npt.assert_equal(trim_image(img, tol=0.1).shape,
+    npt.assert_equal(trim_image(img, tol=0.1).shape[:2],
                      (shape[0] - 4, shape[1] - 4))
-    npt.assert_equal(trim_image(img, tol=0.2).shape, (1, 0))
-    npt.assert_equal(trim_image(img, tol=0.1).shape,
-                     trim_image(trim_image(img), tol=0.1).shape)
+    npt.assert_equal(trim_image(img, tol=0.2).shape[:2], (1, 0))
+    npt.assert_equal(trim_image(img, tol=0.1).shape[:2],
+                     trim_image(trim_image(img), tol=0.1).shape[:2])
 
     with pytest.raises(ValueError):
         trim_image(np.ones(10))
