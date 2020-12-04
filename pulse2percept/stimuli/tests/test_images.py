@@ -183,7 +183,6 @@ def test_ImageStimulus_center():
     # Center phosphene:
     stim = ImageStimulus(fname)
     npt.assert_almost_equal(stim.data, stim.center().data)
-    npt.assert_almost_equal(stim.data, stim.center().data)
     npt.assert_almost_equal(stim.data, stim.shift(0, 2).center().data)
     os.remove(fname)
 
