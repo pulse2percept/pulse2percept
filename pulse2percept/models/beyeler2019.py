@@ -423,8 +423,8 @@ class AxonMapSpatial(SpatialModel):
             # For every axon segment, calculate distance from soma by
             # summing up the individual distances between neighboring axon
             # segments (by "walking along the axon"):
-            d2 = np.cumsum(np.diff(axon[:, 0], axis=0) ** 2 +
-                           np.diff(axon[:, 1], axis=0) ** 2)
+            d2 = np.cumsum(np.sqrt(np.diff(axon[:, 0], axis=0) ** 2 +
+                           np.diff(axon[:, 1], axis=0) ** 2)) ** 2
             idx_d2 = d2 < max_d2
             sensitivity = np.exp(-d2[idx_d2] / (2.0 * self.axlambda ** 2))
             idx_d2 = np.insert(idx_d2, 0, False)
