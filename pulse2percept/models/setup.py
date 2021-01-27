@@ -24,6 +24,10 @@ def configuration(parent_package='', top_path=None):
                              sources=['_nanduri2012.pyx'],
                              include_dirs=[numpy.get_include()],
                              libraries=libraries)
+        config.add_extension('_granley2021',
+                             sources=['_granley2021.pyx'],
+                             include_dirs=[numpy.get_include()],
+                             libraries=libraries)
     config.add_subpackage("tests")
 
     return config
