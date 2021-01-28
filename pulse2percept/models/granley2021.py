@@ -13,6 +13,7 @@ from sklearn.linear_model import LinearRegression
 class DefaultBrightModel():
     def __init__(self):
         self.amp_freq_model = LinearRegression()
+        # TODO
         self.pdur_model = None
 
     def fit(self):
@@ -22,7 +23,7 @@ class DefaultBrightModel():
     def _fit_amp_freq(self):
         data = load_nanduri2012()
         data = data[data['task'] == 'rate']
-        x = data[['stim_amp_factor', 'stim_freq']]
+        x = data[['amp_factor', 'freq']]
         y = data['brightness']
         self.amp_freq_model.fit(x, y)
 
@@ -30,12 +31,13 @@ class DefaultBrightModel():
         pass
 
     def __call__(self, amp, freq, pdur):
-        return self.amp_freq_model.predict((amp, freq)) * 1
+        return self.amp_freq_model.predict([(amp, freq)])[0] * 1
 
 
 class DefaultSizeModel():
     def __init__(self):
         self.amp_model = LinearRegression()
+        # TODO
         self.pdur_model = None
 
     def fit(self):
@@ -45,15 +47,15 @@ class DefaultSizeModel():
     def _fit_amp(self):
         data = load_nanduri2012()
         data = data[data['task'] == 'size']
-        x = data['stim_amp_factor']
+        x = data['amp_factor']
         y = data['size']
-        self.amp_model.fit(x, y)
+        self.amp_model.fit(np.array(x).reshape(-1, 1), y)
 
     def fit_pdur(self):
         pass
 
     def __call__(self, amp, freq, pdur):
-        return self.amp_model.predict(amp) * 1
+        return self.amp_model.predict(np.array([amp]).reshape(1, -1))[0] * 1
 
 
 class DefaultStreakModel():
@@ -100,11 +102,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         base_params = super(BiphasicAxonMapSpatial, self).get_default_params()
         params = {
             # Callable model used to modulate percept brightness with amplitude, frequency, and pulse duration
-            'bright_model' : None, # TODO
+            'bright_model' : None, 
             # Callable model used to modulate percept size with amplitude, frequency, and pulse duration
-            'size_model' : None, # TODO
+            'size_model' : None, 
             # Callable model used to modulate percept streak length with amplitude, frequency, and pulse duration
-            'streak_model' : None # TODO
+            'streak_model' : None 
         }
         params.update(base_params)
         return params
