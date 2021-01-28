@@ -253,16 +253,12 @@ class Stimulus(PrettyPrint):
                 if isinstance(source, dict):
                     # Special case, electrode names are specified in a dict:
                     _electrodes.append(ele)
-                    if 'metadata' in dir(src) and src.metadata is not None:
-                        self.metadata['electrodes'][ele] = {'params' : src.metadata, 'type' : type(src)}
                 else:
                     # In all other cases, use the electrode names specified by
                     # the source (unless they're None):
                     _electrodes.append(e if e is not None else ele)
-                    ename = e if e is not None else ele
-                    if 'metadata' in dir(src) and src.metadata is not None:
-                        self.metadata['electrodes'][ename] = src.metadata
-                
+                if 'metadata' in dir(src) and src.metadata is not None:
+                    self.metadata['electrodes'][str(ele)] = {'params' : src.metadata, 'type' : type(src)}
             # Make sure all stimuli have time=None or none of them do:
             if len(np.unique([t is None for t in _time])) > 1:
                 raise ValueError("If one stimulus has time=None, all others "
