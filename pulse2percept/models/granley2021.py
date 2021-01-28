@@ -54,13 +54,16 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         return params
 
     def _build(self):
-        # Fit models if needed
+        # Fit models if needed TODO
         if self.bright_model is None:
             pass
         if self.size_model is None:
             pass
         if self.streak_model is None:
             pass
+        assert(callable(self.bright_model))
+        assert(callable(self.size_model))
+        assert(callable(self.streak_model))
         super(BiphasicAxonMapSpatial, self)._build()
 
     def _predict_spatial(self, earray, stim):
@@ -68,10 +71,26 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         assert isinstance(earray, ElectrodeArray)
         assert isinstance(stim, Stimulus)
 
-        # stim.data is a NxM array of amps at time points, dont care about this at all
-        data = 
+        # Calculate model effects before losing GIL
+        bright_effects = []
+        size_effects = []
+        streak_effects = []
+        amps = []
 
-        return fast_biphasic_axon_map(stim.data,
+        for e in stim.electrodes:
+            amp = stim._eparams[str(e)]['params']['amp']
+            freq = stim._eparams[str(e)]['params']['freq']
+            pdur = stim._eparams[str(e)]['params']['phase_dur']
+            bright_effects.append(self.bright_model(amp, freq, pdur))
+            size_effects.append(self.size_model(amp, freq, pdur))
+            streak_effects.append(self.streak_model(amp, freq, pdur))
+            amps.append(amp)
+                          
+
+        return fast_biphasic_axon_map(np.array(amps, dtype=np.float32),
+                                      np.array(bright_effects, dtype=np.float32),
+                                      np.array(size_effects, dtype=np.float32),
+                                      np.array(streak_effects, dtype=np.float32),
                                       np.array([earray[e].x for e in stim.electrodes],
                                             dtype=np.float32),
                                       np.array([earray[e].y for e in stim.electrodes],
@@ -81,22 +100,20 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                                       self.axon_idx_end.astype(np.uint32),
                                       self.rho,
                                       self.thresh_percept,
-                                      self.bright_model,
-                                      self.size_model,
-                                      self.streak_model)
+                                      stim.shape[1])
 
 class BiphasicAxonMapModel(Model):
     """
     AxonMapModel that scales percept size, brightness, and streak length according to
     the amplitude, frequency, and pulse duration of the BiphasicPulseTrain.
 
-    All stimuli must be BiphasicPulseTrains.
+    All stimuli must be BiphasicPulseTrains with no delay dur.
 
-    This model is different than other spatial models in that it calculates one percept from all time
-    steps of the stimulus, and then returns this same percept at each time step. 
+    This model is different than other spatial models in that it calculates the brightest percept 
+    from all time steps of the stimulus, and then returns this same percept at each time step. 
 
     The three new parameters are the models to be used to scale brightness, size, and streak length. 
-    These models can be any python callable with function signature f(amp, freq, pdur) that returns a float.
+    These models can be any python callable with function signature f(amp, freq, pdur) that return a float.
 
 
     .. note: :
@@ -122,9 +139,9 @@ class BiphasicAxonMapModel(Model):
         # Make sure stimulus is a BiphasicPulseTrain:
         if not isinstance(implant.stim, BiphasicPulseTrain):
             # Could still be a stimulus where each electrode has a biphasic pulse train
-            for ele, metadata in implant.stim.metadata['electrodes'].items():
-                if not isinstance(metadata['type'], BiphasicPulseTrain): 
-                    raise TypeError("Stimuli must be a BiphasicPulseTrain (Electrode %s is not)" % (ele)) 
+            for ele, params in implant.stim._eparams.items():
+                if params['type'] != BiphasicPulseTrain or params['params']['delay_dur'] != 0: 
+                    raise TypeError("Stimuli must be a BiphasicPulseTrain with no delay dur (Failing electrode: %s)" % (ele)) 
         
         return super(BiphasicAxonMapModel, self).predict_percept(implant,
                                                          t_percept=t_percept)

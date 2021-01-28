@@ -11,9 +11,11 @@ ctypedef cnp.int32_t int32
 cdef float32 deg2rad = 3.14159265358979323846 / 180.0
 
 
-# TODO
 @cdivision(True)
-cpdef fast_biphasic_axon_map(const float32[:, ::1] stim,
+cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
+                    const float32[::1] bright_model_el,
+                    const float32[::1] size_model_el,
+                    const float32[::1] streak_model_el,
                     const float32[::1] xel,
                     const float32[::1] yel,
                     const float32[:, ::1] axon_segments,
@@ -21,13 +23,11 @@ cpdef fast_biphasic_axon_map(const float32[:, ::1] stim,
                     const uint32[::1] idx_end,
                     float32 rho,
                     float32 thresh_percept,
-                    bright_model,
-                    size_model,
-                    streak_model):
+                    int32 timesteps):
     """Fast spatial response of the biphasic axon map model
     Predicts representative percept using entire time interval, 
     and returns this percept repeated at each time point
-
+    TODO
     Parameters
     ----------
     stim : 2D float32 array
@@ -53,76 +53,68 @@ cpdef fast_biphasic_axon_map(const float32[:, ::1] stim,
         axon contribution (stored/passed in ``axon``).
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
-    bright_model : Callable
-        Model used to modulate percept brightness with amplitude, frequency,
-        and pulse duration. Signature must be f(amp, freq, pdur). Must return
-        a float
-    size_model : Callable
-        Model used to modulate percept size with amplitude, frequency,
-        and pulse duration. Signature must be f(amp, freq, pdur). Must return
-        a float
-    streak_model : Callable
-        Model used to modulate percept streak length with amplitude, frequency,
-        and pulse duration. Signature must be f(amp, freq, pdur). Must return
-        a float
     """
     cdef:
         int32 idx_el, idx_time, idx_space, idx_ax, idx_bright
         int32 n_el, n_time, n_space, n_ax, n_bright
-        float32[:, ::1] bright
-        float32 px_bright, xdiff, ydiff, r2, gauss, sgm_bright, amp
+        float32[::1] bright
+        float32 px_bright, xdiff, ydiff, r2, amp, gauss_el, gauss_soma 
+        float32 sgm_bright, bright_effect, size_effect, streak_effect
         int32 i0, i1
 
-    n_el = stim.shape[0]
-    n_time = stim.shape[1]
+    n_el = xel.shape[0]
+    n_time = timesteps
     n_space = len(idx_start)
     n_bright = n_time * n_space
 
-    # A flattened array containing n_space x n_time entries:
-    bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
+    # An array containing n_space entries
+    bright = np.empty((n_space), dtype=np.float32)  # Py overhead
 
     # Parallel loop over all pixels to be rendered:
     for idx_space in prange(n_space, schedule='static', nogil=True):
-        # Each frame in `stim` is treated independently, so we can have an
-        # inner loop over all points in time:
-        for idx_time in range(n_time):
-            # Find the brightness value of each pixel (`px_bright`) by finding
-            # the strongest activated axon segment:
+        # Find the brightness value of each pixel (`px_bright`) by finding
+        # the strongest activated axon segment:
+        px_bright = 0.0
+        # Slice `axon_contrib` (but don't assign the slice to a variable).
+        # `idx_start` and `idx_end` serve as indexes into `axon_segments`.
+        # For example, the axon belonging to the neuron sitting at pixel
+        # `idx_space` has segments
+        # `axon_segments[idx_start[idx_space]:idx_end[idx_space]]`:
+        for idx_ax in range(idx_start[idx_space], idx_end[idx_space]):
+            # Calculate the activation of each axon segment by adding up
+            # the contribution of each electrode:
+            sgm_bright = 0.0
+            for idx_el in range(n_el):
+                amp = amp_el[idx_el]
+                bright_effect = bright_model_el[idx_el]
+                size_effect = size_model_el[idx_el]
+                streak_effect = streak_model_el[idx_el]
+                if c_abs(amp) > 0:
+                    # Calculate the distance between this axon segment and
+                    # the center of the stimulating electrode:
+                    xdiff = axon_segments[idx_ax, 0] - xel[idx_el]
+                    ydiff = axon_segments[idx_ax, 1] - yel[idx_el]
+                    r2 = xdiff * xdiff + ydiff * ydiff
+                    # Determine the activation level of this axon segment,
+                    # consisting of two things:
+                    # - activation as a function of distance to the
+                    #   stimulating electrode (depends on `rho`):
+                    gauss_el = c_exp(-r2 / (2.0 * rho * rho * size_effect))
+                    # - activation as a function of distance to the cell
+                    #   soma (depends on `axlambda`, precalculated during
+                    #   `build` and stored in `axon_segments[idx_ax, 2]`
+                    #   precalculated value does not include streak model
+                    #   effect, which must be added now
+                    gauss_soma = c_pow(axon_segments[idx_ax, 2], 1 / streak_effect)
+                    sgm_bright = (sgm_bright +
+                                    bright_effect * gauss_el * gauss_soma)
+            # After summing up the currents from all the electrodes, we
+            # compare the brightness of the segment (`sgm_bright`) to the
+            # previously brightest segment. The brightest segment overall
+            # determines the brightness of the pixel (`px_bright`):
+            if c_abs(sgm_bright) > c_abs(px_bright):
+                px_bright = sgm_bright
+        if c_abs(px_bright) < thresh_percept:
             px_bright = 0.0
-            # Slice `axon_contrib` (but don't assign the slice to a variable).
-            # `idx_start` and `idx_end` serve as indexes into `axon_segments`.
-            # For example, the axon belonging to the neuron sitting at pixel
-            # `idx_space` has segments
-            # `axon_segments[idx_start[idx_space]:idx_end[idx_space]]`:
-            for idx_ax in range(idx_start[idx_space], idx_end[idx_space]):
-                # Calculate the activation of each axon segment by adding up
-                # the contribution of each electrode:
-                sgm_bright = 0.0
-                for idx_el in range(n_el):
-                    amp = stim[idx_el, idx_time]
-                    if c_abs(amp) > 0:
-                        # Calculate the distance between this axon segment and
-                        # the center of the stimulating electrode:
-                        xdiff = axon_segments[idx_ax, 0] - xel[idx_el]
-                        ydiff = axon_segments[idx_ax, 1] - yel[idx_el]
-                        r2 = xdiff * xdiff + ydiff * ydiff
-                        # Determine the activation level of this axon segment,
-                        # consisting of two things:
-                        # - activation as a function of distance to the
-                        #   stimulating electrode (depends on `rho`):
-                        gauss = c_exp(-r2 / (2.0 * rho * rho))
-                        # - activation as a function of distance to the cell
-                        #   body (depends on `axlambda`, precalculated during
-                        #   `build` and stored in `axon_segments[idx_ax, 2]`:
-                        sgm_bright = (sgm_bright +
-                                      gauss * axon_segments[idx_ax, 2] * amp)
-                # After summing up the currents from all the electrodes, we
-                # compare the brightness of the segment (`sgm_bright`) to the
-                # previously brightest segment. The brightest segment overall
-                # determines the brightness of the pixel (`px_bright`):
-                if c_abs(sgm_bright) > c_abs(px_bright):
-                    px_bright = sgm_bright
-            if c_abs(px_bright) < thresh_percept:
-                px_bright = 0.0
-            bright[idx_space, idx_time] = px_bright  # Py overhead
-    return np.asarray(bright)  # Py overhead
+        bright[idx_space] = px_bright  # Py overhead
+    return np.asarray(np.transpose(np.tile(bright, (n_time, 1)))) # Py overhead, copy output for each timestep

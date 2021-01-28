@@ -304,8 +304,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         else:
             # Calculate the Stimulus at requested time points:
             if t_percept is not None:
+                # Save electrode parameters
+                eparams = stim._eparams
                 stim = Stimulus(stim[:, t_percept].reshape((-1, n_time)),
                                 electrodes=stim.electrodes, time=t_percept)
+                stim._eparams = eparams
             resp = self._predict_spatial(implant.earray, stim)
         return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
                        space=self.grid, time=t_percept)

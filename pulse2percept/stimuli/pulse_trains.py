@@ -176,11 +176,11 @@ class BiphasicPulseTrain(Stimulus):
         self.freq = freq
         self.cathodic_first = cathodic_first
 
-        # Store metadata for BiphasicAxonMapModel
-        self.metadata = {'freq' : freq,
+        # Store parameters for BiphasicAxonMapModel
+        self._eparams = {'freq' : freq,
                          'amp' : amp,
                          'phase_dur' : phase_dur,
-                         'user' : metadata}
+                         'delay_dur' : delay_dur}
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
