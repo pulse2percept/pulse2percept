@@ -127,7 +127,8 @@ class Stimulus(PrettyPrint):
 
     def __init__(self, source, electrodes=None, time=None, metadata=None,
                  compress=False):
-        self.metadata = metadata
+        self.metadata = {'electrodes' : {},
+                         'user': metadata}
         # Flag will be flipped in the compress method:
         self.is_compressed = False
         # Extract the data and coordinates (electrodes, time) from the source:
@@ -253,6 +254,8 @@ class Stimulus(PrettyPrint):
                 if isinstance(source, dict):
                     # Special case, electrode names are specified in a dict:
                     _electrodes.append(ele)
+                    if 'metadata' in dir(src) and src.metadata is not None:
+                        self.metadata['electrodes'][ele] = src.metadata
                 else:
                     # In all other cases, use the electrode names specified by
                     # the source (unless they're None):
