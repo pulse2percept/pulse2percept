@@ -179,8 +179,8 @@ class BiphasicPulseTrain(Stimulus):
         # Store metadata for BiphasicAxonMapModel
         self.metadata = {'freq' : freq,
                          'amp' : amp,
-                         'pdur' : phase_dur,
-                         'user' : self.metadata}
+                         'phase_dur' : phase_dur,
+                         'user' : metadata}
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
