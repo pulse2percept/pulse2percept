@@ -6,6 +6,62 @@ from .base import TemporalModel, Model
 from ._granley2021 import (fast_biphasic_axon_map)
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
+from ..datasets import load_nanduri2012
+
+from sklearn.linear_model import LinearRegression
+
+class DefaultBrightModel():
+    def __init__(self):
+        self.amp_freq_model = LinearRegression()
+        self.pdur_model = None
+
+    def fit(self):
+        self._fit_amp_freq()
+        self.fit_pdur()
+
+    def _fit_amp_freq(self):
+        data = load_nanduri2012()
+        data = data[data['task'] == 'rate']
+        x = data[['stim_amp_factor', 'stim_freq']]
+        y = data['brightness']
+        self.amp_freq_model.fit(x, y)
+
+    def fit_pdur(self):
+        pass
+
+    def __call__(self, amp, freq, pdur):
+        return self.amp_freq_model.predict((amp, freq)) * 1
+
+
+class DefaultSizeModel():
+    def __init__(self):
+        self.amp_model = LinearRegression()
+        self.pdur_model = None
+
+    def fit(self):
+        self._fit_amp()
+        self.fit_pdur()
+
+    def _fit_amp(self):
+        data = load_nanduri2012()
+        data = data[data['task'] == 'size']
+        x = data['stim_amp_factor']
+        y = data['size']
+        self.amp_model.fit(x, y)
+
+    def fit_pdur(self):
+        pass
+
+    def __call__(self, amp, freq, pdur):
+        return self.amp_model.predict(amp) * 1
+
+
+class DefaultStreakModel():
+    def __init__(self):
+        self.pdur_model = None
+    def __call__(self, amp, freq, pdur):
+        return 1.5/pdur
+
 
 class BiphasicAxonMapSpatial(AxonMapSpatial):
     """
@@ -54,13 +110,15 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         return params
 
     def _build(self):
-        # Fit models if needed TODO
+        # Fit models if needed 
         if self.bright_model is None:
-            pass
+            self.bright_model = DefaultBrightModel()
+            self.bright_model.fit()
         if self.size_model is None:
-            pass
+            self.size_model = DefaultSizeModel()
+            self.size_model.fit()
         if self.streak_model is None:
-            pass
+            self.streak_model = DefaultStreakModel()
         assert(callable(self.bright_model))
         assert(callable(self.size_model))
         assert(callable(self.streak_model))
