@@ -9,7 +9,7 @@ except ImportError:
     has_pandas = False
 
 
-def load_nanduri2012(electrodes=None, shuffle=False, random_state=0):
+def load_nanduri2012(electrodes=None, task=None, shuffle=False, random_state=0):
     """Load data from [Nanduri2012]_
 
     Load the threshold data described in [Nanduri2012]_. Average thresholds
@@ -28,17 +28,15 @@ def load_nanduri2012(electrodes=None, shuffle=False, random_state=0):
     subject               Subject ID, S06
     implant               Argus I
     electrode             Electrode ID, A2, A4, B1, C1, C4, D2, D3, D4
-    task                  'rate'
-    stim_type             'fixed_duration'
+    task                  'rate' or 'size'
     stim_dur              Stimulus duration (ms)
-    stim_freq             Stimulus frequency (Hz)
-    stim_amp_factor       Stimulus amplitude ratio over threshold
+    freq                  Stimulus frequency (Hz)
+    amp_factor            Stimulus amplitude ratio over threshold
     brightness            Patient rated brightness compared to reference
                           stimulus
     pulse_dur             Pulse duration (ms)
-    pulse_type            'cathodic_first'
+    pulse_type            'cathodicFirst'
     interphase_dur        Interphase gap (ms)
-    delay_dur             Stimulus delivered after delay (ms)
     source                Figure from which data was extracted
     ====================  ================================================
 
@@ -58,7 +56,7 @@ def load_nanduri2012(electrodes=None, shuffle=False, random_state=0):
     Returns
     -------
     data: pd.DataFrame
-        The whole dataset is returned in a 95x14 Pandas DataFrame
+        The whole dataset is returned in a 144x16 Pandas DataFrame
 
     """
     if not has_pandas:
@@ -79,6 +77,10 @@ def load_nanduri2012(electrodes=None, shuffle=False, random_state=0):
             idx_electrode |= df.electrode == electrode
         idx &= idx_electrode
     df = df[idx]
+    if task is not None:
+        if task not in ['rate', 'size']:
+            raise ValueError("Task must be one of rate or size")
+        df = df[df['task'] == task]
     if shuffle:
         df = df.sample(n=len(df), random_state=random_state)
 
