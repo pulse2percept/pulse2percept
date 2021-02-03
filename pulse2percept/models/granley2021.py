@@ -138,9 +138,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         amps = []
 
         for e in stim.electrodes:
-            amp = stim._eparams[str(e)]['params']['amp']
-            freq = stim._eparams[str(e)]['params']['freq']
-            pdur = stim._eparams[str(e)]['params']['phase_dur']
+            amp = stim.metadata['electrodes'][str(e)]['params']['amp']
+            freq = stim.metadata['electrodes'][str(e)]['params']['freq']
+            pdur = stim.metadata['electrodes'][str(e)]['params']['phase_dur']
             bright_effects.append(self.bright_model(amp, freq, pdur))
             size_effects.append(self.size_model(amp, freq, pdur))
             streak_effects.append(self.streak_model(amp, freq, pdur))
@@ -199,7 +199,7 @@ class BiphasicAxonMapModel(Model):
         # Make sure stimulus is a BiphasicPulseTrain:
         if not isinstance(implant.stim, BiphasicPulseTrain):
             # Could still be a stimulus where each electrode has a biphasic pulse train
-            for ele, params in implant.stim._eparams.items():
+            for ele, params in implant.stim.metadata['electrodes'].items():
                 if params['type'] != BiphasicPulseTrain or params['params']['delay_dur'] != 0: 
                     raise TypeError("Stimuli must be a BiphasicPulseTrain with no delay dur (Failing electrode: %s)" % (ele)) 
         
