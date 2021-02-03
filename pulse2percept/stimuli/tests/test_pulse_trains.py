@@ -216,17 +216,17 @@ def test_BiphasicTripletTrain(amp, interphase_dur, interpulse_dur, delay_dur, ca
 # Test metadata collecting 
 def test_metadata():
     stim = BiphasicPulseTrain(10, 10, 1, metadata='userdata')
-    assert(type(stim) == dict)
-    npt.assert_equal(stim['user'], 'userdata')
-    npt.assert_equal(stim['freq'], 10)
-    npt.assert_equal(stim['amp'], 10)
-    npt.assert_equal(stim['phase_dur'], 1)
-    npt.assert_equal(stim['delay_dur'], 0)
+    assert(type(stim.metadata) == dict)
+    npt.assert_equal(stim.metadata['user'], 'userdata')
+    npt.assert_equal(stim.metadata['freq'], 10)
+    npt.assert_equal(stim.metadata['amp'], 10)
+    npt.assert_equal(stim.metadata['phase_dur'], 1)
+    npt.assert_equal(stim.metadata['delay_dur'], 0)
 
     stim = Stimulus({'A2' : BiphasicPulseTrain(10, 10, 1, metadata='userdataA2'),
                      'B1' : BiphasicPulseTrain(11, 9, 2, metadata='userdataB1'),
                      'C3' : BiphasicPulseTrain(12, 8, 3, metadata='userdataC3')}, metadata='stimulus_userdata')
-    assert(type(stim) == dict)
+    assert(type(stim.metadata) == dict)
     npt.assert_equal(stim.metadata['user'], 'stimulus_userdata')
     npt.assert_equal(stim.metadata['electrodes']['A2']['type'], BiphasicPulseTrain)
     npt.assert_equal(stim.metadata['electrodes']['B1']['metadata']['freq'], 11)
