@@ -13,12 +13,9 @@ from sklearn.linear_model import LinearRegression
 class DefaultBrightModel():
     def __init__(self):
         self.amp_freq_model = LinearRegression()
-        # TODO
-        self.pdur_model = None
 
     def fit(self):
         self._fit_amp_freq()
-        self.fit_pdur()
 
     def _fit_amp_freq(self):
         data = load_nanduri2012()
@@ -27,22 +24,20 @@ class DefaultBrightModel():
         y = data['brightness']
         self.amp_freq_model.fit(x, y)
 
-    def fit_pdur(self):
-        pass
+    def predict_pdur(self, pdur):
+        # Fit using color threshold of weitz et al 2015
+        return 1 / (0.952 + 0.215*pdur)
 
     def __call__(self, amp, freq, pdur):
-        return self.amp_freq_model.predict([(amp, freq)])[0] * 1
+        return self.amp_freq_model.predict([(amp, freq)])[0] * self.predict_pdur(pdur)
 
 
 class DefaultSizeModel():
     def __init__(self):
         self.amp_model = LinearRegression()
-        # TODO
-        self.pdur_model = None
 
     def fit(self):
         self._fit_amp()
-        self.fit_pdur()
 
     def _fit_amp(self):
         data = load_nanduri2012()
@@ -51,18 +46,25 @@ class DefaultSizeModel():
         y = data['size']
         self.amp_model.fit(np.array(x).reshape(-1, 1), y)
 
-    def fit_pdur(self):
-        pass
-
     def __call__(self, amp, freq, pdur):
-        return self.amp_model.predict(np.array([amp]).reshape(1, -1))[0] * 1
+        return self.amp_model.predict(np.array([amp]).reshape(1, -1))[0] 
 
 
 class DefaultStreakModel():
-    def __init__(self):
-        self.pdur_model = None
+    def __init__(self, axlambda):
+        # never decrease lambda to less than 25
+        self.min_lambda = 25
+        self.min_scale = self.min_lambda / axlambda 
     def __call__(self, amp, freq, pdur):
-        return 1.5/pdur
+        # Fit using streak lengths measure from weitz et al 2015
+        scale = 1.56 - 0.54 * pdur ** 0.21
+        if scale > self.min_scale:
+            # Sqaured because it will be multiplied by axlambda squared, and we want to scale lambda
+            return scale ** 2
+        else:
+            return self.min_scale ** 2
+
+
 
 
 class BiphasicAxonMapSpatial(AxonMapSpatial):
@@ -120,7 +122,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             self.size_model = DefaultSizeModel()
             self.size_model.fit()
         if self.streak_model is None:
-            self.streak_model = DefaultStreakModel()
+            self.streak_model = DefaultStreakModel(self.axlambda)
         assert(callable(self.bright_model))
         assert(callable(self.size_model))
         assert(callable(self.streak_model))
@@ -138,9 +140,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         amps = []
 
         for e in stim.electrodes:
-            amp = stim.metadata['electrodes'][str(e)]['params']['amp']
-            freq = stim.metadata['electrodes'][str(e)]['params']['freq']
-            pdur = stim.metadata['electrodes'][str(e)]['params']['phase_dur']
+            amp = stim.metadata['electrodes'][str(e)]['metadata']['amp']
+            freq = stim.metadata['electrodes'][str(e)]['metadata']['freq']
+            pdur = stim.metadata['electrodes'][str(e)]['metadata']['phase_dur']
             bright_effects.append(self.bright_model(amp, freq, pdur))
             size_effects.append(self.size_model(amp, freq, pdur))
             streak_effects.append(self.streak_model(amp, freq, pdur))
@@ -200,7 +202,7 @@ class BiphasicAxonMapModel(Model):
         if not isinstance(implant.stim, BiphasicPulseTrain):
             # Could still be a stimulus where each electrode has a biphasic pulse train
             for ele, params in implant.stim.metadata['electrodes'].items():
-                if params['type'] != BiphasicPulseTrain or params['params']['delay_dur'] != 0: 
+                if params['type'] != BiphasicPulseTrain or params['metadata']['delay_dur'] != 0: 
                     raise TypeError("Stimuli must be a BiphasicPulseTrain with no delay dur (Failing electrode: %s)" % (ele)) 
         
         return super(BiphasicAxonMapModel, self).predict_percept(implant,

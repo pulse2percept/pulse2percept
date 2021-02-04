@@ -263,11 +263,7 @@ class Stimulus(PrettyPrint):
                     # the source (unless they're None):
                     _electrodes.append(e if e is not None else ele)
                 if 'metadata' in dir(src) and src.metadata is not None:
-<<<<<<< HEAD
-                    self.metadata['electrodes'][str(ele)] = {'params' : src.metadata, 'type' : type(src)}
-=======
                     self.metadata['electrodes'][str(ele)] = {'metadata' : src.metadata, 'type' : type(src)}
->>>>>>> jgranley/stimulus_meta
             # Make sure all stimuli have time=None or none of them do:
             if len(np.unique([t is None for t in _time])) > 1:
                 raise ValueError("If one stimulus has time=None, all others "
