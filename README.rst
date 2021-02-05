@@ -98,12 +98,12 @@ Detailed instructions for different platforms can be found in our
 Dependencies
 ------------
 
-**pulse2percept 0.4.3 was the last version to support Python 2.7 and 3.4.**
-pulse2percept 0.5+ requires Python 3.5+.
+**pulse2percept 0.6 was the last version to support Python <= 3.5.**
+pulse2percept 0.7+ requires Python 3.6+.
 
 pulse2percept requires:
 
-1.  `Python`_ (>= 3.5)
+1.  `Python`_ (>= 3.6)
 2.  `Cython`_ (>= 0.28)
 3.  `NumPy`_ (>= 1.9)
 4.  `SciPy`_ (>= 1.0.1)
