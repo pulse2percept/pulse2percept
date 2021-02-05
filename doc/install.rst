@@ -40,8 +40,8 @@ If you don't have Python, you have several options:
 
 .. important::
 
-    pulse2percept 0.4.3 was the last release to support Python 2.7 and 3.4.
-    pulse2percept 0.5+ requires **Python 3.5+**.
+    pulse2percept 0.6 was the last release to support Python <= 3.5.
+    pulse2percept 0.7+ requires **Python 3.6+**.
 
 On some platforms (e.g., macOS), you might also have to install pip yourself.
 You can check if pip is installed on your system by typing ``pip --version``
@@ -79,7 +79,7 @@ You can also install a specific version:
 
 .. code-block:: bash
 
-    pip3 install pulse2percept==0.5.2
+    pip3 install pulse2percept==0.6.0
 
 Then from any Python console or script, try:
 
@@ -107,7 +107,7 @@ Installing version |version| from source
 Prerequisites
 -------------
 
-1.  **Python** (>= 3.5): Make sure to :ref:`install Python <install-python>`
+1.  **Python** (>= 3.6): Make sure to :ref:`install Python <install-python>`
     first.
 
 2.  **XCode**: On macOS, make sure to install `Apple XCode`_.
@@ -120,7 +120,7 @@ Prerequisites
     1.  Install **Build Tools for Visual Studio 2019** from the
         `Microsoft website`_.
         Note that the build tools for Visual Studio 2015 or 2017 should work as
-        well (Python >= 3.5 requires C++ 14.X to be exact).
+        well (Python >= 3.6 requires C++ 14.X to be exact).
         Also note that you don't need to install Visual Studio itself.
 
     2.  `Install Cython`_:

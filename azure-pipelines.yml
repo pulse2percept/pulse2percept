@@ -21,7 +21,7 @@ variables:
   # because skimage uses NumPy in their setup.py:
   CIBW_BEFORE_BUILD_LINUX: "yum -y install freetype-devel pkgconfig libpng-devel && pip install Cython numpy && $(install_p2p)"
   # Skip building on Python 2.7 on all platforms
-  CIBW_SKIP: "cp27-*"
+  CIBW_SKIP: "cp27-* cp35-*"
 
 jobs:
 - job: linux
@@ -29,7 +29,7 @@ jobs:
   steps: 
     - task: UsePythonVersion@0
       inputs:
-        versionSpec: 3.5
+        versionSpec: '3.6'
     - bash: |
         python -m pip install --upgrade pip
         pip install cibuildwheel==1.0.0
@@ -41,7 +41,7 @@ jobs:
   steps: 
     - task: UsePythonVersion@0
       inputs:
-        versionSpec: 3.5
+        versionSpec: '3.6'
     - bash: |
         python -m pip install --upgrade pip
         pip install cibuildwheel==1.0.0
@@ -53,7 +53,7 @@ jobs:
   steps: 
     - task: UsePythonVersion@0
       inputs:
-        versionSpec: 3.5
+        versionSpec: '3.6'
     - bash: |
         python -m pip install --upgrade pip
         pip install cibuildwheel==1.0.0
