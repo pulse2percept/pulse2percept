@@ -127,11 +127,9 @@ class Stimulus(PrettyPrint):
 
     def __init__(self, source, electrodes=None, time=None, metadata=None,
                  compress=False):
-        if isinstance(metadata, dict):
-           self.metadata = metadata 
-           if 'electrodes' not in metadata.keys():
-               metadata['electrodes'] = {}
-        elif isinstance(self, Stimulus):
+        if isinstance(metadata, dict) and 'electrodes' in metadata.keys():
+            self.metadata = metadata
+        else:
             self.metadata = {'electrodes' : {}, 'user' : metadata}
         # Flag will be flipped in the compress method:
         self.is_compressed = False
