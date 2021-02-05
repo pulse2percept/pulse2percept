@@ -274,10 +274,10 @@ before and after compression:
 
 Accessing stimulus metadata
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Stimuli can store additional relevant information in the ''metadata'' dictionary. 
-Users can also pass their own metadata, which will be stored in ''metadata["user"]''
+Stimuli can store additional relevant information in the ``metadata`` dictionary. 
+Users can also pass their own metadata, which will be stored in ``metadata["user"]``
 Stimuli built from a collection of sources store the metadata for each source 
-in ''metadata["electrodes"][electrode]["metadata"]''
+in ``metadata["electrodes"][electrode]["metadata"]``
 
 .. ipython:: python
 
