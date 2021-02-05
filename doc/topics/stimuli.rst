@@ -273,9 +273,9 @@ before and after compression:
     :heading-level: -
 
 Accessing stimulus metadata
-^^^^^^^^^^^^^^^^^^^^^^
-Stimuli can store additional information in the ''metadata'' dictionary. 
-Users can pass their own metadata, which will be stored in ''metadata["user"]''
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Stimuli can store additional relevant information in the ''metadata'' dictionary. 
+Users can also pass their own metadata, which will be stored in ''metadata["user"]''
 Stimuli built from a collection of sources store the metadata for each source 
 in ''metadata["electrodes"][electrode]["metadata"]''
 
@@ -293,5 +293,5 @@ in ''metadata["electrodes"][electrode]["metadata"]''
     stim = Stimulus({'A1' : BiphasicPulseTrain(1,1,1, metadata='A1 metadata'), 
                      'B2' : BiphasicPulseTrain(1,1,1, metadata='B2 metadata')},
                     metadata='stimulus metadata')
+    stim.metadata
 
-                    
