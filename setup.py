@@ -253,7 +253,7 @@ def setup_package():
                         'build_ext': openmp_build_ext(),
                         'sdist': sdist
                     },
-                    python_requires=">=3.5",
+                    python_requires=">=3.6",
                     install_requires=[
                         'numpy>={}'.format(NUMPY_MIN_VERSION),
                         'scipy>={}'.format(SCIPY_MIN_VERSION),
@@ -279,9 +279,9 @@ def setup_package():
 
         metadata['version'] = VERSION
     else:
-        if sys.version_info < (3, 5):
+        if sys.version_info < (3, 6):
             raise RuntimeError(
-                "pulse2percept requires Python 3.5 or later. The current"
+                "pulse2percept requires Python 3.6 or later. The current"
                 " Python version is %s installed in %s."
                 % (platform.python_version(), sys.executable))
 
