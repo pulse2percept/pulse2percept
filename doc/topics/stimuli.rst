@@ -290,8 +290,7 @@ in ''metadata["electrodes"][electrode]["metadata"]''
     stim.metadata
 
     # Multiple source metadata
-    stim = Stimulus({'A1' : BiphasicPulseTrain(1,1,1, metadata='A1 metadata'), 
-                     'B2' : BiphasicPulseTrain(1,1,1, metadata='B2 metadata')},
+    stim = Stimulus({'A1' : Stimulus(1, metadata='A1 metadata'),
+                     'B2' : Stimulus(1, metadata='B2 metadata')},
                     metadata='stimulus metadata')
     stim.metadata
-
