@@ -80,6 +80,8 @@ class VideoStimulus(Stimulus):
                  electrodes=None, time=None, metadata=None, compress=False):
         if metadata is None:
             metadata = {}
+        elif type(metadata) != dict:
+            metadata = {'user' : metadata}
         if isinstance(source, str):
             # Filename provided, read the video:
             reader = video_reader(source, format=format)
@@ -134,6 +136,7 @@ class VideoStimulus(Stimulus):
                                             time=time, electrodes=electrodes,
                                             metadata=metadata,
                                             compress=compress)
+        self.metadata = metadata
         self.rewind()
 
     def _pprint_params(self):

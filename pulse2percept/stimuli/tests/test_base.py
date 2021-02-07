@@ -69,7 +69,7 @@ def test_Stimulus():
     # Saves metadata:
     metadata = {'a': 0, 'b': 1}
     stim = Stimulus(3, metadata=metadata)
-    npt.assert_equal(stim.metadata, metadata)
+    npt.assert_equal(stim.metadata['user'], metadata)
     # List of lists instead of 2D NumPy array:
     stim = Stimulus([[1, 1, 1, 1, 1], [1, 1, 1, 1, 1]], compress=True)
     npt.assert_equal(stim.shape, (2, 2))

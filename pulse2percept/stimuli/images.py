@@ -79,6 +79,8 @@ class ImageStimulus(Stimulus):
                  electrodes=None, metadata=None, compress=False):
         if metadata is None:
             metadata = {}
+        elif type(metadata) != dict:
+            metadata = {'user' : metadata}
         if isinstance(source, str):
             # Filename provided:
             img = imread(source, format=format)
@@ -121,6 +123,7 @@ class ImageStimulus(Stimulus):
                                             time=None, electrodes=electrodes,
                                             metadata=metadata,
                                             compress=compress)
+        self.metadata = metadata
 
     def _pprint_params(self):
         params = super(ImageStimulus, self)._pprint_params()

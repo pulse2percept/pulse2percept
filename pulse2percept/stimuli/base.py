@@ -127,7 +127,10 @@ class Stimulus(PrettyPrint):
 
     def __init__(self, source, electrodes=None, time=None, metadata=None,
                  compress=False):
-        self.metadata = metadata
+        if isinstance(metadata, dict) and 'electrodes' in metadata.keys():
+            self.metadata = metadata
+        else:
+            self.metadata = {'electrodes' : {}, 'user' : metadata}
         # Flag will be flipped in the compress method:
         self.is_compressed = False
         # Extract the data and coordinates (electrodes, time) from the source:
@@ -257,6 +260,8 @@ class Stimulus(PrettyPrint):
                     # In all other cases, use the electrode names specified by
                     # the source (unless they're None):
                     _electrodes.append(e if e is not None else ele)
+                if 'metadata' in dir(src) and src.metadata is not None:
+                    self.metadata['electrodes'][str(ele)] = {'metadata' : src.metadata, 'type' : type(src)}
             # Make sure all stimuli have time=None or none of them do:
             if len(np.unique([t is None for t in _time])) > 1:
                 raise ValueError("If one stimulus has time=None, all others "

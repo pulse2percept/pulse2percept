@@ -104,6 +104,7 @@ class PulseTrain(Stimulus):
                          compress=False)
         self.freq = freq
         self.pulse_type = pulse.__class__.__name__
+        self.metadata = {'user' : metadata}
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
@@ -170,11 +171,17 @@ class BiphasicPulseTrain(Stimulus):
                               cathodic_first=cathodic_first,
                               electrode=electrode)
         # Concatenate the pulses:
-        pt = PulseTrain(freq, pulse, n_pulses=n_pulses, stim_dur=stim_dur,
-                        metadata=metadata)
+        pt = PulseTrain(freq, pulse, n_pulses=n_pulses, stim_dur=stim_dur)
         super().__init__(pt.data, time=pt.time, compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
+
+        # Store metadata for BiphasicAxonMapModel
+        self.metadata = {'freq' : freq,
+                         'amp' : amp,
+                         'phase_dur' : phase_dur,
+                         'delay_dur' : delay_dur,
+                         'user' : metadata}
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
@@ -236,11 +243,11 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
                                         cathodic_first=cathodic_first,
                                         electrode=electrode)
         # Concatenate the pulses:
-        pt = PulseTrain(freq, pulse, n_pulses=n_pulses, stim_dur=stim_dur,
-                        metadata=metadata)
+        pt = PulseTrain(freq, pulse, n_pulses=n_pulses, stim_dur=stim_dur)
         super().__init__(pt.data, time=pt.time, compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
+        self.metadata = {'user' : metadata}
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
@@ -322,6 +329,7 @@ class BiphasicTripletTrain(Stimulus):
                                                    compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
+        self.metadata = {'user' : metadata}
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""

@@ -268,6 +268,30 @@ before and after compression:
     # Notice how the time axis have changed:
     stim
 
+Accessing stimulus metadata
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Stimuli can store additional relevant information in the ``metadata`` dictionary. 
+Users can also pass their own metadata, which will be stored in ``metadata["user"]``
+Stimuli built from a collection of sources store the metadata for each source 
+in ``metadata["electrodes"][electrode]["metadata"]``:
+
+.. ipython:: python
+
+    # Accessing metadata
+    stim = Stimulus([[0, 1, 2, 3]], metadata='user_metadata')
+    stim.metadata
+
+    # Some objects store their own metadata
+    stim = BiphasicPulseTrain(1,1,1, metadata='user_metadata')
+    stim.metadata
+
+    # Multiple source metadata
+    stim = Stimulus({'A1' : BiphasicPulseTrain(1,1,1, metadata='A1 metadata'),
+                     'B2' : BiphasicPulseTrain(1,1,1, metadata='B2 metadata')},
+                    metadata='stimulus metadata')
+    stim.metadata
+    
 .. minigallery:: pulse2percept.stimuli.Stimulus
     :add-heading: Examples using ``Stimulus``
     :heading-level: -
