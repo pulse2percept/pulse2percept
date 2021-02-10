@@ -27,9 +27,18 @@ class DefaultBrightModel():
     def predict_pdur(self, pdur):
         # Fit using color threshold of weitz et al 2015
         return 1 / (0.952 + 0.215*pdur)
+       
 
     def __call__(self, amp, freq, pdur):
-        return self.amp_freq_model.predict([(amp, freq)])[0] * self.predict_pdur(pdur)
+        bright = self.amp_freq_model.predict([(amp, freq)])[0] * self.predict_pdur(pdur)
+
+        # p = (1 / (1 + np.exp(-np.log(98)*x + np.log(96))) - 1/97) / (96/97)
+        # Sigmoid with p[0] = 0, p[1] = 0.5, p[2] = 0.99
+        p = (1 / (1 + np.exp(-4.58497 * amp + 4.56435)) - 0.0103093) / 0.989691
+        if np.random.random() < p:
+            return bright
+        else:
+            return 0
 
 
 class DefaultSizeModel():
@@ -203,7 +212,7 @@ class BiphasicAxonMapModel(Model):
             # Could still be a stimulus where each electrode has a biphasic pulse train
             for ele, params in implant.stim.metadata['electrodes'].items():
                 if params['type'] != BiphasicPulseTrain or params['metadata']['delay_dur'] != 0: 
-                    raise TypeError("Stimuli must be a BiphasicPulseTrain with no delay dur (Failing electrode: %s)" % (ele)) 
+                    raise TypeError("All stimuli must be BiphasicPulseTrains with no delay dur (Failing electrode: %s)" % (ele)) 
         
         return super(BiphasicAxonMapModel, self).predict_percept(implant,
                                                          t_percept=t_percept)
