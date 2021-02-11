@@ -11,8 +11,9 @@ from ..datasets import load_nanduri2012
 from sklearn.linear_model import LinearRegression
 
 class DefaultBrightModel():
-    def __init__(self):
+    def __init__(self,  do_thresholding=True):
         self.amp_freq_model = LinearRegression()
+        self.do_thresholding = do_thresholding
 
     def fit(self):
         self._fit_amp_freq()
@@ -32,10 +33,10 @@ class DefaultBrightModel():
     def __call__(self, amp, freq, pdur):
         bright = self.amp_freq_model.predict([(amp, freq)])[0] * self.predict_pdur(pdur)
 
-        # p = (1 / (1 + np.exp(-np.log(98)*x + np.log(96))) - 1/97) / (96/97)
+        # p = -1/96 + 97 / (96(1+96 exp(-ln(98)amp)))
         # Sigmoid with p[0] = 0, p[1] = 0.5, p[2] = 0.99
-        p = (1 / (1 + np.exp(-4.58497 * amp + 4.56435)) - 0.0103093) / 0.989691
-        if np.random.random() < p:
+        p = -0.01041666666667 + 1.0104166666666667 / (1+96 * np.exp(-4.584967478670572 * amp))
+        if not self.do_thresholding or np.random.random() < p:
             return bright
         else:
             return 0
@@ -102,6 +103,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         Model used to modulate percept size with amplitude, frequency, and pulse duration
     streak_model: callable, optional
         Model used to modulate percept streak length with amplitude, frequency, and pulse duration
+    do_thresholding: boolean
+        Use probabilistic sigmoid thresholding, default=True
     **params: dict, optional
         Arguments to be passed to AxonMapSpatial
     """
@@ -118,6 +121,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             'size_model' : None, 
             # Callable model used to modulate percept streak length with amplitude, frequency, and pulse duration
             'streak_model' : None 
+            # Use probabilistic thresholding
+            'do_thresholding' : True
         }
         params.update(base_params)
         return params
@@ -199,6 +204,8 @@ class BiphasicAxonMapModel(Model):
         Model used to modulate percept size with amplitude, frequency, and pulse duration
     streak_model: callable, optional
         Model used to modulate percept streak length with amplitude, frequency, and pulse duration
+    do_thresholding: boolean
+        Use probabilistic sigmoid thresholding, default=True
     **params: dict, optional
         Arguments to be passed to AxonMapModel
     """
