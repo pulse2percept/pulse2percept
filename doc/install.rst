@@ -331,13 +331,16 @@ Then add the specificed location to ``$PATH``; see `PATH on Windows`_,
 .. _PATH on macOS: https://www.architectryan.com/2012/10/02/add-to-the-path-on-mac-os-x-mountain-lion/
 .. _PATH on Linux: https://linuxize.com/post/how-to-add-directory-to-path-in-linux/
 
-Error in fast_retina.pyx when installing with pip on Windows
-------------------------------------------------------------
+Error: numpy.ufunc size changed, may indicate binary incompatibility
+--------------------------------------------------------------------
 
-Early builds of pulse2percept 0.4 mistakingly omitted the Windows binary
-for the Cython-dependent ``fast_retina`` module (see :issue:`88`).
-The solution is to either pip install :ref:`a later version <install-release>`,
-or to :ref:`build from source <install-source>`.
+This issue may arise when one of the p2p dependencies was compiled using an 
+older NumPy version. Upgrading to the latest NumPy version should fix the 
+issue:
+
+.. code-block:: python
+
+  pip3 install -U numpy
 
 .. note::
 
