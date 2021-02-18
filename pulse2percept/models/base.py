@@ -310,7 +310,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                                 metadata=stim.metadata)
             resp = self._predict_spatial(implant.earray, stim)
         return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
-                       space=self.grid, time=t_percept)
+                       space=self.grid, time=t_percept,
+                       metadata={'stim': stim})
 
     def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
                        bright_tol=0.1, max_iter=100):
@@ -551,7 +552,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # Calculate the Stimulus at requested time points:
             resp = self._predict_temporal(_stim, t_percept)
         return Percept(resp.reshape(_space + [t_percept.size]),
-                       space=None, time=t_percept)
+                       space=None, time=t_percept,
+                       metadata={'stim': stim})
 
     def find_threshold(self, stim, bright_th, amp_range=(0, 999), amp_tol=1,
                        bright_tol=0.1, max_iter=100, t_percept=None):
