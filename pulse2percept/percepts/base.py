@@ -167,8 +167,15 @@ class Percept(Data):
             if not isinstance(ax, Subplot):
                 raise TypeError("'ax' must be a Matplotlib axis, not "
                                 "%s." % type(ax))
-
-        vmin, vmax = frame.min(), frame.max()
+        if 'vmin' in kwargs.keys():
+            vmin = kwargs['vmin']
+        else:
+            vmin = frame.min()
+        if 'vmax' in kwargs.keys():
+            vmax = kwargs['vmax']
+        else:
+            vmax = frame.max()
+            
         cmap = kwargs['cmap'] if 'cmap' in kwargs else 'gray'
         X, Y = np.meshgrid(self.xdva, self.ydva, indexing='xy')
         if kind == 'pcolor':

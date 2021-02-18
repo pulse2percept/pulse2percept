@@ -26,12 +26,12 @@ class DefaultBrightModel():
         self.amp_freq_model.fit(x, y)
 
     def predict_pdur(self, pdur):
-        # Fit using color threshold of weitz et al 2015
+        # Fit using color threshold of weitz et al 2015, technically this is 1 / threshold, and amplitude will be scaled by this
         return 1 / (0.952 + 0.215*pdur)
        
 
     def __call__(self, amp, freq, pdur):
-        bright = self.amp_freq_model.predict([(amp, freq)])[0] * self.predict_pdur(pdur)
+        bright = self.amp_freq_model.predict([(amp * self.predict_pdur(pdur), freq)])[0] 
 
         # p = -1/96 + 97 / (96(1+96 exp(-ln(98)amp)))
         # Sigmoid with p[0] = 0, p[1] = 0.5, p[2] = 0.99
@@ -39,13 +39,15 @@ class DefaultBrightModel():
         if not self.do_thresholding or np.random.random() < p:
             return bright
         else:
+            print("nope")
             return 0
 
 
 class DefaultSizeModel():
-    def __init__(self):
+    def __init__(self, rho):
         self.amp_model = LinearRegression()
-
+        self.min_rho = 10
+        self.min_scale = self.min_rho**2 / rho**2
     def fit(self):
         self._fit_amp()
 
@@ -55,24 +57,31 @@ class DefaultSizeModel():
         x = data['amp_factor']
         y = data['size']
         self.amp_model.fit(np.array(x).reshape(-1, 1), y)
+    
+    def predict_pdur(self, pdur):
+        # Fit using color threshold of weitz et al 2015, technically this is 1 / threshold, and amplitude will be scaled by this
+        return 1 / (0.952 + 0.215*pdur)
 
     def __call__(self, amp, freq, pdur):
-        return self.amp_model.predict(np.array([amp]).reshape(1, -1))[0] 
+        scale = self.amp_model.predict(np.array([amp * self.predict_pdur(pdur)]).reshape(1, -1))[0] 
+        if scale > self.min_scale:
+            return scale
+        else:
+            return self.min_scale
 
 
 class DefaultStreakModel():
     def __init__(self, axlambda):
         # never decrease lambda to less than 25
-        self.min_lambda = 25
-        self.min_scale = self.min_lambda / axlambda 
+        self.min_lambda = 10
+        self.min_scale = self.min_lambda**2 / axlambda **2
     def __call__(self, amp, freq, pdur):
         # Fit using streak lengths measure from weitz et al 2015
         scale = 1.56 - 0.54 * pdur ** 0.21
         if scale > self.min_scale:
-            # Sqaured because it will be multiplied by axlambda squared, and we want to scale lambda
-            return scale ** 2
+            return scale
         else:
-            return self.min_scale ** 2
+            return self.min_scale
 
 
 
@@ -120,7 +129,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Callable model used to modulate percept size with amplitude, frequency, and pulse duration
             'size_model' : None, 
             # Callable model used to modulate percept streak length with amplitude, frequency, and pulse duration
-            'streak_model' : None 
+            'streak_model' : None, 
             # Use probabilistic thresholding
             'do_thresholding' : True
         }
@@ -130,10 +139,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     def _build(self):
         # Fit models if needed 
         if self.bright_model is None:
-            self.bright_model = DefaultBrightModel()
+            self.bright_model = DefaultBrightModel(do_thresholding=self.do_thresholding)
             self.bright_model.fit()
         if self.size_model is None:
-            self.size_model = DefaultSizeModel()
+            self.size_model = DefaultSizeModel(self.rho)
             self.size_model.fit()
         if self.streak_model is None:
             self.streak_model = DefaultStreakModel(self.axlambda)
@@ -162,7 +171,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             streak_effects.append(self.streak_model(amp, freq, pdur))
             amps.append(amp)
                           
-
+        # print(np.max(np.array([bright_effects, size_effects, streak_effects])))
         return fast_biphasic_axon_map(np.array(amps, dtype=np.float32),
                                       np.array(bright_effects, dtype=np.float32),
                                       np.array(size_effects, dtype=np.float32),
