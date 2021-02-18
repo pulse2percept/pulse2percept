@@ -222,6 +222,12 @@ class Stimulus(PrettyPrint):
             _data = source.data
             _time = source.time
             _electrodes = source.electrodes
+            if 'electrodes' not in source.metadata.keys():
+                self.metadata['electrodes'][str(_electrodes[0])] = {'metadata' : source.metadata, 'type' : type(source)}
+            else:
+                self.metadata = source.metadata
+
+
         elif isinstance(source, np.ndarray):
             # A NumPy array is either 1-D (list of electrodes, time=None) or
             # 2-D (electrodes x time points):

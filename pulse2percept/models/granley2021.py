@@ -27,7 +27,7 @@ class DefaultBrightModel():
 
     def predict_pdur(self, pdur):
         # Fit using color threshold of weitz et al 2015, technically this is 1 / threshold, and amplitude will be scaled by this
-        return 1 / (0.952 + 0.215*pdur)
+        return 1 / (0.8825 + 0.27*pdur)
        
 
     def __call__(self, amp, freq, pdur):
@@ -35,11 +35,10 @@ class DefaultBrightModel():
 
         # p = -1/96 + 97 / (96(1+96 exp(-ln(98)amp)))
         # Sigmoid with p[0] = 0, p[1] = 0.5, p[2] = 0.99
-        p = -0.01041666666667 + 1.0104166666666667 / (1+96 * np.exp(-4.584967478670572 * amp))
+        p = -0.01041666666667 + 1.0104166666666667 / (1+96 * np.exp(-4.584967478670572 * amp * self.predict_pdur(pdur)))
         if not self.do_thresholding or np.random.random() < p:
             return bright
         else:
-            print("nope")
             return 0
 
 
@@ -60,7 +59,7 @@ class DefaultSizeModel():
     
     def predict_pdur(self, pdur):
         # Fit using color threshold of weitz et al 2015, technically this is 1 / threshold, and amplitude will be scaled by this
-        return 1 / (0.952 + 0.215*pdur)
+        return 1 / (0.8825 + 0.27*pdur)
 
     def __call__(self, amp, freq, pdur):
         scale = self.amp_model.predict(np.array([amp * self.predict_pdur(pdur)]).reshape(1, -1))[0] 
@@ -161,7 +160,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         size_effects = []
         streak_effects = []
         amps = []
-
         for e in stim.electrodes:
             amp = stim.metadata['electrodes'][str(e)]['metadata']['amp']
             freq = stim.metadata['electrodes'][str(e)]['metadata']['freq']
