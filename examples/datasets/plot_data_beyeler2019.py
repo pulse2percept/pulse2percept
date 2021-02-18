@@ -159,7 +159,7 @@ electrodes = data.electrode.unique()
 # Activate one electrode at a time:
 import numpy as np
 from pulse2percept.stimuli import Stimulus
-implant.stim = Stimulus(np.eye(len(electrodes)), electrodes=electrodes)
+argus.stim = Stimulus(np.eye(len(electrodes)), electrodes=electrodes)
 
 ###############################################################################
 # Using the model's
@@ -167,7 +167,7 @@ implant.stim = Stimulus(np.eye(len(electrodes)), electrodes=electrodes)
 # a Percept object where each frame is the percept generated from activating
 # a single electrode:
 
-percepts = model.predict_percept(implant)
+percepts = model.predict_percept(argus)
 percepts.play()
 
 ###############################################################################
@@ -176,8 +176,8 @@ percepts.play()
 
 from pulse2percept.viz import plot_argus_simulated_phosphenes
 fig, (ax_data, ax_sim) = plt.subplots(ncols=2, figsize=(15, 5))
-plot_argus_phosphenes(data, implant, scale=0.75, ax=ax_data)
-plot_argus_simulated_phosphenes(percepts, implant, scale=1.25, ax=ax_sim)
+plot_argus_phosphenes(data, argus, scale=0.75, ax=ax_data)
+plot_argus_simulated_phosphenes(percepts, argus, scale=1.25, ax=ax_sim)
 ax_data.set_title('Ground-truth phosphenes')
 ax_sim.set_title('Simulated phosphenes')
 
