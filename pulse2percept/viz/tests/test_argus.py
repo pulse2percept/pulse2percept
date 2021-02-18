@@ -12,9 +12,9 @@ from pulse2percept.viz import plot_argus_phosphenes
 def test_plot_argus_phosphenes():
     df = pd.DataFrame([
         {'subject': 'S1', 'electrode': 'A1', 'image': np.random.rand(10, 10),
-         'img_x_dva': (-10, 10), 'img_y_dva': (-10, 10)},
+         'xrange': (-10, 10), 'yrange': (-10, 10)},
         {'subject': 'S1', 'electrode': 'B2', 'image': np.random.rand(10, 10),
-         'img_x_dva': (-10, 10), 'img_y_dva': (-10, 10)},
+         'xrange': (-10, 10), 'yrange': (-10, 10)},
     ])
     _, ax = plt.subplots()
     plot_argus_phosphenes(df, ArgusI(), ax=ax)
