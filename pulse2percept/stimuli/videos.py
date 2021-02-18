@@ -264,7 +264,7 @@ class VideoStimulus(Stimulus):
             # Grayscale videos can be fed directly into rotate:
             data = vid_rotate(data, angle, mode=mode, resize=False)
             return VideoStimulus(data, electrodes=self.electrodes,
-                                 metadata=self.metadata)
+                                 metadata=self.metadata, time=self.time)
         # Else need to feed in each frame individually:
         return self.apply(vid_rotate, angle, mode=mode, resize=False)
 
