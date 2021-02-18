@@ -17,7 +17,7 @@ single-electrode stimulation.
 Loading the dataset
 -------------------
 
-Due to its size (263 MB), the dataset is not included with pulse2percept, but
+Due to its size (66 MB), the dataset is not included with pulse2percept, but
 can be downloaded from the Open Science Framework (OSF).
 
 By default, the dataset will be stored in a local directory
@@ -100,17 +100,9 @@ from pulse2percept.implants import ArgusII
 argus = ArgusII(x=-1331, y=-850, rot=-0.495, eye='RE')
 
 ###############################################################################
-# (We also need to specify the dimensions of the screens that the subject used,
-# expressed in degrees of visual angle, so that we can scale the phosphene
-# drawing appropriately. This should really be part of the Beyeler dataset and
-# will be fixed in a future version.
-# For now, we add the necessary columns ourselves.)
-import pandas as pd
+# For now, let's focus on the data from Subject 2:
+
 data = fetch_beyeler2019(subjects='S2')
-data['img_x_dva'] = pd.Series([(-30, 30)] * len(data), index=data.index,
-                              dtype=float)
-data['img_y_dva'] = pd.Series([(-22.5, 22.5)] * len(data), index=data.index,
-                              dtype=float)
 
 ###############################################################################
 # Passing both ``data`` and ``argus`` to
@@ -132,11 +124,11 @@ plot_argus_phosphenes(data, argus)
 # To see how the phosphene drawings line up with the NFBs, we can also pass an
 # :py:class:`~pulse2percept.models.AxonMapModel` to the function.
 # Of course, we need to make sure that we use the correct dimensions. Subject
-# S2 had their optic disc center located 14 deg nasally, 2.4 deg superior from
-# the fovea:
+# S2 had their optic disc center located 16.2 deg nasally, 1.38 deg superior
+# from the fovea:
 
 from pulse2percept.models import AxonMapModel
-model = AxonMapModel(loc_od=(14, 2.4))
+model = AxonMapModel(loc_od=(16.2, 1.38))
 plot_argus_phosphenes(data, argus, axon_map=model)
 
 ###############################################################################

@@ -25,16 +25,17 @@ def test_fetch_beyeler2019():
     npt.assert_equal(isinstance(data, pd.DataFrame), True)
     columns = ['subject', 'amp', 'area', 'compactness', 'date', 'eccentricity',
                'electrode', 'filename', 'freq', 'image', 'orientation', 'pdur',
-               'stim_class', 'x_center', 'y_center', 'img_shape']
+               'stim_class', 'x_center', 'y_center', 'img_shape',
+               'xrange', 'yrange']
     for expected_col in columns:
         npt.assert_equal(expected_col in data.columns, True)
 
     npt.assert_equal(data.shape, (400, 16))
     npt.assert_equal(data.subject.unique(), ['S1', 'S2', 'S3', 'S4'])
     npt.assert_equal(list(data[data.subject == 'S1'].img_shape.unique()[0]),
-                     [384, 384])
+                     [192, 192])
     npt.assert_equal(list(data[data.subject != 'S1'].img_shape.unique()[0]),
-                     [768, 1024])
+                     [384, 512])
 
     # Subset selection:
     subset = datasets.fetch_beyeler2019(subjects='S2')
