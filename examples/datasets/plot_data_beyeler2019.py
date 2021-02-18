@@ -139,6 +139,7 @@ plot_argus_phosphenes(data, argus, axon_map=model)
 # suited to predict the shape of individual phosphenes. Using the values given
 # in [Beyeler2019]_, we can tailor the axon map parameters to Subject 2:
 
+import numpy as np
 model = AxonMapModel(rho=315, axlambda=500, loc_od=(16.2, 1.38),
                      xrange=(-30, 30), yrange=(-22.5, 22.5),
                      thresh_percept=1 / np.sqrt(np.e))
