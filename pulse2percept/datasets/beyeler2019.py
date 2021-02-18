@@ -99,7 +99,7 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     if not isfile(file_path):
         if download_if_missing:
             url = 'https://osf.io/28uqg/download'
-            checksum = '4774a7cc768fbfb80d1e3f675efd66273e5034ea0e6e74d415acc66badfee442'
+            checksum = '19817990a615d289cdc93b928c138f71977ea2cab54fd1b35d186f3b5a3c4ff5'
             fetch_url(url, file_path, remote_checksum=checksum)
         else:
             raise IOError("No local file %s found" % file_path)
@@ -133,10 +133,10 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     # Combine 'img_shape_x' and 'img_shape_y' into 'img_shape' tuple
     df['img_shape'] = df.apply(lambda x: (x['img_shape_x'], x['img_shape_y']),
                                axis=1)
-    dfs['xrange'] = dfs.apply(lambda x: (x['xrange_x'], x['xrange_y']), axis=1)
-    dfs['yrange'] = dfs.apply(lambda x: (x['yrange_x'], x['yrange_y']), axis=1)
-    dfs.drop(columns=['img_shape_x', 'img_shape_y', 'xrange_x', 'xrange_y',
-                      'yrange_x', 'yrange_y'], inplace=True)
+    df['xrange'] = df.apply(lambda x: (x['xrange_x'], x['xrange_y']), axis=1)
+    df['yrange'] = df.apply(lambda x: (x['yrange_x'], x['yrange_y']), axis=1)
+    df.drop(columns=['img_shape_x', 'img_shape_y', 'xrange_x', 'xrange_y',
+                     'yrange_x', 'yrange_y'], inplace=True)
 
     # Verify integrity of the dataset:
     if len(df) != 400:
