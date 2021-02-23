@@ -19,19 +19,23 @@ class DefaultBrightModel():
         self._fit_amp_freq()
 
     def _fit_amp_freq(self):
-        data = load_nanduri2012()
-        data = data[data['task'] == 'rate']
-        x = data[['amp_factor', 'freq']]
-        y = data['brightness']
-        self.amp_freq_model.fit(x, y)
+        # data = load_nanduri2012()
+        # data = data[data['task'] == 'rate']
+        # x = data[['amp_factor', 'freq']]
+        # y = data['brightness']
+        # self.amp_freq_model.fit(x, y/10)
+        pass
 
     def predict_pdur(self, pdur):
         # Fit using color threshold of weitz et al 2015, technically this is 1 / threshold, and amplitude will be scaled by this
         return 1 / (0.8825 + 0.27*pdur)
        
+    def predict_freq_amp(self, amp, freq):
+        # return self.amp_freq_model.predict([(amp, freq)])[0]
+        return 1.84*amp + 0.2*freq + 3.0986
 
     def __call__(self, amp, freq, pdur):
-        bright = self.amp_freq_model.predict([(amp * self.predict_pdur(pdur), freq)])[0] 
+        bright = self.predict_freq_amp(amp * self.predict_pdur(pdur), freq) 
 
         # p = -1/96 + 97 / (96(1+96 exp(-ln(98)amp)))
         # Sigmoid with p[0] = 0, p[1] = 0.5, p[2] = 0.99
