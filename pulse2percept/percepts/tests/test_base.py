@@ -108,6 +108,11 @@ def test_Percept_plot():
     ax = percept.plot(kind='pcolor', figsize=(6, 4))
     npt.assert_almost_equal(ax.figure.get_size_inches(), (6, 4))
 
+    # Test vmin and vmax
+    ax.clear() 
+    ax = percept.plot(vmin=2, vmax=4)
+    npt.assert_equal(ax.collections[0].get_clim(), (2., 4.))
+
     # Invalid calls:
     with pytest.raises(ValueError):
         percept.plot(kind='invalid')

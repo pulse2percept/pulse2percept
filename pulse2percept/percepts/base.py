@@ -167,9 +167,9 @@ class Percept(Data):
             if not isinstance(ax, Subplot):
                 raise TypeError("'ax' must be a Matplotlib axis, not "
                                 "%s." % type(ax))
-
-        vmin, vmax = frame.min(), frame.max()
-        cmap = kwargs['cmap'] if 'cmap' in kwargs else 'gray'
+        vmin = kwargs['vmin'] if 'vmin' in kwargs.keys() else frame.min()
+        vmax = kwargs['vmax'] if 'vmax' in kwargs.keys() else frame.max()
+        cmap = kwargs['cmap'] if 'cmap' in kwargs.keys() else 'gray'
         X, Y = np.meshgrid(self.xdva, self.ydva, indexing='xy')
         if kind == 'pcolor':
             # Create a pseudocolor plot. Make sure to pass additional keyword
