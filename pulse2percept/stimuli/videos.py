@@ -98,7 +98,7 @@ class VideoStimulus(Stimulus):
             metadata['source'] = source
             metadata['source_shape'] = vid.shape
             # Infer the time points from the video frame rate:
-            time = np.arange(vid.shape[-1]) * meta['fps']
+            time = np.arange(vid.shape[-1]) * 1000.0 / meta['fps']
         elif isinstance(source, VideoStimulus):
             vid = source.data.reshape(source.vid_shape)
             metadata.update(source.metadata)
