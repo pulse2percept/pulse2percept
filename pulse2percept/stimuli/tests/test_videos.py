@@ -9,7 +9,7 @@ from skimage.io import imsave
 from pulse2percept.stimuli import VideoStimulus, BostonTrain
 
 
-@pytest.mark.parametrize('fps', [1, 10, 33])
+@pytest.mark.parametrize('fps', [1, 5])
 def test_VideoStimulus(fps):
     # Create a dummy video:
     fname = 'test.mp4'
@@ -17,6 +17,7 @@ def test_VideoStimulus(fps):
     ndarray = np.random.rand(*shape)
     mimwrite(fname, (255 * ndarray).astype(np.uint8), fps=fps)
     stim = VideoStimulus(fname, as_gray=True)
+    print(stim.shape)
     npt.assert_equal(stim.shape, (np.prod(shape[1:]), shape[0]))
     npt.assert_almost_equal(stim.data,
                             ndarray.reshape((shape[0], -1)).transpose(),
@@ -29,7 +30,7 @@ def test_VideoStimulus(fps):
 
     # Resize the video:
     ndarray = np.ones(shape)
-    mimwrite(fname, (255 * ndarray).astype(np.uint8), fps=1)
+    mimwrite(fname, (255 * ndarray).astype(np.uint8), fps=fps)
     resize = (16, 32)
     stim = VideoStimulus(fname, as_gray=True, resize=resize)
     npt.assert_equal(stim.shape, (np.prod(resize), shape[0]))
@@ -37,7 +38,7 @@ def test_VideoStimulus(fps):
                             np.ones((np.prod(resize), shape[0])), decimal=1)
     npt.assert_equal(stim.metadata['source'], fname)
     npt.assert_equal(stim.metadata['source_size'], (shape[2], shape[1]))
-    npt.assert_equal(stim.time, np.arange(shape[0]))
+    npt.assert_almost_equal(stim.time, np.arange(shape[0]) * 1000 / fps)
     npt.assert_equal(stim.electrodes, np.arange(np.prod(resize)))
     os.remove(fname)
 
