@@ -8,13 +8,11 @@ from pulse2percept import implants
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
-@pytest.mark.parametrize('r', (-45, 60))
-def test_ArgusI(ztype, x, y, r):
+@pytest.mark.parametrize('rot', (-45, 60))
+def test_ArgusI(ztype, x, y, rot):
     # Create an ArgusI and make sure location is correct
     # Height `z` can either be a float or a list
     z = 100 if ztype == 'float' else np.ones(16) * 20
-    # Convert rotation angle to rad
-    rot = r * np.pi / 180
 
     argus = implants.ArgusI(x, y, z=z, rot=rot)
 
@@ -26,8 +24,9 @@ def test_ArgusI(ztype, x, y, r):
     xy = np.array([-1200, -1200]).T
 
     # Rotate
-    R = np.array([np.cos(rot), -np.sin(rot),
-                  np.sin(rot), np.cos(rot)]).reshape((2, 2))
+    rot_rad = np.deg2rad(rot)
+    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
+                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
     xy = np.matmul(R, xy)
 
     # Then off-set: Make sure first electrode is placed
@@ -81,7 +80,7 @@ def test_ArgusI(ztype, x, y, r):
     # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
     for eye, el in zip(['LE', 'RE'], ['A1', 'D1']):
         before = implants.ArgusI(eye=eye)
-        after = implants.ArgusI(eye=eye, rot=np.deg2rad(10))
+        after = implants.ArgusI(eye=eye, rot=10)
         npt.assert_equal(after[el].x > before[el].x, True)
         npt.assert_equal(after[el].y > before[el].y, True)
 
@@ -108,13 +107,11 @@ def test_ArgusI(ztype, x, y, r):
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
-@pytest.mark.parametrize('r', (-45, 60))
-def test_ArgusII(ztype, x, y, r):
+@pytest.mark.parametrize('rot', (-45, 60))
+def test_ArgusII(ztype, x, y, rot):
     # Create an ArgusII and make sure location is correct
     # Height `h` can either be a float or a list
     z = 100 if ztype == 'float' else np.ones(60) * 20
-    # Convert rotation angle to rad
-    rot = np.deg2rad(r)
     argus = implants.ArgusII(x=x, y=y, z=z, rot=rot)
 
     # Slots:
@@ -125,8 +122,9 @@ def test_ArgusII(ztype, x, y, r):
     xy = np.array([-2587.5, -1437.5]).T
 
     # Rotate
-    R = np.array([np.cos(rot), -np.sin(rot),
-                  np.sin(rot), np.cos(rot)]).reshape((2, 2))
+    rot_rad = np.deg2rad(rot)
+    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
+                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
     xy = np.matmul(R, xy)
 
     # Then off-set: Make sure first electrode is placed
@@ -175,7 +173,7 @@ def test_ArgusII(ztype, x, y, r):
         # 'F10' in a right eye (because the columns are reversed). Thus both
         # cases are testing an electrode with x>0, y>0:
         before = implants.ArgusII(eye=eye)
-        after = implants.ArgusII(eye=eye, rot=np.deg2rad(20))
+        after = implants.ArgusII(eye=eye, rot=20)
         npt.assert_equal(after[el].x < before[el].x, True)
         npt.assert_equal(after[el].y > before[el].y, True)
 

@@ -38,12 +38,12 @@ fig, ax = plt.subplots(ncols=2, figsize=(10, 6))
 model = AxonMapModel()
 model.plot(ax=ax[0])
 # Argus I is typically implanted at a 30-45deg angle:
-ArgusI(rot=-0.52).plot(ax=ax[0], annotate=True)
+ArgusI(rot=-30).plot(ax=ax[0], annotate=True)
 ax[0].set_title('Argus I')
 
 model.plot(ax=ax[1])
 # Argus II is typically implanted at a 30-45deg angle:
-ArgusII(rot=-0.52).plot(ax=ax[1], annotate=False)
+ArgusII(rot=-30).plot(ax=ax[1], annotate=False)
 ax[1].set_title('Argus II')
 
 ###############################################################################

@@ -17,7 +17,7 @@ To create a rectangular grid, we need to specify:
    of rows and columns
 -  The electrode-to-electrode ``spacing`` in microns
 -  The (``x``, ``y``) location of the center of the array
--  The rotation angle ``rot`` of the grid in radians, where positive angles
+-  The rotation angle ``rot`` of the grid in degrees, where positive angles
    rotate all electrodes in the array in a counter-clockwise fashion on the
    retinal surface.
 
@@ -113,7 +113,7 @@ hex_grid.plot()
 
 from numpy import pi
 offset_grid = ElectrodeGrid((11, 13), 500, type='hex', x=-600, y=200, z=150,
-                            rot=-pi / 4, etype=DiskElectrode, r=100)
+                            rot=-45, etype=DiskElectrode, r=100)
 
 ##############################################################################
 # .. note::

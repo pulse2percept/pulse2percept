@@ -177,7 +177,7 @@ ax.set_title('Predicted percept')
 # depending on the location of the implant. You can convince yourself of that
 # by re-running the model on an implant shifted and rotated across the retina:
 
-implant = ArgusII(x=-50, y=50, rot=np.deg2rad(-45))
+implant = ArgusII(x=-50, y=50, rot=-45)
 model.plot()
 implant.plot()
 

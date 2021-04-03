@@ -218,7 +218,7 @@ class ElectrodeGrid(ElectrodeArray):
     x, y, z : double, optional
         3D coordinates of the center of the grid
     rot : double, optional
-        Rotation of the grid in radians (positive angle: counter-clockwise
+        Rotation of the grid in degrees (positive angle: counter-clockwise
         rotation on the retinal surface)
     names: (name_rows, name_cols), each of which either 'A' or '1'
         Naming convention for rows and columns, respectively.
@@ -327,7 +327,6 @@ class ElectrodeGrid(ElectrodeArray):
                 raise ValueError("'names' must either have two entries for "
                                  "rows/columns or %d entries, not "
                                  "%d" % (np.prod(shape), len(names)))
-
         self.shape = shape
         self.type = type
         self.spacing = spacing
@@ -488,8 +487,9 @@ class ElectrodeGrid(ElectrodeArray):
             raise NotImplementedError
 
         # Rotate the grid:
-        rotmat = np.array([np.cos(rot), -np.sin(rot),
-                           np.sin(rot), np.cos(rot)]).reshape((2, 2))
+        rot_rad = np.deg2rad(rot)
+        rotmat = np.array([np.cos(rot_rad), -np.sin(rot_rad),
+                           np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
         xy = np.matmul(rotmat, np.vstack((x_arr.flatten(), y_arr.flatten())))
         x_arr = xy[0, :]
         y_arr = xy[1, :]

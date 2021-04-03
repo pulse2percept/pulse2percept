@@ -97,7 +97,7 @@ plt.imshow(data.loc[0, 'image'], cmap='gray')
 # in the following location:
 
 from pulse2percept.implants import ArgusII
-argus = ArgusII(x=-1331, y=-850, rot=-0.495, eye='RE')
+argus = ArgusII(x=-1331, y=-850, rot=-28.4, eye='RE')
 
 ###############################################################################
 # For now, let's focus on the data from Subject 2:

@@ -9,12 +9,12 @@ from skimage.io import imsave
 from pulse2percept.stimuli import VideoStimulus, BostonTrain
 
 
-@pytest.mark.parametrize('fps', [1, 5])
-def test_VideoStimulus(fps):
+def test_VideoStimulus():
     # Create a dummy video:
     fname = 'test.mp4'
     shape = (10, 32, 48)
     ndarray = np.random.rand(*shape)
+    fps = 1
     mimwrite(fname, (255 * ndarray).astype(np.uint8), fps=fps)
     stim = VideoStimulus(fname, as_gray=True)
     npt.assert_equal(stim.shape, (np.prod(shape[1:]), shape[0]))
