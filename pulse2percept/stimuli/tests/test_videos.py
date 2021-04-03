@@ -17,7 +17,6 @@ def test_VideoStimulus(fps):
     ndarray = np.random.rand(*shape)
     mimwrite(fname, (255 * ndarray).astype(np.uint8), fps=fps)
     stim = VideoStimulus(fname, as_gray=True)
-    print(stim.shape)
     npt.assert_equal(stim.shape, (np.prod(shape[1:]), shape[0]))
     npt.assert_almost_equal(stim.data,
                             ndarray.reshape((shape[0], -1)).transpose(),
