@@ -29,8 +29,8 @@ def test_PhotovoltaicPixel():
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
-@pytest.mark.parametrize('r', (-45, 60))
-def test_PRIMA(ztype, x, y, r):
+@pytest.mark.parametrize('rot', (-45, 60))
+def test_PRIMA(ztype, x, y, rot):
     # 85 um pixel with 15 um trenches:
     spacing = 100
     # Roughly a 12x15 grid, but edges are trimmed off:
@@ -38,8 +38,6 @@ def test_PRIMA(ztype, x, y, r):
     # Create an Prima and make sure location is correct
     # Height `z` can either be a float or a list
     z = -100 if ztype == 'float' else -np.ones(378) * 20
-    # Convert rotation angle to rad
-    rot = r * np.pi / 180
 
     prima = PRIMA(x, y, z=z, rot=rot)
 
@@ -54,8 +52,9 @@ def test_PRIMA(ztype, x, y, r):
     # Coordinates of A6 when device is not rotated:
     xy = np.array([-616.99, -925.0]).T
     # Rotate
-    R = np.array([np.cos(rot), -np.sin(rot),
-                  np.sin(rot), np.cos(rot)]).reshape((2, 2))
+    rot_rad = np.deg2rad(rot)
+    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
+                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
     xy = np.matmul(R, xy)
     # Then off-set: Make sure first electrode is placed
     # correctly
@@ -81,8 +80,8 @@ def test_PRIMA(ztype, x, y, r):
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
-@pytest.mark.parametrize('r', (-45, 60))
-def test_PRIMA75(ztype, x, y, r):
+@pytest.mark.parametrize('rot', (-45, 60))
+def test_PRIMA75(ztype, x, y, rot):
     # 70 um pixel with 5 um trenches:
     spacing = 75
     # Roughly a 12x15 grid, but edges are trimmed off:
@@ -90,8 +89,6 @@ def test_PRIMA75(ztype, x, y, r):
     # Create an Prima and make sure location is correct
     # Height `z` can either be a float or a list
     z = -100 if ztype == 'float' else -np.ones(142) * 20
-    # Convert rotation angle to rad
-    rot = r * np.pi / 180
 
     prima = PRIMA75(x, y, z=z, rot=rot)
 
@@ -106,8 +103,9 @@ def test_PRIMA75(ztype, x, y, r):
     # Coordinates of A6 when device is not rotated:
     xy = np.array([-200.24, -431.25]).T
     # Rotate
-    R = np.array([np.cos(rot), -np.sin(rot),
-                  np.sin(rot), np.cos(rot)]).reshape((2, 2))
+    rot_rad = np.deg2rad(rot)
+    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
+                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
     xy = np.matmul(R, xy)
     # Then off-set: Make sure first electrode is placed
     # correctly
@@ -133,8 +131,8 @@ def test_PRIMA75(ztype, x, y, r):
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
-@pytest.mark.parametrize('r', (-45, 60))
-def test_PRIMA55(ztype, x, y, r):
+@pytest.mark.parametrize('rot', (-45, 60))
+def test_PRIMA55(ztype, x, y, rot):
     # 50 um pixels with 5 um trenches:
     spacing = 55
     # Roughly a 18x21 grid, but edges are trimmed off:
@@ -142,8 +140,6 @@ def test_PRIMA55(ztype, x, y, r):
     # Create an Prima and make sure location is correct
     # Height `z` can either be a float or a list
     z = -100 if ztype == 'float' else -np.ones(273) * 20
-    # Convert rotation angle to rad
-    rot = r * np.pi / 180
 
     prima = PRIMA55(x, y, z=z, rot=rot)
 
@@ -158,8 +154,9 @@ def test_PRIMA55(ztype, x, y, r):
     # Coordinates of C8 when device is not rotated:
     xy = np.array([-216.58, -371.25]).T
     # Rotate
-    R = np.array([np.cos(rot), -np.sin(rot),
-                  np.sin(rot), np.cos(rot)]).reshape((2, 2))
+    rot_rad = np.deg2rad(rot)
+    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
+                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
     xy = np.matmul(R, xy)
     # Then off-set: Make sure first electrode is placed
     # correctly
@@ -185,8 +182,8 @@ def test_PRIMA55(ztype, x, y, r):
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
-@pytest.mark.parametrize('r', (-45, 60))
-def test_PRIMA40(ztype, x, y, r):
+@pytest.mark.parametrize('rot', (-45, 60))
+def test_PRIMA40(ztype, x, y, rot):
     # 35 um pixel with 5 um trenches:
     spacing = 40
     # Roughly a 25x28 grid, but edges are trimmed off:
@@ -194,8 +191,6 @@ def test_PRIMA40(ztype, x, y, r):
     # Create an Prima and make sure location is correct
     # Height `z` can either be a float or a list
     z = -100 if ztype == 'float' else -np.ones(532) * 20
-    # Convert rotation angle to rad
-    rot = r * np.pi / 180
 
     prima = PRIMA40(x, y, z=z, rot=rot)
 
@@ -210,8 +205,9 @@ def test_PRIMA40(ztype, x, y, r):
     # Coordinates of D16 when device is not rotated:
     xy = np.array([-20.38, -370.0]).T
     # Rotate
-    R = np.array([np.cos(rot), -np.sin(rot),
-                  np.sin(rot), np.cos(rot)]).reshape((2, 2))
+    rot_rad = np.deg2rad(rot)
+    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
+                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
     xy = np.matmul(R, xy)
     # Then off-set: Make sure first electrode is placed
     # correctly

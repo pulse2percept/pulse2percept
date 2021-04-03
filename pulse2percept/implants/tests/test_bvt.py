@@ -7,11 +7,9 @@ from pulse2percept.implants.bvt import BVT24
 
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
-@pytest.mark.parametrize('r', (-45, 60))
-def test_BVT24(x, y, r):
+@pytest.mark.parametrize('rot', (-45, 60))
+def test_BVT24(x, y, rot):
     # Create a BVT24 and make sure location is correct
-    # Convert rotation angle to rad
-    rot = np.deg2rad(r)
     bva = BVT24(x=x, y=y, rot=rot)
 
     # Slots:
@@ -24,8 +22,9 @@ def test_BVT24(x, y, r):
     xy2 = np.array([-850.0, -2280.0]).T
 
     # Rotate
-    R = np.array([np.cos(rot), -np.sin(rot),
-                  np.sin(rot), np.cos(rot)]).reshape((2, 2))
+    rot_rad = np.deg2rad(rot)
+    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
+                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
     xy = np.matmul(R, xy)
     xy2 = np.matmul(R, xy2)
 

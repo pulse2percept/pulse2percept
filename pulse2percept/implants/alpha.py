@@ -14,7 +14,7 @@ class AlphaIMS(ProsthesisSystem):
     50um in diameter) as described in [Stingl2013]_, and places it in the
     subretinal space, such that the center of the array is located at (x,y,z),
     given in microns, and the array is rotated by rotation angle ``rot``,
-    given in radians.
+    given in degrees.
 
     The device consists of 1500 50um-wide square pixels, arranged on a 39x39
     rectangular grid with 72um pixel pitch.
@@ -40,7 +40,7 @@ class AlphaIMS(ProsthesisSystem):
         Distance of the array to the retinal surface (um). Either a list
         with 1500 entries or a scalar.
     rot : float
-        Rotation angle of the array (rad). Positive values denote
+        Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'RE', 'LE'}, optional
@@ -49,10 +49,10 @@ class AlphaIMS(ProsthesisSystem):
     Examples
     --------
     Create an Alpha-IMS array centered on the fovea, at 100um distance from
-    the retina:
+    the retina, rotated counter-clockwise by 5 degrees:
 
     >>> from pulse2percept.implants import AlphaIMS
-    >>> AlphaIMS(x=0, y=0, z=100, rot=0)  # doctest: +NORMALIZE_WHITESPACE
+    >>> AlphaIMS(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
     AlphaIMS(earray=ElectrodeGrid, eye='RE', shape=(39, 39),
              stim=None)
 
@@ -139,7 +139,7 @@ class AlphaAMS(ProsthesisSystem):
     30um in diameter) as described in [Stingl2017]_, and places it in the
     subretinal space, such that the center of the array is located at (x,y,z),
     given in microns, and the array is rotated by rotation angle ``rot``,
-    given in radians.
+    given in degrees.
 
     The device consists of 1600 30um-wide round pixels, arranged on a 40x40
     rectangular grid with 70um pixel pitch.
@@ -165,7 +165,7 @@ class AlphaAMS(ProsthesisSystem):
         Distance of the array to the retinal surface (um). Either a list
         with 60 entries or a scalar.
     rot : float
-        Rotation angle of the array (rad). Positive values denote
+        Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'RE', 'LE'}, optional
@@ -174,10 +174,10 @@ class AlphaAMS(ProsthesisSystem):
     Examples
     --------
     Create an AlphaAMS array centered on the fovea, at 100um distance from
-    the retina:
+    the retina, rotated counter-clockwise by 5 degrees:
 
     >>> from pulse2percept.implants import AlphaAMS
-    >>> AlphaAMS(x=0, y=0, z=100, rot=0)  # doctest: +NORMALIZE_WHITESPACE
+    >>> AlphaAMS(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
     AlphaAMS(earray=ElectrodeGrid, eye='RE', shape=(40, 40),
              stim=None)
 

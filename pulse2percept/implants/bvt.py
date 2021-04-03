@@ -13,7 +13,7 @@ class BVT24(ProsthesisSystem):
     [Layton2014]_, which was developed by the Bionic Vision Australia
     Consortium and commercialized by Bionic Vision Technologies (BVT).
     The center of the array is located at (x,y,z), given in microns, and the
-    array is rotated by rotation angle ``rot``, given in radians.
+    array is rotated by rotation angle ``rot``, given in degrees.
 
     The array consists of:
 
@@ -47,7 +47,7 @@ class BVT24(ProsthesisSystem):
         Distance of the array to the retinal surface (um). Either a list
         with 60 entries or a scalar.
     rot : float
-        Rotation angle of the array (rad). Positive values denote
+        Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'RE', 'LE'}, optional
@@ -105,8 +105,9 @@ class BVT24(ProsthesisSystem):
         names.extend(['R1', 'R2'])
 
         # Rotate the grid:
-        rotmat = np.array([np.cos(rot), -np.sin(rot),
-                           np.sin(rot), np.cos(rot)]).reshape((2, 2))
+        rot_rad = np.deg2rad(rot)
+        rotmat = np.array([np.cos(rot_rad), -np.sin(rot_rad),
+                           np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
         xy = np.matmul(rotmat, np.vstack((x_arr, y_arr)))
         x_arr = xy[0, :]
         y_arr = xy[1, :]

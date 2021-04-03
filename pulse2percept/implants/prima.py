@@ -64,7 +64,7 @@ class PRIMA(ProsthesisSystem):
     100um in diameter) as used in the clinical trial [Palanker2020]_, and
     places it in the subretinal space such that the center of the array is
     located at 3D location (x,y,z), given in microns, and the array is rotated
-    by rotation angle ``rot``, given in radians.
+    by rotation angle ``rot``, given in degrees.
 
     The device consists of 378 85um-wide pixels separated by 15um trenches,
     arranged in a 2-mm wide hexagonal pattern.
@@ -84,7 +84,7 @@ class PRIMA(ProsthesisSystem):
         Distance of the array to the retinal surface (um). Either a list
         with 378 entries or a scalar.
     rot : float, optional
-        Rotation angle of the array (rad). Positive values denote
+        Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'RE', 'LE'}, optional
@@ -152,7 +152,7 @@ class PRIMA75(ProsthesisSystem):
     in diameter) as described in [Lorach2015]_, and places it in the subretinal
     space, such that that the center of the array is located at 3D location
     (x,y,z), given in microns, and the array is rotated by rotation angle
-    ``rot``, given in radians.
+    ``rot``, given in degrees.
 
     The device consists of 142 70um-wide pixels separated by 5um trenches,
     arranged in a 1-mm wide hexagonal pattern.
@@ -172,7 +172,7 @@ class PRIMA75(ProsthesisSystem):
         Distance of the array to the retinal surface (um). Either a list
         with 142 entries or a scalar.
     rot : float, optional
-        Rotation angle of the array (rad). Positive values denote
+        Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'RE', 'LE'}, optional
@@ -237,7 +237,7 @@ class PRIMA55(ProsthesisSystem):
     This class creates a PRIMA array with 273 photovoltaic pixels (each 55um
     in diameter), and places it in the subretinal space, such that that the
     center of the array is located at 3D location (x,y,z), given in microns,
-    and the array is rotated by rotation angle ``rot``, given in radians.
+    and the array is rotated by rotation angle ``rot``, given in degrees.
 
     The device consists of 273 50um-wide pixels separated by 5um trenches,
     arranged in a 1-mm wide hexagonal pattern.
@@ -263,7 +263,7 @@ class PRIMA55(ProsthesisSystem):
         Distance of the array to the retinal surface (um). Either a list
         with 378 entries or a scalar.
     rot : float, optional
-        Rotation angle of the array (rad). Positive values denote
+        Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'RE', 'LE'}, optional
@@ -333,7 +333,7 @@ class PRIMA40(ProsthesisSystem):
     This class creates a PRIMA array with 532 photovoltaic pixels (each 40um
     in diameter), and places it in the subretinal space, such that that the
     center of the array is located at 3D location (x,y,z), given in microns,
-    and the array is rotated by rotation angle ``rot``, given in radians.
+    and the array is rotated by rotation angle ``rot``, given in degrees.
 
     The device consists of 532 35um-wide pixels separated by 5um trenches,
     arranged in a 1-mm wide hexagonal pattern.
@@ -359,7 +359,7 @@ class PRIMA40(ProsthesisSystem):
         Distance of the array to the retinal surface (um). Either a list
         with 378 entries or a scalar.
     rot : float, optional
-        Rotation angle of the array (rad). Positive values denote
+        Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'LE', 'RE'}, optional
