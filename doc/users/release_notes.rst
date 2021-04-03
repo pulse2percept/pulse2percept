@@ -6,10 +6,10 @@ Release Notes
 
 .. important::
 
-    pulse2percept 0.4.3 is the last release to support Python 2.7 and 3.4.
-    pulse2percept 0.5+ requires **Python 3.5 or newer**.
+    **pulse2percept 0.6 was the last version to support Python <= 3.5.**
+    pulse2percept 0.7+ requires Python 3.6+.
 
-v0.7.0 (2020, planned)
+v0.7.0 (2021, planned)
 ----------------------
 
 Highlights
@@ -49,6 +49,7 @@ API changes
 Backward-incompatible changes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+*  Implants rotation angles are now speicified in degrees, not radians (:pull:`357`)
 *  pulse2percept now requires Matplotlib 3.0.2 or newer (:pull:`223`)
 *  FFMPEG and scikit-video dependencies have been removed (:pull:`196`)
 *  ``TimeSeries`` has been removed. Please use
