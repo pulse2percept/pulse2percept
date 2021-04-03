@@ -251,6 +251,7 @@ class Percept(Data):
 
         def data_gen():
             try:
+                self.rewind()
                 # Advance to the next frame:
                 while True:
                     yield next(self)
