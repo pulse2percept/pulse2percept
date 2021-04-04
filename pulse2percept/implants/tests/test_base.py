@@ -57,6 +57,6 @@ def test_ProsthesisSystem():
 
 def test_ProsthesisSystem_stim():
     implant = ProsthesisSystem(ElectrodeGrid((13, 13), 20))
-    stim = Stimulus(np.ones((13, 13, 3)))
+    stim = Stimulus(np.ones((13 * 13 + 1, 5)))
     with pytest.raises(ValueError):
         implant.stim = stim
