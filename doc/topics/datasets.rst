@@ -13,6 +13,9 @@ functions that can be used to load datasets from the bionic vision community:
    *  :py:func:`~pulse2percept.datasets.load_horsager2009`: Load the threshold
       data from [Horsager2009]_.
 
+   *  :py:func:`~pulse2percept.datasets.load_nanduri2012`: Load the brightness
+      rating data from [Nanduri2012]_.
+
 *  **Dataset fetchers** can be used to download larger datasets from a given
    URL and directly import them into pulse2percept.
 
