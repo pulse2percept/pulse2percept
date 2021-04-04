@@ -534,6 +534,6 @@ def test_Stimulus_arithmetic(scalar):
     with pytest.raises(TypeError):
         stim * np.array([2, 3])
     with pytest.raises(TypeError):
-        stim >> np.array([2, 3])
+        s = stim >> np.array([2, 3])
     with pytest.raises(TypeError):
-        stim << np.array([2, 3])
+        s = stim << np.array([2, 3])

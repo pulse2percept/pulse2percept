@@ -4,7 +4,7 @@ import pytest
 
 from pulse2percept.implants import (DiskElectrode, PointSource, ElectrodeArray,
                                     ProsthesisSystem, ArgusI)
-from pulse2percept.stimuli import Stimulus, BiphasicPulseTrain
+from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (Nanduri2012Model, Nanduri2012Spatial,
                                   Nanduri2012Temporal)
@@ -179,7 +179,6 @@ def test_Nanduri2012Model_predict_percept():
 
     # Requested times must be multiples of model.dt:
     implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
-    tsample = 5e-3  # sampling time step (ms)
     # implant.stim = PulseTrain(tsample)
     implant.stim = BiphasicPulseTrain(20, 20, 0.45)
     model.temporal.dt = 0.1

@@ -10,7 +10,7 @@ from .optimizers import (BaseOptimizer, FunctionMinimizer, GridSearchOptimizer,
                          NotFittedError, ParticleSwarmOptimizer)
 
 __all__ = [
-    'BaseOptimizer'
+    'BaseOptimizer',
     'FunctionMinimizer',
     'GridSearchOptimizer',
     'NotFittedError',
