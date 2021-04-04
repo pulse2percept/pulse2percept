@@ -3,7 +3,6 @@ from os.path import dirname, join
 import numpy as np
 from copy import deepcopy
 import matplotlib.pyplot as plt
-from matplotlib.axes import Subplot
 
 from skimage import img_as_float32
 from skimage.io import imread, imsave

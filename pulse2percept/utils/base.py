@@ -1,6 +1,7 @@
 """`PrettyPrint`, `Frozen`, `Data`, `cached`, `gamma`, `unique`"""
 import numpy as np
 import sys
+import abc
 from scipy.special import factorial
 from collections import OrderedDict as ODict
 from functools import wraps

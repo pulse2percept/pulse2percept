@@ -1,6 +1,5 @@
 """`PulseTrain`, `BiphasicPulseTrain`, `AsymmetricBiphasicPulseTrain`"""
 import numpy as np
-import copy
 import logging
 
 # DT: Sampling time step (ms); defines the duration of the signal edge
