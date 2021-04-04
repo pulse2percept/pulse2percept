@@ -7,11 +7,6 @@ from collections import OrderedDict as ODict
 from functools import wraps
 
 """`PrettyPrint`, `Frozen`, `gamma`, `unique`"""
-import numpy as np
-import sys
-import abc
-from scipy.special import factorial
-from collections import OrderedDict as ODict
 
 
 class PrettyPrint(object, metaclass=abc.ABCMeta):

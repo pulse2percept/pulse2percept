@@ -1,6 +1,5 @@
 """`PulseTrain`, `BiphasicPulseTrain`, `AsymmetricBiphasicPulseTrain`"""
 import numpy as np
-import copy
 import logging
 
 # DT: Sampling time step (ms); defines the duration of the signal edge
@@ -8,7 +7,6 @@ import logging
 from . import DT
 from .base import Stimulus
 from .pulses import BiphasicPulse, AsymmetricBiphasicPulse, MonophasicPulse
-from ..utils import unique
 
 
 class PulseTrain(Stimulus):
@@ -104,7 +102,7 @@ class PulseTrain(Stimulus):
                          compress=False)
         self.freq = freq
         self.pulse_type = pulse.__class__.__name__
-        self.metadata = {'user' : metadata}
+        self.metadata = {'user': metadata}
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
@@ -177,11 +175,11 @@ class BiphasicPulseTrain(Stimulus):
         self.cathodic_first = cathodic_first
 
         # Store metadata for BiphasicAxonMapModel
-        self.metadata = {'freq' : freq,
-                         'amp' : amp,
-                         'phase_dur' : phase_dur,
-                         'delay_dur' : delay_dur,
-                         'user' : metadata}
+        self.metadata = {'freq': freq,
+                         'amp': amp,
+                         'phase_dur': phase_dur,
+                         'delay_dur': delay_dur,
+                         'user': metadata}
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
@@ -247,7 +245,7 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
         super().__init__(pt.data, time=pt.time, compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
-        self.metadata = {'user' : metadata}
+        self.metadata = {'user': metadata}
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
@@ -315,13 +313,13 @@ class BiphasicTripletTrain(Stimulus):
         pulse = BiphasicPulse(amp, phase_dur, interphase_dur=interphase_dur,
                               delay_dur=delay_dur,
                               cathodic_first=cathodic_first,
-                              electrode=electrode)                            
+                              electrode=electrode)
         if interpulse_dur != 0:
             # Create an interpulse 'delay' pulse:
             delay_pulse = MonophasicPulse(0, interpulse_dur)
             pulse = pulse.append(delay_pulse)
         # Create the pulse triplet:
-        triplet = pulse.append(pulse).append(pulse)   
+        triplet = pulse.append(pulse).append(pulse)
         # Create the triplet train:
         pt = PulseTrain(freq, triplet, n_pulses=n_pulses, stim_dur=stim_dur)
         # Set up the Stimulus object through the constructor:
@@ -329,7 +327,7 @@ class BiphasicTripletTrain(Stimulus):
                                                    compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
-        self.metadata = {'user' : metadata}
+        self.metadata = {'user': metadata}
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""

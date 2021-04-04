@@ -8,7 +8,7 @@ from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
-from ..utils import parfor, Grid2D, Watson2014Transform
+from ..utils import parfor, Watson2014Transform
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
@@ -70,8 +70,6 @@ class ScoreboardSpatial(SpatialModel):
         """Predicts the brightness at spatial locations"""
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        assert isinstance(earray, ElectrodeArray)
-        assert isinstance(stim, Stimulus)
         return fast_scoreboard(stim.data,
                                np.array([earray[e].x for e in stim.electrodes],
                                         dtype=np.float32),
@@ -217,7 +215,7 @@ class AxonMapSpatial(SpatialModel):
             # this value will be pruned:
             'min_ax_sensitivity': 1e-3,
             # Use legacy build, searching over axons instead of using KDTree
-            'use_legacy_build' : False,
+            'use_legacy_build': False,
             # Precomputed axon maps stored in the following file:
             'axon_pickle': 'axons.pickle',
             # You can force a build by ignoring pickles:
@@ -395,7 +393,7 @@ class AxonMapSpatial(SpatialModel):
                                          (flat_bundles[:, 1] - y) ** 2)
                                for x, y in zip(xret.ravel(),
                                                yret.ravel())]
-        else: 
+        else:
             kdtree = cKDTree(flat_bundles, leafsize=60)
             # Create query list of xy pairs
             query = np.stack((xret.ravel(), yret.ravel()), axis=1)
@@ -424,7 +422,7 @@ class AxonMapSpatial(SpatialModel):
             # summing up the individual distances between neighboring axon
             # segments (by "walking along the axon"):
             d2 = np.cumsum(np.sqrt(np.diff(axon[:, 0], axis=0) ** 2 +
-                           np.diff(axon[:, 1], axis=0) ** 2)) ** 2
+                                   np.diff(axon[:, 1], axis=0) ** 2)) ** 2
             idx_d2 = d2 < max_d2
             sensitivity = np.exp(-d2[idx_d2] / (2.0 * self.axlambda ** 2))
             idx_d2 = np.insert(idx_d2, 0, False)

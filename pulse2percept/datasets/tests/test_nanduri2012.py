@@ -1,8 +1,5 @@
 import pandas as pd
 import numpy.testing as npt
-import pytest
-from unittest import mock
-from importlib import reload
 
 from pulse2percept.datasets import load_nanduri2012
 
