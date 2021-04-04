@@ -399,8 +399,10 @@ class VideoStimulus(Stimulus):
 
     def play(self, fps=None, repeat=True, annotate_time=True, ax=None):
         """Animate the percept as HTML with JavaScript
+
         The percept will be played in an interactive player in IPython or
         Jupyter Notebook.
+        
         Parameters
         ----------
         fps : float or None
@@ -414,6 +416,7 @@ class VideoStimulus(Stimulus):
             title of the panel.
         ax : matplotlib.axes.AxesSubplot, optional
             A Matplotlib axes object. If None, will create a new Axes object
+        
         Returns
         -------
         ani : matplotlib.animation.FuncAnimation
@@ -429,6 +432,7 @@ class VideoStimulus(Stimulus):
 
         def data_gen():
             try:
+                self.rewind()
                 # Advance to the next frame:
                 while True:
                     yield next(self)
