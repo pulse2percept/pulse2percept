@@ -25,7 +25,7 @@ jobs:
         uses: joerick/cibuildwheel@v1.10.0
         env:
           CIBW_BEFORE_BUILD: "pip install -r requirements.txt && pip install -e ."
-          CIBW_SKIP: "cp27-* cp35-*"
+          CIBW_SKIP: "cp27-* pp27-* cp35-* pp35-*"
 
       - uses: actions/upload-artifact@v2
         with:
