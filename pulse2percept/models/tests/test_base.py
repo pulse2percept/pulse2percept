@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 import numpy.testing as npt
-import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
 
 from pulse2percept.implants import ArgusI
@@ -9,7 +8,7 @@ from pulse2percept.stimuli import Stimulus
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (BaseModel, Model, NotBuiltError,
                                   SpatialModel, TemporalModel)
-from pulse2percept.utils import FreezeError, GridXY
+from pulse2percept.utils import FreezeError, Grid2D
 
 
 class ValidBaseModel(BaseModel):
@@ -26,6 +25,11 @@ def test_BaseModel():
     # Can overwrite default values:
     model = ValidBaseModel(b=3)
     npt.assert_almost_equal(model.b, 3)
+
+    # Use the sklearn syntax:
+    model.set_params(a=5, b=5)
+    npt.assert_almost_equal(model.a, 5)
+    npt.assert_almost_equal(model.b, 5)
 
     # Cannot add more attributes:
     with pytest.raises(FreezeError):
@@ -66,7 +70,7 @@ def test_SpatialModel():
     npt.assert_equal(model.is_built, False)
     model.build()
     npt.assert_equal(model.is_built, True)
-    npt.assert_equal(isinstance(model.grid, GridXY), True)
+    npt.assert_equal(isinstance(model.grid, Grid2D), True)
     npt.assert_equal(isinstance(model.grid.xret, np.ndarray), True)
 
     # Can overwrite default values:
@@ -136,11 +140,15 @@ def test_TemporalModel():
 
     # Returns Percept object of proper size:
     npt.assert_equal(model.predict_percept(ArgusI().stim), None)
+    model.dt = 1
     for stim in [np.ones((16, 3)), np.zeros((16, 3)),
                  {'A1': [1, 2]}, np.ones((16, 2))]:
         implant = ArgusI(stim=stim)
         percept = model.predict_percept(implant.stim)
-        n_time = 1 if implant.stim.time is None else len(implant.stim.time)
+        # By default, percept is output every 20ms. If stimulus is too short,
+        # output at t=[0, 20]. This is mentioned in the docs - for really short
+        # stimuli, users should specify the desired time points manually.
+        n_time = 1 if implant.stim.time is None else 2
         npt.assert_equal(percept.shape, (implant.stim.shape[0], 1, n_time))
         npt.assert_almost_equal(percept.data, 0)
 
@@ -154,6 +162,9 @@ def test_TemporalModel():
     with pytest.raises(ValueError):
         # Cannot request t_percepts that are not multiples of dt:
         model.predict_percept(Stimulus(np.ones((3, 9))), t_percept=[0.1, 0.11])
+    with pytest.raises(ValueError):
+        # Has temporal model but stim.time is None:
+        ValidTemporalModel().predict_percept(Stimulus(3))
     with pytest.raises(ValueError):
         # stim.time==None but requesting t_percept != None
         ValidTemporalModel().predict_percept(Stimulus(3), t_percept=[0, 1, 2])
@@ -309,6 +320,7 @@ def test_Model_predict_percept():
     # Just the temporal model:
     model = Model(temporal=ValidTemporalModel()).build()
     npt.assert_equal(model.predict_percept(ArgusI()), None)
+    # Both spatial and temporal:
 
     # Invalid calls:
     model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
@@ -318,8 +330,11 @@ def test_Model_predict_percept():
     model.build()
     with pytest.raises(ValueError):
         # Cannot request t_percepts that are not multiples of dt:
-        model.predict_percept(ArgusI(stim=np.ones(16)),
+        model.predict_percept(ArgusI(stim={'A1': np.ones(16)}),
                               t_percept=[0.1, 0.11])
+    with pytest.raises(ValueError):
+        # Has temporal model but stim.time is None:
+        ValidTemporalModel().predict_percept(Stimulus(3))
     with pytest.raises(ValueError):
         # stim.time==None but requesting t_percept != None
         model.predict_percept(ArgusI(stim=np.ones(16)),

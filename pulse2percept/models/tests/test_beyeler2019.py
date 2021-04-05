@@ -2,6 +2,10 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 
+from matplotlib.axes import Subplot
+import matplotlib.pyplot as plt
+
+
 from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
@@ -33,7 +37,8 @@ def test_ScoreboardSpatial():
     npt.assert_almost_equal(percept.data, 0)
 
     # Multiple frames are processed independently:
-    model = ScoreboardSpatial(engine='serial', rho=200, xystep=5)
+    model = ScoreboardSpatial(engine='serial', rho=200, xystep=5,
+                              xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 0], 'B3': [0, 2]}))
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
@@ -42,6 +47,7 @@ def test_ScoreboardSpatial():
     npt.assert_almost_equal(percept.data[2, 3, 1], 0)
     npt.assert_almost_equal(percept.data[3, 4, 0], 0)
     npt.assert_almost_equal(percept.data[3, 4, 1], pmax[1])
+    npt.assert_almost_equal(percept.time, [0, 1])
 
 
 def test_ScoreboardModel():
@@ -67,48 +73,53 @@ def test_ScoreboardModel():
     npt.assert_almost_equal(model.predict_percept(implant).data, 0)
 
     # Multiple frames are processed independently:
-    model = ScoreboardModel(engine='serial', rho=200, xystep=5)
+    model = ScoreboardModel(engine='serial', rho=200, xystep=5,
+                            xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 2]}))
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
     pmax = percept.data.max(axis=(0, 1))
     npt.assert_almost_equal(percept.data[2, 3, :], pmax)
     npt.assert_almost_equal(pmax[1] / pmax[0], 2.0)
+    npt.assert_almost_equal(percept.time, [0, 1])
 
 
 def test_ScoreboardModel_predict_percept():
-    model = ScoreboardModel(xystep=0.55, rho=100, thresh_percept=0)
+    model = ScoreboardModel(xystep=0.55, rho=100, thresh_percept=0,
+                            xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     # Single-electrode stim:
     img_stim = np.zeros(60)
     img_stim[47] = 1
     percept = model.predict_percept(ArgusII(stim=img_stim))
     # Single bright pixel, very small Gaussian kernel:
-    npt.assert_equal(np.sum(percept.data > 0.9), 1)
-    npt.assert_equal(np.sum(percept.data > 0.5), 1)
+    npt.assert_equal(np.sum(percept.data > 0.8), 1)
+    npt.assert_equal(np.sum(percept.data > 0.5), 2)
     npt.assert_equal(np.sum(percept.data > 0.1), 7)
-    npt.assert_equal(np.sum(percept.data > 0.00001), 35)
+    npt.assert_equal(np.sum(percept.data > 0.00001), 32)
     # Brightest pixel is in lower right:
-    npt.assert_almost_equal(percept.data[34, 47, 0], np.max(percept.data))
+    npt.assert_almost_equal(percept.data[33, 46, 0], np.max(percept.data))
 
     # Full Argus II: 60 bright spots
     model = ScoreboardModel(engine='serial', xystep=0.55, rho=100)
     model.build()
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
-    npt.assert_equal(np.sum(np.isclose(percept.data, 0.9, rtol=0.1, atol=0.1)),
-                     60)
+    npt.assert_equal(np.sum(np.isclose(percept.data, 0.8, rtol=0.1, atol=0.1)),
+                     92)
 
     # Model gives same outcome as Spatial:
     spatial = ScoreboardSpatial(engine='serial', xystep=1, rho=100)
     spatial.build()
     spatial_percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     npt.assert_almost_equal(percept.data, spatial_percept.data)
+    npt.assert_equal(percept.time, None)
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
-def test_AxonMapSpatial(engine):
+@pytest.mark.parametrize('use_legacy_build', (True, False))
+def test_AxonMapSpatial(engine, use_legacy_build):
     # AxonMapSpatial automatically sets `rho`, `axlambda`:
-    model = AxonMapSpatial(engine=engine, xystep=5)
+    model = AxonMapSpatial(engine=engine, xystep=5, use_legacy_build=use_legacy_build)
 
     # User can set `rho`:
     model.rho = 123
@@ -129,9 +140,11 @@ def test_AxonMapSpatial(engine):
     npt.assert_equal(isinstance(percept, Percept), True)
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [1])
     npt.assert_almost_equal(percept.data, 0)
+    npt.assert_equal(percept.time, None)
 
     # Multiple frames are processed independently:
-    model = AxonMapSpatial(engine=engine, rho=200, axlambda=100, xystep=5)
+    model = AxonMapSpatial(engine=engine, rho=200, axlambda=100, xystep=5,
+                           xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 0], 'B3': [0, 2]}))
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
@@ -140,14 +153,33 @@ def test_AxonMapSpatial(engine):
     npt.assert_almost_equal(percept.data[2, 3, 1], 0)
     npt.assert_almost_equal(percept.data[3, 4, 0], 0)
     npt.assert_almost_equal(percept.data[3, 4, 1], pmax[1])
+    npt.assert_almost_equal(percept.time, [0, 1])
+
+
+def test_AxonMapSpatial_plot():
+    model = AxonMapSpatial()
+    for use_dva, xlim in zip([True, False], [(-18, 18), (-5000, 5000)]):
+        ax = model.plot(use_dva=use_dva)
+        npt.assert_equal(isinstance(ax, Subplot), True)
+        npt.assert_equal(ax.get_xlim(), xlim)
+
+    # Quadrants can be annotated:
+    for ann_q, n_q in [(True, 6), (False, 0)]:
+        fig, ax = plt.subplots()
+        model.plot(annotate=ann_q, ax=ax)
+        npt.assert_equal(len(ax.child_axes), int(n_q > 0))
+        if len(ax.child_axes) > 0:
+            npt.assert_equal(len(ax.child_axes[0].texts), n_q)
+        plt.close(fig)
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
-def test_AxonMapModel(engine):
+@pytest.mark.parametrize('use_legacy_build', (True, False))
+def test_AxonMapModel(engine, use_legacy_build):
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 2,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
-                  'loc_od_x': 5, 'loc_od_y': 6}
+                  'loc_od': (5, 6), 'use_legacy_build' : use_legacy_build}
     model = AxonMapModel()
     for param in set_params:
         npt.assert_equal(hasattr(model.spatial, param), True)
@@ -184,8 +216,7 @@ def test_AxonMapModel(engine):
 def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
     # With `rho` starting at 0, all axons should originate in the optic disc
     # center
-    model = AxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
-                         xystep=2, engine=engine,
+    model = AxonMapModel(loc_od=loc_od, xystep=2, engine=engine,
                          ax_segments_range=(0, 45),
                          n_ax_segments=100)
     for phi0 in [-135.0, 66.0, 128.0]:
@@ -195,8 +226,7 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
 
     # These axons should all end at the meridian
     for phi0 in [110.0, 135.0, 160.0]:
-        model = AxonMapModel(loc_od_x=15, loc_od_y=2,
-                             xystep=2, engine=engine,
+        model = AxonMapModel(loc_od=(15, 2), xystep=2, engine=engine,
                              n_ax_segments=801,
                              ax_segments_range=(0, 45))
         ax_pos = model.spatial._jansonius2009(sign * phi0)
@@ -229,8 +259,7 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
 
     # A single axon fiber with `phi0`=0 should return a single pixel location
     # that corresponds to the optic disc
-        model = AxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
-                             xystep=2, engine=engine, eye=eye,
+        model = AxonMapModel(loc_od=loc_od, xystep=2, engine=engine, eye=eye,
                              ax_segments_range=(0, 0),
                              n_ax_segments=1)
         single_fiber = model.spatial._jansonius2009(0)
@@ -242,15 +271,19 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
 def test_AxonMapModel_grow_axon_bundles(engine):
     for n_axons in [1, 2, 3, 5, 10]:
         model = AxonMapModel(xystep=2, engine=engine, n_axons=n_axons,
-                             axons_range=(-20, 20))
+                             axons_range=(-20, 20), xrange=(-20, 20),
+                             yrange=(-15, 15))
         bundles = model.spatial.grow_axon_bundles()
         npt.assert_equal(len(bundles), n_axons)
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
-def test_AxonMapModel_find_closest_axon(engine):
+@pytest.mark.parametrize('use_legacy_build', (True, False))
+def test_AxonMapModel_find_closest_axon(engine, use_legacy_build):
     model = AxonMapModel(xystep=1, engine=engine, n_axons=5,
-                         axons_range=(-45, 45))
+                         xrange=(-20, 20), yrange=(-15, 15),
+                         axons_range=(-45, 45), 
+                         use_legacy_build=use_legacy_build)
     model.build()
     # Pretend there is an axon close to each point on the grid:
     bundles = [np.array([x + 0.001, y - 0.001],
@@ -266,6 +299,7 @@ def test_AxonMapModel_find_closest_axon(engine):
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
 def test_AxonMapModel_calc_axon_contribution(engine):
     model = AxonMapModel(xystep=2, engine=engine, n_axons=10,
+                         xrange=(-20, 20), yrange=(-15, 15),
                          axons_range=(-30, 30))
     model.build()
     xyret = np.column_stack((model.spatial.grid.xret.ravel(),
@@ -277,8 +311,8 @@ def test_AxonMapModel_calc_axon_contribution(engine):
     # Check lambda math:
     for ax, xy in zip(contrib, xyret):
         axon = np.insert(ax, 0, list(xy) + [0], axis=0)
-        d2 = np.cumsum(np.diff(axon[:, 0], axis=0) ** 2 +
-                       np.diff(axon[:, 1], axis=0) ** 2)
+        d2 = np.cumsum(np.sqrt(np.diff(axon[:, 0], axis=0) ** 2 +
+                       np.diff(axon[:, 1], axis=0) ** 2))**2
         sensitivity = np.exp(-d2 / (2.0 * model.spatial.axlambda ** 2))
         npt.assert_almost_equal(sensitivity, ax[:, 2])
 
@@ -286,6 +320,7 @@ def test_AxonMapModel_calc_axon_contribution(engine):
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
 def test_AxonMapModel_calc_bundle_tangent(engine):
     model = AxonMapModel(xystep=5, engine=engine, n_axons=500,
+                         xrange=(-20, 20), yrange=(-15, 15),
                          n_ax_segments=500, axons_range=(-180, 180),
                          ax_segments_range=(3, 50))
     npt.assert_almost_equal(model.spatial.calc_bundle_tangent(0, 0), 0.4819,
@@ -300,38 +335,42 @@ def test_AxonMapModel_calc_bundle_tangent(engine):
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
 def test_AxonMapModel_predict_percept(engine):
-    model = AxonMapModel(xystep=0.55, axlambda=100, thresh_percept=0,
-                         engine=engine)
+    model = AxonMapModel(xystep=0.55, axlambda=100, rho=100,
+                         thresh_percept=0, engine=engine,
+                         xrange=(-20, 20), yrange=(-15, 15),
+                         n_axons=500)
     model.build()
     # Single-electrode stim:
     img_stim = np.zeros(60)
     img_stim[47] = 1
     percept = model.predict_percept(ArgusII(stim=img_stim))
     # Single bright pixel, rest of arc is less bright:
-    npt.assert_equal(np.sum(percept.data > 0.9), 1)
-    npt.assert_equal(np.sum(percept.data > 0.7), 2)
-    npt.assert_equal(np.sum(percept.data > 0.1), 28)
-    npt.assert_equal(np.sum(percept.data > 0.0001), 96)
+    npt.assert_equal(np.sum(percept.data > 0.8), 1)
+    npt.assert_equal(np.sum(percept.data > 0.6), 2)
+    npt.assert_equal(np.sum(percept.data > 0.1), 7)
+    npt.assert_equal(np.sum(percept.data > 0.0001), 32)
     # Overall only a few bright pixels:
-    npt.assert_almost_equal(np.sum(percept.data), 10.0812, decimal=3)
+    npt.assert_almost_equal(np.sum(percept.data), 3.31321, decimal=3)
     # Brightest pixel is in lower right:
-    npt.assert_almost_equal(percept.data[34, 47, 0], np.max(percept.data))
+    npt.assert_almost_equal(percept.data[33, 46, 0], np.max(percept.data))
     # Top half is empty:
     npt.assert_almost_equal(np.sum(percept.data[:27, :, 0]), 0)
     # Same for lower band:
     npt.assert_almost_equal(np.sum(percept.data[39:, :, 0]), 0)
 
     # Full Argus II with small lambda: 60 bright spots
-    model = AxonMapModel(engine='serial', xystep=1, rho=100, axlambda=40)
+    model = AxonMapModel(engine='serial', xystep=1, rho=100, axlambda=40,
+                         xrange=(-20, 20), yrange=(-15, 15), n_axons=500)
     model.build()
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     # Most spots are pretty bright, but there are 2 dimmer ones (due to their
     # location on the retina):
-    npt.assert_equal(np.sum(percept.data > 0.5), 33)
-    npt.assert_equal(np.sum(percept.data > 0.275), 62)
+    npt.assert_equal(np.sum(percept.data > 0.5), 28)
+    npt.assert_equal(np.sum(percept.data > 0.275), 56)
 
     # Model gives same outcome as Spatial:
     spatial = AxonMapSpatial(engine='serial', xystep=1, rho=100, axlambda=40)
     spatial.build()
     spatial_percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     npt.assert_almost_equal(percept.data, spatial_percept.data)
+    npt.assert_equal(percept.time, None)

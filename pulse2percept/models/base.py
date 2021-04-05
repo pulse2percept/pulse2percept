@@ -8,7 +8,7 @@ import numpy as np
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
 from ..percepts import Percept
-from ..utils import PrettyPrint, Frozen, FreezeError, GridXY, bisect
+from ..utils import PrettyPrint, Frozen, FreezeError, Grid2D, bisect
 
 
 class NotBuiltError(ValueError, AttributeError):
@@ -60,6 +60,11 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
     def get_default_params(self):
         """Return a dict of user-settable model parameters"""
         raise NotImplementedError
+
+    def set_params(self, **params):
+        """Set the parameters of this model"""
+        for key, value in params.items():
+            setattr(self, key, value)
 
     def _pprint_params(self):
         """Return a dict of class attributes to display when pretty-printing"""
@@ -148,6 +153,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     *  ``_build`` (optional): a way to add one-time computations to the build
        process
 
+    .. versionadded:: 0.6
+
     .. note ::
 
         You will not be able to add more parameters outside the constructor;
@@ -169,7 +176,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # We will be simulating a patch of the visual field (xrange/yrange
             # in degrees of visual angle), at a given spatial resolution (step
             # size):
-            'xrange': (-20, 20),  # dva
+            'xrange': (-15, 15),  # dva
             'yrange': (-15, 15),  # dva
             'xystep': 0.25,  # dva
             'grid_type': 'rectangular',
@@ -218,7 +225,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         for key, val in build_params.items():
             setattr(self, key, val)
         # Build the spatial grid:
-        self.grid = GridXY(self.xrange, self.yrange, step=self.xystep,
+        self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
                            grid_type=self.grid_type)
         self.grid.xret = self.dva2ret(self.grid.x)
         self.grid.yret = self.dva2ret(self.grid.y)
@@ -260,7 +267,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
             A valid prosthesis system. A stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
-        t_percept: float or list of floats, optional, default: None
+        t_percept: float or list of floats, optional
             The time points at which to output a percept (ms).
             If None, ``implant.stim.time`` is used.
 
@@ -297,11 +304,14 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         else:
             # Calculate the Stimulus at requested time points:
             if t_percept is not None:
+                # Save electrode parameters
                 stim = Stimulus(stim[:, t_percept].reshape((-1, n_time)),
-                                electrodes=stim.electrodes, time=t_percept)
+                                electrodes=stim.electrodes, time=t_percept,
+                                metadata=stim.metadata)
             resp = self._predict_spatial(implant.earray, stim)
         return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
-                       space=self.grid, time=t_percept)
+                       space=self.grid, time=t_percept,
+                       metadata={'stim': stim})
 
     def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
                        bright_tol=0.1, max_iter=100):
@@ -317,15 +327,15 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             up and down regulated until ``amp_th`` is found.
         bright_th : float
             Model output (brightness) that's considered "at threshold".
-        amp_range : (amp_lo, amp_hi), optional, default: (0, 999)
+        amp_range : (amp_lo, amp_hi), optional
             Range of amplitudes to search (uA).
-        amp_tol : float, optional, default: 1.0
+        amp_tol : float, optional
             Search will stop if candidate range of amplitudes is within
             ``amp_tol``
-        bright_tol : float, optional, default: 0.1
+        bright_tol : float, optional
             Search will stop if model brightness is within ``bright_tol`` of
             ``bright_th``
-        max_iter : int, optional, default: 100
+        max_iter : int, optional
             Search will stop after ``max_iter`` iterations
 
         Returns
@@ -351,6 +361,36 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                       args=[self.predict_percept, implant],
                       x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
                       y_tol=bright_tol, max_iter=max_iter)
+
+    def plot(self, use_dva=False, autoscale=True, ax=None):
+        """Plot the model
+
+        Parameters
+        ----------
+        use_dva : bool, optional
+            Uses degrees of visual angle (dva) if True, else retinal
+            coordinates (microns)
+        autoscale : bool, optional
+            Whether to adjust the x,y limits of the plot to fit the implant
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
+            A Matplotlib axes object. If None, will either use the current axes
+            (if exists) or create a new Axes object.
+
+        Returns
+        -------
+        ax : ``matplotlib.axes.Axes``
+            Returns the axis object of the plot
+        """
+        if use_dva:
+            ax = self.grid.plot(autoscale=autoscale, ax=ax, zorder=10)
+            ax.set_xlabel('x (dva)')
+            ax.set_ylabel('y (dva)')
+        else:
+            ax = self.grid.plot(transform=self.dva2ret, autoscale=autoscale,
+                                ax=ax, zorder=10)
+            ax.set_xlabel('x (microns)')
+            ax.set_ylabel('y (microns)')
+        return ax
 
 
 class TemporalModel(BaseModel, metaclass=ABCMeta):
@@ -385,6 +425,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
        this method
     *  ``_build`` (optional): a way to add one-time computations to the build
        process
+
+    .. versionadded:: 0.6
 
     .. note ::
 
@@ -444,9 +486,15 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                : py: class: `~pulse2percept.models.Percept`
             Either a Stimulus or a Percept object. The temporal model will be
             applied to each spatial location in the stimulus/percept.
-        t_percept : float or list of floats, optional, default: None
+        t_percept : float or list of floats, optional
             The time points at which to output a percept (ms).
-            If None, the percept will be output at model step size (``dt``).
+            If None, the percept will be output once very 20 ms (50 Hz frame
+            rate).
+
+            .. note ::
+
+                If your stimulus is shorter than 20 ms, you should specify
+                the desired time points manually.
 
         Returns
         -------
@@ -468,10 +516,10 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         if not isinstance(stim, (Stimulus, Percept)):
             raise TypeError(("'stim' must be a Stimulus or Percept object, "
                              "not %s.") % type(stim))
-        if stim.time is None and t_percept is not None:
-            raise ValueError("Cannot calculate temporal response at times "
-                             "t_percept=%s, because stimulus/percept does not "
-                             "have a time component." % t_percept)
+        if stim.time is None:
+            raise ValueError("Cannot calculate temporal response, because "
+                             "stimulus/percept does not have a time "
+                             "component." % t_percept)
         # Make sure we don't change the user's Stimulus/Percept object:
         _stim = deepcopy(stim)
         if isinstance(stim, Stimulus):
@@ -484,20 +532,19 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         _time = stim.time
 
         if t_percept is None:
-            # If no time vector is given, output at model time step (and make
-            # sure to include the last time point). We always start at zero:
-            t_percept = np.arange(0, _time[-1] + self.dt / 2.0, self.dt)
-        else:
-            # We need to make sure the requested `t_percept` are sorted and
-            # multiples of `dt`:
-            t_percept = np.sort([t_percept]).flatten()
-            remainder = np.mod(t_percept, self.dt) / self.dt
-            atol = 1e-3
-            within_atol = (remainder < atol) | (np.abs(1 - remainder) < atol)
-            if not np.all(within_atol):
-                raise ValueError("t=%s are not multiples of dt=%.2e." %
-                                 (t_percept[np.logical_not(within_atol)],
-                                  self.dt))
+            # If no time vector is given, output at 50 Hz frame rate. We always
+            # start at zero and include the last time point:
+            t_percept = np.arange(0, np.maximum(20, _time[-1]) + 1, 20)
+        # We need to make sure the requested `t_percept` are sorted and
+        # multiples of `dt`:
+        t_percept = np.sort([t_percept]).flatten()
+        remainder = np.mod(t_percept, self.dt) / self.dt
+        atol = 1e-3
+        within_atol = (remainder < atol) | (np.abs(1 - remainder) < atol)
+        if not np.all(within_atol):
+            raise ValueError("t=%s are not multiples of dt=%.2e." %
+                             (t_percept[np.logical_not(within_atol)],
+                              self.dt))
         if _stim.data.size == 0:
             # Stimulus was compressed to zero:
             resp = np.zeros(_space + [t_percept.size], dtype=np.float32)
@@ -505,10 +552,11 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # Calculate the Stimulus at requested time points:
             resp = self._predict_temporal(_stim, t_percept)
         return Percept(resp.reshape(_space + [t_percept.size]),
-                       space=None, time=t_percept)
+                       space=None, time=t_percept,
+                       metadata={'stim': stim})
 
     def find_threshold(self, stim, bright_th, amp_range=(0, 999), amp_tol=1,
-                       bright_tol=0.1, max_iter=100):
+                       bright_tol=0.1, max_iter=100, t_percept=None):
         """Find the threshold current for a certain stimulus
 
         Estimates ``amp_th`` such that the output of
@@ -521,16 +569,19 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             regulated until ``amp_th`` is found.
         bright_th : float
             Model output (brightness) that's considered "at threshold".
-        amp_range : (amp_lo, amp_hi), optional, default: (0, 999)
+        amp_range : (amp_lo, amp_hi), optional
             Range of amplitudes to search (uA).
-        amp_tol : float, optional, default: 1.0
+        amp_tol : float, optional
             Search will stop if candidate range of amplitudes is within
             ``amp_tol``
-        bright_tol : float, optional, default: 0.1
+        bright_tol : float, optional
             Search will stop if model brightness is within ``bright_tol`` of
             ``bright_th``
-        max_iter : int, optional, default: 100
+        max_iter : int, optional
             Search will stop after ``max_iter`` iterations
+        t_percept: float or list of floats, optional
+            The time points at which to output a percept (ms).
+            If None, ``implant.stim.time`` is used.
 
         Returns
         -------
@@ -542,13 +593,14 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         if not isinstance(stim, Stimulus):
             raise TypeError("'stim' must be a Stimulus, not %s." % type(stim))
 
-        def inner_predict(amp, fnc_predict, stim):
+        def inner_predict(amp, fnc_predict, stim, **kwargs):
             _stim = Stimulus(amp * stim.data / stim.data.max(),
                              electrodes=stim.electrodes, time=stim.time)
-            return fnc_predict(_stim).data.max()
+            return fnc_predict(_stim, **kwargs).data.max()
 
         return bisect(bright_th, inner_predict,
                       args=[self.predict_percept, stim],
+                      kwargs={'t_percept': t_percept},
                       x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
                       y_tol=bright_tol, max_iter=max_iter)
 
@@ -572,6 +624,8 @@ class Model(PrettyPrint):
 
         *  `Basic Concepts > Computational Models > Building your own model
            <topics-models-building-your-own>`
+
+    .. versionadded:: 0.6
 
     Parameters
     ----------
@@ -756,7 +810,7 @@ class Model(PrettyPrint):
         implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
             A valid prosthesis system. A stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
-        t_percept: float or list of floats, optional, default: None
+        t_percept: float or list of floats, optional
             The time points at which to output a percept (ms).
             If None, ``implant.stim.time`` is used.
 
@@ -774,14 +828,19 @@ class Model(PrettyPrint):
         if implant.stim is None or (not self.has_space and not self.has_time):
             # Nothing to see here:
             return None
+        if implant.stim.time is None and t_percept is not None:
+            raise ValueError("Cannot calculate temporal response at times "
+                             "t_percept=%s, because stimulus/percept does not "
+                             "have a time component." % t_percept)
 
         if self.has_space and self.has_time:
             # Need to calculate the spatial response at all stimulus points
             # (i.e., whenever the stimulus changes):
             resp = self.spatial.predict_percept(implant, t_percept=None)
-            # Then pass that to the temporal model, which will output at all
-            # `t_percept` time steps:
-            resp = self.temporal.predict_percept(resp, t_percept=t_percept)
+            if implant.stim.time is not None:
+                # Then pass that to the temporal model, which will output at
+                # all `t_percept` time steps:
+                resp = self.temporal.predict_percept(resp, t_percept=t_percept)
         elif self.has_space:
             resp = self.spatial.predict_percept(implant, t_percept=t_percept)
         elif self.has_time:
@@ -790,7 +849,7 @@ class Model(PrettyPrint):
         return resp
 
     def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
-                       bright_tol=0.1, max_iter=100):
+                       bright_tol=0.1, max_iter=100, t_percept=None):
         """Find the threshold current for a certain stimulus
 
         Estimates ``amp_th`` such that the output of
@@ -803,16 +862,19 @@ class Model(PrettyPrint):
             up and down regulated until ``amp_th`` is found.
         bright_th : float
             Model output (brightness) that's considered "at threshold".
-        amp_range : (amp_lo, amp_hi), optional, default: (0, 999)
+        amp_range : (amp_lo, amp_hi), optional
             Range of amplitudes to search (uA).
-        amp_tol : float, optional, default: 1.0
+        amp_tol : float, optional
             Search will stop if candidate range of amplitudes is within
             ``amp_tol``
-        bright_tol : float, optional, default: 0.1
+        bright_tol : float, optional
             Search will stop if model brightness is within ``bright_tol`` of
             ``bright_th``
-        max_iter : int, optional, default: 100
+        max_iter : int, optional
             Search will stop after ``max_iter`` iterations
+        t_percept: float or list of floats, optional
+            The time points at which to output a percept (ms).
+            If None, ``implant.stim.time`` is used.
 
         Returns
         -------
@@ -825,16 +887,17 @@ class Model(PrettyPrint):
             raise TypeError("'implant' must be a ProsthesisSystem, not "
                             "%s." % type(stim))
 
-        def inner_predict(amp, fnc_predict, implant):
+        def inner_predict(amp, fnc_predict, implant, **kwargs):
             _implant = deepcopy(implant)
             scale = amp / implant.stim.data.max()
             _implant.stim = Stimulus(scale * implant.stim.data,
                                      electrodes=implant.stim.electrodes,
                                      time=implant.stim.time)
-            return fnc_predict(_implant).data.max()
+            return fnc_predict(_implant, **kwargs).data.max()
 
         return bisect(bright_th, inner_predict,
                       args=[self.predict_percept, implant],
+                      kwargs={'t_percept': t_percept},
                       x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
                       y_tol=bright_tol, max_iter=max_iter)
 

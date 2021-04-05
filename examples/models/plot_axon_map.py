@@ -39,14 +39,14 @@ The first step is to instantiate the
 :py:class:`~pulse2percept.models.AxonMapModel` class by calling its
 constructor method.
 The two most important parameters to set are ``rho`` and ``axlambda`` from
-the equation above (here set to 100 micrometers and 150 micrometers,
+the equation above (here set to 200 micrometers and 500 micrometers,
 respectively):
 
 """
 # sphinx_gallery_thumbnail_number = 2
 
 from pulse2percept.models import AxonMapModel
-model = AxonMapModel(rho=100, axlambda=150)
+model = AxonMapModel(rho=200, axlambda=500)
 
 ##############################################################################
 # Parameters you don't specify will take on default values. You can inspect
@@ -132,17 +132,15 @@ implant = ArgusII()
 
 ##############################################################################
 # You can inspect the location of the implant with respect to the underlying
-# nerve fiber bundles using the
-# :py:meth:`~pulse2percept.viz.plot_implant_on_axon_map`:
+# nerve fiber bundles using the built-in plot methods:
 
-from pulse2percept.viz import plot_implant_on_axon_map
-plot_implant_on_axon_map(implant)
+model.plot()
+implant.plot()
+
 
 ##############################################################################
-# .. note::
-#
-#     You can also plot just the axon map with
-#     :py:meth:`~pulse2percept.viz.plot_axon_map`.
+# By default, the plots will be added to the current Axes object.
+# Alternatively, you can pass ``ax=`` to specify in which Axes to plot.
 #
 # The easiest way to assign a stimulus to the implant is to pass a NumPy array
 # that specifies the current amplitude to be applied to every electrode in the
@@ -179,8 +177,9 @@ ax.set_title('Predicted percept')
 # depending on the location of the implant. You can convince yourself of that
 # by re-running the model on an implant shifted and rotated across the retina:
 
-implant = ArgusII(x=-50, y=50, rot=np.deg2rad(-45))
-plot_implant_on_axon_map(implant)
+implant = ArgusII(x=-50, y=50, rot=-45)
+model.plot()
+implant.plot()
 
 ##############################################################################
 # The resulting percepts should look very different from the previous example:

@@ -1,12 +1,13 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
+
 from copy import deepcopy
 from collections import OrderedDict as ODict
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
-from pulse2percept.stimuli import Stimulus
+from pulse2percept.stimuli import Stimulus, DT
 
 
 def test_Stimulus():
@@ -68,7 +69,7 @@ def test_Stimulus():
     # Saves metadata:
     metadata = {'a': 0, 'b': 1}
     stim = Stimulus(3, metadata=metadata)
-    npt.assert_equal(stim.metadata, metadata)
+    npt.assert_equal(stim.metadata['user'], metadata)
     # List of lists instead of 2D NumPy array:
     stim = Stimulus([[1, 1, 1, 1, 1], [1, 1, 1, 1, 1]], compress=True)
     npt.assert_equal(stim.shape, (2, 2))
@@ -138,6 +139,9 @@ def test_Stimulus():
     with pytest.raises(ValueError):
         # Can't force time:
         stim = Stimulus(3, time=[0.4])
+    with pytest.raises(ValueError):
+        # Time points not stricly monotonically increasing:
+        stim = Stimulus([[1, 2, 3]], time=[1, 2, 1.9])
 
 
 def test_Stimulus_compress():
@@ -181,13 +185,43 @@ def test_Stimulus_compress():
         stim.is_compressed = True
 
 
+def test_Stimulus_append():
+    # Basic usage:
+    stim = Stimulus([[0, 1, 0]], time=[0, 1, 2])
+    stim2 = Stimulus([[0, 2]], time=[0, 0.5])
+    comb = stim.append(stim2)
+    # End point of stim and starting point of stim2 will be merged:
+    npt.assert_almost_equal(comb.data, [[0, 1, 0, 2]])
+    npt.assert_almost_equal(comb.time, [0, 1, 2, 2.5])
+
+    # When other stimulus is shifted:
+    comb = stim.append(stim2 >> 10)
+    npt.assert_almost_equal(comb.time, [0, 1, 2, 12, 12.5])
+
+    with pytest.raises(TypeError):
+        # 'other' must be Stimulus:
+        stim.append(np.array([[0, 1, 2]]))
+    with pytest.raises(ValueError):
+        # other cannot have time=None:
+        stim.append(Stimulus(3))
+    with pytest.raises(ValueError):
+        # self cannot have time=None:
+        Stimulus(3).append(stim)
+    with pytest.raises(ValueError):
+        stim.append(Stimulus([[1, 2]], electrodes='B1'))
+    with pytest.raises(NotImplementedError):
+        # negative time axis:
+        stim.append(Stimulus([[0, 2]], time=[-1, 0]))
+
+
 def test_Stimulus_plot():
     # Stimulus with one electrode
     stim = Stimulus([[0, -10, 10, -10, 10, -10, 0]],
                     time=[0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0])
     for time in [None, Ellipsis, slice(None)]:
         # Different ways to plot all data points:
-        ax = stim.plot(time=time)
+        fig, ax = plt.subplots()
+        stim.plot(time=time, ax=ax)
         npt.assert_equal(isinstance(ax, Subplot), True)
         npt.assert_almost_equal(ax.get_yticks(), [stim.data.min(), 0,
                                                   stim.data.max()])
@@ -196,18 +230,23 @@ def test_Stimulus_plot():
                                 stim.data.min())
         npt.assert_almost_equal(ax.lines[0].get_data()[1].max(),
                                 stim.data.max())
+        plt.close(fig)
 
-    # Plot a range of time values (times are sliced, not interpolated):
-    ax = stim.plot(time=(0.2, 0.6))
+    # Plot a range of time values (times are sliced, but end points are
+    # interpolated):
+    fig, ax = plt.subplots()
+    ax = stim.plot(time=(0.2, 0.6), ax=ax)
     npt.assert_equal(isinstance(ax, Subplot), True)
     npt.assert_equal(len(ax.lines), 1)
     t_vals = ax.lines[0].get_data()[0]
-    npt.assert_almost_equal(t_vals[0], 0.3)
-    npt.assert_almost_equal(t_vals[-1], 0.5)
+    npt.assert_almost_equal(t_vals[0], 0.2)
+    npt.assert_almost_equal(t_vals[-1], 0.6)
+    plt.close(fig)
 
     # Plot exact time points:
     t_vals = [0.2, 0.3, 0.4]
-    ax = stim.plot(time=t_vals)
+    fig, ax = plt.subplots()
+    stim.plot(time=t_vals, ax=ax)
     npt.assert_equal(isinstance(ax, Subplot), True)
     npt.assert_equal(len(ax.lines), 1)
     npt.assert_almost_equal(ax.lines[0].get_data()[0], t_vals)
@@ -218,7 +257,8 @@ def test_Stimulus_plot():
     for n_electrodes in [2, 3, 4]:
         stim = Stimulus(np.random.rand(n_electrodes, 20),
                         electrodes=['E%d' % i for i in range(n_electrodes)])
-        axes = stim.plot()
+        fig, axes = plt.subplots(ncols=n_electrodes)
+        stim.plot(ax=axes)
         npt.assert_equal(isinstance(axes, (list, np.ndarray)), True)
         for ax, electrode in zip(axes, stim.electrodes):
             npt.assert_equal(isinstance(ax, Subplot), True)
@@ -227,6 +267,7 @@ def test_Stimulus_plot():
             npt.assert_almost_equal(ax.lines[0].get_data()[0], stim.time)
             npt.assert_almost_equal(ax.lines[0].get_data()[1],
                                     stim[electrode, :])
+        plt.close(fig)
 
     # Invalid calls:
     with pytest.raises(TypeError):
@@ -242,12 +283,12 @@ def test_Stimulus_plot():
     with pytest.raises(ValueError):
         stim = Stimulus(np.ones((3, 10)))
         _, axes = plt.subplots(nrows=4)
-        stim.plot(axes=axes)
+        stim.plot(ax=axes)
     with pytest.raises(TypeError):
         stim = Stimulus(np.ones((3, 10)))
         _, axes = plt.subplots(nrows=3)
         axes[1] = 0
-        stim.plot(axes=axes)
+        stim.plot(ax=axes)
 
 
 def test_Stimulus__stim():
@@ -285,6 +326,12 @@ def test_Stimulus__stim():
         data['electrodes'] = np.arange(3)
         data['time'] = np.arange(7)
         stim._stim = data
+    with pytest.raises(ValueError):
+        # Time points must be unique:
+        data['data'] = np.array([[1, 0, 1, 0, 2, 0, 1]])
+        data['time'] = np.array([0, 1, 1.5, 2, 2.1, 2.10000000000001, 2.2])
+        data['electrodes'] = np.arange(1)
+        stim._stim = data
     # But if you do all the things right, you can reset the stimulus by hand:
     data['data'] = np.ones((3, 1))
     data['electrodes'] = np.arange(3)
@@ -296,9 +343,9 @@ def test_Stimulus__stim():
     data['time'] = np.arange(1)
     stim._stim = data
 
-    data['data'] = np.ones((3, 7))
+    data['data'] = np.ones((3, 4))
     data['electrodes'] = np.arange(3)
-    data['time'] = np.ones(7)
+    data['time'] = np.array([0, 1, 1 + DT, 2])
     stim._stim = data
 
 
@@ -373,25 +420,19 @@ def test_Stimulus___getitem__():
     with pytest.raises(IndexError):
         stim[3.3, 0]
 
-    # Extrapolating should be disabled by default:
-    with pytest.raises(ValueError):
-        stim[0, 9.9]
-    # But you can enable it:
-    stim = Stimulus(1 + np.arange(12).reshape((3, 4)), extrapolate=True)
-    npt.assert_almost_equal(stim[0, 9.901], 10.901)
+    # Times can be extrapolated (take on value of end points):
+    stim = Stimulus(1 + np.arange(12).reshape((3, 4)))
+    npt.assert_almost_equal(stim[0, 9.901], 4)
     # If time=None, you cannot interpolate/extrapolate:
-    stim = Stimulus([3, 4, 5], extrapolate=True)
+    stim = Stimulus([3, 4, 5])
     npt.assert_almost_equal(stim[0], stim.data[0, 0])
     with pytest.raises(ValueError):
         stim[0, 0.2]
 
     # With a single time point, interpolate is still possible:
-    stim = Stimulus(np.arange(3).reshape((-1, 1)), extrapolate=False)
+    stim = Stimulus(np.arange(3).reshape((-1, 1)))
     npt.assert_almost_equal(stim[0], stim.data[0, 0])
     npt.assert_almost_equal(stim[0, 0], stim.data[0, 0])
-    with pytest.raises(ValueError):
-        stim[0, 3.33]
-    stim = Stimulus(np.arange(3).reshape((-1, 1)), extrapolate=True)
     npt.assert_almost_equal(stim[0, 3.33], stim.data[0, 0])
 
     # Annoying but possible:
@@ -418,7 +459,7 @@ def test_Stimulus___getitem__():
     npt.assert_almost_equal(stim[stim.electrodes != 'A1', :], [[3, 4, 5]])
     npt.assert_almost_equal(stim[stim.electrodes == 'B2', :], [[3, 4, 5]])
     npt.assert_almost_equal(stim[stim.electrodes == 'C9', :], np.zeros((0, 3)))
-    npt.assert_almost_equal(stim[stim.electrodes == 'C9', 0.1], [])
+    npt.assert_almost_equal(stim[stim.electrodes == 'C9', 0.1].size, 0)
     npt.assert_almost_equal(stim[stim.electrodes == 'B2', 0.1001], 3.0005,
                             decimal=3)
     npt.assert_almost_equal(stim[stim.electrodes == 'B2', 0.2], 3.5)
@@ -426,5 +467,73 @@ def test_Stimulus___getitem__():
     npt.assert_almost_equal(stim[stim.electrodes == 'B2', stim.time < 0.4],
                             [3, 4])
     npt.assert_almost_equal(stim[:, stim.time > 0.6], np.zeros((2, 0)))
-    npt.assert_almost_equal(stim['A1', stim.time > 0.6], [])
+    npt.assert_almost_equal(stim['A1', stim.time > 0.6].size, 0)
     npt.assert_almost_equal(stim['A1', np.isclose(stim.time, 0.3)], [1])
+
+
+def test_Stimulus_merge():
+    # We can stack multiple stimuli together - their time axes will be merged:
+    stim1 = Stimulus([[0, 1, 2, 3, 4]], time=[0, 1, 2, 3, 4])
+    stim2 = Stimulus([[0, 1, 2]], time=[-0.5, 1.5, 4.5])
+    merge = Stimulus([stim1, stim2])
+    npt.assert_almost_equal(merge.time, np.unique(np.hstack((stim1.time,
+                                                             stim2.time))),
+                            decimal=6)
+    npt.assert_almost_equal(merge[0, [0, -1]], stim1[0, [0, -1]])
+    npt.assert_almost_equal(merge[1, [0, -1]], stim2[0, [0, -1]])
+
+    # We can keep stacking - even when nested:
+    stim3 = Stimulus([[14]], time=[9.7])
+    merge2 = Stimulus([merge, stim3])
+    npt.assert_almost_equal(merge2.time, np.unique((np.hstack((stim1.time,
+                                                               stim2.time,
+                                                               stim3.time)))),
+                            decimal=6)
+    npt.assert_almost_equal(merge2[0, [0, -1]], stim1[0, [0, -1]])
+    npt.assert_almost_equal(merge2[1, [0, -1]], stim2[0, [0, -1]])
+    npt.assert_almost_equal(merge2[2, [0, -1]], stim3[0, [0, -1]])
+
+
+@pytest.mark.parametrize('scalar', (12345.678, -2.3, np.pi))
+def test_Stimulus_arithmetic(scalar):
+    stim = Stimulus([[0, 21, -13, 0, 0]], time=[0, 1, 2, 3, 4])
+    npt.assert_almost_equal((stim + scalar).data,
+                            stim.data + scalar, decimal=5)
+    npt.assert_almost_equal((scalar + stim).data,
+                            scalar + stim.data, decimal=5)
+    npt.assert_almost_equal((stim - scalar).data,
+                            stim.data - scalar, decimal=5)
+    npt.assert_almost_equal((scalar - stim).data,
+                            scalar - stim.data, decimal=5)
+    npt.assert_almost_equal((stim * scalar).data,
+                            stim.data * scalar, decimal=5)
+    npt.assert_almost_equal((scalar * stim).data,
+                            scalar * stim.data, decimal=5)
+    npt.assert_almost_equal((stim / scalar).data,
+                            stim.data / scalar, decimal=5)
+    npt.assert_almost_equal((-stim).data,
+                            -1 * stim.data, decimal=5)
+    npt.assert_almost_equal((stim >> scalar).time,
+                            stim.time + scalar, decimal=5)
+    npt.assert_almost_equal((stim << scalar).time,
+                            stim.time - scalar, decimal=5)
+    # 10 / stim is not supported because it will always give a division by
+    # zero error:
+    with pytest.raises(TypeError):
+        s = scalar / stim
+    with pytest.raises(TypeError):
+        s = stim + stim
+    with pytest.raises(TypeError):
+        s = stim - stim
+    with pytest.raises(TypeError):
+        s = stim * stim
+    with pytest.raises(TypeError):
+        s = stim / stim
+    with pytest.raises(TypeError):
+        s = stim + [1, 1]
+    with pytest.raises(TypeError):
+        s = stim * np.array([2, 3])
+    with pytest.raises(TypeError):
+        s = stim >> np.array([2, 3])
+    with pytest.raises(TypeError):
+        s = stim << np.array([2, 3])

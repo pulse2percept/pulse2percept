@@ -1,3 +1,4 @@
+"""`bisect`"""
 import numpy as np
 import logging
 
@@ -6,24 +7,26 @@ def bisect(y_target, func, args=None, kwargs=None, x_lo=0, x_hi=1,
            x_tol=1e-6, y_tol=1e-3, max_iter=100):
     """Binary search (bisection method) to find `x` value that gives `y_target`
 
-    For a function ``y = func(x, *args, **kwargs)``, returns ``x_opt`` such for
+    For a function ``y = func(x, *args, **kwargs)``, returns ``x_opt`` for
     which ``func(x_opt, *args, **kwargs)`` is approximately equal to
     ``y_target``.
+
+    .. versionadded:: 0.7
 
     Parameters
     ----------
     y_target : float
         Target y value
-    func, args, kwargs
+    func, args, kwargs : optional
         The function to call along with its positional and keyword arguments
-    x_lo, x_hi : float
+    x_lo, x_hi : float, optional
         Lower and upper bounds on ``x``
-    x_tol : float
+    x_tol : float, optional
         Search will stop if the range of candidate ``x`` values is smaller
         than ``x_tol``
-    y_tol : float
+    y_tol : float, optional
         Search will stop if ``y`` is within ``y_tol`` of ``y_target``
-    max_iter : int
+    max_iter : int, optional
         Maximum number of iterations to run
 
     Returns

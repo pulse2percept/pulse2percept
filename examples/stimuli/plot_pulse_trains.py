@@ -85,9 +85,9 @@ import numpy as np
 from pulse2percept.stimuli import Stimulus, PulseTrain
 
 # Single ramp:
-dt = 1e-6
+dt = 1e-3
 ramp = Stimulus([[0, 0, 1, 1, 2, 2, 0, 0]],
-                time=[0, 1, 1 + dt, 2, 2 + dt, 3, 3 + dt, 5])
+                time=[0, 1, 1 + dt, 2, 2 + dt, 3, 3 + dt, 5 - dt])
 ramp.plot()
 
 # Ramp train:

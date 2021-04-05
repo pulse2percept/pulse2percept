@@ -1,17 +1,18 @@
 import numpy as np
 import pytest
 import numpy.testing as npt
+from matplotlib.axes import Axes
 
 from pulse2percept.utils import (RetinalCoordTransform, Curcio1990Transform,
-                                 GridXY, Watson2014Transform,
+                                 Grid2D, Watson2014Transform,
                                  Watson2014DisplaceTransform,
-                                 cart2pol, pol2cart)
+                                 cart2pol, pol2cart, delta_angle)
 
 
 @pytest.mark.parametrize('x_range', [(0, 0), (-3, 3), (4, -2), (1, -1)])
 @pytest.mark.parametrize('y_range', [(0, 0), (0, 7), (-3, 3), (2, -2)])
-def test_GridXY(x_range, y_range):
-    grid = GridXY(x_range, y_range, step=1, grid_type='rectangular')
+def test_Grid2D(x_range, y_range):
+    grid = Grid2D(x_range, y_range, step=1, grid_type='rectangular')
     npt.assert_equal(grid.x_range, x_range)
     npt.assert_equal(grid.y_range, y_range)
     npt.assert_equal(grid.step, 1)
@@ -31,6 +32,55 @@ def test_GridXY(x_range, y_range):
     npt.assert_almost_equal(grid.y[0, -1], y_range[0])
     npt.assert_almost_equal(grid.y[-1, 0], y_range[1])
     npt.assert_almost_equal(grid.y[-1, -1], y_range[1])
+
+
+def test_Grid2D_make_rectangular_grid():
+    # Range is a multiple of step size:
+    grid = Grid2D((-1, 1), (0, 0), step=1)
+    npt.assert_almost_equal(grid.x, [[-1, 0, 1]])
+    npt.assert_almost_equal(grid.y, [[0, 0, 0]])
+    for mlt in [0.01, 0.1, 1, 10, 100]:
+        grid = Grid2D((-10 * mlt, 10 * mlt), (-10 * mlt, 10 * mlt),
+                      step=5 * mlt)
+        npt.assert_almost_equal(grid.x[0], mlt * np.array([-10, -5, 0, 5, 10]))
+        npt.assert_almost_equal(grid.y[:, 0],
+                                mlt * np.array([-10, -5, 0, 5, 10]))
+
+    # Another way to verify this is to manually check the step size:
+    for step in [0.25, 0.5, 1, 2]:
+        grid = Grid2D((-20, 20), (-40, 40), step=step)
+        npt.assert_equal(len(np.unique(np.diff(grid.x[0, :]))), 1)
+        npt.assert_equal(len(np.unique(np.diff(grid.y[:, 0]))), 1)
+        npt.assert_almost_equal(np.unique(np.diff(grid.x[0, :]))[0], step)
+        npt.assert_almost_equal(np.unique(np.diff(grid.y[:, 0]))[0], step)
+
+    # Step size just a little too small/big to fit into range. In this case,
+    # the step size gets adjusted so that the range is as specified by the
+    # user:
+    grid = Grid2D((-1, 1), (0, 0), step=0.33)
+    npt.assert_almost_equal(grid.x, [[-1, -2 / 3, -1 / 3, 0, 1 / 3, 2 / 3, 1]])
+    npt.assert_almost_equal(grid.y, [[0, 0, 0, 0, 0, 0, 0]])
+    grid = Grid2D((-1, 1), (0, 0), step=0.34)
+    npt.assert_almost_equal(grid.x, [[-1, -2 / 3, -1 / 3, 0, 1 / 3, 2 / 3, 1]])
+    npt.assert_almost_equal(grid.y, [[0, 0, 0, 0, 0, 0, 0]])
+
+    # Different step size for x and y:
+    grid = Grid2D((-1, 1), (0, 0), step=(0.5, 1))
+    npt.assert_almost_equal(grid.x, [[-1, -0.5, 0, 0.5, 1]])
+    npt.assert_almost_equal(grid.y, [[0, 0, 0, 0, 0]])
+    grid = Grid2D((0, 0), (-1, 1), step=(2, 0.5))
+    npt.assert_almost_equal(grid.x, [[0], [0], [0], [0], [0]])
+    npt.assert_almost_equal(grid.y[:, 0], [-1, -0.5, 0, 0.5, 1])
+
+    # Same step size, but given explicitly:
+    npt.assert_almost_equal(Grid2D((-3, 3), (8, 12), step=0.123).x,
+                            Grid2D((-3, 3), (8, 12), step=(0.123, 0.123)).x)
+
+
+def test_Grid2D_plot():
+    grid = Grid2D((-20, 20), (-40, 40), step=0.5)
+    ax = grid.plot()
+    npt.assert_equal(isinstance(ax, Axes), True)
 
 
 class ValidCoordTransform(RetinalCoordTransform):
@@ -110,3 +160,23 @@ def test_pol2cart():
     npt.assert_almost_equal(pol2cart(0, 10), (10, 0))
     npt.assert_almost_equal(pol2cart(np.arctan(4 / 3.0), 5), (3, 4))
     npt.assert_almost_equal(pol2cart(np.arctan(3 / 4.0), 5), (4, 3))
+
+def test_delta_angle():
+    npt.assert_almost_equal(delta_angle(0.1, 0.2), 0.1)
+    npt.assert_almost_equal(delta_angle(0.1, 0.2 + 2 * np.pi), 0.1)
+    npt.assert_almost_equal(delta_angle(0.1, 0.2 - 2 * np.pi), 0.1)
+    npt.assert_almost_equal(delta_angle(0.1 + 2 * np.pi, 0.2), 0.1)
+    npt.assert_almost_equal(delta_angle(0.1 - 2 * np.pi, 0.2), 0.1)
+
+    npt.assert_almost_equal(delta_angle(0.2, 0.1), -0.1)
+    npt.assert_almost_equal(delta_angle(0.2, 0.1 + 2 * np.pi), -0.1)
+    npt.assert_almost_equal(delta_angle(0.2, 0.1 - 2 * np.pi), -0.1)
+    npt.assert_almost_equal(delta_angle(0.2 + 2 * np.pi, 0.1), -0.1)
+    npt.assert_almost_equal(delta_angle(0.2 - 2 * np.pi, 0.1), -0.1)
+
+    npt.assert_almost_equal(delta_angle(0, 2 * np.pi), 0)
+    npt.assert_almost_equal(delta_angle(-np.pi, np.pi), 0)
+
+    npt.assert_almost_equal(delta_angle(0, np.pi / 2), np.pi / 2)
+    npt.assert_almost_equal(delta_angle(-np.pi / 2, 0), np.pi / 2)
+    npt.assert_almost_equal(delta_angle(4*np.pi, np.pi, np.pi/2), 0)

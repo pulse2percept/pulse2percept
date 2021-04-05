@@ -119,28 +119,14 @@ earray[0] == earray['A0']
 # Visualizing the electrode array
 # -------------------------------
 #
-# :py:func:`~pulse2percept.viz.plot_implant_on_axon_map` allows us to plot the
-# location of a :py:class:`~pulse2percept.implants.ProsthesisSystem` with
-# respect to the axon map in a simulated eye.
-#
-# Please note that an electrode array is only one part of a
-# :py:class:`~pulse2percept.implants.ProsthesisSystem`. Other parts include the
-# stimulus to be applied to each electrode, stimulus preprocessing methods,
-# and safety checks.
-#
-# However, for the purpose of this tutorial, all we need to do is wrap the
-# electrode array in a prosthesis system:
-from pulse2percept.implants import ProsthesisSystem
-implant = ProsthesisSystem(earray)
+# Electrode arrays come with their own plotting method:
+
+earray.plot()
 
 ##############################################################################
-# We can then visualize the array as follows:
-
-import matplotlib.pyplot as plt
-from pulse2percept.viz import plot_implant_on_axon_map
-plot_implant_on_axon_map(implant)
-
-##############################################################################
+# By default, the method will use the current Axes object or create a new one
+# if none exists. Alternatively, you can specify ``ax=`` yourself.
+#
 # Extending the CircleElectrodeArray class
 # ----------------------------------------
 #
@@ -150,8 +136,8 @@ plot_implant_on_axon_map(implant)
 # To add new functionality, we could simply edit the above constructor.
 # However, nobody stops us from creating our own hierarchy of classes.
 #
-# For example, we could build a ``FlexibleCircleElectrodeArray`` that allows us to
-# remove individual electrodes from the array:
+# For example, we could build a ``FlexibleCircleElectrodeArray`` that allows us
+# to remove individual electrodes from the array:
 
 
 class FlexibleCircleElectrodeArray(CircleElectrodeArray):
@@ -183,5 +169,5 @@ print(flex_earray)
 # Remove electrode 'A1'
 flex_earray.remove('A1')
 
-# Replot the implant on the axon map:
-plot_implant_on_axon_map(ProsthesisSystem(flex_earray))
+# Replot the implant:
+flex_earray.plot()

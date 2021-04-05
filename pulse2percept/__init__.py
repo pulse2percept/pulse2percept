@@ -10,13 +10,27 @@ pulse2percept is organized into the following subpackages:
     models
     percepts
     datasets
-    io
+    model_selection
     viz
     utils
 """
+import matplotlib as mpl
+from os import environ
+from sys import platform
+# Use TkAgg on OS X:
+# https://stackoverflow.com/a/32082076
+# https://stackoverflow.com/a/21789908
+if platform == "darwin":
+    mpl.use('TkAgg')
+else:
+    # Use Agg if there's no display:
+    # https://stackoverflow.com/a/40931739
+    if 'inline' not in mpl.get_backend():
+        if environ.get('DISPLAY', '') == '':
+            mpl.use('Agg')
+
 import logging
 from .version import __version__
-
 
 # Disable Jupyter Notebook handlers
 # https://github.com/ipython/ipython/issues/8282
@@ -34,11 +48,8 @@ logging.basicConfig(level=logging.DEBUG,
 
 from . import datasets
 from . import implants
-# Avoid showing avconv/avprob error:
-logger.setLevel(logging.ERROR)
-from . import io
-logger.setLevel(logging.INFO)
 from . import models
+from . import model_selection
 from . import percepts
 from . import stimuli
 from . import viz
@@ -46,8 +57,8 @@ from . import viz
 __all__ = [
     'datasets',
     'implants',
-    'io',
     'models',
+    'model_selection',
     'percepts',
     'stimuli',
     'utils',

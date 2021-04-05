@@ -29,13 +29,13 @@ data.shape
 #
 # Loading the data
 # ^^^^^^^^^^^^^^^^
+#
 # The data includes a number of thresholds measured on single-pulse stimuli.
 # We can load a subset of these data; for example, for subject S05 and
 # Electrode C3:
 
-single_pulse = data[(data.stim_type == 'single_pulse') &
-                    (data.subject == 'S05') &
-                    (data.electrode == 'C3')]
+single_pulse = load_horsager2009(subjects='S05', electrodes='C3',
+                                 stim_types='single_pulse')
 single_pulse
 
 ###############################################################################
@@ -66,7 +66,7 @@ from pulse2percept.models import Horsager2009Temporal
 model = Horsager2009Temporal()
 model.build()
 
-percept = model.predict_percept(pulse)
+percept = model.predict_percept(pulse, t_percept=np.arange(stim_dur))
 
 max_bright = percept.data.max()
 
@@ -217,7 +217,7 @@ phase_dur = 0.075
 amp_th = 20
 
 # Cathodic phase of the standard pulse::
-cath_standard = MonophasicPulse(-0.5 * amp_th, phase_dur)
+cath_stand = MonophasicPulse(-0.5 * amp_th, phase_dur)
 
 ###############################################################################
 # The delay between the start of the conditioning pulse and the start of the
@@ -236,7 +236,7 @@ cath_test = MonophasicPulse(-amp_test, phase_dur, delay_dur=delay_dur)
 ###############################################################################
 # The anodic phase were always presented 20 ms after the second cathodic phase:
 
-anod_standard = MonophasicPulse(0.5 * amp_th, phase_dur, delay_dur=20)
+anod_stand = MonophasicPulse(0.5 * amp_th, phase_dur, delay_dur=20)
 
 anod_test = MonophasicPulse(amp_test, phase_dur, delay_dur=delay_dur)
 
@@ -245,13 +245,5 @@ anod_test = MonophasicPulse(amp_test, phase_dur, delay_dur=delay_dur)
 
 from pulse2percept.stimuli import Stimulus
 
-data = []
-time = []
-time_tracker = 0
-for pulse in (cath_standard, cath_test, anod_standard, anod_test):
-    data.append(pulse.data)
-    time.append(pulse.time + time_tracker)
-    time_tracker += pulse.time[-1]
-
-latent_add = Stimulus(np.concatenate(data, axis=1), time=np.concatenate(time))
+latent_add = cath_stand.append(cath_test).append(anod_stand).append(anod_test)
 latent_add.plot()

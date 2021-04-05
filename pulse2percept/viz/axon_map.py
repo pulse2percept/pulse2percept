@@ -6,17 +6,19 @@ if platform == "darwin":  # OS X
     mpl.use('TkAgg')
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import patches
+from matplotlib.patches import Circle, Ellipse
+from matplotlib.collections import PatchCollection
 import logging
 from copy import deepcopy
 
 from ..implants import ProsthesisSystem
-from ..utils import parfor
+from ..utils import deprecated
 from ..models import AxonMapSpatial
 
 
+@deprecated(deprecated_version='0.7', removed_version='0.8')
 def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
-                  upside_down=False, annotate_quadrants=True):
+                  upside_down=False, annotate=False, xlim=None, ylim=None):
     """Plot an axon map
 
     This function generates an axon map for a left/right eye and a given
@@ -30,15 +32,27 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
         Location of the optic disc center (deg).
     n_bundles : int, optional, default: 100
         Number of nerve fiber bundles to plot.
-    ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
+    ax : ``matplotlib.axes.Axes``, optional, default: None
         A Matplotlib axes object. If None given, a new one will be created.
     upside_down : bool, optional, default: False
         Flag whether to plot the retina upside-down, such that the upper
         half of the plot corresponds to the upper visual field. In general,
         inferior retina == upper visual field (and superior == lower).
-    annotate_quadrants : bool, optional, default: True
+    annotate : bool, optional, default: True
         Flag whether to annotate the four retinal quadrants
         (inferior/superior x temporal/nasal).
+    xlim: (xmin, xmax), optional, default: (-5000, 5000)
+        Range of x coordinates to visualize. If None, the center 10 mm of the
+        retina will be shown.
+    ylim: (ymin, ymax), optional, default: (-4000, 4000)
+        Range of y coordinates to visualize. If None, the center 8 mm of the
+        retina will be shown.
+
+    Returns
+    -------
+    ax : ``matplotlib.axes.Axes``
+        Returns the axis object of the plot
+
     """
     loc_od = np.asarray(loc_od)
     if len(loc_od) != 2:
@@ -56,30 +70,31 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
                                                              -loc_od[0]))
         logging.getLogger(__name__).info(logstr)
         loc_od = (-loc_od[0], loc_od[1])
-    if ax is None:
-        # No axes object given: create
-        fig, ax = plt.subplots(1, figsize=(10, 8))
-    else:
-        fig = ax.figure
 
-    # Matplotlib<2 compatibility
-    if hasattr(ax, 'set_facecolor'):
-        ax.set_facecolor('black')
-    elif hasattr(ax, 'set_axis_bgcolor'):
-        ax.set_axis_bgcolor('black')
+    # No axes object given: create
+    if ax is None:
+        _, ax = plt.subplots(1, figsize=(10, 8))
+    ax.set_facecolor('white')
 
     # Draw axon pathways:
-    axon_map = AxonMapSpatial(n_axons=n_bundles, loc_od_x=loc_od[0],
-                              loc_od_y=loc_od[1], eye=eye)
+    axon_map = AxonMapSpatial(n_axons=n_bundles, loc_od=loc_od, eye=eye)
     axon_bundles = axon_map.grow_axon_bundles()
     for bundle in axon_bundles:
-        ax.plot(bundle[:, 0], bundle[:, 1], c=(0.5, 1.0, 0.5))
+        ax.plot(bundle[:, 0], bundle[:, 1], c=(0.6, 0.6, 0.6), linewidth=2,
+                zorder=1)
 
-    # Show circular optic disc:
-    ax.add_patch(patches.Circle(axon_map.dva2ret(loc_od), radius=900, alpha=1,
-                                color='black', zorder=10))
+    # Show elliptic optic nerve head:
+    ax.add_patch(Ellipse(axon_map.dva2ret(loc_od), width=1770, height=1880,
+                         alpha=1, color='white', zorder=2))
 
-    xmin, xmax, ymin, ymax = axon_map.dva2ret([-20, 20, -15, 15])
+    if xlim is not None:
+        xmin, xmax = xlim
+    else:
+        xmin, xmax = -5000, 5000
+    if ylim is not None:
+        ymin, ymax = ylim
+    else:
+        ymin, ymax = -4000, 4000
     ax.set_aspect('equal')
     ax.set_xlim(xmin, xmax)
     ax.set_xlabel('x (microns)')
@@ -90,7 +105,7 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
 
     # Annotate the four retinal quadrants near the corners of the plot:
     # superior/inferior x temporal/nasal
-    if annotate_quadrants:
+    if annotate:
         if upside_down:
             topbottom = ['bottom', 'top']
         else:
@@ -107,18 +122,22 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
                         color='black', fontsize=14,
                         horizontalalignment=halign,
                         verticalalignment=valign,
-                        backgroundcolor=(1, 1, 1, 0.8))
+                        bbox={'boxstyle': 'square,pad=-0.1', 'ec': 'none',
+                              'fc': (1, 1, 1, 0.7)},
+                        zorder=99)
 
     # Need to flip y axis to have upper half == upper visual field
     if upside_down:
         ax.invert_yaxis()
 
-    return fig, ax
+    return ax
 
 
+@deprecated(deprecated_version='0.7', removed_version='0.8')
 def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
-                             ax=None, upside_down=False, annotate_implant=True,
-                             annotate_quadrants=True):
+                             ax=None, upside_down=False,
+                             annotate_implant=False, annotate_quadrants=True,
+                             xlim=None, ylim=None):
     """Plot an implant on top of the axon map
 
     This function plots an electrode array on top of an axon map.
@@ -143,29 +162,73 @@ def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
     annotate_quadrants : bool, optional, default: True
         Flag whether to annotate the four retinal quadrants
         (inferior/superior x temporal/nasal).
+    xlim : (xmin, xmax), optional, default: None
+        Range of x values to plot. If None, the plot will be centered over the
+        implant.
+    ylim : (ymin, ymax), optional, default: None
+        Range of y values to plot. If None, the plot will be centered over the
+        implant.
+
+    Returns
+    -------
+    ax : ``matplotlib.axes.Axes``
+        Returns the axis object of the plot
+
     """
     if not isinstance(implant, ProsthesisSystem):
         e_s = "`implant` must be of type ProsthesisSystem"
         raise TypeError(e_s)
 
-    fig, ax = plot_axon_map(eye=implant.eye, loc_od=loc_od, ax=ax,
-                            n_bundles=n_bundles, upside_down=upside_down,
-                            annotate_quadrants=annotate_quadrants)
+    pad = 1500
+    prec = 500
+    if xlim is None:
+        xmin = np.ceil(np.min([el.x - pad for el in implant.values()]) / prec)
+        xmax = np.ceil(np.max([el.x + pad for el in implant.values()]) / prec)
+        xlim = (prec * xmin, prec * xmax)
+    if ylim is None:
+        ymin = np.ceil(np.min([el.y - pad for el in implant.values()]) / prec)
+        ymax = np.ceil(np.max([el.y + pad for el in implant.values()]) / prec)
+        ylim = (prec * ymin, prec * ymax)
+
+    ax = plot_axon_map(eye=implant.eye, loc_od=loc_od, ax=ax,
+                       n_bundles=n_bundles, upside_down=upside_down,
+                       annotate=annotate_quadrants, xlim=xlim,
+                       ylim=ylim)
+
+    # Determine marker size for electrodes:
+    radii = []
+    for el in implant.values():
+        # Use electrode radius (if exists), else constant radius:
+        if hasattr(el, 'r'):
+            radii.append(el.r)
+        else:
+            radii.append(100)
 
     # Highlight location of stimulated electrodes:
     if implant.stim is not None:
         _stim = deepcopy(implant.stim)
         _stim.compress()
-        for e in _stim.electrodes:
-            ax.plot(implant[e].x, implant[e].y, 'oy',
-                    markersize=np.sqrt(implant[e].r) * 2)
+        circles = [Circle((implant[e].x, implant[e].y), color='red', alpha=1,
+                          radius=1.7 * radii[i], linewidth=4, zorder=4)
+                   for i, (e, r) in enumerate(zip(_stim.electrodes, radii))]
+        ax.add_collection(PatchCollection(circles, match_original=True))
 
     # Plot all electrodes and label them (optional):
-    for name, el in implant.items():
+    circles = []
+    for i, (name, el) in enumerate(implant.items()):
         if annotate_implant:
-            ax.text(el.x + 100, el.y + 50, name, color='white', size='x-large')
-        ax.plot(el.x, el.y, 'ow', markersize=np.sqrt(el.r))
+            ax.text(el.x, el.y, name, horizontalalignment='center',
+                    verticalalignment='center',
+                    color='black', size='x-large',
+                    bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
+                          'fc': (1, 1, 1, 0.7)},
+                    zorder=6)
+        circles.append(Circle((el.x, el.y), radius=radii[i],
+                              edgecolor=(0.3, 0.3, 0.3, 1),
+                              facecolor=(1, 1, 1, 0.7),
+                              linewidth=4))
+    ax.add_collection(PatchCollection(circles, match_original=True, zorder=5))
 
     ax.set_title(implant)
 
-    return fig, ax
+    return ax

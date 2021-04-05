@@ -12,7 +12,11 @@ Media coverage
 Scholarly articles referencing pulse2percept
 ============================================
 
+* A Lozano, JS Suarez, C Soto-Sanchez, J Garrigos, JJ Martinez-Alvarez, JM Ferrandez, E Fernandez (2020). Neurolight: A Deep Learning Neural Interface for Cortical Visual Prostheses. *International Journal of Neural Systems*, doi:`10.1142/S0129065720500458 <https://doi.org/10.1142/S0129065720500458>`_.
+
 * C Erickson-Davis, H Korzybska (2020). What do blind people "see" with retinal prostheses? Observations and qualitative reports of epiretinal implant users. *bioRxiv*, doi:`10.1101/2020.02.03.932905 <https://doi.org/10.1101/2020.02.03.932905>`_.
+
+* J Steffen, G Hille, K Tonnies (2019). Automatic Perception Enhancement for Simulated Retinal Implants. *n Proceedings of the 8th International Conference on Pattern Recognition Applications and Methods (ICPRAM 2019)*, doi:`10.5220/0007695409080914 <https://doi.org/10.5220/0007695409080914>`_.
 
 * BW Brunton, M Beyeler (2019). Data-driven models in human neuroscience and neuroengineering. *Current Opinion in Neurobiology* 58, 21-29, doi:`10.1016/j.conb.2019.06.008 <https://doi.org/10.1016/j.conb.2019.06.008>`_.
 

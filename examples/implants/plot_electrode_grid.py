@@ -17,7 +17,7 @@ To create a rectangular grid, we need to specify:
    of rows and columns
 -  The electrode-to-electrode ``spacing`` in microns
 -  The (``x``, ``y``) location of the center of the array
--  The rotation angle ``rot`` of the grid in radians, where positive angles
+-  The rotation angle ``rot`` of the grid in degrees, where positive angles
    rotate all electrodes in the array in a counter-clockwise fashion on the
    retinal surface.
 
@@ -79,7 +79,8 @@ for name, electrode in grid.items():
 
 from pulse2percept.implants import DiskElectrode
 
-disk_grid = ElectrodeGrid((3, 5), 800, etype=DiskElectrode, r=100)
+# 11x13 grid, 100-um disk electrodes spaced 500um apart:
+disk_grid = ElectrodeGrid((11, 13), 500, etype=DiskElectrode, r=100)
 
 disk_grid[:]
 
@@ -89,14 +90,9 @@ disk_grid[:]
 #     You can also specify a list of radii, one value for each electrode in
 #     the grid.
 #
-# We can visualize the grid by wrapping it in a
-# :py:class:`~pulse2percept.implants.ProsthesisSystem` object and passing it
-# to :py:func:`~pulse2percept.viz.plot_implant_on_axon_map`:
+# We can visualize the grid by using its ``plot`` method:
 
-from pulse2percept.implants import ProsthesisSystem
-from pulse2percept.viz import plot_implant_on_axon_map
-
-plot_implant_on_axon_map(ProsthesisSystem(disk_grid))
+disk_grid.plot()
 
 ##############################################################################
 # Creating a hexagonal grid
@@ -105,20 +101,19 @@ plot_implant_on_axon_map(ProsthesisSystem(disk_grid))
 # To create a hexagonal grid instead, all we need to do is change the grid type
 # from 'rect' (default) to 'hex':
 
-hex_grid = ElectrodeGrid((3, 5), 800, type='hex', etype=DiskElectrode, r=100)
+hex_grid = ElectrodeGrid((11, 13), 500, type='hex', etype=DiskElectrode, r=100)
 
-plot_implant_on_axon_map(ProsthesisSystem(hex_grid))
+hex_grid.plot()
+
 
 ##############################################################################
-# The following example centers the grid on (x,y) = (-1000um, 200 um),
+# The following example centers the grid on (x,y) = (-600um, 200 um),
 # z=150um away from the retinal surface, and rotates it clockwise by 45 degrees
 # (note the minus sign):
 
 from numpy import pi
-offset_grid = ElectrodeGrid((3, 5), 800, type='hex', x=-1000, y=200, z=150,
-                            rot=-pi / 4, etype=DiskElectrode, r=100)
-
-plot_implant_on_axon_map(ProsthesisSystem(offset_grid))
+offset_grid = ElectrodeGrid((11, 13), 500, type='hex', x=-600, y=200, z=150,
+                            rot=-45, etype=DiskElectrode, r=100)
 
 ##############################################################################
 # .. note::
@@ -126,8 +121,9 @@ plot_implant_on_axon_map(ProsthesisSystem(offset_grid))
 #     Clockwise/counter-clockwise rotations refer to rotations on the retinal
 #     surface (that is, as if seen on a fundus photograph).
 #
-#     Since the inferior retina maps to the upper visual field, you would have
-#     to flip the image upside-down to see how electrode location maps to
-#     the location of a visual percept. You can do this by passing
-#     ``upside_down=True``
-#     to :py:func:`~pulse2percept.viz.plot_implant_on_axon_map`
+# We can also plot the grid on top of a map of retinal nerve fiber bundles:
+
+from pulse2percept.models import AxonMapModel
+
+AxonMapModel().plot()
+offset_grid.plot()

@@ -1,6 +1,4 @@
 dask
-scikit_image
-sk_video
 pandas
 h5py
 pytest>=5
@@ -8,4 +6,7 @@ pytest-cov
 coveralls
 flake8
 mock
+seaborn
+sklearn
+pyswarm
 -r doc/requirements.txt

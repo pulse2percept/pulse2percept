@@ -25,16 +25,31 @@ def test_fetch_beyeler2019():
     npt.assert_equal(isinstance(data, pd.DataFrame), True)
     columns = ['subject', 'amp', 'area', 'compactness', 'date', 'eccentricity',
                'electrode', 'filename', 'freq', 'image', 'orientation', 'pdur',
-               'stim_class', 'x_center', 'y_center', 'img_shape']
+               'stim_class', 'x_center', 'y_center', 'img_shape',
+               'xrange', 'yrange']
     for expected_col in columns:
         npt.assert_equal(expected_col in data.columns, True)
 
     npt.assert_equal(data.shape, (400, 16))
     npt.assert_equal(data.subject.unique(), ['S1', 'S2', 'S3', 'S4'])
     npt.assert_equal(list(data[data.subject == 'S1'].img_shape.unique()[0]),
-                     [384, 384])
+                     [192, 192])
     npt.assert_equal(list(data[data.subject != 'S1'].img_shape.unique()[0]),
-                     [768, 1024])
+                     [384, 512])
+
+    # Subset selection:
+    subset = datasets.fetch_beyeler2019(subjects='S2')
+    npt.assert_equal(subset.shape, (110, 16))
+    subset = datasets.fetch_beyeler2019(subjects=['S2', 'S3'])
+    npt.assert_equal(subset.shape, (220, 16))
+    subset = datasets.fetch_beyeler2019(subjects='invalid')
+    npt.assert_equal(subset.shape, (0, 16))
+    subset = datasets.fetch_beyeler2019(electrodes=['A1'])
+    npt.assert_equal(subset.shape, (10, 16))
+    subset = datasets.fetch_beyeler2019(electrodes=['A1', 'C3'])
+    npt.assert_equal(subset.shape, (20, 16))
+    subset = datasets.fetch_beyeler2019(electrodes='invalid')
+    npt.assert_equal(subset.shape, (0, 16))
 
     # Shuffle dataset (index will always be range(400), but rows are shuffled):
     data = datasets.fetch_beyeler2019(shuffle=True, random_state=42)

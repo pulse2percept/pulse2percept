@@ -61,11 +61,15 @@ class deprecated:
                        self.removed_version)
         return msg + dep_msg + rmv_msg + ". " + alt_msg
 
-    def _update_doc(self, olddoc):
-        newdoc = self._get_message("Deprecated")
-        if olddoc:
-            newdoc = "%s\n\n%s" % (newdoc, olddoc)
-        return newdoc
+    def _update_doc(self, old_doc, msg=None):
+        """Updates the docstring"""
+        if msg is None:
+            msg = self._get_message("This feature")
+        # Insert a deprecated directive:
+        doc = ".. deprecated:: %s\n\n    %s" % (self.deprecated_version, msg)
+        if old_doc:
+            doc = "%s\n\n%s" % (doc, old_doc)
+        return doc
 
     def _decorate_class(self, cls):
         """Mark a class as deprecated"""
@@ -80,7 +84,7 @@ class deprecated:
         cls.__init__ = wrapped
 
         wrapped.__name__ = '__init__'
-        wrapped.__doc__ = self._update_doc(init.__doc__)
+        wrapped.__doc__ = self._update_doc(init.__doc__, msg)
         wrapped.deprecated_original = init
 
         return cls
@@ -105,6 +109,7 @@ class deprecated:
             warnings.warn(msg, category=DeprecationWarning)
             return prop.fget(*args, **kwargs)
 
+        wrapped.__doc__ = self._update_doc(prop.__doc__, msg)
         return wrapped
 
     def _decorate_fun(self, fun):
@@ -116,10 +121,9 @@ class deprecated:
             warnings.warn(msg, category=DeprecationWarning)
             return fun(*args, **kwargs)
 
-        wrapped.__doc__ = self._update_doc(wrapped.__doc__)
+        wrapped.__doc__ = self._update_doc(wrapped.__doc__, msg)
 
         return wrapped
-
 
 def is_deprecated(func):
     """Helper to check if ``func`` is wrapped by the deprecated decorator"""

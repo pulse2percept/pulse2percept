@@ -1,17 +1,19 @@
 """`ArgusI`, `ArgusII`"""
 import numpy as np
 from collections import OrderedDict
-from .base import (DiskElectrode, ElectrodeArray, ElectrodeGrid,
-                   ProsthesisSystem)
+
+from .base import ProsthesisSystem
+from .electrodes import DiskElectrode
+from .electrode_arrays import ElectrodeGrid
 
 
 class ArgusI(ProsthesisSystem):
-    """Create an ArgusI array on the retina
+    """Create an Argus I array on the retina
 
-    This function creates an ArgusI array and places it on the retina
+    This function creates an Argus I array and places it on the retina
     such that the center of the array is located at 3D location (x,y,z),
     given in microns, and the array is rotated by rotation angle ``rot``,
-    given in radians.
+    given in degrees.
 
     Argus I is a modified cochlear implant containing 16 electrodes in a 4x4
     array with a center-to-center separation of 800 um, and two electrode
@@ -25,10 +27,10 @@ class ArgusI(ProsthesisSystem):
     .. raw:: html
 
         <pre>
-          -y      A1 B1 C1 D1                     260 520 260 520
-          ^       A2 B2 C2 D2   where electrode   520 260 520 260
-          |       A3 B3 C3 D3   diameters are:    260 520 260 520
-          -->x    A4 B4 C4 D4                     520 260 520 260
+          -->x    A1 B1 C1 D1                     260 520 260 520
+          |       A2 B2 C2 D2   where electrode   520 260 520 260
+          v       A3 B3 C3 D3   diameters are:    260 520 260 520
+           y      A4 B4 C4 D4                     520 260 520 260
         </pre>
 
     Electrode order is: A1, B1, C1, D1, A2, B2, ..., D4.
@@ -44,29 +46,29 @@ class ArgusI(ProsthesisSystem):
 
     Parameters
     ----------
-    x : float, optional, default: 0
+    x : float, optional
         x coordinate of the array center (um)
-    y : float, optional, default: 0
+    y : float, optional
         y coordinate of the array center (um)
-    z : float || array_like, optional, default: 0
+    z : float or array_like, optional
         Distance of the array to the retinal surface (um). Either a list
         with 16 entries or a scalar.
-    rot : float, optional, default: 0
-        Rotation angle of the array (rad). Positive values denote
+    rot : float, optional
+        Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
-    eye : {'LE', 'RE'}, optional, default: 'RE'
+    eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
 
     Examples
     --------
-    Create an ArgusI array centered on the fovea, at 100um distance from
-    the retina:
+    Create an Argus I array centered on the fovea, at 100um distance from
+    the retina, rotated counter-clockwise by 5 degrees:
 
     >>> from pulse2percept.implants import ArgusI
-    >>> ArgusI(x=0, y=0, z=100, rot=0)  # doctest: +NORMALIZE_WHITESPACE
-    ArgusI(earray=ElectrodeGrid(shape=(4, 4), type='rect'),
-           eye='RE', shape=(4, 4), stim=None)
+    >>> ArgusI(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
+    ArgusI(earray=ElectrodeGrid, eye='RE', shape=(4, 4),
+           stim=None)
 
     Get access to electrode 'B1', either by name or by row/column index:
 
@@ -99,7 +101,8 @@ class ArgusI(ProsthesisSystem):
                                     rot=rot, etype=DiskElectrode, r=r_arr,
                                     names=names)
 
-        # Set stimulus if available:
+        # Beware of race condition: Stim must be set last, because it requires
+        # indexing into self.electrodes:
         self.stim = stim
 
         # Set left/right eye:
@@ -133,12 +136,12 @@ class ArgusI(ProsthesisSystem):
 
 
 class ArgusII(ProsthesisSystem):
-    """Create an ArgusII array on the retina
+    """Create an Argus II array on the retina
 
-    This function creates an ArgusII array and places it on the retina
+    This function creates an Argus II array and places it on the retina
     such that the center of the array is located at (x,y,z), given in
     microns, and the array is rotated by rotation angle ``rot``, given in
-    radians.
+    degrees.
 
     Argus II contains 60 electrodes of 225 um diameter arranged in a 6 x 10
     grid (575 um center-to-center separation) [Yue2020]_.
@@ -151,10 +154,10 @@ class ArgusII(ProsthesisSystem):
 
         <pre>
                   A1 A2 A3 A4 A5 A6 A7 A8 A9 A10
-          -y      B1 B2 B3 B4 B5 B6 B7 B8 B9 B10
-          ^       C1 C2 C3 C4 C5 C6 C7 C8 C9 C10
-          |       D1 D2 D3 D4 D5 D6 D7 D8 D9 D10
-          -->x    E1 E2 E3 E4 E5 E6 E7 E8 E9 E10
+          -- x    B1 B2 B3 B4 B5 B6 B7 B8 B9 B10
+          |       C1 C2 C3 C4 C5 C6 C7 C8 C9 C10
+          v       D1 D2 D3 D4 D5 D6 D7 D8 D9 D10
+           y      E1 E2 E3 E4 E5 E6 E7 E8 E9 E10
                   F1 F2 F3 F4 F5 F6 F7 F8 F9 F10
         </pre>
 
@@ -173,25 +176,25 @@ class ArgusII(ProsthesisSystem):
         x coordinate of the array center (um)
     y : float
         y coordinate of the array center (um)
-    z: float || array_like
+    z: float or array_like
         Distance of the array to the retinal surface (um). Either a list
         with 60 entries or a scalar.
     rot : float
-        Rotation angle of the array (rad). Positive values denote
+        Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
-    eye : {'LE', 'RE'}, optional, default: 'RE'
+    eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
 
     Examples
     --------
     Create an ArgusII array centered on the fovea, at 100um distance from
-    the retina:
+    the retina, rotated counter-clockwise by 5 degrees:
 
     >>> from pulse2percept.implants import ArgusII
-    >>> ArgusII(x=0, y=0, z=100, rot=0)  # doctest: +NORMALIZE_WHITESPACE
-    ArgusII(earray=ElectrodeGrid(shape=(6, 10), type='rect'),
-            eye='RE', shape=(6, 10), stim=None)
+    >>> ArgusII(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
+    ArgusII(earray=ElectrodeGrid, eye='RE', shape=(6, 10),
+            stim=None)
 
     Get access to electrode 'E7', either by name or by row/column index:
 
@@ -213,7 +216,8 @@ class ArgusII(ProsthesisSystem):
         self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, r=r,
                                     rot=rot, names=names, etype=DiskElectrode)
 
-        # Set stimulus if available:
+        # Beware of race condition: Stim must be set last, because it requires
+        # indexing into self.electrodes:
         self.stim = stim
 
         # Set left/right eye:
@@ -224,7 +228,7 @@ class ArgusII(ProsthesisSystem):
         self.eye = eye
         # Unfortunately, in the left eye the labeling of columns is reversed...
         if eye == 'LE':
-            # FIXME: Would be better to have more flexibility in the naming
+            # TODO: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
             names = list(self.earray.keys())
             objects = list(self.earray.values())

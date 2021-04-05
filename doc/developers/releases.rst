@@ -36,7 +36,7 @@ Until then, the artifacts need to be downloaded from Azure Pipelines.
     Windows vs Unix.
     You can install a wheel via ``pip install <name>.wheel``
 
-The following recipe will upload the files to PyPI:
+The following recipe will upload the files to TestPyPI:
 
 .. code-block:: python
 
@@ -52,11 +52,16 @@ The following recipe will upload the files to PyPI:
     # 'dist' folder.
     wget ...
 
-    # Upload using 'twine' (you may need to 'pip install twine')
-    twine upload dist/*
-
     # Or for TestPyPI:
     twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+
+Install the package from TestPyPI and make sure it works.
+If everything looks good, upload the wheels to the real PyPI:
+
+.. code-block:: python
+
+    # Upload using 'twine' (you may need to 'pip install twine')
+    twine upload dist/*
 
 .. _cibuildwheel: https://github.com/joerick/cibuildwheel
 .. _PR194: https://github.com/joerick/cibuildwheel/pull/194

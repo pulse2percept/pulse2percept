@@ -40,8 +40,8 @@ If you don't have Python, you have several options:
 
 .. important::
 
-    pulse2percept 0.4.3 was the last release to support Python 2.7 and 3.4.
-    pulse2percept 0.5+ requires **Python 3.5+**.
+    pulse2percept 0.6 was the last release to support Python <= 3.5.
+    pulse2percept 0.7+ requires **Python 3.6+**.
 
 On some platforms (e.g., macOS), you might also have to install pip yourself.
 You can check if pip is installed on your system by typing ``pip --version``
@@ -79,7 +79,7 @@ You can also install a specific version:
 
 .. code-block:: bash
 
-    pip3 install pulse2percept==0.5.2
+    pip3 install pulse2percept==0.6.0
 
 Then from any Python console or script, try:
 
@@ -107,7 +107,7 @@ Installing version |version| from source
 Prerequisites
 -------------
 
-1.  **Python** (>= 3.5): Make sure to :ref:`install Python <install-python>`
+1.  **Python** (>= 3.6): Make sure to :ref:`install Python <install-python>`
     first.
 
 2.  **XCode**: On macOS, make sure to install `Apple XCode`_.
@@ -120,7 +120,7 @@ Prerequisites
     1.  Install **Build Tools for Visual Studio 2019** from the
         `Microsoft website`_.
         Note that the build tools for Visual Studio 2015 or 2017 should work as
-        well (Python >= 3.5 requires C++ 14.X to be exact).
+        well (Python >= 3.6 requires C++ 14.X to be exact).
         Also note that you don't need to install Visual Studio itself.
 
     2.  `Install Cython`_:
@@ -147,6 +147,13 @@ Prerequisites
     ``make`` is part of `build-essentials`_ on Ubuntu, `XCode`_ on Mac OS X,
     and can be downloaded from `ezwinports`_ on Windows.
 
+6.  **OpenMP** (optional): OpenMP is used to parallelize code written in Cython
+    or C. OpenMP is part of the GCC compiler on Unix, and part of the
+    `MinGW compiler <https://stackoverflow.com/a/38389181>`_ on Windows.
+    Follow `these instructions 
+    <https://dipy.org/documentation/1.0.0./installation/#openmp-with-osx>`_ 
+    to get it to work on macOS.
+
 .. _Apple XCode: https://developer.apple.com/xcode
 .. _Microsoft website: https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2019
 .. _Install Cython: https://cython.readthedocs.io/en/latest/src/quickstart/install.html
@@ -161,8 +168,8 @@ Dependencies
 ------------
 
 .. include:: ../README.rst
-   :start-line: 105
-   :end-line: 139
+   :start-line: 103
+   :end-line: 155
 
 Obtaining the latest code from GitHub
 -------------------------------------
@@ -324,13 +331,16 @@ Then add the specificed location to ``$PATH``; see `PATH on Windows`_,
 .. _PATH on macOS: https://www.architectryan.com/2012/10/02/add-to-the-path-on-mac-os-x-mountain-lion/
 .. _PATH on Linux: https://linuxize.com/post/how-to-add-directory-to-path-in-linux/
 
-Error in fast_retina.pyx when installing with pip on Windows
-------------------------------------------------------------
+Error: numpy.ufunc size changed, may indicate binary incompatibility
+--------------------------------------------------------------------
 
-Early builds of pulse2percept 0.4 mistakingly omitted the Windows binary
-for the Cython-dependent ``fast_retina`` module (see :issue:`88`).
-The solution is to either pip install :ref:`a later version <install-release>`,
-or to :ref:`build from source <install-source>`.
+This issue may arise when one of the p2p dependencies was compiled using an 
+older NumPy version. Upgrading to the latest NumPy version should fix the 
+issue:
+
+.. code-block:: python
+
+  pip3 install -U numpy
 
 .. note::
 

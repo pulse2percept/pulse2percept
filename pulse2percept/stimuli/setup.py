@@ -16,6 +16,7 @@ def configuration(parent_package='', top_path=None):
                              sources=['_base.pyx'],
                              include_dirs=[numpy.get_include()],
                              libraries=libraries)
-    config.add_subpackage("tests")
+    config.add_subpackage('tests')
+    config.add_data_dir('data')
 
     return config

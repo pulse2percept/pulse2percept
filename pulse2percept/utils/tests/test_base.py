@@ -3,7 +3,8 @@ import copy
 import pytest
 import numpy.testing as npt
 
-from pulse2percept.utils import Frozen, FreezeError, PrettyPrint, Data, gamma
+from pulse2percept.utils import (Frozen, FreezeError, PrettyPrint, Data, gamma,
+                                 cached)
 
 
 class PrettyPrinter(PrettyPrint):
@@ -71,14 +72,16 @@ def test_Data():
     npt.assert_equal(hasattr(data, 'axis2'), False)
 
     # Order is preserved even if None:
-    data = Data(np.zeros(12).reshape((3, 4, 1)),
-                axes=[('x', None), ('y', None), ('t', None)])
+    data = Data(np.zeros(12).reshape((3, 4, 1, 1)),
+                axes=[('x', None), ('y', None), ('t', None), ('t2', 0)])
     npt.assert_equal(hasattr(data, 'x'), True)
     npt.assert_equal(data.x, [0, 1, 2])
     npt.assert_equal(hasattr(data, 'y'), True)
     npt.assert_equal(data.y, [0, 1, 2, 3])
     npt.assert_equal(hasattr(data, 't'), True)
-    npt.assert_equal(data.t, [0])
+    npt.assert_equal(data.t, None)
+    npt.assert_equal(hasattr(data, 't2'), True)
+    npt.assert_equal(data.t2, [0])
     npt.assert_equal(hasattr(data, 'axis0'), False)
 
     # Some axes given, others inferred automatically:
@@ -92,7 +95,7 @@ def test_Data():
         Data(ndarray, axes=3)
     with pytest.raises(TypeError):
         # Not iterable:
-        Data(ndarray, axes={'x': 0, 'y': list})
+        Data(ndarray, axes={'x': 0, 'y': [0, 1]})
     with pytest.raises(ValueError):
         # Wrong number of labels:
         Data(ndarray, axes=[('x', [0, 1])])
@@ -159,3 +162,30 @@ def test_gamma():
 
             # Make sure peak sits correctly
             npt.assert_almost_equal(g.argmax() * tsample, tau * (n - 1))
+
+
+class AreaCache(object):
+
+    def __init__(self, img, cache=True):
+        self.img = img
+        self._cache_active = cache
+        self._cache = {}
+
+    @property
+    @cached
+    def area(self):
+        return np.sum(self.img > 0)
+
+
+def test_cache():
+    # Change underlying image, but area stays the same (is cached):
+    cache = AreaCache(np.ones((10, 20)))
+    area0 = cache.area
+    cache.img[3, 4] = 0
+    area1 = cache.area
+    npt.assert_almost_equal(area0, area1)
+
+    # Now invalidate cache:
+    cache._cache_active = False
+    area2 = cache.area
+    npt.assert_equal(area1 != area2, True)

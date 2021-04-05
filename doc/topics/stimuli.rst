@@ -60,9 +60,8 @@ dictionary).
 
     # Use defaults so we don't get gridlines in generated docs
     import matplotlib as mpl
-
     mpl.rcdefaults()
-
+    
 Single-electrode stimuli
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -145,29 +144,6 @@ The same is true for a dictionary of pulse trains:
     Stimulus({'A1': BiphasicPulse(10, 0.45, stim_dur=100),
               'C9': BiphasicPulse(-30, 1, delay_dur=10, stim_dur=100)})
 
-Plotting stimuli
-----------------
-
-The easiest way to visualize a stimulus is to use the built-in
-:py:meth:`~pulse2percept.stimuli.Stimulus.plot` method:
-
-.. ipython:: python
-
-    from pulse2percept.stimuli import Stimulus, BiphasicPulseTrain
-
-    # Create a multi-electrode stimulus
-    stim = Stimulus({'E%d' % i: BiphasicPulseTrain(i, 10, 0.45)
-                     for i in np.arange(5)})
-    # Plot it:
-    stim.plot()
-
-You can also select individual electrodes, or specify a range of time points:
-
-.. ipython:: python
-
-    # Plot two electrodes with available time points in the range t=[0, 0.5]:
-    stim.plot(electrodes=['E2', 'E4'], time=(0, 0.5))
-
 Interacting with stimuli
 ------------------------
 
@@ -229,26 +205,8 @@ In that case, the value is automatically interpolated (using SciPy's
     # This also works for multiple time points:
     stim[0, [3.45, 6.78]]
     
-    # Extrapolating is disabled by default, but you can enable it:
-    stim = Stimulus(np.arange(10).reshape((1, -1)), extrapolate=True)
+    # Time points above the valid range will return the largest stored value:
     stim[0, 123.45]
-
-You can choose different interpolation methods, as long as
-`scipy.interpolate.interp1d <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html>`_ accepts them.
-For example, the 'nearest' method will return the value of the nearest
-data point:
-
-.. ipython:: python
-
-    # A single-electrode ramp stimulus:
-    stim = Stimulus(np.arange(10).reshape((1, -1)), interp_method='nearest',
-                    extrapolate=True)
-
-    # Interpolate:
-    stim[0, 3.45]
-
-    # Outside the data range:
-    stim[0, 12.2]
 
 Accessing the raw data
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -310,3 +268,30 @@ before and after compression:
     # Notice how the time axis have changed:
     stim
 
+Accessing stimulus metadata
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Stimuli can store additional relevant information in the ``metadata`` dictionary. 
+Users can also pass their own metadata, which will be stored in ``metadata["user"]``
+Stimuli built from a collection of sources store the metadata for each source 
+in ``metadata["electrodes"][electrode]["metadata"]``:
+
+.. ipython:: python
+
+    # Accessing metadata
+    stim = Stimulus([[0, 1, 2, 3]], metadata='user_metadata')
+    stim.metadata
+
+    # Some objects store their own metadata
+    stim = BiphasicPulseTrain(1,1,1, metadata='user_metadata')
+    stim.metadata
+
+    # Multiple source metadata
+    stim = Stimulus({'A1' : BiphasicPulseTrain(1,1,1, metadata='A1 metadata'),
+                     'B2' : BiphasicPulseTrain(1,1,1, metadata='B2 metadata')},
+                    metadata='stimulus metadata')
+    stim.metadata
+    
+.. minigallery:: pulse2percept.stimuli.Stimulus
+    :add-heading: Examples using ``Stimulus``
+    :heading-level: -

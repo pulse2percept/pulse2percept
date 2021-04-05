@@ -6,6 +6,8 @@
     base
     pulses
     pulse_trains
+    images
+    videos
 
 .. seealso::
 
@@ -17,19 +19,33 @@
 # charge-balanced (here expressed in microamps):
 MIN_AMP = 1e-5
 
-from .base import Stimulus, TimeSeries
+# Sampling time step (ms); defines the duration of the signal edge
+# transitions:
+DT = 1e-3
+
+from .base import Stimulus
 from .pulses import AsymmetricBiphasicPulse, BiphasicPulse, MonophasicPulse
 from .pulse_trains import (PulseTrain, BiphasicPulseTrain,
                            BiphasicTripletTrain, AsymmetricBiphasicPulseTrain)
+from .images import ImageStimulus, LogoBVL, LogoUCSB, SnellenChart
+from .videos import VideoStimulus, BostonTrain
+from .psychophysics import BarStimulus, GratingStimulus
 
 __all__ = [
     'AsymmetricBiphasicPulse',
     'AsymmetricBiphasicPulseTrain',
+    'BarStimulus',
     'BiphasicPulse',
     'BiphasicPulseTrain',
     'BiphasicTripletTrain',
+    'BostonTrain',
+    'GratingStimulus',
+    'ImageStimulus',
+    'LogoBVL',
+    'LogoUCSB',
     'MonophasicPulse',
     'PulseTrain',
+    'SnellenChart',
     'Stimulus',
-    'TimeSeries'
+    'VideoStimulus'
 ]

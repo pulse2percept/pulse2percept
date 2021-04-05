@@ -4,7 +4,7 @@ import pytest
 
 from pulse2percept.implants import (DiskElectrode, PointSource, ElectrodeArray,
                                     ProsthesisSystem, ArgusI)
-from pulse2percept.stimuli import Stimulus, BiphasicPulseTrain
+from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (Nanduri2012Model, Nanduri2012Spatial,
                                   Nanduri2012Temporal)
@@ -43,7 +43,8 @@ def test_Nanduri2012Spatial():
         model.predict_percept(implant)
 
     # Multiple frames are processed independently:
-    model = Nanduri2012Spatial(engine='serial', atten_a=14000, xystep=5)
+    model = Nanduri2012Spatial(engine='serial', atten_a=14000, xystep=5,
+                               xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 2]}))
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
@@ -58,8 +59,9 @@ def test_Nanduri2012Spatial():
         npt.assert_almost_equal(model.ret2dva(280.0 * factor), factor)
 
 
-def test_Nanduri2012Temporal():
-    model = Nanduri2012Temporal()
+@pytest.mark.parametrize('scale_out', (1, 2))
+def test_Nanduri2012Temporal(scale_out):
+    model = Nanduri2012Temporal(scale_out=scale_out)
     # User can set their own params:
     model.dt = 0.1
     npt.assert_equal(model.dt, 0.1)
@@ -87,7 +89,7 @@ def test_Nanduri2012Temporal():
         model.predict_percept(implant.stim, t_percept=[0.2, 0.2])
 
     # Brightness scales differently with amplitude vs frequency:
-    model = Nanduri2012Temporal(dt=5e-3)
+    model = Nanduri2012Temporal(dt=5e-3, scale_out=scale_out)
     model.build()
     sdur = 1000.0  # stimulus duration (ms)
     pdur = 0.45  # (ms)
@@ -101,8 +103,8 @@ def test_Nanduri2012Temporal():
                                           stim_dur=sdur)
         percept = model.predict_percept(implant.stim, t_percept=t_percept)
         bright_amp.append(percept.data.max())
-    bright_amp_ref = [0.0, 0.00890, 0.0657, 0.1500, 0.1691]
-    npt.assert_almost_equal(bright_amp, bright_amp_ref, decimal=3)
+    bright_amp_ref = np.array([0.0, 0.00890, 0.0657, 0.1500, 0.1691])
+    npt.assert_almost_equal(bright_amp, scale_out * bright_amp_ref, decimal=3)
 
     bright_freq = []
     for freq in np.linspace(0, 100, 5):
@@ -112,8 +114,9 @@ def test_Nanduri2012Temporal():
                                           stim_dur=sdur)
         percept = model.predict_percept(implant.stim, t_percept=t_percept)
         bright_freq.append(percept.data.max())
-    bright_freq_ref = [0.0, 0.0394, 0.0741, 0.1073, 0.1385]
-    npt.assert_almost_equal(bright_freq, bright_freq_ref, decimal=3)
+    bright_freq_ref = np.array([0.0, 0.0394, 0.0741, 0.1073, 0.1385])
+    npt.assert_almost_equal(bright_freq, scale_out * bright_freq_ref,
+                            decimal=3)
 
 
 def test_Nanduri2012Model():
@@ -176,7 +179,6 @@ def test_Nanduri2012Model_predict_percept():
 
     # Requested times must be multiples of model.dt:
     implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
-    tsample = 5e-3  # sampling time step (ms)
     # implant.stim = PulseTrain(tsample)
     implant.stim = BiphasicPulseTrain(20, 20, 0.45)
     model.temporal.dt = 0.1
@@ -224,7 +226,7 @@ def test_Nanduri2012Model_predict_percept():
         idx_frame = np.argmax(np.max(percept.data, axis=(0, 1)))
         brightest_frame = percept.data[..., idx_frame]
         frames_amp.append(brightest_frame)
-    npt.assert_equal([np.sum(f > bright_th) for f in frames_amp], [0, 180])
+    npt.assert_equal([np.sum(f > bright_th) for f in frames_amp], [0, 161])
     freqs = [20, 120]
     frames_freq = []
     for freq in freqs:
@@ -235,4 +237,4 @@ def test_Nanduri2012Model_predict_percept():
         idx_frame = np.argmax(np.max(percept.data, axis=(0, 1)))
         brightest_frame = percept.data[..., idx_frame]
         frames_freq.append(brightest_frame)
-    npt.assert_equal([np.sum(f > bright_th) for f in frames_freq], [32, 60])
+    npt.assert_equal([np.sum(f > bright_th) for f in frames_freq], [21, 49])

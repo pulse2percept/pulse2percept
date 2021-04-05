@@ -1,9 +1,12 @@
-"""`PrettyPrint`, `Frozen`, `gamma`"""
+"""`PrettyPrint`, `Frozen`, `Data`, `cached`, `gamma`, `unique`"""
 import numpy as np
 import sys
 import abc
 from scipy.special import factorial
 from collections import OrderedDict as ODict
+from functools import wraps
+
+"""`PrettyPrint`, `Frozen`, `gamma`, `unique`"""
 
 
 class PrettyPrint(object, metaclass=abc.ABCMeta):
@@ -28,6 +31,7 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
     ...         return {'a': self.a, 'b': self.b}
     >>> MyClass(1, 2)
     MyClass(a=1, b=2)
+
     """
     __slots__ = ()
 
@@ -138,6 +142,20 @@ class Frozen(object):
 
 
 class Data(PrettyPrint):
+    """N-dimensional data container
+
+    .. versionadded:: 0.6
+
+    Parameters
+    ----------
+    data : np.ndarray
+        An N-dimensional NumPy array containing the data to store
+    axes : dict or tuple, optional
+        For each dimension in ``data``, specify axis name and labels.
+    metadata : dict, optional
+        A dictionary that can store arbitrary metadata
+
+    """
 
     def __init__(self, data, axes=None, metadata=None):
         self._internal = {
@@ -183,14 +201,22 @@ class Data(PrettyPrint):
                 raise ValueError("All axis labels must be unique.")
             for i, (key, values) in enumerate(axes.items()):
                 if values is None:
-                    # Fill in omitted axis:
-                    axes[key] = np.arange(data.shape[i])
-                    continue
-                if len(values) != data.shape[i]:
-                    err_str = ("Number of values for axis '%s' (%d) does not "
-                               "match data.shape[%d] "
-                               "(%d)" % (key, len(values), i, data.shape[i]))
-                    raise ValueError(err_str)
+                    if data.shape[i] > 1:
+                        # If there's 1 data point, then None is None. If
+                        # there's > 1 data points, it's an omitted axis we need
+                        # to fill in:
+                        axes[key] = np.arange(data.shape[i])
+                        continue
+                else:
+                    if data.shape[i] == 1 and np.isscalar(values):
+                        values = np.array([values])
+                    if len(values) != data.shape[i]:
+                        err_str = ("Number of values for axis '%s' (%d) does "
+                                   "not match data.shape[%d] "
+                                   "(%d)" % (key, len(values), i,
+                                             data.shape[i]))
+                        raise ValueError(err_str)
+                    axes[key] = values
 
         # Create a property for each of the following:
         pprint_params = ['data', 'dtype', 'shape', 'metadata']
@@ -285,3 +311,32 @@ def gamma(n, tau, tsample, tol=0.01):
         y = y[:small_vals[0] + peak]
 
     return t, y
+
+
+def cached(f):
+    """Cached property decorator
+
+    Decorator can be added to the property of a class to maintain a cache.
+    This is useful when computing the property is computationall expensive.
+    The property will only be computed on first call, and subsequent calls will
+    refer to the cached result.
+
+    .. important ::
+
+        When making use of a cached property, the class should also maintain
+        a ``_cache_active`` flag set to True or False.
+
+    .. versionadded:: 0.7
+
+    """
+    @wraps(f)
+    def wrapper(obj):
+        cache = obj._cache
+        prop = f.__name__
+
+        if not ((prop in cache) and obj._cache_active):
+            cache[prop] = f(obj)
+
+        return cache[prop]
+
+    return wrapper
