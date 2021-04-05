@@ -9,8 +9,29 @@ Release Notes
     **pulse2percept 0.6 was the last version to support Python <= 3.5.**
     pulse2percept 0.7+ requires Python 3.6+.
 
-v0.7.0 (2021, planned)
+v0.8.0 (2021, planned)
 ----------------------
+
+Highlights
+~~~~~~~~~~
+
+New features
+~~~~~~~~~~~~
+
+API changes
+~~~~~~~~~~~
+
+Backward-incompatible changes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Deprecations
+^^^^^^^^^^^^
+
+Bug fixes
+~~~~~~~~~
+
+v0.7.0 (2021-04-04)
+-------------------
 
 Highlights
 ~~~~~~~~~~
