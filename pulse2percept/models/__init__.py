@@ -21,7 +21,7 @@ from .beyeler2019 import (ScoreboardModel, ScoreboardSpatial, AxonMapSpatial,
 from .horsager2009 import Horsager2009Model, Horsager2009Temporal
 from .nanduri2012 import (Nanduri2012Model, Nanduri2012Spatial,
                           Nanduri2012Temporal)
-from .granley2021 import (BiphasicAxonMapModel)
+from .granley2021 import (BiphasicAxonMapModel, BiphasicAxonMapSpatial)
 
 __all__ = [
     'AxonMapModel',
