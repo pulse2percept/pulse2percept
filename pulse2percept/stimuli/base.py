@@ -1,5 +1,9 @@
 """`Stimulus`, `ImageStimulus`"""
-from sys import platform, _getframe
+from ..utils import PrettyPrint, parfor, unique
+from ._base import fast_compress
+from . import DT, MIN_AMP
+import logging
+from sys import _getframe
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 from copy import deepcopy
@@ -8,11 +12,37 @@ import operator as ops
 import numpy as np
 np.set_printoptions(precision=2, threshold=5, edgeitems=2)
 
-import logging
 
-from . import DT, MIN_AMP
-from ._base import fast_compress
-from ..utils import PrettyPrint, parfor, unique
+def merge_time_axes(data, time):
+    """Merge time axes
+
+    When a collection of source types is passed, it is possible that they
+    have different time axes (e.g., different time steps, or a different
+    stimulus duration). In this case, we need to merge all time axes into a
+    single, coherent one. This is expensive, because of interpolation.
+    """
+    # We can skip the costly interpolation if all `time` vectors are
+    # identical:
+    identical = True
+    for t in time:
+        if len(t) != len(time[0]) or not np.allclose(t, time[0]):
+            identical = False
+            break
+    if identical:
+        return data, [time[0]]
+    # Otherwise, we need to interpolate. Keep only the unique time points
+    # across stimuli:
+    new_time = unique(np.concatenate(time), tol=DT)
+    # Now we need to interpolate the data values at each of these
+    # new time points.
+    new_data = []
+    for t, d in zip(time, data):
+        # t is a 1D vector, d is a 2D data matrix and might have more than
+        # one row:
+        new_rows = [np.interp(new_time, t, row) for row in d]
+        new_rows = np.array(new_rows).reshape((-1, len(new_time)))
+        new_data.append(new_rows)
+    return new_data, [new_time]
 
 
 class Stimulus(PrettyPrint):
@@ -130,7 +160,7 @@ class Stimulus(PrettyPrint):
         if isinstance(metadata, dict) and 'electrodes' in metadata.keys():
             self.metadata = metadata
         else:
-            self.metadata = {'electrodes' : {}, 'user' : metadata}
+            self.metadata = {'electrodes': {}, 'user': metadata}
         # Flag will be flipped in the compress method:
         self.is_compressed = False
         # Extract the data and coordinates (electrodes, time) from the source:
@@ -142,37 +172,6 @@ class Stimulus(PrettyPrint):
                 'time': self.time, 'shape': self.shape, 'dt': self.dt,
                 'is_charge_balanced': self.is_charge_balanced,
                 'metadata': self.metadata}
-
-    def _merge_time_axes(self, _data, _time):
-        """Merge time axes
-
-        When a collection of source types is passed, it is possible that they
-        have different time axes (e.g., different time steps, or a different
-        stimulus duration). In this case, we need to merge all time axes into a
-        single, coherent one. This is expensive, because of interpolation.
-        """
-        # We can skip the costly interpolation if all `_time` vectors are
-        # identical:
-        identical = True
-        for t in _time:
-            if len(t) != len(_time[0]) or not np.allclose(t, _time[0]):
-                identical = False
-                break
-        if identical:
-            return _data, [_time[0]]
-        # Otherwise, we need to interpolate. Keep only the unique time points
-        # across stimuli:
-        new_time = unique(np.concatenate(_time), tol=DT)
-        # Now we need to interpolate the data values at each of these
-        # new time points.
-        new_data = []
-        for t, d in zip(_time, _data):
-            # t is a 1D vector, d is a 2D data matrix and might have more than
-            # one row:
-            new_rows = [np.interp(new_time, t, row) for row in d]
-            new_rows = np.array(new_rows).reshape((-1, len(new_time)))
-            new_data.append(new_rows)
-        return new_data, [new_time]
 
     def _from_source(self, source):
         """Extract the data container and time information from source data
@@ -267,7 +266,8 @@ class Stimulus(PrettyPrint):
                     # the source (unless they're None):
                     _electrodes.append(e if e is not None else ele)
                 if 'metadata' in dir(src) and src.metadata is not None:
-                    self.metadata['electrodes'][str(ele)] = {'metadata' : src.metadata, 'type' : type(src)}
+                    self.metadata['electrodes'][str(ele)] = {
+                        'metadata': src.metadata, 'type': type(src)}
             # Make sure all stimuli have time=None or none of them do:
             if len(np.unique([t is None for t in _time])) > 1:
                 raise ValueError("If one stimulus has time=None, all others "
@@ -275,7 +275,7 @@ class Stimulus(PrettyPrint):
             # When none of the stimuli have time=None, we need to merge the
             # time axes (this is expensive because of interpolation):
             if len(_time) > 1 and _time[0] is not None:
-                _data, _time = self._merge_time_axes(_data, _time)
+                _data, _time = merge_time_axes(_data, _time)
             # Now make `_data` a 2-D NumPy array, with `_electrodes` as rows
             # and `_time` as columns (except sometimes `_time` is None).
             _data = np.vstack(_data) if _data else np.array([])

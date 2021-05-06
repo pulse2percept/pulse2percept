@@ -5,7 +5,6 @@ import numpy as np
 # transitions:
 from . import DT
 from .base import Stimulus
-from ..utils import unique
 
 
 class MonophasicPulse(Stimulus):
@@ -74,7 +73,7 @@ class MonophasicPulse(Stimulus):
         time += [delay_dur + DT, delay_dur + phase_dur - DT,
                  delay_dur + phase_dur]
         data += [amp, amp, 0]
-        if stim_dur - time[-1] > DT: 
+        if stim_dur - time[-1] > DT:
             # If the stimulus extends beyond the second pulse, add another data
             # point:
             time += [stim_dur]

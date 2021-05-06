@@ -68,8 +68,6 @@ class Nanduri2012Spatial(SpatialModel):
         """Predicts the brightness at spatial locations"""
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        assert isinstance(earray, ElectrodeArray)
-        assert isinstance(stim, Stimulus)
         return spatial_fast(stim.data,
                             np.array([earray[e].x for e in stim.electrodes],
                                      dtype=np.float32),

@@ -6,7 +6,7 @@ from matplotlib.animation import FuncAnimation
 
 from skimage.color import rgb2gray
 from skimage.transform import (resize as vid_resize, rotate as vid_rotate,
-                               warp as vid_warp, SimilarityTransform)
+                               SimilarityTransform)
 from skimage.filters import scharr, sobel, median
 from skimage.feature import canny
 
@@ -81,7 +81,7 @@ class VideoStimulus(Stimulus):
         if metadata is None:
             metadata = {}
         elif type(metadata) != dict:
-            metadata = {'user' : metadata}
+            metadata = {'user': metadata}
         if isinstance(source, str):
             # Filename provided, read the video:
             reader = video_reader(source, format=format)
@@ -98,7 +98,7 @@ class VideoStimulus(Stimulus):
             metadata['source'] = source
             metadata['source_shape'] = vid.shape
             # Infer the time points from the video frame rate:
-            time = np.arange(vid.shape[-1]) * meta['fps']
+            time = np.arange(vid.shape[-1]) * 1000.0 / meta['fps']
         elif isinstance(source, VideoStimulus):
             vid = source.data.reshape(source.vid_shape)
             metadata.update(source.metadata)
@@ -399,8 +399,10 @@ class VideoStimulus(Stimulus):
 
     def play(self, fps=None, repeat=True, annotate_time=True, ax=None):
         """Animate the percept as HTML with JavaScript
+
         The percept will be played in an interactive player in IPython or
         Jupyter Notebook.
+
         Parameters
         ----------
         fps : float or None
@@ -414,6 +416,7 @@ class VideoStimulus(Stimulus):
             title of the panel.
         ax : matplotlib.axes.AxesSubplot, optional
             A Matplotlib axes object. If None, will create a new Axes object
+
         Returns
         -------
         ani : matplotlib.animation.FuncAnimation
@@ -429,6 +432,7 @@ class VideoStimulus(Stimulus):
 
         def data_gen():
             try:
+                self.rewind()
                 # Advance to the next frame:
                 while True:
                     yield next(self)

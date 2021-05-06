@@ -520,20 +520,20 @@ def test_Stimulus_arithmetic(scalar):
     # 10 / stim is not supported because it will always give a division by
     # zero error:
     with pytest.raises(TypeError):
-        scalar / stim
+        s = scalar / stim
     with pytest.raises(TypeError):
-        stim + stim
+        s = stim + stim
     with pytest.raises(TypeError):
-        stim - stim
+        s = stim - stim
     with pytest.raises(TypeError):
-        stim * stim
+        s = stim * stim
     with pytest.raises(TypeError):
-        stim / stim
+        s = stim / stim
     with pytest.raises(TypeError):
-        stim + [1, 1]
+        s = stim + [1, 1]
     with pytest.raises(TypeError):
-        stim * np.array([2, 3])
+        s = stim * np.array([2, 3])
     with pytest.raises(TypeError):
-        stim >> np.array([2, 3])
+        s = stim >> np.array([2, 3])
     with pytest.raises(TypeError):
-        stim << np.array([2, 3])
+        s = stim << np.array([2, 3])

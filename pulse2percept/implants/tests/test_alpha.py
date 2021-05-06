@@ -8,10 +8,8 @@ from pulse2percept.implants import AlphaIMS, AlphaAMS
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
-@pytest.mark.parametrize('r', (-45, 60))
-def test_AlphaIMS(ztype, x, y, r):
-    # Convert rotation angle to rad
-    rot = np.deg2rad(r)
+@pytest.mark.parametrize('rot', (-45, 60))
+def test_AlphaIMS(ztype, x, y, rot):
     # Height `h` can either be a float or a list
     if ztype == 'float':
         alpha = AlphaIMS(x=x, y=y, z=-100, rot=rot)
@@ -32,8 +30,9 @@ def test_AlphaIMS(ztype, x, y, r):
     xy = np.array([-1368, -1368]).T
 
     # Rotate
-    R = np.array([np.cos(rot), -np.sin(rot),
-                  np.sin(rot), np.cos(rot)]).reshape((2, 2))
+    rot_rad = np.deg2rad(rot)
+    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
+                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
     xy = np.matmul(R, xy)
 
     # Then off-set: Make sure first electrode is placed
@@ -79,7 +78,7 @@ def test_AlphaIMS(ztype, x, y, r):
     # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
     for eye, el in zip(['LE', 'RE'], ['A1', 'A37']):
         before = AlphaIMS(eye=eye)
-        after = AlphaIMS(eye=eye, rot=np.deg2rad(10))
+        after = AlphaIMS(eye=eye, rot=10)
         npt.assert_equal(after[el].x > before[el].x, True)
         npt.assert_equal(after[el].y > before[el].y, True)
 
@@ -93,10 +92,8 @@ def test_AlphaIMS(ztype, x, y, r):
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
-@pytest.mark.parametrize('r', (-45, 60))
-def test_AlphaAMS(ztype, x, y, r):
-    # Convert rotation angle to rad
-    rot = np.deg2rad(r)
+@pytest.mark.parametrize('rot', (-45, 60))
+def test_AlphaAMS(ztype, x, y, rot):
     # Height `h` can either be a float or a list
     if ztype == 'float':
         alpha = AlphaAMS(x=x, y=y, z=-100, rot=rot)
@@ -112,9 +109,10 @@ def test_AlphaAMS(ztype, x, y, r):
     npt.assert_equal(hasattr(alpha, '__dict__'), False)
 
     # Rotate coordinates of first electrode:
+    rot_rad = np.deg2rad(rot)
     xy = np.array([-1365, -1365]).T
-    R = np.array([np.cos(rot), -np.sin(rot),
-                  np.sin(rot), np.cos(rot)]).reshape((2, 2))
+    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
+                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
     xy = np.matmul(R, xy)
     # Then off-set: Make sure first electrode is placed
     # correctly
@@ -159,7 +157,7 @@ def test_AlphaAMS(ztype, x, y, r):
     # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
     for eye, el in zip(['LE', 'RE'], ['A1', 'A40']):
         before = AlphaAMS(eye=eye)
-        after = AlphaAMS(eye=eye, rot=np.deg2rad(10))
+        after = AlphaAMS(eye=eye, rot=10)
         npt.assert_equal(after[el].x > before[el].x, True)
         npt.assert_equal(after[el].y > before[el].y, True)
 

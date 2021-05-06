@@ -22,7 +22,7 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     """Load the phosphene drawing dataset from [Beyeler2019]_
 
     Download the phosphene drawing dataset described in [Beyeler2019]_ from
-    https://osf.io/6v2tb (263MB) to ``data_path``. By default, all datasets are
+    https://osf.io/28uqg (66MB) to ``data_path``. By default, all datasets are
     stored in '~/pulse2percept_data/', but a different path can be specified.
 
     ===================   =====================
@@ -49,9 +49,15 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     eccentricity          Phosphene elongation (see [Beyeler2019]_)
     compactness           Phosphene compactness (see [Beyeler2019]_)
     x_center, y_center    Phosphene center of mass (see [Beyeler2019]_)
+    xrange, yrange        Screen size in deg (see [Beyeler2019]_)
     ====================  ================================================
 
     .. versionadded:: 0.6
+
+    .. versionchanged:: 0.7
+
+        Redirected download to 66MB version of the dataset that includes
+        the fields ``x_center`` and ``y_center``.
 
     Parameters
     ----------
@@ -92,8 +98,8 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     file_path = join(data_path, 'beyeler2019.h5')
     if not isfile(file_path):
         if download_if_missing:
-            url = 'https://osf.io/6v2tb/download'
-            checksum = '211818c598c27d33d4e0cd5cdbac9e3ad23106031eb7b51c1a78ccaff000e156'
+            url = 'https://osf.io/28uqg/download'
+            checksum = '19817990a615d289cdc93b928c138f71977ea2cab54fd1b35d186f3b5a3c4ff5'
             fetch_url(url, file_path, remote_checksum=checksum)
         else:
             raise IOError("No local file %s found" % file_path)
@@ -127,7 +133,10 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     # Combine 'img_shape_x' and 'img_shape_y' into 'img_shape' tuple
     df['img_shape'] = df.apply(lambda x: (x['img_shape_x'], x['img_shape_y']),
                                axis=1)
-    df.drop(columns=['img_shape_x', 'img_shape_y'], inplace=True)
+    df['xrange'] = df.apply(lambda x: (x['xrange_x'], x['xrange_y']), axis=1)
+    df['yrange'] = df.apply(lambda x: (x['yrange_x'], x['yrange_y']), axis=1)
+    df.drop(columns=['img_shape_x', 'img_shape_y', 'xrange_x', 'xrange_y',
+                     'yrange_x', 'yrange_y'], inplace=True)
 
     # Verify integrity of the dataset:
     if len(df) != 400:

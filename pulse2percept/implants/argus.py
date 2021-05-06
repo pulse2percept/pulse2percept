@@ -13,7 +13,7 @@ class ArgusI(ProsthesisSystem):
     This function creates an Argus I array and places it on the retina
     such that the center of the array is located at 3D location (x,y,z),
     given in microns, and the array is rotated by rotation angle ``rot``,
-    given in radians.
+    given in degrees.
 
     Argus I is a modified cochlear implant containing 16 electrodes in a 4x4
     array with a center-to-center separation of 800 um, and two electrode
@@ -54,7 +54,7 @@ class ArgusI(ProsthesisSystem):
         Distance of the array to the retinal surface (um). Either a list
         with 16 entries or a scalar.
     rot : float, optional
-        Rotation angle of the array (rad). Positive values denote
+        Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'RE', 'LE'}, optional
@@ -63,10 +63,10 @@ class ArgusI(ProsthesisSystem):
     Examples
     --------
     Create an Argus I array centered on the fovea, at 100um distance from
-    the retina:
+    the retina, rotated counter-clockwise by 5 degrees:
 
     >>> from pulse2percept.implants import ArgusI
-    >>> ArgusI(x=0, y=0, z=100, rot=0)  # doctest: +NORMALIZE_WHITESPACE
+    >>> ArgusI(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
     ArgusI(earray=ElectrodeGrid, eye='RE', shape=(4, 4),
            stim=None)
 
@@ -141,7 +141,7 @@ class ArgusII(ProsthesisSystem):
     This function creates an Argus II array and places it on the retina
     such that the center of the array is located at (x,y,z), given in
     microns, and the array is rotated by rotation angle ``rot``, given in
-    radians.
+    degrees.
 
     Argus II contains 60 electrodes of 225 um diameter arranged in a 6 x 10
     grid (575 um center-to-center separation) [Yue2020]_.
@@ -180,7 +180,7 @@ class ArgusII(ProsthesisSystem):
         Distance of the array to the retinal surface (um). Either a list
         with 60 entries or a scalar.
     rot : float
-        Rotation angle of the array (rad). Positive values denote
+        Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'RE', 'LE'}, optional
@@ -189,10 +189,10 @@ class ArgusII(ProsthesisSystem):
     Examples
     --------
     Create an ArgusII array centered on the fovea, at 100um distance from
-    the retina:
+    the retina, rotated counter-clockwise by 5 degrees:
 
     >>> from pulse2percept.implants import ArgusII
-    >>> ArgusII(x=0, y=0, z=100, rot=0)  # doctest: +NORMALIZE_WHITESPACE
+    >>> ArgusII(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
     ArgusII(earray=ElectrodeGrid, eye='RE', shape=(6, 10),
             stim=None)
 

@@ -30,7 +30,7 @@ DESCRIPTION = 'A Python-based simulation framework for bionic vision'
 with open('README.rst') as f:
     LONG_DESCRIPTION = f.read()
 MAINTAINER = 'Michael Beyeler, Ariel Rokem'
-MAINTAINER_EMAIL = 'mbeyeler@uw.edu, arokem@gmail.com'
+MAINTAINER_EMAIL = 'mbeyeler@ucsb.edu, arokem@gmail.com'
 URL = 'https://github.com/pulse2percept/pulse2percept'
 DOWNLOAD_URL = 'https://pypi.org/project/pulse2percept/#files'
 LICENSE = 'new BDS'

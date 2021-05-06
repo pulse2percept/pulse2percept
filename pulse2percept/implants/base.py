@@ -164,6 +164,11 @@ class ProsthesisSystem(PrettyPrint):
                 # Use electrode names as stimulus coordinates:
                 stim = Stimulus(data, electrodes=list(self.earray.keys()))
 
+            if len(stim.electrodes) > self.n_electrodes:
+                raise ValueError("Number of electrodes in the stimulus (%d) "
+                                 "does not match the number of electrodes in "
+                                 "the implant (%d)." % (len(stim.electrodes),
+                                                        self.n_electrodes))
             # Make sure all electrode names are valid:
             for electrode in stim.electrodes:
                 # Invalid index will return None:

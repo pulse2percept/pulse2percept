@@ -268,13 +268,10 @@ def test_ElectrodeGrid(gtype):
         npt.assert_equal(i.z, x + 1)
         x = i.z
 
-    # TODO display a warning when rot > 2pi (meaning it might be in degrees).
-    # I think we did this somewhere in the old Argus code
-
     # TODO test rotation, making sure positive angles rotate CCW
     egrid1 = ElectrodeGrid((2, 2), spacing, type=gtype, etype=DiskElectrode,
                            r=radius)
-    egrid2 = ElectrodeGrid((2, 2), spacing, rot=np.deg2rad(10), type=gtype,
+    egrid2 = ElectrodeGrid((2, 2), spacing, rot=10, type=gtype,
                            etype=DiskElectrode, r=radius)
     npt.assert_equal(egrid1["A1"].x < egrid2["A1"].x, True)
     npt.assert_equal(egrid1["A1"].y > egrid2["A1"].y, True)

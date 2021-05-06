@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 import numpy.testing as npt
-import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
 
 from pulse2percept.implants import ArgusI

@@ -4,7 +4,6 @@ import pytest
 
 # Import whole module so we can reload it to test ImportErrors:
 from pulse2percept.utils import convolution, gamma
-from unittest import mock
 from importlib import reload
 
 

@@ -17,7 +17,7 @@ single-electrode stimulation.
 Loading the dataset
 -------------------
 
-Due to its size (263 MB), the dataset is not included with pulse2percept, but
+Due to its size (66 MB), the dataset is not included with pulse2percept, but
 can be downloaded from the Open Science Framework (OSF).
 
 By default, the dataset will be stored in a local directory
@@ -97,20 +97,12 @@ plt.imshow(data.loc[0, 'image'], cmap='gray')
 # in the following location:
 
 from pulse2percept.implants import ArgusII
-argus = ArgusII(x=-1331, y=-850, rot=-0.495, eye='RE')
+argus = ArgusII(x=-1331, y=-850, rot=-28.4, eye='RE')
 
 ###############################################################################
-# (We also need to specify the dimensions of the screens that the subject used,
-# expressed in degrees of visual angle, so that we can scale the phosphene
-# drawing appropriately. This should really be part of the Beyeler dataset and
-# will be fixed in a future version.
-# For now, we add the necessary columns ourselves.)
-import pandas as pd
+# For now, let's focus on the data from Subject 2:
+
 data = fetch_beyeler2019(subjects='S2')
-data['img_x_dva'] = pd.Series([(-30, 30)] * len(data), index=data.index,
-                              dtype=float)
-data['img_y_dva'] = pd.Series([(-22.5, 22.5)] * len(data), index=data.index,
-                              dtype=float)
 
 ###############################################################################
 # Passing both ``data`` and ``argus`` to
@@ -132,12 +124,62 @@ plot_argus_phosphenes(data, argus)
 # To see how the phosphene drawings line up with the NFBs, we can also pass an
 # :py:class:`~pulse2percept.models.AxonMapModel` to the function.
 # Of course, we need to make sure that we use the correct dimensions. Subject
-# S2 had their optic disc center located 14 deg nasally, 2.4 deg superior from
-# the fovea:
+# S2 had their optic disc center located 16.2 deg nasally, 1.38 deg superior
+# from the fovea:
 
 from pulse2percept.models import AxonMapModel
-model = AxonMapModel(loc_od=(14, 2.4))
+model = AxonMapModel(loc_od=(16.2, 1.38))
 plot_argus_phosphenes(data, argus, axon_map=model)
+
+###############################################################################
+# Predicting phosphene shape
+# --------------------------
+#
+# In addition, the :py:class:`~pulse2percept.models.AxonMapModel` is well
+# suited to predict the shape of individual phosphenes. Using the values given
+# in [Beyeler2019]_, we can tailor the axon map parameters to Subject 2:
+
+import numpy as np
+model = AxonMapModel(rho=315, axlambda=500, loc_od=(16.2, 1.38),
+                     xrange=(-30, 30), yrange=(-22.5, 22.5),
+                     thresh_percept=1 / np.sqrt(np.e))
+model.build()
+
+###############################################################################
+# Now we need to activate one electrode at a time, and predict the resulting
+# percept. We could build a :py:class:`~pulse2percept.stimuli.Stimulus` object
+# with a for loop that does just that, or we can use the following trick.
+#
+# The stimulus' data container is a (electrodes, timepoints) shaped 2D NumPy
+# array. Activating one electrode at a time is therefore the same as an
+# identity matrix whose size is equal to the number of electrodes. In code:
+
+# Find the names of all the electrodes in the dataset:
+electrodes = data.electrode.unique()
+# Activate one electrode at a time:
+import numpy as np
+from pulse2percept.stimuli import Stimulus
+argus.stim = Stimulus(np.eye(len(electrodes)), electrodes=electrodes)
+
+###############################################################################
+# Using the model's
+# :py:func:`~pulse2percept.models.AxonMapModel.predict_percept`, we then get
+# a Percept object where each frame is the percept generated from activating
+# a single electrode:
+
+percepts = model.predict_percept(argus)
+percepts.play()
+
+###############################################################################
+# Finally, we can visualize the ground-truth and simulated phosphenes
+# side-by-side:
+
+from pulse2percept.viz import plot_argus_simulated_phosphenes
+fig, (ax_data, ax_sim) = plt.subplots(ncols=2, figsize=(15, 5))
+plot_argus_phosphenes(data, argus, scale=0.75, ax=ax_data)
+plot_argus_simulated_phosphenes(percepts, argus, scale=1.25, ax=ax_sim)
+ax_data.set_title('Ground-truth phosphenes')
+ax_sim.set_title('Simulated phosphenes')
 
 ###############################################################################
 # Analyzing phosphene shape

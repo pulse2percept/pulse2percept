@@ -4,7 +4,7 @@ import pytest
 import numpy.testing as npt
 from matplotlib.patches import Circle
 
-from pulse2percept.implants import (PointSource, ElectrodeArray,
+from pulse2percept.implants import (PointSource, ElectrodeArray, ElectrodeGrid,
                                     ProsthesisSystem)
 from pulse2percept.stimuli import Stimulus
 
@@ -53,3 +53,10 @@ def test_ProsthesisSystem():
     # Slots:
     npt.assert_equal(hasattr(implant, '__slots__'), True)
     npt.assert_equal(hasattr(implant, '__dict__'), False)
+
+
+def test_ProsthesisSystem_stim():
+    implant = ProsthesisSystem(ElectrodeGrid((13, 13), 20))
+    stim = Stimulus(np.ones((13 * 13 + 1, 5)))
+    with pytest.raises(ValueError):
+        implant.stim = stim

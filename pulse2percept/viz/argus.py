@@ -1,3 +1,4 @@
+"""`plot_argus_phosphenes`, `plot_argus_simulated_phosphenes`"""
 import numpy as np
 import pandas as pd
 from skimage.io import imread
@@ -10,7 +11,7 @@ from matplotlib import patches
 from pkg_resources import resource_filename
 
 from ..implants import ArgusI, ArgusII
-from ..utils import Watson2014Transform
+from ..utils import Watson2014Transform, scale_image, center_image
 
 PATH_ARGUS1 = resource_filename('pulse2percept', 'viz/data/argus1.png')
 PATH_ARGUS2 = resource_filename('pulse2percept', 'viz/data/argus2.png')
@@ -60,88 +61,18 @@ PX_ARGUS2 = np.array([
 ])
 
 
-def center_phosphene(img, loc=None):
-    """Center the image foreground
-
-    This function shifts the center of mass (CoM) to the image center.
-
-    .. versionadded:: 0.7
-
-    Parameters
-    ----------
-    loc : (col, row), optional
-        The pixel location at which to center the CoM. By default, shifts
-        the CoM to the image center.
-
-    Returns
-    -------
-    stim : `ImageStimulus`
-        A copy of the stimulus object containing the centered image
-
-    """
-    # Calculate center of mass:
-    m = img_moments(img, order=1)
-    # No area found:
-    if np.isclose(m[0, 0], 0):
-        return img
-    # Center location:
-    if loc is None:
-        loc = np.array(self.img_shape[::-1]) / 2.0 - 0.5
-    # Shift the image by -centroid, +image center:
-    transl = (loc[0] - m[0, 1] / m[0, 0], loc[1] - m[1, 0] / m[0, 0])
-    tf_shift = SimilarityTransform(translation=transl)
-    img = img_warp(img, tf_shift.inverse)
-    return img
-
-
-def scale_phosphene(img, scaling_factor):
-    """Scale the image foreground
-
-    This function scales the image foreground (excluding black pixels)
-    by a factor.
-
-    .. versionadded:: 0.7
-
-    Parameters
-    ----------
-    scaling_factor : float
-        Factory by which to scale the image
-
-    Returns
-    -------
-    stim : `ImageStimulus`
-        A copy of the stimulus object containing the scaled image
-
-    """
-    if scaling_factor <= 0:
-        raise ValueError("Scaling factor must be greater than zero")
-    # Calculate center of mass:
-    m = img_moments(img, order=1)
-    # No area found:
-    if np.isclose(m[0, 0], 0):
-        return img
-    # Shift the phosphene to (0, 0):
-    center_mass = np.array([m[0, 1] / m[0, 0], m[1, 0] / m[0, 0]])
-    tf_shift = SimilarityTransform(translation=-center_mass)
-    # Scale the phosphene:
-    tf_scale = SimilarityTransform(scale=scaling_factor)
-    # Shift the phosphene back to where it was:
-    tf_shift_inv = SimilarityTransform(translation=center_mass)
-    # Combine all three transforms:
-    tf = tf_shift + tf_scale + tf_shift_inv
-    img = img_warp(img, tf.inverse)
-    return img
-
-
-def plot_argus_phosphenes(X, argus, scale=1.0, axon_map=None, show_fovea=True,
-                          ax=None):
+def plot_argus_phosphenes(data, argus, scale=1.0, axon_map=None,
+                          show_fovea=True, ax=None):
     """Plots phosphenes centered over the corresponding electrodes
 
     .. versionadded:: 0.7
 
     Parameters
     ----------
-    X : pd.DataFrame
+    data : pd.DataFrame
+        The Beyeler2019 dataset, a subset thereof, or a DataFrame with
+        identical organization (i.e., must contain columns 'subject', 'image',
+        'xrange', and 'yrange').
     argus : :py:class:`~pulse2percept.implants.ArgusI` or :py:class:`~pulse2percept.implants.ArgusII`
         Either an Argus I or Argus II implant
     scale : float
@@ -151,15 +82,17 @@ def plot_argus_phosphenes(X, argus, scale=1.0, axon_map=None, show_fovea=True,
     ax : axis
         Matplotlib axis
     """
-    if not isinstance(X, pd.DataFrame):
-        raise TypeError('"X" must be a Pandas DataFrame, not %s.' % type(X))
-    req_cols = ['subject', 'electrode', 'image', 'img_x_dva', 'img_y_dva']
-    if not all(col in X.columns for col in req_cols):
-        raise ValueError('"X" must have columns %s.' % req_cols)
-    if len(X) == 0:
-        raise ValueError('"X" is empty.')
-    if len(X.subject.unique()) > 1:
-        raise ValueError('"X" cannot contain data from more than one subject.')
+    if not isinstance(data, pd.DataFrame):
+        raise TypeError('"data" must be a Pandas DataFrame, not '
+                        '%s.' % type(data))
+    req_cols = ['subject', 'electrode', 'image', 'xrange', 'yrange']
+    if not all(col in data.columns for col in req_cols):
+        raise ValueError('"data" must have columns %s.' % req_cols)
+    if len(data) == 0:
+        raise ValueError('"data" is empty.')
+    if len(data.subject.unique()) > 1:
+        raise ValueError('"data" cannot contain data from more than one '
+                         'subject.')
     if not isinstance(argus, (ArgusI, ArgusII)):
         raise TypeError('"argus" must be an Argus I or Argus II implant, not '
                         '%s.' % type(argus))
@@ -196,11 +129,11 @@ def plot_argus_phosphenes(X, argus, scale=1.0, axon_map=None, show_fovea=True,
     pts_dva = []
     pts_out = []
     try:
-        out_shape = X.img_shape.values[0]
+        out_shape = data.img_shape.values[0]
     except AttributeError:
         # Dataset does not have 'img_shape' column:
         try:
-            out_shape = X.image.values[0].shape
+            out_shape = data.image.values[0].shape
         except IndexError:
             out_shape = (768, 1024)
     for xy, e in zip(px_argus, argus.values()):
@@ -217,20 +150,20 @@ def plot_argus_phosphenes(X, argus, scale=1.0, axon_map=None, show_fovea=True,
     argus2out = img_transform('similarity', pts_in, pts_out)
 
     # Top left, top right, bottom left, bottom right corners:
-    x_range = X.img_x_dva
-    y_range = X.img_y_dva
+    x_range = data.xrange
+    y_range = data.yrange
     pts_dva = [[x_range[0], y_range[0]], [x_range[0], y_range[1]],
                [x_range[1], y_range[0]], [x_range[1], y_range[1]]]
 
     # Calculate average drawings, but don't binarize:
     all_imgs = np.zeros(out_shape)
-    num_imgs = X.groupby('electrode')['image'].count()
-    for _, row in X.iterrows():
+    num_imgs = data.groupby('electrode')['image'].count()
+    for _, row in data.iterrows():
         e_pos = Watson2014Transform.ret2dva((argus[row['electrode']].x,
                                              argus[row['electrode']].y))
         align_center = dva2out(e_pos)[0]
-        img_drawing = scale_phosphene(row['image'], scale)
-        img_drawing = center_phosphene(img_drawing, loc=align_center)
+        img_drawing = scale_image(row['image'], scale)
+        img_drawing = center_image(img_drawing, loc=align_center)
         # We normalize by the number of phosphenes per electrode, so that if
         # all phosphenes are the same, their brightness would add up to 1:
         all_imgs += 1.0 / num_imgs[row['electrode']] * img_drawing
@@ -270,3 +203,42 @@ def plot_argus_phosphenes(X, argus, scale=1.0, axon_map=None, show_fovea=True,
                     linewidth=2, zorder=1)
 
     return ax
+
+
+def plot_argus_simulated_phosphenes(percepts, argus, scale=1.0, axon_map=None,
+                                    show_fovea=True, ax=None):
+    """Plots simulated phosphenes centered over the corresponding electrodes
+
+    .. versionadded:: 0.7
+
+    Parameters
+    ----------
+    percepts : :py:class:`~pulse2percept.percepts.Percept`
+        A Percept object containing multiple frames, where each frame is the
+        percept produced by activating a single electrode.
+    argus : :py:class:`~pulse2percept.implants.ArgusI` or :py:class:`~pulse2percept.implants.ArgusII`
+        Either an Argus I or Argus II implant
+    scale : float
+        Scaling factor to apply to the phosphenes
+    show_fovea : bool
+        Whether to indicate the location of the fovea with a square
+    ax : axis
+        Matplotlib axis
+
+    """
+    stim = percepts.metadata['stim']
+    if not np.allclose(stim.data.sum(axis=0), 1):
+        raise ValueError("This function only works for stimuli where one "
+                         "electrodes is active at a time.")
+    # Build the missing DataFrame columns from Percept metadata:
+    df = []
+    for p, s in zip(percepts, stim.data.T):
+        df.append({
+            'subject': 'S000',
+            'electrode': stim.electrodes[np.asarray(s, dtype=np.bool)][0],
+            'image': p,
+            'xrange': (percepts.xdva.min(), percepts.xdva.max()),
+            'yrange': (percepts.ydva.min(), percepts.ydva.max())
+        })
+    plot_argus_phosphenes(pd.DataFrame(df), argus, scale=scale, ax=ax,
+                          axon_map=axon_map, show_fovea=show_fovea)

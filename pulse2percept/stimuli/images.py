@@ -3,12 +3,10 @@ from os.path import dirname, join
 import numpy as np
 from copy import deepcopy
 import matplotlib.pyplot as plt
-from matplotlib.axes import Subplot
 
 from skimage import img_as_float32
 from skimage.io import imread, imsave
 from skimage.color import rgba2rgb, rgb2gray
-from skimage.measure import moments as img_moments
 from skimage.transform import (resize as img_resize, rotate as img_rotate,
                                warp as img_warp, SimilarityTransform)
 from skimage.filters import (threshold_mean, threshold_minimum, threshold_otsu,
@@ -79,8 +77,8 @@ class ImageStimulus(Stimulus):
                  electrodes=None, metadata=None, compress=False):
         if metadata is None:
             metadata = {}
-        elif type(metadata) != dict:
-            metadata = {'user' : metadata}
+        elif not isinstance(metadata, dict):
+            metadata = {'user': metadata}
         if isinstance(source, str):
             # Filename provided:
             img = imread(source, format=format)
