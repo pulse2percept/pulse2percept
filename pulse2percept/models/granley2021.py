@@ -1,16 +1,15 @@
 """`BiphasicAxonMapModel`""" 
 import numpy as np
 
-from .beyeler2019 import AxonMapModel, AxonMapSpatial
-from .base import TemporalModel, Model
-from ._granley2021 import (fast_biphasic_axon_map)
-from ..implants import ProsthesisSystem, ElectrodeArray
-from ..stimuli import BiphasicPulseTrain, Stimulus
-from ..datasets import load_nanduri2012
+from pulse2percept.models import AxonMapModel, AxonMapSpatial, TemporalModel, Model
+from pulse2percept.implants import ProsthesisSystem, ElectrodeArray
+from pulse2percept.stimuli import BiphasicPulseTrain, Stimulus
+from pulse2percept.datasets import load_nanduri2012
 
 from sklearn.linear_model import LinearRegression
 
-class DefaultBrightModel():
+class DefaultBrightModel(): 
+    # F_{bright}
     def __init__(self,  do_thresholding=True):
         self.amp_freq_model = LinearRegression()
         self.do_thresholding = do_thresholding
@@ -19,18 +18,15 @@ class DefaultBrightModel():
         self._fit_amp_freq()
 
     def _fit_amp_freq(self):
-        # data = load_nanduri2012()
-        # data = data[data['task'] == 'rate']
-        # x = data[['amp_factor', 'freq']]
-        # y = data['brightness']
-        # self.amp_freq_model.fit(x, y/10)
+        # hard coded to linear regression parameters for now
         pass
 
-    def predict_pdur(self, pdur):
-        # Fit using color threshold of weitz et al 2015, technically this is 1 / threshold, and amplitude will be scaled by this
+    def predict_pdur(self, pdur): 
+        # a tilde in paper
+        # Fit using color threshold of weitz et al 2015, this is 1 / relative threshold, and amplitude will be scaled by this
         return 1 / (0.8825 + 0.27*pdur)
        
-    def predict_freq_amp(self, amp, freq):
+    def predict_freq_amp(self, amp, freq): 
         # return self.amp_freq_model.predict([(amp, freq)])[0]
         return 1.84*amp + 0.2*freq + 3.0986
 
@@ -47,9 +43,10 @@ class DefaultBrightModel():
 
 
 class DefaultSizeModel():
+    # F_{size}
     def __init__(self, rho):
         self.amp_model = LinearRegression()
-        self.min_rho = 10
+        self.min_rho = 10 # dont let rho be scaled below this threshold
         self.min_scale = self.min_rho**2 / rho**2
     def fit(self):
         self._fit_amp()
@@ -62,6 +59,7 @@ class DefaultSizeModel():
         self.amp_model.fit(np.array(x).reshape(-1, 1), y)
     
     def predict_pdur(self, pdur):
+        # a tilde
         # Fit using color threshold of weitz et al 2015, technically this is 1 / threshold, and amplitude will be scaled by this
         return 1 / (0.8825 + 0.27*pdur)
 
@@ -74,8 +72,9 @@ class DefaultSizeModel():
 
 
 class DefaultStreakModel():
+    # F_{streak}
     def __init__(self, axlambda):
-        # never decrease lambda to less than 25
+        # never decrease lambda to less than 10
         self.min_lambda = 10
         self.min_scale = self.min_lambda**2 / axlambda **2
     def __call__(self, amp, freq, pdur):
@@ -105,7 +104,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     .. note: :
 
-        Using this model in combination with a temporal model is not supported and may give unexpected results
+        Using this model in combination with a temporal model is not supported and will give unexpected results
 
     Parameters
     ----------
@@ -134,7 +133,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Callable model used to modulate percept streak length with amplitude, frequency, and pulse duration
             'streak_model' : None, 
             # Use probabilistic thresholding
-            'do_thresholding' : True
+            'do_thresholding' : False
         }
         params.update(base_params)
         return params
