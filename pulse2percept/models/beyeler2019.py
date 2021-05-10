@@ -468,7 +468,7 @@ class AxonMapSpatial(SpatialModel):
             tangent -= np.deg2rad(180)
         return tangent
 
-    def _build(self):
+    def _correct_loc_od(self):
         if self.eye.upper() == 'LE':
             # In a left eye, the optic disc must have a negative x coordinate:
             self.loc_od = (-np.abs(self.loc_od[0]), self.loc_od[1])
@@ -478,8 +478,12 @@ class AxonMapSpatial(SpatialModel):
         else:
             err_str = ("Eye should be either 'LE' or 'RE', not %s." % self.eye)
             raise ValueError(err_str)
+
+    def _build(self):
+        # In a left eye, the OD must have a negative x coordinate:
+        self._correct_loc_od()
+        # Check whether pickle file needs to be rebuilt:
         need_axons = False
-        # You can ignore pickle files and force a rebuild with this flag:
         if self.ignore_pickle:
             need_axons = True
         else:
@@ -553,6 +557,9 @@ class AxonMapSpatial(SpatialModel):
             ax = plt.gca()
         ax.set_facecolor('white')
         ax.set_aspect('equal')
+
+        # In a left eye, the OD must have a negative x coordinate:
+        self._correct_loc_od()
 
         # Grow axon bundles to be drawn:
         axon_bundles = self.grow_axon_bundles(n_bundles=100, prune=False)
