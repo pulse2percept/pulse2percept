@@ -52,4 +52,5 @@ def test_plot_argus_simulated_phosphenes(implant):
 
     # Add axon map:
     _, ax = plt.subplots()
-    plot_argus_phosphenes(percepts, implant, ax=ax, axon_map=AxonMapModel())
+    plot_argus_simulated_phosphenes(percepts, implant, ax=ax,
+                                    axon_map=AxonMapModel())
