@@ -11,6 +11,7 @@ from matplotlib import patches
 from pkg_resources import resource_filename
 
 from ..implants import ArgusI, ArgusII
+from ..models import AxonMapModel
 from ..utils import Watson2014Transform, scale_image, center_image
 
 PATH_ARGUS1 = resource_filename('pulse2percept', 'viz/data/argus1.png')
@@ -77,6 +78,8 @@ def plot_argus_phosphenes(data, argus, scale=1.0, axon_map=None,
         Either an Argus I or Argus II implant
     scale : float
         Scaling factor to apply to the phosphenes
+    axon_map : :py:class:`~pulse2percept.models.AxonMapModel`
+        An instance of the axon map model to use for visualization.
     show_fovea : bool
         Whether to indicate the location of the fovea with a square
     ax : axis
@@ -96,6 +99,9 @@ def plot_argus_phosphenes(data, argus, scale=1.0, axon_map=None,
     if not isinstance(argus, (ArgusI, ArgusII)):
         raise TypeError('"argus" must be an Argus I or Argus II implant, not '
                         '%s.' % type(argus))
+    if axon_map is not None and not isinstance(axon_map, AxonMapModel):
+        raise TypeError('"axon_map" must be an AxonMapModel instance, not '
+                        '%s.' % type(axon_map))
     if ax is None:
         ax = plt.gca()
     alpha_bg = 0.5  # alpha value for the array in the background
@@ -193,13 +199,13 @@ def plot_argus_phosphenes(data, argus, scale=1.0, axon_map=None,
         for bundle in axon_bundles:
             # Flip y upside down for dva:
             bundle = Watson2014Transform.ret2dva(bundle) * [1, -1]
-            # Trim segments outside the drawing window:
-            idx = np.logical_and(np.logical_and(bundle[:, 0] >= x_min,
-                                                bundle[:, 0] <= x_max),
-                                 np.logical_and(bundle[:, 1] >= y_min,
-                                                bundle[:, 1] <= y_max))
+            # Set segments outside the drawing window to NaN:
+            x_idx = np.logical_or(bundle[:, 0] < x_min, bundle[:, 0] > x_max)
+            bundle[x_idx, 0] = np.nan
+            y_idx = np.logical_or(bundle[:, 1] < y_min, bundle[:, 1] > y_max)
+            bundle[y_idx, 1] = np.nan
             bundle = dva2out(bundle)
-            ax.plot(bundle[idx, 0], bundle[idx, 1], c=(0.6, 0.6, 0.6),
+            ax.plot(bundle[:, 0], bundle[:, 1], c=(0.6, 0.6, 0.6),
                     linewidth=2, zorder=1)
 
     return ax
@@ -220,6 +226,8 @@ def plot_argus_simulated_phosphenes(percepts, argus, scale=1.0, axon_map=None,
         Either an Argus I or Argus II implant
     scale : float
         Scaling factor to apply to the phosphenes
+    axon_map : :py:class:`~pulse2percept.models.AxonMapModel`
+        An instance of the axon map model to use for visualization.
     show_fovea : bool
         Whether to indicate the location of the fovea with a square
     ax : axis
