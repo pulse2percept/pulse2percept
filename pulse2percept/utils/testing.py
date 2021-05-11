@@ -2,6 +2,7 @@
 
 import pytest
 import numpy.testing as npt
+import warnings
 
 
 def assert_warns_msg(expected_warning, func, msg, *args, **kwargs):
@@ -23,8 +24,19 @@ def assert_warns_msg(expected_warning, func, msg, *args, **kwargs):
     \*\*kwargs: keyword arguments to ``func``
 
     """
+    # Make sure we are not leaking warnings:
+    warnings.resetwarnings()
+    # Run the function that is supposed to produce a warning:
     with pytest.warns(expected_warning) as record:
         func(*args, **kwargs)
+    # Check the number of generated warnings:
+    if len(record) != 1:
+        print('Generated warnings:')
+        for r in record:
+            print('-', r)
     npt.assert_equal(len(record), 1)
+    # Check the message:
     if msg is not None:
         npt.assert_equal(msg in record[0].message.args[0], True)
+    # Remove generated warnings from registry:
+    warnings.resetwarnings()

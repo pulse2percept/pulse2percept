@@ -538,7 +538,7 @@ class Stimulus(PrettyPrint):
             else:
                 if not np.any(time == Ellipsis):
                     # Convert to float so time is not mistaken for column index
-                    if np.array(time).dtype != np.bool:
+                    if np.array(time).dtype != bool:
                         time = np.float32(time)
         else:
             electrodes = item

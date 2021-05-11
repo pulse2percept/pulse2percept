@@ -10,6 +10,7 @@ from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
                                   ScoreboardSpatial, ScoreboardModel)
+from pulse2percept.utils.testing import assert_warns_msg
 
 
 def test_ScoreboardSpatial():
@@ -114,12 +115,19 @@ def test_ScoreboardModel_predict_percept():
     npt.assert_almost_equal(percept.data, spatial_percept.data)
     npt.assert_equal(percept.time, None)
 
+    # Warning for nonzero electrode-retina distances
+    implant = ArgusI(stim=np.ones(16), z=10)
+    msg = ("Nonzero electrode-retina distances do not have any effect on the "
+           "model output.")
+    assert_warns_msg(UserWarning, model.predict_percept, msg, implant)
+
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
 @pytest.mark.parametrize('use_legacy_build', (True, False))
 def test_AxonMapSpatial(engine, use_legacy_build):
     # AxonMapSpatial automatically sets `rho`, `axlambda`:
-    model = AxonMapSpatial(engine=engine, xystep=5, use_legacy_build=use_legacy_build)
+    model = AxonMapSpatial(engine=engine, xystep=5,
+                           use_legacy_build=use_legacy_build)
 
     # User can set `rho`:
     model.rho = 123
@@ -179,7 +187,7 @@ def test_AxonMapModel(engine, use_legacy_build):
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 2,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
-                  'loc_od': (5, 6), 'use_legacy_build' : use_legacy_build}
+                  'loc_od': (5, 6), 'use_legacy_build': use_legacy_build}
     model = AxonMapModel()
     for param in set_params:
         npt.assert_equal(hasattr(model.spatial, param), True)
@@ -282,7 +290,7 @@ def test_AxonMapModel_grow_axon_bundles(engine):
 def test_AxonMapModel_find_closest_axon(engine, use_legacy_build):
     model = AxonMapModel(xystep=1, engine=engine, n_axons=5,
                          xrange=(-20, 20), yrange=(-15, 15),
-                         axons_range=(-45, 45), 
+                         axons_range=(-45, 45),
                          use_legacy_build=use_legacy_build)
     model.build()
     # Pretend there is an axon close to each point on the grid:
@@ -312,7 +320,7 @@ def test_AxonMapModel_calc_axon_contribution(engine):
     for ax, xy in zip(contrib, xyret):
         axon = np.insert(ax, 0, list(xy) + [0], axis=0)
         d2 = np.cumsum(np.sqrt(np.diff(axon[:, 0], axis=0) ** 2 +
-                       np.diff(axon[:, 1], axis=0) ** 2))**2
+                               np.diff(axon[:, 1], axis=0) ** 2))**2
         sensitivity = np.exp(-d2 / (2.0 * model.spatial.axlambda ** 2))
         npt.assert_almost_equal(sensitivity, ax[:, 2])
 
@@ -369,8 +377,15 @@ def test_AxonMapModel_predict_percept(engine):
     npt.assert_equal(np.sum(percept.data > 0.275), 56)
 
     # Model gives same outcome as Spatial:
-    spatial = AxonMapSpatial(engine='serial', xystep=1, rho=100, axlambda=40)
+    spatial = AxonMapSpatial(engine='serial', xystep=1, rho=100, axlambda=40,
+                             xrange=(-20, 20), yrange=(-15, 15), n_axons=500)
     spatial.build()
-    spatial_percept = model.predict_percept(ArgusII(stim=np.ones(60)))
+    spatial_percept = spatial.predict_percept(ArgusII(stim=np.ones(60)))
     npt.assert_almost_equal(percept.data, spatial_percept.data)
     npt.assert_equal(percept.time, None)
+
+    # Warning for nonzero electrode-retina distances
+    implant = ArgusI(stim=np.ones(16), z=10)
+    msg = ("Nonzero electrode-retina distances do not have any effect on the "
+           "model output.")
+    assert_warns_msg(UserWarning, model.predict_percept, msg, implant)
