@@ -15,6 +15,11 @@ from ..models import Model, SpatialModel
 from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
                            fast_find_closest_axon)
 
+# Log all warnings.warn() at the WARNING level:
+import warnings
+import logging
+logging.captureWarnings(True)
+
 
 class ScoreboardSpatial(SpatialModel):
     """Scoreboard model of [Beyeler2019]_ (spatial module only)
@@ -68,6 +73,10 @@ class ScoreboardSpatial(SpatialModel):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
+        if not np.allclose([e.z for e in earray.values()], 0):
+            msg = ("Nonzero electrode-retina distances do not have any effect "
+                   "on the model output.")
+            warnings.warn(msg)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
         return fast_scoreboard(stim.data,
@@ -521,10 +530,12 @@ class AxonMapSpatial(SpatialModel):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at specific times ``t``"""
+        if not np.allclose([e.z for e in earray.values()], 0):
+            msg = ("Nonzero electrode-retina distances do not have any effect "
+                   "on the model output.")
+            warnings.warn(msg)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        assert isinstance(earray, ElectrodeArray)
-        assert isinstance(stim, Stimulus)
         return fast_axon_map(stim.data,
                              np.array([earray[e].x for e in stim.electrodes],
                                       dtype=np.float32),
