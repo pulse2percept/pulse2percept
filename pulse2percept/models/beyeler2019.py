@@ -426,7 +426,7 @@ class AxonMapSpatial(SpatialModel):
             # Cut off the part of the fiber that goes beyond the soma:
             axon = np.flipud(bundle[0: idx + 1, :])
             # Add the exact location of the soma:
-            axon = np.insert(axon, 0, xy, axis=0)
+            axon = np.concatenate((xy.reshape((1, -1)), axon), axis=0)
             # For every axon segment, calculate distance from soma by
             # summing up the individual distances between neighboring axon
             # segments (by "walking along the axon"):
@@ -434,7 +434,7 @@ class AxonMapSpatial(SpatialModel):
                                    np.diff(axon[:, 1], axis=0) ** 2)) ** 2
             idx_d2 = d2 < max_d2
             sensitivity = np.exp(-d2[idx_d2] / (2.0 * self.axlambda ** 2))
-            idx_d2 = np.insert(idx_d2, 0, False)
+            idx_d2 = np.concatenate(([False], idx_d2))
             contrib = np.column_stack((axon[idx_d2, :], sensitivity))
             axon_contrib.append(contrib)
         return axon_contrib
