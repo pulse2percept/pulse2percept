@@ -12,9 +12,16 @@ Release Notes
 v0.7.1 (2021, planned)
 ----------------------
 
+Performance enhancements
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+*  Further speed up the :py:class:`~pulse2percept.models.AxonMapModel` build process (:pull:`369`)
+
 Bug fixes
 ~~~~~~~~~
 
+*  Show a warning when :py:class:`~pulse2percept.models.ScoreboardModel` or
+   :py:class:`~pulse2percept.models.AxonMapModel` is used with a nonzero electrode-retina distance (:pull:`368`)
 *  Fix :py:meth:`pulse2percept.models.AxonMapModel.plot` for left eyes (:pull:`367`)
 *  Fix axon map visualization in :py:meth:`~pulse2percept.viz.plot_argus_phosphenes` (:pull:`366`)
 
@@ -77,7 +84,7 @@ Backward-incompatible changes
 Deprecations
 ^^^^^^^^^^^^
 
-*  ``plot_axon_map``: Use :py:meth`pulse2percept.models.AxonMapModel.plot`
+*  ``plot_axon_map``: Use :py:meth:`pulse2percept.models.AxonMapModel.plot`
 *  ``plot_implant_on_axon_map``: Use
    :py:meth:`pulse2percept.implants.ProsthesisSystem.plot` on top of
    :py:meth`pulse2percept.models.AxonMapModel.plot`
