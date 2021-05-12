@@ -113,11 +113,15 @@ model.engine = 'serial'
 model.build()
 
 ##############################################################################
-# .. note::
+# .. important ::
 #
 #     You need to build a model only once. After that, you can apply any number
 #     of stimuli -- or even apply the model to different implants -- without
 #     having to rebuild (which takes time).
+#
+#     However, if you change important model parameters outside the constructor
+#     (e.g., by directly setting ``model.axlambda = 100``), you will have to
+#     call ``model.build()`` again for your changes to take effect.
 #
 # Assigning a stimulus
 # --------------------
