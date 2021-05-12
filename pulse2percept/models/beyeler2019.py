@@ -489,6 +489,9 @@ class AxonMapSpatial(SpatialModel):
             raise ValueError(err_str)
 
     def _build(self):
+        if self.axlambda < 10:
+            raise ValueError('"axlambda" < 10 is not supported by this model. '
+                             'Consider using ScoreboardModel instead.')
         # In a left eye, the OD must have a negative x coordinate:
         self._correct_loc_od()
         # Check whether pickle file needs to be rebuilt:

@@ -163,6 +163,10 @@ def test_AxonMapSpatial(engine, use_legacy_build):
     npt.assert_almost_equal(percept.data[3, 4, 1], pmax[1])
     npt.assert_almost_equal(percept.time, [0, 1])
 
+    # Lambda cannot be too small:
+    with pytest.raises(ValueError):
+        AxonMapSpatial(axlambda=9).build()
+
 
 def test_AxonMapSpatial_plot():
     model = AxonMapSpatial()
@@ -184,7 +188,7 @@ def test_AxonMapSpatial_plot():
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
 @pytest.mark.parametrize('use_legacy_build', (True, False))
 def test_AxonMapModel(engine, use_legacy_build):
-    set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 2,
+    set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
                   'loc_od': (5, 6), 'use_legacy_build': use_legacy_build}
@@ -215,6 +219,10 @@ def test_AxonMapModel(engine, use_legacy_build):
         AxonMapModel(eye='invalid').build()
     with pytest.raises(ValueError):
         AxonMapModel(xystep=5).build(eye='invalid')
+
+    # Lambda cannot be too small:
+    with pytest.raises(ValueError):
+        AxonMapModel(axlambda=9).build()
 
 
 @pytest.mark.parametrize('eye', ('LE', 'RE'))
