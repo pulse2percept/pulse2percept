@@ -3,6 +3,7 @@ import numpy as np
 from string import ascii_uppercase
 from itertools import product
 from collections import OrderedDict
+from matplotlib.collections import PatchCollection
 import matplotlib.pyplot as plt
 
 from .electrodes import Electrode, PointSource, DiskElectrode
@@ -129,17 +130,30 @@ class ElectrodeArray(PrettyPrint):
         """
         if ax is None:
             ax = plt.gca()
-        if autoscale:
-            ax.autoscale(True)
         ax.set_aspect('equal')
+        patches = []
         for name, electrode in self.items():
-            electrode.plot(autoscale=False, ax=ax)
+            # Rather than calling electrode.plot(), generate all the patch
+            # objects and add them to a collection:
+            if isinstance(electrode.plot_patch, list):
+                # Special case: draw multiple objects per electrode
+                for p, kw in zip(electrode.plot_patch, electrode.plot_kwargs):
+                    patches.append(p((electrode.x, electrode.y), zorder=10,
+                                     **kw))
+            else:
+                # Regular use case: single object
+                patches.append(electrode.plot_patch((electrode.x, electrode.y),
+                                                    zorder=10,
+                                                    **electrode.plot_kwargs))
             if annotate:
                 ax.text(electrode.x, electrode.y, name, ha='center',
                         va='center',  color='black', size='large',
                         bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
                               'fc': (1, 1, 1, 0.7)},
                         zorder=11)
+        ax.add_collection(PatchCollection(patches, match_original=True))
+        if autoscale:
+            ax.autoscale(True)
         ax.set_xlabel('x (microns)')
         ax.set_ylabel('y (microns)')
         return ax
