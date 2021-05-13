@@ -123,11 +123,9 @@ def test_ScoreboardModel_predict_percept():
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
-@pytest.mark.parametrize('use_legacy_build', (True, False))
-def test_AxonMapSpatial(engine, use_legacy_build):
+def test_AxonMapSpatial(engine):
     # AxonMapSpatial automatically sets `rho`, `axlambda`:
-    model = AxonMapSpatial(engine=engine, xystep=5,
-                           use_legacy_build=use_legacy_build)
+    model = AxonMapSpatial(engine=engine, xystep=5)
 
     # User can set `rho`:
     model.rho = 123
@@ -186,12 +184,11 @@ def test_AxonMapSpatial_plot():
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
-@pytest.mark.parametrize('use_legacy_build', (True, False))
-def test_AxonMapModel(engine, use_legacy_build):
+def test_AxonMapModel(engine):
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
-                  'loc_od': (5, 6), 'use_legacy_build': use_legacy_build}
+                  'loc_od': (5, 6)}
     model = AxonMapModel()
     for param in set_params:
         npt.assert_equal(hasattr(model.spatial, param), True)
@@ -294,12 +291,10 @@ def test_AxonMapModel_grow_axon_bundles(engine):
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
-@pytest.mark.parametrize('use_legacy_build', (True, False))
-def test_AxonMapModel_find_closest_axon(engine, use_legacy_build):
+def test_AxonMapModel_find_closest_axon(engine):
     model = AxonMapModel(xystep=1, engine=engine, n_axons=5,
                          xrange=(-20, 20), yrange=(-15, 15),
-                         axons_range=(-45, 45),
-                         use_legacy_build=use_legacy_build)
+                         axons_range=(-45, 45))
     model.build()
 
     # Pretend there is an axon close to each point on the grid:

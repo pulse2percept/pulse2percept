@@ -190,9 +190,6 @@ class AxonMapSpatial(SpatialModel):
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
-    use_legacy_build: bool, optional
-        If true, searches over axons instead of using KDTree. Build will 
-        likely be slower if True
     axon_pickle: str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle: bool, optional
@@ -230,8 +227,6 @@ class AxonMapSpatial(SpatialModel):
             # Axon segments whose contribution to brightness is smaller than
             # this value will be pruned:
             'min_ax_sensitivity': 1e-3,
-            # Use legacy build, searching over axons instead of using KDTree
-            'use_legacy_build': False,
             # Precomputed axon maps stored in the following file:
             'axon_pickle': 'axons.pickle',
             # You can force a build by ignoring pickles:
@@ -469,23 +464,11 @@ class AxonMapSpatial(SpatialModel):
         # Build a long list of all axon segments - their corresponding axon IDs
         # is given by `axon_idx` above:
         flat_bundles = np.concatenate(bundles)
-        if self.use_legacy_build:
-            # For every pixel on the grid, find the closest axon segment:
-            if self.engine == 'cython':
-                closest_seg = fast_find_closest_axon(flat_bundles,
-                                                     xret.ravel(),
-                                                     yret.ravel())
-            else:
-                closest_seg = [np.argmin((flat_bundles[:, 0] - x) ** 2 +
-                                         (flat_bundles[:, 1] - y) ** 2)
-                               for x, y in zip(xret.ravel(),
-                                               yret.ravel())]
-        else:
-            kdtree = cKDTree(flat_bundles, leafsize=60)
-            # Create query list of xy pairs
-            query = np.stack((xret.ravel(), yret.ravel()), axis=1)
-            # Find index of closest segment
-            _, closest_seg = kdtree.query(query)
+        kdtree = cKDTree(flat_bundles, leafsize=60)
+        # Create query list of xy pairs
+        query = np.stack((xret.ravel(), yret.ravel()), axis=1)
+        # Find index of closest segment
+        _, closest_seg = kdtree.query(query)
 
         # Look up the axon ID for every axon segment:
         closest_idx = axon_idx[closest_seg]
@@ -821,9 +804,6 @@ class AxonMapModel(Model):
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
-    use_legacy_build: bool, optional
-        If true, searches over axons instead of using KDTree. Build will 
-        likely be slower if True
     axon_pickle: str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle: bool, optional
