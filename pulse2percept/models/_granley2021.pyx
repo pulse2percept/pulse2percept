@@ -1,5 +1,6 @@
 import numpy as np
 cimport numpy as cnp
+cimport cython
 from cython import cdivision  # for modulo operator
 from cython.parallel import prange
 from libc.math cimport(pow as c_pow, exp as c_exp, tanh as c_tanh,
@@ -10,7 +11,7 @@ ctypedef cnp.uint32_t uint32
 ctypedef cnp.int32_t int32
 cdef float32 deg2rad = 3.14159265358979323846 / 180.0
 
-
+@cython.boundscheck(False)
 @cdivision(True)
 cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
                     const float32[::1] bright_model_el,
@@ -27,13 +28,12 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
     """Fast spatial response of the biphasic axon map model
     Predicts representative percept using entire time interval, 
     and returns this percept repeated at each time point
-    TODO
     Parameters
     ----------
-    stim : 2D float32 array
-        A ``Stimulus.data`` container that contains electrodes as rows and
-        time points as columns. The spatial response will be calculated for
-        each column independently.
+    amp_el : 1D float array 
+        Amplitudes (as a factor of threshold) per electrode
+    bright_model_el, size_model_el, streak_model_el : 1D float array
+        Factors by which to scale brightness, rho (size), and lambda (streak length)
     xel, yel : 1D float32 array
         An array of x or y coordinates for each electrode (microns)
     axon_segments : 2D float32 array
@@ -53,6 +53,14 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
         axon contribution (stored/passed in ``axon``).
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
+    timesteps : float32
+        The number of timesteps in the stimulus.
+
+    Return Value
+    -----------------
+    A percept object representing the predicted brightest frame of the phosphene. 
+    The percept has the same timepoints as the stimulus (for compatibility), but
+    is exactly the same at every point in time. 
     """
     cdef:
         int32 idx_el, idx_time, idx_space, idx_ax, idx_bright
@@ -117,4 +125,4 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
         if c_abs(px_bright) < thresh_percept:
             px_bright = 0.0
         bright[idx_space] = px_bright  # Py overhead
-    return np.asarray(np.transpose(np.tile(bright, (n_time, 1)))) # Py overhead, copy output for each timestep
+    return np.asarray(np.transpose(np.tile(bright, (n_time, 1)))) # Copy output for each timestep
