@@ -37,7 +37,8 @@ def load_nanduri2012(electrodes=None, task=None, shuffle=False, random_state=0):
     pulse_dur             Pulse duration (ms)
     pulse_type            'cathodicFirst'
     interphase_dur        Interphase gap (ms)
-    source                Figure from which data was extracted
+    varied                Whether this trial is a part of 'amp' or 'freq'
+                          modulation 
     ====================  ================================================
 
     .. versionadded:: 0.7
