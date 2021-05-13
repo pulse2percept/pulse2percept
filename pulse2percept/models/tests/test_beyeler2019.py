@@ -301,6 +301,7 @@ def test_AxonMapModel_find_closest_axon(engine, use_legacy_build):
                          axons_range=(-45, 45),
                          use_legacy_build=use_legacy_build)
     model.build()
+
     # Pretend there is an axon close to each point on the grid:
     bundles = [np.array([x + 0.001, y - 0.001],
                         dtype=np.float32).reshape((1, 2))
@@ -311,9 +312,23 @@ def test_AxonMapModel_find_closest_axon(engine, use_legacy_build):
         npt.assert_almost_equal(ax1[0, 0], ax2[0, 0])
         npt.assert_almost_equal(ax1[0, 1], ax2[0, 1])
 
+    # Looking up just one point does not return a list of axons:
+    axon = bundles[0]
+    closest = model.spatial.find_closest_axon(bundles, xret=axon[0, 0],
+                                              yret=axon[0, 1])
+    npt.assert_almost_equal(closest, axon)
+
+    # Return the index as well:
+    closest, closest_idx = model.spatial.find_closest_axon(bundles,
+                                                           xret=axon[0, 0],
+                                                           yret=axon[0, 1],
+                                                           return_index=True)
+    npt.assert_almost_equal(closest, axon)
+    npt.assert_equal(closest_idx, 0)
+
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
-def test_AxonMapModel_calc_axon_contribution(engine):
+def test_AxonMapModel_calc_axon_sensitivity(engine):
     model = AxonMapModel(xystep=2, engine=engine, n_axons=10,
                          xrange=(-20, 20), yrange=(-15, 15),
                          axons_range=(-30, 30))
@@ -322,7 +337,7 @@ def test_AxonMapModel_calc_axon_contribution(engine):
                              model.spatial.grid.yret.ravel()))
     bundles = model.spatial.grow_axon_bundles()
     axons = model.spatial.find_closest_axon(bundles)
-    contrib = model.spatial.calc_axon_contribution(axons)
+    contrib = model.spatial.calc_axon_sensitivity(axons)
 
     # Check lambda math:
     for ax, xy in zip(contrib, xyret):
