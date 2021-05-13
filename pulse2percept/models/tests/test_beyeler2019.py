@@ -123,11 +123,9 @@ def test_ScoreboardModel_predict_percept():
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
-@pytest.mark.parametrize('use_legacy_build', (True, False))
-def test_AxonMapSpatial(engine, use_legacy_build):
+def test_AxonMapSpatial(engine):
     # AxonMapSpatial automatically sets `rho`, `axlambda`:
-    model = AxonMapSpatial(engine=engine, xystep=5,
-                           use_legacy_build=use_legacy_build)
+    model = AxonMapSpatial(engine=engine, xystep=5)
 
     # User can set `rho`:
     model.rho = 123
@@ -163,6 +161,10 @@ def test_AxonMapSpatial(engine, use_legacy_build):
     npt.assert_almost_equal(percept.data[3, 4, 1], pmax[1])
     npt.assert_almost_equal(percept.time, [0, 1])
 
+    # Lambda cannot be too small:
+    with pytest.raises(ValueError):
+        AxonMapSpatial(axlambda=9).build()
+
 
 def test_AxonMapSpatial_plot():
     model = AxonMapSpatial()
@@ -182,12 +184,11 @@ def test_AxonMapSpatial_plot():
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
-@pytest.mark.parametrize('use_legacy_build', (True, False))
-def test_AxonMapModel(engine, use_legacy_build):
-    set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 2,
+def test_AxonMapModel(engine):
+    set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
-                  'loc_od': (5, 6), 'use_legacy_build': use_legacy_build}
+                  'loc_od': (5, 6)}
     model = AxonMapModel()
     for param in set_params:
         npt.assert_equal(hasattr(model.spatial, param), True)
@@ -215,6 +216,10 @@ def test_AxonMapModel(engine, use_legacy_build):
         AxonMapModel(eye='invalid').build()
     with pytest.raises(ValueError):
         AxonMapModel(xystep=5).build(eye='invalid')
+
+    # Lambda cannot be too small:
+    with pytest.raises(ValueError):
+        AxonMapModel(axlambda=9).build()
 
 
 @pytest.mark.parametrize('eye', ('LE', 'RE'))
@@ -286,13 +291,12 @@ def test_AxonMapModel_grow_axon_bundles(engine):
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
-@pytest.mark.parametrize('use_legacy_build', (True, False))
-def test_AxonMapModel_find_closest_axon(engine, use_legacy_build):
+def test_AxonMapModel_find_closest_axon(engine):
     model = AxonMapModel(xystep=1, engine=engine, n_axons=5,
                          xrange=(-20, 20), yrange=(-15, 15),
-                         axons_range=(-45, 45),
-                         use_legacy_build=use_legacy_build)
+                         axons_range=(-45, 45))
     model.build()
+
     # Pretend there is an axon close to each point on the grid:
     bundles = [np.array([x + 0.001, y - 0.001],
                         dtype=np.float32).reshape((1, 2))
@@ -303,9 +307,23 @@ def test_AxonMapModel_find_closest_axon(engine, use_legacy_build):
         npt.assert_almost_equal(ax1[0, 0], ax2[0, 0])
         npt.assert_almost_equal(ax1[0, 1], ax2[0, 1])
 
+    # Looking up just one point does not return a list of axons:
+    axon = bundles[0]
+    closest = model.spatial.find_closest_axon(bundles, xret=axon[0, 0],
+                                              yret=axon[0, 1])
+    npt.assert_almost_equal(closest, axon)
+
+    # Return the index as well:
+    closest, closest_idx = model.spatial.find_closest_axon(bundles,
+                                                           xret=axon[0, 0],
+                                                           yret=axon[0, 1],
+                                                           return_index=True)
+    npt.assert_almost_equal(closest, axon)
+    npt.assert_equal(closest_idx, 0)
+
 
 @pytest.mark.parametrize('engine', ('serial', 'cython'))
-def test_AxonMapModel_calc_axon_contribution(engine):
+def test_AxonMapModel_calc_axon_sensitivity(engine):
     model = AxonMapModel(xystep=2, engine=engine, n_axons=10,
                          xrange=(-20, 20), yrange=(-15, 15),
                          axons_range=(-30, 30))
@@ -314,7 +332,7 @@ def test_AxonMapModel_calc_axon_contribution(engine):
                              model.spatial.grid.yret.ravel()))
     bundles = model.spatial.grow_axon_bundles()
     axons = model.spatial.find_closest_axon(bundles)
-    contrib = model.spatial.calc_axon_contribution(axons)
+    contrib = model.spatial.calc_axon_sensitivity(axons)
 
     # Check lambda math:
     for ax, xy in zip(contrib, xyret):

@@ -39,14 +39,16 @@ The first step is to instantiate the
 :py:class:`~pulse2percept.models.AxonMapModel` class by calling its
 constructor method.
 The two most important parameters to set are ``rho`` and ``axlambda`` from
-the equation above (here set to 200 micrometers and 500 micrometers,
+the equation above (here set to 150 micrometers and 500 micrometers,
 respectively):
 
 """
 # sphinx_gallery_thumbnail_number = 2
 
+import numpy as np
+from pulse2percept.implants import ArgusII
 from pulse2percept.models import AxonMapModel
-model = AxonMapModel(rho=200, axlambda=500)
+model = AxonMapModel(rho=150, axlambda=500)
 
 ##############################################################################
 # Parameters you don't specify will take on default values. You can inspect
@@ -111,11 +113,15 @@ model.engine = 'serial'
 model.build()
 
 ##############################################################################
-# .. note::
+# .. important ::
 #
 #     You need to build a model only once. After that, you can apply any number
 #     of stimuli -- or even apply the model to different implants -- without
 #     having to rebuild (which takes time).
+#
+#     However, if you change important model parameters outside the constructor
+#     (e.g., by directly setting ``model.axlambda = 100``), you will have to
+#     call ``model.build()`` again for your changes to take effect.
 #
 # Assigning a stimulus
 # --------------------
@@ -127,7 +133,6 @@ model.build()
 # will be centered over the fovea (at x=0, y=0) and aligned with the horizontal
 # meridian (rot=0):
 
-from pulse2percept.implants import ArgusII
 implant = ArgusII()
 
 ##############################################################################
@@ -149,7 +154,6 @@ implant.plot()
 # For example, the following sends 1 microamp to all 60 electrodes of the
 # implant:
 
-import numpy as np
 implant.stim = np.ones(60)
 
 ##############################################################################
@@ -199,3 +203,22 @@ ax.set_title('Predicted percept')
 #     (upper) visual field, a counterclockwise orientation on the retina is
 #     equivalent to a clockwise orientation of the percept in visual field
 #     coordinates.
+
+##############################################################################
+# You can also use the axon map model to imitate
+# :py:class:`~pulse2percept.models.ScoreboardModel` by setting lambda to a small
+# value.
+# However, you may have to increase the number of axons and number of segments
+# per axon to get a smooth percept out:
+
+model = AxonMapModel(rho=200, axlambda=10, n_axons=3000, n_ax_segments=3000)
+model.build()
+percept = model.predict_percept(implant)
+ax = percept.plot()
+ax.set_title('Predicted percept')
+
+##############################################################################
+# This is of course not very computationally efficient, because the model is
+# still performing all the axon map calculations.
+# In this case, you might be better off using
+# :py:class:`~pulse2percept.models.ScoreboardModel`.
