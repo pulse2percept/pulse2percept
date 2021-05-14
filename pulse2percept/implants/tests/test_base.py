@@ -35,8 +35,7 @@ def test_ProsthesisSystem():
 
     ax = implant.plot()
     npt.assert_equal(len(ax.texts), 0)
-    npt.assert_equal(len(ax.patches), 1)
-    npt.assert_equal(isinstance(ax.patches[0], Circle), True)
+    npt.assert_equal(len(ax.collections), 1)
 
     with pytest.raises(ValueError):
         # Wrong number of stimuli

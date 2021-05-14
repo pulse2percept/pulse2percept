@@ -15,6 +15,7 @@ v0.7.1 (2021, planned)
 Enhancements
 ~~~~~~~~~~~~
 
+*  Speed up :py:meth:`pulse2percept.implants.ElectrodeArray.plot` that is used by all implants (:pull:`375`)
 *  Further speed up the :py:class:`~pulse2percept.models.AxonMapModel` build process (:pull:`369`)
 
 Maintenance
