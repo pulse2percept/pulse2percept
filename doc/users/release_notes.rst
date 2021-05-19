@@ -12,16 +12,16 @@ Release Notes
 v0.7.1 (2021, planned)
 ----------------------
 
-Enhancements
+New features
 ~~~~~~~~~~~~
 
 *  Add :py:class:`~pulse2percept.models.FadingTemporal`, a generic phosphene fading model (:pull:`378`)
-*  Speed up :py:meth:`pulse2percept.implants.ElectrodeArray.plot` that is used by all implants (:pull:`375`)
-*  Further speed up the :py:class:`~pulse2percept.models.AxonMapModel` build process (:pull:`369`)
 
 Maintenance
 ~~~~~~~~~~~
 
+*  Speed up :py:meth:`pulse2percept.implants.ElectrodeArray.plot` that is used by all implants (:pull:`375`)
+*  Further speed up the :py:class:`~pulse2percept.models.AxonMapModel` build process (:pull:`369`)
 *  Improve documentation and usability of various :py:class:`~pulse2percept.models.AxonMapModel` methods (:pull:`370`)
 *  Disallow lambda<10 for :py:class:`~pulse2percept.models.AxonMapModel` (:pull:`370`)
 *  Show a warning when :py:class:`~pulse2percept.models.ScoreboardModel` or
@@ -30,6 +30,8 @@ Maintenance
 Bug fixes
 ~~~~~~~~~
 
+*  Fix issues with plotting and animating :py:class:`~pulse2percept.percepts.Percept` (:pull:`379`)
+*  Fix inconsistencies and missing parameters in the [Nanduri2012]_ dataset (:pull:`376`)
 *  Fix :py:meth:`pulse2percept.models.AxonMapModel.plot` for left eyes (:pull:`367`)
 *  Fix axon map visualization in :py:meth:`~pulse2percept.viz.plot_argus_phosphenes` (:pull:`366`)
 
