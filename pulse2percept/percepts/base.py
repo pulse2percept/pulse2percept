@@ -190,6 +190,7 @@ class Percept(Data):
         vmin = kwargs['vmin'] if 'vmin' in kwargs.keys() else frame.min()
         vmax = kwargs['vmax'] if 'vmax' in kwargs.keys() else frame.max()
         cmap = kwargs['cmap'] if 'cmap' in kwargs.keys() else 'gray'
+        shading = kwargs['shading'] if 'shading' in kwargs.keys() else 'nearest'
         X, Y = np.meshgrid(self.xdva, self.ydva, indexing='xy')
         if kind == 'pcolor':
             # Create a pseudocolor plot. Make sure to pass additional keyword
@@ -198,7 +199,7 @@ class Percept(Data):
                             for key in (kwargs.keys() - ['figsize', 'cmap',
                                                          'vmin', 'vmax'])}
             ax.pcolormesh(X, Y, np.flipud(frame), cmap=cmap, vmin=vmin,
-                          vmax=vmax, **other_kwargs)
+                          vmax=vmax, shading=shading, **other_kwargs)
         elif kind == 'hex':
             # Create a hexbin plot:
             gridsize = kwargs['gridsize'] if 'gridsize' in kwargs else 80
