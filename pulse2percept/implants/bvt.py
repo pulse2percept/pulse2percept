@@ -19,16 +19,16 @@ class BVT24(ProsthesisSystem):
 
     -   33 platinum stimulating electrodes:
 
-        -   30 electrodes with 600um diameter (Electrodes 1-20 (except
-            9, 17, 19) and Electrodes 21a-m),
+        -   30 electrodes with 600um diameter (Electrodes C1-20 (except
+            C9, C17, C19) and Electrodes C21a-m),
 
-        -   3 electrodes with 400um diameter (Electrodes 9, 17, 19)
+        -   3 electrodes with 400um diameter (Electrodes C9, C17, C19)
 
-    -   2 return electrodes with 2000um diameter (Electrodes 22, 23)
+    -   2 return electrodes with 2000um diameter (Electrodes R1, R2)
 
-    Electrodes 21a-m are typically being ganged to provide an external
+    Electrodes C21a-m are typically being ganged to provide an external
     ring for common ground. The center of the array is assumed to lie
-    between Electrodes 7, 8, 9, and 13.
+    between Electrodes C7, C8, C9, and C13.
 
     .. note::
 
@@ -97,11 +97,11 @@ class BVT24(ProsthesisSystem):
         r_arr[8] = r_arr[16] = r_arr[18] = 200.0
         # the radius of the return electrodes is 1000.0 um
         r_arr[33] = r_arr[34] = 1000.0
-        # the names of the electrodes 1-20, 21a-21m, R1 and R2
-        names = [str(name) for name in range(1, 21)]
-        names.extend(['21a', '21b', '21c', '21d', '21e',
-                      '21f', '21g', '21h', '21i', '21j',
-                      '21k', '21l', '21m'])
+        # the names of the electrodes C1-20, C21a-21m, R1 and R2
+        names = ["C%s" % name for name in range(1, 21)]
+        names.extend(['C21a', 'C21b', 'C21c', 'C21d', 'C21e',
+                      'C21f', 'C21g', 'C21h', 'C21i', 'C21j',
+                      'C21k', 'C21l', 'C21m'])
         names.extend(['R1', 'R2'])
 
         # Rotate the grid:
