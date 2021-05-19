@@ -863,3 +863,8 @@ class Stimulus(PrettyPrint):
         if self.time is None:
             return None
         return np.isclose(np.trapz(self.data, self.time)[0], 0, atol=MIN_AMP)
+
+    @property
+    def duration(self):
+        """Stimulus duration (ms)"""
+        return self.time[-1]
