@@ -9,7 +9,7 @@ import logging
 from skimage import img_as_uint
 from skimage.transform import resize
 
-from ..utils import Data, Grid2D, deprecated
+from ..utils import Data, Grid2D, deprecated, unique
 
 
 class Percept(Data):
@@ -224,17 +224,6 @@ class Percept(Data):
         ax.set_ylabel('y (degrees of visual angle)')
         return ax
 
-    def _get_interval(self):
-        # Determine the frame rate from the time axis. Problem is that
-        # np.unique doesn't work well with floats, so we need to specify a
-        # tolerance `TOL`:
-        interval = np.diff(self.time)
-        TOL = interval.min()
-        # Two time points are the same if they are within `TOL` from each
-        # other:
-        interval = np.unique(np.floor(interval / TOL).astype(int)) * TOL
-        return interval
-
     def play(self, fps=None, repeat=True, annotate_time=True, ax=None):
         """Animate the percept as HTML with JavaScript
 
@@ -301,7 +290,7 @@ class Percept(Data):
                            va='center')
         plt.close(fig)
         if fps is None:
-            interval = self._get_interval()
+            interval = unique(np.diff(self.time))
             if len(interval) > 1:
                 raise NotImplementedError
             interval = interval[0]
@@ -365,7 +354,7 @@ class Percept(Data):
         else:
             # With time component, store as a movie:
             if fps is None:
-                interval = self._get_interval()
+                interval = unique(np.diff(self.time))
                 if len(interval) > 1:
                     raise NotImplementedError
                 fps = 1000.0 / interval[0]

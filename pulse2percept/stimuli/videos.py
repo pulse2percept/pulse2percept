@@ -14,7 +14,7 @@ from skimage import img_as_float32
 from imageio import get_reader as video_reader
 
 from .base import Stimulus
-from ..utils import center_image, shift_image, scale_image
+from ..utils import center_image, shift_image, scale_image, unique
 
 
 class VideoStimulus(Stimulus):
@@ -386,17 +386,6 @@ class VideoStimulus(Stimulus):
         self._next_frame += 1
         return self.data[..., this_frame]
 
-    def _get_interval(self):
-        # Determine the frame rate from the time axis. Problem is that
-        # np.unique doesn't work well with floats, so we need to specify a
-        # tolerance `TOL`:
-        interval = np.diff(self.time)
-        TOL = interval.min()
-        # Two time points are the same if they are within `TOL` from each
-        # other:
-        interval = np.unique(np.floor(interval / TOL).astype(int)) * TOL
-        return interval
-
     def play(self, fps=None, repeat=True, annotate_time=True, ax=None):
         """Animate the percept as HTML with JavaScript
 
@@ -460,7 +449,7 @@ class VideoStimulus(Stimulus):
         cbar.ax.set_ylabel('Brightness (a.u.)', rotation=-90, va='center')
         plt.close(fig)
         if fps is None:
-            interval = self._get_interval()
+            interval = unique(np.diff(self.time))
             if len(interval) > 1:
                 raise NotImplementedError
             interval = interval[0]
