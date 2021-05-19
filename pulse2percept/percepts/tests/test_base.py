@@ -61,11 +61,25 @@ def test_Percept__iter__():
         npt.assert_almost_equal(frame, i)
 
 
+def test_Percept_argmax():
+    percept = Percept(np.arange(30).reshape((3, 5, 2)))
+    npt.assert_almost_equal(percept.argmax(), 29)
+    npt.assert_almost_equal(percept.argmax(axis="frames"), 1)
+    with pytest.raises(TypeError):
+        percept.argmax(axis=(0, 1))
+    with pytest.raises(ValueError):
+        percept.argmax(axis='invalid')
+
+
 def test_Percept_max():
     percept = Percept(np.arange(30).reshape((3, 5, 2)))
     npt.assert_almost_equal(percept.max(), 29)
-    npt.assert_almost_equal(percept.max(axis='frames'),
+    npt.assert_almost_equal(percept.max(axis="frames"),
                             percept.data[..., 1])
+    npt.assert_almost_equal(percept.max(),
+                            percept.data.ravel()[percept.argmax()])
+    npt.assert_almost_equal(percept.max(axis='frames'),
+                            percept.data[..., percept.argmax(axis='frames')])
     with pytest.raises(TypeError):
         percept.max(axis=(0, 1))
     with pytest.raises(ValueError):
@@ -109,7 +123,7 @@ def test_Percept_plot():
     npt.assert_almost_equal(ax.figure.get_size_inches(), (6, 4))
 
     # Test vmin and vmax
-    ax.clear() 
+    ax.clear()
     ax = percept.plot(vmin=2, vmax=4)
     npt.assert_equal(ax.collections[0].get_clim(), (2., 4.))
 
@@ -118,10 +132,6 @@ def test_Percept_plot():
         percept.plot(kind='invalid')
     with pytest.raises(TypeError):
         percept.plot(ax='invalid')
-
-    # TODO
-    with pytest.raises(NotImplementedError):
-        percept.plot(time=3.3)
 
 
 @pytest.mark.parametrize('n_frames', (2, 3, 10, 14))
