@@ -50,6 +50,33 @@ class Percept(Data):
             'metadata': metadata
         }
 
+    def argmax(self, axis=None):
+        """Return the indices of the maximum values along an axis
+
+        Parameters
+        ----------
+        axis : None or 'frames'
+            Axis along which to operate.
+            By default, the index of the brightest pixel is returned.
+            Set ``axis='frames'`` to get the index of the brightest frame.
+
+        Returns
+        -------
+        argmax : ndarray or scalar
+            Indices at which the maxima of ``percept.data`` along an axis occur.
+            If `axis` is None, the result is a scalar value.
+            If `axis` is 'frames', the result is the time of the brightest
+            frame.
+        """
+        if axis is not None and not isinstance(axis, str):
+            raise TypeError('"axis" must be a string or None.')
+        if axis is None:
+            return self.data.argmax()
+        elif axis.lower() == 'frames':
+            return np.argmax(np.max(self.data, axis=(0, 1)))
+        raise ValueError('Unknown axis value "%s". Use "frames" or '
+                         'None.' % axis)
+
     def max(self, axis=None):
         """Brightest pixel or frame
 
@@ -72,7 +99,7 @@ class Percept(Data):
         if axis is None:
             return self.data.max()
         elif axis.lower() == 'frames':
-            return self.data[..., np.argmax(np.max(self.data, axis=(0, 1)))]
+            return self.data[..., self.argmax(axis='frames')]
         raise ValueError('Unknown axis value "%s". Use "frames" or '
                          'None.' % axis)
 
@@ -110,8 +137,15 @@ class Percept(Data):
         self._next_frame += 1
         return self.data[..., this_frame]
 
-    def plot(self, time=None, kind='pcolor', ax=None, **kwargs):
+    def plot(self, kind='pcolor', ax=None, **kwargs):
         """Plot the percept
+
+        For a spatial percept, will plot the perceived brightness across the
+        x, y grid.
+        For a temporal percept, will plot the evolution of perceived brightness
+        over time.
+        For a spatiotemporal percept, will plot the brightest frame.
+        Use ``percept.play()`` to animate the percept across time points.
 
         Parameters
         ----------
@@ -122,13 +156,11 @@ class Percept(Data):
                (e.g., ``vmin``, ``vmax``) can be passed as keyword arguments.
             *  'hex': using Matplotlib's ``hexbin``. Additional parameters
                (e.g., ``gridsize``) can be passed as keyword arguments.
-
-        time : None, optional
-            The time point to plot. If None, plots the brightest frame.
-            Use ``play`` to play the percept frame-by-frame.
         ax : matplotlib.axes.AxesSubplot, optional
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object
+        **kwargs :
+            Other optional arguments passed down to the Matplotlib function
 
         Returns
         -------
@@ -136,13 +168,6 @@ class Percept(Data):
             Returns the axes with the plot on it
 
         """
-        if time is None:
-            idx = np.argmax(np.max(self.data, axis=(0, 1)))
-            frame = self.data[..., idx]
-        else:
-            # Need to be smart about what to do when plotting more than one
-            # frame.
-            raise NotImplementedError
         if ax is None:
             ax = plt.gca()
             if 'figsize' in kwargs:
@@ -151,6 +176,17 @@ class Percept(Data):
             if not isinstance(ax, Subplot):
                 raise TypeError("'ax' must be a Matplotlib axis, not "
                                 "%s." % type(ax))
+        if self.xdva is None and self.ydva is None and self.time is not None:
+            # Special case of a purely temporal percept:
+            ax.plot(self.time, self.data.squeeze(), linewidth=2, **kwargs)
+            ax.set_xlabel('time ms)')
+            ax.set_ylabel('Perceived brightness (a.u.)')
+            return ax
+
+        # A spatial or spatiotemporal percept: Find the brightest frame
+        idx = np.argmax(np.max(self.data, axis=(0, 1)))
+        frame = self.data[..., idx]
+
         vmin = kwargs['vmin'] if 'vmin' in kwargs.keys() else frame.min()
         vmax = kwargs['vmax'] if 'vmax' in kwargs.keys() else frame.max()
         cmap = kwargs['cmap'] if 'cmap' in kwargs.keys() else 'gray'
@@ -244,7 +280,8 @@ class Percept(Data):
                 pass
 
         if self.time is None:
-            raise ValueError("Cannot animate a percept with time=None.")
+            raise ValueError("Cannot animate a percept with time=None. Use "
+                             "percept.plot() instead.")
 
         # There are several options to animate a percept in Jupyter/IPython
         # (see https://stackoverflow.com/a/46878531). Displaying the animation
