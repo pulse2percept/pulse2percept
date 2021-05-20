@@ -8,6 +8,8 @@ from pulse2percept.datasets import load_nanduri2012
 
 from sklearn.linear_model import LinearRegression
 
+from ._granley2021 import fast_biphasic_axon_map
+
 class DefaultBrightModel(): 
     # F_{bright}
     def __init__(self,  do_thresholding=True):
