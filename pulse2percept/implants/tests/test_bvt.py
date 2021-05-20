@@ -30,49 +30,49 @@ def test_BVT24(x, y, rot):
 
     # Then off-set: Make sure first electrode is placed
     # correctly
-    npt.assert_almost_equal(bva['1'].x, xy[0] + x)
-    npt.assert_almost_equal(bva['1'].y, xy[1] + y)
-    npt.assert_almost_equal(bva['21m'].x, xy2[0] + x)
-    npt.assert_almost_equal(bva['21m'].y, xy2[1] + y)
+    npt.assert_almost_equal(bva['C1'].x, xy[0] + x)
+    npt.assert_almost_equal(bva['C1'].y, xy[1] + y)
+    npt.assert_almost_equal(bva['C21m'].x, xy2[0] + x)
+    npt.assert_almost_equal(bva['C21m'].y, xy2[1] + y)
 
     # Check radii of electrodes
-    for e in ['1', '5', '8', '15', '20']:
+    for e in ['C1', 'C5', 'C8', 'C15', 'C20']:
         npt.assert_almost_equal(bva[e].r, 300.0)
-    for e in ['9', '17', '19']:
+    for e in ['C9', 'C17', 'C19']:
         npt.assert_almost_equal(bva[e].r, 200.0)
     for e in ['R1', 'R2']:
         npt.assert_almost_equal(bva[e].r, 1000.0)
 
     # Check the center is still at (x,y)
-    y_center = (bva['8'].y + bva['13'].y) / 2
+    y_center = (bva['C8'].y + bva['C13'].y) / 2
     npt.assert_almost_equal(y_center, y)
-    x_center = (bva['8'].x + bva['13'].x) / 2
+    x_center = (bva['C8'].x + bva['C13'].x) / 2
     npt.assert_almost_equal(x_center, x)
 
     # Right-eye implant:
     xc, yc = 500, -500
     bva_re = BVT24(eye='RE', x=xc, y=yc)
-    npt.assert_equal(bva_re['1'].x < bva_re['6'].x, True)
-    npt.assert_equal(bva_re['1'].y, bva_re['1'].y)
+    npt.assert_equal(bva_re['C1'].x < bva_re['C6'].x, True)
+    npt.assert_equal(bva_re['C1'].y, bva_re['C1'].y)
 
     # Left-eye implant:
     xc, yc = 500, -500
     bva_le = BVT24(eye='LE', x=xc, y=yc)
-    npt.assert_equal(bva_le['1'].x > bva_le['6'].x, True)
-    npt.assert_equal(bva_le['1'].y, bva_le['1'].y)
+    npt.assert_equal(bva_le['C1'].x > bva_le['C6'].x, True)
+    npt.assert_equal(bva_le['C1'].y, bva_le['C1'].y)
 
 
 def test_BVT24_stim():
     # Assign a stimulus:
     implant = BVT24()
-    implant.stim = {'1': 1}
-    npt.assert_equal(implant.stim.electrodes, ['1'])
+    implant.stim = {'C1': 1}
+    npt.assert_equal(implant.stim.electrodes, ['C1'])
     npt.assert_equal(implant.stim.time, None)
     npt.assert_equal(implant.stim.data, [[1]])
 
     # You can also assign the stimulus in the constructor:
-    BVT24(stim={'1': 1})
-    npt.assert_equal(implant.stim.electrodes, ['1'])
+    BVT24(stim={'C1': 1})
+    npt.assert_equal(implant.stim.electrodes, ['C1'])
     npt.assert_equal(implant.stim.time, None)
     npt.assert_equal(implant.stim.data, [[1]])
 

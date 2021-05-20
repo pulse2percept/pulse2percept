@@ -245,8 +245,8 @@ class Watson2014Transform(RetinalCoordTransform):
     def dva2ret(r_deg):
         """Converts visual angles (deg) into retinal distances (um)
 
-        This function converts degrees of visual angle into a retinal distance from
-        the optic axis (um) using Eq. A5 in [Watson2014]_.
+        This function converts degrees of visual angle into a retinal distance 
+        from the optic axis (um) using Eq. A5 in [Watson2014]_.
 
         Parameters
         ----------
@@ -361,6 +361,7 @@ def pol2cart(theta, rho):
     y = rho * np.sin(theta)
     return x, y
 
+
 def delta_angle(source_angle, target_angle, hi=2 * np.pi):
     """Returns the signed difference between two angles (rad)
 
@@ -383,5 +384,5 @@ def delta_angle(source_angle, target_angle, hi=2 * np.pi):
 
     """
     diff = target_angle - source_angle
-    mod = lambda a, n: (a % n + n) % n
+    def mod(a, n): return (a % n + n) % n
     return mod(diff + hi / 2, hi) - hi / 2

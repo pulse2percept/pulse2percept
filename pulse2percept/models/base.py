@@ -520,7 +520,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         if stim.time is None:
             raise ValueError("Cannot calculate temporal response, because "
                              "stimulus/percept does not have a time "
-                             "component." % t_percept)
+                             "component.")
         # Make sure we don't change the user's Stimulus/Percept object:
         _stim = deepcopy(stim)
         if isinstance(stim, Stimulus):

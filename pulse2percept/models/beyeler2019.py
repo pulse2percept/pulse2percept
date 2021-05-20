@@ -15,6 +15,11 @@ from ..models import Model, SpatialModel
 from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
                            fast_find_closest_axon)
 
+# Log all warnings.warn() at the WARNING level:
+import warnings
+import logging
+logging.captureWarnings(True)
+
 
 class ScoreboardSpatial(SpatialModel):
     """Scoreboard model of [Beyeler2019]_ (spatial module only)
@@ -48,6 +53,13 @@ class ScoreboardSpatial(SpatialModel):
         use ``x_range=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}
         Whether to simulate points on a rectangular or hexagonal grid
+
+    .. important ::
+
+        If you change important model parameters outside the constructor (e.g.,
+        by directly setting ``model.axlambda = 100``), you will have to call
+        ``model.build()`` again for your changes to take effect.
+
     """
 
     def get_default_params(self):
@@ -68,6 +80,10 @@ class ScoreboardSpatial(SpatialModel):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
+        if not np.allclose([e.z for e in earray.values()], 0):
+            msg = ("Nonzero electrode-retina distances do not have any effect "
+                   "on the model output.")
+            warnings.warn(msg)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
         return fast_scoreboard(stim.data,
@@ -174,9 +190,6 @@ class AxonMapSpatial(SpatialModel):
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
-    use_legacy_build: bool, optional
-        If true, searches over axons instead of using KDTree. Build will 
-        likely be slower if True
     axon_pickle: str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle: bool, optional
@@ -214,8 +227,6 @@ class AxonMapSpatial(SpatialModel):
             # Axon segments whose contribution to brightness is smaller than
             # this value will be pruned:
             'min_ax_sensitivity': 1e-3,
-            # Use legacy build, searching over axons instead of using KDTree
-            'use_legacy_build': False,
             # Precomputed axon maps stored in the following file:
             'axon_pickle': 'axons.pickle',
             # You can force a build by ignoring pickles:
@@ -226,19 +237,30 @@ class AxonMapSpatial(SpatialModel):
 
     @staticmethod
     def dva2ret(xdva):
-        """Convert degrees of visual angle (dva) into retinal coords (um)"""
+        """Convert degrees of visual angle (dva) into retinal coords (um)
+
+        The axon map model converts degrees of visual angle into a retinal 
+        distance from the optic axis (um) using Eq. A5 in [Watson2014]_.
+
+        """
         return Watson2014Transform.dva2ret(xdva)
 
     @staticmethod
     def ret2dva(xret):
-        """Convert retinal corods (um) to degrees of visual angle (dva)"""
+        """Convert retinal corods (um) to degrees of visual angle (dva)
+
+        The axon map model converts an eccentricity measurement on the retinal
+        surface(in micrometers), measured from the optic axis, into degrees
+        of visual angle using Eq. A6 in [Watson2014]_.
+
+        """
         return Watson2014Transform.ret2dva(xret)
 
     def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
         """Grows a single axon bundle based on the model by Jansonius (2009)
 
         This function generates the trajectory of a single nerve fiber bundle
-        based on the mathematical model described in [Beyeler2019]_.
+        based on the mathematical model described in [Jansonius2009]_.
 
         Parameters
         ----------
@@ -338,6 +360,37 @@ class AxonMapSpatial(SpatialModel):
         return np.vstack((xmodel, ymodel)).astype(np.float32).T
 
     def grow_axon_bundles(self, n_bundles=None, prune=True):
+        """Grow a number of axon bundles
+
+        This method generates the trajectory of a number of nerve fiber
+        bundles based on the mathematical model described in [Beyeler2019]_,
+        which is based on [Jansonius2009]_.
+
+        Bundles originate at the optic nerve head with initial angle ``phi0``.
+        The method generates ``n_bundles`` axon bundles whose ``phi0`` values
+        are linearly sampled from ``self.axons_range`` (polar coords).
+        Each axon will consist of ``self.n_ax_segments`` segments that span
+        ``self.ax_segments_range`` distance from the optic nerve head (polar
+        coords).
+
+        Parameters
+        ----------
+        n_bundles : int, optional
+            Number of axon bundles to generate. If None, ``self.n_axons`` is
+            used
+        prune : bool, optional
+            If set to True, will remove axon segments that are outside the
+            simulated area ``self.xrange``, ``self.yrange`` for the sake of
+            computational efficiency.
+
+        Returns
+        -------
+        bundles : list of Nx2 arrays
+            A list of bundles, where every bundle is an Nx2 array consisting of
+            the x,y coordinates of each axon segment (retinal coords, microns). 
+            Note that each bundle will most likely have a different N
+
+        """
         if n_bundles is None:
             n_bundles = self.n_axons
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
@@ -364,8 +417,37 @@ class AxonMapSpatial(SpatialModel):
         bundles = [self.dva2ret(b) for b in bundles]
         return bundles
 
-    def find_closest_axon(self, bundles, xret=None, yret=None):
-        """Finds the closest axon segment for every point (``xret``, ``yret``)
+    def find_closest_axon(self, bundles, xret=None, yret=None,
+                          return_index=False):
+        """Finds the closest axon segment for a point on the retina
+
+        This function will search a number of nerve fiber bundles (``bundles``)
+        and return the bundle that is closest to a particular point (or list of
+        points) on the retinal surface (``xret``, ``yret``).
+
+        Parameters
+        ----------
+        bundles : list of Nx2 arrays
+            A list of bundles, where every bundle is an Nx2 array consisting of
+            the x,y coordinates of each axon segment (retinal coords, microns). 
+            Note that each bundle will most likely have a different N
+        xret, yret : scalar or list of scalars
+            The x,y location on the retina (in microns, where the fovea is the
+            origin) for which to find the closests axon.
+        return_index : bool, optional
+            If True, the function will also return the index into ``bundles``
+            that represents the closest axon
+
+        Returns
+        -------
+        axon : Nx2 array or list of Nx2 arrays
+            For each point in (xret, yret), returns an Nx2 array that represents
+            the closest axon to that point. Each row in the array contains the
+            x,y retinal coordinates (microns) of a particular axon segment.
+        idx_axon : scalar or list of scalars, optional
+            If ``return_index`` is True, also returns the index in ``bundles``
+            of the closest axon (or list of closest axons).
+
         """
         if len(bundles) <= 0:
             raise ValueError("bundles must have length greater than zero")
@@ -382,42 +464,74 @@ class AxonMapSpatial(SpatialModel):
         # Build a long list of all axon segments - their corresponding axon IDs
         # is given by `axon_idx` above:
         flat_bundles = np.concatenate(bundles)
-        if self.use_legacy_build:
-            # For every pixel on the grid, find the closest axon segment:
-            if self.engine == 'cython':
-                closest_seg = fast_find_closest_axon(flat_bundles,
-                                                     xret.ravel(),
-                                                     yret.ravel())
-            else:
-                closest_seg = [np.argmin((flat_bundles[:, 0] - x) ** 2 +
-                                         (flat_bundles[:, 1] - y) ** 2)
-                               for x, y in zip(xret.ravel(),
-                                               yret.ravel())]
-        else:
-            kdtree = cKDTree(flat_bundles, leafsize=60)
-            # Create query list of xy pairs
-            query = np.stack((xret.ravel(), yret.ravel()), axis=1)
-            # Find index of closest segment
-            _, closest_seg = kdtree.query(query)
+        kdtree = cKDTree(flat_bundles, leafsize=60)
+        # Create query list of xy pairs
+        query = np.stack((xret.ravel(), yret.ravel()), axis=1)
+        # Find index of closest segment
+        _, closest_seg = kdtree.query(query)
 
         # Look up the axon ID for every axon segment:
-        closest_axon = axon_idx[closest_seg]
-        return [bundles[n] for n in closest_axon]
+        closest_idx = axon_idx[closest_seg]
+        if len(closest_idx) == 1:
+            closest_idx = closest_idx[0]
+            closest_axon = bundles[closest_idx]
+        else:
+            closest_axon = [bundles[n] for n in closest_idx]
+        if return_index:
+            return closest_axon, closest_idx
+        return closest_axon
 
-    def calc_axon_contribution(self, axons):
+    def calc_axon_sensitivity(self, bundles):
+        """Calculate the sensitivity of each axon segment to electrical current
+
+        This function combines the x,y coordinates of each bundle segment with
+        a sensitivity value that depends on the distance of the segment to the
+        cell body and ``self.axlambda``.
+
+        The number of ``bundles`` must equal the number of points on
+        `self.grid``. The function will then assume that the i-th bundle passes
+        through the i-th point on the grid. This is used to determine the bundle
+        segment that is closest to the i-th point on the grid, and to cut off
+        all segments that extend beyond the soma. This effectively transforms
+        a *bundle* into an *axon*, where the first axon segment now corresponds
+        with the i-th location of the grid.
+
+        After that, each axon segment gets a sensitivity value that depends
+        on the distance of the segment to the soma (with decay rate 
+        ``self.axlambda``). This is typically done during the build process, so
+        that the only work left to do during run time is to multiply the
+        sensitivity value with the current applied to each segment.
+
+        Parameters
+        ----------
+        bundles : list of Nx2 arrays
+            A list of bundles, where every bundle is an Nx2 array consisting of
+            the x,y coordinates of each axon segment (retinal coords, microns). 
+            Note that each bundle will most likely have a different N
+
+        Returns
+        -------
+        axon_contrib : list of Nx3 arrays
+            A list of axon segments and sensitivity values. Each entry in the
+            list is a Nx3 array, where the first two columns contain the retinal
+            coordinates of each axon segment (microns), and the third column
+            contains the sensitivity of the segment to electrical current.
+            The latter depends on ``self.axlambda``.
+
+        """
         xyret = np.column_stack((self.grid.xret.ravel(),
                                  self.grid.yret.ravel()))
         # Only include axon segments that are < `max_d2` from the soma. These
         # axon segments will have `sensitivity` > `self.min_ax_sensitivity`:
         max_d2 = -2.0 * self.axlambda ** 2 * np.log(self.min_ax_sensitivity)
         axon_contrib = []
-        for xy, bundle in zip(xyret, axons):
+        for xy, bundle in zip(xyret, bundles):
             idx = np.argmin((bundle[:, 0] - xy[0]) ** 2 +
                             (bundle[:, 1] - xy[1]) ** 2)
             # Cut off the part of the fiber that goes beyond the soma:
             axon = np.flipud(bundle[0: idx + 1, :])
             # Add the exact location of the soma:
-            axon = np.insert(axon, 0, xy, axis=0)
+            axon = np.concatenate((xy.reshape((1, -1)), axon), axis=0)
             # For every axon segment, calculate distance from soma by
             # summing up the individual distances between neighboring axon
             # segments (by "walking along the axon"):
@@ -425,7 +539,7 @@ class AxonMapSpatial(SpatialModel):
                                    np.diff(axon[:, 1], axis=0) ** 2)) ** 2
             idx_d2 = d2 < max_d2
             sensitivity = np.exp(-d2[idx_d2] / (2.0 * self.axlambda ** 2))
-            idx_d2 = np.insert(idx_d2, 0, False)
+            idx_d2 = np.concatenate(([False], idx_d2))
             contrib = np.column_stack((axon[idx_d2, :], sensitivity))
             axon_contrib.append(contrib)
         return axon_contrib
@@ -436,8 +550,13 @@ class AxonMapSpatial(SpatialModel):
         Parameters
         ----------
         xc, yc: float
-            (x, y) location of point at which to calculate bundle orientation
-            in microns.
+            (x, y) retinal location of point at which to calculate bundle 
+            orientation in microns.
+
+        Returns
+        -------
+        tangent : scalar
+            An angle in radians
         """
         # Check for scalar:
         if isinstance(xc, (list, np.ndarray)):
@@ -446,7 +565,7 @@ class AxonMapSpatial(SpatialModel):
             raise TypeError("yc must be a scalar")
         # Find the fiber bundle closest to (xc, yc):
         bundles = self.grow_axon_bundles()
-        bundle = self.find_closest_axon(bundles, xret=xc, yret=yc)[0]
+        bundle = self.find_closest_axon(bundles, xret=xc, yret=yc)
         # For that bundle, find the bundle segment closest to (xc, yc):
         idx = np.argmin((bundle[:, 0] - xc) ** 2 + (bundle[:, 1] - yc) ** 2)
         # Calculate orientation from atan2(dy, dx):
@@ -468,7 +587,7 @@ class AxonMapSpatial(SpatialModel):
             tangent -= np.deg2rad(180)
         return tangent
 
-    def _build(self):
+    def _correct_loc_od(self):
         if self.eye.upper() == 'LE':
             # In a left eye, the optic disc must have a negative x coordinate:
             self.loc_od = (-np.abs(self.loc_od[0]), self.loc_od[1])
@@ -478,8 +597,15 @@ class AxonMapSpatial(SpatialModel):
         else:
             err_str = ("Eye should be either 'LE' or 'RE', not %s." % self.eye)
             raise ValueError(err_str)
+
+    def _build(self):
+        if self.axlambda < 10:
+            raise ValueError('"axlambda" < 10 is not supported by this model. '
+                             'Consider using ScoreboardModel instead.')
+        # In a left eye, the OD must have a negative x coordinate:
+        self._correct_loc_od()
+        # Check whether pickle file needs to be rebuilt:
         need_axons = False
-        # You can ignore pickle files and force a rebuild with this flag:
         if self.ignore_pickle:
             need_axons = True
         else:
@@ -502,7 +628,7 @@ class AxonMapSpatial(SpatialModel):
         # and a list cannot be accessed in parallel without the gil. Instead
         # we need to concatenate it into a really long Nx3 array, and pass the
         # start and end indices of each slice:
-        axon_contrib = self.calc_axon_contribution(axons)
+        axon_contrib = self.calc_axon_sensitivity(axons)
         self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
         len_axons = [a.shape[0] for a in axon_contrib]
         self.axon_idx_end = np.cumsum(len_axons)
@@ -517,10 +643,12 @@ class AxonMapSpatial(SpatialModel):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at specific times ``t``"""
+        if not np.allclose([e.z for e in earray.values()], 0):
+            msg = ("Nonzero electrode-retina distances do not have any effect "
+                   "on the model output.")
+            warnings.warn(msg)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        assert isinstance(earray, ElectrodeArray)
-        assert isinstance(stim, Stimulus)
         return fast_axon_map(stim.data,
                              np.array([earray[e].x for e in stim.electrodes],
                                       dtype=np.float32),
@@ -553,6 +681,9 @@ class AxonMapSpatial(SpatialModel):
             ax = plt.gca()
         ax.set_facecolor('white')
         ax.set_aspect('equal')
+
+        # In a left eye, the OD must have a negative x coordinate:
+        self._correct_loc_od()
 
         # Grow axon bundles to be drawn:
         axon_bundles = self.grow_axon_bundles(n_bundles=100, prune=False)
@@ -673,9 +804,6 @@ class AxonMapModel(Model):
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
-    use_legacy_build: bool, optional
-        If true, searches over axons instead of using KDTree. Build will 
-        likely be slower if True
     axon_pickle: str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle: bool, optional

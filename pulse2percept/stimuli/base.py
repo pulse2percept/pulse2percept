@@ -544,7 +544,7 @@ class Stimulus(PrettyPrint):
             else:
                 if not np.any(time == Ellipsis):
                     # Convert to float so time is not mistaken for column index
-                    if np.array(time).dtype != np.bool:
+                    if np.array(time).dtype != bool:
                         time = np.float32(time)
         else:
             electrodes = item
@@ -869,3 +869,8 @@ class Stimulus(PrettyPrint):
         if self.time is None:
             return None
         return np.isclose(np.trapz(self.data, self.time)[0], 0, atol=MIN_AMP)
+
+    @property
+    def duration(self):
+        """Stimulus duration (ms)"""
+        return self.time[-1]

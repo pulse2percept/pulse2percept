@@ -1,11 +1,11 @@
 # distutils: language = c++
 # ^ needed for bool
 
+from libc.math cimport(fabs as c_abs, fmax as c_max)
+from libcpp cimport bool
 import numpy as np
 cimport numpy as cnp
 
-from libcpp cimport bool
-from libc.math cimport(fabs as c_abs, fmax as c_max)
 
 ctypedef cnp.float32_t float32
 
@@ -32,7 +32,7 @@ cpdef bool[::1] fast_compress(float32[:, ::1] data, float32[::1] time):
 
     n_elec = data.shape[0]  # Py overhead
     n_time = data.shape[1]  # Py overhead
-    idx_time = np.zeros(n_time, dtype=np.bool)  # Py overhead
+    idx_time = np.zeros(n_time, dtype=np.bool_)  # Py overhead
 
     for t in range(n_time):
         if t == 0 or t == n_time - 1:
