@@ -311,7 +311,7 @@ class Stimulus(PrettyPrint):
         # Store the data in the private container. Setting all elements at once
         # enforces consistency; e.g., between shape of electrodes and time:
         self._stim = {
-            'data': _data.astype(np.float32),
+            'data': np.ascontiguousarray(_data, dtype=np.float32),
             'electrodes': _electrodes,
             'time': _time if _time is None else _time.astype(np.float32),
         }
@@ -329,6 +329,7 @@ class Stimulus(PrettyPrint):
         data = self.data
         electrodes = self.electrodes
         time = self.time
+        print(data.shape, data.dtype)
         # Remove rows (electrodes) with all zeros:
         keep_el = fast_compress_space(data)
         data = data[keep_el]
