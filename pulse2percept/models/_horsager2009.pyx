@@ -1,20 +1,13 @@
+from ..utils._fast_math cimport c_fmax, c_expit
+from libc.math cimport pow as c_pow, fabs as c_abs, sqrt as c_sqrt
+from cython.parallel import prange
+from cython import cdivision  # modulo, division by zero
 import numpy as np
 cimport numpy as cnp
-from cython import cdivision  # modulo, division by zero
-from cython.parallel import prange
-from libc.math cimport(pow as c_pow, exp as c_exp, fabs as c_abs,
-                       sqrt as c_sqrt)
 
 ctypedef cnp.float32_t float32
 ctypedef cnp.int32_t int32
 ctypedef cnp.uint32_t uint32
-
-@cdivision(True)
-cdef inline float32 expit(float32 x) nogil:
-    return 1.0 / (1.0 + c_exp(-x))
-
-cdef inline float32 float_max(float32 a, float32 b) nogil:
-    return a if a >= b else b
 
 
 @cdivision(True)
@@ -107,10 +100,10 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             # "anodic" current:
             r1 = r1 + dt * (-amp - r1) / tau1  # += in threads is a reduction
             # Charge accumulation:
-            ca = ca + dt * float_max(amp, 0)
+            ca = ca + dt * c_fmax(amp, 0)
             r2 = r2 + dt * (ca - r2) / tau2
             # Half-rectification and power nonlinearity:
-            r3 = c_pow(float_max(r1 - eps * r2, 0), beta)
+            r3 = c_pow(c_fmax(r1 - eps * r2, 0), beta)
             # Slow response (3-stage leaky integrator):
             r4a = r4a + dt * (r3 - r4a) / tau3
             r4b = r4b + dt * (r4a - r4b) / tau3
@@ -125,4 +118,3 @@ cpdef temporal_fast(const float32[:, ::1] stim,
                 idx_frame = idx_frame + 1
 
     return np.asarray(percept)  # Py overhead
-
