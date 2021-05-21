@@ -2,7 +2,7 @@
 # ^ needed for bool
 
 from cython import cdivision  # modulo, division by zero
-from libc.math cimport fabs as c_abs, exp as c_exp
+from libc.math cimport fabs as c_abs, exp as c_exp, pow as c_pow
 from libcpp cimport bool
 import numpy as np
 cimport numpy as cnp
@@ -48,3 +48,12 @@ cdef float32 c_max(float32[::1] arr):
         if arr[idx] > arr_max:
             arr_max = arr[idx]
     return arr_max
+
+
+cdef void c_cumpow(float32* arr_in, float32* arr_out, int32 N, int32 exp) nogil:
+    cdef:
+        int32 i = 0
+        float32 sum = 0
+    for i in range(N):
+        sum += arr_in[i]
+        arr_out[i] = c_pow(sum, exp)

@@ -23,3 +23,5 @@ cdef float32 c_expit(float32 x) nogil
 cdef float32 c_min(float32[::1] arr)
 
 cdef float32 c_max(float32[::1] arr)
+
+cdef void c_cumpow(float32* arr_in, float32* arr_out, int32 N, int32 exp) nogil
