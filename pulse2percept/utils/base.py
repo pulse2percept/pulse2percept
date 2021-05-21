@@ -364,7 +364,7 @@ def bijective26_name(i):
     >>> bijective26_name(0)
     'A'
 
-    >>> bujective26_name(26)
+    >>> bijective26_name(26)
     'AA'
 
     """
