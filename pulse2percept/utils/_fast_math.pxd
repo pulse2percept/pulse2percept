@@ -13,9 +13,12 @@ cdef float32 deg2rad = 3.14159265358979323846 / 180.0
 
 # --- SCALAR FUNCTIONS ------------------------------------------------------- #
 
+cdef float32 c_fmax(float32 a, float32 b) nogil
+
 cdef bool c_isclose(float32 a, float32 b, float32 rel_tol=*,
                     float32 abs_tol=*) nogil
 
+cdef float32 c_expit(float32 x) nogil
 
 # --- ARRAY FUNCTIONS -------------------------------------------------------- #
 
