@@ -24,12 +24,12 @@ cdef inline float32 c_expit(float32 x) nogil:
 
 # --- ARRAY FUNCTIONS -------------------------------------------------------- #
 
-cdef float32 c_min(float32[:] arr):
+cdef float32 c_min(float32[::1] arr):
     cdef:
         float32 arr_min
         int32 idx, arr_len
 
-    arr_min = 1e12
+    arr_min = np.inf
     arr_len = len(arr)
     for idx in range(arr_len):
         if arr[idx] < arr_min:
@@ -37,12 +37,12 @@ cdef float32 c_min(float32[:] arr):
     return arr_min
 
 
-cdef float32 c_max(float32[:] arr):
+cdef float32 c_max(float32[::1] arr):
     cdef:
         float32 arr_max
         int32 idx, arr_len
 
-    arr_max = -1e12
+    arr_max = -np.inf
     arr_len = len(arr)
     for idx in range(arr_len):
         if arr[idx] > arr_max:
