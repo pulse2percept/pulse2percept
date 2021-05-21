@@ -14,7 +14,24 @@ cdef inline bool isclose(float32 a, float32 b, float32 rel_tol=1e-09,
     return c_abs(a-b) <= c_max(rel_tol * c_max(c_abs(a), c_abs(b)), abs_tol)
 
 
-cpdef bool[::1] fast_compress(float32[:, ::1] data, float32[::1] time):
+cpdef bool[::1] fast_compress_space(float32[:, ::1] data):
+    cdef:
+        size_t e, n_elec, t, n_time
+        bool[::1] idx_space
+
+    n_elec = data.shape[0]
+    n_time = data.shape[1]
+    idx_space = np.zeros(n_elec, dtype=np.bool_)  # Py overhead
+
+    for e in range(n_elec):
+        for t in range(n_time):
+            if not isclose(data[e, t], 0):
+                idx_space[e] = True
+                break
+
+    return np.asarray(idx_space)
+
+cpdef bool[::1] fast_compress_time(float32[:, ::1] data, float32[::1] time):
     """Compress a stimulus in time"""
     # In time, we can't just remove empty columns. We need to walk
     # through each column and save all the "state transitions" along

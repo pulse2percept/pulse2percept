@@ -1,6 +1,6 @@
 """`Stimulus`, `ImageStimulus`"""
 from ..utils import PrettyPrint, parfor, unique
-from ._base import fast_compress
+from ._base import fast_compress_space, fast_compress_time
 from . import DT, MIN_AMP
 import logging
 from sys import _getframe
@@ -330,12 +330,12 @@ class Stimulus(PrettyPrint):
         electrodes = self.electrodes
         time = self.time
         # Remove rows (electrodes) with all zeros:
-        keep_el = [not np.allclose(row, 0) for row in data]
+        keep_el = fast_compress_space(data)
         data = data[keep_el]
         electrodes = electrodes[keep_el]
 
         if time is not None:
-            idx_time = fast_compress(data, time)
+            idx_time = fast_compress_time(data, time)
             data = data[:, idx_time]
             time = time[idx_time]
 
