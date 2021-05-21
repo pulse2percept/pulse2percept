@@ -15,6 +15,8 @@ cdef inline bool isclose(float32 a, float32 b, float32 rel_tol=1e-09,
 
 
 cpdef bool[::1] fast_compress_space(float32[:, ::1] data):
+    """Compress a stimulus in space"""
+    # In space, we only keep electrodes with nonzero activation values
     cdef:
         size_t e, n_elec, t, n_time
         bool[::1] idx_space

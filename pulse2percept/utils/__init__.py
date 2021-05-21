@@ -14,7 +14,8 @@
     deprecation
 
 """
-from .base import PrettyPrint, FreezeError, Frozen, Data, cached, gamma
+from .base import (PrettyPrint, FreezeError, Frozen, Data, bijective26_name,
+                   cached, gamma)
 from .geometry import (Grid2D, RetinalCoordTransform, Curcio1990Transform,
                        Watson2014Transform, Watson2014DisplaceTransform,
                        cart2pol, pol2cart, delta_angle)
@@ -27,6 +28,7 @@ from .parallel import parfor
 from .deprecation import deprecated
 
 __all__ = [
+    'bijective26_name',
     'bisect',
     'cached',
     'cart2pol',

@@ -1,13 +1,11 @@
 """`ElectrodeArray`, `ElectrodeGrid`"""
 import numpy as np
-from string import ascii_uppercase
-from itertools import product
 from collections import OrderedDict
 from matplotlib.collections import PatchCollection
 import matplotlib.pyplot as plt
 
 from .electrodes import Electrode, PointSource, DiskElectrode
-from ..utils import PrettyPrint
+from ..utils import PrettyPrint, bijective26_name
 
 
 class ElectrodeArray(PrettyPrint):
@@ -207,10 +205,7 @@ class ElectrodeArray(PrettyPrint):
 
 def _get_alphabetic_names(n_electrodes):
     """Create alphabetic electrode names: A-Z, AA-AZ, BA-BZ, etc. """
-    n_times = int(np.ceil(n_electrodes / 26))
-    names = [''.join(chars) for r in range(1, n_times + 1)
-             for chars in product(ascii_uppercase, repeat=r)]
-    return names[:n_electrodes]
+    return [bijective26_name(i) for i in range(n_electrodes)]
 
 
 def _get_numeric_names(n_electrodes):
