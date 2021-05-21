@@ -1,17 +1,11 @@
 # distutils: language = c++
 # ^ needed for bool
 
+from ..utils._fast_math cimport c_isclose, float32
 from libc.math cimport(fabs as c_abs, fmax as c_max)
 from libcpp cimport bool
 import numpy as np
 cimport numpy as cnp
-
-
-ctypedef cnp.float32_t float32
-
-cdef inline bool isclose(float32 a, float32 b, float32 rel_tol=1e-09,
-                         float32 abs_tol=0.0) nogil:
-    return c_abs(a-b) <= c_max(rel_tol * c_max(c_abs(a), c_abs(b)), abs_tol)
 
 
 cpdef bool[::1] fast_compress_space(float32[:, ::1] data):
@@ -27,7 +21,7 @@ cpdef bool[::1] fast_compress_space(float32[:, ::1] data):
 
     for e in range(n_elec):
         for t in range(n_time):
-            if not isclose(data[e, t], 0):
+            if not c_isclose(data[e, t], 0):
                 idx_space[e] = True
                 break
 
@@ -61,7 +55,7 @@ cpdef bool[::1] fast_compress_time(float32[:, ::1] data, float32[::1] time):
             # Determine if there is a signal edge (at least one element in
             # `t` must be different from `t-1`):
             for e in range(n_elec):
-                if not isclose(data[e, t], data[e, t - 1]):
+                if not c_isclose(data[e, t], data[e, t - 1]):
                     idx_time[t - 1] = True
                     idx_time[t] = True
                     break
