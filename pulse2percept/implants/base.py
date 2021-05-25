@@ -29,6 +29,10 @@ class ProsthesisSystem(PrettyPrint):
     eye : 'LE' or 'RE'
         A string indicating whether the system is implanted in the left ('LE')
         or right eye ('RE')
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
 
     Examples
     --------
@@ -48,22 +52,33 @@ class ProsthesisSystem(PrettyPrint):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_earray', '_stim', '_eye')
 
-    def __init__(self, earray, stim=None, eye='RE'):
+    def __init__(self, earray, stim=None, eye='RE', safe_mode=False,
+                 preprocess=False):
         self.earray = earray
         self.stim = stim
         self.eye = eye
+        self.safe_mode = safe_mode
+        self.preprocess = preprocess
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
-        return {'earray': self.earray, 'stim': self.stim, 'eye': self.eye}
+        return {'earray': self.earray, 'stim': self.stim, 'eye': self.eye,
+                'safe_mode': self.safe_mode, 'preprocess:' self.preprocess}
+
+    @staticmethod
+    def _require_charge_balanced(stim):
+        if not self.is_charge_balanced:
+            raise ValueError("Safety check: Stimulus must be charge-balanced.")
 
     def check_stim(self, stim):
         """Quality-check the stimulus
 
         This method is executed every time a new value is assigned to ``stim``.
 
-        No checks are performed by default, but the user can define their own
-        checks in implants that inherit from
+        If ``safe_mode`` is set to True, this function will only allow stimuli
+        that are charge-balanced.
+
+        The user can define their own checks in implants that inherit from
         :py:class:`~pulse2percept.implants.ProsthesisSystem`.
 
         Parameters
@@ -73,7 +88,35 @@ class ProsthesisSystem(PrettyPrint):
             :py:class:`~pulse2percept.stimuli.Stimulus` object (e.g., scalar,
             NumPy array, pulse train).
         """
-        pass
+        if self.safe_mode:
+            self._require_charge_balanced()
+
+    def preprocess_stim(self, stim):
+        """Preprocess the stimulus
+
+        This methods is executed every time a new value is assigned to ``stim``.
+
+        No preprocessing is performed by default, but the user can define their
+        own method in implants that inherit from
+        return stim
+        :py:class:`~pulse2percept.implants.ProsthesisSystem`.
+
+        A custom method must return a 
+        :py:class:`~pulse2percept.stimuli.Stimulus` object with the correct
+        number of electrodes for the implant.
+
+        Parameters
+        ----------
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+            A valid source type for the
+            :py:class:`~pulse2percept.stimuli.Stimulus` object (e.g., scalar,
+            NumPy array, pulse train).
+
+        Returns
+        ----------
+        stim_out : :py:class:`~pulse2percept.stimuli.Stimulus` object
+        """
+        return stim
 
     def plot(self, annotate=False, autoscale=True, ax=None):
         """Plot
@@ -175,6 +218,11 @@ class ProsthesisSystem(PrettyPrint):
                 if not self.earray[electrode]:
                     raise ValueError("Electrode '%s' not found in "
                                      "implant." % electrode)
+            # Preprocess can be a function (callable) or True/False:
+            if callable(self.preprocess):
+                stim = self.preprocess(stim):
+            elif self.preprocess:
+                stim = self.preprocess_stim(stim)
             # Perform safety checks, etc.:
             self.check_stim(stim)
             # Store stimulus:

@@ -208,7 +208,10 @@ class ArgusII(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
+    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
+                 safe_mode=True, preprocess=False):
+        self.safe_mode = safe_mode
+        self.preprocess = preprocess
         self.shape = (6, 10)
         r = 225.0 / 2.0
         spacing = 575.0
@@ -246,5 +249,25 @@ class ArgusII(ProsthesisSystem):
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
-        params.update({'shape': self.shape})
+        params.update({'shape': self.shape, 'safe_mode': self.safe_mode,
+                       'preprocess': self.preprocess})
         return params
+
+    def check_stim(self, stim):
+        """Quality-check the stimulus
+
+        If ``safe_mode`` is set to True, will only allow charge-balanced pulses.
+
+        This method is executed every time a new value is assigned to ``stim``.
+
+        No checks are performed by default, but the user can define their own
+        checks in implants that inherit from
+        :py:class:`~pulse2percept.implants.ProsthesisSystem`.
+
+        Parameters
+        ----------
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+            A valid source type for the
+            :py:class:`~pulse2percept.stimuli.Stimulus` object (e.g., scalar,
+            NumPy array, pulse train).
+        """

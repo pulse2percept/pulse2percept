@@ -16,6 +16,13 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
     """Electrode
 
     Abstract base class for all electrodes.
+
+    Parameters
+    ----------
+    x/y/z : double
+        3D location of the point source
+    name : str, optional
+        Electrode name
     """
     __slots__ = ('x', 'y', 'z', 'name', 'plot_patch', 'plot_kwargs')
 
@@ -87,6 +94,8 @@ class PointSource(Electrode):
     ----------
     x/y/z : double
         3D location of the point source
+    name : str, optional
+        Electrode name
 
     """
     # Frozen class: User cannot add more class attributes
@@ -144,6 +153,8 @@ class DiskElectrode(Electrode):
         3D location that is the center of the disk electrode
     r : double
         Disk radius in the x,y plane
+    name : str, optional
+        Electrode name
 
     """
     # Frozen class: User cannot add more class attributes
@@ -226,6 +237,8 @@ class SquareElectrode(Electrode):
         3D location that is the center of the square electrode
     a : double
         Side length of the square
+    name : str, optional
+        Electrode name
 
     """
     # Frozen class: User cannot add more class attributes
@@ -265,6 +278,8 @@ class HexElectrode(Electrode):
     a : double
         Length of line drawn from the center of the hexagon to the midpoint of
         one of its sides.
+    name : str, optional
+        Electrode name
 
     """
     # Frozen class: User cannot add more class attributes
