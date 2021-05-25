@@ -47,7 +47,7 @@ class ElectrodeArray(PrettyPrint):
     __slots__ = ('_electrodes',)
 
     def __init__(self, electrodes):
-        self.electrodes = OrderedDict()
+        self._electrodes = OrderedDict()
         if isinstance(electrodes, dict):
             for name, electrode in electrodes.items():
                 self.add_electrode(name, electrode)
@@ -59,18 +59,6 @@ class ElectrodeArray(PrettyPrint):
         else:
             raise TypeError(("electrodes must be a list or dict, not "
                              "%s") % type(electrodes))
-
-    @property
-    def electrodes(self):
-        return self._electrodes
-
-    @electrodes.setter
-    def electrodes(self, electrodes):
-        self._electrodes = electrodes
-
-    @property
-    def n_electrodes(self):
-        return len(self.electrodes)
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -90,7 +78,7 @@ class ElectrodeArray(PrettyPrint):
         if not isinstance(electrode, Electrode):
             raise TypeError(("Electrode %s must be an Electrode object, not "
                              "%s.") % (name, type(electrode)))
-        if name in self.electrodes.keys():
+        if name in self.electrode_names:
             raise ValueError(("Cannot add electrode: key '%s' already "
                               "exists.") % name)
         self._electrodes.update({name: electrode})
@@ -103,7 +91,7 @@ class ElectrodeArray(PrettyPrint):
         name: int|str|...
             Electrode name or index
         """
-        if name not in self.electrodes.keys():
+        if name not in self.electrode_names:
             raise ValueError(("Cannot remove electrode: key '%s' does not "
                               "exist") % name)
         del self.electrodes[name]
@@ -130,7 +118,7 @@ class ElectrodeArray(PrettyPrint):
             ax = plt.gca()
         ax.set_aspect('equal')
         patches = []
-        for name, electrode in self.items():
+        for name, electrode in self.electrodes.items():
             # Rather than calling electrode.plot(), generate all the patch
             # objects and add them to a collection:
             if isinstance(electrode.plot_patch, list):
@@ -184,7 +172,7 @@ class ElectrodeArray(PrettyPrint):
         except (KeyError, TypeError):
             # If not a dict key, `item` might be an int index into the list:
             try:
-                key = list(self.electrodes.keys())[item]
+                key = list(self.electrode_names)[item]
                 return self.electrodes[key]
             except IndexError:
                 raise StopIteration
@@ -193,14 +181,37 @@ class ElectrodeArray(PrettyPrint):
     def __iter__(self):
         return iter(self.electrodes)
 
-    def keys(self):
-        return self.electrodes.keys()
+    @property
+    def n_electrodes(self):
+        return len(self.electrodes)
 
-    def values(self):
-        return self.electrodes.values()
+    @property
+    def electrodes(self):
+        """Return all electrode names and objects in the electrode array
 
-    def items(self):
-        return self.electrodes.items()
+        Internally, electrodes are stored in an ordered dictionary.
+        You can iterate over different electrodes in the array as follows:
+
+        .. code::
+
+            for name, electrode in earray.electrodes.items():
+                print(name, electrode)
+
+        You can access an individual electrode by indexing directly into the
+        electrode array object, e.g. ``earray['A1']`` or ``earray[0]``.
+
+        """
+        return self._electrodes
+
+    @property
+    def electrode_names(self):
+        """Return a list of all electrode names in the array"""
+        return list(self.electrodes.keys())
+
+    @property
+    def electrode_objects(self):
+        """Return a list of all electrode objects in the array"""
+        return list(self.electrodes.values())
 
 
 def _get_alphabetic_names(n_electrodes):
@@ -341,7 +352,7 @@ class ElectrodeGrid(ElectrodeArray):
         self.spacing = spacing
         # Instantiate empty collection of electrodes. This dictionary will be
         # populated in a private method ``_set_egrid``:
-        self.electrodes = OrderedDict()
+        self._electrodes = OrderedDict()
         self._make_grid(x, y, z, rot, names, orientation, etype, **kwargs)
 
     def _pprint_params(self):
@@ -518,8 +529,8 @@ class ElectrodeGrid(ElectrodeArray):
                 r_arr = np.ones(n_elecs, dtype=float) * kwargs['r']
             # Create a grid of DiskElectrode objects:
             for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
-                self.add_electrode(name, DiskElectrode(x, y, z, r))
+                self.add_electrode(name, DiskElectrode(x, y, z, r, name=name))
         else:
             # Pass keyword arguments to the electrode constructor:
             for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
-                self.add_electrode(name, etype(x, y, z, **kwargs))
+                self.add_electrode(name, etype(x, y, z, name=name, **kwargs))

@@ -85,7 +85,7 @@ class Nanduri2012Spatial(SpatialModel):
 
     def predict_percept(self, implant, t_percept=None):
         if not np.all([isinstance(e, DiskElectrode)
-                       for e in implant.values()]):
+                       for e in implant.electrode_objects]):
             raise TypeError("The Nanduri2012 spatial model only supports "
                             "DiskElectrode arrays.")
         return super(Nanduri2012Spatial, self).predict_percept(

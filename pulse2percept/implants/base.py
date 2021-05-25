@@ -162,7 +162,7 @@ class ProsthesisSystem(PrettyPrint):
                 stim = Stimulus(data)
             else:
                 # Use electrode names as stimulus coordinates:
-                stim = Stimulus(data, electrodes=list(self.earray.keys()))
+                stim = Stimulus(data, electrodes=self.electrode_names)
 
             if len(stim.electrodes) > self.n_electrodes:
                 raise ValueError("Number of electrodes in the stimulus (%d) "
@@ -224,29 +224,30 @@ class ProsthesisSystem(PrettyPrint):
     def __iter__(self):
         return iter(self.earray)
 
-    def keys(self):
-        """Return all electrode names in the electrode array"""
-        return self.earray.keys()
-
-    def values(self):
-        """Return all electrode objects in the electrode array"""
-        return self.earray.values()
-
-    def items(self):
+    @property
+    def electrodes(self):
         """Return all electrode names and objects in the electrode array
 
-        Internally, electrodes are stored in a dictionary in
-        ``earray.electrodes``. For convenience, electrodes can also be accessed
-        via ``items``.
+        Internally, electrodes are stored in an ordered dictionary.
+        You can iterate over different electrodes in the array as follows:
 
-        Examples
-        --------
-        Save the x-coordinates of all electrodes of Argus I in a dictionary:
+        .. code::
 
-        >>> from pulse2percept.implants import ArgusI
-        >>> xcoords = {}
-        >>> for name, electrode in ArgusI().items():
-        ...     xcoords[name] = electrode.x
+            for name, electrode in implant.electrodes.items():
+                print(name, electrode)
+
+        You can access an individual electrode by indexing directly into the
+        prosthesis system object, e.g. ``implant['A1']`` or ``implant[0]``.
 
         """
-        return self.earray.items()
+        return self.earray.electrodes
+
+    @property
+    def electrode_names(self):
+        """Return a list of all electrode names in the electrode array"""
+        return self.earray.electrode_names
+
+    @property
+    def electrode_objects(self):
+        """Return a list of all electrode objects in the array"""
+        return self.earray.electrode_objects

@@ -89,8 +89,8 @@ class AlphaIMS(ProsthesisSystem):
         if eye == 'LE':
             # FIXME: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
-            names = list(self.earray.keys())
-            objects = list(self.earray.values())
+            names = self.earray.electrode_names
+            objects = self.earray.electrode_objects
             names = np.array(names).reshape(self.earray.shape)
             # Reverse column names:
             for row in range(self.earray.shape[0]):
@@ -100,7 +100,7 @@ class AlphaIMS(ProsthesisSystem):
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
             # Assign the new ordered dict to earray:
-            self.earray.electrodes = electrodes
+            self.earray._electrodes = electrodes
 
         # Remove electrodes:
         extra_elecs = ['AM39', 'AL39', 'AK39', 'AJ39', 'AI39', 'AH39', 'AG39',
@@ -118,7 +118,7 @@ class AlphaIMS(ProsthesisSystem):
             if z_arr.size != self.n_electrodes:
                 raise ValueError("If `z` is a list, it must have %d entries, "
                                  "not %d." % (self.n_electrodes, z_arr.size))
-            for elec, z_elec in zip(self.earray.values(), z):
+            for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 
         # Beware of race condition: Stim must be set last, because it requires
@@ -213,8 +213,8 @@ class AlphaAMS(ProsthesisSystem):
         if eye == 'LE':
             # FIXME: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
-            names = list(self.earray.keys())
-            objects = list(self.earray.values())
+            names = self.earray.electrode_names
+            objects = self.earray.electrode_objects
             names = np.array(names).reshape(self.earray.shape)
             # Reverse column names:
             for row in range(self.earray.shape[0]):
@@ -224,7 +224,7 @@ class AlphaAMS(ProsthesisSystem):
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
             # Assign the new ordered dict to earray:
-            self.earray.electrodes = electrodes
+            self.earray._electrodes = electrodes
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""

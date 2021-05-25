@@ -17,9 +17,9 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
 
     Abstract base class for all electrodes.
     """
-    __slots__ = ('x', 'y', 'z', 'plot_patch', 'plot_kwargs')
+    __slots__ = ('x', 'y', 'z', 'name', 'plot_patch', 'plot_kwargs')
 
-    def __init__(self, x, y, z):
+    def __init__(self, x, y, z, name=None):
         if isinstance(x, (Sequence, np.ndarray)):
             raise TypeError("x must be a scalar, not %s." % (type(x)))
         if isinstance(y, (Sequence, np.ndarray)):
@@ -29,6 +29,7 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
         self.x = x
         self.y = y
         self.z = z
+        self.name = name
         # A matplotlib.patches object (e.g., Circle, Rectangle) that can be
         # used to plot the electrode:
         self.plot_patch = None
@@ -38,7 +39,7 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
-        return {'x': self.x, 'y': self.y, 'z': self.z}
+        return {'x': self.x, 'y': self.y, 'z': self.z, 'name': self.name}
 
     @abstractmethod
     def electric_potential(self, x, y, z, *args, **kwargs):
@@ -91,8 +92,8 @@ class PointSource(Electrode):
     # Frozen class: User cannot add more class attributes
     __slots__ = ()
 
-    def __init__(self, x, y, z):
-        super(PointSource, self).__init__(x, y, z)
+    def __init__(self, x, y, z, name=None):
+        super(PointSource, self).__init__(x, y, z, name=name)
         self.plot_patch = Circle
         self.plot_kwargs = {'radius': 5, 'linewidth': 2,
                             'ec': (0.3, 0.3, 0.3, 1),
@@ -148,8 +149,8 @@ class DiskElectrode(Electrode):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('r',)
 
-    def __init__(self, x, y, z, r):
-        super(DiskElectrode, self).__init__(x, y, z)
+    def __init__(self, x, y, z, r, name=None):
+        super(DiskElectrode, self).__init__(x, y, z, name)
         if isinstance(r, (Sequence, np.ndarray)):
             raise TypeError("Electrode radius must be a scalar.")
         if r <= 0:
@@ -230,8 +231,8 @@ class SquareElectrode(Electrode):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('a')
 
-    def __init__(self, x, y, z, a):
-        super(SquareElectrode, self).__init__(x, y, z)
+    def __init__(self, x, y, z, a, name=None):
+        super(SquareElectrode, self).__init__(x, y, z, name=name)
         if isinstance(a, (Sequence, np.ndarray)):
             raise TypeError("Side length must be a scalar.")
         if a <= 0:
@@ -269,8 +270,8 @@ class HexElectrode(Electrode):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('a')
 
-    def __init__(self, x, y, z, a):
-        super(HexElectrode, self).__init__(x, y, z)
+    def __init__(self, x, y, z, a, name=None):
+        super(HexElectrode, self).__init__(x, y, z, name=name)
         if isinstance(a, (Sequence, np.ndarray)):
             raise TypeError("Apothem of the hexagon must be a scalar.")
         if a <= 0:

@@ -31,8 +31,8 @@ class PhotovoltaicPixel(HexElectrode):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('r', 'a')
 
-    def __init__(self, x, y, z, r, a):
-        super(PhotovoltaicPixel, self).__init__(x, y, z, a)
+    def __init__(self, x, y, z, r, a, name=None):
+        super(PhotovoltaicPixel, self).__init__(x, y, z, a, name=name)
         if isinstance(r, (Sequence, np.ndarray)):
             raise TypeError("Radius of the active electrode must be a scalar.")
         if r <= 0:
@@ -137,7 +137,7 @@ class PRIMA(ProsthesisSystem):
             if z_arr.size != self.n_electrodes:
                 raise ValueError("If `z` is a list, it must have %d entries, "
                                  "not %d." % (self.n_electrodes, z_arr.size))
-            for elec, z_elec in zip(self.earray.values(), z):
+            for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 
         # Beware of race condition: Stim must be set last, because it requires
@@ -223,7 +223,7 @@ class PRIMA75(ProsthesisSystem):
             if z_arr.size != self.n_electrodes:
                 raise ValueError("If `z` is a list, it must have %d entries, "
                                  "not %d." % (self.n_electrodes, z_arr.size))
-            for elec, z_elec in zip(self.earray.values(), z):
+            for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 
         # Beware of race condition: Stim must be set last, because it requires
@@ -319,7 +319,7 @@ class PRIMA55(ProsthesisSystem):
             if z_arr.size != self.n_electrodes:
                 raise ValueError("If `z` is a list, it must have %d entries, "
                                  "not %d." % (self.n_electrodes, z_arr.size))
-            for elec, z_elec in zip(self.earray.values(), z):
+            for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 
         # Beware of race condition: Stim must be set last, because it requires
@@ -422,7 +422,7 @@ class PRIMA40(ProsthesisSystem):
             if z_arr.size != self.n_electrodes:
                 raise ValueError("If `z` is a list, it must have %d entries, "
                                  "not %d." % (self.n_electrodes, z_arr.size))
-            for elec, z_elec in zip(self.earray.values(), z):
+            for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 
         # Beware of race condition: Stim must be set last, because it requires

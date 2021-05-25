@@ -21,7 +21,7 @@ def test_ProsthesisSystem():
     implant = ProsthesisSystem(PointSource(0, 0, 0))
     npt.assert_equal(implant.n_electrodes, 1)
     npt.assert_equal(implant[0], implant.earray[0])
-    npt.assert_equal(implant.keys(), implant.earray.keys())
+    npt.assert_equal(implant.electrode_names, implant.earray.electrode_names)
     for i, e in zip(implant, implant.earray):
         npt.assert_equal(i, e)
 

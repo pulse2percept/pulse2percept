@@ -13,11 +13,11 @@ def test_AlphaIMS(ztype, x, y, rot):
     # Height `h` can either be a float or a list
     if ztype == 'float':
         alpha = AlphaIMS(x=x, y=y, z=-100, rot=rot)
-        for e in alpha.values():
+        for e in alpha.electrode_objects:
             npt.assert_almost_equal(e.z, -100)
     else:
         alpha = AlphaIMS(x=x, y=y, z=np.arange(1500), rot=rot)
-        for i, e in enumerate(alpha.values()):
+        for i, e in enumerate(alpha.electrode_objects):
             npt.assert_almost_equal(e.z, i)
 
     # Slots:
@@ -58,7 +58,7 @@ def test_AlphaIMS(ztype, x, y, rot):
     alpha = AlphaIMS()
     # enumerate returns ((0, alpha.items()[0]), (1, alpha.items()[1]), ...)
     # idx = 0, ... 36. name = A1, ... e37. electrode = DiskElectrode(...)
-    for idx, (name, electrode) in enumerate(alpha.items()):
+    for idx, (name, electrode) in enumerate(alpha.electrodes.items()):
         npt.assert_equal(electrode, alpha[idx])
         npt.assert_equal(electrode, alpha[name])
         npt.assert_equal(alpha["unlikely name for an electrode"], None)
@@ -97,11 +97,11 @@ def test_AlphaAMS(ztype, x, y, rot):
     # Height `h` can either be a float or a list
     if ztype == 'float':
         alpha = AlphaAMS(x=x, y=y, z=-100, rot=rot)
-        for e in alpha.values():
+        for e in alpha.electrode_objects:
             npt.assert_almost_equal(e.z, -100)
     else:
         alpha = AlphaAMS(x=x, y=y, z=np.arange(1600), rot=rot)
-        for i, e in enumerate(alpha.values()):
+        for i, e in enumerate(alpha.electrode_objects):
             npt.assert_almost_equal(e.z, i)
 
     # Slots:
@@ -137,7 +137,7 @@ def test_AlphaAMS(ztype, x, y, rot):
     alpha = AlphaAMS()
     # enumerate returns ((0, alpha.items()[0]), (1, alpha.items()[1]), ...)
     # idx = 0, ... 36. name = A1, ... e37. electrode = DiskElectrode(...)
-    for idx, (name, electrode) in enumerate(alpha.items()):
+    for idx, (name, electrode) in enumerate(alpha.electrodes.items()):
         npt.assert_equal(electrode, alpha[idx])
         npt.assert_equal(electrode, alpha[name])
         npt.assert_equal(alpha["unlikely name for an electrode"], None)

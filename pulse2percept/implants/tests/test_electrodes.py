@@ -16,10 +16,11 @@ class ValidElectrode(Electrode):
 
 
 def test_Electrode():
-    electrode = ValidElectrode(0, 1, 2)
+    electrode = ValidElectrode(0, 1, 2, name='A001')
     npt.assert_almost_equal(electrode.x, 0)
     npt.assert_almost_equal(electrode.y, 1)
     npt.assert_almost_equal(electrode.z, 2)
+    npt.assert_equal(electrode.name, 'A001')
     npt.assert_almost_equal(electrode.electric_potential(0, 1, 2), 0)
     with pytest.raises(TypeError):
         ValidElectrode([0], 1, 2)
@@ -33,10 +34,11 @@ def test_Electrode():
 
 
 def test_PointSource():
-    electrode = PointSource(0, 1, 2)
+    electrode = PointSource(0, 1, 2, name='A001')
     npt.assert_almost_equal(electrode.x, 0)
     npt.assert_almost_equal(electrode.y, 1)
     npt.assert_almost_equal(electrode.z, 2)
+    npt.assert_equal(electrode.name, 'A001')
     npt.assert_almost_equal(electrode.electric_potential(0, 1, 2, 1, 1), 1)
     npt.assert_almost_equal(electrode.electric_potential(0, 0, 0, 1, 1), 0.035,
                             decimal=3)
@@ -59,10 +61,11 @@ def test_DiskElectrode():
     with pytest.raises(ValueError):
         DiskElectrode(0, 0, 0, -5)
     # Check params:
-    electrode = DiskElectrode(0, 1, 2, 100)
+    electrode = DiskElectrode(0, 1, 2, 100, name='A001')
     npt.assert_almost_equal(electrode.x, 0)
     npt.assert_almost_equal(electrode.y, 1)
     npt.assert_almost_equal(electrode.z, 2)
+    npt.assert_equal(electrode.name, 'A001')
     # On the electrode surface (z=2, x^2+y^2<=100^2)
     npt.assert_almost_equal(electrode.electric_potential(0, 1, 2, 1), 1)
     npt.assert_almost_equal(electrode.electric_potential(30, -30, 2, 1), 1)
@@ -97,11 +100,12 @@ def test_SquareElectrode():
     with pytest.raises(ValueError):
         SquareElectrode(0, 0, 0, -5)
     # Check params:
-    electrode = SquareElectrode(0, 1, 2, 100)
+    electrode = SquareElectrode(0, 1, 2, 100, name='A001')
     npt.assert_almost_equal(electrode.x, 0)
     npt.assert_almost_equal(electrode.y, 1)
     npt.assert_almost_equal(electrode.z, 2)
     npt.assert_almost_equal(electrode.a, 100)
+    npt.assert_equal(electrode.name, 'A001')
     # Slots:
     npt.assert_equal(hasattr(electrode, '__slots__'), True)
     npt.assert_equal(hasattr(electrode, '__dict__'), False)
@@ -121,11 +125,12 @@ def test_HexElectrode():
     with pytest.raises(ValueError):
         HexElectrode(0, 0, 0, -5)
     # Check params:
-    electrode = HexElectrode(0, 1, 2, 100)
+    electrode = HexElectrode(0, 1, 2, 100, name='A001')
     npt.assert_almost_equal(electrode.x, 0)
     npt.assert_almost_equal(electrode.y, 1)
     npt.assert_almost_equal(electrode.z, 2)
     npt.assert_almost_equal(electrode.a, 100)
+    npt.assert_equal(electrode.name, 'A001')
     # Slots:
     npt.assert_equal(hasattr(electrode, '__slots__'), True)
     npt.assert_equal(hasattr(electrode, '__dict__'), False)
