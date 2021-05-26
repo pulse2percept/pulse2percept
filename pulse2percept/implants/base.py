@@ -33,6 +33,8 @@ class ProsthesisSystem(PrettyPrint):
         Either True/False to indicate whether to execute the implant's default
         preprocessing method whenever a new stimulus is assigned, or a custom
         function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
 
     Examples
     --------
@@ -52,8 +54,8 @@ class ProsthesisSystem(PrettyPrint):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_earray', '_stim', '_eye')
 
-    def __init__(self, earray, stim=None, eye='RE', safe_mode=False,
-                 preprocess=False):
+    def __init__(self, earray, stim=None, eye='RE', preprocess=False,
+                 safe_mode=False):
         self.earray = earray
         self.stim = stim
         self.eye = eye
@@ -63,7 +65,7 @@ class ProsthesisSystem(PrettyPrint):
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         return {'earray': self.earray, 'stim': self.stim, 'eye': self.eye,
-                'safe_mode': self.safe_mode, 'preprocess:' self.preprocess}
+                'safe_mode': self.safe_mode, 'preprocess': self.preprocess}
 
     @staticmethod
     def _require_charge_balanced(stim):

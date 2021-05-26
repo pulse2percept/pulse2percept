@@ -59,6 +59,15 @@ class ArgusI(ProsthesisSystem):
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
+    use_legacy_names : bool, optional
+        If True, uses L/M based electrode names from older papers (e.g., L6,
+        L2) instead of A1-A16.
 
     Examples
     --------
@@ -83,8 +92,10 @@ class ArgusI(ProsthesisSystem):
     __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
-                 use_legacy_names=False):
+                 preprocess=False, safe_mode=False, use_legacy_names=False):
         self.eye = eye
+        self.preprocess = preprocess
+        self.safe_mode = safe_mode
         self.shape = (4, 4)
         r_arr = np.array([250, 500, 250, 500]) / 2.0
         r_arr = np.concatenate((r_arr, r_arr[::-1], r_arr, r_arr[::-1]),
@@ -185,6 +196,12 @@ class ArgusII(ProsthesisSystem):
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
 
     Examples
     --------
@@ -209,7 +226,7 @@ class ArgusII(ProsthesisSystem):
     __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
-                 safe_mode=True, preprocess=False):
+                 preprocess=False, safe_mode=False):
         self.safe_mode = safe_mode
         self.preprocess = preprocess
         self.shape = (6, 10)
@@ -252,22 +269,3 @@ class ArgusII(ProsthesisSystem):
         params.update({'shape': self.shape, 'safe_mode': self.safe_mode,
                        'preprocess': self.preprocess})
         return params
-
-    def check_stim(self, stim):
-        """Quality-check the stimulus
-
-        If ``safe_mode`` is set to True, will only allow charge-balanced pulses.
-
-        This method is executed every time a new value is assigned to ``stim``.
-
-        No checks are performed by default, but the user can define their own
-        checks in implants that inherit from
-        :py:class:`~pulse2percept.implants.ProsthesisSystem`.
-
-        Parameters
-        ----------
-        stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
-            A valid source type for the
-            :py:class:`~pulse2percept.stimuli.Stimulus` object (e.g., scalar,
-            NumPy array, pulse train).
-        """

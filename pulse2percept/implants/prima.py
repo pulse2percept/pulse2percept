@@ -89,6 +89,12 @@ class PRIMA(ProsthesisSystem):
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
 
     Notes
     -----
@@ -99,7 +105,8 @@ class PRIMA(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'trench')
 
-    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None):
+    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None,
+                 preprocess=False, safe_mode=False):
         # 85 um pixels with 15 um trenches, 28 um active electrode:
         self.trench = 15  # um
         self.spacing = 100  # um
@@ -107,6 +114,8 @@ class PRIMA(ProsthesisSystem):
         # Roughly a 19x22 grid, but edges are trimmed off:
         self.shape = (19, 22)
         self.eye = eye
+        self.preprocess = preprocess
+        self.safe_mode = safe_mode
 
         # The user might provide a list of z values for each of the
         # 378 resulting electrodes, not for the 22x19 initial ones.
@@ -177,12 +186,19 @@ class PRIMA75(ProsthesisSystem):
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'trench')
 
-    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None):
+    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None,
+                 preprocess=False, safe_mode=False):
         # 70 um pixels with 5 um trenches, 20 um active electrode:
         self.spacing = 75  # um
         self.trench = 5  # um
@@ -190,6 +206,8 @@ class PRIMA75(ProsthesisSystem):
         # Roughly a 12x15 grid, but edges are trimmed off:
         self.shape = (12, 15)
         self.eye = eye
+        self.preprocess = preprocess
+        self.safe_mode = safe_mode
 
         # The user might provide a list of z values for each of the
         # 378 resulting electrodes, not for the 22x19 initial ones.
@@ -268,12 +286,19 @@ class PRIMA55(ProsthesisSystem):
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'trench')
 
-    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None):
+    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None,
+                 preprocess=False, safe_mode=False):
         # 50 um pixels with 5 um trenches, 16 um active electrode:
         self.spacing = 55  # um
         self.trench = 5
@@ -281,6 +306,8 @@ class PRIMA55(ProsthesisSystem):
         # Roughly a 18x21 grid, but edges are trimmed off:
         self.shape = (18, 21)
         self.eye = eye
+        self.preprocess = preprocess
+        self.safe_mode = safe_mode
 
         # The user might provide a list of z values for each of the
         # 378 resulting electrodes, not for the 22x19 initial ones.
@@ -364,12 +391,19 @@ class PRIMA40(ProsthesisSystem):
         system.
     eye : {'LE', 'RE'}, optional
         Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'trench')
 
-    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None):
+    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None,
+                 preprocess=False, safe_mode=False):
         # 35 um pixels with 5 um trenches, 16 um active electrode:
         self.spacing = 40  # um
         self.trench = 5  # um
@@ -377,6 +411,8 @@ class PRIMA40(ProsthesisSystem):
         # Roughly a 25x28 grid, but edges are trimmed off:
         self.shape = (25, 28)
         self.eye = eye
+        self.preprocess = preprocess
+        self.safe_mode = safe_mode
 
         # The user might provide a list of z values for each of the
         # 378 resulting electrodes, not for the 22x19 initial ones.
