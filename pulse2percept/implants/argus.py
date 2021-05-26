@@ -84,10 +84,12 @@ class ArgusI(ProsthesisSystem):
     Get access to electrode 'B1', either by name or by row/column index:
 
     >>> argus = ArgusI(x=0, y=0, z=100, rot=0)
-    >>> argus['B1']
-    DiskElectrode(name='B1', r=250.0, x=-400.0, y=-1200.0, z=100.0)
-    >>> argus[0, 1]
-    DiskElectrode(name='B1', r=250.0, x=-400.0, y=-1200.0, z=100.0)
+    >>> argus['B1']  # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='B1', r=250.0, x=-400.0,
+                  y=-1200.0, z=100.0)
+    >>> argus[0, 1]  # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='B1', r=250.0, x=-400.0,
+                  y=-1200.0, z=100.0)
 
     """
     # Frozen class: User cannot add more class attributes
@@ -220,12 +222,12 @@ class ArgusII(ProsthesisSystem):
     Get access to electrode 'E7', either by name or by row/column index:
 
     >>> argus = ArgusII(x=0, y=0, z=100, rot=0)
-    >>> argus['E7']
-    DiskElectrode(name='E7', r=112.5, x=862.5, y=862.5,...
-                  z=100.0)
-    >>> argus[4, 6]
-    DiskElectrode(name='E7', r=112.5, x=862.5, y=862.5,...
-                  z=100.0)
+    >>> argus['E7']  # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='E7', r=112.5, x=862.5,
+                  y=862.5, z=100.0)
+    >>> argus[4, 6]  # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='E7', r=112.5, x=862.5,
+                  y=862.5, z=100.0)
 
     """
     # Frozen class: User cannot add more class attributes

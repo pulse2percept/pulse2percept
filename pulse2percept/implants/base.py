@@ -222,8 +222,6 @@ class ProsthesisSystem(PrettyPrint):
                 # Use electrode names as stimulus coordinates:
                 stim = Stimulus(data, electrodes=self.electrode_names)
 
-            print(stim)
-
             if len(stim.electrodes) > self.n_electrodes:
                 if (isinstance(stim, (ImageStimulus, VideoStimulus)) and
                         hasattr(self.earray, 'shape')):

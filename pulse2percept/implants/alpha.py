@@ -210,7 +210,7 @@ class AlphaAMS(ProsthesisSystem):
     DiskElectrode(activated=True, name='A3', r=15.0, x=-1225.0,
                   y=-1365.0, z=100.0)
     >>> alpha_ims[0, 2]  # doctest: +NORMALIZE_WHITESPACE
-    DiskElectrode(activated, True, name='A3', r=15.0, x=-1225.0,
+    DiskElectrode(activated=True, name='A3', r=15.0, x=-1225.0,
                   y=-1365.0, z=100.0)
 
     """
