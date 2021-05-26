@@ -311,7 +311,7 @@ class ElectrodeGrid(ElectrodeArray):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('shape', 'type', 'spacing')
+    __slots__ = ('shape', 'type', 'spacing', 'rot')
 
     def __init__(self, shape, spacing, x=0, y=0, z=0, rot=0, names=('A', '1'),
                  type='rect', orientation='horizontal', etype=PointSource,
@@ -350,6 +350,7 @@ class ElectrodeGrid(ElectrodeArray):
         self.shape = shape
         self.type = type
         self.spacing = spacing
+        self.rot = rot
         # Instantiate empty collection of electrodes. This dictionary will be
         # populated in a private method ``_set_egrid``:
         self._electrodes = OrderedDict()
@@ -358,7 +359,7 @@ class ElectrodeGrid(ElectrodeArray):
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = {'shape': self.shape, 'spacing': self.spacing,
-                  'type': self.type}
+                  'type': self.type, 'rot': self.rot}
         return params
 
     def __getitem__(self, item):

@@ -200,6 +200,12 @@ class ProsthesisSystem(PrettyPrint):
         if data is None:
             self._stim = None
         else:
+            # Preprocess can be a function (callable) or True/False:
+            if callable(self.preprocess):
+                data = self.preprocess(data)
+            elif self.preprocess:
+                data = self.preprocess_stim(data)
+            # Convert to stimulus object:
             if isinstance(data, Stimulus):
                 # Already a stimulus object:
                 stim = data
@@ -221,11 +227,6 @@ class ProsthesisSystem(PrettyPrint):
                 if not self.earray[electrode]:
                     raise ValueError("Electrode '%s' not found in "
                                      "implant." % electrode)
-            # Preprocess can be a function (callable) or True/False:
-            if callable(self.preprocess):
-                stim = self.preprocess(stim)
-            elif self.preprocess:
-                stim = self.preprocess_stim(stim)
             # Perform safety checks, etc.:
             self.check_stim(stim)
             # Store stimulus:
