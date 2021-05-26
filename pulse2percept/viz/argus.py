@@ -122,8 +122,8 @@ def plot_argus_phosphenes(data, argus, scale=1.0, axon_map=None,
 
     # Add some padding to the output image so the array is not cut off:
     pad = 2000  # microns
-    x_el = [e.x for e in argus.values()]
-    y_el = [e.y for e in argus.values()]
+    x_el = [e.x for e in argus.electrode_objects]
+    y_el = [e.y for e in argus.electrode_objects]
     x_min = Watson2014Transform.ret2dva(np.min(x_el) - pad)
     x_max = Watson2014Transform.ret2dva(np.max(x_el) + pad)
     y_min = Watson2014Transform.ret2dva(np.min(y_el) - pad)
@@ -142,7 +142,7 @@ def plot_argus_phosphenes(data, argus, scale=1.0, axon_map=None,
             out_shape = data.image.values[0].shape
         except IndexError:
             out_shape = (768, 1024)
-    for xy, e in zip(px_argus, argus.values()):
+    for xy, e in zip(px_argus, argus.electrode_objects):
         x_dva, y_dva = Watson2014Transform.ret2dva([e.x, e.y])
         x_out = (x_dva - x_min) / (x_max - x_min) * (out_shape[1] - 1)
         y_out = (y_dva - y_min) / (y_max - y_min) * (out_shape[0] - 1)

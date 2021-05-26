@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
-from ..stimuli import Stimulus
+from ..stimuli import Stimulus, ImageStimulus, VideoStimulus
 from ..utils import PrettyPrint
 
 
@@ -29,6 +29,12 @@ class ProsthesisSystem(PrettyPrint):
     eye : 'LE' or 'RE'
         A string indicating whether the system is implanted in the left ('LE')
         or right eye ('RE')
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
 
     Examples
     --------
@@ -46,24 +52,36 @@ class ProsthesisSystem(PrettyPrint):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('_earray', '_stim', '_eye')
+    __slots__ = ('_earray', '_stim', '_eye', 'safe_mode', 'preprocess')
 
-    def __init__(self, earray, stim=None, eye='RE'):
+    def __init__(self, earray, stim=None, eye='RE', preprocess=False,
+                 safe_mode=False):
         self.earray = earray
-        self.stim = stim
         self.eye = eye
+        self.safe_mode = safe_mode
+        self.preprocess = preprocess
+        self.stim = stim
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
-        return {'earray': self.earray, 'stim': self.stim, 'eye': self.eye}
+        return {'earray': self.earray, 'stim': self.stim, 'eye': self.eye,
+                'safe_mode': self.safe_mode, 'preprocess': self.preprocess}
+
+    @staticmethod
+    def _require_charge_balanced(stim):
+        # Stimuli without a time component return None, others return True/False
+        if stim.is_charge_balanced is False:
+            raise ValueError("Safety check: Stimulus must be charge-balanced.")
 
     def check_stim(self, stim):
         """Quality-check the stimulus
 
         This method is executed every time a new value is assigned to ``stim``.
 
-        No checks are performed by default, but the user can define their own
-        checks in implants that inherit from
+        If ``safe_mode`` is set to True, this function will only allow stimuli
+        that are charge-balanced.
+
+        The user can define their own checks in implants that inherit from
         :py:class:`~pulse2percept.implants.ProsthesisSystem`.
 
         Parameters
@@ -73,7 +91,35 @@ class ProsthesisSystem(PrettyPrint):
             :py:class:`~pulse2percept.stimuli.Stimulus` object (e.g., scalar,
             NumPy array, pulse train).
         """
-        pass
+        if self.safe_mode:
+            self._require_charge_balanced(stim)
+
+    def preprocess_stim(self, stim):
+        """Preprocess the stimulus
+
+        This methods is executed every time a new value is assigned to ``stim``.
+
+        No preprocessing is performed by default, but the user can define their
+        own method in implants that inherit from
+        return stim
+        :py:class:`~pulse2percept.implants.ProsthesisSystem`.
+
+        A custom method must return a 
+        :py:class:`~pulse2percept.stimuli.Stimulus` object with the correct
+        number of electrodes for the implant.
+
+        Parameters
+        ----------
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+            A valid source type for the
+            :py:class:`~pulse2percept.stimuli.Stimulus` object (e.g., scalar,
+            NumPy array, pulse train).
+
+        Returns
+        ----------
+        stim_out : :py:class:`~pulse2percept.stimuli.Stimulus` object
+        """
+        return stim
 
     def plot(self, annotate=False, autoscale=True, ax=None):
         """Plot
@@ -94,6 +140,12 @@ class ProsthesisSystem(PrettyPrint):
             Returns the axis object of the plot
         """
         return self.earray.plot(annotate=annotate, autoscale=autoscale, ax=ax)
+
+    def activate(self, electrodes):
+        self.earray.activate(electrodes)
+
+    def deactivate(self, electrodes):
+        self.earray.deactivate(electrodes)
 
     @property
     def earray(self):
@@ -154,6 +206,12 @@ class ProsthesisSystem(PrettyPrint):
         if data is None:
             self._stim = None
         else:
+            # Preprocess can be a function (callable) or True/False:
+            if callable(self.preprocess):
+                data = self.preprocess(data)
+            elif self.preprocess:
+                data = self.preprocess_stim(data)
+            # Convert to stimulus object:
             if isinstance(data, Stimulus):
                 # Already a stimulus object:
                 stim = data
@@ -162,19 +220,28 @@ class ProsthesisSystem(PrettyPrint):
                 stim = Stimulus(data)
             else:
                 # Use electrode names as stimulus coordinates:
-                stim = Stimulus(data, electrodes=list(self.earray.keys()))
+                stim = Stimulus(data, electrodes=self.electrode_names)
 
             if len(stim.electrodes) > self.n_electrodes:
-                raise ValueError("Number of electrodes in the stimulus (%d) "
-                                 "does not match the number of electrodes in "
-                                 "the implant (%d)." % (len(stim.electrodes),
-                                                        self.n_electrodes))
+                if (isinstance(stim, (ImageStimulus, VideoStimulus)) and
+                        hasattr(self.earray, 'shape')):
+                    # Convenience function for electrode grids:
+                    stim = stim.rgb2gray().resize(self.earray.shape)
+                else:
+                    err_str = ("Number of electrodes in the stimulus (%d) "
+                               "does not match the number of electrodes in "
+                               "the implant (%d)." % (len(stim.electrodes),
+                                                      self.n_electrodes))
+                    raise ValueError(err_str)
             # Make sure all electrode names are valid:
             for electrode in stim.electrodes:
                 # Invalid index will return None:
                 if not self.earray[electrode]:
-                    raise ValueError("Electrode '%s' not found in "
-                                     "implant." % electrode)
+                    raise ValueError('Electrode "%s" not found in '
+                                     'implant.' % electrode)
+                if not self.earray[electrode].activated:
+                    raise ValueError('Cannot assign stimulus to deactivated '
+                                     'Electrode "%s".' % electrode)
             # Perform safety checks, etc.:
             self.check_stim(stim)
             # Store stimulus:
@@ -224,29 +291,30 @@ class ProsthesisSystem(PrettyPrint):
     def __iter__(self):
         return iter(self.earray)
 
-    def keys(self):
-        """Return all electrode names in the electrode array"""
-        return self.earray.keys()
-
-    def values(self):
-        """Return all electrode objects in the electrode array"""
-        return self.earray.values()
-
-    def items(self):
+    @property
+    def electrodes(self):
         """Return all electrode names and objects in the electrode array
 
-        Internally, electrodes are stored in a dictionary in
-        ``earray.electrodes``. For convenience, electrodes can also be accessed
-        via ``items``.
+        Internally, electrodes are stored in an ordered dictionary.
+        You can iterate over different electrodes in the array as follows:
 
-        Examples
-        --------
-        Save the x-coordinates of all electrodes of Argus I in a dictionary:
+        .. code::
 
-        >>> from pulse2percept.implants import ArgusI
-        >>> xcoords = {}
-        >>> for name, electrode in ArgusI().items():
-        ...     xcoords[name] = electrode.x
+            for name, electrode in implant.electrodes.items():
+                print(name, electrode)
+
+        You can access an individual electrode by indexing directly into the
+        prosthesis system object, e.g. ``implant['A1']`` or ``implant[0]``.
 
         """
-        return self.earray.items()
+        return self.earray.electrodes
+
+    @property
+    def electrode_names(self):
+        """Return a list of all electrode names in the electrode array"""
+        return self.earray.electrode_names
+
+    @property
+    def electrode_objects(self):
+        """Return a list of all electrode objects in the array"""
+        return self.earray.electrode_objects

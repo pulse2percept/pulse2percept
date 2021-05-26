@@ -46,19 +46,30 @@ class ArgusI(ProsthesisSystem):
 
     Parameters
     ----------
-    x : float, optional
-        x coordinate of the array center (um)
-    y : float, optional
-        y coordinate of the array center (um)
-    z : float or array_like, optional
-        Distance of the array to the retinal surface (um). Either a list
-        with 16 entries or a scalar.
+    x/y/z : double
+        3D location of the center of the electrode array.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
+        ``z`` can either be a list with 16 entries or a scalar that is applied
+        to all electrodes.
     rot : float, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
+    use_legacy_names : bool, optional
+        If True, uses L/M based electrode names from older papers (e.g., L6,
+        L2) instead of A1-A16.
 
     Examples
     --------
@@ -67,24 +78,28 @@ class ArgusI(ProsthesisSystem):
 
     >>> from pulse2percept.implants import ArgusI
     >>> ArgusI(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
-    ArgusI(earray=ElectrodeGrid, eye='RE', shape=(4, 4),
-           stim=None)
+    ArgusI(earray=ElectrodeGrid, eye='RE', preprocess=True,
+           safe_mode=False, shape=(4, 4), stim=None)
 
     Get access to electrode 'B1', either by name or by row/column index:
 
     >>> argus = ArgusI(x=0, y=0, z=100, rot=0)
-    >>> argus['B1']
-    DiskElectrode(r=250.0, x=-400.0, y=-1200.0, z=100.0)
-    >>> argus[0, 1]
-    DiskElectrode(r=250.0, x=-400.0, y=-1200.0, z=100.0)
+    >>> argus['B1']  # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='B1', r=250.0, x=-400.0,
+                  y=-1200.0, z=100.0)
+    >>> argus[0, 1]  # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='B1', r=250.0, x=-400.0,
+                  y=-1200.0, z=100.0)
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
-                 use_legacy_names=False):
+                 preprocess=True, safe_mode=False, use_legacy_names=False):
         self.eye = eye
+        self.preprocess = preprocess
+        self.safe_mode = safe_mode
         self.shape = (4, 4)
         r_arr = np.array([250, 500, 250, 500]) / 2.0
         r_arr = np.concatenate((r_arr, r_arr[::-1], r_arr, r_arr[::-1]),
@@ -115,8 +130,8 @@ class ArgusI(ProsthesisSystem):
         if eye == 'LE':
             # FIXME: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
-            names = list(self.earray.keys())
-            objects = list(self.earray.values())
+            names = self.earray.electrode_names
+            objects = self.earray.electrode_objects
             names = np.array(names).reshape(self.earray.shape)
             # Reverse column names:
             for row in range(self.earray.shape[0]):
@@ -126,7 +141,7 @@ class ArgusI(ProsthesisSystem):
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
             # Assign the new ordered dict to earray:
-            self.earray.electrodes = electrodes
+            self.earray._electrodes = electrodes
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -172,19 +187,27 @@ class ArgusII(ProsthesisSystem):
 
     Parameters
     ----------
-    x : float
-        x coordinate of the array center (um)
-    y : float
-        y coordinate of the array center (um)
-    z: float or array_like
-        Distance of the array to the retinal surface (um). Either a list
-        with 60 entries or a scalar.
+    x/y/z : double
+        3D location of the center of the electrode array.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
+        ``z`` can either be a list with 60 entries or a scalar that is applied
+        to all electrodes.
     rot : float
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
 
     Examples
     --------
@@ -193,22 +216,27 @@ class ArgusII(ProsthesisSystem):
 
     >>> from pulse2percept.implants import ArgusII
     >>> ArgusII(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
-    ArgusII(earray=ElectrodeGrid, eye='RE', shape=(6, 10),
-            stim=None)
+    ArgusII(earray=ElectrodeGrid, eye='RE', preprocess=True,
+            safe_mode=False, shape=(6, 10), stim=None)
 
     Get access to electrode 'E7', either by name or by row/column index:
 
     >>> argus = ArgusII(x=0, y=0, z=100, rot=0)
-    >>> argus['E7']
-    DiskElectrode(r=112.5, x=862.5, y=862.5, z=100.0)
-    >>> argus[4, 6]
-    DiskElectrode(r=112.5, x=862.5, y=862.5, z=100.0)
+    >>> argus['E7']  # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='E7', r=112.5, x=862.5,
+                  y=862.5, z=100.0)
+    >>> argus[4, 6]  # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='E7', r=112.5, x=862.5,
+                  y=862.5, z=100.0)
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
+    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
+                 preprocess=True, safe_mode=False):
+        self.safe_mode = safe_mode
+        self.preprocess = preprocess
         self.shape = (6, 10)
         r = 225.0 / 2.0
         spacing = 575.0
@@ -230,8 +258,8 @@ class ArgusII(ProsthesisSystem):
         if eye == 'LE':
             # TODO: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
-            names = list(self.earray.keys())
-            objects = list(self.earray.values())
+            names = self.earray.electrode_names
+            objects = self.earray.electrode_objects
             names = np.array(names).reshape(self.earray.shape)
             # Reverse column names:
             for row in range(self.earray.shape[0]):
@@ -241,10 +269,11 @@ class ArgusII(ProsthesisSystem):
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
             # Assign the new ordered dict to earray:
-            self.earray.electrodes = electrodes
+            self.earray._electrodes = electrodes
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
-        params.update({'shape': self.shape})
+        params.update({'shape': self.shape, 'safe_mode': self.safe_mode,
+                       'preprocess': self.preprocess})
         return params

@@ -33,21 +33,25 @@ class ElectrodeArray(PrettyPrint):
     >>> from pulse2percept.implants import ElectrodeArray, DiskElectrode
     >>> earray = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
     >>> earray.electrodes  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    OrderedDict([(0, DiskElectrode(r=100..., x=0..., y=0..., z=0...))])
+    OrderedDict([(0,
+                  DiskElectrode(activated=True, name=None, r=100..., x=0..., y=0...,
+                  z=0...))])
 
     Electrode array made from a single DiskElectrode with name 'A1':
 
     >>> from pulse2percept.implants import ElectrodeArray, DiskElectrode
     >>> earray = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 100)})
     >>> earray.electrodes  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    OrderedDict([('A1', DiskElectrode(r=100..., x=0..., y=0..., z=0...))])
+    OrderedDict([('A1',
+                  DiskElectrode(activated=True, name=None, r=100..., x=0..., y=0...,
+                  z=0...))])
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_electrodes',)
 
     def __init__(self, electrodes):
-        self.electrodes = OrderedDict()
+        self._electrodes = OrderedDict()
         if isinstance(electrodes, dict):
             for name, electrode in electrodes.items():
                 self.add_electrode(name, electrode)
@@ -59,18 +63,6 @@ class ElectrodeArray(PrettyPrint):
         else:
             raise TypeError(("electrodes must be a list or dict, not "
                              "%s") % type(electrodes))
-
-    @property
-    def electrodes(self):
-        return self._electrodes
-
-    @electrodes.setter
-    def electrodes(self, electrodes):
-        self._electrodes = electrodes
-
-    @property
-    def n_electrodes(self):
-        return len(self.electrodes)
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -90,7 +82,7 @@ class ElectrodeArray(PrettyPrint):
         if not isinstance(electrode, Electrode):
             raise TypeError(("Electrode %s must be an Electrode object, not "
                              "%s.") % (name, type(electrode)))
-        if name in self.electrodes.keys():
+        if name in self.electrode_names:
             raise ValueError(("Cannot add electrode: key '%s' already "
                               "exists.") % name)
         self._electrodes.update({name: electrode})
@@ -103,10 +95,28 @@ class ElectrodeArray(PrettyPrint):
         name: int|str|...
             Electrode name or index
         """
-        if name not in self.electrodes.keys():
+        if name not in self.electrode_names:
             raise ValueError(("Cannot remove electrode: key '%s' does not "
                               "exist") % name)
         del self.electrodes[name]
+
+    def activate(self, electrodes):
+        if np.isscalar(electrodes):
+            if electrodes == 'all':
+                electrodes = self.electrode_names
+            else:
+                electrodes = [electrodes]
+        for electrode in electrodes:
+            self.__getitem__(electrode).activated = True
+
+    def deactivate(self, electrodes):
+        if np.isscalar(electrodes):
+            if electrodes == 'all':
+                electrodes = self.electrode_names
+            else:
+                electrodes = [electrodes]
+        for electrode in electrodes:
+            self.__getitem__(electrode).activated = False
 
     def plot(self, annotate=False, autoscale=True, ax=None):
         """Plot the electrode array
@@ -130,19 +140,22 @@ class ElectrodeArray(PrettyPrint):
             ax = plt.gca()
         ax.set_aspect('equal')
         patches = []
-        for name, electrode in self.items():
+        for name, electrode in self.electrodes.items():
             # Rather than calling electrode.plot(), generate all the patch
             # objects and add them to a collection:
+            kwargs = electrode.plot_kwargs
+            if not electrode.activated:
+                kwargs = electrode.plot_deactivated_kwargs
             if isinstance(electrode.plot_patch, list):
                 # Special case: draw multiple objects per electrode
-                for p, kw in zip(electrode.plot_patch, electrode.plot_kwargs):
+                for p, kw in zip(electrode.plot_patch, kwargs):
                     patches.append(p((electrode.x, electrode.y), zorder=10,
                                      **kw))
             else:
                 # Regular use case: single object
                 patches.append(electrode.plot_patch((electrode.x, electrode.y),
                                                     zorder=10,
-                                                    **electrode.plot_kwargs))
+                                                    **kwargs))
             if annotate:
                 ax.text(electrode.x, electrode.y, name, ha='center',
                         va='center',  color='black', size='large',
@@ -184,7 +197,7 @@ class ElectrodeArray(PrettyPrint):
         except (KeyError, TypeError):
             # If not a dict key, `item` might be an int index into the list:
             try:
-                key = list(self.electrodes.keys())[item]
+                key = list(self.electrode_names)[item]
                 return self.electrodes[key]
             except IndexError:
                 raise StopIteration
@@ -193,14 +206,37 @@ class ElectrodeArray(PrettyPrint):
     def __iter__(self):
         return iter(self.electrodes)
 
-    def keys(self):
-        return self.electrodes.keys()
+    @property
+    def n_electrodes(self):
+        return len(self.electrodes)
 
-    def values(self):
-        return self.electrodes.values()
+    @property
+    def electrodes(self):
+        """Return all electrode names and objects in the electrode array
 
-    def items(self):
-        return self.electrodes.items()
+        Internally, electrodes are stored in an ordered dictionary.
+        You can iterate over different electrodes in the array as follows:
+
+        .. code::
+
+            for name, electrode in earray.electrodes.items():
+                print(name, electrode)
+
+        You can access an individual electrode by indexing directly into the
+        electrode array object, e.g. ``earray['A1']`` or ``earray[0]``.
+
+        """
+        return self._electrodes
+
+    @property
+    def electrode_names(self):
+        """Return a list of all electrode names in the array"""
+        return list(self.electrodes.keys())
+
+    @property
+    def electrode_objects(self):
+        """Return a list of all electrode objects in the array"""
+        return list(self.electrodes.values())
 
 
 def _get_alphabetic_names(n_electrodes):
@@ -224,8 +260,13 @@ class ElectrodeGrid(ElectrodeArray):
         Electrode-to-electrode spacing in microns.
     type : {'rect', 'hex'}, optional
         Grid type ('rect': rectangular, 'hex': hexagonal).
-    x, y, z : double, optional
-        3D coordinates of the center of the grid
+    x/y/z : double
+        3D location of the center of the grid.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
     rot : double, optional
         Rotation of the grid in degrees (positive angle: counter-clockwise
         rotation on the retinal surface)
@@ -261,9 +302,9 @@ class ElectrodeGrid(ElectrodeArray):
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> ElectrodeGrid((3, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
     ...               type='hex', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    ElectrodeGrid(shape=(3, 4), spacing=20, type='hex')
+    ElectrodeGrid(rot=0, shape=(3, 4), spacing=20, type='hex')
 
-    A rectangulr electrode grid with 2 rows and 4 columns, made of disk
+    A rectangular electrode grid with 2 rows and 4 columns, made of disk
     electrodes with 10um radius spaced 20um apart, centered at (10, 20)um, and
     located 500um away from the retinal surface, with names like this:
 
@@ -275,7 +316,7 @@ class ElectrodeGrid(ElectrodeArray):
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> ElectrodeGrid((2, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
     ...               type='rect', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    ElectrodeGrid(shape=(2, 4), spacing=20, type='rect')
+    ElectrodeGrid(rot=0, shape=(2, 4), spacing=20, type='rect')
 
     There are three ways to access (e.g.) the last electrode in the grid,
     either by name (``grid['C3']``), by row/column index (``grid[2, 2]``), or
@@ -283,8 +324,9 @@ class ElectrodeGrid(ElectrodeArray):
 
     >>> from pulse2percept.implants import ElectrodeGrid
     >>> grid = ElectrodeGrid((3, 3), 20, names=('A', '1'))
-    >>> grid['C3']  # doctest: +ELLIPSIS
-    PointSource(x=20..., y=20..., z=0...)
+    >>> grid['C3']  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    PointSource(activated=True, name='C3', x=20..., y=20...,
+                z=0...)
     >>> grid['C3'] == grid[8] == grid[2, 2]
     True
 
@@ -294,13 +336,16 @@ class ElectrodeGrid(ElectrodeArray):
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> grid = ElectrodeGrid((3, 3), 20, etype=DiskElectrode, r=10)
     >>> grid[['A1', 1, (0, 2)]]  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [DiskElectrode(r=10..., x=-20.0, y=-20.0, z=0...),
-     DiskElectrode(r=10..., x=0.0, y=-20.0, z=0...),
-     DiskElectrode(r=10..., x=20.0, y=-20.0, z=0...)]
+    [DiskElectrode(activated=True, name='A1', r=10..., x=-20.0,
+                   y=-20.0, z=0...),
+     DiskElectrode(activated=True, name='A2', r=10..., x=0.0,
+                   y=-20.0, z=0...),
+     DiskElectrode(activated=True, name='A3', r=10..., x=20.0,
+                   y=-20.0, z=0...)]
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('shape', 'type', 'spacing')
+    __slots__ = ('shape', 'type', 'spacing', 'rot')
 
     def __init__(self, shape, spacing, x=0, y=0, z=0, rot=0, names=('A', '1'),
                  type='rect', orientation='horizontal', etype=PointSource,
@@ -339,15 +384,16 @@ class ElectrodeGrid(ElectrodeArray):
         self.shape = shape
         self.type = type
         self.spacing = spacing
+        self.rot = rot
         # Instantiate empty collection of electrodes. This dictionary will be
         # populated in a private method ``_set_egrid``:
-        self.electrodes = OrderedDict()
+        self._electrodes = OrderedDict()
         self._make_grid(x, y, z, rot, names, orientation, etype, **kwargs)
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = {'shape': self.shape, 'spacing': self.spacing,
-                  'type': self.type}
+                  'type': self.type, 'rot': self.rot}
         return params
 
     def __getitem__(self, item):
@@ -518,8 +564,8 @@ class ElectrodeGrid(ElectrodeArray):
                 r_arr = np.ones(n_elecs, dtype=float) * kwargs['r']
             # Create a grid of DiskElectrode objects:
             for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
-                self.add_electrode(name, DiskElectrode(x, y, z, r))
+                self.add_electrode(name, DiskElectrode(x, y, z, r, name=name))
         else:
             # Pass keyword arguments to the electrode constructor:
             for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
-                self.add_electrode(name, etype(x, y, z, **kwargs))
+                self.add_electrode(name, etype(x, y, z, name=name, **kwargs))

@@ -21,7 +21,7 @@ def test_ProsthesisSystem():
     implant = ProsthesisSystem(PointSource(0, 0, 0))
     npt.assert_equal(implant.n_electrodes, 1)
     npt.assert_equal(implant[0], implant.earray[0])
-    npt.assert_equal(implant.keys(), implant.earray.keys())
+    npt.assert_equal(implant.electrode_names, implant.earray.electrode_names)
     for i, e in zip(implant, implant.earray):
         npt.assert_equal(i, e)
 
@@ -48,6 +48,10 @@ def test_ProsthesisSystem():
         implant.stim = {'A1': 1}
     with pytest.raises(ValueError):
         implant.stim = Stimulus({'A1': 1})
+    # Safe mode requires charge-balanced pulses:
+    with pytest.raises(ValueError):
+        implant = ProsthesisSystem(PointSource(0, 0, 0), safe_mode=True)
+        implant.stim = 1
 
     # Slots:
     npt.assert_equal(hasattr(implant, '__slots__'), True)
@@ -59,3 +63,14 @@ def test_ProsthesisSystem_stim():
     stim = Stimulus(np.ones((13 * 13 + 1, 5)))
     with pytest.raises(ValueError):
         implant.stim = stim
+
+    # Deactivated electrodes cannot receive stimuli:
+    implant.deactivate('H4')
+    npt.assert_equal(implant['H4'].activated, False)
+    with pytest.raises(ValueError):
+        implant.stim = {'H4': 1}
+    implant.deactivate('all')
+    with pytest.raises(ValueError):
+        implant.stim = [1] * implant.n_electrodes
+    implant.activate('all')
+    implant.stim = {'H4': 1}

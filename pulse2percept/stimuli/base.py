@@ -329,7 +329,6 @@ class Stimulus(PrettyPrint):
         data = self.data
         electrodes = self.electrodes
         time = self.time
-        print(data.shape, data.dtype)
         # Remove rows (electrodes) with all zeros:
         keep_el = fast_compress_space(data)
         data = data[keep_el]
@@ -859,11 +858,13 @@ class Stimulus(PrettyPrint):
         """Flag indicating whether the stimulus is charge-balanced
 
         A stimulus with a time component is considered charge-balanced if its
-        net current is smaller than 10 pico Amps
+        net current is smaller than 10 pico Amps.
+        For the whole stimulus to be charge-balanced, every electrode must be
+        charge-balanced as well.
         """
         if self.time is None:
-            return None
-        return np.isclose(np.trapz(self.data, self.time)[0], 0, atol=MIN_AMP)
+            return np.allclose(self.data, 0, atol=MIN_AMP)
+        return np.allclose(np.trapz(self.data, x=self.time), 0, atol=MIN_AMP)
 
     @property
     def duration(self):

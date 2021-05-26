@@ -182,12 +182,16 @@ def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
     pad = 1500
     prec = 500
     if xlim is None:
-        xmin = np.ceil(np.min([el.x - pad for el in implant.values()]) / prec)
-        xmax = np.ceil(np.max([el.x + pad for el in implant.values()]) / prec)
+        xmin = np.ceil(np.min([el.x - pad
+                               for el in implant.electrode_objects]) / prec)
+        xmax = np.ceil(np.max([el.x + pad
+                               for el in implant.electrode_objects]) / prec)
         xlim = (prec * xmin, prec * xmax)
     if ylim is None:
-        ymin = np.ceil(np.min([el.y - pad for el in implant.values()]) / prec)
-        ymax = np.ceil(np.max([el.y + pad for el in implant.values()]) / prec)
+        ymin = np.ceil(np.min([el.y - pad
+                               for el in implant.electrode_objects]) / prec)
+        ymax = np.ceil(np.max([el.y + pad
+                               for el in implant.electrode_objects]) / prec)
         ylim = (prec * ymin, prec * ymax)
 
     ax = plot_axon_map(eye=implant.eye, loc_od=loc_od, ax=ax,
@@ -197,7 +201,7 @@ def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
 
     # Determine marker size for electrodes:
     radii = []
-    for el in implant.values():
+    for el in implant.electrode_objects:
         # Use electrode radius (if exists), else constant radius:
         if hasattr(el, 'r'):
             radii.append(el.r)
@@ -215,7 +219,7 @@ def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
 
     # Plot all electrodes and label them (optional):
     circles = []
-    for i, (name, el) in enumerate(implant.items()):
+    for i, (name, el) in enumerate(implant.electrodes.items()):
         if annotate_implant:
             ax.text(el.x, el.y, name, horizontalalignment='center',
                     verticalalignment='center',

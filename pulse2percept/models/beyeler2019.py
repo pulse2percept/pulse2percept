@@ -80,7 +80,7 @@ class ScoreboardSpatial(SpatialModel):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
-        if not np.allclose([e.z for e in earray.values()], 0):
+        if not np.allclose([e.z for e in earray.electrode_objects], 0):
             msg = ("Nonzero electrode-retina distances do not have any effect "
                    "on the model output.")
             warnings.warn(msg)
@@ -643,7 +643,7 @@ class AxonMapSpatial(SpatialModel):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at specific times ``t``"""
-        if not np.allclose([e.z for e in earray.values()], 0):
+        if not np.allclose([e.z for e in earray.electrode_objects], 0):
             msg = ("Nonzero electrode-retina distances do not have any effect "
                    "on the model output.")
             warnings.warn(msg)

@@ -59,7 +59,7 @@ def test_ArgusI(ztype, x, y, rot):
     # Indexing must work for both integers and electrode names
     for use_legacy_names in [True, False]:
         argus = implants.ArgusI(use_legacy_names=use_legacy_names)
-        for idx, (name, electrode) in enumerate(argus.items()):
+        for idx, (name, electrode) in enumerate(argus.electrodes.items()):
             npt.assert_equal(electrode, argus[idx])
             npt.assert_equal(electrode, argus[name])
         npt.assert_equal(argus["unlikely name for an electrode"], None)
@@ -86,12 +86,12 @@ def test_ArgusI(ztype, x, y, rot):
 
     # Check naming scheme
     argus = implants.ArgusI(use_legacy_names=False)
-    npt.assert_equal(list(argus.keys())[15], 'D4')
-    npt.assert_equal(list(argus.keys())[0], 'A1')
+    npt.assert_equal(argus.electrode_names[15], 'D4')
+    npt.assert_equal(argus.electrode_names[0], 'A1')
 
     argus = implants.ArgusI(use_legacy_names=True)
-    npt.assert_equal(list(argus.keys())[15], 'M1')
-    npt.assert_equal(list(argus.keys())[0], 'L6')
+    npt.assert_equal(argus.electrode_names[15], 'M1')
+    npt.assert_equal(argus.electrode_names[0], 'L6')
 
     # Set a stimulus via dict:
     argus = implants.ArgusI(stim={'B3': 13})
@@ -150,7 +150,7 @@ def test_ArgusII(ztype, x, y, rot):
 
     # Indexing must work for both integers and electrode names
     argus = implants.ArgusII()
-    for idx, (name, electrode) in enumerate(argus.items()):
+    for idx, (name, electrode) in enumerate(argus.electrodes.items()):
         npt.assert_equal(electrode, argus[idx])
         npt.assert_equal(electrode, argus[name])
     npt.assert_equal(argus["unlikely name for an electrode"], None)
