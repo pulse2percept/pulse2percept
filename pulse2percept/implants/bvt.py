@@ -39,13 +39,15 @@ class BVT24(ProsthesisSystem):
 
     Parameters
     ----------
-    x : float
-        x coordinate of the array center (um)
-    y : float
-        y coordinate of the array center (um)
-    z: float or array_like
-        Distance of the array to the retinal surface (um). Either a list
-        with 60 entries or a scalar.
+    x/y/z : double
+        3D location of the center of the electrode array.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
+        ``z`` can either be a list with 35 entries or a scalar that is applied
+        to all electrodes.
     rot : float
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate

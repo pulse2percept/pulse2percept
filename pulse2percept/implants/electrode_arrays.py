@@ -260,8 +260,13 @@ class ElectrodeGrid(ElectrodeArray):
         Electrode-to-electrode spacing in microns.
     type : {'rect', 'hex'}, optional
         Grid type ('rect': rectangular, 'hex': hexagonal).
-    x, y, z : double, optional
-        3D coordinates of the center of the grid
+    x/y/z : double
+        3D location of the center of the grid.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
     rot : double, optional
         Rotation of the grid in degrees (positive angle: counter-clockwise
         rotation on the retinal surface)

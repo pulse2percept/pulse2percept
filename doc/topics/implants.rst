@@ -51,6 +51,28 @@ A mathematical model is then used to compute the neural stimulus response and
 predict the resulting visual percept
 (see :ref:`Computational Models <topics-models>`).
 
+Understanding the coordinate system
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The easiest way to understand the coordinate system is to look at the
+organization of the optic fiber layer:
+
+.. ipython:: python
+
+    from pulse2percept.models import AxonMapModel
+    AxonMapModel(eye='RE').plot()
+
+Here you can see that:
+
+*  the coordinate system is centered on the fovea
+*  in a right eye, positive :math:`x` values correspond to the nasal retina
+*  in a right eye, positive :math:`y` values correspond to the superior retina
+
+Positive :math:`z` values move an electrode away from the retina into the
+vitreous humor (:math:`z` is sometimes called electrode-retina distance).
+Analogously, negative :math:`z` values move an electrode through the different
+retinal layers towards the outer retina.
+
 Understanding the ProsthesisSystem class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -91,7 +113,7 @@ prosthesis system is a Python dictionary:
 .. ipython:: python
 
     from pulse2percept.implants import ArgusI
-    for name, electrode in ArgusI().items():
+    for name, electrode in ArgusI().electrodes.items():
         print(name, electrode)
 
 

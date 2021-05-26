@@ -20,7 +20,12 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
     Parameters
     ----------
     x/y/z : double
-        3D location of the point source
+        3D location of the electrode.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
     name : str, optional
         Electrode name
     activated : bool
@@ -103,7 +108,12 @@ class PointSource(Electrode):
     Parameters
     ----------
     x/y/z : double
-        3D location of the point source
+        3D location of the electrode.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
     name : str, optional
         Electrode name
     activated : bool
@@ -167,7 +177,12 @@ class DiskElectrode(Electrode):
     Parameters
     ----------
     x/y/z : double
-        3D location that is the center of the disk electrode
+        3D location of the electrode.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
     r : double
         Disk radius in the x,y plane
     name : str, optional
@@ -257,7 +272,12 @@ class SquareElectrode(Electrode):
     Parameters
     ----------
     x/y/z : double
-        3D location that is the center of the square electrode
+        3D location of the electrode.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
     a : double
         Side length of the square
     name : str, optional
@@ -305,7 +325,12 @@ class HexElectrode(Electrode):
     Parameters
     ----------
     x/y/z : double
-        3D location that is the center of the hexagonal electrode
+        3D location of the electrode.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
     a : double
         Length of line drawn from the center of the hexagon to the midpoint of
         one of its sides.
