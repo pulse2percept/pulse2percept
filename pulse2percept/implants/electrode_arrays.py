@@ -295,7 +295,7 @@ class ElectrodeGrid(ElectrodeArray):
     >>> from pulse2percept.implants import ElectrodeGrid
     >>> grid = ElectrodeGrid((3, 3), 20, names=('A', '1'))
     >>> grid['C3']  # doctest: +ELLIPSIS
-    PointSource(x=20..., y=20..., z=0...)
+    PointSource(name='C3', x=20..., y=20..., z=0...)
     >>> grid['C3'] == grid[8] == grid[2, 2]
     True
 
@@ -305,9 +305,9 @@ class ElectrodeGrid(ElectrodeArray):
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> grid = ElectrodeGrid((3, 3), 20, etype=DiskElectrode, r=10)
     >>> grid[['A1', 1, (0, 2)]]  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [DiskElectrode(r=10..., x=-20.0, y=-20.0, z=0...),
-     DiskElectrode(r=10..., x=0.0, y=-20.0, z=0...),
-     DiskElectrode(r=10..., x=20.0, y=-20.0, z=0...)]
+    [DiskElectrode(name='A1', r=10..., x=-20.0, y=-20.0, z=0...),
+     DiskElectrode(name='A2', r=10..., x=0.0, y=-20.0, z=0...),
+     DiskElectrode(name='A3', r=10..., x=20.0, y=-20.0, z=0...)]
 
     """
     # Frozen class: User cannot add more class attributes

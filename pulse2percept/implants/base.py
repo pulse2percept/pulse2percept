@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
-from ..stimuli import Stimulus
+from ..stimuli import Stimulus, ImageStimulus, VideoStimulus
 from ..utils import PrettyPrint
 
 
@@ -217,10 +217,16 @@ class ProsthesisSystem(PrettyPrint):
                 stim = Stimulus(data, electrodes=self.electrode_names)
 
             if len(stim.electrodes) > self.n_electrodes:
-                raise ValueError("Number of electrodes in the stimulus (%d) "
-                                 "does not match the number of electrodes in "
-                                 "the implant (%d)." % (len(stim.electrodes),
-                                                        self.n_electrodes))
+                if (isinstance(stim, (ImageStimulus, VideoStimulus)) and
+                        hasattr(self.earray, 'shape')):
+                    # Convenience function for electrode grids:
+                    stim = stim.rgb2gray().resize(self.earray.shape)
+                else:
+                    err_str = ("Number of electrodes in the stimulus (%d) "
+                               "does not match the number of electrodes in "
+                               "the implant (%d)." % (len(stim.electrodes),
+                                                      self.n_electrodes))
+                    raise ValueError(err_str)
             # Make sure all electrode names are valid:
             for electrode in stim.electrodes:
                 # Invalid index will return None:
