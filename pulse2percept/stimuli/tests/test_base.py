@@ -120,6 +120,15 @@ def test_Stimulus():
     npt.assert_equal(stim.electrodes, [0, 1])
     npt.assert_almost_equal(stim.time, [0, 0.4])
 
+    # Charge-balanced:
+    npt.assert_equal(Stimulus(0).is_charge_balanced, True)
+    npt.assert_equal(Stimulus(1).is_charge_balanced, False)
+    npt.assert_equal(Stimulus([0, 0]).is_charge_balanced, True)
+    npt.assert_equal(Stimulus([[0, 0]]).is_charge_balanced, True)
+    npt.assert_equal(Stimulus([1, -1]).is_charge_balanced, False)
+    npt.assert_equal(Stimulus([[1, -1]]).is_charge_balanced, True)
+    npt.assert_equal(Stimulus([[1, -1], [0, 0.5]]).is_charge_balanced, False)
+
     # Not allowed:
     with pytest.raises(ValueError):
         # First one doesn't have time:

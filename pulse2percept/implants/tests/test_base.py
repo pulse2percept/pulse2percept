@@ -48,6 +48,10 @@ def test_ProsthesisSystem():
         implant.stim = {'A1': 1}
     with pytest.raises(ValueError):
         implant.stim = Stimulus({'A1': 1})
+    # Safe mode requires charge-balanced pulses:
+    with pytest.raises(ValueError):
+        implant = ProsthesisSystem(PointSource(0, 0, 0), safe_mode=True)
+        implant.stim = 1
 
     # Slots:
     npt.assert_equal(hasattr(implant, '__slots__'), True)

@@ -52,7 +52,7 @@ class ProsthesisSystem(PrettyPrint):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('_earray', '_stim', '_eye')
+    __slots__ = ('_earray', '_stim', '_eye', 'safe_mode', 'preprocess')
 
     def __init__(self, earray, stim=None, eye='RE', preprocess=False,
                  safe_mode=False):
@@ -69,7 +69,8 @@ class ProsthesisSystem(PrettyPrint):
 
     @staticmethod
     def _require_charge_balanced(stim):
-        if not self.is_charge_balanced:
+        # Stimuli without a time component return None, others return True/False
+        if stim.is_charge_balanced is False:
             raise ValueError("Safety check: Stimulus must be charge-balanced.")
 
     def check_stim(self, stim):
@@ -91,7 +92,7 @@ class ProsthesisSystem(PrettyPrint):
             NumPy array, pulse train).
         """
         if self.safe_mode:
-            self._require_charge_balanced()
+            self._require_charge_balanced(stim)
 
     def preprocess_stim(self, stim):
         """Preprocess the stimulus
@@ -222,7 +223,7 @@ class ProsthesisSystem(PrettyPrint):
                                      "implant." % electrode)
             # Preprocess can be a function (callable) or True/False:
             if callable(self.preprocess):
-                stim = self.preprocess(stim):
+                stim = self.preprocess(stim)
             elif self.preprocess:
                 stim = self.preprocess_stim(stim)
             # Perform safety checks, etc.:
