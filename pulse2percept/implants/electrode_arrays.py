@@ -33,14 +33,14 @@ class ElectrodeArray(PrettyPrint):
     >>> from pulse2percept.implants import ElectrodeArray, DiskElectrode
     >>> earray = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
     >>> earray.electrodes  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    OrderedDict([(0, DiskElectrode(r=100..., x=0..., y=0..., z=0...))])
+    OrderedDict([(0, DiskElectrode(name=None, r=100..., x=0..., y=0..., z=0...))])
 
     Electrode array made from a single DiskElectrode with name 'A1':
 
     >>> from pulse2percept.implants import ElectrodeArray, DiskElectrode
     >>> earray = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 100)})
     >>> earray.electrodes  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    OrderedDict([('A1', DiskElectrode(r=100..., x=0..., y=0..., z=0...))])
+    OrderedDict([('A1', DiskElectrode(name=None, r=100..., x=0..., y=0..., z=0...))])
 
     """
     # Frozen class: User cannot add more class attributes
@@ -272,7 +272,7 @@ class ElectrodeGrid(ElectrodeArray):
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> ElectrodeGrid((3, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
     ...               type='hex', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    ElectrodeGrid(shape=(3, 4), spacing=20, type='hex')
+    ElectrodeGrid(rot=0, shape=(3, 4), spacing=20, type='hex')
 
     A rectangulr electrode grid with 2 rows and 4 columns, made of disk
     electrodes with 10um radius spaced 20um apart, centered at (10, 20)um, and

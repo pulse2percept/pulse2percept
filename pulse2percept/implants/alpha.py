@@ -59,8 +59,8 @@ class AlphaIMS(ProsthesisSystem):
 
     >>> from pulse2percept.implants import AlphaIMS
     >>> AlphaIMS(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
-    AlphaIMS(earray=ElectrodeGrid, eye='RE', shape=(39, 39),
-             stim=None)
+    AlphaIMS(earray=ElectrodeGrid, eye='RE', preprocess=True,
+             safe_mode=False, shape=(39, 39), stim=None)
 
     Get access to the third electrode in the top row (by name or by row/column
     index):
@@ -76,7 +76,7 @@ class AlphaIMS(ProsthesisSystem):
     __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None,
-                 preprocess=False, safe_mode=False):
+                 preprocess=True, safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
@@ -193,8 +193,8 @@ class AlphaAMS(ProsthesisSystem):
 
     >>> from pulse2percept.implants import AlphaAMS
     >>> AlphaAMS(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
-    AlphaAMS(earray=ElectrodeGrid, eye='RE', shape=(40, 40),
-             stim=None)
+    AlphaAMS(earray=ElectrodeGrid, eye='RE', preprocess=True,
+             safe_mode=False, shape=(40, 40), stim=None)
 
     Get access to the third electrode in the top row (by name or by row/column
     index):
@@ -210,7 +210,7 @@ class AlphaAMS(ProsthesisSystem):
     __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
-                 preprocess=False, safe_mode=False):
+                 preprocess=True, safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode

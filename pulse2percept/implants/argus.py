@@ -76,8 +76,8 @@ class ArgusI(ProsthesisSystem):
 
     >>> from pulse2percept.implants import ArgusI
     >>> ArgusI(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
-    ArgusI(earray=ElectrodeGrid, eye='RE', shape=(4, 4),
-           stim=None)
+    ArgusI(earray=ElectrodeGrid, eye='RE', preprocess=True,
+           safe_mode=False, shape=(4, 4), stim=None)
 
     Get access to electrode 'B1', either by name or by row/column index:
 
@@ -92,7 +92,7 @@ class ArgusI(ProsthesisSystem):
     __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
-                 preprocess=False, safe_mode=False, use_legacy_names=False):
+                 preprocess=True, safe_mode=False, use_legacy_names=False):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
@@ -210,8 +210,8 @@ class ArgusII(ProsthesisSystem):
 
     >>> from pulse2percept.implants import ArgusII
     >>> ArgusII(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
-    ArgusII(earray=ElectrodeGrid, eye='RE', shape=(6, 10),
-            stim=None)
+    ArgusII(earray=ElectrodeGrid, eye='RE', preprocess=True,
+            safe_mode=False, shape=(6, 10), stim=None)
 
     Get access to electrode 'E7', either by name or by row/column index:
 
@@ -226,7 +226,7 @@ class ArgusII(ProsthesisSystem):
     __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
-                 preprocess=False, safe_mode=False):
+                 preprocess=True, safe_mode=False):
         self.safe_mode = safe_mode
         self.preprocess = preprocess
         self.shape = (6, 10)

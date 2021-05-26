@@ -57,10 +57,10 @@ class ProsthesisSystem(PrettyPrint):
     def __init__(self, earray, stim=None, eye='RE', preprocess=False,
                  safe_mode=False):
         self.earray = earray
-        self.stim = stim
         self.eye = eye
         self.safe_mode = safe_mode
         self.preprocess = preprocess
+        self.stim = stim
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
