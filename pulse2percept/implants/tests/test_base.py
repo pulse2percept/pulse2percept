@@ -63,3 +63,14 @@ def test_ProsthesisSystem_stim():
     stim = Stimulus(np.ones((13 * 13 + 1, 5)))
     with pytest.raises(ValueError):
         implant.stim = stim
+
+    # Deactivated electrodes cannot receive stimuli:
+    implant.deactivate('H4')
+    npt.assert_equal(implant['H4'].activated, False)
+    with pytest.raises(ValueError):
+        implant.stim = {'H4': 1}
+    implant.deactivate('all')
+    with pytest.raises(ValueError):
+        implant.stim = [1] * implant.n_electrodes
+    implant.activate('all')
+    implant.stim = {'H4': 1}

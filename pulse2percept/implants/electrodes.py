@@ -23,10 +23,14 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
         3D location of the point source
     name : str, optional
         Electrode name
+    activated : bool
+        To deactivate, set to ``False``. Deactivated electrodes cannot receive
+        stimuli.
     """
-    __slots__ = ('x', 'y', 'z', 'name', 'plot_patch', 'plot_kwargs')
+    __slots__ = ('x', 'y', 'z', 'name', 'activated', 'plot_patch',
+                 'plot_kwargs', 'plot_deactivated_kwargs')
 
-    def __init__(self, x, y, z, name=None):
+    def __init__(self, x, y, z, name=None, activated=True):
         if isinstance(x, (Sequence, np.ndarray)):
             raise TypeError("x must be a scalar, not %s." % (type(x)))
         if isinstance(y, (Sequence, np.ndarray)):
@@ -37,16 +41,19 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
         self.y = y
         self.z = z
         self.name = name
+        self.activated = activated
         # A matplotlib.patches object (e.g., Circle, Rectangle) that can be
         # used to plot the electrode:
         self.plot_patch = None
         # Any keyword arguments that should be passed to the call above:
         # (e.g., {'radius': 5}):
         self.plot_kwargs = {}
+        self.plot_deactivated_kwargs = {}
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
-        return {'x': self.x, 'y': self.y, 'z': self.z, 'name': self.name}
+        return {'x': self.x, 'y': self.y, 'z': self.z, 'name': self.name,
+                'activated': self.activated}
 
     @abstractmethod
     def electric_potential(self, x, y, z, *args, **kwargs):
@@ -70,15 +77,18 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
         """
         if ax is None:
             _, ax = plt.subplots(figsize=(8, 8))
+        kwargs = self.plot_kwargs
+        if not self.activated:
+            kwargs = self.plot_deactivated_kwargs
         if self.plot_patch is not None:
             if isinstance(self.plot_patch, list):
                 # Special case: draw multiple objects
-                for p, kw in zip(self.plot_patch, self.plot_kwargs):
+                for p, kw in zip(self.plot_patch, kwargs):
                     ax.add_patch(p((self.x, self.y), zorder=10, **kw))
             else:
                 # Regular use case: single object
                 ax.add_patch(self.plot_patch((self.x, self.y), zorder=10,
-                                             **self.plot_kwargs))
+                                             **kwargs))
             # This is needed in MPL 3.0.X to set the axis limit correctly:
             ax.autoscale_view()
         if autoscale:
@@ -96,17 +106,24 @@ class PointSource(Electrode):
         3D location of the point source
     name : str, optional
         Electrode name
+    activated : bool
+        To deactivate, set to ``False``. Deactivated electrodes cannot receive
+        stimuli.
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ()
 
-    def __init__(self, x, y, z, name=None):
-        super(PointSource, self).__init__(x, y, z, name=name)
+    def __init__(self, x, y, z, name=None, activated=True):
+        super(PointSource, self).__init__(x, y, z, name=name,
+                                          activated=activated)
         self.plot_patch = Circle
         self.plot_kwargs = {'radius': 5, 'linewidth': 2,
                             'ec': (0.3, 0.3, 0.3, 1),
                             'fc': (0.8, 0.8, 0.8, 0.7)}
+        self.plot_deactivated_kwargs = {'radius': 5, 'linewidth': 2,
+                                        'ec': (0.5, 0.5, 0.5, 0.6),
+                                        'fc': (0.9, 0.9, 0.9, 0.4)}
 
     def electric_potential(self, x, y, z, amp, sigma):
         """Calculate electric potential at (x, y, z)
@@ -155,13 +172,16 @@ class DiskElectrode(Electrode):
         Disk radius in the x,y plane
     name : str, optional
         Electrode name
+    activated : bool
+        To deactivate, set to ``False``. Deactivated electrodes cannot receive
+        stimuli.
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('r',)
 
-    def __init__(self, x, y, z, r, name=None):
-        super(DiskElectrode, self).__init__(x, y, z, name)
+    def __init__(self, x, y, z, r, name=None, activated=True):
+        super(DiskElectrode, self).__init__(x, y, z, name, activated=activated)
         if isinstance(r, (Sequence, np.ndarray)):
             raise TypeError("Electrode radius must be a scalar.")
         if r <= 0:
@@ -171,6 +191,9 @@ class DiskElectrode(Electrode):
         self.plot_kwargs = {'radius': r, 'linewidth': 2,
                             'ec': (0.3, 0.3, 0.3, 1),
                             'fc': (0.8, 0.8, 0.8, 0.7)}
+        self.plot_deactivated_kwargs = {'radius': r, 'linewidth': 2,
+                                        'ec': (0.5, 0.5, 0.5, 0.6),
+                                        'fc': (0.9, 0.9, 0.9, 0.4)}
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -239,13 +262,17 @@ class SquareElectrode(Electrode):
         Side length of the square
     name : str, optional
         Electrode name
+    activated : bool
+        To deactivate, set to ``False``. Deactivated electrodes cannot receive
+        stimuli.
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('a')
 
-    def __init__(self, x, y, z, a, name=None):
-        super(SquareElectrode, self).__init__(x, y, z, name=name)
+    def __init__(self, x, y, z, a, name=None, activated=True):
+        super(SquareElectrode, self).__init__(x, y, z, name=name,
+                                              activated=activated)
         if isinstance(a, (Sequence, np.ndarray)):
             raise TypeError("Side length must be a scalar.")
         if a <= 0:
@@ -255,6 +282,10 @@ class SquareElectrode(Electrode):
         self.plot_kwargs = {'width': a, 'height': a, 'angle': 0,
                             'linewidth': 2, 'ec': (0.3, 0.3, 0.3, 1),
                             'fc': (0.8, 0.8, 0.8, 0.7)}
+        self.plot_deactivated_kwargs = {'width': a, 'height': a, 'angle': 0,
+                                        'linewidth': 2,
+                                        'ec': (0.5, 0.5, 0.5, 0.6),
+                                        'fc': (0.9, 0.9, 0.9, 0.4)}
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -280,13 +311,17 @@ class HexElectrode(Electrode):
         one of its sides.
     name : str, optional
         Electrode name
+    activated : bool
+        To deactivate, set to ``False``. Deactivated electrodes cannot receive
+        stimuli.
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('a')
 
-    def __init__(self, x, y, z, a, name=None):
-        super(HexElectrode, self).__init__(x, y, z, name=name)
+    def __init__(self, x, y, z, a, name=None, activated=True):
+        super(HexElectrode, self).__init__(x, y, z, name=name,
+                                           activated=activated)
         if isinstance(a, (Sequence, np.ndarray)):
             raise TypeError("Apothem of the hexagon must be a scalar.")
         if a <= 0:
@@ -295,8 +330,14 @@ class HexElectrode(Electrode):
         self.a = a
         self.plot_patch = RegularPolygon
         self.plot_kwargs = {'numVertices': 6, 'radius': a, 'alpha': 0.2,
-                            'orientation': np.radians(30), 'fc': 'k',
-                            'ec': 'k'}
+                            'orientation': np.radians(30),
+                            'ec': (0.3, 0.3, 0.3, 1),
+                            'fc': (0.8, 0.8, 0.8, 0.7)}
+        self.plot_deactivated_kwargs = {'numVertices': 6, 'radius': a,
+                                        'alpha': 0.2,
+                                        'orientation': np.radians(30),
+                                        'ec': (0.5, 0.5, 0.5, 0.6),
+                                        'fc': (0.9, 0.9, 0.9, 0.4)}
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""

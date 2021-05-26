@@ -141,6 +141,12 @@ class ProsthesisSystem(PrettyPrint):
         """
         return self.earray.plot(annotate=annotate, autoscale=autoscale, ax=ax)
 
+    def activate(self, electrodes):
+        self.earray.activate(electrodes)
+
+    def deactivate(self, electrodes):
+        self.earray.deactivate(electrodes)
+
     @property
     def earray(self):
         """Electrode array
@@ -216,6 +222,8 @@ class ProsthesisSystem(PrettyPrint):
                 # Use electrode names as stimulus coordinates:
                 stim = Stimulus(data, electrodes=self.electrode_names)
 
+            print(stim)
+
             if len(stim.electrodes) > self.n_electrodes:
                 if (isinstance(stim, (ImageStimulus, VideoStimulus)) and
                         hasattr(self.earray, 'shape')):
@@ -231,8 +239,11 @@ class ProsthesisSystem(PrettyPrint):
             for electrode in stim.electrodes:
                 # Invalid index will return None:
                 if not self.earray[electrode]:
-                    raise ValueError("Electrode '%s' not found in "
-                                     "implant." % electrode)
+                    raise ValueError('Electrode "%s" not found in '
+                                     'implant.' % electrode)
+                if not self.earray[electrode].activated:
+                    raise ValueError('Cannot assign stimulus to deactivated '
+                                     'Electrode "%s".' % electrode)
             # Perform safety checks, etc.:
             self.check_stim(stim)
             # Store stimulus:

@@ -33,14 +33,18 @@ class ElectrodeArray(PrettyPrint):
     >>> from pulse2percept.implants import ElectrodeArray, DiskElectrode
     >>> earray = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
     >>> earray.electrodes  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    OrderedDict([(0, DiskElectrode(name=None, r=100..., x=0..., y=0..., z=0...))])
+    OrderedDict([(0,
+                  DiskElectrode(activated=True, name=None, r=100..., x=0..., y=0...,
+                  z=0...))])
 
     Electrode array made from a single DiskElectrode with name 'A1':
 
     >>> from pulse2percept.implants import ElectrodeArray, DiskElectrode
     >>> earray = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 100)})
     >>> earray.electrodes  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    OrderedDict([('A1', DiskElectrode(name=None, r=100..., x=0..., y=0..., z=0...))])
+    OrderedDict([('A1',
+                  DiskElectrode(activated=True, name=None, r=100..., x=0..., y=0...,
+                  z=0...))])
 
     """
     # Frozen class: User cannot add more class attributes
@@ -96,6 +100,24 @@ class ElectrodeArray(PrettyPrint):
                               "exist") % name)
         del self.electrodes[name]
 
+    def activate(self, electrodes):
+        if np.isscalar(electrodes):
+            if electrodes == 'all':
+                electrodes = self.electrode_names
+            else:
+                electrodes = [electrodes]
+        for electrode in electrodes:
+            self.__getitem__(electrode).activated = True
+
+    def deactivate(self, electrodes):
+        if np.isscalar(electrodes):
+            if electrodes == 'all':
+                electrodes = self.electrode_names
+            else:
+                electrodes = [electrodes]
+        for electrode in electrodes:
+            self.__getitem__(electrode).activated = False
+
     def plot(self, annotate=False, autoscale=True, ax=None):
         """Plot the electrode array
 
@@ -121,16 +143,19 @@ class ElectrodeArray(PrettyPrint):
         for name, electrode in self.electrodes.items():
             # Rather than calling electrode.plot(), generate all the patch
             # objects and add them to a collection:
+            kwargs = electrode.plot_kwargs
+            if not electrode.activated:
+                kwargs = electrode.plot_deactivated_kwargs
             if isinstance(electrode.plot_patch, list):
                 # Special case: draw multiple objects per electrode
-                for p, kw in zip(electrode.plot_patch, electrode.plot_kwargs):
+                for p, kw in zip(electrode.plot_patch, kwargs):
                     patches.append(p((electrode.x, electrode.y), zorder=10,
                                      **kw))
             else:
                 # Regular use case: single object
                 patches.append(electrode.plot_patch((electrode.x, electrode.y),
                                                     zorder=10,
-                                                    **electrode.plot_kwargs))
+                                                    **kwargs))
             if annotate:
                 ax.text(electrode.x, electrode.y, name, ha='center',
                         va='center',  color='black', size='large',
@@ -274,7 +299,7 @@ class ElectrodeGrid(ElectrodeArray):
     ...               type='hex', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     ElectrodeGrid(rot=0, shape=(3, 4), spacing=20, type='hex')
 
-    A rectangulr electrode grid with 2 rows and 4 columns, made of disk
+    A rectangular electrode grid with 2 rows and 4 columns, made of disk
     electrodes with 10um radius spaced 20um apart, centered at (10, 20)um, and
     located 500um away from the retinal surface, with names like this:
 
@@ -294,8 +319,9 @@ class ElectrodeGrid(ElectrodeArray):
 
     >>> from pulse2percept.implants import ElectrodeGrid
     >>> grid = ElectrodeGrid((3, 3), 20, names=('A', '1'))
-    >>> grid['C3']  # doctest: +ELLIPSIS
-    PointSource(name='C3', x=20..., y=20..., z=0...)
+    >>> grid['C3']  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    PointSource(activated=True, name='C3', x=20..., y=20...,
+                z=0...)
     >>> grid['C3'] == grid[8] == grid[2, 2]
     True
 
@@ -305,9 +331,12 @@ class ElectrodeGrid(ElectrodeArray):
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> grid = ElectrodeGrid((3, 3), 20, etype=DiskElectrode, r=10)
     >>> grid[['A1', 1, (0, 2)]]  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [DiskElectrode(name='A1', r=10..., x=-20.0, y=-20.0, z=0...),
-     DiskElectrode(name='A2', r=10..., x=0.0, y=-20.0, z=0...),
-     DiskElectrode(name='A3', r=10..., x=20.0, y=-20.0, z=0...)]
+    [DiskElectrode(activated=True, name='A1', r=10..., x=-20.0,
+                   y=-20.0, z=0...),
+     DiskElectrode(activated=True, name='A2', r=10..., x=0.0,
+                   y=-20.0, z=0...),
+     DiskElectrode(activated=True, name='A3', r=10..., x=20.0,
+                   y=-20.0, z=0...)]
 
     """
     # Frozen class: User cannot add more class attributes

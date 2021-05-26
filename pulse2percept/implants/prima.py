@@ -26,13 +26,17 @@ class PhotovoltaicPixel(HexElectrode):
     a : double
         Length of line drawn from the center of the hexagon to the midpoint of
         one of its sides.
+    activated : bool
+        To deactivate, set to ``False``. Deactivated electrodes cannot receive
+        stimuli.
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('r', 'a')
 
-    def __init__(self, x, y, z, r, a, name=None):
-        super(PhotovoltaicPixel, self).__init__(x, y, z, a, name=name)
+    def __init__(self, x, y, z, r, a, name=None, activated=True):
+        super(PhotovoltaicPixel, self).__init__(x, y, z, a, name=name,
+                                                activated=activated)
         if isinstance(r, (Sequence, np.ndarray)):
             raise TypeError("Radius of the active electrode must be a scalar.")
         if r <= 0:
@@ -42,10 +46,15 @@ class PhotovoltaicPixel(HexElectrode):
         # Plot two objects: hex honeycomb and circular active electrode
         self.plot_patch = [RegularPolygon, Circle]
         self.plot_kwargs = [{'radius': a, 'numVertices': 6, 'alpha': 0.2,
-                             'orientation': np.radians(30), 'fc': 'k',
-                             'ec': 'k'},
+                             'orientation': np.radians(30),
+                             'fc': 'k', 'ec': 'k'},
                             {'radius': r, 'linewidth': 0, 'color': 'k',
                              'alpha': 0.5}]
+        self.plot_deactivated_kwargs = [{'radius': a, 'numVertices': 6,
+                                         'orientation': np.radians(30),
+                                         'fc': 'k', 'ec': 'k', 'alpha': 0.1},
+                                        {'radius': r, 'linewidth': 0,
+                                         'color': 'k', 'alpha': 0.2}]
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
