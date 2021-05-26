@@ -67,9 +67,9 @@ class AlphaIMS(ProsthesisSystem):
 
     >>> alpha_ims = AlphaIMS(x=0, y=0, z=100, rot=0)
     >>> alpha_ims['A3']
-    SquareElectrode(a=50.0, x=-1224.0, y=-1368.0, z=100.0)
+    SquareElectrode(a=50.0, name='A3', x=-1224.0, y=-1368.0, z=100.0)
     >>> alpha_ims[0, 2]
-    SquareElectrode(a=50.0, x=-1224.0, y=-1368.0, z=100.0)
+    SquareElectrode(a=50.0, name='A3', x=-1224.0, y=-1368.0, z=100.0)
 
     """
     # Frozen class: User cannot add more class attributes
@@ -201,9 +201,9 @@ class AlphaAMS(ProsthesisSystem):
 
     >>> alpha_ims = AlphaAMS(x=0, y=0, z=100, rot=0)
     >>> alpha_ims['A3']
-    DiskElectrode(r=15.0, x=-1225.0, y=-1365.0, z=100.0)
+    DiskElectrode(name='A3', r=15.0, x=-1225.0, y=-1365.0, z=100.0)
     >>> alpha_ims[0, 2]
-    DiskElectrode(r=15.0, x=-1225.0, y=-1365.0, z=100.0)
+    DiskElectrode(name='A3', r=15.0, x=-1225.0, y=-1365.0, z=100.0)
 
     """
     # Frozen class: User cannot add more class attributes

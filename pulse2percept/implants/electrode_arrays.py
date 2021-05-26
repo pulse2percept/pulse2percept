@@ -286,7 +286,7 @@ class ElectrodeGrid(ElectrodeArray):
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
     >>> ElectrodeGrid((2, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
     ...               type='rect', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    ElectrodeGrid(shape=(2, 4), spacing=20, type='rect')
+    ElectrodeGrid(rot=0, shape=(2, 4), spacing=20, type='rect')
 
     There are three ways to access (e.g.) the last electrode in the grid,
     either by name (``grid['C3']``), by row/column index (``grid[2, 2]``), or

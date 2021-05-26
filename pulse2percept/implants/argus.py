@@ -83,9 +83,9 @@ class ArgusI(ProsthesisSystem):
 
     >>> argus = ArgusI(x=0, y=0, z=100, rot=0)
     >>> argus['B1']
-    DiskElectrode(r=250.0, x=-400.0, y=-1200.0, z=100.0)
+    DiskElectrode(name='B1', r=250.0, x=-400.0, y=-1200.0, z=100.0)
     >>> argus[0, 1]
-    DiskElectrode(r=250.0, x=-400.0, y=-1200.0, z=100.0)
+    DiskElectrode(name='B1', r=250.0, x=-400.0, y=-1200.0, z=100.0)
 
     """
     # Frozen class: User cannot add more class attributes
@@ -217,9 +217,9 @@ class ArgusII(ProsthesisSystem):
 
     >>> argus = ArgusII(x=0, y=0, z=100, rot=0)
     >>> argus['E7']
-    DiskElectrode(r=112.5, x=862.5, y=862.5, z=100.0)
+    DiskElectrode(name='E7', r=112.5, x=862.5, y=862.5, z=100.0)
     >>> argus[4, 6]
-    DiskElectrode(r=112.5, x=862.5, y=862.5, z=100.0)
+    DiskElectrode(name='E7', r=112.5, x=862.5, y=862.5, z=100.0)
 
     """
     # Frozen class: User cannot add more class attributes
