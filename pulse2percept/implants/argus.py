@@ -217,10 +217,10 @@ class ArgusII(ProsthesisSystem):
 
     >>> argus = ArgusII(x=0, y=0, z=100, rot=0)
     >>> argus['E7']
-    DiskElectrode(name='E7', r=112.5, x=862.5, y=862.5,
+    DiskElectrode(name='E7', r=112.5, x=862.5, y=862.5,...
                   z=100.0)
     >>> argus[4, 6]
-    DiskElectrode(name='E7', r=112.5, x=862.5, y=862.5,
+    DiskElectrode(name='E7', r=112.5, x=862.5, y=862.5,...
                   z=100.0)
 
     """
