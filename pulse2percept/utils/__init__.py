@@ -19,7 +19,7 @@ from .base import (PrettyPrint, FreezeError, Frozen, Data, bijective26_name,
 from .geometry import (Grid2D, RetinalCoordTransform, Curcio1990Transform,
                        Watson2014Transform, Watson2014DisplaceTransform,
                        cart2pol, pol2cart, delta_angle)
-from .array import radial_mask, unique
+from .array import is_strictly_increasing, radial_mask, unique
 from .images import center_image, scale_image, shift_image, trim_image
 from .convolution import center_vector, conv
 from .optimize import bisect
@@ -44,6 +44,7 @@ __all__ = [
     'Frozen',
     'gamma',
     'Grid2D',
+    'is_strictly_increasing',
     'parfor',
     'pol2cart',
     'PrettyPrint',

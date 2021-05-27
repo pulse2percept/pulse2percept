@@ -1,5 +1,5 @@
 """`Stimulus`, `ImageStimulus`"""
-from ..utils import PrettyPrint, parfor, unique
+from ..utils import PrettyPrint, parfor, unique, is_strictly_increasing
 from ._base import fast_compress_space, fast_compress_time
 from . import DT, MIN_AMP
 
@@ -260,9 +260,13 @@ class Stimulus(PrettyPrint):
                     # In all other cases, use the electrode names specified by
                     # the source (unless they're None):
                     _electrodes.append(e if e is not None else ele)
-                if 'metadata' in dir(src) and src.metadata is not None:
+                try:
                     self.metadata['electrodes'][str(ele)] = {
-                        'metadata': src.metadata, 'type': type(src)}
+                        'metadata': src.metadata,
+                        'type': type(src)
+                    }
+                except AttributeError:
+                    pass
             # Make sure all stimuli have time=None or none of them do:
             if len(np.unique([t is None for t in _time])) > 1:
                 raise ValueError("If one stimulus has time=None, all others "
@@ -733,13 +737,8 @@ class Stimulus(PrettyPrint):
         """Shift every time point in the stimulus some ms into the past"""
         return self.__rshift__(-scalar)
 
-    @property
-    def _stim(self):
-        """A dictionary containing all the stimulus data"""
-        return self.__stim
-
-    @_stim.setter
-    def _stim(self, stim):
+    @staticmethod
+    def _check_stim(self, stim):
         # Check stimulus data for consistency:
         for field in ['data', 'electrodes', 'time']:
             if field not in stim:
@@ -760,29 +759,22 @@ class Stimulus(PrettyPrint):
                 raise ValueError("Number of time points (%d) must match the "
                                  "number of columns in the data array "
                                  "(%d)." % (n_time, data_shape[1]))
-            if n_time > 1:
-                # All time points must be unique, but we have to be careful
-                # with the floating-point math. We consider two time points as
-                # being unique if they differ by more than half a DT:
-                uniq, idx_uniq = unique(stim['time'], tol=0.5*DT,
-                                        return_index=True)
-                if len(uniq) != n_time:
-                    err_str = ("The following time points are separated by "
-                               "less than DT=%.0ems: " % DT)
-                    err_str += ", ".join([
-                        "time[%d]=%f and time[%d]=%f" % (i-1,
-                                                         stim['time'][i-1],
-                                                         i, stim['time'][i])
-                        for i in idx_uniq
-                    ])
-                    raise ValueError(err_str)
-            if not np.all(np.argsort(stim['time']) == np.arange(n_time)):
+            if not is_strictly_increasing(stim['time'], tol=0.95*DT):
                 raise ValueError("Time points must be stricly monotonically "
                                  "increasing:", list(stim['time']))
         elif data_shape[0] > 0:
             if data_shape[1] > 1:
                 raise ValueError("Number of columns in the data array must be "
                                  "1 if time=None.")
+
+    @property
+    def _stim(self):
+        """A dictionary containing all the stimulus data"""
+        return self.__stim
+
+    @_stim.setter
+    def _stim(self, stim):
+        self._check_stim(stim)
         # All checks passed, store the data:
         self.__stim = stim
 

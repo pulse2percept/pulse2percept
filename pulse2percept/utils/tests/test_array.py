@@ -2,7 +2,16 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.utils import radial_mask, unique
+from pulse2percept.utils import is_strictly_increasing, radial_mask, unique
+
+
+def test_is_strictly_increasing():
+    npt.assert_equal(is_strictly_increasing([1]), True)
+    npt.assert_equal(is_strictly_increasing([0, 1, 2]), True)
+    npt.assert_equal(is_strictly_increasing([0, 1, 2], tol=1), True)
+    npt.assert_equal(is_strictly_increasing([0, 0.5, 1], tol=1), False)
+    npt.assert_equal(is_strictly_increasing([0, 0, 0]), False)
+    npt.assert_equal(is_strictly_increasing([0, 2, 1]), False)
 
 
 def test_unique():
