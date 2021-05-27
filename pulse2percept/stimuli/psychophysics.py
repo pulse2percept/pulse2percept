@@ -16,8 +16,8 @@ class GratingStimulus(VideoStimulus):
     Parameters
     ----------
     shape : (height, width)
-        A tuple specifying the desired height and the width of the grating
-        stimulus.
+        A tuple specifying the desired height (pixels) and the width (pixels)
+        of the grating stimulus.
 
     direction : scalar in [0, 360) degrees, optional
         Drift direction of the grating.
@@ -107,8 +107,8 @@ class BarStimulus(VideoStimulus):
     Parameters
     ----------
     shape : (height, width)
-        A tuple specifying the desired height and the width of the bar
-        stimulus.
+        A tuple specifying the desired height (pixels) and the width (pixels)
+        of the grating stimulus.
 
     direction : scalar in [0, 360) degrees, optional
         Drift direction of the bar.
