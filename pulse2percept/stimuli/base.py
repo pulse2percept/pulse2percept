@@ -2,6 +2,7 @@
 from ..utils import PrettyPrint, parfor, unique
 from ._base import fast_compress_space, fast_compress_time
 from . import DT, MIN_AMP
+
 import logging
 from sys import _getframe
 from matplotlib.axes import Subplot
@@ -740,58 +741,46 @@ class Stimulus(PrettyPrint):
     @_stim.setter
     def _stim(self, stim):
         # Check stimulus data for consistency:
-        if not isinstance(stim, dict):
-            raise TypeError("Stimulus data must be stored in a dictionary, "
-                            "not %s." % type(stim))
         for field in ['data', 'electrodes', 'time']:
             if field not in stim:
                 raise AttributeError("Stimulus dict must contain a field "
                                      "'%s'." % field)
-        if len(stim['data']) > 0:
-            if not isinstance(stim['data'], np.ndarray):
-                raise TypeError("Stimulus data must be a NumPy array, not "
-                                "%s." % type(stim['data']))
-            if stim['data'].ndim != 2:
-                raise ValueError("Stimulus data must be a 2-D NumPy array, not "
-                                 "%d-D." % stim['data'].ndim)
-        if len(stim['electrodes']) != stim['data'].shape[0]:
+        data_shape = stim['data'].shape
+        if data_shape[0] > 0 and stim['data'].ndim != 2:
+            raise ValueError("Stimulus data must be a 2-D NumPy array, not "
+                             "%d-D." % stim['data'].ndim)
+        n_electrodes = len(stim['electrodes'])
+        if n_electrodes != data_shape[0]:
             raise ValueError("Number of electrodes (%d) must match the number "
                              "of rows in the data array "
-                             "(%d)." % (len(stim['electrodes']),
-                                        stim['data'].shape[0]))
-        if len(stim['electrodes']) != stim['data'].shape[0]:
-            raise ValueError("Number of electrodes (%d) must match the number "
-                             "of rows in the data array "
-                             "(%d)." % (len(stim['electrodes']),
-                                        stim['data'].shape[0]))
+                             "(%d)." % (n_electrodes, data_shape[0]))
         if stim['time'] is not None:
-            if len(stim['time']) != stim['data'].shape[1]:
+            n_time = len(stim['time'])
+            if n_time != data_shape[1]:
                 raise ValueError("Number of time points (%d) must match the "
                                  "number of columns in the data array "
-                                 "(%d)." % (len(stim['time']),
-                                            stim['data'].shape[1]))
-            n_time = len(stim['time'])
+                                 "(%d)." % (n_time, data_shape[1]))
             if n_time > 1:
                 # All time points must be unique, but we have to be careful
-                # with the floatin-point math. We consider two time points as
+                # with the floating-point math. We consider two time points as
                 # being unique if they differ by more than half a DT:
-                idx_unique = [True] + list(np.diff(stim['time']) > 0.5 * DT)
-                n_unique = np.sum(idx_unique)
-                if n_unique != n_time:
+                uniq, idx_uniq = unique(stim['time'], tol=0.5*DT,
+                                        return_index=True)
+                if len(uniq) != n_time:
                     err_str = ("The following time points are separated by "
                                "less than DT=%.0ems: " % DT)
                     err_str += ", ".join([
-                        "time[%d]=%f and time[%d]=%f" % (i - 1,
-                                                         stim['time'][i - 1],
+                        "time[%d]=%f and time[%d]=%f" % (i-1,
+                                                         stim['time'][i-1],
                                                          i, stim['time'][i])
-                        for i in np.where(np.bitwise_not(idx_unique))[0]
+                        for i in idx_uniq
                     ])
                     raise ValueError(err_str)
             if not np.all(np.argsort(stim['time']) == np.arange(n_time)):
                 raise ValueError("Time points must be stricly monotonically "
                                  "increasing:", list(stim['time']))
-        elif len(stim['data']) > 0:
-            if stim['data'].shape[1] > 1:
+        elif data_shape[0] > 0:
+            if data_shape[1] > 1:
                 raise ValueError("Number of columns in the data array must be "
                                  "1 if time=None.")
         # All checks passed, store the data:

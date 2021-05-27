@@ -306,7 +306,7 @@ def test_Stimulus__stim():
     # would lead to inconsistencies between data, electrodes, time. The new
     # property setting mechanism prevents that.
     # Requires dict:
-    with pytest.raises(TypeError):
+    with pytest.raises(AttributeError):
         stim._stim = np.array([0, 1])
     # Dict must have all required fields:
     fields = ['data', 'electrodes', 'time']
@@ -317,9 +317,6 @@ def test_Stimulus__stim():
             stim._stim = {f: None for f in _fields}
     # Data must be a 2-D NumPy array:
     data = {f: None for f in fields}
-    with pytest.raises(TypeError):
-        data['data'] = [1, 2]
-        stim._stim = data
     with pytest.raises(ValueError):
         data['data'] = np.ones(3)
         stim._stim = data

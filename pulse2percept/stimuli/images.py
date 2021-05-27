@@ -487,8 +487,8 @@ class ImageStimulus(Stimulus):
         stim = []
         for px, e in zip(px_data.ravel(), self.electrodes):
             amp = px * (amp_range[1] - amp_range[0]) + amp_range[0]
-            stim.append(Stimulus(amp * enc_data, time=pulse.time,
-                                 electrodes=e))
+            s = Stimulus(amp * enc_data, time=pulse.time, electrodes=e)
+            stim.append(s)
         return Stimulus(stim)
 
     def plot(self, ax=None, **kwargs):
