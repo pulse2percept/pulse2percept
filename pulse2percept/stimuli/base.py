@@ -737,7 +737,6 @@ class Stimulus(PrettyPrint):
         """Shift every time point in the stimulus some ms into the past"""
         return self.__rshift__(-scalar)
 
-    @staticmethod
     def _check_stim(self, stim):
         # Check stimulus data for consistency:
         for field in ['data', 'electrodes', 'time']:
