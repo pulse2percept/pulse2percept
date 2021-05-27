@@ -205,7 +205,8 @@ class VideoStimulus(Stimulus):
 
         """
         vid = self.data.reshape(self.vid_shape)
-        vid = rgb2gray(vid.transpose((0, 1, 3, 2)))
+        if len(self.vid_shape) == 4:
+            vid = rgb2gray(vid.transpose((0, 1, 3, 2)))
         return VideoStimulus(vid, electrodes=electrodes, time=self.time,
                              metadata=self.metadata)
 
