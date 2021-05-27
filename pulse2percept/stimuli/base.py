@@ -9,7 +9,7 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 from copy import deepcopy
 import operator as ops
-
+from math import isclose
 import numpy as np
 np.set_printoptions(precision=2, threshold=5, edgeitems=2)
 
@@ -387,7 +387,7 @@ class Stimulus(PrettyPrint):
         stim = deepcopy(self)
         # Last time point of `self` can be merged with first point of `other`
         # but only if they have the same amplitude(s):
-        if np.isclose(other.time[0], 0, atol=DT):
+        if isclose(other.time[0], 0, abs_tol=DT):
             if not np.allclose(other.data[:, 0], self.data[:, -1]):
                 err_str = ("Data mismatch: Cannot append other stimulus "
                            "because other[t=0] != this[t=%fms]. You may need "

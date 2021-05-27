@@ -1,5 +1,6 @@
 """`center_image`, `scale_image`, `shift_image`, `trim_image`"""
 import numpy as np
+from math import isclose
 from skimage import img_as_bool, img_as_ubyte, img_as_float32
 from skimage.color import rgba2rgb, rgb2gray
 from skimage.measure import moments
@@ -77,7 +78,7 @@ def center_image(img, loc=None):
                          "%dD." % img.ndim)
     m = moments(img, order=1)
     # No area found:
-    if np.isclose(m[0, 0], 0):
+    if isclose(m[0, 0], 0):
         return img
     # Center location:
     if loc is None:
@@ -117,7 +118,7 @@ def scale_image(img, scaling_factor):
     # Calculate center of mass:
     m = moments(img, order=1)
     # No area found:
-    if np.isclose(m[0, 0], 0):
+    if isclose(m[0, 0], 0):
         return img
     # Shift the phosphene to (0, 0):
     center_mass = np.array([m[0, 1] / m[0, 0], m[1, 0] / m[0, 0]])

@@ -3,6 +3,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Rectangle, RegularPolygon
 
+from math import isclose
 import numpy as np
 from abc import ABCMeta, abstractmethod
 # Using or importing the ABCs from 'collections' instead of from
@@ -166,7 +167,7 @@ class PointSource(Electrode):
 
         """
         r = np.sqrt((x - self.x) ** 2 + (y - self.y) ** 2 + (z - self.z) ** 2)
-        if np.isclose(r, 0):
+        if isclose(r, 0):
             return sigma * amp
         return sigma * amp / (4.0 * np.pi * r)
 
@@ -248,7 +249,7 @@ class DiskElectrode(Electrode):
         """
         radial_dist = np.sqrt((x - self.x) ** 2 + (y - self.y) ** 2)
         axial_dist = z - self.z
-        if np.isclose(axial_dist, 0):
+        if isclose(axial_dist, 0):
             # Potential on the electrode surface (Eq. 9 in Wiley & Webster):
             if radial_dist > self.r:
                 # Outside the electrode:
