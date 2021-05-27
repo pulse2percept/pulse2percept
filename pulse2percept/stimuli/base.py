@@ -279,10 +279,12 @@ class Stimulus(PrettyPrint):
         if electrodes is not None:
             _electrodes = np.array([electrodes]).flatten()
         else:
-            try:
-                _electrodes = np.concatenate(_electrodes)
-            except ValueError:
-                _electrodes = np.array(_electrodes)
+            if not isinstance(_electrodes, np.ndarray):
+                # Could be a list of NumPy arrays, need to flatten:
+                try:
+                    _electrodes = np.concatenate(_electrodes)
+                except ValueError:
+                    _electrodes = np.array(_electrodes)
         if len(_electrodes) != _data.shape[0]:
             raise ValueError("Number of electrodes provided (%d) does not "
                              "match the number of electrodes in the data "
