@@ -487,8 +487,6 @@ class ImageStimulus(Stimulus):
         # Amplitude modulation:
         stim = {}
         for px, e in zip(px_data.ravel(), self.electrodes):
-            if isclose(px, 0):
-                continue
             amp = px * (amp_range[1] - amp_range[0]) + amp_range[0]
             s = Stimulus(amp * enc_data, time=pulse.time, electrodes=e)
             stim.update({e: s})
