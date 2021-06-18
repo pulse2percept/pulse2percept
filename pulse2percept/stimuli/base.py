@@ -1,4 +1,5 @@
 """`Stimulus`, `ImageStimulus`"""
+import warnings
 from ..utils import PrettyPrint, parfor, unique, is_strictly_increasing
 from ._base import fast_compress_space, fast_compress_time
 from . import DT, MIN_AMP
@@ -12,6 +13,9 @@ import operator as ops
 from math import isclose
 import numpy as np
 np.set_printoptions(precision=2, threshold=5, edgeitems=2)
+
+# Log all warnings.warn() at the WARNING level:
+logging.captureWarnings(True)
 
 
 def merge_time_axes(data, time):
@@ -300,7 +304,7 @@ class Stimulus(PrettyPrint):
             idx = np.delete(np.arange(len(_electrodes)), nunq)
             msg = ("Duplicate electrode names detected %s, and replaced with "
                    "integer values" % _electrodes[idx])
-            logging.getLogger(__name__).warning(msg)
+            warnings.warn(msg)
             _electrodes[idx] = idx
 
         # User can overwrite time:
@@ -759,8 +763,9 @@ class Stimulus(PrettyPrint):
                                  "number of columns in the data array "
                                  "(%d)." % (n_time, data_shape[1]))
             if not is_strictly_increasing(stim['time'], tol=0.95*DT):
-                raise ValueError("Time points must be stricly monotonically "
-                                 "increasing:", list(stim['time']))
+                msg = ("Time points must be strictly monotonically ",
+                       "increasing: %s" % list(stim['time']))
+                warnings.warn(msg)
         elif data_shape[0] > 0:
             if data_shape[1] > 1:
                 raise ValueError("Number of columns in the data array must be "

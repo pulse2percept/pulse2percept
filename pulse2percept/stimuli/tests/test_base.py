@@ -8,6 +8,7 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
 from pulse2percept.stimuli import Stimulus, DT
+from pulse2percept.utils.testing import assert_warns_msg
 
 
 def test_Stimulus():
@@ -148,9 +149,8 @@ def test_Stimulus():
     with pytest.raises(ValueError):
         # Can't force time:
         stim = Stimulus(3, time=[0.4])
-    with pytest.raises(ValueError):
-        # Time points not stricly monotonically increasing:
-        stim = Stimulus([[1, 2, 3]], time=[1, 2, 1.9])
+    msg = "Time points must be strictly monotonically increasing"
+    assert_warns_msg(UserWarning, Stimulus, msg, [[1, 2, 3]], time=[1, 2, 1.9])
 
 
 def test_Stimulus_compress():
@@ -300,6 +300,13 @@ def test_Stimulus_plot():
         stim.plot(ax=axes)
 
 
+def _unique_timepoints(stim, data):
+    data['data'] = np.array([[1, 0, 1, 0, 2, 0, 1]])
+    data['time'] = np.array([0, 1, 1.5, 2, 2.1, 2.10000000000001, 2.2])
+    data['electrodes'] = np.arange(1)
+    stim._stim = data
+
+
 def test_Stimulus__stim():
     stim = Stimulus(3)
     # User could try and motify the data container after the constructor, which
@@ -332,12 +339,9 @@ def test_Stimulus__stim():
         data['electrodes'] = np.arange(3)
         data['time'] = np.arange(7)
         stim._stim = data
-    with pytest.raises(ValueError):
-        # Time points must be unique:
-        data['data'] = np.array([[1, 0, 1, 0, 2, 0, 1]])
-        data['time'] = np.array([0, 1, 1.5, 2, 2.1, 2.10000000000001, 2.2])
-        data['electrodes'] = np.arange(1)
-        stim._stim = data
+    # Time points must be unique:
+    msg = "Time points must be strictly monotonically increasing"
+    assert_warns_msg(UserWarning, _unique_timepoints, msg, stim, data)
     # But if you do all the things right, you can reset the stimulus by hand:
     data['data'] = np.ones((3, 1))
     data['electrodes'] = np.arange(3)
