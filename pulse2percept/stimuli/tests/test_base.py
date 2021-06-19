@@ -149,8 +149,7 @@ def test_Stimulus():
     with pytest.raises(ValueError):
         # Can't force time:
         stim = Stimulus(3, time=[0.4])
-    msg = "Time points must be strictly monotonically increasing"
-    assert_warns_msg(UserWarning, Stimulus, msg, [[1, 2, 3]], time=[1, 2, 1.9])
+    assert_warns_msg(UserWarning, Stimulus, None, [[1, 2, 3]], time=[1, 2, 1.9])
 
 
 def test_Stimulus_compress():
