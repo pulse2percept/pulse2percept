@@ -1,6 +1,7 @@
 """`ImageStimulus`, `LogoBVL`, `LogoUCSB`, `SnellenChart`"""
 from os.path import dirname, join
 import numpy as np
+from math import isclose
 from copy import deepcopy
 import matplotlib.pyplot as plt
 
@@ -477,18 +478,18 @@ class ImageStimulus(Stimulus):
                 raise ValueError("'pulse' must have a time component.")
         # Make sure the provided pulse has max amp 1:
         enc_data = pulse.data
-        if not np.isclose(np.abs(enc_data).max(), 0):
+        if not isclose(np.abs(enc_data).max(), 0):
             enc_data /= np.abs(enc_data).max()
         # Normalize the range of pixel values:
         px_data = self.data - self.data.min()
-        if not np.isclose(np.abs(px_data).max(), 0):
+        if not isclose(np.abs(px_data).max(), 0):
             px_data /= np.abs(px_data).max()
         # Amplitude modulation:
-        stim = []
+        stim = {}
         for px, e in zip(px_data.ravel(), self.electrodes):
             amp = px * (amp_range[1] - amp_range[0]) + amp_range[0]
-            stim.append(Stimulus(amp * enc_data, time=pulse.time,
-                                 electrodes=e))
+            s = Stimulus(amp * enc_data, time=pulse.time, electrodes=e)
+            stim.update({e: s})
         return Stimulus(stim)
 
     def plot(self, ax=None, **kwargs):

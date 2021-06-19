@@ -1,6 +1,13 @@
-"""`unique`, `radial_mask`"""
+"""`is_strictly_increasing`, `unique`, `radial_mask`"""
 
+from ._array import fast_is_strictly_increasing
 import numpy as np
+
+
+def is_strictly_increasing(arr, tol=1e-6):
+    a = np.ascontiguousarray(arr[:-1], dtype=np.float32)
+    b = np.ascontiguousarray(arr[1:], dtype=np.float32)
+    return fast_is_strictly_increasing(a, b, np.float32(tol))
 
 
 def unique(a, tol=1e-6, return_index=False):

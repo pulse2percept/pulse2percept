@@ -1,6 +1,7 @@
 """`VideoStimulus`, `BostonTrain`"""
 from os.path import dirname, join
 import numpy as np
+from math import isclose
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
@@ -14,7 +15,8 @@ from skimage import img_as_float32
 from imageio import get_reader as video_reader
 
 from .base import Stimulus
-from ..utils import center_image, shift_image, scale_image, unique
+from .pulses import BiphasicPulse
+from ..utils import center_image, shift_image, scale_image, trim_image, unique
 
 
 class VideoStimulus(Stimulus):
@@ -205,7 +207,8 @@ class VideoStimulus(Stimulus):
 
         """
         vid = self.data.reshape(self.vid_shape)
-        vid = rgb2gray(vid.transpose((0, 1, 3, 2)))
+        if len(self.vid_shape) == 4:
+            vid = rgb2gray(vid.transpose((0, 1, 3, 2)))
         return VideoStimulus(vid, electrodes=electrodes, time=self.time,
                              metadata=self.metadata)
 
@@ -243,6 +246,45 @@ class VideoStimulus(Stimulus):
                          (height, width, *self.vid_shape[2:]))
         return VideoStimulus(vid, electrodes=electrodes, time=self.time,
                              metadata=self.metadata)
+
+    def trim(self, tol=0, electrodes=None):
+        """Remove any black border around the video
+
+        .. versionadded:: 0.7
+
+        Parameters
+        ----------
+        tol : float
+            Any pixels with gray levels > tol will be trimmed.
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, electrode names will be numbered 0..N.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in each frame of the trimmed video.
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object with trimmed borders.
+
+        """
+        vid = self.data.reshape(self.vid_shape)
+        # First we trim each frame individually and record the start and stop
+        # indices for rows and columns:
+        rows, cols = [], []
+        for i in range(vid.shape[-1]):
+            _, r, c = trim_image(vid[..., i], return_coords=True)
+            rows.append(r)
+            cols.append(c)
+        rows, cols = np.array(rows), np.array(cols)
+        # Then we
+        col_start, col_end = cols[:, 0].min(), cols[:, 1].max()
+        row_start, row_end = rows[:, 0].min(), rows[:, 1].max()
+        vid = vid[row_start:row_end, col_start:col_end, ...]
+        return VideoStimulus(vid, electrodes=electrodes, metadata=self.metadata,
+                             time=self.time)
 
     def rotate(self, angle, mode='constant'):
         """Rotate each frame of the video
@@ -369,9 +411,72 @@ class VideoStimulus(Stimulus):
             raise ValueError("Unknown filter '%s'." % filt)
         return self.apply(filt, **kwargs)
 
-    def rewind(self):
-        """Rewind the iterator"""
-        self._next_frame = 0
+    def encode(self, amp_range=(0, 50), pulse=None):
+        """Encode image using amplitude modulation
+
+        Encodes the image as a series of pulses, where the gray levels of the
+        image are interpreted as the amplitude of a pulse with values in
+        ``amp_range``.
+
+        By default, a single biphasic pulse is used for each pixel, with 0.46ms
+        phase duration, and 500ms total stimulus duration.
+
+        Parameters
+        ----------
+        amp_range : (min_amp, max_amp)
+            Range of amplitude values to use for the encoding. The image's
+            gray levels will be scaled such that the smallest value is mapped
+            onto ``min_amp`` and the largest onto ``max_amp``.
+        pulse : :py:class:`~pulse2percept.stimuli.Stimulus`, optional
+            A valid pulse or pulse train to be used for the encoding.
+            If None given, a :py:class:`~pulse2percept.stimuli.BiphasicPulse`
+            (0.46 ms phase duration, stimulus duration inferred from the movie
+            frame rate) will be used.
+
+        Returns
+        -------
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
+            Encoded stimulus
+
+        """
+        if pulse is not None:
+            if not isinstance(pulse, Stimulus):
+                raise TypeError("'pulse' must be a Stimulus object.")
+            if pulse.time is None:
+                raise ValueError("'pulse' must have a time component.")
+        # Set frame rate, either from metadata or inferred from stim.time:
+        try:
+            frame_dur = 1000.0 / self.metadata['fps']
+        except KeyError:
+            t_diff = unique(np.diff(self.time))
+            if len(t_diff) > 1:
+                raise NotImplementedError
+            frame_dur = 1000.0 / t_diff[0]
+        # Normalize the range of pixel values:
+        vid_data = self.data - self.data.min()
+        if not isclose(np.abs(vid_data).max(), 0):
+            vid_data /= np.abs(vid_data).max()
+        # For each pixel, we get a list of grayscale values (over time):
+        stim = {}
+        for px_data, e in zip(vid_data, self.electrodes):
+            px_stim = None
+            # For each time point, expand into a pulse train:
+            for px in px_data:
+                if pulse is None:
+                    pulse = BiphasicPulse(1, 0.46, stim_dur=frame_dur)
+                # Make sure the provided pulse has max amp 1:
+                enc_data = pulse.data
+                if not isclose(np.abs(enc_data).max(), 0):
+                    enc_data /= np.abs(enc_data).max()
+                # Amplitude modulation:
+                amp = px * (amp_range[1] - amp_range[0]) + amp_range[0]
+                s = Stimulus(amp * enc_data, time=pulse.time, electrodes=e)
+                if px_stim is None:
+                    px_stim = s
+                else:
+                    px_stim = px_stim.append(s)
+            stim.update({e: px_stim})
+        return Stimulus(stim)
 
     def __iter__(self):
         """Iterate over all frames in self.data"""
@@ -385,6 +490,10 @@ class VideoStimulus(Stimulus):
             raise StopIteration
         self._next_frame += 1
         return self.data[..., this_frame]
+
+    def rewind(self):
+        """Rewind the iterator"""
+        self._next_frame = 0
 
     def play(self, fps=None, repeat=True, annotate_time=True, ax=None):
         """Animate the percept as HTML with JavaScript

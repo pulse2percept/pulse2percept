@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
 from matplotlib.animation import FuncAnimation
+from math import isclose
 
 import imageio
 import logging
@@ -329,7 +330,7 @@ class Percept(Data):
 
         """
         data = self.data - self.data.min()
-        if not np.isclose(np.max(data), 0):
+        if not isclose(np.max(data), 0):
             data = data / np.max(data)
         data = img_as_uint(data)
 

@@ -15,6 +15,10 @@ def configuration(parent_package='', top_path=None):
         config.add_extension('_fast_math',
                              sources=['_fast_math.pyx'],
                              include_dirs=[numpy.get_include()],
+                             libraries=libraries),
+        config.add_extension('_array',
+                             sources=['_array.pyx'],
+                             include_dirs=[numpy.get_include()],
                              libraries=libraries)
     config.add_subpackage('tests')
 

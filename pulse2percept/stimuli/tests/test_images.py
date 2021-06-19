@@ -258,7 +258,6 @@ def test_ImageStimulus_plot():
     imsave(fname, ndarray)
     stim = ImageStimulus(fname)
     ax = stim.plot()
-    print(ax.axis())
     npt.assert_equal(ax.axis(), (-0.5, 4.5, 4.5, -0.5))
     os.remove(fname)
 
