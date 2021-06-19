@@ -133,10 +133,10 @@ class PointSource(Electrode):
         self.plot_patch = Circle
         self.plot_kwargs = {'radius': 5, 'linewidth': 2,
                             'ec': (0.3, 0.3, 0.3, 1),
-                            'fc': (0.8, 0.8, 0.8, 0.7)}
+                            'fc': (1, 1, 1, 0.8)}
         self.plot_deactivated_kwargs = {'radius': 5, 'linewidth': 2,
-                                        'ec': (0.5, 0.5, 0.5, 0.6),
-                                        'fc': (0.9, 0.9, 0.9, 0.4)}
+                                        'ec': (0.6, 0.6, 0.6, 1),
+                                        'fc': (1, 1, 1, 0.6)}
 
     def electric_potential(self, x, y, z, amp, sigma):
         """Calculate electric potential at (x, y, z)
@@ -208,10 +208,10 @@ class DiskElectrode(Electrode):
         self.plot_patch = Circle
         self.plot_kwargs = {'radius': r, 'linewidth': 2,
                             'ec': (0.3, 0.3, 0.3, 1),
-                            'fc': (0.8, 0.8, 0.8, 0.7)}
+                            'fc': (1, 1, 1, 0.8)}
         self.plot_deactivated_kwargs = {'radius': r, 'linewidth': 2,
-                                        'ec': (0.5, 0.5, 0.5, 0.6),
-                                        'fc': (0.9, 0.9, 0.9, 0.4)}
+                                        'ec': (0.6, 0.6, 0.6, 1),
+                                        'fc': (1, 1, 1, 0.6)}
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -303,12 +303,13 @@ class SquareElectrode(Electrode):
         self.a = a
         self.plot_patch = Rectangle
         self.plot_kwargs = {'width': a, 'height': a, 'angle': 0,
-                            'linewidth': 2, 'ec': (0.3, 0.3, 0.3, 1),
-                            'fc': (0.8, 0.8, 0.8, 0.7)}
+                            'linewidth': 2,
+                            'ec': (0.3, 0.3, 0.3, 1),
+                            'fc': (1, 1, 1, 0.8)}
         self.plot_deactivated_kwargs = {'width': a, 'height': a, 'angle': 0,
                                         'linewidth': 2,
-                                        'ec': (0.5, 0.5, 0.5, 0.6),
-                                        'fc': (0.9, 0.9, 0.9, 0.4)}
+                                        'ec': (0.6, 0.6, 0.6, 1),
+                                        'fc': (1, 1, 1, 0.6)}
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -360,12 +361,12 @@ class HexElectrode(Electrode):
         self.plot_kwargs = {'numVertices': 6, 'radius': a, 'alpha': 0.2,
                             'orientation': np.radians(30),
                             'ec': (0.3, 0.3, 0.3, 1),
-                            'fc': (0.8, 0.8, 0.8, 0.7)}
+                            'fc': (1, 1, 1, 0.8)}
         self.plot_deactivated_kwargs = {'numVertices': 6, 'radius': a,
                                         'alpha': 0.2,
                                         'orientation': np.radians(30),
-                                        'ec': (0.5, 0.5, 0.5, 0.6),
-                                        'fc': (0.9, 0.9, 0.9, 0.4)}
+                                        'ec': (0.6, 0.6, 0.6, 1),
+                                        'fc': (1, 1, 1, 0.6)}
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""

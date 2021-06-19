@@ -168,7 +168,7 @@ class Grid2D(PrettyPrint):
                 border += list(array[::-1, 0])
                 xy.append(border)
             # Draw border:
-            ax.add_patch(Polygon(np.array(xy).T, alpha=0.5, ec='k', fc='gray',
+            ax.add_patch(Polygon(np.array(xy).T, alpha=0.3, ec='k', fc='gray',
                                  ls='--', zorder=zorder))
             # This is needed in MPL 3.0.X to set the axis limit correctly:
             ax.autoscale_view()
