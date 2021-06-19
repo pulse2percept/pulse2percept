@@ -141,7 +141,7 @@ def scale_image(img, scaling_factor):
     return img_warped
 
 
-def trim_image(img, tol=0):
+def trim_image(img, tol=0, return_coords=False):
     """Remove any black border around the image
 
     .. versionadded:: 0.7
@@ -163,6 +163,12 @@ def trim_image(img, tol=0):
     -------
     img : ndarray
         A copy of the image with trimmed borders.
+    (row_start, row_end): tuple, optional
+        The range of row indices in the trimmed image (returned only if
+        ``return_coords`` is True)
+    (col_start, col_end): tuple, optional
+        The range of column indices in the trimmed image (returned only if
+        ``return_coords`` is True)
 
     """
     if img.ndim < 2 or img.ndim > 3:
@@ -186,4 +192,6 @@ def trim_image(img, tol=0):
     row_start, row_end = mask1.argmax(), m - mask1[::-1].argmax()
     # Trim the border by cropping out the relevant part:
     img = img[row_start:row_end, col_start:col_end, ...]
+    if return_coords:
+        return img, (row_start, row_end), (col_start, col_end)
     return img

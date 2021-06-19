@@ -42,7 +42,7 @@ def test_center_image():
 
 
 def test_scale_image():
-        # Create a horizontal bar:
+    # Create a horizontal bar:
     img = np.zeros((5, 5), dtype=np.uint8)
     img[2, :] = 255
     # Scale phosphene:
@@ -72,6 +72,10 @@ def test_trim_image(n_channels):
     npt.assert_equal(trim_image(img, tol=0.2).shape[:2], (1, 0))
     npt.assert_equal(trim_image(img, tol=0.1).shape[:2],
                      trim_image(trim_image(img), tol=0.1).shape[:2])
+    trimmed, rows, cols = trim_image(img, return_coords=True)
+    npt.assert_almost_equal(trimmed, trim_image(img))
+    npt.assert_equal(rows, (1, 12))
+    npt.assert_equal(cols, (1, 28))
 
     with pytest.raises(ValueError):
         trim_image(np.ones(10))

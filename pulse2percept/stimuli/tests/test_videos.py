@@ -215,6 +215,27 @@ def test_VideoStimulus_filter():
     os.remove(fname)
 
 
+def test_VideoStimulus_encode():
+    stim = VideoStimulus(np.random.rand(4, 5, 6))
+
+    # Amplitude encoding in default range:
+    enc = stim.encode()
+    npt.assert_almost_equal(enc.time[-1], 6000)
+    npt.assert_almost_equal(np.abs(enc.data).min(), 0)
+    npt.assert_almost_equal(np.abs(enc.data).max(), 50)
+
+    # Amplitude encoding in custom range:
+    enc = stim.encode(amp_range=(2, 43))
+    npt.assert_almost_equal(enc.time[-1], 6000)
+    npt.assert_almost_equal(np.abs(enc.data).min(), 2)
+    npt.assert_almost_equal(np.abs(enc.data).max(), 43)
+
+    with pytest.raises(TypeError):
+        stim.encode(pulse={'invalid': 1})
+    with pytest.raises(ValueError):
+        stim.encode(pulse=LogoUCSB())
+
+
 def test_VideoStimulus_apply():
     fname = 'test.mp4'
     shape = (10, 32, 48)
