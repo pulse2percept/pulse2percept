@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 
 from .base import PrettyPrint
+from ..utils import ZORDER
 
 
 class Grid2D(PrettyPrint):
@@ -125,7 +126,7 @@ class Grid2D(PrettyPrint):
     def reset(self):
         self._iter = 0
 
-    def plot(self, transform=None, autoscale=True, zorder=1, ax=None):
+    def plot(self, transform=None, autoscale=True, zorder=None, ax=None):
         """Plot the extension of the grid
 
         Parameters
@@ -146,6 +147,8 @@ class Grid2D(PrettyPrint):
         ax.set_aspect('equal')
         if autoscale:
             ax.autoscale(True)
+        if zorder is None:
+            zorder = ZORDER['background']
 
         x, y = self.x, self.y
         if transform is not None:

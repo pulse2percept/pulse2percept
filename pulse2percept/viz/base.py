@@ -43,7 +43,7 @@ def scatter_correlation(x, y, marker='o', color='k', ax=None, autoscale=True):
     ax.scatter(x, y, marker=marker, s=50, c=color, edgecolors='w', alpha=0.5)
     # Fit the regression curve:
     slope, intercept, rval, pval, _ = spst.linregress(x, y)
-    fit = lambda x: slope * x + intercept
+    def fit(x): return slope * x + intercept
     ax.plot([np.min(x), np.max(x)], [fit(np.min(x)), fit(np.max(x))], 'k--')
     # Annotate with fitting results:
     pval = ("%.2e" % pval) if pval < 0.001 else ("%.03f" % pval)
@@ -91,7 +91,7 @@ def correlation_matrix(X, cols=None, dropna=True, ax=None):
         corr.dropna(how='all', axis=1, inplace=True)
     if ax is None:
         ax = plt.gca()
-    sns.heatmap(corr, mask=np.triu(np.ones(corr.shape), k=1).astype(np.bool),
+    sns.heatmap(corr, mask=np.triu(np.ones(corr.shape), k=1).astype(bool),
                 vmin=-1, vmax=1, cmap='coolwarm', linewidths=1, ax=ax,
                 cbar_kws={"shrink": .75})
     return ax

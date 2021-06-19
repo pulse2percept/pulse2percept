@@ -41,7 +41,7 @@ def shift_image(img, shift_cols, shift_rows):
     img_warped = warp(img, tf.inverse)
     # Warp automatically converts to double, so we need to convert the image
     # back to its original format:
-    if img.dtype == np.bool:
+    if img.dtype == bool:
         return img_as_bool(img_warped)
     if img.dtype == np.uint8:
         return img_as_ubyte(img_warped)
@@ -132,7 +132,7 @@ def scale_image(img, scaling_factor):
     img_warped = warp(img, tf.inverse)
     # Warp automatically converts to double, so we need to convert the image
     # back to its original format:
-    if img.dtype == np.bool:
+    if img.dtype == bool:
         return img_as_bool(img_warped)
     if img.dtype == np.uint8:
         return img_as_ubyte(img_warped)

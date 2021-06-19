@@ -12,7 +12,7 @@ import logging
 from copy import deepcopy
 
 from ..implants import ProsthesisSystem
-from ..utils import deprecated
+from ..utils import deprecated, ZORDER
 from ..models import AxonMapSpatial
 
 
@@ -81,11 +81,12 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
     axon_bundles = axon_map.grow_axon_bundles()
     for bundle in axon_bundles:
         ax.plot(bundle[:, 0], bundle[:, 1], c=(0.6, 0.6, 0.6), linewidth=2,
-                zorder=1)
+                zorder=ZORDER['background'])
 
     # Show elliptic optic nerve head:
     ax.add_patch(Ellipse(axon_map.dva2ret(loc_od), width=1770, height=1880,
-                         alpha=1, color='white', zorder=2))
+                         alpha=1, color='white',
+                         zorder=ZORDER['background'] + 1))
 
     if xlim is not None:
         xmin, xmax = xlim
@@ -124,7 +125,7 @@ def plot_axon_map(eye='RE', loc_od=(15.5, 1.5), n_bundles=100, ax=None,
                         verticalalignment=valign,
                         bbox={'boxstyle': 'square,pad=-0.1', 'ec': 'none',
                               'fc': (1, 1, 1, 0.7)},
-                        zorder=99)
+                        zorder=ZORDER['annotate'])
 
     # Need to flip y axis to have upper half == upper visual field
     if upside_down:
@@ -213,7 +214,8 @@ def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
         _stim = deepcopy(implant.stim)
         _stim.compress()
         circles = [Circle((implant[e].x, implant[e].y), color='red', alpha=1,
-                          radius=1.7 * radii[i], linewidth=4, zorder=4)
+                          radius=1.7 * radii[i], linewidth=4,
+                          zorder=ZORDER['foreground'])
                    for i, (e, r) in enumerate(zip(_stim.electrodes, radii))]
         ax.add_collection(PatchCollection(circles, match_original=True))
 
@@ -226,12 +228,13 @@ def plot_implant_on_axon_map(implant, loc_od=(15.5, 1.5), n_bundles=100,
                     color='black', size='x-large',
                     bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
                           'fc': (1, 1, 1, 0.7)},
-                    zorder=6)
+                    zorder=ZORDER['foreground'] + 2)
         circles.append(Circle((el.x, el.y), radius=radii[i],
                               edgecolor=(0.3, 0.3, 0.3, 1),
                               facecolor=(1, 1, 1, 0.7),
                               linewidth=4))
-    ax.add_collection(PatchCollection(circles, match_original=True, zorder=5))
+    ax.add_collection(PatchCollection(circles, match_original=True,
+                                      zorder=ZORDER['foreground'] + 1))
 
     ax.set_title(implant)
 

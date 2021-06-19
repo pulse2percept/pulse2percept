@@ -92,25 +92,25 @@ def load_horsager2009(subjects=None, electrodes=None, stim_types=None,
     df = pd.read_csv(file_path)
 
     # Select subset of data:
-    idx = np.ones_like(df.index, dtype=np.bool)
+    idx = np.ones_like(df.index, dtype=bool)
     if subjects is not None:
         if isinstance(subjects, str):
             subjects = [subjects]
-        idx_subject = np.zeros_like(df.index, dtype=np.bool)
+        idx_subject = np.zeros_like(df.index, dtype=bool)
         for subject in subjects:
             idx_subject |= df.subject == subject
         idx &= idx_subject
     if electrodes is not None:
         if isinstance(electrodes, str):
             electrodes = [electrodes]
-        idx_electrode = np.zeros_like(df.index, dtype=np.bool)
+        idx_electrode = np.zeros_like(df.index, dtype=bool)
         for electrode in electrodes:
             idx_electrode |= df.electrode == electrode
         idx &= idx_electrode
     if stim_types is not None:
         if isinstance(stim_types, str):
             stim_types = [stim_types]
-        idx_type = np.zeros_like(df.index, dtype=np.bool)
+        idx_type = np.zeros_like(df.index, dtype=bool)
         for stim_type in stim_types:
             idx_type |= df.stim_type == stim_type
         idx &= idx_type

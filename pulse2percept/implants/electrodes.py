@@ -10,7 +10,7 @@ from abc import ABCMeta, abstractmethod
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
 from collections.abc import Sequence
 
-from ..utils import PrettyPrint
+from ..utils import PrettyPrint, ZORDER
 
 
 class Electrode(PrettyPrint, metaclass=ABCMeta):
@@ -90,10 +90,12 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
             if isinstance(self.plot_patch, list):
                 # Special case: draw multiple objects
                 for p, kw in zip(self.plot_patch, kwargs):
-                    ax.add_patch(p((self.x, self.y), zorder=10, **kw))
+                    ax.add_patch(p((self.x, self.y),
+                                   zorder=ZORDER['foreground'], **kw))
             else:
                 # Regular use case: single object
-                ax.add_patch(self.plot_patch((self.x, self.y), zorder=10,
+                ax.add_patch(self.plot_patch((self.x, self.y),
+                                             zorder=ZORDER['foreground'],
                                              **kwargs))
             # This is needed in MPL 3.0.X to set the axis limit correctly:
             ax.autoscale_view()
