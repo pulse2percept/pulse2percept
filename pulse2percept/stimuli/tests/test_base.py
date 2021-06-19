@@ -339,8 +339,7 @@ def test_Stimulus__stim():
         data['time'] = np.arange(7)
         stim._stim = data
     # Time points must be unique:
-    msg = "Time points must be strictly monotonically increasing"
-    assert_warns_msg(UserWarning, _unique_timepoints, msg, stim, data)
+    assert_warns_msg(UserWarning, _unique_timepoints, None, stim, data)
     # But if you do all the things right, you can reset the stimulus by hand:
     data['data'] = np.ones((3, 1))
     data['electrodes'] = np.arange(3)
