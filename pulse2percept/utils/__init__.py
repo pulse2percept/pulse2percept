@@ -4,6 +4,7 @@
     :toctree: _api
 
     base
+    constants
     geometry
     array
     images

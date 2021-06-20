@@ -4,7 +4,8 @@ import numpy.testing as npt
 
 from pulse2percept.stimuli import (Stimulus, PulseTrain, BiphasicPulseTrain,
                                    BiphasicTripletTrain,
-                                   AsymmetricBiphasicPulseTrain, DT)
+                                   AsymmetricBiphasicPulseTrain)
+from pulse2percept.utils.constants import DT
 
 
 def test_PulseTrain():

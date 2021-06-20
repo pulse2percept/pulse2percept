@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 from .electrodes import Electrode, PointSource, DiskElectrode
 from ..utils import PrettyPrint, bijective26_name
+from ..utils.constants import ZORDER
 
 
 class ElectrodeArray(PrettyPrint):
@@ -149,20 +150,19 @@ class ElectrodeArray(PrettyPrint):
             if isinstance(electrode.plot_patch, list):
                 # Special case: draw multiple objects per electrode
                 for p, kw in zip(electrode.plot_patch, kwargs):
-                    patches.append(p((electrode.x, electrode.y), zorder=10,
-                                     **kw))
+                    patches.append(p((electrode.x, electrode.y), **kw))
             else:
                 # Regular use case: single object
                 patches.append(electrode.plot_patch((electrode.x, electrode.y),
-                                                    zorder=10,
                                                     **kwargs))
             if annotate:
                 ax.text(electrode.x, electrode.y, name, ha='center',
                         va='center',  color='black', size='large',
                         bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
                               'fc': (1, 1, 1, 0.7)},
-                        zorder=11)
-        ax.add_collection(PatchCollection(patches, match_original=True))
+                        zorder=ZORDER['annotate'])
+        ax.add_collection(PatchCollection(patches, match_original=True,
+                                          zorder=ZORDER['annotate']))
         if autoscale:
             ax.autoscale(True)
         ax.set_xlabel('x (microns)')

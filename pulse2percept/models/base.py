@@ -9,6 +9,7 @@ from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
 from ..percepts import Percept
 from ..utils import PrettyPrint, Frozen, FreezeError, Grid2D, bisect
+from ..utils.constants import ZORDER
 
 
 class NotBuiltError(ValueError, AttributeError):
@@ -382,12 +383,13 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             Returns the axis object of the plot
         """
         if use_dva:
-            ax = self.grid.plot(autoscale=autoscale, ax=ax, zorder=10)
+            ax = self.grid.plot(autoscale=autoscale, ax=ax,
+                                zorder=ZORDER['background'])
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')
         else:
             ax = self.grid.plot(transform=self.dva2ret, autoscale=autoscale,
-                                ax=ax, zorder=10)
+                                ax=ax, zorder=ZORDER['background'] + 1)
             ax.set_xlabel('x (microns)')
             ax.set_ylabel('y (microns)')
         return ax
