@@ -4,6 +4,7 @@
     :toctree: _api
 
     base
+    constants
     geometry
     array
     images
@@ -16,7 +17,6 @@
 """
 from .base import (PrettyPrint, FreezeError, Frozen, Data, bijective26_name,
                    cached, gamma)
-from .constants import DT, MIN_AMP, ZORDER
 from .geometry import (Grid2D, RetinalCoordTransform, Curcio1990Transform,
                        Watson2014Transform, Watson2014DisplaceTransform,
                        cart2pol, pol2cart, delta_angle)
@@ -57,8 +57,5 @@ __all__ = [
     'trim_image',
     'unique',
     'Watson2014DisplaceTransform',
-    'Watson2014Transform',
-    'DT',
-    'MIN_AMP',
-    'ZORDER'
+    'Watson2014Transform'
 ]

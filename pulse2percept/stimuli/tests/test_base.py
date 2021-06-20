@@ -8,7 +8,7 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
 from pulse2percept.stimuli import Stimulus
-from pulse2percept.utils import DT
+from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
 
 

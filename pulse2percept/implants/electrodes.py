@@ -10,7 +10,8 @@ from abc import ABCMeta, abstractmethod
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
 from collections.abc import Sequence
 
-from ..utils import PrettyPrint, ZORDER
+from ..utils import PrettyPrint
+from ..utils.constants import ZORDER
 
 
 class Electrode(PrettyPrint, metaclass=ABCMeta):

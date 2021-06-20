@@ -5,7 +5,8 @@ from matplotlib.collections import PatchCollection
 import matplotlib.pyplot as plt
 
 from .electrodes import Electrode, PointSource, DiskElectrode
-from ..utils import PrettyPrint, bijective26_name, ZORDER
+from ..utils import PrettyPrint, bijective26_name
+from ..utils.constants import ZORDER
 
 
 class ElectrodeArray(PrettyPrint):

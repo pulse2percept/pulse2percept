@@ -6,7 +6,7 @@ import logging
 # transitions:
 from .base import Stimulus
 from .pulses import BiphasicPulse, AsymmetricBiphasicPulse, MonophasicPulse
-from ..utils import DT
+from ..utils.constants import DT
 
 
 class PulseTrain(Stimulus):

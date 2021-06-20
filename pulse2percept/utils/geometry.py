@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 
 from .base import PrettyPrint
-from ..utils import ZORDER
+from .constants import ZORDER
 
 
 class Grid2D(PrettyPrint):

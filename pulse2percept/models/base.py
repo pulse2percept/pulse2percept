@@ -8,7 +8,8 @@ import numpy as np
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
 from ..percepts import Percept
-from ..utils import PrettyPrint, Frozen, FreezeError, Grid2D, bisect, ZORDER
+from ..utils import PrettyPrint, Frozen, FreezeError, Grid2D, bisect
+from ..utils.constants import ZORDER
 
 
 class NotBuiltError(ValueError, AttributeError):

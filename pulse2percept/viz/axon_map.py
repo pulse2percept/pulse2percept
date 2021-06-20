@@ -12,7 +12,8 @@ import logging
 from copy import deepcopy
 
 from ..implants import ProsthesisSystem
-from ..utils import deprecated, ZORDER
+from ..utils import deprecated
+from ..utils.constants import ZORDER
 from ..models import AxonMapSpatial
 
 

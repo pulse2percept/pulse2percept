@@ -2,7 +2,7 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.utils import DT, MIN_AMP, ZORDER
+from pulse2percept.utils.constants import DT, MIN_AMP, ZORDER
 
 
 def test_zorder():

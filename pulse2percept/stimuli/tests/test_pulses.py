@@ -4,7 +4,7 @@ import pytest
 
 from pulse2percept.stimuli import (AsymmetricBiphasicPulse, BiphasicPulse,
                                    MonophasicPulse, Stimulus)
-from pulse2percept.utils import DT
+from pulse2percept.utils.constants import DT
 
 DECIMAL = int(-np.log10(DT))
 
