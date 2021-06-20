@@ -13,8 +13,8 @@ def test_zorder():
 
 
 def test_min_amp():
-    npt.assert_equal(MIN_AMP < 1e-2, True)
+    npt.assert_equal(MIN_AMP < 1e-4, True)
 
 
 def test_dt():
-    npt.assert_equal(DT < 1e-4, True)
+    npt.assert_equal(DT < 1e-2, True)
