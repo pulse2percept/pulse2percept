@@ -39,26 +39,37 @@ class BVT24(ProsthesisSystem):
 
     Parameters
     ----------
-    x : float
-        x coordinate of the array center (um)
-    y : float
-        y coordinate of the array center (um)
-    z: float or array_like
-        Distance of the array to the retinal surface (um). Either a list
-        with 60 entries or a scalar.
+    x/y/z : double
+        3D location of the center of the electrode array.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
+        ``z`` can either be a list with 35 entries or a scalar that is applied
+        to all electrodes.
     rot : float
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ()
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None):
+    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
+                 preprocess=False, safe_mode=False):
         self.eye = eye
+        self.preprocess = preprocess
+        self.safe_mode = safe_mode
         self.earray = ElectrodeArray([])
         n_elecs = 35
 

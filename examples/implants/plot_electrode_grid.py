@@ -40,6 +40,9 @@ Let's say we want to create a 2x3 rectangular grid of
 
 """
 # sphinx_gallery_thumbnail_number = 3
+from pulse2percept.models import AxonMapModel
+from numpy import pi
+from pulse2percept.implants import DiskElectrode
 from pulse2percept.implants import ElectrodeGrid
 
 grid = ElectrodeGrid((2, 3), 500)
@@ -69,7 +72,7 @@ grid[:]
 ##############################################################################
 # We can iterate over all electrodes as if we were dealing with a dictionary:
 
-for name, electrode in grid.items():
+for name, electrode in grid.electrodes.items():
     print(name, electrode)
 
 ##############################################################################
@@ -77,7 +80,6 @@ for name, electrode in grid.items():
 # we need to explicitly specify the electrode type (``etype``) and the radius
 # to use (``r``):
 
-from pulse2percept.implants import DiskElectrode
 
 # 11x13 grid, 100-um disk electrodes spaced 500um apart:
 disk_grid = ElectrodeGrid((11, 13), 500, etype=DiskElectrode, r=100)
@@ -111,7 +113,6 @@ hex_grid.plot()
 # z=150um away from the retinal surface, and rotates it clockwise by 45 degrees
 # (note the minus sign):
 
-from numpy import pi
 offset_grid = ElectrodeGrid((11, 13), 500, type='hex', x=-600, y=200, z=150,
                             rot=-45, etype=DiskElectrode, r=100)
 
@@ -123,7 +124,6 @@ offset_grid = ElectrodeGrid((11, 13), 500, type='hex', x=-600, y=200, z=150,
 #
 # We can also plot the grid on top of a map of retinal nerve fiber bundles:
 
-from pulse2percept.models import AxonMapModel
 
 AxonMapModel().plot()
 offset_grid.plot()

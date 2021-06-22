@@ -78,7 +78,7 @@ class CircleElectrodeArray(ElectrodeArray):
         """
         # The job of the constructor is to create the electrodes. We start
         # with an empty collection:
-        self.electrodes = coll.OrderedDict()
+        self._electrodes = coll.OrderedDict()
         # We then generate a number `n_electrodes` of electrodes, arranged on
         # the circumference of a circle:
         for n in range(n_electrodes):
@@ -96,6 +96,7 @@ class CircleElectrodeArray(ElectrodeArray):
 #
 # To use the new class, we need to specify all input arguments and pass them
 # to the constructor:
+
 
 n_electrodes = 10
 radius = 1000  # radius in microns
@@ -157,6 +158,7 @@ class FlexibleCircleElectrodeArray(CircleElectrodeArray):
 # By default, the class inherits all (public) functionality from its parent,
 # including its constructor. So the following line will create the same
 # electrode array as above:
+
 
 flex_earray = FlexibleCircleElectrodeArray(
     n_electrodes, radius, x_center, y_center)

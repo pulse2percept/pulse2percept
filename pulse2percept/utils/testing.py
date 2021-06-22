@@ -37,6 +37,6 @@ def assert_warns_msg(expected_warning, func, msg, *args, **kwargs):
     npt.assert_equal(len(record), 1)
     # Check the message:
     if msg is not None:
-        npt.assert_equal(msg in record[0].message.args[0], True)
+        npt.assert_equal(msg in ''.join(record[0].message.args[0]), True)
     # Remove generated warnings from registry:
     warnings.resetwarnings()

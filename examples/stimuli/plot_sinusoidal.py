@@ -16,11 +16,12 @@ Consider a sine wave:
 """
 # sphinx_gallery_thumbnail_number = 4
 
+from pulse2percept.utils.constants import DT
+from pulse2percept.stimuli import Stimulus
+import numpy as np
 import matplotlib.pyplot as plt
 plt.style.use('ggplot')
 
-import numpy as np
-import matplotlib.pyplot as plt
 
 t = np.linspace(0, 2 * np.pi, 100)
 x = np.sin(t)
@@ -47,7 +48,6 @@ plt.legend()
 # We can turn this signal into a :py:class:`~pulse2percept.stimuli.Stimulus`
 # object as follows:
 
-from pulse2percept.stimuli import Stimulus, DT
 
 stim = Stimulus(10 * data.reshape((1, -1)), time=t)
 stim.plot()
@@ -91,6 +91,7 @@ class SinusoidalPulse(Stimulus):
 
 ##############################################################################
 # Then we can create a new pulse as follows:
+
 
 sine = SinusoidalPulse(26, 0.25, -np.pi / 4, 20)
 sine.plot()

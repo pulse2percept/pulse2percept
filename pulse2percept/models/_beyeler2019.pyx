@@ -8,33 +8,8 @@ from libc.math cimport(pow as c_pow, exp as c_exp, tanh as c_tanh,
 ctypedef cnp.float32_t float32
 ctypedef cnp.uint32_t uint32
 ctypedef cnp.int32_t int32
+
 cdef float32 deg2rad = 3.14159265358979323846 / 180.0
-
-
-cdef float32 c_min(float32[:] arr):
-    cdef:
-        float32 arr_min
-        int32 idx, arr_len
-
-    arr_min = 1e12
-    arr_len = len(arr)
-    for idx in range(arr_len):
-        if arr[idx] < arr_min:
-            arr_min = arr[idx]
-    return arr_min
-
-
-cdef float32 c_max(float32[:] arr):
-    cdef:
-        float32 arr_max
-        int32 idx, arr_len
-
-    arr_max = -1e12
-    arr_len = len(arr)
-    for idx in range(arr_len):
-        if arr[idx] > arr_max:
-            arr_max = arr[idx]
-    return arr_max
 
 
 @cdivision(True)
@@ -120,7 +95,7 @@ cpdef fast_jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
 
     xprime = np.empty_like(rho)
     yprime = np.empty_like(rho)
-    rho_min = c_min(rho)
+    rho_min = np.min(rho)
     with nogil:
         for idx in range(len(rho)):
             tmp_rho = rho[idx]

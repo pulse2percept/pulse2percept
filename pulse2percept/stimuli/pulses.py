@@ -3,8 +3,8 @@ import numpy as np
 
 # DT: Sampling time step (ms); defines the duration of the signal edge
 # transitions:
-from . import DT
 from .base import Stimulus
+from ..utils.constants import DT
 
 
 class MonophasicPulse(Stimulus):

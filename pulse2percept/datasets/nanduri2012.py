@@ -69,11 +69,11 @@ def load_nanduri2012(electrodes=None, task=None, shuffle=False, random_state=0):
     df = pd.read_csv(file_path)
 
     # Select subset of data:
-    idx = np.ones_like(df.index, dtype=np.bool)
+    idx = np.ones_like(df.index, dtype=np.bool_)
     if electrodes is not None:
         if isinstance(electrodes, str):
             electrodes = [electrodes]
-        idx_electrode = np.zeros_like(df.index, dtype=np.bool)
+        idx_electrode = np.zeros_like(df.index, dtype=np.bool_)
         for electrode in electrodes:
             idx_electrode |= df.electrode == electrode
         idx &= idx_electrode

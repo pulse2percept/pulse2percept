@@ -24,12 +24,11 @@ def configuration(parent_package='', top_path=None):
     config.add_subpackage('model_selection/tests')
     config.add_subpackage('viz')
     config.add_subpackage('viz/tests')
-    config.add_subpackage('utils')
-    config.add_subpackage('utils/tests')
 
     # Submodules which have their own setup.py; e.g., because they use Cython:
     config.add_subpackage('models')
     config.add_subpackage('stimuli')
+    config.add_subpackage('utils')
 
     # Data directories
     config.add_data_dir('datasets/data')

@@ -177,11 +177,11 @@ def test_ElectrodeGrid(gtype):
     spacing = 100
     grid = ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
                          r=13)
-    for e in grid.values():
+    for (_, e) in grid.electrodes.items():
         npt.assert_almost_equal(e.r, 13)
     grid = ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
                          r=np.arange(1, np.prod(gshape) + 1))
-    for i, e in enumerate(grid.values()):
+    for i, (_, e) in enumerate(grid.electrodes.items()):
         npt.assert_almost_equal(e.r, i + 1)
     with pytest.raises(ValueError):
         ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode)
@@ -241,22 +241,24 @@ def test_ElectrodeGrid(gtype):
     npt.assert_equal(egrid.shape, gshape)
     npt.assert_equal(egrid.n_electrodes, np.prod(gshape))
     # Make sure different electrodes have different coordinates:
-    npt.assert_equal(len(np.unique([e.x for e in egrid.values()])), gshape[1])
-    npt.assert_equal(len(np.unique([e.y for e in egrid.values()])), gshape[0])
+    npt.assert_equal(len(np.unique([e.x for e in egrid.electrode_objects])),
+                     gshape[1])
+    npt.assert_equal(len(np.unique([e.y for e in egrid.electrode_objects])),
+                     gshape[0])
     # Make sure the average of all x-coordinates == x:
     # (Note: egrid has all electrodes in a dictionary, with (name, object)
     # as (key, value) pairs. You can get the electrode names by iterating over
     # egrid.keys(). You can get the electrode objects by iterating over
     # egrid.values().)
-    npt.assert_almost_equal(np.mean([e.x for e in egrid.values()]), x)
+    npt.assert_almost_equal(np.mean([e.x for e in egrid.electrode_objects]), x)
     # Same for y:
-    npt.assert_almost_equal(np.mean([e.y for e in egrid.values()]), y)
+    npt.assert_almost_equal(np.mean([e.y for e in egrid.electrode_objects]), y)
 
     # Test whether egrid.z is set correctly, when z is a constant:
     z = 12
     egrid = ElectrodeGrid(gshape, spacing, z=z, type=gtype,
                           etype=DiskElectrode, r=radius)
-    for i in egrid.values():
+    for i in egrid.electrode_objects:
         npt.assert_equal(i.z, z)
 
     # and when every electrode has a different z:
@@ -264,7 +266,7 @@ def test_ElectrodeGrid(gtype):
     egrid = ElectrodeGrid(gshape, spacing, z=z, type=gtype,
                           etype=DiskElectrode, r=radius)
     x = -1
-    for i in egrid.values():
+    for i in egrid.electrode_objects:
         npt.assert_equal(i.z, x + 1)
         x = i.z
 
@@ -321,35 +323,35 @@ def test_ElectrodeGrid(gtype):
     gshape = (2, 3)
     egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('A', '1'))
     # print([e for e in egrid.keys()])
-    npt.assert_equal([e for e in egrid.keys()],
+    npt.assert_equal([e for e in egrid.electrode_names],
                      ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
     egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('1', 'A'))
     # print([e for e in egrid.keys()])
     # egrid = ElectrodeGrid(shape, names=('A', '1'))
-    npt.assert_equal([e for e in egrid.keys()],
+    npt.assert_equal([e for e in egrid.electrode_names],
                      ['A1', 'B1', 'C1', 'A2', 'B2', 'C2'])
 
     egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('1', '1'))
     # print([e for e in egrid.keys()])
-    npt.assert_equal([e for e in egrid.keys()],
+    npt.assert_equal([e for e in egrid.electrode_names],
                      ['11', '12', '13', '21', '22', '23'])
     egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('A', 'A'))
     # print([e for e in egrid.keys()])
-    npt.assert_equal([e for e in egrid.keys()],
+    npt.assert_equal([e for e in egrid.electrode_names],
                      ['AA', 'AB', 'AC', 'BA', 'BB', 'BC'])
 
     # Still starts at A:
     egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('B', '1'))
-    npt.assert_equal([e for e in egrid.keys()],
+    npt.assert_equal([e for e in egrid.electrode_names],
                      ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
     egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('A', '2'))
-    npt.assert_equal([e for e in egrid.keys()],
+    npt.assert_equal([e for e in egrid.electrode_names],
                      ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
 
     # test unique names
     egrid = ElectrodeGrid(gshape, spacing, type=gtype,
                           names=['53', '18', '00', '81', '11', '12'])
-    npt.assert_equal([e for e in egrid.keys()],
+    npt.assert_equal([e for e in egrid.electrode_names],
                      ['53', '18', '00', '81', '11', '12'])
 
     # Slots:

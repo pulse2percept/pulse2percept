@@ -1,12 +1,12 @@
-"""`PrettyPrint`, `Frozen`, `Data`, `cached`, `gamma`, `unique`"""
+"""`PrettyPrint`, `Frozen`, `Data`, `bijective26_name`, `cached`, `gamma`,
+   `unique`"""
 import numpy as np
 import sys
 import abc
 from scipy.special import factorial
 from collections import OrderedDict as ODict
 from functools import wraps
-
-"""`PrettyPrint`, `Frozen`, `gamma`, `unique`"""
+from string import ascii_uppercase
 
 
 class PrettyPrint(object, metaclass=abc.ABCMeta):
@@ -340,3 +340,38 @@ def cached(f):
         return cache[prop]
 
     return wrapper
+
+
+def bijective26_name(i):
+    """Bijective base-26 numeration
+
+    Creates the "alphabetic number" for a given integer i following bijective
+    base-26 numeration: A-Z, AA-AZ, BA-BZ, ... ZA-ZZ, AAA-AAZ, ABA-ABZ, ...
+
+    Parameters
+    ----------
+    i : int
+        Regular number to be translated into an alphabetic number
+
+    Returns
+    -------
+    name : string
+        Alphabetic number
+
+    Examples
+    --------
+
+    >>> bijective26_name(0)
+    'A'
+
+    >>> bijective26_name(26)
+    'AA'
+
+    """
+    n_ascii = len(ascii_uppercase)
+    repeat = i // n_ascii
+    letter = i % n_ascii
+    name = ""
+    if repeat > 0:
+        name = bijective26_name(repeat - 1)
+    return "%s%s" % (name, ascii_uppercase[letter])

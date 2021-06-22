@@ -20,19 +20,28 @@ class PhotovoltaicPixel(HexElectrode):
     Parameters
     ----------
     x/y/z : double
-        3D location that is the center of the disk electrode
+        3D location of the electrode.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
     r : double
         Disk radius in the x,y plane
     a : double
         Length of line drawn from the center of the hexagon to the midpoint of
         one of its sides.
+    activated : bool
+        To deactivate, set to ``False``. Deactivated electrodes cannot receive
+        stimuli.
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('r', 'a')
 
-    def __init__(self, x, y, z, r, a):
-        super(PhotovoltaicPixel, self).__init__(x, y, z, a)
+    def __init__(self, x, y, z, r, a, name=None, activated=True):
+        super(PhotovoltaicPixel, self).__init__(x, y, z, a, name=name,
+                                                activated=activated)
         if isinstance(r, (Sequence, np.ndarray)):
             raise TypeError("Radius of the active electrode must be a scalar.")
         if r <= 0:
@@ -42,10 +51,15 @@ class PhotovoltaicPixel(HexElectrode):
         # Plot two objects: hex honeycomb and circular active electrode
         self.plot_patch = [RegularPolygon, Circle]
         self.plot_kwargs = [{'radius': a, 'numVertices': 6, 'alpha': 0.2,
-                             'orientation': np.radians(30), 'fc': 'k',
-                             'ec': 'k'},
+                             'orientation': np.radians(30),
+                             'fc': 'k', 'ec': 'k'},
                             {'radius': r, 'linewidth': 0, 'color': 'k',
                              'alpha': 0.5}]
+        self.plot_deactivated_kwargs = [{'radius': a, 'numVertices': 6,
+                                         'orientation': np.radians(30),
+                                         'fc': 'k', 'ec': 'k', 'alpha': 0.1},
+                                        {'radius': r, 'linewidth': 0,
+                                         'color': 'k', 'alpha': 0.2}]
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -76,19 +90,27 @@ class PRIMA(ProsthesisSystem):
 
     Parameters
     ----------
-    x : float, optional
-        x coordinate of the array center (um)
-    y : float, optional
-        y coordinate of the array center (um)
-    z: float or array_like, optional
-        Distance of the array to the retinal surface (um). Either a list
-        with 378 entries or a scalar.
+    x/y/z : double
+        3D location of the center of the electrode array.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
+        ``z`` can either be a list with 378 entries or a scalar that is applied
+        to all electrodes.
     rot : float, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
 
     Notes
     -----
@@ -99,7 +121,8 @@ class PRIMA(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'trench')
 
-    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None):
+    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None,
+                 preprocess=False, safe_mode=False):
         # 85 um pixels with 15 um trenches, 28 um active electrode:
         self.trench = 15  # um
         self.spacing = 100  # um
@@ -107,6 +130,8 @@ class PRIMA(ProsthesisSystem):
         # Roughly a 19x22 grid, but edges are trimmed off:
         self.shape = (19, 22)
         self.eye = eye
+        self.preprocess = preprocess
+        self.safe_mode = safe_mode
 
         # The user might provide a list of z values for each of the
         # 378 resulting electrodes, not for the 22x19 initial ones.
@@ -137,7 +162,7 @@ class PRIMA(ProsthesisSystem):
             if z_arr.size != self.n_electrodes:
                 raise ValueError("If `z` is a list, it must have %d entries, "
                                  "not %d." % (self.n_electrodes, z_arr.size))
-            for elec, z_elec in zip(self.earray.values(), z):
+            for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 
         # Beware of race condition: Stim must be set last, because it requires
@@ -164,25 +189,34 @@ class PRIMA75(ProsthesisSystem):
 
     Parameters
     ----------
-    x : float, optional
-        x coordinate of the array center (um)
-    y : float, optional
-        y coordinate of the array center (um)
-    z: float or array_like, optional
-        Distance of the array to the retinal surface (um). Either a list
-        with 142 entries or a scalar.
+    x/y/z : double
+        3D location of the center of the electrode array.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
+        ``z`` can either be a list with 142 entries or a scalar that is applied
+        to all electrodes.
     rot : float, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'trench')
 
-    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None):
+    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None,
+                 preprocess=False, safe_mode=False):
         # 70 um pixels with 5 um trenches, 20 um active electrode:
         self.spacing = 75  # um
         self.trench = 5  # um
@@ -190,6 +224,8 @@ class PRIMA75(ProsthesisSystem):
         # Roughly a 12x15 grid, but edges are trimmed off:
         self.shape = (12, 15)
         self.eye = eye
+        self.preprocess = preprocess
+        self.safe_mode = safe_mode
 
         # The user might provide a list of z values for each of the
         # 378 resulting electrodes, not for the 22x19 initial ones.
@@ -223,7 +259,7 @@ class PRIMA75(ProsthesisSystem):
             if z_arr.size != self.n_electrodes:
                 raise ValueError("If `z` is a list, it must have %d entries, "
                                  "not %d." % (self.n_electrodes, z_arr.size))
-            for elec, z_elec in zip(self.earray.values(), z):
+            for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 
         # Beware of race condition: Stim must be set last, because it requires
@@ -255,25 +291,34 @@ class PRIMA55(ProsthesisSystem):
 
     Parameters
     ----------
-    x : float, optional
-        x coordinate of the array center (um)
-    y : float, optional
-        y coordinate of the array center (um)
-    z: float or array_like, optional
-        Distance of the array to the retinal surface (um). Either a list
-        with 378 entries or a scalar.
+    x/y/z : double
+        3D location of the center of the electrode array.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
+        ``z`` can either be a list with 378 entries or a scalar that is applied
+        to all electrodes.
     rot : float, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'trench')
 
-    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None):
+    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None,
+                 preprocess=False, safe_mode=False):
         # 50 um pixels with 5 um trenches, 16 um active electrode:
         self.spacing = 55  # um
         self.trench = 5
@@ -281,6 +326,8 @@ class PRIMA55(ProsthesisSystem):
         # Roughly a 18x21 grid, but edges are trimmed off:
         self.shape = (18, 21)
         self.eye = eye
+        self.preprocess = preprocess
+        self.safe_mode = safe_mode
 
         # The user might provide a list of z values for each of the
         # 378 resulting electrodes, not for the 22x19 initial ones.
@@ -319,7 +366,7 @@ class PRIMA55(ProsthesisSystem):
             if z_arr.size != self.n_electrodes:
                 raise ValueError("If `z` is a list, it must have %d entries, "
                                  "not %d." % (self.n_electrodes, z_arr.size))
-            for elec, z_elec in zip(self.earray.values(), z):
+            for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 
         # Beware of race condition: Stim must be set last, because it requires
@@ -351,25 +398,34 @@ class PRIMA40(ProsthesisSystem):
 
     Parameters
     ----------
-    x : float, optional
-        x coordinate of the array center (um)
-    y : float, optional
-        y coordinate of the array center (um)
-    z: float or array_like, optional
-        Distance of the array to the retinal surface (um). Either a list
-        with 378 entries or a scalar.
+    x/y/z : double
+        3D location of the center of the electrode array.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
+        ``z`` can either be a list with 532 entries or a scalar that is applied
+        to all electrodes.
     rot : float, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
     eye : {'LE', 'RE'}, optional
         Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'trench')
 
-    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None):
+    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None,
+                 preprocess=False, safe_mode=False):
         # 35 um pixels with 5 um trenches, 16 um active electrode:
         self.spacing = 40  # um
         self.trench = 5  # um
@@ -377,6 +433,8 @@ class PRIMA40(ProsthesisSystem):
         # Roughly a 25x28 grid, but edges are trimmed off:
         self.shape = (25, 28)
         self.eye = eye
+        self.preprocess = preprocess
+        self.safe_mode = safe_mode
 
         # The user might provide a list of z values for each of the
         # 378 resulting electrodes, not for the 22x19 initial ones.
@@ -422,7 +480,7 @@ class PRIMA40(ProsthesisSystem):
             if z_arr.size != self.n_electrodes:
                 raise ValueError("If `z` is a list, it must have %d entries, "
                                  "not %d." % (self.n_electrodes, z_arr.size))
-            for elec, z_elec in zip(self.earray.values(), z):
+            for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 
         # Beware of race condition: Stim must be set last, because it requires

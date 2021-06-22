@@ -1,20 +1,14 @@
+from ..utils._fast_math cimport c_fmax, c_expit
+
+from libc.math cimport pow as c_pow, fabs as c_abs, sqrt as c_sqrt
+from cython.parallel import prange, parallel
+from cython import cdivision  # modulo, division by zero
 import numpy as np
 cimport numpy as cnp
-from cython import cdivision  # modulo, division by zero
-from cython.parallel import prange, parallel
-from libc.math cimport(pow as c_pow, exp as c_exp, fabs as c_abs,
-                       sqrt as c_sqrt)
 
 ctypedef cnp.float32_t float32
 ctypedef cnp.int32_t int32
 ctypedef cnp.uint32_t uint32
-
-@cdivision(True)
-cdef inline float32 expit(float32 x) nogil:
-    return 1.0 / (1.0 + c_exp(-x))
-
-cdef inline float32 float_max(float32 a, float32 b) nogil:
-    return a if a >= b else b
 
 
 @cdivision(True)
@@ -197,10 +191,10 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             # Fast ganglion cell response:
             r1 = r1 + dt * (amp - r1) / tau1  # += in threads is a reduction
             # Charge accumulation:
-            ca = ca + dt * float_max(amp, 0)
+            ca = ca + dt * c_fmax(amp, 0)
             r2 = r2 + dt * (ca - r2) / tau2
             # Half-rectification:
-            r3 = float_max(r1 - eps * r2, 0)
+            r3 = c_fmax(r1 - eps * r2, 0)
             # Store `r3` for Step 2:
             all_r3[idx_space, idx_sim] = r3
             # Find the largest `r3` across time for Step 2:
@@ -215,7 +209,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
         idx_stim = 0
         idx_frame = 0
         # Scaling factor depends on `max_r3` from Step 1:
-        scale = asymptote * expit((max_r3 - shift) / slope) / max_r3
+        scale = asymptote * c_expit((max_r3 - shift) / slope) / max_r3
         # We have to restart the loop over all simulation time steps from 0:
         for idx_sim in range(n_sim):
             t_sim = idx_sim * dt
@@ -238,4 +232,3 @@ cpdef temporal_fast(const float32[:, ::1] stim,
                 idx_frame = idx_frame + 1
 
     return np.asarray(percept)  # Py overhead
-

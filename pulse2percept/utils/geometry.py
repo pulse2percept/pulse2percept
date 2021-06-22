@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 
 from .base import PrettyPrint
+from .constants import ZORDER
 
 
 class Grid2D(PrettyPrint):
@@ -125,7 +126,7 @@ class Grid2D(PrettyPrint):
     def reset(self):
         self._iter = 0
 
-    def plot(self, transform=None, autoscale=True, zorder=1, ax=None):
+    def plot(self, transform=None, autoscale=True, zorder=None, ax=None):
         """Plot the extension of the grid
 
         Parameters
@@ -146,6 +147,8 @@ class Grid2D(PrettyPrint):
         ax.set_aspect('equal')
         if autoscale:
             ax.autoscale(True)
+        if zorder is None:
+            zorder = ZORDER['background']
 
         x, y = self.x, self.y
         if transform is not None:
@@ -165,7 +168,7 @@ class Grid2D(PrettyPrint):
                 border += list(array[::-1, 0])
                 xy.append(border)
             # Draw border:
-            ax.add_patch(Polygon(np.array(xy).T, alpha=0.5, ec='k', fc='gray',
+            ax.add_patch(Polygon(np.array(xy).T, alpha=0.3, ec='k', fc='gray',
                                  ls='--', zorder=zorder))
             # This is needed in MPL 3.0.X to set the axis limit correctly:
             ax.autoscale_view()

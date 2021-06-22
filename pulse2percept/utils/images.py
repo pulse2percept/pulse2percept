@@ -1,5 +1,6 @@
 """`center_image`, `scale_image`, `shift_image`, `trim_image`"""
 import numpy as np
+from math import isclose
 from skimage import img_as_bool, img_as_ubyte, img_as_float32
 from skimage.color import rgba2rgb, rgb2gray
 from skimage.measure import moments
@@ -40,7 +41,7 @@ def shift_image(img, shift_cols, shift_rows):
     img_warped = warp(img, tf.inverse)
     # Warp automatically converts to double, so we need to convert the image
     # back to its original format:
-    if img.dtype == np.bool:
+    if img.dtype == bool:
         return img_as_bool(img_warped)
     if img.dtype == np.uint8:
         return img_as_ubyte(img_warped)
@@ -77,7 +78,7 @@ def center_image(img, loc=None):
                          "%dD." % img.ndim)
     m = moments(img, order=1)
     # No area found:
-    if np.isclose(m[0, 0], 0):
+    if isclose(m[0, 0], 0):
         return img
     # Center location:
     if loc is None:
@@ -117,7 +118,7 @@ def scale_image(img, scaling_factor):
     # Calculate center of mass:
     m = moments(img, order=1)
     # No area found:
-    if np.isclose(m[0, 0], 0):
+    if isclose(m[0, 0], 0):
         return img
     # Shift the phosphene to (0, 0):
     center_mass = np.array([m[0, 1] / m[0, 0], m[1, 0] / m[0, 0]])
@@ -131,7 +132,7 @@ def scale_image(img, scaling_factor):
     img_warped = warp(img, tf.inverse)
     # Warp automatically converts to double, so we need to convert the image
     # back to its original format:
-    if img.dtype == np.bool:
+    if img.dtype == bool:
         return img_as_bool(img_warped)
     if img.dtype == np.uint8:
         return img_as_ubyte(img_warped)
@@ -140,7 +141,7 @@ def scale_image(img, scaling_factor):
     return img_warped
 
 
-def trim_image(img, tol=0):
+def trim_image(img, tol=0, return_coords=False):
     """Remove any black border around the image
 
     .. versionadded:: 0.7
@@ -162,6 +163,12 @@ def trim_image(img, tol=0):
     -------
     img : ndarray
         A copy of the image with trimmed borders.
+    (row_start, row_end): tuple, optional
+        The range of row indices in the trimmed image (returned only if
+        ``return_coords`` is True)
+    (col_start, col_end): tuple, optional
+        The range of column indices in the trimmed image (returned only if
+        ``return_coords`` is True)
 
     """
     if img.ndim < 2 or img.ndim > 3:
@@ -185,4 +192,6 @@ def trim_image(img, tol=0):
     row_start, row_end = mask1.argmax(), m - mask1[::-1].argmax()
     # Trim the border by cropping out the relevant part:
     img = img[row_start:row_end, col_start:col_end, ...]
+    if return_coords:
+        return img, (row_start, row_end), (col_start, col_end)
     return img

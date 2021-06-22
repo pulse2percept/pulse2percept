@@ -3,8 +3,8 @@ import copy
 import pytest
 import numpy.testing as npt
 
-from pulse2percept.utils import (Frozen, FreezeError, PrettyPrint, Data, gamma,
-                                 cached)
+from pulse2percept.utils import (Frozen, FreezeError, PrettyPrint, Data,
+                                 bijective26_name, cached, gamma)
 
 
 class PrettyPrinter(PrettyPrint):
@@ -189,3 +189,15 @@ def test_cache():
     cache._cache_active = False
     area2 = cache.area
     npt.assert_equal(area1 != area2, True)
+
+
+def test_bijective26_name():
+    npt.assert_equal(bijective26_name(0), 'A')
+    npt.assert_equal(bijective26_name(25), 'Z')
+    npt.assert_equal(bijective26_name(26), 'AA')
+    npt.assert_equal(bijective26_name(51), 'AZ')
+    npt.assert_equal(bijective26_name(52), 'BA')
+    npt.assert_equal(bijective26_name(701), 'ZZ')
+    npt.assert_equal(bijective26_name(702), 'AAA')
+    npt.assert_equal(bijective26_name(18277), 'ZZZ')
+    npt.assert_equal(bijective26_name(18278), 'AAAA')

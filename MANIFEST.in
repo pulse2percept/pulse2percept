@@ -1,0 +1,3 @@
+include AUTHORS LICENSE CONTRIBUTING* CODE_OF_CONDUCT* Makefile* MANIFEST.in setup* README.*
+recursive-include doc *
+recursive-include examples *

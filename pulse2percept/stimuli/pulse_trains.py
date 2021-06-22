@@ -4,9 +4,9 @@ import logging
 
 # DT: Sampling time step (ms); defines the duration of the signal edge
 # transitions:
-from . import DT
 from .base import Stimulus
 from .pulses import BiphasicPulse, AsymmetricBiphasicPulse, MonophasicPulse
+from ..utils.constants import DT
 
 
 class PulseTrain(Stimulus):

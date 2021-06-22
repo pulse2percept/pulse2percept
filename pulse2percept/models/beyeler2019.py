@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
 from ..utils import parfor, Watson2014Transform
+from ..utils.constants import ZORDER
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
@@ -80,7 +81,7 @@ class ScoreboardSpatial(SpatialModel):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
-        if not np.allclose([e.z for e in earray.values()], 0):
+        if not np.allclose([e.z for e in earray.electrode_objects], 0):
             msg = ("Nonzero electrode-retina distances do not have any effect "
                    "on the model output.")
             warnings.warn(msg)
@@ -643,7 +644,7 @@ class AxonMapSpatial(SpatialModel):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at specific times ``t``"""
-        if not np.allclose([e.z for e in earray.values()], 0):
+        if not np.allclose([e.z for e in earray.electrode_objects], 0):
             msg = ("Nonzero electrode-retina distances do not have any effect "
                    "on the model output.")
             warnings.warn(msg)
@@ -721,20 +722,22 @@ class AxonMapSpatial(SpatialModel):
             y_idx = np.logical_or(bundle[:, 1] < ymin, bundle[:, 1] > ymax)
             bundle[y_idx, 1] = np.nan
             ax.plot(bundle[:, 0], bundle[:, 1], c=(0.6, 0.6, 0.6),
-                    linewidth=2, zorder=1)
+                    linewidth=2, zorder=ZORDER['background'])
         # Show elliptic optic nerve head (width/height are averages from
         # the human retina literature):
         ax.add_patch(Ellipse(od_xy, width=od_w, height=od_h, alpha=1,
-                             color='white', zorder=2))
+                             color='white', zorder=ZORDER['background'] + 1))
         # Show extent of simulated grid:
         if self.is_built:
-            self.grid.plot(ax=ax, transform=grid_transform, zorder=10)
+            self.grid.plot(ax=ax, transform=grid_transform,
+                           zorder=ZORDER['background'] + 2)
         ax.set_xlabel('x (%s)' % units)
         ax.set_ylabel('y (%s)' % units)
         if autoscale:
             ax.axis((xmin, xmax, ymin, ymax))
         if annotate:
-            ann = ax.inset_axes([0.05, 0.05, 0.2, 0.2], zorder=99)
+            ann = ax.inset_axes([0.05, 0.05, 0.2, 0.2],
+                                zorder=ZORDER['annotate'])
             ann.annotate('', (0.5, 1), (0.5, 0),
                          arrowprops={'arrowstyle': '<->'})
             ann.annotate('', (1, 0.5), (0, 0.5),
