@@ -24,6 +24,11 @@ API changes
 Backward-incompatible changes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+*  ``plot_axon_map`` was removed: Use :py:meth:`pulse2percept.models.AxonMapModel.plot`
+*  ``plot_implant_on_axon_map`` was removed: Use
+   :py:meth:`pulse2percept.implants.ProsthesisSystem.plot` on top of
+   :py:meth`pulse2percept.models.AxonMapModel.plot`
+
 Deprecations
 ^^^^^^^^^^^^
 
