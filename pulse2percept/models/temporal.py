@@ -44,7 +44,7 @@ class FadingTemporal(TemporalModel):
         base_params = super(FadingTemporal, self).get_default_params()
         params = {
             # Time constant for the exponential decay:
-            'tau': 0.01,
+            'tau': 100,
         }
         # This is subtle: Rather than calling `params.update(base_params)`, we
         # call `base_params.update(params)`. This will overwrite `base_params`
