@@ -17,9 +17,9 @@ def test_BVT24(x, y, rot):
     npt.assert_equal(hasattr(bva, '__dict__'), False)
 
     # Coordinate of first electrode (electrode '1')
-    xy = np.array([-1275.0, 1520.0]).T
+    xy = np.array([1275.0, 1520.0]).T
     # Coordinate of last electrode (electrode '21m')
-    xy2 = np.array([-850.0, -2280.0]).T
+    xy2 = np.array([850.0, -2280.0]).T
 
     # Rotate
     rot_rad = np.deg2rad(rot)
@@ -50,15 +50,15 @@ def test_BVT24(x, y, rot):
     npt.assert_almost_equal(x_center, x)
 
     # Right-eye implant:
-    xc, yc = 500, -500
+    xc, yc = -500, -500
     bva_re = BVT24(eye='RE', x=xc, y=yc)
-    npt.assert_equal(bva_re['C1'].x < bva_re['C6'].x, True)
+    npt.assert_equal(bva_re['C1'].x > bva_re['C6'].x, True)
     npt.assert_equal(bva_re['C1'].y, bva_re['C1'].y)
 
     # Left-eye implant:
-    xc, yc = 500, -500
+    xc, yc = -500, -500
     bva_le = BVT24(eye='LE', x=xc, y=yc)
-    npt.assert_equal(bva_le['C1'].x > bva_le['C6'].x, True)
+    npt.assert_equal(bva_le['C1'].x < bva_le['C6'].x, True)
     npt.assert_equal(bva_le['C1'].y, bva_le['C1'].y)
 
 
