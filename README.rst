@@ -152,6 +152,12 @@ listed in ``requirements-dev.txt`` and can be installed via:
 
     pip3 install -r requirements-dev.txt
 
+Code organization
+=================
+
+.. image:: ./diagram.svg
+   :alt: Visualization of this repo
+
 Where to go from here
 =====================
 
