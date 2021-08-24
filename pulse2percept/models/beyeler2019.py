@@ -473,11 +473,12 @@ class AxonMapSpatial(SpatialModel):
 
         # Look up the axon ID for every axon segment:
         closest_idx = axon_idx[closest_seg]
-        closest_axon = [bundles[n] for n in closest_idx]
+        if len(closest_idx) == 1:
+            closest_idx = closest_idx[0]
+            closest_axon = bundles[closest_idx]
+        else:
+            closest_axon = [bundles[n] for n in closest_idx]
         if return_index:
-            # if there was only one query, return result instead of list
-            if len(closest_idx) == 0:
-                return closest_axon[0], closest_idx[0]
             return closest_axon, closest_idx
         return closest_axon
 
@@ -623,6 +624,8 @@ class AxonMapSpatial(SpatialModel):
         if need_axons:
             bundles = self.grow_axon_bundles()
             axons = self.find_closest_axon(bundles)
+            if type(axons) != list:
+                axons = [axons]
         # Calculate axon contributions (depends on axlambda):
         # Axon contribution is a list of (differently shaped) NumPy arrays,
         # and a list cannot be accessed in parallel without the gil. Instead
