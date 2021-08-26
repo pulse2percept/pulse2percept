@@ -306,6 +306,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # Calculate the Stimulus at requested time points:
             if t_percept is not None:
                 # Save electrode parameters
+                stim = Stimulus(stim) # make sure stimulus is in proper format
                 stim = Stimulus(stim[:, t_percept].reshape((-1, n_time)),
                                 electrodes=stim.electrodes, time=t_percept,
                                 metadata=stim.metadata)
