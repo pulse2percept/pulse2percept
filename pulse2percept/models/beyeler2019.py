@@ -624,6 +624,8 @@ class AxonMapSpatial(SpatialModel):
         if need_axons:
             bundles = self.grow_axon_bundles()
             axons = self.find_closest_axon(bundles)
+            if type(axons) != list:
+                axons = [axons]
         # Calculate axon contributions (depends on axlambda):
         # Axon contribution is a list of (differently shaped) NumPy arrays,
         # and a list cannot be accessed in parallel without the gil. Instead
