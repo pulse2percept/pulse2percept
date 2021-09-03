@@ -230,8 +230,6 @@ class Stimulus(PrettyPrint):
                 self.metadata['electrodes'][str(_electrodes[0])] = {'metadata' : source.metadata, 'type' : type(source)}
             else:
                 self.metadata = source.metadata
-
-
         elif isinstance(source, np.ndarray):
             # A NumPy array is either 1-D (list of electrodes, time=None) or
             # 2-D (electrodes x time points):
