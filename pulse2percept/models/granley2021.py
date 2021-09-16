@@ -1,14 +1,17 @@
 """`BiphasicAxonMapModel`"""
+from attr import Attribute
 import numpy as np
 from copy import deepcopy
+import sys
 
 from numpy.core.fromnumeric import size
 
-from pulse2percept.models import AxonMapModel, AxonMapSpatial, TemporalModel, Model
-from pulse2percept.implants import ProsthesisSystem, ElectrodeArray
-from pulse2percept.stimuli import BiphasicPulseTrain, Stimulus
-from pulse2percept.datasets import load_nanduri2012
-from pulse2percept.percepts import Percept
+from . import AxonMapModel, AxonMapSpatial, TemporalModel, Model
+from ..implants import ProsthesisSystem, ElectrodeArray
+from ..stimuli import BiphasicPulseTrain, Stimulus
+from ..datasets import load_nanduri2012
+from ..percepts import Percept
+from ..utils import FreezeError
 
 from ._granley2021 import fast_biphasic_axon_map
 from .base import NotBuiltError
@@ -38,7 +41,7 @@ class DefaultBrightModel():
         self.a3 = 0.2
         self.a4 = 3.0986
         for k, v in kwargs:
-            if k in dir(self):
+            if hasattr(self, k):
                 self.__setattr__(k, v)
 
     def scale_threshold(self, pdur):
@@ -95,7 +98,7 @@ class DefaultSizeModel():
         self.a5 = 1.0812
         self.a6 = -0.35338
         for k, v in kwargs:
-            if k in dir(self):
+            if hasattr(self, k):
                 self.__setattr__(k, v)
 
     def scale_threshold(self, pdur):
@@ -140,7 +143,7 @@ class DefaultStreakModel():
         self.a8 = 0.21
         self.a9 = 1.56
         for k, v in kwargs:
-            if k in dir(self):
+            if hasattr(self, k):
                 self.__setattr__(k, v)
 
     def __call__(self, freq, amp, pdur):
@@ -189,9 +192,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     do_thresholding: boolean
         Use probabilistic sigmoid thresholding, default: False
     **params: dict, optional
-        Arguments to be passed to AxonMapSpatial
-        Options:
-        ---------
+        Additional params for AxonMapModel. 
+
+        Options for AxonMapSpatial:
+        ---------------------------
         axlambda: double, optional
             Exponential decay constant along the axon(microns).
         rho: double, optional
@@ -241,6 +245,50 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     def __init__(self, **params):
         super(BiphasicAxonMapSpatial, self).__init__(**params)
+
+    def __getattr__(self, attr):
+        # Called when normal get attribute fails
+        if sys._getframe(2).f_code.co_name == '__init__':
+            # We can set new class attributes in the constructor. Reaching this
+            # point means the default attribute access failed - most likely
+            # because we are trying to create a variable. In this case, simply
+            # raise an exception:
+            raise AttributeError("%s not found" % attr)
+        elif sys._getframe(2).f_code.co_name == '__getattr__':
+            # prevents infinite recursion when setting a new parameter
+            raise AttributeError("%s not found" % attr)
+        # Check if bright/size/streak model has param
+        for m in [self.bright_model, self.size_model, self.streak_model]:
+                if hasattr(m, attr):
+                    return getattr(self.bright_model, attr)
+        # No error msg neccesary, this will be caught by base __get_attr__
+        raise AttributeError()
+    
+    def __setattr__(self, name, value):
+        """Called when an attribute is set
+
+        This method is called when a new attribute is set(e.g.,
+        ``model.a=2``). This is allowed in the constructor, but will raise a
+        ``FreezeError`` elsewhere.
+
+        ``model.a = X`` can be used as a shorthand to set ``model.bright_model.a``,
+        etc
+        """
+        try:
+            # This will work if we have the attribute, or if we are in constructor
+            super().__setattr__(name, value)
+        except FreezeError as fe:
+            # Check whether the attribute is a part of any 
+            # bright/size/streak model
+            found = False
+            for m in [self.bright_model, self.size_model, self.streak_model]:
+                try:
+                    m.__setattr__(name, value)
+                    found = True
+                except (AttributeError, FreezeError):
+                    pass
+            if not found:
+                raise fe
 
     def get_default_params(self):
         base_params = super(BiphasicAxonMapSpatial, self).get_default_params()
@@ -452,6 +500,7 @@ class BiphasicAxonMapModel(Model):
             stim = Stimulus(stim)
             resp = np.zeros(list(self.grid.x.shape) + [len(t_percept)])
             # Response goes in first frame
-            resp[:, :, 0] = self._predict_spatial(implant.earray, stim).reshape(self.grid.x.shape)
+            resp[:, :, 0] = self._predict_spatial(
+                implant.earray, stim).reshape(self.grid.x.shape)
         return Percept(resp, space=self.grid, time=t_percept,
                        metadata={'stim': stim.metadata})

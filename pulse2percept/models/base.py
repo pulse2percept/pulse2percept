@@ -690,11 +690,11 @@ class Model(PrettyPrint):
             raise AttributeError("%s not found" % attr)
         # Outside the constructor, we need to check the spatial/temporal model:
         try:
-            spatial = self.spatial.__getattribute__(attr)
+            spatial = getattr(self.spatial, attr)
         except AttributeError:
             spatial = None
         try:
-            temporal = self.temporal.__getattribute__(attr)
+            temporal = getattr(self.temporal, attr)
         except AttributeError:
             temporal = None
         if spatial is None and temporal is None:
