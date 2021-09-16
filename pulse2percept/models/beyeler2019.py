@@ -190,7 +190,8 @@ class AxonMapSpatial(SpatialModel):
     min_ax_sensitivity: float, optional
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
-        value between 0 and 1.
+        value between 0 and 1. All other axons will be padded to the length
+        enforced by this constraint.
     axon_pickle: str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle: bool, optional
@@ -396,7 +397,7 @@ class AxonMapSpatial(SpatialModel):
             n_bundles = self.n_axons
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
         phi = np.linspace(*self.axons_range, num=n_bundles)
-        engine = 'serial' if self.engine == 'cython' else self.engine
+        engine = 'serial' if self.engine in ['cython', 'jax'] else self.engine
         bundles = parfor(self._jansonius2009, phi,
                          func_kwargs={'eye': self.eye},
                          engine=engine, n_jobs=self.n_jobs,
@@ -482,7 +483,7 @@ class AxonMapSpatial(SpatialModel):
             return closest_axon, closest_idx
         return closest_axon
 
-    def calc_axon_sensitivity(self, bundles):
+    def calc_axon_sensitivity(self, bundles, pad=False):
         """Calculate the sensitivity of each axon segment to electrical current
 
         This function combines the x,y coordinates of each bundle segment with
@@ -503,6 +504,9 @@ class AxonMapSpatial(SpatialModel):
         that the only work left to do during run time is to multiply the
         sensitivity value with the current applied to each segment.
 
+        If pad is True (set when engine is 'jax'), axons are padded to all have 
+        the same length as the longest axon
+
         Parameters
         ----------
         bundles : list of Nx2 arrays
@@ -512,12 +516,13 @@ class AxonMapSpatial(SpatialModel):
 
         Returns
         -------
-        axon_contrib : list of Nx3 arrays
-            A list of axon segments and sensitivity values. Each entry in the
-            list is a Nx3 array, where the first two columns contain the retinal
+        axon_contrib : numpy array with shape (n_points, axon_length, 3)
+            An array of axon segments and sensitivity values. Each entry in the
+            array is a Nx3 array, where the first two columns contain the retinal
             coordinates of each axon segment (microns), and the third column
             contains the sensitivity of the segment to electrical current.
-            The latter depends on ``self.axlambda``.
+            The latter depends on ``self.axlambda``. axon_length is set to the 
+            maximum length of any axon after being trimmed due to min_sensitivity 
 
         """
         xyret = np.column_stack((self.grid.xret.ravel(),
@@ -543,7 +548,23 @@ class AxonMapSpatial(SpatialModel):
             idx_d2 = np.concatenate(([False], idx_d2))
             contrib = np.column_stack((axon[idx_d2, :], sensitivity))
             axon_contrib.append(contrib)
-        return axon_contrib
+        
+        if pad:
+            # pad to length of longest axon
+            axon_length = max([len(axon) for axon in axon_contrib])
+            axon_sensitivities = np.zeros((len(axon_contrib), axon_length, 3))
+            for i, axon in enumerate(axon_contrib):
+                original_len = len(axon)
+                if original_len >= axon_length:
+                    axon_sensitivities[i] = axon[:axon_length]
+                elif original_len != 0:
+                    axon_sensitivities[i, :original_len] = axon
+                    axon_sensitivities[i, original_len:] = axon[-1]
+
+            del axon_contrib
+            return axon_sensitivities
+        else:
+            return axon_contrib
 
     def calc_bundle_tangent(self, xc, yc):
         """Calculates orientation of fiber bundle tangent at (xc, yc)
@@ -626,16 +647,24 @@ class AxonMapSpatial(SpatialModel):
             axons = self.find_closest_axon(bundles)
             if type(axons) != list:
                 axons = [axons]
-        # Calculate axon contributions (depends on axlambda):
-        # Axon contribution is a list of (differently shaped) NumPy arrays,
-        # and a list cannot be accessed in parallel without the gil. Instead
-        # we need to concatenate it into a really long Nx3 array, and pass the
-        # start and end indices of each slice:
-        axon_contrib = self.calc_axon_sensitivity(axons)
-        self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
-        len_axons = [a.shape[0] for a in axon_contrib]
-        self.axon_idx_end = np.cumsum(len_axons)
-        self.axon_idx_start = self.axon_idx_end - np.array(len_axons)
+        # Calculate axon contributions (depends on engine):
+        # If engine is cython or serial: 
+        #   Axon contribution is a list of (differently shaped) NumPy arrays,
+        #   and a list cannot be accessed in parallel without the gil. Instead
+        #   we need to concatenate it into a really long Nx3 array, and pass the
+        #   start and end indices of each slice:
+        # If engine is jax:
+        #   All axons are the same length, so Axon contribution is an array with 
+        #   shape (n, axon_length, 3)
+        if self.engine == 'jax':
+            self.axon_contrib = self.calc_axon_sensitivity(axons, pad=True).astype(np.float32) 
+        else:
+            axon_contrib = self.calc_axon_sensitivity(axons)
+            self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
+            len_axons = [a.shape[0] for a in axon_contrib]
+            self.axon_idx_end = np.cumsum(len_axons)
+            self.axon_idx_start = self.axon_idx_end - np.array(len_axons)
+        
         # Pickle axons along with all important parameters:
         params = {'loc_od': self.loc_od,
                   'n_axons': self.n_axons, 'axons_range': self.axons_range,
@@ -652,7 +681,8 @@ class AxonMapSpatial(SpatialModel):
             warnings.warn(msg)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        return fast_axon_map(stim.data,
+        if self.engine != 'jax':
+            return fast_axon_map(stim.data,
                              np.array([earray[e].x for e in stim.electrodes],
                                       dtype=np.float32),
                              np.array([earray[e].y for e in stim.electrodes],
@@ -662,6 +692,9 @@ class AxonMapSpatial(SpatialModel):
                              self.axon_idx_end.astype(np.uint32),
                              self.rho,
                              self.thresh_percept)
+        else:
+            raise NotImplementedError("Jax engine is currently only supported"
+                                      " for BiphasicAxonMapModel")
 
     def plot(self, use_dva=False, annotate=True, autoscale=True, ax=None):
         """Plot the axon map
