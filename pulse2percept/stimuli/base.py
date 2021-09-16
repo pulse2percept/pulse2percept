@@ -244,6 +244,9 @@ class Stimulus(PrettyPrint):
             else:
                 raise ValueError("Cannot create Stimulus object from a %d-D "
                                  "NumPy array. Must be < 2-D." % source.ndim)
+            if len(self.metadata['electrodes']) != len(_electrodes):
+                for elec in _electrodes:
+                    self.metadata['electrodes'][str(elec)] = {'metadata' : '', 'type': np.ndarray}
         else:
             # Input is either a scalar or (more likely) a collection of source
             # types. Easiest to tream them all as a collection and iterate:

@@ -168,7 +168,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     This model is different than other spatial models in that it calculates
     one representative percept from all time steps of the stimulus.
 
-    Brightness, size, and streak length scaling are controlled by the parameters
+    Brightness, size, and streak length scaling are controlled by the effects models
     bright_model, size_model, and streak model respectively. By default, these are
     set to classes that implement Eqs 3-6 from Granley 2021. These models can be
     individually customized by setting the bright_model, size_model, or streak_model
@@ -257,11 +257,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             raise AttributeError("%s not found" % attr)
         # Check if bright/size/streak model has param
         for m in [self.bright_model, self.size_model, self.streak_model]:
-                if hasattr(m, attr):
-                    return getattr(self.bright_model, attr)
+            if hasattr(m, attr):
+                return getattr(self.bright_model, attr)
         # No error msg neccesary, this will be caught by base __get_attr__
         raise AttributeError()
-    
+
     def __setattr__(self, name, value):
         """Called when an attribute is set
 
@@ -279,7 +279,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 return
         except FreezeError:
             pass
-        # Check whether the attribute is a part of any 
+        # Check whether the attribute is a part of any
         # bright/size/streak model
         found = False
         # try to set it ourselves, but can't use get_attr
@@ -480,9 +480,12 @@ class BiphasicAxonMapModel(Model):
         # Make sure stimulus is a BiphasicPulseTrain:
         if not isinstance(implant.stim, BiphasicPulseTrain):
             # Could still be a stimulus where each electrode has a biphasic pulse train
-            for ele, params in implant.stim.metadata['electrodes'].items():
-                if params['type'] != BiphasicPulseTrain or \
-                   params['metadata']['delay_dur'] != 0:
+            # or a 0 stimulus
+            for i, (ele, params) in enumerate(implant.stim.metadata
+                                              ['electrodes'].items()):
+                if (params['type'] != BiphasicPulseTrain or \
+                    params['metadata']['delay_dur'] != 0) and \
+                    np.any(implant.stim[i]):
                     raise TypeError(
                         "All stimuli must be BiphasicPulseTrains with no " +
                         "delay dur (Failing electrode: %s)" % (ele))
@@ -501,17 +504,17 @@ class BiphasicAxonMapModel(Model):
             return None
         stim = implant.stim
         if t_percept is None:
-            t_percept = [0]
-        if not isinstance(t_percept, list):
-            t_percept = list(t_percept)
-        if stim.data.size == 0:
-            # Stimulus was compressed to zero:
-            resp = np.zeros((self.grid.x.size, len(t_percept)),
+            n_time = 1
+        else:
+            n_time = len(t_percept)
+        if not np.any(stim.data):
+            # Stimulus is 0
+            resp = np.zeros(list(self.grid.x.shape) + [n_time],
                             dtype=np.float32)
         else:
             # Make sure stimulus is in proper format
             stim = Stimulus(stim)
-            resp = np.zeros(list(self.grid.x.shape) + [len(t_percept)])
+            resp = np.zeros(list(self.grid.x.shape) + [n_time])
             # Response goes in first frame
             resp[:, :, 0] = self._predict_spatial(
                 implant.earray, stim).reshape(self.grid.x.shape)
