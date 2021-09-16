@@ -2,6 +2,8 @@
 import numpy as np
 from copy import deepcopy
 
+from numpy.core.fromnumeric import size
+
 from pulse2percept.models import AxonMapModel, AxonMapSpatial, TemporalModel, Model
 from pulse2percept.implants import ProsthesisSystem, ElectrodeArray
 from pulse2percept.stimuli import BiphasicPulseTrain, Stimulus
@@ -301,7 +303,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 self.axon_contrib,
                 self.axon_idx_start.astype(np.uint32),
                 self.axon_idx_end.astype(np.uint32),
-                self.rho, self.thresh_percept, stim.shape[1])
+                self.rho, self.thresh_percept)
         else:
             raise NotImplementedError("Jax will be supported in future release")
 
@@ -418,12 +420,11 @@ class BiphasicAxonMapModel(Model):
         if not isinstance(implant.stim, BiphasicPulseTrain):
             # Could still be a stimulus where each electrode has a biphasic pulse train
             for ele, params in implant.stim.metadata['electrodes'].items():
-                if params['type'] != BiphasicPulseTrain or params['metadata'][
-                        'delay_dur'] != 0:
+                if params['type'] != BiphasicPulseTrain or \
+                   params['metadata']['delay_dur'] != 0:
                     raise TypeError(
                         "All stimuli must be BiphasicPulseTrains with no " +
                         "delay dur (Failing electrode: %s)" % (ele))
-        # Need to add an additional check for correct eye:
         if isinstance(implant, ProsthesisSystem):
             if implant.eye != self.spatial.eye:
                 raise ValueError(("The implant is in %s but the model was "
@@ -434,20 +435,23 @@ class BiphasicAxonMapModel(Model):
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError(("'implant' must be a ProsthesisSystem object, "
                              "not %s.") % type(implant))
+
         if implant.stim is None:
             return None
-        if t_percept is not None:
-            raise UserWarning(
-                "t_percept usage not supported with BiphasicAxonMapModel")
-
-        # Make sure we don't change the user's Stimulus object:
-        stim = deepcopy(implant.stim)
+        stim = implant.stim
+        if t_percept is None:
+            t_percept = stim.time
+        if not isinstance(t_percept, list):
+            t_percept = list(t_percept)
         if stim.data.size == 0:
             # Stimulus was compressed to zero:
-            resp = np.zeros((self.grid.x.size, 1), dtype=np.float32)
+            resp = np.zeros((self.grid.x.size, len(t_percept)),
+                            dtype=np.float32)
         else:
-            stim = Stimulus(stim)  # make sure stimulus is in proper format
-            resp = self._predict_spatial(implant.earray, stim)
-        return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
-                       space=self.grid, time=None,
+            # Make sure stimulus is in proper format
+            stim = Stimulus(stim)
+            resp = np.zeros(list(self.grid.x.shape) + [len(t_percept)])
+            # Response goes in first frame
+            resp[:, :, 0] = self._predict_spatial(implant.earray, stim).reshape(self.grid.x.shape)
+        return Percept(resp, space=self.grid, time=t_percept,
                        metadata={'stim': stim.metadata})

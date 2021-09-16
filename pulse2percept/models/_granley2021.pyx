@@ -23,8 +23,7 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
                     const uint32[::1] idx_start,
                     const uint32[::1] idx_end,
                     float32 rho,
-                    float32 thresh_percept,
-                    int32 timesteps):
+                    float32 thresh_percept):
     """Fast spatial response of the biphasic axon map model
     Predicts representative percept using entire time interval, 
     and returns this percept repeated at each time point
@@ -53,14 +52,10 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
         axon contribution (stored/passed in ``axon``).
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
-    timesteps : float32
-        The number of timesteps in the stimulus.
 
     Return Value
     -----------------
-    A percept object representing the predicted brightest frame of the phosphene. 
-    The percept has the same timepoints as the stimulus (for compatibility), but
-    is exactly the same at every point in time. 
+    Array with shape (n_points) representing the brightest frame of the percept
     """
     cdef:
         int32 idx_el, idx_time, idx_space, idx_ax, idx_bright
@@ -71,12 +66,11 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
         int32 i0, i1
 
     n_el = xel.shape[0]
-    n_time = timesteps
     n_space = len(idx_start)
-    n_bright = n_time * n_space
+    n_bright = n_space
 
     # An array containing n_space entries
-    bright = np.empty((n_space), dtype=np.float32)  # Py overhead
+    bright = np.zeros((n_space), dtype=np.float32)  # Py overhead
 
     # Parallel loop over all pixels to be rendered:
     for idx_space in prange(n_space, schedule='static', nogil=True):
@@ -125,4 +119,4 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
         if c_abs(px_bright) < thresh_percept:
             px_bright = 0.0
         bright[idx_space] = px_bright  # Py overhead
-    return np.asarray(np.transpose(np.tile(bright, (n_time, 1)))) # Copy output for each timestep
+    return np.asarray(bright)
