@@ -12,8 +12,8 @@ from ._granley2021 import fast_biphasic_axon_map
 class DefaultBrightModel():
     """
     Default model to be used for brightness scaling in BiphasicAxonMapModel
-    Implements Eq 4 from Granley 2021
-    Fit using data from Nanduri et al 2012
+    Implements Eq 4 from [Granley2021]_ 
+    Fit using data from [Nanduri2012]_ 
 
     Parameters:
     ------------
@@ -29,7 +29,7 @@ class DefaultBrightModel():
         """ 
         Based on eq 3 in paper, this function produces the factor that amplitude
         will be scaled by to produce a_tilde. Computes (A_0 * t + A_1)^-1
-        Fit using color threshold of Weitz et al 2015
+        Fit using color threshold of [Weitz2015]_
         """
         return 1 / (0.8825 + 0.27*pdur)
 
@@ -61,8 +61,8 @@ class DefaultBrightModel():
 class DefaultSizeModel():
     """
     Default model to be used for size (rho) scaling in BiphasicAxonMapModel
-    Implements Eq 5 from Granley 2021
-    Fit using data from Nanduri et al 2012
+    Implements Eq 5 from [Granley2021]_ 
+    Fit using data from [Nanduri2012]_ 
 
     Parameters:
     ------------
@@ -78,7 +78,7 @@ class DefaultSizeModel():
         """ 
         Based on eq 3 in paper, this function produces the factor that amplitude
         will be scaled by to produce a_tilde. Computes (A_0 * t + A_1)^-1
-        Fit using color threshold of Weitz et al 2015
+        Fit using color threshold of [Weitz2015]_
         """
         return 1 / (0.8825 + 0.27*pdur)
 
@@ -97,8 +97,8 @@ class DefaultSizeModel():
 class DefaultStreakModel():
     """
     Default model to be used for streak length (lambda) scaling in BiphasicAxonMapModel
-    Implements Eq 6 from Granley 2021
-    Fit using data from Weitz et al 2015
+    Implements Eq 6 from [Granley2021]_ 
+    Fit using data from [Weitz2015]_
 
     Parameters:
     ------------
@@ -114,7 +114,7 @@ class DefaultStreakModel():
     def __call__(self, freq, amp, pdur):
         """
         Main function to be called by BiphasicAxonMapModel
-        Outputs value for each electrode that rho should be scaled by (F_streak)
+        Outputs value for each electrode that lambda should be scaled by (F_streak)
         """
         F_streak = 1.56 - 0.54 * pdur ** 0.21
         if F_streak > self.min_f_streak:
@@ -124,7 +124,7 @@ class DefaultStreakModel():
 
 
 class BiphasicAxonMapSpatial(AxonMapSpatial):
-    """
+    """ BiphasicAxonMapModel of [Granley2021]_ (spatial model)
     An AxonMapModel where phosphene brightness, size, and streak length scale
     according to amplitude, frequency, and pulse duration
 
@@ -213,11 +213,14 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     def get_default_params(self):
         base_params = super(BiphasicAxonMapSpatial, self).get_default_params()
         params = {
-            # Callable model used to modulate percept brightness with amplitude, frequency, and pulse duration
+            # Callable model used to modulate percept brightness with amplitude,
+            # frequency, and pulse duration
             'bright_model': None,
-            # Callable model used to modulate percept size with amplitude, frequency, and pulse duration
+            # Callable model used to modulate percept size with amplitude,
+            # frequency, and pulse duration
             'size_model': None,
-            # Callable model used to modulate percept streak length with amplitude, frequency, and pulse duration
+            # Callable model used to modulate percept streak length with amplitude,
+            # frequency, and pulse duration
             'streak_model': None,
             # Use probabilistic thresholding
             'do_thresholding': False
@@ -226,14 +229,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         return params
 
     def _build(self):
-        # Fit models if needed
         if self.bright_model is None:
             self.bright_model = DefaultBrightModel(
                 do_thresholding=self.do_thresholding)
-            self.bright_model.fit()
         if self.size_model is None:
             self.size_model = DefaultSizeModel(self.rho)
-            self.size_model.fit()
         if self.streak_model is None:
             self.streak_model = DefaultStreakModel(self.axlambda)
         assert(callable(self.bright_model))
@@ -255,30 +255,26 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             amp = stim.metadata['electrodes'][str(e)]['metadata']['amp']
             freq = stim.metadata['electrodes'][str(e)]['metadata']['freq']
             pdur = stim.metadata['electrodes'][str(e)]['metadata']['phase_dur']
-            bright_effects.append(self.bright_model(amp, freq, pdur))
-            size_effects.append(self.size_model(amp, freq, pdur))
-            streak_effects.append(self.streak_model(amp, freq, pdur))
+            bright_effects.append(self.bright_model(freq, amp, pdur))
+            size_effects.append(self.size_model(freq, amp, pdur))
+            streak_effects.append(self.streak_model(freq, amp, pdur))
             amps.append(amp)
 
-        # print(np.max(np.array([bright_effects, size_effects, streak_effects])))
         return fast_biphasic_axon_map(
             np.array(amps, dtype=np.float32),
             np.array(bright_effects, dtype=np.float32),
             np.array(size_effects, dtype=np.float32),
             np.array(streak_effects, dtype=np.float32),
-            np.array(
-                [earray[e].x for e in stim.electrodes],
-                dtype=np.float32),
-            np.array(
-                [earray[e].y for e in stim.electrodes],
-                dtype=np.float32),
-            self.axon_contrib, self.axon_idx_start.astype(np.uint32),
+            np.array([earray[e].x for e in stim.electrodes], dtype=np.float32),
+            np.array([earray[e].y for e in stim.electrodes], dtype=np.float32),
+            self.axon_contrib, 
+            self.axon_idx_start.astype(np.uint32),
             self.axon_idx_end.astype(np.uint32),
             self.rho, self.thresh_percept, stim.shape[1])
 
 
 class BiphasicAxonMapModel(Model):
-    """
+    """ BiphasicAxonMapModel of [Granley2021]_ (standalone model)
     AxonMapModel that scales percept size, brightness, and streak length according to
     the amplitude, frequency, and pulse duration of the BiphasicPulseTrain.
 

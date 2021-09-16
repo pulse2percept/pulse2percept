@@ -190,8 +190,11 @@ class AxonMapSpatial(SpatialModel):
     min_ax_sensitivity: float, optional
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
-        value between 0 and 1. All other axons will be padded to the length
-        enforced by this constraint.
+        value between 0 and 1. If engine is jax, all other axons will be padded
+        to the length enforced by this constraint.
+    engine : string, optional
+        Engine to use for computation. Options are 'serial', 'cython', and 'jax'.
+        Defaults to 'cython'
     axon_pickle: str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle: bool, optional
@@ -841,7 +844,11 @@ class AxonMapModel(Model):
     min_ax_sensitivity: float, optional
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
-        value between 0 and 1.
+        value between 0 and 1. If engine is jax, all other axons will be padded
+        to the length enforced by this constraint.
+    engine : string, optional
+        Engine to use for computation. Options are 'serial', 'cython', and 'jax'.
+        Defaults to 'cython'
     axon_pickle: str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle: bool, optional
