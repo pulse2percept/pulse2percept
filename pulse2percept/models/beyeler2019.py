@@ -696,8 +696,7 @@ class AxonMapSpatial(SpatialModel):
                              self.rho,
                              self.thresh_percept)
         else:
-            raise NotImplementedError("Jax engine is currently only supported"
-                                      " for BiphasicAxonMapModel")
+            raise NotImplementedError("Jax will be supported in future release")
 
     def plot(self, use_dva=False, annotate=True, autoscale=True, ax=None):
         """Plot the axon map
