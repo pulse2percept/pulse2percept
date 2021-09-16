@@ -440,7 +440,7 @@ class BiphasicAxonMapModel(Model):
             return None
         stim = implant.stim
         if t_percept is None:
-            t_percept = stim.time
+            t_percept = [0]
         if not isinstance(t_percept, list):
             t_percept = list(t_percept)
         if stim.data.size == 0:
