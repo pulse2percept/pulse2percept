@@ -248,14 +248,12 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     def __getattr__(self, attr):
         # Called when normal get attribute fails
-        if sys._getframe(2).f_code.co_name == '__init__':
+        if sys._getframe(2).f_code.co_name == '__init__' or  \
+           sys._getframe(3).f_code.co_name == '__init__':
             # We can set new class attributes in the constructor. Reaching this
             # point means the default attribute access failed - most likely
             # because we are trying to create a variable. In this case, simply
             # raise an exception:
-            raise AttributeError("%s not found" % attr)
-        elif sys._getframe(2).f_code.co_name == '__getattr__':
-            # prevents infinite recursion when setting a new parameter
             raise AttributeError("%s not found" % attr)
         # Check if bright/size/streak model has param
         for m in [self.bright_model, self.size_model, self.streak_model]:
@@ -275,20 +273,35 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         etc
         """
         try:
-            # This will work if we have the attribute, or if we are in constructor
+            if sys._getframe(2).f_code.co_name == '__init__' or  \
+               sys._getframe(3).f_code.co_name == '__init__':
+                super().__setattr__(name, value)
+                return
+        except FreezeError:
+            pass
+        # Check whether the attribute is a part of any 
+        # bright/size/streak model
+        found = False
+        # try to set it ourselves, but can't use get_attr
+        try:
+            self.__getattribute__(name)
+            # if we get here, we have the attribute, not (neccesarily) an effects model
             super().__setattr__(name, value)
-        except FreezeError as fe:
-            # Check whether the attribute is a part of any 
-            # bright/size/streak model
-            found = False
-            for m in [self.bright_model, self.size_model, self.streak_model]:
-                try:
-                    m.__setattr__(name, value)
+            found = True
+        except AttributeError:
+            pass
+        for m in [self.bright_model, self.size_model, self.streak_model]:
+            try:
+                if hasattr(m, name):
+                    setattr(m, name, value)
                     found = True
-                except (AttributeError, FreezeError):
-                    pass
-            if not found:
-                raise fe
+            except (AttributeError, FreezeError):
+                pass
+        if not found:
+            err_str = ("'%s' not found. You cannot add attributes to %s "
+                       "outside the constructor." % (name,
+                                                     self.__class__.__name__))
+            raise FreezeError(err_str)
 
     def get_default_params(self):
         base_params = super(BiphasicAxonMapSpatial, self).get_default_params()

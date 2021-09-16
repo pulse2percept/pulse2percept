@@ -114,12 +114,14 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
         # getframe(0) is '_is_built', getframe(1) is 'set_attr'.
         # getframe(2) is the one we are looking for, and has to be either the
         # construct or ``build``:
-        f_caller = sys._getframe(2).f_code.co_name
-        if f_caller in ["__init__", "build"]:
+        f_caller_2 = sys._getframe(2).f_code.co_name
+        f_caller_3 = sys._getframe(3).f_code.co_name
+        if f_caller_2 in ["__init__", "build"] or \
+           f_caller_3 in ["__init__", "build"]:
             self._is_built = val
         else:
             err_s = ("The attribute `is_built` can only be set in the "
-                     "constructor or in ``build``, not in ``%s``." % f_caller)
+                     "constructor or in ``build``, not in ``%s``." % f_caller_2)
             raise AttributeError(err_s)
 
 
