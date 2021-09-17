@@ -693,19 +693,21 @@ class Model(PrettyPrint):
         # Outside the constructor, we need to check the spatial/temporal model:
         try:
             spatial = getattr(self.spatial, attr)
+            spatial_valid = True
         except AttributeError:
-            spatial = None
+            spatial_valid = False
         try:
             temporal = getattr(self.temporal, attr)
+            temporal_valid = True
         except AttributeError:
-            temporal = None
-        if spatial is None and temporal is None:
+            temporal_valid = False
+        if not spatial_valid and not temporal_valid:
             raise AttributeError("%s has no attribute "
                                  "'%s'." % (self.__class__.__name__,
                                             attr))
-        if spatial is None:
+        if not spatial_valid:
             return temporal
-        if temporal is None:
+        if not temporal_valid:
             return spatial
         return {'spatial': spatial, 'temporal': temporal}
 
