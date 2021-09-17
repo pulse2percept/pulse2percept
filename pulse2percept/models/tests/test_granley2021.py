@@ -30,14 +30,17 @@ def test_effects_models():
     npt.assert_almost_equal(np.sqrt(model(10, 1, 10000) * 200 * 200), model.min_lambda)
 
     coeffs = {'a' + str(i) : i for i in range(9)}
-    # Models can take any coeffs, but only set the ones that they have
-    model = DefaultBrightModel(**coeffs)
+    # Models can take correct coeffs
+    model_coeffs = {k:v for k,v in coeffs if hasattr(DefaultBrightModel(), k)}
+    model = DefaultBrightModel(**model_coeffs)
     npt.assert_equal(hasattr(model, 'a0'), True)
     npt.assert_equal(hasattr(model, 'a9'), False)
-    model = DefaultSizeModel(200, **coeffs)
+    model_coeffs = {k:v for k,v in coeffs if hasattr(DefaultSizeModel(200), k)}
+    model = DefaultSizeModel(200, **model_coeffs)
     npt.assert_equal(hasattr(model, 'a0'), True)
     npt.assert_equal(hasattr(model, 'a9'), False)
-    model = DefaultStreakModel(200, **coeffs)
+    model_coeffs = {k:v for k,v in coeffs if hasattr(DefaultStreakModel(200), k)}
+    model = DefaultStreakModel(200, **model_coeffs)
     npt.assert_equal(hasattr(model, 'a0'), False)
     npt.assert_equal(hasattr(model, 'a9'), True) 
 
@@ -73,7 +76,7 @@ def test_biphasicAxonMapSpatial(engine):
     npt.assert_almost_equal(percept.data, 0)
     npt.assert_equal(percept.time, None)
 
-    # Should be exactly equal to axon map model if effects models return 1
+    # Should be equal to axon map model if effects models return 1
     model = BiphasicAxonMapSpatial(engine=engine, xystep=2)
     def bright_model(freq, amp, pdur): return 1
     def size_model(freq, amp, pdur): return 1
@@ -92,7 +95,7 @@ def test_biphasicAxonMapSpatial(engine):
     # Effect models must be callable
     model = BiphasicAxonMapSpatial(engine=engine, xystep=2)
     model.bright_model = 1.0
-    with pytest.raises(AssertionError):
+    with pytest.raises(TypeError):
         model.build()
 
     # If t_percept is not specified, there should only be one frame 
@@ -133,11 +136,7 @@ def test_biphasicAxonMapModel(engine):
     for param in set_params:
         npt.assert_equal(hasattr(model.spatial, param), True)
 
-    # We can set and get effects model params, but only AFTER build
-    assert(model.bright_model is None)
-    with pytest.raises(FreezeError):
-        model.a0 = 5
-    model.build()
+    # We can set and get effects model params
     model.a0 = 5
     # Should propogate to size and bright model
     # But should not be a member of streak or spatial
@@ -146,6 +145,34 @@ def test_biphasicAxonMapModel(engine):
     npt.assert_equal(hasattr(model.spatial.streak_model, 'a0'), False)
     with pytest.raises(AttributeError):
         model.spatial.__getattribute__('a0')
+    # If the spatial model and an effects model have a parameter with the
+    # Same name, both need to be changed
+    model.rho = 350
+    model.axlambda = 450
+    model.do_thresholding = True
+    npt.assert_equal(model.spatial.size_model.rho, 350)
+    npt.assert_equal(model.spatial.streak_model.axlambda, 450)
+    npt.assert_equal(model.spatial.bright_model.do_thresholding, True)
+    npt.assert_equal(model.rho, 350)
+    npt.assert_equal(model.axlambda, 450)
+    npt.assert_equal(model.do_thresholding, True)
+
+    # If parameter is not an effects model param, it cant be set
+    with pytest.raises(FreezeError):
+        model.invalid_param = 5
+
+    # Custom parameters also propogate to effects models
+    model = BiphasicAxonMapModel(engine=engine)
+    class TestSizeModel():
+        def __init__(self):
+            self.test_param = 5
+        def __call__(self, freq, amp, pdur):
+            return 1
+    model.size_model = TestSizeModel()
+    model.test_param = 10
+    npt.assert_equal(model.spatial.size_model.test_param, 10)
+    with pytest.raises(AttributeError):
+        model.spatial.__getattribute__('test_param')
 
     # User can override default values
     model = BiphasicAxonMapModel(engine=engine)

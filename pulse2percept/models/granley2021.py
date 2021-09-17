@@ -1,23 +1,18 @@
 """`BiphasicAxonMapModel`"""
-from attr import Attribute
+from typing import Type
 import numpy as np
-from copy import deepcopy
 import sys
-
-from numpy.core.fromnumeric import size
 
 from . import AxonMapModel, AxonMapSpatial, TemporalModel, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
-from ..datasets import load_nanduri2012
 from ..percepts import Percept
 from ..utils import FreezeError
-
+from .base import BaseModel, NotBuiltError
 from ._granley2021 import fast_biphasic_axon_map
-from .base import NotBuiltError
 
 
-class DefaultBrightModel():
+class DefaultBrightModel(BaseModel):
     """
     Default model to be used for brightness scaling in BiphasicAxonMapModel
     Implements Eq 4 from [Granley2021]_ 
@@ -28,21 +23,29 @@ class DefaultBrightModel():
     do_thresholding : bool, optional
         Set to true to enable probabilistic phosphene appearance at near-threshold 
         amplitudes
-    **kwargs : dict, optional 
-        Allows for setting model coefficients, A0-4
+    a0, a1 : float, optional
+        Linear regression coefficients (slope and intercept) of pulse_duration
+        vs threshold curve (Eq 3). Amplitude factor will be scaled by 
+        (a0*pdur + a1)^-1.
+    a2, a3, a4: float, optional
+        Linear regression coefficients for brightness vs amplitude and frequency (Eq 4)
+        F_bright = a2*scaled_amp + a3*freq + a4 
     """
 
-    def __init__(self,  do_thresholding=False, **kwargs):
-        self.do_thresholding = do_thresholding
-        # Default values
-        self.a0 = 0.27
-        self.a1 = 0.8825
-        self.a2 = 1.84
-        self.a3 = 0.2
-        self.a4 = 3.0986
-        for k, v in kwargs:
-            if hasattr(self, k):
-                self.__setattr__(k, v)
+    def __init__(self, **params):
+        super(DefaultBrightModel, self).__init__(**params)
+        self.build()
+
+    def get_default_params(self):
+        params = {
+            'a0': 0.27,
+            'a1': 0.8825,
+            'a2': 1.84,
+            'a3': 0.2,
+            'a4': 3.0986,
+            'do_thresholding': False
+        }
+        return params
 
     def scale_threshold(self, pdur):
         """ 
@@ -64,18 +67,21 @@ class DefaultBrightModel():
         # Scale amp according to pdur (Eq 3 in paper) and then calculate F_{bright}
         F_bright = self.predict_freq_amp(amp * self.scale_threshold(pdur), freq)
 
-        # If thresholding is enabled, phosphene only has a chance of appearing
-        # p = -1/96 + 97 / (96(1+96 exp(-ln(98)amp)))
-        # Sigmoid with p[0] = 0, p[1] = 0.5, p[2] = 0.99
-        p = -0.01041666666667 + 1.0104166666666667 / (
-            1+96 * np.exp(-4.584967478670572 * amp * self.scale_threshold(pdur)))
-        if not self.do_thresholding or np.random.random() < p:
+        if not self.do_thresholding:
             return F_bright
         else:
-            return 0
+            # If thresholding is enabled, phosphene only has a chance of appearing
+            # p = -1/96 + 97 / (96(1+96 exp(-ln(98)amp)))
+            # Sigmoid with p[0] = 0, p[1] = 0.5, p[2] = 0.99
+            p = -0.01041666666667 + 1.0104166666666667 / (
+                1+96 * np.exp(-4.584967478670572 * amp * self.scale_threshold(pdur)))
+            if np.random.random() < p:
+                return F_bright
+            else:
+                return 0
 
 
-class DefaultSizeModel():
+class DefaultSizeModel(BaseModel):
     """
     Default model to be used for size (rho) scaling in BiphasicAxonMapModel
     Implements Eq 5 from [Granley2021]_ 
@@ -85,21 +91,30 @@ class DefaultSizeModel():
     ------------
     rho :  float32
         Rho parameter of BiphasicAxonMapModel (spatial decay rate)
-    **kwargs : dict, optional 
-        Allows for setting model coefficients, A0-2, A5-6
+    a0, a1 : float, optional
+        Linear regression coefficients (slope and intercept) of pulse_duration
+        vs threshold curve (Eq 3). Amplitude factor will be scaled by 
+        (a0*pdur + a1)^-1.
+    a5, a6 : float, optional
+        Linear regression coefficients for size vs amplitude (Eq 5)
+        F_size = a5*scaled_amp + a6 
     """
 
-    def __init__(self, rho, **kwargs):
-        self.min_rho = 10  # dont let rho be scaled below this threshold
-        self.min_f_size = self.min_rho**2 / rho**2
-        # Default values
-        self.a0 = 0.27
-        self.a1 = 0.8825
-        self.a5 = 1.0812
-        self.a6 = -0.35338
-        for k, v in kwargs:
-            if hasattr(self, k):
-                self.__setattr__(k, v)
+    def __init__(self, rho, **params):
+        super(DefaultSizeModel, self).__init__(**params)
+        self.rho = rho
+        self.build()
+
+    def get_default_params(self):
+        params = {
+            'a0': 0.27,
+            'a1': 0.8825,
+            'a5': 1.0812,
+            'a6': -0.35338,
+            # dont let rho be scaled below this threshold
+            'min_rho': 10,
+        }
+        return params
 
     def scale_threshold(self, pdur):
         """ 
@@ -113,14 +128,15 @@ class DefaultSizeModel():
         Main function to be called by BiphasicAxonMapModel
         Outputs value for each electrode that rho should be scaled by (F_size)
         """
+        min_f_size = self.min_rho**2 / self.rho**2
         F_size = self.a5 * amp * self.scale_threshold(pdur) + self.a6
-        if F_size > self.min_f_size:
+        if F_size > min_f_size:
             return F_size
         else:
-            return self.min_f_size
+            return min_f_size
 
 
-class DefaultStreakModel():
+class DefaultStreakModel(BaseModel):
     """
     Default model to be used for streak length (lambda) scaling in BiphasicAxonMapModel
     Implements Eq 6 from [Granley2021]_ 
@@ -130,32 +146,37 @@ class DefaultStreakModel():
     ------------
     axlambda :  float32
         Axlambda parameter of BiphasicAxonMapModel (axonal decay rate)
-    **kwargs : dict, optional 
-        Allows for setting model coefficients, A7-9
+    a7, a8, a9: float, optional
+        Regression coefficients for streak length vs pulse duration (Eq 6)
+        F_streak = -a7*pdur^a8 + a9
     """
 
-    def __init__(self, axlambda, **kwargs):
-        # never decrease lambda to less than 10
-        self.min_lambda = 10
-        self.min_f_streak = self.min_lambda**2 / axlambda ** 2
-        # Default values
-        self.a7 = 0.54
-        self.a8 = 0.21
-        self.a9 = 1.56
-        for k, v in kwargs:
-            if hasattr(self, k):
-                self.__setattr__(k, v)
+    def __init__(self, axlambda, **params):
+        super(DefaultStreakModel, self).__init__(**params)
+        self.axlambda = axlambda
+        self.build()
+
+    def get_default_params(self):
+        params = {
+            'a7': 0.54,
+            'a8': 0.21,
+            'a9': 1.56,
+            # dont let lambda be scaled below this threshold
+            'min_lambda': 10,
+        }
+        return params
 
     def __call__(self, freq, amp, pdur):
         """
         Main function to be called by BiphasicAxonMapModel
         Outputs value for each electrode that lambda should be scaled by (F_streak)
         """
+        min_f_streak = self.min_lambda**2 / self.axlambda ** 2
         F_streak = self.a9 - self.a7 * pdur ** self.a8
-        if F_streak > self.min_f_streak:
+        if F_streak > min_f_streak:
             return F_streak
         else:
-            return self.min_f_streak
+            return min_f_streak
 
 
 class BiphasicAxonMapSpatial(AxonMapSpatial):
@@ -191,11 +212,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         and pulse duration
     do_thresholding: boolean
         Use probabilistic sigmoid thresholding, default: False
-    **params: dict, optional
+    **params: optional
         Additional params for AxonMapModel. 
 
-        Options for AxonMapSpatial:
-        ---------------------------
+        Options:
+        --------
         axlambda: double, optional
             Exponential decay constant along the axon(microns).
         rho: double, optional
@@ -245,6 +266,13 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     def __init__(self, **params):
         super(BiphasicAxonMapSpatial, self).__init__(**params)
+        if self.bright_model is None:
+            self.bright_model = DefaultBrightModel(
+                do_thresholding=self.do_thresholding)
+        if self.size_model is None:
+            self.size_model = DefaultSizeModel(self.rho)
+        if self.streak_model is None:
+            self.streak_model = DefaultStreakModel(self.axlambda)
 
     def __getattr__(self, attr):
         # Called when normal get attribute fails
@@ -321,16 +349,12 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         return params
 
     def _build(self):
-        if self.bright_model is None:
-            self.bright_model = DefaultBrightModel(
-                do_thresholding=self.do_thresholding)
-        if self.size_model is None:
-            self.size_model = DefaultSizeModel(self.rho)
-        if self.streak_model is None:
-            self.streak_model = DefaultStreakModel(self.axlambda)
-        assert(callable(self.bright_model))
-        assert(callable(self.size_model))
-        assert(callable(self.streak_model))
+        if not callable(self.bright_model):
+            raise TypeError("bright_model needs to be callable")
+        if not callable(self.size_model):
+            raise TypeError("size_model needs to be callable")
+        if not callable(self.streak_model):
+            raise TypeError("streak_model needs to be callable")
         super(BiphasicAxonMapSpatial, self)._build()
 
     def _predict_spatial(self, earray, stim):
@@ -393,9 +417,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # or a 0 stimulus
             for i, (ele, params) in enumerate(implant.stim.metadata
                                               ['electrodes'].items()):
-                if (params['type'] != BiphasicPulseTrain or \
-                    params['metadata']['delay_dur'] != 0) and \
-                    np.any(implant.stim[i]):
+                if (params['type'] != BiphasicPulseTrain or
+                        params['metadata']['delay_dur'] != 0) and \
+                        np.any(implant.stim[i]):
                     raise TypeError(
                         "All stimuli must be BiphasicPulseTrains with no " +
                         "delay dur (Failing electrode: %s)" % (ele))
@@ -552,8 +576,3 @@ class BiphasicAxonMapModel(Model):
             return None
         resp = self.spatial.predict_percept(implant, t_percept=t_percept)
         return resp
-
-
-
-
-        

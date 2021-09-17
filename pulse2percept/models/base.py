@@ -351,7 +351,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError("'implant' must be a ProsthesisSystem, not "
-                            "%s." % type(stim))
+                            "%s." % type(implant))
 
         def inner_predict(amp, fnc_predict, implant):
             _implant = deepcopy(implant)
@@ -892,7 +892,7 @@ class Model(PrettyPrint):
         """
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError("'implant' must be a ProsthesisSystem, not "
-                            "%s." % type(stim))
+                            "%s." % type(implant))
 
         def inner_predict(amp, fnc_predict, implant, **kwargs):
             _implant = deepcopy(implant)
