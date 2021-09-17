@@ -368,6 +368,71 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         else:
             raise NotImplementedError("Jax will be supported in future release")
 
+    def predict_percept(self, implant, t_percept=None):
+        """ Predicts the spatial response
+        Override base predict percept to have desired timesteps and 
+        remove unneccesary computation
+
+        Parameters
+        ----------
+        implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
+            A valid prosthesis system. A stimulus can be passed via
+            :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
+        t_percept: float or list of floats, optional
+            The time points at which to output a percept (ms).
+            If None, ``implant.stim.time`` is used.
+
+        Returns
+        -------
+        percept: :py:class:`~pulse2percept.models.Percept`
+            A Percept object whose ``data`` container has dimensions Y x X x 1.
+            Will return None if ``implant.stim`` is None.
+        """
+        # Make sure stimulus is a BiphasicPulseTrain:
+        if not isinstance(implant.stim, BiphasicPulseTrain):
+            # Could still be a stimulus where each electrode has a biphasic pulse train
+            # or a 0 stimulus
+            for i, (ele, params) in enumerate(implant.stim.metadata
+                                              ['electrodes'].items()):
+                if (params['type'] != BiphasicPulseTrain or \
+                    params['metadata']['delay_dur'] != 0) and \
+                    np.any(implant.stim[i]):
+                    raise TypeError(
+                        "All stimuli must be BiphasicPulseTrains with no " +
+                        "delay dur (Failing electrode: %s)" % (ele))
+        if isinstance(implant, ProsthesisSystem):
+            if implant.eye != self.spatial.eye:
+                raise ValueError(("The implant is in %s but the model was "
+                                  "built for %s.") % (implant.eye,
+                                                      self.spatial.eye))
+        if not self.is_built:
+            raise NotBuiltError("Yout must call ``build`` first.")
+        if not isinstance(implant, ProsthesisSystem):
+            raise TypeError(("'implant' must be a ProsthesisSystem object, "
+                             "not %s.") % type(implant))
+
+        if implant.stim is None:
+            return None
+        stim = implant.stim
+        if t_percept is None:
+            n_time = 1
+        else:
+            n_time = len(t_percept)
+        if not np.any(stim.data):
+            # Stimulus is 0
+            resp = np.zeros(list(self.grid.x.shape) + [n_time],
+                            dtype=np.float32)
+        else:
+            # Make sure stimulus is in proper format
+            stim = Stimulus(stim)
+            resp = np.zeros(list(self.grid.x.shape) + [n_time])
+            # Response goes in first frame
+            resp[:, :, 0] = self._predict_spatial(
+                implant.earray, stim).reshape(self.grid.x.shape)
+        print('t_percept'  + str(t_percept))
+        return Percept(resp, space=self.grid, time=t_percept,
+                       metadata={'stim': stim.metadata})
+
 
 class BiphasicAxonMapModel(Model):
     """ BiphasicAxonMapModel of [Granley2021]_ (standalone model)
@@ -458,9 +523,11 @@ class BiphasicAxonMapModel(Model):
             spatial=BiphasicAxonMapSpatial(), temporal=None, **params)
 
     def predict_percept(self, implant, t_percept=None):
-        """ Predicts the spatial response
-        Override base predict percept to have desired timesteps and 
-        remove unneccesary computation
+        """Predict a percept
+        Overrides base predict percept to keep desired time axes
+        .. important ::
+
+            You must call ``build`` before calling ``predict_percept``.
 
         Parameters
         ----------
@@ -474,49 +541,21 @@ class BiphasicAxonMapModel(Model):
         Returns
         -------
         percept: :py:class:`~pulse2percept.models.Percept`
-            A Percept object whose ``data`` container has dimensions Y x X x 1.
+            A Percept object whose ``data`` container has dimensions Y x X x T.
             Will return None if ``implant.stim`` is None.
         """
-        # Make sure stimulus is a BiphasicPulseTrain:
-        if not isinstance(implant.stim, BiphasicPulseTrain):
-            # Could still be a stimulus where each electrode has a biphasic pulse train
-            # or a 0 stimulus
-            for i, (ele, params) in enumerate(implant.stim.metadata
-                                              ['electrodes'].items()):
-                if (params['type'] != BiphasicPulseTrain or \
-                    params['metadata']['delay_dur'] != 0) and \
-                    np.any(implant.stim[i]):
-                    raise TypeError(
-                        "All stimuli must be BiphasicPulseTrains with no " +
-                        "delay dur (Failing electrode: %s)" % (ele))
-        if isinstance(implant, ProsthesisSystem):
-            if implant.eye != self.spatial.eye:
-                raise ValueError(("The implant is in %s but the model was "
-                                  "built for %s.") % (implant.eye,
-                                                      self.spatial.eye))
         if not self.is_built:
-            raise NotBuiltError("Yout must call ``build`` first.")
+            raise NotBuiltError("You must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(("'implant' must be a ProsthesisSystem object, "
-                             "not %s.") % type(implant))
-
-        if implant.stim is None:
+            raise TypeError("'implant' must be a ProsthesisSystem object, not "
+                            "%s." % type(implant))
+        if implant.stim is None or (not self.has_space and not self.has_time):
+            # Nothing to see here:
             return None
-        stim = implant.stim
-        if t_percept is None:
-            n_time = 1
-        else:
-            n_time = len(t_percept)
-        if not np.any(stim.data):
-            # Stimulus is 0
-            resp = np.zeros(list(self.grid.x.shape) + [n_time],
-                            dtype=np.float32)
-        else:
-            # Make sure stimulus is in proper format
-            stim = Stimulus(stim)
-            resp = np.zeros(list(self.grid.x.shape) + [n_time])
-            # Response goes in first frame
-            resp[:, :, 0] = self._predict_spatial(
-                implant.earray, stim).reshape(self.grid.x.shape)
-        return Percept(resp, space=self.grid, time=t_percept,
-                       metadata={'stim': stim.metadata})
+        resp = self.spatial.predict_percept(implant, t_percept=t_percept)
+        return resp
+
+
+
+
+        
