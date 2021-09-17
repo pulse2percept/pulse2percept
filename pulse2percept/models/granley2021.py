@@ -259,8 +259,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         for m in [self.bright_model, self.size_model, self.streak_model]:
             if hasattr(m, attr):
                 return getattr(self.bright_model, attr)
-        # No error msg neccesary, this will be caught by base __get_attr__
-        raise AttributeError()
+        raise AttributeError("%s not found" % attr)
 
     def __setattr__(self, name, value):
         """Called when an attribute is set
@@ -401,10 +400,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                         "All stimuli must be BiphasicPulseTrains with no " +
                         "delay dur (Failing electrode: %s)" % (ele))
         if isinstance(implant, ProsthesisSystem):
-            if implant.eye != self.spatial.eye:
+            if implant.eye != self.eye:
                 raise ValueError(("The implant is in %s but the model was "
                                   "built for %s.") % (implant.eye,
-                                                      self.spatial.eye))
+                                                      self.eye))
         if not self.is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
@@ -429,7 +428,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Response goes in first frame
             resp[:, :, 0] = self._predict_spatial(
                 implant.earray, stim).reshape(self.grid.x.shape)
-        print('t_percept'  + str(t_percept))
         return Percept(resp, space=self.grid, time=t_percept,
                        metadata={'stim': stim.metadata})
 
