@@ -359,8 +359,12 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the percept"""
-        assert isinstance(earray, ElectrodeArray)
-        assert isinstance(stim, Stimulus)
+        if not isinstance(earray, ElectrodeArray):
+            raise TypeError("Implant must be of type ElectrodeArray but it is " +
+                str(type(earray)))
+        if not isinstance(stim, Stimulus):
+            raise TypeError(
+                "Stim must be of type Stimulus but it is " + str(type(stim)))
 
         # Calculate model effects before losing GIL
         bright_effects = []
