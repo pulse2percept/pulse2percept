@@ -26,6 +26,9 @@ Studies referenced throughout the Documentation:
                 *Journal of Comparative Neurophysiology* 292:497-523,
                 doi:`10.1002/cne.902920402
                 <https://doi.org/10.1002/cne.902920402>`_.
+.. [Granley2021] Granley, J., & Beyeler, M. (2021). A Computational Model of 
+                 Phosphene Appearance for Epiretinal Prostheses. Conference on 
+                 Engineering in Medicine and Biology, 2021.
 .. [Hayes2003] JS Hayes et al. (2003). Visually guided performance of
                simple tasks using simulated prosthetic vision.
                *Artificial Organs* 27, 1016-1028.
@@ -84,6 +87,11 @@ Studies referenced throughout the Documentation:
                 receptive field density as a function of visual field
                 location. *Journal of Vision* 14(7):1-17,
                 doi:`10.1167/14.7.15 <https://doi.org/10.1167/14.7.15>`_.
+.. [Weitz2015]  Weitz, A. C., Nanduri, D., Behrend, M. R., Gonzalez-Calle, A.,
+                Greenberg, R. J., Humayun, M. S., ... & Weiland, J. D. (2015).
+                Improving the spatial resolution of epiretinal implants by 
+                increasing stimulus pulse duration. Science translational medicine,
+                7(318), 318ra203-318ra203.
 .. [WileyWebster1982] JD Wiley, JG Webster (1982). Analysis and control of the
                       current distribution under circular dispersive 
                       electrodes. *IEEE Transactions on Biomedical Engineering*

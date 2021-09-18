@@ -116,7 +116,8 @@ def freeze_class(set):
             # If attribute already exists, simply set it
             set(self, name, value)
             return
-        elif sys._getframe(1).f_code.co_name == '__init__':
+        elif sys._getframe(1).f_code.co_name == '__init__' or \
+             sys._getframe(2).f_code.co_name == '__init__':
             # Allow __setattr__ calls in __init__ calls of proper object types
             if isinstance(sys._getframe(1).f_locals['self'], self.__class__):
                 set(self, name, value)

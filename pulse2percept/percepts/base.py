@@ -51,6 +51,9 @@ class Percept(Data):
             'metadata': metadata
         }
 
+    def __get_item__(self, key):
+        return self.data[key]
+
     def argmax(self, axis=None):
         """Return the indices of the maximum values along an axis
 

@@ -114,12 +114,14 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
         # getframe(0) is '_is_built', getframe(1) is 'set_attr'.
         # getframe(2) is the one we are looking for, and has to be either the
         # construct or ``build``:
-        f_caller = sys._getframe(2).f_code.co_name
-        if f_caller in ["__init__", "build"]:
+        f_caller_2 = sys._getframe(2).f_code.co_name
+        f_caller_3 = sys._getframe(3).f_code.co_name
+        if f_caller_2 in ["__init__", "build"] or \
+           f_caller_3 in ["__init__", "build"]:
             self._is_built = val
         else:
             err_s = ("The attribute `is_built` can only be set in the "
-                     "constructor or in ``build``, not in ``%s``." % f_caller)
+                     "constructor or in ``build``, not in ``%s``." % f_caller_2)
             raise AttributeError(err_s)
 
 
@@ -349,7 +351,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError("'implant' must be a ProsthesisSystem, not "
-                            "%s." % type(stim))
+                            "%s." % type(implant))
 
         def inner_predict(amp, fnc_predict, implant):
             _implant = deepcopy(implant)
@@ -690,20 +692,22 @@ class Model(PrettyPrint):
             raise AttributeError("%s not found" % attr)
         # Outside the constructor, we need to check the spatial/temporal model:
         try:
-            spatial = self.spatial.__getattribute__(attr)
+            spatial = getattr(self.spatial, attr)
+            spatial_valid = True
         except AttributeError:
-            spatial = None
+            spatial_valid = False
         try:
-            temporal = self.temporal.__getattribute__(attr)
+            temporal = getattr(self.temporal, attr)
+            temporal_valid = True
         except AttributeError:
-            temporal = None
-        if spatial is None and temporal is None:
+            temporal_valid = False
+        if not spatial_valid and not temporal_valid:
             raise AttributeError("%s has no attribute "
                                  "'%s'." % (self.__class__.__name__,
                                             attr))
-        if spatial is None:
+        if not spatial_valid:
             return temporal
-        if temporal is None:
+        if not temporal_valid:
             return spatial
         return {'spatial': spatial, 'temporal': temporal}
 
@@ -888,7 +892,7 @@ class Model(PrettyPrint):
         """
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError("'implant' must be a ProsthesisSystem, not "
-                            "%s." % type(stim))
+                            "%s." % type(implant))
 
         def inner_predict(amp, fnc_predict, implant, **kwargs):
             _implant = deepcopy(implant)
