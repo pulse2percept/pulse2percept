@@ -137,6 +137,8 @@ def test_biphasicAxonMapModel(engine):
         npt.assert_equal(hasattr(model.spatial, param), True)
 
     # We can set and get effects model params
+    for atr in ['a' + str(i) for i in range(0, 10)]:
+        npt.assert_equal(hasattr(model, atr), True)
     model.a0 = 5
     # Should propogate to size and bright model
     # But should not be a member of streak or spatial

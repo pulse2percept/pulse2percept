@@ -286,7 +286,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         # Check if bright/size/streak model has param
         for m in [self.bright_model, self.size_model, self.streak_model]:
             if hasattr(m, attr):
-                return getattr(self.bright_model, attr)
+                return getattr(m, attr)
         raise AttributeError("%s not found" % attr)
 
     def __setattr__(self, name, value):
