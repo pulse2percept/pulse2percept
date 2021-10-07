@@ -283,6 +283,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # point means the default attribute access failed - most likely
             # because we are trying to create a variable. In this case, simply
             # raise an exception:
+            # Note that this gets called from __init__ of BaseModel, not directly from 
+            # BiphasicAxonMap
             raise AttributeError("%s not found" % attr)
         # Check if bright/size/streak model has param
         for m in [self.bright_model, self.size_model, self.streak_model]:
