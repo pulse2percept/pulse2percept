@@ -40,7 +40,7 @@ def test_fetch_url(tmp_data_dir):
     fetch_url(url1, file_path1, remote_checksum=paper_checksum1)
     npt.assert_equal(os.path.exists(file_path1), True)
 
-    url2 = 'https://bionicvisionlab.org/publication/2019-optimal-surgical-placement/2019-optimal-surgical-placement.pdf'
+    url2 = 'https://bionicvisionlab.org/publications/2019-optimal-surgical-placement/2019-optimal-surgical-placement.pdf'
     file_path2 = os.path.join(tmp_data_dir, 'paper2.pdf')
     paper_checksum2 = 'e2d0cbecc9c2826f66f60576b44fe18ad6a635d394ae02c3f528b89cffcd9450'
     # Use wrong checksum:
