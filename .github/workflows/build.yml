@@ -16,7 +16,7 @@ jobs:
       # Test on all supported platforms using all supported Python versions:
       matrix:
         python-version: [3.7, 3.8, 3.9]
-        os: [ubuntu-latest, ubuntu-16.04, windows-latest, macOS-latest]
+        os: [ubuntu-latest, ubuntu-18.04, windows-latest, macOS-latest]
     
     steps:
     - uses: actions/checkout@v1
