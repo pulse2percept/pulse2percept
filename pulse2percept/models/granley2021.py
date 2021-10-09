@@ -276,12 +276,15 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     def __getattr__(self, attr):
         # Called when normal get attribute fails
-        if sys._getframe(2).f_code.co_name == '__init__' or  \
-           sys._getframe(3).f_code.co_name == '__init__':
+        if sys._getframe(3).f_code.co_name == '__init__' and \
+            "pulse2percept/pulse2percept/models/base.py" in \
+            sys._getframe(3).f_code.co_filename:
             # We can set new class attributes in the constructor. Reaching this
             # point means the default attribute access failed - most likely
             # because we are trying to create a variable. In this case, simply
             # raise an exception:
+            # Note that this gets called from __init__ of BaseModel, not directly from 
+            # BiphasicAxonMap
             raise AttributeError("%s not found" % attr)
         # Check if bright/size/streak model has param
         for m in [self.bright_model, self.size_model, self.streak_model]:
