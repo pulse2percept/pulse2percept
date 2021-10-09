@@ -40,8 +40,8 @@ If you don't have Python, you have several options:
 
 .. important::
 
-    pulse2percept 0.6 was the last release to support Python <= 3.5.
-    pulse2percept 0.7+ requires **Python 3.6+**.
+    pulse2percept 0.7 was the last release to support Python <= 3.6.
+    pulse2percept 0.8+ requires **Python 3.7+**.
 
 On some platforms (e.g., macOS), you might also have to install pip yourself.
 You can check if pip is installed on your system by typing ``pip --version``
@@ -73,13 +73,13 @@ release can be installed with pip:
 
 .. code-block:: bash
 
-    pip3 install pulse2percept
+    pip install pulse2percept
 
 You can also install a specific version:
 
 .. code-block:: bash
 
-    pip3 install pulse2percept==0.6.0
+    pip install pulse2percept==0.6.0
 
 Then from any Python console or script, try:
 
@@ -107,7 +107,7 @@ Installing version |version| from source
 Prerequisites
 -------------
 
-1.  **Python** (>= 3.6): Make sure to :ref:`install Python <install-python>`
+1.  **Python** (>= 3.7): Make sure to :ref:`install Python <install-python>`
     first.
 
 2.  **XCode**: On macOS, make sure to install `Apple XCode`_.
@@ -120,14 +120,14 @@ Prerequisites
     1.  Install **Build Tools for Visual Studio 2019** from the
         `Microsoft website`_.
         Note that the build tools for Visual Studio 2015 or 2017 should work as
-        well (Python >= 3.6 requires C++ 14.X to be exact).
+        well (Python >= 3.7 requires C++ 14.X to be exact).
         Also note that you don't need to install Visual Studio itself.
 
     2.  `Install Cython`_:
 
         .. code-block:: bash
 
-            pip3 install Cython
+            pip install Cython
 
         If you get an error saying ``unable to find vcvarsall.bat``, then there
         is a problem with your Build Tools installation, in which case you
@@ -205,7 +205,7 @@ Obtaining the latest code from GitHub
 
     .. code-block:: bash
 
-        pip3 install -r requirements.txt
+        pip install -r requirements.txt
 
     This includes Cython. If you are on Windows, you will also need a suitable
     C compiler (see :ref:`Prerequisites <install-source-prerequisites>` above).
@@ -216,7 +216,7 @@ Obtaining the latest code from GitHub
 
     .. code-block:: bash
 
-       pip3 install -r requirements-dev.txt
+       pip install -r requirements-dev.txt
 
 .. _pulse2percept on GitHub: https://github.com/pulse2percept/pulse2percept
 .. _GitHub account: https://help.github.com/articles/signing-up-for-a-new-github-account
@@ -229,7 +229,7 @@ Assuming you are still in the root directory of the git clone, type
 
 .. code-block:: bash
 
-    pip3 install -e .
+    pip install -e .
 
 Then from any Python console or script, try:
 
@@ -269,7 +269,7 @@ To upgrade to the newest stable release, use the ``-U`` option with pip:
 
 .. code-block:: bash
 
-    pip3 install -U pulse2percept
+    pip install -U pulse2percept
 
 To upgrade to the bleedingest-edge version, navigate to the directory where you
 cloned the git repository. If you have never upgraded your code before, add
@@ -298,7 +298,7 @@ You can uninstall pulse2percept using pip:
 
 .. code-block:: python
 
-   pip3 uninstall pulse2percept
+   pip uninstall pulse2percept
 
 This works for both stable and latest releases.
 
@@ -322,7 +322,7 @@ You can check the installation location:
 
 .. code-block:: python
 
-   pip3 show pulse2percept
+   pip show pulse2percept
 
 Then add the specificed location to ``$PATH``; see `PATH on Windows`_, 
 `PATH on macOS`_, `PATH on Linux`_.
@@ -340,7 +340,7 @@ issue:
 
 .. code-block:: python
 
-  pip3 install -U numpy
+  pip install -U numpy
 
 .. note::
 
