@@ -279,8 +279,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         for i in range(0, 5, 1):
             print(i, end=': ')
             print(sys._getframe(i).f_code.co_name, end=', ')
-            print(sys._getframe(i).f_code.co_filename)
-            print(sys._getframe(3).f_code.co_name == '__init__')
+            print(sys._getframe(i).f_code.co_filename, end=', ')
+            print(sys._getframe(3).f_code.co_name == '__init__', end=', ')
             print("pulse2percept/pulse2percept/models/base.py" in sys._getframe(3).f_code.co_filename)
         print()
         # Called when normal get attribute fails
