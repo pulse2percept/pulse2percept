@@ -77,13 +77,13 @@ can be installed with pip:
 
 .. code-block:: bash
 
-    pip3 install pulse2percept
+    pip install pulse2percept
 
 The `bleeding-edge version`_ of pulse2percept can be installed via:
 
 .. code-block:: bash
 
-    pip3 install git+https://github.com/pulse2percept/pulse2percept
+    pip install git+https://github.com/pulse2percept/pulse2percept
 
 .. _stable release: https://pulse2percept.readthedocs.io/en/stable/index.html
 .. _bleeding-edge version: https://pulse2percept.readthedocs.io/en/latest/index.html
@@ -98,12 +98,12 @@ Detailed instructions for different platforms can be found in our
 Dependencies
 ------------
 
-**pulse2percept 0.6 was the last version to support Python <= 3.5.**
-pulse2percept 0.7+ requires Python 3.6+.
+**pulse2percept 0.7 was the last version to support Python <= 3.6.**
+pulse2percept 0.8+ requires Python 3.7+.
 
 pulse2percept requires:
 
-1.  `Python`_ (>= 3.6)
+1.  `Python`_ (>= 3.7)
 2.  `Cython`_ (>= 0.28)
 3.  `NumPy`_ (>= 1.9)
 4.  `SciPy`_ (>= 1.0.1)
@@ -143,14 +143,14 @@ of the git repository, and can be installed with the following command:
 
     git clone https://github.com/pulse2percept/pulse2percept.git
     cd pulse2percept
-    pip3 install -r requirements.txt
+    pip install -r requirements.txt
 
 All packages required for development (including all optional packages) are
 listed in ``requirements-dev.txt`` and can be installed via:
 
 .. code-block:: bash
 
-    pip3 install -r requirements-dev.txt
+    pip install -r requirements-dev.txt
 
 Where to go from here
 =====================

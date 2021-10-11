@@ -6,6 +6,7 @@
      [DOC] for new or updated documentation
      [STY] for stylistic changes
      [REF] for refactoring existing code
+     [MNT] for packaging/maintenance updates 
 
      If your PR is not yet ready to be merged, click on the dropdown arrow next to the
      "Create pull request" button and choose "Create draft pull request" instead.

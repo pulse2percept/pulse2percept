@@ -275,18 +275,14 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             self.streak_model = DefaultStreakModel(self.axlambda)
 
     def __getattr__(self, attr):
-        print(attr)
-        for i in range(0, 5, 1):
-            print(i, end=': ')
-            print(sys._getframe(i).f_code.co_name, end=', ')
-            print(sys._getframe(i).f_code.co_filename, end=', ')
-            print(sys._getframe(3).f_code.co_name == '__init__', end=', ')
-            print("pulse2percept/models/base.py" in sys._getframe(3).f_code.co_filename)
-        print()
         # Called when normal get attribute fails
-        if sys._getframe(3).f_code.co_name == '__init__' and \
+        # If we are in the initializer, or if trying to access 
+        # an effects model, raise an error which is caught and causes
+        # the parameter to be created.
+        if (sys._getframe(3).f_code.co_name == '__init__' and \
             "pulse2percept/models/base.py" in \
-            sys._getframe(3).f_code.co_filename:
+            sys._getframe(3).f_code.co_filename) or \
+            (attr in ['bright_model', 'streak_model' 'size_model']):
             # We can set new class attributes in the constructor. Reaching this
             # point means the default attribute access failed - most likely
             # because we are trying to create a variable. In this case, simply

@@ -253,7 +253,7 @@ def setup_package():
                         'build_ext': openmp_build_ext(),
                         'sdist': sdist
                     },
-                    python_requires=">=3.6",
+                    python_requires=">=3.7",
                     install_requires=[
                         'numpy>={}'.format(NUMPY_MIN_VERSION),
                         'scipy>={}'.format(SCIPY_MIN_VERSION),
