@@ -281,11 +281,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             print(sys._getframe(i).f_code.co_name, end=', ')
             print(sys._getframe(i).f_code.co_filename, end=', ')
             print(sys._getframe(3).f_code.co_name == '__init__', end=', ')
-            print("pulse2percept/pulse2percept/models/base.py" in sys._getframe(3).f_code.co_filename)
+            print("pulse2percept/models/base.py" in sys._getframe(3).f_code.co_filename)
         print()
         # Called when normal get attribute fails
         if sys._getframe(3).f_code.co_name == '__init__' and \
-            "pulse2percept/pulse2percept/models/base.py" in \
+            "pulse2percept/models/base.py" in \
             sys._getframe(3).f_code.co_filename:
             # We can set new class attributes in the constructor. Reaching this
             # point means the default attribute access failed - most likely
