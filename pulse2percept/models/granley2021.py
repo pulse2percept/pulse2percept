@@ -275,6 +275,12 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             self.streak_model = DefaultStreakModel(self.axlambda)
 
     def __getattr__(self, attr):
+        print(attr)
+        for i in range(0, 5, 1):
+            print(i, end=': ')
+            print(sys._getframe(i).f_code.co_name, end=', ')
+            print(sys._getframe(i).f_code.co_filename)
+        print()
         # Called when normal get attribute fails
         if sys._getframe(3).f_code.co_name == '__init__' and \
             "pulse2percept/pulse2percept/models/base.py" in \
