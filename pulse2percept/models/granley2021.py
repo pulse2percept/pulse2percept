@@ -282,7 +282,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         if (sys._getframe(3).f_code.co_name == '__init__' and \
             "pulse2percept/models/base.py" in \
             sys._getframe(3).f_code.co_filename) or \
-            (attr in ['bright_model', 'streak_model' 'size_model']):
+            (attr in ['bright_model', 'streak_model', 'size_model']):
             # We can set new class attributes in the constructor. Reaching this
             # point means the default attribute access failed - most likely
             # because we are trying to create a variable. In this case, simply
