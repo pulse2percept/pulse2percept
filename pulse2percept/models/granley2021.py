@@ -38,8 +38,8 @@ class DefaultBrightModel(BaseModel):
 
     def get_default_params(self):
         params = {
-            'a0': 0.27,
-            'a1': 0.8825,
+            'a0': 2.095,
+            'a1': 0.054326,
             'a2': 1.84,
             'a3': 0.2,
             'a4': 3.0986,
@@ -107,8 +107,8 @@ class DefaultSizeModel(BaseModel):
 
     def get_default_params(self):
         params = {
-            'a0': 0.27,
-            'a1': 0.8825,
+            'a0': 2.095,
+            'a1': 0.054326,
             'a5': 1.0812,
             'a6': -0.35338,
             # dont let rho be scaled below this threshold
