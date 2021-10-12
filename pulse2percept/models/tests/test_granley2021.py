@@ -176,6 +176,23 @@ def test_biphasicAxonMapModel(engine):
     with pytest.raises(AttributeError):
         model.spatial.__getattribute__('test_param')
 
+    # Values are passed correctly even in another classes __init__
+    # This also tests for recursion error in another classes __init__
+    class TestInitClassGood():
+        def __init__(self):
+            self.model = BiphasicAxonMapModel()
+            # This shouldnt raise an error
+            self.model.a0
+    class TestInitClassBad():
+        def __init__(self):
+            self.model = BiphasicAxonMapModel()
+            # This should
+            self.model.a10 = 999
+    # If this fails, something is wrong with getattr / setattr logic
+    TestInitClassGood()
+    with pytest.raises(FreezeError):
+        TestInitClassBad()
+
     # User can override default values
     model = BiphasicAxonMapModel(engine=engine)
     for key, value in set_params.items():
