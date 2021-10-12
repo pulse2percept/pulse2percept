@@ -562,6 +562,9 @@ class BiphasicAxonMapModel(Model):
 
             You must call ``build`` before calling ``predict_percept``.
 
+        Note: The stimuli should use amplitude as a factor of threshold,
+        NOT raw amplitude in microamps
+
         Parameters
         ----------
         implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
