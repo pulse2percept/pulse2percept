@@ -50,9 +50,9 @@ class DefaultBrightModel(BaseModel):
     def scale_threshold(self, pdur):
         """ 
         Based on eq 3 in paper, this function produces the factor that amplitude
-        will be scaled by to produce a_tilde. Computes (A_0 * t + A_1)^-1
+        will be scaled by to produce a_tilde. Computes A_0 * t + A_1 (1/threshold)
         """
-        return 1 / (self.a1 + self.a0*pdur)
+        return self.a1 + self.a0*pdur
 
     def predict_freq_amp(self, amp, freq):
         """ Eq 4 in paper, A_2*A_tilde + A_3*f + A_4 """
@@ -119,9 +119,9 @@ class DefaultSizeModel(BaseModel):
     def scale_threshold(self, pdur):
         """ 
         Based on eq 3 in paper, this function produces the factor that amplitude
-        will be scaled by to produce a_tilde. Computes (A_0 * t + A_1)^-1
+        will be scaled by to produce a_tilde. Computes A_0 * t + A_1 (1/threshold)
         """
-        return 1 / (self.a1 + self.a0*pdur)
+        return self.a1 + self.a0*pdur
 
     def __call__(self, freq, amp, pdur):
         """
