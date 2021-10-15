@@ -113,17 +113,17 @@ def test_biphasicAxonMapSpatial(engine):
     npt.assert_equal(np.any(percept.data[:, :, 1:]), False)
 
     # Test that default models give expected values
-    model = BiphasicAxonMapSpatial(engine=engine, rho=600, axlambda=600, xystep=1,
+    model = BiphasicAxonMapSpatial(engine=engine, rho=400, axlambda=600, xystep=1,
                            xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     implant = ArgusII()
     implant.stim = Stimulus({'A4' : BiphasicPulseTrain(20, 1, 1)})
     percept = model.predict_percept(implant)
-    npt.assert_equal(np.sum(percept.data > 1), 53)
-    npt.assert_equal(np.sum(percept.data > 2), 36)
-    npt.assert_equal(np.sum(percept.data > 3), 25)
-    npt.assert_equal(np.sum(percept.data > 5), 12)
-    npt.assert_equal(np.sum(percept.data > 7), 4)
+    npt.assert_equal(np.sum(percept.data > 1), 82)
+    npt.assert_equal(np.sum(percept.data > 2), 59)
+    npt.assert_equal(np.sum(percept.data > 3), 44)
+    npt.assert_equal(np.sum(percept.data > 5), 25)
+    npt.assert_equal(np.sum(percept.data > 7), 14)
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
