@@ -551,7 +551,7 @@ class AxonMapSpatial(SpatialModel):
             idx_d2 = np.concatenate(([False], idx_d2))
             contrib = np.column_stack((axon[idx_d2, :], sensitivity))
             axon_contrib.append(contrib)
-        
+
         if pad:
             # pad to length of longest axon
             axon_length = max([len(axon) for axon in axon_contrib])
@@ -651,23 +651,24 @@ class AxonMapSpatial(SpatialModel):
             if type(axons) != list:
                 axons = [axons]
         # Calculate axon contributions (depends on engine):
-        # If engine is cython or serial: 
+        # If engine is cython or serial:
         #   Axon contribution is a list of (differently shaped) NumPy arrays,
         #   and a list cannot be accessed in parallel without the gil. Instead
         #   we need to concatenate it into a really long Nx3 array, and pass the
         #   start and end indices of each slice:
         # If engine is jax:
-        #   All axons are the same length, so Axon contribution is an array with 
+        #   All axons are the same length, so Axon contribution is an array with
         #   shape (n, axon_length, 3)
         if self.engine == 'jax':
-            self.axon_contrib = self.calc_axon_sensitivity(axons, pad=True).astype(np.float32) 
+            self.axon_contrib = self.calc_axon_sensitivity(
+                axons, pad=True).astype(np.float32)
         else:
             axon_contrib = self.calc_axon_sensitivity(axons)
             self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
             len_axons = [a.shape[0] for a in axon_contrib]
             self.axon_idx_end = np.cumsum(len_axons)
             self.axon_idx_start = self.axon_idx_end - np.array(len_axons)
-        
+
         # Pickle axons along with all important parameters:
         params = {'loc_od': self.loc_od,
                   'n_axons': self.n_axons, 'axons_range': self.axons_range,
@@ -686,19 +687,20 @@ class AxonMapSpatial(SpatialModel):
         # electrodes to activation values at X,Y grid locations:
         if self.engine != 'jax':
             return fast_axon_map(stim.data,
-                             np.array([earray[e].x for e in stim.electrodes],
-                                      dtype=np.float32),
-                             np.array([earray[e].y for e in stim.electrodes],
-                                      dtype=np.float32),
-                             self.axon_contrib,
-                             self.axon_idx_start.astype(np.uint32),
-                             self.axon_idx_end.astype(np.uint32),
-                             self.rho,
-                             self.thresh_percept)
+                                 np.array([earray[e].x for e in stim.electrodes],
+                                          dtype=np.float32),
+                                 np.array([earray[e].y for e in stim.electrodes],
+                                          dtype=np.float32),
+                                 self.axon_contrib,
+                                 self.axon_idx_start.astype(np.uint32),
+                                 self.axon_idx_end.astype(np.uint32),
+                                 self.rho,
+                                 self.thresh_percept)
         else:
             raise NotImplementedError("Jax will be supported in future release")
 
-    def plot(self, use_dva=False, annotate=True, autoscale=True, ax=None):
+    def plot(self, use_dva=False, annotate=True, autoscale=True, ax=None,
+             figsize=None):
         """Plot the axon map
 
         Parameters
@@ -713,10 +715,14 @@ class AxonMapSpatial(SpatialModel):
         ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object
+        figsize : (float, float), optional
+            Desired (width, height) of the figure in inches
 
         """
         if ax is None:
             ax = plt.gca()
+        if figsize is not None:
+            ax.figure.set_size_inches(figsize)
         ax.set_facecolor('white')
         ax.set_aspect('equal')
 
@@ -729,7 +735,12 @@ class AxonMapSpatial(SpatialModel):
         if use_dva:
             # Use degrees of visual angle (dva) as axis unit:
             units = 'degrees of visual angle'
-            xmin, xmax, ymin, ymax = -18, 18, -18, 18
+            # Make sure we're filling the simulated area, rounded up/down,
+            # but no smaller than (-18, 18):
+            xmin = min(np.floor(self.xrange[0] / 3) * 3, -18)
+            xmax = max(np.ceil(self.xrange[1] / 3) * 3, 18)
+            ymin = min(np.floor(self.yrange[0] / 3) * 3, -18)
+            ymax = max(np.ceil(self.yrange[1] / 3) * 3, 18)
             od_xy = self.loc_od
             od_w = 6.44
             od_h = 6.85
@@ -741,7 +752,16 @@ class AxonMapSpatial(SpatialModel):
         else:
             # Use retinal coordinates (microns) as axis unit.
             units = 'microns'
-            xmin, xmax, ymin, ymax = -5000, 5000, -5000, 5000
+            # Make sure we're filling the simulated area, rounded up/down,
+            # but no smaller than (-5000, 5000):
+            xmin = min(np.floor(self.dva2ret(self.xrange[0]) / 1000) * 1000,
+                       -5000)
+            xmax = max(np.ceil(self.dva2ret(self.xrange[1]) / 1000) * 1000,
+                       5000)
+            ymin = min(np.floor(self.dva2ret(self.yrange[0]) / 1000) * 1000,
+                       -5000)
+            ymax = max(np.ceil(self.dva2ret(self.yrange[1]) / 1000) * 1000,
+                       5000)
             od_xy = self.dva2ret(self.loc_od)
             od_w = 1770
             od_h = 1880
