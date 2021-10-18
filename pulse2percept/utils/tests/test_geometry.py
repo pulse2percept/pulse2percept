@@ -81,6 +81,18 @@ def test_Grid2D_plot():
     grid = Grid2D((-20, 20), (-40, 40), step=0.5)
     ax = grid.plot()
     npt.assert_equal(isinstance(ax, Axes), True)
+    npt.assert_almost_equal(ax.get_xlim(), (-22, 22))
+    npt.assert_almost_equal(ax.get_ylim(), (-44, 44))
+
+    # You can change the scaling:
+    ax = grid.plot(transform=lambda x: 2*x)
+    npt.assert_equal(isinstance(ax, Axes), True)
+    npt.assert_almost_equal(ax.get_xlim(), (-44, 44))
+    npt.assert_almost_equal(ax.get_ylim(), (-88, 88))
+
+    # You can change the figure size
+    ax = grid.plot(figsize=(9, 7))
+    npt.assert_almost_equal(ax.figure.get_size_inches(), (9, 7))
 
 
 class ValidCoordTransform(RetinalCoordTransform):
@@ -160,6 +172,7 @@ def test_pol2cart():
     npt.assert_almost_equal(pol2cart(0, 10), (10, 0))
     npt.assert_almost_equal(pol2cart(np.arctan(4 / 3.0), 5), (3, 4))
     npt.assert_almost_equal(pol2cart(np.arctan(3 / 4.0), 5), (4, 3))
+
 
 def test_delta_angle():
     npt.assert_almost_equal(delta_angle(0.1, 0.2), 0.1)

@@ -126,7 +126,8 @@ class Grid2D(PrettyPrint):
     def reset(self):
         self._iter = 0
 
-    def plot(self, transform=None, autoscale=True, zorder=None, ax=None):
+    def plot(self, transform=None, autoscale=True, zorder=None, ax=None,
+             figsize=None):
         """Plot the extension of the grid
 
         Parameters
@@ -141,9 +142,13 @@ class Grid2D(PrettyPrint):
         ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object
+        figsize : (float, float), optional
+            Desired (width, height) of the figure in inches
         """
         if ax is None:
             ax = plt.gca()
+        if figsize is not None:
+            ax.figure.set_size_inches(figsize)
         ax.set_aspect('equal')
         if autoscale:
             ax.autoscale(True)
