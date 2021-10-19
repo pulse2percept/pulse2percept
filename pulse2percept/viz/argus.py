@@ -157,8 +157,8 @@ def plot_argus_phosphenes(data, argus, scale=1.0, axon_map=None,
     argus2out = img_transform('similarity', pts_in, pts_out)
 
     # Top left, top right, bottom left, bottom right corners:
-    x_range = data.xrange
-    y_range = data.yrange
+    x_range = data.xrange.values[0]
+    y_range = data.yrange.values[0]
     pts_dva = [[x_range[0], y_range[0]], [x_range[0], y_range[1]],
                [x_range[1], y_range[0]], [x_range[1], y_range[1]]]
 

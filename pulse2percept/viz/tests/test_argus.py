@@ -42,6 +42,9 @@ def test_plot_argus_phosphenes():
     with pytest.raises(TypeError):
         plot_argus_phosphenes(df, ArgusI(), ax=ax, axon_map=ScoreboardModel())
 
+    # Manual subject selection
+    plot_argus_phosphenes(df[df.electrode == 'B2'], ArgusI(), ax=ax)
+
 
 @pytest.mark.parametrize('implant', (ArgusI(), ArgusII()))
 def test_plot_argus_simulated_phosphenes(implant):
