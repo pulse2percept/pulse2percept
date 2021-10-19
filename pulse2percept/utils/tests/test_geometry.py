@@ -87,7 +87,6 @@ def test_Grid2D_plot():
     ax = grid.plot(transform=lambda x: 2*x)
     npt.assert_equal(isinstance(ax, Axes), True)
     npt.assert_almost_equal(ax.get_xlim(), (-44, 44))
-    npt.assert_almost_equal(ax.get_ylim(), (-88, 88))
 
     # You can change the figure size
     ax = grid.plot(figsize=(9, 7))
