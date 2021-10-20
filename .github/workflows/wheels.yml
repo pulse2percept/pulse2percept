@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Build wheels
-        uses: joerick/cibuildwheel
+        uses: joerick/cibuildwheel@master
         env:
           CIBW_BEFORE_BUILD: "pip install --upgrade pip && pip install -r requirements.txt && pip install -e ."
           CIBW_SKIP: "cp27-* cp35-* cp36-* pp*"
