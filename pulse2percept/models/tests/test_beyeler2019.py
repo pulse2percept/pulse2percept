@@ -160,7 +160,8 @@ def test_AxonMapSpatial(engine):
     # Axon map jax predict_percept not implemented yet
     if engine == 'jax':
         with pytest.raises(NotImplementedError):
-            percept = model.predict_percept(ArgusII(stim={'A1': [1, 0], 'B3': [0, 2]}))
+            percept = model.predict_percept(
+                ArgusII(stim={'A1': [1, 0], 'B3': [0, 2]}))
         return
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 0], 'B3': [0, 2]}))
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
@@ -178,6 +179,18 @@ def test_AxonMapSpatial_plot():
         ax = model.plot(use_dva=use_dva)
         npt.assert_equal(isinstance(ax, Subplot), True)
         npt.assert_equal(ax.get_xlim(), xlim)
+    # Simulated area might be larger than that:
+    model = AxonMapSpatial(xrange=(-20.5, 20.5), yrange=(-16.1, 16.1))
+    ax = model.plot(use_dva=True)
+    npt.assert_almost_equal(ax.get_xlim(), (-21, 21))
+    npt.assert_almost_equal(ax.get_ylim(), (-18, 18))
+    ax = model.plot(use_dva=False)
+    npt.assert_almost_equal(ax.get_xlim(), (-6000, 6000))
+    npt.assert_almost_equal(ax.get_ylim(), (-5000, 5000))
+
+    # Figure size can be changed:
+    ax = model.plot(figsize=(8, 7))
+    npt.assert_almost_equal(ax.figure.get_size_inches(), (8, 7))
 
     # Quadrants can be annotated:
     for ann_q, n_q in [(True, 6), (False, 0)]:
@@ -343,7 +356,7 @@ def test_AxonMapModel_calc_axon_sensitivity(engine):
     contrib = model.spatial.calc_axon_sensitivity(axons, pad=False)
     pad = engine == 'jax'
     axon_contrib = model.spatial.calc_axon_sensitivity(axons, pad=pad)
-    
+
     # Check lambda math:
     max_axon_length = max([len(ax) for ax in contrib])
     for ax, xy, model_ax in zip(contrib, xyret, axon_contrib):

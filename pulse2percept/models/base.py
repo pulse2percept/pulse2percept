@@ -308,7 +308,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # Calculate the Stimulus at requested time points:
             if t_percept is not None:
                 # Save electrode parameters
-                stim = Stimulus(stim) # make sure stimulus is in proper format
+                stim = Stimulus(stim)  # make sure stimulus is in proper format
                 stim = Stimulus(stim[:, t_percept].reshape((-1, n_time)),
                                 electrodes=stim.electrodes, time=t_percept,
                                 metadata=stim.metadata)
@@ -366,7 +366,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                       x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
                       y_tol=bright_tol, max_iter=max_iter)
 
-    def plot(self, use_dva=False, autoscale=True, ax=None):
+    def plot(self, use_dva=False, autoscale=True, ax=None, figsize=None):
         """Plot the model
 
         Parameters
@@ -379,20 +379,27 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object.
+        figsize : (float, float), optional
+            Desired (width, height) of the figure in inches
 
         Returns
         -------
         ax : ``matplotlib.axes.Axes``
             Returns the axis object of the plot
         """
+        if not self.is_built:
+            raise NotBuiltError("You need to build the model first before "
+                                "you can plot it.")
         if use_dva:
             ax = self.grid.plot(autoscale=autoscale, ax=ax,
-                                zorder=ZORDER['background'])
+                                zorder=ZORDER['background'], figsize=figsize)
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')
         else:
+            print('transform', self.dva2ret)
             ax = self.grid.plot(transform=self.dva2ret, autoscale=autoscale,
-                                ax=ax, zorder=ZORDER['background'] + 1)
+                                ax=ax, zorder=ZORDER['background'] + 1,
+                                figsize=figsize)
             ax.set_xlabel('x (microns)')
             ax.set_ylabel('y (microns)')
         return ax
