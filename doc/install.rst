@@ -38,10 +38,21 @@ If you don't have Python, you have several options:
 - `Python Miniconda`_ (fast but minimal): comes with the conda package manager
   but nothing else.
 
-.. important::
+pulse2percept supports these Python versions:
 
-    pulse2percept 0.7 was the last release to support Python <= 3.6.
-    pulse2percept 0.8+ requires **Python 3.7+**.
++----------------------+-----+-----+-----+-----+-----+-----+-----+-----+
+|        Python        |3.10 | 3.9 | 3.8 | 3.7 | 3.6 | 3.5 | 3.4 | 2.7 |
++======================+=====+=====+=====+=====+=====+=====+=====+=====+
+| p2p 0.8              |soon | Yes | Yes | Yes |     |     |     |     |
++----------------------+-----+-----+-----+-----+-----+-----+-----+-----+
+| p2p 0.7              |     | Yes | Yes | Yes | Yes |     |     |     |
++----------------------+-----+-----+-----+-----+-----+-----+-----+-----+
+| p2p 0.6              |     |     | Yes | Yes | Yes | Yes |     |     |
++----------------------+-----+-----+-----+-----+-----+-----+-----+-----+
+| p2p 0.5              |     |     |     | Yes | Yes | Yes |     |     |
++----------------------+-----+-----+-----+-----+-----+-----+-----+-----+
+| p2p 0.4              |     |     |     |     |     | Yes | Yes | Yes |
++----------------------+-----+-----+-----+-----+-----+-----+-----+-----+
 
 On some platforms (e.g., macOS), you might also have to install pip yourself.
 You can check if pip is installed on your system by typing ``pip --version``
