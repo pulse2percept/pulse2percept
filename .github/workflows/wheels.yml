@@ -16,13 +16,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2019, macos-10.15]
+        os: [ubuntu-20.04, ubuntu-18.04, windows-2019, macos-10.15]
 
     steps:
       - uses: actions/checkout@v2
 
       - name: Build wheels
-        uses: joerick/cibuildwheel@v1.10.0
+        uses: joerick/cibuildwheel
         env:
           CIBW_BEFORE_BUILD: "pip install --upgrade pip && pip install -r requirements.txt && pip install -e ."
           CIBW_SKIP: "cp27-* cp35-* cp36-* pp*"
