@@ -1,4 +1,4 @@
-cython>=0.29
+cython>=0.28
 numpy>=1.11
 setuptools<50.0
 scipy>=1.0.1

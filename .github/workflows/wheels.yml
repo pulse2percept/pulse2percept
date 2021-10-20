@@ -24,7 +24,7 @@ jobs:
       - name: Build wheels
         uses: joerick/cibuildwheel@v1.10.0
         env:
-          CIBW_BEFORE_BUILD: "pip install -r requirements.txt && pip install -e ."
+          CIBW_BEFORE_BUILD: "pip install --upgrade pip && pip install -r requirements.txt && pip install -e ."
           CIBW_SKIP: "cp27-* cp35-* cp36-* pp*"
 
       - uses: actions/upload-artifact@v2
