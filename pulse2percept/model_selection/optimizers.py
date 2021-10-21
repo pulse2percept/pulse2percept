@@ -403,7 +403,7 @@ class ParticleSwarmOptimizer(BaseOptimizer):
         # Clone the estimator to make sure we have a clean slate, then fit:
         if fit_params is None:
             fit_params = {}
-        estimator = clone_estimator(self.estimator)
+        estimator = self.estimator
         estimator.set_params(**search_params)
         estimator.fit(X, y=y, **fit_params)
         # If score is not a loss function, we need to invert here:
