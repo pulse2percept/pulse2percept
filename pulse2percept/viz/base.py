@@ -61,7 +61,6 @@ def scatter_correlation(x, y, marker='o', marker_size=50, marker_alpha=0.5,
         annot_str += "\n$y$=%.3f$x$+%.3f" % (slope, intercept)
     annot_str += "\n$r$=%.3f, $p$=%s" % (rval, pval)
     a = ax.axis()
-    print(a)
     t = ax.text(0.98 * (a[1] - a[0]) + a[0], 0.05 * (a[3] - a[2]) + a[2],
                 annot_str, va='bottom', ha='right', fontsize=text_size)
     t.set_bbox(dict(facecolor='w', edgecolor='w', alpha=0.5))
