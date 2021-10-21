@@ -5,7 +5,9 @@ import scipy.stats as spst
 import matplotlib.pyplot as plt
 
 
-def scatter_correlation(x, y, marker='o', color='k', ax=None, autoscale=True):
+def scatter_correlation(x, y, marker='o', marker_size=50, marker_alpha=0.5,
+                        color='k', text_size=10, show_slope_intercept=False,
+                        ax=None, autoscale=True):
     """Scatter plots some data points and fits a regression curve to them
 
     .. versionadded:: 0.7
@@ -14,11 +16,17 @@ def scatter_correlation(x, y, marker='o', color='k', ax=None, autoscale=True):
     ----------
     x, y : array-like
         x, y coordinates of data points to scatter
-    marker : str
-        Matplotlib marker style
-    color : str
-        Matplotlib marker color
-    ax : axis
+    marker : str, optional
+        Marker style passed to Matplotlib's ``scatter``
+    marker_size : float or array-like, shape (n, ), optional
+        Marker size in points**2 passed to Matplotlib's ``scatter``
+    marker_alpha : float, optional
+        Marker alpha value between 0 and 1
+    color : array-like or list of colors or color, optional
+        Marker color passed to Matplotlib's ``scatter``
+    text_size : int, optional
+        Font size for inset text and axis labels
+    ax : axis, optional
         Matplotlib axis
     autoscale : {True, False}
         Flag whether to automatically adjust the axis limits
@@ -40,18 +48,25 @@ def scatter_correlation(x, y, marker='o', color='k', ax=None, autoscale=True):
     # Scatter plot the data:
     if ax is None:
         ax = plt.gca()
-    ax.scatter(x, y, marker=marker, s=50, c=color, edgecolors='w', alpha=0.5)
+    ax.scatter(x, y, marker=marker, s=marker_size, c=color, edgecolors='w',
+               alpha=marker_alpha)
     # Fit the regression curve:
     slope, intercept, rval, pval, _ = spst.linregress(x, y)
     def fit(x): return slope * x + intercept
     ax.plot([np.min(x), np.max(x)], [fit(np.min(x)), fit(np.max(x))], 'k--')
     # Annotate with fitting results:
     pval = ("%.2e" % pval) if pval < 0.001 else ("%.03f" % pval)
+    annot_str = "$N$=%d" % len(y)
+    if show_slope_intercept:
+        annot_str += "\n$y$=%.3f$x$+%.3f" % (slope, intercept)
+    annot_str += "\n$r$=%.3f, $p$=%s" % (rval, pval)
     a = ax.axis()
-    ax.text(a[1], a[2], "$N$=%d\n$r$=%.3f, $p$=%s" % (len(y), rval, pval),
-            va='bottom', ha='right')
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
+    t = ax.text(0.98 * (a[1] - a[0]) + a[0], 0.05 * (a[3] - a[2]) + a[2],
+                annot_str, va='bottom', ha='right', fontsize=text_size)
+    t.set_bbox(dict(facecolor='w', edgecolor='w', alpha=0.5))
+    ax.set_xlabel(x_label, fontsize=text_size)
+    ax.set_ylabel(y_label, fontsize=text_size)
+    ax.tick_params(labelsize=text_size)
     if autoscale:
         ax.autoscale(True)
     return ax
