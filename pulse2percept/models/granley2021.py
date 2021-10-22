@@ -374,6 +374,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             raise TypeError("streak_model needs to be callable")
         super(BiphasicAxonMapSpatial, self)._build()
 
+    def biphasic_axon_map_jax(self, ):
+        pass
+
     def _predict_spatial(self, earray, stim):
         """Predicts the percept"""
         if not isinstance(earray, ElectrodeArray):
@@ -410,7 +413,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 self.axon_idx_end.astype(np.uint32),
                 self.rho, self.thresh_percept)
         else:
+            
+            
             raise NotImplementedError("Jax will be supported in future release")
+
 
     def predict_percept(self, implant, t_percept=None):
         """ Predicts the spatial response
