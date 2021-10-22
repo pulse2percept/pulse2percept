@@ -373,6 +373,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         if not callable(self.streak_model):
             raise TypeError("streak_model needs to be callable")
         super(BiphasicAxonMapSpatial, self)._build()
+        if self.engine == 'jax':
+            # Cache axon_contrib for fast access later
+            self.axon_contrib = jax.device_put(self.axon_contrib, jax.devices()[0])
 
     def biphasic_axon_map_jax(self, ):
         pass
@@ -393,6 +396,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         amps = []
         for e in stim.electrodes:
             amp = stim.metadata['electrodes'][str(e)]['metadata']['amp']
+            if amp == 0:
+                continue
             freq = stim.metadata['electrodes'][str(e)]['metadata']['freq']
             pdur = stim.metadata['electrodes'][str(e)]['metadata']['phase_dur']
             bright_effects.append(self.bright_model(freq, amp, pdur))
