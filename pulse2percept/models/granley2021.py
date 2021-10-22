@@ -12,6 +12,13 @@ from .base import BaseModel, NotBuiltError
 from ._granley2021 import fast_biphasic_axon_map
 
 
+try:
+    import jax
+    import jax.numpy as jnp
+    has_jax = True
+except ImportError:
+    has_jax = False
+
 class DefaultBrightModel(BaseModel):
     """
     Default model to be used for brightness scaling in BiphasicAxonMapModel
@@ -130,10 +137,7 @@ class DefaultSizeModel(BaseModel):
         """
         min_f_size = self.min_rho**2 / self.rho**2
         F_size = self.a5 * amp * self.scale_threshold(pdur) + self.a6
-        if F_size > min_f_size:
-            return F_size
-        else:
-            return min_f_size
+        return max(F_size, min_f_size)
 
 
 class DefaultStreakModel(BaseModel):
@@ -273,6 +277,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             self.size_model = DefaultSizeModel(self.rho)
         if self.streak_model is None:
             self.streak_model = DefaultStreakModel(self.axlambda)
+        if self.engine == 'jax' and not has_jax:
+            raise ImportError("Engine was chosen as jax, but jax is not installed. "
+                              "You can install it with 'pip install \"jax[cpu]\"' for cpu "
+                              "or following https://github.com/google/jax#installation for gpu")
 
     def __getattr__(self, attr):
         # Called when normal get attribute fails
@@ -352,6 +360,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Use probabilistic thresholding
             'do_thresholding': False
         }
+        if has_jax:
+            params['engine'] = 'jax'
         params.update(base_params)
         return params
 
