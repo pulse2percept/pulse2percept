@@ -2,6 +2,7 @@
 from typing import Type
 import numpy as np
 import sys
+import time
 
 from . import AxonMapModel, AxonMapSpatial, TemporalModel, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
@@ -375,10 +376,26 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         super(BiphasicAxonMapSpatial, self)._build()
         if self.engine == 'jax':
             # Cache axon_contrib for fast access later
-            self.axon_contrib = jax.device_put(self.axon_contrib, jax.devices()[0])
+            self.axon_contrib = jax.device_put(jnp.array(self.axon_contrib), jax.devices()[0])
 
-    def biphasic_axon_map_jax(self, ):
-        pass
+    def predict_one_point_jax(self, axon, brights, sizes, streaks, x, y, rho, axlambda):
+        d2_el = (axon[:, 0, None] - x)**2 + (axon[:, 1, None] - y)**2
+        intensities = brights * jnp.exp(-d2_el / (2. * rho**2 * sizes)) * (axon[:, 2, None] ** (1./streaks))
+        return jnp.sum(intensities, axis=1)
+
+    def biphasic_axon_map_jax(self, brights, sizes, streaks, x, y, axon_segments, rho, axlambda, thresh_percept):
+        I = jnp.max(jax.jit(
+                        jax.vmap(
+                            self.predict_one_point_jax, in_axes=[0, None, None, None, None, None, None, None]))(
+                                axon_segments, 
+                                brights, 
+                                sizes, 
+                                streaks, 
+                                x, y, 
+                                rho, axlambda), 
+                axis=1)
+        I = (I > thresh_percept) * I
+        return I
 
     def _predict_spatial(self, earray, stim):
         """Predicts the percept"""
@@ -404,23 +421,32 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             size_effects.append(self.size_model(freq, amp, pdur))
             streak_effects.append(self.streak_model(freq, amp, pdur))
             amps.append(amp)
-
+        x = np.array([earray[e].x for e in stim.electrodes], dtype=np.float32)
+        y = np.array([earray[e].y for e in stim.electrodes], dtype=np.float32)
+        
         if self.engine != 'jax':
             return fast_biphasic_axon_map(
                 np.array(amps, dtype=np.float32),
                 np.array(bright_effects, dtype=np.float32),
                 np.array(size_effects, dtype=np.float32),
                 np.array(streak_effects, dtype=np.float32),
-                np.array([earray[e].x for e in stim.electrodes], dtype=np.float32),
-                np.array([earray[e].y for e in stim.electrodes], dtype=np.float32),
+                x, y,
                 self.axon_contrib,
                 self.axon_idx_start.astype(np.uint32),
                 self.axon_idx_end.astype(np.uint32),
                 self.rho, self.thresh_percept)
         else:
-            
-            
-            raise NotImplementedError("Jax will be supported in future release")
+            start = time.time()
+            temp = jax.jit(self.biphasic_axon_map_jax)(jnp.array(bright_effects),
+                                                                           jnp.array(size_effects),
+                                                                           jnp.array(streak_effects),
+                                                                           jnp.array(x), jnp.array(y),
+                                                                           self.axon_contrib,
+                                                                           self.rho, 
+                                                                           self.axlambda, 
+                                                                           self.thresh_percept)
+            print("Jax took {} s".format(time.time() - start))
+            return temp
 
 
     def predict_percept(self, implant, t_percept=None):
