@@ -6,6 +6,7 @@
 import numpy as np
 from abc import ABCMeta, abstractmethod
 import scipy.stats as spst
+from scipy.spatial import ConvexHull
 # Using or importing the ABCs from 'collections' instead of from
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
 from collections.abc import Sequence
@@ -158,27 +159,13 @@ class Grid2D(PrettyPrint):
         x, y = self.x, self.y
         if transform is not None:
             x, y = transform(self.x), transform(self.y)
-
-        if self.type == 'rectangular':
-            xy = []
-            for array in (x, y):
-                border = []
-                # Top row (left to right), not the last element:
-                border += list(array[0, :-1])
-                # Right column (top to bottom), not the last element:
-                border += list(array[:-1, -1])
-                # Bottom row (right to left), not the last element:
-                border += list(array[-1, :0:-1])
-                # Left column (bottom to top), all elements element:
-                border += list(array[::-1, 0])
-                xy.append(border)
-            # Draw border:
-            ax.add_patch(Polygon(np.array(xy).T, alpha=0.3, ec='k', fc='gray',
-                                 ls='--', zorder=zorder))
-            # This is needed in MPL 3.0.X to set the axis limit correctly:
-            ax.autoscale_view()
-        else:
-            raise NotImplementedError
+            
+        points = np.vstack((x.ravel(), y.ravel())).T
+        hull = ConvexHull(points)
+        ax.add_patch(Polygon(points[hull.vertices, :], alpha=0.3, ec='k',
+                             fc='gray', ls='--', zorder=zorder))
+        # This is needed in MPL 3.0.X to set the axis limit correctly:
+        ax.autoscale_view()
         return ax
 
 
