@@ -357,14 +357,36 @@ class Watson2014DisplaceTransform(RetinalCoordTransform):
 
 
 def cart2pol(x, y):
-    """Convert Cartesian to polar coordinates"""
+    """Convert Cartesian to polar coordinates
+    
+    Parameters
+    ----------
+    x, y : scalar or array-like
+        The x,y Cartesian coordinates
+        
+    Returns
+    -------
+    theta, rho : scalar or array-like
+        The transformed polar coordinates
+    """
     theta = np.arctan2(y, x)
     rho = np.hypot(x, y)
     return theta, rho
 
 
 def pol2cart(theta, rho):
-    """Convert polar to Cartesian coordinates"""
+    """Convert polar to Cartesian coordinates
+    
+    Parameters
+    ----------
+    theta, rho : scalar or array-like
+        The polar coordinates
+       
+    Returns
+    -------
+    x, y : scalar or array-like
+        The transformed Cartesian coordinates
+    """
     x = rho * np.cos(theta)
     y = rho * np.sin(theta)
     return x, y
