@@ -361,6 +361,13 @@ def test_ElectrodeGrid__make_grid(gtype, orientation):
     egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('A', '2'))
     npt.assert_equal([e for e in egrid.electrode_names],
                      ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
+    # Reversal:
+    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('-A', '1'))
+    npt.assert_equal([e for e in egrid.electrode_names],
+                     ['B1', 'B2', 'B3', 'A1', 'A2', 'A3'])
+    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('A', '-1'))
+    npt.assert_equal([e for e in egrid.electrode_names],
+                     ['A3', 'A2', 'A1', 'B3', 'B2', 'B1'])
 
     # test unique names
     egrid = ElectrodeGrid(gshape, spacing, type=gtype,

@@ -282,8 +282,8 @@ class ElectrodeGrid(ElectrodeArray):
     names: (name_rows, name_cols), each of which either 'A' or '1'
         Naming convention for rows and columns, respectively.
         If 'A', rows or columns will be labeled alphabetically: A-Z, AA-AZ,
-        BA-BZ, CA-CZ, etc.
-        If '1', rows or columns will be labeled numerically.
+        BA-BZ, CA-CZ, etc. '-A' will reverse the order.
+        If '1', rows or columns will be labeled numerically. '-1' will reverse.
         Letters will always precede numbers in electrode names.
         For example ('1', 'A') will number rows numerically and columns
         alphabetically; first row: 'A1', 'B1', 'C1', NOT '1A', '1B', '1C'.
@@ -459,19 +459,31 @@ class ElectrodeGrid(ElectrodeArray):
                 raise TypeError("Column name must be a string, not "
                                 "%s." % type(name_cols))
             # Row names:
+            reverse_rows = False
+            if '-' in name_rows:
+                reverse_rows = True
+                name_rows = name_rows.replace('-', '')
             if name_rows.isalpha():
                 rws = _get_alphabetic_names(rows)
             elif name_rows.isdigit():
                 rws = _get_numeric_names(rows)
             else:
                 raise ValueError("Row name must be alphabetic or numeric.")
+            if reverse_rows:
+                rws = rws[::-1]
             # Column names:
+            reverse_cols = False
+            if '-' in name_cols:
+                reverse_cols = True
+                name_cols = name_cols.replace('-', '')
             if name_cols.isalpha():
                 clms = _get_alphabetic_names(cols)
             elif name_cols.isdigit():
                 clms = _get_numeric_names(cols)
             else:
                 raise ValueError("Column name must be alphabetic or numeric.")
+            if reverse_cols:
+                clms = clms[::-1]
             # Letters before digits:
             if name_cols.isalpha() and not name_rows.isalpha():
                 names = [clms[j] + rws[i] for i in range(len(rws))
