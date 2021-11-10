@@ -691,13 +691,7 @@ class Model(PrettyPrint):
             *  if the attribtue is not found, raises an AttributeError.
 
         """
-        if sys._getframe(2).f_code.co_name == '__init__':
-            # We can set new class attributes in the constructor. Reaching this
-            # point means the default attribute access failed - most likely
-            # because we are trying to create a variable. In this case, simply
-            # raise an exception:
-            raise AttributeError("%s not found" % attr)
-        # Outside the constructor, we need to check the spatial/temporal model:
+        # Check the spatial/temporal model:
         try:
             spatial = getattr(self.spatial, attr)
             spatial_valid = True
@@ -709,6 +703,8 @@ class Model(PrettyPrint):
         except AttributeError:
             temporal_valid = False
         if not spatial_valid and not temporal_valid:
+            # If we are in the constructor, this will be caught later and
+            # a new variable will be constructed
             raise AttributeError("%s has no attribute "
                                  "'%s'." % (self.__class__.__name__,
                                             attr))
