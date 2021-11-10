@@ -256,10 +256,19 @@ class ElectrodeGrid(ElectrodeArray):
     ----------
     shape : (rows, cols)
         A tuple containing the number of rows x columns in the grid
-    spacing : double
+    spacing : double or (x_spacing, y_spacing)
         Electrode-to-electrode spacing in microns.
+        Must be either a tuple specifying the spacing in x and y directions or
+        a float (assuming the same spacing in x and y).
+        If a tuple is specified for a horizontal hex grid, ``x_spacing`` will
+        define the electrode-to-electrode distance, and ``y_spacing`` will
+        define the vertical distance between adjacent hexagon centers.
+        In a vertical hex grid, the order is reversed.
     type : {'rect', 'hex'}, optional
         Grid type ('rect': rectangular, 'hex': hexagonal).
+    orientation : {'horizontal', 'vertical'}, optional
+        In a hex grid, 'horizontal' orientation will shift every other row
+        to the right, whereas 'vertical' will shift every other column up.
     x/y/z : double
         3D location of the center of the grid.
         The coordinate system is centered over the fovea.
@@ -273,8 +282,8 @@ class ElectrodeGrid(ElectrodeArray):
     names: (name_rows, name_cols), each of which either 'A' or '1'
         Naming convention for rows and columns, respectively.
         If 'A', rows or columns will be labeled alphabetically: A-Z, AA-AZ,
-        BA-BZ, CA-CZ, etc.
-        If '1', rows or columns will be labeled numerically.
+        BA-BZ, CA-CZ, etc. '-A' will reverse the order.
+        If '1', rows or columns will be labeled numerically. '-1' will reverse.
         Letters will always precede numbers in electrode names.
         For example ('1', 'A') will number rows numerically and columns
         alphabetically; first row: 'A1', 'B1', 'C1', NOT '1A', '1B', '1C'.
@@ -450,19 +459,31 @@ class ElectrodeGrid(ElectrodeArray):
                 raise TypeError("Column name must be a string, not "
                                 "%s." % type(name_cols))
             # Row names:
+            reverse_rows = False
+            if '-' in name_rows:
+                reverse_rows = True
+                name_rows = name_rows.replace('-', '')
             if name_rows.isalpha():
                 rws = _get_alphabetic_names(rows)
             elif name_rows.isdigit():
                 rws = _get_numeric_names(rows)
             else:
                 raise ValueError("Row name must be alphabetic or numeric.")
+            if reverse_rows:
+                rws = rws[::-1]
             # Column names:
+            reverse_cols = False
+            if '-' in name_cols:
+                reverse_cols = True
+                name_cols = name_cols.replace('-', '')
             if name_cols.isalpha():
                 clms = _get_alphabetic_names(cols)
             elif name_cols.isdigit():
                 clms = _get_numeric_names(cols)
             else:
                 raise ValueError("Column name must be alphabetic or numeric.")
+            if reverse_cols:
+                clms = clms[::-1]
             # Letters before digits:
             if name_cols.isalpha() and not name_rows.isalpha():
                 names = [clms[j] + rws[i] for i in range(len(rws))
@@ -481,63 +502,38 @@ class ElectrodeGrid(ElectrodeArray):
             # If `z` is a scalar, choose same height for all electrodes:
             z_arr = np.ones(n_elecs, dtype=float) * z
 
-        spc = self.spacing
-        if self.type.lower() == 'rect':
-            # Rectangular grid from x, y coordinates:
-            # For example, cols=3 with spacing=100 should give: [-100, 0, 100]
-            x_arr = (np.arange(cols) * spc - (cols / 2.0 - 0.5) * spc)
-            y_arr = (np.arange(rows) * spc - (rows / 2.0 - 0.5) * spc)
-            x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
-        elif self.type.lower() == 'hex':
-            # When orientation is horizontal, x_arr is shifting to create the
-            # hex grid
-            if orientation == 'horizontal':
-                # Hexagonal grid from x,y coordinates:
-                x_arr_lshift = ((np.arange(cols) * spc -
-                                 (cols / 2.0 - 0.5) * spc - spc * 0.25))
-                x_arr_rshift = ((np.arange(cols) * spc -
-                                 (cols / 2.0 - 0.5) * spc + spc * 0.25))
-                y_arr = (np.arange(rows) * np.sqrt(3) * spc / 2.0 -
-                         (rows / 2.0 - 0.5) * spc)
-                x_arr_lshift, _ = np.meshgrid(x_arr_lshift, y_arr)
-                x_arr_rshift, y_arr_rshift = np.meshgrid(x_arr_rshift, y_arr)
-                # Shift every other row to get an interleaved pattern:
-                x_arr = []
-                for row in range(rows):
-                    if row % 2:
-                        x_arr.append(x_arr_rshift[row])
-                    else:
-                        x_arr.append(x_arr_lshift[row])
-                x_arr = np.array(x_arr)
-                y_arr = y_arr_rshift
-            # When orientation is vertical, y_arr is shifting to create the hex
-            # grid
-            elif orientation == 'vertical':
-                # Hexagonal grid from x,y coordinates:
-                x_arr = (np.arange(cols) * np.sqrt(3) * spc / 2.0 -
-                         (cols / 2.0 - 0.5) * spc)
-                y_arr_downshift = ((np.arange(rows) * spc -
-                                    (rows / 2.0 - 0.5) * spc - spc * 0.25))
-                y_arr_upshift = ((np.arange(rows) * spc -
-                                  (rows / 2.0 - 0.5) * spc + spc * 0.25))
-                x_arr_downshift, y_arr_downshift = np.meshgrid(x_arr,
-                                                               y_arr_downshift,
-                                                               sparse=False)
-                x_arr_upshift, y_arr_upshift = np.meshgrid(x_arr,
-                                                           y_arr_upshift,
-                                                           sparse=False)
-                # Shift every other column to get an interleaved pattern:
-                y_arr = np.zeros(shape=(rows, cols))
-                for row in range(rows):
-                    for col in range(cols):
-                        if col % 2:
-                            y_arr[row][col] = y_arr_downshift[row][col]
-                        else:
-                            y_arr[row][col] = y_arr_upshift[row][col]
-                x_arr = x_arr_upshift
-                y_arr = np.array(y_arr)
+        # Spacing can be different for x and y (tuple) or the same (float):
+        if isinstance(self.spacing, (list, np.ndarray, tuple)):
+            x_spc, y_spc = self.spacing[:2]
         else:
-            raise NotImplementedError
+            x_spc = y_spc = self.spacing
+            if self.type.lower() == 'hex':
+                # In a hex grid, we need to adjust the spacing so that
+                # neighboring electrodes are separated by self.spacing:
+                if orientation.lower() == 'horizontal':
+                    y_spc = x_spc * np.sqrt(3) / 2
+                else:
+                    x_spc = y_spc * np.sqrt(3) / 2
+
+        # Start with a rectangular grid:
+        x_arr = (np.arange(cols) * x_spc - 0.5 * (cols - 1) * x_spc)
+        y_arr = (np.arange(rows) * y_spc - 0.5 * (rows - 1) * y_spc)
+        x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
+        if self.type.lower() == 'hex':
+            if orientation.lower() == 'horizontal':
+                # Shift every other row:
+                x_arr_shift = np.zeros_like(x_arr)
+                x_arr_shift[::2] = 0.5 * x_spc
+                x_arr += x_arr_shift
+                # Make sure the center is at (0, 0)
+                x_arr -= 0.25 * x_spc
+            elif orientation.lower() == 'vertical':
+                # Shift every other column:
+                y_arr_shift = np.zeros_like(y_arr)
+                y_arr_shift[:, ::2] = 0.5 * y_spc
+                y_arr += y_arr_shift
+                # Make sure the center is at (0, 0)
+                y_arr -= 0.25 * y_spc
 
         # Rotate the grid:
         rot_rad = np.deg2rad(rot)
