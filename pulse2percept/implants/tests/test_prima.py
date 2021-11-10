@@ -50,7 +50,7 @@ def test_PRIMA(ztype, x, y, rot):
     npt.assert_equal(len(prima.earray.electrodes), n_elec)
 
     # Coordinates of A6 when device is not rotated:
-    xy = np.array([-616.99, -925.0]).T
+    xy = np.array([-476.31, -925.0]).T
     # Rotate
     rot_rad = np.deg2rad(rot)
     R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
@@ -101,7 +101,7 @@ def test_PRIMA75(ztype, x, y, rot):
     npt.assert_equal(prima.n_electrodes, n_elec)
 
     # Coordinates of A6 when device is not rotated:
-    xy = np.array([-200.24, -431.25]).T
+    xy = np.array([-129.90, -431.25]).T
     # Rotate
     rot_rad = np.deg2rad(rot)
     R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
@@ -152,7 +152,7 @@ def test_PRIMA55(ztype, x, y, rot):
     npt.assert_equal(prima.n_electrodes, n_elec)
 
     # Coordinates of C8 when device is not rotated:
-    xy = np.array([-216.58, -371.25]).T
+    xy = np.array([-142.89, -371.25]).T
     # Rotate
     rot_rad = np.deg2rad(rot)
     R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
@@ -203,7 +203,7 @@ def test_PRIMA40(ztype, x, y, rot):
     npt.assert_equal(prima.n_electrodes, n_elec)
 
     # Coordinates of D16 when device is not rotated:
-    xy = np.array([-20.38, -370.0]).T
+    xy = np.array([51.96, -370.0]).T
     # Rotate
     rot_rad = np.deg2rad(rot)
     R = np.array([np.cos(rot_rad), -np.sin(rot_rad),

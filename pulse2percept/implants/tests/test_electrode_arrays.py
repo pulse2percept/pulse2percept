@@ -294,8 +294,8 @@ def test_ElectrodeGrid__make_grid(gtype, orientation):
                                     (grid['A1'].y - grid['A2'].y) ** 2),
                             spacing)
     if gtype == 'hex':
-        npt.assert_almost_equal(np.sqrt((grid['A2'].x - grid['B1'].x) ** 2 +
-                                        (grid['A2'].y - grid['B1'].y) ** 2),
+        npt.assert_almost_equal(np.sqrt((grid['A1'].x - grid['B2'].x) ** 2 +
+                                        (grid['A1'].y - grid['B2'].y) ** 2),
                                 spacing)
 
     # Different spacing in x and y:

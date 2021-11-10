@@ -511,14 +511,14 @@ class ElectrodeGrid(ElectrodeArray):
             if orientation.lower() == 'horizontal':
                 # Shift every other row:
                 x_arr_shift = np.zeros_like(x_arr)
-                x_arr_shift[1::2] = 0.5 * x_spc
+                x_arr_shift[::2] = 0.5 * x_spc
                 x_arr += x_arr_shift
                 # Make sure the center is at (0, 0)
                 x_arr -= 0.25 * x_spc
             elif orientation.lower() == 'vertical':
                 # Shift every other column:
                 y_arr_shift = np.zeros_like(y_arr)
-                y_arr_shift[:, 1::2] = 0.5 * y_spc
+                y_arr_shift[:, ::2] = 0.5 * y_spc
                 y_arr += y_arr_shift
                 # Make sure the center is at (0, 0)
                 y_arr -= 0.25 * y_spc
