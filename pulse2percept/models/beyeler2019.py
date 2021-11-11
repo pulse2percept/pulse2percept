@@ -219,7 +219,7 @@ class AxonMapSpatial(SpatialModel):
             # Left or right eye:
             'eye': 'RE',
             'rho': 200,
-            'axlambda': 200,
+            'axlambda': 500,
             # Set the (x,y) location of the optic disc:
             'loc_od': (15.5, 1.5),
             'n_axons': 1000,
