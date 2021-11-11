@@ -28,8 +28,8 @@ def test_ScoreboardSpatial():
     npt.assert_equal(model.predict_percept(ArgusI()), None)
 
     # Converting ret <=> dva
-    npt.assert_almost_equal(model.ret2dva(0), 0)
-    npt.assert_almost_equal(model.dva2ret(0), 0)
+    npt.assert_almost_equal(model.ret2dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.dva2ret(0, 0), (0, 0))
 
     implant = ArgusI(stim=np.zeros(16))
     # Zero in = zero out:
@@ -107,7 +107,7 @@ def test_ScoreboardModel_predict_percept():
     model.build()
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     npt.assert_equal(np.sum(np.isclose(percept.data, 0.8, rtol=0.1, atol=0.1)),
-                     92)
+                     88)
 
     # Model gives same outcome as Spatial:
     spatial = ScoreboardSpatial(engine='serial', xystep=1, rho=100)
@@ -135,8 +135,8 @@ def test_AxonMapSpatial(engine):
     npt.assert_equal(model.rho, 987)
 
     # Converting ret <=> dva
-    npt.assert_almost_equal(model.ret2dva(0), 0)
-    npt.assert_almost_equal(model.dva2ret(0), 0)
+    npt.assert_almost_equal(model.ret2dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.dva2ret(0, 0), (0, 0))
 
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(ArgusI()), None)
@@ -385,7 +385,7 @@ def test_AxonMapModel_calc_bundle_tangent(engine):
     npt.assert_almost_equal(model.spatial.calc_bundle_tangent(0, 0), 0.4819,
                             decimal=3)
     npt.assert_almost_equal(model.spatial.calc_bundle_tangent(0, 1000),
-                            -0.5532, decimal=3)
+                            -0.5514, decimal=3)
     with pytest.raises(TypeError):
         model.spatial.calc_bundle_tangent([0], 1000)
     with pytest.raises(TypeError):
@@ -412,9 +412,9 @@ def test_AxonMapModel_predict_percept(engine):
     npt.assert_equal(np.sum(percept.data > 0.8), 1)
     npt.assert_equal(np.sum(percept.data > 0.6), 2)
     npt.assert_equal(np.sum(percept.data > 0.1), 7)
-    npt.assert_equal(np.sum(percept.data > 0.0001), 32)
+    npt.assert_equal(np.sum(percept.data > 0.0001), 31)
     # Overall only a few bright pixels:
-    npt.assert_almost_equal(np.sum(percept.data), 3.31321, decimal=3)
+    npt.assert_almost_equal(np.sum(percept.data), 3.3087, decimal=3)
     # Brightest pixel is in lower right:
     npt.assert_almost_equal(percept.data[33, 46, 0], np.max(percept.data))
     # Top half is empty:

@@ -70,14 +70,14 @@ class ScoreboardSpatial(SpatialModel):
         return params
 
     @staticmethod
-    def dva2ret(xdva):
+    def dva2ret(xdva, ydva, coords='cart'):
         """Convert degrees of visual angle (dva) into retinal coords (um)"""
-        return Watson2014Transform.dva2ret(xdva)
+        return Watson2014Transform.dva2ret(xdva, ydva, coords=coords)
 
     @staticmethod
-    def ret2dva(xret):
+    def ret2dva(xret, yret, coords='cart'):
         """Convert retinal corods (um) to degrees of visual angle (dva)"""
-        return Watson2014Transform.ret2dva(xret)
+        return Watson2014Transform.ret2dva(xret, yret, coords=coords)
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
@@ -219,7 +219,7 @@ class AxonMapSpatial(SpatialModel):
             # Left or right eye:
             'eye': 'RE',
             'rho': 200,
-            'axlambda': 200,
+            'axlambda': 500,
             # Set the (x,y) location of the optic disc:
             'loc_od': (15.5, 1.5),
             'n_axons': 1000,
@@ -241,17 +241,17 @@ class AxonMapSpatial(SpatialModel):
         return params
 
     @staticmethod
-    def dva2ret(xdva):
+    def dva2ret(xdva, ydva, coords='cart'):
         """Convert degrees of visual angle (dva) into retinal coords (um)
 
         The axon map model converts degrees of visual angle into a retinal 
         distance from the optic axis (um) using Eq. A5 in [Watson2014]_.
 
         """
-        return Watson2014Transform.dva2ret(xdva)
+        return Watson2014Transform.dva2ret(xdva, ydva, coords=coords)
 
     @staticmethod
-    def ret2dva(xret):
+    def ret2dva(xret, yret, coords='cart'):
         """Convert retinal corods (um) to degrees of visual angle (dva)
 
         The axon map model converts an eccentricity measurement on the retinal
@@ -259,7 +259,7 @@ class AxonMapSpatial(SpatialModel):
         of visual angle using Eq. A6 in [Watson2014]_.
 
         """
-        return Watson2014Transform.ret2dva(xret)
+        return Watson2014Transform.ret2dva(xret, yret, coords=coords)
 
     def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
         """Grows a single axon bundle based on the model by Jansonius (2009)
@@ -419,7 +419,7 @@ class AxonMapSpatial(SpatialModel):
             # Keep only reasonably sized axon bundles:
             bundles = list(filter(lambda x: len(x) > 10, bundles))
         # Convert to um:
-        bundles = [self.dva2ret(b) for b in bundles]
+        bundles = [np.array(self.dva2ret(b[:, 0], b[:, 1])).T for b in bundles]
         return bundles
 
     def find_closest_axon(self, bundles, xret=None, yret=None,
@@ -746,7 +746,8 @@ class AxonMapSpatial(SpatialModel):
             od_h = 6.85
             grid_transform = None
             # Flip y upside down for dva:
-            axon_bundles = [self.ret2dva(bundle) * [1, -1]
+            axon_bundles = [np.array(self.ret2dva(bundle[:, 0],
+                                                  -bundle[:, 1])).T
                             for bundle in axon_bundles]
             labels = ['upper', 'lower', 'left', 'right']
         else:
@@ -754,15 +755,13 @@ class AxonMapSpatial(SpatialModel):
             units = 'microns'
             # Make sure we're filling the simulated area, rounded up/down,
             # but no smaller than (-5000, 5000):
-            xmin = min(np.floor(self.dva2ret(self.xrange[0]) / 1000) * 1000,
-                       -5000)
-            xmax = max(np.ceil(self.dva2ret(self.xrange[1]) / 1000) * 1000,
-                       5000)
-            ymin = min(np.floor(self.dva2ret(self.yrange[0]) / 1000) * 1000,
-                       -5000)
-            ymax = max(np.ceil(self.dva2ret(self.yrange[1]) / 1000) * 1000,
-                       5000)
-            od_xy = self.dva2ret(self.loc_od)
+            xmin, ymin = self.dva2ret(self.xrange[0], self.yrange[0])
+            xmin = min(np.floor(xmin / 1000) * 1000, -5000)
+            ymin = min(np.floor(ymin / 1000) * 1000, -5000)
+            xmax, ymax = self.dva2ret(self.xrange[1], self.yrange[1])
+            xmax = max(np.ceil(xmax / 1000) * 1000, 5000)
+            ymax = max(np.ceil(ymax / 1000) * 1000, 5000)
+            od_xy = self.dva2ret(0, self.loc_od, coords='polar')[1]
             od_w = 1770
             od_h = 1880
             grid_transform = self.dva2ret

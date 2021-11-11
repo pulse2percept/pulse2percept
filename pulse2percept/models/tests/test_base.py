@@ -50,11 +50,11 @@ def test_BaseModel():
 
 class ValidSpatialModel(SpatialModel):
 
-    def dva2ret(self, dva):
-        return Watson2014Transform.dva2ret(dva)
+    def dva2ret(self, xdva, ydva):
+        return Watson2014Transform.dva2ret(xdva, ydva)
 
-    def ret2dva(self, ret):
-        return Watson2014Transform.ret2dva(ret)
+    def ret2dva(self, xret, yret):
+        return Watson2014Transform.ret2dva(xret, yret)
 
     def _predict_spatial(self, earray, stim):
         if not self.is_built:
@@ -124,7 +124,7 @@ def test_SpatialModel_plot():
     npt.assert_almost_equal(ax.get_xlim(), (-22.55, 22.55))
     ax = model.plot(use_dva=False)
     npt.assert_almost_equal(ax.get_xlim(), (-6122.87, 6122.87), decimal=2)
-    npt.assert_almost_equal(ax.get_ylim(), (-4805.75, 4805.75), decimal=2)
+    npt.assert_almost_equal(ax.get_ylim(), (-4808.7, 4808.7), decimal=2)
 
     # Figure size can be changed:
     ax = model.plot(figsize=(8, 7))

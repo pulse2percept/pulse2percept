@@ -195,12 +195,12 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         return params
 
     @abstractmethod
-    def dva2ret(self, xdva):
+    def dva2ret(self, xdva, ydva):
         """Convert degrees of visual angle (dva) into retinal coords (um)"""
         raise NotImplementedError
 
     @abstractmethod
-    def ret2dva(self, xret):
+    def ret2dva(self, xret, yret):
         """Convert retinal corods (um) to degrees of visual angle (dva)"""
         raise NotImplementedError
 
@@ -230,8 +230,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         # Build the spatial grid:
         self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
                            grid_type=self.grid_type)
-        self.grid.xret = self.dva2ret(self.grid.x)
-        self.grid.yret = self.dva2ret(self.grid.y)
+        self.grid.xret, self.grid.yret = self.dva2ret(self.grid.x, self.grid.y)
         self._build()
         self.is_built = True
         return self

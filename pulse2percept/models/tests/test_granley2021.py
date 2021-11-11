@@ -1,7 +1,7 @@
 from multiprocessing import Value
 from typing import Type
 from pulse2percept.models.granley2021 import DefaultBrightModel, \
-                                             DefaultSizeModel, DefaultStreakModel
+    DefaultSizeModel, DefaultStreakModel
 from pulse2percept.utils.base import FreezeError
 import numpy as np
 import pytest
@@ -11,7 +11,7 @@ from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import Stimulus, BiphasicPulseTrain
 from pulse2percept.models import BiphasicAxonMapModel, BiphasicAxonMapSpatial, \
-                                 AxonMapSpatial
+    AxonMapSpatial
 from pulse2percept.utils.testing import assert_warns_msg
 
 
@@ -23,26 +23,30 @@ def test_effects_models():
 
     # Test rho scaling on size model
     model = DefaultSizeModel(200)
-    npt.assert_almost_equal(np.sqrt(model(0.01, 0.01, 0.45) * 200 * 200), model.min_rho)
+    npt.assert_almost_equal(
+        np.sqrt(model(0.01, 0.01, 0.45) * 200 * 200), model.min_rho)
 
     # Test lambda scaling on streak model
     model = DefaultStreakModel(200)
-    npt.assert_almost_equal(np.sqrt(model(10, 1, 10000) * 200 * 200), model.min_lambda)
+    npt.assert_almost_equal(
+        np.sqrt(model(10, 1, 10000) * 200 * 200), model.min_lambda)
 
-    coeffs = {'a' + str(i) : i for i in range(9)}
+    coeffs = {'a' + str(i): i for i in range(9)}
     # Models can take correct coeffs
-    model_coeffs = {k:v for k,v in coeffs if hasattr(DefaultBrightModel(), k)}
+    model_coeffs = {k: v for k, v in coeffs if hasattr(DefaultBrightModel(), k)}
     model = DefaultBrightModel(**model_coeffs)
     npt.assert_equal(hasattr(model, 'a0'), True)
     npt.assert_equal(hasattr(model, 'a9'), False)
-    model_coeffs = {k:v for k,v in coeffs if hasattr(DefaultSizeModel(200), k)}
+    model_coeffs = {k: v for k, v in coeffs if hasattr(
+        DefaultSizeModel(200), k)}
     model = DefaultSizeModel(200, **model_coeffs)
     npt.assert_equal(hasattr(model, 'a0'), True)
     npt.assert_equal(hasattr(model, 'a9'), False)
-    model_coeffs = {k:v for k,v in coeffs if hasattr(DefaultStreakModel(200), k)}
+    model_coeffs = {k: v for k, v in coeffs if hasattr(
+        DefaultStreakModel(200), k)}
     model = DefaultStreakModel(200, **model_coeffs)
     npt.assert_equal(hasattr(model, 'a0'), False)
-    npt.assert_equal(hasattr(model, 'a9'), True) 
+    npt.assert_equal(hasattr(model, 'a9'), True)
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
@@ -56,7 +60,7 @@ def test_biphasicAxonMapSpatial(engine):
     if engine == 'jax':
         with pytest.raises(NotImplementedError):
             implant = ArgusII()
-            implant.stim = Stimulus({'A5' : BiphasicPulseTrain(20, 1, 0.45)})
+            implant.stim = Stimulus({'A5': BiphasicPulseTrain(20, 1, 0.45)})
             percept = model.predict_percept(implant)
         return
 
@@ -87,10 +91,11 @@ def test_biphasicAxonMapSpatial(engine):
     model.build()
     axon_map = AxonMapSpatial(xystep=2).build()
     implant = ArgusII()
-    implant.stim = Stimulus({'A5' : BiphasicPulseTrain(20, 1, 0.45)})
+    implant.stim = Stimulus({'A5': BiphasicPulseTrain(20, 1, 0.45)})
     percept = model.predict_percept(implant)
     percept_axon = axon_map.predict_percept(implant)
-    npt.assert_almost_equal(percept.data[:, :, 0], percept_axon.get_brightest_frame())
+    npt.assert_almost_equal(
+        percept.data[:, :, 0], percept_axon.get_brightest_frame())
 
     # Effect models must be callable
     model = BiphasicAxonMapSpatial(engine=engine, xystep=2)
@@ -98,11 +103,11 @@ def test_biphasicAxonMapSpatial(engine):
     with pytest.raises(TypeError):
         model.build()
 
-    # If t_percept is not specified, there should only be one frame 
+    # If t_percept is not specified, there should only be one frame
     model = BiphasicAxonMapSpatial(engine=engine, xystep=2)
     model.build()
     implant = ArgusII()
-    implant.stim = Stimulus({'A5' : BiphasicPulseTrain(20, 1, 0.45)})
+    implant.stim = Stimulus({'A5': BiphasicPulseTrain(20, 1, 0.45)})
     percept = model.predict_percept(implant)
     npt.assert_equal(percept.time is None, True)
     # If t_percept is specified, only first frame should have data
@@ -113,16 +118,16 @@ def test_biphasicAxonMapSpatial(engine):
     npt.assert_equal(np.any(percept.data[:, :, 1:]), False)
 
     # Test that default models give expected values
-    model = BiphasicAxonMapSpatial(engine=engine, rho=400, axlambda=600, xystep=1,
-                           xrange=(-20, 20), yrange=(-15, 15))
+    model = BiphasicAxonMapSpatial(engine=engine, rho=400, axlambda=600,
+                                   xystep=1, xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     implant = ArgusII()
-    implant.stim = Stimulus({'A4' : BiphasicPulseTrain(20, 1, 1)})
+    implant.stim = Stimulus({'A4': BiphasicPulseTrain(20, 1, 1)})
     percept = model.predict_percept(implant)
-    npt.assert_equal(np.sum(percept.data > 1), 82)
+    npt.assert_equal(np.sum(percept.data > 1), 81)
     npt.assert_equal(np.sum(percept.data > 2), 59)
     npt.assert_equal(np.sum(percept.data > 3), 44)
-    npt.assert_equal(np.sum(percept.data > 5), 25)
+    npt.assert_equal(np.sum(percept.data > 5), 26)
     npt.assert_equal(np.sum(percept.data > 7), 14)
 
 
@@ -131,7 +136,7 @@ def test_biphasicAxonMapModel(engine):
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
-                  'loc_od': (5, 6), 'do_thresholding' : False}
+                  'loc_od': (5, 6), 'do_thresholding': False}
     model = BiphasicAxonMapModel(engine=engine)
     for param in set_params:
         npt.assert_equal(hasattr(model.spatial, param), True)
@@ -165,9 +170,11 @@ def test_biphasicAxonMapModel(engine):
 
     # Custom parameters also propogate to effects models
     model = BiphasicAxonMapModel(engine=engine)
+
     class TestSizeModel():
         def __init__(self):
             self.test_param = 5
+
         def __call__(self, freq, amp, pdur):
             return 1
     model.size_model = TestSizeModel()
@@ -183,6 +190,7 @@ def test_biphasicAxonMapModel(engine):
             self.model = BiphasicAxonMapModel()
             # This shouldnt raise an error
             self.model.a0
+
     class TestInitClassBad():
         def __init__(self):
             self.model = BiphasicAxonMapModel()

@@ -48,21 +48,21 @@ class Nanduri2012Spatial(SpatialModel):
         params.update({'atten_a': 14000, 'atten_n': 1.69})
         return params
 
-    def dva2ret(self, xdva):
+    def dva2ret(self, xdva, ydva):
         """Convert degrees of visual angle (dva) to retinal eccentricity (um)
 
         Assumes that one degree of visual angle is equal to 280 um on the
         retina.
         """
-        return Curcio1990Transform.dva2ret(xdva)
+        return Curcio1990Transform.dva2ret(xdva, ydva)
 
-    def ret2dva(self, xret):
+    def ret2dva(self, xret, yret):
         """Convert retinal eccentricity (um) to degrees of visual angle (dva)
 
         Assumes that one degree of visual angle is equal to 280 um on the
         retina.
         """
-        return Curcio1990Transform.ret2dva(xret)
+        return Curcio1990Transform.ret2dva(xret, yret)
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""

@@ -54,9 +54,11 @@ def test_Nanduri2012Spatial():
 
     # Nanduri model uses a linear dva2ret conversion factor:
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(model.dva2ret(factor), 280.0 * factor)
+        npt.assert_almost_equal(model.dva2ret(factor, factor),
+                                (280.0 * factor, 280.0 * factor))
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(model.ret2dva(280.0 * factor), factor)
+        npt.assert_almost_equal(model.ret2dva(280.0 * factor, 280.0 * factor),
+                                (factor, factor))
 
 
 @pytest.mark.parametrize('scale_out', (1, 2))
