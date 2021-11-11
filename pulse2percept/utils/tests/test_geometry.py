@@ -3,9 +3,9 @@ import pytest
 import numpy.testing as npt
 from matplotlib.axes import Axes
 
-from pulse2percept.utils import (RetinalCoordTransform, Curcio1990Transform,
-                                 Grid2D, Watson2014Transform,
-                                 Watson2014DisplaceTransform,
+from pulse2percept.utils import (VisualFieldMap, Curcio1990Map,
+                                 Grid2D, Watson2014Map,
+                                 Watson2014DisplaceMap,
                                  cart2pol, pol2cart, delta_angle)
 
 
@@ -93,7 +93,7 @@ def test_Grid2D_plot():
     npt.assert_almost_equal(ax.figure.get_size_inches(), (9, 7))
 
 
-class ValidCoordTransform(RetinalCoordTransform):
+class ValidCoordTransform(VisualFieldMap):
 
     @staticmethod
     def dva2ret(x_dva, y_dva):
@@ -104,24 +104,24 @@ class ValidCoordTransform(RetinalCoordTransform):
         return x_ret, y_ret
 
 
-def test_RetinalCoordTransform():
+def test_VisualFieldMap():
     npt.assert_almost_equal(ValidCoordTransform.dva2ret(1.1, 0), (1.1, 0))
     npt.assert_almost_equal(ValidCoordTransform.ret2dva(1.1, 0), (1.1, 0))
 
 
-def test_Curcio1990Transform():
+def test_Curcio1990Map():
     # Curcio1990 uses a linear dva2ret conversion factor:
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(Curcio1990Transform.dva2ret(factor, factor),
+        npt.assert_almost_equal(Curcio1990Map.dva2ret(factor, factor),
                                 (280.0 * factor, 280.0 * factor))
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(Curcio1990Transform.ret2dva(280.0 * factor,
-                                                            280.0 * factor),
+        npt.assert_almost_equal(Curcio1990Map.ret2dva(280.0 * factor,
+                                                      280.0 * factor),
                                 (factor, factor))
 
 
-def test_Watson2014Transform():
-    trafo = Watson2014Transform()
+def test_Watson2014Map():
+    trafo = Watson2014Map()
     with pytest.raises(ValueError):
         trafo.ret2dva(0, 0, coords='invalid')
     with pytest.raises(ValueError):
@@ -145,8 +145,8 @@ def test_Watson2014Transform():
                                     decimal=-exp)  # adjust precision
 
 
-def test_Watson2014DisplaceTransform():
-    trafo = Watson2014DisplaceTransform()
+def test_Watson2014DisplaceMap():
+    trafo = Watson2014DisplaceMap()
     with pytest.raises(ValueError):
         trafo.watson_displacement(0, meridian='invalid')
     npt.assert_almost_equal(trafo.watson_displacement(0), 0.4957506)

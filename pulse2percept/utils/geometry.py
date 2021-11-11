@@ -1,6 +1,6 @@
 """
-`Grid2D`, `RetinalCoordTransform`, `Curcio1990Transform`,
-`Watson2014Transform`, `Watson2014DisplaceTransform`, `cart2pol`, `pol2cart`, 'delta_angle'
+`Grid2D`, `VisualFieldMap`, `Curcio1990Map`, `Watson2014Map`,
+`Watson2014DisplaceMap`, `cart2pol`, `pol2cart`, `delta_angle`
 
 """
 import numpy as np
@@ -171,8 +171,8 @@ class Grid2D(PrettyPrint):
         return ax
 
 
-class RetinalCoordTransform(object, metaclass=ABCMeta):
-    """Base class for a retinal coordinate transform
+class VisualFieldMap(object, metaclass=ABCMeta):
+    """Base class for a visual field map (retinotopy)
 
     A template
 
@@ -189,7 +189,7 @@ class RetinalCoordTransform(object, metaclass=ABCMeta):
         raise NotImplementedError
 
 
-class Curcio1990Transform(RetinalCoordTransform):
+class Curcio1990Map(VisualFieldMap):
     """Converts between visual angle and retinal eccentricity [Curcio1990]_"""
 
     @staticmethod
@@ -211,7 +211,7 @@ class Curcio1990Transform(RetinalCoordTransform):
         return xret / 280.0, yret / 280.0
 
 
-class Watson2014Transform(RetinalCoordTransform):
+class Watson2014Map(VisualFieldMap):
     """Converts between visual angle and retinal eccentricity [Watson2014]_"""
 
     @staticmethod
@@ -278,7 +278,7 @@ class Watson2014Transform(RetinalCoordTransform):
         raise ValueError('Unknown coordinate system "%s".' % coords)
 
 
-class Watson2014DisplaceTransform(Watson2014Transform):
+class Watson2014DisplaceMap(Watson2014Map):
     """Converts between visual angle and retinal eccentricity using RGC
        displacement [Watson2014]_
 
@@ -350,7 +350,7 @@ class Watson2014DisplaceTransform(Watson2014Transform):
         rho_dva += self.watson_displacement(rho_dva, meridian=meridian)
         # Convert back to x, y (dva):
         x, y = pol2cart(theta, rho_dva)
-        return super(Watson2014DisplaceTransform, self).dva2ret(x, y)
+        return super(Watson2014DisplaceMap, self).dva2ret(x, y)
 
     def ret2dva(self, xret, yret):
         raise NotImplementedError

@@ -38,10 +38,10 @@ class Nanduri2012Spatial(SpatialModel):
         Nominator of the attentuation function
     atten_n : float32, optional
         Exponent of the attenuation function's denominator
-    retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
-        An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+    retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
+        An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
         object that provides ``ret2dva`` and ``dva2ret`` methods.
-        By default, :py:class:`~pulse2percept.utils.Curcio1990Transform` is
+        By default, :py:class:`~pulse2percept.utils.Curcio1990Map` is
         used.
 
     """
@@ -206,10 +206,10 @@ class Nanduri2012Model(Model):
         A scaling factor applied to the output of the model
     thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
-    retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
-        An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+    retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
+        An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
         object that provides ``ret2dva`` and ``dva2ret`` methods.
-        By default, :py:class:`~pulse2percept.utils.Curcio1990Transform` is
+        By default, :py:class:`~pulse2percept.utils.Curcio1990Map` is
         used.
     """
 

@@ -8,7 +8,7 @@ from pulse2percept.stimuli import Stimulus
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (BaseModel, Model, NotBuiltError,
                                   SpatialModel, TemporalModel)
-from pulse2percept.utils import FreezeError, Grid2D, Watson2014Transform
+from pulse2percept.utils import FreezeError, Grid2D, Watson2014Map
 
 
 class ValidBaseModel(BaseModel):
@@ -52,7 +52,7 @@ class ValidSpatialModel(SpatialModel):
 
     def get_default_params(self):
         params = super(ValidSpatialModel, self).get_default_params()
-        params.update({'retinotopy': Watson2014Transform()})
+        params.update({'retinotopy': Watson2014Map()})
         return params
 
     def _predict_spatial(self, earray, stim):

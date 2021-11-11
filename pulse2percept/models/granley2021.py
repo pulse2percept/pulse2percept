@@ -239,10 +239,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             use ``x_range=(0, 1)`` and ``xystep=0.5``.
         grid_type : {'rectangular', 'hexagonal'}
             Whether to simulate points on a rectangular or hexagonal grid
-        retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
-            An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+        retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
+            An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
             object that provides ``ret2dva`` and ``dva2ret`` methods.
-            By default, :py:class:`~pulse2percept.utils.Watson2014Transform` is
+            By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
             used.
         loc_od, loc_od: (x,y), optional
             Location of the optic disc in degrees of visual angle. Note that the
@@ -535,10 +535,10 @@ class BiphasicAxonMapModel(Model):
             use ``x_range=(0, 1)`` and ``xystep=0.5``.
         grid_type : {'rectangular', 'hexagonal'}
             Whether to simulate points on a rectangular or hexagonal grid
-        retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
-            An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+        retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
+            An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
             object that provides ``ret2dva`` and ``dva2ret`` methods.
-            By default, :py:class:`~pulse2percept.utils.Watson2014Transform` is
+            By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
             used.
         loc_od, loc_od: (x,y), optional
             Location of the optic disc in degrees of visual angle. Note that the

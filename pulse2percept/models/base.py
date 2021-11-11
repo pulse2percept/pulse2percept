@@ -8,7 +8,7 @@ import numpy as np
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
 from ..percepts import Percept
-from ..utils import (Curcio1990Transform, PrettyPrint, Frozen, FreezeError,
+from ..utils import (Curcio1990Map, PrettyPrint, Frozen, FreezeError,
                      Grid2D, bisect)
 from ..utils.constants import ZORDER
 
@@ -194,7 +194,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
             # Retinotopic map to be used:
-            'retinotopy': Curcio1990Transform(),
+            'retinotopy': Curcio1990Map(),
             # JobLib or Dask can be used to parallelize computations:
             'engine': 'serial',
             'scheduler': 'threading',

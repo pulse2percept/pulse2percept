@@ -8,7 +8,7 @@ from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
-from ..utils import parfor, Watson2014Transform
+from ..utils import parfor, Watson2014Map
 from ..utils.constants import ZORDER
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
@@ -54,10 +54,10 @@ class ScoreboardSpatial(SpatialModel):
         use ``xrange=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
-    retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
-        An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+    retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
+        An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
         object that provides ``ret2dva`` and ``dva2ret`` methods.
-        By default, :py:class:`~pulse2percept.utils.Watson2014Transform` is
+        By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
 
     .. important ::
@@ -70,7 +70,7 @@ class ScoreboardSpatial(SpatialModel):
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
         base_params = super(ScoreboardSpatial, self).get_default_params()
-        params = {'rho': 100, 'retinotopy': Watson2014Transform()}
+        params = {'rho': 100, 'retinotopy': Watson2014Map()}
         return {**base_params, **params}
 
     def _predict_spatial(self, earray, stim):
@@ -121,10 +121,10 @@ class ScoreboardModel(Model):
         use ``xrange=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
-    retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
-        An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+    retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
+        An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
         object that provides ``ret2dva`` and ``dva2ret`` methods.
-        By default, :py:class:`~pulse2percept.utils.Watson2014Transform` is
+        By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
 
     .. important ::
@@ -177,10 +177,10 @@ class AxonMapSpatial(SpatialModel):
         use ``xrange=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
-    retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
-        An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+    retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
+        An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
         object that provides ``ret2dva`` and ``dva2ret`` methods.
-        By default, :py:class:`~pulse2percept.utils.Watson2014Transform` is
+        By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
     loc_od, loc_od: (x,y), optional
         Location of the optic disc in degrees of visual angle. Note that the
@@ -253,7 +253,7 @@ class AxonMapSpatial(SpatialModel):
             # You can force a build by ignoring pickles:
             'ignore_pickle': False,
             # Use the Watson transform for dva <=> ret:
-            'retinotopy': Watson2014Transform()
+            'retinotopy': Watson2014Map()
         }
         return {**base_params, **params}
 
@@ -841,10 +841,10 @@ class AxonMapModel(Model):
         use ``xrange=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
-    retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
-        An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+    retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
+        An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
         object that provides ``ret2dva`` and ``dva2ret`` methods.
-        By default, :py:class:`~pulse2percept.utils.Watson2014Transform` is
+        By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
     loc_od, loc_od: (x,y), optional
         Location of the optic disc in degrees of visual angle. Note that the
