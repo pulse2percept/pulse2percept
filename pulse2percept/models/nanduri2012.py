@@ -5,7 +5,6 @@ from .base import Model, SpatialModel, TemporalModel
 from ._nanduri2012 import spatial_fast, temporal_fast
 from ..implants import ElectrodeArray, DiskElectrode
 from ..stimuli import Stimulus
-from ..utils import Curcio1990Transform
 
 
 class Nanduri2012Spatial(SpatialModel):
@@ -47,22 +46,6 @@ class Nanduri2012Spatial(SpatialModel):
         params = super(Nanduri2012Spatial, self).get_default_params()
         params.update({'atten_a': 14000, 'atten_n': 1.69})
         return params
-
-    def dva2ret(self, xdva, ydva):
-        """Convert degrees of visual angle (dva) to retinal eccentricity (um)
-
-        Assumes that one degree of visual angle is equal to 280 um on the
-        retina.
-        """
-        return Curcio1990Transform.dva2ret(xdva, ydva)
-
-    def ret2dva(self, xret, yret):
-        """Convert retinal eccentricity (um) to degrees of visual angle (dva)
-
-        Assumes that one degree of visual angle is equal to 280 um on the
-        retina.
-        """
-        return Curcio1990Transform.ret2dva(xret, yret)
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""

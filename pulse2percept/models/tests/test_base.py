@@ -50,11 +50,10 @@ def test_BaseModel():
 
 class ValidSpatialModel(SpatialModel):
 
-    def dva2ret(self, xdva, ydva):
-        return Watson2014Transform.dva2ret(xdva, ydva)
-
-    def ret2dva(self, xret, yret):
-        return Watson2014Transform.ret2dva(xret, yret)
+    def get_default_params(self):
+        params = super(ValidSpatialModel, self).get_default_params()
+        params.update({'retinotopy': Watson2014Transform()})
+        return params
 
     def _predict_spatial(self, earray, stim):
         if not self.is_built:

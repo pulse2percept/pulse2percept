@@ -65,19 +65,9 @@ class ScoreboardSpatial(SpatialModel):
 
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
-        params = super(ScoreboardSpatial, self).get_default_params()
-        params.update({'rho': 100})
-        return params
-
-    @staticmethod
-    def dva2ret(xdva, ydva, coords='cart'):
-        """Convert degrees of visual angle (dva) into retinal coords (um)"""
-        return Watson2014Transform.dva2ret(xdva, ydva, coords=coords)
-
-    @staticmethod
-    def ret2dva(xret, yret, coords='cart'):
-        """Convert retinal corods (um) to degrees of visual angle (dva)"""
-        return Watson2014Transform.ret2dva(xret, yret, coords=coords)
+        base_params = super(ScoreboardSpatial, self).get_default_params()
+        params = {'rho': 100, 'retinotopy': Watson2014Transform()}
+        return {**base_params, **params}
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
@@ -133,7 +123,8 @@ class ScoreboardModel(Model):
 
     def __init__(self, **params):
         super(ScoreboardModel, self).__init__(spatial=ScoreboardSpatial(),
-                                              temporal=None, **params)
+                                              temporal=None,
+                                              **params)
 
 
 class AxonMapSpatial(SpatialModel):
@@ -236,30 +227,10 @@ class AxonMapSpatial(SpatialModel):
             'axon_pickle': 'axons.pickle',
             # You can force a build by ignoring pickles:
             'ignore_pickle': False,
+            # Use the Watson transform for dva <=> ret:
+            'retinotopy': Watson2014Transform()
         }
-        params.update(base_params)
-        return params
-
-    @staticmethod
-    def dva2ret(xdva, ydva, coords='cart'):
-        """Convert degrees of visual angle (dva) into retinal coords (um)
-
-        The axon map model converts degrees of visual angle into a retinal 
-        distance from the optic axis (um) using Eq. A5 in [Watson2014]_.
-
-        """
-        return Watson2014Transform.dva2ret(xdva, ydva, coords=coords)
-
-    @staticmethod
-    def ret2dva(xret, yret, coords='cart'):
-        """Convert retinal corods (um) to degrees of visual angle (dva)
-
-        The axon map model converts an eccentricity measurement on the retinal
-        surface(in micrometers), measured from the optic axis, into degrees
-        of visual angle using Eq. A6 in [Watson2014]_.
-
-        """
-        return Watson2014Transform.ret2dva(xret, yret, coords=coords)
+        return {**base_params, **params}
 
     def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
         """Grows a single axon bundle based on the model by Jansonius (2009)
@@ -419,7 +390,8 @@ class AxonMapSpatial(SpatialModel):
             # Keep only reasonably sized axon bundles:
             bundles = list(filter(lambda x: len(x) > 10, bundles))
         # Convert to um:
-        bundles = [np.array(self.dva2ret(b[:, 0], b[:, 1])).T for b in bundles]
+        bundles = [np.array(self.retinotopy.dva2ret(b[:, 0], b[:, 1])).T
+                   for b in bundles]
         return bundles
 
     def find_closest_axon(self, bundles, xret=None, yret=None,
@@ -746,8 +718,8 @@ class AxonMapSpatial(SpatialModel):
             od_h = 6.85
             grid_transform = None
             # Flip y upside down for dva:
-            axon_bundles = [np.array(self.ret2dva(bundle[:, 0],
-                                                  -bundle[:, 1])).T
+            axon_bundles = [np.array(self.retinotopy.ret2dva(bundle[:, 0],
+                                                             -bundle[:, 1])).T
                             for bundle in axon_bundles]
             labels = ['upper', 'lower', 'left', 'right']
         else:
@@ -755,16 +727,16 @@ class AxonMapSpatial(SpatialModel):
             units = 'microns'
             # Make sure we're filling the simulated area, rounded up/down,
             # but no smaller than (-5000, 5000):
-            xmin, ymin = self.dva2ret(self.xrange[0], self.yrange[0])
+            xmin, ymin = self.retinotopy.dva2ret(self.xrange[0], self.yrange[0])
             xmin = min(np.floor(xmin / 1000) * 1000, -5000)
             ymin = min(np.floor(ymin / 1000) * 1000, -5000)
-            xmax, ymax = self.dva2ret(self.xrange[1], self.yrange[1])
+            xmax, ymax = self.retinotopy.dva2ret(self.xrange[1], self.yrange[1])
             xmax = max(np.ceil(xmax / 1000) * 1000, 5000)
             ymax = max(np.ceil(ymax / 1000) * 1000, 5000)
-            od_xy = self.dva2ret(0, self.loc_od, coords='polar')[1]
+            od_xy = self.retinotopy.dva2ret(*self.loc_od)
             od_w = 1770
             od_h = 1880
-            grid_transform = self.dva2ret
+            grid_transform = self.retinotopy.dva2ret
             if self.eye == 'RE':
                 labels = ['superior', 'inferior', 'temporal', 'nasal']
             else:
@@ -881,7 +853,8 @@ class AxonMapModel(Model):
 
     def __init__(self, **params):
         super(AxonMapModel, self).__init__(spatial=AxonMapSpatial(),
-                                           temporal=None, **params)
+                                           temporal=None,
+                                           **params)
 
     def predict_percept(self, implant, t_percept=None):
         # Need to add an additional check before running the base method:

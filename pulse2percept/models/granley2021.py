@@ -276,18 +276,18 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     def __getattr__(self, attr):
         # Called when normal get attribute fails
-        # If we are in the initializer, or if trying to access 
+        # If we are in the initializer, or if trying to access
         # an effects model, raise an error which is caught and causes
         # the parameter to be created.
-        if (sys._getframe(3).f_code.co_name == '__init__' and \
-            "pulse2percept/models/base.py" in \
-            sys._getframe(3).f_code.co_filename) or \
-            (attr in ['bright_model', 'streak_model', 'size_model']):
+        if (sys._getframe(3).f_code.co_name == '__init__' and
+                "pulse2percept/models/base.py" in
+                sys._getframe(3).f_code.co_filename) or \
+                (attr in ['bright_model', 'streak_model', 'size_model']):
             # We can set new class attributes in the constructor. Reaching this
             # point means the default attribute access failed - most likely
             # because we are trying to create a variable. In this case, simply
             # raise an exception:
-            # Note that this gets called from __init__ of BaseModel, not directly from 
+            # Note that this gets called from __init__ of BaseModel, not directly from
             # BiphasicAxonMap
             raise AttributeError("%s not found" % attr)
         # Check if bright/size/streak model has param
@@ -352,8 +352,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Use probabilistic thresholding
             'do_thresholding': False
         }
-        params.update(base_params)
-        return params
+        return {**base_params, **params}
 
     def _build(self):
         if not callable(self.bright_model):
@@ -368,7 +367,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         """Predicts the percept"""
         if not isinstance(earray, ElectrodeArray):
             raise TypeError("Implant must be of type ElectrodeArray but it is " +
-                str(type(earray)))
+                            str(type(earray)))
         if not isinstance(stim, Stimulus):
             raise TypeError(
                 "Stim must be of type Stimulus but it is " + str(type(stim)))
@@ -393,8 +392,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 np.array(bright_effects, dtype=np.float32),
                 np.array(size_effects, dtype=np.float32),
                 np.array(streak_effects, dtype=np.float32),
-                np.array([earray[e].x for e in stim.electrodes], dtype=np.float32),
-                np.array([earray[e].y for e in stim.electrodes], dtype=np.float32),
+                np.array([earray[e].x for e in stim.electrodes],
+                         dtype=np.float32),
+                np.array([earray[e].y for e in stim.electrodes],
+                         dtype=np.float32),
                 self.axon_contrib,
                 self.axon_idx_start.astype(np.uint32),
                 self.axon_idx_end.astype(np.uint32),

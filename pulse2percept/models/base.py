@@ -8,7 +8,8 @@ import numpy as np
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
 from ..percepts import Percept
-from ..utils import PrettyPrint, Frozen, FreezeError, Grid2D, bisect
+from ..utils import (Curcio1990Transform, PrettyPrint, Frozen, FreezeError,
+                     Grid2D, bisect)
 from ..utils.constants import ZORDER
 
 
@@ -134,18 +135,25 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
        You can add your own ``_build`` method (note the underscore) that
        performs additional expensive one-time calculations.
     *  ``predict_percept``: predicts the percepts based on an implant/stimulus.
-       You can add your own ``_predict_spatial`` method to customize this step.
+       Don't customize this method - implement your own ``_predict_spatial``
+       instead (see below).
        A user must call ``build`` before calling ``predict_percept``.
 
     To create your own spatial model, you must subclass ``SpatialModel`` and
-    provide implementations for its three abstract methods:
+    provide an implementation for:
 
-    *  ``dva2ret``: a means to convert from degrees of visual angle (dva) to
-       retinal coordinates (microns).
-    *  ``ret2dva``: a means to convert from retinal coordinates to dva.
-    *  ``_predict_spatial``: a method that accepts an ElectrodeArray as well as
-       a Stimulus and computes the brightness at all spatial coordinates of
+    *  ``_predict_spatial``: This method should accept an ElectrodeArray as well
+       as a Stimulus, and compute the brightness at all spatial coordinates of 
        ``self.grid``, returned as a 2D NumPy array (space x time).
+
+       .. note ::
+
+           The ``_`` in the method name indicates that this is a private method,
+           meaning that it should not be called by the user. Instead, the user
+           should call ``predict_percept``, which in turn will call
+           ``_predict_spatial``.
+           The same logic applies to ``build`` (called by the user; don't touch)
+           and ``_build`` (called by ``build``; customize this instead).
 
     In addition, you can customize the following:
 
@@ -185,6 +193,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'grid_type': 'rectangular',
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
+            # Retinotopic map to be used:
+            'retinotopy': Curcio1990Transform(),
             # JobLib or Dask can be used to parallelize computations:
             'engine': 'serial',
             'scheduler': 'threading',
@@ -193,16 +203,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'verbose': True
         }
         return params
-
-    @abstractmethod
-    def dva2ret(self, xdva, ydva):
-        """Convert degrees of visual angle (dva) into retinal coords (um)"""
-        raise NotImplementedError
-
-    @abstractmethod
-    def ret2dva(self, xret, yret):
-        """Convert retinal corods (um) to degrees of visual angle (dva)"""
-        raise NotImplementedError
 
     def build(self, **build_params):
         """Build the model
@@ -230,7 +230,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         # Build the spatial grid:
         self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
                            grid_type=self.grid_type)
-        self.grid.xret, self.grid.yret = self.dva2ret(self.grid.x, self.grid.y)
+        self.grid.xret, self.grid.yret = self.retinotopy.dva2ret(self.grid.x,
+                                                                 self.grid.y)
         self._build()
         self.is_built = True
         return self
@@ -395,10 +396,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')
         else:
-            print('transform', self.dva2ret)
-            ax = self.grid.plot(transform=self.dva2ret, autoscale=autoscale,
-                                ax=ax, zorder=ZORDER['background'] + 1,
-                                figsize=figsize)
+            ax = self.grid.plot(transform=self.retinotopy.dva2ret, ax=ax,
+                                zorder=ZORDER['background'] + 1,
+                                figsize=figsize, autoscale=autoscale)
             ax.set_xlabel('x (microns)')
             ax.set_ylabel('y (microns)')
         return ax
@@ -417,11 +417,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
        step. A user must call ``build`` before calling ``predict_percept``.
 
     To create your own temporal model, you must subclass ``SpatialModel`` and
-    provide implementations for its three abstract methods:
+    provide an implementation for:
 
-    *  ``dva2ret``: a means to convert from degrees of visual angle (dva) to
-       retinal coordinates (microns).
-    *  ``ret2dva``: a means to convert from retinal coordinates to dva.
     *  ``_predict_temporal``: a method that accepts either a
        :py:class:`~pulse2percept.stimuli.Stimulus` or a
        :py:class:`~pulse2percept.percepts.Percept` object and a list of time
