@@ -181,6 +181,7 @@ class DefaultStreakModel(BaseModel):
 
 class BiphasicAxonMapSpatial(AxonMapSpatial):
     """ BiphasicAxonMapModel of [Granley2021]_ (spatial model)
+
     An AxonMapModel where phosphene brightness, size, and streak length scale
     according to amplitude, frequency, and pulse duration
 
@@ -238,6 +239,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             use ``x_range=(0, 1)`` and ``xystep=0.5``.
         grid_type : {'rectangular', 'hexagonal'}
             Whether to simulate points on a rectangular or hexagonal grid
+        retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
+            An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+            object that provides ``ret2dva`` and ``dva2ret`` methods.
+            By default, :py:class:`~pulse2percept.utils.Watson2014Transform` is
+            used.
         loc_od, loc_od: (x,y), optional
             Location of the optic disc in degrees of visual angle. Note that the
             optic disc in a left eye will be corrected to have a negative x
@@ -262,6 +268,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         ignore_pickle: bool, optional
             A flag whether to ignore the pickle file in future calls to
             ``model.build()``.
+
     """
 
     def __init__(self, **params):
@@ -470,6 +477,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
 class BiphasicAxonMapModel(Model):
     """ BiphasicAxonMapModel of [Granley2021]_ (standalone model)
+
     An AxonMapModel where phosphene brightness, size, and streak length scale
     according to amplitude, frequency, and pulse duration
 
@@ -503,6 +511,7 @@ class BiphasicAxonMapModel(Model):
         Use probabilistic sigmoid thresholding, default: False
     **params: dict, optional
         Arguments to be passed to AxonMapSpatial
+
         Options:
         ---------
         axlambda: double, optional
@@ -526,6 +535,11 @@ class BiphasicAxonMapModel(Model):
             use ``x_range=(0, 1)`` and ``xystep=0.5``.
         grid_type : {'rectangular', 'hexagonal'}
             Whether to simulate points on a rectangular or hexagonal grid
+        retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
+            An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+            object that provides ``ret2dva`` and ``dva2ret`` methods.
+            By default, :py:class:`~pulse2percept.utils.Watson2014Transform` is
+            used.
         loc_od, loc_od: (x,y), optional
             Location of the optic disc in degrees of visual angle. Note that the
             optic disc in a left eye will be corrected to have a negative x
@@ -550,6 +564,7 @@ class BiphasicAxonMapModel(Model):
         ignore_pickle: bool, optional
             A flag whether to ignore the pickle file in future calls to
             ``model.build()``.
+
     """
 
     def __init__(self, **params):

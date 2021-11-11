@@ -39,28 +39,32 @@ class ScoreboardSpatial(SpatialModel):
     ----------
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
-    x_range : (x_min, x_max), optional
+    xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). In a right eye, negative x values correspond to the
         temporal retina, and positive x values to the nasal retina. In a left
         eye, the opposite is true.
-    y_range : tuple, (y_min, y_max)
+    yrange : tuple, (y_min, y_max), optional
         A tuple indicating the range of y values to simulate (in degrees of
         visual angle). Negative y values correspond to the superior retina,
         and positive y values to the inferior retina.
-    xystep : int, double, tuple
+    xystep : int, double, tuple, optional
         Step size for the range of (x,y) values to simulate (in degrees of
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
-        use ``x_range=(0, 1)`` and ``xystep=0.5``.
-    grid_type : {'rectangular', 'hexagonal'}
+        use ``xrange=(0, 1)`` and ``xystep=0.5``.
+    grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
+    retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
+        An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+        object that provides ``ret2dva`` and ``dva2ret`` methods.
+        By default, :py:class:`~pulse2percept.utils.Watson2014Transform` is
+        used.
 
     .. important ::
 
         If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.axlambda = 100``), you will have to call
+        by directly setting ``model.xrange = (-10, 10)``), you will have to call
         ``model.build()`` again for your changes to take effect.
-
     """
 
     def get_default_params(self):
@@ -100,25 +104,35 @@ class ScoreboardModel(Model):
         Use :py:class:`~pulse2percept.models.ScoreboardSpatial` if you want
         to combine the spatial model with a temporal model.
 
-    Parameters
-    ----------
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
-    x_range : (x_min, x_max), optional
+    xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). In a right eye, negative x values correspond to the
         temporal retina, and positive x values to the nasal retina. In a left
         eye, the opposite is true.
-    y_range : tuple, (y_min, y_max)
+    yrange : tuple, (y_min, y_max), optional
         A tuple indicating the range of y values to simulate (in degrees of
         visual angle). Negative y values correspond to the superior retina,
         and positive y values to the inferior retina.
-    xystep : int, double, tuple
+    xystep : int, double, tuple, optional
         Step size for the range of (x,y) values to simulate (in degrees of
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
-        use ``x_range=(0, 1)`` and ``xystep=0.5``.
-    grid_type : {'rectangular', 'hexagonal'}
+        use ``xrange=(0, 1)`` and ``xystep=0.5``.
+    grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
+    retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
+        An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+        object that provides ``ret2dva`` and ``dva2ret`` methods.
+        By default, :py:class:`~pulse2percept.utils.Watson2014Transform` is
+        used.
+
+    .. important ::
+
+        If you change important model parameters outside the constructor (e.g.,
+        by directly setting ``model.xrange = (-10, 10)``), you will have to call
+        ``model.build()`` again for your changes to take effect.
+
     """
 
     def __init__(self, **params):
@@ -153,16 +167,21 @@ class AxonMapSpatial(SpatialModel):
         visual angle). In a right eye, negative x values correspond to the
         temporal retina, and positive x values to the nasal retina. In a left
         eye, the opposite is true.
-    yrange : tuple, (y_min, y_max)
+    yrange : (y_min, y_max), optional
         A tuple indicating the range of y values to simulate (in degrees of
         visual angle). Negative y values correspond to the superior retina,
         and positive y values to the inferior retina.
-    xystep : int, double, tuple
+    xystep : int or double or tuple, optional
         Step size for the range of (x,y) values to simulate (in degrees of
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
-        use ``x_range=(0, 1)`` and ``xystep=0.5``.
-    grid_type : {'rectangular', 'hexagonal'}
+        use ``xrange=(0, 1)`` and ``xystep=0.5``.
+    grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
+    retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
+        An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+        object that provides ``ret2dva`` and ``dva2ret`` methods.
+        By default, :py:class:`~pulse2percept.utils.Watson2014Transform` is
+        used.
     loc_od, loc_od: (x,y), optional
         Location of the optic disc in degrees of visual angle. Note that the
         optic disc in a left eye will be corrected to have a negative x
@@ -191,6 +210,12 @@ class AxonMapSpatial(SpatialModel):
     ignore_pickle: bool, optional
         A flag whether to ignore the pickle file in future calls to
         ``model.build()``.
+
+    .. important ::
+
+        If you change important model parameters outside the constructor (e.g.,
+        by directly setting ``model.axlambda = 100``), you will have to call
+        ``model.build()`` again for your changes to take effect.
 
     Notes
     -----
@@ -806,16 +831,21 @@ class AxonMapModel(Model):
         visual angle). In a right eye, negative x values correspond to the
         temporal retina, and positive x values to the nasal retina. In a left
         eye, the opposite is true.
-    yrange : tuple, (y_min, y_max)
+    yrange : (y_min, y_max), optional
         A tuple indicating the range of y values to simulate (in degrees of
         visual angle). Negative y values correspond to the superior retina,
         and positive y values to the inferior retina.
-    xystep : int, double, tuple
+    xystep : int or double or tuple, optional
         Step size for the range of (x,y) values to simulate (in degrees of
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
-        use ``x_range=(0, 1)`` and ``xystep=0.5``.
-    grid_type : {'rectangular', 'hexagonal'}
+        use ``xrange=(0, 1)`` and ``xystep=0.5``.
+    grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
+    retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
+        An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+        object that provides ``ret2dva`` and ``dva2ret`` methods.
+        By default, :py:class:`~pulse2percept.utils.Watson2014Transform` is
+        used.
     loc_od, loc_od: (x,y), optional
         Location of the optic disc in degrees of visual angle. Note that the
         optic disc in a left eye will be corrected to have a negative x
@@ -844,6 +874,12 @@ class AxonMapModel(Model):
     ignore_pickle: bool, optional
         A flag whether to ignore the pickle file in future calls to
         ``model.build()``.
+
+    .. important ::
+
+        If you change important model parameters outside the constructor (e.g.,
+        by directly setting ``model.axlambda = 100``), you will have to call
+        ``model.build()`` again for your changes to take effect.
 
     Notes
     -----

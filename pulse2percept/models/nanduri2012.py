@@ -38,14 +38,19 @@ class Nanduri2012Spatial(SpatialModel):
         Nominator of the attentuation function
     atten_n : float32, optional
         Exponent of the attenuation function's denominator
+    retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
+        An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+        object that provides ``ret2dva`` and ``dva2ret`` methods.
+        By default, :py:class:`~pulse2percept.utils.Curcio1990Transform` is
+        used.
 
     """
 
     def get_default_params(self):
         """Returns all settable parameters of the Nanduri model"""
-        params = super(Nanduri2012Spatial, self).get_default_params()
-        params.update({'atten_a': 14000, 'atten_n': 1.69})
-        return params
+        base_params = super(Nanduri2012Spatial, self).get_default_params()
+        params = {'atten_a': 14000, 'atten_n': 1.69}
+        return {**base_params, **params}
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
@@ -135,12 +140,7 @@ class Nanduri2012Temporal(TemporalModel):
             # Scale the output:
             'scale_out': 1.0
         }
-        # This is subtle: Rather than calling `params.update(base_params)`, we
-        # call `base_params.update(params)`. This will overwrite `base_params`
-        # with values from `params`, which allows us to set `thresh_percept`=0
-        # rather than what the BaseModel dictates:
-        base_params.update(params)
-        return base_params
+        return {**base_params, **params}
 
     def _predict_temporal(self, stim, t_percept):
         """Predict the temporal response"""
@@ -175,7 +175,6 @@ class Nanduri2012Model(Model):
        calculate the spatial activation function, which is assumed to be
        equivalent to the "current spread" described as a function of distance
        from the center of the stimulating electrode (see Eq.2 in the paper).
-
     *  :py:class:`~pulse2percept.models.Nanduri2012Temporal` is used to
        calculate the temporal activation function, which is assumed to be the
        output of a linear-nonlinear cascade model (see Fig.6 in the paper).
@@ -207,6 +206,11 @@ class Nanduri2012Model(Model):
         A scaling factor applied to the output of the model
     thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
+    retinotopy : :py:class:`~pulse2percept.utils.RetinalCoordTransform`, optional
+        An instance of a :py:class:`~pulse2percept.utils.RetinalCoordTransform`
+        object that provides ``ret2dva`` and ``dva2ret`` methods.
+        By default, :py:class:`~pulse2percept.utils.Curcio1990Transform` is
+        used.
     """
 
     def __init__(self, **params):
