@@ -92,6 +92,11 @@ def test_Grid2D_plot():
     ax = grid.plot(figsize=(9, 7))
     npt.assert_almost_equal(ax.figure.get_size_inches(), (9, 7))
 
+    # You can change the style (smoke test):
+    ax = grid.plot(style='hull')
+    ax = grid.plot(style='cell')
+    ax = grid.plot(style='scatter')
+
 
 class ValidCoordTransform(VisualFieldMap):
 

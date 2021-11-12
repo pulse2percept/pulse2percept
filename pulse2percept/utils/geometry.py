@@ -12,6 +12,7 @@ from scipy.spatial import ConvexHull
 from collections.abc import Sequence
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
+from matplotlib.collections import PatchCollection
 
 from .base import PrettyPrint
 from .constants import ZORDER
@@ -127,8 +128,8 @@ class Grid2D(PrettyPrint):
     def reset(self):
         self._iter = 0
 
-    def plot(self, transform=None, autoscale=True, zorder=None, ax=None,
-             figsize=None):
+    def plot(self, transform=None, style='hull', autoscale=True,
+             zorder=None, ax=None, figsize=None):
         """Plot the extension of the grid
 
         Parameters
@@ -138,6 +139,12 @@ class Grid2D(PrettyPrint):
             the grid (e.g., :py:meth:`Curcio1990Transform.dva2ret`). It must
             accept two input arguments (x and y) and output two variables (the
             transformed x and y).
+        style : {'hull', 'scatter', 'cell'}, optional
+            * 'hull': Show the convex hull of the grid (that is, the outline of
+              the smallest convex set that contains all grid points).
+            * 'scatter': Scatter plot all grid points
+            * 'cell': Show the outline of each grid cell as a polygon. Note that
+              this can be costly for a high-resolution grid.
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot to fit the implant
         zorder : int, optional
@@ -148,6 +155,9 @@ class Grid2D(PrettyPrint):
         figsize : (float, float), optional
             Desired (width, height) of the figure in inches
         """
+        if style.lower() not in ['hull', 'scatter', 'cell']:
+            raise ValueError('Unknown plotting style "%s". Choose from: '
+                             '"hull", "scatter", "cell"' % style)
         if ax is None:
             ax = plt.gca()
         if figsize is not None:
@@ -159,13 +169,39 @@ class Grid2D(PrettyPrint):
             zorder = ZORDER['background']
 
         x, y = self.x, self.y
-        if transform is not None:
-            x, y = transform(self.x, self.y)
-
-        points = np.vstack((x.ravel(), y.ravel())).T
-        hull = ConvexHull(points)
-        ax.add_patch(Polygon(points[hull.vertices, :], alpha=0.3, ec='k',
-                             fc='gray', ls='--', zorder=zorder))
+        if style.lower() == 'cell':
+            # Show a polygon for every grid cell that we are simulating:
+            if self.type == 'hexagonal':
+                raise NotImplementedError
+            patches = []
+            for xret, yret in zip(x.ravel(), y.ravel()):
+                # Outlines of the cell are given by (x,y) and the step size:
+                vertices = np.array([
+                    [xret - self.step / 2, yret - self.step / 2],
+                    [xret - self.step / 2, yret + self.step / 2],
+                    [xret + self.step / 2, yret + self.step / 2],
+                    [xret + self.step / 2, yret - self.step / 2],
+                ])
+                if transform is not None:
+                    vertices = np.array(transform(*vertices.T)).T
+                patches.append(Polygon(vertices, alpha=0.3, ec='k', fc='gray',
+                                       ls='--', zorder=zorder))
+            ax.add_collection(PatchCollection(patches, match_original=True,
+                                              zorder=zorder))
+        else:
+            # Show either the convex hull or a scatter plot:
+            if transform is not None:
+                x, y = transform(self.x, self.y)
+            points = np.vstack((x.ravel(), y.ravel()))
+            # Remove NaN values from the grid:
+            points = points[:, ~np.logical_or(*np.isnan(points))]
+            if style.lower() == 'hull':
+                hull = ConvexHull(points.T)
+                ax.add_patch(Polygon(points[:, hull.vertices].T, alpha=0.3, ec='k',
+                                     fc='gray', ls='--', zorder=zorder))
+            elif style.lower() == 'scatter':
+                ax.scatter(*points, alpha=0.3, ec='k', fc='gray', marker='+',
+                           zorder=zorder)
         # This is needed in MPL 3.0.X to set the axis limit correctly:
         ax.autoscale_view()
         return ax
