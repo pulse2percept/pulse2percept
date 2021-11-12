@@ -17,8 +17,8 @@
 """
 from .base import (PrettyPrint, FreezeError, Frozen, Data, bijective26_name,
                    cached, gamma)
-from .geometry import (Grid2D, RetinalCoordTransform, Curcio1990Transform,
-                       Watson2014Transform, Watson2014DisplaceTransform,
+from .geometry import (Grid2D, VisualFieldMap, Curcio1990Map,
+                       Watson2014Map, Watson2014DisplaceMap,
                        cart2pol, pol2cart, delta_angle)
 from .array import is_strictly_increasing, radial_mask, unique
 from .images import center_image, scale_image, shift_image, trim_image
@@ -37,7 +37,7 @@ __all__ = [
     'center_vector',
     'circ_r2_score',
     'conv',
-    'Curcio1990Transform',
+    'Curcio1990Map',
     'Data',
     'delta_angle',
     'deprecated',
@@ -51,11 +51,11 @@ __all__ = [
     'PrettyPrint',
     'r2_score',
     'radial_mask',
-    'RetinalCoordTransform',
     'scale_image',
     'shift_image',
     'trim_image',
     'unique',
-    'Watson2014DisplaceTransform',
-    'Watson2014Transform'
+    'VisualFieldMap',
+    'Watson2014DisplaceMap',
+    'Watson2014Map'
 ]

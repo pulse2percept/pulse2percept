@@ -1,6 +1,6 @@
 """
-`Grid2D`, `RetinalCoordTransform`, `Curcio1990Transform`,
-`Watson2014Transform`, `Watson2014DisplaceTransform`, `cart2pol`, `pol2cart`, 'delta_angle'
+`Grid2D`, `VisualFieldMap`, `Curcio1990Map`, `Watson2014Map`,
+`Watson2014DisplaceMap`, `cart2pol`, `pol2cart`, `delta_angle`
 
 """
 import numpy as np
@@ -135,7 +135,9 @@ class Grid2D(PrettyPrint):
         ----------
         transform : function, optional
             A coordinate transform to be applied to the (x,y) coordinates of
-            the grid (e.g., :py:meth:`Curcio1990Transform.dva2ret`)
+            the grid (e.g., :py:meth:`Curcio1990Transform.dva2ret`). It must
+            accept two input arguments (x and y) and output two variables (the
+            transformed x and y).
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot to fit the implant
         zorder : int, optional
@@ -158,8 +160,8 @@ class Grid2D(PrettyPrint):
 
         x, y = self.x, self.y
         if transform is not None:
-            x, y = transform(self.x), transform(self.y)
-            
+            x, y = transform(self.x, self.y)
+
         points = np.vstack((x.ravel(), y.ravel())).T
         hull = ConvexHull(points)
         ax.add_patch(Polygon(points[hull.vertices, :], alpha=0.3, ec='k',
@@ -169,51 +171,51 @@ class Grid2D(PrettyPrint):
         return ax
 
 
-class RetinalCoordTransform(object, metaclass=ABCMeta):
-    """Base class for a retinal coordinate transform
+class VisualFieldMap(object, metaclass=ABCMeta):
+    """Base class for a visual field map (retinotopy)
 
     A template
 
     """
 
     @abstractmethod
-    def dva2ret(self):
+    def dva2ret(self, x, y):
         """Convert degrees of visual angle (dva) to retinal coords (um)"""
         raise NotImplementedError
 
     @abstractmethod
-    def ret2dva(self):
+    def ret2dva(self, x, y):
         """Convert retinal coords (um) to degrees of visual angle (dva)"""
         raise NotImplementedError
 
 
-class Curcio1990Transform(RetinalCoordTransform):
+class Curcio1990Map(VisualFieldMap):
     """Converts between visual angle and retinal eccentricity [Curcio1990]_"""
 
     @staticmethod
-    def dva2ret(xdva):
+    def dva2ret(xdva, ydva):
         """Convert degrees of visual angle (dva) to retinal eccentricity (um)
 
         Assumes that one degree of visual angle is equal to 280 um on the
         retina [Curcio1990]_.
         """
-        return 280.0 * xdva
+        return 280.0 * xdva, 280.0 * ydva
 
     @staticmethod
-    def ret2dva(xret):
+    def ret2dva(xret, yret):
         """Convert retinal eccentricity (um) to degrees of visual angle (dva)
 
         Assumes that one degree of visual angle is equal to 280 um on the
         retina [Curcio1990]_
         """
-        return xret / 280.0
+        return xret / 280.0, yret / 280.0
 
 
-class Watson2014Transform(RetinalCoordTransform):
+class Watson2014Map(VisualFieldMap):
     """Converts between visual angle and retinal eccentricity [Watson2014]_"""
 
     @staticmethod
-    def ret2dva(r_um):
+    def ret2dva(x_um, y_um, coords='cart'):
         """Converts retinal distances (um) to visual angles (deg)
 
         This function converts an eccentricity measurement on the retinal
@@ -222,22 +224,30 @@ class Watson2014Transform(RetinalCoordTransform):
 
         Parameters
         ----------
-        r_um : double or array-like
-            Eccentricity in microns
+        x_um, y_um : double or array-like
+            Original x and y coordinates on the retina (microns)
+        coords : {'cart', 'polar'}
+            Whether to return the result in Cartesian or polar coordinates
 
         Returns
         -------
-        r_dva : double or array-like
-            Eccentricity in degrees of visual angle (dva)
+        x_dva, y_dva : double or array-like
+            Transformed x and y coordinates (degrees of visual angle, dva)
         """
+        phi_um, r_um = cart2pol(x_um, y_um)
         sign = np.sign(r_um)
         r_mm = 1e-3 * np.abs(r_um)
         r_deg = 3.556 * r_mm + 0.05993 * r_mm ** 2 - 0.007358 * r_mm ** 3
         r_deg += 3.027e-4 * r_mm ** 4
-        return sign * r_deg
+        r_deg *= sign
+        if coords.lower() == 'cart':
+            return pol2cart(phi_um, r_deg)
+        elif coords.lower() == 'polar':
+            return phi_um, r_deg
+        raise ValueError('Unknown coordinate system "%s".' % coords)
 
     @staticmethod
-    def dva2ret(r_deg):
+    def dva2ret(x_deg, y_deg, coords='cart'):
         """Converts visual angles (deg) into retinal distances (um)
 
         This function converts degrees of visual angle into a retinal distance 
@@ -245,24 +255,30 @@ class Watson2014Transform(RetinalCoordTransform):
 
         Parameters
         ----------
-        r_dva : double or array-like
-            Eccentricity in degrees of visual angle (dva)
+        x_dva, y_dva : double or array-like
+            Original x and y coordinates (degrees of visual angle, dva)
+        coords : {'cart', 'polar'}
+            Whether to return the result in Cartesian or polar coordinates
 
         Returns
         -------
-        r_um : double or array-like
-            Eccentricity in microns
-
+        x_ret, y_ret : double or array-like
+            Transformed x and y coordinates on the retina (microns)
 
         """
+        phi_deg, r_deg = cart2pol(x_deg, y_deg)
         sign = np.sign(r_deg)
         r_deg = np.abs(r_deg)
         r_mm = 0.268 * r_deg + 3.427e-4 * r_deg ** 2 - 8.3309e-6 * r_deg ** 3
-        r_um = 1e3 * r_mm
-        return sign * r_um
+        r_um = 1e3 * r_mm * sign
+        if coords.lower() == 'cart':
+            return pol2cart(phi_deg, r_um)
+        elif coords.lower() == 'polar':
+            return phi_deg, r_um
+        raise ValueError('Unknown coordinate system "%s".' % coords)
 
 
-class Watson2014DisplaceTransform(RetinalCoordTransform):
+class Watson2014DisplaceMap(Watson2014Map):
     """Converts between visual angle and retinal eccentricity using RGC
        displacement [Watson2014]_
 
@@ -327,17 +343,14 @@ class Watson2014DisplaceTransform(RetinalCoordTransform):
         xret, yret : double or array-like
             Corresponding x,y coordinates in microns
         """
-        if self.eye == 'LE':
-            raise NotImplementedError
         # Convert x, y (dva) into polar coordinates:
-        theta, rho_dva = utils.cart2pol(xdva, ydva)
+        theta, rho_dva = cart2pol(xdva, ydva)
         # Add RGC displacement:
         meridian = np.where(xdva < 0, 'temporal', 'nasal')
         rho_dva += self.watson_displacement(rho_dva, meridian=meridian)
         # Convert back to x, y (dva):
-        x, y = utils.pol2cart(theta, rho_dva)
-        # Convert to retinal coords:
-        return dva2ret(x), dva2ret(y)
+        x, y = pol2cart(theta, rho_dva)
+        return super(Watson2014DisplaceMap, self).dva2ret(x, y)
 
     def ret2dva(self, xret, yret):
         raise NotImplementedError
@@ -345,12 +358,12 @@ class Watson2014DisplaceTransform(RetinalCoordTransform):
 
 def cart2pol(x, y):
     """Convert Cartesian to polar coordinates
-    
+
     Parameters
     ----------
     x, y : scalar or array-like
         The x,y Cartesian coordinates
-        
+
     Returns
     -------
     theta, rho : scalar or array-like
@@ -363,12 +376,12 @@ def cart2pol(x, y):
 
 def pol2cart(theta, rho):
     """Convert polar to Cartesian coordinates
-    
+
     Parameters
     ----------
     theta, rho : scalar or array-like
         The polar coordinates
-       
+
     Returns
     -------
     x, y : scalar or array-like

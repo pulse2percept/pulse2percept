@@ -20,14 +20,14 @@ How are retinal coordinates mapped to visual field coordinates?
 Studies often assume a linear mapping between retinal and visual field
 coordinates (e.g., [Hayes2003]_, [Thompson2003]_), based on the work by
 [Curcio1990]_
-(see :py:class:`~pulse2percept.utils.Curcio1990Transform`).
+(see :py:class:`~pulse2percept.utils.Curcio1990Map`).
 
 A more exact transformation is given in [Watson2014]_
-(see :py:class:`~pulse2percept.utils.Watson2014Transform`
-and :py:class:`~pulse2percept.utils.Watson2014DisplaceTransform`).
+(see :py:class:`~pulse2percept.utils.Watson2014Map`
+and :py:class:`~pulse2percept.utils.Watson2014DisplaceMap`).
 
 You can also write your own
-:py:class:`~pulse2percept.utils.RetinalCoordTransform`.
+:py:class:`~pulse2percept.utils.VisualFieldMap`.
 
 In any case, note that stimulation of the inferior (superior) retina leads to
 phosphenes appearing in the upper (lower) visual field.
