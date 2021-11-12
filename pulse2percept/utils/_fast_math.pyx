@@ -12,6 +12,9 @@ cimport numpy as cnp
 cdef inline float32 c_fmax(float32 a, float32 b) nogil:
     return a if a >= b else b
 
+cdef inline float32 c_fmin(float32 a, float32 b) nogil:
+    return a if a <= b else b
+
 cdef inline bool c_isclose(float32 a, float32 b, float32 rel_tol=1e-09,
                            float32 abs_tol=0.0) nogil:
     return c_abs(a-b) <= c_fmax(rel_tol * c_fmax(c_abs(a), c_abs(b)), abs_tol)
@@ -20,6 +23,16 @@ cdef inline bool c_isclose(float32 a, float32 b, float32 rel_tol=1e-09,
 @cdivision(True)
 cdef inline float32 c_expit(float32 x) nogil:
     return 1.0 / (1.0 + c_exp(-x))
+
+
+@cdivision(True)
+cpdef float32 c_gcd(float32 a, float32 b, float32 rtol=1e-5,
+                    float atol=1e-8) nogil:
+    cdef float32 t
+    t = c_fmin(c_abs(a), c_abs(b))
+    while c_abs(b) > rtol * t + atol:
+        a, b = b, a % b
+    return a
 
 
 # --- ARRAY FUNCTIONS -------------------------------------------------------- #
@@ -50,7 +63,7 @@ cdef float32 c_max(float32[::1] arr):
     return arr_max
 
 
-cdef void c_cumpow(float32* arr_in, float32* arr_out, int32 N, int32 exp) nogil:
+cdef void c_cumpow(float32 * arr_in, float32 * arr_out, int32 N, int32 exp) nogil:
     cdef:
         int32 i = 0
         float32 sum = 0
