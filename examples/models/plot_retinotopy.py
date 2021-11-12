@@ -29,21 +29,20 @@ This means that they have to specify a ``dva2ret`` method, which transforms
 visual field coordinates into retinal coordinates, and a complementary 
 ``ret2dva`` method.
 
+Visual field maps
+-----------------
+
+To appreciate the difference between the available visual field maps, let us
+look at a rectangular grid in visual field coordinates:
+
 """
 # sphinx_gallery_thumbnail_number = 4
-
-###############################################################################
-# Visual field maps
-# -----------------
-#
-# To appreciate the difference between the available visual field maps, let us
-# look at a rectangular grid in visual field coordinates:
 
 import pulse2percept as p2p
 import matplotlib.pyplot as plt
 
 grid = p2p.utils.Grid2D((-50, 50), (-50, 50), step=5)
-plt.scatter(grid.x, grid.y)
+grid.plot(style='scatter')
 plt.xlabel('x (degrees of visual angle)')
 plt.ylabel('y (degrees of visual angle)')
 plt.axis('square')
@@ -60,7 +59,7 @@ transforms = [p2p.utils.Curcio1990Map,
               p2p.utils.Watson2014DisplaceMap]
 fig, axes = plt.subplots(ncols=3, sharey=True, figsize=(13, 4))
 for ax, transform in zip(axes, transforms):
-    ax.scatter(*transform().dva2ret(grid.x, grid.y))
+    grid.plot(transform=transform().dva2ret, style='cell', ax=ax)
     ax.set_title(transform().__class__.__name__)
     ax.set_xlabel('x (microns)')
     ax.set_ylabel('y (microns)')
