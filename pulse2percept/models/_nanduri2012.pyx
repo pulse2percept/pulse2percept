@@ -1,6 +1,7 @@
 from ..utils._fast_math cimport c_fmax, c_expit
 
-from libc.math cimport pow as c_pow, fabs as c_abs, sqrt as c_sqrt
+from libc.math cimport(pow as c_pow, fabs as c_abs, sqrt as c_sqrt,
+                       isnan as c_isnan)
 from cython.parallel import prange, parallel
 from cython import cdivision  # modulo, division by zero
 import numpy as np
@@ -66,6 +67,10 @@ cpdef spatial_fast(const float32[:, ::1] stim,
         # For each entry in the output matrix:
         idx_space = idx_bright % n_space
         idx_time = idx_bright / n_space
+
+        if c_isnan(xgrid[idx_space]) or c_isnan(ygrid[idx_space]):
+            bright[idx_space, idx_time] = 0.0
+            continue
 
         # At each pixel to be rendered, we need to sum up the contribution of
         # each electrode:

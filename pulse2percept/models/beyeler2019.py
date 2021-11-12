@@ -696,8 +696,8 @@ class AxonMapSpatial(SpatialModel):
         else:
             raise NotImplementedError("Jax will be supported in future release")
 
-    def plot(self, use_dva=False, annotate=True, autoscale=True, ax=None,
-             figsize=None):
+    def plot(self, use_dva=False, style='hull', annotate=True, autoscale=True,
+             ax=None, figsize=None):
         """Plot the axon map
 
         Parameters
@@ -705,6 +705,14 @@ class AxonMapSpatial(SpatialModel):
         use_dva : bool, optional
             Uses degrees of visual angle (dva) if True, else retinal
             coordinates (microns)
+        style : {'hull', 'scatter', 'cell'}, optional
+            Grid plotting style:
+
+            * 'hull': Show the convex hull of the grid (that is, the outline of
+              the smallest convex set that contains all grid points).
+            * 'scatter': Scatter plot all grid points
+            * 'cell': Show the outline of each grid cell as a polygon. Note that
+              this can be costly for a high-resolution grid.
         annotate : bool, optional
             Flag whether to label the four retinal quadrants
         autoscale : bool, optional
@@ -782,7 +790,7 @@ class AxonMapSpatial(SpatialModel):
                              color='white', zorder=ZORDER['background'] + 1))
         # Show extent of simulated grid:
         if self.is_built:
-            self.grid.plot(ax=ax, transform=grid_transform,
+            self.grid.plot(ax=ax, transform=grid_transform, style=style,
                            zorder=ZORDER['background'] + 2)
         ax.set_xlabel('x (%s)' % units)
         ax.set_ylabel('y (%s)' % units)

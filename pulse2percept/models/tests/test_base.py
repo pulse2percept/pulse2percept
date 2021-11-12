@@ -112,9 +112,6 @@ def test_SpatialModel():
 
 def test_SpatialModel_plot():
     model = ValidSpatialModel()
-    with pytest.raises(NotBuiltError):
-        model.plot()
-
     model.build()
     # Simulated area might be larger than that:
     model = ValidSpatialModel(xrange=(-20.5, 20.5), yrange=(-16.1, 16.1))
