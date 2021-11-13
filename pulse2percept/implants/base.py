@@ -3,6 +3,7 @@ import numpy as np
 from copy import deepcopy
 from functools import reduce
 from scipy.spatial import cKDTree
+from skimage.transform import SimilarityTransform
 
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
@@ -127,22 +128,40 @@ class ProsthesisSystem(PrettyPrint):
     def reshape_stim(self, stim):
         if isinstance(stim, (ImageStimulus, VideoStimulus)):
             # In the more general case, the implant might not have a 'shape'
-            # attribute or have a hex grid.
-            # Fit implant to a rectangular grid using the greatest common
-            # demoninator:
-            x_e = [e.x for e in self.electrode_objects]
-            y_e = [e.y for e in self.electrode_objects]
-            dx = abs(reduce(lambda a, b: c_gcd(a, b), np.diff(x_e)))
-            dy = abs(reduce(lambda a, b: c_gcd(a, b), np.diff(y_e)))
+            # attribute or have a hex grid. Idea:
+            # - Fit electrode locations to a rectangular grid
+            # - Downscale the image to that grid size
+            # - Index into grid to determine electrode activation
+            data = stim.rgb2gray()
+            if hasattr(self.earray, 'rot'):
+                # We need to rotate the array & image first, otherwise we may
+                # end up with an infinitesimally small (dx,dy); for example,
+                # when a rectangular grid is rotated by 1deg:
+                tf = SimilarityTransform(rotation=np.deg2rad(self.earray.rot))
+                x, y = np.array([tf.inverse([e.x, e.y])
+                                 for e in self.electrode_objects]).squeeze().T
+                data = data.rotate(self.earray.rot)
+            else:
+                x = [e.x for e in self.electrode_objects]
+                y = [e.y for e in self.electrode_objects]
+            # Determine grid step by finding the greatest common denominator:
+            dx = abs(reduce(lambda a, b: c_gcd(a, b), np.diff(x)))
+            dy = abs(reduce(lambda a, b: c_gcd(a, b), np.diff(y)))
             # Build a new rectangular grid:
-            grid = Grid2D((np.min(x_e), np.max(x_e)),
-                          (np.min(y_e), np.max(y_e)), step=(dx, dy))
+            try:
+                grid = Grid2D((np.min(x), np.max(x)), (np.min(y), np.max(y)),
+                              step=(dx, dy))
+            except MemoryError:
+                raise ValueError("Automatic stimulus reshaping failed. You "
+                                 "will need to resize the stimulus yourself "
+                                 "so that there is one activation value per "
+                                 "electrode.")
             # For each electrode, find the closest pixel on the grid:
             kdtree = cKDTree(np.vstack((grid.x.ravel(), grid.y.ravel())).T)
-            _, e_idx = kdtree.query(np.vstack((x_e, y_e)).T)
+            _, e_idx = kdtree.query(np.vstack((x, y)).T)
             # Sample the stimulus at the correct pixel locations:
-            data = stim.rgb2gray().resize(grid.x.shape).data[e_idx, ...]
-            return Stimulus(data, electrodes=self.electrode_names,
+            return Stimulus(data.resize(grid.x.shape).data[e_idx, ...],
+                            electrodes=self.electrode_names,
                             metadata=stim.metadata)
         else:
             err_str = ("Number of electrodes in the stimulus (%d) "

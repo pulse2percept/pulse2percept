@@ -1,5 +1,6 @@
 """`BVT24`"""
 import numpy as np
+from skimage.transform import SimilarityTransform
 
 from .base import ProsthesisSystem
 from .electrodes import DiskElectrode
@@ -115,17 +116,9 @@ class BVT24(ProsthesisSystem):
                       'C21k', 'C21l', 'C21m'])
         names.extend(['R1', 'R2'])
 
-        # Rotate the grid:
-        rot_rad = np.deg2rad(rot)
-        rotmat = np.array([np.cos(rot_rad), -np.sin(rot_rad),
-                           np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
-        xy = np.matmul(rotmat, np.vstack((x_arr, y_arr)))
-        x_arr = xy[0, :]
-        y_arr = xy[1, :]
-
-        # Apply offset to make the grid centered at (x, y):
-        x_arr += x
-        y_arr += y
+        # Rotate the grid and center at (x,y):
+        tf = SimilarityTransform(rotation=np.deg2rad(rot), translation=[x, y])
+        x_arr, y_arr = tf(np.vstack([x_arr.ravel(), y_arr.ravel()]).T).T
 
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
             self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
