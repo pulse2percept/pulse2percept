@@ -159,10 +159,10 @@ class ProsthesisSystem(PrettyPrint):
             # For each electrode, find the closest pixel on the grid:
             kdtree = cKDTree(np.vstack((grid.x.ravel(), grid.y.ravel())).T)
             _, e_idx = kdtree.query(np.vstack((x, y)).T)
+            data = data.resize(grid.x.shape).data[e_idx, ...].squeeze()
             # Sample the stimulus at the correct pixel locations:
-            return Stimulus(data.resize(grid.x.shape).data[e_idx, ...],
-                            electrodes=self.electrode_names,
-                            metadata=stim.metadata)
+            return Stimulus(data, electrodes=self.electrode_names,
+                            time=stim.time, metadata=stim.metadata)
         else:
             err_str = ("Number of electrodes in the stimulus (%d) "
                        "does not match the number of electrodes in "
