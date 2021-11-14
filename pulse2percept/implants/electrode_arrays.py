@@ -3,6 +3,7 @@ import numpy as np
 from collections import OrderedDict
 from matplotlib.collections import PatchCollection
 import matplotlib.pyplot as plt
+from skimage.transform import SimilarityTransform
 
 from .electrodes import Electrode, PointSource, DiskElectrode
 from ..utils import PrettyPrint, bijective26_name
@@ -535,17 +536,9 @@ class ElectrodeGrid(ElectrodeArray):
                 # Make sure the center is at (0, 0)
                 y_arr -= 0.25 * y_spc
 
-        # Rotate the grid:
-        rot_rad = np.deg2rad(rot)
-        rotmat = np.array([np.cos(rot_rad), -np.sin(rot_rad),
-                           np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
-        xy = np.matmul(rotmat, np.vstack((x_arr.flatten(), y_arr.flatten())))
-        x_arr = xy[0, :]
-        y_arr = xy[1, :]
-
-        # Apply offset to make the grid centered at (x, y):
-        x_arr += x
-        y_arr += y
+        # Rotate the grid and center at (x,y):
+        tf = SimilarityTransform(rotation=np.deg2rad(rot), translation=[x, y])
+        x_arr, y_arr = tf(np.vstack([x_arr.ravel(), y_arr.ravel()]).T).T
 
         if issubclass(etype, DiskElectrode):
             if isinstance(kwargs['r'], (list, np.ndarray)):

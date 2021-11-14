@@ -1,11 +1,15 @@
 """`ProsthesisSystem`"""
 import numpy as np
 from copy import deepcopy
+from functools import reduce
+from scipy.spatial import cKDTree
+from skimage.transform import SimilarityTransform
 
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
 from ..stimuli import Stimulus, ImageStimulus, VideoStimulus
-from ..utils import PrettyPrint
+from ..utils import PrettyPrint, Grid2D
+from ..utils._fast_math import c_gcd
 
 
 class ProsthesisSystem(PrettyPrint):
@@ -104,7 +108,7 @@ class ProsthesisSystem(PrettyPrint):
         return stim
         :py:class:`~pulse2percept.implants.ProsthesisSystem`.
 
-        A custom method must return a 
+        A custom method must return a
         :py:class:`~pulse2percept.stimuli.Stimulus` object with the correct
         number of electrodes for the implant.
 
@@ -119,6 +123,52 @@ class ProsthesisSystem(PrettyPrint):
         ----------
         stim_out : :py:class:`~pulse2percept.stimuli.Stimulus` object
         """
+        return stim
+
+    def reshape_stim(self, stim):
+        if isinstance(stim, (ImageStimulus, VideoStimulus)):
+            # In the more general case, the implant might not have a 'shape'
+            # attribute or have a hex grid. Idea:
+            # - Fit electrode locations to a rectangular grid
+            # - Downscale the image to that grid size
+            # - Index into grid to determine electrode activation
+            data = stim.rgb2gray()
+            if hasattr(self.earray, 'rot'):
+                # We need to rotate the array & image first, otherwise we may
+                # end up with an infinitesimally small (dx,dy); for example,
+                # when a rectangular grid is rotated by 1deg:
+                tf = SimilarityTransform(rotation=np.deg2rad(self.earray.rot))
+                x, y = np.array([tf.inverse([e.x, e.y])
+                                 for e in self.electrode_objects]).squeeze().T
+                data = data.rotate(self.earray.rot)
+            else:
+                x = [e.x for e in self.electrode_objects]
+                y = [e.y for e in self.electrode_objects]
+            # Determine grid step by finding the greatest common denominator:
+            dx = abs(reduce(lambda a, b: c_gcd(a, b), np.diff(x)))
+            dy = abs(reduce(lambda a, b: c_gcd(a, b), np.diff(y)))
+            # Build a new rectangular grid:
+            try:
+                grid = Grid2D((np.min(x), np.max(x)), (np.min(y), np.max(y)),
+                              step=(dx, dy))
+            except MemoryError:
+                raise ValueError("Automatic stimulus reshaping failed. You "
+                                 "will need to resize the stimulus yourself "
+                                 "so that there is one activation value per "
+                                 "electrode.")
+            # For each electrode, find the closest pixel on the grid:
+            kdtree = cKDTree(np.vstack((grid.x.ravel(), grid.y.ravel())).T)
+            _, e_idx = kdtree.query(np.vstack((x, y)).T)
+            # Sample the stimulus at the correct pixel locations:
+            return Stimulus(data.resize(grid.x.shape).data[e_idx, ...],
+                            electrodes=self.electrode_names,
+                            metadata=stim.metadata)
+        else:
+            err_str = ("Number of electrodes in the stimulus (%d) "
+                       "does not match the number of electrodes in "
+                       "the implant (%d)." % (len(stim.electrodes),
+                                              self.n_electrodes))
+            raise ValueError(err_str)
         return stim
 
     def plot(self, annotate=False, autoscale=True, ax=None):
@@ -222,17 +272,12 @@ class ProsthesisSystem(PrettyPrint):
                 # Use electrode names as stimulus coordinates:
                 stim = Stimulus(data, electrodes=self.electrode_names)
 
+            # If the stim is larger than the number of electrodes, most commonly
+            # we're dealing with an image or video stim. In this case, we might
+            # want to try and reshape the stimulus to fit the array:
             if len(stim.electrodes) > self.n_electrodes:
-                if (isinstance(stim, (ImageStimulus, VideoStimulus)) and
-                        hasattr(self.earray, 'shape')):
-                    # Convenience function for electrode grids:
-                    stim = stim.rgb2gray().resize(self.earray.shape)
-                else:
-                    err_str = ("Number of electrodes in the stimulus (%d) "
-                               "does not match the number of electrodes in "
-                               "the implant (%d)." % (len(stim.electrodes),
-                                                      self.n_electrodes))
-                    raise ValueError(err_str)
+                stim = self.reshape_stim(stim)
+
             # Make sure all electrode names are valid:
             for electrode in stim.electrodes:
                 # Invalid index will return None:
