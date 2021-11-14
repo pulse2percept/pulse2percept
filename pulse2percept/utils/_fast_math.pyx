@@ -63,7 +63,7 @@ cdef float32 c_max(float32[::1] arr):
     return arr_max
 
 
-cdef void c_cumpow(float32 * arr_in, float32 * arr_out, int32 N, int32 exp) nogil:
+cdef void c_cumpow(float32* arr_in, float32* arr_out, int32 N, int32 exp) nogil:
     cdef:
         int32 i = 0
         float32 sum = 0
