@@ -36,7 +36,7 @@ To appreciate the difference between the available visual field maps, let us
 look at a rectangular grid in visual field coordinates:
 
 """
-# sphinx_gallery_thumbnail_number = 4
+# sphinx_gallery_thumbnail_number = 3
 
 import pulse2percept as p2p
 import matplotlib.pyplot as plt
@@ -81,7 +81,7 @@ for ax, transform in zip(axes, transforms):
 # device on the fovea and feed it a suitable stimulus:
 
 implant = p2p.implants.AlphaAMS(stim=p2p.stimuli.LogoUCSB())
-implant.stim.plot()
+implant.stim
 
 ###############################################################################
 # We can easily switch out the visual field maps by passing a ``retinotopy``
