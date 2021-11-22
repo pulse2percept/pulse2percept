@@ -181,7 +181,6 @@ class DefaultStreakModel(BaseModel):
 
 class BiphasicAxonMapSpatial(AxonMapSpatial):
     """ BiphasicAxonMapModel of [Granley2021]_ (spatial model)
-
     An AxonMapModel where phosphene brightness, size, and streak length scale
     according to amplitude, frequency, and pulse duration
 
@@ -239,11 +238,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             use ``x_range=(0, 1)`` and ``xystep=0.5``.
         grid_type : {'rectangular', 'hexagonal'}
             Whether to simulate points on a rectangular or hexagonal grid
-        retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
-            An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
-            object that provides ``ret2dva`` and ``dva2ret`` methods.
-            By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
-            used.
         loc_od, loc_od: (x,y), optional
             Location of the optic disc in degrees of visual angle. Note that the
             optic disc in a left eye will be corrected to have a negative x
@@ -268,7 +262,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         ignore_pickle: bool, optional
             A flag whether to ignore the pickle file in future calls to
             ``model.build()``.
-
     """
 
     def __init__(self, **params):
@@ -280,21 +273,27 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             self.size_model = DefaultSizeModel(self.rho)
         if self.streak_model is None:
             self.streak_model = DefaultStreakModel(self.axlambda)
+        
+        # need to set params again to ensure effect params get passed
+        for key, val in params.items():
+            if key in ['bright_model', 'size_model', 'streak_model']:
+                continue
+            setattr(self, key, val)
 
     def __getattr__(self, attr):
         # Called when normal get attribute fails
-        # If we are in the initializer, or if trying to access
+        # If we are in the initializer, or if trying to access 
         # an effects model, raise an error which is caught and causes
         # the parameter to be created.
-        if (sys._getframe(3).f_code.co_name == '__init__' and
-                "pulse2percept/models/base.py" in
-                sys._getframe(3).f_code.co_filename) or \
-                (attr in ['bright_model', 'streak_model', 'size_model']):
+        if (sys._getframe(3).f_code.co_name == '__init__' and \
+            "pulse2percept/models/base.py" in \
+            sys._getframe(3).f_code.co_filename) or \
+            (attr in ['bright_model', 'streak_model', 'size_model']):
             # We can set new class attributes in the constructor. Reaching this
             # point means the default attribute access failed - most likely
             # because we are trying to create a variable. In this case, simply
             # raise an exception:
-            # Note that this gets called from __init__ of BaseModel, not directly from
+            # Note that this gets called from __init__ of BaseModel, not directly from 
             # BiphasicAxonMap
             raise AttributeError("%s not found" % attr)
         # Check if bright/size/streak model has param
@@ -313,15 +312,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         ``model.a = X`` can be used as a shorthand to set ``model.bright_model.a``,
         etc
         """
-        try:
-            if sys._getframe(2).f_code.co_name == '__init__' or  \
-               sys._getframe(3).f_code.co_name == '__init__':
-                super().__setattr__(name, value)
-                return
-        except FreezeError:
-            pass
-        # Check whether the attribute is a part of any
-        # bright/size/streak model
         found = False
         # try to set it ourselves, but can't use get_attr
         try:
@@ -331,13 +321,26 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             found = True
         except AttributeError:
             pass
-        for m in [self.bright_model, self.size_model, self.streak_model]:
+        # Check whether the attribute is a part of any
+        # bright/size/streak model
+        if name not in ['bright_model', 'size_model', 'streak_model']:
+            for m in [self.bright_model, self.size_model, self.streak_model]:
+                try:
+                    if hasattr(m, name):
+                        setattr(m, name, value)
+                        found = True
+                except (AttributeError, FreezeError):
+                    pass
+        if not found:
             try:
-                if hasattr(m, name):
-                    setattr(m, name, value)
-                    found = True
-            except (AttributeError, FreezeError):
+                if sys._getframe(2).f_code.co_name == '__init__' or  \
+                sys._getframe(3).f_code.co_name == '__init__':
+                    super().__setattr__(name, value)
+                    print("Making a param")
+                    return
+            except FreezeError:
                 pass
+        
         if not found:
             err_str = ("'%s' not found. You cannot add attributes to %s "
                        "outside the constructor." % (name,
@@ -359,7 +362,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Use probabilistic thresholding
             'do_thresholding': False
         }
-        return {**base_params, **params}
+        params.update(base_params)
+        return params
 
     def _build(self):
         if not callable(self.bright_model):
@@ -374,7 +378,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         """Predicts the percept"""
         if not isinstance(earray, ElectrodeArray):
             raise TypeError("Implant must be of type ElectrodeArray but it is " +
-                            str(type(earray)))
+                str(type(earray)))
         if not isinstance(stim, Stimulus):
             raise TypeError(
                 "Stim must be of type Stimulus but it is " + str(type(stim)))
@@ -399,10 +403,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 np.array(bright_effects, dtype=np.float32),
                 np.array(size_effects, dtype=np.float32),
                 np.array(streak_effects, dtype=np.float32),
-                np.array([earray[e].x for e in stim.electrodes],
-                         dtype=np.float32),
-                np.array([earray[e].y for e in stim.electrodes],
-                         dtype=np.float32),
+                np.array([earray[e].x for e in stim.electrodes], dtype=np.float32),
+                np.array([earray[e].y for e in stim.electrodes], dtype=np.float32),
                 self.axon_contrib,
                 self.axon_idx_start.astype(np.uint32),
                 self.axon_idx_end.astype(np.uint32),
@@ -477,7 +479,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
 class BiphasicAxonMapModel(Model):
     """ BiphasicAxonMapModel of [Granley2021]_ (standalone model)
-
     An AxonMapModel where phosphene brightness, size, and streak length scale
     according to amplitude, frequency, and pulse duration
 
@@ -511,7 +512,6 @@ class BiphasicAxonMapModel(Model):
         Use probabilistic sigmoid thresholding, default: False
     **params: dict, optional
         Arguments to be passed to AxonMapSpatial
-
         Options:
         ---------
         axlambda: double, optional
@@ -535,11 +535,6 @@ class BiphasicAxonMapModel(Model):
             use ``x_range=(0, 1)`` and ``xystep=0.5``.
         grid_type : {'rectangular', 'hexagonal'}
             Whether to simulate points on a rectangular or hexagonal grid
-        retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
-            An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
-            object that provides ``ret2dva`` and ``dva2ret`` methods.
-            By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
-            used.
         loc_od, loc_od: (x,y), optional
             Location of the optic disc in degrees of visual angle. Note that the
             optic disc in a left eye will be corrected to have a negative x
@@ -564,7 +559,6 @@ class BiphasicAxonMapModel(Model):
         ignore_pickle: bool, optional
             A flag whether to ignore the pickle file in future calls to
             ``model.build()``.
-
     """
 
     def __init__(self, **params):

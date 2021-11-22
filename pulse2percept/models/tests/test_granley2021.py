@@ -164,6 +164,13 @@ def test_biphasicAxonMapModel(engine):
     npt.assert_equal(model.axlambda, 450)
     npt.assert_equal(model.do_thresholding, True)
 
+    # Effect model parameters can be passed even in constructor
+    model = BiphasicAxonMapModel(engine=engine, a0=5, rho=432)
+    npt.assert_equal(model.a0, 5)
+    npt.assert_equal(model.spatial.bright_model.a0, 5)
+    npt.assert_equal(model.rho, 432)
+    npt.assert_equal(model.spatial.size_model.rho, 432)
+
     # If parameter is not an effects model param, it cant be set
     with pytest.raises(FreezeError):
         model.invalid_param = 5
