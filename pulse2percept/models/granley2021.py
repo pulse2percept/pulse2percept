@@ -336,7 +336,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 if sys._getframe(2).f_code.co_name == '__init__' or  \
                 sys._getframe(3).f_code.co_name == '__init__':
                     super().__setattr__(name, value)
-                    print("Making a param")
                     return
             except FreezeError:
                 pass
