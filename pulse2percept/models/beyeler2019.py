@@ -665,14 +665,14 @@ class AxonMapSpatial(SpatialModel):
             len_axons = [a.shape[0] for a in axon_contrib]
             self.axon_idx_end = np.cumsum(len_axons)
             self.axon_idx_start = self.axon_idx_end - np.array(len_axons)
-
-        # Pickle axons along with all important parameters:
-        params = {'loc_od': self.loc_od,
-                  'n_axons': self.n_axons, 'axons_range': self.axons_range,
-                  'xrange': self.xrange, 'yrange': self.yrange,
-                  'xystep': self.xystep, 'n_ax_segments': self.n_ax_segments,
-                  'ax_segments_range': self.ax_segments_range}
-        pickle.dump((params, axons), open(self.axon_pickle, 'wb'))
+        if need_axons:
+            # Pickle axons along with all important parameters:
+            params = {'loc_od': self.loc_od,
+                    'n_axons': self.n_axons, 'axons_range': self.axons_range,
+                    'xrange': self.xrange, 'yrange': self.yrange,
+                    'xystep': self.xystep, 'n_ax_segments': self.n_ax_segments,
+                    'ax_segments_range': self.ax_segments_range}
+            pickle.dump((params, axons), open(self.axon_pickle, 'wb'))
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at specific times ``t``"""
