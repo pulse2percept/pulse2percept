@@ -40,9 +40,9 @@ class DefaultBrightModel(BaseModel):
         params = {
             'a0': 2.095,
             'a1': 0.054326,
-            'a2': 1.84,
-            'a3': 0.2,
-            'a4': 3.0986,
+            'a2': 0.1492147,
+            'a3': 0.0163851,
+            'a4': 0.25191869,
             'do_thresholding': False
         }
         return params
@@ -281,6 +281,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         if self.streak_model is None:
             self.streak_model = DefaultStreakModel(self.axlambda)
 
+        for key, val in params.items():
+            if key in ['bright_model', 'size_model', 'streak_model']:
+                continue
+            setattr(self, key, val)
+
     def __getattr__(self, attr):
         # Called when normal get attribute fails
         # If we are in the initializer, or if trying to access
@@ -305,23 +310,12 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     def __setattr__(self, name, value):
         """Called when an attribute is set
-
         This method is called when a new attribute is set(e.g.,
         ``model.a=2``). This is allowed in the constructor, but will raise a
         ``FreezeError`` elsewhere.
-
         ``model.a = X`` can be used as a shorthand to set ``model.bright_model.a``,
         etc
         """
-        try:
-            if sys._getframe(2).f_code.co_name == '__init__' or  \
-               sys._getframe(3).f_code.co_name == '__init__':
-                super().__setattr__(name, value)
-                return
-        except FreezeError:
-            pass
-        # Check whether the attribute is a part of any
-        # bright/size/streak model
         found = False
         # try to set it ourselves, but can't use get_attr
         try:
@@ -331,18 +325,31 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             found = True
         except AttributeError:
             pass
-        for m in [self.bright_model, self.size_model, self.streak_model]:
+        # Check whether the attribute is a part of any
+        # bright/size/streak model
+        if name not in ['bright_model', 'size_model', 'streak_model']:
             try:
-                if hasattr(m, name):
-                    setattr(m, name, value)
-                    found = True
+                for m in [self.bright_model, self.size_model, self.streak_model]:
+                    if hasattr(m, name):
+                        setattr(m, name, value)
+                        found = True
             except (AttributeError, FreezeError):
                 pass
+        if not found:
+            try:
+                if sys._getframe(2).f_code.co_name == '__init__' or  \
+                sys._getframe(3).f_code.co_name == '__init__':
+                    super().__setattr__(name, value)
+                    return
+            except FreezeError:
+                pass
+        
         if not found:
             err_str = ("'%s' not found. You cannot add attributes to %s "
                        "outside the constructor." % (name,
                                                      self.__class__.__name__))
             raise FreezeError(err_str)
+        
 
     def get_default_params(self):
         base_params = super(BiphasicAxonMapSpatial, self).get_default_params()

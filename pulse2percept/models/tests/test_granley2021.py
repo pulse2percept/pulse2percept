@@ -124,11 +124,11 @@ def test_biphasicAxonMapSpatial(engine):
     implant = ArgusII()
     implant.stim = Stimulus({'A4': BiphasicPulseTrain(20, 1, 1)})
     percept = model.predict_percept(implant)
-    npt.assert_equal(np.sum(percept.data > 1), 81)
-    npt.assert_equal(np.sum(percept.data > 2), 59)
-    npt.assert_equal(np.sum(percept.data > 3), 44)
-    npt.assert_equal(np.sum(percept.data > 5), 26)
-    npt.assert_equal(np.sum(percept.data > 7), 14)
+    npt.assert_equal(np.sum(percept.data > 0.0813), 81)
+    npt.assert_equal(np.sum(percept.data > 0.1626), 59)
+    npt.assert_equal(np.sum(percept.data > 0.2439), 44)
+    npt.assert_equal(np.sum(percept.data > 0.4065), 26)
+    npt.assert_equal(np.sum(percept.data > 0.5691), 14)
 
 
 @pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
@@ -163,6 +163,13 @@ def test_biphasicAxonMapModel(engine):
     npt.assert_equal(model.rho, 350)
     npt.assert_equal(model.axlambda, 450)
     npt.assert_equal(model.do_thresholding, True)
+
+    # Effect model parameters can be passed even in constructor
+    model = BiphasicAxonMapModel(engine=engine, a0=5, rho=432)
+    npt.assert_equal(model.a0, 5)
+    npt.assert_equal(model.spatial.bright_model.a0, 5)
+    npt.assert_equal(model.rho, 432)
+    npt.assert_equal(model.spatial.size_model.rho, 432)
 
     # If parameter is not an effects model param, it cant be set
     with pytest.raises(FreezeError):
