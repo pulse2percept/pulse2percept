@@ -40,9 +40,9 @@ class DefaultBrightModel(BaseModel):
         params = {
             'a0': 2.095,
             'a1': 0.054326,
-            'a2': 1.84,
-            'a3': 0.2,
-            'a4': 3.0986,
+            'a2': 0.1492147,
+            'a3': 0.0163851,
+            'a4': 0.25191869,
             'do_thresholding': False
         }
         return params
