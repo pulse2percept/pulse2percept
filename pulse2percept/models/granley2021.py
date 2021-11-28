@@ -184,6 +184,24 @@ class DefaultStreakModel(BaseModel):
             return min_f_streak
 
 
+def predict_one_point_jax(axon, brights, sizes, streaks, x, y, rho, axlambda):
+    d2_el = (axon[:, 0, None] - x)**2 + (axon[:, 1, None] - y)**2
+    intensities = brights * jnp.exp(-d2_el / (2. * rho**2 * sizes)) * (axon[:, 2, None] ** (1./streaks))
+    return jnp.sum(intensities, axis=1)
+
+def biphasic_axon_map_jax(brights, sizes, streaks, x, y, axon_segments, rho, axlambda, thresh_percept):
+    I = jnp.max(jax.vmap(predict_one_point_jax, in_axes=[0, None, None, None, None, None, None, None])(
+                            axon_segments, 
+                            brights, 
+                            sizes, 
+                            streaks, 
+                            x, y, 
+                            rho, axlambda), 
+            axis=1)
+    # I = (I > thresh_percept) * I
+    return I
+
+
 class BiphasicAxonMapSpatial(AxonMapSpatial):
     """ BiphasicAxonMapModel of [Granley2021]_ (spatial model)
 
@@ -389,22 +407,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Cache axon_contrib for fast access later
             self.axon_contrib = jax.device_put(jnp.array(self.axon_contrib), jax.devices()[0])
 
-    def predict_one_point_jax(self, axon, brights, sizes, streaks, x, y, rho, axlambda):
-        d2_el = (axon[:, 0, None] - x)**2 + (axon[:, 1, None] - y)**2
-        intensities = brights * jnp.exp(-d2_el / (2. * rho**2 * sizes)) * (axon[:, 2, None] ** (1./streaks))
-        return jnp.sum(intensities, axis=1)
-
-    def biphasic_axon_map_jax(self, brights, sizes, streaks, x, y, axon_segments, rho, axlambda, thresh_percept):
-        I = jnp.max(jax.vmap(self.predict_one_point_jax, in_axes=[0, None, None, None, None, None, None, None])(
-                                axon_segments, 
-                                brights, 
-                                sizes, 
-                                streaks, 
-                                x, y, 
-                                rho, axlambda), 
-                axis=1)
-        I = (I > thresh_percept) * I
-        return I
+    
 
     def _predict_spatial(self, earray, stim):
         """Predicts the percept"""
@@ -446,7 +449,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 self.rho, self.thresh_percept)
         else:
             start = time.time()
-            temp = jax.jit(self.biphasic_axon_map_jax)(jnp.array(bright_effects),
+            temp = jax.jit(biphasic_axon_map_jax)(jnp.array(bright_effects),
                                                                            jnp.array(size_effects),
                                                                            jnp.array(streak_effects),
                                                                            jnp.array(x), jnp.array(y),
@@ -454,8 +457,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                                                                            self.rho, 
                                                                            self.axlambda, 
                                                                            self.thresh_percept)
-            print("Jax took {} s".format(time.time() - start))
-            return temp
+            t = time.time() - start
+            return t * 1000
 
 
     def predict_percept(self, implant, t_percept=None):
@@ -517,6 +520,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             stim = Stimulus(stim)
             resp = np.zeros(list(self.grid.x.shape) + [n_time])
             # Response goes in first frame
+            if self.engine == 'jax':
+                return self._predict_spatial(implant.earray, stim)
             resp[:, :, 0] = self._predict_spatial(
                 implant.earray, stim).reshape(self.grid.x.shape)
         return Percept(resp, space=self.grid, time=t_percept,
