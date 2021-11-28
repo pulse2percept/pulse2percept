@@ -395,9 +395,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         return jnp.sum(intensities, axis=1)
 
     def biphasic_axon_map_jax(self, brights, sizes, streaks, x, y, axon_segments, rho, axlambda, thresh_percept):
-        I = jnp.max(jax.jit(
-                        jax.vmap(
-                            self.predict_one_point_jax, in_axes=[0, None, None, None, None, None, None, None]))(
+        I = jnp.max(jax.vmap(self.predict_one_point_jax, in_axes=[0, None, None, None, None, None, None, None])(
                                 axon_segments, 
                                 brights, 
                                 sizes, 
