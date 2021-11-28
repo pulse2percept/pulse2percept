@@ -1,4 +1,5 @@
 """`BiphasicAxonMapModel`"""
+from functools import partial
 import numpy as np
 import sys
 import time
@@ -14,7 +15,7 @@ from ._granley2021 import fast_biphasic_axon_map
 
 try:
     import os
-    os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]='false'
+    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"]='.99'
     import jax
     import jax.numpy as jnp
     from jax import jit, vmap, lax
@@ -142,7 +143,7 @@ class DefaultSizeModel(BaseModel):
         """
         min_f_size = self.min_rho**2 / self.rho**2
         F_size = self.a5 * amp * self.scale_threshold(pdur) + self.a6
-        return np.maximum(F_size, min_f_size)
+        return jnp.maximum(F_size, min_f_size)
 
 
 class DefaultStreakModel(BaseModel):
@@ -182,7 +183,7 @@ class DefaultStreakModel(BaseModel):
         """
         min_f_streak = self.min_lambda**2 / self.axlambda ** 2
         F_streak = self.a9 - self.a7 * pdur ** self.a8
-        return np.maximum(F_streak, min_f_streak)
+        return jnp.maximum(F_streak, min_f_streak)
 
 
 def predict_one_point_jax(axon, eparams, x, y, rho, axlambda):
@@ -192,6 +193,7 @@ def predict_one_point_jax(axon, eparams, x, y, rho, axlambda):
 
 @jit
 def biphasic_axon_map_jax(eparams, x, y, axon_segments, rho, axlambda, thresh_percept):
+
     I = jnp.max(jax.vmap(predict_one_point_jax, in_axes=[0, None, None, None, None, None])(
                             axon_segments, 
                             eparams, x, y, 
@@ -434,7 +436,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                                      self.axon_contrib,
                                      self.rho, 
                                      self.axlambda, 
-                                     self.thresh_percept).block_until_ready()
+                                     self.thresh_percept)
         return resp
     
     def _predict_spatial(self, earray, stim):
@@ -478,6 +480,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         else:
             return self._predict_spatial_jax(elec_params[:, :3], x, y)
 
+    @partial(jit, static_argnums=[0])
     def _predict_spatial_batched(self, elec_params, x, y):
         """ A batched version of _predict_spatial_jax
         Parameters:
@@ -493,14 +496,16 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         bright_effects = self.bright_model(elec_params[:, :, 0], elec_params[:, :, 1], elec_params[:, :, 2])
         size_effects = self.size_model(elec_params[:, :, 0], elec_params[:, :, 1], elec_params[:, :, 2])
         streak_effects = self.streak_model(elec_params[:, :, 0], elec_params[:, :, 1], elec_params[:, :, 2])
-        eparams = np.stack([bright_effects, size_effects, streak_effects], axis=2)
+        eparams = jnp.stack([bright_effects, size_effects, streak_effects], axis=2)
         
-        resps = vmap(biphasic_axon_map_jax, in_axes=[0, None, None, None, None, None, None])(
-                                            eparams, x, y,
+        def predict_one(e_params):
+            return biphasic_axon_map_jax(e_params, x, y,
                                             self.axon_contrib,
                                             self.rho, 
                                             self.axlambda, 
-                                            self.thresh_percept).block_until_ready()
+                                            self.thresh_percept)
+        resps = lax.map(predict_one, eparams)
+
         return resps
 
 
