@@ -5,3 +5,4 @@ ipython
 sphinx_version_warning
 pandas
 h5py
+docutils<0.18

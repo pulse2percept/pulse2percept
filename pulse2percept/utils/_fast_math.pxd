@@ -13,10 +13,14 @@ ctypedef cnp.int32_t int32
 
 cdef float32 c_fmax(float32 a, float32 b) nogil
 
+cdef float32 c_fmin(float32 a, float32 b) nogil
+
 cdef bool c_isclose(float32 a, float32 b, float32 rel_tol=*,
                     float32 abs_tol=*) nogil
 
 cdef float32 c_expit(float32 x) nogil
+
+cpdef float32 c_gcd(float32 a, float32 b, float32 rtol=*, float atol=*) nogil
 
 # --- ARRAY FUNCTIONS -------------------------------------------------------- #
 

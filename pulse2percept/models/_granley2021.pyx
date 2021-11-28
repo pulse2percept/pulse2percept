@@ -1,29 +1,31 @@
+from libc.math cimport(pow as c_pow, exp as c_exp, tanh as c_tanh,
+                       sin as c_sin, cos as c_cos, fabs as c_abs,
+                       isnan as c_isnan)
+from cython.parallel import prange
+from cython import cdivision  # for modulo operator
 import numpy as np
 cimport numpy as cnp
 cimport cython
-from cython import cdivision  # for modulo operator
-from cython.parallel import prange
-from libc.math cimport(pow as c_pow, exp as c_exp, tanh as c_tanh,
-                       sin as c_sin, cos as c_cos, fabs as c_abs)
 
 ctypedef cnp.float32_t float32
 ctypedef cnp.uint32_t uint32
 ctypedef cnp.int32_t int32
 cdef float32 deg2rad = 3.14159265358979323846 / 180.0
 
+
 @cython.boundscheck(False)
 @cdivision(True)
 cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
-                    const float32[::1] bright_model_el,
-                    const float32[::1] size_model_el,
-                    const float32[::1] streak_model_el,
-                    const float32[::1] xel,
-                    const float32[::1] yel,
-                    const float32[:, ::1] axon_segments,
-                    const uint32[::1] idx_start,
-                    const uint32[::1] idx_end,
-                    float32 rho,
-                    float32 thresh_percept):
+                             const float32[::1] bright_model_el,
+                             const float32[::1] size_model_el,
+                             const float32[::1] streak_model_el,
+                             const float32[::1] xel,
+                             const float32[::1] yel,
+                             const float32[:, ::1] axon_segments,
+                             const uint32[::1] idx_start,
+                             const uint32[::1] idx_end,
+                             float32 rho,
+                             float32 thresh_percept):
     """Fast spatial response of the biphasic axon map model
     Predicts representative percept using entire time interval, 
     and returns this percept repeated at each time point
@@ -61,7 +63,7 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
         int32 idx_el, idx_time, idx_space, idx_ax, idx_bright
         int32 n_el, n_time, n_space, n_ax, n_bright
         float32[::1] bright
-        float32 px_bright, xdiff, ydiff, r2, amp, gauss_el, gauss_soma 
+        float32 px_bright, xdiff, ydiff, r2, amp, gauss_el, gauss_soma
         float32 sgm_bright, bright_effect, size_effect, streak_effect
         int32 i0, i1
 
@@ -92,6 +94,9 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
                 size_effect = size_model_el[idx_el]
                 streak_effect = streak_model_el[idx_el]
                 if c_abs(amp) > 0:
+                    if (c_isnan(axon_segments[idx_ax, 0]) or
+                            c_isnan(axon_segments[idx_ax, 1])):
+                        continue
                     # Calculate the distance between this axon segment and
                     # the center of the stimulating electrode:
                     xdiff = axon_segments[idx_ax, 0] - xel[idx_el]
@@ -107,9 +112,10 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
                     #   `build` and stored in `axon_segments[idx_ax, 2]`
                     #   precalculated value does not include streak model
                     #   effect, which must be added now
-                    gauss_soma = c_pow(axon_segments[idx_ax, 2], 1 / streak_effect)
+                    gauss_soma = c_pow(
+                        axon_segments[idx_ax, 2], 1 / streak_effect)
                     sgm_bright = (sgm_bright +
-                                    bright_effect * gauss_el * gauss_soma)
+                                  bright_effect * gauss_el * gauss_soma)
             # After summing up the currents from all the electrodes, we
             # compare the brightness of the segment (`sgm_bright`) to the
             # previously brightest segment. The brightest segment overall

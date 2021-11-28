@@ -113,6 +113,9 @@ def scale_image(img, scaling_factor):
     if img.ndim < 2 or img.ndim > 3:
         raise ValueError("Only 2D and 3D images are allowed, not "
                          "%dD." % img.ndim)
+    if img.ndim == 3 and img.shape[-1] > 3:
+        raise ValueError("Only RGB and grayscale images are allowed, not "
+                         "%d-channel images." % img.shape[-1])
     if scaling_factor <= 0:
         raise ValueError("Scaling factor must be greater than zero")
     # Calculate center of mass:

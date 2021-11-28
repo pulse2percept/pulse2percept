@@ -3,10 +3,12 @@ import collections as coll
 import pytest
 import numpy.testing as npt
 from matplotlib.patches import Circle
+from skimage.measure import label, regionprops
 
 from pulse2percept.implants import (PointSource, ElectrodeArray, ElectrodeGrid,
                                     ProsthesisSystem)
-from pulse2percept.stimuli import Stimulus
+from pulse2percept.stimuli import Stimulus, ImageStimulus, VideoStimulus
+from pulse2percept.models import ScoreboardModel
 
 
 def test_ProsthesisSystem():
@@ -74,3 +76,30 @@ def test_ProsthesisSystem_stim():
         implant.stim = [1] * implant.n_electrodes
     implant.activate('all')
     implant.stim = {'H4': 1}
+
+
+@pytest.mark.parametrize('rot', (0, 30, 92))
+@pytest.mark.parametrize('gtype', ('hex', 'rect'))
+@pytest.mark.parametrize('n_frames', (1, 3, 4))
+def test_ProsthesisSystem_reshape_stim(rot, gtype, n_frames):
+    implant = ProsthesisSystem(ElectrodeGrid((10, 10), 30, rot=rot, type=gtype))
+    # Smoke test the automatic reshaping:
+    n_px = 21
+    implant.stim = ImageStimulus(np.ones((n_px, n_px, n_frames)).squeeze())
+    npt.assert_equal(implant.stim.data.shape, (implant.n_electrodes, 1))
+    npt.assert_equal(implant.stim.time, None)
+    implant.stim = VideoStimulus(np.ones((n_px, n_px, 3 * n_frames)),
+                                 time=2 * np.arange(3 * n_frames))
+    npt.assert_equal(implant.stim.data.shape,
+                     (implant.n_electrodes, 3 * n_frames))
+    npt.assert_equal(implant.stim.time, 2 * np.arange(3 * n_frames))
+
+    # Verify that a horizontal stimulus will always appear horizontally, even if
+    # the device is rotated:
+    data = np.zeros((50, 50))
+    data[20:-20, 10:-10] = 1
+    implant.stim = ImageStimulus(data)
+    model = ScoreboardModel(xrange=(-1, 1), yrange=(-1, 1), rho=30, xystep=0.02)
+    model.build()
+    percept = label(model.predict_percept(implant).data.squeeze().T > 0.2)
+    npt.assert_almost_equal(regionprops(percept)[0].orientation, 0, decimal=1)
