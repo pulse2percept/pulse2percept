@@ -53,8 +53,7 @@ class DefaultBrightModel(BaseModel):
             'a1': 0.054326,
             'a2': 0.1492147,
             'a3': 0.0163851,
-            'a4': 0.25191869,
-            'do_thresholding': False
+            'a4': 0.25191869
         }
         return params
 
@@ -73,25 +72,13 @@ class DefaultBrightModel(BaseModel):
         """
         Main function to be called by BiphasicAxonMapModel
         Outputs value by which brightness contribution for each electrode should
-        be scaled by (F_bright)
+        be scaled by (F_bright).
+        Must support batching (freq, amp, pdur may be arrays)
         """
         # Scale amp according to pdur (Eq 3 in paper) and then calculate F_{bright}
         F_bright = self.predict_freq_amp(amp * self.scale_threshold(pdur), freq)
 
         return F_bright
-
-        if not self.do_thresholding:
-            return F_bright
-        else:
-            # If thresholding is enabled, phosphene only has a chance of appearing
-            # p = -1/96 + 97 / (96(1+96 exp(-ln(98)amp)))
-            # Sigmoid with p[0] = 0, p[1] = 0.5, p[2] = 0.99
-            p = -0.01041666666667 + 1.0104166666666667 / (
-                1+96 * np.exp(-4.584967478670572 * amp * self.scale_threshold(pdur)))
-            if np.random.random() < p:
-                return F_bright
-            else:
-                return 0
 
 
 class DefaultSizeModel(BaseModel):
@@ -140,6 +127,7 @@ class DefaultSizeModel(BaseModel):
         """
         Main function to be called by BiphasicAxonMapModel
         Outputs value for each electrode that rho should be scaled by (F_size)
+        Must support batching (freq, amp, pdur may be arrays)
         """
         min_f_size = self.min_rho**2 / self.rho**2
         F_size = self.a5 * amp * self.scale_threshold(pdur) + self.a6
@@ -180,6 +168,7 @@ class DefaultStreakModel(BaseModel):
         """
         Main function to be called by BiphasicAxonMapModel
         Outputs value for each electrode that lambda should be scaled by (F_streak)
+        Must support batching (freq, amp, pdur may be arrays)
         """
         min_f_streak = self.min_lambda**2 / self.axlambda ** 2
         F_streak = self.a9 - self.a7 * pdur ** self.a8
@@ -233,8 +222,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     streak_model: callable, optional
         Model used to modulate percept streak length with amplitude, frequency,
         and pulse duration
-    do_thresholding: boolean
-        Use probabilistic sigmoid thresholding, default: False
     **params: optional
         Additional params for AxonMapModel. 
 
@@ -296,8 +283,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     def __init__(self, **params):
         super(BiphasicAxonMapSpatial, self).__init__(**params)
         if self.bright_model is None:
-            self.bright_model = DefaultBrightModel(
-                do_thresholding=self.do_thresholding)
+            self.bright_model = DefaultBrightModel()
         if self.size_model is None:
             self.size_model = DefaultSizeModel(self.rho)
         if self.streak_model is None:
@@ -389,8 +375,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Callable model used to modulate percept streak length with amplitude,
             # frequency, and pulse duration
             'streak_model': None,
-            # Use probabilistic thresholding
-            'do_thresholding': False
         }
         return {**base_params, **params}
 
@@ -405,20 +389,22 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         if self.engine == 'jax':
             # Cache axon_contrib for fast access later
             self.axon_contrib = jax.device_put(jnp.array(self.axon_contrib), jax.devices()[0])
-
+    
     def _predict_spatial_jax(self, elec_params, x, y):
         """
-        A stripped version of predict_percept that takes only electrode parameters, and returns only a numpy array
+        A stripped version of predict_percept that takes only electrode parameters, 
+        and returns only a numpy array
         This is a better function to use when the stimulus is guaranteed to be safe,
-        and the percept object isn't used (e.g. inside a neural network), just the data in the percept
+        and the percept object isn't used, just the data in the percept (e.g. inside a neural network)
 
         To jit / differentiate this function:
         - Make effect models jit-able (maximum operation)
         - remove state (pass in axon_contib, rho, lambda, thresh_percept) (optional, speeds up)
+        - change np to jnp
 
         Parameters:
         ------------
-        elec_params : np.array with shape (batch_size, n_electrodes, 3)
+        elec_params : np.array with shape (n_electrodes, 3)
             The 3 columns are freq, amp, pdur for each electrode
         x, y: np.array with shape (n_electrodes)
             x and y coordinates of electrodes
@@ -427,9 +413,15 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         ------------
         resp : np.array() representing the resulting percept, shape (:, 1)
         """
-        bright_effects = self.bright_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2])
-        size_effects = self.size_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2])
-        streak_effects = self.streak_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2])
+        bright_effects = np.array(self.bright_model(elec_params[:, 0], 
+                                           elec_params[:, 1], 
+                                           elec_params[:, 2])).reshape((-1))
+        size_effects = np.array(self.size_model(elec_params[:, 0], 
+                                       elec_params[:, 1], 
+                                       elec_params[:, 2])).reshape((-1))
+        streak_effects = np.array(self.streak_model(elec_params[:, 0], 
+                                           elec_params[:, 1], 
+                                           elec_params[:, 2])).reshape((-1))
         eparams = np.stack([bright_effects, size_effects, streak_effects], axis=1)
         
         resp = biphasic_axon_map_jax(eparams, x, y,
@@ -464,11 +456,15 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         y = np.array(y, dtype=np.float32)
 
         if self.engine != 'jax':
-            bright_effects = self.bright_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2])
-            size_effects = self.size_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2])
-            streak_effects = self.streak_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2])
+            bright_effects = np.array(self.bright_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]), 
+                                    dtype=np.float32).reshape((-1))
+            size_effects = np.array(self.size_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]),
+                                    dtype=np.float32).reshape((-1))
+            streak_effects = np.array(self.streak_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]), 
+                                    dtype=np.float32).reshape((-1))
+            amps = np.array(elec_params[:, 1], dtype=np.float32).reshape((-1))
             return fast_biphasic_axon_map(
-                elec_params[:, 1],
+                amps,
                 bright_effects,
                 size_effects,
                 streak_effects,
@@ -493,9 +489,15 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         ------------
         resp : np.array() representing the resulting percept, shape (:, 1)
         """
-        bright_effects = self.bright_model(elec_params[:, :, 0], elec_params[:, :, 1], elec_params[:, :, 2])
-        size_effects = self.size_model(elec_params[:, :, 0], elec_params[:, :, 1], elec_params[:, :, 2])
-        streak_effects = self.streak_model(elec_params[:, :, 0], elec_params[:, :, 1], elec_params[:, :, 2])
+        bright_effects = self.bright_model(elec_params[:, :, 0], 
+                                           elec_params[:, :, 1], 
+                                           elec_params[:, :, 2])
+        size_effects = self.size_model(elec_params[:, :, 0], 
+                                       elec_params[:, :, 1], 
+                                       elec_params[:, :, 2])
+        streak_effects = self.streak_model(elec_params[:, :, 0], 
+                                           elec_params[:, :, 1], 
+                                           elec_params[:, :, 2])
         eparams = jnp.stack([bright_effects, size_effects, streak_effects], axis=2)
         
         def predict_one(e_params):

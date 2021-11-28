@@ -1,5 +1,3 @@
-from multiprocessing import Value
-from typing import Type
 from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
 from pulse2percept.utils.base import FreezeError
@@ -12,15 +10,9 @@ from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import Stimulus, BiphasicPulseTrain
 from pulse2percept.models import BiphasicAxonMapModel, BiphasicAxonMapSpatial, \
     AxonMapSpatial
-from pulse2percept.utils.testing import assert_warns_msg
 
 
 def test_effects_models():
-    # Test thresholding on bright model
-    model = DefaultBrightModel(do_thresholding=True)
-    # Technically this could fail, but the probability is negliglible
-    npt.assert_almost_equal(model(20, 0.01, 0.45), 0)
-
     # Test rho scaling on size model
     model = DefaultSizeModel(200)
     npt.assert_almost_equal(
@@ -57,12 +49,12 @@ def test_biphasicAxonMapSpatial(engine):
 
     model = BiphasicAxonMapModel(engine=engine, xystep=2).build()
     # Jax not implemented yet
-    if engine == 'jax':
-        with pytest.raises(NotImplementedError):
-            implant = ArgusII()
-            implant.stim = Stimulus({'A5': BiphasicPulseTrain(20, 1, 0.45)})
-            percept = model.predict_percept(implant)
-        return
+    # if engine == 'jax':
+    #     with pytest.raises(NotImplementedError):
+    #         implant = ArgusII()
+    #         implant.stim = Stimulus({'A5': BiphasicPulseTrain(20, 1, 0.45)})
+    #         percept = model.predict_percept(implant)
+    #     return
 
     # Only accepts biphasic pulse trains with no delay dur
     implant = ArgusI(stim=np.ones(16))
@@ -136,7 +128,7 @@ def test_biphasicAxonMapModel(engine):
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
-                  'loc_od': (5, 6), 'do_thresholding': False}
+                  'loc_od': (5, 6)}
     model = BiphasicAxonMapModel(engine=engine)
     for param in set_params:
         npt.assert_equal(hasattr(model.spatial, param), True)
@@ -156,13 +148,10 @@ def test_biphasicAxonMapModel(engine):
     # Same name, both need to be changed
     model.rho = 350
     model.axlambda = 450
-    model.do_thresholding = True
     npt.assert_equal(model.spatial.size_model.rho, 350)
     npt.assert_equal(model.spatial.streak_model.axlambda, 450)
-    npt.assert_equal(model.spatial.bright_model.do_thresholding, True)
     npt.assert_equal(model.rho, 350)
     npt.assert_equal(model.axlambda, 450)
-    npt.assert_equal(model.do_thresholding, True)
 
     # Effect model parameters can be passed even in constructor
     model = BiphasicAxonMapModel(engine=engine, a0=5, rho=432)
