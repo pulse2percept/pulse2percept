@@ -11,6 +11,11 @@ from pulse2percept.stimuli import Stimulus, BiphasicPulseTrain
 from pulse2percept.models import BiphasicAxonMapModel, BiphasicAxonMapSpatial, \
     AxonMapSpatial
 
+try:
+    import jax
+    has_jax = True
+except ImportError:
+    has_jax = False
 
 def test_effects_models():
     # Test rho scaling on size model
@@ -43,19 +48,14 @@ def test_effects_models():
 
 @pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
 def test_biphasicAxonMapSpatial(engine):
+    if engine == 'jax' and not has_jax:
+        pytest.skip("Jax not installed")
+
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
         BiphasicAxonMapSpatial(axlambda=9).build()
 
     model = BiphasicAxonMapModel(engine=engine, xystep=2).build()
-    # Jax not implemented yet
-    # if engine == 'jax':
-    #     with pytest.raises(NotImplementedError):
-    #         implant = ArgusII()
-    #         implant.stim = Stimulus({'A5': BiphasicPulseTrain(20, 1, 0.45)})
-    #         percept = model.predict_percept(implant)
-    #     return
-
     # Only accepts biphasic pulse trains with no delay dur
     implant = ArgusI(stim=np.ones(16))
     with pytest.raises(TypeError):
@@ -122,6 +122,43 @@ def test_biphasicAxonMapSpatial(engine):
     npt.assert_equal(np.sum(percept.data > 0.4065), 26)
     npt.assert_equal(np.sum(percept.data > 0.5691), 14)
 
+
+def test_predict_spatial_jax():
+    # ensure jax predict spatial is equal to normal
+    if not has_jax:
+        pytest.skip("Jax not installed")
+    model1 = BiphasicAxonMapModel(engine='jax')
+    model2 = BiphasicAxonMapModel(engine='cython')
+    model1.build()
+    model2.build()
+    implant = ArgusII()
+    implant.stim = {'A5' : BiphasicPulseTrain(25, 4, 0.45),
+                    'C7' : BiphasicPulseTrain(50, 2.5, 0.75)}
+    p1 = model1.predict_percept(implant)
+    p2 = model2.predict_percept(implant)
+    npt.assert_almost_equal(p1.data, p2.data)
+
+@pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+def test_predict_batched(engine):
+    # Allows mix of valid Stimulus types
+    stims = [{'A5' : BiphasicPulseTrain(25, 4, 0.45),
+              'C7' : BiphasicPulseTrain(50, 2.5, 0.75)},
+             {'B4' : BiphasicPulseTrain(3, 1, 0.32)},
+             Stimulus({'F3' : BiphasicPulseTrain(12, 3, 1.2)})]
+    implant = ArgusII()
+    model = BiphasicAxonMapModel(engine=engine, xystep=2)
+    # Import error if we dont have jax
+    if engine != 'jax':
+        with pytest.raises(ImportError):
+            model.predict_percept_batched(implant, stims)
+    
+    percepts_batched = model.predict_percept_batched(implant, stims)
+    percepts_serial = []
+    for stim in stims:
+        implant.stim = stim
+        percepts_serial.append(model.predict_percept(implant))
+    for p1, p2 in zip(percepts_batched, percepts_serial):
+        npt.assert_almost_equal(p1.data, p2.data)
 
 @pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
 def test_biphasicAxonMapModel(engine):

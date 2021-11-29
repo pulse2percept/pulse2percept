@@ -14,7 +14,6 @@ from ._granley2021 import fast_biphasic_axon_map
 
 try:
     import os
-    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"]='.99'
     import jax
     import jax.numpy as jnp
     from jax import jit, vmap, lax
@@ -624,7 +623,7 @@ def predict_percept_batched(self, implant, stims, t_percept=None):
             A list of Percept objects whose ``data`` container has dimensions Y x X x 1.
     """
     if self.engine != 'jax':
-        raise NotImplementedError("Batched predict percept is not supported unless engine is jax")
+        raise ImportError("Batched predict percept is not supported unless engine is jax")
     #make sure all stimuli are BiphasicPulseTrains
     for stim in stims:
         if not isinstance(stim, BiphasicPulseTrain):
