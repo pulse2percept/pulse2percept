@@ -23,12 +23,14 @@ except ImportError:
     has_jax = False
 
 # Need conditional decorator for jax
-def cond_decorator(dec, condition):
-    def decorator(fn):
-        if not condition:
-            return fn
-        return dec(fn)
-    return decorator
+def cond_jit(fn, static_argnums=None):
+    if has_jax:
+        if static_argnums is None:
+            return jit(fn)
+        else:
+            return jit(fn, static_argnums=static_argnums)
+    else:
+        return fn
 
 class DefaultBrightModel(BaseModel):
     """
@@ -140,7 +142,7 @@ class DefaultSizeModel(BaseModel):
         if has_jax:
             return jnp.maximum(F_size, min_f_size)
         else:
-            return np.maximum(F_size)
+            return np.maximum(F_size, min_f_size)
 
 
 class DefaultStreakModel(BaseModel):
@@ -192,7 +194,7 @@ def predict_one_point_jax(axon, eparams, x, y, rho, axlambda):
     intensities = eparams[:, 0] * jnp.exp(-d2_el / (2. * rho**2 * eparams[:, 1])) * (axon[:, 2, None] ** (1./eparams[:, 2]))
     return jnp.sum(intensities, axis=1)
 
-@cond_decorator(jit, has_jax)
+@cond_jit
 def biphasic_axon_map_jax(eparams, x, y, axon_segments, rho, axlambda, thresh_percept):
 
     I = jnp.max(jax.vmap(predict_one_point_jax, in_axes=[0, None, None, None, None, None])(
@@ -300,11 +302,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             self.size_model = DefaultSizeModel(self.rho)
         if self.streak_model is None:
             self.streak_model = DefaultStreakModel(self.axlambda)
-        if self.engine == 'jax' and not has_jax:
-            raise ImportError("Engine was chosen as jax, but jax is not installed. "
-                              "You can install it with 'pip install \"jax[cpu]\"' for cpu "
-                              "or following https://github.com/google/jax#installation for gpu")
-
         for key, val in params.items():
             if key in ['bright_model', 'size_model', 'streak_model']:
                 continue
@@ -374,7 +371,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                                                      self.__class__.__name__))
             raise FreezeError(err_str)
         
-
     def get_default_params(self):
         base_params = super(BiphasicAxonMapSpatial, self).get_default_params()
         params = {
@@ -397,12 +393,17 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             raise TypeError("size_model needs to be callable")
         if not callable(self.streak_model):
             raise TypeError("streak_model needs to be callable")
+        if self.engine == 'jax' and not has_jax:
+            raise ImportError("Engine was chosen as jax, but jax is not installed. "
+                              "You can install it with 'pip install \"jax[cpu]\"' for cpu "
+                              "or following https://github.com/google/jax#installation for gpu")
+                              
         super(BiphasicAxonMapSpatial, self)._build()
         if self.engine == 'jax':
             # Cache axon_contrib for fast access later
             self.axon_contrib = jax.device_put(jnp.array(self.axon_contrib), jax.devices()[0])
     
-    @cond_decorator(partial(jit, static_argnums=0), has_jax)
+    @partial(cond_jit, static_argnums=[0])
     def _predict_spatial_jax(self, elec_params, x, y):
         """
         A stripped version of predict_percept that takes only electrode parameters, 
@@ -489,7 +490,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         else:
             return self._predict_spatial_jax(elec_params[:, :3], x, y)
 
-    @cond_decorator(partial(jit, static_argnums=[0]), has_jax)
+    @partial(cond_jit, static_argnums=[0])
     def _predict_spatial_batched(self, elec_params, x, y):
         """ A batched version of _predict_spatial_jax
         Parameters:
