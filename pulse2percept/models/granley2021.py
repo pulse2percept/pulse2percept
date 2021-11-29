@@ -106,7 +106,7 @@ class DefaultSizeModel(BaseModel):
         F_size = a5*scaled_amp + a6 
     """
 
-    def __init__(self, rho, engine, **params):
+    def __init__(self, rho, engine="serial", **params):
         super(DefaultSizeModel, self).__init__(**params)
         self.rho = rho
         self.engine = engine
@@ -159,7 +159,7 @@ class DefaultStreakModel(BaseModel):
         F_streak = -a7*pdur^a8 + a9
     """
 
-    def __init__(self, axlambda, engine, **params):
+    def __init__(self, axlambda, engine='serial', **params):
         super(DefaultStreakModel, self).__init__(**params)
         self.axlambda = axlambda
         self.engine = engine
