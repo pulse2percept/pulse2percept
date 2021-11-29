@@ -3,7 +3,7 @@ from functools import partial
 import numpy as np
 import sys
 
-from . import AxonMapModel, AxonMapSpatial, TemporalModel, Model
+from . import AxonMapSpatial, TemporalModel, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
 from ..percepts import Percept
@@ -13,7 +13,6 @@ from ._granley2021 import fast_biphasic_axon_map
 
 
 try:
-    import os
     import jax
     import jax.numpy as jnp
     from jax import jit, vmap, lax
