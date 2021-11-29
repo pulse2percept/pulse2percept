@@ -61,7 +61,7 @@ class DefaultBrightModel(BaseModel):
             'a1': 0.054326,
             'a2': 0.1492147,
             'a3': 0.0163851,
-            'a4': 0.25191869
+            'a4': 0
         }
         return params
 
@@ -601,85 +601,86 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         return Percept(resp, space=self.grid, time=t_percept,
                        metadata={'stim': stim.metadata})
 
-def predict_percept_batched(self, implant, stims, t_percept=None):
-    """
-    Batched version of predict_percept
-    Only supported with jax engine
+    def predict_percept_batched(self, implant, stims, t_percept=None):
+        """
+        Batched version of predict_percept
+        Only supported with jax engine
 
-    Parameters
-        ----------
-        implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
-            A valid prosthesis system. 
-        stims : list of stimuli
-            A percept will be predicted for each stimulus. Each stimulus
-            must be a collection of :py:class:`~pulse2percept.stimuli.BiphasicPulseTrains'
-        t_percept: float or list of floats, optional
-            The time points at which to output a percept (ms).
-            If None, ``implant.stim.time`` is used.
+        Parameters
+            ----------
+            implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
+                A valid prosthesis system. 
+            stims : list of stimuli
+                A percept will be predicted for each stimulus. Each stimulus
+                must be a collection of :py:class:`~pulse2percept.stimuli.BiphasicPulseTrains'
+            t_percept: float or list of floats, optional
+                The time points at which to output a percept (ms).
+                If None, ``implant.stim.time`` is used.
 
-        Returns
-        -------
-        percepts: list of :py:class:`~pulse2percept.models.Percept`
-            A list of Percept objects whose ``data`` container has dimensions Y x X x 1.
-    """
-    if self.engine != 'jax':
-        raise ImportError("Batched predict percept is not supported unless engine is jax")
-    #make sure all stimuli are BiphasicPulseTrains
-    for stim in stims:
-        if not isinstance(stim, BiphasicPulseTrain):
-            # Could still be a stimulus where each electrode has a biphasic pulse train
-            # or a 0 stimulus
-            for i, (ele, params) in enumerate(stim.metadata
-                                                ['electrodes'].items()):
-                if (params['type'] != BiphasicPulseTrain or
-                        params['metadata']['delay_dur'] != 0) and \
-                        np.any(stim[i]):
-                    raise TypeError(
-                        "All stimuli must be BiphasicPulseTrains with no " +
-                        "delay dur (Failing electrode: %s)" % (ele))
-    
-    if not self.is_built:
-        raise NotBuiltError("Yout must call ``build`` first.")
-    if not isinstance(implant, ProsthesisSystem):
-        raise TypeError(("'implant' must be a ProsthesisSystem object, "
-                            "not %s.") % type(implant))
-    if implant.eye != self.eye:
-        raise ValueError(("The implant is in %s but the model was "
-                            "built for %s.") % (implant.eye,
-                                                self.eye))
-    
-    # Currently all stimuli must have same electrodes
-    all_elecs = list(set().union(*[s.metadata['electrodes'].keys() for s in stim]))
-    max_elecs = len(all_elecs)
-    # Compute stimulus parameters for all electrodes
-    eparams = np.zeros((len(stims), max_elecs, 3))
-    for idx_stim, stim in enumerate(stims):
-        if stim is None:
-            continue
-        stim = Stimulus(stim)
-        for elec in stim.metadata['electrodes'].keys():
-            idx_elec = all_elecs.index(elec)
-            elec_metadata = stim.metadata[elec]
-            eparams[idx_stim, idx_elec, 0] = elec_metadata['freq']
-            eparams[idx_stim, idx_elec, 1] = elec_metadata['amp']
-            eparams[idx_stim, idx_elec, 2] = elec_metadata['phase_dur']
-    x = [implant.earray[elec].x for elec in all_elecs]
-    y = [implant.earray[elec].y for elec in all_elecs]
-    # Predict percepts (returns only numpy array)
-    percepts_data = self._predict_spatial_batched(eparams, x, y)
-    # Convert into percepts
-    percepts = []
-    for idx_percept, pdata in enumerate(percepts_data):
-        if t_percept is None:
-            n_time = 1
-        else:
-            n_time = len(t_percept)
-        resp = np.zeros(list(self.grid.x.shape) + [n_time])
-        # Response goes in first frame
-        resp[:, :, 0] = pdata.reshape(self.grid.x.shape)
-        percepts.append(Percept(resp, space=self.grid, time=t_percept,
-                       metadata={'stim': stims[idx_percept].metadata}))
-    return percepts
+            Returns
+            -------
+            percepts: list of :py:class:`~pulse2percept.models.Percept`
+                A list of Percept objects whose ``data`` container has dimensions Y x X x 1.
+        """
+        if self.engine != 'jax':
+            raise ImportError("Batched predict percept is not supported unless engine is jax")
+        
+        stims = [Stimulus(s) for s in stims]
+        # Make sure all stimuli are BiphasicPulseTrains
+        for stim in stims:
+            if not isinstance(stim, BiphasicPulseTrain):
+                # Could still be a stimulus where each electrode has a biphasic pulse train
+                # or a 0 stimulus
+                for i, (ele, params) in enumerate(stim.metadata
+                                                    ['electrodes'].items()):
+                    if (params['type'] != BiphasicPulseTrain or
+                            params['metadata']['delay_dur'] != 0) and \
+                            np.any(stim[i]):
+                        raise TypeError(
+                            "All stimuli must be BiphasicPulseTrains with no " +
+                            "delay dur (Failing electrode: %s)" % (ele))
+        
+        if not self.is_built:
+            raise NotBuiltError("Yout must call ``build`` first.")
+        if not isinstance(implant, ProsthesisSystem):
+            raise TypeError(("'implant' must be a ProsthesisSystem object, "
+                                "not %s.") % type(implant))
+        if implant.eye != self.eye:
+            raise ValueError(("The implant is in %s but the model was "
+                                "built for %s.") % (implant.eye,
+                                                    self.eye))
+        
+        # Currently all stimuli must have same electrodes
+        all_elecs = list(set().union(*[s.metadata['electrodes'].keys() for s in stims]))
+        max_elecs = len(all_elecs)
+        # Compute stimulus parameters for all electrodes
+        eparams = np.zeros((len(stims), max_elecs, 3))
+        for idx_stim, stim in enumerate(stims):
+            if stim is None:
+                continue
+            for elec in stim.metadata['electrodes'].keys():
+                idx_elec = all_elecs.index(elec)
+                elec_metadata = stim.metadata['electrodes'][elec]['metadata']
+                eparams[idx_stim, idx_elec, 0] = elec_metadata['freq']
+                eparams[idx_stim, idx_elec, 1] = elec_metadata['amp']
+                eparams[idx_stim, idx_elec, 2] = elec_metadata['phase_dur']
+        x = np.array([implant.earray[elec].x for elec in all_elecs])
+        y = np.array([implant.earray[elec].y for elec in all_elecs])
+        # Predict percepts (returns only numpy array)
+        percepts_data = self._predict_spatial_batched(eparams, x, y)
+        # Convert into percepts
+        percepts = []
+        for idx_percept, pdata in enumerate(percepts_data):
+            if t_percept is None:
+                n_time = 1
+            else:
+                n_time = len(t_percept)
+            resp = np.zeros(list(self.grid.x.shape) + [n_time])
+            # Response goes in first frame
+            resp[:, :, 0] = pdata.reshape(self.grid.x.shape)
+            percepts.append(Percept(resp, space=self.grid, time=t_percept,
+                        metadata={'stim': stims[idx_percept].metadata}))
+        return percepts
 
     
 
