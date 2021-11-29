@@ -2,7 +2,6 @@
 from functools import partial
 import numpy as np
 import sys
-import time
 
 from . import AxonMapModel, AxonMapSpatial, TemporalModel, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
@@ -77,7 +76,6 @@ class DefaultBrightModel(BaseModel):
         """
         # Scale amp according to pdur (Eq 3 in paper) and then calculate F_{bright}
         F_bright = self.predict_freq_amp(amp * self.scale_threshold(pdur), freq)
-
         return F_bright
 
 
@@ -104,6 +102,10 @@ class DefaultSizeModel(BaseModel):
         super(DefaultSizeModel, self).__init__(**params)
         self.rho = rho
         self.build()
+        if has_jax:
+            self.__call__ == self.__call__jax
+        else:
+            self.__call__ == self.__call__nojax
 
     def get_default_params(self):
         params = {
@@ -123,9 +125,19 @@ class DefaultSizeModel(BaseModel):
         """
         return self.a1 + self.a0*pdur
 
-    def __call__(self, freq, amp, pdur):
+    def __call__nojax(self, freq, amp, pdur):
         """
         Main function to be called by BiphasicAxonMapModel
+        Outputs value for each electrode that rho should be scaled by (F_size)
+        Must support batching (freq, amp, pdur may be arrays)
+        """
+        min_f_size = self.min_rho**2 / self.rho**2
+        F_size = self.a5 * amp * self.scale_threshold(pdur) + self.a6
+        return np.maximum(F_size, min_f_size)
+
+    def __call__jax(self, freq, amp, pdur):
+        """
+        Jax version of main function to be called by BiphasicAxonMapModel
         Outputs value for each electrode that rho should be scaled by (F_size)
         Must support batching (freq, amp, pdur may be arrays)
         """
@@ -390,6 +402,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Cache axon_contrib for fast access later
             self.axon_contrib = jax.device_put(jnp.array(self.axon_contrib), jax.devices()[0])
     
+    @partial(jit, static_argnums=0)
     def _predict_spatial_jax(self, elec_params, x, y):
         """
         A stripped version of predict_percept that takes only electrode parameters, 
@@ -413,16 +426,16 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         ------------
         resp : np.array() representing the resulting percept, shape (:, 1)
         """
-        bright_effects = np.array(self.bright_model(elec_params[:, 0], 
+        bright_effects = jnp.array(self.bright_model(elec_params[:, 0], 
                                            elec_params[:, 1], 
                                            elec_params[:, 2])).reshape((-1))
-        size_effects = np.array(self.size_model(elec_params[:, 0], 
+        size_effects = jnp.array(self.size_model(elec_params[:, 0], 
                                        elec_params[:, 1], 
                                        elec_params[:, 2])).reshape((-1))
-        streak_effects = np.array(self.streak_model(elec_params[:, 0], 
+        streak_effects = jnp.array(self.streak_model(elec_params[:, 0], 
                                            elec_params[:, 1], 
                                            elec_params[:, 2])).reshape((-1))
-        eparams = np.stack([bright_effects, size_effects, streak_effects], axis=1)
+        eparams = jnp.stack([bright_effects, size_effects, streak_effects], axis=1)
         
         resp = biphasic_axon_map_jax(eparams, x, y,
                                      self.axon_contrib,
