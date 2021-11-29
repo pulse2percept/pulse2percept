@@ -106,9 +106,10 @@ class DefaultSizeModel(BaseModel):
         F_size = a5*scaled_amp + a6 
     """
 
-    def __init__(self, rho, **params):
+    def __init__(self, rho, engine, **params):
         super(DefaultSizeModel, self).__init__(**params)
         self.rho = rho
+        self.engine = engine
         self.build()
 
     def get_default_params(self):
@@ -137,7 +138,7 @@ class DefaultSizeModel(BaseModel):
         """
         min_f_size = self.min_rho**2 / self.rho**2
         F_size = self.a5 * amp * self.scale_threshold(pdur) + self.a6
-        if has_jax:
+        if self.engine == 'jax':
             return jnp.maximum(F_size, min_f_size)
         else:
             return np.maximum(F_size, min_f_size)
@@ -158,9 +159,10 @@ class DefaultStreakModel(BaseModel):
         F_streak = -a7*pdur^a8 + a9
     """
 
-    def __init__(self, axlambda, **params):
+    def __init__(self, axlambda, engine, **params):
         super(DefaultStreakModel, self).__init__(**params)
         self.axlambda = axlambda
+        self.engine = engine
         self.build()
 
     def get_default_params(self):
@@ -181,46 +183,12 @@ class DefaultStreakModel(BaseModel):
         """
         min_f_streak = self.min_lambda**2 / self.axlambda ** 2
         F_streak = self.a9 - self.a7 * pdur ** self.a8
-        if has_jax:
+        if self.engine == 'jax':
             return jnp.maximum(F_streak, min_f_streak)
         else:
             return np.maximum(F_streak, min_f_streak)
 
 
-def predict_one_point_jax(axon, eparams, x, y, rho):
-    """ Predicts the brightness contribution from each axon segment for each pixel"""
-    d2_el = (axon[:, 0, None] - x)**2 + (axon[:, 1, None] - y)**2
-    intensities = eparams[:, 0] * jnp.exp(-d2_el / (2. * rho**2 * eparams[:, 1])) * (axon[:, 2, None] ** (1./eparams[:, 2]))
-    return jnp.sum(intensities, axis=1)
-
-@cond_jit
-def biphasic_axon_map_jax(eparams, x, y, axon_segments, rho, thresh_percept):
-    """ Predicts the spatial response of BiphasicAxonMapModel using Jax
-    
-    Parameters:
-    -------------
-    eparams : jnp.array with shape (n_elecs, 3)
-        Brightness, size, and streak length effect on each electrode
-    x, y : jnp.array with shape (n_elecs)
-        x and y coordinate of each electrode
-    axon_segments : jnp.array with shape (n_points, n_ax_segments, 3)
-        Closest axon segment to each simulated point, as returned by calc_axon_sensitivities
-    rho : float
-        The rho parameter of the axon map model: exponential decay constant
-        (microns) away from the axon.
-    axlambda : float
-        The lambda parameter of the axon map model: exponential decay constant
-        (microns) away from the cell body along the axon
-    thresh_percept : float
-        Spatial responses smaller than ``thresh_percept`` will be set to zero
-    """
-
-    I = jnp.max(jax.vmap(predict_one_point_jax, in_axes=[0, None, None, None, None])(
-                            axon_segments, 
-                            eparams, x, y, 
-                            rho), axis=1)
-    I = (I > thresh_percept) * I
-    return I
 
 class BiphasicAxonMapSpatial(AxonMapSpatial):
     """ BiphasicAxonMapModel of [Granley2021]_ (spatial model)
@@ -309,7 +277,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         ignore_pickle: bool, optional
             A flag whether to ignore the pickle file in future calls to
             ``model.build()``.
-
     """
 
     def __init__(self, **params):
@@ -317,9 +284,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         if self.bright_model is None:
             self.bright_model = DefaultBrightModel()
         if self.size_model is None:
-            self.size_model = DefaultSizeModel(self.rho)
+            self.size_model = DefaultSizeModel(self.rho, self.engine)
         if self.streak_model is None:
-            self.streak_model = DefaultStreakModel(self.axlambda)
+            self.streak_model = DefaultStreakModel(self.axlambda, self.engine)
         for key, val in params.items():
             if key in ['bright_model', 'size_model', 'streak_model']:
                 continue
@@ -466,6 +433,40 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         else:
             return self._predict_spatial_jax(elec_params[:, :3], x, y)
 
+    def predict_one_point_jax(self, axon, eparams, x, y, rho):
+        """ Predicts the brightness contribution from each axon segment for each pixel"""
+        d2_el = (axon[:, 0, None] - x)**2 + (axon[:, 1, None] - y)**2
+        intensities = eparams[:, 0] * jnp.exp(-d2_el / (2. * rho**2 * eparams[:, 1])) * (axon[:, 2, None] ** (1./eparams[:, 2]))
+        return jnp.sum(intensities, axis=1)
+
+    @partial(cond_jit, static_argnums=[0])
+    def biphasic_axon_map_jax(self, eparams, x, y, axon_segments, rho, thresh_percept):
+        """ Predicts the spatial response of BiphasicAxonMapModel using Jax
+        
+        Parameters:
+        -------------
+        eparams : jnp.array with shape (n_elecs, 3)
+            Brightness, size, and streak length effect on each electrode
+        x, y : jnp.array with shape (n_elecs)
+            x and y coordinate of each electrode
+        axon_segments : jnp.array with shape (n_points, n_ax_segments, 3)
+            Closest axon segment to each simulated point, as returned by calc_axon_sensitivities
+        rho : float
+            The rho parameter of the axon map model: exponential decay constant
+            (microns) away from the axon.
+        axlambda : float
+            The lambda parameter of the axon map model: exponential decay constant
+            (microns) away from the cell body along the axon
+        thresh_percept : float
+            Spatial responses smaller than ``thresh_percept`` will be set to zero
+        """
+        I = jnp.max(jax.vmap(self.predict_one_point_jax, in_axes=[0, None, None, None, None])(
+                                axon_segments, 
+                                eparams, x, y, 
+                                rho), axis=1)
+        I = (I > thresh_percept) * I
+        return I
+
     @partial(cond_jit, static_argnums=[0])
     def _predict_spatial_jax(self, elec_params, x, y):
         """
@@ -496,7 +497,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                                            elec_params[:, 2])).reshape((-1))
         eparams = jnp.stack([bright_effects, size_effects, streak_effects], axis=1)
         
-        resp = biphasic_axon_map_jax(eparams, x, y,
+        resp = self.biphasic_axon_map_jax(eparams, x, y,
                                      self.axon_contrib,
                                      self.rho, 
                                      self.thresh_percept)
@@ -527,7 +528,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         eparams = jnp.stack([bright_effects, size_effects, streak_effects], axis=2)
         
         def predict_one(e_params):
-            return biphasic_axon_map_jax(e_params, x, y,
+            return self.biphasic_axon_map_jax(e_params, x, y,
                                             self.axon_contrib,
                                             self.rho, 
                                             self.thresh_percept)
@@ -681,7 +682,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                         metadata={'stim': stims[idx_percept].metadata}))
         return percepts
 
-    
 
 
 class BiphasicAxonMapModel(Model):
