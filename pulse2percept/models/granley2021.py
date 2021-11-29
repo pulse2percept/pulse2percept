@@ -22,6 +22,14 @@ try:
 except ImportError:
     has_jax = False
 
+# Need conditional decorator for jax
+def cond_decorator(dec, condition):
+    def decorator(fn):
+        if not condition:
+            return fn
+        return dec(fn)
+    return decorator
+
 class DefaultBrightModel(BaseModel):
     """
     Default model to be used for brightness scaling in BiphasicAxonMapModel
@@ -102,10 +110,6 @@ class DefaultSizeModel(BaseModel):
         super(DefaultSizeModel, self).__init__(**params)
         self.rho = rho
         self.build()
-        if has_jax:
-            self.__call__ == self.__call__jax
-        else:
-            self.__call__ == self.__call__nojax
 
     def get_default_params(self):
         params = {
@@ -125,7 +129,7 @@ class DefaultSizeModel(BaseModel):
         """
         return self.a1 + self.a0*pdur
 
-    def __call__nojax(self, freq, amp, pdur):
+    def __call__(self, freq, amp, pdur):
         """
         Main function to be called by BiphasicAxonMapModel
         Outputs value for each electrode that rho should be scaled by (F_size)
@@ -133,17 +137,10 @@ class DefaultSizeModel(BaseModel):
         """
         min_f_size = self.min_rho**2 / self.rho**2
         F_size = self.a5 * amp * self.scale_threshold(pdur) + self.a6
-        return np.maximum(F_size, min_f_size)
-
-    def __call__jax(self, freq, amp, pdur):
-        """
-        Jax version of main function to be called by BiphasicAxonMapModel
-        Outputs value for each electrode that rho should be scaled by (F_size)
-        Must support batching (freq, amp, pdur may be arrays)
-        """
-        min_f_size = self.min_rho**2 / self.rho**2
-        F_size = self.a5 * amp * self.scale_threshold(pdur) + self.a6
-        return jnp.maximum(F_size, min_f_size)
+        if has_jax:
+            return jnp.maximum(F_size, min_f_size)
+        else:
+            return np.maximum(F_size)
 
 
 class DefaultStreakModel(BaseModel):
@@ -184,7 +181,10 @@ class DefaultStreakModel(BaseModel):
         """
         min_f_streak = self.min_lambda**2 / self.axlambda ** 2
         F_streak = self.a9 - self.a7 * pdur ** self.a8
-        return jnp.maximum(F_streak, min_f_streak)
+        if has_jax:
+            return jnp.maximum(F_streak, min_f_streak)
+        else:
+            return np.maximum(F_streak, min_f_streak)
 
 
 def predict_one_point_jax(axon, eparams, x, y, rho, axlambda):
@@ -192,7 +192,7 @@ def predict_one_point_jax(axon, eparams, x, y, rho, axlambda):
     intensities = eparams[:, 0] * jnp.exp(-d2_el / (2. * rho**2 * eparams[:, 1])) * (axon[:, 2, None] ** (1./eparams[:, 2]))
     return jnp.sum(intensities, axis=1)
 
-@jit
+@cond_decorator(jit, has_jax)
 def biphasic_axon_map_jax(eparams, x, y, axon_segments, rho, axlambda, thresh_percept):
 
     I = jnp.max(jax.vmap(predict_one_point_jax, in_axes=[0, None, None, None, None, None])(
@@ -402,7 +402,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Cache axon_contrib for fast access later
             self.axon_contrib = jax.device_put(jnp.array(self.axon_contrib), jax.devices()[0])
     
-    @partial(jit, static_argnums=0)
+    @cond_decorator(partial(jit, static_argnums=0), has_jax)
     def _predict_spatial_jax(self, elec_params, x, y):
         """
         A stripped version of predict_percept that takes only electrode parameters, 
@@ -489,7 +489,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         else:
             return self._predict_spatial_jax(elec_params[:, :3], x, y)
 
-    @partial(jit, static_argnums=[0])
+    @cond_decorator(partial(jit, static_argnums=[0]), has_jax)
     def _predict_spatial_batched(self, elec_params, x, y):
         """ A batched version of _predict_spatial_jax
         Parameters:
@@ -591,9 +591,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 def predict_percept_batched(self, implant, stims, t_percept=None):
     """
     Batched version of predict_percept
-    Only supported if engine is jax
+    Only supported with jax engine
 
-    This could be optimized to call _predict_spatial_batched instead of looping
+    
     """
     if self.engine != 'jax':
         raise NotImplementedError("Batched predict percept is not supported unless engine is jax")
@@ -620,28 +620,38 @@ def predict_percept_batched(self, implant, stims, t_percept=None):
         raise ValueError(("The implant is in %s but the model was "
                             "built for %s.") % (implant.eye,
                                                 self.eye))
-    percepts = []
-    for stim in stims:
+    
+    # Currently all stimuli must have same electrodes
+    all_elecs = list(set().union(*[s.metadata['electrodes'].keys() for s in stim]))
+    max_elecs = len(all_elecs)
+    # Compute stimulus parameters for all electrodes
+    eparams = np.zeros((len(stims), max_elecs, 3))
+    for idx_stim, stim in enumerate(stims):
         if stim is None:
-            percepts.append(None)
             continue
+        stim = Stimulus(stim)
+        for elec in stim.metadata['electrodes'].keys():
+            idx_elec = all_elecs.index(elec)
+            elec_metadata = stim.metadata[elec]
+            eparams[idx_stim, idx_elec, 0] = elec_metadata['freq']
+            eparams[idx_stim, idx_elec, 1] = elec_metadata['amp']
+            eparams[idx_stim, idx_elec, 2] = elec_metadata['phase_dur']
+    x = [implant.earray[elec].x for elec in all_elecs]
+    y = [implant.earray[elec].y for elec in all_elecs]
+    # Predict percepts (returns only numpy array)
+    percepts_data = self._predict_spatial_batched(eparams, x, y)
+    # Convert into percepts
+    percepts = []
+    for idx_percept, pdata in enumerate(percepts_data):
         if t_percept is None:
             n_time = 1
         else:
             n_time = len(t_percept)
-        if not np.any(stim.data):
-            # Stimulus is 0
-            resp = np.zeros(list(self.grid.x.shape) + [n_time],
-                            dtype=np.float32)
-        else:
-            # Make sure stimulus is in proper format
-            stim = Stimulus(stim)
-            resp = np.zeros(list(self.grid.x.shape) + [n_time])
-            # Response goes in first frame
-            resp[:, :, 0] = self._predict_spatial(
-                implant.earray, stim).reshape(self.grid.x.shape)
+        resp = np.zeros(list(self.grid.x.shape) + [n_time])
+        # Response goes in first frame
+        resp[:, :, 0] = pdata.reshape(self.grid.x.shape)
         percepts.append(Percept(resp, space=self.grid, time=t_percept,
-                       metadata={'stim': stim.metadata}))
+                       metadata={'stim': stims[idx_percept].metadata}))
     return percepts
 
     
