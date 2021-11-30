@@ -138,6 +138,17 @@ def test_predict_spatial_jax():
     p2 = model2.predict_percept(implant)
     npt.assert_almost_equal(p1.data, p2.data, decimal=4)
 
+    # test changing model parameters, make sure jax is clearing cache on build
+    model1.axlambda = 800
+    model2.axlambda = 800
+    model1.rho = 50
+    model2.rho = 50
+    model1.build()
+    model2.build()
+    p1 = model1.predict_percept(implant)
+    p2 = model2.predict_percept(implant)
+    npt.assert_almost_equal(p1.data, p2.data, decimal=4)
+
 @pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
 def test_predict_batched(engine):
     if not has_jax:

@@ -13,6 +13,8 @@ from ._granley2021 import fast_biphasic_axon_map
 
 
 try:
+    import os
+    os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = '0'
     import jax
     import jax.numpy as jnp
     from jax import jit, vmap, lax
@@ -385,6 +387,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
         super(BiphasicAxonMapSpatial, self)._build()
         if self.engine == 'jax':
+            # Clear previously cached functions
+            self._predict_spatial_jax = jit(self._predict_spatial_jax)
+            self._predict_spatial_batched = jit(self._predict_spatial_batched)
             # Cache axon_contrib for fast access later
             self.axon_contrib = jax.device_put(jnp.array(self.axon_contrib), jax.devices()[0])
     
