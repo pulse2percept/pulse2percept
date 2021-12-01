@@ -611,6 +611,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         Batched version of predict_percept
         Only supported with jax engine
 
+        This is significantly faster if you do not batch ALL of your percepts, but rather, split
+        them into chunks (128 - 256 percepts each) and repeatedly call that. 
+        This is because jax has to compile on the first call, so repeated calls 
+        is much faster.
+
         Parameters
             ----------
             implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
