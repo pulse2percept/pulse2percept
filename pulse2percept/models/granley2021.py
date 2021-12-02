@@ -218,6 +218,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
         Options:
         --------
+        n_gray : int, optional
+            The number of gray levels to use. If an integer is given, k-means
+            clustering is used to compress the color space of the percept into
+            ``n_gray`` bins. If None, no compression is performed.
         axlambda: double, optional
             Exponential decay constant along the axon(microns).
         rho: double, optional
@@ -521,6 +525,10 @@ class BiphasicAxonMapModel(Model):
 
         Options:
         ---------
+        n_gray : int, optional
+            The number of gray levels to use. If an integer is given, k-means
+            clustering is used to compress the color space of the percept into
+            ``n_gray`` bins. If None, no compression is performed.
         axlambda: double, optional
             Exponential decay constant along the axon(microns).
         rho: double, optional

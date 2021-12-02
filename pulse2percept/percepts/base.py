@@ -31,10 +31,14 @@ class Percept(Data):
         A list of time points
     metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.
+    n_gray : int, optional
+        The number of gray levels to use. If an integer is given, k-means
+        clustering is used to compress the color space of the percept into
+        ``n_gray`` bins. If None, no compression is performed.
 
     """
 
-    def __init__(self, data, space=None, time=None, metadata=None):
+    def __init__(self, data, space=None, time=None, metadata=None, n_gray=None):
         xdva = None
         ydva = None
         if space is not None:
@@ -43,6 +47,13 @@ class Percept(Data):
                                 "%s." % type(space))
             xdva = space._xflat
             ydva = space._yflat
+        if n_gray is not None:
+            n_gray = int(n_gray)
+            if n_gray <= 1:
+                raise ValueError(('"n_gray" must be greater than 1, not '
+                                  '%d.' % n_gray))
+            centroids, labels = kmeans2(data.ravel(), n_gray)
+            data = centroids[labels].reshape(data.shape)
         if time is not None:
             time = np.array([time]).flatten()
         self._internal = {
@@ -124,7 +135,7 @@ class Percept(Data):
         self._next_frame += 1
         return self.data[..., this_frame]
 
-    def plot(self, kind='pcolor', n_gray=None, ax=None, **kwargs):
+    def plot(self, kind='pcolor', ax=None, **kwargs):
         """Plot the percept
 
         For a spatial percept, will plot the perceived brightness across the
@@ -143,10 +154,6 @@ class Percept(Data):
                (e.g., ``vmin``, ``vmax``) can be passed as keyword arguments.
             *  'hex': using Matplotlib's ``hexbin``. Additional parameters
                (e.g., ``gridsize``) can be passed as keyword arguments.
-        n_gray : int, optional
-            The number of gray levels to use. If an integer is given, k-means
-            clustering is used to compress the color space of the percept into
-            ``n_gray`` bins. If None, no compression is performed.
         ax : matplotlib.axes.AxesSubplot, optional
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object
@@ -177,14 +184,6 @@ class Percept(Data):
         # A spatial or spatiotemporal percept: Find the brightest frame
         idx = np.argmax(np.max(self.data, axis=(0, 1)))
         frame = self.data[..., idx]
-
-        if n_gray is not None:
-            n_gray = int(n_gray)
-            if n_gray <= 1:
-                raise ValueError(('"n_gray" must be greater than 1, not '
-                                  '%d.' % n_gray))
-            centroids, labels = kmeans2(frame.ravel(), n_gray)
-            frame = centroids[labels].reshape(frame.shape)
 
         vmin = kwargs['vmin'] if 'vmin' in kwargs.keys() else frame.min()
         vmax = kwargs['vmax'] if 'vmax' in kwargs.keys() else frame.max()

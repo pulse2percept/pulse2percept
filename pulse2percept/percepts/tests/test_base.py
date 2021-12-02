@@ -47,8 +47,17 @@ def test_Percept():
     npt.assert_almost_equal(percept.ydva, grid._yflat)
     npt.assert_almost_equal(percept.time, [0])
 
+    # Gray levels
+    for n_gray in [2, 4, 6]:
+        percept = Percept(np.random.rand(7, 7, 1), n_gray=n_gray)
+        npt.assert_equal(len(np.unique(percept.data)), n_gray)
+
     with pytest.raises(TypeError):
         Percept(ndarray, space={'x': [0, 1, 2], 'y': [0, 1, 2, 3, 4]})
+    with pytest.raises(ValueError):
+        Percept(ndarray, n_gray=1.2)
+    with pytest.raises(ValueError):
+        Percept(ndarray, n_gray=-3)
 
 
 def test_Percept__iter__():
@@ -96,7 +105,7 @@ def test_Percept_plot():
     ax = percept.plot(kind='pcolor')
     npt.assert_equal(isinstance(ax, Subplot), True)
     npt.assert_almost_equal(ax.axis(), [*x_range, *y_range])
-    frame = percept.get_brightest_frame()
+    frame = percept.max(axis='frames')
     npt.assert_almost_equal(ax.collections[0].get_clim(),
                             [frame.min(), frame.max()])
 
@@ -121,22 +130,11 @@ def test_Percept_plot():
     ax = percept.plot(vmin=2, vmax=4)
     npt.assert_equal(ax.collections[0].get_clim(), (2., 4.))
 
-    # Gray levels
-    percept = Percept(np.random.rand(7, 7, 1))
-    for n_gray in [2, 4, 6]:
-        ax.clear()
-        ax = percept.plot(n_gray=n_gray)
-        npt.assert_equal(len(np.unique(ax.collections[0].get_array())), n_gray)
-
     # Invalid calls:
     with pytest.raises(ValueError):
         percept.plot(kind='invalid')
     with pytest.raises(TypeError):
         percept.plot(ax='invalid')
-    with pytest.raises(ValueError):
-        percept.plot(n_gray=1.2)
-    with pytest.raises(ValueError):
-        percept.plot(n_gray=-3)
 
 
 @pytest.mark.parametrize('n_frames', (2, 3, 10, 14))
