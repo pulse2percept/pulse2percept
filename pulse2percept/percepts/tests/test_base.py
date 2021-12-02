@@ -86,12 +86,6 @@ def test_Percept_max():
         percept.max(axis='invalid')
 
 
-def test_Percept_get_brightest_frame():
-    percept = Percept(np.arange(30).reshape((3, 5, 2)))
-    npt.assert_almost_equal(percept.get_brightest_frame(),
-                            percept.data[..., 1])
-
-
 def test_Percept_plot():
     y_range = (-1, 1)
     x_range = (-2, 2)
