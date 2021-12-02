@@ -49,7 +49,8 @@ def test_Percept():
 
     # Gray levels
     for n_gray in [2, 4, 6]:
-        percept = Percept(np.random.rand(7, 7, 1), n_gray=n_gray)
+        percept = Percept(np.arange(49, dtype=float).reshape((7, 7, 1)),
+                          n_gray=n_gray)
         npt.assert_equal(len(np.unique(percept.data)), n_gray)
 
     with pytest.raises(TypeError):
