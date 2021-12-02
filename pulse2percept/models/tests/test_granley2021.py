@@ -95,7 +95,7 @@ def test_biphasicAxonMapSpatial(engine):
     percept = model.predict_percept(implant)
     percept_axon = axon_map.predict_percept(implant)
     npt.assert_almost_equal(
-        percept.data[:, :, 0], percept_axon.get_brightest_frame())
+        percept.data[:, :, 0], percept_axon.max(axis='frames'))
 
     # Effect models must be callable
     model = BiphasicAxonMapSpatial(engine=engine, xystep=2)
