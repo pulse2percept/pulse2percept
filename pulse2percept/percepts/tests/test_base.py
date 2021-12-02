@@ -127,11 +127,22 @@ def test_Percept_plot():
     ax = percept.plot(vmin=2, vmax=4)
     npt.assert_equal(ax.collections[0].get_clim(), (2., 4.))
 
+    # Gray levels
+    percept = Percept(np.random.rand(7, 7, 1))
+    for n_gray in [2, 4, 6]:
+        ax.clear()
+        ax = percept.plot(n_gray=n_gray)
+        npt.assert_equal(len(np.unique(ax.collections[0].get_array())), n_gray)
+
     # Invalid calls:
     with pytest.raises(ValueError):
         percept.plot(kind='invalid')
     with pytest.raises(TypeError):
         percept.plot(ax='invalid')
+    with pytest.raises(ValueError):
+        percept.plot(n_gray=1.2)
+    with pytest.raises(ValueError):
+        percept.plot(n_gray=-3)
 
 
 @pytest.mark.parametrize('n_frames', (2, 3, 10, 14))
