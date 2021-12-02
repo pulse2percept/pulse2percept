@@ -201,7 +201,6 @@ class Percept(Data):
                 raise ValueError(('"n_gray" must be greater than 1, not '
                                   '%d.' % n_gray))
             centroids, labels = kmeans2(frame.ravel(), n_gray)
-            print(centroids, len(centroids))
             frame = centroids[labels].reshape(frame.shape)
 
         vmin = kwargs['vmin'] if 'vmin' in kwargs.keys() else frame.min()

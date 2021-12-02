@@ -161,7 +161,6 @@ def test_Percept_save(dtype):
 
     # Save multiple frames as a gif or movie:
     for fname in ['test.mp4', 'test.avi', 'test.mov', 'test.wmv', 'test.gif']:
-        print(fname)
         percept.save(fname)
         npt.assert_equal(os.path.isfile(fname), True)
         # Normalized to [0, 255] with some loss of precision:
