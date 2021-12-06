@@ -43,6 +43,11 @@ class Nanduri2012Spatial(SpatialModel):
         object that provides ``ret2dva`` and ``dva2ret`` methods.
         By default, :py:class:`~pulse2percept.utils.Curcio1990Map` is
         used.
+    noise : float or int, optional
+        Adds salt-and-pepper noise to each percept frame. An integer will be
+        interpreted as the number of pixels to subject to noise in each frame.
+        A float between 0 and 1 will be interpreted as a ratio of pixels to
+        subject to noise in each frame.
 
     """
 

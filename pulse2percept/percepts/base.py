@@ -1,5 +1,6 @@
 """`Percept`"""
 import numpy as np
+from copy import deepcopy
 import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
 from matplotlib.animation import FuncAnimation
@@ -25,16 +26,21 @@ class Percept(Data):
     ----------
     data : 3D NumPy array
         A NumPy array specifying the percept in (Y, X, T) dimensions
-    space : :py:class:`~pulse2percept.utils.Grid2D`
+    space : :py:class:`~pulse2percept.utils.Grid2D`, optional
         A grid object specifying the (x,y) coordinates in space
-    time : 1D array
+    time : 1D array, optional
         A list of time points
+    noise : float or int, optional
+        Adds salt-and-pepper noise to each percept frame. An integer will be
+        interpreted as the number of pixels to subject to noise in each frame.
+        A float between 0 and 1 will be interpreted as a ratio of pixels to
+        subject to noise in each frame.
     metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.
 
     """
 
-    def __init__(self, data, space=None, time=None, metadata=None):
+    def __init__(self, data, space=None, time=None, noise=None, metadata=None):
         xdva = None
         ydva = None
         if space is not None:
@@ -45,6 +51,30 @@ class Percept(Data):
             ydva = space._yflat
         if time is not None:
             time = np.array([time]).flatten()
+        data = deepcopy(data)
+        if noise is not None:
+            n_pixels = np.prod(data.shape[:2])
+            if isinstance(noise, int):
+                n_noise = noise
+            elif isinstance(noise, float):
+                n_noise = int(noise * n_pixels)
+            else:
+                raise TypeError('"noise" should be of type int or float, '
+                                'not "%s."' % type(noise))
+            if n_noise < 0 or n_noise > n_pixels:
+                raise ValueError('Number of pixels subject to noise (%d) '
+                                 'must be smaller than the total number of '
+                                 'pixels (%d).' % (n_noise, n_pixels))
+            vmin, vmax = data.min(), data.max()
+            for t in range(data.shape[2]):
+                idx_noise = np.arange(n_pixels)
+                np.random.shuffle(idx_noise)
+                xi, yi = np.unravel_index(
+                    idx_noise[:n_noise//2], data.shape[:2])
+                data[xi, yi, t] = vmin
+                xi, yi = np.unravel_index(
+                    idx_noise[n_noise//2:n_noise], data.shape[:2])
+                data[xi, yi, t] = vmax
         self._internal = {
             'data': data,
             'axes': [('ydva', ydva), ('xdva', xdva), ('time', time)],

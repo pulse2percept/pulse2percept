@@ -244,6 +244,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             object that provides ``ret2dva`` and ``dva2ret`` methods.
             By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
             used.
+        noise : float or int, optional
+            Adds salt-and-pepper noise to each percept frame. An integer will be
+            interpreted as the number of pixels to subject to noise in each 
+            frame. A float between 0 and 1 will be interpreted as a ratio of 
+            pixels to subject to noise in each frame.
         loc_od, loc_od: (x,y), optional
             Location of the optic disc in degrees of visual angle. Note that the
             optic disc in a left eye will be corrected to have a negative x
@@ -338,18 +343,17 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         if not found:
             try:
                 if sys._getframe(2).f_code.co_name == '__init__' or  \
-                sys._getframe(3).f_code.co_name == '__init__':
+                        sys._getframe(3).f_code.co_name == '__init__':
                     super().__setattr__(name, value)
                     return
             except FreezeError:
                 pass
-        
+
         if not found:
             err_str = ("'%s' not found. You cannot add attributes to %s "
                        "outside the constructor." % (name,
                                                      self.__class__.__name__))
             raise FreezeError(err_str)
-        
 
     def get_default_params(self):
         base_params = super(BiphasicAxonMapSpatial, self).get_default_params()
@@ -547,6 +551,11 @@ class BiphasicAxonMapModel(Model):
             object that provides ``ret2dva`` and ``dva2ret`` methods.
             By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
             used.
+        noise : float or int, optional
+            Adds salt-and-pepper noise to each percept frame. An integer will be
+            interpreted as the number of pixels to subject to noise in each
+            frame. A float between 0 and 1 will be interpreted as a ratio of 
+            pixels to subject to noise in each frame.
         loc_od, loc_od: (x,y), optional
             Location of the optic disc in degrees of visual angle. Note that the
             optic disc in a left eye will be corrected to have a negative x
