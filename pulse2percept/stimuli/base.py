@@ -442,21 +442,23 @@ class Stimulus(PrettyPrint):
                 'time': self.time
             }
             return
+        # Start with a list of True and set the removed electrodes to False:
         keep_el = np.ones(len(self.electrodes), dtype=bool)
         for electrode in np.array([electrodes]).ravel():
             try:
+                # Check if `electrode` is an index into the electrodes array:
                 self.electrodes[electrode]
                 keep_el[electrode] = False
             except (IndexError, KeyError):
+                # Another possibility is that a string with the electrode name
+                # was passed. In this case, find the corresponding list index:
                 try:
                     keep_el[list(self.electrodes).index(electrode)] = False
                 except ValueError:
-                    raise ValueError(f'Electrode {electrode} not found.')
-        data = self.data[keep_el]
-        electrodes = self.electrodes[keep_el]
+                    raise ValueError(f'Electrode "{electrode}" not found.')
         self._stim = {
-            'data': data,
-            'electrodes': electrodes,
+            'data': self.data[keep_el],
+            'electrodes': self.electrodes[keep_el],
             'time': self.time,
         }
 
