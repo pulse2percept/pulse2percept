@@ -1,4 +1,4 @@
-sphinx==1.8.5
+sphinx
 sphinx_gallery>=0.7
 sphinx_rtd_theme
 ipython
