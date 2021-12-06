@@ -546,3 +546,12 @@ def test_Stimulus_arithmetic(scalar):
         s = stim >> np.array([2, 3])
     with pytest.raises(TypeError):
         s = stim << np.array([2, 3])
+
+
+def test_Stimulus_remove():
+    stim = Stimulus([[0, 1, 2], [3, 4, 5]], electrodes=['A1', 'C3'])
+    npt.assert_equal('A1' in stim.electrodes, True)
+    npt.assert_equal('C3' in stim.electrodes, True)
+    stim.remove('A1')
+    npt.assert_equal('A1' in stim.electrodes, False)
+    npt.assert_equal('C3' in stim.electrodes, True)
