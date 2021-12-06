@@ -9,6 +9,7 @@
     nanduri2012
     horsager2009
     granley2021
+    thompson2003
 
 .. seealso::
 
@@ -23,7 +24,8 @@ from .beyeler2019 import (ScoreboardModel, ScoreboardSpatial, AxonMapSpatial,
 from .horsager2009 import Horsager2009Model, Horsager2009Temporal
 from .nanduri2012 import (Nanduri2012Model, Nanduri2012Spatial,
                           Nanduri2012Temporal)
-from .granley2021 import (BiphasicAxonMapModel, BiphasicAxonMapSpatial)
+from .granley2021 import BiphasicAxonMapModel, BiphasicAxonMapSpatial
+from .thompson2003 import Thompson2003Model, Thompson2003Spatial
 
 __all__ = [
     'AxonMapModel',
@@ -42,4 +44,6 @@ __all__ = [
     'ScoreboardSpatial',
     'SpatialModel',
     'TemporalModel',
+    'Thompson2003Model',
+    'Thompson2003Spatial'
 ]
