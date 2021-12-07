@@ -169,6 +169,13 @@ class Grid2D(PrettyPrint):
             zorder = ZORDER['background']
 
         x, y = self.x, self.y
+        try:
+            # Step might be a tuple:
+            x_step, y_step = self.step
+        except TypeError:
+            x_step = self.step
+            y_step = self.step
+
         if style.lower() == 'cell':
             # Show a polygon for every grid cell that we are simulating:
             if self.type == 'hexagonal':
@@ -177,10 +184,10 @@ class Grid2D(PrettyPrint):
             for xret, yret in zip(x.ravel(), y.ravel()):
                 # Outlines of the cell are given by (x,y) and the step size:
                 vertices = np.array([
-                    [xret - self.step / 2, yret - self.step / 2],
-                    [xret - self.step / 2, yret + self.step / 2],
-                    [xret + self.step / 2, yret + self.step / 2],
-                    [xret + self.step / 2, yret - self.step / 2],
+                    [xret - x_step / 2, yret - y_step / 2],
+                    [xret - x_step / 2, yret + y_step / 2],
+                    [xret + x_step / 2, yret + y_step / 2],
+                    [xret + x_step / 2, yret - y_step / 2],
                 ])
                 if transform is not None:
                     vertices = np.array(transform(*vertices.T)).T

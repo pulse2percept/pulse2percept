@@ -47,8 +47,18 @@ def test_Percept():
     npt.assert_almost_equal(percept.ydva, grid._yflat)
     npt.assert_almost_equal(percept.time, [0])
 
+    # Gray levels
+    for n_gray in [2, 4, 6]:
+        percept = Percept(np.arange(49, dtype=float).reshape((7, 7, 1)),
+                          n_gray=n_gray)
+        npt.assert_equal(len(np.unique(percept.data)), n_gray)
+
     with pytest.raises(TypeError):
         Percept(ndarray, space={'x': [0, 1, 2], 'y': [0, 1, 2, 3, 4]})
+    with pytest.raises(ValueError):
+        Percept(ndarray, n_gray=1.2)
+    with pytest.raises(ValueError):
+        Percept(ndarray, n_gray=-3)
 
 
 def test_Percept__iter__():
@@ -86,12 +96,6 @@ def test_Percept_max():
         percept.max(axis='invalid')
 
 
-def test_Percept_get_brightest_frame():
-    percept = Percept(np.arange(30).reshape((3, 5, 2)))
-    npt.assert_almost_equal(percept.get_brightest_frame(),
-                            percept.data[..., 1])
-
-
 def test_Percept_plot():
     y_range = (-1, 1)
     x_range = (-2, 2)
@@ -102,7 +106,7 @@ def test_Percept_plot():
     ax = percept.plot(kind='pcolor')
     npt.assert_equal(isinstance(ax, Subplot), True)
     npt.assert_almost_equal(ax.axis(), [*x_range, *y_range])
-    frame = percept.get_brightest_frame()
+    frame = percept.max(axis='frames')
     npt.assert_almost_equal(ax.collections[0].get_clim(),
                             [frame.min(), frame.max()])
 
@@ -150,7 +154,6 @@ def test_Percept_save(dtype):
 
     # Save multiple frames as a gif or movie:
     for fname in ['test.mp4', 'test.avi', 'test.mov', 'test.wmv', 'test.gif']:
-        print(fname)
         percept.save(fname)
         npt.assert_equal(os.path.isfile(fname), True)
         # Normalized to [0, 255] with some loss of precision:

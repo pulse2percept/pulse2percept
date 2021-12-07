@@ -97,6 +97,9 @@ def test_Grid2D_plot():
     ax = grid.plot(style='cell')
     ax = grid.plot(style='scatter')
 
+    # Step might be a tuple (smoke test):
+    Grid2D((-5, 5), (-5, 5), step=(0.5, 1)).plot(style='cell')
+
 
 class ValidCoordTransform(VisualFieldMap):
 

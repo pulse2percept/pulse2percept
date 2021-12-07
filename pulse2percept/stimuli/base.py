@@ -227,7 +227,8 @@ class Stimulus(PrettyPrint):
             _time = source.time
             _electrodes = source.electrodes
             if 'electrodes' not in source.metadata.keys():
-                self.metadata['electrodes'][str(_electrodes[0])] = {'metadata' : source.metadata, 'type' : type(source)}
+                self.metadata['electrodes'][str(_electrodes[0])] = {
+                    'metadata': source.metadata, 'type': type(source)}
             else:
                 self.metadata = source.metadata
         elif isinstance(source, np.ndarray):
@@ -246,7 +247,9 @@ class Stimulus(PrettyPrint):
                                  "NumPy array. Must be < 2-D." % source.ndim)
             if len(self.metadata['electrodes']) != len(_electrodes):
                 for elec in _electrodes:
-                    self.metadata['electrodes'][str(elec)] = {'metadata' : '', 'type': np.ndarray}
+                    self.metadata['electrodes'][str(elec)] = {
+                        'metadata': '', 'type': np.ndarray
+                    }
         else:
             # Input is either a scalar or (more likely) a collection of source
             # types. Easiest to tream them all as a collection and iterate:
@@ -416,6 +419,48 @@ class Stimulus(PrettyPrint):
                       'electrodes': self.electrodes,
                       'time': time}
         return stim
+
+    def remove(self, electrodes):
+        """Remove electrode(s)
+
+        Removes the stimulus of a certain electrode or list of electrodes.
+
+        .. versionadded:: 0.8
+
+        Parameters
+        ----------
+        electrodes : int, string, or list of int/str
+            The item(s) to remove from the stimulus. Can either be an electrode
+            index, electrode name, or a list thereof.
+        """
+        if not electrodes:
+            return
+        if np.isscalar(electrodes) and electrodes == 'all':
+            self._stim = {
+                'data': self.data[[]],
+                'electrodes': [],
+                'time': self.time
+            }
+            return
+        # Start with a list of True and set the removed electrodes to False:
+        keep_el = np.ones(len(self.electrodes), dtype=bool)
+        for electrode in np.array([electrodes]).ravel():
+            try:
+                # Check if `electrode` is an index into the electrodes array:
+                self.electrodes[electrode]
+                keep_el[electrode] = False
+            except (IndexError, KeyError):
+                # Another possibility is that a string with the electrode name
+                # was passed. In this case, find the corresponding list index:
+                try:
+                    keep_el[list(self.electrodes).index(electrode)] = False
+                except ValueError:
+                    raise ValueError(f'Electrode "{electrode}" not found.')
+        self._stim = {
+            'data': self.data[keep_el],
+            'electrodes': self.electrodes[keep_el],
+            'time': self.time,
+        }
 
     def plot(self, electrodes=None, time=None, fmt='k-', ax=None):
         """Plot the stimulus
