@@ -48,7 +48,7 @@ def test_Percept():
     npt.assert_almost_equal(percept.time, [0])
 
     # Gray levels
-    for n_gray in [2, 4, 6]:
+    for n_gray in [2, 4]:
         percept = Percept(np.arange(49, dtype=float).reshape((7, 7, 1)),
                           n_gray=n_gray)
         npt.assert_equal(len(np.unique(percept.data)), n_gray)

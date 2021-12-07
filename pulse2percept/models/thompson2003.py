@@ -1,4 +1,4 @@
-"""`Thompson2003Model`, `Thompson2003Spatial` [Chen2009]_"""
+"""`Thompson2003Model`, `Thompson2003Spatial` [Thompson2003]_"""
 
 import numpy as np
 from ..utils import Curcio1990Map, sample
@@ -28,7 +28,9 @@ class Thompson2003Spatial(SpatialModel):
     Parameters
     ----------
     radius : double, optional
-        Disk radius describing phosphene size (microns)
+        Disk radius describing phosphene size (microns).
+        If None, disk diameter is chosen as the electrode-to-electrode spacing
+        (works only for implants with a ``shape`` attribute) with a 5% gap.
     dropout : int or float, optional
         If an int, number of electrodes to randomly drop out every frame.
         If a float between 0 and 1, the fraction of electrodes to randomly drop
@@ -53,6 +55,10 @@ class Thompson2003Spatial(SpatialModel):
         object that provides ``ret2dva`` and ``dva2ret`` methods.
         By default, :py:class:`~pulse2percept.utils.Curcio1990Map` is
         used.
+    n_gray : int, optional
+        The number of gray levels to use. If an integer is given, k-means
+        clustering is used to compress the color space of the percept into
+        ``n_gray`` bins. If None, no compression is performed.
 
     .. important ::
 
@@ -62,9 +68,10 @@ class Thompson2003Spatial(SpatialModel):
     """
 
     def get_default_params(self):
-        """Returns all settable parameters of the scoreboard model"""
+        """Returns all settable parameters of the model"""
         base_params = super(Thompson2003Spatial, self).get_default_params()
-        params = {'radius': None, 'dropout': 0.0, 'retinotopy': Curcio1990Map()}
+        params = {'radius': None, 'dropout': None,
+                  'retinotopy': Curcio1990Map()}
         return {**base_params, **params}
 
     def _predict_spatial(self, earray, stim):
@@ -98,19 +105,26 @@ class Thompson2003Spatial(SpatialModel):
 
 
 class Thompson2003Model(Model):
-    """Scoreboard model of [Beyeler2019]_ (standalone model)
+    """Scoreboard model of [Thompson2003]_ (standalone model)
 
-    Implements the scoreboard model described in [Beyeler2019]_, where all
-    percepts are Gaussian blobs.
+    Implements the scoreboard model described in [Thompson2003]_, where all
+    percepts are circular disks of a given size, and a fraction of electrodes
+    may randomly drop out.
 
     .. note ::
 
         Use this class if you want a standalone model.
-        Use :py:class:`~pulse2percept.models.ScoreboardSpatial` if you want
+        Use :py:class:`~pulse2percept.models.Thompson2003Spatial` if you want
         to combine the spatial model with a temporal model.
 
-    rho : double, optional
-        Exponential decay constant describing phosphene size (microns).
+    radius : double, optional
+        Disk radius describing phosphene size (microns).
+        If None, disk diameter is chosen as the electrode-to-electrode spacing
+        (works only for implants with a ``shape`` attribute) with a 5% gap.
+    dropout : int or float, optional
+        If an int, number of electrodes to randomly drop out every frame.
+        If a float between 0 and 1, the fraction of electrodes to randomly drop
+        out every frame.
     xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). In a right eye, negative x values correspond to the
@@ -131,6 +145,10 @@ class Thompson2003Model(Model):
         object that provides ``ret2dva`` and ``dva2ret`` methods.
         By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
+    n_gray : int, optional
+        The number of gray levels to use. If an integer is given, k-means
+        clustering is used to compress the color space of the percept into
+        ``n_gray`` bins. If None, no compression is performed.
 
     .. important ::
 

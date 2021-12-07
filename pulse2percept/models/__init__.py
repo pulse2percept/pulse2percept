@@ -5,11 +5,11 @@
 
     base
     temporal
-    beyeler2019
-    nanduri2012
-    horsager2009
-    granley2021
     thompson2003
+    horsager2009
+    nanduri2012
+    beyeler2019
+    granley2021
 
 .. seealso::
 
