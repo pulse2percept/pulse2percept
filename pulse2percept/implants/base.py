@@ -196,6 +196,8 @@ class ProsthesisSystem(PrettyPrint):
 
     def deactivate(self, electrodes):
         self.earray.deactivate(electrodes)
+        if self.stim is not None:
+            self.stim.remove(electrodes)
 
     @property
     def earray(self):
@@ -284,9 +286,9 @@ class ProsthesisSystem(PrettyPrint):
                 if not self.earray[electrode]:
                     raise ValueError('Electrode "%s" not found in '
                                      'implant.' % electrode)
-                if not self.earray[electrode].activated:
-                    raise ValueError('Cannot assign stimulus to deactivated '
-                                     'Electrode "%s".' % electrode)
+            # Remove deactivated electrodes from the stimulus:
+            stim.remove([name for (name, e) in self.electrodes.items()
+                         if not e.activated])
             # Perform safety checks, etc.:
             self.check_stim(stim)
             # Store stimulus:

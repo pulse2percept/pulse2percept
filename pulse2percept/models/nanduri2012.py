@@ -43,6 +43,10 @@ class Nanduri2012Spatial(SpatialModel):
         object that provides ``ret2dva`` and ``dva2ret`` methods.
         By default, :py:class:`~pulse2percept.utils.Curcio1990Map` is
         used.
+    n_gray : int, optional
+        The number of gray levels to use. If an integer is given, k-means
+        clustering is used to compress the color space of the percept into
+        ``n_gray`` bins. If None, no compression is performed.
 
     """
 

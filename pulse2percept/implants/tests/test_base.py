@@ -69,13 +69,14 @@ def test_ProsthesisSystem_stim():
     # Deactivated electrodes cannot receive stimuli:
     implant.deactivate('H4')
     npt.assert_equal(implant['H4'].activated, False)
-    with pytest.raises(ValueError):
-        implant.stim = {'H4': 1}
+    implant.stim = {'H4': 1}
+    npt.assert_equal('H4' in implant.stim.electrodes, False)
+
     implant.deactivate('all')
-    with pytest.raises(ValueError):
-        implant.stim = [1] * implant.n_electrodes
+    npt.assert_equal(not implant.stim.data, True)
     implant.activate('all')
     implant.stim = {'H4': 1}
+    npt.assert_equal('H4' in implant.stim.electrodes, True)
 
 
 @pytest.mark.parametrize('rot', (0, 30, 92))
@@ -103,3 +104,13 @@ def test_ProsthesisSystem_reshape_stim(rot, gtype, n_frames):
     model.build()
     percept = label(model.predict_percept(implant).data.squeeze().T > 0.2)
     npt.assert_almost_equal(regionprops(percept)[0].orientation, 0, decimal=1)
+
+
+def test_ProsthesisSystem_deactivate():
+    implant = ProsthesisSystem(ElectrodeGrid((10, 10), 30))
+    implant.stim = np.ones(implant.n_electrodes)
+    electrode = 'A3'
+    npt.assert_equal(electrode in implant.stim.electrodes, True)
+    implant.deactivate(electrode)
+    npt.assert_equal(implant[electrode].activated, False)
+    npt.assert_equal(electrode in implant.stim.electrodes, False)
