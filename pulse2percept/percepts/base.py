@@ -36,7 +36,6 @@ class Percept(Data):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
-
     noise : float or int, optional
         Adds salt-and-pepper noise to each percept frame. An integer will be
         interpreted as the number of pixels to subject to noise in each frame.
@@ -45,7 +44,8 @@ class Percept(Data):
     """
 
     def __init__(self, data, space=None, time=None, metadata=None, n_gray=None,
-                       noise=None):
+                 noise=None):
+        data = deepcopy(data)
         xdva = None
         ydva = None
         if space is not None:
@@ -54,7 +54,7 @@ class Percept(Data):
                                 "%s." % type(space))
             xdva = space._xflat
             ydva = space._yflat
-
+        # Reduce number of gray levels if requested:
         if n_gray is not None:
             n_gray = int(n_gray)
             if n_gray <= 1:
@@ -63,7 +63,7 @@ class Percept(Data):
             data = np.asarray(data, dtype=np.float32)
             centroids, labels = kmeans2(data.ravel(), n_gray)
             data = centroids[labels].reshape(data.shape)
-        data = deepcopy(data)
+        # Add salt-and-pepper noise if requested:
         if noise is not None:
             n_pixels = np.prod(data.shape[:2])
             if isinstance(noise, int):

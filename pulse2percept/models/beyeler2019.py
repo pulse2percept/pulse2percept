@@ -69,9 +69,6 @@ class ScoreboardSpatial(SpatialModel):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
 
-
-
-
     .. important ::
 
         If you change important model parameters outside the constructor (e.g.,
@@ -142,7 +139,6 @@ class ScoreboardModel(Model):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
-
     noise : float or int, optional
         Adds salt-and-pepper noise to each percept frame. An integer will be
         interpreted as the number of pixels to subject to noise in each frame.
@@ -213,7 +209,6 @@ class AxonMapSpatial(SpatialModel):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
-
     loc_od, loc_od: (x,y), optional
         Location of the optic disc in degrees of visual angle. Note that the
         optic disc in a left eye will be corrected to have a negative x
@@ -886,6 +881,10 @@ class AxonMapModel(Model):
         object that provides ``ret2dva`` and ``dva2ret`` methods.
         By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
+    n_gray : int, optional
+        The number of gray levels to use. If an integer is given, k-means
+        clustering is used to compress the color space of the percept into
+        ``n_gray`` bins. If None, no compression is performed.
     noise : float or int, optional
         Adds salt-and-pepper noise to each percept frame. An integer will be
         interpreted as the number of pixels to subject to noise in each frame.

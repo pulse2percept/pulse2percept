@@ -52,8 +52,6 @@ class Nanduri2012Spatial(SpatialModel):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
-
-
     """
 
     def get_default_params(self):
@@ -230,7 +228,6 @@ class Nanduri2012Model(Model):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
-
 
     """
 
