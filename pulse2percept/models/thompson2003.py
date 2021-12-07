@@ -1,7 +1,7 @@
 """`Thompson2003Model`, `Thompson2003Spatial` [Chen2009]_"""
 
 import numpy as np
-from ..utils import Curcio1990Map
+from ..utils import Curcio1990Map, sample
 from ..models import Model, SpatialModel
 from ._thompson2003 import fast_thompson2003
 
@@ -77,25 +77,12 @@ class Thompson2003Spatial(SpatialModel):
         if radius is None:
             if not hasattr(earray, 'spacing'):
                 raise NotImplementedError
-            radius = earray.spacing / 2.0 - earray.spacing * 0.05
+            radius = 0.45 * earray.spacing
         if self.dropout is not None:
-            n_elec = stim.shape[0]
-            if isinstance(self.dropout, int):
-                n_dropout = self.dropout
-            elif isinstance(self.dropout, float):
-                n_dropout = int(self.dropout * n_elec)
-            else:
-                raise TypeError('"dropout" must be an int or float, not '
-                                '"%s".' % type(self.dropout))
-            if n_dropout < 0 or n_dropout > n_elec:
-                raise ValueError('Number of electrodes to drop out (%d) '
-                                 'must be smaller than the total number of '
-                                 'electrodes (%d).' % (n_dropout, n_elec))
             dropout = np.zeros(stim.shape, dtype=np.uint8)
             for t in range(dropout.shape[1]):
-                idx_drop = np.arange(n_elec)
-                np.random.shuffle(idx_drop)
-                dropout[idx_drop[:n_dropout], t] = 255
+                dropout[sample(np.arange(stim.shape[0]), k=self.dropout),
+                        t] = 255
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
         return fast_thompson2003(stim.data,
