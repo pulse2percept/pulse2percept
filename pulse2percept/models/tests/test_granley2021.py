@@ -1,8 +1,3 @@
-from multiprocessing import Value
-from typing import Type
-from pulse2percept.models.granley2021 import DefaultBrightModel, \
-    DefaultSizeModel, DefaultStreakModel
-from pulse2percept.utils.base import FreezeError
 import numpy as np
 import pytest
 import numpy.testing as npt
@@ -12,15 +7,17 @@ from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import Stimulus, BiphasicPulseTrain
 from pulse2percept.models import BiphasicAxonMapModel, BiphasicAxonMapSpatial, \
     AxonMapSpatial
-from pulse2percept.utils.testing import assert_warns_msg
+from pulse2percept.models.granley2021 import DefaultBrightModel, \
+    DefaultSizeModel, DefaultStreakModel
+from pulse2percept.utils.base import FreezeError
 
+try:
+    import jax
+    has_jax = True
+except ImportError:
+    has_jax = False
 
 def test_effects_models():
-    # Test thresholding on bright model
-    model = DefaultBrightModel(do_thresholding=True)
-    # Technically this could fail, but the probability is negliglible
-    npt.assert_almost_equal(model(20, 0.01, 0.45), 0)
-
     # Test rho scaling on size model
     model = DefaultSizeModel(200)
     npt.assert_almost_equal(
@@ -51,19 +48,14 @@ def test_effects_models():
 
 @pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
 def test_biphasicAxonMapSpatial(engine):
+    if engine == 'jax' and not has_jax:
+        pytest.skip("Jax not installed")
+
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
         BiphasicAxonMapSpatial(axlambda=9).build()
 
     model = BiphasicAxonMapModel(engine=engine, xystep=2).build()
-    # Jax not implemented yet
-    if engine == 'jax':
-        with pytest.raises(NotImplementedError):
-            implant = ArgusII()
-            implant.stim = Stimulus({'A5': BiphasicPulseTrain(20, 1, 0.45)})
-            percept = model.predict_percept(implant)
-        return
-
     # Only accepts biphasic pulse trains with no delay dur
     implant = ArgusI(stim=np.ones(16))
     with pytest.raises(TypeError):
@@ -124,19 +116,76 @@ def test_biphasicAxonMapSpatial(engine):
     implant = ArgusII()
     implant.stim = Stimulus({'A4': BiphasicPulseTrain(20, 1, 1)})
     percept = model.predict_percept(implant)
-    npt.assert_equal(np.sum(percept.data > 0.0813), 81)
-    npt.assert_equal(np.sum(percept.data > 0.1626), 59)
-    npt.assert_equal(np.sum(percept.data > 0.2439), 44)
-    npt.assert_equal(np.sum(percept.data > 0.4065), 26)
-    npt.assert_equal(np.sum(percept.data > 0.5691), 14)
+    npt.assert_equal(np.sum(percept.data > 0.0813), 69)
+    npt.assert_equal(np.sum(percept.data > 0.1626), 46)
+    npt.assert_equal(np.sum(percept.data > 0.2439), 32)
+    npt.assert_equal(np.sum(percept.data > 0.4065), 14)
+    npt.assert_equal(np.sum(percept.data > 0.5691), 4)
 
+
+def test_predict_spatial_jax():
+    # ensure jax predict spatial is equal to normal
+    if not has_jax:
+        pytest.skip("Jax not installed")
+    model1 = BiphasicAxonMapModel(engine='jax', xystep=2)
+    model2 = BiphasicAxonMapModel(engine='cython', xystep=2)
+    model1.build()
+    model2.build()
+    implant = ArgusII()
+    implant.stim = {'A5' : BiphasicPulseTrain(25, 4, 0.45),
+                    'C7' : BiphasicPulseTrain(50, 2.5, 0.75)}
+    p1 = model1.predict_percept(implant)
+    p2 = model2.predict_percept(implant)
+    npt.assert_almost_equal(p1.data, p2.data, decimal=4)
+
+    # test changing model parameters, make sure jax is clearing cache on build
+    model1.axlambda = 800
+    model2.axlambda = 800
+    model1.rho = 50
+    model2.rho = 50
+    model1.build()
+    model2.build()
+    p1 = model1.predict_percept(implant)
+    p2 = model2.predict_percept(implant)
+    npt.assert_almost_equal(p1.data, p2.data, decimal=4)
+
+@pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+def test_predict_batched(engine):
+    if not has_jax:
+        pytest.skip("Jax not installed")
+
+    # Allows mix of valid Stimulus types
+    stims = [{'A5' : BiphasicPulseTrain(25, 4, 0.45),
+              'C7' : BiphasicPulseTrain(50, 2.5, 0.75)},
+             {'B4' : BiphasicPulseTrain(3, 1, 0.32)},
+             Stimulus({'F3' : BiphasicPulseTrain(12, 3, 1.2)})]
+    implant = ArgusII()
+    model = BiphasicAxonMapModel(engine=engine, xystep=2)
+    model.build()
+    # Import error if we dont have jax
+    if engine != 'jax':
+        with pytest.raises(ImportError):
+            model.predict_percept_batched(implant, stims)
+        return
+    
+    percepts_batched = model.predict_percept_batched(implant, stims)
+    percepts_serial = []
+    for stim in stims:
+        implant.stim = stim
+        percepts_serial.append(model.predict_percept(implant))
+
+    npt.assert_equal(len(percepts_serial), len(percepts_batched))
+    for p1, p2 in zip(percepts_batched, percepts_serial):
+        npt.assert_almost_equal(p1.data, p2.data)
 
 @pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
 def test_biphasicAxonMapModel(engine):
+    if engine == 'jax' and not has_jax:
+        pytest.skip("Jax not installed")
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
-                  'loc_od': (5, 6), 'do_thresholding': False}
+                  'loc_od': (5, 6)}
     model = BiphasicAxonMapModel(engine=engine)
     for param in set_params:
         npt.assert_equal(hasattr(model.spatial, param), True)
@@ -156,13 +205,10 @@ def test_biphasicAxonMapModel(engine):
     # Same name, both need to be changed
     model.rho = 350
     model.axlambda = 450
-    model.do_thresholding = True
     npt.assert_equal(model.spatial.size_model.rho, 350)
     npt.assert_equal(model.spatial.streak_model.axlambda, 450)
-    npt.assert_equal(model.spatial.bright_model.do_thresholding, True)
     npt.assert_equal(model.rho, 350)
     npt.assert_equal(model.axlambda, 450)
-    npt.assert_equal(model.do_thresholding, True)
 
     # Effect model parameters can be passed even in constructor
     model = BiphasicAxonMapModel(engine=engine, a0=5, rho=432)

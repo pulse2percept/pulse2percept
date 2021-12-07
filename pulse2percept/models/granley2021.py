@@ -1,9 +1,9 @@
 """`BiphasicAxonMapModel`"""
-from typing import Type
+from functools import partial
 import numpy as np
 import sys
 
-from . import AxonMapModel, AxonMapSpatial, TemporalModel, Model
+from . import AxonMapSpatial, TemporalModel, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
 from ..percepts import Percept
@@ -11,6 +11,26 @@ from ..utils import FreezeError
 from .base import BaseModel, NotBuiltError
 from ._granley2021 import fast_biphasic_axon_map
 
+
+try:
+    import os
+    os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = '0'
+    import jax
+    import jax.numpy as jnp
+    from jax import jit, vmap, lax
+    has_jax = True
+except ImportError:
+    has_jax = False
+
+def cond_jit(fn, static_argnums=None):
+    """ Conditional decorator for jax jit"""
+    if has_jax:
+        if static_argnums is None:
+            return jit(fn)
+        else:
+            return jit(fn, static_argnums=static_argnums)
+    else:
+        return fn
 
 class DefaultBrightModel(BaseModel):
     """
@@ -42,8 +62,7 @@ class DefaultBrightModel(BaseModel):
             'a1': 0.054326,
             'a2': 0.1492147,
             'a3': 0.0163851,
-            'a4': 0.25191869,
-            'do_thresholding': False
+            'a4': 0
         }
         return params
 
@@ -62,23 +81,12 @@ class DefaultBrightModel(BaseModel):
         """
         Main function to be called by BiphasicAxonMapModel
         Outputs value by which brightness contribution for each electrode should
-        be scaled by (F_bright)
+        be scaled by (F_bright).
+        Must support batching (freq, amp, pdur may be arrays)
         """
         # Scale amp according to pdur (Eq 3 in paper) and then calculate F_{bright}
         F_bright = self.predict_freq_amp(amp * self.scale_threshold(pdur), freq)
-
-        if not self.do_thresholding:
-            return F_bright
-        else:
-            # If thresholding is enabled, phosphene only has a chance of appearing
-            # p = -1/96 + 97 / (96(1+96 exp(-ln(98)amp)))
-            # Sigmoid with p[0] = 0, p[1] = 0.5, p[2] = 0.99
-            p = -0.01041666666667 + 1.0104166666666667 / (
-                1+96 * np.exp(-4.584967478670572 * amp * self.scale_threshold(pdur)))
-            if np.random.random() < p:
-                return F_bright
-            else:
-                return 0
+        return F_bright
 
 
 class DefaultSizeModel(BaseModel):
@@ -100,9 +108,10 @@ class DefaultSizeModel(BaseModel):
         F_size = a5*scaled_amp + a6 
     """
 
-    def __init__(self, rho, **params):
+    def __init__(self, rho, engine="serial", **params):
         super(DefaultSizeModel, self).__init__(**params)
         self.rho = rho
+        self.engine = engine
         self.build()
 
     def get_default_params(self):
@@ -127,13 +136,14 @@ class DefaultSizeModel(BaseModel):
         """
         Main function to be called by BiphasicAxonMapModel
         Outputs value for each electrode that rho should be scaled by (F_size)
+        Must support batching (freq, amp, pdur may be arrays)
         """
         min_f_size = self.min_rho**2 / self.rho**2
         F_size = self.a5 * amp * self.scale_threshold(pdur) + self.a6
-        if F_size > min_f_size:
-            return F_size
+        if self.engine == 'jax':
+            return jnp.maximum(F_size, min_f_size)
         else:
-            return min_f_size
+            return np.maximum(F_size, min_f_size)
 
 
 class DefaultStreakModel(BaseModel):
@@ -151,9 +161,10 @@ class DefaultStreakModel(BaseModel):
         F_streak = -a7*pdur^a8 + a9
     """
 
-    def __init__(self, axlambda, **params):
+    def __init__(self, axlambda, engine='serial', **params):
         super(DefaultStreakModel, self).__init__(**params)
         self.axlambda = axlambda
+        self.engine = engine
         self.build()
 
     def get_default_params(self):
@@ -170,13 +181,15 @@ class DefaultStreakModel(BaseModel):
         """
         Main function to be called by BiphasicAxonMapModel
         Outputs value for each electrode that lambda should be scaled by (F_streak)
+        Must support batching (freq, amp, pdur may be arrays)
         """
         min_f_streak = self.min_lambda**2 / self.axlambda ** 2
         F_streak = self.a9 - self.a7 * pdur ** self.a8
-        if F_streak > min_f_streak:
-            return F_streak
+        if self.engine == 'jax':
+            return jnp.maximum(F_streak, min_f_streak)
         else:
-            return min_f_streak
+            return np.maximum(F_streak, min_f_streak)
+
 
 
 class BiphasicAxonMapSpatial(AxonMapSpatial):
@@ -211,8 +224,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     streak_model: callable, optional
         Model used to modulate percept streak length with amplitude, frequency,
         and pulse duration
-    do_thresholding: boolean
-        Use probabilistic sigmoid thresholding, default: False
     **params: optional
         Additional params for AxonMapModel. 
 
@@ -268,19 +279,16 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         ignore_pickle: bool, optional
             A flag whether to ignore the pickle file in future calls to
             ``model.build()``.
-
     """
 
     def __init__(self, **params):
         super(BiphasicAxonMapSpatial, self).__init__(**params)
         if self.bright_model is None:
-            self.bright_model = DefaultBrightModel(
-                do_thresholding=self.do_thresholding)
+            self.bright_model = DefaultBrightModel()
         if self.size_model is None:
-            self.size_model = DefaultSizeModel(self.rho)
+            self.size_model = DefaultSizeModel(self.rho, self.engine)
         if self.streak_model is None:
-            self.streak_model = DefaultStreakModel(self.axlambda)
-
+            self.streak_model = DefaultStreakModel(self.axlambda, self.engine)
         for key, val in params.items():
             if key in ['bright_model', 'size_model', 'streak_model']:
                 continue
@@ -350,7 +358,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                                                      self.__class__.__name__))
             raise FreezeError(err_str)
         
-
     def get_default_params(self):
         base_params = super(BiphasicAxonMapSpatial, self).get_default_params()
         params = {
@@ -363,8 +370,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Callable model used to modulate percept streak length with amplitude,
             # frequency, and pulse duration
             'streak_model': None,
-            # Use probabilistic thresholding
-            'do_thresholding': False
         }
         return {**base_params, **params}
 
@@ -375,8 +380,19 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             raise TypeError("size_model needs to be callable")
         if not callable(self.streak_model):
             raise TypeError("streak_model needs to be callable")
-        super(BiphasicAxonMapSpatial, self)._build()
+        if self.engine == 'jax' and not has_jax:
+            raise ImportError("Engine was chosen as jax, but jax is not installed. "
+                              "You can install it with 'pip install \"jax[cpu]\"' for cpu "
+                              "or following https://github.com/google/jax#installation for gpu")
 
+        super(BiphasicAxonMapSpatial, self)._build()
+        if self.engine == 'jax':
+            # Clear previously cached functions
+            self._predict_spatial_jax = jit(self._predict_spatial_jax)
+            self._predict_spatial_batched = jit(self._predict_spatial_batched)
+            # Cache axon_contrib for fast access later
+            self.axon_contrib = jax.device_put(jnp.array(self.axon_contrib), jax.devices()[0])
+    
     def _predict_spatial(self, earray, stim):
         """Predicts the percept"""
         if not isinstance(earray, ElectrodeArray):
@@ -385,37 +401,146 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         if not isinstance(stim, Stimulus):
             raise TypeError(
                 "Stim must be of type Stimulus but it is " + str(type(stim)))
-
-        # Calculate model effects before losing GIL
-        bright_effects = []
-        size_effects = []
-        streak_effects = []
-        amps = []
+        elec_params = []
+        x = []
+        y = []
         for e in stim.electrodes:
             amp = stim.metadata['electrodes'][str(e)]['metadata']['amp']
+            if amp == 0:
+                continue
             freq = stim.metadata['electrodes'][str(e)]['metadata']['freq']
             pdur = stim.metadata['electrodes'][str(e)]['metadata']['phase_dur']
-            bright_effects.append(self.bright_model(freq, amp, pdur))
-            size_effects.append(self.size_model(freq, amp, pdur))
-            streak_effects.append(self.streak_model(freq, amp, pdur))
-            amps.append(amp)
+            elec_params.append([freq, amp, pdur])
+            x.append(earray[e].x)
+            y.append(earray[e].y)
+        elec_params = np.array(elec_params, dtype=np.float32)
+        x = np.array(x, dtype=np.float32)
+        y = np.array(y, dtype=np.float32)
 
         if self.engine != 'jax':
+            bright_effects = np.array(self.bright_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]), 
+                                    dtype=np.float32).reshape((-1))
+            size_effects = np.array(self.size_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]),
+                                    dtype=np.float32).reshape((-1))
+            streak_effects = np.array(self.streak_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]), 
+                                    dtype=np.float32).reshape((-1))
+            amps = np.array(elec_params[:, 1], dtype=np.float32).reshape((-1))
             return fast_biphasic_axon_map(
-                np.array(amps, dtype=np.float32),
-                np.array(bright_effects, dtype=np.float32),
-                np.array(size_effects, dtype=np.float32),
-                np.array(streak_effects, dtype=np.float32),
-                np.array([earray[e].x for e in stim.electrodes],
-                         dtype=np.float32),
-                np.array([earray[e].y for e in stim.electrodes],
-                         dtype=np.float32),
+                amps,
+                bright_effects,
+                size_effects,
+                streak_effects,
+                x, y,
                 self.axon_contrib,
                 self.axon_idx_start.astype(np.uint32),
                 self.axon_idx_end.astype(np.uint32),
                 self.rho, self.thresh_percept)
         else:
-            raise NotImplementedError("Jax will be supported in future release")
+            return self._predict_spatial_jax(elec_params[:, :3], x, y)
+
+    def predict_one_point_jax(self, axon, eparams, x, y, rho):
+        """ Predicts the brightness contribution from each axon segment for each pixel"""
+        d2_el = (axon[:, 0, None] - x)**2 + (axon[:, 1, None] - y)**2
+        intensities = eparams[:, 0] * jnp.exp(-d2_el / (2. * rho**2 * eparams[:, 1])) * (axon[:, 2, None] ** (1./eparams[:, 2]))
+        return jnp.sum(intensities, axis=1)
+
+    @partial(cond_jit, static_argnums=[0])
+    def biphasic_axon_map_jax(self, eparams, x, y, axon_segments, rho, thresh_percept):
+        """ Predicts the spatial response of BiphasicAxonMapModel using Jax
+        
+        Parameters:
+        -------------
+        eparams : jnp.array with shape (n_elecs, 3)
+            Brightness, size, and streak length effect on each electrode
+        x, y : jnp.array with shape (n_elecs)
+            x and y coordinate of each electrode
+        axon_segments : jnp.array with shape (n_points, n_ax_segments, 3)
+            Closest axon segment to each simulated point, as returned by calc_axon_sensitivities
+        rho : float
+            The rho parameter of the axon map model: exponential decay constant
+            (microns) away from the axon.
+        axlambda : float
+            The lambda parameter of the axon map model: exponential decay constant
+            (microns) away from the cell body along the axon
+        thresh_percept : float
+            Spatial responses smaller than ``thresh_percept`` will be set to zero
+        """
+        I = jnp.max(jax.vmap(self.predict_one_point_jax, in_axes=[0, None, None, None, None])(
+                                axon_segments, 
+                                eparams, x, y, 
+                                rho), axis=1)
+        I = (I > thresh_percept) * I
+        return I
+
+    @partial(cond_jit, static_argnums=[0])
+    def _predict_spatial_jax(self, elec_params, x, y):
+        """
+        A stripped version of _predict_spatial that takes only electrode parameters, 
+        and returns only a numpy array
+        This is a better function to use when the stimulus is guaranteed to be safe,
+        and the percept object isn't used, just the data in the percept (e.g. inside a neural network)
+
+        Parameters:
+        ------------
+        elec_params : np.array with shape (n_electrodes, 3)
+            Frequency, amplitude, and pulse duration for each electrode
+        x, y: np.array with shape (n_electrodes)
+            x and y coordinates of electrodes
+
+        Returns:
+        ------------
+        resp : flattened np.array() representing the resulting percept, shape (:, 1)
+        """
+        bright_effects = jnp.array(self.bright_model(elec_params[:, 0], 
+                                           elec_params[:, 1], 
+                                           elec_params[:, 2])).reshape((-1))
+        size_effects = jnp.array(self.size_model(elec_params[:, 0], 
+                                       elec_params[:, 1], 
+                                       elec_params[:, 2])).reshape((-1))
+        streak_effects = jnp.array(self.streak_model(elec_params[:, 0], 
+                                           elec_params[:, 1], 
+                                           elec_params[:, 2])).reshape((-1))
+        eparams = jnp.stack([bright_effects, size_effects, streak_effects], axis=1)
+        
+        resp = self.biphasic_axon_map_jax(eparams, x, y,
+                                     self.axon_contrib,
+                                     self.rho, 
+                                     self.thresh_percept)
+        return resp
+
+    @partial(cond_jit, static_argnums=[0])
+    def _predict_spatial_batched(self, elec_params, x, y):
+        """ A batched version of _predict_spatial_jax
+        Parameters:
+        -------------
+        elec_params : np.array with shape (batch_size, n_electrodes, 3)
+            The 3 columns are freq, amp, pdur for each electrode
+        x, y: np.array with shape (n_electrodes)
+            x and y coordinates of electrodes
+        Returns:
+        ------------
+        resp : np.array() representing the resulting percepts, shape (batch_size, :, 1)
+        """
+        bright_effects = self.bright_model(elec_params[:, :, 0], 
+                                           elec_params[:, :, 1], 
+                                           elec_params[:, :, 2])
+        size_effects = self.size_model(elec_params[:, :, 0], 
+                                       elec_params[:, :, 1], 
+                                       elec_params[:, :, 2])
+        streak_effects = self.streak_model(elec_params[:, :, 0], 
+                                           elec_params[:, :, 1], 
+                                           elec_params[:, :, 2])
+        eparams = jnp.stack([bright_effects, size_effects, streak_effects], axis=2)
+        
+        def predict_one(e_params):
+            return self.biphasic_axon_map_jax(e_params, x, y,
+                                            self.axon_contrib,
+                                            self.rho, 
+                                            self.thresh_percept)
+        resps = lax.map(predict_one, eparams)
+
+        return resps
+
 
     def predict_percept(self, implant, t_percept=None):
         """ Predicts the spatial response
@@ -480,6 +605,93 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 implant.earray, stim).reshape(self.grid.x.shape)
         return Percept(resp, space=self.grid, time=t_percept,
                        metadata={'stim': stim.metadata})
+
+    def predict_percept_batched(self, implant, stims, t_percept=None):
+        """
+        Batched version of predict_percept
+        Only supported with jax engine
+
+        This is significantly faster if you do not batch ALL of your percepts, but rather, split
+        them into chunks (128 - 256 percepts each) and repeatedly call that. 
+        This is because jax has to compile on the first call, so repeated calls 
+        is much faster.
+
+        Parameters
+            ----------
+            implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
+                A valid prosthesis system. 
+            stims : list of stimuli
+                A percept will be predicted for each stimulus. Each stimulus
+                must be a collection of :py:class:`~pulse2percept.stimuli.BiphasicPulseTrains'
+            t_percept: float or list of floats, optional
+                The time points at which to output a percept (ms).
+                If None, ``implant.stim.time`` is used.
+
+            Returns
+            -------
+            percepts: list of :py:class:`~pulse2percept.models.Percept`
+                A list of Percept objects whose ``data`` container has dimensions Y x X x 1.
+        """
+        if self.engine != 'jax':
+            raise ImportError("Batched predict percept is not supported unless engine is jax")
+        
+        stims = [Stimulus(s) for s in stims]
+        # Make sure all stimuli are BiphasicPulseTrains
+        for stim in stims:
+            if not isinstance(stim, BiphasicPulseTrain):
+                # Could still be a stimulus where each electrode has a biphasic pulse train
+                # or a 0 stimulus
+                for i, (ele, params) in enumerate(stim.metadata
+                                                    ['electrodes'].items()):
+                    if (params['type'] != BiphasicPulseTrain or
+                            params['metadata']['delay_dur'] != 0) and \
+                            np.any(stim[i]):
+                        raise TypeError(
+                            "All stimuli must be BiphasicPulseTrains with no " +
+                            "delay dur (Failing electrode: %s)" % (ele))
+        
+        if not self.is_built:
+            raise NotBuiltError("Yout must call ``build`` first.")
+        if not isinstance(implant, ProsthesisSystem):
+            raise TypeError(("'implant' must be a ProsthesisSystem object, "
+                                "not %s.") % type(implant))
+        if implant.eye != self.eye:
+            raise ValueError(("The implant is in %s but the model was "
+                                "built for %s.") % (implant.eye,
+                                                    self.eye))
+        
+        # Currently all stimuli must have same electrodes
+        all_elecs = list(set().union(*[s.metadata['electrodes'].keys() for s in stims]))
+        max_elecs = len(all_elecs)
+        # Compute stimulus parameters for all electrodes
+        eparams = np.zeros((len(stims), max_elecs, 3))
+        for idx_stim, stim in enumerate(stims):
+            if stim is None:
+                continue
+            for elec in stim.metadata['electrodes'].keys():
+                idx_elec = all_elecs.index(elec)
+                elec_metadata = stim.metadata['electrodes'][elec]['metadata']
+                eparams[idx_stim, idx_elec, 0] = elec_metadata['freq']
+                eparams[idx_stim, idx_elec, 1] = elec_metadata['amp']
+                eparams[idx_stim, idx_elec, 2] = elec_metadata['phase_dur']
+        x = np.array([implant.earray[elec].x for elec in all_elecs])
+        y = np.array([implant.earray[elec].y for elec in all_elecs])
+        # Predict percepts (returns only numpy array)
+        percepts_data = self._predict_spatial_batched(eparams, x, y)
+        # Convert into percepts
+        percepts = []
+        for idx_percept, pdata in enumerate(percepts_data):
+            if t_percept is None:
+                n_time = 1
+            else:
+                n_time = len(t_percept)
+            resp = np.zeros(list(self.grid.x.shape) + [n_time])
+            # Response goes in first frame
+            resp[:, :, 0] = pdata.reshape(self.grid.x.shape)
+            percepts.append(Percept(resp, space=self.grid, time=t_percept,
+                        metadata={'stim': stims[idx_percept].metadata}))
+        return percepts
+
 
 
 class BiphasicAxonMapModel(Model):
