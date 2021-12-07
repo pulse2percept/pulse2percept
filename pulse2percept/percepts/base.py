@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
 from matplotlib.animation import FuncAnimation
 from math import isclose
-
+from scipy.cluster.vq import kmeans2
 import imageio
 import logging
 from skimage import img_as_uint
@@ -31,10 +31,14 @@ class Percept(Data):
         A list of time points
     metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.
+    n_gray : int, optional
+        The number of gray levels to use. If an integer is given, k-means
+        clustering is used to compress the color space of the percept into
+        ``n_gray`` bins. If None, no compression is performed.
 
     """
 
-    def __init__(self, data, space=None, time=None, metadata=None):
+    def __init__(self, data, space=None, time=None, metadata=None, n_gray=None):
         xdva = None
         ydva = None
         if space is not None:
@@ -43,6 +47,14 @@ class Percept(Data):
                                 "%s." % type(space))
             xdva = space._xflat
             ydva = space._yflat
+        if n_gray is not None:
+            n_gray = int(n_gray)
+            if n_gray <= 1:
+                raise ValueError(('"n_gray" must be greater than 1, not '
+                                  '%d.' % n_gray))
+            data = np.asarray(data, dtype=np.float32)
+            centroids, labels = kmeans2(data.ravel(), n_gray)
+            data = centroids[labels].reshape(data.shape)
         if time is not None:
             time = np.array([time]).flatten()
         self._internal = {
@@ -106,23 +118,6 @@ class Percept(Data):
             return self.data[..., self.argmax(axis='frames')]
         raise ValueError('Unknown axis value "%s". Use "frames" or '
                          'None.' % axis)
-
-    @deprecated(deprecated_version='0.7', removed_version='0.8',
-                alt_func='percept.max()')
-    def get_brightest_frame(self):
-        """Return the brightest frame
-
-        Looks for the brightest pixel in the percept, determines at what point
-        in time it happened, and returns all brightness values at that point
-        in a 2D NumPy array
-
-        Returns
-        -------
-        frame : 2D NumPy array
-            A slice ``percept.data[..., tmax]`` where ``tmax`` is the time at
-            which the percept reached its maximum brightness.
-        """
-        return self.data[..., np.argmax(np.max(self.data, axis=(0, 1)))]
 
     def rewind(self):
         """Rewind the iterator"""

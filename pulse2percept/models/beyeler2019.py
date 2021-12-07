@@ -59,6 +59,10 @@ class ScoreboardSpatial(SpatialModel):
         object that provides ``ret2dva`` and ``dva2ret`` methods.
         By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
+    n_gray : int, optional
+        The number of gray levels to use. If an integer is given, k-means
+        clustering is used to compress the color space of the percept into
+        ``n_gray`` bins. If None, no compression is performed.
 
     .. important ::
 
@@ -126,6 +130,10 @@ class ScoreboardModel(Model):
         object that provides ``ret2dva`` and ``dva2ret`` methods.
         By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
+    n_gray : int, optional
+        The number of gray levels to use. If an integer is given, k-means
+        clustering is used to compress the color space of the percept into
+        ``n_gray`` bins. If None, no compression is performed.
 
     .. important ::
 
@@ -182,6 +190,10 @@ class AxonMapSpatial(SpatialModel):
         object that provides ``ret2dva`` and ``dva2ret`` methods.
         By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
+    n_gray : int, optional
+        The number of gray levels to use. If an integer is given, k-means
+        clustering is used to compress the color space of the percept into
+        ``n_gray`` bins. If None, no compression is performed.
     loc_od, loc_od: (x,y), optional
         Location of the optic disc in degrees of visual angle. Note that the
         optic disc in a left eye will be corrected to have a negative x
@@ -668,10 +680,10 @@ class AxonMapSpatial(SpatialModel):
         if need_axons:
             # Pickle axons along with all important parameters:
             params = {'loc_od': self.loc_od,
-                    'n_axons': self.n_axons, 'axons_range': self.axons_range,
-                    'xrange': self.xrange, 'yrange': self.yrange,
-                    'xystep': self.xystep, 'n_ax_segments': self.n_ax_segments,
-                    'ax_segments_range': self.ax_segments_range}
+                      'n_axons': self.n_axons, 'axons_range': self.axons_range,
+                      'xrange': self.xrange, 'yrange': self.yrange,
+                      'xystep': self.xystep, 'n_ax_segments': self.n_ax_segments,
+                      'ax_segments_range': self.ax_segments_range}
             pickle.dump((params, axons), open(self.axon_pickle, 'wb'))
 
     def _predict_spatial(self, earray, stim):

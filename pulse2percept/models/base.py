@@ -195,6 +195,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'thresh_percept': 0,
             # Retinotopic map to be used:
             'retinotopy': Curcio1990Map(),
+            # Number of gray levels to use in the percept:
+            'n_gray': None,
             # JobLib or Dask can be used to parallelize computations:
             'engine': 'serial',
             'scheduler': 'threading',
@@ -315,7 +317,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             resp = self._predict_spatial(implant.earray, stim)
         return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
                        space=self.grid, time=t_percept,
-                       metadata={'stim': stim})
+                       metadata={'stim': stim}, n_gray=self.n_gray)
 
     def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
                        bright_tol=0.1, max_iter=100):
