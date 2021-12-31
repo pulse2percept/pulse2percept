@@ -53,7 +53,7 @@ class Percept(Data):
                 raise ValueError(('"n_gray" must be greater than 1, not '
                                   '%d.' % n_gray))
             data = np.asarray(data, dtype=np.float32)
-            centroids, labels = kmeans2(data.ravel(), n_gray)
+            centroids, labels = kmeans2(data.ravel(), n_gray, minit='points')
             data = centroids[labels].reshape(data.shape)
         if time is not None:
             time = np.array([time]).flatten()
