@@ -245,7 +245,7 @@ for amp_f in amp_factors:
     # 2. Run the temporal model:
     percept = model.predict_percept(implant, t_percept=t_percept)
     # 3. Save the brightest frame:
-    frames_amp.append(percept.get_brightest_frame())
+    frames_amp.append(percept.max(axis='frames'))
 
 # Use the amplitude values from the paper:
 freqs = [40.0 / 3, 20, 2.0 * 40 / 3, 40, 80, 120]
@@ -263,7 +263,7 @@ for freq in freqs:
     # 2. Run the temporal model:
     percept = model.predict_percept(implant, t_percept=t_percept)
     # 3. Save the brightest frame:
-    frames_freq.append(percept.get_brightest_frame())
+    frames_freq.append(percept.max(axis='frames'))
 
 ###############################################################################
 # This allows us to reproduce Fig. 7 of [Nanduri2012]_:
