@@ -93,8 +93,8 @@ class BVT24(ProsthesisSystem):
             # Specify different height for every electrode in a list:
             z_arr = np.asarray(self.z).flatten()
             if z_arr.size != n_elecs:
-                raise ValueError("If `z` is a list, it must have %d entries, "
-                                 "not %d." % (n_elecs, len(z)))
+                raise ValueError(f"If `z` is a list, it must have {n_elecs} entries, "
+                                 f"not {len(z)}.")
         else:
             # If `z` is a scalar, choose same height for all electrodes:
             z_arr = np.ones(n_elecs, dtype=float) * z
@@ -110,7 +110,7 @@ class BVT24(ProsthesisSystem):
         # the radius of the return electrodes is 1000.0 um
         r_arr[33] = r_arr[34] = 1000.0
         # the names of the electrodes C1-20, C21a-21m, R1 and R2
-        names = ["C%s" % name for name in range(1, 21)]
+        names = [f"C{name}" for name in range(1, 21)]
         names.extend(['C21a', 'C21b', 'C21c', 'C21d', 'C21e',
                       'C21f', 'C21g', 'C21h', 'C21i', 'C21j',
                       'C21k', 'C21l', 'C21m'])

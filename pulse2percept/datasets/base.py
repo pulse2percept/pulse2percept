@@ -74,10 +74,8 @@ def _report_hook(count, block_size, total_size):
     """Display a progress bar for ``urlretrieve``"""
     progress_size = int(count * block_size)
     percent = min(100, int(count * block_size * 100 / total_size))
-    sys.stdout.write("\rDownloading %d/%d MB (%d%%)" %
-                     (progress_size / (1024 * 1024),
-                      total_size / (1024 * 1024),
-                      percent))
+    sys.stdout.write(f"\rDownloading {progress_size / (1024 * 1024)}"
+                     f"/{total_size / (1024 * 1024)} MB ({percent}%)"
     sys.stdout.flush()
 
 
@@ -105,7 +103,6 @@ def fetch_url(url, file_path, progress_bar=_report_hook, remote_checksum=None):
     urlretrieve(url, file_path, progress_bar)
     checksum = _sha256(file_path)
     if remote_checksum != None and remote_checksum != checksum:
-        raise IOError("{} has an SHA256 checksum ({}) "
-                      "differing from expected ({}), "
-                      "file may be corrupted.".format(file_path, checksum,
-                                                      remote_checksum))
+        raise IOError(f"{file_path} has an SHA256 checksum ({checksum}) "
+                      f"differing from expected ({remote_checksum}), "
+                      f"file may be corrupted.")

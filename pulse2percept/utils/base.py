@@ -65,7 +65,7 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
                     strobj = np.array2string(val).replace('\n', ',')
                     # If still too long, show shape:
                     if len(strobj) > lwidth - lindent:
-                        strobj = '<%s np.ndarray>' % str(val.shape)
+                        strobj = f'<{str(val.shape)} np.ndarray>'
                 else:
                     strobj = str(val)
                     is_type = isinstance(val, type)
@@ -122,8 +122,8 @@ def freeze_class(set):
             if isinstance(sys._getframe(1).f_locals['self'], self.__class__):
                 set(self, name, value)
                 return
-        err_str = ("'%s' not found. You cannot add attributes to %s outside "
-                   "the constructor." % (name, self.__class__.__name__))
+        err_str = (f"'{name}' not found. You cannot add attributes "
+                   f"to {self.__class__.__name__} outside the constructor.")
         raise FreezeError(err_str)
     return set_attr
 
@@ -184,7 +184,7 @@ class Data(PrettyPrint):
             data = np.array([data])
         if source['axes'] is None:
             # Automatic axis labels and values: 'axis0', 'axis1', etc.
-            axes = ODict([('axis%d' % d, np.arange(data.shape[d]))
+            axes = ODict([(f'axis{d}', np.arange(data.shape[d]))
                           for d in np.arange(data.ndim)])
         else:
             # Build an ordered dictionary from the provided axis labels/values
@@ -195,9 +195,9 @@ class Data(PrettyPrint):
                 raise TypeError("'axes' must be either an ordered dictionary "
                                 "or a list of tuples (label, values).")
             if len(axes) != data.ndim:
-                raise ValueError("Number of axis labels (%d) does not match "
-                                 "number of dimensions in the NumPy array "
-                                 " (%d)." % (len(axes), data.ndim))
+                raise ValueError(f"Number of axis labels ({len(axes)}) does not match "
+                                 f"number of dimensions in the NumPy array "
+                                 f" ({data.ndim}).")
             if len(np.unique(list(axes.keys()))) < data.ndim:
                 raise ValueError("All axis labels must be unique.")
             for i, (key, values) in enumerate(axes.items()):
@@ -212,10 +212,9 @@ class Data(PrettyPrint):
                     if data.shape[i] == 1 and np.isscalar(values):
                         values = np.array([values])
                     if len(values) != data.shape[i]:
-                        err_str = ("Number of values for axis '%s' (%d) does "
-                                   "not match data.shape[%d] "
-                                   "(%d)" % (key, len(values), i,
-                                             data.shape[i]))
+                        err_str = (f"Number of values for axis '{key}' ({len(values)}) does "
+                                   f"not match data.shape[{i}] "
+                                   f"({data.shape[i]})")
                         raise ValueError(err_str)
                     axes[key] = values
 
@@ -375,4 +374,4 @@ def bijective26_name(i):
     name = ""
     if repeat > 0:
         name = bijective26_name(repeat - 1)
-    return "%s%s" % (name, ascii_uppercase[letter])
+    return f"{name}{ascii_uppercase[letter]}"

@@ -46,7 +46,7 @@ class PhotovoltaicPixel(HexElectrode):
             raise TypeError("Radius of the active electrode must be a scalar.")
         if r <= 0:
             raise ValueError("Radius of the active electrode must be > 0, not "
-                             "%f." % r)
+                             "{r}.")
         self.r = r
         # Plot two objects: hex honeycomb and circular active electrode
         self.plot_patch = [RegularPolygon, Circle]
@@ -160,8 +160,8 @@ class PRIMA(ProsthesisSystem):
             # Specify different height for every electrode in a list:
             z_arr = np.asarray(z).flatten()
             if z_arr.size != self.n_electrodes:
-                raise ValueError("If `z` is a list, it must have %d entries, "
-                                 "not %d." % (self.n_electrodes, z_arr.size))
+                raise ValueError(f"If `z` is a list, it must have {self.n_electrodes} entries, "
+                                 f"not {z_arr.size}.")
             for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 
@@ -257,8 +257,8 @@ class PRIMA75(ProsthesisSystem):
             # Specify different height for every electrode in a list:
             z_arr = np.asarray(z).flatten()
             if z_arr.size != self.n_electrodes:
-                raise ValueError("If `z` is a list, it must have %d entries, "
-                                 "not %d." % (self.n_electrodes, z_arr.size))
+                raise ValueError(f"If `z` is a list, it must have {self.n_electrodes} entries, "
+                                 f"not {z_arr.size}.")
             for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 
@@ -364,8 +364,8 @@ class PRIMA55(ProsthesisSystem):
             # Specify different height for every electrode in a list:
             z_arr = np.asarray(z).flatten()
             if z_arr.size != self.n_electrodes:
-                raise ValueError("If `z` is a list, it must have %d entries, "
-                                 "not %d." % (self.n_electrodes, z_arr.size))
+                raise ValueError(f"If `z` is a list, it must have {self.n_electrodes} entries, "
+                                 f"not {z_arr.size}.")
             for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 
@@ -478,8 +478,8 @@ class PRIMA40(ProsthesisSystem):
             # Specify different height for every electrode in a list:
             z_arr = np.asarray(z).flatten()
             if z_arr.size != self.n_electrodes:
-                raise ValueError("If `z` is a list, it must have %d entries, "
-                                 "not %d." % (self.n_electrodes, z_arr.size))
+                raise ValueError(f"If `z` is a list, it must have {self.n_electrodes} entries, "
+                                 f"not {z_arr.size}.")
             for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 

@@ -79,8 +79,8 @@ if SETUPTOOLS_COMMANDS.intersection(sys.argv):
         include_package_data=True,
         extras_require={
             'alldeps': (
-                'numpy >= {}'.format(NUMPY_MIN_VERSION),
-                'scipy >= {}'.format(SCIPY_MIN_VERSION),
+                f'numpy >= {NUMPY_MIN_VERSION}',
+                f'scipy >= {SCIPY_MIN_VERSION}'
             ),
         },
     )
@@ -255,9 +255,9 @@ def setup_package():
                     },
                     python_requires=">=3.7",
                     install_requires=[
-                        'numpy>={}'.format(NUMPY_MIN_VERSION),
-                        'scipy>={}'.format(SCIPY_MIN_VERSION),
-                        'joblib>={}'.format(JOBLIB_MIN_VERSION)
+                        f'numpy>={NUMPY_MIN_VERSION}',
+                        f'scipy>={SCIPY_MIN_VERSION}',
+                        f'joblib>={JOBLIB_MIN_VERSION}'
                     ],
                     **extra_setuptools_args)
 
@@ -281,46 +281,35 @@ def setup_package():
     else:
         if sys.version_info < (3, 6):
             raise RuntimeError(
-                "pulse2percept requires Python 3.6 or later. The current"
-                " Python version is %s installed in %s."
-                % (platform.python_version(), sys.executable))
-
+                f"pulse2percept requires Python 3.6 or later. The current"
+                f" Python version is {platform.python_version()} installed in {sys.executable}."
         instructions = ("Installation instructions are available on GitHub: "
                         "http://github.com/pulse2percept/pulse2percept\n")
 
         # Make sure NumPy is installed:
         numpy_status = get_numpy_status()
-        numpy_req_str = "pulse2percept requires NumPy >= {}.\n".format(
-            NUMPY_MIN_VERSION
-        )
+        numpy_req_str = f"pulse2percept erquires NumPy >= {NUMPY_MIN_VERSION}\n"
         if numpy_status['up_to_date'] is False:
             if numpy_status['version']:
-                raise ImportError("Your installation of Numerical Python "
-                                  "(NumPy) {} is out-of-date.\n{}{}"
-                                  .format(numpy_status['version'],
-                                          numpy_req_str, instructions))
+                raise ImportError(f"Your installation of Numerical Python "
+                                  f"(NumPy) {numpy_status[version]} is "
+                                  f"out-of-date.\n{numpy_req_str}{instructions}")
             else:
-                raise ImportError("Numerical Python (NumPy) is not "
-                                  "installed.\n{}{}"
-                                  .format(numpy_req_str, instructions))
+                raise ImportError(f"Numerical Python (NumPy) is not "
+                                  f"installed.\n{numpy_req_str}{instructions}")
         from numpy.distutils.core import setup
 
         # Make sure Cython is installed:
         cython_status = get_cython_status()
-        cython_req_str = "pulse2percept requires Cython >= {}.\n".format(
-            CYTHON_MIN_VERSION
-        )
+        cython_req_str = f"pulse2percept requires Cython >= {CYTHON_MIN_VERSION}.\n"
         if cython_status['up_to_date'] is False:
             if cython_status['version']:
-                raise ImportError("Your installation of C-Extensions for "
-                                  "Python (Cython) {} is out-of-date.\n{}{}"
-                                  .format(cython_status['version'],
-                                          cython_req_str, instructions))
+                raise ImportError(f"Your installation of C-Extensions for "
+                                  f"Python (Cython) {cython_status['version']} "
+                                  f"is out-of-date.\n{cython_req_str}{instructions}"
             else:
-                raise ImportError("C-Extensions for Python (Cython) is not "
-                                  "installed.\n{}{}"
-                                  .format(cython_req_str, instructions))
-
+                raise ImportError(f"C-Extensions for Python (Cython) is not "
+                                  f"installed.\n{cython_req_str}{instructions}")
         metadata['configuration'] = configuration
 
     setup(**metadata)
