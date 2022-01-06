@@ -75,7 +75,7 @@ def _report_hook(count, block_size, total_size):
     progress_size = int(count * block_size)
     percent = min(100, int(count * block_size * 100 / total_size))
     sys.stdout.write(f"\rDownloading {progress_size / (1024 * 1024)}"
-                     f"/{total_size / (1024 * 1024)} MB ({percent}%)"
+                     f"/{total_size / (1024 * 1024)} MB ({percent}%)")
     sys.stdout.flush()
 
 
