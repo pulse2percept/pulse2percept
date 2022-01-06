@@ -282,7 +282,7 @@ def setup_package():
         if sys.version_info < (3, 6):
             raise RuntimeError(
                 f"pulse2percept requires Python 3.6 or later. The current"
-                f" Python version is {platform.python_version()} installed in {sys.executable}."
+                f" Python version is {platform.python_version()} installed in {sys.executable}.")
         instructions = ("Installation instructions are available on GitHub: "
                         "http://github.com/pulse2percept/pulse2percept\n")
 
@@ -306,7 +306,7 @@ def setup_package():
             if cython_status['version']:
                 raise ImportError(f"Your installation of C-Extensions for "
                                   f"Python (Cython) {cython_status['version']} "
-                                  f"is out-of-date.\n{cython_req_str}{instructions}"
+                                  f"is out-of-date.\n{cython_req_str}{instructions}")
             else:
                 raise ImportError(f"C-Extensions for Python (Cython) is not "
                                   f"installed.\n{cython_req_str}{instructions}")

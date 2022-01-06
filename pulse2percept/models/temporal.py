@@ -68,7 +68,7 @@ class FadingTemporal(TemporalModel):
         idx_percept = np.uint32(np.round(t_percept / self.dt))
         if np.unique(idx_percept).size < t_percept.size:
             raise ValueError(f"All times 't_percept' must be distinct multiples "
-                             f"of `dt`={self.dt:.2e}"}
+                             f"of `dt`={self.dt:.2e}")
         # Cython returns a 2D (space x time) NumPy array:
         return fading_fast(stim_data.astype(np.float32),
                            stim.time.astype(np.float32),
