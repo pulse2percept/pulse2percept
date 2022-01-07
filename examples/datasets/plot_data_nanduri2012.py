@@ -1,6 +1,6 @@
 """
 ===============================================================================
-Threshold data from Nanduri et al. (2012)
+ Data from Nanduri et al. (2012)
 ===============================================================================
 
 This example shows how to use the Nanduri et al. (2012) dataset.
@@ -53,10 +53,16 @@ print(data[data.freq == 20.0])
 ###############################################################################
 # This leaves us with 88 rows.
 #
-# An alternative to indexing into the DataFrame is to load only a subset of
-# the data such as all features with electrode C4:
+# One of the important points of the paper is to investigate the relationship between
+# phosphene brightness and size as either the stimulation amplitude factor or frequency varies.
+# We can easily load in all data points where phosphene brightness was recorded when initially loading in the data set.
 
-print(load_nanduri2012(electrodes='C4'))
+print(load_nanduri2012(task='rate'))
+
+###############################################################################
+# Likewise, we can load in all data points where phosphene size was recorded when initially loading in the data set.
+
+print(load_nanduri2012(task='size'))
 
 ###############################################################################
 # .. note ::
@@ -67,6 +73,57 @@ print(load_nanduri2012(electrodes='C4'))
 
 ###############################################################################
 # Plotting the data
+# -----------------
+#
+# To see the relationship between phosphene brightness as the amplitude factor varies,
+# we can recreate figure 4 a, from the paper.
+# Furthermore, the dataset available in :py:func:`~pulse2percept.datasets.load_nanduri2012`
+# is used to create figures 4 and 5, a-d in the paper.
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+# load subset of the dataset concerning brightness data
+brightness_data = load_nanduri2012(task='rate')
+
+# get data where stimulation amplitude is varied
+vary_amp = brightness_data[brightness_data.varied_param == 'amp']
+
+# get the list of electrodes
+electrodes = data['electrode'].unique()
+
+# iterate over all electrodes
+for electrode in electrodes:
+    # get relevant data for this specific electrode
+    electrode_data = vary_amp[vary_amp.electrode == electrode]
+
+    # normalize the amplitude
+    normalized_amp = electrode_data.amp_factor / electrode_data.ref_amp_factor
+
+    # set brightness rating
+    brightness_rating = electrode_data.brightness
+
+    # perform a first order linear best fit
+    linear_fit = np.poly1d(np.polyfit(normalized_amp, brightness_rating, 1))
+
+    # plot the linear best fit
+    plt.plot(normalized_amp, linear_fit(normalized_amp), label=electrode)
+
+# display legend on plot
+plt.legend()
+
+# set plot axes
+plt.xlim(0, 7)
+plt.ylim(0, 60)
+
+# set plot labels and title
+plt.xlabel('Amplitude (uA) / Threshold (uA)')
+plt.ylabel('Brightness Rating')
+plt.title('Amplitude Modulation Brightness')
+
+
+###############################################################################
+# Using Built-In Plotting Functionality
 # -----------------
 #
 # Arguably the most important column is "freq". This is the current
