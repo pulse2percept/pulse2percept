@@ -77,7 +77,7 @@ class Horsager2009Temporal(TemporalModel):
                              stim.time.astype(np.float32),
                              idx_percept,
                              self.dt, self.tau1, self.tau2, self.tau3,
-                             self.eps, self.beta, self.thresh_percept)
+                             self.eps, self.beta, self.thresh_percept, self.n_threads)
 
 
 class Horsager2009Model(Model):

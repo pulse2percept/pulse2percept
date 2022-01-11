@@ -93,7 +93,8 @@ class ScoreboardSpatial(SpatialModel):
                                self.grid.xret.ravel(),
                                self.grid.yret.ravel(),
                                self.rho,
-                               self.thresh_percept)
+                               self.thresh_percept,
+                               self.n_threads)
 
 
 class ScoreboardModel(Model):

@@ -73,7 +73,8 @@ class Nanduri2012Spatial(SpatialModel):
                             self.grid.yret.ravel(),
                             self.atten_a,
                             self.atten_n,
-                            self.thresh_percept)
+                            self.thresh_percept,
+                            self.n_threads)
 
     def predict_percept(self, implant, t_percept=None):
         if not np.all([isinstance(e, DiskElectrode)
@@ -164,7 +165,7 @@ class Nanduri2012Temporal(TemporalModel):
                              idx_percept,
                              self.dt, self.tau1, self.tau2, self.tau3,
                              self.asymptote, self.shift, self.slope, self.eps,
-                             self.scale_out, self.thresh_percept)
+                             self.scale_out, self.thresh_percept, self.n_threads)
 
 
 class Nanduri2012Model(Model):

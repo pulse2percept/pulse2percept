@@ -438,7 +438,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 self.axon_contrib,
                 self.axon_idx_start.astype(np.uint32),
                 self.axon_idx_end.astype(np.uint32),
-                self.rho, self.thresh_percept)
+                self.rho, self.thresh_percept,
+                self.n_threads)
         else:
             return self._predict_spatial_jax(elec_params[:, :3], x, y)
 
