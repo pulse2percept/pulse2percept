@@ -21,7 +21,7 @@ class FadingTemporal(TemporalModel):
     *  Cathodic currents (negative amplitudes) will increase perceived
        brightness
     *  Anodic currents (positive amplitudes) will decrease brightness
-    *  Brightness is bounded in :math:`[\\theta, \\infinity[`, where 
+    *  Brightness is bounded in :math:`[\\theta, \\infty]`, where
        :math:`\\theta` (``thresh_percept``) is a nonnegative scalar
 
     Parameters
@@ -35,8 +35,10 @@ class FadingTemporal(TemporalModel):
         :math:`\\ln(2) \\tau` milliseconds.
     thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
+    n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
 
-    .. versionadded: 0.7.1
+    .. versionadded:: 0.7.1
 
     """
 

@@ -78,7 +78,7 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
     bright = np.zeros((n_space), dtype=np.float32)  # Py overhead
 
     # Parallel loop over all pixels to be rendered:
-    for idx_space in prange(n_space, schedule='static', nogil=True, n_threads=n_threads):
+    for idx_space in prange(n_space, schedule='static', nogil=True, num_threads=n_threads):
         # Find the brightness value of each pixel (`px_bright`) by finding
         # the strongest activated axon segment:
         px_bright = 0.0

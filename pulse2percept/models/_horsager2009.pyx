@@ -73,7 +73,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
 
     percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
 
-    for idx_space in prange(n_space, schedule='static', nogil=True, n_threads=n_threads):
+    for idx_space in prange(n_space, schedule='static', nogil=True, num_threads=n_threads):
         # Because the stationary nonlinearity depends on `max_R3`, which is the
         # largest value of R3 over all time points, we have to process the
         # stimulus in two steps.
