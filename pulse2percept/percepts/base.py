@@ -11,6 +11,7 @@ from skimage import img_as_uint
 from skimage.transform import resize
 
 from ..utils import Data, Grid2D, deprecated, unique
+from ..utils.constants import VIDEO_BLOCK_SIZE
 
 
 class Percept(Data):
@@ -350,7 +351,7 @@ class Percept(Data):
         if self.time is None:
             # No time component, store as an image. imwrite will automatically
             # scale the gray levels:
-            imageio.imwrite(fname, data)
+            imageio.imwrite(fname, img_as_uint(data).astype(np.uint8))
         else:
             # With time component, store as a movie:
             if fps is None:
@@ -358,5 +359,19 @@ class Percept(Data):
                 if len(interval) > 1:
                     raise NotImplementedError
                 fps = 1000.0 / interval[0]
+            # Note, for most codecs, the image dimensions must be divisible by
+            # 16 the default for the VIDEO_BLOCK_SIZE is 16. Check if image is
+            # divisible, if not have ffmpeg upsize to nearest size and warn
+            # user they should correct input image if this is not desired.
+            h, w = data.shape[:2]
+            if VIDEO_BLOCK_SIZE > 1:
+                if h % VIDEO_BLOCK_SIZE > 0 or w % VIDEO_BLOCK_SIZE > 0:
+                    out_h, out_w = h, w
+                    if w % VIDEO_BLOCK_SIZE > 0:
+                        out_w += VIDEO_BLOCK_SIZE - (w % VIDEO_BLOCK_SIZE)
+                    if h % VIDEO_BLOCK_SIZE > 0:
+                        out_h += VIDEO_BLOCK_SIZE - (h % VIDEO_BLOCK_SIZE)
+                    data = resize(data, (out_h, out_w))
+            data = img_as_uint(data).astype(np.uint8)
             imageio.mimwrite(fname, data.transpose((2, 0, 1)), fps=fps)
         logging.getLogger(__name__).info('Created %s.' % fname)
