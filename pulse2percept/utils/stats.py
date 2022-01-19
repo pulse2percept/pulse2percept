@@ -63,7 +63,7 @@ def r2_score(y_true, y_pred):
     ss_res = np.sum((y_true - y_pred) ** 2, dtype=np.float32)
     # Total sum of squares:
     ss_tot = np.sum((y_true - np.mean(y_true)) ** 2, dtype=np.float32)
-    if isclose(ss_tot, 0):
+    if isclose(ss_tot, 0, abs_tol=1e-9):
         return 0.0  # zero variance in the ground-truth data
     return 1 - ss_res / ss_tot
 
@@ -108,7 +108,6 @@ def circ_r2_score(y_true, y_pred):
     ss_res = np.mean(err ** 2, dtype=np.float32)
     ss_tot = np.asarray(circvar(y_true, low=-np.pi / 2, high=np.pi / 2),
                         dtype=np.float32)
-    print(f"debug: res={ss_res}, tot={ss_tot} isclose={isclose(ss_tot, 0.0)}")
-    if isclose(ss_tot, 0.0):
+    if isclose(ss_tot, 0.0, abs_tol=1e-9):
         return 0.0  # zero variance in the ground-truth data
     return 1 - ss_res / ss_tot
