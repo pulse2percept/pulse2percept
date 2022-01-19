@@ -88,7 +88,7 @@ class CustomReferencesResolver(ReferencesResolver):
                                               self.app.builder, role, target,
                                               node, contnode)
                     if res and isinstance(res[0], nodes.Element):
-                        result = ('%s:%s' % (domain.name, role), res)
+                        result = (f'{domain.name}:{role}', res)
                         return self.create_node(result)
 
         # no results considered to be <code>

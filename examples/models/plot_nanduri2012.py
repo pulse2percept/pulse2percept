@@ -272,14 +272,14 @@ fig, axes = plt.subplots(nrows=2, ncols=len(amp_factors), figsize=(16, 6))
 
 for ax, amp, frame in zip(axes[0], amp_factors, frames_amp):
     ax.imshow(frame, vmin=0, vmax=0.3, cmap='gray')
-    ax.set_title('%.2g xTh / 20 Hz' % amp, fontsize=16)
+    ax.set_title(f'{amp:.2g} xTh / 20 Hz', fontsize=16)
     ax.set_xticks([])
     ax.set_yticks([])
 axes[0][0].set_ylabel('amplitude\nmodulation')
 
 for ax, freq, frame in zip(axes[1], freqs, frames_freq):
     ax.imshow(frame, vmin=0, vmax=0.3, cmap='gray')
-    ax.set_title('1.25xTh / %d Hz' % freq, fontsize=16)
+    ax.set_title(f'1.25xTh / {freq} Hz', fontsize=16)
     ax.set_xticks([])
     ax.set_yticks([])
 axes[1][0].set_ylabel('frequency\nmodulation')

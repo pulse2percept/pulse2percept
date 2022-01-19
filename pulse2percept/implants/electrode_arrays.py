@@ -63,8 +63,8 @@ class ElectrodeArray(PrettyPrint):
         elif isinstance(electrodes, Electrode):
             self.add_electrode(self.n_electrodes, electrodes)
         else:
-            raise TypeError(("electrodes must be a list or dict, not "
-                             "%s") % type(electrodes))
+            raise TypeError((f"electrodes must be a list or dict, not "
+                             f"{type(electrodes)}"))
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -82,11 +82,11 @@ class ElectrodeArray(PrettyPrint):
             An Electrode object, such as a PointSource or a DiskElectrode.
         """
         if not isinstance(electrode, Electrode):
-            raise TypeError(("Electrode %s must be an Electrode object, not "
-                             "%s.") % (name, type(electrode)))
+            raise TypeError(f"Electrode {name} must be an Electrode object, not "
+                            f"{type(electrode)}.")
         if name in self.electrode_names:
-            raise ValueError(("Cannot add electrode: key '%s' already "
-                              "exists.") % name)
+            raise ValueError(f"Cannot add electrode: key '{name}' already "
+                             f"exists.")
         self._electrodes.update({name: electrode})
 
     def remove_electrode(self, name):
@@ -98,8 +98,8 @@ class ElectrodeArray(PrettyPrint):
             Electrode name or index
         """
         if name not in self.electrode_names:
-            raise ValueError(("Cannot remove electrode: key '%s' does not "
-                              "exist") % name)
+            raise ValueError(f"Cannot remove electrode: key '{name}' does not "
+                             f"exist")
         del self.electrodes[name]
 
     def activate(self, electrodes):
@@ -384,13 +384,13 @@ class ElectrodeGrid(ElectrodeArray):
             if 'r' not in kwargs.keys():
                 raise ValueError("A DiskElectrode needs a radius ``r``.")
         if not isinstance(names, (tuple, list, np.ndarray)):
-            raise TypeError("'names' must be a tuple or list, not "
-                            "%s." % type(names))
+            raise TypeError(f"'names' must be a tuple or list, not "
+                            f"{type(names)}.")
         else:
             if len(names) != 2 and len(names) != np.prod(shape):
-                raise ValueError("'names' must either have two entries for "
-                                 "rows/columns or %d entries, not "
-                                 "%d" % (np.prod(shape), len(names)))
+                raise ValueError(f"'names' must either have two entries for "
+                                 f"rows/columns or {np.prod(shape)} entries, not "
+                                 f"{len(names)}")
         self.shape = shape
         self.type = type
         self.spacing = spacing
@@ -454,11 +454,11 @@ class ElectrodeGrid(ElectrodeArray):
         if len(names) == 2 and np.prod(self.shape) != 2:
             name_rows, name_cols = names
             if not isinstance(name_rows, str):
-                raise TypeError("Row name must be a string, not "
-                                "%s." % type(name_rows))
+                raise TypeError(f"Row name must be a string, not "
+                                f"{type(name_rows)}.")
             if not isinstance(name_cols, str):
-                raise TypeError("Column name must be a string, not "
-                                "%s." % type(name_cols))
+                raise TypeError(f"Column name must be a string, not "
+                                f"{type(name_cols)}.")
             # Row names:
             reverse_rows = False
             if '-' in name_rows:
@@ -497,8 +497,8 @@ class ElectrodeGrid(ElectrodeArray):
             # Specify different height for every electrode in a list:
             z_arr = np.asarray(z).flatten()
             if z_arr.size != n_elecs:
-                raise ValueError("If `h` is a list, it must have %d entries, "
-                                 "not %d." % (n_elecs, len(z)))
+                raise ValueError(f"If `h` is a list, it must have {n_elecs} entries, "
+                                 f"not {len(z)}.")
         else:
             # If `z` is a scalar, choose same height for all electrodes:
             z_arr = np.ones(n_elecs, dtype=float) * z
@@ -544,8 +544,8 @@ class ElectrodeGrid(ElectrodeArray):
             if isinstance(kwargs['r'], (list, np.ndarray)):
                 # Specify different radius for every electrode in a list:
                 if len(kwargs['r']) != n_elecs:
-                    err_s = ("If `r` is a list, it must have %d entries, not "
-                             "%d)." % (n_elecs, len(kwargs['r'])))
+                    err_s = (f"If `r` is a list, it must have {n_elecs} entries, not "
+                             f"{len(kwargs['r'])}.")
                     raise ValueError(err_s)
                 r_arr = kwargs['r']
             else:

@@ -44,15 +44,15 @@ class Percept(Data):
         ydva = None
         if space is not None:
             if not isinstance(space, Grid2D):
-                raise TypeError("'space' must be a Grid2D object, not "
-                                "%s." % type(space))
+                raise TypeError(f"'space' must be a Grid2D object, not "
+                                f"{type(space)}.")
             xdva = space._xflat
             ydva = space._yflat
         if n_gray is not None:
             n_gray = int(n_gray)
             if n_gray <= 1:
-                raise ValueError(('"n_gray" must be greater than 1, not '
-                                  '%d.' % n_gray))
+                raise ValueError(f'"n_gray" must be greater than 1, not '
+                                 f'{n_gray}.')
             data = np.asarray(data, dtype=np.float32)
             centroids, labels = kmeans2(data.ravel(), n_gray, minit='points')
             data = centroids[labels].reshape(data.shape)
@@ -91,8 +91,8 @@ class Percept(Data):
             return self.data.argmax()
         elif axis.lower() == 'frames':
             return np.argmax(np.max(self.data, axis=(0, 1)))
-        raise ValueError('Unknown axis value "%s". Use "frames" or '
-                         'None.' % axis)
+        raise ValueError(f'Unknown axis value "{axis}". Use "frames" or '
+                         f'None.')
 
     def max(self, axis=None):
         """Brightest pixel or frame
@@ -117,8 +117,8 @@ class Percept(Data):
             return self.data.max()
         elif axis.lower() == 'frames':
             return self.data[..., self.argmax(axis='frames')]
-        raise ValueError('Unknown axis value "%s". Use "frames" or '
-                         'None.' % axis)
+        raise ValueError(f'Unknown axis value "{axis}". Use "frames" or '
+                         f'None.')
 
     def rewind(self):
         """Rewind the iterator"""
@@ -174,8 +174,8 @@ class Percept(Data):
                 ax.figure.set_size_inches(kwargs['figsize'])
         else:
             if not isinstance(ax, Subplot):
-                raise TypeError("'ax' must be a Matplotlib axis, not "
-                                "%s." % type(ax))
+                raise TypeError(f"'ax' must be a Matplotlib axis, not "
+                                f"{type(ax)}.")
         if self.xdva is None and self.ydva is None and self.time is not None:
             # Special case of a purely temporal percept:
             ax.plot(self.time, self.data.squeeze(), linewidth=2, **kwargs)
@@ -214,8 +214,8 @@ class Percept(Data):
                       cmap=cmap, gridsize=gridsize, vmin=vmin, vmax=vmax,
                       **other_kwargs)
         else:
-            raise ValueError("Unknown plot option '%s'. Choose either 'pcolor'"
-                             "or 'hex'." % kind)
+            raise ValueError(f"Unknown plot option '%s'. Choose either 'pcolor'"
+                             f"or '{kind}'.")
         ax.set_aspect('equal', adjustable='box')
         ax.set_xlim(self.xdva[0], self.xdva[-1])
         ax.set_xticks(np.linspace(self.xdva[0], self.xdva[-1], num=5))
@@ -254,8 +254,7 @@ class Percept(Data):
         """
         def update(data):
             if annotate_time:
-                mat.axes.set_title('t = %d ms' %
-                                   self.time[self._next_frame - 1])
+                mat.axes.set_title(f't = {self.time[self._next_frame - 1]} ms')
             mat.set_data(data)
             return mat
 
@@ -374,4 +373,4 @@ class Percept(Data):
                     data = resize(data, (out_h, out_w))
             data = img_as_uint(data).astype(np.uint8)
             imageio.mimwrite(fname, data.transpose((2, 0, 1)), fps=fps)
-        logging.getLogger(__name__).info('Created %s.' % fname)
+        logging.getLogger(__name__).info(f'Created {fname}.')

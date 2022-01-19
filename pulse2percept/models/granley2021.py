@@ -313,12 +313,12 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # raise an exception:
             # Note that this gets called from __init__ of BaseModel, not directly from
             # BiphasicAxonMap
-            raise AttributeError("%s not found" % attr)
+            raise AttributeError(f"{attr} not found")
         # Check if bright/size/streak model has param
         for m in [self.bright_model, self.size_model, self.streak_model]:
             if hasattr(m, attr):
                 return getattr(m, attr)
-        raise AttributeError("%s not found" % attr)
+        raise AttributeError(f"{attr} not found")
 
     def __setattr__(self, name, value):
         """Called when an attribute is set
@@ -357,9 +357,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 pass
         
         if not found:
-            err_str = ("'%s' not found. You cannot add attributes to %s "
-                       "outside the constructor." % (name,
-                                                     self.__class__.__name__))
+            err_str = (f"'{name}' not found. You cannot add attributes to "
+                       f"{self.__class__.__name__} outside the constructor.")
             raise FreezeError(err_str)
         
     def get_default_params(self):
@@ -576,19 +575,17 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                         params['metadata']['delay_dur'] != 0) and \
                         np.any(implant.stim[i]):
                     raise TypeError(
-                        "All stimuli must be BiphasicPulseTrains with no " +
-                        "delay dur (Failing electrode: %s)" % (ele))
+                        f"All stimuli must be BiphasicPulseTrains with no " +
+                        f"delay dur (Failing electrode: {ele})")
         if isinstance(implant, ProsthesisSystem):
             if implant.eye != self.eye:
-                raise ValueError(("The implant is in %s but the model was "
-                                  "built for %s.") % (implant.eye,
-                                                      self.eye))
+                raise ValueError(f"The implant is in {implant.eye} but the model was "
+                                 f"built for {self.eye}.")
         if not self.is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(("'implant' must be a ProsthesisSystem object, "
-                             "not %s.") % type(implant))
-
+            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
+                            f"not {type(implant)}.")
         if implant.stim is None:
             return None
         stim = implant.stim
@@ -651,18 +648,17 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                             params['metadata']['delay_dur'] != 0) and \
                             np.any(stim[i]):
                         raise TypeError(
-                            "All stimuli must be BiphasicPulseTrains with no " +
-                            "delay dur (Failing electrode: %s)" % (ele))
+                            f"All stimuli must be BiphasicPulseTrains with no "
+                            f"delay dur (Failing electrode: {ele})")
         
         if not self.is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(("'implant' must be a ProsthesisSystem object, "
-                                "not %s.") % type(implant))
+            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
+                            f"not {type(implant)}.")
         if implant.eye != self.eye:
-            raise ValueError(("The implant is in %s but the model was "
-                                "built for %s.") % (implant.eye,
-                                                    self.eye))
+            raise ValueError(f"The implant is in {implant.eye} but the model was "
+                             f"built for {self.eye}.")
         
         # Currently all stimuli must have same electrodes
         all_elecs = list(set().union(*[s.metadata['electrodes'].keys() for s in stims]))
@@ -826,8 +822,8 @@ class BiphasicAxonMapModel(Model):
         if not self.is_built:
             raise NotBuiltError("You must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
-            raise TypeError("'implant' must be a ProsthesisSystem object, not "
-                            "%s." % type(implant))
+            raise TypeError(f"'implant' must be a ProsthesisSystem object, not "
+                            f"{type(implant)}.")
         if implant.stim is None or (not self.has_space and not self.has_time):
             # Nothing to see here:
             return None

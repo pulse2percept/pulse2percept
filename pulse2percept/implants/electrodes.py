@@ -39,11 +39,11 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
 
     def __init__(self, x, y, z, name=None, activated=True):
         if isinstance(x, (Sequence, np.ndarray)):
-            raise TypeError("x must be a scalar, not %s." % (type(x)))
+            raise TypeError(f"x must be a scalar, not {type(x)}.")
         if isinstance(y, (Sequence, np.ndarray)):
-            raise TypeError("y must be a scalar, not %s." % type(y))
+            raise TypeError(f"y must be a scalar, not {type(y)}.")
         if isinstance(z, (Sequence, np.ndarray)):
-            raise TypeError("z must be a scalar, not %s." % type(z))
+            raise TypeError(f"z must be a scalar, not {type(z)}.")
         self.x = x
         self.y = y
         self.z = z
@@ -204,7 +204,7 @@ class DiskElectrode(Electrode):
         if isinstance(r, (Sequence, np.ndarray)):
             raise TypeError("Electrode radius must be a scalar.")
         if r <= 0:
-            raise ValueError("Electrode radius must be > 0, not %f." % r)
+            raise ValueError(f"Electrode radius must be > 0, not {r}.")
         self.r = r
         self.plot_patch = Circle
         self.plot_kwargs = {'radius': r, 'linewidth': 2,
@@ -300,7 +300,7 @@ class SquareElectrode(Electrode):
         if isinstance(a, (Sequence, np.ndarray)):
             raise TypeError("Side length must be a scalar.")
         if a <= 0:
-            raise ValueError("Side length must be > 0, not %f." % a)
+            raise ValueError(f"Side length must be > 0, not {a}.")
         self.a = a
         self.plot_patch = Rectangle
         self.plot_kwargs = {'width': a, 'height': a, 'angle': 0,
@@ -355,8 +355,8 @@ class HexElectrode(Electrode):
         if isinstance(a, (Sequence, np.ndarray)):
             raise TypeError("Apothem of the hexagon must be a scalar.")
         if a <= 0:
-            raise ValueError("Apothem of the hexagon must be > 0, not "
-                             "%f." % a)
+            raise ValueError(f"Apothem of the hexagon must be > 0, not "
+                             f"{a}.")
         self.a = a
         self.plot_patch = RegularPolygon
         self.plot_kwargs = {'numVertices': 6, 'radius': a, 'alpha': 0.2,

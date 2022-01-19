@@ -49,11 +49,11 @@ class PulseTrain(Stimulus):
     def __init__(self, freq, pulse, n_pulses=None, stim_dur=1000.0,
                  electrode=None, metadata=None):
         if not isinstance(pulse, Stimulus):
-            raise TypeError("'pulse' must be a Stimulus object, not "
-                            "%s." % type(pulse))
+            raise TypeError(f"'pulse' must be a Stimulus object, not "
+                            f"{type(pulse)}.")
         if pulse.shape[0] == 0:
-            raise ValueError("'pulse' has invalid shape "
-                             "(%d, %d)." % (pulse.shape[0], pulse.shape[1]))
+            raise ValueError(f"'pulse' has invalid shape "
+                             f"({pulse.shape[0]}, {pulse.shape[1]}).")
         if pulse.time is None:
             raise ValueError("'pulse' does not have a time component.")
 
@@ -63,8 +63,8 @@ class PulseTrain(Stimulus):
         if n_pulses is not None:
             n_pulses = int(n_pulses)
             if n_pulses > n_max_pulses:
-                raise ValueError("stim_dur=%.2f cannot fit more than "
-                                 "%d pulses." % (stim_dur, n_max_pulses))
+                raise ValueError(f"stim_dur={stim_dur:.2f} cannot fit more than "
+                                 f"{n_max_pulses} pulses.")
         else:
             # `freq` might not perfectly divide `stim_dur`, so we will create
             # one extra pulse and trim to the right length:
@@ -77,9 +77,9 @@ class PulseTrain(Stimulus):
             # Window duration is the inverse of pulse train frequency:
             window_dur = 1000.0 / freq
             if pulse.time[-1] > window_dur:
-                raise ValueError("Pulse (dur=%.2f ms) does not fit into "
-                                 "pulse train window (dur=%.2f "
-                                 "ms)" % (pulse.time[-1], window_dur))
+                raise ValueError(f"Pulse (dur={pulse.time[-1]:.2f} ms) does not fit into "
+                                 f"pulse train window (dur={window_dur:.2f} "
+                                 f"ms)")
             shift = np.maximum(0, window_dur - pulse.time[-1])
             pt = pulse
             for i in range(1, n_pulses):
