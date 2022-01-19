@@ -108,6 +108,7 @@ def circ_r2_score(y_true, y_pred):
     ss_res = np.mean(err ** 2, dtype=np.float32)
     ss_tot = np.asarray(circvar(y_true, low=-np.pi / 2, high=np.pi / 2),
                         dtype=np.float32)
-    if isclose(ss_tot, 0):
+    print(f"debug: res={ss_res}, tot={ss_tot} isclose={isclose(ss_tot, 0.0)}")
+    if isclose(ss_tot, 0.0):
         return 0.0  # zero variance in the ground-truth data
     return 1 - ss_res / ss_tot
