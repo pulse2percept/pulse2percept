@@ -55,7 +55,7 @@ def scatter_correlation(x, y, marker='o', marker_size=50, marker_alpha=0.5,
     def fit(x): return slope * x + intercept
     ax.plot([np.min(x), np.max(x)], [fit(np.min(x)), fit(np.max(x))], 'k--')
     # Annotate with fitting results:
-    pval = (f"{pval:.2e}") if pval < 0.001 else ("{pval:.03f}")
+    pval = (f"{pval:.2e}") if pval < 0.001 else (f"{pval:.03f}")
     annot_str = f"$N$={len(y)}"
     if show_slope_intercept:
         annot_str += f"\n$y$={slope:.3f}$x$+{intercept:.3f}"
