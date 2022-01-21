@@ -7,9 +7,9 @@ In the News
 Media coverage
 ==============
 
-* `"Restoring vision with bionic eyes: No longer science fiction" <https://www.pcmag.com/news/369401/restoring-vision-with-bionic-eyes-no-longer-science-fiction>`_, PCMag, July 2019.
-
 * `"Building the Bionic Eye...With Car Tech?" <https://www.pcmag.com/news/building-the-bionic-eyewith-car-tech>`_, PCMag, Feb 2021.
+
+* `"Restoring vision with bionic eyes: No longer science fiction" <https://www.pcmag.com/news/369401/restoring-vision-with-bionic-eyes-no-longer-science-fiction>`_, PCMag, July 2019.
 
 Scholarly articles referencing pulse2percept
 ============================================
