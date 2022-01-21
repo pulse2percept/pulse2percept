@@ -265,7 +265,7 @@ def test_Stimulus_plot():
     # Plot multiple electrodes with string names:
     for n_electrodes in [2, 3, 4]:
         stim = Stimulus(np.random.rand(n_electrodes, 20),
-                        electrodes=['E%d' % i for i in range(n_electrodes)])
+                        electrodes=[f'E{i}' for i in range(n_electrodes)])
         fig, axes = plt.subplots(ncols=n_electrodes)
         stim.plot(ax=axes)
         npt.assert_equal(isinstance(axes, (list, np.ndarray)), True)

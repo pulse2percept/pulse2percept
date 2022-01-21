@@ -48,17 +48,16 @@ class deprecated:
 
     def _get_message(self, obj_name):
         """Builds the message string"""
-        msg = "%s is deprecated" % obj_name
+        msg = f"{obj_name} is deprecated"
         alt_msg = ""
         if self.alt_func is not None:
-            alt_msg = "Use ``%s`` instead." % self.alt_func
+            alt_msg = f"Use ``{self.alt_func}`` instead."
         dep_msg = ""
         if self.deprecated_version is not None:
-            dep_msg = " since version %s" % self.deprecated_version
+            dep_msg = f" since version {self.deprecated_version}"
         rmv_msg = ""
         if self.removed_version is not None:
-            rmv_msg = (", and will be removed in version %s" %
-                       self.removed_version)
+            rmv_msg = f", and will be removed in version {self.removed_version}"
         return msg + dep_msg + rmv_msg + ". " + alt_msg
 
     def _update_doc(self, old_doc, msg=None):
@@ -66,14 +65,14 @@ class deprecated:
         if msg is None:
             msg = self._get_message("This feature")
         # Insert a deprecated directive:
-        doc = ".. deprecated:: %s\n\n    %s" % (self.deprecated_version, msg)
+        doc = f".. deprecated:: {self.deprecated_version}\n\n    {msg}"
         if old_doc:
-            doc = "%s\n\n%s" % (doc, old_doc)
+            doc = f"{doc}\n\n{old_doc}"
         return doc
 
     def _decorate_class(self, cls):
         """Mark a class as deprecated"""
-        msg = self._get_message("Class %s" % cls.__name__)
+        msg = self._get_message(f"Class {cls.__name__}")
 
         # FIXME: we should probably reset __new__ for full generality
         init = cls.__init__
@@ -102,7 +101,7 @@ class deprecated:
             def deprecated_attribute_(self):
                 ...
         """
-        msg = self._get_message("Property %s" % prop.__name__)
+        msg = self._get_message(f"Property {prop.__name__}")
 
         @property
         def wrapped(*args, **kwargs):
@@ -114,7 +113,7 @@ class deprecated:
 
     def _decorate_fun(self, fun):
         """Mark a function as deprecated"""
-        msg = self._get_message("Function %s" % fun.__name__)
+        msg = self._get_message(f"Function {fun.__name__}")
 
         @functools.wraps(fun)
         def wrapped(*args, **kwargs):

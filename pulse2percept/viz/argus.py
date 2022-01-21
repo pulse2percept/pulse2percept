@@ -87,22 +87,22 @@ def plot_argus_phosphenes(data, argus, scale=1.0, axon_map=None,
         Matplotlib axis
     """
     if not isinstance(data, pd.DataFrame):
-        raise TypeError('"data" must be a Pandas DataFrame, not '
-                        '%s.' % type(data))
+        raise TypeError(f'"data" must be a Pandas DataFrame, not '
+                        f'{type(data)}.')
     req_cols = ['subject', 'electrode', 'image', 'xrange', 'yrange']
     if not all(col in data.columns for col in req_cols):
-        raise ValueError('"data" must have columns %s.' % req_cols)
+        raise ValueError(f'"data" must have columns {req_cols}.')
     if len(data) == 0:
         raise ValueError('"data" is empty.')
     if len(data.subject.unique()) > 1:
         raise ValueError('"data" cannot contain data from more than one '
                          'subject.')
     if not isinstance(argus, (ArgusI, ArgusII)):
-        raise TypeError('"argus" must be an Argus I or Argus II implant, not '
-                        '%s.' % type(argus))
+        raise TypeError(f'"argus" must be an Argus I or Argus II implant, not '
+                        f'{type(argus)}.')
     if axon_map is not None and not isinstance(axon_map, AxonMapModel):
-        raise TypeError('"axon_map" must be an AxonMapModel instance, not '
-                        '%s.' % type(axon_map))
+        raise TypeError(f'"axon_map" must be an AxonMapModel instance, not '
+                        f'{type(axon_map)}.')
     if ax is None:
         ax = plt.gca()
     alpha_bg = 0.5  # alpha value for the array in the background

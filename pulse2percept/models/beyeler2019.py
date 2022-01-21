@@ -316,7 +316,7 @@ class AxonMapSpatial(SpatialModel):
         # Check for the location of the optic disc:
         loc_od = self.loc_od
         if eye.upper() not in ['LE', 'RE']:
-            e_s = "Unknown eye string '%s': Choose from 'LE', 'RE'." % eye
+            e_s = f"Unknown eye string '{eye}': Choose from 'LE', 'RE'."
             raise ValueError(e_s)
         if eye.upper() == 'LE':
             # The Jansonius model doesn't know about left eyes: We invert the x
@@ -641,7 +641,7 @@ class AxonMapSpatial(SpatialModel):
             # In a right eye, the optic disc must have a positive x coordinate:
             self.loc_od = (np.abs(self.loc_od[0]), self.loc_od[1])
         else:
-            err_str = ("Eye should be either 'LE' or 'RE', not %s." % self.eye)
+            err_str = (f"Eye should be either 'LE' or 'RE', not {self.eye}.")
             raise ValueError(err_str)
 
     def _build(self):
@@ -817,8 +817,8 @@ class AxonMapSpatial(SpatialModel):
         if self.is_built:
             self.grid.plot(ax=ax, transform=grid_transform, style=style,
                            zorder=ZORDER['background'] + 2)
-        ax.set_xlabel('x (%s)' % units)
-        ax.set_ylabel('y (%s)' % units)
+        ax.set_xlabel(f'x ({units})')
+        ax.set_ylabel(f'y ({units})')
         if autoscale:
             ax.axis((xmin, xmax, ymin, ymax))
         if annotate:
@@ -932,8 +932,7 @@ class AxonMapModel(Model):
         # Need to add an additional check before running the base method:
         if isinstance(implant, ProsthesisSystem):
             if implant.eye != self.spatial.eye:
-                raise ValueError(("The implant is in %s but the model was "
-                                  "built for %s.") % (implant.eye,
-                                                      self.spatial.eye))
+                raise ValueError(f"The implant is in {implant.eye} but the model was "
+                                 f"built for {self.spatial.eye}.")
         return super(AxonMapModel, self).predict_percept(implant,
                                                          t_percept=t_percept)

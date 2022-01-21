@@ -51,7 +51,7 @@ class MonophasicPulse(Stimulus):
     def __init__(self, amp, phase_dur, delay_dur=0, stim_dur=None,
                  electrode=None):
         if phase_dur <= DT:
-            raise ValueError("'phase_dur' must be greater than DT=%ems." % DT)
+            raise ValueError(f"'phase_dur' must be greater than DT={DT}ms.")
         if delay_dur < 0:
             raise ValueError("'delay_dur' cannot be negative.")
         # The minimum stimulus duration is given by the pulse, IPG, and delay:
@@ -60,8 +60,8 @@ class MonophasicPulse(Stimulus):
             stim_dur = min_dur
         else:
             if stim_dur < min_dur:
-                raise ValueError("'stim_dur' must be at least %.3f ms, not "
-                                 "%.3f ms." % (min_dur, stim_dur))
+                raise ValueError(f"'stim_dur' must be at least {min_dur:.3f} ms, not "
+                                 f"{stim_dur:.3f} ms.")
         # We only need to store the time points at which the stimulus changes.
         time = [0]
         data = [0]
@@ -144,7 +144,7 @@ class BiphasicPulse(Stimulus):
     def __init__(self, amp, phase_dur, interphase_dur=0, delay_dur=0,
                  stim_dur=None, cathodic_first=True, electrode=None):
         if phase_dur <= DT:
-            raise ValueError("'phase_dur' must be greater than DT=%ems." % DT)
+            raise ValueError(f"'phase_dur' must be greater than DT={DT}ms.")
         if interphase_dur < 0:
             raise ValueError("'interphase_dur' cannot be negative.")
         if delay_dur < 0:
@@ -155,8 +155,8 @@ class BiphasicPulse(Stimulus):
             stim_dur = min_dur
         else:
             if stim_dur < min_dur:
-                raise ValueError("'stim_dur' must be at least %.3f ms, not "
-                                 "%.3f ms." % (min_dur, stim_dur))
+                raise ValueError(f"'stim_dur' must be at least {min_dur:.3f} ms, not "
+                                 f"{stim_dur:.3f} ms.")
         amp = -np.abs(amp) if cathodic_first else np.abs(amp)
         # We only need to store the time points at which the stimulus changes.
         time = [0]
@@ -267,8 +267,8 @@ class AsymmetricBiphasicPulse(Stimulus):
             stim_dur = min_dur
         else:
             if stim_dur < min_dur:
-                raise ValueError("'stim_dur' must be at least %.3f ms, not "
-                                 "%.3f ms." % (min_dur, stim_dur))
+                raise ValueError(f"'stim_dur' must be at least {min_dur:.3f} ms, not "
+                                 f"{stim_dur:.3f} ms.")
         if cathodic_first:
             amp1 = -np.abs(amp1)
             amp2 = np.abs(amp2)
