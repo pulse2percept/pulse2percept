@@ -26,7 +26,12 @@ Studies referenced throughout the Documentation:
                 *Journal of Comparative Neurophysiology* 292:497-523,
                 doi:`10.1002/cne.902920402
                 <https://doi.org/10.1002/cne.902920402>`_.
-.. [Granley2021] Granley, J., & Beyeler, M. (2021). A Computational Model of 
+.. [Fornos2012] A Perez Fornos, J Sommerhalder, L da Cruz, J Alain Sahel,
+                S Mohand-Said, F Hafezi, M Pelizzone (2012). Temporal Properties of
+                Visual Perception on Electrical Stimulation of the Retina.
+                *Investigative Ophthalmology & Visual Science*, doi: `10.1167/iovs.11-9344
+                <https://doi.org/10.1167/iovs.11-9344>`_.
+.. [Granley2021] Granley, J., & Beyeler, M. (2021). A Computational Model of
                  Phosphene Appearance for Epiretinal Prostheses. Conference on 
                  Engineering in Medicine and Biology, 2021.
 .. [Hayes2003] JS Hayes et al. (2003). Visually guided performance of
