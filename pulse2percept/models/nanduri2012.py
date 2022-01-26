@@ -47,6 +47,8 @@ class Nanduri2012Spatial(SpatialModel):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
+    n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
 
     """
 
@@ -73,7 +75,8 @@ class Nanduri2012Spatial(SpatialModel):
                             self.grid.yret.ravel(),
                             self.atten_a,
                             self.atten_n,
-                            self.thresh_percept)
+                            self.thresh_percept,
+                            self.n_threads)
 
     def predict_percept(self, implant, t_percept=None):
         if not np.all([isinstance(e, DiskElectrode)
@@ -121,6 +124,8 @@ class Nanduri2012Temporal(TemporalModel):
         A scaling factor applied to the output of the model
     thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
+    n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
 
     """
 
@@ -164,7 +169,7 @@ class Nanduri2012Temporal(TemporalModel):
                              idx_percept,
                              self.dt, self.tau1, self.tau2, self.tau3,
                              self.asymptote, self.shift, self.slope, self.eps,
-                             self.scale_out, self.thresh_percept)
+                             self.scale_out, self.thresh_percept, self.n_threads)
 
 
 class Nanduri2012Model(Model):
@@ -215,6 +220,8 @@ class Nanduri2012Model(Model):
         object that provides ``ret2dva`` and ``dva2ret`` methods.
         By default, :py:class:`~pulse2percept.utils.Curcio1990Map` is
         used.
+    n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
     """
 
     def __init__(self, **params):
