@@ -234,6 +234,65 @@ class ImageStimulus(Stimulus):
         return ImageStimulus(img, electrodes=electrodes,
                              metadata=self.metadata)
 
+    def crop(self, indices=None, left=0, right=0, top=0, bottom=0,
+             electrodes=None):
+        """Crop the image
+
+        Parameters
+        ----------
+        indices : array of int: [y1, x1, y2, x2]
+            The upper-left crop-indices and the bottom-right crop-indices. 
+            The upper-left pixel of the resulting image would be the [y1, x1] 
+            of the original image, and the bottom-right pixel of the resulting
+            image would be the [y2 - 1, x2 - 1] of the original image. 
+
+            Notes: crop-indices and crop-width (left, right, up, down) cannot be existed at the same time
+
+        left : int
+            How many to crop from the left
+        right: int
+            How many to crop from the right
+        top: int
+            How many to crop from the top
+        bottom:
+            How many to crop from the bottom
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, electrode names will be numbered 0..N.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in the grayscale image.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the cropped image
+
+        """
+        img = self.data.reshape(self.img_shape)
+        if indices == None:
+            if left < 0 or right < 0 or top < 0 or bottom < 0:
+                raise ValueError(
+                    "crop-width(left, right, up, down) cannot be negative")
+            elif left + right >= self.img_shape[1] or top + bottom >= self.img_shape[0]:
+                raise ValueError(
+                    "crop-width should be smaller than the shape of the image")
+            indices = [0 + top, 0+left, self.img_shape[0] -
+                       bottom, self.img_shape[1]-right]
+        elif left != 0 or right != 0 or top != 0 or bottom != 0:
+            raise Exception(
+                "crop-indices and crop-width (left, right, up, down) cannot exist at the same time")
+        elif len(indices) != 4 or indices[0] >= indices[2] or indices[1] >= indices[3]:
+            raise ValueError(
+                "crop-indices is invalid. It should be [y1,x1,y2,x2], where (y1,x1) is upperleft and (y2,x2) is bottom-right")
+        elif indices[0] < 0 or indices[2] > self.img_shape[0] or indices[1] < 0 or indices[3] > self.img_shape[1]:
+            raise ValueError("crop-indices must be on the image")
+
+        cropped_img = img[indices[0]:indices[2], indices[1]:indices[3], 0:3]
+        return ImageStimulus(cropped_img, electrodes=electrodes,
+                             metadata=self.metadata)
+
     def trim(self, tol=0, electrodes=None):
         """Remove any black border around the image
 

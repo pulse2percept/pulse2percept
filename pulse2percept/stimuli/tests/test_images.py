@@ -87,6 +87,64 @@ def test_ImageStimulus_resize():
     os.remove(fname)
 
 
+def test_ImageStimulus_crop():
+    fname = 'test.png'
+    shape = (30, 50, 3)
+    gray = create_dummy_img(fname, shape, 'rand')
+    stim = ImageStimulus(fname)
+    stim_cropped = stim.crop([5, 10, 25, 40])
+    npt.assert_equal(stim_cropped.img_shape, (20, 30, 3))
+    npt.assert_equal(stim_cropped.data.reshape(stim_cropped.img_shape)[3, 7],
+                     stim.data.reshape(stim.img_shape)[8, 17])
+    npt.assert_equal(stim_cropped.data.reshape(stim_cropped.img_shape)[10, 28],
+                     stim.data.reshape(stim.img_shape)[15, 38])
+
+    stim_cropped2 = stim.crop(left=10, right=8, top=6, bottom=7)
+    npt.assert_equal(stim_cropped2.img_shape, (17, 32, 3))
+    npt.assert_equal(stim_cropped2.data.reshape(stim_cropped2.img_shape)[3, 7],
+                     stim.data.reshape(stim.img_shape)[9, 17])
+    npt.assert_equal(stim_cropped2.data.reshape(stim_cropped2.img_shape)[10, 28],
+                     stim.data.reshape(stim.img_shape)[16, 38])
+
+    #"crop-indices and crop-width (left, right, up, down) cannot exist at the same time"
+    with pytest.raises(Exception):
+        stim.crop([5, 10, 25, 40], left=10)
+    with pytest.raises(Exception):
+        stim.crop([5, 10, 25, 40], right=8)
+    with pytest.raises(Exception):
+        stim.crop([5, 10, 25, 40], top=6)
+    with pytest.raises(Exception):
+        stim.crop([5, 10, 25, 40], bottom=7)
+    # "crop-width(left, right, up, down) cannot be negative"
+    with pytest.raises(ValueError):
+        stim.crop(left=-1)
+    with pytest.raises(ValueError):
+        stim.crop(right=-1)
+    with pytest.raises(ValueError):
+        stim.crop(top=-1)
+    with pytest.raises(ValueError):
+        stim.crop(bottom=-1)
+    # "crop-width should be smaller than the shape of the image"
+    with pytest.raises(ValueError):
+        stim.crop(left=32, right=20)
+    with pytest.raises(ValueError):
+        stim.crop(top=12, bottom=18)
+    # "crop-indices must be on the image"
+    with pytest.raises(ValueError):
+        stim.crop([-1, 10, 25, 40])
+    with pytest.raises(ValueError):
+        stim.crop([5, -1, 25, 40])
+    with pytest.raises(ValueError):
+        stim.crop([5, 10, 31, 40])
+    with pytest.raises(ValueError):
+        stim.crop([5, 10, 25, 51])
+    # "crop-indices is invalid. It should be [y1,x1,y2,x2], where (y1,x1) is upperleft and (y2,x2) is bottom-right"
+    with pytest.raises(ValueError):
+        stim.crop([5, 10, 4, 40])
+    with pytest.raises(ValueError):
+        stim.crop([5, 10, 25, 9])
+
+
 def test_ImageStimulus_trim():
     shape = (13, 29)
     ndarray = np.zeros(shape)

@@ -247,6 +247,86 @@ class VideoStimulus(Stimulus):
         return VideoStimulus(vid, electrodes=electrodes, time=self.time,
                              metadata=self.metadata)
 
+    def crop(self, time=None, indices=None, start=0, end=0, left=0, right=0, top=0, bottom=0,
+             electrodes=None):
+        """Crop the video
+
+        Parameters
+        ----------
+        time : array of int [t1, t2]
+            The resulting video stimuli will be started from the t1 th frame to the t2 
+            frame of the original video stimuli 
+            Note : crop-time and crop-length (start, end) cannot be existed at the same time
+        start: int
+            How many to crop from the start
+        end: int
+            How many to crop from the end
+        indices : [x1, x2, y1, y2]
+            The upper-left crop-indices and the bottom-right crop-indices. 
+            The upper-left pixel of the resulting image would be the [x1, x2] 
+            of the original image, and the bottom-write pixel of the resulting
+            image would be the [y1, y2] of the original image. 
+            Note : crop-indices and crop-width (left, right, up, down) cannot existed at the same time
+        left : int
+            How many to crop from the left
+        right: int
+            How many to crop from the right
+        top: int
+            How many to crop from the top
+        bottom:
+            How many to crop from the bottom
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, electrode names will be numbered 0..N.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in the video frame.
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object containing the video
+
+        """
+        video = self.data.reshape(self.vid_shape)
+        if time == None:
+            if start < 0 or end < 0:
+                raise ValueError("crop-length(start, end) cannot be negative")
+            elif start + end >= self.vid_shape[2]:
+                raise ValueError(
+                    "crop-length(start, end) should be smaller than the duration of the video")
+            time = [0 + start, self.vid_shape[2]-end]
+        elif start != 0 or end != 0:
+            raise Exception(
+                "crop-time and crop-length (start, end) cannot existe at the same time")
+        elif len(time) != 2 or time[0] < 0 or time[1] > self.vid_shape[2]:
+            raise ValueError(
+                "Crop time is invalid. It should be [t1, t2], where t1 is the starting frame and t2 is the ending frame")
+
+        if indices == None:
+            if left < 0 or right < 0 or top < 0 or bottom < 0:
+                raise ValueError(
+                    "crop-width(left, right, up, down) cannot be negative")
+            elif left + right >= self.vid_shape[1] or top + bottom >= self.vid_shape[0]:
+                raise ValueError(
+                    "crop-width should be smaller than the shape of the video frame")
+            indices = [0 + top, 0+left, self.vid_shape[0] -
+                       bottom, self.vid_shape[1]-right]
+        elif left != 0 or right != 0 or top != 0 or bottom != 0:
+            raise Exception(
+                "crop-indices and crop-width (left, right, up, down) cannot exist at the same time")
+        elif len(indices) != 4 or indices[0] >= indices[2] or indices[1] >= indices[3]:
+            raise ValueError(
+                "crop-indices is invalid. It should be [y1,x1,y2,x2], where (y1,x1) is upperleft and (y2,x2) is bottom-right")
+        elif indices[0] < 0 or indices[2] > self.vid_shape[0] or indices[1] < 0 or indices[3] > self.vid_shape[1]:
+            raise ValueError("crop-indices must be on the video frame")
+
+        cropped_img = video[indices[0]:indices[2],
+                            indices[1]:indices[3], time[0]:time[1]]
+        return VideoStimulus(cropped_img, electrodes=electrodes, time=self.time[time[0]:time[1]],
+                             metadata=self.metadata)
+
     def trim(self, tol=0, electrodes=None):
         """Remove any black border around the video
 

@@ -92,6 +92,89 @@ def test_VideoStimulus_resize():
     os.remove(fname)
 
 
+def test_VideoStimulus_crop():
+    fname = 'test.mp4'
+    shape = (10, 48, 32)
+    ndarray = np.random.rand(*shape)
+    fps = 1
+    mimwrite(fname, (255 * ndarray).astype(np.uint8), fps=fps)
+    stim = VideoStimulus(fname, as_gray=True)
+    stim_cropped = stim.crop(time=[3, 9], indices=[6, 10, 36, 30])
+    npt.assert_equal(stim_cropped.vid_shape, (30, 20, 6))
+    npt.assert_equal(stim_cropped.data.reshape(stim_cropped.vid_shape)[3, 7, 2],
+                     stim.data.reshape(stim.vid_shape)[9, 17, 5])
+    npt.assert_equal(stim_cropped.data.reshape(stim_cropped.vid_shape)[10, 18, 5],
+                     stim.data.reshape(stim.vid_shape)[16, 28, 8])
+    npt.assert_equal(stim_cropped.time, stim.time[3:9])
+
+    stim_cropped2 = stim.crop(start=5, end=2, left=10,
+                              right=8, top=6, bottom=7)
+    npt.assert_equal(stim_cropped2.vid_shape, (35, 14, 3))
+    npt.assert_equal(stim_cropped2.data.reshape(stim_cropped2.vid_shape)[3, 7, 2],
+                     stim.data.reshape(stim.vid_shape)[9, 17, 7])
+    npt.assert_equal(stim_cropped2.data.reshape(stim_cropped2.vid_shape)[10, 9, 1],
+                     stim.data.reshape(stim.vid_shape)[16, 19, 6])
+    npt.assert_equal(stim_cropped2.time, stim.time[5:8])
+
+    #"crop-time and crop-length (start, end) cannot be existed at the same time"
+    with pytest.raises(Exception):
+        stim.crop(time=[0, 1], start=3)
+    with pytest.raises(Exception):
+        stim.crop(time=[3, 9], end=4)
+    #"Crop time is invalid. It should be [t1, t2], where t1 is the starting frame and t2 is the ending frame"
+    with pytest.raises(ValueError):
+        stim.crop(time=[0, 1, 2])
+    with pytest.raises(ValueError):
+        stim.crop(time=[5, 4])
+    #"crop-length(start, end) cannot be negative"
+    with pytest.raises(ValueError):
+        stim.crop(start=-1)
+    with pytest.raises(ValueError):
+        stim.crop(end=-1)
+    #"crop-length(start, end) should be smaller than the duration of the video"
+    with pytest.raises(ValueError):
+        stim.crop(start=5, end=6)
+    #"crop-indices and crop-width (left, right, up, down) cannot exist at the same time"
+    with pytest.raises(Exception):
+        stim.crop(indices=[5, 10, 25], left=10)
+    with pytest.raises(Exception):
+        stim.crop(indices=[5, 10, 25, 30], left=10)
+    with pytest.raises(Exception):
+        stim.crop(indices=[5, 10, 25, 30], right=8)
+    with pytest.raises(Exception):
+        stim.crop(indices=[5, 10, 25, 30], top=6)
+    with pytest.raises(Exception):
+        stim.crop(indices=[5, 10, 25, 30], bottom=7)
+    # "crop-width(left, right, up, down) cannot be negative"
+    with pytest.raises(ValueError):
+        stim.crop(left=-1)
+    with pytest.raises(ValueError):
+        stim.crop(right=-1)
+    with pytest.raises(ValueError):
+        stim.crop(top=-1)
+    with pytest.raises(ValueError):
+        stim.crop(bottom=-1)
+    # "crop-width should be smaller than the shape of the video frame"
+    with pytest.raises(ValueError):
+        stim.crop(left=14, right=20)
+    with pytest.raises(ValueError):
+        stim.crop(top=12, bottom=38)
+    # "crop-indices must be on the video frame"
+    with pytest.raises(ValueError):
+        stim.crop(indices=[-1, 10, 25, 30])
+    with pytest.raises(ValueError):
+        stim.crop(indices=[5, -1, 25, 30])
+    with pytest.raises(ValueError):
+        stim.crop(indices=[5, 10, 50, 30])
+    with pytest.raises(ValueError):
+        stim.crop(indices=[5, 10, 25, 51])
+    # "crop-indices is invalid. It should be [y1,x1,y2,x2], where (y1,x1) is upperleft and (y2,x2) is bottom-right"
+    with pytest.raises(ValueError):
+        stim.crop(indices=[5, 10, 4, 30])
+    with pytest.raises(ValueError):
+        stim.crop(indices=[5, 10, 25, 9])
+
+
 def test_VideoStimulus_rotate():
     # Create a horizontal bar:
     shape = (5, 5, 3)
