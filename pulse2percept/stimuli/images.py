@@ -290,6 +290,9 @@ class ImageStimulus(Stimulus):
             raise ValueError("crop-indices must be on the image")
 
         cropped_img = img[indices[0]:indices[2], indices[1]:indices[3], 0:3]
+        if electrodes == None:
+            electrodes = self.electrodes.reshape(
+                self.img_shape)[indices[0]:indices[2], indices[1]:indices[3], 0:3].flatten()
         return ImageStimulus(cropped_img, electrodes=electrodes,
                              metadata=self.metadata)
 

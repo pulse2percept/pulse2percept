@@ -106,6 +106,10 @@ def test_VideoStimulus_crop():
     npt.assert_equal(stim_cropped.data.reshape(stim_cropped.vid_shape)[10, 18, 5],
                      stim.data.reshape(stim.vid_shape)[16, 28, 8])
     npt.assert_equal(stim_cropped.time, stim.time[3:9])
+    npt.assert_equal(stim.electrodes.reshape(48, 32)[9, 17],
+                     stim_cropped.electrodes.reshape(30, 20)[3, 7])
+    npt.assert_equal(stim.electrodes.reshape(48, 32)[16, 28],
+                     stim_cropped.electrodes.reshape(30, 20)[10, 18])
 
     stim_cropped2 = stim.crop(start=5, end=2, left=10,
                               right=8, top=6, bottom=7)

@@ -98,6 +98,10 @@ def test_ImageStimulus_crop():
                      stim.data.reshape(stim.img_shape)[8, 17])
     npt.assert_equal(stim_cropped.data.reshape(stim_cropped.img_shape)[10, 28],
                      stim.data.reshape(stim.img_shape)[15, 38])
+    npt.assert_equal(stim.electrodes.reshape(30, 50, 3)[8, 17, 0],
+                     stim_cropped.electrodes.reshape(20, 30, 3)[3, 7, 0])
+    npt.assert_equal(stim.electrodes.reshape(30, 50, 3)[15, 38, 2],
+                     stim_cropped.electrodes.reshape(20, 30, 3)[10, 28, 2])
 
     stim_cropped2 = stim.crop(left=10, right=8, top=6, bottom=7)
     npt.assert_equal(stim_cropped2.img_shape, (17, 32, 3))

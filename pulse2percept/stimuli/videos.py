@@ -322,9 +322,12 @@ class VideoStimulus(Stimulus):
         elif indices[0] < 0 or indices[2] > self.vid_shape[0] or indices[1] < 0 or indices[3] > self.vid_shape[1]:
             raise ValueError("crop-indices must be on the video frame")
 
-        cropped_img = video[indices[0]:indices[2],
+        cropped_vid = video[indices[0]:indices[2],
                             indices[1]:indices[3], time[0]:time[1]]
-        return VideoStimulus(cropped_img, electrodes=electrodes, time=self.time[time[0]:time[1]],
+        if electrodes == None:
+            electrodes = self.electrodes.reshape(self.vid_shape[0:2])[
+                indices[0]:indices[2], indices[1]:indices[3]].flatten()
+        return VideoStimulus(cropped_vid, electrodes=electrodes, time=self.time[time[0]:time[1]],
                              metadata=self.metadata)
 
     def trim(self, tol=0, electrodes=None):
