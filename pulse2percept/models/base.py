@@ -4,6 +4,7 @@ import sys
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
 import numpy as np
+import multiprocessing
 
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
@@ -202,7 +203,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'scheduler': 'threading',
             'n_jobs': 1,
             # True: print status messages, 0: silent
-            'verbose': True
+            'verbose': True,
+            'n_threads': multiprocessing.cpu_count()
         }
         return params
 
@@ -465,7 +467,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
             # True: print status messages, False: silent
-            'verbose': True
+            'verbose': True,
+            'n_threads': multiprocessing.cpu_count()
         }
         return params
 

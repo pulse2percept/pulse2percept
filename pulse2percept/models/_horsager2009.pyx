@@ -20,7 +20,8 @@ cpdef temporal_fast(const float32[:, ::1] stim,
                     float32 tau3,
                     float32 eps,
                     float32 beta,
-                    float32 thresh_percept):
+                    float32 thresh_percept,
+                    uint32 n_threads):
     """Cython implementation of the Horsager 2009 temporal model
 
     Parameters
@@ -45,6 +46,8 @@ cpdef temporal_fast(const float32[:, ::1] stim,
         Power nonlinearity (exponent of the half-wave rectification).
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
+    n_threads: uint32
+        Number of CPU threads to use during parallelization using OpenMP.
 
     Returns
     -------
@@ -70,7 +73,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
 
     percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
 
-    for idx_space in prange(n_space, schedule='static', nogil=True):
+    for idx_space in prange(n_space, schedule='static', nogil=True, num_threads=n_threads):
         # Because the stationary nonlinearity depends on `max_R3`, which is the
         # largest value of R3 over all time points, we have to process the
         # stimulus in two steps.
