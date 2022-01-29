@@ -63,6 +63,9 @@ class ScoreboardSpatial(SpatialModel):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
+    n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
+
 
     .. important ::
 
@@ -93,7 +96,8 @@ class ScoreboardSpatial(SpatialModel):
                                self.grid.xret.ravel(),
                                self.grid.yret.ravel(),
                                self.rho,
-                               self.thresh_percept)
+                               self.thresh_percept,
+                               self.n_threads)
 
 
 class ScoreboardModel(Model):
@@ -108,6 +112,8 @@ class ScoreboardModel(Model):
         Use :py:class:`~pulse2percept.models.ScoreboardSpatial` if you want
         to combine the spatial model with a temporal model.
 
+    Parameters
+    ----------
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
     xrange : (x_min, x_max), optional
@@ -134,6 +140,9 @@ class ScoreboardModel(Model):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
+    n_threads: int, optional
+        Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
+
 
     .. important ::
 
@@ -222,6 +231,9 @@ class AxonMapSpatial(SpatialModel):
     ignore_pickle: bool, optional
         A flag whether to ignore the pickle file in future calls to
         ``model.build()``.
+    n_threads: int, optional
+        Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
+
 
     .. important ::
 
@@ -704,7 +716,8 @@ class AxonMapSpatial(SpatialModel):
                                  self.axon_idx_start.astype(np.uint32),
                                  self.axon_idx_end.astype(np.uint32),
                                  self.rho,
-                                 self.thresh_percept)
+                                 self.thresh_percept,
+                                 self.n_threads)
         else:
             raise NotImplementedError("Jax will be supported in future release")
 
@@ -894,8 +907,11 @@ class AxonMapModel(Model):
     ignore_pickle: bool, optional
         A flag whether to ignore the pickle file in future calls to
         ``model.build()``.
+    n_threads: int, optional
+        Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
 
-    .. important ::
+
+    .. important::
 
         If you change important model parameters outside the constructor (e.g.,
         by directly setting ``model.axlambda = 100``), you will have to call

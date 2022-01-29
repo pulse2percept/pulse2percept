@@ -36,6 +36,8 @@ class Horsager2009Temporal(TemporalModel):
         Common values at threshold: 3.43, suprathreshold: 0.83.
     thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
+    n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
 
     """
 
@@ -77,7 +79,7 @@ class Horsager2009Temporal(TemporalModel):
                              stim.time.astype(np.float32),
                              idx_percept,
                              self.dt, self.tau1, self.tau2, self.tau3,
-                             self.eps, self.beta, self.thresh_percept)
+                             self.eps, self.beta, self.thresh_percept, self.n_threads)
 
 
 class Horsager2009Model(Model):
@@ -110,6 +112,8 @@ class Horsager2009Model(Model):
         Common values at threshold: 3.43, suprathreshold: 0.83.
     thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
+    n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
 
     """
 
