@@ -456,18 +456,19 @@ class VideoStimulus(Stimulus):
         vid_data = self.data - self.data.min()
         if not isclose(np.abs(vid_data).max(), 0):
             vid_data /= np.abs(vid_data).max()
-        # For each pixel, we get a list of grayscale values (over time):
+        # If no pulse is provided, create a default pulse
+        # This pulse will be scaled to provide pixel grayscale levels
+        if pulse is None:
+            pulse = BiphasicPulse(1, 0.46, stim_dur=frame_dur)
+        # Make sure the provided pulse has max amp 1:
+        enc_data = pulse.data
+        if not isclose(np.abs(enc_data).max(), 0):
+            enc_data /= np.abs(enc_data).max()
         stim = {}
         for px_data, e in zip(vid_data, self.electrodes):
             px_stim = None
-            # For each time point, expand into a pulse train:
+            # For each pixel, we get a list of grayscale values (over time):
             for px in px_data:
-                if pulse is None:
-                    pulse = BiphasicPulse(1, 0.46, stim_dur=frame_dur)
-                # Make sure the provided pulse has max amp 1:
-                enc_data = pulse.data
-                if not isclose(np.abs(enc_data).max(), 0):
-                    enc_data /= np.abs(enc_data).max()
                 # Amplitude modulation:
                 amp = px * (amp_range[1] - amp_range[0]) + amp_range[0]
                 s = Stimulus(amp * enc_data, time=pulse.time, electrodes=e)
