@@ -292,7 +292,7 @@ def setup_package():
         if numpy_status['up_to_date'] is False:
             if numpy_status['version']:
                 raise ImportError(f"Your installation of Numerical Python "
-                                  f"(NumPy) {numpy_status[version]} is "
+                                  f"(NumPy) {numpy_status['version']} is "
                                   f"out-of-date.\n{numpy_req_str}{instructions}")
             else:
                 raise ImportError(f"Numerical Python (NumPy) is not "
