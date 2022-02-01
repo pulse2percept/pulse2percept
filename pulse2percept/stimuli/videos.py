@@ -541,47 +541,7 @@ class VideoStimulus(Stimulus):
             Encoded stimulus
 
         """
-
         return fast_encode(self, amp_range[0], amp_range[1], pulse)
-        # if pulse is not None:
-        #     if not isinstance(pulse, Stimulus):
-        #         raise TypeError("'pulse' must be a Stimulus object.")
-        #     if pulse.time is None:
-        #         raise ValueError("'pulse' must have a time component.")
-        # # Set frame rate, either from metadata or inferred from stim.time:
-        # try:
-        #     frame_dur = 1000.0 / self.metadata['fps']
-        # except KeyError:
-        #     t_diff = unique(np.diff(self.time))
-        #     if len(t_diff) > 1:
-        #         raise NotImplementedError
-        #     frame_dur = 1000.0 / t_diff[0]
-        # # Normalize the range of pixel values:
-        # vid_data = self.data - self.data.min()
-        # if not isclose(np.abs(vid_data).max(), 0):
-        #     vid_data /= np.abs(vid_data).max()
-        # # If no pulse is provided, create a default pulse
-        # # This pulse will be scaled to provide pixel grayscale levels
-        # if pulse is None:
-        #     pulse = BiphasicPulse(1, 0.46, stim_dur=frame_dur)
-        # # Make sure the provided pulse has max amp 1:
-        # enc_data = pulse.data
-        # if not isclose(np.abs(enc_data).max(), 0):
-        #     enc_data /= np.abs(enc_data).max()
-        # stim = {}
-        # for px_data, e in zip(vid_data, self.electrodes):
-        #     px_stim = None
-        #     # For each pixel, we get a list of grayscale values (over time):
-        #     for px in px_data:
-        #         # Amplitude modulation:
-        #         amp = px * (amp_range[1] - amp_range[0]) + amp_range[0]
-        #         s = Stimulus(amp * enc_data, time=pulse.time, electrodes=e)
-        #         if px_stim is None:
-        #             px_stim = s
-        #         else:
-        #             px_stim = px_stim.append(s)
-        #     stim.update({e: px_stim})
-        # return Stimulus(stim)
 
     def __iter__(self):
         """Iterate over all frames in self.data"""

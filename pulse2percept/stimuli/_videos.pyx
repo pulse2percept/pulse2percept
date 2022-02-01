@@ -43,7 +43,7 @@ cpdef fast_encode(stim, int32 amp_min, int32 amp_max, pulse=None):
     """
     cdef:
         float32 frame_dur
-        float32 amp
+        float32 amp, px
 
     if pulse is not None:
         if not isinstance(pulse, Stimulus):
