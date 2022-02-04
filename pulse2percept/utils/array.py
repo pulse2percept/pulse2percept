@@ -89,6 +89,6 @@ def radial_mask(shape, mask='gauss', sd=3):
         inv_var = (1.0 / sd) ** 2.0
         intensity = np.exp(-rad ** 2.0 / (2.0 * inv_var))
     else:
-        raise ValueError('Unknown mask "%s". Choose either "circle" or '
-                         '"gauss".' % mask)
+        raise ValueError(f'Unknown mask "{mask}". Choose either "circle" or '
+                         f'"gauss".')
     return intensity

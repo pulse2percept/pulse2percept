@@ -70,9 +70,8 @@ class BaseOptimizer(Frozen, PrettyPrint, metaclass=ABCMeta):
             if key in defaults:
                 setattr(self, key, val)
             else:
-                err_str = ("'%s' is not a valid parameter. Choose from: "
-                           "%s." % (key, ', '.join(defaults.keys())))
-                raise AttributeError(err_str)
+                raise AttributeError(f"'{key}' is not a valid parameter. Choose from: "
+                                     f"{', '.join(defaults.keys())}.")
         # This flag will be flipped once the ``fit`` method was called
         self._is_fitted = False
         # Successful optimization will populate these fields:
@@ -138,8 +137,7 @@ class BaseOptimizer(Frozen, PrettyPrint, metaclass=ABCMeta):
         # `self._best_params`:
         self._optimize(X, y, fit_params=fit_params)
         if self.verbose:
-            print('Best score: %f, Best params: %f' % (self._best_score,
-                                                       self._best_params))
+            print(f'Best score: {self._best_score}, Best params: {self._best_params}')
         # Use the parameter values found during optimiziation to set the
         # estimator one more time, then fit it:
         self.estimator.set_params(**self._best_params)
@@ -202,8 +200,8 @@ class BaseOptimizer(Frozen, PrettyPrint, metaclass=ABCMeta):
         if f_caller in ["__init__", "fit"]:
             self._is_fitted = val
         else:
-            err_s = ("The attribute `is_fitted` can only be set in the "
-                     "constructor or in ``fit``, not in ``%s``." % f_caller)
+            err_s = (f"The attribute `is_fitted` can only be set in the "
+                     f"constructor or in ``fit``, not in ``{f_caller}``.")
             raise AttributeError(err_s)
 
 

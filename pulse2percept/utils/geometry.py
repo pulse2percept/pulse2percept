@@ -70,7 +70,7 @@ class Grid2D(PrettyPrint):
         elif grid_type == 'hexagonal':
             self._make_hexagonal_grid(x_range, y_range, step)
         else:
-            raise ValueError("Unknown grid type '%s'." % grid_type)
+            raise ValueError(f"Unknown grid type '{grid_type}'.")
 
     def _pprint_params(self):
         """Return dictionary of class arguments to pretty-print"""
@@ -81,18 +81,18 @@ class Grid2D(PrettyPrint):
     def _make_rectangular_grid(self, x_range, y_range, step):
         """Creates a rectangular grid"""
         if not isinstance(x_range, (tuple, list, np.ndarray)):
-            raise TypeError(("x_range must be a tuple, list or NumPy array, "
-                             "not %s.") % type(x_range))
+            raise TypeError((f"x_range must be a tuple, list or NumPy array, "
+                             f"not {type(x_range)}."))
         if not isinstance(y_range, (tuple, list, np.ndarray)):
-            raise TypeError(("y_range must be a tuple, list or NumPy array, "
-                             "not %s.") % type(y_range))
+            raise TypeError((f"y_range must be a tuple, list or NumPy array, "
+                             f"not {type(y_range)}."))
         if len(x_range) != 2 or len(y_range) != 2:
             raise ValueError("x_range and y_range must have 2 elements.")
         if isinstance(step, (tuple, list, np.ndarray)):
             if len(step) != 2:
-                raise ValueError("If 'step' is a tuple, it must provide "
-                                 "two values (x_step, y_step), not "
-                                 "%d." % len(step))
+                raise ValueError(f"If 'step' is a tuple, it must provide "
+                                 f"two values (x_step, y_step), not "
+                                 f"{len(step)}.")
             x_step = step[0]
             y_step = step[1]
         else:
@@ -156,8 +156,8 @@ class Grid2D(PrettyPrint):
             Desired (width, height) of the figure in inches
         """
         if style.lower() not in ['hull', 'scatter', 'cell']:
-            raise ValueError('Unknown plotting style "%s". Choose from: '
-                             '"hull", "scatter", "cell"' % style)
+            raise ValueError(f'Unknown plotting style "{style}". Choose from: '
+                             f'"hull", "scatter", "cell"')
         if ax is None:
             ax = plt.gca()
         if figsize is not None:
@@ -287,7 +287,7 @@ class Watson2014Map(VisualFieldMap):
             return pol2cart(phi_um, r_deg)
         elif coords.lower() == 'polar':
             return phi_um, r_deg
-        raise ValueError('Unknown coordinate system "%s".' % coords)
+        raise ValueError(f'Unknown coordinate system "{coords}".')
 
     @staticmethod
     def dva2ret(x_deg, y_deg, coords='cart'):
@@ -318,7 +318,7 @@ class Watson2014Map(VisualFieldMap):
             return pol2cart(phi_deg, r_um)
         elif coords.lower() == 'polar':
             return phi_deg, r_um
-        raise ValueError('Unknown coordinate system "%s".' % coords)
+        raise ValueError(f'Unknown coordinate system "{coords}".')
 
 
 class Watson2014DisplaceMap(Watson2014Map):

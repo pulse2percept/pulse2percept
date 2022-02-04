@@ -22,7 +22,8 @@ cpdef spatial_fast(const float32[:, ::1] stim,
                    const float32[::1] ygrid,
                    float32 atten_a,
                    float32 atten_n,
-                   float32 thresh_percept):
+                   float32 thresh_percept,
+                   uint32 n_threads):
     """Fast spatial response of the Nanduri et al. (2012) model
 
     Parameters
@@ -42,6 +43,8 @@ cpdef spatial_fast(const float32[:, ::1] stim,
         Exponent of the attenuation function's denominator (Eq.2 in the paper)
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
+    n_threads: uint32
+        Number of CPU threads to use during parallelization using OpenMP.
 
     Returns
     -------
@@ -63,7 +66,7 @@ cpdef spatial_fast(const float32[:, ::1] stim,
     # A flattened array containing n_time x n_space entries:
     bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
 
-    for idx_bright in prange(n_bright, schedule='static', nogil=True):
+    for idx_bright in prange(n_bright, schedule='static', nogil=True, num_threads=n_threads):
         # For each entry in the output matrix:
         idx_space = idx_bright % n_space
         idx_time = idx_bright / n_space
@@ -113,7 +116,8 @@ cpdef temporal_fast(const float32[:, ::1] stim,
                     float32 slope,
                     float32 eps,
                     float32 scale_out,
-                    float32 thresh_percept):
+                    float32 thresh_percept,
+                    uint32 n_threads):
     """Cython implementation of the Nanduri 2012 temporal model
 
     Parameters
@@ -145,6 +149,8 @@ cpdef temporal_fast(const float32[:, ::1] stim,
         A scaling factor applied to the output of the model
     thresh_percept: float32
         Below threshold, the percept has brightness zero.
+    n_threads: uint32
+        Number of CPU threads to use during parallelization using OpenMP.
 
     Returns
     -------
@@ -172,7 +178,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
     all_r3 = np.empty((n_space, n_sim), dtype=np.float32)  # Py overhead
     percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
 
-    for idx_space in prange(n_space, schedule='static', nogil=True):
+    for idx_space in prange(n_space, schedule='static', nogil=True, num_threads=n_threads):
         # Because the stationary nonlinearity depends on `max_R3`, which is the
         # largest value of R3 over all time points, we have to process the
         # stimulus in two steps.

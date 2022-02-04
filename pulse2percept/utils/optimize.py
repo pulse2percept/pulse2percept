@@ -42,14 +42,14 @@ def bisect(y_target, func, args=None, kwargs=None, x_lo=0, x_hi=1,
 
     """
     if x_lo >= x_hi:
-        raise ValueError("x_lo (%f) must be lower than x_hi "
-                         "(%f)." % (x_lo, x_hi))
+        raise ValueError(f"x_lo ({x_lo}) must be lower than x_hi "
+                         f"({x_hi}).")
     if x_tol <= 0:
-        raise ValueError("x_tol (%f) must be greater than zero." % x_tol)
+        raise ValueError(f"x_tol ({x_tol}) must be greater than zero.")
     if y_tol <= 0:
-        raise ValueError("y_tol (%f) must be greater than zero." % y_tol)
+        raise ValueError(f"y_tol ({y_tol}) must be greater than zero.")
     if max_iter <= 0:
-        raise ValueError("max_iter (%d) must be greater than zero." % max_iter)
+        raise ValueError(f"max_iter ({max_iter}) must be greater than zero.")
     if args is None:
         args = []
     if kwargs is None:
@@ -77,5 +77,5 @@ def bisect(y_target, func, args=None, kwargs=None, x_lo=0, x_hi=1,
             x_lo = x_mid
         else:
             x_hi = x_mid
-    logging.getLogger(__name__).warning("max_iter=%d reached" % max_iter)
+    logging.getLogger(__name__).warning(f"max_iter={max_iter} reached")
     return x_mid

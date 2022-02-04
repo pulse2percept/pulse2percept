@@ -111,11 +111,11 @@ class VideoStimulus(Stimulus):
         elif isinstance(source, np.ndarray):
             vid = source
         else:
-            raise TypeError("Source must be a filename, a 3D NumPy array or "
-                            "another VideoStimulus, not %s." % type(source))
+            raise TypeError(f"Source must be a filename, a 3D NumPy array or "
+                            f"another VideoStimulus, not {type(source)}.")
         if vid.ndim < 3 or vid.ndim > 4:
-            raise ValueError("Videos must have 3 or 4 dimensions, not "
-                             "%d." % vid.ndim)
+            raise ValueError(f"Videos must have 3 or 4 dimensions, not "
+                             f"{vid.ndim}.")
         # Convert to grayscale if necessary:
         if as_gray:
             if vid.ndim == 4:
@@ -399,7 +399,7 @@ class VideoStimulus(Stimulus):
             A copy of the stimulus object with the filtered image
         """
         if not isinstance(filt, str):
-            raise TypeError("'filt' must be a string, not %s." % type(filt))
+            raise TypeError(f"'filt' must be a string, not {type(filt)}.")
         if len(self.vid_shape) == 4:
             raise ValueError('Cannot apply filter to RGB video. Convert to '
                              'grayscale first.')
@@ -408,7 +408,7 @@ class VideoStimulus(Stimulus):
         try:
             filt = filters[filt.lower()]
         except KeyError:
-            raise ValueError("Unknown filter '%s'." % filt)
+            raise ValueError(f"Unknown filter '{filt}'.")
         return self.apply(filt, **kwargs)
 
     def encode(self, amp_range=(0, 50), pulse=None):
@@ -523,8 +523,7 @@ class VideoStimulus(Stimulus):
         """
         def update(data):
             if annotate_time:
-                mat.axes.set_title('t = %d ms' %
-                                   self.time[self._next_frame - 1])
+                mat.axes.set_title(f't = {self.time[self._next_frame - 1]} ms')
             mat.set_data(data.reshape(self.vid_shape[:-1]))
             return mat
 
