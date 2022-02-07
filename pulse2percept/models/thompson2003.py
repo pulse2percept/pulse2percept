@@ -85,8 +85,8 @@ class Thompson2003Spatial(SpatialModel):
             if not hasattr(earray, 'spacing'):
                 raise NotImplementedError
             radius = 0.45 * earray.spacing
+        dropout = np.zeros(stim.shape, dtype=np.uint8)
         if self.dropout is not None:
-            dropout = np.zeros(stim.shape, dtype=np.uint8)
             for t in range(dropout.shape[1]):
                 dropout[sample(np.arange(stim.shape[0]), k=self.dropout),
                         t] = 255
