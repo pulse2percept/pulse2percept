@@ -1,5 +1,6 @@
 """`Percept`"""
 import numpy as np
+from copy import deepcopy
 import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
 from matplotlib.animation import FuncAnimation
@@ -10,7 +11,7 @@ import logging
 from skimage import img_as_uint
 from skimage.transform import resize
 
-from ..utils import Data, Grid2D, deprecated, unique
+from ..utils import Data, Grid2D, deprecated, unique, sample
 from ..utils.constants import VIDEO_BLOCK_SIZE
 
 
@@ -26,9 +27,9 @@ class Percept(Data):
     ----------
     data : 3D NumPy array
         A NumPy array specifying the percept in (Y, X, T) dimensions
-    space : :py:class:`~pulse2percept.utils.Grid2D`
+    space : :py:class:`~pulse2percept.utils.Grid2D`, optional
         A grid object specifying the (x,y) coordinates in space
-    time : 1D array
+    time : 1D array, optional
         A list of time points
     metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.
@@ -36,10 +37,16 @@ class Percept(Data):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
-
+    noise : float or int, optional
+        Adds salt-and-pepper noise to each percept frame. An integer will be
+        interpreted as the number of pixels to subject to noise in each frame.
+        A float between 0 and 1 will be interpreted as a ratio of pixels to
+        subject to noise in each frame.
     """
 
-    def __init__(self, data, space=None, time=None, metadata=None, n_gray=None):
+    def __init__(self, data, space=None, time=None, metadata=None, n_gray=None,
+                 noise=None):
+        data = deepcopy(data)
         xdva = None
         ydva = None
         if space is not None:
@@ -48,6 +55,7 @@ class Percept(Data):
                                 f"{type(space)}.")
             xdva = space._xflat
             ydva = space._yflat
+        # Reduce number of gray levels if requested:
         if n_gray is not None:
             n_gray = int(n_gray)
             if n_gray <= 1:
@@ -56,6 +64,19 @@ class Percept(Data):
             data = np.asarray(data, dtype=np.float32)
             centroids, labels = kmeans2(data.ravel(), n_gray, minit='points')
             data = centroids[labels].reshape(data.shape)
+        # Add salt-and-pepper noise if requested:
+        if noise is not None:
+            n_pixels = np.prod(data.shape[:2])
+            vmin, vmax = data.min(), data.max()
+            for t in range(data.shape[2]):
+                idx_noise = sample(np.arange(n_pixels), k=noise)
+                n_noise = len(idx_noise)
+                xi, yi = np.unravel_index(idx_noise[:n_noise//2],
+                                          data.shape[:2])
+                data[xi, yi, t] = vmin
+                xi, yi = np.unravel_index(idx_noise[n_noise//2:n_noise],
+                                          data.shape[:2])
+                data[xi, yi, t] = vmax
         if time is not None:
             time = np.array([time]).flatten()
         self._internal = {

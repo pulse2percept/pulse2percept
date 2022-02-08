@@ -60,6 +60,17 @@ def test_Percept():
     with pytest.raises(ValueError):
         Percept(ndarray, n_gray=-3)
 
+    # Noise:
+    data = np.arange(100, dtype=float).reshape((5, 5, 4))
+    npt.assert_almost_equal(Percept(data, noise=0).data, data)
+    npt.assert_almost_equal(Percept(data, noise=0.0).data, data)
+    for noise in [0.5, 1.0]:
+        percept = Percept(data, noise=noise)
+        n_white = sum(np.isclose(percept.data.ravel(), 99.0))
+        n_black = sum(np.isclose(percept.data.ravel(), 0.0))
+        npt.assert_equal(abs(n_white - 0.5 * noise * data.size) <= 2, True)
+        npt.assert_equal(abs(n_black - 0.5 * noise * data.size) <= 2, True)
+
 
 def test_Percept__iter__():
     ndarray = np.zeros((2, 4, 3))
@@ -138,7 +149,7 @@ def test_Percept_plot():
         percept.plot(ax='invalid')
 
 
-@pytest.mark.parametrize('n_frames', (2, 3, 10, 14))
+@ pytest.mark.parametrize('n_frames', (2, 3, 10, 14))
 def test_Percept_play(n_frames):
     ndarray = np.random.rand(2, 4, n_frames)
     percept = Percept(ndarray)
@@ -147,7 +158,7 @@ def test_Percept_play(n_frames):
     npt.assert_equal(len(list(ani.frame_seq)), n_frames)
 
 
-@pytest.mark.parametrize('dtype', (np.float32, np.uint8))
+@ pytest.mark.parametrize('dtype', (np.float32, np.uint8))
 def test_Percept_save(dtype):
     ndarray = np.arange(256, dtype=dtype).repeat(31).reshape((-1, 16, 16))
     percept = Percept(ndarray.transpose((2, 0, 1)))
