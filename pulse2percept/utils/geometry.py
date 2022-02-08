@@ -129,7 +129,7 @@ class Grid2D(PrettyPrint):
         self._iter = 0
 
     def plot(self, transform=None, transform_name=None, style='hull', autoscale=True,
-             zorder=None, ax=None, figsize=None, fc=None):
+             zorder=None, ax=None, figsize=None, fc='gray'):
         """Plot the extension of the grid
 
         Parameters
@@ -175,8 +175,6 @@ class Grid2D(PrettyPrint):
         except TypeError:
             x_step = self.step
             y_step = self.step
-        if fc is None:
-            fc = 'gray'
 
         if style.lower() == 'cell':
             # Show a polygon for every grid cell that we are simulating:
