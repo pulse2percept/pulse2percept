@@ -26,9 +26,10 @@ Studies referenced throughout the Documentation:
                 *Journal of Comparative Neurophysiology* 292:497-523,
                 doi:`10.1002/cne.902920402
                 <https://doi.org/10.1002/cne.902920402>`_.
-.. [Granley2021] Granley, J., & Beyeler, M. (2021). A Computational Model of
-                 Phosphene Appearance for Epiretinal Prostheses. Conference on 
-                 Engineering in Medicine and Biology, 2021.
+.. [Granley2021] Granley, J., & Beyeler, M. (2021). A Computational Model of 
+                 Phosphene Appearance for Epiretinal Prostheses. *International 
+                 Conference of the IEEE Engineering in Medicine and Biology
+                 Society*.
 .. [Hayes2003] JS Hayes et al. (2003). Visually guided performance of
                simple tasks using simulated prosthetic vision.
                *Artificial Organs* 27, 1016-1028.

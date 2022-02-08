@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 from matplotlib.axes import Subplot
+import time
 
 from pulse2percept.implants import ArgusI
 from pulse2percept.stimuli import Stimulus
@@ -358,3 +359,35 @@ def test_Model_predict_percept():
     with pytest.raises(TypeError):
         # Must pass an implant:
         model.predict_percept(Stimulus(3))
+
+
+def test_Model_predict_percept_correctly_parallelizes():
+    # setup and time spatial model with 1 thread
+    one_thread_spatial = Model(spatial=ValidSpatialModel(n_threads=1)).build()
+    start_time_one_thread_spatial = time.perf_counter()
+    one_thread_spatial.predict_percept(ArgusI())
+    one_thread_spatial_predict_time = time.perf_counter() - start_time_one_thread_spatial
+
+    # setup and time spatial model with 2 threads
+    two_thread_spatial = Model(spatial=ValidSpatialModel(n_threads=2)).build()
+    start_time_two_thread_spatial = time.perf_counter()
+    two_thread_spatial.predict_percept(ArgusI())
+    two_threaded_spatial_predict_time = time.perf_counter() - start_time_two_thread_spatial
+
+    # we expect roughly a linear decrease in time as thread count increases
+    npt.assert_almost_equal(actual=two_threaded_spatial_predict_time, desired=one_thread_spatial_predict_time / 2, decimal=1e-5)
+
+    # setup and time temporal model with 1 thread
+    one_thread_temporal = Model(temporal=ValidTemporalModel(n_threads=1)).build()
+    start_time_one_thread_temporal = time.perf_counter()
+    one_thread_temporal.predict_percept(ArgusI())
+    one_thread_temporal_predict_time = time.perf_counter() - start_time_one_thread_temporal
+
+    # setup and time temporal model with 2 threads
+    two_thread_temporal = Model(temporal=ValidTemporalModel(n_threads=2)).build()
+    start_time_two_thread_temporal = time.perf_counter()
+    two_thread_temporal.predict_percept(ArgusI())
+    two_thread_temporal_predict_time = time.perf_counter() - start_time_two_thread_temporal
+
+    # we expect roughly a linear decrease in time as thread count increases
+    npt.assert_almost_equal(actual=two_thread_temporal_predict_time, desired=one_thread_temporal_predict_time / 2, decimal=1e-5)

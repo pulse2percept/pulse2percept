@@ -22,6 +22,8 @@ pulse2percept provides the following computational models:
 Reference         Model                      Type
 ----------------  -------------------------  -------------------
 generic           `FadingTemporal`           temporal
+[Thompson2003]_   `Thompson2003Model`        spatial
+[Thompson2003]_   `Thompson2003Spatial`      spatial
 [Horsager2009]_   `Horsager2009Model`        temporal
 [Horsager2009]_   `Horsager2009Temporal`     temporal
 [Nanduri2012]_    `Nanduri2012Model`         spatial + temporal
@@ -29,6 +31,7 @@ generic           `FadingTemporal`           temporal
 [Nanduri2012]_    `Nanduri2012Temporal`      temporal
 [Beyeler2019]_    `AxonMapModel`             spatial
 [Beyeler2019]_    `ScoreboardModel`          spatial
+[Granley2021]_    `BiphasicAxonMapModel`     spatial + temporal
 ================  =========================  ===================
 
 .. note::

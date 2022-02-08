@@ -3,7 +3,7 @@ from functools import partial
 import numpy as np
 import sys
 
-from . import AxonMapSpatial, TemporalModel, Model
+from . import AxonMapSpatial, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
 from ..percepts import Percept
@@ -209,7 +209,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     individually customized by setting the bright_model, size_model, or streak_model
     to any python callable with signature f(freq, amp, pdur)
 
-    .. note: :
+    .. note::
         Using this model in combination with a temporal model is not currently
         supported and will give unexpected results
 
@@ -283,6 +283,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         ignore_pickle: bool, optional
             A flag whether to ignore the pickle file in future calls to
             ``model.build()``.
+        n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
     """
 
     def __init__(self, **params):
@@ -437,7 +439,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 self.axon_contrib,
                 self.axon_idx_start.astype(np.uint32),
                 self.axon_idx_end.astype(np.uint32),
-                self.rho, self.thresh_percept)
+                self.rho, self.thresh_percept,
+                self.n_threads)
         else:
             return self._predict_spatial_jax(elec_params[:, :3], x, y)
 
@@ -711,7 +714,7 @@ class BiphasicAxonMapModel(Model):
     individually customized by setting the bright_model, size_model, or streak_model
     to any python callable with signature f(freq, amp, pdur)
 
-    .. note: :
+    .. note::
         Using this model in combination with a temporal model is not currently
         supported and will give unexpected results
 
@@ -787,6 +790,8 @@ class BiphasicAxonMapModel(Model):
         ignore_pickle: bool, optional
             A flag whether to ignore the pickle file in future calls to
             ``model.build()``.
+        n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
 
     """
 
@@ -797,7 +802,7 @@ class BiphasicAxonMapModel(Model):
     def predict_percept(self, implant, t_percept=None):
         """Predict a percept
         Overrides base predict percept to keep desired time axes
-        .. important ::
+        .. important::
 
             You must call ``build`` before calling ``predict_percept``.
 
