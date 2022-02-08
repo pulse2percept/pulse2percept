@@ -52,8 +52,9 @@ class Nanduri2012Spatial(SpatialModel):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
-    n_threads: int, optional
-            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
+    n_threads : int, optional
+        Number of CPU threads to use during parallelization using OpenMP. 
+        Defaults to max number of user CPU cores.
 
     """
 
@@ -127,10 +128,11 @@ class Nanduri2012Temporal(TemporalModel):
         Shift of the logistic function in the stationary nonlinearity stage.
     scale_out : float32, optional
         A scaling factor applied to the output of the model
-    thresh_percept: float, optional
+    thresh_percept : float, optional
         Below threshold, the percept has brightness zero.
-    n_threads: int, optional
-            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
+    n_threads : int, optional
+        Number of CPU threads to use during parallelization using OpenMP. 
+        Defaults to max number of user CPU cores.
 
     """
 

@@ -11,7 +11,7 @@ import logging
 from skimage import img_as_uint
 from skimage.transform import resize
 
-from ..utils import Data, Grid2D, deprecated, unique
+from ..utils import Data, Grid2D, deprecated, unique, sample
 from ..utils.constants import VIDEO_BLOCK_SIZE
 
 
@@ -67,26 +67,15 @@ class Percept(Data):
         # Add salt-and-pepper noise if requested:
         if noise is not None:
             n_pixels = np.prod(data.shape[:2])
-            if isinstance(noise, int):
-                n_noise = noise
-            elif isinstance(noise, float):
-                n_noise = int(noise * n_pixels)
-            else:
-                raise TypeError('"noise" should be of type int or float, '
-                                'not "%s."' % type(noise))
-            if n_noise < 0 or n_noise > n_pixels:
-                raise ValueError('Number of pixels subject to noise (%d) '
-                                 'must be smaller than the total number of '
-                                 'pixels (%d).' % (n_noise, n_pixels))
             vmin, vmax = data.min(), data.max()
             for t in range(data.shape[2]):
-                idx_noise = np.arange(n_pixels)
-                np.random.shuffle(idx_noise)
-                xi, yi = np.unravel_index(
-                    idx_noise[:n_noise//2], data.shape[:2])
+                idx_noise = sample(np.arange(n_pixels), k=noise)
+                n_noise = len(idx_noise)
+                xi, yi = np.unravel_index(idx_noise[:n_noise//2],
+                                          data.shape[:2])
                 data[xi, yi, t] = vmin
-                xi, yi = np.unravel_index(
-                    idx_noise[n_noise//2:n_noise], data.shape[:2])
+                xi, yi = np.unravel_index(idx_noise[n_noise//2:n_noise],
+                                          data.shape[:2])
                 data[xi, yi, t] = vmax
         if time is not None:
             time = np.array([time]).flatten()
