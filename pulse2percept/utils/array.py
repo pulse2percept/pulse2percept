@@ -1,4 +1,4 @@
-"""`is_strictly_increasing`, `unique`, `radial_mask`"""
+"""`is_strictly_increasing`, `sample`, `unique`, `radial_mask`"""
 
 from ._array import fast_is_strictly_increasing
 import numpy as np
@@ -8,6 +8,36 @@ def is_strictly_increasing(arr, tol=1e-6):
     a = np.ascontiguousarray(arr[:-1], dtype=np.float32)
     b = np.ascontiguousarray(arr[1:], dtype=np.float32)
     return fast_is_strictly_increasing(a, b, np.float32(tol))
+
+
+def sample(sequence, k=1):
+    """Randomly selects ``k`` elements from a ``sequence``
+
+    .. versionadded:: 0.8
+
+    Parameters
+    ----------
+    sequence : list, tuple, np.ndarray
+        A sequence like a list, a tuple, an array, etc.
+    k : int or float, optional
+        If an integer, the number of elements to pick
+        If a float between 0 and 1, the fraction of elements to pick
+
+    Returns
+    -------
+    sample : list
+        List of randomly chosen elements from the sequence
+    """
+    sequence = np.asarray(sequence)
+    if isinstance(k, float):
+        k = int(k * len(sequence))
+    elif not isinstance(k, int):
+        raise TypeError(f'"k" must be an int or float, not {type(k)}.')
+    if k < 0 or k > len(sequence):
+        raise ValueError(f'"k must be smaller than {len(sequence)}.')
+    idx_sample = np.arange(len(sequence))
+    np.random.shuffle(idx_sample)
+    return sequence[idx_sample[:k]]
 
 
 def unique(a, tol=1e-6, return_index=False):

@@ -63,9 +63,15 @@ class ScoreboardSpatial(SpatialModel):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
-    n_threads: int, optional
-            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
+    noise : float or int, optional
+        Adds salt-and-pepper noise to each percept frame. An integer will be
+        interpreted as the number of pixels to subject to noise in each frame.
+        A float between 0 and 1 will be interpreted as a ratio of pixels to
+        subject to noise in each frame.
 
+    n_threads : int, optional
+        Number of CPU threads to use during parallelization using OpenMP. 
+        Defaults to max number of user CPU cores.
 
     .. important ::
 
@@ -140,9 +146,14 @@ class ScoreboardModel(Model):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
-    n_threads: int, optional
-        Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
-
+    noise : float or int, optional
+        Adds salt-and-pepper noise to each percept frame. An integer will be
+        interpreted as the number of pixels to subject to noise in each frame.
+        A float between 0 and 1 will be interpreted as a ratio of pixels to
+        subject to noise in each frame.
+    n_threads : int, optional
+        Number of CPU threads to use during parallelization using OpenMP. 
+        Defaults to max number of user CPU cores.
 
     .. important ::
 
@@ -173,11 +184,11 @@ class AxonMapSpatial(SpatialModel):
 
     Parameters
     ----------
-    axlambda: double, optional
+    axlambda : double, optional
         Exponential decay constant along the axon(microns).
-    rho: double, optional
+    rho : double, optional
         Exponential decay constant away from the axon(microns).
-    eye: {'RE', LE'}, optional
+    eye : {'RE', LE'}, optional
         Eye for which to generate the axon map.
     xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
@@ -203,22 +214,27 @@ class AxonMapSpatial(SpatialModel):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
-    loc_od, loc_od: (x,y), optional
+    noise : float or int, optional
+        Adds salt-and-pepper noise to each percept frame. An integer will be
+        interpreted as the number of pixels to subject to noise in each frame.
+        A float between 0 and 1 will be interpreted as a ratio of pixels to
+        subject to noise in each frame.
+    loc_od, loc_od : (x,y), optional
         Location of the optic disc in degrees of visual angle. Note that the
         optic disc in a left eye will be corrected to have a negative x
         coordinate.
-    n_axons: int, optional
+    n_axons : int, optional
         Number of axons to generate.
-    axons_range: (min, max), optional
+    axons_range : (min, max), optional
         The range of angles(in degrees) at which axons exit the optic disc.
         This corresponds to the range of $\\phi_0$ values used in
         [Jansonius2009]_.
-    n_ax_segments: int, optional
+    n_ax_segments : int, optional
         Number of segments an axon is made of.
-    ax_segments_range: (min, max), optional
+    ax_segments_range : (min, max), optional
         Lower and upper bounds for the radial position values(polar coords)
         for each axon.
-    min_ax_sensitivity: float, optional
+    min_ax_sensitivity : float, optional
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1. If engine is jax, all other axons will be padded
@@ -226,14 +242,14 @@ class AxonMapSpatial(SpatialModel):
     engine : string, optional
         Engine to use for computation. Options are 'serial', 'cython', and 'jax'.
         Defaults to 'cython'
-    axon_pickle: str, optional
+    axon_pickle : str, optional
         File name in which to store precomputed axon maps.
-    ignore_pickle: bool, optional
+    ignore_pickle : bool, optional
         A flag whether to ignore the pickle file in future calls to
         ``model.build()``.
-    n_threads: int, optional
-        Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
-
+    n_threads : int, optional
+        Number of CPU threads to use during parallelization using OpenMP. 
+        Defaults to max number of user CPU cores.
 
     .. important ::
 
@@ -853,11 +869,11 @@ class AxonMapModel(Model):
 
     Parameters
     ----------
-    axlambda: double, optional
+    axlambda : double, optional
         Exponential decay constant along the axon(microns).
-    rho: double, optional
+    rho : double, optional
         Exponential decay constant away from the axon(microns).
-    eye: {'RE', LE'}, optional
+    eye : {'RE', LE'}, optional
         Eye for which to generate the axon map.
     xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
@@ -879,22 +895,31 @@ class AxonMapModel(Model):
         object that provides ``ret2dva`` and ``dva2ret`` methods.
         By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
-    loc_od, loc_od: (x,y), optional
+    n_gray : int, optional
+        The number of gray levels to use. If an integer is given, k-means
+        clustering is used to compress the color space of the percept into
+        ``n_gray`` bins. If None, no compression is performed.
+    noise : float or int, optional
+        Adds salt-and-pepper noise to each percept frame. An integer will be
+        interpreted as the number of pixels to subject to noise in each frame.
+        A float between 0 and 1 will be interpreted as a ratio of pixels to
+        subject to noise in each frame.
+    loc_od, loc_od : (x,y), optional
         Location of the optic disc in degrees of visual angle. Note that the
         optic disc in a left eye will be corrected to have a negative x
         coordinate.
-    n_axons: int, optional
+    n_axons : int, optional
         Number of axons to generate.
-    axons_range: (min, max), optional
+    axons_range : (min, max), optional
         The range of angles(in degrees) at which axons exit the optic disc.
         This corresponds to the range of $\\phi_0$ values used in
         [Jansonius2009]_.
-    n_ax_segments: int, optional
+    n_ax_segments : int, optional
         Number of segments an axon is made of.
-    ax_segments_range: (min, max), optional
+    ax_segments_range : (min, max), optional
         Lower and upper bounds for the radial position values(polar coords)
         for each axon.
-    min_ax_sensitivity: float, optional
+    min_ax_sensitivity : float, optional
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1. If engine is jax, all other axons will be padded
@@ -902,16 +927,16 @@ class AxonMapModel(Model):
     engine : string, optional
         Engine to use for computation. Options are 'serial', 'cython', and 'jax'.
         Defaults to 'cython'
-    axon_pickle: str, optional
+    axon_pickle : str, optional
         File name in which to store precomputed axon maps.
-    ignore_pickle: bool, optional
+    ignore_pickle : bool, optional
         A flag whether to ignore the pickle file in future calls to
         ``model.build()``.
-    n_threads: int, optional
-        Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
+    n_threads : int, optional
+        Number of CPU threads to use during parallelization using OpenMP. 
+        Defaults to max number of user CPU cores.
 
-
-    .. important::
+    .. important ::
 
         If you change important model parameters outside the constructor (e.g.,
         by directly setting ``model.axlambda = 100``), you will have to call

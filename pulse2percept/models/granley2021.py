@@ -22,6 +22,7 @@ try:
 except ImportError:
     has_jax = False
 
+
 def cond_jit(fn, static_argnums=None):
     """ Conditional decorator for jax jit"""
     if has_jax:
@@ -31,6 +32,7 @@ def cond_jit(fn, static_argnums=None):
             return jit(fn, static_argnums=static_argnums)
     else:
         return fn
+
 
 class DefaultBrightModel(BaseModel):
     """
@@ -191,7 +193,6 @@ class DefaultStreakModel(BaseModel):
             return np.maximum(F_streak, min_f_streak)
 
 
-
 class BiphasicAxonMapSpatial(AxonMapSpatial):
     """ BiphasicAxonMapModel of [Granley2021]_ (spatial model)
 
@@ -229,10 +230,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
         Options:
         --------
-        n_gray : int, optional
-            The number of gray levels to use. If an integer is given, k-means
-            clustering is used to compress the color space of the percept into
-            ``n_gray`` bins. If None, no compression is performed.
         axlambda: double, optional
             Exponential decay constant along the axon(microns).
         rho: double, optional
@@ -259,6 +256,15 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             object that provides ``ret2dva`` and ``dva2ret`` methods.
             By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
             used.
+        n_gray : int, optional
+            The number of gray levels to use. If an integer is given, k-means
+            clustering is used to compress the color space of the percept into
+            ``n_gray`` bins. If None, no compression is performed.
+        noise : float or int, optional
+            Adds salt-and-pepper noise to each percept frame. An integer will be
+            interpreted as the number of pixels to subject to noise in each 
+            frame. A float between 0 and 1 will be interpreted as a ratio of 
+            pixels to subject to noise in each frame.
         loc_od, loc_od: (x,y), optional
             Location of the optic disc in degrees of visual angle. Note that the
             optic disc in a left eye will be corrected to have a negative x
@@ -284,7 +290,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             A flag whether to ignore the pickle file in future calls to
             ``model.build()``.
         n_threads: int, optional
-            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
+            Number of CPU threads to use during parallelization using OpenMP. 
+            Defaults to max number of user CPU cores.
     """
 
     def __init__(self, **params):
@@ -352,17 +359,17 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         if not found:
             try:
                 if sys._getframe(2).f_code.co_name == '__init__' or  \
-                sys._getframe(3).f_code.co_name == '__init__':
+                        sys._getframe(3).f_code.co_name == '__init__':
                     super().__setattr__(name, value)
                     return
             except FreezeError:
                 pass
-        
+
         if not found:
             err_str = (f"'{name}' not found. You cannot add attributes to "
                        f"{self.__class__.__name__} outside the constructor.")
             raise FreezeError(err_str)
-        
+
     def get_default_params(self):
         base_params = super(BiphasicAxonMapSpatial, self).get_default_params()
         params = {
@@ -396,8 +403,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             self._predict_spatial_jax = jit(self._predict_spatial_jax)
             self._predict_spatial_batched = jit(self._predict_spatial_batched)
             # Cache axon_contrib for fast access later
-            self.axon_contrib = jax.device_put(jnp.array(self.axon_contrib), jax.devices()[0])
-    
+            self.axon_contrib = jax.device_put(
+                jnp.array(self.axon_contrib), jax.devices()[0])
+
     def _predict_spatial(self, earray, stim):
         """Predicts the percept"""
         if not isinstance(earray, ElectrodeArray):
@@ -423,12 +431,12 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         y = np.array(y, dtype=np.float32)
 
         if self.engine != 'jax':
-            bright_effects = np.array(self.bright_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]), 
-                                    dtype=np.float32).reshape((-1))
+            bright_effects = np.array(self.bright_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]),
+                                      dtype=np.float32).reshape((-1))
             size_effects = np.array(self.size_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]),
                                     dtype=np.float32).reshape((-1))
-            streak_effects = np.array(self.streak_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]), 
-                                    dtype=np.float32).reshape((-1))
+            streak_effects = np.array(self.streak_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]),
+                                      dtype=np.float32).reshape((-1))
             amps = np.array(elec_params[:, 1], dtype=np.float32).reshape((-1))
             return fast_biphasic_axon_map(
                 amps,
@@ -447,13 +455,14 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     def predict_one_point_jax(self, axon, eparams, x, y, rho):
         """ Predicts the brightness contribution from each axon segment for each pixel"""
         d2_el = (axon[:, 0, None] - x)**2 + (axon[:, 1, None] - y)**2
-        intensities = eparams[:, 0] * jnp.exp(-d2_el / (2. * rho**2 * eparams[:, 1])) * (axon[:, 2, None] ** (1./eparams[:, 2]))
+        intensities = eparams[:, 0] * jnp.exp(-d2_el / (2. * rho**2 * eparams[:, 1])) * (
+            axon[:, 2, None] ** (1./eparams[:, 2]))
         return jnp.sum(intensities, axis=1)
 
     @partial(cond_jit, static_argnums=[0])
     def biphasic_axon_map_jax(self, eparams, x, y, axon_segments, rho, thresh_percept):
         """ Predicts the spatial response of BiphasicAxonMapModel using Jax
-        
+
         Parameters:
         -------------
         eparams : jnp.array with shape (n_elecs, 3)
@@ -472,9 +481,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             Spatial responses smaller than ``thresh_percept`` will be set to zero
         """
         I = jnp.max(jax.vmap(self.predict_one_point_jax, in_axes=[0, None, None, None, None])(
-                                axon_segments, 
-                                eparams, x, y, 
-                                rho), axis=1)
+            axon_segments,
+            eparams, x, y,
+            rho), axis=1)
         I = (I > thresh_percept) * I
         return I
 
@@ -497,21 +506,22 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         ------------
         resp : flattened np.array() representing the resulting percept, shape (:, 1)
         """
-        bright_effects = jnp.array(self.bright_model(elec_params[:, 0], 
-                                           elec_params[:, 1], 
-                                           elec_params[:, 2])).reshape((-1))
-        size_effects = jnp.array(self.size_model(elec_params[:, 0], 
-                                       elec_params[:, 1], 
-                                       elec_params[:, 2])).reshape((-1))
-        streak_effects = jnp.array(self.streak_model(elec_params[:, 0], 
-                                           elec_params[:, 1], 
-                                           elec_params[:, 2])).reshape((-1))
-        eparams = jnp.stack([bright_effects, size_effects, streak_effects], axis=1)
-        
+        bright_effects = jnp.array(self.bright_model(elec_params[:, 0],
+                                                     elec_params[:, 1],
+                                                     elec_params[:, 2])).reshape((-1))
+        size_effects = jnp.array(self.size_model(elec_params[:, 0],
+                                                 elec_params[:, 1],
+                                                 elec_params[:, 2])).reshape((-1))
+        streak_effects = jnp.array(self.streak_model(elec_params[:, 0],
+                                                     elec_params[:, 1],
+                                                     elec_params[:, 2])).reshape((-1))
+        eparams = jnp.stack(
+            [bright_effects, size_effects, streak_effects], axis=1)
+
         resp = self.biphasic_axon_map_jax(eparams, x, y,
-                                     self.axon_contrib,
-                                     self.rho, 
-                                     self.thresh_percept)
+                                          self.axon_contrib,
+                                          self.rho,
+                                          self.thresh_percept)
         return resp
 
     @partial(cond_jit, static_argnums=[0])
@@ -527,26 +537,26 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         ------------
         resp : np.array() representing the resulting percepts, shape (batch_size, :, 1)
         """
-        bright_effects = self.bright_model(elec_params[:, :, 0], 
-                                           elec_params[:, :, 1], 
+        bright_effects = self.bright_model(elec_params[:, :, 0],
+                                           elec_params[:, :, 1],
                                            elec_params[:, :, 2])
-        size_effects = self.size_model(elec_params[:, :, 0], 
-                                       elec_params[:, :, 1], 
+        size_effects = self.size_model(elec_params[:, :, 0],
+                                       elec_params[:, :, 1],
                                        elec_params[:, :, 2])
-        streak_effects = self.streak_model(elec_params[:, :, 0], 
-                                           elec_params[:, :, 1], 
+        streak_effects = self.streak_model(elec_params[:, :, 0],
+                                           elec_params[:, :, 1],
                                            elec_params[:, :, 2])
-        eparams = jnp.stack([bright_effects, size_effects, streak_effects], axis=2)
-        
+        eparams = jnp.stack(
+            [bright_effects, size_effects, streak_effects], axis=2)
+
         def predict_one(e_params):
             return self.biphasic_axon_map_jax(e_params, x, y,
-                                            self.axon_contrib,
-                                            self.rho, 
-                                            self.thresh_percept)
+                                              self.axon_contrib,
+                                              self.rho,
+                                              self.thresh_percept)
         resps = lax.map(predict_one, eparams)
 
         return resps
-
 
     def predict_percept(self, implant, t_percept=None):
         """ Predicts the spatial response
@@ -637,8 +647,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 A list of Percept objects whose ``data`` container has dimensions Y x X x 1.
         """
         if self.engine != 'jax':
-            raise ImportError("Batched predict percept is not supported unless engine is jax")
-        
+            raise ImportError(
+                "Batched predict percept is not supported unless engine is jax")
+
         stims = [Stimulus(s) for s in stims]
         # Make sure all stimuli are BiphasicPulseTrains
         for stim in stims:
@@ -646,14 +657,14 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 # Could still be a stimulus where each electrode has a biphasic pulse train
                 # or a 0 stimulus
                 for i, (ele, params) in enumerate(stim.metadata
-                                                    ['electrodes'].items()):
+                                                  ['electrodes'].items()):
                     if (params['type'] != BiphasicPulseTrain or
                             params['metadata']['delay_dur'] != 0) and \
                             np.any(stim[i]):
                         raise TypeError(
                             f"All stimuli must be BiphasicPulseTrains with no "
                             f"delay dur (Failing electrode: {ele})")
-        
+
         if not self.is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
@@ -662,9 +673,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         if implant.eye != self.eye:
             raise ValueError(f"The implant is in {implant.eye} but the model was "
                              f"built for {self.eye}.")
-        
+
         # Currently all stimuli must have same electrodes
-        all_elecs = list(set().union(*[s.metadata['electrodes'].keys() for s in stims]))
+        all_elecs = list(set().union(
+            *[s.metadata['electrodes'].keys() for s in stims]))
         max_elecs = len(all_elecs)
         # Compute stimulus parameters for all electrodes
         eparams = np.zeros((len(stims), max_elecs, 3))
@@ -692,9 +704,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Response goes in first frame
             resp[:, :, 0] = pdata.reshape(self.grid.x.shape)
             percepts.append(Percept(resp, space=self.grid, time=t_percept,
-                        metadata={'stim': stims[idx_percept].metadata}))
+                                    metadata={'stim': stims[idx_percept].metadata}))
         return percepts
-
 
 
 class BiphasicAxonMapModel(Model):
@@ -736,10 +747,6 @@ class BiphasicAxonMapModel(Model):
 
         Options:
         ---------
-        n_gray : int, optional
-            The number of gray levels to use. If an integer is given, k-means
-            clustering is used to compress the color space of the percept into
-            ``n_gray`` bins. If None, no compression is performed.
         axlambda: double, optional
             Exponential decay constant along the axon(microns).
         rho: double, optional
@@ -766,6 +773,15 @@ class BiphasicAxonMapModel(Model):
             object that provides ``ret2dva`` and ``dva2ret`` methods.
             By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
             used.
+        n_gray : int, optional
+            The number of gray levels to use. If an integer is given, k-means
+            clustering is used to compress the color space of the percept into
+            ``n_gray`` bins. If None, no compression is performed.
+        noise : float or int, optional
+            Adds salt-and-pepper noise to each percept frame. An integer will be
+            interpreted as the number of pixels to subject to noise in each 
+            frame. A float between 0 and 1 will be interpreted as a ratio of 
+            pixels to subject to noise in each frame.
         loc_od, loc_od: (x,y), optional
             Location of the optic disc in degrees of visual angle. Note that the
             optic disc in a left eye will be corrected to have a negative x
@@ -791,7 +807,8 @@ class BiphasicAxonMapModel(Model):
             A flag whether to ignore the pickle file in future calls to
             ``model.build()``.
         n_threads: int, optional
-            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
+            Number of CPU threads to use during parallelization using OpenMP. 
+            Defaults to max number of user CPU cores.
 
     """
 
