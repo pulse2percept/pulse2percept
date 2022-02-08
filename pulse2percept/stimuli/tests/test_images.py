@@ -92,7 +92,7 @@ def test_ImageStimulus_crop():
     shape = (30, 50, 3)
     gray = create_dummy_img(fname, shape, 'rand')
     stim = ImageStimulus(fname)
-    stim_cropped = stim.crop([5, 10, 25, 40])
+    stim_cropped = stim.crop(idx_rect=[5, 10, 25, 40])
     npt.assert_equal(stim_cropped.img_shape, (20, 30, 3))
     npt.assert_equal(stim_cropped.data.reshape(stim_cropped.img_shape)[3, 7],
                      stim.data.reshape(stim.img_shape)[8, 17])
@@ -111,13 +111,13 @@ def test_ImageStimulus_crop():
                      stim.data.reshape(stim.img_shape)[16, 38])
 
     #"crop-indices and crop-width (left, right, up, down) cannot exist at the same time"
-    with pytest.raises(Exception):
-        stim.crop([5, 10, 25, 40], left=10)
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
+        stim.crop(idx_rect=[5, 10, 25, 40], left=10)
+    with pytest.raises(ValueError):
         stim.crop([5, 10, 25, 40], right=8)
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         stim.crop([5, 10, 25, 40], top=6)
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         stim.crop([5, 10, 25, 40], bottom=7)
     # "crop-width(left, right, up, down) cannot be negative"
     with pytest.raises(ValueError):
