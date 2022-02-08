@@ -139,6 +139,9 @@ class Grid2D(PrettyPrint):
             the grid (e.g., :py:meth:`Curcio1990Transform.dva2ret`). It must
             accept two input arguments (x and y) and output two variables (the
             transformed x and y).
+        transform_name : str, optional
+            A name to be used as the label of the matplotlib plot. This can be used
+            to label plots with multiple regions (i.e. call plt.legend after)
         style : {'hull', 'scatter', 'cell'}, optional
             * 'hull': Show the convex hull of the grid (that is, the outline of
               the smallest convex set that contains all grid points).
@@ -154,6 +157,9 @@ class Grid2D(PrettyPrint):
             (if exists) or create a new Axes object
         figsize : (float, float), optional
             Desired (width, height) of the figure in inches
+        fc : str or valid matplotlib color, optional
+            Facecolor, or edge color if style=scatter, of the plotted region
+            Defaults to gray
         """
         if style.lower() not in ['hull', 'scatter', 'cell']:
             raise ValueError(f'Unknown plotting style "{style}". Choose from: '
