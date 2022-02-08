@@ -128,7 +128,7 @@ class Grid2D(PrettyPrint):
     def reset(self):
         self._iter = 0
 
-    def plot(self, transform=None, transform_name=None, style='hull', autoscale=True,
+    def plot(self, transform=None, label=None, style='hull', autoscale=True,
              zorder=None, ax=None, figsize=None, fc='gray'):
         """Plot the extension of the grid
 
@@ -139,7 +139,7 @@ class Grid2D(PrettyPrint):
             the grid (e.g., :py:meth:`Curcio1990Transform.dva2ret`). It must
             accept two input arguments (x and y) and output two variables (the
             transformed x and y).
-        transform_name : str, optional
+        label : str, optional
             A name to be used as the label of the matplotlib plot. This can be used
             to label plots with multiple regions (i.e. call plt.legend after)
         style : {'hull', 'scatter', 'cell'}, optional
@@ -200,7 +200,7 @@ class Grid2D(PrettyPrint):
                 patches.append(Polygon(vertices, alpha=0.3, ec='k', fc=fc,
                                        ls='--', zorder=zorder))
             ax.add_collection(PatchCollection(patches, match_original=True,
-                                              zorder=zorder, label=transform_name))
+                                              zorder=zorder, label=label))
         else:
             # Show either the convex hull or a scatter plot:
             if transform is not None:
@@ -211,10 +211,10 @@ class Grid2D(PrettyPrint):
             if style.lower() == 'hull':
                 hull = ConvexHull(points.T)
                 ax.add_patch(Polygon(points[:, hull.vertices].T, alpha=0.3, ec='k',
-                                     fc=fc, ls='--', zorder=zorder, label=transform_name))
+                                     fc=fc, ls='--', zorder=zorder, label=label))
             elif style.lower() == 'scatter':
                 ax.scatter(*points, alpha=0.3, ec=fc, color=fc, marker='+',
-                           zorder=zorder, label=transform_name)
+                           zorder=zorder, label=label)
         # This is needed in MPL 3.0.X to set the axis limit correctly:
         ax.autoscale_view()
         return ax
