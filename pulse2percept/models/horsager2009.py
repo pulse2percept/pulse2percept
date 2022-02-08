@@ -36,6 +36,8 @@ class Horsager2009Temporal(TemporalModel):
         Common values at threshold: 3.43, suprathreshold: 0.83.
     thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
+    n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
 
     """
 
@@ -70,14 +72,14 @@ class Horsager2009Temporal(TemporalModel):
         # np.uint32, so we need to np.round it first:
         idx_percept = np.uint32(np.round(t_percept / self.dt))
         if np.unique(idx_percept).size < t_percept.size:
-            raise ValueError("All times 't_percept' must be distinct multiples "
-                             "of `dt`=%.2e" % self.dt)
+            raise ValueError(f"All times 't_percept' must be distinct multiples "
+                             f"of `dt`={self.dt:.2e}")
         # Cython returns a 2D (space x time) NumPy array:
         return temporal_fast(stim_data.astype(np.float32),
                              stim.time.astype(np.float32),
                              idx_percept,
                              self.dt, self.tau1, self.tau2, self.tau3,
-                             self.eps, self.beta, self.thresh_percept)
+                             self.eps, self.beta, self.thresh_percept, self.n_threads)
 
 
 class Horsager2009Model(Model):
@@ -110,6 +112,8 @@ class Horsager2009Model(Model):
         Common values at threshold: 3.43, suprathreshold: 0.83.
     thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
+    n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
 
     """
 

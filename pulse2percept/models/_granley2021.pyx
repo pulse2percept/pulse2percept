@@ -25,7 +25,8 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
                              const uint32[::1] idx_start,
                              const uint32[::1] idx_end,
                              float32 rho,
-                             float32 thresh_percept):
+                             float32 thresh_percept,
+                             uint32 n_threads):
     """Fast spatial response of the biphasic axon map model
     Predicts representative percept using entire time interval, 
     and returns this percept repeated at each time point
@@ -54,6 +55,8 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
         axon contribution (stored/passed in ``axon``).
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
+    n_threads: uint32
+        Number of CPU threads to use during parallelization using OpenMP.
 
     Return Value
     -----------------
@@ -75,7 +78,7 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
     bright = np.zeros((n_space), dtype=np.float32)  # Py overhead
 
     # Parallel loop over all pixels to be rendered:
-    for idx_space in prange(n_space, schedule='static', nogil=True):
+    for idx_space in prange(n_space, schedule='static', nogil=True, num_threads=n_threads):
         # Find the brightness value of each pixel (`px_bright`) by finding
         # the strongest activated axon segment:
         px_bright = 0.0

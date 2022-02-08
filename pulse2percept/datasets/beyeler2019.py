@@ -102,7 +102,7 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
             checksum = '19817990a615d289cdc93b928c138f71977ea2cab54fd1b35d186f3b5a3c4ff5'
             fetch_url(url, file_path, remote_checksum=checksum)
         else:
-            raise IOError("No local file %s found" % file_path)
+            raise IOError(f"No local file {file_path} found")
 
     # Open the HDF5 file:
     f = h5py.File(file_path, 'r')
@@ -140,8 +140,8 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
 
     # Verify integrity of the dataset:
     if len(df) != 400:
-        raise ValueError("Try reloading the dataset: only %d/400 rows "
-                         "found" % len(df))
+        raise ValueError(f"Try reloading the dataset: only {len(df)}/400 rows "
+                         f"found")
     # Convert byte string to regular string, otherwise subset selection won't
     # work:
     try:

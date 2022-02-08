@@ -55,11 +55,11 @@ def scatter_correlation(x, y, marker='o', marker_size=50, marker_alpha=0.5,
     def fit(x): return slope * x + intercept
     ax.plot([np.min(x), np.max(x)], [fit(np.min(x)), fit(np.max(x))], 'k--')
     # Annotate with fitting results:
-    pval = ("%.2e" % pval) if pval < 0.001 else ("%.03f" % pval)
-    annot_str = "$N$=%d" % len(y)
+    pval = (f"{pval:.2e}") if pval < 0.001 else (f"{pval:.03f}")
+    annot_str = f"$N$={len(y)}"
     if show_slope_intercept:
-        annot_str += "\n$y$=%.3f$x$+%.3f" % (slope, intercept)
-    annot_str += "\n$r$=%.3f, $p$=%s" % (rval, pval)
+        annot_str += f"\n$y$={slope:.3f}$x$+{intercept:.3f}"
+    annot_str += f"\n$r$={rval:.3f}, $p$={pval}"
     a = ax.axis()
     t = ax.text(0.98 * (a[1] - a[0]) + a[0], 0.05 * (a[3] - a[2]) + a[2],
                 annot_str, va='bottom', ha='right', fontsize=text_size)
@@ -96,7 +96,7 @@ def correlation_matrix(X, cols=None, dropna=True, ax=None):
         raise ImportError("This function requires seaborn. "
                           "You can install it via $ pip install seaborn.")
     if not isinstance(X, pd.DataFrame):
-        raise TypeError('"X" must be a Pandas DataFrame, not %s.' % type(X))
+        raise TypeError(f'"X" must be a Pandas DataFrame, not {type(X)}.')
     if cols is not None:
         X = X[cols]
     # Calculate column-wise correlation:

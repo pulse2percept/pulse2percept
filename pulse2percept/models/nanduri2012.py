@@ -52,6 +52,9 @@ class Nanduri2012Spatial(SpatialModel):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
+    n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
+
     """
 
     def get_default_params(self):
@@ -77,7 +80,8 @@ class Nanduri2012Spatial(SpatialModel):
                             self.grid.yret.ravel(),
                             self.atten_a,
                             self.atten_n,
-                            self.thresh_percept)
+                            self.thresh_percept,
+                            self.n_threads)
 
     def predict_percept(self, implant, t_percept=None):
         if not np.all([isinstance(e, DiskElectrode)
@@ -125,6 +129,8 @@ class Nanduri2012Temporal(TemporalModel):
         A scaling factor applied to the output of the model
     thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
+    n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
 
     """
 
@@ -160,15 +166,15 @@ class Nanduri2012Temporal(TemporalModel):
         # np.uint32, so we need to np.round it first:
         idx_percept = np.uint32(np.round(t_percept / self.dt))
         if np.unique(idx_percept).size < t_percept.size:
-            raise ValueError("All times 't_percept' must be distinct multiples "
-                             "of `dt`=%.2e" % self.dt)
+            raise ValueError(f"All times 't_percept' must be distinct multiples "
+                             f"of `dt`={self.dt:.2e}")
         # Cython returns a 2D (space x time) NumPy array:
         return temporal_fast(stim_data.astype(np.float32),
                              stim.time.astype(np.float32),
                              idx_percept,
                              self.dt, self.tau1, self.tau2, self.tau3,
                              self.asymptote, self.shift, self.slope, self.eps,
-                             self.scale_out, self.thresh_percept)
+                             self.scale_out, self.thresh_percept, self.n_threads)
 
 
 class Nanduri2012Model(Model):
@@ -228,6 +234,8 @@ class Nanduri2012Model(Model):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
+    n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
 
     """
 

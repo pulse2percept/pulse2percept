@@ -129,8 +129,8 @@ class AlphaIMS(ProsthesisSystem):
             # Specify different height for every electrode in a list:
             z_arr = np.asarray(z).flatten()
             if z_arr.size != self.n_electrodes:
-                raise ValueError("If `z` is a list, it must have %d entries, "
-                                 "not %d." % (self.n_electrodes, z_arr.size))
+                raise ValueError(f"If `z` is a list, it must have {self.n_electrodes} entries, "
+                                 f"not {z_arr.size}.")
             for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 

@@ -55,15 +55,15 @@ def r2_score(y_true, y_pred):
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
     if y_true.size != y_pred.size:
-        raise ValueError('"y_true" (%d) and "y_pred" (%d) must have the same '
-                         'size.' % (y_true.size, y_pred.size))
+        raise ValueError(f'"y_true" ({y_true.size}) and "y_pred" ({y_pred.size}) must have the same '
+                         f'size.')
     if y_true.size < 2:
         raise ValueError('Need at least two data points.')
     # Sum of squares of residuals:
     ss_res = np.sum((y_true - y_pred) ** 2, dtype=np.float32)
     # Total sum of squares:
     ss_tot = np.sum((y_true - np.mean(y_true)) ** 2, dtype=np.float32)
-    if isclose(ss_tot, 0):
+    if isclose(ss_tot, 0, abs_tol=1e-9):
         return 0.0  # zero variance in the ground-truth data
     return 1 - ss_res / ss_tot
 
@@ -96,8 +96,8 @@ def circ_r2_score(y_true, y_pred):
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
     if y_true.size != y_pred.size:
-        raise ValueError('"y_true" (%d) and "y_pred" (%d) must have the same '
-                         'size.' % (y_true.size, y_pred.size))
+        raise ValueError(f'"y_true" ({y_true.size}) and "y_pred" ({y_pred.size}) must have the same '
+                         f'size.')
     if y_true.size < 2:
         raise ValueError('Need at least two data points.')
     # Difference between two angles in [-pi/2, pi/2]:
@@ -108,6 +108,6 @@ def circ_r2_score(y_true, y_pred):
     ss_res = np.mean(err ** 2, dtype=np.float32)
     ss_tot = np.asarray(circvar(y_true, low=-np.pi / 2, high=np.pi / 2),
                         dtype=np.float32)
-    if isclose(ss_tot, 0):
+    if isclose(ss_tot, 0.0, abs_tol=1e-9):
         return 0.0  # zero variance in the ground-truth data
     return 1 - ss_res / ss_tot

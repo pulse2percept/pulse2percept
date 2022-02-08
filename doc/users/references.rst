@@ -27,8 +27,9 @@ Studies referenced throughout the Documentation:
                 doi:`10.1002/cne.902920402
                 <https://doi.org/10.1002/cne.902920402>`_.
 .. [Granley2021] Granley, J., & Beyeler, M. (2021). A Computational Model of 
-                 Phosphene Appearance for Epiretinal Prostheses. Conference on 
-                 Engineering in Medicine and Biology, 2021.
+                 Phosphene Appearance for Epiretinal Prostheses. *International 
+                 Conference of the IEEE Engineering in Medicine and Biology
+                 Society*.
 .. [Hayes2003] JS Hayes et al. (2003). Visually guided performance of
                simple tasks using simulated prosthetic vision.
                *Artificial Organs* 27, 1016-1028.
@@ -64,6 +65,11 @@ Studies referenced throughout the Documentation:
 .. [Palanker2020] D Palanker, Y LeMer, S Mohand-Said, M Muqit, JA Sahel (2020).
                   Photovoltaic restoration of central vision in atrophic
                   age-related macular degeneration. *Ophthalmology* 1-8
+.. [PerezFornos2012] A Perez Fornos, J Sommerhalder, L da Cruz, J Alain Sahel,
+                     S Mohand-Said, F Hafezi, M Pelizzone (2012). Temporal Properties of
+                     Visual Perception on Electrical Stimulation of the Retina.
+                     *Investigative Ophthalmology & Visual Science*, doi: `10.1167/iovs.11-9344
+                     <https://doi.org/10.1167/iovs.11-9344>`_.
 .. [Stingl2013] K Stingl, KU Bartz-Schmidt, D Besch, A Braun, A Bruckmann,
                 F Gekeler, U Greppmaier, S Hipp, G Hortdorfer, C Kernstock,
                 A Koitschev, A Kusnyerik, H Sachs, A Schatz, KT Stingl,

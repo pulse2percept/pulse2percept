@@ -93,11 +93,11 @@ class ImageStimulus(Stimulus):
         elif isinstance(source, np.ndarray):
             img = source
         else:
-            raise TypeError("Source must be a filename or another "
-                            "ImageStimulus, not %s." % type(source))
+            raise TypeError(f"Source must be a filename or another "
+                            f"ImageStimulus, not {type(source)}.")
         if img.ndim < 2 or img.ndim > 3:
-            raise ValueError("Images must have 2 or 3 dimensions, not "
-                             "%d." % img.ndim)
+            raise ValueError(f"Images must have 2 or 3 dimensions, not "
+                             f"{img.ndim}.")
         # Convert to grayscale if necessary:
         if as_gray:
             if img.ndim == 3 and img.shape[2] == 4:
@@ -234,6 +234,78 @@ class ImageStimulus(Stimulus):
         return ImageStimulus(img, electrodes=electrodes,
                              metadata=self.metadata)
 
+    def crop(self, idx_rect=None, left=0, right=0, top=0, bottom=0,
+             electrodes=None):
+        """Crop the image
+
+        This method maps a rectangle (defined by two corners) from the image
+        to a rectangle of the given size. Alternatively, this method can be used
+        to crop a number of columns either from the left or the right of the
+        image, or a number of rows either from the top or the bottom.
+
+        .. versionadded:: 0.8
+
+        Parameters
+        ----------
+        idx_rect : 4-tuple (y0, x0, y1, x1)
+            Image indices of the top-left corner ``[y0, x0]`` and bottom-right
+            corner ``[y1, x1]`` (exclusive) of the rectangle to crop.
+        left : int
+            Number of columns to crop from the left
+        right : int
+            Number of columns to crop from the right
+        top : int
+            Number of rows to crop from the top
+        bottom : int
+            Number of rows to crop from the bottom
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, electrode names will be numbered 0..N.
+
+            .. note::
+
+               The number of electrode names provided must match the number of
+               pixels in the cropped image.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the cropped image
+
+        """
+        if idx_rect is not None:
+            if left > 0 or right > 0 or top > 0 or bottom > 0:
+                raise ValueError('Crop window "idx_rect" cannot be given at '
+                                 'the same time as "left"/"right"/"top"/'
+                                 '"bottom".')
+            # Crop window is given by a rectangle (ignore left, right, etc.):
+            try:
+                y0, x0, y1, x1 = idx_rect
+            except (ValueError, TypeError):
+                raise TypeError('"idx_rect" must be a 4-tuple (y0, x0, y1, x1)')
+        else:
+            y0, x0 = top, left
+            y1, x1 = self.img_shape[0] - bottom, self.img_shape[1] - right
+        # Safety checks:
+        if y1 <= y0 or x1 <= x0:
+            raise ValueError(f"The corners do not define a valid rectangle:"
+                             f"(y0,x0)=({y0},{x0}), (y1,x1)=({y1},{x1}).")
+        if y0 < 0 or x0 < 0:
+            raise ValueError(f"Top-left corner (y0,x0)=({y0},{x0}) lies "
+                             f"outside the image.")
+        if y1 >= self.img_shape[0] or x1 >= self.img_shape[1]:
+            raise ValueError(f"Bottom-right corner (y1,x1)=({y1},{x1}) lies "
+                             f"outside the image.")
+        # Crop the image:
+        img = self.data.reshape(self.img_shape)
+        cropped_img = img[y0:y1, x0:x1, :3]
+        electrodes = self.electrodes
+        if electrodes is not None:
+            electrodes = electrodes.reshape(self.img_shape)
+            electrodes = electrodes[y0:y1, x0:x1, :3].ravel()
+        return ImageStimulus(cropped_img, electrodes=electrodes,
+                             metadata=self.metadata)
+
     def trim(self, tol=0, electrodes=None):
         """Remove any black border around the image
 
@@ -309,12 +381,12 @@ class ImageStimulus(Stimulus):
             elif thresh.lower() == 'isodata':
                 img = img > threshold_isodata(img, **kwargs)
             else:
-                raise ValueError("Unknown threshold method '%s'." % thresh)
+                raise ValueError(f"Unknown threshold method '{thresh}'.")
         elif np.isscalar(thresh):
             img = self.data.reshape(self.img_shape) > thresh
         else:
-            raise TypeError("Threshold type must be str or float, not "
-                            "%s." % type(thresh))
+            raise TypeError(f"Threshold type must be str or float, not "
+                            f"{type(thresh)}.")
         return ImageStimulus(img, electrodes=self.electrodes,
                              metadata=self.metadata)
 
@@ -433,13 +505,13 @@ class ImageStimulus(Stimulus):
             A copy of the stimulus object with the filtered image
         """
         if not isinstance(filt, str):
-            raise TypeError("'filt' must be a string, not %s." % type(filt))
+            raise TypeError(f"'filt' must be a string, not {type(filt)}.")
         filters = {'sobel': sobel, 'scharr': scharr, 'canny': canny,
                    'median': median}
         try:
             filt = filters[filt.lower()]
         except KeyError:
-            raise ValueError("Unknown filter '%s'." % filt)
+            raise ValueError(f"Unknown filter '{filt}'.")
         return self.apply(filt, **kwargs)
 
     def encode(self, amp_range=(0, 50), pulse=None):
@@ -607,8 +679,8 @@ class SnellenChart(ImageStimulus):
                         idx += 12
                     source = source[row_bounds[idx][0]:row_bounds[idx][1]]
                 except (IndexError, TypeError):
-                    raise ValueError('Invalid value for "row": %s. Choose '
-                                     'an int between 1 and 11.' % row)
+                    raise ValueError(f'Invalid value for "row": {row}. Choose '
+                                     f'an int between 1 and 11.')
         # Call ImageStimulus constructor:
         super(SnellenChart, self).__init__(source, format="PNG",
                                            resize=resize,

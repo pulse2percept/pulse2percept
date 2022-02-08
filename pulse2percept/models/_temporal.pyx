@@ -16,7 +16,8 @@ cpdef fading_fast(const float32[:, ::1] stim,
                   const uint32[::1] idx_t_percept,
                   float32 dt,
                   float32 tau,
-                  float32 thresh_percept):
+                  float32 thresh_percept,
+                  uint32 n_threads):
     """Cython implementation of the generic fading model
 
     Parameters
@@ -33,6 +34,8 @@ cpdef fading_fast(const float32[:, ::1] stim,
         Time decay constant for the fast leaky integrater (ms).
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
+    n_threads: uint32
+        Number of CPU threads to use during parallelization using OpenMP. Defaults to maximum number of cores on user CPU
 
     Returns
     -------
@@ -53,7 +56,7 @@ cpdef fading_fast(const float32[:, ::1] stim,
 
     percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
 
-    for idx_space in prange(n_space, schedule='static', nogil=True):
+    for idx_space in prange(n_space, schedule='static', nogil=True, num_threads=n_threads):
         bright = 0.0
         idx_stim = 0
         idx_frame = 0

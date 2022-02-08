@@ -69,6 +69,11 @@ class ScoreboardSpatial(SpatialModel):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
 
+    n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
+
+
+
     .. important ::
 
         If you change important model parameters outside the constructor (e.g.,
@@ -98,7 +103,8 @@ class ScoreboardSpatial(SpatialModel):
                                self.grid.xret.ravel(),
                                self.grid.yret.ravel(),
                                self.rho,
-                               self.thresh_percept)
+                               self.thresh_percept,
+                               self.n_threads)
 
 
 class ScoreboardModel(Model):
@@ -113,6 +119,8 @@ class ScoreboardModel(Model):
         Use :py:class:`~pulse2percept.models.ScoreboardSpatial` if you want
         to combine the spatial model with a temporal model.
 
+    Parameters
+    ----------
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
     xrange : (x_min, x_max), optional
@@ -144,6 +152,10 @@ class ScoreboardModel(Model):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
+    n_threads: int, optional
+        Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
+
+
 
     .. important ::
 
@@ -237,6 +249,9 @@ class AxonMapSpatial(SpatialModel):
     ignore_pickle: bool, optional
         A flag whether to ignore the pickle file in future calls to
         ``model.build()``.
+    n_threads: int, optional
+        Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
+
 
     .. important ::
 
@@ -319,7 +334,7 @@ class AxonMapSpatial(SpatialModel):
         # Check for the location of the optic disc:
         loc_od = self.loc_od
         if eye.upper() not in ['LE', 'RE']:
-            e_s = "Unknown eye string '%s': Choose from 'LE', 'RE'." % eye
+            e_s = f"Unknown eye string '{eye}': Choose from 'LE', 'RE'."
             raise ValueError(e_s)
         if eye.upper() == 'LE':
             # The Jansonius model doesn't know about left eyes: We invert the x
@@ -644,7 +659,7 @@ class AxonMapSpatial(SpatialModel):
             # In a right eye, the optic disc must have a positive x coordinate:
             self.loc_od = (np.abs(self.loc_od[0]), self.loc_od[1])
         else:
-            err_str = ("Eye should be either 'LE' or 'RE', not %s." % self.eye)
+            err_str = (f"Eye should be either 'LE' or 'RE', not {self.eye}.")
             raise ValueError(err_str)
 
     def _build(self):
@@ -719,7 +734,8 @@ class AxonMapSpatial(SpatialModel):
                                  self.axon_idx_start.astype(np.uint32),
                                  self.axon_idx_end.astype(np.uint32),
                                  self.rho,
-                                 self.thresh_percept)
+                                 self.thresh_percept,
+                                 self.n_threads)
         else:
             raise NotImplementedError("Jax will be supported in future release")
 
@@ -819,8 +835,8 @@ class AxonMapSpatial(SpatialModel):
         if self.is_built:
             self.grid.plot(ax=ax, transform=grid_transform, style=style,
                            zorder=ZORDER['background'] + 2)
-        ax.set_xlabel('x (%s)' % units)
-        ax.set_ylabel('y (%s)' % units)
+        ax.set_xlabel(f'x ({units})')
+        ax.set_ylabel(f'y ({units})')
         if autoscale:
             ax.axis((xmin, xmax, ymin, ymax))
         if annotate:
@@ -918,6 +934,8 @@ class AxonMapModel(Model):
     ignore_pickle: bool, optional
         A flag whether to ignore the pickle file in future calls to
         ``model.build()``.
+    n_threads: int, optional
+        Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
 
     .. important ::
 
@@ -940,8 +958,7 @@ class AxonMapModel(Model):
         # Need to add an additional check before running the base method:
         if isinstance(implant, ProsthesisSystem):
             if implant.eye != self.spatial.eye:
-                raise ValueError(("The implant is in %s but the model was "
-                                  "built for %s.") % (implant.eye,
-                                                      self.spatial.eye))
+                raise ValueError(f"The implant is in {implant.eye} but the model was "
+                                 f"built for {self.spatial.eye}.")
         return super(AxonMapModel, self).predict_percept(implant,
                                                          t_percept=t_percept)

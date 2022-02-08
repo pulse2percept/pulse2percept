@@ -4,6 +4,7 @@ import sys
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
 import numpy as np
+import multiprocessing
 
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
@@ -52,8 +53,8 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
             if key in defaults:
                 setattr(self, key, val)
             else:
-                err_str = ("'%s' is not a valid model parameter. Choose "
-                           "from: %s." % (key, ', '.join(defaults.keys())))
+                err_str = (f"'{key}' is not a valid model parameter. Choose "
+                           f"from: {', '.join(defaults.keys())}.")
                 raise AttributeError(err_str)
         # This flag will be flipped once the ``build`` method was called
         self._is_built = False
@@ -121,8 +122,8 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
            f_caller_3 in ["__init__", "build"]:
             self._is_built = val
         else:
-            err_s = ("The attribute `is_built` can only be set in the "
-                     "constructor or in ``build``, not in ``%s``." % f_caller_2)
+            err_s = (f"The attribute `is_built` can only be set in the "
+                     f"constructor or in ``build``, not in ``{f_caller_2}``.")
             raise AttributeError(err_s)
 
 
@@ -204,7 +205,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'scheduler': 'threading',
             'n_jobs': 1,
             # True: print status messages, 0: silent
-            'verbose': True
+            'verbose': True,
+            'n_threads': multiprocessing.cpu_count()
         }
         return params
 
@@ -288,15 +290,15 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         if not self.is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(("'implant' must be a ProsthesisSystem object, "
-                             "not %s.") % type(implant))
+            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
+                            f"not {type(implant)}.")
         if implant.stim is None:
             # Nothing to see here:
             return None
         if implant.stim.time is None and t_percept is not None:
-            raise ValueError("Cannot calculate spatial response at times "
-                             "t_percept=%s, because stimulus does not "
-                             "have a time component." % t_percept)
+            raise ValueError(f"Cannot calculate spatial response at times "
+                             f"t_percept={t_percept} because stimulus does not "
+                             f"have a time component.")
         # Make sure we don't change the user's Stimulus object:
         stim = deepcopy(implant.stim)
         # Make sure to operate on the compressed stim:
@@ -354,8 +356,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             ``bright_th``.
         """
         if not isinstance(implant, ProsthesisSystem):
-            raise TypeError("'implant' must be a ProsthesisSystem, not "
-                            "%s." % type(implant))
+            raise TypeError(f"'implant' must be a ProsthesisSystem, not "
+                            f"{type(implant)}.")
 
         def inner_predict(amp, fnc_predict, implant):
             _implant = deepcopy(implant)
@@ -467,7 +469,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
             # True: print status messages, False: silent
-            'verbose': True
+            'verbose': True,
+            'n_threads': multiprocessing.cpu_count()
         }
         return params
 
@@ -534,8 +537,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # Nothing to see here:
             return None
         if not isinstance(stim, (Stimulus, Percept)):
-            raise TypeError(("'stim' must be a Stimulus or Percept object, "
-                             "not %s.") % type(stim))
+            raise TypeError(f"'stim' must be a Stimulus or Percept object, "
+                            f"not {type(stim)}.")
         if stim.time is None:
             raise ValueError("Cannot calculate temporal response, because "
                              "stimulus/percept does not have a time "
@@ -562,9 +565,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         atol = 1e-3
         within_atol = (remainder < atol) | (np.abs(1 - remainder) < atol)
         if not np.all(within_atol):
-            raise ValueError("t=%s are not multiples of dt=%.2e." %
-                             (t_percept[np.logical_not(within_atol)],
-                              self.dt))
+            raise ValueError(f"t={t_percept[np.logical_not(within_atol)]} are "
+                             f"not multiples of dt={self.dt:.2e}.")
         if _stim.data.size == 0:
             # Stimulus was compressed to zero:
             resp = np.zeros(_space + [t_percept.size], dtype=np.float32)
@@ -611,7 +613,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             ``bright_th``.
         """
         if not isinstance(stim, Stimulus):
-            raise TypeError("'stim' must be a Stimulus, not %s." % type(stim))
+            raise TypeError(f"'stim' must be a Stimulus, not {type(stim)}.")
 
         def inner_predict(amp, fnc_predict, stim, **kwargs):
             _stim = Stimulus(amp * stim.data / stim.data.max(),
@@ -666,8 +668,8 @@ class Model(PrettyPrint):
                 # User should have passed an instance, not a class:
                 spatial = spatial()
             else:
-                raise TypeError("'spatial' must be a SpatialModel instance, "
-                                "not %s." % type(spatial))
+                raise TypeError(f"'spatial' must be a SpatialModel instance, "
+                                f"not {type(spatial)}.")
         self.spatial = spatial
         # Set the temporal model:
         if temporal is not None and not isinstance(temporal, TemporalModel):
@@ -675,8 +677,8 @@ class Model(PrettyPrint):
                 # User should have passed an instance, not a class:
                 temporal = temporal()
             else:
-                raise TypeError("'temporal' must be a TemporalModel instance, "
-                                "not %s." % type(temporal))
+                raise TypeError(f"'temporal' must be a TemporalModel instance, "
+                                f"not {type(temporal)}.")
         self.temporal = temporal
         # Use user-specified parameter values instead of defaults:
         self.set_params(params)
@@ -713,9 +715,7 @@ class Model(PrettyPrint):
         if not spatial_valid and not temporal_valid:
             # If we are in the constructor, this will be caught later and
             # a new variable will be constructed
-            raise AttributeError("%s has no attribute "
-                                 "'%s'." % (self.__class__.__name__,
-                                            attr))
+            raise AttributeError(f"{self.__class__.__name__} has no attribute '{attr}'.")
         if not spatial_valid:
             return temporal
         if not temporal_valid:
@@ -753,9 +753,8 @@ class Model(PrettyPrint):
         except (AttributeError, FreezeError):
             pass
         if not found:
-            err_str = ("'%s' not found. You cannot add attributes to %s "
-                       "outside the constructor." % (name,
-                                                     self.__class__.__name__))
+            err_str = (f"'{name}' not found. You cannot add attributes to "
+                       f"{self.__class__.__name__} outside the constructor.")
             raise FreezeError(err_str)
 
     def _pprint_params(self):
@@ -841,15 +840,15 @@ class Model(PrettyPrint):
         if not self.is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
-            raise TypeError("'implant' must be a ProsthesisSystem object, not "
-                            "%s." % type(implant))
+            raise TypeError(f"'implant' must be a ProsthesisSystem object, not "
+                            f"{type(implant)}.")
         if implant.stim is None or (not self.has_space and not self.has_time):
             # Nothing to see here:
             return None
         if implant.stim.time is None and t_percept is not None:
-            raise ValueError("Cannot calculate temporal response at times "
-                             "t_percept=%s, because stimulus/percept does not "
-                             "have a time component." % t_percept)
+            raise ValueError(f"Cannot calculate temporal response at times "
+                             f"t_percept={t_percept}, because stimulus/percept does not "
+                             f"have a time component.")
 
         if self.has_space and self.has_time:
             # Need to calculate the spatial response at all stimulus points
@@ -902,8 +901,8 @@ class Model(PrettyPrint):
             ``bright_th``.
         """
         if not isinstance(implant, ProsthesisSystem):
-            raise TypeError("'implant' must be a ProsthesisSystem, not "
-                            "%s." % type(implant))
+            raise TypeError(f"'implant' must be a ProsthesisSystem, not "
+                            f"{type(implant)}.")
 
         def inner_predict(amp, fnc_predict, implant, **kwargs):
             _implant = deepcopy(implant)

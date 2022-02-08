@@ -12,14 +12,14 @@ except ImportError:
 def load_nanduri2012(electrodes=None, task=None, shuffle=False, random_state=0):
     """Load data from [Nanduri2012]_
 
-    Load the threshold data described in [Nanduri2012]_. Average thresholds
-    were extracted from the figures of the paper using WebplotDigitizer.
+    Load the brightness and size rating data described in [Nanduri2012]_. Datapoints
+    were extracted from figure 4 of the paper using WebplotDigitizer.
 
     ===================   =====================
     Retinal implants:                   Argus I
     Subjects:                                 1
-    Number of samples:                       95
-    Number of features:                      14
+    Number of samples:                      128
+    Number of features:                      17
     ===================   =====================
 
     The dataset includes the following features:
@@ -29,11 +29,16 @@ def load_nanduri2012(electrodes=None, task=None, shuffle=False, random_state=0):
     implant               Argus I
     electrode             Electrode ID, A2, A4, B1, C1, C4, D2, D3, D4
     task                  'rate' or 'size'
+    stim_class            "Nanduri2012"
     stim_dur              Stimulus duration (ms)
     freq                  Stimulus frequency (Hz)
     amp_factor            Stimulus amplitude ratio over threshold
     brightness            Patient rated brightness compared to reference
                           stimulus
+    size                  Patient rated size compared to reference stimulus
+    ref_stim_class        "Nanduri2012"
+    ref_amp_factor        Amplitude factor (xTh) of reference pulse
+    ref_freq              Frequency (Hz) of reference pulse
     pulse_dur             Pulse duration (ms)
     pulse_type            'cathodicFirst'
     interphase_dur        Interphase gap (ms)

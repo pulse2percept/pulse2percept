@@ -20,7 +20,7 @@ from .base import (PrettyPrint, FreezeError, Frozen, Data, bijective26_name,
 from .geometry import (Grid2D, VisualFieldMap, Curcio1990Map,
                        Watson2014Map, Watson2014DisplaceMap,
                        cart2pol, pol2cart, delta_angle)
-from .array import is_strictly_increasing, radial_mask, unique
+from .array import is_strictly_increasing, radial_mask, sample, unique
 from .images import center_image, scale_image, shift_image, trim_image
 from .convolution import center_vector, conv
 from .optimize import bisect
@@ -51,6 +51,7 @@ __all__ = [
     'PrettyPrint',
     'r2_score',
     'radial_mask',
+    'sample',
     'scale_image',
     'shift_image',
     'trim_image',

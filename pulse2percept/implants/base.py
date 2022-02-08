@@ -164,10 +164,9 @@ class ProsthesisSystem(PrettyPrint):
             return Stimulus(data, electrodes=self.electrode_names,
                             time=stim.time, metadata=stim.metadata)
         else:
-            err_str = ("Number of electrodes in the stimulus (%d) "
-                       "does not match the number of electrodes in "
-                       "the implant (%d)." % (len(stim.electrodes),
-                                              self.n_electrodes))
+            err_str = (f"Number of electrodes in the stimulus ({len(stim.electrodes)}) "
+                       f"does not match the number of electrodes in "
+                       f"the implant ({self.n_electrodes}).")
             raise ValueError(err_str)
         return stim
 
@@ -214,8 +213,8 @@ class ProsthesisSystem(PrettyPrint):
             # For convenience, build an array from a single electrode:
             earray = ElectrodeArray(earray)
         if not isinstance(earray, ElectrodeArray):
-            raise TypeError("'earray' must be an ElectrodeArray object, not "
-                            "%s." % type(earray))
+            raise TypeError(f"'earray' must be an ElectrodeArray object, not "
+                            f"{type(earray)}.")
         self._earray = earray
 
     @property
@@ -284,8 +283,8 @@ class ProsthesisSystem(PrettyPrint):
             for electrode in stim.electrodes:
                 # Invalid index will return None:
                 if not self.earray[electrode]:
-                    raise ValueError('Electrode "%s" not found in '
-                                     'implant.' % electrode)
+                    raise ValueError(f'Electrode "{electrode}" not found in '
+                                     f'implant.')
             # Remove deactivated electrodes from the stimulus:
             stim.remove([name for (name, e) in self.electrodes.items()
                          if not e.activated])
@@ -317,11 +316,11 @@ class ProsthesisSystem(PrettyPrint):
     def eye(self, eye):
         """Eye setter (called upon `self.eye = eye`)"""
         if not isinstance(eye, str):
-            raise TypeError("'eye' must be a string, not %s." % type(eye))
+            raise TypeError(f"'eye' must be a string, not {type(eye)}.")
         eye = eye.upper()
         if eye != 'LE' and eye != 'RE':
-            raise ValueError("'eye' must be either 'LE' or 'RE', not "
-                             "%s." % eye)
+            raise ValueError(f"'eye' must be either 'LE' or 'RE', not "
+                             f"{eye}.")
         self._eye = eye
 
     @property

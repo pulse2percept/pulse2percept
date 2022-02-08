@@ -32,6 +32,10 @@ def configuration(parent_package='', top_path=None):
                              sources=['_granley2021.pyx'],
                              include_dirs=[numpy.get_include()],
                              libraries=libraries)
+        config.add_extension('_thompson2003',
+                             sources=['_thompson2003.pyx'],
+                             include_dirs=[numpy.get_include()],
+                             libraries=libraries)
     config.add_subpackage("tests")
 
     return config

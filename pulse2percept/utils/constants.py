@@ -1,4 +1,4 @@
-"""`DT`, `MIN_AMP`, `ZORDER`"""
+"""`DT`, `MIN_AMP`, `VIDEO_BLOCK_SIZE`, `ZORDER`"""
 
 #: Pulses with net currents smaller than 10 picoamps are considered
 #: charge-balanced (here expressed in microamps).
@@ -8,6 +8,9 @@ MIN_AMP = 1e-5
 #: transitions.
 DT = 1e-3
 
+# Block size for saving videos: width/height must be divisible by 16 for most
+# codecs to work
+VIDEO_BLOCK_SIZE = 16
 
 #: An enum specifying the zorder values to use in Matplotlib plots, ensuring
 #: that foreground items (like implants) always appear on top of background

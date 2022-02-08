@@ -3,7 +3,7 @@ from functools import partial
 import numpy as np
 import sys
 
-from . import AxonMapSpatial, TemporalModel, Model
+from . import AxonMapSpatial, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
 from ..percepts import Percept
@@ -209,7 +209,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     individually customized by setting the bright_model, size_model, or streak_model
     to any python callable with signature f(freq, amp, pdur)
 
-    .. note: :
+    .. note::
         Using this model in combination with a temporal model is not currently
         supported and will give unexpected results
 
@@ -288,6 +288,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         ignore_pickle: bool, optional
             A flag whether to ignore the pickle file in future calls to
             ``model.build()``.
+        n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
     """
 
     def __init__(self, **params):
@@ -318,12 +320,12 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # raise an exception:
             # Note that this gets called from __init__ of BaseModel, not directly from
             # BiphasicAxonMap
-            raise AttributeError("%s not found" % attr)
+            raise AttributeError(f"{attr} not found")
         # Check if bright/size/streak model has param
         for m in [self.bright_model, self.size_model, self.streak_model]:
             if hasattr(m, attr):
                 return getattr(m, attr)
-        raise AttributeError("%s not found" % attr)
+        raise AttributeError(f"{attr} not found")
 
     def __setattr__(self, name, value):
         """Called when an attribute is set
@@ -362,9 +364,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 pass
         
         if not found:
-            err_str = ("'%s' not found. You cannot add attributes to %s "
-                       "outside the constructor." % (name,
-                                                     self.__class__.__name__))
+            err_str = (f"'{name}' not found. You cannot add attributes to "
+                       f"{self.__class__.__name__} outside the constructor.")
             raise FreezeError(err_str)
         
     def get_default_params(self):
@@ -443,7 +444,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 self.axon_contrib,
                 self.axon_idx_start.astype(np.uint32),
                 self.axon_idx_end.astype(np.uint32),
-                self.rho, self.thresh_percept)
+                self.rho, self.thresh_percept,
+                self.n_threads)
         else:
             return self._predict_spatial_jax(elec_params[:, :3], x, y)
 
@@ -581,19 +583,17 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                         params['metadata']['delay_dur'] != 0) and \
                         np.any(implant.stim[i]):
                     raise TypeError(
-                        "All stimuli must be BiphasicPulseTrains with no " +
-                        "delay dur (Failing electrode: %s)" % (ele))
+                        f"All stimuli must be BiphasicPulseTrains with no " +
+                        f"delay dur (Failing electrode: {ele})")
         if isinstance(implant, ProsthesisSystem):
             if implant.eye != self.eye:
-                raise ValueError(("The implant is in %s but the model was "
-                                  "built for %s.") % (implant.eye,
-                                                      self.eye))
+                raise ValueError(f"The implant is in {implant.eye} but the model was "
+                                 f"built for {self.eye}.")
         if not self.is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(("'implant' must be a ProsthesisSystem object, "
-                             "not %s.") % type(implant))
-
+            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
+                            f"not {type(implant)}.")
         if implant.stim is None:
             return None
         stim = implant.stim
@@ -656,18 +656,17 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                             params['metadata']['delay_dur'] != 0) and \
                             np.any(stim[i]):
                         raise TypeError(
-                            "All stimuli must be BiphasicPulseTrains with no " +
-                            "delay dur (Failing electrode: %s)" % (ele))
+                            f"All stimuli must be BiphasicPulseTrains with no "
+                            f"delay dur (Failing electrode: {ele})")
         
         if not self.is_built:
             raise NotBuiltError("Yout must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(("'implant' must be a ProsthesisSystem object, "
-                                "not %s.") % type(implant))
+            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
+                            f"not {type(implant)}.")
         if implant.eye != self.eye:
-            raise ValueError(("The implant is in %s but the model was "
-                                "built for %s.") % (implant.eye,
-                                                    self.eye))
+            raise ValueError(f"The implant is in {implant.eye} but the model was "
+                             f"built for {self.eye}.")
         
         # Currently all stimuli must have same electrodes
         all_elecs = list(set().union(*[s.metadata['electrodes'].keys() for s in stims]))
@@ -720,7 +719,7 @@ class BiphasicAxonMapModel(Model):
     individually customized by setting the bright_model, size_model, or streak_model
     to any python callable with signature f(freq, amp, pdur)
 
-    .. note: :
+    .. note::
         Using this model in combination with a temporal model is not currently
         supported and will give unexpected results
 
@@ -801,6 +800,8 @@ class BiphasicAxonMapModel(Model):
         ignore_pickle: bool, optional
             A flag whether to ignore the pickle file in future calls to
             ``model.build()``.
+        n_threads: int, optional
+            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
 
     """
 
@@ -811,7 +812,7 @@ class BiphasicAxonMapModel(Model):
     def predict_percept(self, implant, t_percept=None):
         """Predict a percept
         Overrides base predict percept to keep desired time axes
-        .. important ::
+        .. important::
 
             You must call ``build`` before calling ``predict_percept``.
 
@@ -836,8 +837,8 @@ class BiphasicAxonMapModel(Model):
         if not self.is_built:
             raise NotBuiltError("You must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
-            raise TypeError("'implant' must be a ProsthesisSystem object, not "
-                            "%s." % type(implant))
+            raise TypeError(f"'implant' must be a ProsthesisSystem object, not "
+                            f"{type(implant)}.")
         if implant.stim is None or (not self.has_space and not self.has_time):
             # Nothing to see here:
             return None
