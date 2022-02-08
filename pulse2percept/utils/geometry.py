@@ -128,8 +128,8 @@ class Grid2D(PrettyPrint):
     def reset(self):
         self._iter = 0
 
-    def plot(self, transform=None, style='hull', autoscale=True,
-             zorder=None, ax=None, figsize=None):
+    def plot(self, transform=None, transform_name=None, style='hull', autoscale=True,
+             zorder=None, ax=None, figsize=None, fc=None):
         """Plot the extension of the grid
 
         Parameters
@@ -175,6 +175,8 @@ class Grid2D(PrettyPrint):
         except TypeError:
             x_step = self.step
             y_step = self.step
+        if fc is None:
+            fc = 'gray'
 
         if style.lower() == 'cell':
             # Show a polygon for every grid cell that we are simulating:
@@ -191,10 +193,10 @@ class Grid2D(PrettyPrint):
                 ])
                 if transform is not None:
                     vertices = np.array(transform(*vertices.T)).T
-                patches.append(Polygon(vertices, alpha=0.3, ec='k', fc='gray',
+                patches.append(Polygon(vertices, alpha=0.3, ec='k', fc=fc,
                                        ls='--', zorder=zorder))
             ax.add_collection(PatchCollection(patches, match_original=True,
-                                              zorder=zorder))
+                                              zorder=zorder, label=transform_name))
         else:
             # Show either the convex hull or a scatter plot:
             if transform is not None:
@@ -205,10 +207,10 @@ class Grid2D(PrettyPrint):
             if style.lower() == 'hull':
                 hull = ConvexHull(points.T)
                 ax.add_patch(Polygon(points[:, hull.vertices].T, alpha=0.3, ec='k',
-                                     fc='gray', ls='--', zorder=zorder))
+                                     fc=fc, ls='--', zorder=zorder, label=transform_name))
             elif style.lower() == 'scatter':
-                ax.scatter(*points, alpha=0.3, ec='k', fc='gray', marker='+',
-                           zorder=zorder)
+                ax.scatter(*points, alpha=0.3, ec=fc, color=fc, marker='+',
+                           zorder=zorder, label=transform_name)
         # This is needed in MPL 3.0.X to set the axis limit correctly:
         ax.autoscale_view()
         return ax
