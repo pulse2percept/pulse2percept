@@ -247,6 +247,107 @@ class VideoStimulus(Stimulus):
         return VideoStimulus(vid, electrodes=electrodes, time=self.time,
                              metadata=self.metadata)
 
+    def crop(self, idx_space=None, idx_time=None, left=0, right=0, top=0,
+             bottom=0, front=0, back=0, electrodes=None):
+        """Crop the video
+
+        This method maps a rectangle (defined by two corners) from each video
+        frame to a rectangle of the given size. Similarly, the video can be
+        shortened to a specified range of frames.
+
+        Alternatively, this method can be used to crop a number of columns
+        either from the left or the right of the video frame, or a number of
+        rows either from the top or the bottom, or a number of frames from the
+        front (beginning) or back (end) of the video.
+
+        .. versionadded:: 0.8
+
+        Parameters
+        ----------
+        idx_space : 4-tuple (y0, x0, y1, x1)
+            Image indices of the top-left corner ``[y0, x0]`` and bottom-right
+            corner ``[y1, x1]`` (exclusive) of the rectangle to crop.
+        idx_time : tuple (t0, t1)
+            Frame indices defining the start ``t0`` and end ``t1`` of the
+            cropped video.
+        left : int
+            Number of columns to crop from the left of each video frame
+        right: int
+            Number of columns to crop from the right of each video frame
+        top: int
+            Number of rows to crop from the top of each video frame
+        bottom : int
+            Number of rows to crop from the bottom of each video frame
+        front : int
+            Number of frames to crop from the front (beginning) of the video
+        back : int
+            Number of frames to crop from the back (end) of the video
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, electrode names will be numbered 0..N.
+
+            .. note::
+
+               The number of electrode names provided must match the number of
+               pixels in the cropped image.
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object containing the video
+
+        """
+        if idx_space is not None:
+            if left > 0 or right > 0 or top > 0 or bottom > 0:
+                raise ValueError('Crop window "idx_space" cannot be given at '
+                                 'the same time as "left"/"right"/"top"/'
+                                 '"bottom".')
+            # Crop window is given by a rectangle (ignore left, right, etc.):
+            try:
+                y0, x0, y1, x1 = idx_space
+            except (ValueError, TypeError):
+                raise TypeError('"idx_space" must be a 4-tuple (y0,x0,y1,x1)')
+        else:
+            # Crop window not given, use left/right/top/bottom:
+            y0, x0 = top, left
+            y1, x1 = self.vid_shape[0] - bottom, self.vid_shape[1] - right
+        if idx_time is not None:
+            if front > 0 or back > 0:
+                raise ValueError('Crop window "idx_time" cannot be given at '
+                                 'the same times as "front"/"back".')
+            try:
+                t0, t1 = idx_time
+            except (ValueError, TypeError):
+                raise TypeError('"idx_time" must be a tuple (t0, t1).')
+        else:
+            t0, t1 = front, self.vid_shape[-1] - back
+        # Safety checks:
+        if y1 <= y0 or x1 <= x0:
+            raise ValueError(f"The corners do not define a valid rectangle:"
+                             f"(y0,x0)=({y0},{x0}), (y1,x1)=({y1},{x1}).")
+        if y0 < 0 or x0 < 0:
+            raise ValueError(f"Top-left corner (y0,x0)=({y0},{x0}) lies "
+                             f"outside the video frame.")
+        if y1 >= self.vid_shape[0] or x1 >= self.vid_shape[1]:
+            raise ValueError(f"Bottom-right corner (y1,x1)=({y1},{x1}) lies "
+                             f"outside the video frame.")
+        if t1 <= t0:
+            raise ValueError(f"Start and stop frame do not form a valid range: "
+                             f"t0={t0}, t1={t1}.")
+        if t0 < 0 or t1 > self.vid_shape[-1]:
+            raise ValueError(f"Start/stop frames lie outside the valid range: "
+                             f"t0={t0}, t1={t1}")
+        # Crop the video:
+        vid = self.data.reshape(self.vid_shape)
+        cropped_vid = vid[y0:y1, x0:x1, ..., t0:t1]  # could be RGB or gray
+        time = self.time[t0:t1]
+        electrodes = self.electrodes
+        if electrodes is not None:
+            electrodes = electrodes.reshape(self.vid_shape[:-1])
+            electrodes = electrodes[y0:y1, x0:x1, ...].ravel()
+        return VideoStimulus(cropped_vid, electrodes=electrodes, time=time,
+                             metadata=self.metadata)
+
     def trim(self, tol=0, electrodes=None):
         """Remove any black border around the video
 
