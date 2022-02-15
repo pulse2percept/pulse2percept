@@ -326,6 +326,27 @@ class Watson2014Map(VisualFieldMap):
             return phi_deg, r_um
         raise ValueError(f'Unknown coordinate system "{coords}".')
 
+    def __eq__(self, other):
+        """
+        Equality operator for Watson2014 Object.
+        Compares two Watson2014 Objects based attribute equality
+
+        Parameters
+        ----------
+        other: Watson2014Map
+            Watson2014 Object to compare against
+
+        Returns
+        -------
+        bool:
+            True if the compared objects have identical attributes, False otherwise.
+        """
+        if not isinstance(other, Watson2014Map):
+            return False
+        if id(self) == id(other):
+            return True
+        return self.__dict__ == other.__dict__
+
 
 class Watson2014DisplaceMap(Watson2014Map):
     """Converts between visual angle and retinal eccentricity using RGC
