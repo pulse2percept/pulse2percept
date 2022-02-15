@@ -2,6 +2,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import numpy.testing as npt
+import copy
 
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
@@ -263,6 +264,28 @@ def test_AxonMapModel(engine):
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
         AxonMapModel(axlambda=9).build()
+
+def test_deepcopy_AxonMapModel():
+    original = AxonMapModel()
+    copied = copy.deepcopy(original)
+
+    # Assert these are two different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Compare attributes other than Spatial and Temporal Models
+    attributes = ['has_space', 'has_time', 'is_built']
+
+    for attribute in attributes:
+        npt.assert_equal(original.__getattribute__(attribute) == copied.__getattribute__(attribute), True)
+
+    # Assert associated Spatial Models are different objects in memory
+    npt.assert_equal(id(original.spatial) != id(copied.spatial), True)
+
+    # Assert Spatial Models are equal
+    npt.assert_equal(original.spatial == copied.spatial, True)
+
+    # Assert Temporal Model is None for both original and copied
+    npt.assert_equal(original.temporal is None and copied.temporal is None, True)
 
 
 @ pytest.mark.parametrize('eye', ('LE', 'RE'))

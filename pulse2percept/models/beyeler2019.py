@@ -3,6 +3,7 @@
 import os
 import numpy as np
 import pickle
+import copy
 from scipy.spatial import cKDTree
 
 import matplotlib.pyplot as plt
@@ -961,3 +962,11 @@ class AxonMapModel(Model):
                                  f"built for {self.spatial.eye}.")
         return super(AxonMapModel, self).predict_percept(implant,
                                                          t_percept=t_percept)
+
+    def __deepcopy__(self, memodict={}):
+        attributes = copy.deepcopy(self.__dict__)
+        attributes.pop('spatial')
+        attributes.pop('temporal')
+
+        result = AxonMapModel(**attributes)
+        return result
