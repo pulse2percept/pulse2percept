@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import pytest
 import numpy.testing as npt
@@ -110,6 +112,27 @@ def test_SpatialModel():
         # must pass an implant
         ValidSpatialModel().build().predict_percept(Stimulus(3))
 
+def test_eq_SpatialModel():
+    valid = ValidSpatialModel()
+
+    # Assert not equal for differing classes
+    npt.assert_equal(valid == ValidBaseModel(), False)
+
+    # Assert equal to itself
+    npt.assert_equal(valid == valid, True)
+
+    # Assert equal for shallow references
+    copied = valid
+    npt.assert_equal(valid == copied, True)
+
+    # Assert deep copies are equal
+    copied = copy.deepcopy(valid)
+    npt.assert_equal(valid == copied, True)
+
+    # Assert different models do not equal each other
+    differing_model = ValidSpatialModel(xrange=(-10, 10))
+    npt.assert_equal(valid != differing_model, True)
+
 
 def test_SpatialModel_plot():
     model = ValidSpatialModel()
@@ -191,6 +214,27 @@ def test_TemporalModel():
     with pytest.raises(TypeError):
         # Must pass a stimulus:
         ValidTemporalModel().build().predict_percept(ArgusI())
+
+def test_eq_TemporalModel():
+    valid = ValidTemporalModel()
+
+    # Assert not equal for differing classes
+    npt.assert_equal(valid == ValidBaseModel(), False)
+
+    # Assert equal to itself
+    npt.assert_equal(valid == valid, True)
+
+    # Assert equal for shallow references
+    copied = valid
+    npt.assert_equal(valid == copied, True)
+
+    # Assert deep copies are equal
+    copied = copy.deepcopy(valid)
+    npt.assert_equal(valid == copied, True)
+
+    # Assert different models do not equal each other
+    differing_model = ValidSpatialModel(xrange=(-10, 10))
+    npt.assert_equal(valid != differing_model, True)
 
 
 def test_Model():

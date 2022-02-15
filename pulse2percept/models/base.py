@@ -417,6 +417,27 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             ax.set_ylabel('y (microns)')
         return ax
 
+    def __eq__(self, other):
+        """
+        Equality operator for Spatial Model.
+        Compares two Spatial Models based attribute equality
+
+        Parameters
+        ----------
+        other: SpatialModel
+            SpatialModel to compare with
+
+        Returns
+        -------
+        bool:
+            True if the compared objects have identical attributes, False otherwise.
+        """
+        if not isinstance(other, SpatialModel):
+            return False
+        if id(self) == id(other):
+            return True
+        return self.__dict__ == other.__dict__
+
 
 class TemporalModel(BaseModel, metaclass=ABCMeta):
     """Abstract base class for all temporal models
@@ -625,6 +646,27 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                       kwargs={'t_percept': t_percept},
                       x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
                       y_tol=bright_tol, max_iter=max_iter)
+
+    def __eq__(self, other):
+        """
+        Equality operator for Temporal Model.
+        Compares two Temporal Models based attribute equality
+
+        Parameters
+        ----------
+        other: TemporalModel
+            TemporalModel to compare against
+
+        Returns
+        -------
+        bool:
+            True if the compared objects have identical attributes, False otherwise.
+        """
+        if not isinstance(other, TemporalModel):
+            return False
+        if id(self) == id(other):
+            return True
+        return self.__dict__ == other.__dict__
 
 
 class Model(PrettyPrint):
