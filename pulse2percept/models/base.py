@@ -702,6 +702,38 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             return True
         return self.__dict__ == other.__dict__
 
+    def __deepcopy__(self, memodict={}):
+        """
+        Perform a deep copy of the TemporalModel object.
+
+        Parameters
+        ----------
+        memodict: dict
+            Dictionary of objects already copied during the current copying pass.
+
+        Returns
+            Deep copy of the object
+        -------
+
+        """
+        # Check if already been copied
+        if id(self) in memodict:
+            return memodict[id(self)]
+
+        # Deep copy original object's attributes
+        attributes = copy.deepcopy(self.__dict__)
+
+        # Remove attributes that will be set internally by TemporalModel
+        attributes.pop('_is_built')
+
+        # Perform the copy by creating a new object with deep copied attributes
+        copied = self.__class__(**attributes)
+
+        # Save copied
+        memodict[id(copied)] = copied
+
+        return copied
+
 
 class Model(PrettyPrint):
     """Computational model

@@ -263,6 +263,33 @@ def test_eq_TemporalModel():
     npt.assert_equal(valid != differing_model, True)
 
 
+def test_deepcopy_TemporalModel():
+    original = ValidTemporalModel()
+    copied = copy.deepcopy(original)
+
+    # Assert they are different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert the objects are equivalent to each other
+    npt.assert_equal(original == copied, True)
+
+    # Assert building one object does not affect the copied
+    original.build()
+    npt.assert_equal(copied.is_built, False)
+    npt.assert_equal(original != copied, True)
+
+    # Change the copied attribute by "destroying" the retinotopy attribute
+    # which should be unique to each SpatialModel object
+    copied = copy.deepcopy(original)
+    copied.verbose = False
+    npt.assert_equal(original.verbose, True)
+    npt.assert_equal(original != copied, True)
+
+    # Assert "destroying" the original doesn't affect the copied
+    original = None
+    npt.assert_equal(copied is not None, True)
+
+
 def test_Model():
     # A None Model:
     model = Model()
