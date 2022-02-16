@@ -278,8 +278,7 @@ def test_deepcopy_TemporalModel():
     npt.assert_equal(copied.is_built, False)
     npt.assert_equal(original != copied, True)
 
-    # Change the copied attribute by "destroying" the retinotopy attribute
-    # which should be unique to each SpatialModel object
+    # Change the copied attribute by resetting the verbose attribute
     copied = copy.deepcopy(original)
     copied.verbose = False
     npt.assert_equal(original.verbose, True)

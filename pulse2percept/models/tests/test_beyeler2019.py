@@ -58,6 +58,25 @@ def test_ScoreboardSpatial():
     npt.assert_almost_equal(percept.time, [0, 1])
 
 
+def test_deepcopy_ScoreboardSpatial():
+    original = ScoreboardSpatial()
+    copied = copy.deepcopy(original)
+
+    # Assert these are two different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert these objects are equivalent
+    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+
+    # Assert building one object does not affect the copied
+    original.build()
+    npt.assert_equal(copied.is_built, False)
+    npt.assert_equal(original.__dict__ != copied.__dict__, True)
+
+    # Assert destroying the original doesn't affect the copied
+    original = None
+    npt.assert_equal(copied is not None, True)
+
 def test_ScoreboardModel():
     # ScoreboardModel automatically sets `rho`:
     model = ScoreboardModel(engine='serial', xystep=5)
@@ -97,6 +116,26 @@ def test_ScoreboardModel():
     npt.assert_almost_equal(percept.data[2, 3, :], pmax)
     npt.assert_almost_equal(pmax[1] / pmax[0], 2.0)
     npt.assert_almost_equal(percept.time, [0, 1])
+
+
+def test_deepcopy_ScoreboardModel():
+    original = ScoreboardModel()
+    copied = copy.deepcopy(original)
+
+    # Assert these are two different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert these objects are equivalent
+    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+
+    # Assert building one object does not affect the copied
+    original.build()
+    npt.assert_equal(copied.is_built, False)
+    npt.assert_equal(original.__dict__ != copied.__dict__, True)
+
+    # Assert destroying the original doesn't affect the copied
+    original = None
+    npt.assert_equal(copied is not None, True)
 
 
 def test_ScoreboardModel_predict_percept():
@@ -190,6 +229,25 @@ def test_AxonMapSpatial(engine):
     npt.assert_almost_equal(percept.time, [0, 1])
 
 
+def test_deepcopy_AxonMapSpatial():
+    original = AxonMapSpatial()
+    copied = copy.deepcopy(original)
+
+    # Assert these are two different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert these objects are equivalent
+    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+
+    # Assert building one object does not affect the copied
+    original.build()
+    npt.assert_equal(copied.is_built, False)
+    npt.assert_equal(original.__dict__ != copied.__dict__, True)
+
+    # Assert destroying the original doesn't affect the copied
+    original = None
+    npt.assert_equal(copied is not None, True)
+
 def test_AxonMapSpatial_plot():
     model = AxonMapSpatial()
     for use_dva, xlim in zip([True, False], [(-18, 18), (-5000, 5000)]):
@@ -265,6 +323,7 @@ def test_AxonMapModel(engine):
     with pytest.raises(ValueError):
         AxonMapModel(axlambda=9).build()
 
+
 def test_deepcopy_AxonMapModel():
     original = AxonMapModel()
     copied = copy.deepcopy(original)
@@ -272,20 +331,16 @@ def test_deepcopy_AxonMapModel():
     # Assert these are two different objects
     npt.assert_equal(id(original) != id(copied), True)
 
-    # Compare attributes other than Spatial and Temporal Models
-    attributes = ['has_space', 'has_time', 'is_built']
+    # Assert the objects are equivalent
+    npt.assert_equal(original.__dict__ == copied.__dict__, True)
 
-    for attribute in attributes:
-        npt.assert_equal(original.__getattribute__(attribute) == copied.__getattribute__(attribute), True)
-
-    # Assert associated Spatial Models are different objects in memory
+    # Assert they do not share the same AxonMapSpatial Object
+    npt.assert_equal(original.spatial == copied.spatial, True)
     npt.assert_equal(id(original.spatial) != id(copied.spatial), True)
 
-    # Assert Spatial Models are equal
-    npt.assert_equal(original.spatial == copied.spatial, True)
-
-    # Assert Temporal Model is None for both original and copied
-    npt.assert_equal(original.temporal is None and copied.temporal is None, True)
+    # Assert changing copied doesn't change original
+    copied.spatial.xrange = (-10, 10)
+    npt.assert_equal(original.spatial != copied.spatial, True)
 
 
 @ pytest.mark.parametrize('eye', ('LE', 'RE'))

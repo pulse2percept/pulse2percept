@@ -106,6 +106,34 @@ class ScoreboardSpatial(SpatialModel):
                                self.thresh_percept,
                                self.n_threads)
 
+    def __deepcopy__(self, memodict={}):
+        """
+        Perform a deep copy of the ScoreboardSpatial object.
+
+        Parameters
+        ----------
+        memodict: dict
+            Dictionary of objects already copied during the current copying pass.
+
+        Returns
+            Deep copy of the object
+        -------
+
+        """
+        if id(self) in memodict:
+            return memodict[id(self)]
+
+        attributes = copy.deepcopy(self.__dict__)
+
+        # Remove attributes set internally
+        attributes.pop('_is_built')
+        attributes.pop('grid')
+
+        result = self.__class__(**attributes)
+
+        memodict[id(self)] = result
+
+        return result
 
 class ScoreboardModel(Model):
     """Scoreboard model of [Beyeler2019]_ (standalone model)
@@ -168,6 +196,35 @@ class ScoreboardModel(Model):
         super(ScoreboardModel, self).__init__(spatial=ScoreboardSpatial(),
                                               temporal=None,
                                               **params)
+
+    def __deepcopy__(self, memodict={}):
+        """
+        Perform a deep copy of the ScoreBoardModel object.
+
+        Parameters
+        ----------
+        memodict: dict
+            Dictionary of objects already copied during the current copying pass.
+
+        Returns
+            Deep copy of the object
+        -------
+
+        """
+        if id(self) in memodict:
+            return memodict[id(self)]
+
+        attributes = copy.deepcopy(self.__dict__)
+
+        # Remove Spatial and Temporal Model attributes, they are created internally.
+        attributes.pop('spatial')
+        attributes.pop('temporal')
+
+        result = self.__class__(**attributes)
+
+        memodict[id(self)] = result
+
+        return result
 
 
 class AxonMapSpatial(SpatialModel):
@@ -855,6 +912,23 @@ class AxonMapSpatial(SpatialModel):
             ann.set_yticks([])
         return ax
 
+    def __deepcopy__(self, memodict={}):
+        if id(self) in memodict:
+            return memodict[id(self)]
+
+        attributes = copy.deepcopy(self.__dict__)
+        attributes.pop('_is_built')
+        attributes.pop('grid')
+        attributes.pop('axon_contrib')
+        attributes.pop('axon_idx_start')
+        attributes.pop('axon_idx_end')
+
+        result = self.__class__(**attributes)
+
+        memodict[id(self)] = result
+
+        return result
+
 
 class AxonMapModel(Model):
     """Axon map model of [Beyeler2019]_ (standalone model)
@@ -964,9 +1038,30 @@ class AxonMapModel(Model):
                                                          t_percept=t_percept)
 
     def __deepcopy__(self, memodict={}):
+        """
+        Perform a deep copy of the AxonMapModel object.
+
+        Parameters
+        ----------
+        memodict: dict
+            Dictionary of objects already copied during the current copying pass.
+
+        Returns
+            Deep copy of the object
+        -------
+
+        """
+        if id(self) in memodict:
+            return memodict[id(self)]
+
         attributes = copy.deepcopy(self.__dict__)
+
+        # Remove parameters set internally
         attributes.pop('spatial')
         attributes.pop('temporal')
 
-        result = AxonMapModel(**attributes)
+        result = self.__class__(**attributes)
+
+        memodict[id(self)] = result
+
         return result
