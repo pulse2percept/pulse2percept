@@ -130,6 +130,29 @@ def test_Curcio1990Map():
                                 (factor, factor))
 
 
+def test_eq_Curcio19990Map():
+    curcio_map = Curcio1990Map()
+
+    # Assert not equal for differing classes
+    npt.assert_equal(curcio_map == int, False)
+
+    # Assert equal to itself
+    npt.assert_equal(curcio_map == curcio_map, True)
+
+    # Assert equal for shallow references
+    copied = curcio_map
+    npt.assert_equal(curcio_map == copied, True)
+
+    # Assert deep copies are equal
+    copied = copy.deepcopy(curcio_map)
+    npt.assert_equal(curcio_map == copied, True)
+
+    # Assert differing objects aren't equal
+    differing_map = Watson2014Map()
+    differing_map.a = 5
+    npt.assert_equal(curcio_map == differing_map, False)
+
+
 def test_Watson2014Map():
     trafo = Watson2014Map()
     with pytest.raises(ValueError):
