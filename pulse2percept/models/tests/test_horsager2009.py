@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -57,6 +59,21 @@ def test_Horsager2009Temporal():
         npt.assert_almost_equal(percept.data.max(), 36.29, decimal=2)
 
 
+def test_deepcopy_Horsager2009Temporal():
+    original = Horsager2009Temporal()
+    copied = copy.deepcopy(original)
+
+    # Assert these are two different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert the objects are equivalent
+    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+    npt.assert_equal(original == copied, True)
+
+    # Assert changing the original doesn't affect the copied
+    original.verbose = False
+    npt.assert_equal(original != copied, True)
+
 def test_Horsager2009Model():
     model = Horsager2009Model()
     npt.assert_equal(hasattr(model, 'has_space'), True)
@@ -85,3 +102,17 @@ def test_Horsager2009Model():
         implant = ProsthesisSystem(PointSource(0, 0, 0), stim=stim)
         npt.assert_almost_equal(model1.predict_percept(implant).data,
                                 model2.predict_percept(stim).data)
+
+def test_deepcopy_Horsager2009Model():
+    original = Horsager2009Model()
+    copied = copy.deepcopy(original)
+
+    # Assert these are two different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert the objects are equivalent
+    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+
+    # Assert changing the original doesn't affect the copied
+    original.verbose = False
+    npt.assert_equal(original != copied, True)

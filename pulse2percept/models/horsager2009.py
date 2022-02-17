@@ -1,5 +1,6 @@
 """`Horsager2009Model`, `Horsager2009Temporal` [Horsager2009]_"""
 import numpy as np
+import copy
 from .base import Model, TemporalModel
 from ._horsager2009 import temporal_fast
 
@@ -121,3 +122,36 @@ class Horsager2009Model(Model):
         super(Horsager2009Model, self).__init__(spatial=None,
                                                 temporal=Horsager2009Temporal,
                                                 **params)
+
+    def __deepcopy__(self, memodict={}):
+        """
+        Perform a deep copy of the Horsager2009Model object.
+
+        Parameters
+        ----------
+        memodict: dict
+            Dictionary of objects already copied during the current copying pass.
+
+        Returns
+            Deep copy of the object
+        -------
+
+        """
+        # Check if already been copied
+        if id(self) in memodict:
+            return memodict[id(self)]
+
+        # Deep copy original object's attributes
+        attributes = copy.deepcopy(self.__dict__)
+
+        # Remove attributes set internally by Horsager2009Model
+        attributes.pop('spatial')
+        attributes.pop('temporal')
+
+        # Perform the copy by creating a new object with deep copied attributes
+        copied = self.__class__(**attributes)
+
+        # Save copied
+        memodict[id(copied)] = copied
+
+        return copied
