@@ -126,3 +126,139 @@ class BVT24(ProsthesisSystem):
         # Beware of race condition: Stim must be set last, because it requires
         # indexing into self.electrodes:
         self.stim = stim
+
+class BVT44(ProsthesisSystem):
+    """
+    44-channel suprachoroidal retinal prosthesis
+
+    This class creates a 44-channel suprachoroidal retinal prosthesis
+    [Petoe et al. 2021]_, which was developed by the Bionic Vision Australia
+    Consortium and commercialized by Bionic Vision Technologies (BVT).
+    The center of the array is located at (x,y,z), given in microns, and the
+    array is rotated by rotation angle ``rot``, given in degrees.
+
+    The array consists of:
+
+    -   44 platinum stimulating electrodes:
+
+        -   44 electrodes with 1000um exposed diameter (Electrodes A1-22
+            and Electrodes B1-B22),
+
+    -   2 return electrodes with 2000um diameter (Electrodes R1, R2)
+
+    .. note::
+
+        Column order for electrode numbering is reversed in a left-eye
+        implant.
+
+    .. versionadded:: 0.8
+
+    Parameters
+    ----------
+    x/y/z : double
+        3D location of the center of the electrode array.
+        The coordinate system is centered over the fovea.
+        Positive ``x`` values move the electrode into the nasal retina.
+        Positive ``y`` values move the electrode into the superior retina.
+        Positive ``z`` values move the electrode away from the retina into the
+        vitreous humor (sometimes called electrode-retina distance).
+        ``z`` can either be a list with 35 entries or a scalar that is applied
+        to all electrodes.
+    rot : float
+        Rotation angle of the array (deg). Positive values denote
+        counter-clock-wise (CCW) rotations in the retinal coordinate
+        system.
+    eye : {'RE', 'LE'}, optional
+        Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
+    """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ()
+
+    def __init__(self, x=0, y=0, z=0, rot=0, eye='LE', stim=None,
+                 preprocess=False, safe_mode=False):
+        self.eye = eye
+        self.preprocess = preprocess
+        self.safe_mode = safe_mode
+        self.earray = ElectrodeArray([])
+        n_elecs = 46
+
+        # the positions of the electrodes 1-20, 21a-21m, R1-R2
+        # x_arr = [-1980, -1188, -396, 396, 1188, 1980, 
+        # -2376, -1584, -792, 0, 792, 1584, 2376, 
+        # -1980, -1188, -396, 396, 1188, 1980, 
+        # -2376, -1584, -792, 0, 792, 1584, 
+        # -1980, -1188, -396, 396, 1188, 1980, 
+        # -2376, -1584, -792, 0, 792, 1584, 2376, 
+        # -1980, -1188, -396, 396, 1188, 1980, 4252, 4252 ]
+        x_arr = [-3300, -1980, -660, 660, 1980, 3300, 
+        -3960, -2640, -1320, 0, 1320, 2640, 3960, 
+        -3300, -1980, -660, 660, 1980, 3300, 
+        -3960, -2640, -1320, 0, 1320, 2640, 
+        -3300, -1980, -660, 660, 1980, 3300, 
+        -3960, -2640, -1320, 0, 1320, 2640, 3960, 
+        -3300, -1980, -660, 660, 1980, 3300, 7000, 7000]
+        print("working", len(x_arr))
+        # y_arr = [1807.5, 1807.5, 1807.5, 1807.5, 1807.5, 1807.5, 
+        # 1205, 1205, 1205, 1205, 1205, 1205, 1205, 
+        # 602.5, 602.5, 602.5, 602.5, 602.5, 602.5, 
+        # 0, 0, 0, 0, 0, 0, 
+        # -602.5, -602.5, -602.5, -602.5, -602.5, -602.5, 
+        # -1205, -1205, -1205, -1205, -1205, -1205, -1205, 
+        # -1807.5, -1807.5, -1807.5, -1807.5, -1807.5, -1807.5, 1030 , -1030]
+        y_arr = [3013.5, 3013.5, 3013.5, 3013.5, 3013.5, 3013.5, 
+        2009, 2009, 2009, 2009, 2009, 2009, 2009, 
+        1004.5, 1004.5, 1004.5, 1004.5, 1004.5, 1004.5, 
+        0, 0, 0, 0, 0, 0, 
+        -1004.5, -1004.5, -1004.5, -1004.5, -1004.5, -1004.5, 
+        -2009, -2009, -2009, -2009, -2009, -2009, -2009, 
+        -3013.5, -3013.5, -3013.5, -3013.5, -3013.5, -3013.5, 1500, -1500]
+        print("working", len(y_arr))
+        if isinstance(z, (list, np.ndarray)):
+            # Specify different height for every electrode in a list:
+            z_arr = np.asarray(self.z).flatten()
+            if z_arr.size != n_elecs:
+                raise ValueError("If `z` is a list, it must have %d entries, "
+                                 "not %d." % (n_elecs, len(z)))
+        else:
+            # If `z` is a scalar, choose same height for all electrodes:
+            z_arr = np.ones(n_elecs, dtype=float) * z
+
+        # the position of the electrodes 1-20, 21a-21m, R1-R2 for left eye
+        if eye == 'RE':
+            x_arr = np.negative(x_arr)
+
+        # the radius of all the electrodes in the implants
+        r_arr = [500.0] * n_elecs
+        # the radius of electrodes 9, 17, 19 is 200.0 um
+        #r_arr[8] = r_arr[16] = r_arr[18] = 200.0
+        # the radius of the return electrodes is 1000.0 um
+        r_arr[44] = r_arr[45] = 1000.0
+        # the names of the electrodes A1-A22, B1-B22, R1 and R2
+        names = ['A1','B1','A14','B14','A15','B15','A2','B2','A13','B13','A16','B16','B22','A3','B3','A12','B12','A17','B17','A4','B4','A11','B11','A18','B18','A5','B5','A10','B10','A19','B19','A6','B6','A9','B9','A20','B20','A22','A7','B7','A8','B8','A21','B21']
+        print(names)
+        names.extend(['R1', 'R2'])
+
+        # Rotate the grid:
+        rot_rad = np.deg2rad(rot)
+        rotmat = np.array([np.cos(rot_rad), -np.sin(rot_rad),
+                           np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
+        xy = np.matmul(rotmat, np.vstack((x_arr, y_arr)))
+        x_arr = xy[0, :]
+        y_arr = xy[1, :]
+
+        # Apply offset to make the grid centered at (x, y):
+        x_arr += x
+        y_arr += y
+
+        for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
+            self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
+
+        # Beware of race condition: Stim must be set last, because it requires
+        # indexing into self.electrodes:
+        self.stim = stim
