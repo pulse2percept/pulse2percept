@@ -1,4 +1,4 @@
-"""`BVT24`"""
+"""`BVT24`, `BVT44`"""
 import numpy as np
 from skimage.transform import SimilarityTransform
 
