@@ -814,7 +814,7 @@ class Stimulus(PrettyPrint):
                                  f"number of columns in the data array "
                                  f"({data_shape[1]}).")
             if not is_strictly_increasing(stim['time'], tol=0.95*DT):
-                msg = (f"Time points must be strictly monotonically ",
+                msg = (f"Time points must be strictly monotonically "
                        f"increasing: {list(stim['time'])}")
                 warnings.warn(msg)
         elif data_shape[0] > 0:

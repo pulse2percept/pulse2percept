@@ -1,7 +1,7 @@
 # distutils: language = c++
 # ^ needed for bool
 
-from ..utils._fast_math cimport c_isclose, float32, int32
+from cython.parallel import prange
 from libc.math cimport(fabs as c_abs, fmax as c_max)
 from libcpp cimport bool
 import numpy as np
@@ -10,8 +10,20 @@ cimport numpy as cnp
 from .base import Stimulus
 from .pulses import BiphasicPulse
 from ..utils import unique
+from ..utils._fast_math cimport c_isclose, float32, int32
 
-cpdef fast_encode(stim, int32 amp_min, int32 amp_max, pulse=None):
+#use memoryiews for enc_data and pulse_time
+
+ctypedef fused electrode_t:
+    long
+    unicode
+    bytes
+
+ctypedef fused time_t:
+    int32
+    float32
+
+cpdef fast_encode( float32 [:, :] vid_data, electrode_t [:] electrodes, float32 [:] enc_data, time_t [:] pulse_time, int32 amp_min, int32 amp_max ):
     """Encode image using amplitude modulation
 
     Encodes the image as a series of pulses, where the gray levels of the
@@ -41,46 +53,41 @@ cpdef fast_encode(stim, int32 amp_min, int32 amp_max, pulse=None):
         Encoded stimulus
 
     """
-    cdef:
-        float32 frame_dur
-        float32 amp, px
 
-    if pulse is not None:
-        if not isinstance(pulse, Stimulus):
-            raise TypeError("'pulse' must be a Stimulus object.")
-        if pulse.time is None:
-            raise ValueError("'pulse' must have a time component.")
-    # Set frame rate, either from metadata or inferred from stim.time:
-    try:
-        frame_dur = 1000.0 / stim.metadata['fps']
-    except KeyError:
-        t_diff = unique(np.diff(stim.time))
-        if len(t_diff) > 1:
-            raise NotImplementedError
-        frame_dur = 1000.0 / t_diff[0]
-    # Normalize the range of pixel values:
-    vid_data = stim.data - stim.data.min()
-    if not c_isclose(np.abs(vid_data).max(), 0):
-        vid_data /= np.abs(vid_data).max()
-    # If no pulse is provided, create a default pulse
-    # This pulse will be scaled to provide pixel grayscale levels
-    if pulse is None:
-        pulse = BiphasicPulse(1, 0.46, stim_dur=frame_dur)
-    # Make sure the provided pulse has max amp 1:
-    enc_data = pulse.data
-    if not c_isclose(np.abs(enc_data).max(), 0):
-        enc_data /= np.abs(enc_data).max()
+    #Not working on BostonTrain, maybe because Pulse has multiple dimensions?
+
+    cdef:
+        float32 amp, px
+        float32 [:] px_stim, new_data
+        time_t [:] px_stim_time, new_time
+        int32 elec_num
+
     out_stim = {}
-    for px_data, e in zip(vid_data, stim.electrodes):
+    stim_time = np.empty([1,0])
+    for px_data, e in zip(vid_data, electrodes):
         px_stim = None
         # For each pixel, we get a list of grayscale values (over time):
         for px in px_data:
             # Amplitude modulation:
             amp = px * (amp_max - amp_min) + amp_min
-            s = Stimulus(amp * enc_data, time=pulse.time, electrodes=e)
             if px_stim is None:
-                px_stim = s
+                px_stim = enc_data.copy()
+                for i in range(px_stim.shape[0]):
+                    for j in range(px_stim.shape[1])
+                        px_stim[i][j] = <float32> (px_stim[i][j] * amp)
+                stim_time = pulse_time.copy()
             else:
-                px_stim = px_stim.append(s)
+                new_data = enc_data.copy()
+                new_time = pulse_time.copy()
+                for i in range(len(new_time)):
+                    new_time[i] += stim_time[len(stim_time)-1]
+                for i in range(new_data.shape[0]):
+                    new_data[i] = <float32> (new_data[i] * amp)
+                if c_isclose(enc_data[len(enc_data)-1], new_data[0]):
+                    px_stim = np.hstack([px_stim, new_data[1:]])
+                    stim_time = np.concatenate([stim_time, new_time[1:]])
+                else:
+                    px_stim = np.hstack([px_stim, new_data])
+                    stim_time = np.concatenate([stim_time, new_time])
         out_stim.update({e: px_stim})
-    return Stimulus(out_stim)
+    return out_stim, stim_time
