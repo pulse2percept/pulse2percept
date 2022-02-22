@@ -23,7 +23,7 @@ ctypedef fused time_t:
     int32
     float32
 
-cpdef fast_encode( float32 [:, :] vid_data, electrode_t [:] electrodes, float32 [:] enc_data, time_t [:] pulse_time, int32 amp_min, int32 amp_max ):
+cpdef fast_encode( float32 [:, :] vid_data, electrode_t [:] electrodes, float32 [:, :] enc_data, time_t [:] pulse_time, int32 amp_min, int32 amp_max ):
     """Encode image using amplitude modulation
 
     Encodes the image as a series of pulses, where the gray levels of the
@@ -73,8 +73,7 @@ cpdef fast_encode( float32 [:, :] vid_data, electrode_t [:] electrodes, float32 
             if px_stim is None:
                 px_stim = enc_data.copy()
                 for i in range(px_stim.shape[0]):
-                    for j in range(px_stim.shape[1])
-                        px_stim[i][j] = <float32> (px_stim[i][j] * amp)
+                    px_stim[i] = <float32> (px_stim[i] * amp)
                 stim_time = pulse_time.copy()
             else:
                 new_data = enc_data.copy()

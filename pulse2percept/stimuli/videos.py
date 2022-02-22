@@ -445,7 +445,8 @@ class VideoStimulus(Stimulus):
                 raise TypeError("'pulse' must be a Stimulus object.")
             if pulse.time is None:
                 raise ValueError("'pulse' must have a time component.")
-
+            if pulse.data.ndim == 2 and pulse.data.shape[1] > 1:
+                raise ValueError("'pulse' must have exactly 1 electrode")
         # Set frame rate, either from metadata or inferred from stim.time:
         try:
             frame_dur = 1000.0 / self.metadata['fps']
