@@ -23,7 +23,7 @@ ctypedef fused time_t:
     int32
     float32
 
-cpdef fast_encode( float32 [:, :] vid_data, electrode_t [:] electrodes, float32 [:, :] enc_data, time_t [:] pulse_time, int32 amp_min, int32 amp_max ):
+cpdef fast_encode( float32 [:, :] vid_data, electrode_t [:] electrodes, float32 [:] enc_data, time_t [:] pulse_time, int32 amp_min, int32 amp_max ):
     """Encode image using amplitude modulation
 
     Encodes the image as a series of pulses, where the gray levels of the
