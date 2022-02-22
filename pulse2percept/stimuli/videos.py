@@ -541,7 +541,36 @@ class VideoStimulus(Stimulus):
             Encoded stimulus
 
         """
-        return fast_encode(self, amp_range[0], amp_range[1], pulse)
+        if pulse is not None:
+            if not isinstance(pulse, Stimulus):
+                raise TypeError("'pulse' must be a Stimulus object.")
+            if pulse.time is None:
+                raise ValueError("'pulse' must have a time component.")
+
+        # Set frame rate, either from metadata or inferred from stim.time:
+        try:
+            frame_dur = 1000.0 / self.metadata['fps']
+        except KeyError:
+            t_diff = unique(np.diff(self.time))
+            if len(t_diff) > 1:
+                raise NotImplementedError
+            frame_dur = 1000.0 / t_diff[0]
+        # Normalize the range of pixel values:
+        vid_data = self.data - self.data.min()
+        if not isclose(np.abs(vid_data).max(), 0):
+            vid_data /= np.abs(vid_data).max()
+        # If no pulse is provided, create a default pulse
+        # This pulse will be scaled to provide pixel grayscale levels
+        if pulse is None:
+            pulse = BiphasicPulse(1, 0.46, stim_dur=frame_dur)
+        enc_data = pulse.data
+        # Make sure the provided pulse has max amp 1:
+        if not isclose(np.abs(enc_data).max(), 0):
+            enc_data /= np.abs(enc_data).max()
+        encoded_stim, encoded_time = fast_encode(vid_data, self.electrodes, enc_data[0], pulse.time, amp_range[0], amp_range[1] )
+        np_stim = {e: np.asarray(stim) for (e, stim) in encoded_stim.items()}
+        
+        return Stimulus(np_stim, electrodes=self.electrodes, time=encoded_time)
 
     def __iter__(self):
         """Iterate over all frames in self.data"""
