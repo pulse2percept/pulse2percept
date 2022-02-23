@@ -146,6 +146,9 @@ class BVT44(ProsthesisSystem):
 
     -   2 return electrodes with 2000um diameter (Electrodes R1, R2)
 
+    The position of each electrode is measured from [Petoe et al. 2021] Figure 7. 
+    The position would be updated after the accurate position publish.
+
     .. note::
 
         Column order for electrode numbering is reversed in a left-eye
@@ -188,14 +191,8 @@ class BVT44(ProsthesisSystem):
         self.earray = ElectrodeArray([])
         n_elecs = 46
 
-        # the positions of the electrodes 1-20, 21a-21m, R1-R2
-        # x_arr = [-1980, -1188, -396, 396, 1188, 1980, 
-        # -2376, -1584, -792, 0, 792, 1584, 2376, 
-        # -1980, -1188, -396, 396, 1188, 1980, 
-        # -2376, -1584, -792, 0, 792, 1584, 
-        # -1980, -1188, -396, 396, 1188, 1980, 
-        # -2376, -1584, -792, 0, 792, 1584, 2376, 
-        # -1980, -1188, -396, 396, 1188, 1980, 4252, 4252 ]
+        # the positions of the electrodes A1-22, B1-22
+        # +3, R1
         x_arr = [-3300, -1980, -660, 660, 1980, 3300, 
         -3960, -2640, -1320, 0, 1320, 2640, 3960, 
         -3300, -1980, -660, 660, 1980, 3300, 
@@ -204,20 +201,14 @@ class BVT44(ProsthesisSystem):
         -3960, -2640, -1320, 0, 1320, 2640, 3960, 
         -3300, -1980, -660, 660, 1980, 3300, 7000, 7000]
         print("working", len(x_arr))
-        # y_arr = [1807.5, 1807.5, 1807.5, 1807.5, 1807.5, 1807.5, 
-        # 1205, 1205, 1205, 1205, 1205, 1205, 1205, 
-        # 602.5, 602.5, 602.5, 602.5, 602.5, 602.5, 
-        # 0, 0, 0, 0, 0, 0, 
-        # -602.5, -602.5, -602.5, -602.5, -602.5, -602.5, 
-        # -1205, -1205, -1205, -1205, -1205, -1205, -1205, 
-        # -1807.5, -1807.5, -1807.5, -1807.5, -1807.5, -1807.5, 1030 , -1030]
-        y_arr = [3013.5, 3013.5, 3013.5, 3013.5, 3013.5, 3013.5, 
-        2009, 2009, 2009, 2009, 2009, 2009, 2009, 
-        1004.5, 1004.5, 1004.5, 1004.5, 1004.5, 1004.5, 
+
+        y_arr = [2775, 2775, 2775, 2775, 2775, 2775, 
+        1850, 1850, 1850, 1850, 1850, 1850, 1850, 
+        925, 925, 925, 925, 925, 925, 
         0, 0, 0, 0, 0, 0, 
-        -1004.5, -1004.5, -1004.5, -1004.5, -1004.5, -1004.5, 
-        -2009, -2009, -2009, -2009, -2009, -2009, -2009, 
-        -3013.5, -3013.5, -3013.5, -3013.5, -3013.5, -3013.5, 1500, -1500]
+        -925, -925, -925, -925, -925, -925, 
+        -1850, -1850, -1850, -1850, -1850, -1850, -1850, 
+        -2775, -2775, -2775, -2775, -2775, -2775, 1500, -1500]
         print("working", len(y_arr))
         if isinstance(z, (list, np.ndarray)):
             # Specify different height for every electrode in a list:
@@ -235,8 +226,6 @@ class BVT44(ProsthesisSystem):
 
         # the radius of all the electrodes in the implants
         r_arr = [500.0] * n_elecs
-        # the radius of electrodes 9, 17, 19 is 200.0 um
-        #r_arr[8] = r_arr[16] = r_arr[18] = 200.0
         # the radius of the return electrodes is 1000.0 um
         r_arr[44] = r_arr[45] = 1000.0
         # the names of the electrodes A1-A22, B1-B22, R1 and R2
