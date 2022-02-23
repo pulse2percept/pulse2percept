@@ -127,6 +127,7 @@ class BVT24(ProsthesisSystem):
         # indexing into self.electrodes:
         self.stim = stim
 
+
 class BVT44(ProsthesisSystem):
     """
     44-channel suprachoroidal retinal prosthesis
@@ -151,7 +152,7 @@ class BVT44(ProsthesisSystem):
 
     .. note::
 
-        Column order for electrode numbering is reversed in a left-eye
+        Column order for electrode numbering is reversed in a right-eye
         implant.
 
     .. versionadded:: 0.8
@@ -193,22 +194,22 @@ class BVT44(ProsthesisSystem):
 
         # the positions of the electrodes A1-22, B1-22
         # +3, R1
-        x_arr = [-3300, -1980, -660, 660, 1980, 3300, 
-        -3960, -2640, -1320, 0, 1320, 2640, 3960, 
-        -3300, -1980, -660, 660, 1980, 3300, 
-        -3960, -2640, -1320, 0, 1320, 2640, 
-        -3300, -1980, -660, 660, 1980, 3300, 
-        -3960, -2640, -1320, 0, 1320, 2640, 3960, 
-        -3300, -1980, -660, 660, 1980, 3300, 7000, 7000]
+        x_arr = [-3300, -1980, -660, 660, 1980, 3300,
+                 -3960, -2640, -1320, 0, 1320, 2640, 3960,
+                 -3300, -1980, -660, 660, 1980, 3300,
+                 -3960, -2640, -1320, 0, 1320, 2640,
+                 -3300, -1980, -660, 660, 1980, 3300,
+                 -3960, -2640, -1320, 0, 1320, 2640, 3960,
+                 -3300, -1980, -660, 660, 1980, 3300, 7000, 7000]
         print("working", len(x_arr))
 
-        y_arr = [2775, 2775, 2775, 2775, 2775, 2775, 
-        1850, 1850, 1850, 1850, 1850, 1850, 1850, 
-        925, 925, 925, 925, 925, 925, 
-        0, 0, 0, 0, 0, 0, 
-        -925, -925, -925, -925, -925, -925, 
-        -1850, -1850, -1850, -1850, -1850, -1850, -1850, 
-        -2775, -2775, -2775, -2775, -2775, -2775, 1500, -1500]
+        y_arr = [2775, 2775, 2775, 2775, 2775, 2775,
+                 1850, 1850, 1850, 1850, 1850, 1850, 1850,
+                 925, 925, 925, 925, 925, 925,
+                 0, 0, 0, 0, 0, 0,
+                 -925, -925, -925, -925, -925, -925,
+                 -1850, -1850, -1850, -1850, -1850, -1850, -1850,
+                 -2775, -2775, -2775, -2775, -2775, -2775, 1500, -1500]
         print("working", len(y_arr))
         if isinstance(z, (list, np.ndarray)):
             # Specify different height for every electrode in a list:
@@ -229,7 +230,8 @@ class BVT44(ProsthesisSystem):
         # the radius of the return electrodes is 1000.0 um
         r_arr[44] = r_arr[45] = 1000.0
         # the names of the electrodes A1-A22, B1-B22, R1 and R2
-        names = ['A1','B1','A14','B14','A15','B15','A2','B2','A13','B13','A16','B16','B22','A3','B3','A12','B12','A17','B17','A4','B4','A11','B11','A18','B18','A5','B5','A10','B10','A19','B19','A6','B6','A9','B9','A20','B20','A22','A7','B7','A8','B8','A21','B21']
+        names = ['A1', 'B1', 'A14', 'B14', 'A15', 'B15', 'A2', 'B2', 'A13', 'B13', 'A16', 'B16', 'B22', 'A3', 'B3', 'A12', 'B12', 'A17', 'B17', 'A4', 'B4',
+                 'A11', 'B11', 'A18', 'B18', 'A5', 'B5', 'A10', 'B10', 'A19', 'B19', 'A6', 'B6', 'A9', 'B9', 'A20', 'B20', 'A22', 'A7', 'B7', 'A8', 'B8', 'A21', 'B21']
         print(names)
         names.extend(['R1', 'R2'])
 

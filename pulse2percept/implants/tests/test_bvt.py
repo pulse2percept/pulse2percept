@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 from pulse2percept.implants.base import ProsthesisSystem
-from pulse2percept.implants.bvt import BVT24
+from pulse2percept.implants.bvt import BVT24, BVT44
 
 
 @pytest.mark.parametrize('x', (-100, 200))
@@ -79,4 +79,78 @@ def test_BVT24_stim():
     # Set a stimulus via array:
     implant = BVT24(stim=np.ones(35))
     npt.assert_equal(implant.stim.shape, (35, 1))
+    npt.assert_almost_equal(implant.stim.data, 1)
+
+@pytest.mark.parametrize('x', (-100, 200))
+@pytest.mark.parametrize('y', (-200, 400))
+@pytest.mark.parametrize('rot', (-45, 60))
+def test_BVT44(x, y, rot):
+    # Create a BVT24 and make sure location is correct
+    bva = BVT44(x=x, y=y, rot=rot)
+
+    # Slots:
+    npt.assert_equal(hasattr(bva, '__slots__'), True)
+    npt.assert_equal(hasattr(bva, '__dict__'), False)
+
+    # Coordinate of first electrode (electrode 'A1')
+    xy = np.array([-3300, 2775]).T
+    # Coordinate of third last electrode (electrode 'B8')
+    xy2 = np.array([660, -2775]).T
+
+    # Rotate
+    rot_rad = np.deg2rad(rot)
+    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
+                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
+    xy = np.matmul(R, xy)
+    xy2 = np.matmul(R, xy2)
+
+    # Then off-set: Make sure first electrode is placed
+    # correctly
+    npt.assert_almost_equal(bva['A1'].x, xy[0] + x)
+    npt.assert_almost_equal(bva['A1'].y, xy[1] + y)
+    npt.assert_almost_equal(bva['B8'].x, xy2[0] + x)
+    npt.assert_almost_equal(bva['B8'].y, xy2[1] + y)
+
+    # Check radii of electrodes
+    for e in ['A1', 'A5', 'B8', 'B15', 'B20']:
+        npt.assert_almost_equal(bva[e].r, 500.0)
+    for e in ['R1', 'R2']:
+        npt.assert_almost_equal(bva[e].r, 1000.0)
+
+    # Check the center is still at (x,y)
+    y_center = bva['B11'].y
+    npt.assert_almost_equal(y_center, y)
+    x_center = bva['B11'].x
+    npt.assert_almost_equal(x_center, x)
+
+    # Right-eye implant:
+    xc, yc = -500, -500
+    bva_re = BVT44(eye='RE', x=xc, y=yc)
+    npt.assert_equal(bva_re['A1'].x > bva_re['A14'].x, True)
+    npt.assert_equal(bva_re['A1'].y, bva_re['A14'].y)
+
+    # Left-eye implant:
+    xc, yc = -500, -500
+    bva_le = BVT44(eye='LE', x=xc, y=yc)
+    npt.assert_equal(bva_le['A1'].x < bva_le['A14'].x, True)
+    npt.assert_equal(bva_le['A1'].y, bva_le['A14'].y)
+
+
+def test_BVT44_stim():
+    # Assign a stimulus:
+    implant = BVT44()
+    implant.stim = {'A1': 1}
+    npt.assert_equal(implant.stim.electrodes, ['A1'])
+    npt.assert_equal(implant.stim.time, None)
+    npt.assert_equal(implant.stim.data, [[1]])
+
+    # You can also assign the stimulus in the constructor:
+    BVT44(stim={'A1': 1})
+    npt.assert_equal(implant.stim.electrodes, ['A1'])
+    npt.assert_equal(implant.stim.time, None)
+    npt.assert_equal(implant.stim.data, [[1]])
+
+    # Set a stimulus via array:
+    implant = BVT44(stim=np.ones(46))
+    npt.assert_equal(implant.stim.shape, (46, 1))
     npt.assert_almost_equal(implant.stim.data, 1)
