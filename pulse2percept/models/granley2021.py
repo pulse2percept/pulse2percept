@@ -582,14 +582,18 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         if not isinstance(implant.stim, BiphasicPulseTrain):
             # Could still be a stimulus where each electrode has a biphasic pulse train
             # or a 0 stimulus
-            for i, (ele, params) in enumerate(implant.stim.metadata
-                                              ['electrodes'].items()):
-                if (params['type'] != BiphasicPulseTrain or
-                        params['metadata']['delay_dur'] != 0) and \
-                        np.any(implant.stim[i]):
-                    raise TypeError(
-                        f"All stimuli must be BiphasicPulseTrains with no " +
-                        f"delay dur (Failing electrode: {ele})")
+            try:
+                for i, (ele, params) in enumerate(implant.stim.metadata
+                                                ['electrodes'].items()):
+                    if (params['type'] != BiphasicPulseTrain or
+                            params['metadata']['delay_dur'] != 0) and \
+                            np.any(implant.stim[i]):
+                        raise TypeError(
+                            f"All stimuli must be BiphasicPulseTrains with no " +
+                            f"delay dur (Failing electrode: {ele})")
+            except KeyError:
+                print(f"All stimuli must be BiphasicPulseTrains with no " +
+                      f"delay dur")
         if isinstance(implant, ProsthesisSystem):
             if implant.eye != self.eye:
                 raise ValueError(f"The implant is in {implant.eye} but the model was "
