@@ -460,12 +460,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         # Deep copy original object's attributes
         attributes = copy.deepcopy(self.__dict__)
 
-        # Remove attributes that will be set internally
-        attributes.pop('_is_built')
-        attributes.pop('grid')
+        copied = self.__class__()
 
-        # Perform the copy by creating a new object with deep copied attributes
-        copied = self.__class__(**attributes)
+        # Manually set all attributes
+        for attr in attributes:
+            copied.__setattr__(attr, attributes[attr])
 
         # Save copied
         memodict[id(copied)] = copied
@@ -723,11 +722,12 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         # Deep copy original object's attributes
         attributes = copy.deepcopy(self.__dict__)
 
-        # Remove attributes that will be set internally by TemporalModel
-        attributes.pop('_is_built')
+        # Create the copy object
+        copied = self.__class__()
 
-        # Perform the copy by creating a new object with deep copied attributes
-        copied = self.__class__(**attributes)
+        # Manually set all attributes
+        for attr in attributes:
+            copied.__setattr__(attr, attributes[attr])
 
         # Save copied
         memodict[id(copied)] = copied
