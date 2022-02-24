@@ -35,26 +35,27 @@ cpdef fast_encode( float32 [:, :] vid_data, electrode_t [:] electrodes, float32 
 
     Parameters
     ----------
-    stim : VideoStimulus
-        The VideoStimulus that will be encoded.
-    amp_min, amp_max :
+    vid_data : 2-D Array
+        Normalized amplitude data from Stimulus to be encoded.
+    electrodes : 1-D Array of ints or strings
+        List of electrode names from Stimulus.
+    enc_data : 1-D Array of float32s
+        Amplitdue data from Pulse.
+    pulse_time : 1-D Array of floats
+        Time point data of pulse.
+    amp_min, amp_max : Int32
         Range of amplitude values to use for the encoding. The image's
         gray levels will be scaled such that the smallest value is mapped
         onto ``min_amp`` and the largest onto ``max_amp``.
-    pulse : :py:class:`~pulse2percept.stimuli.Stimulus`, optional
-        A valid pulse or pulse train to be used for the encoding.
-        If None given, a :py:class:`~pulse2percept.stimuli.BiphasicPulse`
-        (0.46 ms phase duration, stimulus duration inferred from the movie
-        frame rate) will be used.
+
 
     Returns
     -------
-    stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-        Encoded stimulus
-
+    out_stim : Dict{(int or string): 1-D Array}
+        Dictionary that maps each electrode to its encoded stimulus.
+    stim_time : 1-D Array
+        List of encoded time points
     """
-
-    #Not working on BostonTrain, maybe because Pulse has multiple dimensions?
 
     cdef:
         float32 amp, px
