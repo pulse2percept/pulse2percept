@@ -270,7 +270,7 @@ class Nanduri2012Model(Model):
 
     def __deepcopy__(self, memodict={}):
         """
-        Perform a deep copy of the Horsager2009Model object.
+        Perform a deep copy of the Nanduri2012Model object.
 
         Parameters
         ----------
@@ -289,7 +289,7 @@ class Nanduri2012Model(Model):
         # Deep copy original object's attributes
         attributes = copy.deepcopy(self.__dict__)
 
-        # Remove attributes set internally by Horsager2009Model
+        # Remove attributes set internally by Nanduri2012Model
         attributes.pop('spatial')
         attributes.pop('temporal')
 

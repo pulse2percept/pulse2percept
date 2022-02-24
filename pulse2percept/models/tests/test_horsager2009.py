@@ -74,6 +74,7 @@ def test_deepcopy_Horsager2009Temporal():
     original.verbose = False
     npt.assert_equal(original != copied, True)
 
+
 def test_Horsager2009Model():
     model = Horsager2009Model()
     npt.assert_equal(hasattr(model, 'has_space'), True)
@@ -102,6 +103,7 @@ def test_Horsager2009Model():
         implant = ProsthesisSystem(PointSource(0, 0, 0), stim=stim)
         npt.assert_almost_equal(model1.predict_percept(implant).data,
                                 model2.predict_percept(stim).data)
+
 
 def test_deepcopy_Horsager2009Model():
     original = Horsager2009Model()
