@@ -913,17 +913,27 @@ class AxonMapSpatial(SpatialModel):
         return ax
 
     def __deepcopy__(self, memodict={}):
+        """
+        Perform a deep copy of the AxonMapSpatial object.
+
+        Parameters
+        ----------
+        memodict: dict
+            Dictionary of objects already copied during the current copying pass.
+
+        Returns
+            Deep copy of the object
+        -------
+
+        """
         if id(self) in memodict:
             return memodict[id(self)]
 
         attributes = copy.deepcopy(self.__dict__)
-        attributes.pop('_is_built')
-        attributes.pop('grid')
-        attributes.pop('axon_contrib')
-        attributes.pop('axon_idx_start')
-        attributes.pop('axon_idx_end')
+        result = self.__class__()
 
-        result = self.__class__(**attributes)
+        for attr in attributes:
+            result.__setattr__(attr, attributes[attr])
 
         memodict[id(self)] = result
 

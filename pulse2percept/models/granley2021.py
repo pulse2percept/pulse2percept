@@ -2,6 +2,7 @@
 from functools import partial
 import numpy as np
 import sys
+import copy
 
 from . import AxonMapSpatial, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
@@ -90,6 +91,27 @@ class DefaultBrightModel(BaseModel):
         F_bright = self.predict_freq_amp(amp * self.scale_threshold(pdur), freq)
         return F_bright
 
+    def __eq__(self, other):
+        """
+        Equality operator for DefaultBrightModel.
+        Compares two DefaultBrightModel's based attribute equality
+
+        Parameters
+        ----------
+        other: SpatialModel
+            SpatialModel to compare with
+
+        Returns
+        -------
+        bool:
+            True if the compared objects have identical attributes, False otherwise.
+        """
+        if not isinstance(other, DefaultBrightModel):
+            return False
+        if id(self) == id(other):
+            return True
+
+        return self.__dict__ == other.__dict__
 
 class DefaultSizeModel(BaseModel):
     """
@@ -147,6 +169,27 @@ class DefaultSizeModel(BaseModel):
         else:
             return np.maximum(F_size, min_f_size)
 
+    def __eq__(self, other):
+        """
+        Equality operator for DefaultSizeModel.
+        Compares two DefaultSizeModel's based attribute equality
+
+        Parameters
+        ----------
+        other: DefaultSizeModel
+            DefaultSizeModel to compare with
+
+        Returns
+        -------
+        bool:
+            True if the compared objects have identical attributes, False otherwise.
+        """
+        if not isinstance(other, DefaultSizeModel):
+            return False
+        if id(self) == id(other):
+            return True
+        return self.__dict__ == other.__dict__
+
 
 class DefaultStreakModel(BaseModel):
     """
@@ -191,6 +234,27 @@ class DefaultStreakModel(BaseModel):
             return jnp.maximum(F_streak, min_f_streak)
         else:
             return np.maximum(F_streak, min_f_streak)
+
+    def __eq__(self, other):
+        """
+        Equality operator for DefaultStreakModel.
+        Compares two DefaultSizeModel's based attribute equality
+
+        Parameters
+        ----------
+        other: DefaultStreakModel
+            DefaultStreakModel to compare with
+
+        Returns
+        -------
+        bool:
+            True if the compared objects have identical attributes, False otherwise.
+        """
+        if not isinstance(other, DefaultStreakModel):
+            return False
+        if id(self) == id(other):
+            return True
+        return self.__dict__ == other.__dict__
 
 
 class BiphasicAxonMapSpatial(AxonMapSpatial):
@@ -707,6 +771,43 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                                     metadata={'stim': stims[idx_percept].metadata}))
         return percepts
 
+    def __deepcopy__(self, memodict={}):
+        """
+        Perform a deep copy of the BiphasicAxonMapSpatial object.
+
+        Parameters
+        ----------
+        memodict: dict
+            Dictionary of objects already copied during the current copying pass.
+
+        Returns
+            Deep copy of the BiphasicAxonMapSpatial object
+        -------
+
+        """
+        # Check if already been copied
+        if id(self) in memodict:
+            return memodict[id(self)]
+
+        # Deep copy original object's attributes
+        attributes = copy.deepcopy(self.__dict__)
+
+        copied = BiphasicAxonMapSpatial()
+
+        # Manually set all attributes
+        for attr in attributes:
+            copied.__setattr__(attr, attributes[attr])
+
+        # Manually set bright_model, size_model, streak_model as attributes change while manually setting above
+        copied.__setattr__('bright_model', copy.deepcopy(self.bright_model))
+        copied.__setattr__('size_model', copy.deepcopy(self.size_model))
+        copied.__setattr__('streak_model', copy.deepcopy(self.streak_model))
+
+        # Save copied
+        memodict[id(copied)] = copied
+
+        return copied
+
 
 class BiphasicAxonMapModel(Model):
     """ BiphasicAxonMapModel of [Granley2021]_ (standalone model)
@@ -851,3 +952,32 @@ class BiphasicAxonMapModel(Model):
             return None
         resp = self.spatial.predict_percept(implant, t_percept=t_percept)
         return resp
+
+    def __deepcopy__(self, memodict={}):
+        """
+        Perform a deep copy of the BiphasicAxonMapModel object.
+
+        Parameters
+        ----------
+        memodict: dict
+            Dictionary of objects already copied during the current copying pass.
+
+        Returns
+            Deep copy of the BiphasicAxonMapModel object
+        -------
+
+        """
+        if id(self) in memodict:
+            return memodict[id(self)]
+
+        attributes = copy.deepcopy(self.__dict__)
+
+        # Remove attributes set internally
+        attributes.pop('spatial')
+        attributes.pop('temporal')
+
+        copied = BiphasicAxonMapModel(**attributes)
+
+        memodict[id(self)] = copied
+
+        return copied
