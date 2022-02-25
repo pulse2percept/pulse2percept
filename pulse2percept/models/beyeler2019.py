@@ -109,30 +109,23 @@ class ScoreboardSpatial(SpatialModel):
     def __deepcopy__(self, memodict={}):
         """
         Perform a deep copy of the ScoreboardSpatial object.
-
         Parameters
         ----------
         memodict: dict
             Dictionary of objects already copied during the current copying pass.
 
         Returns
-            Deep copy of the object
         -------
-
+            Deep copy of the object
         """
         if id(self) in memodict:
             return memodict[id(self)]
-
         attributes = copy.deepcopy(self.__dict__)
-
         # Remove attributes set internally
         attributes.pop('_is_built')
         attributes.pop('grid')
-
         result = self.__class__(**attributes)
-
         memodict[id(self)] = result
-
         return result
 
 class ScoreboardModel(Model):
@@ -920,23 +913,18 @@ class AxonMapSpatial(SpatialModel):
         ----------
         memodict: dict
             Dictionary of objects already copied during the current copying pass.
-
+        
         Returns
-            Deep copy of the object
         -------
-
+            Deep copy of the object
         """
         if id(self) in memodict:
             return memodict[id(self)]
-
         attributes = copy.deepcopy(self.__dict__)
         result = self.__class__()
-
         for attr in attributes:
             result.__setattr__(attr, attributes[attr])
-
         memodict[id(self)] = result
-
         return result
 
 
