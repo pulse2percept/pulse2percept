@@ -449,26 +449,20 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             Dictionary of objects already copied during the current copying pass.
 
         Returns
-            Deep copy of the object
         -------
-
+            Deep copy of the object
         """
         # Check if already been copied
         if id(self) in memodict:
             return memodict[id(self)]
-
         # Deep copy original object's attributes
         attributes = copy.deepcopy(self.__dict__)
-
         copied = self.__class__()
-
         # Manually set all attributes
         for attr in attributes:
             copied.__setattr__(attr, attributes[attr])
-
         # Save copied
         memodict[id(copied)] = copied
-
         return copied
 
 
@@ -711,27 +705,21 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             Dictionary of objects already copied during the current copying pass.
 
         Returns
-            Deep copy of the object
         -------
-
+            Deep copy of the object
         """
         # Check if already been copied
         if id(self) in memodict:
             return memodict[id(self)]
-
         # Deep copy original object's attributes
         attributes = copy.deepcopy(self.__dict__)
-
         # Create the copy object
         copied = self.__class__()
-
         # Manually set all attributes
         for attr in attributes:
             copied.__setattr__(attr, attributes[attr])
-
         # Save copied
         memodict[id(copied)] = copied
-
         return copied
 
 
