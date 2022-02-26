@@ -127,6 +127,38 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
                      f"constructor or in ``build``, not in ``{f_caller_2}``.")
             raise AttributeError(err_s)
 
+    def __deepcopy__(self, memodict={}):
+        if id(self) in memodict:
+            return memodict[id(self)]
+
+        copied = copy.copy(self)
+
+        for attr in self.__dict__:
+            copied.__setattr__(attr, copy.deepcopy(self.__getattribute__(attr)))
+
+        return copied
+
+    def __eq__(self, other):
+        """
+        Equality operator for BaseModel.
+        Compares two Temporal Models based attribute equality
+
+        Parameters
+        ----------
+        other: BaseModel
+            BaseModel to compare against
+
+        Returns
+        -------
+        bool:
+            True if the compared objects have identical attributes, False otherwise.
+        """
+        if not isinstance(other, self.__class__):
+            return False
+        if id(self) == id(other):
+            return True
+        return self.__dict__ == other.__dict__
+
 
 class SpatialModel(BaseModel, metaclass=ABCMeta):
     """Abstract base class for all spatial models
@@ -418,27 +450,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             ax.set_ylabel('y (microns)')
         return ax
 
-    def __eq__(self, other):
-        """
-        Equality operator for Spatial Model.
-        Compares two Spatial Models based attribute equality
-
-        Parameters
-        ----------
-        other: SpatialModel
-            SpatialModel to compare with
-
-        Returns
-        -------
-        bool:
-            True if the compared objects have identical attributes, False otherwise.
-        """
-        if not isinstance(other, SpatialModel):
-            return False
-        if id(self) == id(other):
-            return True
-        return self.__dict__ == other.__dict__
-
     def __deepcopy__(self, memodict={}):
         """
         Perform a deep copy of the SpatialModel object.
@@ -455,15 +466,20 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         # Check if already been copied
         if id(self) in memodict:
             return memodict[id(self)]
-        # Deep copy original object's attributes
-        attributes = copy.deepcopy(self.__dict__)
-        copied = self.__class__()
-        # Manually set all attributes
-        for attr in attributes:
-            copied.__setattr__(attr, attributes[attr])
-        # Save copied
-        memodict[id(copied)] = copied
+
+        copied = super(SpatialModel, self).__deepcopy__(memodict)
+
         return copied
+
+        # # Deep copy original object's attributes
+        # attributes = copy.deepcopy(self.__dict__)
+        # copied = self.__class__()
+        # # Manually set all attributes
+        # for attr in attributes:
+        #     copied.__setattr__(attr, attributes[attr])
+        # # Save copied
+        # memodict[id(copied)] = copied
+        # return copied
 
 
 class TemporalModel(BaseModel, metaclass=ABCMeta):
@@ -674,26 +690,6 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                       x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
                       y_tol=bright_tol, max_iter=max_iter)
 
-    def __eq__(self, other):
-        """
-        Equality operator for Temporal Model.
-        Compares two Temporal Models based attribute equality
-
-        Parameters
-        ----------
-        other: TemporalModel
-            TemporalModel to compare against
-
-        Returns
-        -------
-        bool:
-            True if the compared objects have identical attributes, False otherwise.
-        """
-        if not isinstance(other, TemporalModel):
-            return False
-        if id(self) == id(other):
-            return True
-        return self.__dict__ == other.__dict__
 
     def __deepcopy__(self, memodict={}):
         """

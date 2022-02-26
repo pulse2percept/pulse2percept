@@ -106,27 +106,6 @@ class ScoreboardSpatial(SpatialModel):
                                self.thresh_percept,
                                self.n_threads)
 
-    def __deepcopy__(self, memodict={}):
-        """
-        Perform a deep copy of the ScoreboardSpatial object.
-        Parameters
-        ----------
-        memodict: dict
-            Dictionary of objects already copied during the current copying pass.
-
-        Returns
-        -------
-            Deep copy of the object
-        """
-        if id(self) in memodict:
-            return memodict[id(self)]
-        attributes = copy.deepcopy(self.__dict__)
-        # Remove attributes set internally
-        attributes.pop('_is_built')
-        attributes.pop('grid')
-        result = self.__class__(**attributes)
-        memodict[id(self)] = result
-        return result
 
 class ScoreboardModel(Model):
     """Scoreboard model of [Beyeler2019]_ (standalone model)
@@ -904,28 +883,6 @@ class AxonMapSpatial(SpatialModel):
             ann.set_xticks([])
             ann.set_yticks([])
         return ax
-
-    def __deepcopy__(self, memodict={}):
-        """
-        Perform a deep copy of the AxonMapSpatial object.
-
-        Parameters
-        ----------
-        memodict: dict
-            Dictionary of objects already copied during the current copying pass.
-        
-        Returns
-        -------
-            Deep copy of the object
-        """
-        if id(self) in memodict:
-            return memodict[id(self)]
-        attributes = copy.deepcopy(self.__dict__)
-        result = self.__class__()
-        for attr in attributes:
-            result.__setattr__(attr, attributes[attr])
-        memodict[id(self)] = result
-        return result
 
 
 class AxonMapModel(Model):

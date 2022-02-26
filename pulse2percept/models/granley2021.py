@@ -113,6 +113,7 @@ class DefaultBrightModel(BaseModel):
 
         return self.__dict__ == other.__dict__
 
+
 class DefaultSizeModel(BaseModel):
     """
     Default model to be used for size (rho) scaling in BiphasicAxonMapModel
@@ -168,27 +169,6 @@ class DefaultSizeModel(BaseModel):
             return jnp.maximum(F_size, min_f_size)
         else:
             return np.maximum(F_size, min_f_size)
-
-    def __eq__(self, other):
-        """
-        Equality operator for DefaultSizeModel.
-        Compares two DefaultSizeModel's based attribute equality
-
-        Parameters
-        ----------
-        other: DefaultSizeModel
-            DefaultSizeModel to compare with
-
-        Returns
-        -------
-        bool:
-            True if the compared objects have identical attributes, False otherwise.
-        """
-        if not isinstance(other, DefaultSizeModel):
-            return False
-        if id(self) == id(other):
-            return True
-        return self.__dict__ == other.__dict__
 
 
 class DefaultStreakModel(BaseModel):
