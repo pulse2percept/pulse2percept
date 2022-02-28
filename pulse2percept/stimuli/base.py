@@ -36,7 +36,7 @@ def merge_time_axes(data, time):
     if identical:
         return data, [time[0]]
     # Otherwise, we need to interpolate. Keep only the unique time points
-    # across stimuli:
+    # across stimuli. We need a higher tolerance to ensure interpolation is correct.
     new_time = unique(np.concatenate(time), tol=1e-6)
     # Now we need to interpolate the data values at each of these
     # new time points.
