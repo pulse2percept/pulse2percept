@@ -37,7 +37,7 @@ def merge_time_axes(data, time):
         return data, [time[0]]
     # Otherwise, we need to interpolate. Keep only the unique time points
     # across stimuli:
-    new_time = unique(np.concatenate(time), tol=DT)
+    new_time = unique(np.concatenate(time), tol=1e-6)
     # Now we need to interpolate the data values at each of these
     # new time points.
     new_data = []
@@ -814,7 +814,7 @@ class Stimulus(PrettyPrint):
                                  f"number of columns in the data array "
                                  f"({data_shape[1]}).")
             if not is_strictly_increasing(stim['time'], tol=0.95*DT):
-                msg = (f"Time points must be strictly monotonically ",
+                msg = (f"Time points must be strictly monotonically "
                        f"increasing: {list(stim['time'])}")
                 warnings.warn(msg)
         elif data_shape[0] > 0:
