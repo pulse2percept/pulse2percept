@@ -169,35 +169,6 @@ class ScoreboardModel(Model):
                                               temporal=None,
                                               **params)
 
-    def __deepcopy__(self, memodict={}):
-        """
-        Perform a deep copy of the ScoreBoardModel object.
-
-        Parameters
-        ----------
-        memodict: dict
-            Dictionary of objects already copied during the current copying pass.
-
-        Returns
-            Deep copy of the object
-        -------
-
-        """
-        if id(self) in memodict:
-            return memodict[id(self)]
-
-        attributes = copy.deepcopy(self.__dict__)
-
-        # Remove Spatial and Temporal Model attributes, they are created internally.
-        attributes.pop('spatial')
-        attributes.pop('temporal')
-
-        result = self.__class__(**attributes)
-
-        memodict[id(self)] = result
-
-        return result
-
 
 class AxonMapSpatial(SpatialModel):
     """Axon map model of [Beyeler2019]_ (spatial module only)
@@ -991,32 +962,3 @@ class AxonMapModel(Model):
                                  f"built for {self.spatial.eye}.")
         return super(AxonMapModel, self).predict_percept(implant,
                                                          t_percept=t_percept)
-
-    def __deepcopy__(self, memodict={}):
-        """
-        Perform a deep copy of the AxonMapModel object.
-
-        Parameters
-        ----------
-        memodict: dict
-            Dictionary of objects already copied during the current copying pass.
-
-        Returns
-            Deep copy of the object
-        -------
-
-        """
-        if id(self) in memodict:
-            return memodict[id(self)]
-
-        attributes = copy.deepcopy(self.__dict__)
-
-        # Remove parameters set internally
-        attributes.pop('spatial')
-        attributes.pop('temporal')
-
-        result = self.__class__(**attributes)
-
-        memodict[id(self)] = result
-
-        return result

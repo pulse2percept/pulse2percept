@@ -116,6 +116,7 @@ def test_deepcopy_BiphasicAxonMapSpatial():
 
     # Assert the objects are equivalent
     npt.assert_equal(original == copied, True)
+    npt.assert_equal(original == copied, True)
 
     # Assert changing copied doesn't change original
     copied.bright_model = None

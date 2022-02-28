@@ -94,27 +94,6 @@ class Nanduri2012Spatial(SpatialModel):
             implant, t_percept=t_percept
         )
 
-    def __eq__(self, other):
-        """
-        Equality operator for Nanduri2012Spatial.
-        Compares two Nanduri2012Spatial's based attribute equality
-
-        Parameters
-        ----------
-        other: SpatialModel
-            SpatialModel to compare with
-
-        Returns
-        -------
-        bool:
-            True if the compared objects have identical attributes, False otherwise.
-        """
-        if not isinstance(other, Nanduri2012Spatial):
-            return False
-        if id(self) == id(other):
-            return True
-        return self.__dict__ == other.__dict__
-
 
 class Nanduri2012Temporal(TemporalModel):
     """Temporal model of [Nanduri2012]_
@@ -267,36 +246,3 @@ class Nanduri2012Model(Model):
         super(Nanduri2012Model, self).__init__(spatial=Nanduri2012Spatial(),
                                                temporal=Nanduri2012Temporal(),
                                                **params)
-
-    def __deepcopy__(self, memodict={}):
-        """
-        Perform a deep copy of the Nanduri2012Model object.
-
-        Parameters
-        ----------
-        memodict: dict
-            Dictionary of objects already copied during the current copying pass.
-
-        Returns
-            Deep copy of the object
-        -------
-
-        """
-        # Check if already been copied
-        if id(self) in memodict:
-            return memodict[id(self)]
-
-        # Deep copy original object's attributes
-        attributes = copy.deepcopy(self.__dict__)
-
-        # Remove attributes set internally by Nanduri2012Model
-        attributes.pop('spatial')
-        attributes.pop('temporal')
-
-        # Perform the copy by creating a new object with deep copied attributes
-        copied = self.__class__(**attributes)
-
-        # Save copied
-        memodict[id(copied)] = copied
-
-        return copied

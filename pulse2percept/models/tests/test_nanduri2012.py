@@ -95,6 +95,7 @@ def test_deepcopy_Nanduri2012Spatial():
 
     # Assert the objects are equivalent
     npt.assert_equal(original.__dict__ == copied.__dict__, True)
+    npt.assert_equal(original == copied, True)
 
     # Assert changing the original doesn't affect the copied
     original.verbose = False

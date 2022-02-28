@@ -141,7 +141,6 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
     def __eq__(self, other):
         """
         Equality operator for BaseModel.
-        Compares two Temporal Models based attribute equality
 
         Parameters
         ----------
@@ -450,36 +449,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             ax.set_ylabel('y (microns)')
         return ax
 
-    def __deepcopy__(self, memodict={}):
-        """
-        Perform a deep copy of the SpatialModel object.
-
-        Parameters
-        ----------
-        memodict: dict
-            Dictionary of objects already copied during the current copying pass.
-
-        Returns
-        -------
-            Deep copy of the object
-        """
-        # Check if already been copied
-        if id(self) in memodict:
-            return memodict[id(self)]
-
-        copied = super(SpatialModel, self).__deepcopy__(memodict)
-
-        return copied
-
-        # # Deep copy original object's attributes
-        # attributes = copy.deepcopy(self.__dict__)
-        # copied = self.__class__()
-        # # Manually set all attributes
-        # for attr in attributes:
-        #     copied.__setattr__(attr, attributes[attr])
-        # # Save copied
-        # memodict[id(copied)] = copied
-        # return copied
 
 
 class TemporalModel(BaseModel, metaclass=ABCMeta):
@@ -691,34 +660,6 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                       y_tol=bright_tol, max_iter=max_iter)
 
 
-    def __deepcopy__(self, memodict={}):
-        """
-        Perform a deep copy of the TemporalModel object.
-
-        Parameters
-        ----------
-        memodict: dict
-            Dictionary of objects already copied during the current copying pass.
-
-        Returns
-        -------
-            Deep copy of the object
-        """
-        # Check if already been copied
-        if id(self) in memodict:
-            return memodict[id(self)]
-        # Deep copy original object's attributes
-        attributes = copy.deepcopy(self.__dict__)
-        # Create the copy object
-        copied = self.__class__()
-        # Manually set all attributes
-        for attr in attributes:
-            copied.__setattr__(attr, attributes[attr])
-        # Save copied
-        memodict[id(copied)] = copied
-        return copied
-
-
 class Model(PrettyPrint):
     """Computational model
 
@@ -848,6 +789,55 @@ class Model(PrettyPrint):
             err_str = (f"'{name}' not found. You cannot add attributes to "
                        f"{self.__class__.__name__} outside the constructor.")
             raise FreezeError(err_str)
+
+    def __deepcopy__(self, memodict={}):
+        """
+        Perform a deep copy of the Model object.
+
+        Parameters
+        ----------
+        memodict: dict
+            Dictionary of objects already copied during the current copying pass.
+
+        Returns
+            Deep copy of the object
+        -------
+
+        """
+        if id(self) in memodict:
+            return memodict[id(self)]
+
+        attributes = copy.deepcopy(self.__dict__)
+
+        # Remove Spatial and Temporal Model attributes, they are created internally.
+        attributes.pop('spatial')
+        attributes.pop('temporal')
+
+        result = self.__class__(**attributes)
+
+        memodict[id(self)] = result
+
+        return result
+
+    def __eq__(self, other):
+        """
+        Equality operator for Model.
+
+        Parameters
+        ----------
+        other: Model
+            Model to compare against
+
+        Returns
+        -------
+        bool:
+            True if the compared objects have identical attributes, False otherwise.
+        """
+        if not isinstance(other, self.__class__):
+            return False
+        if id(self) == id(other):
+            return True
+        return self.temporal == other.temporal and self.spatial == other.spatial
 
     def _pprint_params(self):
         """Return a dictionary of parameters to pretty - print"""

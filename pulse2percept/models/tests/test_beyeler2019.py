@@ -238,6 +238,7 @@ def test_deepcopy_AxonMapSpatial():
 
     # Assert these objects are equivalent
     npt.assert_equal(original.__dict__ == copied.__dict__, True)
+    npt.assert_equal(original == copied, True)
 
     # Assert building one object does not affect the copied
     original.build()
@@ -333,6 +334,9 @@ def test_deepcopy_AxonMapModel():
 
     # Assert the objects are equivalent
     npt.assert_equal(original.__dict__ == copied.__dict__, True)
+    
+    # Assert that __eq__ works
+    npt.assert_equal(original == copied, True)
 
     # Assert they do not share the same AxonMapSpatial Object
     npt.assert_equal(original.spatial == copied.spatial, True)
