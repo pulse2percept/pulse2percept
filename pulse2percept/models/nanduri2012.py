@@ -1,7 +1,6 @@
 """`Nanduri2012Model`, `Nanduri2012Spatial`, `Nanduri2012Temporal`
    [Nanduri2012]_"""
 import numpy as np
-import copy
 from .base import Model, SpatialModel, TemporalModel
 from ._nanduri2012 import spatial_fast, temporal_fast
 from ..implants import ElectrodeArray, DiskElectrode

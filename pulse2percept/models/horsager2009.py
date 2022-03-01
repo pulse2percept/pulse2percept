@@ -1,6 +1,5 @@
 """`Horsager2009Model`, `Horsager2009Temporal` [Horsager2009]_"""
 import numpy as np
-import copy
 from .base import Model, TemporalModel
 from ._horsager2009 import temporal_fast
 

@@ -3,7 +3,6 @@
 import os
 import numpy as np
 import pickle
-import copy
 from scipy.spatial import cKDTree
 
 import matplotlib.pyplot as plt

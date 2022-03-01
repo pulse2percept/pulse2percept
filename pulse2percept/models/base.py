@@ -1,9 +1,8 @@
 """`BaseModel`, `Model`, `NotBuiltError`, `Percept`, `SpatialModel`,
    `TemporalModel`"""
-import copy
 import sys
 from abc import ABCMeta, abstractmethod
-from copy import deepcopy
+from copy import deepcopy, copy
 import numpy as np
 import multiprocessing
 
@@ -130,12 +129,9 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
     def __deepcopy__(self, memodict={}):
         if id(self) in memodict:
             return memodict[id(self)]
-
-        copied = copy.copy(self)
-
+        copied = copy(self)
         for attr in self.__dict__:
-            copied.__setattr__(attr, copy.deepcopy(self.__getattribute__(attr)))
-
+            copied.__setattr__(attr, deepcopy(self.__getattribute__(attr)))
         return copied
 
     def __eq__(self, other):
@@ -448,7 +444,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             ax.set_xlabel('x (microns)')
             ax.set_ylabel('y (microns)')
         return ax
-
 
 
 class TemporalModel(BaseModel, metaclass=ABCMeta):
@@ -806,17 +801,12 @@ class Model(PrettyPrint):
         """
         if id(self) in memodict:
             return memodict[id(self)]
-
-        attributes = copy.deepcopy(self.__dict__)
-
+        attributes = deepcopy(self.__dict__)
         # Remove Spatial and Temporal Model attributes, they are created internally.
         attributes.pop('spatial')
         attributes.pop('temporal')
-
         result = self.__class__(**attributes)
-
         memodict[id(self)] = result
-
         return result
 
     def __eq__(self, other):

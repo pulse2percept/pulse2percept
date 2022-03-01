@@ -2,7 +2,6 @@
 from functools import partial
 import numpy as np
 import sys
-import copy
 
 from . import AxonMapSpatial, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
