@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 import numpy.testing as npt
 import pytest
 
@@ -52,3 +53,30 @@ def test_FadingTemporal():
     # tau cannot be negative:
     with pytest.raises(ValueError):
         FadingTemporal(tau=-1).build()
+
+
+def test_deepcopy_FadingTemporal():
+    original = FadingTemporal()
+    copied = copy.deepcopy(original)
+
+    # Assert they are different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert the objects are equivalent to each other
+    npt.assert_equal(original == copied, True)
+
+    # Assert building one object does not affect the copied
+    original.build()
+    npt.assert_equal(copied.is_built, False)
+    npt.assert_equal(original != copied, True)
+
+    # Change the copied attribute by "destroying" the retinotopy attribute
+    # which should be unique to each SpatialModel object
+    copied = copy.deepcopy(original)
+    copied.verbose = False
+    npt.assert_equal(original.verbose, True)
+    npt.assert_equal(original != copied, True)
+
+    # Assert "destroying" the original doesn't affect the copied
+    original = None
+    npt.assert_equal(copied is not None, True)

@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 import numpy as np
+import copy
 import pytest
 import numpy.testing as npt
 
@@ -50,6 +51,33 @@ def test_Thompson2003Spatial():
     npt.assert_almost_equal(percept.data[3, 4, 0], 0)
     npt.assert_almost_equal(percept.data[3, 4, 1], pmax[1])
     npt.assert_almost_equal(percept.time, [0, 1])
+
+
+def test_deepcopy_Thompson2003Spatial():
+    original = Thompson2003Spatial()
+    copied = copy.deepcopy(original)
+
+    # Assert they are different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert the objects are equivalent to each other
+    npt.assert_equal(original == copied, True)
+
+    # Assert building one object does not affect the copied
+    original.build()
+    npt.assert_equal(copied.is_built, False)
+    npt.assert_equal(original != copied, True)
+
+    # Change the copied attribute by "destroying" the retinotopy attribute
+    # which should be unique to each SpatialModel object
+    copied = copy.deepcopy(original)
+    copied.retinotopy = None
+    npt.assert_equal(original.retinotopy is not None, True)
+    npt.assert_equal(original != copied, True)
+
+    # Assert "destroying" the original doesn't affect the copied
+    original = None
+    npt.assert_equal(copied is not None, True)
 
 
 def test_Thompson2003Model():
@@ -126,3 +154,30 @@ def test_Thompson2003Model_predict_percept():
     msg = ("Nonzero electrode-retina distances do not have any effect on the "
            "model output.")
     assert_warns_msg(UserWarning, model.predict_percept, msg, implant)
+
+
+def test_deepcopy_Thompson2003Model():
+    original = Thompson2003Model()
+    copied = copy.deepcopy(original)
+
+    # Assert they are different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert the objects are equivalent to each other
+    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+
+    # Assert building one object does not affect the copied
+    original.build()
+    npt.assert_equal(copied.is_built, False)
+    npt.assert_equal(original != copied, True)
+
+    # Change the copied attribute by "destroying" the retinotopy attribute
+    # which should be unique to each SpatialModel object
+    copied = copy.deepcopy(original)
+    copied.retinotopy = None
+    npt.assert_equal(original.retinotopy is not None, True)
+    npt.assert_equal(original != copied, True)
+
+    # Assert "destroying" the original doesn't affect the copied
+    original = None
+    npt.assert_equal(copied is not None, True)

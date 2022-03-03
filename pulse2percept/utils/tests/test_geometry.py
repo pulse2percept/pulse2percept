@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import pytest
 import numpy.testing as npt
@@ -128,6 +130,29 @@ def test_Curcio1990Map():
                                 (factor, factor))
 
 
+def test_eq_Curcio19990Map():
+    curcio_map = Curcio1990Map()
+
+    # Assert not equal for differing classes
+    npt.assert_equal(curcio_map == int, False)
+
+    # Assert equal to itself
+    npt.assert_equal(curcio_map == curcio_map, True)
+
+    # Assert equal for shallow references
+    copied = curcio_map
+    npt.assert_equal(curcio_map == copied, True)
+
+    # Assert deep copies are equal
+    copied = copy.deepcopy(curcio_map)
+    npt.assert_equal(curcio_map == copied, True)
+
+    # Assert differing objects aren't equal
+    differing_map = Watson2014Map()
+    differing_map.a = 5
+    npt.assert_equal(curcio_map == differing_map, False)
+
+
 def test_Watson2014Map():
     trafo = Watson2014Map()
     with pytest.raises(ValueError):
@@ -151,6 +176,28 @@ def test_Watson2014Map():
             ret = 0.268 * sign * 10 ** (exp + 3)  # mm
             npt.assert_almost_equal(trafo.dva2ret(0, dva)[1], ret,
                                     decimal=-exp)  # adjust precision
+
+def test_eq_Watson2014Map():
+    map = Watson2014Map()
+
+    # Assert not equal for differing classes
+    npt.assert_equal(map == int, False)
+
+    # Assert equal to itself
+    npt.assert_equal(map == map, True)
+
+    # Assert equal for shallow references
+    copied = map
+    npt.assert_equal(map == copied, True)
+
+    # Assert deep copies are equal
+    copied = copy.deepcopy(map)
+    npt.assert_equal(map == copied, True)
+
+    # Assert differing objects aren't equal
+    differing_map = Watson2014Map()
+    differing_map.a = 5
+    npt.assert_equal(map == differing_map, False)
 
 
 def test_Watson2014DisplaceMap():

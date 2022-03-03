@@ -348,7 +348,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             pass
         # Check whether the attribute is a part of any
         # bright/size/streak model
-        if name not in ['bright_model', 'size_model', 'streak_model']:
+        if name not in ['bright_model', 'size_model', 'streak_model', 'is_built', '_is_built']:
             try:
                 for m in [self.bright_model, self.size_model, self.streak_model]:
                     if hasattr(m, name):
