@@ -2,7 +2,7 @@
    `TemporalModel`"""
 import sys
 from abc import ABCMeta, abstractmethod
-from copy import deepcopy
+from copy import deepcopy, copy
 import numpy as np
 import multiprocessing
 
@@ -125,6 +125,34 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
             err_s = (f"The attribute `is_built` can only be set in the "
                      f"constructor or in ``build``, not in ``{f_caller_2}``.")
             raise AttributeError(err_s)
+
+    def __deepcopy__(self, memodict={}):
+        if id(self) in memodict:
+            return memodict[id(self)]
+        copied = copy(self)
+        for attr in self.__dict__:
+            copied.__setattr__(attr, deepcopy(self.__getattribute__(attr)))
+        return copied
+
+    def __eq__(self, other):
+        """
+        Equality operator for BaseModel.
+
+        Parameters
+        ----------
+        other: BaseModel
+            BaseModel to compare against
+
+        Returns
+        -------
+        bool:
+            True if the compared objects have identical attributes, False otherwise.
+        """
+        if not isinstance(other, self.__class__):
+            return False
+        if id(self) == id(other):
+            return True
+        return self.__dict__ == other.__dict__
 
 
 class SpatialModel(BaseModel, metaclass=ABCMeta):
@@ -756,6 +784,50 @@ class Model(PrettyPrint):
             err_str = (f"'{name}' not found. You cannot add attributes to "
                        f"{self.__class__.__name__} outside the constructor.")
             raise FreezeError(err_str)
+
+    def __deepcopy__(self, memodict={}):
+        """
+        Perform a deep copy of the Model object.
+
+        Parameters
+        ----------
+        memodict: dict
+            Dictionary of objects already copied during the current copying pass.
+
+        Returns
+            Deep copy of the object
+        -------
+
+        """
+        if id(self) in memodict:
+            return memodict[id(self)]
+        attributes = deepcopy(self.__dict__)
+        # Remove Spatial and Temporal Model attributes, they are created internally.
+        attributes.pop('spatial')
+        attributes.pop('temporal')
+        result = self.__class__(**attributes)
+        memodict[id(self)] = result
+        return result
+
+    def __eq__(self, other):
+        """
+        Equality operator for Model.
+
+        Parameters
+        ----------
+        other: Model
+            Model to compare against
+
+        Returns
+        -------
+        bool:
+            True if the compared objects have identical attributes, False otherwise.
+        """
+        if not isinstance(other, self.__class__):
+            return False
+        if id(self) == id(other):
+            return True
+        return self.temporal == other.temporal and self.spatial == other.spatial
 
     def _pprint_params(self):
         """Return a dictionary of parameters to pretty - print"""

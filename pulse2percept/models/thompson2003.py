@@ -1,6 +1,7 @@
 """`Thompson2003Model`, `Thompson2003Spatial` [Thompson2003]_"""
 
 import numpy as np
+import copy
 from ..utils import Curcio1990Map, sample
 from ..models import Model, SpatialModel
 from ._thompson2003 import fast_thompson2003

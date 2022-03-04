@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
+import copy
 
 from pulse2percept.implants import (DiskElectrode, PointSource, ElectrodeArray,
                                     ProsthesisSystem, ArgusI)
@@ -62,6 +63,44 @@ def test_Nanduri2012Spatial():
                                 (factor, factor))
 
 
+def test_eq_Nanduri2012Spatial():
+    nanduri_spatial = Nanduri2012Spatial()
+
+    # Assert not equal for differing classes
+    npt.assert_equal(nanduri_spatial == int, False)
+
+    # Assert equal to itself
+    npt.assert_equal(nanduri_spatial == nanduri_spatial, True)
+
+    # Assert equal for shallow references
+    copied = nanduri_spatial
+    npt.assert_equal(nanduri_spatial == copied, True)
+
+    # Assert deep copies are equal
+    copied = copy.deepcopy(nanduri_spatial)
+    npt.assert_equal(nanduri_spatial == copied, True)
+
+    # Assert differing objects aren't equal
+    differing_model = Nanduri2012Model()
+    differing_model.xrange = (-10, 10)
+    npt.assert_equal(nanduri_spatial == differing_model, False)
+
+
+def test_deepcopy_Nanduri2012Spatial():
+    original = Nanduri2012Spatial()
+    copied = copy.deepcopy(original)
+
+    # Assert these are two different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert the objects are equivalent
+    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+    npt.assert_equal(original == copied, True)
+
+    # Assert changing the original doesn't affect the copied
+    original.verbose = False
+    npt.assert_equal(original != copied, True)
+
 @pytest.mark.parametrize('scale_out', (1, 2))
 def test_Nanduri2012Temporal(scale_out):
     model = Nanduri2012Temporal(scale_out=scale_out)
@@ -122,6 +161,20 @@ def test_Nanduri2012Temporal(scale_out):
                             decimal=3)
 
 
+def test_deepcopy_Nanduri2012Temporal():
+    original = Nanduri2012Temporal()
+    copied = copy.deepcopy(original)
+
+    # Assert these are two different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert the objects are equivalent
+    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+
+    # Assert changing the original doesn't affect the copied
+    original.verbose = False
+    npt.assert_equal(original != copied, True)
+
 def test_Nanduri2012Model():
     model = Nanduri2012Model(engine='serial', xystep=5)
     npt.assert_equal(hasattr(model, 'has_time'), True)
@@ -148,6 +201,21 @@ def test_Nanduri2012Model():
     # or individually:
     model.temporal.thresh_percept = 2 * th
     npt.assert_almost_equal(model.temporal.thresh_percept, 2 * th)
+
+
+def test_deepcopy_Nanduri2012Model():
+    original = Nanduri2012Model()
+    copied = copy.deepcopy(original)
+
+    # Assert these are two different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert the objects are equivalent
+    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+
+    # Assert changing the original doesn't affect the copied
+    original.verbose = False
+    npt.assert_equal(original != copied, True)
 
 
 def test_Nanduri2012Model_predict_percept():
