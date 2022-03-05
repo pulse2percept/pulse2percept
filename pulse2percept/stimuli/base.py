@@ -18,13 +18,27 @@ np.set_printoptions(precision=2, threshold=5, edgeitems=2)
 logging.captureWarnings(True)
 
 
-def merge_time_axes(data, time):
-    """Merge time axes
+def merge_time_axes(data, time, merge_tolerance=1e-6):
+    """
+    Merge time axes
 
     When a collection of source types is passed, it is possible that they
     have different time axes (e.g., different time steps, or a different
     stimulus duration). In this case, we need to merge all time axes into a
     single, coherent one. This is expensive, because of interpolation.
+
+    Parameters
+    ----------
+    data: list
+        List of numpy.ndarray's containing data points associated with time axes.
+    time: list
+        List of numpy.ndarray's containing time points to merge
+    merge_tolerance: float
+        Float representing the tolerance used when collecting unique time points from the time axes.
+    Returns
+        Tuple of: list of new data points (linearly interpolated from merged time axis), list of new merged time axis.
+    -------
+
     """
     # We can skip the costly interpolation if all `time` vectors are
     # identical:
@@ -37,7 +51,7 @@ def merge_time_axes(data, time):
         return data, [time[0]]
     # Otherwise, we need to interpolate. Keep only the unique time points
     # across stimuli. We need a higher tolerance to ensure interpolation is correct.
-    new_time = unique(np.concatenate(time), tol=1e-6)
+    new_time = unique(np.concatenate(time), tol=merge_tolerance)
     # Now we need to interpolate the data values at each of these
     # new time points.
     new_data = []
