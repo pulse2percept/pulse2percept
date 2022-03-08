@@ -428,8 +428,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 x.append(earray[e].x)
                 y.append(earray[e].y)
         except KeyError:
-            raise KeyError(f"All stimuli must be BiphasicPulseTrains with no " +
-                           f"delay dur")
+            raise TypeError(f"All stimuli must be BiphasicPulseTrains with no " +
+                            f"delay dur")
         elec_params = np.array(elec_params, dtype=np.float32)
         x = np.array(x, dtype=np.float32)
         y = np.array(y, dtype=np.float32)
@@ -596,8 +596,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                             f"All stimuli must be BiphasicPulseTrains with no " +
                             f"delay dur (Failing electrode: {ele})")
             except KeyError:
-                raise KeyError(f"All stimuli must be BiphasicPulseTrains with no " +
-                               f"delay dur")
+                raise TypeError(f"All stimuli must be BiphasicPulseTrains with no " +
+                                f"delay dur")
         if isinstance(implant, ProsthesisSystem):
             if implant.eye != self.eye:
                 raise ValueError(f"The implant is in {implant.eye} but the model was "
