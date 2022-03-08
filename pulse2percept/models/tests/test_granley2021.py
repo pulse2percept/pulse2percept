@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import pytest
 import numpy.testing as npt
@@ -16,6 +18,124 @@ try:
     has_jax = True
 except ImportError:
     has_jax = False
+
+def test_deepcopy_DefaultBrightModel():
+    original = DefaultBrightModel()
+    copied = copy.deepcopy(original)
+
+    # Assert these are two different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert the objects are equivalent
+    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+
+    # Assert changing copied doesn't change original
+    copied.a4 = 5
+    npt.assert_equal(original.a4 != copied.a4, True)
+
+
+def test_deepcopy_DefaultSizeModel():
+    original = DefaultSizeModel(rho=0)
+    copied = copy.deepcopy(original)
+
+    # Assert these are two different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert the objects are equivalent
+    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+
+    # Assert changing copied doesn't change original
+    copied.a0 = 5
+    npt.assert_equal(original.a0 != copied.a0, True)
+
+def test_deepcopy_DefaultStreakModel():
+    original = DefaultStreakModel(200)
+    copied = copy.deepcopy(original)
+
+    # Assert these are two different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert the objects are equivalent
+    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+
+    # Assert changing copied doesn't change original
+    copied.a7 = 5
+    npt.assert_equal(original.a7 != copied.a7, True)
+
+
+def test_eq_DefaultStreakModel():
+    model = DefaultStreakModel(axlambda=200)
+
+    # Assert not equal for differing classes
+    npt.assert_equal(model == DefaultSizeModel, False)
+
+    # Assert equal to itself
+    npt.assert_equal(model == model, True)
+
+    # Assert equal for shallow references
+    copied = model
+    npt.assert_equal(model == copied, True)
+
+    # Assert deep copies are equal
+    copied = copy.deepcopy(model)
+    npt.assert_equal(model == copied, True)
+
+    # Assert different models do not equal each other
+    differing_model = DefaultStreakModel(axlambda=300)
+    npt.assert_equal(model != differing_model, True)
+
+
+def test_eq_DefaultSizeModel():
+    model = DefaultSizeModel(rho=1)
+
+    # Assert not equal for differing classes
+    npt.assert_equal(model == DefaultSizeModel, False)
+
+    # Assert equal to itself
+    npt.assert_equal(model == model, True)
+
+    # Assert equal for shallow references
+    copied = model
+    npt.assert_equal(model == copied, True)
+
+    # Assert deep copies are equal
+    copied = copy.deepcopy(model)
+    npt.assert_equal(model == copied, True)
+
+    # Assert different models do not equal each other
+    differing_model = DefaultSizeModel(rho=2)
+    npt.assert_equal(model != differing_model, True)
+
+
+def test_deepcopy_BiphasicAxonMapSpatial():
+    original = BiphasicAxonMapSpatial()
+    copied = copy.deepcopy(original)
+
+    # Assert these are two different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert the objects are equivalent
+    npt.assert_equal(original == copied, True)
+    npt.assert_equal(original == copied, True)
+
+    # Assert changing copied doesn't change original
+    copied.bright_model = None
+    npt.assert_equal(original.bright_model != copied.bright_model, True)
+
+
+def test_deepcopy_BiphasicAxonMapModel():
+    original = BiphasicAxonMapModel()
+    copied = copy.deepcopy(original)
+
+    # Assert these are two different objects
+    npt.assert_equal(id(original) != id(copied), True)
+
+    # Assert the objects are equivalent
+    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+
+    # Assert changing copied doesn't change original
+    copied.spatial.axlambda = 200
+    npt.assert_equal(original.spatial != copied.spatial, True)
 
 def test_effects_models():
     # Test rho scaling on size model
