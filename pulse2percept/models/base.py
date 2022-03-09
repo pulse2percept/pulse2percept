@@ -154,6 +154,10 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
             return True
         return self.__dict__ == other.__dict__
 
+    def __hash__(self):
+        # Default python 2.6+ implementation
+        return id(self) // 16
+
 
 class SpatialModel(BaseModel, metaclass=ABCMeta):
     """Abstract base class for all spatial models
