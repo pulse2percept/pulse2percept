@@ -154,6 +154,10 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
             return True
         return self.__dict__ == other.__dict__
 
+    def __hash__(self):
+        # Default python 2.6+ implementation
+        return id(self) // 16
+
 
 class SpatialModel(BaseModel, metaclass=ABCMeta):
     """Abstract base class for all spatial models
@@ -828,6 +832,10 @@ class Model(PrettyPrint):
         if id(self) == id(other):
             return True
         return self.temporal == other.temporal and self.spatial == other.spatial
+
+    def __hash__(self):
+        # Default python 2.6+ implementation
+        return id(self) // 16
 
     def _pprint_params(self):
         """Return a dictionary of parameters to pretty - print"""
