@@ -833,6 +833,10 @@ class Model(PrettyPrint):
             return True
         return self.temporal == other.temporal and self.spatial == other.spatial
 
+    def __hash__(self):
+        # Default python 2.6+ implementation
+        return id(self) // 16
+
     def _pprint_params(self):
         """Return a dictionary of parameters to pretty - print"""
         params = {'spatial': self.spatial, 'temporal': self.temporal}
