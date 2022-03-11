@@ -178,7 +178,7 @@ def test_biphasicAxonMapSpatial(engine):
     model = BiphasicAxonMapModel(engine=engine, xystep=2).build()
     # Only accepts biphasic pulse trains with no delay dur
     implant = ArgusI(stim=np.ones(16))
-    with pytest.raises(KeyError):
+    with pytest.raises(TypeError):
         model.predict_percept(implant)
 
     # Nothing in, None out:
