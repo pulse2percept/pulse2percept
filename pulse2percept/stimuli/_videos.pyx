@@ -40,7 +40,7 @@ cpdef fast_encode( float32 [:, :] vid_data, electrode_t [:] electrodes, float32 
     electrodes : 1-D Array of ints or strings
         List of electrode names from Stimulus.
     enc_data : 1-D Array of float32s
-        Amplitdue data from Pulse.
+        Amplitdue data of pulse.
     pulse_time : 1-D Array of floats
         Time point data of pulse.
     amp_min, amp_max : Int32
@@ -61,7 +61,6 @@ cpdef fast_encode( float32 [:, :] vid_data, electrode_t [:] electrodes, float32 
         float32 amp, px
         float32 [:] px_stim, new_data
         time_t [:] px_stim_time, new_time
-        int32 elec_num
 
     out_stim = {}
     stim_time = np.empty([1,0])
