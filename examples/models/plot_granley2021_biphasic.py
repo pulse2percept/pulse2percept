@@ -130,5 +130,42 @@ ax.set_title('Predicted percept')
 
 ##############################################################################
 # Increasing the frequency will make phosphenes brighter
-fig, axes = plt.subplots
-implant.stim = {'A4' : BiphasicPulseTrain(40, 1, 0.45)}
+fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
+implant.stim = {'A4' : BiphasicPulseTrain(50, 1, 0.45)}
+new_percept = model.predict_percept(implant)
+new_percept.plot(ax=axes[1])
+percept.plot(ax=axes[0], vmax=new_percept.max())
+axes[0].set_title("20 Hz")
+axes[1].set_title("40 Hz")
+# Note that without setting vmax, matplotlib automatically rescales images to
+# have the same max brightness and the difference isn't visible
+
+##############################################################################
+# Increasing amplitude increases both size and brightness
+fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
+implant.stim = {'A4' : BiphasicPulseTrain(20, 3, 0.45)}
+new_percept = model.predict_percept(implant)
+new_percept.plot(ax=axes[1])
+percept.plot(ax=axes[0], vmax=new_percept.max())
+axes[0].set_title("1xTh")
+axes[1].set_title("3xTh")
+
+##############################################################################
+# Increasing pulse duration decreases threshold, thus indirectly causing an 
+# increase in size and brightness (amp factor is increased)
+fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
+implant.stim = {'A4' : BiphasicPulseTrain(20, 1, 4)}
+new_percept = model.predict_percept(implant)
+new_percept.plot(ax=axes[1])
+percept.plot(ax=axes[0], vmax=new_percept.max())
+axes[0].set_title("0.45ms")
+axes[1].set_title("4ms")
+# If you account for the change in threshold by decreasing amplitude, then 
+# The only affect is the streak length decreasing
+fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
+implant.stim = {'A4' : BiphasicPulseTrain(20, 0.11856311, 4)}
+new_percept = model.predict_percept(implant)
+new_percept.plot(ax=axes[1])
+percept.plot(ax=axes[0], vmax=new_percept.max())
+axes[0].set_title("0.45ms")
+axes[1].set_title("4ms, 0.11xTh")
