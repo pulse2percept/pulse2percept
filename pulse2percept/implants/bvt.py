@@ -4,7 +4,7 @@ from skimage.transform import SimilarityTransform
 
 from .base import ProsthesisSystem
 from .electrodes import DiskElectrode
-from .electrode_arrays import ElectrodeArray
+from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 
 
 class BVT24(ProsthesisSystem):
@@ -14,7 +14,8 @@ class BVT24(ProsthesisSystem):
     [Layton2014]_, which was developed by the Bionic Vision Australia
     Consortium and commercialized by Bionic Vision Technologies (BVT).
     The center of the array is located at (x,y,z), given in microns, and the
-    array is rotated by rotation angle ``rot``, given in degrees.
+    array is rotated counter-clockwise by rotation angle ``rot``, given in 
+    degrees.
 
     The array consists of:
 
@@ -36,7 +37,7 @@ class BVT24(ProsthesisSystem):
         Column order for electrode numbering is reversed in a left-eye
         implant.
 
-    .. versionadded:: 0.6
+    .. versionadded :: 0.6
 
     Parameters
     ----------
@@ -129,33 +130,30 @@ class BVT24(ProsthesisSystem):
 
 
 class BVT44(ProsthesisSystem):
-    """
-    44-channel suprachoroidal retinal prosthesis
+    """    44-channel suprachoroidal retinal prosthesis
 
     This class creates a 44-channel suprachoroidal retinal prosthesis
-    [Petoe et al. 2021]_, which was developed by the Bionic Vision Australia
+    [Petoe2021]_, which was developed by the Bionic Vision Australia
     Consortium and commercialized by Bionic Vision Technologies (BVT).
-    The center of the array is located at (x,y,z), given in microns, and the
-    array is rotated by rotation angle ``rot``, given in degrees.
+
+    The center of the array (x,y,z) is located at the center of electrodes
+    D4, D5, C4, and E4, and the  array is rotated counter-clockwise by rotation
+    angle ``rot``, given in degrees.
 
     The array consists of:
 
-    -   44 platinum stimulating electrodes:
-
-        -   44 electrodes with 1000um exposed diameter (Electrodes A1-22
-            and Electrodes B1-B22),
+    -   44 platinum stimulating electrodes with 1000um exposed diameter
 
     -   2 return electrodes with 2000um diameter (Electrodes R1, R2)
 
-    The position of each electrode is measured from [Petoe et al. 2021] Figure 7. 
-    The position would be updated after the accurate position publish.
+    The position of each electrode is measured from Figure 7 in [Petoe2021]_.
 
     .. note::
 
-        Column order for electrode numbering is reversed in a right-eye
+        Column order for electrode numbering is reversed in a left-eye
         implant.
 
-    .. versionadded:: 0.8
+    .. versionadded :: 0.8
 
     Parameters
     ----------
@@ -192,25 +190,15 @@ class BVT44(ProsthesisSystem):
         self.earray = ElectrodeArray([])
         n_elecs = 46
 
-        # the positions of the electrodes A1-22, B1-22
-        # +3, R1
-        x_arr = [-3300, -1980, -660, 660, 1980, 3300,
-                 -3960, -2640, -1320, 0, 1320, 2640, 3960,
-                 -3300, -1980, -660, 660, 1980, 3300,
-                 -3960, -2640, -1320, 0, 1320, 2640,
-                 -3300, -1980, -660, 660, 1980, 3300,
-                 -3960, -2640, -1320, 0, 1320, 2640, 3960,
-                 -3300, -1980, -660, 660, 1980, 3300, 7000, 7000]
-        print("working", len(x_arr))
-
-        y_arr = [2775, 2775, 2775, 2775, 2775, 2775,
-                 1850, 1850, 1850, 1850, 1850, 1850, 1850,
-                 925, 925, 925, 925, 925, 925,
-                 0, 0, 0, 0, 0, 0,
-                 -925, -925, -925, -925, -925, -925,
-                 -1850, -1850, -1850, -1850, -1850, -1850, -1850,
-                 -2775, -2775, -2775, -2775, -2775, -2775, 1500, -1500]
-        print("working", len(y_arr))
+        # The 44 stimulating electrodes are arranged in a hex grid; two return
+        # electrodes are added as well:
+        grid = ElectrodeGrid((7, 7), (1320, 925), type='hex', x=-330)
+        for e in ['D1', 'A7', 'C7', 'E7', 'G7']:
+            grid.remove_electrode(e)
+        x_arr = np.array([e.x for e in grid.electrode_objects] + [-7000, -7000])
+        y_arr = np.array([e.y for e in grid.electrode_objects] + [1500, -1500])
+        r_arr = [500.0] * grid.n_electrodes + [1000.0, 1000.0]
+        names = grid.electrode_names + ['R1', 'R2']
         if isinstance(z, (list, np.ndarray)):
             # Specify different height for every electrode in a list:
             z_arr = np.asarray(self.z).flatten()
@@ -222,30 +210,12 @@ class BVT44(ProsthesisSystem):
             z_arr = np.ones(n_elecs, dtype=float) * z
 
         # the position of the electrodes 1-20, 21a-21m, R1-R2 for left eye
-        if eye == 'RE':
+        if eye == 'LE':
             x_arr = np.negative(x_arr)
 
-        # the radius of all the electrodes in the implants
-        r_arr = [500.0] * n_elecs
-        # the radius of the return electrodes is 1000.0 um
-        r_arr[44] = r_arr[45] = 1000.0
-        # the names of the electrodes A1-A22, B1-B22, R1 and R2
-        names = ['A1', 'B1', 'A14', 'B14', 'A15', 'B15', 'A2', 'B2', 'A13', 'B13', 'A16', 'B16', 'B22', 'A3', 'B3', 'A12', 'B12', 'A17', 'B17', 'A4', 'B4',
-                 'A11', 'B11', 'A18', 'B18', 'A5', 'B5', 'A10', 'B10', 'A19', 'B19', 'A6', 'B6', 'A9', 'B9', 'A20', 'B20', 'A22', 'A7', 'B7', 'A8', 'B8', 'A21', 'B21']
-        print(names)
-        names.extend(['R1', 'R2'])
-
-        # Rotate the grid:
-        rot_rad = np.deg2rad(rot)
-        rotmat = np.array([np.cos(rot_rad), -np.sin(rot_rad),
-                           np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
-        xy = np.matmul(rotmat, np.vstack((x_arr, y_arr)))
-        x_arr = xy[0, :]
-        y_arr = xy[1, :]
-
-        # Apply offset to make the grid centered at (x, y):
-        x_arr += x
-        y_arr += y
+        # Rotate the grid and center at (x,y):
+        tf = SimilarityTransform(rotation=np.deg2rad(rot), translation=[x, y])
+        x_arr, y_arr = tf(np.vstack([x_arr.ravel(), y_arr.ravel()]).T).T
 
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
             self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
