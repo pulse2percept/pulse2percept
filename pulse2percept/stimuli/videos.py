@@ -17,7 +17,7 @@ from imageio import get_reader as video_reader
 from .base import Stimulus
 from .pulses import BiphasicPulse
 from ..utils import center_image, shift_image, scale_image, trim_image, unique
-from ._videos import fast_encode
+from ..utils.constants import DT
 
 
 class VideoStimulus(Stimulus):
@@ -541,13 +541,6 @@ class VideoStimulus(Stimulus):
             Encoded stimulus
 
         """
-        if pulse is not None:
-            if not isinstance(pulse, Stimulus):
-                raise TypeError("'pulse' must be a Stimulus object.")
-            if pulse.time is None:
-                raise ValueError("'pulse' must have a time component.")
-            if pulse.data.ndim == 2 and pulse.data.shape[1] > 1:
-                raise ValueError("'pulse' must have exactly 1 electrode")
         # Set frame rate, either from metadata or inferred from stim.time:
         try:
             frame_dur = 1000.0 / self.metadata['fps']
@@ -556,22 +549,41 @@ class VideoStimulus(Stimulus):
             if len(t_diff) > 1:
                 raise NotImplementedError
             frame_dur = 1000.0 / t_diff[0]
-        # Normalize the range of pixel values:
-        vid_data = self.data - self.data.min()
+        # If no user-defined pulse is given, use a standard one:
+        if pulse is None:
+            pulse = BiphasicPulse(1, 0.46, stim_dur=frame_dur-DT)
+        else:
+            if not isinstance(pulse, Stimulus):
+                raise TypeError('"pulse" must be a Stimulus object.')
+            if pulse.time is None:
+                raise ValueError('"pulse" must have a time component.')
+            if pulse.time[-1] > frame_dur:
+                raise ValueError(f"'pulse.time[-1]={pulse.time[-1]}' exceeds "
+                                 f"frame_dur={frame_dur}.")
+            if isclose(pulse.time[-1], frame_dur):
+                pulse.time[-1] -= DT
+        # Scale the pixel values to the desired amplitude range:
+        vid_data = self.data.copy() - self.data.min()
         if not isclose(np.abs(vid_data).max(), 0):
             vid_data /= np.abs(vid_data).max()
-        # If no pulse is provided, create a default pulse
-        # This pulse will be scaled to provide pixel grayscale levels
-        if pulse is None:
-            pulse = BiphasicPulse(1, 0.46, stim_dur=frame_dur)
-        enc_data = pulse.data
-        # Make sure the provided pulse has max amp 1:
+        vid_data = vid_data * (amp_range[1] - amp_range[0]) + amp_range[0]
+        # Normalize pulse data:
+        enc_data = pulse.data.copy()
         if not isclose(np.abs(enc_data).max(), 0):
             enc_data /= np.abs(enc_data).max()
-        encoded_stim, encoded_time = fast_encode(vid_data, self.electrodes, enc_data[0], pulse.time, amp_range[0], amp_range[1] )
-        np_stim = {e: np.asarray(stim) for (e, stim) in encoded_stim.items()}
-        
-        return Stimulus(np_stim, electrodes=self.electrodes, time=encoded_time)
+        # Amplitude encoding: Every pixel value serves as an amplitude, so must
+        # be multiplied with the pulse data. This is easily done with an outer
+        # product, then we just need to concatenate all frames in time:
+        vid_data = np.outer(vid_data.ravel(),
+                            enc_data).reshape((self.shape[0], -1))
+        # The time points are given by the pulse data, we just need to shift:
+        vid_time = np.array([pulse.time + s * frame_dur
+                             for s in range(self.shape[1])]).flatten()
+        # Cosmetics: Make sure resulting stimulus has the desired length up to
+        # DT precision:
+        if not isclose(vid_time[-1], self.shape[1] * frame_dur):
+            vid_time[-1] = self.shape[1] * frame_dur
+        return Stimulus(vid_data, electrodes=self.electrodes, time=vid_time)
 
     def __iter__(self):
         """Iterate over all frames in self.data"""
