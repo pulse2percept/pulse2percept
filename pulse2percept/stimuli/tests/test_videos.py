@@ -311,14 +311,19 @@ def test_VideoStimulus_encode():
     # Amplitude encoding in default range:
     enc = stim.encode()
     npt.assert_almost_equal(enc.time[-1], 6000)
-    npt.assert_almost_equal(enc.data[:, 4::7].min(), 0)
-    npt.assert_almost_equal(enc.data[:, 4::7].max(), 50)
+    # The positions we check depends on the encoding of the pulse! First element
+    # is always zero, second and third are negative phase, etc.
+    npt.assert_almost_equal(np.abs(enc.data[:, ::8]).min(), 0)
+    npt.assert_almost_equal(enc.data[:, 1::8].min(), -50)
+    npt.assert_almost_equal(enc.data[:, 4::8].max(), 50)
 
     # Amplitude encoding in custom range:
     enc = stim.encode(amp_range=(2, 43))
     npt.assert_almost_equal(enc.time[-1], 6000)
-    npt.assert_almost_equal(enc.data[:, 4::7].min(), 2)
-    npt.assert_almost_equal(enc.data[:, 4::7].max(), 43)
+    npt.assert_almost_equal(np.abs(enc.data[:, ::8]).min(), 0)
+    npt.assert_almost_equal(enc.data[:, 1::8].min(), -43)
+    npt.assert_almost_equal(enc.data[:, 4::8].max(), 43)
+    npt.assert_almost_equal(enc.data[:, 4::8].min(), 2)
 
     with pytest.raises(TypeError):
         stim.encode(pulse={'invalid': 1})
