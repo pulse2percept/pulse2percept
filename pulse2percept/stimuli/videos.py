@@ -583,7 +583,8 @@ class VideoStimulus(Stimulus):
         # DT precision:
         if not isclose(vid_time[-1], self.shape[1] * frame_dur):
             vid_time[-1] = self.shape[1] * frame_dur
-        return Stimulus(vid_data, electrodes=self.electrodes, time=vid_time)
+        return VideoStimulus(vid_data.reshape((*self.vid_shape[:2], -1)),
+                             electrodes=self.electrodes, time=vid_time)
 
     def __iter__(self):
         """Iterate over all frames in self.data"""
