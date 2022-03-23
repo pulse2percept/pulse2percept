@@ -120,6 +120,8 @@ class VideoStimulus(Stimulus):
         if as_gray:
             if vid.ndim == 4:
                 vid = rgb2gray(vid.transpose((0, 1, 3, 2)))
+        # Convert to float array in [0, 1] and call the Stimulus constructor:
+        vid = img_as_float32(vid)
         # Resize if necessary:
         if resize is not None:
             height, width = resize
@@ -132,8 +134,6 @@ class VideoStimulus(Stimulus):
             vid = vid_resize(vid, (height, width, *vid.shape[2:]))
         # Store the original image shape for resizing and color conversion:
         self.vid_shape = vid.shape
-        # Convert to float array in [0, 1] and call the Stimulus constructor:
-        vid = img_as_float32(vid)
         super(VideoStimulus, self).__init__(vid.reshape((-1, vid.shape[-1])),
                                             time=time, electrodes=electrodes,
                                             metadata=metadata,

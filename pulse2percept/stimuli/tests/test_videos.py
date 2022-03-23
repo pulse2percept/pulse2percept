@@ -362,5 +362,5 @@ def test_BostonTrain():
     # Resize:
     video = BostonTrain(resize=(32, 32))
     npt.assert_equal(video.vid_shape, (32, 32, 3, 94))
-    npt.assert_almost_equal(video.data.min(), 0.0039, decimal=3)
-    npt.assert_almost_equal(video.data.max(), 0.9843, decimal=3)
+    npt.assert_almost_equal(video.data.min(), 0.0056, decimal=3)
+    npt.assert_almost_equal(video.data.max(), 0.9871, decimal=3)

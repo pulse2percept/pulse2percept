@@ -198,7 +198,9 @@ class ImageStimulus(Stimulus):
         if img.ndim == 3 and img.shape[2] == 4:
             # Blend the background with black:
             img = rgba2rgb(img, background=(0, 0, 0))
-        return ImageStimulus(rgb2gray(img), electrodes=electrodes,
+        if img.ndim == 3:
+            img = rgb2gray(img)
+        return ImageStimulus(img, electrodes=electrodes,
                              metadata=self.metadata)
 
     def resize(self, shape, electrodes=None):
