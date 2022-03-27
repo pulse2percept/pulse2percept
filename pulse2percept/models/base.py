@@ -233,7 +233,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # Salt-and-pepper noise on the output:
             'noise': None,
             # JobLib or Dask can be used to parallelize computations:
-            'engine': 'serial',
+            'engine': None,
             'scheduler': 'threading',
             'n_jobs': 1,
             # True: print status messages, 0: silent

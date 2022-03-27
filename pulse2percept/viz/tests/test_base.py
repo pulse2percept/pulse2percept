@@ -6,17 +6,25 @@ import matplotlib.pyplot as plt
 
 from pulse2percept.viz import scatter_correlation, correlation_matrix
 
+try:
+    import scipy
+    has_scipy = True
+except ImportError:
+    has_scipy = False
+
 
 def test_scatter_correlation():
+    show_regression = has_scipy
     x = np.arange(100)
     _, ax = plt.subplots()
-    ax = scatter_correlation(x, x, ax=ax, show_regression=False)
-    npt.assert_equal(len(ax.texts), 1)
-    npt.assert_equal('$r$=1.000' in ax.texts[0].get_text(), True)
-    # Ignore NaN:
-    ax = scatter_correlation([0, 1, np.nan, 3], [0, 1, 2, 3],
-                             show_regression=False)
-    npt.assert_equal('$r$=1.000' in ax.texts[0].get_text(), True)
+    if has_scipy:
+        ax = scatter_correlation(x, x, ax=ax, show_regression=True)
+        npt.assert_equal(len(ax.texts), 0)
+        npt.assert_equal('$r$=1.000' in ax.texts[0].get_text(), True)
+        # Ignore NaN:
+        ax = scatter_correlation([0, 1, np.nan, 3], [0, 1, 2, 3],
+                                 show_regression=True)
+        npt.assert_equal('$r$=1.000' in ax.texts[0].get_text(), True)
     with pytest.raises(ValueError):
         scatter_correlation(np.arange(10), np.arange(11), show_regression=False)
     with pytest.raises(ValueError):

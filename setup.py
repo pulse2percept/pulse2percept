@@ -22,7 +22,6 @@ VERSION = __version__
 
 NUMPY_MIN_VERSION = '1.9.0'
 CYTHON_MIN_VERSION = '0.28'
-JOBLIB_MIN_VERSION = '0.11'
 
 DISTNAME = 'pulse2percept'
 DESCRIPTION = 'A Python-based simulation framework for bionic vision'
@@ -254,7 +253,6 @@ def setup_package():
                     python_requires=">=3.7",
                     install_requires=[
                         f'numpy>={NUMPY_MIN_VERSION}',
-                        f'joblib>={JOBLIB_MIN_VERSION}'
                     ],
                     **extra_setuptools_args)
 

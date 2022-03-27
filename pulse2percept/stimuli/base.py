@@ -1,6 +1,6 @@
 """`Stimulus`, `ImageStimulus`"""
 import warnings
-from ..utils import PrettyPrint, parfor, unique, is_strictly_increasing
+from ..utils import PrettyPrint, unique, is_strictly_increasing
 from ..utils.constants import DT, MIN_AMP
 from ._base import fast_compress_space, fast_compress_time
 
