@@ -1,7 +1,12 @@
 """`conv`, `center_vector`"""
 
 import numpy as np
-from scipy import signal as sps
+
+try:
+    from scipy.signal import fftconvolve
+    has_scipy = True
+except ImportError:
+    has_scipy = False
 
 
 def center_vector(vec, newlen):
@@ -84,8 +89,11 @@ def conv(data, kernel, mode='full', method='fft'):
     if method not in ['fft', 'sparse']:
         raise ValueError("Acceptable methods are: 'fft', 'sparse'.")
     if method.lower() == 'fft':
+        if not has_scipy:
+            raise ImportError("You do not have scipy installed. "
+                              "You can install it via $ pip install scipy.")
         # Use FFT: faster on non-sparse data
-        conved = sps.fftconvolve(data, kernel, mode)
+        conved = fftconvolve(data, kernel, mode)
     elif method.lower() == 'sparse':
         conved = _sparseconv(data, kernel, mode)
     return conved

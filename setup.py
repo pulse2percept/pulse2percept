@@ -21,7 +21,6 @@ with open(ver_file) as f:
 VERSION = __version__
 
 NUMPY_MIN_VERSION = '1.9.0'
-SCIPY_MIN_VERSION = '1.0'
 CYTHON_MIN_VERSION = '0.28'
 JOBLIB_MIN_VERSION = '0.11'
 
@@ -80,7 +79,6 @@ if SETUPTOOLS_COMMANDS.intersection(sys.argv):
         extras_require={
             'alldeps': (
                 f'numpy >= {NUMPY_MIN_VERSION}',
-                f'scipy >= {SCIPY_MIN_VERSION}'
             ),
         },
     )
@@ -256,7 +254,6 @@ def setup_package():
                     python_requires=">=3.7",
                     install_requires=[
                         f'numpy>={NUMPY_MIN_VERSION}',
-                        f'scipy>={SCIPY_MIN_VERSION}',
                         f'joblib>={JOBLIB_MIN_VERSION}'
                     ],
                     **extra_setuptools_args)

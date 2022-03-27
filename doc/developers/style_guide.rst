@@ -50,7 +50,6 @@ consistency and readibility across the library:
 
     import numpy as np
     import numpy.testing as npt
-    import scipy as sp
     import pandas as pd
 
     import pulse2percept as p2p

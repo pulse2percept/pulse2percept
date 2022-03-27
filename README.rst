@@ -106,21 +106,21 @@ pulse2percept requires:
 1.  `Python`_ (>= 3.7)
 2.  `Cython`_ (>= 0.28)
 3.  `NumPy`_ (>= 1.9)
-4.  `SciPy`_ (>= 1.0.1)
-5.  `ScikitImage`_ (>=0.14)
-6.  `Matplotlib`_ (>= 3.0.2)
-7.  `ImageIO FFMPEG`_ (>=0.4)
-8.  `JobLib`_ (>= 0.11)
+4.  `ScikitImage`_ (>=0.14)
+5.  `Matplotlib`_ (>= 3.0.2)
+6.  `ImageIO FFMPEG`_ (>=0.4)
+7.  `JobLib`_ (>= 0.11)
 
 Optional packages:
 
-1.  `Pandas`_ for loading datasets in the ``datasets`` module.
-2.  `Scikit Learn`_ for machine learning functionality in the 
+1.  `SciPy`_ (>= 1.0.1, != 1.7.2) for FFT and interpolation
+2.  `Pandas`_ for loading datasets in the ``datasets`` module.
+3.  `Scikit Learn`_ for machine learning functionality in the 
     ``model_selection`` module.
-3.  `Dask`_ for parallel processing (a joblib alternative).
+4.  `Dask`_ for parallel processing (a joblib alternative).
     Use conda to install.
-4.  `Pytest`_ to run the test suite.
-5.  `OpenMP`_ for parallel processing support.
+5.  `Pytest`_ to run the test suite.
+6.  `OpenMP`_ for parallel processing support.
 
 .. _Python: https://www.python.org
 .. _Cython: https://www.cython.org

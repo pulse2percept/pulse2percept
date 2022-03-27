@@ -10,16 +10,17 @@ from pulse2percept.viz import scatter_correlation, correlation_matrix
 def test_scatter_correlation():
     x = np.arange(100)
     _, ax = plt.subplots()
-    ax = scatter_correlation(x, x, ax=ax)
+    ax = scatter_correlation(x, x, ax=ax, show_regression=False)
     npt.assert_equal(len(ax.texts), 1)
     npt.assert_equal('$r$=1.000' in ax.texts[0].get_text(), True)
     # Ignore NaN:
-    ax = scatter_correlation([0, 1, np.nan, 3], [0, 1, 2, 3])
+    ax = scatter_correlation([0, 1, np.nan, 3], [0, 1, 2, 3],
+                             show_regression=False)
     npt.assert_equal('$r$=1.000' in ax.texts[0].get_text(), True)
     with pytest.raises(ValueError):
-        scatter_correlation(np.arange(10), np.arange(11))
+        scatter_correlation(np.arange(10), np.arange(11), show_regression=False)
     with pytest.raises(ValueError):
-        scatter_correlation([1], [2])
+        scatter_correlation([1], [2], show_regression=False)
 
 
 def test_correlation_matrix():

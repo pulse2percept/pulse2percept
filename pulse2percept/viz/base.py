@@ -1,13 +1,18 @@
 """`correlation_matrix`, `scatter_correlation`"""
 import numpy as np
 import pandas as pd
-import scipy.stats as spst
 import matplotlib.pyplot as plt
+
+try:
+    import scipy.stats as spst
+    has_scipy = True
+except ImportError:
+    has_scipy = False
 
 
 def scatter_correlation(x, y, marker='o', marker_size=50, marker_alpha=0.5,
-                        color='k', text_size=10, show_slope_intercept=False,
-                        ax=None, autoscale=True):
+                        color='k', text_size=10, show_regression=True,
+                        show_slope_intercept=False, ax=None, autoscale=True):
     """Scatter plots some data points and fits a regression curve to them
 
     .. versionadded:: 0.7
@@ -26,6 +31,10 @@ def scatter_correlation(x, y, marker='o', marker_size=50, marker_alpha=0.5,
         Marker color passed to Matplotlib's ``scatter``
     text_size : int, optional
         Font size for inset text and axis labels
+    show_regression : {True, False}
+        Flag whether to show linear regression results (requires SciPy)
+    show_slope_intercept : {True, False}
+        Flag whether to show y=mx+b annotation for linear regression
     ax : axis, optional
         Matplotlib axis
     autoscale : {True, False}
@@ -50,20 +59,24 @@ def scatter_correlation(x, y, marker='o', marker_size=50, marker_alpha=0.5,
         ax = plt.gca()
     ax.scatter(x, y, marker=marker, s=marker_size, c=color, edgecolors='w',
                alpha=marker_alpha)
-    # Fit the regression curve:
-    slope, intercept, rval, pval, _ = spst.linregress(x, y)
-    def fit(x): return slope * x + intercept
-    ax.plot([np.min(x), np.max(x)], [fit(np.min(x)), fit(np.max(x))], 'k--')
-    # Annotate with fitting results:
-    pval = (f"{pval:.2e}") if pval < 0.001 else (f"{pval:.03f}")
-    annot_str = f"$N$={len(y)}"
-    if show_slope_intercept:
-        annot_str += f"\n$y$={slope:.3f}$x$+{intercept:.3f}"
-    annot_str += f"\n$r$={rval:.3f}, $p$={pval}"
-    a = ax.axis()
-    t = ax.text(0.98 * (a[1] - a[0]) + a[0], 0.05 * (a[3] - a[2]) + a[2],
-                annot_str, va='bottom', ha='right', fontsize=text_size)
-    t.set_bbox(dict(facecolor='w', edgecolor='w', alpha=0.5))
+    if show_regression:
+        if not has_scipy:
+            raise ImportError("You do not have scipy installed. "
+                              "You can install it via $ pip install scipy.")
+        # Fit the regression curve:
+        slope, intercept, rval, pval, _ = spst.linregress(x, y)
+        def fit(x): return slope * x + intercept
+        ax.plot([np.min(x), np.max(x)], [fit(np.min(x)), fit(np.max(x))], 'k--')
+        # Annotate with fitting results:
+        pval = (f"{pval:.2e}") if pval < 0.001 else (f"{pval:.03f}")
+        annot_str = f"$N$={len(y)}"
+        if show_slope_intercept:
+            annot_str += f"\n$y$={slope:.3f}$x$+{intercept:.3f}"
+        annot_str += f"\n$r$={rval:.3f}, $p$={pval}"
+        a = ax.axis()
+        t = ax.text(0.98 * (a[1] - a[0]) + a[0], 0.05 * (a[3] - a[2]) + a[2],
+                    annot_str, va='bottom', ha='right', fontsize=text_size)
+        t.set_bbox(dict(facecolor='w', edgecolor='w', alpha=0.5))
     ax.set_xlabel(x_label, fontsize=text_size)
     ax.set_ylabel(y_label, fontsize=text_size)
     ax.tick_params(labelsize=text_size)

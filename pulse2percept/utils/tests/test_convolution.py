@@ -8,8 +8,8 @@ from importlib import reload
 
 
 @pytest.mark.parametrize('mode', ('full', 'valid', 'same'))
-@pytest.mark.parametrize('method', ('sparse', 'fft'))
-def test_conv(mode, method):
+def test_conv(mode):
+    method = 'sparse'  # no fft
     reload(convolution)
     # time vector for stimulus (long)
     stim_dur = 0.5  # seconds

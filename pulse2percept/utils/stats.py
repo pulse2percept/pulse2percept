@@ -1,8 +1,13 @@
 """`r2_score`, `circ_r2_score`"""
 import numpy as np
 from math import isclose
-from scipy.stats import circvar
 from .geometry import delta_angle
+
+try:
+    from scipy.stats import circvar
+    has_scipy = True
+except ImportError:
+    has_scipy = False
 
 
 def r2_score(y_true, y_pred):
@@ -55,8 +60,8 @@ def r2_score(y_true, y_pred):
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
     if y_true.size != y_pred.size:
-        raise ValueError(f'"y_true" ({y_true.size}) and "y_pred" ({y_pred.size}) must have the same '
-                         f'size.')
+        raise ValueError(f'"y_true" ({y_true.size}) and "y_pred" '
+                         f'({y_pred.size}) must have the same size.')
     if y_true.size < 2:
         raise ValueError('Need at least two data points.')
     # Sum of squares of residuals:
@@ -93,11 +98,14 @@ def circ_r2_score(y_true, y_pred):
     *  This is not a symmetric function
 
     """
+    if not has_scipy:
+        raise ImportError("You do not have scipy installed. "
+                          "You can install it via $ pip install scipy.")
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
     if y_true.size != y_pred.size:
-        raise ValueError(f'"y_true" ({y_true.size}) and "y_pred" ({y_pred.size}) must have the same '
-                         f'size.')
+        raise ValueError(f'"y_true" ({y_true.size}) and "y_pred" '
+                         f'({y_pred.size}) must have the same size.')
     if y_true.size < 2:
         raise ValueError('Need at least two data points.')
     # Difference between two angles in [-pi/2, pi/2]:
