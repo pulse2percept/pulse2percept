@@ -69,7 +69,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine=None,
 
     if engine is None:
         if has_joblib:
-            engine = 'joblibe'
+            engine = 'joblib'
         elif has_dask:
             engine = 'dask'
         else:
@@ -116,8 +116,8 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine=None,
             else:
                 results.append(func(in_element, *func_args, **func_kwargs))
     else:
-        raise ValueError("Acceptable values for `engine` are: 'serial', "
-                         "'joblib', or 'dask'.")
+        raise ValueError(f'Acceptable values for `engine` are: "serial", '
+                         f'"joblib", or "dask", not "{engine}".')
 
     if out_shape is not None:
         return np.array(results).reshape(out_shape)
