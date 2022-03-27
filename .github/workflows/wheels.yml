@@ -21,16 +21,22 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Build Py3.10 wheels
+        uses: pypa/cibuildwheel@v2.1.3
+        env:
+          CIBW_BEFORE_BUILD: "python -m pip install -U pip && python -m pip numpy install Pillow==8.3.2 && python -m pip install -r requirements.txt && python -m pip install -e ."
+          CIBW_BUILD: "cp310-*"
+
       - name: Build Py3.8/3.9 wheels
         uses: pypa/cibuildwheel@v2.1.3
         env:
-          CIBW_BEFORE_BUILD: "python -m pip install -U pip && python -m pip install Pillow==8.3.2 && python -m pip install -r requirements.txt && python -m pip install -e ."
+          CIBW_BEFORE_BUILD: "python -m pip install -U pip numpy && python -m pip install Pillow==8.3.2 && python -m pip install -r requirements.txt && python -m pip install -e ."
           CIBW_BUILD: "cp38-* cp39-*"
 
       - name: Build Py3.7 wheels
         uses: pypa/cibuildwheel@v2.1.3
         env:
-          CIBW_BEFORE_BUILD: "python -m pip install pip==20.0.2 && python -m pip install Pillow==6.2.1 --no-cache-dir && python -m pip install -r requirements.txt && python -m pip install -e ."
+          CIBW_BEFORE_BUILD: "python -m pip install pip==20.0.2 && python -m pip install -U numpy && python -m pip install Pillow==6.2.1 --no-cache-dir && python -m pip install -r requirements.txt && python -m pip install -e ."
           CIBW_BUILD: "cp37-*"
 
       - uses: actions/upload-artifact@v2
