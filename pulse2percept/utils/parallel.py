@@ -40,7 +40,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine=None,
         dimensions.
     n_jobs : integer, optional, default: 1
         The number of jobs to perform in parallel. -1 to use all cpus
-    engine : str, optional, default: JobLib if available, else Dask or serial
+    engine : str, optional, default: JobLib or Dask (if available), else serial
         {'dask', 'joblib', 'serial'}
         The last one is useful for debugging -- runs the code without any
         parallelization.
