@@ -5,4 +5,3 @@ scipy>=1.0.1,<=1.7.1
 scikit_image>=0.14
 matplotlib>=3.0.2
 imageio_ffmpeg>=0.4
-joblib>=0.11
