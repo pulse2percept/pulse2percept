@@ -21,11 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Build Py3.8/3.9 wheels
+      - name: Build Py3.8-3.10 wheels
         uses: pypa/cibuildwheel@v2.1.3
         env:
           CIBW_BEFORE_BUILD: "python -m pip install -U pip && python -m pip install Pillow==8.3.2 && python -m pip install -r requirements.txt && python -m pip install -e ."
-          CIBW_BUILD: "cp38-* cp39-*"
+          CIBW_BUILD: "cp310-* cp39-* cp38-*"
           CIBW_SKIP: "*-manylinux_i686"
 
       - name: Build Py3.7 wheels
