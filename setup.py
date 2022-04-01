@@ -23,7 +23,6 @@ VERSION = __version__
 NUMPY_MIN_VERSION = '1.9.0'
 SCIPY_MIN_VERSION = '1.0'
 CYTHON_MIN_VERSION = '0.28'
-JOBLIB_MIN_VERSION = '0.11'
 
 DISTNAME = 'pulse2percept'
 DESCRIPTION = 'A Python-based simulation framework for bionic vision'
@@ -51,10 +50,10 @@ CLASSIFIERS = ['Intended Audience :: Science/Research',
                'Operating System :: Unix',
                'Operating System :: MacOS',
                'Programming Language :: Python :: 3',
-               'Programming Language :: Python :: 3.5',
                'Programming Language :: Python :: 3.6',
                'Programming Language :: Python :: 3.7',
                'Programming Language :: Python :: 3.8',
+               'Programming Language :: Python :: 3.9',
                ('Programming Language :: Python :: '
                 'Implementation :: CPython'),
                ('Programming Language :: Python :: '
@@ -257,7 +256,6 @@ def setup_package():
                     install_requires=[
                         f'numpy>={NUMPY_MIN_VERSION}',
                         f'scipy>={SCIPY_MIN_VERSION}',
-                        f'joblib>={JOBLIB_MIN_VERSION}'
                     ],
                     **extra_setuptools_args)
 
