@@ -26,12 +26,14 @@ jobs:
         env:
           CIBW_BEFORE_BUILD: "python -m pip install -U pip && python -m pip install Pillow==8.3.2 && python -m pip install -r requirements.txt && python -m pip install -e ."
           CIBW_BUILD: "cp38-* cp39-*"
+          CIBW_SKIP: "*-manylinux_i686"
 
       - name: Build Py3.7 wheels
         uses: pypa/cibuildwheel@v2.1.3
         env:
           CIBW_BEFORE_BUILD: "python -m pip install pip==20.0.2 && python -m pip install Pillow==6.2.1 --no-cache-dir && python -m pip install -r requirements.txt && python -m pip install -e ."
           CIBW_BUILD: "cp37-*"
+          CIBW_SKIP: "*-manylinux_i686"
 
       - uses: actions/upload-artifact@v2
         with:
