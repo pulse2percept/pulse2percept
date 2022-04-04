@@ -54,6 +54,11 @@ pulse2percept supports these Python versions:
 | p2p 0.4              |     |     |     |     |     | Yes | Yes | Yes |
 +----------------------+-----+-----+-----+-----+-----+-----+-----+-----+
 
+Following recent trends in the NumPy and SciPy community, we do not provide
+wheels for 32-bit platforms (this includes all Unix platforms and Windows
+starting with Python 3.10).
+On these platforms, you will need to build pulse2percept from source.
+
 On some platforms (e.g., macOS), you might also have to install pip yourself.
 You can check if pip is installed on your system by typing ``pip --version``
 in a terminal or command prompt.
