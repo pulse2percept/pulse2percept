@@ -83,5 +83,25 @@ model.build()
 implant = ArgusII()
 implant.stim = GratingStimulus((25,25), temporal_freq=0.1)
 
-percept_test = model.predict_percept(implant)
-percept_test.play()
+percept = model.predict_percept(implant)
+percept.play()
+
+#####################################################################################
+# Pre-processing Stimuli
+# ---------------------
+# 
+# Since both :py:class: `~pulse2percept.stimuli.BarStimulus` and :py:class: `~pulse2percept.stimuli.GratingStimulus`
+# inherit form VideoStimulus, you can apply processing methods from VideoStimulus. In this example,
+# we will invert the stimulus before passing it to the implant.
+#
+from pulse2percept.implants import ArgusII
+from pulse2percept.models import AxonMapModel
+from pulse2percept.stimuli import GratingStimulus
+model = AxonMapModel()
+model.build()
+
+implant = ArgusII()
+implant.stim = GratingStimulus((25,25), temporal_freq=0.1)
+
+percept = model.predict_percept(implant)
+percept.play()
