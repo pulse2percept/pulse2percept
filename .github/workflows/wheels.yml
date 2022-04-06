@@ -21,17 +21,26 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Build Py3.8/3.9 wheels
+      - name: Build Py3.10 wheels
         uses: pypa/cibuildwheel@v2.1.3
         env:
-          CIBW_BEFORE_BUILD: "python -m pip install -U pip && python -m pip install Pillow==8.3.2 && python -m pip install -r requirements.txt && python -m pip install -e ."
-          CIBW_BUILD: "cp38-* cp39-*"
-          CIBW_SKIP: "*-manylinux_i686"
+          CIBW_BEFORE_BUILD_LINUX: "yum install -y python-devel zlib-devel libjpeg-turbo-devel wget && python -m pip install -U pip numpy pillow && wget https://github.com/scipy/scipy/releases/download/v1.8.0/scipy-1.8.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl && mv scipy-1.8.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl scipy-1.8.0-cp310-none-any.whl && python -m pip install scipy-1.8.0-cp310-none-any.whl && python -m pip install -r requirements.txt && python -m pip install -e ."
+          CIBW_BEFORE_BUILD: "python -m pip install -U pip numpy pillow && python -m pip install -r requirements.txt && python -m pip install -e ."
+          CIBW_BUILD: "cp310-*"
+          CIBW_SKIP: "*-manylinux_i686 cp310-win32"
+
+      - name: Build Py3.8-3.9 wheels
+        uses: pypa/cibuildwheel@v2.1.3
+        env:
+          CIBW_BEFORE_BUILD: "python -m pip install -U pip numpy && python -m pip install Pillow==8.3.2 && python -m pip install -r requirements.txt && python -m pip install -e ."
+          CIBW_BUILD: "cp39-* cp38-*"
+          CIBW_SKIP: "*-manylinux_i686 cp310-win32"
 
       - name: Build Py3.7 wheels
         uses: pypa/cibuildwheel@v2.1.3
         env:
-          CIBW_BEFORE_BUILD: "python -m pip install pip==20.0.2 && python -m pip install Pillow==6.2.1 --no-cache-dir && python -m pip install -r requirements.txt && python -m pip install -e ."
+          CIBW_BEFORE_BUILD_LINUX: "yum install -y python-devel zlib-devel libjpeg-turbo-devel wget && python -m pip install pip==20.3 && python -m pip install Pillow==6.2.1 && python -m pip install -r requirements.txt && python -m pip install -e ."
+          CIBW_BEFORE_BUILD: "python -m pip install pip==20.3 && python -m pip install Pillow==6.2.1 && python -m pip install -r requirements.txt && python -m pip install -e ."
           CIBW_BUILD: "cp37-*"
           CIBW_SKIP: "*-manylinux_i686"
 

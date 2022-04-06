@@ -15,7 +15,7 @@ jobs:
     strategy:
       # Test on all supported platforms using all supported Python versions:
       matrix:
-        python-version: [3.7, 3.8, 3.9]
+        python-version: ["3.10", 3.9, 3.8, 3.7]
         os: [ubuntu-latest, ubuntu-18.04, windows-latest, macOS-latest]
     
     steps:
