@@ -7,7 +7,7 @@ Generating a drifting sinusoidal grating or drifting bar stimulus
 *This example shows how to use drifting psychophysics-based stimuli for a retinal implant.*
 
 Along with images, videos, and oter built-in stimuli, pulse2percept supports
-generating :py:class: `~pulse2percept.stimuli.GratingStimulus` and :py:class: `~pulse2percept.stimuli.BarStimulus` as stimuli
+generating :py:class:`~pulse2percept.stimuli.GratingStimulus` and :py:class:`~pulse2percept.stimuli.BarStimulus` as stimuli
 that can be passed as percepts to implants.
 
 Creating a Stimulus
@@ -20,18 +20,24 @@ Create a stimulus as such:
     grating_sin_stim = GratingStimulus( (height, width) )
     bar_stim = BarStimulus = BarStimulus( (height, width) )
 
-Shape is the only required parameter for creating either of the stimuli.
+Shape (`(height, width)` in pixels) is the only required parameter for creating these stimuli.
 
-A drifting sinusoidal grating is represented by :py:class: `~pulse2percept.stimuli.GratingStimulus`.
+A drifting sinusoidal grating is represented by :py:class:`~pulse2percept.stimuli.GratingStimulus`.
 A visual example of a basic sinusoidal grating can be generated as such:
 """
 
-from pulse2percept.stimuli.psychophysics import GratingStimulus
-stim = GratingStimulus((50, 50), temporal_freq=0.1)
+from pulse2percept.stimuli import GratingStimulus
+stim = GratingStimulus((50, 50), spatial_freq=0.1, temporal_freq=0.1)
 stim.play()
 
 #####################################################################################
-# A drifting bar is represented by :py:class: `~pulse2percept.stimuli.BarStimulus`.
+# Here, the spatial frequency of the grating (i.e., the inverse of how many pixels it
+# takes to represent one cycle of the sinusoid) is given as 0.1 cycles/pixel, whereas
+# the temporal frequency (i.e., the inverse of how many frames it takes to represent
+# one cycle of the sinusoid) is given as 0.1 cycles/frame.
+# By default, the drift direction of the grating will be to the right (0 degrees).
+#
+# A drifting bar is represented by :py:class:`~pulse2percept.stimuli.BarStimulus`.
 # A visual example of a basic sinusoidal grating can be generated as such:
 
 from pulse2percept.stimuli.psychophysics import BarStimulus
@@ -39,26 +45,38 @@ stim = BarStimulus((50, 50), speed=1)
 stim.play()
 
 #####################################################################################
+# Here, the drift speed of the bar is given as 1 pixel/frame and, by default, the
+# bar will drift to the right (0 degrees).
+#
 # Customizing the Stimulus
 # ------------------------
 #
-# For both :py:class: `~pulse2percept.stimuli.BarStimulus` and :py:class: `~pulse2percept.stimuli.GratingStimulus`,
-# the only argument you must pass to the constructor is the shape in the for (height, width).
-# There are many optional arguments that can be passed to change various attributes of the stimulus.
-# In the examples above, we changed the speed at which the GratingStimulus changed with temporal_freq *(scalar, cycles/frame)* 
-# and the speed at which the BarStimulus moved with speed *(scalar, pixels/frame)* in order to make the effect easier to visualize.
-# If, for example, we wanted a longer stimulus, we cold set the time parameter (in units of milliseconds)
+# For both :py:class:`~pulse2percept.stimuli.BarStimulus` and 
+# :py:class:`~pulse2percept.stimuli.GratingStimulus`,
+# the only argument you must pass to the constructor is the shape `(height, width)` 
+# in pixels.
+# There are many optional arguments that can be passed to change various attributes 
+# of the stimulus.
+# In the examples above, we changed the speed at which the GratingStimulus changed 
+# with temporal_freq *(scalar, cycles/frame)* 
+# and the speed at which the BarStimulus moved with speed *(scalar, pixels/frame)* 
+# in order to make the effect easier to visualize.
+# If, for example, we wanted a longer stimulus, we cold set the time parameter 
+# (in units of milliseconds)
 # to change the duration of the stimulus:
 
-from pulse2percept.stimuli.psychophysics import BarStimulus
+from pulse2percept.stimuli import BarStimulus
 stim = BarStimulus((50, 50), speed=1, time=1500)
 stim.play()
 
 #####################################################################################
-# You can also change the direction *(scalar in [0, 360) degrees)*
+# We can also change the direction *(scalar in [0, 360) degrees)*, where 0 degrees
+# represent rightward motion, 90 degrees represent upward motion, 180 degrees
+# represent leftward motion, and 270 degrees represent downward motion.
+#
 # .. code:: python
 #
-#   BarStimulus((height, width), direction=direction)
+#     BarStimulus((height, width), direction=direction)
 #
 # Or the contrast *(scalar in [0,1])*
 # .. code:: python
@@ -66,24 +84,27 @@ stim.play()
 #     BarStimulus((height, width), contrast=contrast)
 #
 # For exact info on all of the arguments, please refer to
-# `~pulse2percept.stimuli.BarStimulus` and :py:class: `~pulse2percept.stimuli.GratingStimulus`
+# :py:class:`~pulse2percept.stimuli.BarStimulus` and 
+#:py:class:`~pulse2percept.stimuli.GratingStimulus`.
 
 #####################################################################################
 # Passing to an Implant
 # ---------------------
 # 
-# Psychophsyics stimuli can be passed to an implant and predicted by a model.
-# To demonstrate, we will pass a GratingStimululus to an :py:class: `~pulse2percept.implants.ArgusII`
-# and use the Beyeler 2019 :py:class: `~pulse2percept.models.AxonMapModel` to interpret it:
+# Psychophsyics stimuli can be passed to an implant and combined with a model.
+# To demonstrate, we will pass a ``GratingStimululus`` to an
+# :py:class:`~pulse2percept.implants.ArgusII` implant and use the
+# :py:class:`~pulse2percept.models.AxonMapModel` [Beyeler2019]_ to interpret it:
 #
 # .. important ::
 #   
-#   Don't forget to build the model before using predict_percept
+#   Don't forget to build the model before using ``predict_percept``
 #
 
 from pulse2percept.implants import ArgusII
 from pulse2percept.models import AxonMapModel
 from pulse2percept.stimuli import GratingStimulus
+
 model = AxonMapModel()
 model.build()
 
@@ -94,21 +115,31 @@ percept = model.predict_percept(implant)
 percept.play()
 
 #####################################################################################
-# Pre-processing Stimuli
+# As you can see in the above code segment, the stimulus passed to the implant does
+# not necessarily have to have the same dimensions as the electrode grid.
+# This is functionality built in to the implant code: The implant will automatically
+# rescale the stimulus to the appropriate size.
+# In the case of Argus II, the stimulus would thus be downscaled to a 6x10 image.
+#
+# Pre-Processing Stimuli
 # ----------------------
 # 
-# Since both :py:class: `~pulse2percept.stimuli.BarStimulus` and :py:class: `~pulse2percept.stimuli.GratingStimulus`
-# inherit form VideoStimulus, you can apply processing methods from VideoStimulus. In this example,
-# we will invert the stimulus before passing it to the implant.
-#
+# Since both :py:class:`~pulse2percept.stimuli.BarStimulus` and 
+# :py:class:`~pulse2percept.stimuli.GratingStimulus`
+# inherit form :py:class:`~pulse2percept.stimuli.VideoStimulus`, we can apply 
+# any video processing methods provided by ``VideoStimulus``.
+
+# In the following example, we will invert the stimulus before passing it to the
+# implant:
 from pulse2percept.implants import ArgusII
 from pulse2percept.models import AxonMapModel
 from pulse2percept.stimuli import GratingStimulus
+
 model = AxonMapModel()
 model.build()
 
 implant = ArgusII()
-implant.stim = GratingStimulus((25,25), temporal_freq=0.1)
+implant.stim = GratingStimulus((25,25), temporal_freq=0.1).invert()
 
 percept = model.predict_percept(implant)
 percept.play()
