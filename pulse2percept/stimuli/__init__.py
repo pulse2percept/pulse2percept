@@ -8,6 +8,7 @@
     pulse_trains
     images
     videos
+    psychophysics
 
 .. seealso::
 
