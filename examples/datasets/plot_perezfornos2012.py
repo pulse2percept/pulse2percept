@@ -78,12 +78,6 @@ print(load_perezfornos2012(subjects='S2'))
 figure_3_s1_data = load_perezfornos2012(figures='fig3_S1')['time_series'][0]
 figure_3_s2_data = load_perezfornos2012(figures='fig3_S2')['time_series'][0]
 
-# Set up the subplot:
-fig, (ax1, ax2) = plt.subplots(1, 2, sharex=True, sharey=True)
-plt.xlim(-1, 30)
-plt.ylim(-11, 11)
-fig.suptitle('Average Joystick Response vs. Time')
-
 ###############################################################################
 # Stimuli were delivered over a 10 second window. To recreate this, we build
 # a vector of time points (``time_steps``) and set stimulation value to 10
@@ -101,6 +95,12 @@ for pulse_step in time_steps:
 
 ###############################################################################
 # Now we can plot the stimulus alongside the subject's response:
+
+# Set up the subplot:
+fig, (ax1, ax2) = plt.subplots(1, 2, sharex=True, sharey=True)
+plt.xlim(-1, 30)
+plt.ylim(-11, 11)
+fig.suptitle('Average Joystick Response vs. Time')
 
 # Plot subject 1
 ax1.plot(time_steps, figure_3_s1_data, 'r', label='S1 Joystick Response')

@@ -4,8 +4,13 @@ import multiprocessing
 import joblib
 
 
-# Dask is optional. Rather than trying to import it all over, try once and then
-# remember by setting a flag.
+# JobLib and Dask are optional. Rather than trying to import them all over, try
+# once and then remember by setting a flag.
+try:
+    import joblib
+    has_joblib = True
+except (ImportError, AttributeError):
+    has_joblib = False
 try:
     import dask
     import dask.multiprocessing
@@ -15,7 +20,7 @@ except (ImportError, AttributeError):
     has_dask = False
 
 
-def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
+def parfor(func, in_list, out_shape=None, n_jobs=-1, engine=None,
            scheduler='threading', func_args=[], func_kwargs={}):
     """
     Parallel for loop for NumPy arrays
@@ -37,7 +42,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         dimensions.
     n_jobs : integer, optional, default: 1
         The number of jobs to perform in parallel. -1 to use all cpus
-    engine : str, optional, default: 'joblib'
+    engine : str, optional, default: JobLib or Dask (if available), else serial
         {'dask', 'joblib', 'serial'}
         The last one is useful for debugging -- runs the code without any
         parallelization.
@@ -64,6 +69,13 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
         n_jobs = multiprocessing.cpu_count()
         n_jobs = n_jobs - 1
 
+    if engine is None:
+        if has_joblib:
+            engine = 'joblib'
+        elif has_dask:
+            engine = 'dask'
+        else:
+            engine = 'serial'
     if engine.lower() == 'joblib':
         p = joblib.Parallel(n_jobs=n_jobs, backend=scheduler)
         d = joblib.delayed(func)
@@ -106,9 +118,8 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine='joblib',
             else:
                 results.append(func(in_element, *func_args, **func_kwargs))
     else:
-        raise ValueError("Acceptable values for `engine` are: 'serial', "
-                         "'joblib', or 'dask'.")
-
+        raise ValueError(f'Acceptable values for `engine` are: "serial", '
+                         f'"joblib", or "dask", not "{engine}".')
     if out_shape is not None:
         return np.array(results).reshape(out_shape)
     else:

@@ -23,7 +23,7 @@ from .electrodes import (Electrode, PointSource, DiskElectrode,
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from .argus import ArgusI, ArgusII
 from .alpha import AlphaIMS, AlphaAMS
-from .bvt import BVT24
+from .bvt import BVT24, BVT44
 from .prima import PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55, PRIMA40
 
 __all__ = [

@@ -76,6 +76,12 @@ Studies referenced throughout the Documentation:
                      Visual Perception on Electrical Stimulation of the Retina.
                      *Investigative Ophthalmology & Visual Science*, doi: `10.1167/iovs.11-9344
                      <https://doi.org/10.1167/iovs.11-9344>`_.
+.. [Petoe2021] MA Petoe, SA Titchener, M Kolic, WG Kentler, CJ Abbott, DAX Nayagam, 
+               EK Baglin, J Kvansakul, N Barnes, JG Walker, SB Epp, KA Young, LN Ayton, 
+               CD Luu, PJ Allen (2021). A Second-Generation (44-Channel) Suprachoroidal 
+               Retinal Prosthesis: Interim Clinical Trial Results.
+               *Translational Vision Science & Technology*, doi: `10.1167/tvst.10.10.12 
+               <https://doi.org/10.1167/tvst.10.10.12>`_.
 .. [Stingl2013] K Stingl, KU Bartz-Schmidt, D Besch, A Braun, A Bruckmann,
                 F Gekeler, U Greppmaier, S Hipp, G Hortdorfer, C Kernstock,
                 A Koitschev, A Kusnyerik, H Sachs, A Schatz, KT Stingl,
