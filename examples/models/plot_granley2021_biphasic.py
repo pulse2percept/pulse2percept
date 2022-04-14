@@ -19,10 +19,10 @@ The :py:class:`~pulse2percept.models.BiphasicAxonMapModel` shares the same under
 assumptions as the axon map model. Namely, an axon's sensitivity to electrical stimulation
 is assumed to decay exponentially:
 
-*  with distance along the axon from the soma, with spatial decay
+*  with distance along the axon from the soma (:math:`d_s`), with spatial decay
    constant :math:`\\lambda`,
-*  with distance from the stimulated retinal location
-   :math:`(x_{stim}, y_{stim})`, with spatial decay constant :math:`\\rho`.
+*  with distance from the stimulated electrode (:math:`d_e`), with spatial decay 
+   constant :math:`\\rho`.
 
 In the biphasic model, the radial decay rate :math:`\\rho` is scaled by :math:`F_{size}`,
 the axonal decay rate :math:`\\lambda` is scaled by :math:`F_{streak}`, and the brightness 
@@ -32,9 +32,8 @@ coordinates :math:`(r, \\theta)` is given by:
 
 .. math::
 
-    I =  \max_{axon}\sum_{elecs}F_\mathrm{bright}  
-            \exp\left(\frac{-d_{e}^2}{2\rho^2 F_\mathrm{size} } + 
-            \frac{-d_{s}^2}{2\lambda^2 F_\mathrm{streak} }\right).
+    I =  \\max_{axon}\\sum_{elecs}F_\\mathrm{bright} \\exp\\left(\\frac{-d_{e}^2}{2\\rho^2 F_\\mathrm{size} } + 
+            \\frac{-d_{s}^2}{2\\lambda^2 F_\\mathrm{streak} }\\right).
 
 
 Basic Model Usage
@@ -42,7 +41,7 @@ Basic Model Usage
 The biphasic axon map model can be instantiated and ran similarly to other models,
 with the exception that all stimuli are required to be :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`
 """
-# sphinx_gallery_thumbnail_number = 2
+# sphinx_gallery_thumbnail_number = 4
 
 import matplotlib.pyplot as plt
 from pulse2percept.implants import ArgusII
@@ -57,6 +56,7 @@ model = BiphasicAxonMapModel(rho=200, axlambda=800)
 print(model)
 
 ##############################################################################
+#
 # The most important parameters are ``rho`` and ``axlambda``, which control the 
 # radial and axonal current spread, respectively.
 #
@@ -75,7 +75,7 @@ print(model)
 
 
 ##############################################################################
-# Build the model to perform expensive, one time calculations.
+# Next, build the model to perform expensive, one time calculations.
 
 model.build()
 
