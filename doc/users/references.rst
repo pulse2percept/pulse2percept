@@ -30,7 +30,7 @@ Studies referenced throughout the Documentation:
                  Phosphene Appearance for Epiretinal Prostheses. *International
                  Conference of the IEEE Engineering in Medicine and Biology
                  Society*.
-[Greenwald2009] Greenwald, S., Horsager A., Humayun M, Greenberg R.,
+.. [Greenwald2009] Greenwald, S., Horsager A., Humayun M, Greenberg R.,
                     McMahon M., Fine I. (2009).
                     Brightness as a Function of Current Amplitude in Human
                     Retinal Electrical Simulation. *Investigative Ophthalmology & Visual
