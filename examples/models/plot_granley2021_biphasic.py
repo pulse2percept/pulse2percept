@@ -56,7 +56,6 @@ model = BiphasicAxonMapModel(rho=200, axlambda=800)
 print(model)
 
 ##############################################################################
-#
 # The most important parameters are ``rho`` and ``axlambda``, which control the 
 # radial and axonal current spread, respectively.
 #
@@ -70,10 +69,6 @@ print(model)
 # The rest of the parameters are shared with 
 # :py:class:`~pulse2percept.models.AxonMapModel`. For full details on these 
 # parameters, see TODO: axon map tutorial link
-#
-##############################################################################
-
-
 ##############################################################################
 # Next, build the model to perform expensive, one time calculations.
 
@@ -87,13 +82,12 @@ model.build()
 #     having to rebuild (which takes time).
 #
 #     However, if you change model parameters
-#     (e.g., by directly setting ``model.axlambda = 100``), you will have to
+#     (e.g., by directly setting ``model.a5 = 100``), you will have to
 #     call ``model.build()`` again for your changes to take effect.
 #
 ##############################################################################
-#
 # The next step is to specify a visual prosthesis from the
-# :py:mod:`~pulse2percept.implants` module and giving it a stimulus
+# :py:mod:`~pulse2percept.implants` module and giving it a stimulus.
 #
 # Models with an axon map are well suited for epiretinal implants, such as 
 # Argus II
@@ -110,7 +104,8 @@ implant.plot()
 ##############################################################################
 # As mentioned above, the Biphasic Axon Map Model only accepts 
 # :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`
-# stimuli with no delay_dur. The amplitude given to the BiphasicPulseTrain
+# stimuli with no :py:attribute:`~pulse2percept.stimuli.BiphasicPulseTrain.delay_dur`. 
+# The amplitude given to the BiphasicPulseTrain
 # is interpreted as amplitude as a factor of threshold (i.e. an amp of 1 means 
 # 1xTh)
 #
@@ -122,12 +117,13 @@ implant.stim = {'A4' : BiphasicPulseTrain(20, 1, 0.45)}
 implant.stim.plot()
 
 ##############################################################################
-#
 # Finally, you can predict the percept resulting from stimulation
 
 percept = model.predict_percept(implant)
 ax = percept.plot()
 ax.set_title('Predicted percept')
+plt.show()
+##############################################################################
 
 
 ##############################################################################
@@ -139,6 +135,7 @@ new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
 axes[0].set_title("20 Hz")
 axes[1].set_title("40 Hz")
+plt.show()
 # Note that without setting vmax, matplotlib automatically rescales images to
 # have the same max brightness and the difference isn't visible
 
@@ -151,6 +148,7 @@ new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
 axes[0].set_title("1xTh")
 axes[1].set_title("3xTh")
+plt.show()
 
 ##############################################################################
 # Increasing pulse duration decreases threshold, thus indirectly causing an 
@@ -162,9 +160,11 @@ new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
 axes[0].set_title("0.45ms")
 axes[1].set_title("4ms")
+plt.show()
+
 ##############################################################################
 # If you account for the change in threshold by decreasing amplitude, then 
-# The only affect is the streak length decreasing
+# The only affect of increasing pulse duration is the streak length decreasing
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
 implant.stim = {'A4' : BiphasicPulseTrain(20, 0.023835, 20)}
 new_percept = model.predict_percept(implant)
@@ -172,6 +172,7 @@ new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
 axes[0].set_title("0.45ms")
 axes[1].set_title("20ms, 0.02xTh")
+plt.show()
 
 # This illustrates another important point: The amplitude used for the Biphasic
 # model is relative to the threshold current at 0.45ms pulse duration. Since larger 
@@ -185,27 +186,31 @@ axes[1].set_title("20ms, 0.02xTh")
 # ----------------------
 # All of the 'effects' plotted above (e.g. size increasing with amplitude)
 # are controlled by the effect models :math:`F_{bright}`, :math:`F_{size}`, and
-# :math:`F_{streak}`. The variables :py:attribute:`bright_model`, 
-# :py:attribute:`size_model`, :py:attribute:`streak_model` encode the effects models.
+# :math:`F_{streak}`. The variables 
+# :py:attribute:`~pulse2percept.models.BiphasicAxonMapModel.bright_model`, 
+# :py:attribute:`~pulse2percept.models.BiphasicAxonMapModel.size_model`, 
+# :py:attribute:`~pulse2percept.models.BiphasicAxonMapModel.streak_model` encode the 
+# effects models.
 # 
 # These default to :py:class:`~pulse2percept.models.granley2021.DefaultBrightModel`,
 # :py:class:`~pulse2percept.models.granley2021.DefaultSizeModel`, and 
 # :py:class:`~pulse2percept.models.granley2021.DefaultStreakModel` respectively, which
 # implement the simple scaling functions described in Granley et al. (2021)
 # 
+#
 # The coefficients a0-a9 parametrize these effect models. While the default values
-# are likely to work for most cases, they can be customized. Notice how we only
-# have to change the value given to the BiphasicAxonMapModel, and it is automatically
-# passed down to the effect models.
+# are likely to work for most cases, they can be customized to be patient specific. 
+# Notice how we only have to change the value given to the BiphasicAxonMapModel, 
+# and it is automatically passed down to the effect models.
 model.a5 = 0
 print(model.size_model.a5)
 
 ##################################################################################
 # For example, a0 and a1 control how threshold changed with pulse duration (a is amp): 
-# :math`\Tilde{a}(pdur) = (A_0*pdur + A_1)^{-1}*a`
-# Thus, pulse duration threshold scaling can easily be disabled by setting a0 to 0
-# and a1 to 1. If we increase pulse duration like we did previously, we will now see that
-# only streak length decreases, and we no longer have to change amplitude
+# :math:`\Tilde{a}(pdur) = (A_0*pdur + A_1)^{-1}*a`. Thus, pulse duration threshold 
+# scaling can easily be disabled by setting a0 to 0 and a1 to 1. If we increase 
+# pulse duration like we did previously, we will now see that only streak length decreases, 
+# and we no longer have to change amplitude to account for change in threshold
 model = BiphasicAxonMapModel(rho=200, axlambda=800)
 model.a0 = 0
 model.a1 = 1
@@ -228,9 +233,7 @@ axes[1].set_title("20ms")
 # For most cases, using the provided, default implementation of the effect models
 # will probably be enough. However, the effect models are completely modular, and 
 # can be replaced by any python callable with the parameters frequency, amplitude, 
-# and pulse duration
-#
-# For example, we can easily change the model to no longer scale size
+# and pulse duration. For example, we can easily change the model to no longer scale size
 model = BiphasicAxonMapModel(rho=200, axlambda=800)
 def size_modulation(freq, amp, pdur):
     return 1
@@ -246,7 +249,7 @@ new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
 axes[0].set_title("1xTh")
 axes[1].set_title("3xTh")
-
+######################################################################################
 # The stimuli with larger amplitude created a brighter, but equally-sized phosphene
 # 
 # Advanced tip: The effect models can even be a class, and can have its own parameters, 
