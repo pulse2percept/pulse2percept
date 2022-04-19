@@ -264,8 +264,8 @@ plt.show()
 # JAX Engine
 # ============
 #
-# The default computational engine is cython, but a engine based on 
-# `jax <https://github.com/google/jax>`_. The jax engine is marginally fasters on CPU,
+# The default computational engine is cython, but an engine based on 
+# `jax <https://github.com/google/jax>`_ is also provided. The jax engine is marginally faster on CPU
 # and significantly faster on GPU, at the cost of increased memory usage. The jax-based model 
 # can be used identically to the cython engine, but it also has some additional features
 # and limitations. 
@@ -302,9 +302,8 @@ plt.show()
 # One other useful feature is the 
 # `predict_percept_batched` function. This
 # applies predict_percept to batches of input stimuli, using optimized matrix operations. See also 
-# its faster, stripped version 
-# `._predict_spatial_batched`. This 
-# function is only inteneded to be used if you are repeatedly simulating batches of percepts. 
+# its faster, stripped version `_predict_spatial_batched`. This 
+# function is only intended to be used if you are repeatedly simulating batches of percepts. 
 # Since jax compiles each function the first time it is used, using this function only once
 # for a singular group of stimuli will be noticably slower than repeatedly applying 
 # `predict_percept`. However, splitting a very large set of stimuli into smaller batches and 
