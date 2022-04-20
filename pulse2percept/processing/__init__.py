@@ -7,12 +7,13 @@
 
 """
 
-from .shrink import shrinked_image, shrinked_single_image, shrinked_video, shrinked_video_1d
+from .shrink import shrinked_single_image, shrinked_image, shrinked_video, shrinked_stim, _spatial_temporal_saliency
 
 
 __all__ = [
-    'shrinked_image',
     'shrinked_single_image',
+    'shrinked_image', 
     'shrinked_video',
-    'shrinked_video_1d'
+    'shrinked_stim', 
+    '_spatial_temporal_saliency'
 ]

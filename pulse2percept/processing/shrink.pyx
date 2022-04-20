@@ -6,7 +6,7 @@ from scipy.signal import convolve2d
 from skimage import filters
 from skimage import color
 import matplotlib.pyplot as plt
-import pulse2percept as p2p
+from ..stimuli import ImageStimulus, VideoStimulus, BostonTrain
 
 from libc.math cimport(fabs as c_abs)
 ctypedef cnp.float32_t float32
@@ -146,7 +146,7 @@ cpdef temporal_saliency(image_gray, second_frame, int32 N=4, float32 boundary=0.
           Wt[u,v]=1
   return Wt
 
-cpdef spatial_temporal_saliency(image_gray,second_frame, int32 N=4, float32 boundary=0.5):
+cpdef _spatial_temporal_saliency(image_gray,second_frame, int32 N=4, float32 boundary=0.5):
   """Calculates the spatio-temporal importance matrix
 
   This function calculates the spatio-temporal importance matrix, which is the combination of the spatial saliency map and the temporal saliency map
@@ -208,7 +208,7 @@ cpdef seam_carving_energy(Wst,image_gray_shape):
         M_v[i,j] = M_v[i-1,j]+Wst[i-1,id]
   return M_v, bt_v
 
-def seam_carvings(M_v,bt_v,Wst,image_gray_shape,int32 num=15):
+cpdef seam_carvings(M_v,bt_v,Wst,image_gray_shape,int32 num=15):
   """Calculate the modified importance matrix with seam carving information
 
   This function calculates the updated importance matrix with seam carving based on the spatio-temporal importance matrix
@@ -407,7 +407,7 @@ cpdef shrinked_image(image_gray,second_frame, int32 wid = 0, int32 hei = 0, int3
   """
   result = image_gray
   if wid>0:
-    Wst=spatial_temporal_saliency(image_gray,second_frame, N, boundary)
+    Wst=_spatial_temporal_saliency(image_gray,second_frame, N, boundary)
     W_fin=importance_matrix(Wst,image_gray.shape,L,num)
     S_=shrinkability_matrix(W_fin,image_gray.shape,wid)
     result = np.array(shrinked(S_,image_gray,wid))
@@ -415,7 +415,7 @@ cpdef shrinked_image(image_gray,second_frame, int32 wid = 0, int32 hei = 0, int3
     if wid>0:
       shrinked_second = np.array(shrinked(S_,second_frame,wid))
     result = np.rot90(result, 1)
-    Wst=spatial_temporal_saliency(result,np.rot90(shrinked_second,1), N, boundary)
+    Wst=_spatial_temporal_saliency(result,np.rot90(shrinked_second,1), N, boundary)
     W_fin=importance_matrix(Wst,result.shape,L,num)
     S_=shrinkability_matrix(W_fin,result.shape,hei)
     result = np.array(shrinked(S_,result,hei))
@@ -483,11 +483,11 @@ cpdef shrinked_video_1d(video,int32 K, int32 N=4, float32 boundary=0.5, int32 L=
     int32 i
   result=[]
   Wst_=np.zeros((video.shape[0],video.shape[1],video.shape[2]))
-  Wst_[0]=spatial_temporal_saliency(video[0],video[1], N, boundary)
+  Wst_[0]=_spatial_temporal_saliency(video[0],video[1], N, boundary)
   for i in range(1,video.shape[0]):
     image_gray = video[i]
     second_frame = video[i-1]
-    Wst_[i]=spatial_temporal_saliency(image_gray,second_frame, N, boundary)
+    Wst_[i]=_spatial_temporal_saliency(image_gray,second_frame, N, boundary)
   
   M_v,bt_v=seam_carving_energy(Wst_[0],image_gray.shape)
   lowest = np.argpartition(M_v[image_gray.shape[0]-1,0:image_gray.shape[1]],num)
@@ -544,7 +544,7 @@ cpdef shrinked_video(video,int32 wid=0, int32 hei=0, int32 N=4, float32 boundary
     result = np.rot90(result,-1,(1,2))
   return result
 
-cpdef shrinked_stimulus(stim,int32 wid=0, int32 hei=0, int32 N=4, float32 boundary=0.5, int32 L=5, int32 num=15):
+cpdef shrinked_stim(stim,int32 wid=0, int32 hei=0, int32 N=4, float32 boundary=0.5, int32 L=5, int32 num=15):
   """Calculates the shrinked stimulus.
 
   This function calculates the shrinked stimulus.
@@ -566,15 +566,15 @@ cpdef shrinked_stimulus(stim,int32 wid=0, int32 hei=0, int32 N=4, float32 bounda
   num: int, optional
     the number of seams we would like to have. Initialized to 15. num should be smaller than the resolution of your image or video.
   """
-  if isinstance(stim,p2p.stimuli.VideoStimulus):
+  if isinstance(stim,VideoStimulus):
     video = stim.data.reshape(stim.vid_shape).transpose(3, 0, 1, 2)
     shrinked = shrinked_video(video,wid,hei,N,boundary,L,num)
-    new_stim = p2p.stimuli.videos.VideoStimulus(np.dstack(shrinked),)
+    new_stim = VideoStimulus(np.dstack(shrinked),)
     return new_stim
-  if isinstance(stim,p2p.stimuli.ImageStimulus):
+  if isinstance(stim,ImageStimulus):
     image = stim.data.reshape(stim.img_shape)
     shrinked = shrinked_single_image(image,wid,hei,L,num)
-    new_stim = p2p.stimuli.images.ImageStimulus(np.array(shrinked))
+    new_stim = ImageStimulus(np.array(shrinked))
     return new_stim
   else:
     raise NotImplementedError

@@ -1,9 +1,10 @@
+import os
 import numpy as np
 import numpy.testing as npt
 import pytest
 
 from pulse2percept.stimuli import ImageStimulus, VideoStimulus, BostonTrain
-from pulse2percept.processing import shrinked_single_image, shrinked_image, shrinked_video, shrinked_stimulus, _spatial_temporal_saliency
+from pulse2percept.processing import shrinked_single_image, shrinked_image, shrinked_video, shrinked_stim, _spatial_temporal_saliency
 
 
 def test_shrinked_single_image():
@@ -83,7 +84,7 @@ def test_shrinked_image_Stimulus():
         for j in range(14, 19):
             image[i, j] = 1
     stim = ImageStimulus(image)
-    shrinked = shrinked_stimulus(stim, wid=10, hei=10, L=1)
+    shrinked = shrinked_stim(stim, wid=10, hei=10, L=1)
     shrinked_data = shrinked.data.reshape(shrinked.img_shape)
     npt.assert_equal(shrinked_data[3, 3], 1.0)
     npt.assert_equal(shrinked_data[4, 4], 0.0)
@@ -112,7 +113,7 @@ def test_shrinked_video_stimulus():
         for j in range(11, 15):
             video[i, j, :, 2] = 1
     stim = VideoStimulus(video)
-    shrinked = shrinked_stimulus(stim, wid=3, hei=3, L=2, num=5)
+    shrinked = shrinked_stim(stim, wid=3, hei=3, L=2, num=5)
     shrinked_data = shrinked.data.reshape(shrinked.vid_shape)
     npt.assert_almost_equal(shrinked_data[3, 4, 0], 0.79999995)
     npt.assert_almost_equal(shrinked_data[5, 6, 0], 0.40000009)
