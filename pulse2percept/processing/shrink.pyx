@@ -1,5 +1,5 @@
 import numpy as np
-cimport numpy as cnp
+cimport numpy as np
 cimport cython
 
 from scipy.signal import convolve2d
@@ -9,9 +9,10 @@ import matplotlib.pyplot as plt
 from ..stimuli import ImageStimulus, VideoStimulus, BostonTrain
 
 from libc.math cimport(fabs as c_abs)
-ctypedef cnp.float32_t float32
-ctypedef cnp.uint32_t uint32
-ctypedef cnp.int32_t int32
+ctypedef np.float32_t float32
+ctypedef np.uint32_t uint32
+ctypedef np.int32_t int32
+
 
 cpdef spatial_saliency(image_gray):
   """Calculates the spatial saliency map
@@ -26,31 +27,34 @@ cpdef spatial_saliency(image_gray):
   # compute the first derivative in four directions : x (horizontal), y (vertical), d1, and d2
   dx = np.array([[-1,0,1],
                  [-2,0,2],
-                 [-1,0,1]])/8
+                 [-1,0,1]])*0.125
   dy = np.array([[ 1, 2, 1],
                  [ 0, 0, 0],
-                 [-1,-2,-1]])/8
+                 [-1,-2,-1]])*0.125
   dd_1 = np.array([[ 0, 1, 2],
                   [-1, 0, 1],
-                  [-2,-1, 0]])/8
+                  [-2,-1, 0]])*0.125
   dd_2 = np.array([[-2,-1, 0],
                   [-1, 0, 1],
-                  [ 0, 1, 2]])/8
+                  [ 0, 1, 2]])*0.125
   img_sobel_x = convolve2d (image_gray, dx, mode='same')
   img_sobel_y = convolve2d (image_gray, dy, mode='same')
   img_sobel_d1 = convolve2d (image_gray, dd_1, mode='same')
   img_sobel_d2 = convolve2d (image_gray, dd_2, mode='same')
 
   # This is implementing Eq. 1 from the paper:
-  X=img_sobel_x+(img_sobel_d1+img_sobel_d2)/2
+  X=img_sobel_x+(img_sobel_d1+img_sobel_d2)*0.5
 
   # This is implementing Eq. 2 from the paper:
-  Y=img_sobel_y+(img_sobel_d1-img_sobel_d2)/2
+  Y=img_sobel_y+(img_sobel_d1-img_sobel_d2)*0.5
   
   # This is implementing Eq. 3 from the paper:
   Ws=np.sqrt(X*X+Y*Y)
   return Ws
 
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef motion_saliency_x(image_gray,int32 N=4):
   """Calculates the motion saliency map in x direction 
 
@@ -65,7 +69,7 @@ cpdef motion_saliency_x(image_gray,int32 N=4):
     containing the pixel [x,y] in j th degree
   """
   cdef:
-    int32 j, u, v, x_, y_
+    int32 j, u, v, x_, y_, x
     float32 denom
   Wt_x=np.zeros((N,image_gray.shape[0],image_gray.shape[1]), dtype=float)
   for j in range(N):
@@ -83,6 +87,9 @@ cpdef motion_saliency_x(image_gray,int32 N=4):
           Wt_x[j,u,v]+=((x-j)%N)*(image_gray[x,v//N*N]+image_gray[x,v//N*N+1]+image_gray[x,v//N*N+2]+image_gray[x,v//N*N+3])/denom
   return Wt_x
 
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef motion_saliency_y(image_gray,int32 N=4):
   """Calculates the motion saliency map in y direction 
 
@@ -97,7 +104,7 @@ cpdef motion_saliency_y(image_gray,int32 N=4):
     containing the pixel [x,y] in j th degree
   """
   cdef:
-    int32 j, u, v, x_, y_
+    int32 j, u, v, x_, y_, y
     float32 denom
   Wt_y=np.zeros((N,image_gray.shape[0],image_gray.shape[1]))
   for j in range(N):
