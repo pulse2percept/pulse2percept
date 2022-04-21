@@ -17,11 +17,11 @@ psychophysical and electrophysiological studies.
 
 The :py:class:`~pulse2percept.models.BiphasicAxonMapModel` shares the same underlying 
 assumptions as the axon map model. Namely, an axon's sensitivity to electrical stimulation
-is assumed to decay exponentially:
+is assumed to decay exponentially with...
 
-*  with distance along the axon from the soma (:math:`d_s`), with spatial decay
+*  distance along the axon from the soma (:math:`d_s`), with spatial decay
    constant :math:`\\lambda`,
-*  with distance from the stimulated electrode (:math:`d_e`), with spatial decay 
+*  distance from the stimulated electrode (:math:`d_e`), with spatial decay 
    constant :math:`\\rho`.
 
 In the biphasic model, the radial decay rate :math:`\\rho` is scaled by :math:`F_{size}`,
@@ -58,21 +58,20 @@ print(model)
 
 ##############################################################################
 # The most important parameters are ``rho`` and ``axlambda``, which control the 
-# radial and axonal current spread, respectively. The parameters a0-a9 are 
+# radial and axonal current spread, respectively. The parameters ``a0``-``a9`` are 
 # coefficients for the size, streak, and bright models, which will be discussed 
 # later in this example. The biphasic axon map model supports both the default 
 # cython engine and a faster, gpu-enabled jax engine.
 #
 # The rest of the parameters are shared with 
 # :py:class:`~pulse2percept.models.AxonMapModel`. For full details on these 
-# parameters, see the 
-# :doc:`Axon Map Tutorial <plot_beyeler2019_axonmap.py>`
+# parameters, see the Axon Map Tutorial
 #
 #
 # Next, build the model to perform expensive, one time calculations,
 # and specify a visual prosthesis from the
-# :py:mod:`~pulse2percept.implants` module. Models with an axon map, such as
-# Argus II, are well suited for epiretinal implants.
+# :py:mod:`~pulse2percept.implants` module. Models with an axon map are well 
+# suited for epiretinal implants, such as Argus II.
 model.build()
 implant = ArgusII()
 
@@ -186,7 +185,7 @@ plt.show()
 # These default to :py:class:`~pulse2percept.models.granley2021.DefaultBrightModel`,
 # :py:class:`~pulse2percept.models.granley2021.DefaultSizeModel`, and 
 # :py:class:`~pulse2percept.models.granley2021.DefaultStreakModel` respectively, which
-# implement the simple scaling functions described in Granley et al. (2021)
+# implement the simple scaling functions described in `Granley et al. (2021) <[Granley2021]>`_.
 # 
 #
 # The coefficients ``a0``-``a9`` parametrize these effect models. While the default values
@@ -219,7 +218,8 @@ plt.show()
 
 ##################################################################################
 # Similarly, ``a2``-``a4`` control brightness scaling; ``a5``-``a6`` control size scaling, and
-# ``a7``-``a9`` control streak length scaling.
+# ``a7``-``a9`` control streak length scaling. For more details on these parameters,
+# see the effect models documentation, or [Granley2021]_ 
 #
 # Advanced Usage
 # ----------------------
@@ -265,7 +265,7 @@ plt.show()
 # ============
 #
 # The default computational engine is cython, but an engine based on 
-# `jax <https://github.com/google/jax>`_ is also provided. The jax engine is marginally faster on CPU
+# `jax <https://github.com/google/jax>`_ is also provided. The jax engine is slightly faster on CPU
 # and significantly faster on GPU, at the cost of increased memory usage. The jax-based model 
 # can be used identically to the cython engine, but it also has some additional features
 # and limitations. 
