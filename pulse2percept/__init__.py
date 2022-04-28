@@ -52,7 +52,6 @@ from . import models
 from . import model_selection
 from . import percepts
 from . import stimuli
-from . import processing
 from . import viz
 
 __all__ = [
@@ -61,7 +60,6 @@ __all__ = [
     'models',
     'model_selection',
     'percepts',
-    'processing',
     'stimuli',
     'utils',
     'viz'
