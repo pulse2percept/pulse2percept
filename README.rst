@@ -95,62 +95,21 @@ Detailed instructions for different platforms can be found in our
 
 .. _Installation Guide: https://pulse2percept.readthedocs.io/en/stable/install.html
 
-Dependencies
-------------
+pulse2percept supports these Python versions:
 
-**pulse2percept 0.7 was the last version to support Python <= 3.6.**
-pulse2percept 0.8+ requires Python 3.7+.
-
-pulse2percept requires:
-
-1.  `Python`_ (>= 3.7)
-2.  `Cython`_ (>= 0.28)
-3.  `NumPy`_ (>= 1.9)
-4.  `SciPy`_ (>= 1.0.1)
-5.  `ScikitImage`_ (>=0.14)
-6.  `Matplotlib`_ (>= 3.0.2)
-7.  `ImageIO FFMPEG`_ (>=0.4)
-
-Optional packages:
-
-1.  `Pandas`_ for loading datasets in the ``datasets`` module.
-2.  `Scikit Learn`_ for machine learning functionality in the 
-    ``model_selection`` module.
-3.  `JobLib`_ (>= 0.11)
-4.  `Dask`_ for parallel processing (a joblib alternative).
-    Use conda to install.
-5.  `Pytest`_ to run the test suite.
-6.  `OpenMP`_ for parallel processing support.
-
-.. _Python: https://www.python.org
-.. _Cython: https://www.cython.org
-.. _NumPy: https://www.numpy.org
-.. _SciPy: https://www.scipy.org
-.. _ScikitImage: https://scikit-image.org
-.. _Matplotlib: https://matplotlib.org
-.. _ImageIO FFMPEG: https://github.com/imageio/imageio-ffmpeg
-.. _JobLib: https://joblib.readthedocs.io
-.. _Pandas: https://pandas.pydata.org
-.. _Scikit Learn: https://scikit-learn.org
-.. _Dask: https://github.com/dask/dask
-.. _Pytest: https://docs.pytest.org/en/latest
-.. _OpenMP: https://openmp.org
-
-All required packages are listed in ``requirements.txt`` in the root directory
-of the git repository, and can be installed with the following command:
-
-.. code-block:: bash
-
-    git clone https://github.com/pulse2percept/pulse2percept.git
-    cd pulse2percept
-    pip install -r requirements.txt
-
-All packages required for development (including all optional packages) are
-listed in ``requirements-dev.txt`` and can be installed via:
-
-.. code-block:: bash
-
-    pip install -r requirements-dev.txt
++----------------------+-----+-----+-----+-----+-----+-----+-----+-----+
+|        Python        |3.10 | 3.9 | 3.8 | 3.7 | 3.6 | 3.5 | 3.4 | 2.7 |
++======================+=====+=====+=====+=====+=====+=====+=====+=====+
+| p2p 0.8              | Yes | Yes | Yes | Yes |     |     |     |     |
++----------------------+-----+-----+-----+-----+-----+-----+-----+-----+
+| p2p 0.7              |     | Yes | Yes | Yes | Yes |     |     |     |
++----------------------+-----+-----+-----+-----+-----+-----+-----+-----+
+| p2p 0.6              |     |     | Yes | Yes | Yes | Yes |     |     |
++----------------------+-----+-----+-----+-----+-----+-----+-----+-----+
+| p2p 0.5              |     |     |     | Yes | Yes | Yes |     |     |
++----------------------+-----+-----+-----+-----+-----+-----+-----+-----+
+| p2p 0.4              |     |     |     |     |     | Yes | Yes | Yes |
++----------------------+-----+-----+-----+-----+-----+-----+-----+-----+
 
 Where to go from here
 =====================
