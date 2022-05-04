@@ -4,7 +4,7 @@
 Installation
 ============
 
-Because pulse2percept is in active development, there are at least two versions
+Because pulse2percept is in active development, there are at least three versions
 to choose from:
 
 -  ``stable``: Our :ref:`stable release <install-release>` can be installed
@@ -269,13 +269,13 @@ wheels for 32-bit platforms (this includes all Unix platforms and Windows
 starting with Python 3.10).
 
 The main reason is that p2p heavily depends on NumPy, SciPy, Matplotlib,
-and Scikit-Image. Since these packages no longer provide wheels 32-bit
+and Scikit-Image. Since these packages no longer provide wheels for 32-bit
 platforms, we cannot either.
 
 In this case, you will have to install p2p :ref:`from source <install-source>`.
 
-If you think that you are getting this error message for a supposedly supported
-platform, please `open an issue`_ on GitHub.
+If you are getting this error message for a supposedly supported platform,
+please `open an issue`_ on GitHub.
  
 Python ImportError: No module named pulse2percept
 -------------------------------------------------
