@@ -64,7 +64,7 @@ Releasing the code on GitHub
    branch should be a release.
 
 *  Draft a new release on PR and tag it with "vX.Y".
-   Upload all the wheels you downloaded as artifacts from Azure Pipelines
+   Upload all the wheels you downloaded as artifacts from GitHub Actions
    above.
 
 After the release
