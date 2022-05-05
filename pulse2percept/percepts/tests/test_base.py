@@ -1,16 +1,17 @@
+from pulse2percept.utils import Grid2D
+from pulse2percept.percepts import Percept
+from skimage.io import imread
+from skimage import img_as_float
+from imageio import mimread
+from matplotlib.animation import FuncAnimation
+from matplotlib.axes import Subplot
+import matplotlib.pyplot as plt
 import os
 import numpy as np
 import pytest
 import numpy.testing as npt
-import matplotlib.pyplot as plt
-from matplotlib.axes import Subplot
-from matplotlib.animation import FuncAnimation
-from imageio import mimread
-from skimage import img_as_float
-from skimage.io import imread
-
-from pulse2percept.percepts import Percept
-from pulse2percept.utils import Grid2D
+import matplotlib
+matplotlib.use('Agg')
 
 
 def test_Percept():
