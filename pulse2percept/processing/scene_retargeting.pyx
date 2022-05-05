@@ -396,8 +396,8 @@ cpdef shrinked(S_, image_gray, K):
         result_rows.append(sr)
     return result_rows
 
-cpdef shrinked_image(image_gray, second_frame, int32 wid=0, int32 hei=0, int32 N=4, float32 boundary=0.5, int32 L=5, int32 num=15):
-    """Calculates the shrinked image
+cpdef image_retargeting(image_gray, second_frame, int32 wid=0, int32 hei=0, int32 N=4, float32 boundary=0.5, int32 L=5, int32 num=15):
+    """Calculates the image after content-aware image retargeting
 
     This function calculates the shrinked image from the image and the next or previous frame of the image
 
@@ -442,8 +442,8 @@ cpdef shrinked_image(image_gray, second_frame, int32 wid=0, int32 hei=0, int32 N
 
     return result
 
-cpdef shrinked_single_image(image_gray, int32 wid=0, int32 hei=0, int32 L=5, int32 num=15):
-    """Calculates the shrinked image with only one image
+cpdef single_image_retargeting(image_gray, int32 wid=0, int32 hei=0, int32 L=5, int32 num=15):
+    """Calculates the image after content-aware image retargeting with only one image
 
     This function calculates the spatio-temporal importance matrix, which is the combination of the spatial saliency map and the temporal saliency map
 
@@ -480,8 +480,8 @@ cpdef shrinked_single_image(image_gray, int32 wid=0, int32 hei=0, int32 L=5, int
 
     return result
 
-cpdef shrinked_video_1d(video, int32 K, int32 N=4, float32 boundary=0.5, int32 L=5, int32 num=15):
-    """Calculates the shrinked video which is shrinked by only one dimension (width)
+cpdef video_retargeting_1d(video, int32 K, int32 N=4, float32 boundary=0.5, int32 L=5, int32 num=15):
+    """Calculates the retargeted video which is shrinked by only one dimension (width)
 
     This function calculates the shrinked video which is shrinked by only one dimension
 
@@ -537,7 +537,7 @@ cpdef shrinked_video_1d(video, int32 K, int32 N=4, float32 boundary=0.5, int32 L
             result.append(frame)
     return np.array(result)
 
-cpdef shrinked_video(video, int32 wid=0, int32 hei=0, int32 N=4, float32 boundary=0.5, int32 L=5, int32 num=15):
+cpdef video_retargeting(video, int32 wid=0, int32 hei=0, int32 N=4, float32 boundary=0.5, int32 L=5, int32 num=15):
     """Calculates the shrinked video.
 
     This function calculates the shrinked video.
@@ -563,15 +563,15 @@ cpdef shrinked_video(video, int32 wid=0, int32 hei=0, int32 N=4, float32 boundar
     if len(video.shape) == 4:
         result = color.rgb2gray(video)
     if wid > 0:
-        result = shrinked_video_1d(result, wid, N, boundary, L, num)
+        result = video_retargeting_1d(result, wid, N, boundary, L, num)
     if hei > 0:
         result = np.rot90(result, 1, (1, 2))
-        result = shrinked_video_1d(result, hei, N, boundary, L, num)
+        result = video_retargeting_1d(result, hei, N, boundary, L, num)
         result = np.rot90(result, -1, (1, 2))
     return result
 
-cpdef shrinked_stim(stim, int32 wid=0, int32 hei=0, int32 N=4, float32 boundary=0.5, int32 L=5, int32 num=15):
-    """Calculates the shrinked stimulus.
+cpdef stim_retargeting(stim, int32 wid=0, int32 hei=0, int32 N=4, float32 boundary=0.5, int32 L=5, int32 num=15):
+    """Calculates the stimulus after content-aware scene retargeting.
 
     This function calculates the shrinked stimulus.
 
@@ -597,12 +597,12 @@ cpdef shrinked_stim(stim, int32 wid=0, int32 hei=0, int32 N=4, float32 boundary=
             video = stim.data.reshape(stim.vid_shape).transpose(2, 0, 1)
         elif len(stim.vid_shape) == 4:
             video = stim.data.reshape(stim.vid_shape).transpose(3, 0, 1, 2)
-        shrinked = shrinked_video(video, wid, hei, N, boundary, L, num)
+        shrinked = video_retargeting(video, wid, hei, N, boundary, L, num)
         new_stim = VideoStimulus(np.dstack(shrinked),)
         return new_stim
     if isinstance(stim, ImageStimulus):
         image = stim.data.reshape(stim.img_shape)
-        shrinked = shrinked_single_image(image, wid, hei, L, num)
+        shrinked = single_image_retargeting(image, wid, hei, L, num)
         new_stim = ImageStimulus(np.array(shrinked))
         return new_stim
     else:

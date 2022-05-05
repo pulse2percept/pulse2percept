@@ -12,8 +12,8 @@ def configuration(parent_package='', top_path=None):
         libraries.append('m')
 
     if platform.python_implementation() != 'PyPy':
-        config.add_extension('shrink',
-                             sources=['shrink.pyx'],
+        config.add_extension('scene_retargeting',
+                             sources=['scene_retargeting.pyx'],
                              include_dirs=[numpy.get_include()],
                              libraries=libraries)
     config.add_subpackage('tests')

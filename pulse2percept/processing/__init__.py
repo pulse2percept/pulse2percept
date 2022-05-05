@@ -2,18 +2,18 @@
 .. autosummary::
     :toctree: _api
 
-    shrink
+    scene_retargeting
 ..
 
 """
 
-from .shrink import shrinked_single_image, shrinked_image, shrinked_video, shrinked_stim, _spatial_temporal_saliency
+from .scene_retargeting import single_image_retargeting, image_retargeting, video_retargeting, stim_retargeting, _spatial_temporal_saliency
 
 
 __all__ = [
-    'shrinked_single_image',
-    'shrinked_image', 
-    'shrinked_video',
-    'shrinked_stim', 
+    'single_image_retargeting',
+    'image_retargeting', 
+    'video_retargeting',
+    'stim_retargeting', 
     '_spatial_temporal_saliency'
 ]

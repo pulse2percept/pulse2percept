@@ -31,7 +31,7 @@ stim.play()
 import matplotlib.pyplot as plt
 
 image=video[0]
-img=p2p.processing.shrinked_single_image(image, wid=300, hei=50)
+img=p2p.processing.single_image_retargeting(image, wid=300, hei=50)
 plt.imshow(img, cmap='gray')
 
 ##############################################################################
@@ -39,7 +39,7 @@ plt.imshow(img, cmap='gray')
 # to determine what is important. You can take the next frame of the image as
 # another input to provide motion information
 
-img=p2p.processing.shrinked_image(video[0], video[1], wid=300, hei=50)
+img=p2p.processing.image_retargeting(video[0], video[1], wid=300, hei=50)
 plt.imshow(img, cmap='gray')
 
 
@@ -69,13 +69,13 @@ plt.imshow(img, cmap='gray')
 # It takes a long time. 
 
 
-new_stim = p2p.processing.shrinked_stim(stim, wid=300, hei=50)
+new_stim = p2p.processing.video_retargeting(stim, wid=300, hei=50)
 new_stim.play()
 
 
 ##############################################################################
 # You can also shrink it when it is a video array
 
-new_video = p2p.processing.shrinked_stim(video[0:5], wid=300, hei=50)
+new_video = p2p.processing.stim_retargeting(video[0:5], wid=300, hei=50)
 new_video_stim = p2p.stimuli.videos.VideoStimulus(np.dstack(new_video))
 new_video_stim.play()
