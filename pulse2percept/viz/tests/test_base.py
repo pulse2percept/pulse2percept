@@ -1,10 +1,11 @@
+from pulse2percept.viz import scatter_correlation, correlation_matrix
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
 import numpy.testing as npt
-import matplotlib.pyplot as plt
-
-from pulse2percept.viz import scatter_correlation, correlation_matrix
+import matplotlib
+matplotlib.use('Agg')
 
 
 def test_scatter_correlation():
