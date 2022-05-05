@@ -4,6 +4,28 @@
 Release Notes
 =============
 
+v0.9.0 (TBD)
+------------
+
+Highlights
+~~~~~~~~~~
+
+New features
+~~~~~~~~~~~~
+
+API changes
+~~~~~~~~~~~
+
+Backward-incompatible changes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Deprecations
+^^^^^^^^^^^^
+
+Bug fixes
+~~~~~~~~~
+
+
 v0.8.0 (2022-05-05)
 -------------------
 
