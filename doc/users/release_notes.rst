@@ -4,19 +4,46 @@
 Release Notes
 =============
 
-.. important::
-
-    **pulse2percept 0.6 was the last version to support Python <= 3.5.**
-    pulse2percept 0.7+ requires Python 3.6+.
-
-v0.8.0 (2021, planned)
-----------------------
+v0.8.0 (2022-05-04)
+-------------------
 
 Highlights
 ~~~~~~~~~~
 
+*  New implants: :py:class:`~pulse2percept.implants.BVT44` [Petoe2021]_
+   (:pull:`465`)
+*  New models: :py:class:`~pulse2percept.models.BiphasicAxonMapModel`
+   [Granley2021]_ (:pull:`398`) and
+   :py:class:`~pulse2percept.models.Thompson2003Model` [Thompson2003]_
+   (:pull:`448`)
+*  New datasets: :py:func:`~pulse2percept.datasets.load_greenwald2009`
+   [Greenwald2009]_ (:pull:`459`) and
+   :py:func:`~pulse2percept.datasets.load_perezfornos2012`
+   [PerezFornos2012]_ (:pull:`457`)
+*  New stimuli: :py:class:`~pulse2percept.stimuli.BarStimulus`,
+   :py:class:`~pulse2percept.stimuli.GratingStimulus` (:pull:`310`)
+*  Python 3.10 support (:pull:`479`)
+
 New features
 ~~~~~~~~~~~~
+
+*  New gallery examples for visual field maps (:pull:`432`), Nanduri
+   dataset (:pull:`452`), psychophysics stimuli (:pull:`480`), and
+   :py:class:`~pulse2percept.models.BiphasicAxonMapModel` (:pull:`484`)
+*  Crop method for :py:class:`~pulse2percept.stimuli.ImageStimulus` and 
+   :py:class:`~pulse2percept.stimuli.VideoStimulus` objects (:pull:`455`)
+*  Specify number of OpenMP threads (:pull:`453`)
+*  Ignore stimuli of deactivated electrodes (:pull:`444`)
+*  Percepts can now have a limited number of gray levels (:pull:`443`)
+*  Automatic stimulus reshaping for 
+   :py:class:`~pulse2percept.stimuli.ImageStimulus` and 
+   :py:class:`~pulse2percept.stimuli.VideoStimulus` objects (:pull:`434`)
+*  :py:class:`~pulse2percept.implants.ElectrodeGrid` can now have different
+   spacings in x and y direction (:pull:`430`)
+*  Add new plotting styles for a grid's ``plot`` method (:pull:`426`, 
+   :pull:`433`, :pull:`446`)
+*  Additional options for :py:func:`~pulse2percept.viz.scatter_correlation`
+   (:pull:`422`)
 
 API changes
 ~~~~~~~~~~~
@@ -24,6 +51,7 @@ API changes
 Backward-incompatible changes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+*  ``RetinalCoordTransform`` has been renamed to ``VisualFieldMap`` (:pull:`432`)
 *  ``plot_axon_map`` was removed: Use :py:meth:`pulse2percept.models.AxonMapModel.plot`
 *  ``plot_implant_on_axon_map`` was removed: Use
    :py:meth:`pulse2percept.implants.ProsthesisSystem.plot` on top of
@@ -32,9 +60,20 @@ Backward-incompatible changes
 Deprecations
 ^^^^^^^^^^^^
 
+None.
+
 Bug fixes
 ~~~~~~~~~
 
+*  Fix handling of multi-channel images for scikit-image >= 0.19 (:pull:`473`)
+*  Fix corrupted stimuli when created from multiple stimuli (:pull:`469`)
+*  :py:func:`~pulse2percept.viz.plot_argus_phosphenes` now works for sliced subsets of data
+   (:pull:`415`)
+*  Fix plot window for the :py:class:`~pulse2percept.models.AxonMapModel` ``plot`` method
+   (:pull:`414`)
+*  Keep metadata intact when stimuli are created from other stimuli (:pull:`396`)
+*  Be able to run :py:class:`~pulse2percept.models.AxonMapModel` on a single pixel (:pull:`395`)
+*  Mirror-flip the :py:class:`~pulse2percept.implants.BVT24` implant (:pull:`393`)
 
 v0.7.1 (2021-06-21)
 -------------------

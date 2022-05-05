@@ -17,17 +17,7 @@ Before the Release
 Uploading the Release to PyPI
 -----------------------------
 
-pulse2percept wheels are built using Azure Pipelines to support the following:
-
-- Python 3.5 - 3.7
-- Linux: manylinux1, manylinux2010 for i686 and x86_64
-- macOS: OS X 10.6 and up
-- Windows: Server 2016 with VS 2017 for win-32 and amd64 (closes issue #88)
-
-Wheels are built using the `cibuildwheel`_ package. Once their `PR194`_ is merged,
-we can start automating the PyPI upload whenever a tag is pushed using GitHub Actions.
-
-Until then, the artifacts need to be downloaded from Azure Pipelines.
+pulse2percept wheels are built using GitHub Actions.
 
 .. important::
 
