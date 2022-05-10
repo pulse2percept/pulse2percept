@@ -1,12 +1,13 @@
+from pulse2percept.stimuli import VideoStimulus, BostonTrain
+from skimage.io import imsave
+from matplotlib.animation import FuncAnimation
 import os
 import numpy as np
 import numpy.testing as npt
 import pytest
 from imageio import mimwrite
-from matplotlib.animation import FuncAnimation
-from skimage.io import imsave
-
-from pulse2percept.stimuli import VideoStimulus, BostonTrain
+import matplotlib
+matplotlib.use('Agg')
 
 
 def test_VideoStimulus():

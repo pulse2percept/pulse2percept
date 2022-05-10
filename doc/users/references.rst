@@ -30,12 +30,12 @@ Studies referenced throughout the Documentation:
                  Phosphene Appearance for Epiretinal Prostheses. *International
                  Conference of the IEEE Engineering in Medicine and Biology
                  Society*.
-[Greenwald2009] Greenwald, S., Horsager A., Humayun M, Greenberg R.,
-                    McMahon M., Fine I. (2009).
-                    Brightness as a Function of Current Amplitude in Human
-                    Retinal Electrical Simulation. *Investigative Ophthalmology & Visual
-                    Science November 2009* Vol.50, 5017-5025, doi:`10.1167/iovs.08-2897
-                 <https://doi.org/10.1167/iovs.08-2897>`_.
+.. [Greenwald2009] Greenwald, S., Horsager A., Humayun M, Greenberg R.,
+                   McMahon M., Fine I. (2009).
+                   Brightness as a Function of Current Amplitude in Human
+                   Retinal Electrical Simulation. *Investigative Ophthalmology & Visual
+                   Science November 2009* Vol.50, 5017-5025, doi:`10.1167/iovs.08-2897
+                   <https://doi.org/10.1167/iovs.08-2897>`_.
 .. [Hayes2003] JS Hayes et al. (2003). Visually guided performance of
                simple tasks using simulated prosthetic vision.
                *Artificial Organs* 27, 1016-1028.

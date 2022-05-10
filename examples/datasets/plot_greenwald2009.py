@@ -18,7 +18,7 @@ Loading the dataset
 
 The dataset can be loaded as a Pandas ``DataFrame``:
 """
-# sphinx_gallery_thumbnail_number = 4
+# sphinx_gallery_thumbnail_number = 1
 
 from pulse2percept.datasets import load_greenwald2009
 data = load_greenwald2009()
@@ -55,13 +55,14 @@ print(data[data.subject == 'S05'])
 
 print(load_greenwald2009(subjects='S05'))
 
+################################################################################
 # .. note ::
 #
 #     Please see the documentation for :py:func:`~pulse2percept.datasets.load_greenwald2009`
 #     to see all available parameters for data subset loading.
 #
-
-###############################################################################
+#
+#
 # Plotting the data
 # -----------------
 #
@@ -88,3 +89,4 @@ plt.title("S06 Current Amplitude vs Brightness, Electrode C4")
 
 # Plot the data
 plt.scatter(data.amp, data.brightness)
+plt.show()

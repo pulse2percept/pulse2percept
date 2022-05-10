@@ -13,21 +13,24 @@ that can be passed as percepts to implants.
 Creating a Stimulus
 -------------------
 
-Create a stimulus as such:
+First, create the stimuli:
 
-.. code:: python
-
-    grating_sin_stim = GratingStimulus( (height, width) )
-    bar_stim = BarStimulus = BarStimulus( (height, width) )
 
 Shape (`(height, width)` in pixels) is the only required parameter for creating these stimuli.
 
 A drifting sinusoidal grating is represented by :py:class:`~pulse2percept.stimuli.GratingStimulus`.
-A visual example of a basic sinusoidal grating can be generated as such:
+The following illustrates one frame of a grating stimulus.
 """
-
+# sphinx_gallery_thumbnail_number = 1
+import matplotlib.pyplot as plt
 from pulse2percept.stimuli import GratingStimulus
 stim = GratingStimulus((50, 50), spatial_freq=0.1, temporal_freq=0.1)
+plt.imshow(stim.data[:, 0].reshape(50, 50), cmap='gray')
+plt.title("Grating Stimulus")
+plt.show()
+
+########################################################################################
+# You can view the entire stimulus over time using `stim.play()`
 stim.play()
 
 #####################################################################################
@@ -65,29 +68,29 @@ stim.play()
 # (in units of milliseconds)
 # to change the duration of the stimulus:
 
-from pulse2percept.stimuli import BarStimulus
 stim = BarStimulus((50, 50), speed=1, time=1500)
 stim.play()
 
 #####################################################################################
 # We can also change the direction *(scalar in [0, 360) degrees)*, where 0 degrees
-# represent rightward motion, 90 degrees represent upward motion, 180 degrees
-# represent leftward motion, and 270 degrees represent downward motion.
+# represents rightward motion, 90 degrees represents upward motion, 180 degrees
+# represents leftward motion, and 270 degrees represents downward motion.
 #
 # .. code:: python
 #
 #     BarStimulus((height, width), direction=direction)
 #
 # Or the contrast *(scalar in [0,1])*
+#
 # .. code:: python
 #
 #     BarStimulus((height, width), contrast=contrast)
 #
 # For exact info on all of the arguments, please refer to
 # :py:class:`~pulse2percept.stimuli.BarStimulus` and 
-#:py:class:`~pulse2percept.stimuli.GratingStimulus`.
-
-#####################################################################################
+# :py:class:`~pulse2percept.stimuli.GratingStimulus`.
+#
+#
 # Passing to an Implant
 # ---------------------
 # 
@@ -103,7 +106,6 @@ stim.play()
 
 from pulse2percept.implants import ArgusII
 from pulse2percept.models import AxonMapModel
-from pulse2percept.stimuli import GratingStimulus
 
 model = AxonMapModel()
 model.build()
@@ -128,12 +130,9 @@ percept.play()
 # :py:class:`~pulse2percept.stimuli.GratingStimulus`
 # inherit form :py:class:`~pulse2percept.stimuli.VideoStimulus`, we can apply 
 # any video processing methods provided by ``VideoStimulus``.
-
+#
 # In the following example, we will invert the stimulus before passing it to the
 # implant:
-from pulse2percept.implants import ArgusII
-from pulse2percept.models import AxonMapModel
-from pulse2percept.stimuli import GratingStimulus
 
 model = AxonMapModel()
 model.build()
