@@ -16,6 +16,9 @@ Studies referenced throughout the Documentation:
 .. [Ahuja2008] AK Ahuja, MR Behrend, M Kuroda, MS Humayun, JD Weiland (2008).
                An in in vitro model of a retinal prosthesis.
                *IEEE Trans Biomed Eng* 55, 1744-1753.
+.. [Al-Atabany2010] WT Al-Atabany, T Tong, PA Degenaar (2010). Improved 
+                    content aware scene retargeting for retinitis pigmentosa
+                    patients. *BioMedical Engineering OnLine*, 9(1), 52. 
 .. [Beyeler2019] M Beyeler, D Nanduri, JD Weiland, A Rokem, GM Boynton, I Fine
                  (2019). A model of ganglion axon pathways accounts for
                  percepts elicited by retinal implants. *Scientific Reports*
@@ -114,6 +117,10 @@ Studies referenced throughout the Documentation:
                       current distribution under circular dispersive 
                       electrodes. *IEEE Transactions on Biomedical Engineering*
                       5, 381-385.
+.. [Xu2021] H Xu, X Zhong, C Pang, W Chen, X Wang, S Li, Y Hu, DS Sagan, PT Weiss,
+            Y Yao, J Xiang, MS Dayan, MS Humayun, YC Tai (2021). First Human Results
+            With the 256 Channel Intelligent Micro Implant Eye (IMIE 256). 
+            *Translational Vision Science & Technology*, 10(10), 14–14. 
 .. [Yue2020] L Yue, V Wuyyuru, A Gonzalez-Calle, JD Dorn, MS Humayun (2020).
              Retina–electrode interface properties and vision restoration by
              two generations of retinal prostheses in one patient—one in each
