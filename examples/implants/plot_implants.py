@@ -148,3 +148,22 @@ ax[0].set_title('Alpha-IMS')
 
 AlphaAMS().plot(ax=ax[1])
 ax[1].set_title('Alpha-AMS')
+
+###############################################################################
+# Intelligent Micro Implant Eye epiretinal prosthesis system (IMIE)
+# ------------------------------------------------------------------
+#
+# :py:class:`~pulse2percept.implants.IMIE` is an epiretinal implant co-developed
+#  by Golden Eye Bionic, LLC (Pasadena CA) and IntelliMicro Medical Co., Ltd. 
+# (Changsha, Hunan Province, China) and is manufactured by IntelliMicro. 
+#
+# IMIE consists of 248 large disc-shaped electrodes (210 µm in diameter) and 8 
+# smaller disc-shaped electrodes (160 µm in diameter), arranged on an area of 
+# 4.75 mm × 6.50 mm. The center-to-center pitch is 350 µm for the large electrodes
+# and 300 µm for the small electrodes. [Xu2021]_.
+#
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+IMIE().plot(ax=ax, annotate=True)
+ax.set_title('IMIE')

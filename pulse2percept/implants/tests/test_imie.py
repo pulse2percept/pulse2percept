@@ -41,6 +41,14 @@ def test_IMIE(x, y, rot, eye):
     x_center = imie['H10'].x + (imie['G10'].x - imie['H10'].x) / 2
     npt.assert_almost_equal(x_center, x)
 
+    # Make sure the center to center pitch is correct
+    npt.assert_almost_equal((imie['L1'].x - imie['K1'].x) ** 2 + 
+                            (imie['L1'].y - imie['K1'].y) ** 2,
+                            300**2)
+    npt.assert_almost_equal((imie['A3'].x - imie['A4'].x) ** 2 + 
+                            (imie['A3'].y - imie['A4'].y) ** 2,
+                            350**2)
+
     # Check radii of electrodes
     for e in ['N16', 'N17', 'A16', 'A17', 'L1', 'K1', 'C1', 'D1']:
         npt.assert_almost_equal(imie[e].r, 80.0)

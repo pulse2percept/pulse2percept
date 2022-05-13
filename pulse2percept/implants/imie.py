@@ -93,8 +93,8 @@ class IMIE(ProsthesisSystem):
         for elec in extra_elecs:
             self.earray.remove_electrode(elec)
 
-        # Change electrodes to smaller ones:
-        small_elecs = ['N16', 'N17', 'A16', 'A17', 'L1', 'K1', 'C1', 'D1']
+        # Change electrodes to smaller ones in place:
+        small_elecs = ['N16', 'A16', 'K1', 'D1']
         small_radius = 160.0 / 2
         for elec in small_elecs:
             e = self.earray.electrodes[elec]
@@ -103,8 +103,22 @@ class IMIE(ProsthesisSystem):
             new_e = DiskElectrode(x, y, z, small_radius, name=elec)
             self.earray.add_electrode(elec, new_e)
         
-        self.stim=stim
-            
+        # Change the rest smaller electrodes according to its neighbor:
+        small_elecs_rest = {'N17' : 'N16', 'A17' : 'A16', 'L1' : 'K1', 
+                            'C1' : 'D1'}
+        for elec in small_elecs_rest:
+            e = self.earray.electrodes[elec]
+            x, y, z = e.x, e.y, e.z
+            neighbor = self.earray.electrodes[small_elecs_rest[elec]]
+            nx, ny, nz = neighbor.x, neighbor.y, neighbor.z
+            newx, newy, newz = x-(x-nx)/7, y-(y-ny)/7, z-(z-nz)/7
+            self.earray.remove_electrode(elec)
+            new_e = DiskElectrode(newx, newy, newz, small_radius, name=elec)
+            self.earray.add_electrode(elec, new_e)
+
+        # Beware of race condition: Stim must be set last, because it requires
+        # indexing into self.electrodes:   
+        self.stim = stim
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
