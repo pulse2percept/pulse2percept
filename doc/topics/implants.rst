@@ -42,8 +42,8 @@ Implant     Location        Num Electrodes  Manufacturer
 `PRIMA75`   subretinal      142             Pixium Vision SA
 `PRIMA55`   subretinal      273(?)          Pixium Vision SA
 `PRIMA40`   subretinal      532(?)          Pixium Vision SA
-`BVA24`     suprachoroidal  24              Bionic Vision Technologies
-`BVA44`     suprachoroidal  44              Bionic Vision Technologies
+`BVT24`     suprachoroidal  24              Bionic Vision Technologies
+`BVT44`     suprachoroidal  44              Bionic Vision Technologies
 ==========  ==============  ==============  =================================
 
 Stimuli can be assigned to the various electrodes in the electrode array,
