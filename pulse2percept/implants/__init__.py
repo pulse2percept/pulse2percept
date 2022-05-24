@@ -47,6 +47,6 @@ __all__ = [
     'PRIMA55',
     'PRIMA40',
     'ProsthesisSystem',
-    'SquareElectrode'
+    'SquareElectrode',
     'IMIE'
 ]
