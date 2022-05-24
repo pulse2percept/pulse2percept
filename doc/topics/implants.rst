@@ -35,13 +35,15 @@ Implant     Location        Num Electrodes  Manufacturer
 ----------  --------------  --------------  ---------------------------------
 `ArgusI`    epiretinal      16              Second Sight Medical Products Inc
 `ArgusII`   epiretinal      60              Second Sight Medical Products Inc
+`IMIE`      epiretinal      256             IntelliMicro Medical Co., Ltd
 `AlphaIMS`  subretinal      1500            Retina Implant AG
 `AlphaAMS`  subretinal      1600            Retina Implant AG
 `PRIMA`     subretinal      378             Pixium Vision SA
 `PRIMA75`   subretinal      142             Pixium Vision SA
 `PRIMA55`   subretinal      273(?)          Pixium Vision SA
 `PRIMA40`   subretinal      532(?)          Pixium Vision SA
-`BVA24`     suprachoroidal  24              Bionic Vision Technologies
+`BVT24`     suprachoroidal  24              Bionic Vision Technologies
+`BVT44`     suprachoroidal  44              Bionic Vision Technologies
 ==========  ==============  ==============  =================================
 
 Stimuli can be assigned to the various electrodes in the electrode array,
