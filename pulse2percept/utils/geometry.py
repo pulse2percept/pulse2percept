@@ -5,6 +5,7 @@
 """
 import numpy as np
 from abc import ABCMeta, abstractmethod
+import random
 import scipy.stats as spst
 from scipy.spatial import ConvexHull
 # Using or importing the ABCs from 'collections' instead of from
@@ -13,6 +14,7 @@ from collections.abc import Sequence
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
+from scipy.interpolate import LinearNDInterpolator
 
 from .base import PrettyPrint
 from .constants import ZORDER
@@ -280,7 +282,6 @@ class Curcio1990Map(VisualFieldMap):
             return True
         return self.__dict__ == other.__dict__
 
-
 class Watson2014Map(VisualFieldMap):
     """Converts between visual angle and retinal eccentricity [Watson2014]_"""
 
@@ -446,6 +447,38 @@ class Watson2014DisplaceMap(Watson2014Map):
     def ret2dva(self, xret, yret):
         raise NotImplementedError
 
+class NoisyWatsonMap(VisualFieldMap):
+    """Converts between visual angle and retinal eccentricity using
+       [Watson2014]_ with added gaussian noise.
+       
+       Recommmended values for scale are intergers between 50 and 150.
+
+       Forms a mapping using [Watson2014]_ then uses scipy.interpolate.LinearNDInterpolator to fill in
+       any other points.
+    """
+    def __init__(self, scale=100):
+        xdva, ydva = np.meshgrid(np.arange(-45, 45, 2), np.arange(-45, 45, 2))
+        xret, yret = Watson2014Map().dva2ret(xdva.ravel(), ydva.ravel())
+        xydva = np.vstack((xdva.ravel(), ydva.ravel())).T
+        xyret = np.vstack((xret.ravel(), yret.ravel())).T
+        xyret = xyret + scale * np.vectorize(self.f)(xyret)
+        self.dva2ret_interp = LinearNDInterpolator(xydva, xyret)
+        self.ret2dva_interp = LinearNDInterpolator(xyret, xydva)
+
+    def noise_fn(self, point):
+        return np.random.normal() / 2
+
+    def dva2ret(self, x, y):
+        """Convert degrees of visual angle (dva) to retinal coords (um)"""
+        xydva = np.vstack((x.ravel(), y.ravel())).T
+        xyret = self.dva2ret_interp(xydva).astype(np.float32)
+        return xyret[:, 0], xyret[:, 1]
+
+    def ret2dva(self, x, y):
+        """Convert degrees of retinal coords (um) to visual angle (dva)"""
+        xyret = np.vstack((x.ravel(), y.ravel())).T
+        xydva = self.ret2dva_interp(xyret).astype(np.float32)
+        return xydva[:, 0], xydva[:, 1]
 
 def cart2pol(x, y):
     """Convert Cartesian to polar coordinates
