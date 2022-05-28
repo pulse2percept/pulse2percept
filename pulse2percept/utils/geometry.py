@@ -447,26 +447,52 @@ class Watson2014DisplaceMap(Watson2014Map):
     def ret2dva(self, xret, yret):
         raise NotImplementedError
 
-class NoisyWatsonMap(VisualFieldMap):
-    """Converts between visual angle and retinal eccentricity using
-       [Watson2014]_ with added gaussian noise.
-       
-       Recommmended values for scale are intergers between 50 and 150.
+class NoisyMap(VisualFieldMap):
+    """Converts between visual angle and retinal eccentricity with random noise.
+       Simulates natural variation of retina to visual field mapping by adding random noise to an existing
+       VisualFieldMap object.
 
-       Forms a mapping using [Watson2014]_ then uses scipy.interpolate.LinearNDInterpolator to fill in
-       any other points.
+       Parameters:
+       ------------
+       base_map : VisualFieldMap
+           The map to which random noise will be added. Must be instantiated i.e. Watson2014Map()
+       scale : float32
+           Magnitude of random noise.
+           Recommmended values for scale are integers between 50 and 150.
+       noise_type : string
+           Type of random noise added to map. Supported values are 'uniform' and 'normal'.
     """
-    def __init__(self, scale=100):
+    def __init__(self, base_map, scale=100, noise_type='uniform'):
+        # Generate grid of points to form interpolation function
         xdva, ydva = np.meshgrid(np.arange(-45, 45, 2), np.arange(-45, 45, 2))
-        xret, yret = Watson2014Map().dva2ret(xdva.ravel(), ydva.ravel())
+
+        # Check whether parameters are correct
+        if issubclass(type(base_map), VisualFieldMap):
+            xret, yret = base_map.dva2ret(xdva.ravel(), ydva.ravel())
+        else:
+            raise TypeError(f"base_map must be a subclass of VisualFieldMap,"
+                            f" not {type(base_map)}")
+        if noise_type == 'uniform':
+            f = np.vectorize(self.noise_fn_normal)
+        elif noise_type == 'normal':
+            f = np.vectorize(self.noise_fn_uniform)
+        else:
+            raise ValueError(f"Supported values of noise_type are 'uniform' and 'normal', "
+                             f"not {noise_type}")
+
+        # Create mapping of points on retina and visual field, form interpoolation functions
         xydva = np.vstack((xdva.ravel(), ydva.ravel())).T
         xyret = np.vstack((xret.ravel(), yret.ravel())).T
-        xyret = xyret + scale * np.vectorize(self.f)(xyret)
+        
+        xyret = xyret + scale * f(xyret)
         self.dva2ret_interp = LinearNDInterpolator(xydva, xyret)
         self.ret2dva_interp = LinearNDInterpolator(xyret, xydva)
 
-    def noise_fn(self, point):
+    def noise_fn_normal(self, _):
         return np.random.normal() / 2
+
+    def noise_fn_uniform(self, _):
+        return np.random.rand()
 
     def dva2ret(self, x, y):
         """Convert degrees of visual angle (dva) to retinal coords (um)"""
