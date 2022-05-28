@@ -19,6 +19,7 @@ from .base import (PrettyPrint, FreezeError, Frozen, Data, bijective26_name,
                    cached, gamma)
 from .geometry import (Grid2D, VisualFieldMap, Curcio1990Map,
                        Watson2014Map, Watson2014DisplaceMap,
+                       NoisyMap,
                        cart2pol, pol2cart, delta_angle)
 from .array import is_strictly_increasing, radial_mask, sample, unique
 from .images import center_image, scale_image, shift_image, trim_image
@@ -46,6 +47,7 @@ __all__ = [
     'gamma',
     'Grid2D',
     'is_strictly_increasing',
+    'NoisyMap',
     'parfor',
     'pol2cart',
     'PrettyPrint',
