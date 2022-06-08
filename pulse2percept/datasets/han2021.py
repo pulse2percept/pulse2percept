@@ -22,26 +22,46 @@ def fetch_han2021(videos=None, resize=None, as_gray=None, data_path=None,
                   download_if_missing=True):
     """Load the original videos of outdoor scenes from [Han2021]_
 
-    Download the original videos or simulated prosthetic vision of outdoor scenes 
-    described in [Han2021] from https://osf.io/pf2ja/ (303MB) to ``data_path``. 
+    Download the original videos or simulated prosthetic vision of outdoor
+    scenes described in [Han2021]_ from https://osf.io/pf2ja/ (303MB) to 
+    ``data_path``. 
     By default, all datasets are stored in '~/pulse2percept_data/', but a 
     different path can be specified.
 
-    The size of the videos are 320*180. The number of frames of the videos are 125 to 126.
+    ===================   =====================
+    Number of videos:                        20
+    Number of frames:                125 or 126
+    Frame size (px):                  320 x 180
+    ===================   =====================
+
+    Each :py:class:`~p2p.stimuli.VideoStimulus` object contains a `metadata`
+    dict with the following fields:
+
+    ====================  ================================================
+    plugin                FFMPEG
+    ffmpeg_version        FFMPEG version
+    codec                 FFMPEG codec
+    pix_fmt               pixel format
+    nframes               Number of frames
+    duration              Movie duration (seconds)
+    fps                   Frame rate (frames per second)
+    source                File name of original video (before downscaling)
+    source_size           Original image size (before downscaling)
+    source_shape          Original video shape (before downscaling)
+    size                  Actual image size (after downscaling)
+    rotate                Rotation angle
+    ====================  ================================================
 
     .. versionadded:: 0.9
 
     Parameters
+    ----------
     videos: str | list of strings | None, optional
-        The name of videos you wants to put into the data. By default, all
-        subjects are selected.
-        Available names:
-        'sample1', 'sample2', 'sample3', 'sample4', 'stim1', 'stim2', 'stim3', 'stim4', 
-        'stim5', 'stim6', 'stim7', 'stim8', 'stim9', 'stim10', 'stim11', 'stim12', 
-        'stim13', 'stim14', 'stim15', 'stim16'
+        Video names you want to download. By default, all videos will be
+        downloaded. Available names: 'sample1' - 'sample4', 'stim1' - 'stim16'
     resize : (height, width) or None, optional, default: None
-        A tuple specifying the desired height and the width of each video frame.
-        The original size is 320*180.
+        A tuple specifying the desired height and width of each video frame.
+        The original size is 320x180 pixels.
     as_gray : bool, optional
         Flag whether to convert the image to grayscale.
         A four-channel image is interpreted as RGBA (e.g., a PNG), and the
@@ -56,7 +76,7 @@ def fetch_han2021(videos=None, resize=None, as_gray=None, data_path=None,
     Returns
     -------
     data: dict of VideoStimulus
-        VideoStimulus of the original videos in [Han2021]_ is returned
+        VideoStimulus of the original videos in [Han2021]_
 
     """
     if not has_h5py:
@@ -102,8 +122,8 @@ def fetch_han2021(videos=None, resize=None, as_gray=None, data_path=None,
                         'duration': vid.shape[3]/25.0,
                         'source': key,
                         'source_shape': (540, 960, 3, vid.shape[3])}
-            data[name] = VideoStimulus(
-                vid, metadata=metadata, resize=resize, as_gray=as_gray)
+            data[name] = VideoStimulus(vid, metadata=metadata, resize=resize,
+                                       as_gray=as_gray)
     else:
         if type(videos) == str:
             videos = [videos]
@@ -131,7 +151,7 @@ def fetch_han2021(videos=None, resize=None, as_gray=None, data_path=None,
                         'source': key,
                         'source_shape': (540, 960, 3, vid.shape[3])}
 
-            data[name] = VideoStimulus(
-                vid, metadata=metadata, resize=resize, as_gray=as_gray)
+            data[name] = VideoStimulus(vid, metadata=metadata, resize=resize,
+                                       as_gray=as_gray)
     hf.close()
     return data
