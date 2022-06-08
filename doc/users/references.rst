@@ -29,6 +29,9 @@ Studies referenced throughout the Documentation:
                 *Journal of Comparative Neurophysiology* 292:497-523,
                 doi:`10.1002/cne.902920402
                 <https://doi.org/10.1002/cne.902920402>`_.
+.. [Han2021] N Han, S Srivastava, A Xu, D Klein, M Beyeler (2021). Deep Learning–Based
+             Scene Simplification for Bionic Vision. *Augmented Humans Conference* 2021,
+             45–54. <https://doi.org/10.1145/3458709.3458982>`_.
 .. [Granley2021] Granley, J., & Beyeler, M. (2021). A Computational Model of 
                  Phosphene Appearance for Epiretinal Prostheses. *International
                  Conference of the IEEE Engineering in Medicine and Biology

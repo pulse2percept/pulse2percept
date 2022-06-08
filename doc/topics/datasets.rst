@@ -25,6 +25,9 @@ functions that can be used to load datasets from the bionic vision community:
    *  :py:func:`~pulse2percept.datasets.fetch_beyeler2019`: Download and load
       the phosphene drawing dataset from [Beyeler2019]_.
 
+   *  :py:func:`~pulse2percept.datasets.fetch_han2021`: Download and load
+      the outdoor scenes from [Han2021]_.
+
 .. note::
 
     You will need Pandas (``pip install pandas``) to load the data.

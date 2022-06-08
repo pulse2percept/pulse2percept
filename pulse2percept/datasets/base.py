@@ -4,6 +4,7 @@ from os import environ, makedirs
 from os.path import exists, expanduser, join
 from shutil import rmtree
 import hashlib
+import ssl
 from urllib.request import urlretrieve
 
 
@@ -74,8 +75,8 @@ def _report_hook(count, block_size, total_size):
     """Display a progress bar for ``urlretrieve``"""
     progress_size = int(count * block_size)
     percent = min(100, int(count * block_size * 100 / total_size))
-    sys.stdout.write(f"\rDownloading {progress_size / (1024 * 1024)}"
-                     f"/{total_size / (1024 * 1024)} MB ({percent}%)")
+    sys.stdout.write(f"\rDownloading {progress_size / (1024 * 1024):.1f}"
+                     f"/{total_size / (1024 * 1024):.1f} MB ({percent}%)")
     sys.stdout.flush()
 
 
@@ -100,6 +101,8 @@ def fetch_url(url, file_path, progress_bar=_report_hook, remote_checksum=None):
         The expected SHA-256 checksum of the file.
 
     """
+    # Hacky way to keep using ulretrieve without SSL verification:
+    ssl._create_default_https_context = ssl._create_unverified_context
     urlretrieve(url, file_path, progress_bar)
     checksum = _sha256(file_path)
     if remote_checksum != None and remote_checksum != checksum:
