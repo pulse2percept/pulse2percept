@@ -668,7 +668,7 @@ class VideoStimulus(Stimulus):
         cbar.ax.set_ylabel('Brightness (a.u.)', rotation=-90, va='center')
         plt.close(fig)
         if fps is None:
-            interval = unique(np.diff(self.time))
+            interval = unique(np.diff(self.time), tol=1e-2)
             if len(interval) > 1:
                 raise NotImplementedError
             interval = interval[0]
