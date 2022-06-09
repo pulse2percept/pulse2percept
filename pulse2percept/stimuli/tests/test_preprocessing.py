@@ -5,7 +5,7 @@ import pytest
 
 from pulse2percept.stimuli import ImageStimulus, VideoStimulus, BostonTrain
 from pulse2percept.stimuli.preprocessing import (center_image, shift_image, scale_image,
-                                                 trim_image, shrinked, single_image_retargeting,
+                                                 trim_image, shrinked, retarget_image,
                                                  video_retargeting, _spatial_temporal_saliency,
                                                  image_retargeting)
 
@@ -89,7 +89,7 @@ def test_trim_image(n_channels):
         trim_image(img, tol=-1)
 
 
-def test_single_image_retargeting():
+def test_retarget_image():
     image = np.zeros((20, 20))
     for i in range(1, 8):
         for j in range(1, 8):
@@ -97,7 +97,7 @@ def test_single_image_retargeting():
     for i in range(10, 15):
         for j in range(14, 19):
             image[i, j] = 1
-    shrinked = single_image_retargeting(image, wid=10, hei=10, L=1)
+    shrinked = retarget_image(image, (10, 10), L=1)
     npt.assert_equal(shrinked[3, 3], 1.0)
     npt.assert_equal(shrinked[4, 4], 0.0)
     npt.assert_almost_equal(shrinked[5, 5], 0.35745859)

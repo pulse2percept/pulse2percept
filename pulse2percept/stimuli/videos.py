@@ -16,7 +16,8 @@ from imageio import get_reader as video_reader
 
 from .base import Stimulus
 from .pulses import BiphasicPulse
-from .preprocessing import center_image, shift_image, scale_image, trim_image
+from .preprocessing import (center_image, shift_image, scale_image, trim_image,
+                            video_retargeting_1d)
 from ..utils import unique
 from ..utils.constants import DT
 
@@ -516,6 +517,17 @@ class VideoStimulus(Stimulus):
             raise ValueError(f"Unknown filter '{filt}'.")
         return self.apply(filt, **kwargs)
 
+    def retarget(self, wid=0, hei=0, N=4, boundary=0.5, L=5, num=15):
+        stim = self.rgb2gray()
+        result = stim.data.reshape(stim.vid_shape)
+        if wid > 0:
+            result = video_retargeting_1d(result, wid, N, boundary, L, num)
+        if hei > 0:
+            result = np.rot90(result, 1, (1, 2))
+            result = video_retargeting_1d(result, hei, N, boundary, L, num)
+            result = np.rot90(result, -1, (1, 2))
+        return VideoStimulus(result, time=stim.time, metadata=stim.metadata)
+
     def encode(self, amp_range=(0, 50), pulse=None):
         """Encode image using amplitude modulation
 
@@ -668,7 +680,7 @@ class VideoStimulus(Stimulus):
         cbar.ax.set_ylabel('Brightness (a.u.)', rotation=-90, va='center')
         plt.close(fig)
         if fps is None:
-            interval = unique(np.diff(self.time))
+            interval = unique(np.diff(self.time), tol=1e-2)
             if len(interval) > 1:
                 raise NotImplementedError
             interval = interval[0]

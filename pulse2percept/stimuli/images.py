@@ -17,7 +17,8 @@ from skimage.feature import canny
 
 from .base import Stimulus
 from .pulses import BiphasicPulse
-from .preprocessing import center_image, shift_image, scale_image, trim_image
+from .preprocessing import (center_image, shift_image, scale_image, trim_image,
+                            retarget_image)
 
 
 class ImageStimulus(Stimulus):
@@ -515,6 +516,14 @@ class ImageStimulus(Stimulus):
         except KeyError:
             raise ValueError(f"Unknown filter '{filt}'.")
         return self.apply(filt, **kwargs)
+
+    def retarget(self, target_shape, mov_avg=5, num_seams=15, electrodes=None):
+        """Context-aware image retargeting"""
+        stim = self.rgb2gray()
+        img = stim.data.reshape(stim.img_shape)
+        return ImageStimulus(retarget_image(img, target_shape, L=mov_avg,
+                                            num=num_seams),
+                             electrodes=electrodes, metadata=self.metadata)
 
     def encode(self, amp_range=(0, 50), pulse=None):
         """Encode image using amplitude modulation
