@@ -17,7 +17,7 @@ from skimage.feature import canny
 
 from .base import Stimulus
 from .pulses import BiphasicPulse
-from ..utils import center_image, shift_image, scale_image, trim_image
+from .preprocessing import center_image, shift_image, scale_image, trim_image
 
 
 class ImageStimulus(Stimulus):

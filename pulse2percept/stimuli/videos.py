@@ -16,7 +16,8 @@ from imageio import get_reader as video_reader
 
 from .base import Stimulus
 from .pulses import BiphasicPulse
-from ..utils import center_image, shift_image, scale_image, trim_image, unique
+from .preprocessing import center_image, shift_image, scale_image, trim_image
+from ..utils import unique
 from ..utils.constants import DT
 
 
@@ -111,6 +112,8 @@ class VideoStimulus(Stimulus):
                 time = source.time
         elif isinstance(source, np.ndarray):
             vid = source
+            if time is None and 'fps' in metadata:
+                time = np.arange(vid.shape[-1]) * 1000.0 / metadata['fps']
         else:
             raise TypeError(f"Source must be a filename, a 3D NumPy array or "
                             f"another VideoStimulus, not {type(source)}.")

@@ -7,7 +7,6 @@
     constants
     geometry
     array
-    images
     convolution
     optimize
     stats
@@ -21,7 +20,6 @@ from .geometry import (Grid2D, VisualFieldMap, Curcio1990Map,
                        Watson2014Map, Watson2014DisplaceMap,
                        cart2pol, pol2cart, delta_angle)
 from .array import is_strictly_increasing, radial_mask, sample, unique
-from .images import center_image, scale_image, shift_image, trim_image
 from .convolution import center_vector, conv
 from .optimize import bisect
 from .stats import r2_score, circ_r2_score
@@ -33,7 +31,6 @@ __all__ = [
     'bisect',
     'cached',
     'cart2pol',
-    'center_image',
     'center_vector',
     'circ_r2_score',
     'conv',
@@ -52,9 +49,6 @@ __all__ = [
     'r2_score',
     'radial_mask',
     'sample',
-    'scale_image',
-    'shift_image',
-    'trim_image',
     'unique',
     'VisualFieldMap',
     'Watson2014DisplaceMap',
