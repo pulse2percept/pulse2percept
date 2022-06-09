@@ -144,6 +144,33 @@ The same is true for a dictionary of pulse trains:
     Stimulus({'A1': BiphasicPulse(10, 0.45, stim_dur=100),
               'C9': BiphasicPulse(-30, 1, delay_dur=10, stim_dur=100)})
 
+Preprocessing stimuli
+---------------------
+
+:py:class:`~pulse2percept.stimuli.ImageStimulus` and
+:py:class:`~pulse2percept.stimuli.VideoStimulus` come with built-in
+preprocessing methods that include basic image operations:
+
+-  ``rgb2gray``: converting from RGB to grayscale
+-  ``invert``: inverting the gray levels
+-  ``resize``: resizing to a desired shape
+-  ``crop``: cropping a region of interest
+-  ``shift``, ``scale``, and ``rotate``
+
+as well as advanced image processing techniques:
+
+-  ``threshold``: thresholding the gray levels (e.g., local, Otsu, ISODATA)
+-  ``filter``: filtering (e.g., Sobel, Scharr, median, Canny edge detector)
+-  ``retarget``: content-aware image retargeting [AlAtabany2010]_
+
+In addition, images and videos can be automatically converted into pulse trains
+using the ``encode`` method.
+
+Last but not least, if your favorite image processing method is not yet
+supported, you can pass a custom function to the ``apply`` method.
+This will work as long as the custom function accepts and returns an image 
+(or video).
+
 Interacting with stimuli
 ------------------------
 

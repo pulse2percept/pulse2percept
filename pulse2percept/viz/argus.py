@@ -12,7 +12,8 @@ from pkg_resources import resource_filename
 
 from ..implants import ArgusI, ArgusII
 from ..models import AxonMapModel
-from ..utils import Watson2014Map, scale_image, center_image
+from ..stimuli.preprocessing import scale_image, center_image
+from ..utils import Watson2014Map
 from ..utils.constants import ZORDER
 
 PATH_ARGUS1 = resource_filename('pulse2percept', 'viz/data/argus1.png')

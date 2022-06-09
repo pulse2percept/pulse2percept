@@ -29,6 +29,8 @@ Studies referenced throughout the Documentation:
                 *Journal of Comparative Neurophysiology* 292:497-523,
                 doi:`10.1002/cne.902920402
                 <https://doi.org/10.1002/cne.902920402>`_.
+.. [Fleck1992] MM Fleck (1992). Some defects in finite-difference edge finders. 
+               *IEEE J PAMI* 14:337--345
 .. [Han2021] N Han, S Srivastava, A Xu, D Klein, M Beyeler (2021). Deep Learning–Based
              Scene Simplification for Bionic Vision. *Augmented Humans Conference* 2021,
              45–54. <https://doi.org/10.1145/3458709.3458982>`_.
