@@ -114,6 +114,7 @@ class VideoStimulus(Stimulus):
         elif isinstance(source, np.ndarray):
             vid = source
             if time is None and 'fps' in metadata:
+                # Infer the time points from the video frame rate:
                 time = np.arange(vid.shape[-1]) * 1000.0 / metadata['fps']
         else:
             raise TypeError(f"Source must be a filename, a 3D NumPy array or "

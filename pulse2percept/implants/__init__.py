@@ -11,6 +11,7 @@ and PRIMA.
     argus
     alpha
     bvt
+    imie
     prima
 
 .. seealso::
@@ -25,6 +26,7 @@ from .argus import ArgusI, ArgusII
 from .alpha import AlphaIMS, AlphaAMS
 from .bvt import BVT24, BVT44
 from .prima import PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55, PRIMA40
+from .imie import IMIE
 
 __all__ = [
     'AlphaAMS',
@@ -32,6 +34,7 @@ __all__ = [
     'ArgusI',
     'ArgusII',
     'BVT24',
+    'BVT44',
     'DiskElectrode',
     'Electrode',
     'ElectrodeArray',
@@ -44,5 +47,6 @@ __all__ = [
     'PRIMA55',
     'PRIMA40',
     'ProsthesisSystem',
-    'SquareElectrode'
+    'SquareElectrode',
+    'IMIE'
 ]
