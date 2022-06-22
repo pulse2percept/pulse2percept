@@ -1,9 +1,11 @@
 """`ElectrodeArray`, `ElectrodeGrid`"""
+from matplotlib.colors import Normalize
 import numpy as np
 from collections import OrderedDict
 from matplotlib.collections import PatchCollection
 import matplotlib.pyplot as plt
 from skimage.transform import SimilarityTransform
+from copy import deepcopy
 
 from .electrodes import Electrode, PointSource, DiskElectrode
 from ..utils import PrettyPrint, bijective26_name
@@ -144,15 +146,19 @@ class ElectrodeArray(PrettyPrint):
             ax = plt.gca()
         ax.set_aspect('equal')
         patches = []
+        cm = None
+        norm = None
         if color_stim is not None:
-            cmap = plt.get_cmap(cmap)
-            maxamp = np.max(color_stim.data)
+            cm = plt.get_cmap(cmap)
+            norm = Normalize(vmin=0, vmax=np.max(color_stim.data))
         for name, electrode in self.electrodes.items():
             # Rather than calling electrode.plot(), generate all the patch
             # objects and add them to a collection:
-            kwargs = electrode.plot_kwargs
+            kwargs = deepcopy(electrode.plot_kwargs)
             if color_stim is not None and name in color_stim.electrodes:
-                kwargs['fc'] = cmap(np.max(color_stim[name]) / maxamp)
+                amp = np.max(color_stim[name])
+                if amp != 0:
+                    kwargs['fc'] = cm(norm(amp), alpha=0.8)
             if not electrode.activated:
                 kwargs = electrode.plot_deactivated_kwargs
             if isinstance(electrode.plot_patch, list):
@@ -170,7 +176,7 @@ class ElectrodeArray(PrettyPrint):
                               'fc': (1, 1, 1, 0.7)},
                         zorder=ZORDER['annotate'])
         patch_collection = PatchCollection(patches, match_original=True,
-                                          zorder=ZORDER['annotate'], cmap=cmap)
+                                          zorder=ZORDER['annotate'], cmap=cm, norm=norm)
         ax.add_collection(patch_collection)
         plt.sci(patch_collection) # enables plt.colormap()
         if autoscale:

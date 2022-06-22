@@ -184,7 +184,7 @@ class ProsthesisSystem(PrettyPrint):
             (if exists) or create a new Axes object.
         color_stim : bool, optional
             If true, the fill color of the plotted electrodes will vary based 
-            on stimulus amplitude
+            on maximum stimulus amplitude on each electrode
         cmap : str
             Matplotlib colormap to use for stimulus coloring.
 
