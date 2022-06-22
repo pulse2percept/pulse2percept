@@ -120,7 +120,7 @@ class ElectrodeArray(PrettyPrint):
         for electrode in electrodes:
             self.__getitem__(electrode).activated = False
 
-    def plot(self, annotate=False, autoscale=True, ax=None):
+    def plot(self, annotate=False, autoscale=True, ax=None, color_stim=None, cmap='OrRd'):
         """Plot the electrode array
 
         Parameters
@@ -132,6 +132,8 @@ class ElectrodeArray(PrettyPrint):
         ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object.
+        color_stim : ``pulse2percept.stimuli.Stimulus``, or None
+            If provided, colors the earray based on the stimulus amplitudes
 
         Returns
         -------
@@ -142,10 +144,15 @@ class ElectrodeArray(PrettyPrint):
             ax = plt.gca()
         ax.set_aspect('equal')
         patches = []
+        if color_stim is not None:
+            cmap = plt.get_cmap(cmap)
+            maxamp = np.max(color_stim.data)
         for name, electrode in self.electrodes.items():
             # Rather than calling electrode.plot(), generate all the patch
             # objects and add them to a collection:
             kwargs = electrode.plot_kwargs
+            if color_stim is not None and name in color_stim.electrodes:
+                kwargs['fc'] = cmap(np.max(color_stim[name]) / maxamp)
             if not electrode.activated:
                 kwargs = electrode.plot_deactivated_kwargs
             if isinstance(electrode.plot_patch, list):
@@ -162,8 +169,10 @@ class ElectrodeArray(PrettyPrint):
                         bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
                               'fc': (1, 1, 1, 0.7)},
                         zorder=ZORDER['annotate'])
-        ax.add_collection(PatchCollection(patches, match_original=True,
-                                          zorder=ZORDER['annotate']))
+        patch_collection = PatchCollection(patches, match_original=True,
+                                          zorder=ZORDER['annotate'], cmap=cmap)
+        ax.add_collection(patch_collection)
+        plt.sci(patch_collection) # enables plt.colormap()
         if autoscale:
             ax.autoscale(True)
         ax.set_xlabel('x (microns)')
