@@ -136,6 +136,8 @@ class ElectrodeArray(PrettyPrint):
             (if exists) or create a new Axes object.
         color_stim : ``pulse2percept.stimuli.Stimulus``, or None
             If provided, colors the earray based on the stimulus amplitudes
+        cmap : str
+            Matplotlib colormap to use for stimulus coloring.
 
         Returns
         -------
