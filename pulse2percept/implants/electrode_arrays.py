@@ -162,7 +162,7 @@ class ElectrodeArray(PrettyPrint):
                     amp = np.max(color_stim[name])
                     if amp != 0:
                         kwargs['fc'] = cm(norm(amp), alpha=0.8)
-            if not electrode.activated:
+            else:
                 kwargs = electrode.plot_deactivated_kwargs
             if isinstance(electrode.plot_patch, list):
                 # Special case: draw multiple objects per electrode
