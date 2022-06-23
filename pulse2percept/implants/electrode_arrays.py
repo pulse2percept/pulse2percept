@@ -1,9 +1,11 @@
 """`ElectrodeArray`, `ElectrodeGrid`"""
+from matplotlib.colors import Normalize
 import numpy as np
 from collections import OrderedDict
 from matplotlib.collections import PatchCollection
 import matplotlib.pyplot as plt
 from skimage.transform import SimilarityTransform
+from copy import deepcopy
 
 from .electrodes import Electrode, PointSource, DiskElectrode
 from ..utils import PrettyPrint, bijective26_name
@@ -120,7 +122,7 @@ class ElectrodeArray(PrettyPrint):
         for electrode in electrodes:
             self.__getitem__(electrode).activated = False
 
-    def plot(self, annotate=False, autoscale=True, ax=None):
+    def plot(self, annotate=False, autoscale=True, ax=None, color_stim=None, cmap='OrRd'):
         """Plot the electrode array
 
         Parameters
@@ -132,6 +134,10 @@ class ElectrodeArray(PrettyPrint):
         ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object.
+        color_stim : ``pulse2percept.stimuli.Stimulus``, or None
+            If provided, colors the earray based on the stimulus amplitudes
+        cmap : str
+            Matplotlib colormap to use for stimulus coloring.
 
         Returns
         -------
@@ -142,11 +148,21 @@ class ElectrodeArray(PrettyPrint):
             ax = plt.gca()
         ax.set_aspect('equal')
         patches = []
+        cm = None
+        norm = None
+        if color_stim is not None:
+            cm = plt.get_cmap(cmap)
+            norm = Normalize(vmin=0, vmax=np.max(color_stim.data))
         for name, electrode in self.electrodes.items():
             # Rather than calling electrode.plot(), generate all the patch
             # objects and add them to a collection:
-            kwargs = electrode.plot_kwargs
-            if not electrode.activated:
+            if electrode.activated:
+                kwargs = deepcopy(electrode.plot_kwargs)
+                if color_stim is not None and name in color_stim.electrodes:
+                    amp = np.max(color_stim[name])
+                    if amp != 0:
+                        kwargs['fc'] = cm(norm(amp), alpha=0.8)
+            else:
                 kwargs = electrode.plot_deactivated_kwargs
             if isinstance(electrode.plot_patch, list):
                 # Special case: draw multiple objects per electrode
@@ -162,8 +178,10 @@ class ElectrodeArray(PrettyPrint):
                         bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
                               'fc': (1, 1, 1, 0.7)},
                         zorder=ZORDER['annotate'])
-        ax.add_collection(PatchCollection(patches, match_original=True,
-                                          zorder=ZORDER['annotate']))
+        patch_collection = PatchCollection(patches, match_original=True,
+                                          zorder=ZORDER['annotate'], cmap=cm, norm=norm)
+        ax.add_collection(patch_collection)
+        plt.sci(patch_collection) # enables plt.colormap()
         if autoscale:
             ax.autoscale(True)
         ax.set_xlabel('x (microns)')

@@ -3,6 +3,7 @@ import collections as coll
 import pytest
 import numpy.testing as npt
 from matplotlib.patches import Circle
+import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
 
 from pulse2percept.implants import (PointSource, ElectrodeArray, ElectrodeGrid,
@@ -35,6 +36,7 @@ def test_ProsthesisSystem():
     npt.assert_equal(implant.stim.time, None)
     npt.assert_equal(implant.stim.electrodes, [0])
 
+    plt.cla()
     ax = implant.plot()
     npt.assert_equal(len(ax.texts), 0)
     npt.assert_equal(len(ax.collections), 1)
@@ -65,6 +67,27 @@ def test_ProsthesisSystem_stim():
     stim = Stimulus(np.ones((13 * 13 + 1, 5)))
     with pytest.raises(ValueError):
         implant.stim = stim
+
+    # color mapping
+    stim = np.zeros((13*13, 5))
+    stim[84, 0] = 1
+    stim[98, 2] = 2
+    implant.stim = stim
+    plt.cla()
+    ax = implant.plot(stim_cmap='hsv')
+    plt.colorbar()
+    npt.assert_equal(len(ax.collections), 1)
+    npt.assert_equal(ax.collections[0].colorbar.vmax, 2)
+    npt.assert_equal(ax.collections[0].cmap(ax.collections[0].norm(1)),
+                     (0.0, 1.0, 0.9647031631761764, 1))
+    # make sure default behaviour unchanged
+    plt.cla()
+    ax = implant.plot()
+    plt.colorbar()
+    npt.assert_equal(len(ax.collections), 1)
+    npt.assert_equal(ax.collections[0].colorbar.vmax, 1)
+    npt.assert_equal(ax.collections[0].cmap(ax.collections[0].norm(1)),
+                     (0.993248, 0.906157, 0.143936, 1))  
 
     # Deactivated electrodes cannot receive stimuli:
     implant.deactivate('H4')
