@@ -156,11 +156,12 @@ class ElectrodeArray(PrettyPrint):
         for name, electrode in self.electrodes.items():
             # Rather than calling electrode.plot(), generate all the patch
             # objects and add them to a collection:
-            kwargs = deepcopy(electrode.plot_kwargs)
-            if color_stim is not None and name in color_stim.electrodes:
-                amp = np.max(color_stim[name])
-                if amp != 0:
-                    kwargs['fc'] = cm(norm(amp), alpha=0.8)
+            if electrode.activated:
+                kwargs = deepcopy(electrode.plot_kwargs)
+                if color_stim is not None and name in color_stim.electrodes:
+                    amp = np.max(color_stim[name])
+                    if amp != 0:
+                        kwargs['fc'] = cm(norm(amp), alpha=0.8)
             if not electrode.activated:
                 kwargs = electrode.plot_deactivated_kwargs
             if isinstance(electrode.plot_patch, list):
