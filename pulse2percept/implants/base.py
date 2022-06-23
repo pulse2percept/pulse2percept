@@ -170,7 +170,7 @@ class ProsthesisSystem(PrettyPrint):
             raise ValueError(err_str)
         return stim
 
-    def plot(self, annotate=False, autoscale=True, ax=None, color_stim=False, cmap='OrRd'):
+    def plot(self, annotate=False, autoscale=True, ax=None, stim_cmap=False):
         """Plot
 
         Parameters
@@ -182,11 +182,10 @@ class ProsthesisSystem(PrettyPrint):
         ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object.
-        color_stim : bool, optional
-            If true, the fill color of the plotted electrodes will vary based 
-            on maximum stimulus amplitude on each electrode
-        cmap : str
-            Matplotlib colormap to use for stimulus coloring.
+        stim_cmap : bool, str, or matplotlib colormap, optional
+            If not false, the fill color of the plotted electrodes will vary based 
+            on maximum stimulus amplitude on each electrode. The chosen colormap
+            will be used if provided
 
         Returns
         -------
@@ -194,11 +193,13 @@ class ProsthesisSystem(PrettyPrint):
             Returns the axis object of the plot
         """
         stim = None
-        if color_stim:
+        if stim_cmap:
             if self.stim is None:
                 raise ValueError("Must assign a stimulus in order to enable stimulus coloring")
             stim = self.stim
-        return self.earray.plot(annotate=annotate, autoscale=autoscale, ax=ax, color_stim=stim, cmap=cmap)
+            if stim_cmap == True:
+                stim_cmap = 'hot'
+        return self.earray.plot(annotate=annotate, autoscale=autoscale, ax=ax, color_stim=stim, cmap=stim_cmap)
 
     def activate(self, electrodes):
         self.earray.activate(electrodes)

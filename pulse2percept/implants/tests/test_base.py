@@ -74,12 +74,20 @@ def test_ProsthesisSystem_stim():
     stim[98, 2] = 2
     implant.stim = stim
     plt.cla()
-    ax = implant.plot(color_stim=True, cmap='hsv')
+    ax = implant.plot(stim_cmap='hsv')
     plt.colorbar()
     npt.assert_equal(len(ax.collections), 1)
     npt.assert_equal(ax.collections[0].colorbar.vmax, 2)
     npt.assert_equal(ax.collections[0].cmap(ax.collections[0].norm(1)),
-                     (0.0, 1.0, 0.9647031631761764, 1)) 
+                     (0.0, 1.0, 0.9647031631761764, 1))
+    # make sure default behaviour unchanged
+    plt.cla()
+    ax = implant.plot()
+    plt.colorbar()
+    npt.assert_equal(len(ax.collections), 1)
+    npt.assert_equal(ax.collections[0].colorbar.vmax, 1)
+    npt.assert_equal(ax.collections[0].cmap(ax.collections[0].norm(1)),
+                     (0.993248, 0.906157, 0.143936, 1))  
 
     # Deactivated electrodes cannot receive stimuli:
     implant.deactivate('H4')
