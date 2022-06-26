@@ -346,11 +346,19 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # Calculate the Stimulus at requested time points:
             if t_percept is not None:
                 # Save electrode parameters
-                stim = Stimulus(stim)  # make sure stimulus is in proper format
                 stim = Stimulus(stim[:, t_percept].reshape((-1, n_time)),
                                 electrodes=stim.electrodes, time=t_percept,
                                 metadata=stim.metadata)
-            resp = self._predict_spatial(implant.earray, stim)
+                # find unique stimulus points
+                _, t_unique, inverse = np.unique(stim.data.T, axis=0, 
+                                                return_index=True, return_inverse=True)
+                stim_unique = Stimulus(stim[:, stim.time[t_unique]], 
+                                       electrodes=stim.electrodes, time=stim.time[t_unique])
+                resp_unique = self._predict_spatial(implant.earray, stim_unique)
+                # reconstruct original time points, making sure to preserve C ordering
+                resp = resp_unique[..., inverse].copy(order='C')
+            else:
+                resp = self._predict_spatial(implant.earray, stim)
         return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
                        space=self.grid, time=t_percept,
                        metadata={'stim': stim}, n_gray=self.n_gray, noise=self.noise)
