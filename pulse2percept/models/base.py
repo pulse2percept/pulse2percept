@@ -355,9 +355,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 _, t_unique, inverse = np.unique(stim.data.T, axis=0, 
                                                 return_index=True, return_inverse=True)
                 stim_unique = Stimulus(stim[:, stim.time[t_unique]], 
-                                       electrodes=stim.electrodes, time=t_unique)
+                                       electrodes=stim.electrodes, time=stim.time[t_unique])
                 resp_unique = self._predict_spatial(implant.earray, stim_unique)
-                resp = resp_unique[..., inverse]
+                # reconstruct original time points, making sure to preserve C ordering
+                resp = resp_unique[..., inverse].copy(order='C')
             else:
                 resp = self._predict_spatial(implant.earray, stim)
         return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
