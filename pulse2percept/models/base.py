@@ -352,7 +352,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                                 electrodes=stim.electrodes, time=t_percept,
                                 metadata=stim.metadata)
             # find unique stimulus points
-            amps, t_unique, inverse = np.unique(stim.data.T, axis=0, 
+            _, t_unique, inverse = np.unique(stim.data.T, axis=0, 
                                             return_index=True, return_inverse=True)
             stim_unique = Stimulus(stim[:, t_unique], electrodes=stim.electrodes,
                                    time=t_unique)
