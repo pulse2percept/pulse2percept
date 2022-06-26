@@ -354,8 +354,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 # find unique stimulus points
                 _, t_unique, inverse = np.unique(stim.data.T, axis=0, 
                                                 return_index=True, return_inverse=True)
-                stim_unique = Stimulus(stim[:, t_unique], electrodes=stim.electrodes,
-                                    time=t_unique)
+                stim_unique = Stimulus(stim[:, stim.time[t_unique]], 
+                                       electrodes=stim.electrodes, time=t_unique)
                 resp_unique = self._predict_spatial(implant.earray, stim_unique)
                 resp = resp_unique[..., inverse]
             else:
