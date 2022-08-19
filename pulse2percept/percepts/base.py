@@ -246,7 +246,8 @@ class Percept(Data):
         ax.set_ylabel('y (degrees of visual angle)')
         return ax
 
-    def play(self, fps=None, repeat=True, annotate_time=True, ax=None):
+    def play(self, fps=None, repeat=True, annotate_time=True, ax=None,
+             colorbar=True):
         """Animate the percept as HTML with JavaScript
 
         The percept will be played in an interactive player in IPython or
@@ -265,6 +266,8 @@ class Percept(Data):
             title of the panel.
         ax : matplotlib.axes.AxesSubplot, optional
             A Matplotlib axes object. If None, will create a new Axes object
+        colorbar : {True, False}
+            Whether to show the colorbar
 
         Returns
         -------
@@ -275,7 +278,7 @@ class Percept(Data):
         """
         def update(data):
             if annotate_time:
-                mat.axes.set_title(f't = {self.time[self._next_frame - 1]} ms')
+                mat.axes.set_title(f't = {self.time[self._next_frame - 1]:.2f} ms')
             mat.set_data(data)
             return mat
 
@@ -306,9 +309,10 @@ class Percept(Data):
         self.rewind()
         mat = ax.imshow(np.zeros_like(self.data[..., 0]), cmap='gray',
                         vmax=self.data.max())
-        cbar = fig.colorbar(mat)
-        cbar.ax.set_ylabel('Phosphene brightness (a.u.)', rotation=-90,
-                           va='center')
+        if colorbar:
+            cbar = fig.colorbar(mat)
+            cbar.ax.set_ylabel('Phosphene brightness (a.u.)', rotation=-90,
+                               va='center')
         plt.close(fig)
         if fps is None:
             interval = unique(np.diff(self.time))

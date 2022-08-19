@@ -236,7 +236,7 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     df['implant_x'] = 0
     df['implant_y'] = 0
     df['implant_rot'] = 0
-    for subject in df.subjects.unique():
+    for subject in df.subject.unique():
         df.loc[df.subject == subject,
                'implant_type_str'] = subject_params[subject]['implant_type_str']
         df.loc[df.subject == subject,
