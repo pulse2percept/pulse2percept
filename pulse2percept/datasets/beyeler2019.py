@@ -1,4 +1,4 @@
-"""`fetch_beyeler2019`"""
+"""`fetch_beyeler2019`, `subject_params`"""
 from os.path import join, isfile
 import numpy as np
 
@@ -15,6 +15,66 @@ try:
     has_h5py = True
 except ImportError:
     has_h5py = False
+
+
+subject_params = {
+    'S1': {
+        'subject_id': 'S1',
+        'second_sight_id': 'TB',
+        'implant_type_str': 'ArgusI',
+        'implant_x': -1527,
+        'implant_y': -556,
+        'implant_rot': -64.74,
+        'loc_od_x': 13.6,
+        'loc_od_y': 0.0,
+        'xmin': -36.9,
+        'xmax': 36.9,
+        'ymin': -36.9,
+        'ymax': 36.9
+    },
+    'S2': {
+        'subject_id': 'S2',
+        'second_sight_id': '12-005',
+        'implant_type_str': 'ArgusII',
+        'implant_x': -1896,
+        'implant_y': -542,
+        'implant_rot': -44,
+        'loc_od_x': 15.8,
+        'loc_od_y': 1.4,
+        'xmin': -30,
+        'xmax': 30,
+        'ymin': -22.5,
+        'ymax': 22.5
+    },
+    'S3': {
+        'subject_id': 'S3',
+        'second_sight_id': '51-009',
+        'implant_type_str': 'ArgusII',
+        'implant_x': -1203,
+        'implant_y': 280,
+        'implant_rot': -35,
+        'loc_od_x': 15.4,
+        'loc_od_y': 1.57,
+        'xmin': -32.5,
+        'xmax': 32.5,
+        'ymin': -24.4,
+        'ymax': 24.4
+    },
+    'S4': {
+        'subject_id': 'S4',
+        'second_sight_id': '52-001',
+        'implant_type_str': 'ArgusII',
+        'implant_x': -1945,
+        'implant_y': 469,
+        'implant_rot': -34,
+        'loc_od_x': 15.8,
+        'loc_od_y': 1.51,
+        'xmin': -32,
+        'xmax': 32,
+        'ymin': -24,
+        'ymax': 24
+    }
+}
 
 
 def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
@@ -170,6 +230,21 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
             idx_electrode |= df.electrode == electrode
         idx &= idx_electrode
     df = df[idx]
+
+    # Augment with implant type & location data:
+    df['implant_type_str'] == ''
+    df['implant_x'] = 0
+    df['implant_y'] = 0
+    df['implant_rot'] = 0
+    for subject in df.subjects.unique():
+        df.loc[df.subject == subject,
+               'implant_type_str'] = subject_params[subject]['implant_type_str']
+        df.loc[df.subject == subject,
+               'implant_x'] = subject_params[subject]['implant_x']
+        df.loc[df.subject == subject,
+               'implant_y'] = subject_params[subject]['implant_y']
+        df.loc[df.subject == subject,
+               'implant_rot'] = subject_params[subject]['implant_rot']
 
     if shuffle:
         df = df.sample(n=len(df), random_state=random_state)

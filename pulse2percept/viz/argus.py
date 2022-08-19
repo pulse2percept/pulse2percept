@@ -63,7 +63,7 @@ PX_ARGUS2 = np.array([
 ])
 
 
-def plot_argus_phosphenes(data, argus, scale=1.0, axon_map=None,
+def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
                           show_fovea=True, ax=None):
     """Plots phosphenes centered over the corresponding electrodes
 
@@ -76,7 +76,11 @@ def plot_argus_phosphenes(data, argus, scale=1.0, axon_map=None,
         identical organization (i.e., must contain columns 'subject', 'image',
         'xrange', and 'yrange').
     argus : :py:class:`~pulse2percept.implants.ArgusI` or :py:class:`~pulse2percept.implants.ArgusII`
-        Either an Argus I or Argus II implant
+        Either an Argus I or Argus II implant. If None, the data is expected to
+        contain additional columns: "implant_type_str", "implant_x",
+        "implant_y", and "implant_rot", which together define the type and
+        position of the implant. "implant_type_str" must be either "ArgusI" or
+        "ArgusII".
     scale : float
         Scaling factor to apply to the phosphenes
     axon_map : :py:class:`~pulse2percept.models.AxonMapModel`
@@ -97,23 +101,33 @@ def plot_argus_phosphenes(data, argus, scale=1.0, axon_map=None,
     if len(data.subject.unique()) > 1:
         raise ValueError('"data" cannot contain data from more than one '
                          'subject.')
-    if not isinstance(argus, (ArgusI, ArgusII)):
-        raise TypeError(f'"argus" must be an Argus I or Argus II implant, not '
-                        f'{type(argus)}.')
     if axon_map is not None and not isinstance(axon_map, AxonMapModel):
         raise TypeError(f'"axon_map" must be an AxonMapModel instance, not '
                         f'{type(axon_map)}.')
-    if ax is None:
-        ax = plt.gca()
-    alpha_bg = 0.5  # alpha value for the array in the background
-    thresh_fg = 0.95  # Grayscale value above which to mask the drawings
-
+    if argus is None:
+        # Implant not given, must first be created from data columns:
+        try:
+            specs = data.iloc[0]
+            implant_type = ArgusI if specs.implant_type_str == 'ArgusI' else ArgusII
+            argus = implant_type(x=specs.implant_x, y=specs.implant_y,
+                                 rot=specs.implant_rot)
+        except KeyError:
+            raise ValueError('If "argus" is not given, "data" must contain '
+                             'columns "implant_type_str", "implant_x", '
+                             '"implant_y", and "implant_rot".')
+    if not isinstance(argus, (ArgusI, ArgusII)):
+        raise TypeError(f'"argus" must be an Argus I or Argus II implant, '
+                        f'not {type(argus)}.')
     if isinstance(argus, ArgusI):
         px_argus = PX_ARGUS1
         img_argus = imread(PATH_ARGUS1)
     else:
         px_argus = PX_ARGUS2
         img_argus = imread(PATH_ARGUS2)
+    if ax is None:
+        ax = plt.gca()
+    alpha_bg = 0.5  # alpha value for the array in the background
+    thresh_fg = 0.95  # Grayscale value above which to mask the drawings
 
     # To simulate an implant in a left eye, flip the image left-right (along
     # with the electrode x-coordinates):

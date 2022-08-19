@@ -26,7 +26,8 @@ def test_fetch_beyeler2019():
     columns = ['subject', 'amp', 'area', 'compactness', 'date', 'eccentricity',
                'electrode', 'filename', 'freq', 'image', 'orientation', 'pdur',
                'stim_class', 'x_center', 'y_center', 'img_shape',
-               'xrange', 'yrange']
+               'xrange', 'yrange', 'implant_type_str', 'implant_x', 'implant_y',
+               'implant_rot']
     for expected_col in columns:
         npt.assert_equal(expected_col in data.columns, True)
 

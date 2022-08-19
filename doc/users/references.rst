@@ -29,13 +29,16 @@ Studies referenced throughout the Documentation:
                 *Journal of Comparative Neurophysiology* 292:497-523,
                 doi:`10.1002/cne.902920402
                 <https://doi.org/10.1002/cne.902920402>`_.
+.. [EricksonDavis2021] C Erickson-Davis, H Korzybska (2021). What do blind people 
+                       "see" with retinal prostheses? Observations and qualitative
+                       reports of epiretinal implant users. *PLOS ONE* 16(2), doi:`10.1371/journal.pone.0229189 <https://doi.org/10.1371/journal.pone.0229189>`_.
 .. [Han2021] N Han, S Srivastava, A Xu, D Klein, M Beyeler (2021). Deep Learning–Based
              Scene Simplification for Bionic Vision. *Augmented Humans Conference* 2021,
              45–54. <https://doi.org/10.1145/3458709.3458982>`_.
 .. [Granley2021] Granley, J., & Beyeler, M. (2021). A Computational Model of 
                  Phosphene Appearance for Epiretinal Prostheses. *International
                  Conference of the IEEE Engineering in Medicine and Biology
-                 Society*.
+                 Society*, doi:`10.1109/EMBC46164.2021.9629663 <https://doi.org/10.1109/EMBC46164.2021.9629663>`_.
 .. [Greenwald2009] Greenwald, S., Horsager A., Humayun M, Greenberg R.,
                    McMahon M., Fine I. (2009).
                    Brightness as a Function of Current Amplitude in Human
@@ -68,6 +71,10 @@ Studies referenced throughout the Documentation:
                 K Mathieson, P Huie, J Harris, A Sher, D Palanker (2015).
                 Photovoltaic restoration of sight with high visual acuity.
                 *Nature Medicine* 21(5):476-482
+.. [Luo2016] YH Luo, JJ Zhong, M Clemo, L da Cruz (2016). Long-term Repeatability and 
+             Reproducibility of Phosphene Characteristics in Chronically Implanted
+             Argus(R) II Retinal Prosthesis Subjects. *Am J Ophthalmol*, 
+             doi:`10.1016/j.ajo.2016.07.021 <https://doi.org/10.1016/j.ajo.2016.07.021>`_.
 .. [Nanduri2012] D Nanduri, I Fine, A Horsager, GM Boynton, MS Humayun,
                  RJ Greenberg, JD Weiland (2012), Frequency and amplitude
                  modulation have different effects on the percepts elicited
