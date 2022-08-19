@@ -42,9 +42,16 @@ def test_plot_argus_phosphenes():
     # Works only for axon maps:
     with pytest.raises(TypeError):
         plot_argus_phosphenes(df, ArgusI(), ax=ax, axon_map=ScoreboardModel())
-
     # Manual subject selection
     plot_argus_phosphenes(df[df.electrode == 'B2'], ArgusI(), ax=ax)
+    # If no implant given, dataframe must have additional columns:
+    with pytest.raises(ValueError):
+        plot_argus_phosphenes(df, ax=ax)
+    df['implant_type_str'] = 'ArgusII'
+    df['implant_x'] = 0
+    df['implant_y'] = 0
+    df['implant_rot'] = 0
+    plot_argus_phosphenes(df, ax=ax)
 
 
 @pytest.mark.parametrize('implant', (ArgusI(), ArgusII()))

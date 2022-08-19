@@ -1,4 +1,4 @@
-"""`VideoStimulus`, `BostonTrain`"""
+"""`VideoStimulus`, `BostonTrain`, `GirlPool`"""
 from os.path import dirname, join
 import numpy as np
 from math import isclose
@@ -607,15 +607,15 @@ class VideoStimulus(Stimulus):
         self._next_frame = 0
 
     def play(self, fps=None, repeat=True, annotate_time=True, ax=None):
-        """Animate the percept as HTML with JavaScript
+        """Animate the video as HTML with JavaScript
 
-        The percept will be played in an interactive player in IPython or
+        The video will be played in an interactive player in IPython or
         Jupyter Notebook.
 
         Parameters
         ----------
         fps : float or None
-            If None, uses the percept's time axis. Not supported for
+            If None, uses the video's time axis. Not supported for
             non-homogeneous time axis.
         repeat : bool, optional
             Whether the animation should repeat when the sequence of frames is
@@ -629,12 +629,12 @@ class VideoStimulus(Stimulus):
         Returns
         -------
         ani : matplotlib.animation.FuncAnimation
-            A Matplotlib animation object that will play the percept
+            A Matplotlib animation object that will play the video
             frame-by-frame.
         """
         def update(data):
             if annotate_time:
-                mat.axes.set_title(f't = {self.time[self._next_frame - 1]} ms')
+                mat.axes.set_title(f't = {self.time[self._next_frame - 1]:.2f} ms')
             mat.set_data(data.reshape(self.vid_shape[:-1]))
             return mat
 
@@ -664,8 +664,6 @@ class VideoStimulus(Stimulus):
         self.rewind()
         mat = ax.imshow(np.zeros(self.vid_shape[:-1]), cmap='gray',
                         vmax=self.data.max())
-        cbar = fig.colorbar(mat)
-        cbar.ax.set_ylabel('Brightness (a.u.)', rotation=-90, va='center')
         plt.close(fig)
         if fps is None:
             interval = unique(np.diff(self.time), tol=1e-2)
@@ -723,3 +721,49 @@ class BostonTrain(VideoStimulus):
                                           electrodes=electrodes,
                                           metadata=metadata,
                                           compress=False)
+
+
+class GirlPool(VideoStimulus):
+    """A girl jumping into a swimming pool
+
+    Load the "girl jumping in a pool" sequence, consisting of 91 frames of
+    240x426x3 pixels each.
+
+    .. versionadded:: 0.9
+
+    Parameters
+    ----------
+    resize : (height, width) or None
+        A tuple specifying the desired height and the width of the video
+        stimulus.
+
+    electrodes : int, string or list thereof; optional, default: None
+        Optionally, you can provide your own electrode names. If none are
+        given, electrode names will be numbered 0..N.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) video frame.
+
+    as_gray : bool, optional
+        Flag whether to convert the image to grayscale.
+        A four-channel image is interpreted as RGBA (e.g., a PNG), and the
+        alpha channel will be blended with the color black.
+
+    metadata : dict, optional, default: None
+        Additional stimulus metadata can be stored in a dictionary.
+
+    """
+
+    def __init__(self, resize=None, electrodes=None, as_gray=False,
+                 metadata=None):
+        # Load logo from data dir:
+        module_path = dirname(__file__)
+        source = join(module_path, 'data', 'girl-pool.mp4')
+        # Call VideoStimulus constructor:
+        super(GirlPool, self).__init__(source, format="MP4",
+                                       resize=resize,
+                                       as_gray=as_gray,
+                                       electrodes=electrodes,
+                                       metadata=metadata,
+                                       compress=False)
