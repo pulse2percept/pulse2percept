@@ -232,7 +232,7 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     df = df[idx]
 
     # Augment with implant type & location data:
-    df['implant_type_str'] == ''
+    df['implant_type_str'] = ''
     df['implant_x'] = 0
     df['implant_y'] = 0
     df['implant_rot'] = 0
