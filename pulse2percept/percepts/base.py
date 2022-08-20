@@ -315,7 +315,7 @@ class Percept(Data):
                                va='center')
         plt.close(fig)
         if fps is None:
-            interval = unique(np.diff(self.time))
+            interval = unique(np.diff(self.time), tol=1e-2)
             if len(interval) > 1:
                 raise NotImplementedError
             interval = interval[0]
