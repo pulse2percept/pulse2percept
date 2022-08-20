@@ -1,4 +1,4 @@
-from pulse2percept.stimuli import VideoStimulus, BostonTrain
+from pulse2percept.stimuli import VideoStimulus, BostonTrain, GirlPool
 from skimage.io import imsave
 from matplotlib.animation import FuncAnimation
 import os
@@ -370,3 +370,22 @@ def test_BostonTrain():
     npt.assert_equal(video.vid_shape, (32, 32, 3, 94))
     npt.assert_almost_equal(video.data.min(), 0.0056, decimal=3)
     npt.assert_almost_equal(video.data.max(), 0.9871, decimal=3)
+
+
+def test_GirlPool():
+    video = GirlPool()
+    npt.assert_equal(video.vid_shape, (240, 426, 3, 91))
+    npt.assert_almost_equal(video.data.min(), 0)
+    npt.assert_almost_equal(video.data.max(), 1)
+
+    # Grayscale:
+    video = GirlPool(as_gray=True)
+    npt.assert_equal(video.vid_shape, (240, 426, 91))
+    npt.assert_almost_equal(video.data.min(), 0)
+    npt.assert_almost_equal(video.data.max(), 0.9983, decimal=3)
+
+    # Resize:
+    video = GirlPool(resize=(32, 32))
+    npt.assert_equal(video.vid_shape, (32, 32, 3, 91))
+    npt.assert_almost_equal(video.data.min(), 0.0001, decimal=3)
+    npt.assert_almost_equal(video.data.max(), 0.9988, decimal=3)
