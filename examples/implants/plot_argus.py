@@ -107,7 +107,7 @@ model.predict_percept(implant).play()
 # seeing thin and elongated phosphenes. In this case, the same video may appear
 # very different to them:
 
-model.rho = 50
+model.rho = 100
 model.axlambda = 1000
 model.build()
 model.predict_percept(implant).play()
@@ -141,7 +141,7 @@ model.predict_percept(implant).play()
 ###############################################################################
 # Here is the same video with thin and long phosphenes:
 
-model.rho = 50
+model.rho = 100
 model.axlambda = 1000
 model.build()
 model.predict_percept(implant).play()
