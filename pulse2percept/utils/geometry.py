@@ -64,6 +64,32 @@ class Grid2D(PrettyPrint):
         self.y_range = y_range
         self.step = step
         self.type = grid_type
+        # internally, all layers (dva, ret, v1, etc) are stored here
+        self._x = {}
+        self._y = {}
+        # Allows grid.xret, grid.v1, etc
+        def getter(layername, coord):
+            def fn(self):
+                grid_coords = getattr(self, '_'+coord)
+                if layername in grid_coords.keys():
+                    return grid_coords[layername]
+                else:
+                    raise ValueError(f"'{coord}{layername}' layer not defined (try a different retinotopy)")
+            return fn
+        def setter(layername, coord):
+            def fn(self, value):
+                getattr(self, '_'+coord)[layername] = value
+            return fn
+        for coord in ['x', 'y']:
+            for layername in ['v1', 'v2', 'v3', 'ret', 'dva']:
+                setattr(type(self), coord + layername, property(
+                    fget=getter(layername, coord),
+                    fset=setter(layername, coord)))
+            # backward compatibility, allows grid.x
+            setattr(type(self), coord, property(
+                fget=getter('dva', coord),
+                fset=setter('dva', coord)))
+
         # These could also be their own subclasses:
         if grid_type == 'rectangular':
             self._make_rectangular_grid(x_range, y_range, step)
