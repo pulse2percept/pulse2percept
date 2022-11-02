@@ -352,8 +352,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 # find unique stimulus points
                 _, t_unique, inverse = np.unique(stim.data.T, axis=0, 
                                                 return_index=True, return_inverse=True)
+                uniq_time = stim.time[t_unique]
+                if len(uniq_time) == 1:
+                    uniq_time = None
                 stim_unique = Stimulus(stim[:, stim.time[t_unique]], 
-                                       electrodes=stim.electrodes, time=stim.time[t_unique])
+                                       electrodes=stim.electrodes, time=uniq_time)
                 resp_unique = self._predict_spatial(implant.earray, stim_unique)
                 # reconstruct original time points, making sure to preserve C ordering
                 resp = resp_unique[..., inverse].copy(order='C')
