@@ -67,6 +67,7 @@ class Grid2D(PrettyPrint):
         # internally, all layers (dva, ret, v1, etc) are stored here
         self._x = {}
         self._y = {}
+        
         # Allows grid.xret, grid.v1, etc
         def getter(layername, coord):
             def fn(self):
@@ -74,7 +75,8 @@ class Grid2D(PrettyPrint):
                 if layername in grid_coords.keys():
                     return grid_coords[layername]
                 else:
-                    raise ValueError(f"'{coord}{layername}' layer not defined (try a different retinotopy)")
+                    raise ValueError(f"'{coord}{layername}' layer not \
+                        defined (try a different retinotopy)")
             return fn
         def setter(layername, coord):
             def fn(self, value):
