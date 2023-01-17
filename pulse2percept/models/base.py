@@ -268,8 +268,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         # Build the spatial grid:
         self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
                            grid_type=self.grid_type)
-        self.grid.xret, self.grid.yret = self.retinotopy.dva2ret(self.grid.x,
-                                                                 self.grid.y)
+        self.grid.build(self.retinotopy)
         self._build()
         self.is_built = True
         return self
