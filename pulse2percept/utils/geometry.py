@@ -64,34 +64,12 @@ class Grid2D(PrettyPrint):
         self.y_range = y_range
         self.step = step
         self.type = grid_type
-        # internally, all layers (dva, ret, v1, etc) are stored here
+        self.layers = []
+        self.allowed_layers = ['dva', 'ret', 'v1', 'v2', 'v3']
+        # Internally, coordinate grids in each layer are stored in _x and _y
         self._x = {}
         self._y = {}
-        
-        # Allows grid.xret, grid.v1, etc
-        def getter(layername, coord):
-            def fn(self):
-                grid_coords = getattr(self, '_'+coord)
-                if layername in grid_coords.keys():
-                    return grid_coords[layername]
-                else:
-                    raise ValueError(f"'{coord}{layername}' layer not \
-                        defined (try a different retinotopy)")
-            return fn
-        def setter(layername, coord):
-            def fn(self, value):
-                getattr(self, '_'+coord)[layername] = value
-            return fn
-        for coord in ['x', 'y']:
-            for layername in ['v1', 'v2', 'v3', 'ret', 'dva']:
-                setattr(type(self), coord + layername, property(
-                    fget=getter(layername, coord),
-                    fset=setter(layername, coord)))
-            # backward compatibility, allows grid.x
-            setattr(type(self), coord, property(
-                fget=getter('dva', coord),
-                fset=setter('dva', coord)))
-
+        self._register_layers(self.allowed_layers)
         # These could also be their own subclasses:
         if grid_type == 'rectangular':
             self._make_rectangular_grid(x_range, y_range, step)
@@ -99,6 +77,43 @@ class Grid2D(PrettyPrint):
             self._make_hexagonal_grid(x_range, y_range, step)
         else:
             raise ValueError(f"Unknown grid type '{grid_type}'.")
+
+    def _register_layers(self, layers):
+        """ Registers helper getters and setters to allow e.g. grid.xret, grid.yv1.
+            Needed for backwards compatibility. 
+            
+            Note: The list of layers given does NOT need be the layers currently
+            being used. If a given layer does not exist at call time, then a ValueError
+            will be raised (e.g. grid.xv1 with retinal retinotopy will throw an error).
+
+            Parameters:
+            ------------
+            layers : list of str
+                Names of each layer to register
+        """
+        def getter(layername, coord):
+            def fn(self):
+                grid_coords = getattr(self, '_'+coord)
+                if layername in grid_coords.keys():
+                    return grid_coords[layername]
+                else:
+                    raise ValueError(f"'{coord}{layername}' layer not \
+                        defined (make sure you're using the correct retinotopy)")
+            return fn
+        def setter(layername, coord):
+            def fn(self, value):
+                getattr(self, '_'+coord)[layername] = value
+            return fn
+        for coord in ['x', 'y']:
+            for layername in layers:
+                setattr(type(self), coord + layername, property(
+                    fget=getter(layername, coord),
+                    fset=setter(layername, coord)))
+            # Backward compatibility, allows grid.x -> grid._x['dva']
+            if not hasattr(self, coord):
+                setattr(type(self), coord, property(
+                    fget=getter('dva', coord),
+                    fset=setter('dva', coord)))
 
     def _pprint_params(self):
         """Return dictionary of class arguments to pretty-print"""
@@ -155,6 +170,11 @@ class Grid2D(PrettyPrint):
 
     def reset(self):
         self._iter = 0
+
+    def build(self, retinotopy):
+        self.layers = retinotopy.layer_mappings.keys()
+        for layer, map_fn in retinotopy.layer_mappings():
+            self._x[layer], self._y[layer] = map_fn(self.x, self.y)
 
     def plot(self, transform=None, label=None, style='hull', autoscale=True,
              zorder=None, ax=None, figsize=None, fc='gray'):
@@ -249,9 +269,7 @@ class Grid2D(PrettyPrint):
 
 
 class VisualFieldMap(object, metaclass=ABCMeta):
-    """Base class for a visual field map (retinotopy)
-
-    A template
+    """Base template class for a visual field map (retinotopy)
 
     """
 
