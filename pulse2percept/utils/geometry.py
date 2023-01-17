@@ -80,7 +80,7 @@ class Grid2D(PrettyPrint):
 
     def _register_regions(self, regions):
         """ Registers helper getters and setters to allow e.g. grid.xret, grid.yv1.
-            Needed for backwards compatibility. 
+            Necessary for backwards compatibility. 
             
             Note: The list of regions given does NOT need be the regions currently
             being used. If a given region does not exist at call time, then a ValueError
@@ -172,10 +172,13 @@ class Grid2D(PrettyPrint):
         self._iter = 0
 
     def build(self, retinotopy):
-        for region, map_fn in retinotopy.layer_mappings():
-            if region not in self.layers:
-                self.regions.append(region)
+        for region, map_fn in retinotopy.region_mappings():
             self._x[region], self._y[region] = map_fn(self.x, self.y)
+            if region not in self.regions:
+                self.regions.append(region)
+            # register the mapping if we haven't
+            if region not in self.all_regions:
+                self._register_regions([region])
 
     def plot(self, transform=None, label=None, style='hull', autoscale=True,
              zorder=None, ax=None, figsize=None, fc='gray'):
@@ -270,10 +273,33 @@ class Grid2D(PrettyPrint):
 
 
 class VisualFieldMap(object, metaclass=ABCMeta):
-    """Base template class for a visual field map (retinotopy)
+    """ Base template class for a visual field map (retinotopy) """
 
-    """
+    @abstractmethod
+    def region_mappings(self):
+        """ Returns a dict containing the region(s) that this retinotopy maps 
+            to, and the corresponding mapping function(s).
+        """
+        raise NotImplementedError
 
+    @abstractmethod
+    def inv_region_mappings(self):
+        """ Returns a dict containing the region(s) that this retinotopy maps 
+            from, and the corresponding inverse mapping function(s).
+        """
+        raise NotImplementedError
+
+
+class RetinalMap(VisualFieldMap):
+    """ Template class for retinal visual field maps, which only have 1 region."""
+    @staticmethod
+    def region_mappings(self):
+        return {'ret' : self.dva2ret}
+    
+    @staticmethod
+    def inv_region_mappings(self):
+        return {'ret' : self.ret2dva}
+    
     @abstractmethod
     def dva2ret(self, x, y):
         """Convert degrees of visual angle (dva) to retinal coords (um)"""
@@ -285,7 +311,7 @@ class VisualFieldMap(object, metaclass=ABCMeta):
         raise NotImplementedError
 
 
-class Curcio1990Map(VisualFieldMap):
+class Curcio1990Map(RetinalMap):
     """Converts between visual angle and retinal eccentricity [Curcio1990]_"""
 
     @staticmethod
@@ -328,7 +354,7 @@ class Curcio1990Map(VisualFieldMap):
         return self.__dict__ == other.__dict__
 
 
-class Watson2014Map(VisualFieldMap):
+class Watson2014Map(RetinalMap):
     """Converts between visual angle and retinal eccentricity [Watson2014]_"""
 
     @staticmethod
@@ -416,7 +442,7 @@ class Watson2014Map(VisualFieldMap):
         return self.__dict__ == other.__dict__
 
 
-class Watson2014DisplaceMap(Watson2014Map):
+class Watson2014DisplaceMap(RetinalMap):
     """Converts between visual angle and retinal eccentricity using RGC
        displacement [Watson2014]_
 
