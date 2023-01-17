@@ -59,28 +59,13 @@ class Grid2D(PrettyPrint):
 
     """
 
-    def __init__(self, x_range, y_range, step=1, grid_type='rectangular'):
-        self.x_range = x_range
-        self.y_range = y_range
-        self.step = step
-        self.type = grid_type
-        self.regions = []
-        self.all_regions = ['dva', 'ret', 'v1', 'v2', 'v3']
-        # Internally, coordinate grids for each region are stored in _x and _y
-        self._x = {}
-        self._y = {}
-        self._register_regions(self.all_regions)
-        # These could also be their own subclasses:
-        if grid_type == 'rectangular':
-            self._make_rectangular_grid(x_range, y_range, step)
-        elif grid_type == 'hexagonal':
-            self._make_hexagonal_grid(x_range, y_range, step)
-        else:
-            raise ValueError(f"Unknown grid type '{grid_type}'.")
+    all_regions = ['dva', 'ret', 'v1', 'v2', 'v3']
 
-    def _register_regions(self, regions):
+    @staticmethod
+    def _register_regions(regions):
         """ Registers helper getters and setters to allow e.g. grid.xret, grid.yv1.
-            Necessary for backwards compatibility. 
+            Necessary for backwards compatibility. Static because property attributes are
+            tracked at the class level
             
             Note: The list of regions given does NOT need be the regions currently
             being used. If a given region does not exist at call time, then a ValueError
@@ -97,24 +82,49 @@ class Grid2D(PrettyPrint):
                 if regionname in grid_coords.keys():
                     return grid_coords[regionname]
                 else:
-                    raise ValueError(f"Coordinates not found for '{coord}{regionname}' \
-                          region (make sure you're using the correct retinotopy)")
+                    raise ValueError(f"Coordinates not found for '{coord}{regionname}' " \
+                          "region (make sure you're using the correct retinotopy)")
             return fn
         def setter(regionname, coord):
             def fn(self, value):
                 getattr(self, '_'+coord)[regionname] = value
             return fn
+
         for coord in ['x', 'y']:
             for regionname in regions:
-                setattr(type(self), coord + regionname, property(
-                    fget=getter(regionname, coord),
-                    fset=setter(regionname, coord)))
+                if not hasattr(Grid2D, coord + regionname):
+                    setattr(Grid2D, coord + regionname, property(
+                        fget=getter(regionname, coord),
+                        fset=setter(regionname, coord)))
             # Backward compatibility, allows grid.x -> grid._x['dva']
-            if not hasattr(self, coord):
-                setattr(type(self), coord, property(
+            if not hasattr(Grid2D, coord):
+                setattr(Grid2D, coord, property(
                     fget=getter('dva', coord),
                     fset=setter('dva', coord)))
 
+
+    def __init__(self, x_range, y_range, step=1, grid_type='rectangular'):
+        self.x_range = x_range
+        self.y_range = y_range
+        self.step = step
+        self.type = grid_type
+        self.regions = []
+        
+        # Internally, coordinate grids for each region are stored in _x and _y
+        self._x = {}
+        self._y = {}
+        # Register helper getters and setters for region names. This is slightly
+        # wasteful to do with every instance, but it is impossible to do before initialization
+        self._register_regions(self.all_regions)
+
+        # These could also be their own subclasses:
+        if grid_type == 'rectangular':
+            self._make_rectangular_grid(x_range, y_range, step)
+        elif grid_type == 'hexagonal':
+            self._make_hexagonal_grid(x_range, y_range, step)
+        else:
+            raise ValueError(f"Unknown grid type '{grid_type}'.")
+    
     def _pprint_params(self):
         """Return dictionary of class arguments to pretty-print"""
         return {'x_range': self.x_range, 'y_range': self.y_range,
@@ -172,11 +182,11 @@ class Grid2D(PrettyPrint):
         self._iter = 0
 
     def build(self, retinotopy):
-        for region, map_fn in retinotopy.region_mappings():
+        for region, map_fn in retinotopy.region_mappings().items():
             self._x[region], self._y[region] = map_fn(self.x, self.y)
             if region not in self.regions:
                 self.regions.append(region)
-            # register the mapping if we haven't
+            # Register the mapping if it wasn't already
             if region not in self.all_regions:
                 self._register_regions([region])
 
@@ -292,21 +302,23 @@ class VisualFieldMap(object, metaclass=ABCMeta):
 
 class RetinalMap(VisualFieldMap):
     """ Template class for retinal visual field maps, which only have 1 region."""
-    @staticmethod
-    def region_mappings(self):
-        return {'ret' : self.dva2ret}
+    @classmethod
+    def region_mappings(cls):
+        return {'ret' : cls.dva2ret}
+    
+    @classmethod
+    def inv_region_mappings(cls):
+        return {'ret' : cls.ret2dva}
     
     @staticmethod
-    def inv_region_mappings(self):
-        return {'ret' : self.ret2dva}
-    
     @abstractmethod
-    def dva2ret(self, x, y):
+    def dva2ret(x, y):
         """Convert degrees of visual angle (dva) to retinal coords (um)"""
         raise NotImplementedError
-
+        
+    @staticmethod
     @abstractmethod
-    def ret2dva(self, x, y):
+    def ret2dva(x, y):
         """Convert retinal coords (um) to degrees of visual angle (dva)"""
         raise NotImplementedError
 
@@ -442,7 +454,7 @@ class Watson2014Map(RetinalMap):
         return self.__dict__ == other.__dict__
 
 
-class Watson2014DisplaceMap(RetinalMap):
+class Watson2014DisplaceMap(Watson2014Map):
     """Converts between visual angle and retinal eccentricity using RGC
        displacement [Watson2014]_
 
