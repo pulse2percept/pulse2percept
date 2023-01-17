@@ -64,12 +64,12 @@ class Grid2D(PrettyPrint):
         self.y_range = y_range
         self.step = step
         self.type = grid_type
-        self.layers = []
-        self.allowed_layers = ['dva', 'ret', 'v1', 'v2', 'v3']
-        # Internally, coordinate grids in each layer are stored in _x and _y
+        self.regions = []
+        self.all_regions = ['dva', 'ret', 'v1', 'v2', 'v3']
+        # Internally, coordinate grids for each region are stored in _x and _y
         self._x = {}
         self._y = {}
-        self._register_layers(self.allowed_layers)
+        self._register_regions(self.all_regions)
         # These could also be their own subclasses:
         if grid_type == 'rectangular':
             self._make_rectangular_grid(x_range, y_range, step)
@@ -78,37 +78,37 @@ class Grid2D(PrettyPrint):
         else:
             raise ValueError(f"Unknown grid type '{grid_type}'.")
 
-    def _register_layers(self, layers):
+    def _register_regions(self, regions):
         """ Registers helper getters and setters to allow e.g. grid.xret, grid.yv1.
             Needed for backwards compatibility. 
             
-            Note: The list of layers given does NOT need be the layers currently
-            being used. If a given layer does not exist at call time, then a ValueError
+            Note: The list of regions given does NOT need be the regions currently
+            being used. If a given region does not exist at call time, then a ValueError
             will be raised (e.g. grid.xv1 with retinal retinotopy will throw an error).
 
             Parameters:
             ------------
-            layers : list of str
-                Names of each layer to register
+            regions : list of str
+                Names of each region to register
         """
-        def getter(layername, coord):
+        def getter(regionname, coord):
             def fn(self):
                 grid_coords = getattr(self, '_'+coord)
-                if layername in grid_coords.keys():
-                    return grid_coords[layername]
+                if regionname in grid_coords.keys():
+                    return grid_coords[regionname]
                 else:
-                    raise ValueError(f"'{coord}{layername}' layer not \
-                        defined (make sure you're using the correct retinotopy)")
+                    raise ValueError(f"Coordinates not found for '{coord}{regionname}' \
+                          region (make sure you're using the correct retinotopy)")
             return fn
-        def setter(layername, coord):
+        def setter(regionname, coord):
             def fn(self, value):
-                getattr(self, '_'+coord)[layername] = value
+                getattr(self, '_'+coord)[regionname] = value
             return fn
         for coord in ['x', 'y']:
-            for layername in layers:
-                setattr(type(self), coord + layername, property(
-                    fget=getter(layername, coord),
-                    fset=setter(layername, coord)))
+            for regionname in regions:
+                setattr(type(self), coord + regionname, property(
+                    fget=getter(regionname, coord),
+                    fset=setter(regionname, coord)))
             # Backward compatibility, allows grid.x -> grid._x['dva']
             if not hasattr(self, coord):
                 setattr(type(self), coord, property(
@@ -172,9 +172,10 @@ class Grid2D(PrettyPrint):
         self._iter = 0
 
     def build(self, retinotopy):
-        self.layers = retinotopy.layer_mappings.keys()
-        for layer, map_fn in retinotopy.layer_mappings():
-            self._x[layer], self._y[layer] = map_fn(self.x, self.y)
+        for region, map_fn in retinotopy.layer_mappings():
+            if region not in self.layers:
+                self.regions.append(region)
+            self._x[region], self._y[region] = map_fn(self.x, self.y)
 
     def plot(self, transform=None, label=None, style='hull', autoscale=True,
              zorder=None, ax=None, figsize=None, fc='gray'):
