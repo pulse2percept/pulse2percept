@@ -323,6 +323,69 @@ class RetinalMap(VisualFieldMap):
         raise NotImplementedError
 
 
+class CorticalMap(VisualFieldMap):
+    """Template class for V1/V2/V3 visuotopic maps"""
+    allowed_regions = {'v1', 'v2', 'v3'}
+
+    def __init__(self, regions=['v1']):
+        if not isinstance(regions, list):
+            layers = list(regions)
+        for region in regions:
+            if region.lower() not in self.allowed_regions:
+                raise ValueError(f"Specified region {region} not supported."\
+                                 f" Options are {self.allowed_layers}")
+        self.regions = [r.lower() for r in regions]
+
+    def region_mappings(self):
+        mappings = dict()
+        if 'v1' in self.regions:
+            mappings['v1'] = self.dva2v1
+        if 'v2' in self.regions:
+            mappings['v2'] = self.dva2v2
+        if 'v3' in self.regions:
+            mappings['v3'] = self.dva2v3
+        return mappings
+    
+    def inv_region_mappings(self):
+        mappings = dict()
+        if 'v1' in self.regions:
+            mappings['v1'] = self.v12dva
+        if 'v2' in self.regions:
+            mappings['v2'] = self.v22dva
+        if 'v3' in self.regions:
+            mappings['v3'] = self.v32dva
+        return mappings
+    
+    @abstractmethod
+    def dva2v1(self, x, y):
+        """Convert degrees visual angle (dva) to V1 coordinates (um)"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def dva2v2(self, x, y):
+        """Convert degrees visual angle (dva) to V2 coordinates (um)"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def dva2v3(self, x, y):
+        """Convert degrees visual angle (dva) to V3 coordinates (um)"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def v12dva(self, x, y):
+        """Convert V1 coordinates (um) to degrees visual angle (dva)"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def v22dva(self, x, y):
+        """Convert V2 coordinates (um) to degrees visual angle (dva)"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def v32dva(self, x, y):
+        """Convert V3 coordinates (um) to degrees visual angle (dva)"""
+        raise NotImplementedError
+
 class Curcio1990Map(RetinalMap):
     """Converts between visual angle and retinal eccentricity [Curcio1990]_"""
 
