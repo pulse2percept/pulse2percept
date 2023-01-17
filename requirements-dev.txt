@@ -8,6 +8,6 @@ coveralls
 flake8
 mock
 seaborn
-sklearn
+scikit-learn
 pyswarm
 -r doc/requirements.txt
