@@ -1,6 +1,7 @@
 """
-`Grid2D`, `VisualFieldMap`, `Curcio1990Map`, `Watson2014Map`,
-`Watson2014DisplaceMap`, `cart2pol`, `pol2cart`, `delta_angle`
+`Grid2D`, `VisualFieldMap`, `RetinalMap`, `CorticalMap`
+`Curcio1990Map`, `Watson2014Map`,`Watson2014DisplaceMap`, `cart2pol`, 
+`pol2cart`, `delta_angle`
 
 """
 import numpy as np
@@ -292,10 +293,10 @@ class VisualFieldMap(object, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    @abstractmethod
     def inv_region_mappings(self):
         """ Returns a dict containing the region(s) that this retinotopy maps 
-            from, and the corresponding inverse mapping function(s).
+            from, and the corresponding inverse mapping function(s). This 
+            transform is optional for most models.
         """
         raise NotImplementedError
 
@@ -317,7 +318,6 @@ class RetinalMap(VisualFieldMap):
         raise NotImplementedError
         
     @staticmethod
-    @abstractmethod
     def ret2dva(x, y):
         """Convert retinal coords (um) to degrees of visual angle (dva)"""
         raise NotImplementedError
@@ -371,17 +371,14 @@ class CorticalMap(VisualFieldMap):
         """Convert degrees visual angle (dva) to V3 coordinates (um)"""
         raise NotImplementedError
 
-    @abstractmethod
     def v12dva(self, x, y):
         """Convert V1 coordinates (um) to degrees visual angle (dva)"""
         raise NotImplementedError
 
-    @abstractmethod
     def v22dva(self, x, y):
         """Convert V2 coordinates (um) to degrees visual angle (dva)"""
         raise NotImplementedError
 
-    @abstractmethod
     def v32dva(self, x, y):
         """Convert V3 coordinates (um) to degrees visual angle (dva)"""
         raise NotImplementedError

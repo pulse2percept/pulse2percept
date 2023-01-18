@@ -5,7 +5,8 @@ import pytest
 import numpy.testing as npt
 from matplotlib.axes import Axes
 
-from pulse2percept.utils import (VisualFieldMap, Curcio1990Map,
+from pulse2percept.utils import (VisualFieldMap, RetinalMap, 
+                                 CorticalMap, Curcio1990Map,
                                  Grid2D, Watson2014Map,
                                  Watson2014DisplaceMap,
                                  cart2pol, pol2cart, delta_angle)
@@ -80,6 +81,7 @@ def test_Grid2D_make_rectangular_grid():
 
 
 def test_Grid2D_plot():
+    # This test is slow
     grid = Grid2D((-20, 20), (-40, 40), step=0.5)
     ax = grid.plot()
     npt.assert_equal(isinstance(ax, Axes), True)
@@ -103,7 +105,7 @@ def test_Grid2D_plot():
     Grid2D((-5, 5), (-5, 5), step=(0.5, 1)).plot(style='cell')
 
 
-class ValidCoordTransform(VisualFieldMap):
+class ValidCoordTransform(RetinalMap):
 
     @staticmethod
     def dva2ret(x_dva, y_dva):
@@ -114,9 +116,59 @@ class ValidCoordTransform(VisualFieldMap):
         return x_ret, y_ret
 
 
-def test_VisualFieldMap():
-    npt.assert_almost_equal(ValidCoordTransform.dva2ret(1.1, 0), (1.1, 0))
-    npt.assert_almost_equal(ValidCoordTransform.ret2dva(1.1, 0), (1.1, 0))
+class ValidCorticalTransform(CorticalMap):
+    def dva2v1(self, x, y):
+        return x, y
+
+    def dva2v2(self, x, y):
+        return x, y
+
+    def dva2v3(self, x, y):
+        return x, y
+
+    def v12dva(self, x, y):
+        return x, y
+
+    def v22dva(self, x, y):
+        return x, y
+
+    def v32dva(self, x, y):
+        return x, y
+
+
+class NewRegionTransform(VisualFieldMap):
+
+    def newlayer_transform(self, x, y):
+        return x, y
+
+    def region_mappings(self):
+        return {"newlayer" : self.newlayer_transform}
+
+
+def test_grid_regions():
+    # this also implicitly tests Cortical/RetinalMap
+
+    grid = Grid2D((-2, 2), (-2, 2), step=1)
+    # x is alias for xdva. Test properties
+    npt.assert_equal(grid.x, grid.xdva)
+
+    retinotopy = ValidCoordTransform()
+    grid.build(retinotopy)
+    # Make sure xret gets populated
+    npt.assert_equal(grid.xdva, grid.xret)
+
+    grid = Grid2D((-2, 2), (-2, 2), step=1)
+    retinotopy = ValidCorticalTransform(regions=['v1', 'v2', 'v3'])
+    grid.build(retinotopy)
+    npt.assert_equal(grid.x, grid.xv1)
+    npt.assert_equal(grid.x, grid.xv2)
+    npt.assert_equal(grid.x, grid.xv3)
+
+    # make sure that new layers are registered
+    grid = Grid2D((-2, 2), (-2, 2), step=1)
+    grid.build(NewRegionTransform())
+    npt.assert_equal(grid.xnewlayer, grid.x)
+    npt.assert_equal('newlayer' in grid.regions, True)
 
 
 def test_Curcio1990Map():
@@ -176,6 +228,7 @@ def test_Watson2014Map():
             ret = 0.268 * sign * 10 ** (exp + 3)  # mm
             npt.assert_almost_equal(trafo.dva2ret(0, dva)[1], ret,
                                     decimal=-exp)  # adjust precision
+
 
 def test_eq_Watson2014Map():
     map = Watson2014Map()
