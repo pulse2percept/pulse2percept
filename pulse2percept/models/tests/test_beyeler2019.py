@@ -31,8 +31,8 @@ def test_ScoreboardSpatial():
 
     # Converting ret <=> dva
     npt.assert_equal(isinstance(model.retinotopy, Watson2014Map), True)
-    npt.assert_almost_equal(model.retinotopy.ret2dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.retinotopy.dva2ret(0, 0), (0, 0))
+    npt.assert_almost_equal(model.retinotopy.ret_to_dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.retinotopy.dva_to_ret(0, 0), (0, 0))
     model2 = ScoreboardSpatial(retinotopy=Watson2014DisplaceMap())
     npt.assert_equal(isinstance(model2.retinotopy, Watson2014DisplaceMap),
                      True)
@@ -94,8 +94,8 @@ def test_ScoreboardModel():
 
     # Converting ret <=> dva
     npt.assert_equal(isinstance(model.retinotopy, Watson2014Map), True)
-    npt.assert_almost_equal(model.retinotopy.ret2dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.retinotopy.dva2ret(0, 0), (0, 0))
+    npt.assert_almost_equal(model.retinotopy.ret_to_dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.retinotopy.dva_to_ret(0, 0), (0, 0))
     model2 = ScoreboardModel(retinotopy=Watson2014DisplaceMap())
     npt.assert_equal(isinstance(model2.retinotopy, Watson2014DisplaceMap),
                      True)
@@ -188,8 +188,8 @@ def test_AxonMapSpatial(engine):
 
     # Converting ret <=> dva
     npt.assert_equal(isinstance(model.retinotopy, Watson2014Map), True)
-    npt.assert_almost_equal(model.retinotopy.ret2dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.retinotopy.dva2ret(0, 0), (0, 0))
+    npt.assert_almost_equal(model.retinotopy.ret_to_dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.retinotopy.dva_to_ret(0, 0), (0, 0))
     model2 = AxonMapSpatial(retinotopy=Watson2014DisplaceMap())
     npt.assert_equal(isinstance(model2.retinotopy, Watson2014DisplaceMap),
                      True)
@@ -299,8 +299,8 @@ def test_AxonMapModel(engine):
 
     # Converting ret <=> dva
     npt.assert_equal(isinstance(model.retinotopy, Watson2014Map), True)
-    npt.assert_almost_equal(model.retinotopy.ret2dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.retinotopy.dva2ret(0, 0), (0, 0))
+    npt.assert_almost_equal(model.retinotopy.ret_to_dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.retinotopy.dva_to_ret(0, 0), (0, 0))
     model2 = AxonMapModel(retinotopy=Watson2014DisplaceMap())
     npt.assert_equal(isinstance(model2.retinotopy, Watson2014DisplaceMap),
                      True)
@@ -425,8 +425,8 @@ def test_AxonMapModel_find_closest_axon(engine):
     # Pretend there is an axon close to each point on the grid:
     bundles = [np.array([x + 0.001, y - 0.001],
                         dtype=np.float32).reshape((1, 2))
-               for x, y in zip(model.spatial.grid.xret.ravel(),
-                               model.spatial.grid.yret.ravel())]
+               for x, y in zip(model.spatial.grid.ret.x.ravel(),
+                               model.spatial.grid.ret.y.ravel())]
     closest = model.spatial.find_closest_axon(bundles)
     for ax1, ax2 in zip(bundles, closest):
         npt.assert_almost_equal(ax1[0, 0], ax2[0, 0])
@@ -453,8 +453,8 @@ def test_AxonMapModel_calc_axon_sensitivity(engine):
                          xrange=(-20, 20), yrange=(-15, 15),
                          axons_range=(-30, 30))
     model.build()
-    xyret = np.column_stack((model.spatial.grid.xret.ravel(),
-                             model.spatial.grid.yret.ravel()))
+    xyret = np.column_stack((model.spatial.grid.ret.x.ravel(),
+                             model.spatial.grid.ret.y.ravel()))
     bundles = model.spatial.grow_axon_bundles()
     axons = model.spatial.find_closest_axon(bundles)
     # Need two separate contribs, one to get cut off axons from, and another

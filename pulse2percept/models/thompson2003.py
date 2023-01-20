@@ -53,7 +53,7 @@ class Thompson2003Spatial(SpatialModel):
         Whether to simulate points on a rectangular or hexagonal grid
     retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
-        object that provides ``ret2dva`` and ``dva2ret`` methods.
+        object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.utils.Curcio1990Map` is
         used.
     n_gray : int, optional
@@ -98,8 +98,8 @@ class Thompson2003Spatial(SpatialModel):
                                           dtype=np.float32),
                                  np.array([earray[e].y for e in stim.electrodes],
                                           dtype=np.float32),
-                                 self.grid.xret.ravel(),
-                                 self.grid.yret.ravel(),
+                                 self.grid.ret.x.ravel(),
+                                 self.grid.ret.y.ravel(),
                                  dropout.astype(np.uint8),
                                  radius,
                                  self.thresh_percept)
@@ -143,7 +143,7 @@ class Thompson2003Model(Model):
         Whether to simulate points on a rectangular or hexagonal grid
     retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
-        object that provides ``ret2dva`` and ``dva2ret`` methods.
+        object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
     n_gray : int, optional

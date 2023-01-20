@@ -1,4 +1,4 @@
-"""`BiphasicAxonMapModel`"""
+"""`BiphasicAxonMapModel`, `BiphasicAxonMapSpatial`, [Granley2021]_"""
 from functools import partial
 import numpy as np
 import sys
@@ -253,7 +253,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             Whether to simulate points on a rectangular or hexagonal grid
         retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
             An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
-            object that provides ``ret2dva`` and ``dva2ret`` methods.
+            object that provides retinotopic mappings.
             By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
             used.
         n_gray : int, optional
@@ -639,7 +639,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         is much faster.
 
         Parameters
-            ----------
+        ----------
             implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
                 A valid prosthesis system. 
             stims : list of stimuli
@@ -649,8 +649,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 The time points at which to output a percept (ms).
                 If None, ``implant.stim.time`` is used.
 
-            Returns
-            -------
+        Returns
+        -------
             percepts: list of :py:class:`~pulse2percept.models.Percept`
                 A list of Percept objects whose ``data`` container has dimensions Y x X x 1.
         """
@@ -754,7 +754,7 @@ class BiphasicAxonMapModel(Model):
         Arguments to be passed to AxonMapSpatial
 
         Options:
-        ---------
+        ^^^^^^^^
         axlambda: double, optional
             Exponential decay constant along the axon(microns).
         rho: double, optional
@@ -778,7 +778,7 @@ class BiphasicAxonMapModel(Model):
             Whether to simulate points on a rectangular or hexagonal grid
         retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
             An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
-            object that provides ``ret2dva`` and ``dva2ret`` methods.
+            object that provides retinotopic mappings.
             By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
             used.
         n_gray : int, optional
@@ -825,8 +825,10 @@ class BiphasicAxonMapModel(Model):
             spatial=BiphasicAxonMapSpatial(), temporal=None, **params)
 
     def predict_percept(self, implant, t_percept=None):
-        """Predict a percept
+        """Predict a percept.
+
         Overrides base predict percept to keep desired time axes
+
         .. important::
 
             You must call ``build`` before calling ``predict_percept``.

@@ -25,9 +25,9 @@ field coordinates. A number of these visual field maps are provided in the
 
 All of these visual field maps follow the
 :py:class:`~pulse2percept.utils.VisualFieldMap` template.
-This means that they have to specify a ``dva2ret`` method, which transforms
+This means that they have to specify a ``dva_to_ret`` method, which transforms
 visual field coordinates into retinal coordinates, and a complementary 
-``ret2dva`` method.
+``ret_to_dva`` method.
 
 Visual field maps
 -----------------
@@ -59,7 +59,7 @@ transforms = [p2p.utils.Curcio1990Map,
               p2p.utils.Watson2014DisplaceMap]
 fig, axes = plt.subplots(ncols=3, sharey=True, figsize=(13, 4))
 for ax, transform in zip(axes, transforms):
-    grid.plot(transform=transform().dva2ret, style='cell', ax=ax)
+    grid.plot(transform=transform().dva_to_ret, style='cell', ax=ax)
     ax.set_title(transform().__class__.__name__)
     ax.set_xlabel('x (microns)')
     ax.set_ylabel('y (microns)')
@@ -105,8 +105,8 @@ for ax, transform in zip(axes, transforms):
 # ----------------------------------
 #
 # To create your own visual field map, you need to subclass the
-# :py:class:`~pulse2percept.utils.VisualFieldMap` template and provide your own
-# ``dva2ret`` and ``ret2dva`` methods.
+# :py:class:`~pulse2percept.utils.RetinalMap` template and provide your own
+# ``dva_to_ret`` and ``ret_to_dva`` methods.
 # For example, the following class would (wrongly) assume that retinal
 # coordinates are identical to visual field coordinates:
 #
@@ -114,10 +114,10 @@ for ax, transform in zip(axes, transforms):
 #
 #     class MyVisualFieldMap(p2p.utils.VisualFieldMap):
 #
-#         def dva2ret(self, xdva, ydva):
+#         def dva_to_ret(self, xdva, ydva):
 #             return xdva, ydva
 #
-#         def ret2dva(self, xret, yret):
+#         def ret_to_dva(self, xret, yret):
 #             return xret, yret
 #
 # To use it with a model, you need to pass ``retinotopy=MyVisualFieldMap()``
