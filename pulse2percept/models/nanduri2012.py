@@ -40,7 +40,7 @@ class Nanduri2012Spatial(SpatialModel):
         Exponent of the attenuation function's denominator
     retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
-        object that provides ``ret2dva`` and ``dva2ret`` methods.
+        object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.utils.Curcio1990Map` is
         used.
     n_gray : int, optional
@@ -77,8 +77,8 @@ class Nanduri2012Spatial(SpatialModel):
                                      dtype=np.float32),
                             np.array([earray[e].r for e in stim.electrodes],
                                      dtype=np.float32),
-                            self.grid.xret.ravel(),
-                            self.grid.yret.ravel(),
+                            self.grid.ret.x.ravel(),
+                            self.grid.ret.y.ravel(),
                             self.atten_a,
                             self.atten_n,
                             self.thresh_percept,
@@ -224,7 +224,7 @@ class Nanduri2012Model(Model):
         Below threshold, the percept has brightness zero.
     retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
-        object that provides ``ret2dva`` and ``dva2ret`` methods.
+        object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.utils.Curcio1990Map` is
         used.
     n_gray : int, optional

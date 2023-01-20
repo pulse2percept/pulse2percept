@@ -253,7 +253,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             Whether to simulate points on a rectangular or hexagonal grid
         retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
             An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
-            object that provides ``ret2dva`` and ``dva2ret`` methods.
+            object that provides retinotopic mappings.
             By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
             used.
         n_gray : int, optional
@@ -778,7 +778,7 @@ class BiphasicAxonMapModel(Model):
             Whether to simulate points on a rectangular or hexagonal grid
         retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
             An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
-            object that provides ``ret2dva`` and ``dva2ret`` methods.
+            object that provides retinotopic mappings.
             By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
             used.
         n_gray : int, optional

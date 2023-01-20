@@ -73,7 +73,7 @@ def test_SpatialModel():
     model.build()
     npt.assert_equal(model.is_built, True)
     npt.assert_equal(isinstance(model.grid, Grid2D), True)
-    npt.assert_equal(isinstance(model.grid.xret, np.ndarray), True)
+    npt.assert_equal(isinstance(model.grid.ret.x, np.ndarray), True)
 
     # Can overwrite default values:
     model = ValidSpatialModel(xystep=1.234)

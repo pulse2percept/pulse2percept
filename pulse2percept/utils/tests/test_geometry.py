@@ -139,7 +139,7 @@ class NewRegionTransform(VisualFieldMap):
     def newlayer_transform(self, x, y):
         return x, y
 
-    def region_mappings(self):
+    def from_dva(self):
         return {"newlayer" : self.newlayer_transform}
 
 

@@ -452,7 +452,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')
         else:
-            ax = self.grid.plot(transform=self.retinotopy.dva2ret, ax=ax,
+            ax = self.grid.plot(transform=self.retinotopy.dva_to_ret, ax=ax,
                                 zorder=ZORDER['background'] + 1, style=style,
                                 figsize=figsize, autoscale=autoscale)
             ax.set_xlabel('x (microns)')

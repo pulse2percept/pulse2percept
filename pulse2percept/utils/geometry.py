@@ -66,13 +66,13 @@ class Grid2D(PrettyPrint):
 
     @staticmethod
     def _register_regions(regions):
-        """ Registers helper getters and setters to allow e.g. grid.xret, grid.yv1.
+        """ Registers helper getters and setters to allow e.g. grid.ret, grid.v1.
             Necessary for backwards compatibility. Static because property attributes are
             tracked at the class level
             
             Note: The list of regions given does NOT need be the regions currently
             being used. If a given region does not exist at call time, then a ValueError
-            will be raised (e.g. grid.xv1 with retinal retinotopy will throw an error).
+            will be raised (e.g. grid.v1 with retinal retinotopy will throw an error).
 
             Parameters:
             ------------
@@ -210,7 +210,7 @@ class Grid2D(PrettyPrint):
         ----------
         transform : function, optional
             A coordinate transform to be applied to the (x,y) coordinates of
-            the grid (e.g., :py:meth:`Curcio1990Transform.dva2ret`). It must
+            the grid (e.g., :py:meth:`Curcio1990Transform.dva_to_ret`). It must
             accept two input arguments (x and y) and output two variables (the
             transformed x and y).
         label : str, optional
@@ -316,19 +316,28 @@ class RetinalMap(VisualFieldMap):
     """ Template class for retinal visual field maps, which only have 1 region."""
 
     def from_dva(self):
-        return {'ret' : self.dva2ret}
+        return {'ret' : self.dva_to_ret}
     
     def to_dva(self):
-        return {'ret' : self.ret2dva}
+        return {'ret' : self.ret_to_dva}
     
     @abstractmethod
-    def dva_to_ret(x, y):
+    def dva_to_ret(self, x, y):
         """Convert degrees of visual angle (dva) to retinal coords (um)"""
         raise NotImplementedError
         
-    def ret_to_dva(x, y):
+    def ret_to_dva(self, x, y):
         """Convert retinal coords (um) to degrees of visual angle (dva)"""
         raise NotImplementedError
+
+    # Backwards Compatibility
+    def ret2dva(self, x, y):
+        """Convert retinal coords (um) to degrees of visual angle (dva)"""
+        return self.ret_to_dva(x, y)
+    
+    def dva2ret(self, x, y):
+        """Convert degrees of visual angle (dva) to retinal coords (um)"""
+        return self.ret_to_dva(x, y)
 
 
 class CorticalMap(VisualFieldMap):
@@ -337,7 +346,7 @@ class CorticalMap(VisualFieldMap):
 
     def __init__(self, regions=['v1']):
         if not isinstance(regions, list):
-            layers = list(regions)
+            regions = list(regions)
         for region in regions:
             if region.lower() not in self.allowed_regions:
                 raise ValueError(f"Specified region {region} not supported."\
@@ -347,47 +356,47 @@ class CorticalMap(VisualFieldMap):
     def from_dva(self):
         mappings = dict()
         if 'v1' in self.regions:
-            mappings['v1'] = self.dva2v1
+            mappings['v1'] = self.dva_to_v1
         if 'v2' in self.regions:
-            mappings['v2'] = self.dva2v2
+            mappings['v2'] = self.dva_to_v2
         if 'v3' in self.regions:
-            mappings['v3'] = self.dva2v3
+            mappings['v3'] = self.dva_to_v3
         return mappings
     
     def to_dva(self):
         mappings = dict()
         if 'v1' in self.regions:
-            mappings['v1'] = self.v12dva
+            mappings['v1'] = self.v1_to_dva
         if 'v2' in self.regions:
-            mappings['v2'] = self.v22dva
+            mappings['v2'] = self.v2_to_dva
         if 'v3' in self.regions:
-            mappings['v3'] = self.v32dva
+            mappings['v3'] = self.v3_to_dva
         return mappings
     
     @abstractmethod
-    def dva2v1(self, x, y):
+    def dva_to_v1(self, x, y):
         """Convert degrees visual angle (dva) to V1 coordinates (um)"""
         raise NotImplementedError
 
     @abstractmethod
-    def dva2v2(self, x, y):
+    def dva_to_v2(self, x, y):
         """Convert degrees visual angle (dva) to V2 coordinates (um)"""
         raise NotImplementedError
 
     @abstractmethod
-    def dva2v3(self, x, y):
+    def dva_to_v3(self, x, y):
         """Convert degrees visual angle (dva) to V3 coordinates (um)"""
         raise NotImplementedError
 
-    def v12dva(self, x, y):
+    def v1_to_dva(self, x, y):
         """Convert V1 coordinates (um) to degrees visual angle (dva)"""
         raise NotImplementedError
 
-    def v22dva(self, x, y):
+    def v2_to_dva(self, x, y):
         """Convert V2 coordinates (um) to degrees visual angle (dva)"""
         raise NotImplementedError
 
-    def v32dva(self, x, y):
+    def v3_to_dva(self, x, y):
         """Convert V3 coordinates (um) to degrees visual angle (dva)"""
         raise NotImplementedError
 
@@ -402,7 +411,7 @@ class Curcio1990Map(RetinalMap):
         """
         return 280.0 * xdva, 280.0 * ydva
 
-    def ret2dva(self, xret, yret):
+    def ret_to_dva(self, xret, yret):
         """Convert retinal eccentricity (um) to degrees of visual angle (dva)
 
         Assumes that one degree of visual angle is equal to 280 um on the
@@ -589,7 +598,7 @@ class Watson2014DisplaceMap(Watson2014Map):
         rho_dva += self.watson_displacement(rho_dva, meridian=meridian)
         # Convert back to x, y (dva):
         x, y = pol2cart(theta, rho_dva)
-        return super(Watson2014DisplaceMap, self).dva2ret(x, y)
+        return super(Watson2014DisplaceMap, self).dva_to_ret(x, y)
 
     def ret_to_dva(self, xret, yret):
         raise NotImplementedError
