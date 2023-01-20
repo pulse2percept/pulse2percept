@@ -330,15 +330,6 @@ class RetinalMap(VisualFieldMap):
         """Convert retinal coords (um) to degrees of visual angle (dva)"""
         raise NotImplementedError
 
-    # Backwards Compatibility
-    def ret2dva(self, x, y):
-        """Convert retinal coords (um) to degrees of visual angle (dva)"""
-        return self.ret_to_dva(x, y)
-    
-    def dva2ret(self, x, y):
-        """Convert degrees of visual angle (dva) to retinal coords (um)"""
-        return self.ret_to_dva(x, y)
-
 
 class CorticalMap(VisualFieldMap):
     """Template class for V1/V2/V3 visuotopic maps"""
