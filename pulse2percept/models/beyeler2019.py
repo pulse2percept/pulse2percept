@@ -496,7 +496,7 @@ class AxonMapSpatial(SpatialModel):
         if xret is None:
             xret = self.grid.ret.x
         if yret is None:
-            yret = self.grid.ret.x
+            yret = self.grid.ret.y
         xret = np.asarray(xret, dtype=np.float32)
         yret = np.asarray(yret, dtype=np.float32)
         # For every axon segment, store the corresponding axon ID:
