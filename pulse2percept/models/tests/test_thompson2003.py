@@ -96,8 +96,8 @@ def test_Thompson2003Model():
 
     # Converting ret <=> dva
     npt.assert_equal(isinstance(model.retinotopy, Curcio1990Map), True)
-    npt.assert_almost_equal(model.retinotopy.ret2dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.retinotopy.dva2ret(0, 0), (0, 0))
+    npt.assert_almost_equal(model.retinotopy.ret_to_dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.retinotopy.dva_to_ret(0, 0), (0, 0))
     model2 = Thompson2003Model(retinotopy=Watson2014DisplaceMap())
     npt.assert_equal(isinstance(model2.retinotopy, Watson2014DisplaceMap),
                      True)

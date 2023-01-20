@@ -268,8 +268,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         # Build the spatial grid:
         self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
                            grid_type=self.grid_type)
-        self.grid.xret, self.grid.yret = self.retinotopy.dva2ret(self.grid.x,
-                                                                 self.grid.y)
+        self.grid.build(self.retinotopy)
         self._build()
         self.is_built = True
         return self
@@ -453,7 +452,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')
         else:
-            ax = self.grid.plot(transform=self.retinotopy.dva2ret, ax=ax,
+            ax = self.grid.plot(transform=self.retinotopy.dva_to_ret, ax=ax,
                                 zorder=ZORDER['background'] + 1, style=style,
                                 figsize=figsize, autoscale=autoscale)
             ax.set_xlabel('x (microns)')

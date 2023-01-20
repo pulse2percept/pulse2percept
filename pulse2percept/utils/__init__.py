@@ -17,8 +17,8 @@
 """
 from .base import (PrettyPrint, FreezeError, Frozen, Data, bijective26_name,
                    cached, gamma)
-from .geometry import (Grid2D, VisualFieldMap, Curcio1990Map,
-                       Watson2014Map, Watson2014DisplaceMap,
+from .geometry import (Grid2D, VisualFieldMap, RetinalMap, CorticalMap,
+                       Curcio1990Map, Watson2014Map, Watson2014DisplaceMap,
                        cart2pol, pol2cart, delta_angle)
 from .array import is_strictly_increasing, radial_mask, sample, unique
 from .images import center_image, scale_image, shift_image, trim_image
@@ -57,6 +57,8 @@ __all__ = [
     'trim_image',
     'unique',
     'VisualFieldMap',
+    'RetinalMap',
+    'CorticalMap',
     'Watson2014DisplaceMap',
     'Watson2014Map'
 ]

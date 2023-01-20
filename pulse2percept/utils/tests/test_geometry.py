@@ -5,7 +5,8 @@ import pytest
 import numpy.testing as npt
 from matplotlib.axes import Axes
 
-from pulse2percept.utils import (VisualFieldMap, Curcio1990Map,
+from pulse2percept.utils import (VisualFieldMap, RetinalMap, 
+                                 CorticalMap, Curcio1990Map,
                                  Grid2D, Watson2014Map,
                                  Watson2014DisplaceMap,
                                  cart2pol, pol2cart, delta_angle)
@@ -80,6 +81,7 @@ def test_Grid2D_make_rectangular_grid():
 
 
 def test_Grid2D_plot():
+    # This test is slow
     grid = Grid2D((-20, 20), (-40, 40), step=0.5)
     ax = grid.plot()
     npt.assert_equal(isinstance(ax, Axes), True)
@@ -103,29 +105,78 @@ def test_Grid2D_plot():
     Grid2D((-5, 5), (-5, 5), step=(0.5, 1)).plot(style='cell')
 
 
-class ValidCoordTransform(VisualFieldMap):
+class ValidCoordTransform(RetinalMap):
 
-    @staticmethod
-    def dva2ret(x_dva, y_dva):
+    def dva_to_ret(self, x_dva, y_dva):
         return x_dva, y_dva
 
-    @staticmethod
-    def ret2dva(x_ret, y_ret):
+    def ret_to_dva(self, x_ret, y_ret):
         return x_ret, y_ret
 
 
-def test_VisualFieldMap():
-    npt.assert_almost_equal(ValidCoordTransform.dva2ret(1.1, 0), (1.1, 0))
-    npt.assert_almost_equal(ValidCoordTransform.ret2dva(1.1, 0), (1.1, 0))
+class ValidCorticalTransform(CorticalMap):
+    def dva_to_v1(self, x, y):
+        return x, y
+
+    def dva_to_v2(self, x, y):
+        return x, y
+
+    def dva_to_v3(self, x, y):
+        return x, y
+
+    def v1_to_dva(self, x, y):
+        return x, y
+
+    def v2_to_dva(self, x, y):
+        return x, y
+
+    def v3_to_dva(self, x, y):
+        return x, y
+
+
+class NewRegionTransform(VisualFieldMap):
+
+    def newlayer_transform(self, x, y):
+        return x, y
+
+    def from_dva(self):
+        return {"newlayer" : self.newlayer_transform}
+
+
+def test_grid_regions():
+    # this also implicitly tests Cortical/RetinalMap
+
+    grid = Grid2D((-2, 2), (-2, 2), step=1)
+    # x is alias for dva.x. Test properties
+    npt.assert_equal(grid.x, grid.dva.x)
+    npt.assert_equal(grid.x, grid._grid['dva'].x)
+
+    retinotopy = ValidCoordTransform()
+    grid.build(retinotopy)
+    # Make sure xret gets populated
+    npt.assert_equal(grid.dva.x, grid.ret.x)
+
+    grid = Grid2D((-2, 2), (-2, 2), step=1)
+    retinotopy = ValidCorticalTransform(regions=['v1', 'v2', 'v3'])
+    grid.build(retinotopy)
+    npt.assert_equal(grid.x, grid.v1.x)
+    npt.assert_equal(grid.x, grid.v2.x)
+    npt.assert_equal(grid.x, grid.v3.x)
+
+    # make sure that new layers are registered
+    grid = Grid2D((-2, 2), (-2, 2), step=1)
+    grid.build(NewRegionTransform())
+    npt.assert_equal(grid.newlayer.x, grid.x)
+    npt.assert_equal('newlayer' in grid.regions, True)
 
 
 def test_Curcio1990Map():
-    # Curcio1990 uses a linear dva2ret conversion factor:
+    # Curcio1990 uses a linear dva_to_ret conversion factor:
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(Curcio1990Map.dva2ret(factor, factor),
+        npt.assert_almost_equal(Curcio1990Map().dva_to_ret(factor, factor),
                                 (280.0 * factor, 280.0 * factor))
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(Curcio1990Map.ret2dva(280.0 * factor,
+        npt.assert_almost_equal(Curcio1990Map().ret_to_dva(280.0 * factor,
                                                       280.0 * factor),
                                 (factor, factor))
 
@@ -156,26 +207,27 @@ def test_eq_Curcio19990Map():
 def test_Watson2014Map():
     trafo = Watson2014Map()
     with pytest.raises(ValueError):
-        trafo.ret2dva(0, 0, coords='invalid')
+        trafo.ret_to_dva(0, 0, coords='invalid')
     with pytest.raises(ValueError):
-        trafo.dva2ret(0, 0, coords='invalid')
+        trafo.dva_to_ret(0, 0, coords='invalid')
 
     # Below 15mm eccentricity, relationship is linear with slope 3.731
-    npt.assert_equal(trafo.ret2dva(0.0, 0.0), (0.0, 0.0))
+    npt.assert_equal(trafo.ret_to_dva(0.0, 0.0), (0.0, 0.0))
     for sign in [-1, 1]:
         for exp in [2, 3, 4]:
             ret = sign * 10 ** exp  # mm
             dva = 3.731 * sign * 10 ** (exp - 3)  # dva
-            npt.assert_almost_equal(trafo.ret2dva(0, ret)[1], dva,
+            npt.assert_almost_equal(trafo.ret_to_dva(0, ret)[1], dva,
                                     decimal=3 - exp)  # adjust precision
     # Below 50deg eccentricity, relationship is linear with slope 0.268
-    npt.assert_equal(trafo.dva2ret(0.0, 0.0), (0.0, 0.0))
+    npt.assert_equal(trafo.dva_to_ret(0.0, 0.0), (0.0, 0.0))
     for sign in [-1, 1]:
         for exp in [-2, -1, 0]:
             dva = sign * 10 ** exp  # deg
             ret = 0.268 * sign * 10 ** (exp + 3)  # mm
-            npt.assert_almost_equal(trafo.dva2ret(0, dva)[1], ret,
+            npt.assert_almost_equal(trafo.dva_to_ret(0, dva)[1], ret,
                                     decimal=-exp)  # adjust precision
+
 
 def test_eq_Watson2014Map():
     map = Watson2014Map()
@@ -218,7 +270,7 @@ def test_Watson2014DisplaceMap():
     npt.assert_almost_equal(np.max(all_displace), 1.9228664)
     npt.assert_almost_equal(radii[np.argmax(all_displace)], 2.1212121)
     # Smoke test
-    trafo.dva2ret(0, 0)
+    trafo.dva_to_ret(0, 0)
 
 
 def test_cart2pol():
