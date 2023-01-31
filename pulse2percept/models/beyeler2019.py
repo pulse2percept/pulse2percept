@@ -8,8 +8,9 @@ from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
-from ..utils import parfor, Watson2014Map
+from ..utils import parfor
 from ..utils.constants import ZORDER
+from ..topography import Watson2014Map
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel

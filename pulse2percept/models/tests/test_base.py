@@ -11,7 +11,8 @@ from pulse2percept.stimuli import Stimulus
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (BaseModel, Model, NotBuiltError,
                                   SpatialModel, TemporalModel)
-from pulse2percept.utils import FreezeError, Grid2D, Watson2014Map
+from pulse2percept.utils import FreezeError
+from pulse2percept.topography import Grid2D, Watson2014Map
 
 
 class ValidBaseModel(BaseModel):

@@ -6,17 +6,17 @@ Retinotopy: Predicting the perceptual effects of different visual field maps
 
 Every computational model needs to assume a mapping between retinal and visual
 field coordinates. A number of these visual field maps are provided in the
-:py:mod:`~pulse2percept.utils.geometry` module of the utilities subpackage:
+:py:mod:`~pulse2percept.topography.geometry` module of the utilities subpackage:
 
-*  :py:class:`~pulse2percept.utils.Curcio1990Map`: The [Curcio1990]_ model
+*  :py:class:`~pulse2percept.topography.Curcio1990Map`: The [Curcio1990]_ model
    simply assumes that one degree of visual angle (dva) is equal to 280 um on
    the retina.
-*  :py:class:`~pulse2percept.utils.Watson2014Map`: The [Watson2014]_ model
+*  :py:class:`~pulse2percept.topography.Watson2014Map`: The [Watson2014]_ model
    extends [Curcio1990]_ by recognizing that the transformation between dva and
    retinal eccentricity is not linear (see Eq. A5 in [Watson2014]_). However,
    within 40 degrees of eccentricity, the transform is virtually
    indistuingishable from [Curcio1990]_.
-*  :py:class:`~pulse2percept.utils.Watson2014DisplaceMap`: [Watson2014]_ also
+*  :py:class:`~pulse2percept.topography.Watson2014DisplaceMap`: [Watson2014]_ also
    describes the retinal ganglion cell (RGC) density at different retinal
    eccentricities. In specific, there is a central retinal zone where RGC bodies
    are displaced centrifugally some distance from the inner segments of the
@@ -24,7 +24,7 @@ field coordinates. A number of these visual field maps are provided in the
    their receptive field (see Eq. 5 [Watson2014]_).
 
 All of these visual field maps follow the
-:py:class:`~pulse2percept.utils.VisualFieldMap` template.
+:py:class:`~pulse2percept.topography.VisualFieldMap` template.
 This means that they have to specify a ``dva_to_ret`` method, which transforms
 visual field coordinates into retinal coordinates, and a complementary 
 ``ret_to_dva`` method.
@@ -41,7 +41,7 @@ look at a rectangular grid in visual field coordinates:
 import pulse2percept as p2p
 import matplotlib.pyplot as plt
 
-grid = p2p.utils.Grid2D((-50, 50), (-50, 50), step=5)
+grid = p2p.topography.Grid2D((-50, 50), (-50, 50), step=5)
 grid.plot(style='scatter')
 plt.xlabel('x (degrees of visual angle)')
 plt.ylabel('y (degrees of visual angle)')
@@ -54,9 +54,9 @@ plt.axis('square')
 # However, these visual field coordinates are mapped onto different retinal
 # coordinates under the three visual field maps:
 
-transforms = [p2p.utils.Curcio1990Map,
-              p2p.utils.Watson2014Map,
-              p2p.utils.Watson2014DisplaceMap]
+transforms = [p2p.topography.Curcio1990Map,
+              p2p.topography.Watson2014Map,
+              p2p.topography.Watson2014DisplaceMap]
 fig, axes = plt.subplots(ncols=3, sharey=True, figsize=(13, 4))
 for ax, transform in zip(axes, transforms):
     grid.plot(transform=transform().dva_to_ret, style='cell', ax=ax)

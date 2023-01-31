@@ -9,9 +9,9 @@ import multiprocessing
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
 from ..percepts import Percept
-from ..utils import (Curcio1990Map, PrettyPrint, Frozen, FreezeError,
-                     Grid2D, bisect)
+from ..utils import (PrettyPrint, Frozen, FreezeError, bisect)
 from ..utils.constants import ZORDER
+from ..topography import (Curcio1990Map, Grid2D)
 
 
 class NotBuiltError(ValueError, AttributeError):
