@@ -12,7 +12,7 @@ from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
                                   ScoreboardSpatial, ScoreboardModel)
-from pulse2percept.utils import Watson2014Map, Watson2014DisplaceMap
+from pulse2percept.topography import Watson2014Map, Watson2014DisplaceMap
 from pulse2percept.utils.testing import assert_warns_msg
 
 

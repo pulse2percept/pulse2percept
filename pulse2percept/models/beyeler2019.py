@@ -8,8 +8,9 @@ from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
-from ..utils import parfor, Watson2014Map
+from ..utils import parfor
 from ..utils.constants import ZORDER
+from ..topography import Watson2014Map
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
@@ -74,7 +75,6 @@ class ScoreboardSpatial(SpatialModel):
         Defaults to max number of user CPU cores.
 
     .. important ::
-
         If you change important model parameters outside the constructor (e.g.,
         by directly setting ``model.xrange = (-10, 10)``), you will have to call
         ``model.build()`` again for your changes to take effect.
@@ -156,7 +156,6 @@ class ScoreboardModel(Model):
         Defaults to max number of user CPU cores.
 
     .. important ::
-
         If you change important model parameters outside the constructor (e.g.,
         by directly setting ``model.xrange = (-10, 10)``), you will have to call
         ``model.build()`` again for your changes to take effect.
@@ -252,7 +251,6 @@ class AxonMapSpatial(SpatialModel):
         Defaults to max number of user CPU cores.
 
     .. important ::
-
         If you change important model parameters outside the constructor (e.g.,
         by directly setting ``model.axlambda = 100``), you will have to call
         ``model.build()`` again for your changes to take effect.
@@ -937,7 +935,6 @@ class AxonMapModel(Model):
         Defaults to max number of user CPU cores.
 
     .. important ::
-
         If you change important model parameters outside the constructor (e.g.,
         by directly setting ``model.axlambda = 100``), you will have to call
         ``model.build()`` again for your changes to take effect.

@@ -1,4 +1,4 @@
-from pulse2percept.utils import Grid2D
+from pulse2percept.topography import Grid2D
 from pulse2percept.percepts import Percept
 from skimage.io import imread
 from skimage import img_as_float

@@ -11,8 +11,9 @@ import logging
 from skimage import img_as_uint
 from skimage.transform import resize
 
-from ..utils import Data, Grid2D, deprecated, unique, sample
+from ..utils import Data, deprecated, unique, sample
 from ..utils.constants import VIDEO_BLOCK_SIZE
+from ..topography import Grid2D
 
 
 class Percept(Data):
@@ -27,7 +28,7 @@ class Percept(Data):
     ----------
     data : 3D NumPy array
         A NumPy array specifying the percept in (Y, X, T) dimensions
-    space : :py:class:`~pulse2percept.utils.Grid2D`, optional
+    space : :py:class:`~pulse2percept.topography.Grid2D`, optional
         A grid object specifying the (x,y) coordinates in space
     time : 1D array, optional
         A list of time points
