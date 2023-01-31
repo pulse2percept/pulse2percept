@@ -33,20 +33,3 @@ h3 {
 p {
 	margin-bottom: 4px;
 }
-
-/* Change thumbnail size */
-.sphx-glr-thumbcontainer {
-    min-height: 270px !important;
-    margin: 20px !important;
-}
-.sphx-glr-thumbcontainer .figure {
-    width: 280px !important;
-}
-.sphx-glr-thumbcontainer img {
-    max-height: 250px !important;
-    max-width: 300px !important;
-    width: 250px !important;
-}
-.sphx-glr-thumbcontainer a.internal {
-    padding: 220px 10px 0 !important;
-}
