@@ -53,12 +53,12 @@ def test_Nanduri2012Spatial():
     npt.assert_almost_equal(percept.data[2, 3, :], pmax)
     npt.assert_almost_equal(pmax[1] / pmax[0], 2.0)
 
-    # Nanduri model uses a linear dva2ret conversion factor:
+    # Nanduri model uses a linear dva_to_ret conversion factor:
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(model.retinotopy.dva2ret(factor, factor),
+        npt.assert_almost_equal(model.retinotopy.dva_to_ret(factor, factor),
                                 (280.0 * factor, 280.0 * factor))
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(model.retinotopy.ret2dva(280.0 * factor,
+        npt.assert_almost_equal(model.retinotopy.ret_to_dva(280.0 * factor,
                                                          280.0 * factor),
                                 (factor, factor))
 

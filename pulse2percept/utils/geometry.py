@@ -1,6 +1,7 @@
 """
-`Grid2D`, `VisualFieldMap`, `Curcio1990Map`, `Watson2014Map`,
-`Watson2014DisplaceMap`, `cart2pol`, `pol2cart`, `delta_angle`
+`Grid2D`, `VisualFieldMap`, `RetinalMap`, `CorticalMap`
+`Curcio1990Map`, `Watson2014Map`,`Watson2014DisplaceMap`, `cart2pol`, 
+`pol2cart`, `delta_angle`
 
 """
 import numpy as np
@@ -9,7 +10,7 @@ import scipy.stats as spst
 from scipy.spatial import ConvexHull
 # Using or importing the ABCs from 'collections' instead of from
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
-from collections.abc import Sequence
+from collections import namedtuple
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
@@ -21,8 +22,10 @@ from .constants import ZORDER
 class Grid2D(PrettyPrint):
     """2D spatial grid
 
-    This class generates a two-dimensional mesh grid from a range of x, y
-    values and provides an iterator to loop over elements.
+    This class generates and stores 2D mesh grids of coordinates across
+    different regions (visual field, retina, cortex). The grid is uniform 
+    in visual field, and transformed with a retinotopic mapping to 
+    obtain the grid in other regions.
 
     .. versionadded:: 0.6
 
@@ -59,38 +62,71 @@ class Grid2D(PrettyPrint):
 
     """
 
+    all_regions = ['dva', 'ret', 'v1', 'v2', 'v3']
+
+    @staticmethod
+    def _register_regions(regions):
+        """ Registers helper getters and setters to allow e.g. grid.ret, grid.v1.
+            Necessary for backwards compatibility. Static because property attributes are
+            tracked at the class level
+            
+            Note: The list of regions given does NOT need be the regions currently
+            being used. If a given region does not exist at call time, then a ValueError
+            will be raised (e.g. grid.v1 with retinal retinotopy will throw an error).
+
+            Parameters:
+            ------------
+            regions : list of str
+                Names of each region to register
+        """
+        def getter(regionname):
+            def fn(self):
+                if regionname in self._grid.keys():
+                    return self._grid[regionname]
+                else:
+                    raise ValueError(f"Region {regionname} not found. Make sure the model is" \
+                        " built with the correct retinotopy")
+            return fn
+        def setter(regionname):
+            def fn(self, value):
+                self._grid[regionname] = value
+            return fn
+
+        for region in regions:
+            if not hasattr(Grid2D, region):
+                setattr(Grid2D, region, property(fget=getter(region), 
+                                                 fset=setter(region)))
+
+    @property
+    def x(self):
+        return self._grid['dva'].x
+
+    @x.setter
+    def x(self, value):
+        self._grid['dva'] = self.CoordinateGrid(value, self.y)
+    
+    @property 
+    def y(self):
+        return self._grid['dva'].y
+    
+    @y.setter
+    def y(self, value):
+        self._grid['dva'] = self.CoordinateGrid(self.x, value)
+
+
     def __init__(self, x_range, y_range, step=1, grid_type='rectangular'):
         self.x_range = x_range
         self.y_range = y_range
         self.step = step
         self.type = grid_type
-        # internally, all layers (dva, ret, v1, etc) are stored here
-        self._x = {}
-        self._y = {}
-        
-        # Allows grid.xret, grid.v1, etc
-        def getter(layername, coord):
-            def fn(self):
-                grid_coords = getattr(self, '_'+coord)
-                if layername in grid_coords.keys():
-                    return grid_coords[layername]
-                else:
-                    raise ValueError(f"'{coord}{layername}' layer not \
-                        defined (try a different retinotopy)")
-            return fn
-        def setter(layername, coord):
-            def fn(self, value):
-                getattr(self, '_'+coord)[layername] = value
-            return fn
-        for coord in ['x', 'y']:
-            for layername in ['v1', 'v2', 'v3', 'ret', 'dva']:
-                setattr(type(self), coord + layername, property(
-                    fget=getter(layername, coord),
-                    fset=setter(layername, coord)))
-            # backward compatibility, allows grid.x
-            setattr(type(self), coord, property(
-                fget=getter('dva', coord),
-                fset=setter('dva', coord)))
+        self.regions = []
+        # Datatype for storing the grid of coordinates
+        self.CoordinateGrid = namedtuple("CoordinateGrid", ['x', 'y'])
+        # Internally, coordinate grids for each region are stored in _grid
+        self._grid = {}
+        # Register helper getters and setters for region names. This is slightly
+        # wasteful to do with every instance, but it is impossible to do before initialization
+        self._register_regions(self.all_regions)
 
         # These could also be their own subclasses:
         if grid_type == 'rectangular':
@@ -99,7 +135,7 @@ class Grid2D(PrettyPrint):
             self._make_hexagonal_grid(x_range, y_range, step)
         else:
             raise ValueError(f"Unknown grid type '{grid_type}'.")
-
+    
     def _pprint_params(self):
         """Return dictionary of class arguments to pretty-print"""
         return {'x_range': self.x_range, 'y_range': self.y_range,
@@ -134,7 +170,8 @@ class Grid2D(PrettyPrint):
         ydiff = np.abs(np.diff(y_range))
         ny = int(np.round(ydiff / y_step) + 1) if ydiff != 0 else 1
         self._yflat = np.linspace(*y_range, num=ny, dtype=np.float32)
-        self.x, self.y = np.meshgrid(self._xflat, self._yflat, indexing='xy')
+        self._grid['dva'] = self.CoordinateGrid(
+            *np.meshgrid(self._xflat, self._yflat, indexing='xy'))
         self.shape = self.x.shape
         self.reset()
 
@@ -156,6 +193,15 @@ class Grid2D(PrettyPrint):
     def reset(self):
         self._iter = 0
 
+    def build(self, retinotopy):
+        for region, map_fn in retinotopy.from_dva().items():
+            self._grid[region] = self.CoordinateGrid(*map_fn(self.x, self.y))
+            if region not in self.regions:
+                self.regions.append(region)
+            # Register the mapping if it wasn't already
+            if region not in self.all_regions:
+                self._register_regions([region])
+
     def plot(self, transform=None, label=None, style='hull', autoscale=True,
              zorder=None, ax=None, figsize=None, fc='gray'):
         """Plot the extension of the grid
@@ -164,7 +210,7 @@ class Grid2D(PrettyPrint):
         ----------
         transform : function, optional
             A coordinate transform to be applied to the (x,y) coordinates of
-            the grid (e.g., :py:meth:`Curcio1990Transform.dva2ret`). It must
+            the grid (e.g., :py:meth:`Curcio1990Transform.dva_to_ret`). It must
             accept two input arguments (x and y) and output two variables (the
             transformed x and y).
         label : str, optional
@@ -249,28 +295,106 @@ class Grid2D(PrettyPrint):
 
 
 class VisualFieldMap(object, metaclass=ABCMeta):
-    """Base class for a visual field map (retinotopy)
-
-    A template
-
-    """
+    """ Base template class for a visual field map (retinotopy) """
 
     @abstractmethod
-    def dva2ret(self, x, y):
-        """Convert degrees of visual angle (dva) to retinal coords (um)"""
+    def from_dva(self):
+        """ Returns a dict containing the region(s) that this retinotopy maps 
+            to, and the corresponding mapping function(s).
+        """
         raise NotImplementedError
 
+    def to_dva(self):
+        """ Returns a dict containing the region(s) that this retinotopy maps 
+            from, and the corresponding inverse mapping function(s). This 
+            transform is optional for most models.
+        """
+        raise NotImplementedError
+
+
+class RetinalMap(VisualFieldMap):
+    """ Template class for retinal visual field maps, which only have 1 region."""
+
+    def from_dva(self):
+        return {'ret' : self.dva_to_ret}
+    
+    def to_dva(self):
+        return {'ret' : self.ret_to_dva}
+    
     @abstractmethod
-    def ret2dva(self, x, y):
+    def dva_to_ret(self, x, y):
+        """Convert degrees of visual angle (dva) to retinal coords (um)"""
+        raise NotImplementedError
+        
+    def ret_to_dva(self, x, y):
         """Convert retinal coords (um) to degrees of visual angle (dva)"""
         raise NotImplementedError
 
 
-class Curcio1990Map(VisualFieldMap):
+class CorticalMap(VisualFieldMap):
+    """Template class for V1/V2/V3 visuotopic maps"""
+    allowed_regions = {'v1', 'v2', 'v3'}
+
+    def __init__(self, regions=['v1']):
+        if not isinstance(regions, list):
+            regions = list(regions)
+        for region in regions:
+            if region.lower() not in self.allowed_regions:
+                raise ValueError(f"Specified region {region} not supported."\
+                                 f" Options are {self.allowed_layers}")
+        self.regions = [r.lower() for r in regions]
+
+    def from_dva(self):
+        mappings = dict()
+        if 'v1' in self.regions:
+            mappings['v1'] = self.dva_to_v1
+        if 'v2' in self.regions:
+            mappings['v2'] = self.dva_to_v2
+        if 'v3' in self.regions:
+            mappings['v3'] = self.dva_to_v3
+        return mappings
+    
+    def to_dva(self):
+        mappings = dict()
+        if 'v1' in self.regions:
+            mappings['v1'] = self.v1_to_dva
+        if 'v2' in self.regions:
+            mappings['v2'] = self.v2_to_dva
+        if 'v3' in self.regions:
+            mappings['v3'] = self.v3_to_dva
+        return mappings
+    
+    @abstractmethod
+    def dva_to_v1(self, x, y):
+        """Convert degrees visual angle (dva) to V1 coordinates (um)"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def dva_to_v2(self, x, y):
+        """Convert degrees visual angle (dva) to V2 coordinates (um)"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def dva_to_v3(self, x, y):
+        """Convert degrees visual angle (dva) to V3 coordinates (um)"""
+        raise NotImplementedError
+
+    def v1_to_dva(self, x, y):
+        """Convert V1 coordinates (um) to degrees visual angle (dva)"""
+        raise NotImplementedError
+
+    def v2_to_dva(self, x, y):
+        """Convert V2 coordinates (um) to degrees visual angle (dva)"""
+        raise NotImplementedError
+
+    def v3_to_dva(self, x, y):
+        """Convert V3 coordinates (um) to degrees visual angle (dva)"""
+        raise NotImplementedError
+
+class Curcio1990Map(RetinalMap):
     """Converts between visual angle and retinal eccentricity [Curcio1990]_"""
 
-    @staticmethod
-    def dva2ret(xdva, ydva):
+    def dva_to_ret(self, xdva, ydva):
         """Convert degrees of visual angle (dva) to retinal eccentricity (um)
 
         Assumes that one degree of visual angle is equal to 280 um on the
@@ -278,8 +402,7 @@ class Curcio1990Map(VisualFieldMap):
         """
         return 280.0 * xdva, 280.0 * ydva
 
-    @staticmethod
-    def ret2dva(xret, yret):
+    def ret_to_dva(self, xret, yret):
         """Convert retinal eccentricity (um) to degrees of visual angle (dva)
 
         Assumes that one degree of visual angle is equal to 280 um on the
@@ -309,11 +432,10 @@ class Curcio1990Map(VisualFieldMap):
         return self.__dict__ == other.__dict__
 
 
-class Watson2014Map(VisualFieldMap):
+class Watson2014Map(RetinalMap):
     """Converts between visual angle and retinal eccentricity [Watson2014]_"""
 
-    @staticmethod
-    def ret2dva(x_um, y_um, coords='cart'):
+    def ret_to_dva(self, x_um, y_um, coords='cart'):
         """Converts retinal distances (um) to visual angles (deg)
 
         This function converts an eccentricity measurement on the retinal
@@ -344,8 +466,7 @@ class Watson2014Map(VisualFieldMap):
             return phi_um, r_deg
         raise ValueError(f'Unknown coordinate system "{coords}".')
 
-    @staticmethod
-    def dva2ret(x_deg, y_deg, coords='cart'):
+    def dva_to_ret(self, x_deg, y_deg, coords='cart'):
         """Converts visual angles (deg) into retinal distances (um)
 
         This function converts degrees of visual angle into a retinal distance 
@@ -413,8 +534,7 @@ class Watson2014DisplaceMap(Watson2014Map):
 
     """
 
-    @staticmethod
-    def watson_displacement(r, meridian='temporal'):
+    def watson_displacement(self, r, meridian='temporal'):
         """Ganglion cell displacement function
 
         Implements the ganglion cell displacement function described in Eq. 5
@@ -449,7 +569,7 @@ class Watson2014DisplaceMap(Watson2014Map):
         denom = beta * spst.gamma.pdf(alpha, 5)
         return numer / denom / scale
 
-    def dva2ret(self, xdva, ydva):
+    def dva_to_ret(self, xdva, ydva):
         """Converts dva to retinal coords
 
         Parameters
@@ -469,9 +589,9 @@ class Watson2014DisplaceMap(Watson2014Map):
         rho_dva += self.watson_displacement(rho_dva, meridian=meridian)
         # Convert back to x, y (dva):
         x, y = pol2cart(theta, rho_dva)
-        return super(Watson2014DisplaceMap, self).dva2ret(x, y)
+        return super(Watson2014DisplaceMap, self).dva_to_ret(x, y)
 
-    def ret2dva(self, xret, yret):
+    def ret_to_dva(self, xret, yret):
         raise NotImplementedError
 
 

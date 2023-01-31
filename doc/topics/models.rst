@@ -94,9 +94,6 @@ class. For example, to create a new spatial model, you will need to subclass
 :py:class:`~pulse2percept.models.SpatialModel` and provide implementations for
 the following methods:
 
-*  ``dva2ret``: a means to convert from degrees of visual angle (dva) to
-   retinal coordinates (microns).
-*  ``ret2dva``: a means to convert from retinal coordinates to dva.
 *  ``_predict_spatial``: a method that accepts an
    :py:class:`~pulse2percept.implants.ElectrodeArray` as well as a
    :py:class:`~pulse2percept.stimuli.Stimulus` and computes the brightness at
@@ -134,15 +131,7 @@ A full working example:
             params.update(myparam=1)
             # Return the combined dictionary:
             return params
-
-        def dva2ret(self, dva):
-            """Convert degrees of visual angle (dva) into retinal coords (um)"""
-            return 280.0 * dva
-
-        def ret2dva(self, ret):
-            """Convert retinal corods (um) to degrees of visual angle (dva)"""
-            return ret / 280.0
-
+            
         def _build(self):
             """Perform heavy computations during the build process"""
             # Perform some expensive computation using parameters you

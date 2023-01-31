@@ -56,7 +56,7 @@ class ScoreboardSpatial(SpatialModel):
         Whether to simulate points on a rectangular or hexagonal grid
     retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
-        object that provides ``ret2dva`` and ``dva2ret`` methods.
+        that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
     n_gray : int, optional
@@ -99,8 +99,8 @@ class ScoreboardSpatial(SpatialModel):
                                         dtype=np.float32),
                                np.array([earray[e].y for e in stim.electrodes],
                                         dtype=np.float32),
-                               self.grid.xret.ravel(),
-                               self.grid.yret.ravel(),
+                               self.grid.ret.x.ravel(),
+                               self.grid.ret.y.ravel(),
                                self.rho,
                                self.thresh_percept,
                                self.n_threads)
@@ -139,7 +139,7 @@ class ScoreboardModel(Model):
         Whether to simulate points on a rectangular or hexagonal grid
     retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
-        object that provides ``ret2dva`` and ``dva2ret`` methods.
+        object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
     n_gray : int, optional
@@ -207,7 +207,7 @@ class AxonMapSpatial(SpatialModel):
         Whether to simulate points on a rectangular or hexagonal grid
     retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
-        object that provides ``ret2dva`` and ``dva2ret`` methods.
+        object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
     n_gray : int, optional
@@ -455,7 +455,7 @@ class AxonMapSpatial(SpatialModel):
             # Keep only reasonably sized axon bundles:
             bundles = list(filter(lambda x: len(x) > 10, bundles))
         # Convert to um:
-        bundles = [np.array(self.retinotopy.dva2ret(b[:, 0], b[:, 1])).T
+        bundles = [np.array(self.retinotopy.dva_to_ret(b[:, 0], b[:, 1])).T
                    for b in bundles]
         return bundles
 
@@ -494,9 +494,9 @@ class AxonMapSpatial(SpatialModel):
         if len(bundles) <= 0:
             raise ValueError("bundles must have length greater than zero")
         if xret is None:
-            xret = self.grid.xret
+            xret = self.grid.ret.x
         if yret is None:
-            yret = self.grid.yret
+            yret = self.grid.ret.y
         xret = np.asarray(xret, dtype=np.float32)
         yret = np.asarray(yret, dtype=np.float32)
         # For every axon segment, store the corresponding axon ID:
@@ -565,8 +565,8 @@ class AxonMapSpatial(SpatialModel):
             maximum length of any axon after being trimmed due to min_sensitivity 
 
         """
-        xyret = np.column_stack((self.grid.xret.ravel(),
-                                 self.grid.yret.ravel()))
+        xyret = np.column_stack((self.grid.ret.x.ravel(),
+                                 self.grid.ret.y.ravel()))
         # Only include axon segments that are < `max_d2` from the soma. These
         # axon segments will have `sensitivity` > `self.min_ax_sensitivity`:
         max_d2 = -2.0 * self.axlambda ** 2 * np.log(self.min_ax_sensitivity)
@@ -792,7 +792,7 @@ class AxonMapSpatial(SpatialModel):
             od_h = 6.85
             grid_transform = None
             # Flip y upside down for dva:
-            axon_bundles = [np.array(self.retinotopy.ret2dva(bundle[:, 0],
+            axon_bundles = [np.array(self.retinotopy.ret_to_dva(bundle[:, 0],
                                                              -bundle[:, 1])).T
                             for bundle in axon_bundles]
             labels = ['upper', 'lower', 'left', 'right']
@@ -801,16 +801,16 @@ class AxonMapSpatial(SpatialModel):
             units = 'microns'
             # Make sure we're filling the simulated area, rounded up/down,
             # but no smaller than (-5000, 5000):
-            xmin, ymin = self.retinotopy.dva2ret(self.xrange[0], self.yrange[0])
+            xmin, ymin = self.retinotopy.dva_to_ret(self.xrange[0], self.yrange[0])
             xmin = min(np.floor(xmin / 1000) * 1000, -5000)
             ymin = min(np.floor(ymin / 1000) * 1000, -5000)
-            xmax, ymax = self.retinotopy.dva2ret(self.xrange[1], self.yrange[1])
+            xmax, ymax = self.retinotopy.dva_to_ret(self.xrange[1], self.yrange[1])
             xmax = max(np.ceil(xmax / 1000) * 1000, 5000)
             ymax = max(np.ceil(ymax / 1000) * 1000, 5000)
-            od_xy = self.retinotopy.dva2ret(*self.loc_od)
+            od_xy = self.retinotopy.dva_to_ret(*self.loc_od)
             od_w = 1770
             od_h = 1880
-            grid_transform = self.retinotopy.dva2ret
+            grid_transform = self.retinotopy.dva_to_ret
             if self.eye == 'RE':
                 labels = ['superior', 'inferior', 'temporal', 'nasal']
             else:
@@ -892,7 +892,7 @@ class AxonMapModel(Model):
         Whether to simulate points on a rectangular or hexagonal grid
     retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
-        object that provides ``ret2dva`` and ``dva2ret`` methods.
+        object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
         used.
     n_gray : int, optional
