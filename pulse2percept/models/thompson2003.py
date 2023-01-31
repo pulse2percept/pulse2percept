@@ -2,7 +2,8 @@
 
 import numpy as np
 import copy
-from ..utils import Curcio1990Map, sample
+from ..utils import sample
+from ..topography import Curcio1990Map
 from ..models import Model, SpatialModel
 from ._thompson2003 import fast_thompson2003
 

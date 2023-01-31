@@ -8,7 +8,8 @@ from skimage.transform import SimilarityTransform
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
 from ..stimuli import Stimulus, ImageStimulus, VideoStimulus
-from ..utils import PrettyPrint, Grid2D
+from ..utils import PrettyPrint
+from ..topography import Grid2D
 from ..utils._fast_math import c_gcd
 
 
