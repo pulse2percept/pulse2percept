@@ -270,6 +270,8 @@ class ProsthesisSystem(PrettyPrint):
             self._stim = None
         elif isinstance(data, (list, tuple, dict)) and not data:
             self._stim = None
+        elif isinstance(data, np.ndarray) and data.size == 0:
+            self._stim = None
         else:
             # Preprocess can be a function (callable) or True/False:
             if callable(self.preprocess):

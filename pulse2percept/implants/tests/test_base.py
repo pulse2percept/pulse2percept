@@ -73,6 +73,8 @@ def test_ProsthesisSystem_stim():
     npt.assert_equal(implant.stim, None)
     implant.stim = {}
     npt.assert_equal(implant.stim, None)
+    implant.stim = np.array([])
+    npt.assert_equal(implant.stim, None)
 
     # color mapping
     stim = np.zeros((13*13, 5))
