@@ -68,6 +68,12 @@ def test_ProsthesisSystem_stim():
     with pytest.raises(ValueError):
         implant.stim = stim
 
+    # make sure empty stimulus causes None stim
+    implant.stim = []
+    npt.assert_equal(implant.stim, None)
+    implant.stim = {}
+    npt.assert_equal(implant.stim, None)
+
     # color mapping
     stim = np.zeros((13*13, 5))
     stim[84, 0] = 1
