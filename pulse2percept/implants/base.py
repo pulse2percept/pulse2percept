@@ -265,7 +265,12 @@ class ProsthesisSystem(PrettyPrint):
     @stim.setter
     def stim(self, data):
         """Stimulus setter (called upon ``self.stim = data``)"""
+        # if stim is empty or None
         if data is None:
+            self._stim = None
+        elif isinstance(data, (list, tuple, dict)) and not data:
+            self._stim = None
+        elif isinstance(data, np.ndarray) and data.size == 0:
             self._stim = None
         else:
             # Preprocess can be a function (callable) or True/False:
