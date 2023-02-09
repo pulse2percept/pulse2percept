@@ -172,16 +172,18 @@ class ElectrodeArray(PrettyPrint):
                 # Regular use case: single object
                 patches.append(electrode.plot_patch((electrode.x, electrode.y),
                                                     **kwargs))
-            if annotate:
+            
+        patch_collection = PatchCollection(patches, match_original=True,
+                                          zorder=ZORDER['annotate'], cmap=cm, norm=norm)
+        ax.add_collection(patch_collection)
+        ax._sci(patch_collection) # enables plt.colormap()
+        if annotate:
+            for name, electrode in self.electrodes.items():
                 ax.text(electrode.x, electrode.y, name, ha='center',
                         va='center',  color='black', size='large',
                         bbox={'boxstyle': 'square,pad=-0.2', 'ec': 'none',
                               'fc': (1, 1, 1, 0.7)},
                         zorder=ZORDER['annotate'])
-        patch_collection = PatchCollection(patches, match_original=True,
-                                          zorder=ZORDER['annotate'], cmap=cm, norm=norm)
-        ax.add_collection(patch_collection)
-        ax._sci(patch_collection) # enables plt.colormap()
         if autoscale:
             ax.autoscale(True)
         ax.set_xlabel('x (microns)')
