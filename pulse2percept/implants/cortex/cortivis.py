@@ -20,9 +20,8 @@ class Cortivis(ProsthesisSystem):
 
     # 400um spacing, 80um diameter at base, 10x10
     # depth of shanks: 1.5mm
-    def __init__(self, x=15000, y=0, z=0, rot=0, eye='RE', stim=None,
+    def __init__(self, x=15000, y=0, z=0, rot=0, stim=None,
                  preprocess=False, safe_mode=False):
-        self.eye = eye
         if not np.isclose(z, 0):
             raise NotImplementedError
         self.preprocess = preprocess
