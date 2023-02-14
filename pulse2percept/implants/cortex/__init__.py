@@ -10,7 +10,9 @@ Different cortical prosthetic implants such as TODO.
 """
 
 from .orion import Orion
+from .cortivis import Cortivis
 
 __all__ = [
-    "Orion"
+    "Orion",
+    "Cortivis"
 ]
