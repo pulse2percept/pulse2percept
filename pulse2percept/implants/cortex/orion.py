@@ -10,7 +10,7 @@ class Orion(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
     # TODO: Get rid of eye arg?
-    def __init__(self, x=15000, y=0, z=0, rot=0, eye='RE', stim=None,
+    def __init__(self, x=15000, y=0, z=0, rot=0, stim=None,
                  preprocess=False, safe_mode=False):
         """Orion I
         Parameters
@@ -26,8 +26,6 @@ class Orion(ProsthesisSystem):
             Rotation angle of the array (deg). Positive values denote
             counter-clock-wise (CCW) rotations in the cortical coordinate
             system.
-        eye : {'RE', 'LE'}, optional
-            Leftover from p2p. Now means cortical hemisphere
         preprocess : bool or callable, optional
             Either True/False to indicate whether to execute the implant's
             default preprocessing method whenever a new stimulus is assigned, 
@@ -36,7 +34,6 @@ class Orion(ProsthesisSystem):
             If safe mode is enabled, only charge-balanced stimuli are allowed.
         """
 
-        self.eye = eye
         if not np.isclose(z, 0):
             raise NotImplementedError
         self.preprocess = preprocess
