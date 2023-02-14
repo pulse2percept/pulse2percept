@@ -9,5 +9,8 @@ Different cortical prosthetic implants such as TODO.
     *  :ref:`Basic Concepts > Visual Prostheses <topics-implants>`
 """
 
+from .orion import Orion
+
 __all__ = [
+    "Orion"
 ]
