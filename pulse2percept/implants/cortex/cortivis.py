@@ -43,7 +43,3 @@ class Cortivis(ProsthesisSystem):
         # indexing into self.electrodes:
         self.stim = stim
 
-    def plot(self, annotate=False, autoscale=True, ax=None):
-        ax = super(Cortivis, self).plot(annotate=annotate, autoscale=autoscale,
-                                     ax=ax)
-        return ax
