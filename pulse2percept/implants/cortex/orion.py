@@ -56,8 +56,3 @@ class Orion(ProsthesisSystem):
         # Beware of race condition: Stim must be set last, because it requires
         # indexing into self.electrodes:
         self.stim = stim
-
-    def plot(self, annotate=False, autoscale=True, ax=None, stim_cmap=False):
-        ax = super(Orion, self).plot(annotate=annotate, autoscale=autoscale,
-                                     ax=ax)
-        return ax
