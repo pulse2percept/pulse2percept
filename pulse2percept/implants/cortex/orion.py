@@ -9,7 +9,6 @@ from ..electrode_arrays import ElectrodeGrid
 class Orion(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
-    # TODO: Get rid of eye arg?
     def __init__(self, x=15000, y=0, z=0, rot=0, stim=None,
                  preprocess=False, safe_mode=False):
         """Orion I
@@ -56,3 +55,10 @@ class Orion(ProsthesisSystem):
         # Beware of race condition: Stim must be set last, because it requires
         # indexing into self.electrodes:
         self.stim = stim
+
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
+        params = super()._pprint_params()
+        params.update({'shape': self.shape, 'safe_mode': self.safe_mode,
+                       'preprocess': self.preprocess})
+        return params
