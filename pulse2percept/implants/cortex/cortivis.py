@@ -43,3 +43,9 @@ class Cortivis(ProsthesisSystem):
         # indexing into self.electrodes:
         self.stim = stim
 
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
+        params = super()._pprint_params()
+        params.update({'shape': self.shape, 'safe_mode': self.safe_mode,
+                       'preprocess': self.preprocess})
+        return params
