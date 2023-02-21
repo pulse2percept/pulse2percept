@@ -2,7 +2,6 @@
 `CorticalMap`
 """
 import numpy as np
-import math
 from abc import abstractmethod
 
 from .base import VisualFieldMap
@@ -127,12 +126,12 @@ class Polimeni2006Map(CorticalMap):
         xV1, yV1 = self.add_nans(xV1, yV1, theta, radius)
         xV1 *= 1000
         yV1 *= 1000
-        return self._invert_left_cart(xV1, yV1, inverted)[:2]
+        return self._invert_left_cart(xV1, yV1, ~inverted)[:2]
 
     def dva_to_v2(self, theta, radius):
         theta, radius, inverted = self._invert_left_pol(theta, radius)
-        phi1 = math.pi / 2 * (1 - self.alpha1)
-        phi2 = math.pi / 2 * (1 - self.alpha2)
+        phi1 = np.pi / 2 * (1 - self.alpha1)
+        phi2 = np.pi / 2 * (1 - self.alpha2)
         thetaV2 = self.alpha2 * theta + np.sign(theta) * (phi2 + phi1)
         zV2 = -np.conj(radius * np.exp(1j * thetaV2))
         wV2 = (self.k * np.log((zV2 + self.a) / (zV2 + self.b)) -
@@ -141,13 +140,13 @@ class Polimeni2006Map(CorticalMap):
         xV2, yV2 = self.add_nans(xV2, yV2, theta, radius, allow_zero=False)
         xV2 *= 1000
         yV2 *= 1000
-        return self._invert_left_cart(xV2, yV2, inverted)[:2]
+        return self._invert_left_cart(xV2, yV2, ~inverted)[:2]
 
     def dva_to_v3(self, theta, radius):
         theta, radius, inverted = self._invert_left_pol(theta, radius)
-        phi1 = math.pi / 2 * (1 - self.alpha1)
-        phi2 = math.pi / 2 * (1 - self.alpha2)
-        thetaV3 = self.alpha3 * theta + np.sign(theta) * (math.pi - phi1 - phi2)
+        phi1 = np.pi / 2 * (1 - self.alpha1)
+        phi2 = np.pi / 2 * (1 - self.alpha2)
+        thetaV3 = self.alpha3 * theta + np.sign(theta) * (np.pi - phi1 - phi2)
         zV3 = radius * np.exp(1j * thetaV3)
         wV3 = (self.k * np.log((zV3 + self.a) / (zV3 + self.b)) -
                self.k * np.log(self.a/self.b))
@@ -155,7 +154,7 @@ class Polimeni2006Map(CorticalMap):
         xV3, yV3 = self.add_nans(xV3, yV3, theta, radius, allow_zero=False)
         xV3 *= 1000
         yV3 *= 1000
-        return self._invert_left_cart(xV3, yV3, inverted)[:2]
+        return self._invert_left_cart(xV3, yV3, ~inverted)[:2]
 
     def v1_to_dva(self, x, y):
         x, y, inverted = self._invert_left_cart(x, y)
@@ -168,7 +167,7 @@ class Polimeni2006Map(CorticalMap):
         r = np.sqrt(t1**2 + t2**2)
         thetav1 = np.arctan2(t2, t1)
         theta = thetav1 / self.alpha1
-        return self._invert_left_pol(theta, r, inverted)[:2]
+        return self._invert_left_pol(theta, r, ~inverted)[:2]
 
     def v2_to_dva(self, x, y):
         x, y, inverted = self._invert_left_cart(x, y)
@@ -181,14 +180,23 @@ class Polimeni2006Map(CorticalMap):
         r = np.sqrt(re**2 + im**2)
         thetav2 = np.arctan2(-im,re)
         thetav2 += np.sign(y)*np.pi
-        phi1 = math.pi / 2 * (1 - self.alpha1)
-        phi2 = math.pi / 2 * (1 - self.alpha2)
+        phi1 = np.pi / 2 * (1 - self.alpha1)
+        phi2 = np.pi / 2 * (1 - self.alpha2)
         theta = (thetav2 - (np.sign(y) * (phi1 + phi2))) / self.alpha2
         
-        return self._invert_left_pol(theta, r, inverted)[:2]
+        return self._invert_left_pol(theta, r, ~inverted)[:2]
 
     def v3_to_dva(self, x, y):
-        x, y = self._invert_left_cart(x,y)
+        x, y, inverted = self._invert_left_cart(x,y)
+        x /= 1000
+        y /= 1000
         w = x + y * 1j
-        z = (self.a * self.b * np.exp())
-        raise NotImplementedError
+        z = (self.a - self.a * np.exp(w/self.k)) / (self.a/self.b * np.exp(w/self.k) - 1)
+        re, im = np.real(z), np.imag(z)
+        r = np.sqrt(re**2 + im**2)
+        thetav3 = np.arctan2(im,re)
+        phi1 = np.pi / 2 * (1 - self.alpha1)
+        phi2 = np.pi / 2 * (1 - self.alpha2)
+        thetav3 -= np.sign(y) * (np.pi - phi1 - phi2)
+        theta = thetav3 / self.alpha3
+        return self._invert_left_pol(theta, r, ~inverted)[:2]
