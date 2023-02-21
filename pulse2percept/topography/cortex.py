@@ -66,3 +66,14 @@ class CorticalMap(VisualFieldMap):
     def v3_to_dva(self, x, y):
         """Convert V3 coordinates (um) to degrees visual angle (dva)"""
         raise NotImplementedError
+
+class Polimeni2006Map(CorticalMap):
+    """Polimeni visual mapping"""
+    def __init__(self, regions=['v1']):
+        super().__init__(regions=regions)
+        self.k = 15
+        self.a = 0.5
+        self.b = 90
+        self.alpha1 = 1
+        self.alpha2 = 0.333
+        self.alpha3 = 0.25
