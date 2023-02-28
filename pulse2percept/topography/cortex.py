@@ -88,6 +88,8 @@ class Polimeni2006Map(CorticalMap):
         # Check if we're reverting from an existing inversion
         if inverted is None:
             inverted = (theta > (np.pi / 2)) | (theta < - (np.pi / 2))
+            # then flip vertically
+            theta = -theta
 
         # Invert theta across x axis
         theta = np.where(inverted, np.pi - theta, theta)
@@ -103,6 +105,8 @@ class Polimeni2006Map(CorticalMap):
         # Check if we're reverting from an existing inversion
         if inverted is None:
             inverted = x < 0
+            # then flip vertically
+            y = -y
 
         # Invert across x axis
         x = np.where(inverted, -x, x)
