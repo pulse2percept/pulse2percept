@@ -128,3 +128,20 @@ def test_polimeni_v3():
     y_match = ((y > 0) & (theta < (0))) | ((y < 0) & (theta > (0)))
     npt.assert_equal(y_match, True)
 
+def test_polimeni_y_inversion():
+    map = Polimeni2006Map(regions=['v1','v2', 'v3'])
+
+    # check that y-inversion is correct
+    # point 0 is A and point 1 is B
+    # A is almost directly above B in the visual field
+    # so should be below B in v1 & v3
+    # and above B in v2
+    theta = np.array([2*np.pi/6, np.pi/6])
+    radius = np.array([6, 3])
+    v1x, v1y = map.from_dva()['v1'](theta, radius)
+    v2x, v2y = map.from_dva()['v2'](theta, radius)
+    v3x, v3y = map.from_dva()['v3'](theta, radius)
+
+    npt.assert_equal(v1y[0] < 0 and v1y[0] < v1y[1], True)
+    npt.assert_equal(v2y[0] < 0 and v2y[0] > v2y[1], True)
+    npt.assert_equal(v3y[0] < 0 and v3y[0] < v3y[1], True)

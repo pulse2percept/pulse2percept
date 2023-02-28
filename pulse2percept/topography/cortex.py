@@ -187,7 +187,6 @@ class Polimeni2006Map(CorticalMap):
         phi1 = np.pi / 2 * (1 - self.alpha1)
         phi2 = np.pi / 2 * (1 - self.alpha2)
         theta = (thetav2 - (np.sign(y) * (phi1 + phi2))) / self.alpha2
-        
         return self._invert_left_pol(theta, r, ~inverted)[:2]
 
     def v3_to_dva(self, x, y):
