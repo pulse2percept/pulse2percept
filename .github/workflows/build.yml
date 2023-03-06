@@ -10,7 +10,7 @@ jobs:
   # Continuous integration: Run unit tests on all supported platforms whenever
   # someone pushes a new commit or creates a pull request. 
   build:
-    name: Building on ${{ matrix.os }} with Python-${{ matrix.python-version }}
+    name: Building on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       # Test on all supported platforms using all supported Python versions:
