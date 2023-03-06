@@ -251,10 +251,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             use ``x_range=(0, 1)`` and ``xystep=0.5``.
         grid_type : {'rectangular', 'hexagonal'}
             Whether to simulate points on a rectangular or hexagonal grid
-        retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
-            An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
+        retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+            An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
             object that provides retinotopic mappings.
-            By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
+            By default, :py:class:`~pulse2percept.topography.Watson2014Map` is
             used.
         n_gray : int, optional
             The number of gray levels to use. If an integer is given, k-means
@@ -776,10 +776,10 @@ class BiphasicAxonMapModel(Model):
             use ``x_range=(0, 1)`` and ``xystep=0.5``.
         grid_type : {'rectangular', 'hexagonal'}
             Whether to simulate points on a rectangular or hexagonal grid
-        retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
-            An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
+        retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+            An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
             object that provides retinotopic mappings.
-            By default, :py:class:`~pulse2percept.utils.Watson2014Map` is
+            By default, :py:class:`~pulse2percept.topography.Watson2014Map` is
             used.
         n_gray : int, optional
             The number of gray levels to use. If an integer is given, k-means

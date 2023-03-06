@@ -69,8 +69,9 @@ class Grid2D(PrettyPrint):
             tracked at the class level
             
             Note: The list of regions given does NOT need be the regions currently
-            being used. If a given region does not exist at call time, then a ValueError
-            will be raised (e.g. grid.v1 with retinal retinotopy will throw an error).
+            being used (can be all valid regions). If a given region does not exist 
+            at call time, then a ValueError will be raised (e.g. grid.v1 with a
+            retinal visual field map will throw an error).
 
             Parameters:
             ------------
@@ -190,6 +191,15 @@ class Grid2D(PrettyPrint):
 
     def reset(self):
         self._iter = 0
+
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            return self._grid[key]
+        elif isinstance(key, int):
+            return self.CoordinateGrid(self.x.ravel()[key], self.y.ravel()[key])
+        else:
+            raise ValueError(f"Unknown key: {key}. Must be region name or \
+                              integer position")
 
     def build(self, retinotopy):
         for region, map_fn in retinotopy.from_dva().items():
