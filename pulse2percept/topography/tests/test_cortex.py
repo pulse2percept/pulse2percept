@@ -129,15 +129,15 @@ def test_polimeni_v3():
     npt.assert_equal(y_match, True)
 
 def test_polimeni_y_inversion():
-    map = Polimeni2006Map(regions=['v1','v2', 'v3'])
+    map = Polimeni2006Map(regions=['v1','v2','v3'])
 
     # check that y-inversion is correct
     # point 0 is A and point 1 is B
     # A is almost directly above B in the visual field
     # so should be below B in v1 & v3
     # and above B in v2
-    theta = np.array([2*np.pi/6, np.pi/6])
-    radius = np.array([6, 3])
+    theta = np.array([np.pi/3, np.pi/6])
+    radius = np.array([3, 3])
     v1x, v1y = map.from_dva()['v1'](theta, radius)
     v2x, v2y = map.from_dva()['v2'](theta, radius)
     v3x, v3y = map.from_dva()['v3'](theta, radius)
@@ -145,3 +145,27 @@ def test_polimeni_y_inversion():
     npt.assert_equal(v1y[0] < 0 and v1y[0] < v1y[1], True)
     npt.assert_equal(v2y[0] < 0 and v2y[0] > v2y[1], True)
     npt.assert_equal(v3y[0] < 0 and v3y[0] < v3y[1], True)
+
+def test_polimeni_continuity():
+    map = Polimeni2006Map(regions=['v1', 'v2', 'v3'])
+    
+    # check 8 points along the v2-v3 border
+    v2v3_theta = np.array([1e-5 for _ in range(4)]+[np.pi+1e-5 for _ in range(4)])
+    v2v3_radius = np.array([i for i in range(1, 5)]*2)
+
+    v2x, v2y = map.from_dva()['v2'](v2v3_theta, v2v3_radius)
+    v3x, v3y = map.from_dva()['v3'](v2v3_theta, v2v3_radius)
+
+    npt.assert_almost_equal(v2x, v3x, 1)
+    npt.assert_almost_equal(v2y, v3y, 1)
+        
+    # check 8 points along the v1-v2 border
+    v1v2_theta = np.array([np.pi / 2 for _ in range(4)] + [-np.pi / 2 for _ in range(4)])
+    v1v2_radius = np.array([i for i in range(1, 5)]*2)
+
+    v1x, v1y = map.from_dva()['v1'](v1v2_theta, v1v2_radius)
+    v2x, v2y = map.from_dva()['v2'](v1v2_theta, v1v2_radius)
+    
+    npt.assert_almost_equal(v1x, v2x, 1)
+    npt.assert_almost_equal(v1y, v2y, 1)
+    

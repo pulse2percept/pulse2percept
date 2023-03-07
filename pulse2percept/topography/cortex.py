@@ -88,13 +88,14 @@ class Polimeni2006Map(CorticalMap):
         # Check if we're reverting from an existing inversion
         if inverted is None:
             inverted = (theta > (np.pi / 2)) | (theta < - (np.pi / 2))
-            # then flip vertically
-            theta = -theta
 
-        # Invert theta across x axis
+        # Invert theta across y axis
         theta = np.where(inverted, np.pi - theta, theta)
         theta = np.where(theta > np.pi, theta - 2*np.pi, theta)
         theta = np.where(theta <= - np.pi, theta + 2*np.pi, theta)
+        
+        # Invert theta across x axis
+        theta = -theta
         return theta, radius, inverted
     
     def _invert_left_cart(self, x, y, inverted = None):
@@ -105,10 +106,8 @@ class Polimeni2006Map(CorticalMap):
         # Check if we're reverting from an existing inversion
         if inverted is None:
             inverted = x < 0
-            # then flip vertically
-            y = -y
 
-        # Invert across x axis
+        # Invert across y axis
         x = np.where(inverted, -x, x)
         return x, y, inverted
 
