@@ -7,15 +7,17 @@ import numpy as np
 class ScoreboardSpatial(SpatialModel):
     """Cortical adaptation of scoreboard model from [Beyeler2019]_
 
-    Implements the scoreboard model described in [Beyeler2019]_, where all
-    percepts are Gaussian blobs. The resulting percepts from different cortical
-    regions (e.g. v1/v2/v3) are added linearly
+    Implements the scoreboard model described in [Beyeler2019]_, where percepts
+    from each electrode are Gaussian blobs. The percepts resulting from different 
+    cortical regions (e.g. v1/v2/v3) are added linearly. The `rho` parameter 
+    modulates phosphene size.
 
     .. note ::
 
-        Use this class if you want a standalone model.
-        Use :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial` if you want
-        to combine the spatial model with a temporal model.
+        Use this class if you want to combine the spatial model with a temporal
+        model.
+        Use :py:class:`~pulse2percept.models.cortex.ScoreboardModel` if you want a
+        a standalone model.
 
     Parameters
     ----------
@@ -99,9 +101,10 @@ class ScoreboardSpatial(SpatialModel):
 class ScoreboardModel(Model):
     """Cortical adaptation of scoreboard model from [Beyeler2019]_ (standalone model)
 
-    Implements the scoreboard model described in [Beyeler2019]_, where all
-    percepts are Gaussian blobs. The resulting percepts from different cortical
-    regions are summed
+    Implements the scoreboard model described in [Beyeler2019]_, where percepts
+    from each electrode are Gaussian blobs. The percepts resulting from different 
+    cortical regions (e.g. v1/v2/v3) are added linearly. The `rho` parameter 
+    modulates phosphene size.
 
     .. note ::
 
