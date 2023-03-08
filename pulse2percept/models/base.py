@@ -708,7 +708,7 @@ class Model(PrettyPrint):
         if spatial is not None and not isinstance(spatial, SpatialModel):
             if issubclass(spatial, SpatialModel):
                 # User should have passed an instance, not a class:
-                spatial = spatial()
+                spatial = spatial(**params)
             else:
                 raise TypeError(f"'spatial' must be a SpatialModel instance, "
                                 f"not {type(spatial)}.")
@@ -717,7 +717,7 @@ class Model(PrettyPrint):
         if temporal is not None and not isinstance(temporal, TemporalModel):
             if issubclass(temporal, TemporalModel):
                 # User should have passed an instance, not a class:
-                temporal = temporal()
+                temporal = temporal(**params)
             else:
                 raise TypeError(f"'temporal' must be a TemporalModel instance, "
                                 f"not {type(temporal)}.")

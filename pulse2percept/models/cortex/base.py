@@ -1,7 +1,9 @@
 """`ScoreboardSpatial`, `ScoreboardModel"""
 
 from ..base import Model, SpatialModel
+from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard
+from ...utils.constants import ZORDER
 import numpy as np
 
 class ScoreboardSpatial(SpatialModel):
@@ -70,7 +72,7 @@ class ScoreboardSpatial(SpatialModel):
 
         # Use [Polemeni2006]_ visual field map by default
         if 'retinotopy' not in params.keys():
-            self.retinotopy = None # TODO: Polimeni2006Map(regions=self.regions)
+            self.retinotopy = Polimeni2006Map(regions=self.regions)
 
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
@@ -96,6 +98,64 @@ class ScoreboardSpatial(SpatialModel):
                                 self.rho, self.thresh_percept, self.n_threads)
                 for region in self.regions ],
             axis = 0)
+
+
+    def plot(self, use_dva=False, style='scatter', autoscale=True, ax=None,
+             figsize=None):
+        """Plot the model
+
+        Parameters
+        ----------
+        use_dva : bool, optional
+            Uses degrees of visual angle (dva) if True, else retinal
+            coordinates (microns)
+        style : {'hull', 'scatter', 'cell'}, optional
+            Grid plotting style:
+
+            * 'hull': Show the convex hull of the grid (that is, the outline of
+              the smallest convex set that contains all grid points).
+            * 'scatter': Scatter plot all grid points
+            * 'cell': Show the outline of each grid cell as a polygon. Note that
+              this can be costly for a high-resolution grid.
+        autoscale : bool, optional
+            Whether to adjust the x,y limits of the plot to fit the implant
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
+            A Matplotlib axes object. If None, will either use the current axes
+            (if exists) or create a new Axes object.
+        figsize : (float, float), optional
+            Desired (width, height) of the figure in inches
+
+        Returns
+        -------
+        ax : ``matplotlib.axes.Axes``
+            Returns the axis object of the plot
+        """
+        if not self.is_built:
+            self.build()
+        if use_dva:
+            ax = self.grid.plot(autoscale=autoscale, ax=ax, style=style,
+                                zorder=ZORDER['background'], figsize=figsize)
+            ax.set_xlabel('x (dva)')
+            ax.set_ylabel('y (dva)')
+        else:
+            for idx_region, region in enumerate(self.retinotopy.regions):
+                transform = self.retinotopy.from_dva()[region]
+                if region == 'v1':
+                    fc = 'red'
+                elif region == 'v2':
+                    fc = 'orange'
+                elif region == 'v3':
+                    fc = 'green'
+                ax = self.grid.plot(transform=transform, label=region, ax=ax,
+                                    zorder=ZORDER['background'] + 1, style=style,
+                                    figsize=figsize, autoscale=autoscale, fc=fc)
+
+
+            ax.legend(loc='upper right')
+
+            ax.set_xlabel('x (microns)')
+            ax.set_ylabel('y (microns)')
+        return ax
 
 
 class ScoreboardModel(Model):
@@ -160,6 +220,6 @@ class ScoreboardModel(Model):
     """
 
     def __init__(self, **params):
-        super(ScoreboardModel, self).__init__(spatial=ScoreboardSpatial(),
+        super(ScoreboardModel, self).__init__(spatial=ScoreboardSpatial(**params),
                                               temporal=None,
                                               **params)

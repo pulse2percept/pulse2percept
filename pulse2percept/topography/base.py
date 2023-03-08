@@ -16,7 +16,6 @@ from matplotlib.collections import PatchCollection
 from ..utils.base import PrettyPrint
 from ..utils.constants import ZORDER
 
-
 class Grid2D(PrettyPrint):
     """2D spatial grid
 
@@ -61,6 +60,8 @@ class Grid2D(PrettyPrint):
     """
 
     all_regions = ['dva', 'ret', 'v1', 'v2', 'v3']
+    discontinuous_x = ['v1', 'v2', 'v3']
+    discontinuous_y = ['v2', 'v3']
 
     @staticmethod
     def _register_regions(regions):
@@ -119,6 +120,7 @@ class Grid2D(PrettyPrint):
         self.step = step
         self.type = grid_type
         self.regions = []
+        self.retinotopy = None
         # Datatype for storing the grid of coordinates
         self.CoordinateGrid = namedtuple("CoordinateGrid", ['x', 'y'])
         # Internally, coordinate grids for each region are stored in _grid
@@ -202,6 +204,7 @@ class Grid2D(PrettyPrint):
                               integer position")
 
     def build(self, retinotopy):
+        self.retinotopy = retinotopy
         for region, map_fn in retinotopy.from_dva().items():
             self._grid[region] = self.CoordinateGrid(*map_fn(self.x, self.y))
             if region not in self.regions:
@@ -277,6 +280,17 @@ class Grid2D(PrettyPrint):
                     [xret + x_step / 2, yret + y_step / 2],
                     [xret + x_step / 2, yret - y_step / 2],
                 ])
+                # Check for discontinuity.
+                # This is super hacky, but different regions need to be plotted
+                # differently, and it can't be implemented from outside this fn
+                # because it depends not only on retinotopy, but also transform.
+                # If region is discontinuous and vertices cross boundary, skip
+                if (np.any([r in transform.__name__ for r in self.discontinuous_x]) and 
+                    np.sign(vertices[0][0]) != np.sign(vertices[2][0])):
+                    continue
+                if (np.any([r in transform.__name__ for r in self.discontinuous_y]) and 
+                    np.sign(vertices[0][1]) != np.sign(vertices[1][1])):
+                    continue
                 if transform is not None:
                     vertices = np.array(transform(*vertices.T)).T
                 patches.append(Polygon(vertices, alpha=0.3, ec='k', fc=fc,
@@ -291,9 +305,20 @@ class Grid2D(PrettyPrint):
             # Remove NaN values from the grid:
             points = points[:, ~np.logical_or(*np.isnan(points))]
             if style.lower() == 'hull':
-                hull = ConvexHull(points.T)
-                ax.add_patch(Polygon(points[:, hull.vertices].T, alpha=0.3, ec='k',
-                                     fc=fc, ls='--', zorder=zorder, label=label))
+                if self.retinotopy and self.retinotopy.split_map:
+                    points_right = points[:, points[0] >= 0]
+                    points_left = points[:, points[0] <= 0]
+                    hull_right = ConvexHull(points_right.T)
+                    hull_left = ConvexHull(points_left.T)
+                    ax.add_patch(Polygon(points_right[:, hull_right.vertices].T, alpha=0.3, ec='k',
+                                         fc=fc, ls='--', zorder=zorder, label=label))
+                    ax.add_patch(Polygon(points_left[:, hull_left.vertices].T, alpha=0.3, ec='k',
+                                         fc=fc, ls='--', zorder=zorder))
+                else:
+                    hull = ConvexHull(points.T)
+                    ax.add_patch(Polygon(points[:, hull.vertices].T, alpha=0.3, ec='k',
+                                         fc=fc, ls='--', zorder=zorder, label=label))
+
             elif style.lower() == 'scatter':
                 ax.scatter(*points, alpha=0.3, ec=fc, color=fc, marker='+',
                            zorder=zorder, label=label)
@@ -304,6 +329,9 @@ class Grid2D(PrettyPrint):
 
 class VisualFieldMap(object, metaclass=ABCMeta):
     """ Base template class for a visual field map (retinotopy) """
+
+    # If the map is split into left and right hemispheres. 
+    split_map = False
 
     @abstractmethod
     def from_dva(self):
