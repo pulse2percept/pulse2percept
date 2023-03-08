@@ -78,6 +78,10 @@ class ScoreboardSpatial(SpatialModel):
         """Returns all settable parameters of the scoreboard model"""
         base_params = super(ScoreboardSpatial, self).get_default_params()
         params = {
+                    # override xrange and yrange so we don't have points
+                    # on the boundary between hemispheres or y=0
+                    'xrange' : (-14.99, 15.01),
+                    'yrange' : (-14.99, 15.01),
                     # radial current spread
                     'rho': 200,  
                     # Visual field regions to simulate
@@ -85,6 +89,20 @@ class ScoreboardSpatial(SpatialModel):
                  }
         return {**base_params, **params}
 
+    def _build(self):
+        # could potentially just adjust these instead of warning
+        for region in self.regions:
+            if np.any(self.grid[region].x == 0):
+                raise UserWarning("Since the visual cortex is discontinuous " +
+                    "across hemispheres, it is recommended to not simulate points " +
+                    " at exactly x=0. This can be avoided by adding a small " + 
+                    "to both limits of xrange")
+            if (region in ['v2', 'v3'] and
+                np.any(self.grid[region].y == 0)):
+                raise UserWarning(f"Since the {region} is discontinuous " +
+                    "across the y axis, it is recommended to not simulate points " +
+                    " at exactly y=0. This can be avoided by adding a small " + 
+                    "to both limits of yrange")
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""

@@ -285,10 +285,12 @@ class Grid2D(PrettyPrint):
                 # differently, and it can't be implemented from outside this fn
                 # because it depends not only on retinotopy, but also transform.
                 # If region is discontinuous and vertices cross boundary, skip
-                if (np.any([r in transform.__name__ for r in self.discontinuous_x]) and 
+                if (transform and
+                    np.any([r in transform.__name__ for r in self.discontinuous_x]) and 
                     np.sign(vertices[0][0]) != np.sign(vertices[2][0])):
                     continue
-                if (np.any([r in transform.__name__ for r in self.discontinuous_y]) and 
+                if (transform and
+                    np.any([r in transform.__name__ for r in self.discontinuous_y]) and 
                     np.sign(vertices[0][1]) != np.sign(vertices[1][1])):
                     continue
                 if transform is not None:
