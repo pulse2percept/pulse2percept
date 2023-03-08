@@ -42,7 +42,7 @@ jobs:
           CIBW_BEFORE_BUILD_LINUX: "yum install -y python-devel zlib-devel libjpeg-turbo-devel wget && python -m pip install pip==20.3 && python -m pip install Pillow==6.2.1 && python -m pip install -r requirements.txt && python -m pip install -e ."
           CIBW_BEFORE_BUILD: "python -m pip install pip==20.3 && python -m pip install Pillow==6.2.1 && python -m pip install -r requirements.txt && python -m pip install -e ."
           CIBW_BUILD: "cp37-*"
-          CIBW_SKIP: "*-manylinux_i686"
+          CIBW_SKIP: "*-manylinux_i686 cp37-win32"
 
       - uses: actions/upload-artifact@v2
         with:
