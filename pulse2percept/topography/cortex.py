@@ -66,3 +66,139 @@ class CorticalMap(VisualFieldMap):
     def v3_to_dva(self, x, y):
         """Convert V3 coordinates (um) to degrees visual angle (dva)"""
         raise NotImplementedError
+
+
+class Polimeni2006Map(CorticalMap):
+    """Polimeni visual mapping"""
+    def __init__(self, regions=['v1']):
+        super().__init__(regions=regions)
+        self.k = 15
+        self.a = 0.5
+        self.b = 90
+        self.alpha1 = 1
+        self.alpha2 = 0.333
+        self.alpha3 = 0.25
+
+    def _invert_left_pol(self, theta, radius, inverted = None):
+        """
+        'Corrects' the mapping by flipping x axis if necessary, allowing for both
+         left and right hemisphere to use the same map.
+        """
+
+        # Check if we're reverting from an existing inversion
+        if inverted is None:
+            inverted = (theta > (np.pi / 2)) | (theta < - (np.pi / 2))
+
+        # Invert theta across y axis
+        theta = np.where(inverted, np.pi - theta, theta)
+        theta = np.where(theta > np.pi, theta - 2*np.pi, theta)
+        theta = np.where(theta <= - np.pi, theta + 2*np.pi, theta)
+        
+        # Invert theta across x axis
+        theta = -theta
+        return theta, radius, inverted
+    
+    def _invert_left_cart(self, x, y, inverted = None):
+        """
+        'Corrects' the mapping by flipping x axis if neccesary, allowing for both
+         left and right hemisphere to use the same map.
+        """
+        # Check if we're reverting from an existing inversion
+        if inverted is None:
+            inverted = x < 0
+
+        # Invert across y axis
+        x = np.where(inverted, -x, x)
+        return x, y, inverted
+
+    def add_nans(self, x, y, theta, radius, allow_zero=True):
+        idx_nan = ((theta < -np.pi/2) | (theta > np.pi/2) | (radius < 0) |
+                        (radius > 90) | (x < 0) | (x > 180))
+        if not allow_zero:
+            idx_nan = idx_nan | (theta == 0)
+        x[idx_nan], y[idx_nan] = np.nan, np.nan
+        return x, y
+
+    def dva_to_v1(self, theta, radius):
+        theta, radius, inverted = self._invert_left_pol(theta, radius)
+        thetaV1 = self.alpha1 * theta
+        zV1 = radius * np.exp(1j * thetaV1)
+        wV1 = (self.k * np.log((zV1 + self.a) / (zV1 + self.b)) -
+               self.k * np.log(self.a/self.b))
+        xV1, yV1 = np.real(wV1), np.imag(wV1)
+        xV1, yV1 = self.add_nans(xV1, yV1, theta, radius)
+        xV1 *= 1000
+        yV1 *= 1000
+        return self._invert_left_cart(xV1, yV1, ~inverted)[:2]
+
+    def dva_to_v2(self, theta, radius):
+        theta, radius, inverted = self._invert_left_pol(theta, radius)
+        phi1 = np.pi / 2 * (1 - self.alpha1)
+        phi2 = np.pi / 2 * (1 - self.alpha2)
+        thetaV2 = self.alpha2 * theta + np.sign(theta) * (phi2 + phi1)
+        zV2 = -np.conj(radius * np.exp(1j * thetaV2))
+        wV2 = (self.k * np.log((zV2 + self.a) / (zV2 + self.b)) -
+               self.k * np.log(self.a/self.b))
+        xV2, yV2 = np.real(wV2), np.imag(wV2)
+        xV2, yV2 = self.add_nans(xV2, yV2, theta, radius, allow_zero=False)
+        xV2 *= 1000
+        yV2 *= 1000
+        return self._invert_left_cart(xV2, yV2, ~inverted)[:2]
+
+    def dva_to_v3(self, theta, radius):
+        theta, radius, inverted = self._invert_left_pol(theta, radius)
+        phi1 = np.pi / 2 * (1 - self.alpha1)
+        phi2 = np.pi / 2 * (1 - self.alpha2)
+        thetaV3 = self.alpha3 * theta + np.sign(theta) * (np.pi - phi1 - phi2)
+        zV3 = radius * np.exp(1j * thetaV3)
+        wV3 = (self.k * np.log((zV3 + self.a) / (zV3 + self.b)) -
+               self.k * np.log(self.a/self.b))
+        xV3, yV3 = np.real(wV3), np.imag(wV3)
+        xV3, yV3 = self.add_nans(xV3, yV3, theta, radius, allow_zero=False)
+        xV3 *= 1000
+        yV3 *= 1000
+        return self._invert_left_cart(xV3, yV3, ~inverted)[:2]
+
+    def v1_to_dva(self, x, y):
+        x, y, inverted = self._invert_left_cart(x, y)
+        x /= 1000
+        y /= 1000
+        w = x + y*1j
+        z = (self.a - self.a * np.exp(w/self.k)) / (self.a/self.b * np.exp(w/self.k) - 1)
+        t1 = np.real(z)
+        t2 = np.imag(z)
+        r = np.sqrt(t1**2 + t2**2)
+        thetav1 = np.arctan2(t2, t1)
+        theta = thetav1 / self.alpha1
+        return self._invert_left_pol(theta, r, ~inverted)[:2]
+
+    def v2_to_dva(self, x, y):
+        x, y, inverted = self._invert_left_cart(x, y)
+        x /= 1000
+        y /= 1000
+        w = x + y * 1j
+        z = (self.a - self.a*np.exp(w / self.k)) / (self.a/self.b * np.exp(w/self.k) - 1)
+        re = np.real(z)
+        im = np.imag(z)
+        r = np.sqrt(re**2 + im**2)
+        thetav2 = np.arctan2(-im,re)
+        thetav2 += np.sign(y)*np.pi
+        phi1 = np.pi / 2 * (1 - self.alpha1)
+        phi2 = np.pi / 2 * (1 - self.alpha2)
+        theta = (thetav2 - (np.sign(y) * (phi1 + phi2))) / self.alpha2
+        return self._invert_left_pol(theta, r, ~inverted)[:2]
+
+    def v3_to_dva(self, x, y):
+        x, y, inverted = self._invert_left_cart(x,y)
+        x /= 1000
+        y /= 1000
+        w = x + y * 1j
+        z = (self.a - self.a * np.exp(w/self.k)) / (self.a/self.b * np.exp(w/self.k) - 1)
+        re, im = np.real(z), np.imag(z)
+        r = np.sqrt(re**2 + im**2)
+        thetav3 = np.arctan2(im,re)
+        phi1 = np.pi / 2 * (1 - self.alpha1)
+        phi2 = np.pi / 2 * (1 - self.alpha2)
+        thetav3 -= np.sign(y) * (np.pi - phi1 - phi2)
+        theta = thetav3 / self.alpha3
+        return self._invert_left_pol(theta, r, ~inverted)[:2]
