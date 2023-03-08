@@ -179,7 +179,7 @@ class ElectrodeArray(PrettyPrint):
                               'fc': (1, 1, 1, 0.7)},
                         zorder=ZORDER['annotate'])
         patch_collection = PatchCollection(patches, match_original=True,
-                                          zorder=ZORDER['annotate'], cmap=cm, norm=norm)
+                                          zorder=ZORDER['foreground'], cmap=cm, norm=norm)
         ax.add_collection(patch_collection)
         ax._sci(patch_collection) # enables plt.colormap()
         if autoscale:
