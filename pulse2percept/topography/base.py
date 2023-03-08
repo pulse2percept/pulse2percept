@@ -348,3 +348,23 @@ class VisualFieldMap(object, metaclass=ABCMeta):
             transform is optional for most models.
         """
         raise NotImplementedError
+
+    def __eq__(self, other):
+        """
+        Equality operator for VisualFieldMap.
+
+        Parameters
+        ----------
+        other: VisualFieldMap
+            VisualFieldMap to compare against
+
+        Returns
+        -------
+        bool:
+            True if the compared objects have identical attributes, False otherwise.
+        """
+        if not isinstance(other, self.__class__):
+            return False
+        if id(self) == id(other):
+            return True
+        return self.__dict__ == other.__dict__
