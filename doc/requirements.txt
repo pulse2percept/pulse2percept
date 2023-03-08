@@ -8,4 +8,8 @@ joblib>=0.11
 pandas
 h5py
 docutils<0.18
+<<<<<<< HEAD
 jax[cpu]<=0.4.3
+=======
+jax[cpu]<=0.4.3
+>>>>>>> 705fe3d3a97715c6b79f0648f2cfa3d1202dd28d
