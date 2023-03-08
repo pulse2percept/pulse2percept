@@ -4,6 +4,7 @@ from ..base import Model, SpatialModel
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard
 from ...utils.constants import ZORDER
+import warnings
 import numpy as np
 
 class ScoreboardSpatial(SpatialModel):
@@ -62,6 +63,7 @@ class ScoreboardSpatial(SpatialModel):
         Defaults to max number of user CPU cores.
 
     .. important ::
+    
         If you change important model parameters outside the constructor (e.g.,
         by directly setting ``model.xrange = (-10, 10)``), you will have to call
         ``model.build()`` again for your changes to take effect.
@@ -91,18 +93,17 @@ class ScoreboardSpatial(SpatialModel):
 
     def _build(self):
         # could potentially just adjust these instead of warning
-        for region in self.regions:
-            if np.any(self.grid[region].x == 0):
-                raise UserWarning("Since the visual cortex is discontinuous " +
-                    "across hemispheres, it is recommended to not simulate points " +
-                    " at exactly x=0. This can be avoided by adding a small " + 
-                    "to both limits of xrange")
-            if (region in ['v2', 'v3'] and
-                np.any(self.grid[region].y == 0)):
-                raise UserWarning(f"Since the {region} is discontinuous " +
-                    "across the y axis, it is recommended to not simulate points " +
-                    " at exactly y=0. This can be avoided by adding a small " + 
-                    "to both limits of yrange")
+        if np.any(self.grid['dva'].x == 0):
+            warnings.warn("Since the visual cortex is discontinuous " +
+                "across hemispheres, it is recommended to not simulate points " +
+                " at exactly x=0. This can be avoided by adding a small " + 
+                "to both limits of xrange") 
+        if (np.any([r in self.regions for r in self.grid.discontinuous_y]) and 
+            np.any(self.grid['dva'].y == 0)):
+            warnings.warn(f"Since some simulated regions are discontinuous " +
+                "across the y axis, it is recommended to not simulate points " +
+                " at exactly y=0. This can be avoided by adding a small " + 
+                "to both limits of yrange")
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""

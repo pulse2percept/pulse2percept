@@ -13,7 +13,6 @@ from skimage.transform import resize
 
 from ..utils import Data, deprecated, unique, sample
 from ..utils.constants import VIDEO_BLOCK_SIZE
-from ..topography import Grid2D
 
 
 class Percept(Data):
@@ -47,6 +46,8 @@ class Percept(Data):
 
     def __init__(self, data, space=None, time=None, metadata=None, n_gray=None,
                  noise=None):
+        # import at runtime to avoid circular import
+        from ..topography import Grid2D
         data = deepcopy(data)
         xdva = None
         ydva = None

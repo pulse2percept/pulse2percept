@@ -12,6 +12,10 @@ from ..utils.geometry import cart2pol, pol2cart
 class RetinalMap(VisualFieldMap):
     """ Template class for retinal visual field maps, which only have 1 region."""
     split_map = False
+
+    def __init__(self, **params):
+        super().__init__(**params)
+
     def from_dva(self):
         return {'ret' : self.dva_to_ret}
     

@@ -8,7 +8,7 @@ from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
 from ..percepts import Percept
 from ..utils import FreezeError
-from .base import BaseModel, NotBuiltError
+from .base import NotBuiltError, BaseModel
 from ._granley2021 import fast_biphasic_axon_map
 
 

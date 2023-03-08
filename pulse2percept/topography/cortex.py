@@ -13,14 +13,15 @@ class CorticalMap(VisualFieldMap):
     allowed_regions = {'v1', 'v2', 'v3'}
     split_map = True
 
-    def __init__(self, regions=['v1']):
-        if not isinstance(regions, list):
-            regions = list(regions)
-        for region in regions:
+    def __init__(self, **params):
+        super(CorticalMap, self).__init__(**params)
+        if not isinstance(self.regions, list):
+            self.regions = list(self.regions)
+        for region in self.regions:
             if region.lower() not in self.allowed_regions:
                 raise ValueError(f"Specified region {region} not supported."\
-                                 f" Options are {self.allowed_layers}")
-        self.regions = [r.lower() for r in regions]
+                                 f" Options are {self.allowed_regions}")
+        self.regions = [r.lower() for r in self.regions]
 
     def from_dva(self):
         mappings = dict()
@@ -42,6 +43,12 @@ class CorticalMap(VisualFieldMap):
             mappings['v3'] = self.v3_to_dva
         return mappings
     
+    def get_default_params(self):
+        params = {
+            'regions' : ['v1']
+        }
+        return params
+
     @abstractmethod
     def dva_to_v1(self, x, y):
         """Convert degrees visual angle (dva) to V1 coordinates (um)"""
@@ -72,14 +79,21 @@ class CorticalMap(VisualFieldMap):
 
 class Polimeni2006Map(CorticalMap):
     """Polimeni visual mapping"""
-    def __init__(self, regions=['v1']):
-        super().__init__(regions=regions)
-        self.k = 15
-        self.a = 0.5
-        self.b = 90
-        self.alpha1 = 1
-        self.alpha2 = 0.333
-        self.alpha3 = 0.25
+    def __init__(self, **params):
+        super().__init__(**params)
+
+    def get_default_params(self):
+        base_params = super(Polimeni2006Map, self).get_default_params()
+        params = {
+            'k' : 15,
+            'a' : 0.5,
+            'b' : 90,
+            'alpha1' : 1,
+            'alpha2' : 0.333,
+            'alpha3' : 0.25,
+            'jitter_boundary' : False
+        }
+        return {**base_params, **params}
 
     def _invert_left_pol(self, theta, radius, inverted = None):
         """
@@ -124,8 +138,14 @@ class Polimeni2006Map(CorticalMap):
         return x, y
 
     def dva_to_v1(self, x, y):
-        x = np.array(x)
-        y = np.array(y)
+        if not isinstance(x, np.ndarray):
+            x = np.array(x)
+        if not isinstance(x, np.ndarray):
+            y = np.array(y)
+        if self.jitter_boundary:
+            # remove and discontinuities across x axis
+            # shift to the same side as existing points
+            x[x==0] += np.sign(np.mean(x)) * 1e-3 
         theta, radius = cart2pol(x, y)
         theta, radius, inverted = self._invert_left_pol(theta, radius)
         thetaV1 = self.alpha1 * theta
@@ -139,8 +159,15 @@ class Polimeni2006Map(CorticalMap):
         return self._invert_left_cart(xV1, yV1, ~inverted)[:2]
 
     def dva_to_v2(self, x, y):
-        x = np.array(x)
-        y = np.array(y)
+        if not isinstance(x, np.ndarray):
+            x = np.array(x)
+        if not isinstance(x, np.ndarray):
+            y = np.array(y)
+        if self.jitter_boundary:
+            # remove and discontinuities across x and y axis
+            # shift to the same side as existing points
+            x[x==0] += np.sign(np.mean(x)) * 1e-3 
+            y[y==0] += np.sign(np.mean(y)) * 1e-3 
         theta, radius = cart2pol(x, y)
         theta, radius, inverted = self._invert_left_pol(theta, radius)
         phi1 = np.pi / 2 * (1 - self.alpha1)
@@ -156,8 +183,15 @@ class Polimeni2006Map(CorticalMap):
         return self._invert_left_cart(xV2, yV2, ~inverted)[:2]
 
     def dva_to_v3(self, x, y):
-        x = np.array(x)
-        y = np.array(y)
+        if not isinstance(x, np.ndarray):
+            x = np.array(x)
+        if not isinstance(x, np.ndarray):
+            y = np.array(y)
+        if self.jitter_boundary:
+            # remove and discontinuities across x and y axis
+            # shift to the same side as existing points
+            x[x==0] += np.sign(np.mean(x)) * 1e-3 
+            y[y==0] += np.sign(np.mean(y)) * 1e-3 
         theta, radius = cart2pol(x, y)
         theta, radius, inverted = self._invert_left_pol(theta, radius)
         phi1 = np.pi / 2 * (1 - self.alpha1)
@@ -173,8 +207,10 @@ class Polimeni2006Map(CorticalMap):
         return self._invert_left_cart(xV3, yV3, ~inverted)[:2]
 
     def v1_to_dva(self, x, y):
-        x = np.array(x)
-        y = np.array(y)
+        if not isinstance(x, np.ndarray):
+            x = np.array(x)
+        if not isinstance(x, np.ndarray):
+            y = np.array(y)
         x, y, inverted = self._invert_left_cart(x, y)
         x /= 1000
         y /= 1000
@@ -188,8 +224,10 @@ class Polimeni2006Map(CorticalMap):
         return pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
 
     def v2_to_dva(self, x, y):
-        x = np.array(x)
-        y = np.array(y)
+        if not isinstance(x, np.ndarray):
+            x = np.array(x)
+        if not isinstance(x, np.ndarray):
+            y = np.array(y)
         x, y, inverted = self._invert_left_cart(x, y)
         x /= 1000
         y /= 1000
@@ -206,8 +244,10 @@ class Polimeni2006Map(CorticalMap):
         return pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
 
     def v3_to_dva(self, x, y):
-        x = np.array(x)
-        y = np.array(y)
+        if not isinstance(x, np.ndarray):
+            x = np.array(x)
+        if not isinstance(x, np.ndarray):
+            y = np.array(y)
         x, y, inverted = self._invert_left_cart(x,y)
         x /= 1000
         y /= 1000

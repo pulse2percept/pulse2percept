@@ -15,6 +15,7 @@ from matplotlib.collections import PatchCollection
 
 from ..utils.base import PrettyPrint
 from ..utils.constants import ZORDER
+from ..models import BaseModel
 
 class Grid2D(PrettyPrint):
     """2D spatial grid
@@ -329,11 +330,16 @@ class Grid2D(PrettyPrint):
         return ax
 
 
-class VisualFieldMap(object, metaclass=ABCMeta):
+class VisualFieldMap(BaseModel):
     """ Base template class for a visual field map (retinotopy) """
 
     # If the map is split into left and right hemispheres. 
     split_map = False
+
+    def __init__(self, **params):
+        super().__init__(**params)
+        # don't need build functionality from BaseModel
+        self.is_built = True
 
     @abstractmethod
     def from_dva(self):
@@ -348,6 +354,10 @@ class VisualFieldMap(object, metaclass=ABCMeta):
             transform is optional for most models.
         """
         raise NotImplementedError
+
+    def get_default_params(self):
+        """Required to inherit from BaseModel"""
+        return {}
 
     def __eq__(self, other):
         """
