@@ -1,4 +1,5 @@
 from pulse2percept.topography import Polimeni2006Map
+from pulse2percept.utils import pol2cart, cart2pol
 import numpy as np
 import numpy.testing as npt
 
@@ -8,7 +9,7 @@ def test_polimeni_v1():
     theta = np.array([(i * np.pi - 0.1) / 6 for i in range(-5, 7)])
     radius = np.array([i for i in range(1, 13)])
 
-    x, y = map.from_dva()['v1'](theta, radius)
+    x, y = map.from_dva()['v1'](*pol2cart(theta, radius))
 
     expected_x = [
         15902.589306126785, 22701.701209282972, 27105.66605223716,
@@ -27,7 +28,7 @@ def test_polimeni_v1():
     npt.assert_almost_equal(x, expected_x)
     npt.assert_almost_equal(y, expected_y)
 
-    result_theta, result_radius = map.to_dva()['v1'](x, y)
+    result_theta, result_radius = cart2pol(*map.to_dva()['v1'](x, y))
 
     # check that the inverse functions work correctly
     npt.assert_almost_equal(theta, result_theta)
@@ -50,7 +51,7 @@ def test_polimeni_v2():
     theta = np.array([(i * np.pi - 0.1) / 6 for i in range(-5, 7)])
     radius = np.array([i for i in range(1, 13)])
 
-    x, y = map.from_dva()['v2'](theta, radius)
+    x, y = map.from_dva()['v2'](*pol2cart(theta, radius))
 
     expected_x = [
         9689.877814630294, 20645.517280735134, 27062.815960747776,
@@ -69,7 +70,7 @@ def test_polimeni_v2():
     npt.assert_almost_equal(x, expected_x)
     npt.assert_almost_equal(y, expected_y)
 
-    result_theta, result_radius = map.to_dva()['v2'](x, y)
+    result_theta, result_radius = cart2pol(*map.to_dva()['v2'](x, y))
 
     # check that the inverse functions work correctly
     npt.assert_almost_equal(theta, result_theta)
@@ -92,7 +93,7 @@ def test_polimeni_v3():
     theta = np.array([(i * np.pi - 0.1) / 6 for i in range(-5, 7)])
     radius = np.array([i for i in range(1, 13)])
 
-    x, y = map.from_dva()['v3'](theta, radius)
+    x, y = map.from_dva()['v3'](*pol2cart(theta, radius))
 
     expected_x = [
         7208.613020331824, 18466.684974346612, 25257.495476836517,
@@ -111,7 +112,7 @@ def test_polimeni_v3():
     npt.assert_almost_equal(x, expected_x)
     npt.assert_almost_equal(y, expected_y)
 
-    result_theta, result_radius = map.to_dva()['v3'](x, y)
+    result_theta, result_radius = cart2pol(*map.to_dva()['v3'](x, y))
 
     # check that the inverse functions work correctly
     npt.assert_almost_equal(theta, result_theta)
@@ -138,9 +139,9 @@ def test_polimeni_y_inversion():
     # and above B in v2
     theta = np.array([np.pi/3, np.pi/6])
     radius = np.array([3, 3])
-    v1x, v1y = map.from_dva()['v1'](theta, radius)
-    v2x, v2y = map.from_dva()['v2'](theta, radius)
-    v3x, v3y = map.from_dva()['v3'](theta, radius)
+    v1x, v1y = map.from_dva()['v1'](*pol2cart(theta, radius))
+    v2x, v2y = map.from_dva()['v2'](*pol2cart(theta, radius))
+    v3x, v3y = map.from_dva()['v3'](*pol2cart(theta, radius))
 
     npt.assert_equal(v1y[0] < 0 and v1y[0] < v1y[1], True)
     npt.assert_equal(v2y[0] < 0 and v2y[0] > v2y[1], True)
@@ -153,8 +154,8 @@ def test_polimeni_continuity():
     v2v3_theta = np.array([1e-5 for _ in range(4)]+[np.pi+1e-5 for _ in range(4)])
     v2v3_radius = np.array([i for i in range(1, 5)]*2)
 
-    v2x, v2y = map.from_dva()['v2'](v2v3_theta, v2v3_radius)
-    v3x, v3y = map.from_dva()['v3'](v2v3_theta, v2v3_radius)
+    v2x, v2y = map.from_dva()['v2'](*pol2cart(v2v3_theta, v2v3_radius))
+    v3x, v3y = map.from_dva()['v3'](*pol2cart(v2v3_theta, v2v3_radius))
 
     npt.assert_almost_equal(v2x, v3x, 1)
     npt.assert_almost_equal(v2y, v3y, 1)
@@ -163,8 +164,8 @@ def test_polimeni_continuity():
     v1v2_theta = np.array([np.pi / 2 for _ in range(4)] + [-np.pi / 2 for _ in range(4)])
     v1v2_radius = np.array([i for i in range(1, 5)]*2)
 
-    v1x, v1y = map.from_dva()['v1'](v1v2_theta, v1v2_radius)
-    v2x, v2y = map.from_dva()['v2'](v1v2_theta, v1v2_radius)
+    v1x, v1y = map.from_dva()['v1'](*pol2cart(v1v2_theta, v1v2_radius))
+    v2x, v2y = map.from_dva()['v2'](*pol2cart(v1v2_theta, v1v2_radius))
     
     npt.assert_almost_equal(v1x, v2x, 1)
     npt.assert_almost_equal(v1y, v2y, 1)

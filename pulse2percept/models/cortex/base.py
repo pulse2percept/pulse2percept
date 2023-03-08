@@ -112,7 +112,7 @@ class ScoreboardSpatial(SpatialModel):
                                         dtype=np.float32)
         return np.sum([
                 fast_scoreboard(stim.data, x_el, y_el,
-                                self.grid[region].x, self.grid[region].y,
+                                self.grid[region].x.ravel(), self.grid[region].y.ravel(),
                                 self.rho, self.thresh_percept, self.n_threads)
                 for region in self.regions ],
             axis = 0)

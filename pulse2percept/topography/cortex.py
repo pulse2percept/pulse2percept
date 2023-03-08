@@ -118,10 +118,14 @@ class Polimeni2006Map(CorticalMap):
                         (radius > 90) | (x < 0) | (x > 180))
         if not allow_zero:
             idx_nan = idx_nan | (theta == 0)
+        else:
+            idx_nan = idx_nan | ((theta == 0) & (radius == 0))
         x[idx_nan], y[idx_nan] = np.nan, np.nan
         return x, y
 
     def dva_to_v1(self, x, y):
+        x = np.array(x)
+        y = np.array(y)
         theta, radius = cart2pol(x, y)
         theta, radius, inverted = self._invert_left_pol(theta, radius)
         thetaV1 = self.alpha1 * theta
@@ -129,12 +133,14 @@ class Polimeni2006Map(CorticalMap):
         wV1 = (self.k * np.log((zV1 + self.a) / (zV1 + self.b)) -
                self.k * np.log(self.a/self.b))
         xV1, yV1 = np.real(wV1), np.imag(wV1)
-        xV1, yV1 = self.add_nans(xV1, yV1, theta, radius, allow_zero=False)
+        xV1, yV1 = self.add_nans(xV1, yV1, theta, radius)
         xV1 *= 1000
         yV1 *= 1000
         return self._invert_left_cart(xV1, yV1, ~inverted)[:2]
 
     def dva_to_v2(self, x, y):
+        x = np.array(x)
+        y = np.array(y)
         theta, radius = cart2pol(x, y)
         theta, radius, inverted = self._invert_left_pol(theta, radius)
         phi1 = np.pi / 2 * (1 - self.alpha1)
@@ -150,6 +156,8 @@ class Polimeni2006Map(CorticalMap):
         return self._invert_left_cart(xV2, yV2, ~inverted)[:2]
 
     def dva_to_v3(self, x, y):
+        x = np.array(x)
+        y = np.array(y)
         theta, radius = cart2pol(x, y)
         theta, radius, inverted = self._invert_left_pol(theta, radius)
         phi1 = np.pi / 2 * (1 - self.alpha1)
@@ -165,6 +173,8 @@ class Polimeni2006Map(CorticalMap):
         return self._invert_left_cart(xV3, yV3, ~inverted)[:2]
 
     def v1_to_dva(self, x, y):
+        x = np.array(x)
+        y = np.array(y)
         x, y, inverted = self._invert_left_cart(x, y)
         x /= 1000
         y /= 1000
@@ -178,6 +188,8 @@ class Polimeni2006Map(CorticalMap):
         return pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
 
     def v2_to_dva(self, x, y):
+        x = np.array(x)
+        y = np.array(y)
         x, y, inverted = self._invert_left_cart(x, y)
         x /= 1000
         y /= 1000
@@ -194,6 +206,8 @@ class Polimeni2006Map(CorticalMap):
         return pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
 
     def v3_to_dva(self, x, y):
+        x = np.array(x)
+        y = np.array(y)
         x, y, inverted = self._invert_left_cart(x,y)
         x /= 1000
         y /= 1000
