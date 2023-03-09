@@ -91,7 +91,8 @@ class Polimeni2006Map(CorticalMap):
             'alpha1' : 1,
             'alpha2' : 0.333,
             'alpha3' : 0.25,
-            'jitter_boundary' : False
+            'jitter_boundary' : False,
+            'left_offset' : 20000
         }
         return {**base_params, **params}
 
@@ -122,14 +123,15 @@ class Polimeni2006Map(CorticalMap):
         # Check if we're reverting from an existing inversion
         if inverted is None:
             inverted = x < 0
+            x = np.where(inverted, x + self.left_offset, x)
 
         # Invert across y axis
-        x = np.where(inverted, -x, x)
+        x = np.where(inverted, -x - self.left_offset, x)
         return x, y, inverted
 
     def add_nans(self, x, y, theta, radius, allow_zero=True):
         idx_nan = ((theta <= -np.pi/2) | (theta >= np.pi/2) | (radius < 0) |
-                        (radius > 90) | (x < 0) | (x > 180))
+                        (radius > 90) )
         if not allow_zero:
             idx_nan = idx_nan | (theta == 0)
         else:

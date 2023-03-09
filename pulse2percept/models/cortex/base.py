@@ -114,7 +114,8 @@ class ScoreboardSpatial(SpatialModel):
         return np.sum([
                 fast_scoreboard(stim.data, x_el, y_el,
                                 self.grid[region].x.ravel(), self.grid[region].y.ravel(),
-                                self.rho, self.thresh_percept, self.n_threads)
+                                self.rho, self.thresh_percept, 
+                                self.n_threads, 1, self.retinotopy.left_offset)
                 for region in self.regions ],
             axis = 0)
 
@@ -171,9 +172,10 @@ class ScoreboardSpatial(SpatialModel):
 
 
             ax.legend(loc='upper right')
-
-            ax.set_xlabel('x (microns)')
-            ax.set_ylabel('y (microns)')
+            ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
+            ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
+            ax.set_xlabel('x (mm)')
+            ax.set_ylabel('y (mm)')
         return ax
 
 
