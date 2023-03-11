@@ -165,6 +165,7 @@ class Polimeni2006Map(CorticalMap):
         if self.jitter_boundary:
             # remove and discontinuities across x and y axis
             # shift to the same side as existing points
+            print('jittering')
             x[x==0] += np.copysign(1e-3, np.mean(x)) 
             y[y==0] += np.copysign(1e-3, np.mean(y)) 
         theta, radius = cart2pol(x, y)
