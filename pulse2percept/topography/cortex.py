@@ -133,10 +133,11 @@ class Polimeni2006Map(CorticalMap):
     def add_nans(self, x, y, theta, radius, allow_zero=True):
         idx_nan = ((theta <= -np.pi/2) | (theta >= np.pi/2) | (radius < 0) |
                         (radius > 90) )
+        # isclose to avoid numerical issues
         if not allow_zero:
-            idx_nan = idx_nan | (theta == 0)
+            idx_nan = idx_nan | np.isclose(theta, 0, atol=1e-7)
         else:
-            idx_nan = idx_nan | ((theta == 0) & (radius == 0))
+            idx_nan = idx_nan | (np.isclose(theta, 0, atol=1e-7) & (radius == 0))
         x[idx_nan], y[idx_nan] = np.nan, np.nan
         return x, y
 
@@ -168,12 +169,7 @@ class Polimeni2006Map(CorticalMap):
             x[x==0] += np.copysign(1e-3, np.mean(x)) 
             y[y==0] += np.copysign(1e-3, np.mean(y)) 
         theta, radius = cart2pol(x, y)
-        print('theta', list(theta))
-        print('radius', list(radius))
         theta, radius, inverted = self._invert_left_pol(theta, radius)
-        print('theta post', list(theta))
-        print('radius post', list(radius))
-        print('inverted', list(inverted))
         phi1 = np.pi / 2 * (1 - self.alpha1)
         phi2 = np.pi / 2 * (1 - self.alpha2)
         thetaV2 = self.alpha2 * theta + np.sign(theta) * (phi2 + phi1)
