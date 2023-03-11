@@ -47,10 +47,8 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
         if 'v1' in regions:
             npt.assert_equal(model.grid.v1.x[~np.isnan(model.grid.v1.x)].size, 42)
         if 'v2' in regions:
-            print(list(~np.isnan(model.grid.v2.x)))
-            print('2')
-            print(list(model.grid.dva.y==0))
-            print(model.grid.dva.y)
+            print('not nans', list(~np.isnan(model.grid.v2.x)))
+            print('dva y', list(model.grid.dva.y==0))
             npt.assert_equal(model.grid.v2.x[~np.isnan(model.grid.v2.x)].size, 36)
         if 'v3' in regions:
             npt.assert_equal(model.grid.v3.x[~np.isnan(model.grid.v3.x)].size, 36)
