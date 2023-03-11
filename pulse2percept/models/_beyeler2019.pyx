@@ -21,9 +21,9 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
                       const float32[::1] ygrid,
                       float32 rho,
                       float32 thresh_percept,
-                      uint32 n_threads,
                       uint32 separate,
-                      float32 offset):
+                      float32 offset,
+                      uint32 n_threads):
     """Fast spatial response of the scoreboard model
 
     Parameters

@@ -5,6 +5,9 @@
     :toctree: _api
 
     cortex
+
+.. autosummary::
+    :toctree: _api
     base
     temporal
     thompson2003

@@ -103,7 +103,8 @@ class ScoreboardSpatial(SpatialModel):
                                self.grid.ret.y.ravel(),
                                self.rho,
                                self.thresh_percept,
-                               self.n_threads, 0, 0)
+                               0, 0, # don't set current boundaries
+                               self.n_threads)
 
 
 class ScoreboardModel(Model):

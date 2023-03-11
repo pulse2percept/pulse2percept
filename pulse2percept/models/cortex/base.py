@@ -69,21 +69,41 @@ class ScoreboardSpatial(SpatialModel):
         ``model.build()`` again for your changes to take effect.
 
     """
+    @property
+    def regions(self):
+        return self._regions
+    
+    @regions.setter
+    def regions(self, regions):
+        
+        if not isinstance(regions, list):
+            regions = [regions]
+        self._regions = regions
+
     def __init__(self, **params):
+        self._regions = None
         super(ScoreboardSpatial, self).__init__(**params)
 
         # Use [Polemeni2006]_ visual field map by default
         if 'retinotopy' not in params.keys():
             self.retinotopy = Polimeni2006Map(regions=self.regions)
+        elif 'regions' in params.keys() and \
+            set(self.regions) != set(self.retinotopy.regions):
+            raise ValueError("Conflicting regions in provided retinotopy and regions")
+        else:
+            # need to override self.regions
+            self.regions = self.retinotopy.regions
+
+        if not isinstance(self.regions, list):
+            self.regions = [self.regions]
 
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
         base_params = super(ScoreboardSpatial, self).get_default_params()
         params = {
-                    # override xrange and yrange so we don't have points
-                    # on the boundary between hemispheres or y=0
-                    'xrange' : (-14.99, 15.01),
-                    'yrange' : (-14.99, 15.01),
+                    'xrange' : (-5, 5),
+                    'yrange' : (-5, 5),
+                    'xystep' : 0.1,
                     # radial current spread
                     'rho': 200,  
                     # Visual field regions to simulate
@@ -92,18 +112,32 @@ class ScoreboardSpatial(SpatialModel):
         return {**base_params, **params}
 
     def _build(self):
-        # could potentially just adjust these instead of warning
+        # warn the user either that they are simulating points at discontinuous boundaries, 
+        # or that the points will be moved by a small constant
         if np.any(self.grid['dva'].x == 0):
-            warnings.warn("Since the visual cortex is discontinuous " +
-                "across hemispheres, it is recommended to not simulate points " +
-                " at exactly x=0. This can be avoided by adding a small " + 
-                "to both limits of xrange") 
+            if hasattr(self.retinotopy, 'jitter_boundary') and self.retinotopy.jitter_boundary:
+                warnings.warn("Since the visual cortex is discontinuous " +
+                    "across hemispheres, it is recommended to not simulate points " +
+                    " at exactly x=0. Points on the boundary will be moved " +
+                    "by a small constant") 
+            else:
+                warnings.warn("Since the visual cortex is discontinuous " +
+                    "across hemispheres, it is recommended to not simulate points " +
+                    " at exactly x=0. This can be avoided by adding a small " + 
+                    "to both limits of xrange") 
         if (np.any([r in self.regions for r in self.grid.discontinuous_y]) and 
             np.any(self.grid['dva'].y == 0)):
-            warnings.warn(f"Since some simulated regions are discontinuous " +
-                "across the y axis, it is recommended to not simulate points " +
-                " at exactly y=0. This can be avoided by adding a small " + 
-                "to both limits of yrange")
+            if hasattr(self.retinotopy, 'jitter_boundary') and self.retinotopy.jitter_boundary:
+                warnings.warn("Since some simulated regions are discontinuous " +
+                    "across the y axis, it is recommended to not simulate points " +
+                    " at exactly y=0.  Points on the boundary will be moved " +
+                    "by a small constant") 
+            else:
+                warnings.warn(f"Since some simulated regions are discontinuous " +
+                    "across the y axis, it is recommended to not simulate points " +
+                    " at exactly y=0. This can be avoided by adding a small " + 
+                    "to both limits of yrange or setting " +
+                    "self.retinotopy.jitter_boundary=True")
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
@@ -111,11 +145,19 @@ class ScoreboardSpatial(SpatialModel):
                                         dtype=np.float32)
         y_el = np.array([earray[e].y for e in stim.electrodes],
                                         dtype=np.float32)
+
+        # whether to allow current to spread between hemispheres
+        separate = 0
+        boundary = 0
+        if self.retinotopy.split_map:
+            separate = 1
+            boundary = self.retinotopy.left_offset/2
         return np.sum([
                 fast_scoreboard(stim.data, x_el, y_el,
                                 self.grid[region].x.ravel(), self.grid[region].y.ravel(),
                                 self.rho, self.thresh_percept, 
-                                self.n_threads, 1, self.retinotopy.left_offset)
+                                separate, boundary, 
+                                self.n_threads)
                 for region in self.regions ],
             axis = 0)
 

@@ -286,6 +286,9 @@ class Grid2D(PrettyPrint):
                 # differently, and it can't be implemented from outside this fn
                 # because it depends not only on retinotopy, but also transform.
                 # If region is discontinuous and vertices cross boundary, skip
+                # TODO Luke: This can be modified to no longer depend on the 
+                # transform name  when the transform parameter 
+                # is no longer passed (because we'll know region then)
                 if (transform and
                     np.any([r in transform.__name__ for r in self.discontinuous_x]) and 
                     np.sign(vertices[0][0]) != np.sign(vertices[2][0])):
@@ -325,8 +328,19 @@ class Grid2D(PrettyPrint):
             elif style.lower() == 'scatter':
                 ax.scatter(*points, alpha=0.3, ec=fc, color=fc, marker='+',
                            zorder=zorder, label=label)
+
+        
         # This is needed in MPL 3.0.X to set the axis limit correctly:
         ax.autoscale_view()
+
+        # plot boundary between hemispheres if it exists
+        # but don't change the plot limits 
+        lim = ax.get_xlim()
+        if self.retinotopy and self.retinotopy.split_map and hasattr(self.retinotopy, 'left_offset'):
+            boundary = self.retinotopy.left_offset / 2
+            ax.axvline(boundary, linestyle=':', c='gray')
+        ax.set_xlim(lim)
+
         return ax
 
 
