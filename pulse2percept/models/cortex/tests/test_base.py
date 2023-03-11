@@ -31,23 +31,25 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     npt.assert_equal(model.predict_percept(Cortivis()), None)
 
     # Converting ret <=> dva
+    retinotopy = Polimeni2006Map(jitter_boundary=jitter_boundary, regions=regions)
+    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=1, retinotopy=retinotopy).build()
     npt.assert_equal(isinstance(model.retinotopy, Polimeni2006Map), True)
     if jitter_boundary:
         npt.assert_equal(np.isnan(model.retinotopy.dva_to_v1([0], [0])), False)
         if 'v1' in regions:
-            npt.assert_equal(model.grid.v1.x[~np.isnan(model.grid.v1.x)].size, 3721)
+            npt.assert_equal(model.grid.v1.x[~np.isnan(model.grid.v1.x)].size, 49)
         if 'v2' in regions:
-            npt.assert_equal(model.grid.v2.x[~np.isnan(model.grid.v2.x)].size, 3721)
+            npt.assert_equal(model.grid.v2.x[~np.isnan(model.grid.v2.x)].size, 49)
         if 'v3' in regions:
-            npt.assert_equal(model.grid.v3.x[~np.isnan(model.grid.v3.x)].size, 3721)
+            npt.assert_equal(model.grid.v3.x[~np.isnan(model.grid.v3.x)].size, 49)
     else:
         npt.assert_equal(np.isnan(model.retinotopy.dva_to_v1([0], [0])), True)
         if 'v1' in regions:
-            npt.assert_equal(model.grid.v1.x[~np.isnan(model.grid.v1.x)].size, 3660)
+            npt.assert_equal(model.grid.v1.x[~np.isnan(model.grid.v1.x)].size, 42)
         if 'v2' in regions:
-            npt.assert_equal(model.grid.v2.x[~np.isnan(model.grid.v2.x)].size, 3600)
+            npt.assert_equal(model.grid.v2.x[~np.isnan(model.grid.v2.x)].size, 36)
         if 'v3' in regions:
-            npt.assert_equal(model.grid.v3.x[~np.isnan(model.grid.v3.x)].size, 3600)
+            npt.assert_equal(model.grid.v3.x[~np.isnan(model.grid.v3.x)].size, 36)
 
     implant = Cortivis(x=1000, stim=np.zeros(96))
     # Zero in = zero out:
