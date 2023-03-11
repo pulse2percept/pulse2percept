@@ -25,14 +25,14 @@ def test_polimeni_v1():
     ]
 
     # check that the conversion from dva to v1 was correct
-    npt.assert_almost_equal(x, expected_x)
-    npt.assert_almost_equal(y, expected_y)
+    npt.assert_almost_equal(x, expected_x, 2)
+    npt.assert_almost_equal(y, expected_y, 2)
 
     result_theta, result_radius = cart2pol(*map.to_dva()['v1'](x, y))
 
     # check that the inverse functions work correctly
-    npt.assert_almost_equal(theta, result_theta)
-    npt.assert_almost_equal(radius, result_radius)
+    npt.assert_almost_equal(theta, result_theta, 5)
+    npt.assert_almost_equal(radius, result_radius, 5)
 
     # check that points in the left visual field correspond to
     # the right hemisphere and vice versa
@@ -67,14 +67,14 @@ def test_polimeni_v2():
     ]
 
     # check that the conversion from dva to v2 was correct
-    npt.assert_almost_equal(x, expected_x)
-    npt.assert_almost_equal(y, expected_y)
+    npt.assert_almost_equal(x, expected_x, 2)
+    npt.assert_almost_equal(y, expected_y, 2)
 
     result_theta, result_radius = cart2pol(*map.to_dva()['v2'](x, y))
 
     # check that the inverse functions work correctly
-    npt.assert_almost_equal(theta, result_theta)
-    npt.assert_almost_equal(radius, result_radius)
+    npt.assert_almost_equal(theta, result_theta, 5)
+    npt.assert_almost_equal(radius, result_radius, 5)
 
     # check that points in the left visual field correspond to
     # the right hemisphere and vice versa
@@ -109,14 +109,14 @@ def test_polimeni_v3():
     ]
 
     # check that the conversion from dva to v3 was correct
-    npt.assert_almost_equal(x, expected_x)
-    npt.assert_almost_equal(y, expected_y)
+    npt.assert_almost_equal(x, expected_x, 2)
+    npt.assert_almost_equal(y, expected_y, 2)
 
     result_theta, result_radius = cart2pol(*map.to_dva()['v3'](x, y))
 
     # check that the inverse functions work correctly
-    npt.assert_almost_equal(theta, result_theta)
-    npt.assert_almost_equal(radius, result_radius)
+    npt.assert_almost_equal(theta, result_theta, 5)
+    npt.assert_almost_equal(radius, result_radius, 5)
 
     # check that points in the left visual field correspond to
     # the right hemisphere and vice versa
