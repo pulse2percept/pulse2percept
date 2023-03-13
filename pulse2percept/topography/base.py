@@ -117,6 +117,7 @@ class Grid2D(PrettyPrint):
         self.y_range = y_range
         self.step = step
         self.type = grid_type
+        self.retinotopy = None
         self.regions = []
         # Datatype for storing the grid of coordinates
         self.CoordinateGrid = namedtuple("CoordinateGrid", ['x', 'y'])
@@ -192,6 +193,7 @@ class Grid2D(PrettyPrint):
         self._iter = 0
 
     def build(self, retinotopy):
+        self.retinotopy = retinotopy
         for region, map_fn in retinotopy.from_dva().items():
             self._grid[region] = self.CoordinateGrid(*map_fn(self.x, self.y))
             if region not in self.regions:
@@ -200,8 +202,10 @@ class Grid2D(PrettyPrint):
             if region not in self.all_regions:
                 self._register_regions([region])
 
-    def plot(self, transform=None, label=None, style='hull', autoscale=True,
-             zorder=None, ax=None, figsize=None, fc='gray'):
+    def plot(
+            self, style='hull', autoscale=True, zorder=None, ax=None,
+            figsize=None, fc='gray'
+        ):
         """Plot the extension of the grid
 
         Parameters
@@ -254,39 +258,43 @@ class Grid2D(PrettyPrint):
             x_step = self.step
             y_step = self.step
 
-        if style.lower() == 'cell':
-            # Show a polygon for every grid cell that we are simulating:
-            if self.type == 'hexagonal':
-                raise NotImplementedError
-            patches = []
-            for xret, yret in zip(x.ravel(), y.ravel()):
-                # Outlines of the cell are given by (x,y) and the step size:
-                vertices = np.array([
-                    [xret - x_step / 2, yret - y_step / 2],
-                    [xret - x_step / 2, yret + y_step / 2],
-                    [xret + x_step / 2, yret + y_step / 2],
-                    [xret + x_step / 2, yret - y_step / 2],
-                ])
+        for label, transform in self.retinotopy.items():
+            if style.lower() == 'cell':
+                # Show a polygon for every grid cell that we are simulating:
+                if self.type == 'hexagonal':
+                    raise NotImplementedError
+                patches = []
+                for xret, yret in zip(x.ravel(), y.ravel()):
+                    # Outlines of the cell are given by (x,y) and the step size:
+                    vertices = np.array([
+                        [xret - x_step / 2, yret - y_step / 2],
+                        [xret - x_step / 2, yret + y_step / 2],
+                        [xret + x_step / 2, yret + y_step / 2],
+                        [xret + x_step / 2, yret - y_step / 2],
+                    ])
+                    if transform is not None:
+                        vertices = np.array(transform(*vertices.T)).T
+                    patches.append(Polygon(vertices, alpha=0.3, ec='k', fc=fc,
+                                           ls='--', zorder=zorder))
+                ax.add_collection(PatchCollection(patches, match_original=True,
+                                                  zorder=zorder, label=label))
+            else:
+                # Show either the convex hull or a scatter plot:
                 if transform is not None:
-                    vertices = np.array(transform(*vertices.T)).T
-                patches.append(Polygon(vertices, alpha=0.3, ec='k', fc=fc,
-                                       ls='--', zorder=zorder))
-            ax.add_collection(PatchCollection(patches, match_original=True,
-                                              zorder=zorder, label=label))
-        else:
-            # Show either the convex hull or a scatter plot:
-            if transform is not None:
-                x, y = transform(self.x, self.y)
-            points = np.vstack((x.ravel(), y.ravel()))
-            # Remove NaN values from the grid:
-            points = points[:, ~np.logical_or(*np.isnan(points))]
-            if style.lower() == 'hull':
-                hull = ConvexHull(points.T)
-                ax.add_patch(Polygon(points[:, hull.vertices].T, alpha=0.3, ec='k',
-                                     fc=fc, ls='--', zorder=zorder, label=label))
-            elif style.lower() == 'scatter':
-                ax.scatter(*points, alpha=0.3, ec=fc, color=fc, marker='+',
-                           zorder=zorder, label=label)
+                    x, y = transform(self.x, self.y)
+                points = np.vstack((x.ravel(), y.ravel()))
+                # Remove NaN values from the grid:
+                points = points[:, ~np.logical_or(*np.isnan(points))]
+                if style.lower() == 'hull':
+                    hull = ConvexHull(points.T)
+                    ax.add_patch(
+                        Polygon(
+                            points[:, hull.vertices].T, alpha=0.3,
+                            ec='k', fc=fc, ls='--', zorder=zorder,
+                            label=label))
+                elif style.lower() == 'scatter':
+                    ax.scatter(*points, alpha=0.3, ec=fc, color=fc, marker='+',
+                               zorder=zorder, label=label)
         # This is needed in MPL 3.0.X to set the axis limit correctly:
         ax.autoscale_view()
         return ax
