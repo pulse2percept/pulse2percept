@@ -184,8 +184,11 @@ class ElectrodeArray(PrettyPrint):
         ax._sci(patch_collection) # enables plt.colormap()
         if autoscale:
             ax.autoscale(True)
-        ax.set_xlabel('x (microns)')
-        ax.set_ylabel('y (microns)')
+        # dont relabel if its already set
+        if ax.get_xlabel() == "":
+            ax.set_xlabel('x (microns)')
+        if ax.get_ylabel() == "":
+            ax.set_ylabel('y (microns)')
         return ax
 
     def __getitem__(self, item):

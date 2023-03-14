@@ -37,7 +37,6 @@ def test_eq_Curcio19990Map():
 
     # Assert differing objects aren't equal
     differing_map = Watson2014Map()
-    differing_map.a = 5
     npt.assert_equal(curcio_map == differing_map, False)
 
 
@@ -84,8 +83,7 @@ def test_eq_Watson2014Map():
     npt.assert_equal(map == copied, True)
 
     # Assert differing objects aren't equal
-    differing_map = Watson2014Map()
-    differing_map.a = 5
+    differing_map = Curcio1990Map()
     npt.assert_equal(map == differing_map, False)
 
 

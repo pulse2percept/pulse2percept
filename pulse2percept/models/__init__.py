@@ -1,8 +1,13 @@
-"""Computational models of the retina, such as phosphene and neural response models.
+"""Computational models of the prosthetic vision, such as phosphene and neural response models.
+   Cortical models are in the cortex submodule.
 
 .. autosummary::
     :toctree: _api
 
+    cortex
+
+.. autosummary::
+    :toctree: _api
     base
     temporal
     thompson2003
@@ -26,11 +31,13 @@ from .nanduri2012 import (Nanduri2012Model, Nanduri2012Spatial,
                           Nanduri2012Temporal)
 from .granley2021 import BiphasicAxonMapModel, BiphasicAxonMapSpatial
 from .thompson2003 import Thompson2003Model, Thompson2003Spatial
+from . import cortex
 
 __all__ = [
     'AxonMapModel',
     'AxonMapSpatial',
     'BaseModel',
+    'cortex',
     'FadingTemporal',
     'Horsager2009Model',
     'Horsager2009Temporal',
@@ -45,5 +52,5 @@ __all__ = [
     'SpatialModel',
     'TemporalModel',
     'Thompson2003Model',
-    'Thompson2003Spatial'
+    'Thompson2003Spatial',
 ]

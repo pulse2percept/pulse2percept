@@ -9,7 +9,6 @@ from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
 from ..stimuli import Stimulus, ImageStimulus, VideoStimulus
 from ..utils import PrettyPrint
-from ..topography import Grid2D
 from ..utils._fast_math import c_gcd
 
 
@@ -150,6 +149,8 @@ class ProsthesisSystem(PrettyPrint):
             dy = abs(reduce(lambda a, b: c_gcd(a, b), np.diff(y)))
             # Build a new rectangular grid:
             try:
+                # import at runtime to avoid circular import
+                from ..topography import Grid2D
                 grid = Grid2D((np.min(x), np.max(x)), (np.min(y), np.max(y)),
                               step=(dx, dy))
             except MemoryError:

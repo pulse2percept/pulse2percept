@@ -5,6 +5,7 @@ and PRIMA.
 .. autosummary::
     : toctree: _api
 
+    cortex
     base
     electrodes
     electrode_arrays
@@ -27,6 +28,7 @@ from .alpha import AlphaIMS, AlphaAMS
 from .bvt import BVT24, BVT44
 from .prima import PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55, PRIMA40
 from .imie import IMIE
+from . import cortex
 
 __all__ = [
     'AlphaAMS',
@@ -35,6 +37,7 @@ __all__ = [
     'ArgusII',
     'BVT24',
     'BVT44',
+    'cortex',
     'DiskElectrode',
     'Electrode',
     'ElectrodeArray',
