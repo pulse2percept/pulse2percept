@@ -217,10 +217,8 @@ class Grid2D(PrettyPrint):
             if region not in self.all_regions:
                 self._register_regions([region])
 
-    def plot(
-            self, style='hull', autoscale=True, zorder=None, ax=None,
-            figsize=None, fc=None, use_dva=False
-        ):
+    def plot(self, style='hull', autoscale=True, zorder=None, ax=None,
+            figsize=None, fc=None, use_dva=False):
         """Plot the extension of the grid
 
         Parameters
@@ -243,6 +241,10 @@ class Grid2D(PrettyPrint):
         fc : str or valid matplotlib color, optional
             Facecolor, or edge color if style=scatter, of the plotted region
             Defaults to gray
+        use_dva : bool, optional
+            Whether dva or transformed points should be plotted.  If True, will
+            not apply any transformations, and if False, will apply all
+            transformations in self.retinotopy
         """
         if style.lower() not in ['hull', 'scatter', 'cell']:
             raise ValueError(f'Unknown plotting style "{style}". Choose from: '
