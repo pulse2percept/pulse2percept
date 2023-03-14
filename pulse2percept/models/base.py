@@ -449,15 +449,16 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         if not self.is_built:
             self.build()
+
+        zorder = ZORDER['background'] + (0 if use_dva else 1)
+
+        ax = self.grid.plot(autoscale=autoscale, ax=ax, style=style, zorder=zorder,
+                            figsize=figsize, use_dva=use_dva)
+        
         if use_dva:
-            ax = self.grid.plot(autoscale=autoscale, ax=ax, style=style,
-                                zorder=ZORDER['background'], figsize=figsize)
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')
         else:
-            ax = self.grid.plot(transform=self.retinotopy.dva_to_ret, ax=ax,
-                                zorder=ZORDER['background'] + 1, style=style,
-                                figsize=figsize, autoscale=autoscale)
             ax.set_xlabel('x (microns)')
             ax.set_ylabel('y (microns)')
         return ax

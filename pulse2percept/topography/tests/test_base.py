@@ -73,16 +73,22 @@ def test_Grid2D_make_rectangular_grid():
     npt.assert_almost_equal(Grid2D((-3, 3), (8, 12), step=0.123).x,
                             Grid2D((-3, 3), (8, 12), step=(0.123, 0.123)).x)
 
+class TestMapDouble(VisualFieldMap):
+    def from_dva(self):
+        return {
+            "double": lambda x, y: (2*x, 2*y)
+        }
 
 def test_Grid2D_plot():
     # This test is slow
     grid = Grid2D((-20, 20), (-40, 40), step=0.5)
-    ax = grid.plot()
+    ax = grid.plot(use_dva=True)
     npt.assert_equal(isinstance(ax, Axes), True)
     npt.assert_almost_equal(ax.get_xlim(), (-22, 22))
 
     # You can change the scaling:
-    ax = grid.plot(transform=lambda x, y: (2*x, 2*y))
+    grid.build(TestMapDouble())
+    ax = grid.plot()
     npt.assert_equal(isinstance(ax, Axes), True)
     npt.assert_almost_equal(ax.get_xlim(), (-44, 44))
 
@@ -96,7 +102,8 @@ def test_Grid2D_plot():
     ax = grid.plot(style='scatter')
 
     # Step might be a tuple (smoke test):
-    Grid2D((-5, 5), (-5, 5), step=(0.5, 1)).plot(style='cell')
+    grid = Grid2D((-5, 5), (-5, 5), step=(0.5, 1))
+    grid.plot(style='cell', use_dva=True)
 
 
 

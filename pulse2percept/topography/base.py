@@ -12,6 +12,8 @@ from collections import namedtuple
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
+import matplotlib as mpl
+
 
 from ..utils.base import PrettyPrint
 from ..utils.constants import ZORDER
@@ -217,20 +219,12 @@ class Grid2D(PrettyPrint):
 
     def plot(
             self, style='hull', autoscale=True, zorder=None, ax=None,
-            figsize=None, fc='gray'
+            figsize=None, fc=None, use_dva=False
         ):
         """Plot the extension of the grid
 
         Parameters
         ----------
-        transform : function, optional
-            A coordinate transform to be applied to the (x,y) coordinates of
-            the grid (e.g., :py:meth:`Curcio1990Transform.dva_to_ret`). It must
-            accept two input arguments (x and y) and output two variables (the
-            transformed x and y).
-        label : str, optional
-            A name to be used as the label of the matplotlib plot. This can be used
-            to label plots with multiple regions (i.e. call plt.legend after)
         style : {'hull', 'scatter', 'cell'}, optional
             * 'hull': Show the convex hull of the grid (that is, the outline of
               the smallest convex set that contains all grid points).
@@ -271,66 +265,72 @@ class Grid2D(PrettyPrint):
             x_step = self.step
             y_step = self.step
 
-        if style.lower() == 'cell':
-            # Show a polygon for every grid cell that we are simulating:
-            if self.type == 'hexagonal':
-                raise NotImplementedError
-            patches = []
-            for xret, yret in zip(x.ravel(), y.ravel()):
-                # Outlines of the cell are given by (x,y) and the step size:
-                vertices = np.array([
-                    [xret - x_step / 2, yret - y_step / 2],
-                    [xret - x_step / 2, yret + y_step / 2],
-                    [xret + x_step / 2, yret + y_step / 2],
-                    [xret + x_step / 2, yret - y_step / 2],
-                ])
-                # Check for discontinuity.
-                # This is super hacky, but different regions need to be plotted
-                # differently, and it can't be implemented from outside this fn
-                # because it depends not only on retinotopy, but also transform.
-                # If region is discontinuous and vertices cross boundary, skip
-                # TODO Luke: This can be modified to no longer depend on the 
-                # transform name  when the transform parameter 
-                # is no longer passed (because we'll know region then)
-                if (transform and
-                    np.any([r in transform.__name__ for r in self.discontinuous_x]) and 
-                    np.sign(vertices[0][0]) != np.sign(vertices[2][0])):
-                    continue
-                if (transform and
-                    np.any([r in transform.__name__ for r in self.discontinuous_y]) and 
-                    np.sign(vertices[0][1]) != np.sign(vertices[1][1])):
-                    continue
-                if transform is not None:
-                    vertices = np.array(transform(*vertices.T)).T
-                patches.append(Polygon(vertices, alpha=0.3, ec='k', fc=fc,
-                                       ls='--', zorder=zorder))
-            ax.add_collection(PatchCollection(patches, match_original=True,
-                                              zorder=zorder, label=label))
-        else:
-            # Show either the convex hull or a scatter plot:
-            if transform is not None:
-                x, y = transform(self.x, self.y)
-            points = np.vstack((x.ravel(), y.ravel()))
-            # Remove NaN values from the grid:
-            points = points[:, ~np.logical_or(*np.isnan(points))]
-            if style.lower() == 'hull':
-                if self.retinotopy and self.retinotopy.split_map:
-                    points_right = points[:, points[0] >= 0]
-                    points_left = points[:, points[0] <= 0]
-                    hull_right = ConvexHull(points_right.T)
-                    hull_left = ConvexHull(points_left.T)
-                    ax.add_patch(Polygon(points_right[:, hull_right.vertices].T, alpha=0.3, ec='k',
-                                         fc=fc, ls='--', zorder=zorder, label=label))
-                    ax.add_patch(Polygon(points_left[:, hull_left.vertices].T, alpha=0.3, ec='k',
-                                         fc=fc, ls='--', zorder=zorder))
-                else:
-                    hull = ConvexHull(points.T)
-                    ax.add_patch(Polygon(points[:, hull.vertices].T, alpha=0.3, ec='k',
-                                         fc=fc, ls='--', zorder=zorder, label=label))
+        transforms = (
+            [(None, None)]
+            if use_dva
+            else self.retinotopy.from_dva().items()
+        )
 
-            elif style.lower() == 'scatter':
-                ax.scatter(*points, alpha=0.3, ec=fc, color=fc, marker='+',
-                           zorder=zorder, label=label)
+        color_map = mpl.colormaps['turbo'].reversed().resampled(max(5, len(transforms)))
+        for idx, (label, transform) in enumerate(transforms):
+            color = fc if fc is not None else color_map(idx)
+
+            if style.lower() == 'cell':
+                # Show a polygon for every grid cell that we are simulating:
+                if self.type == 'hexagonal':
+                    raise NotImplementedError
+                patches = []
+                for xret, yret in zip(x.ravel(), y.ravel()):
+                    # Outlines of the cell are given by (x,y) and the step size:
+                    vertices = np.array([
+                        [xret - x_step / 2, yret - y_step / 2],
+                        [xret - x_step / 2, yret + y_step / 2],
+                        [xret + x_step / 2, yret + y_step / 2],
+                        [xret + x_step / 2, yret - y_step / 2],
+                    ])
+                    # Check for discontinuity.
+                    # This is super hacky, but different regions need to be plotted
+                    # differently, and it can't be implemented from outside this fn
+                    # because it depends not only on retinotopy, but also transform.
+                    # If region is discontinuous and vertices cross boundary, skip
+                    if (transform and
+                        np.any([r in transform.__name__ for r in self.discontinuous_x]) and 
+                        np.sign(vertices[0][0]) != np.sign(vertices[2][0])):
+                        continue
+                    if (transform and
+                        np.any([r in transform.__name__ for r in self.discontinuous_y]) and 
+                        np.sign(vertices[0][1]) != np.sign(vertices[1][1])):
+                        continue
+                    if transform is not None:
+                        vertices = np.array(transform(*vertices.T)).T
+                    patches.append(Polygon(vertices, alpha=0.3, ec='k', fc=color,
+                                        ls='--', zorder=zorder))
+                ax.add_collection(PatchCollection(patches, match_original=True,
+                                                zorder=zorder, label=label))
+            else:
+                # Show either the convex hull or a scatter plot:
+                if transform is not None:
+                    x, y = transform(self.x, self.y)
+                points = np.vstack((x.ravel(), y.ravel()))
+                # Remove NaN values from the grid:
+                points = points[:, ~np.logical_or(*np.isnan(points))]
+                if style.lower() == 'hull':
+                    if self.retinotopy and self.retinotopy.split_map:
+                        points_right = points[:, points[0] >= 0]
+                        points_left = points[:, points[0] <= 0]
+                        hull_right = ConvexHull(points_right.T)
+                        hull_left = ConvexHull(points_left.T)
+                        ax.add_patch(Polygon(points_right[:, hull_right.vertices].T, alpha=0.3, ec='k',
+                                            fc=color, ls='--', zorder=zorder, label=label))
+                        ax.add_patch(Polygon(points_left[:, hull_left.vertices].T, alpha=0.3, ec='k',
+                                            fc=color, ls='--', zorder=zorder))
+                    else:
+                        hull = ConvexHull(points.T)
+                        ax.add_patch(Polygon(points[:, hull.vertices].T, alpha=0.3, ec='k',
+                                            fc=color, ls='--', zorder=zorder, label=label))
+                elif style.lower() == 'scatter':
+                    ax.scatter(*points, alpha=0.3, ec=color, color=color, marker='+',
+                            zorder=zorder, label=label)
 
         
         # This is needed in MPL 3.0.X to set the axis limit correctly:

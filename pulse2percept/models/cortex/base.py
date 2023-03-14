@@ -161,66 +161,6 @@ class ScoreboardSpatial(SpatialModel):
                 for region in self.regions ],
             axis = 0)
 
-
-    def plot(self, use_dva=False, style='scatter', autoscale=True, ax=None,
-             figsize=None):
-        """Plot the model
-
-        Parameters
-        ----------
-        use_dva : bool, optional
-            Uses degrees of visual angle (dva) if True, else retinal
-            coordinates (microns)
-        style : {'hull', 'scatter', 'cell'}, optional
-            Grid plotting style:
-
-            * 'hull': Show the convex hull of the grid (that is, the outline of
-              the smallest convex set that contains all grid points).
-            * 'scatter': Scatter plot all grid points
-            * 'cell': Show the outline of each grid cell as a polygon. Note that
-              this can be costly for a high-resolution grid.
-        autoscale : bool, optional
-            Whether to adjust the x,y limits of the plot to fit the implant
-        ax : matplotlib.axes._subplots.AxesSubplot, optional
-            A Matplotlib axes object. If None, will either use the current axes
-            (if exists) or create a new Axes object.
-        figsize : (float, float), optional
-            Desired (width, height) of the figure in inches
-
-        Returns
-        -------
-        ax : ``matplotlib.axes.Axes``
-            Returns the axis object of the plot
-        """
-        if not self.is_built:
-            self.build()
-        if use_dva:
-            ax = self.grid.plot(autoscale=autoscale, ax=ax, style=style,
-                                zorder=ZORDER['background'], figsize=figsize)
-            ax.set_xlabel('x (dva)')
-            ax.set_ylabel('y (dva)')
-        else:
-            for idx_region, region in enumerate(self.retinotopy.regions):
-                transform = self.retinotopy.from_dva()[region]
-                if region == 'v1':
-                    fc = 'red'
-                elif region == 'v2':
-                    fc = 'orange'
-                elif region == 'v3':
-                    fc = 'green'
-                ax = self.grid.plot(transform=transform, label=region, ax=ax,
-                                    zorder=ZORDER['background'] + 1, style=style,
-                                    figsize=figsize, autoscale=autoscale, fc=fc)
-
-
-            ax.legend(loc='upper right')
-            ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
-            ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
-            ax.set_xlabel('x (mm)')
-            ax.set_ylabel('y (mm)')
-        return ax
-
-
 class ScoreboardModel(Model):
     """Cortical adaptation of scoreboard model from [Beyeler2019]_ (standalone model)
 
