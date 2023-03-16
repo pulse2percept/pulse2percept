@@ -6,6 +6,7 @@ from abc import abstractmethod
 
 from .base import VisualFieldMap
 from ..utils import pol2cart, cart2pol
+import matplotlib.pyplot as plt
 
 
 class CorticalMap(VisualFieldMap):
@@ -147,7 +148,7 @@ class Polimeni2006Map(CorticalMap):
         if self.jitter_boundary:
             # remove and discontinuities across x axis
             # shift to the same side as existing points
-            x[x==0] += np.copysign(1e-3, np.mean(x)) 
+            x[np.isclose(x, 0, rtol=0, atol=1e-7)] += np.copysign(1e-3, np.mean(x)) 
         theta, radius = cart2pol(x, y)
         theta, radius, inverted = self._invert_left_pol(theta, radius)
         thetaV1 = self.alpha1 * theta
@@ -166,8 +167,8 @@ class Polimeni2006Map(CorticalMap):
         if self.jitter_boundary:
             # remove and discontinuities across x and y axis
             # shift to the same side as existing points
-            x[x==0] += np.copysign(1e-3, np.mean(x)) 
-            y[y==0] += np.copysign(1e-3, np.mean(y)) 
+            x[np.isclose(x, 0, rtol=0, atol=1e-7)] += np.copysign(1e-3, np.mean(x)) 
+            y[np.isclose(y, 0, rtol=0, atol=1e-7)] += np.copysign(1e-3, np.mean(y)) 
         theta, radius = cart2pol(x, y)
         theta, radius, inverted = self._invert_left_pol(theta, radius)
         phi1 = np.pi / 2 * (1 - self.alpha1)
@@ -188,8 +189,8 @@ class Polimeni2006Map(CorticalMap):
         if self.jitter_boundary:
             # remove and discontinuities across x and y axis
             # shift to the same side as existing points
-            x[x==0] += np.copysign(1e-3, np.mean(x)) 
-            y[y==0] += np.copysign(1e-3, np.mean(y)) 
+            x[np.isclose(x, 0, rtol=0, atol=1e-7)] += np.copysign(1e-3, np.mean(x)) 
+            y[np.isclose(y, 0, rtol=0, atol=1e-7)] += np.copysign(1e-3, np.mean(y)) 
         theta, radius = cart2pol(x, y)
         theta, radius, inverted = self._invert_left_pol(theta, radius)
         phi1 = np.pi / 2 * (1 - self.alpha1)
@@ -253,3 +254,44 @@ class Polimeni2006Map(CorticalMap):
         thetav3 -= np.sign(y) * (np.pi - phi1 - phi2)
         theta = thetav3 / self.alpha3
         return pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
+    
+    def plot(self, ax=None):
+        if ax is None:
+            ax = plt.gca()
+        theta = np.pi + np.linspace(-np.pi/2+0.001, np.pi/2-0.001, num=102).reshape((1, -1))
+        radius = np.array([0.5, 2.5, 5, 10, 20, 40, 80]).reshape((-1, 1))
+        x, y = self.dva_to_v1(*pol2cart(theta, radius))
+        for i in range(x.shape[0]):
+            ax.plot(x[i, :], y[i, :], 'gray', label='v1' if i == 0 else None)
+            rad = f"{radius[i, 0] : .1f}" if radius[i, 0] < 5 else f"{radius[i, 0] : .0f}"
+            x_val = x[i, np.argsort(np.abs(y[i]))[0]]
+            ax.annotate(f"{rad}$\degree$", (x_val + 2000, 500),
+                         ha='center')
+        x, y = self.dva_to_v2(*pol2cart(theta, radius))
+        for i in range(x.shape[0]):
+            ax.plot(x[i, (theta < np.pi).ravel()], y[i, (theta < np.pi).ravel()],
+                    'blue', linewidth=1, label='v2' if i == 0 else None)
+            ax.plot(x[i, (theta > np.pi).ravel()], y[i, (theta > np.pi).ravel()],
+                    'blue', linewidth=1)
+        x, y = self.dva_to_v3(*pol2cart(theta, radius))
+        for i in range(x.shape[0]):
+            ax.plot(x[i, (theta < np.pi).ravel()], y[i, (theta < np.pi).ravel()],
+                    'red', linewidth=1, label='v3' if i == 0 else None)
+            ax.plot(x[i, (theta > np.pi).ravel()], y[i, (theta > np.pi).ravel()],
+                    'red', linewidth=1)
+
+
+        theta = np.pi + np.linspace(-np.pi/2, np.pi/2, 5).reshape((-1, 1))
+        radius = np.logspace(np.log10(1e-5), np.log10(80), num=50).reshape((1,
+                                                                            -1))
+        x, y = self.dva_to_v1(*pol2cart(theta, radius))
+        for i in range(x.shape[0]):
+            ax.plot(x[i, :], y[i, :], 'gray', linewidth=1)
+        theta = np.array([-np.pi/2, np.pi-1e-5, np.pi+1e-5, np.pi/2]).reshape((-1, 1))
+        x, y = self.dva_to_v2(*pol2cart(theta, radius))
+        for i in range(x.shape[0]):
+            ax.plot(x[i, :], y[i, :], 'blue', linewidth=1)
+        x, y = self.dva_to_v3(*pol2cart(theta, radius))
+        for i in range(x.shape[0]):
+            ax.plot(x[i, :], y[i, :], 'red', linewidth=1)
+        plt.legend()
