@@ -148,7 +148,7 @@ def test_polimeni_y_inversion():
     npt.assert_equal(v3y[0] < 0 and v3y[0] < v3y[1], True)
 
 def test_polimeni_continuity():
-    map = Polimeni2006Map(regions=['v1', 'v2', 'v3'])
+    map = Polimeni2006Map(regions=['v1', 'v2', 'v3'], jitter_boundary=False)
     
     # check 8 points along the v2-v3 border
     v2v3_theta = np.array([1e-5 for _ in range(4)]+[np.pi+1e-5 for _ in range(4)])
