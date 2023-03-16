@@ -267,16 +267,16 @@ class Grid2D(PrettyPrint):
             x_step = self.step
             y_step = self.step
 
-        transforms = (
-            [(None, None)]
-            if use_dva
-            else self.retinotopy.from_dva().items()
-        )
+        transforms = [(None, None)]
+        if not use_dva:
+            transforms = self.retinotopy.from_dva().items()
 
-        color_map = mpl.colormaps['turbo'].reversed().resampled(max(5, len(transforms)))
+        color_map = mpl.colormaps['tab10']
+        cmap_idx = {i : i for i in range(len(transforms))}
+        cmap_idx[0] = 3
+        cmap_idx[3] = 0
         for idx, (label, transform) in enumerate(transforms):
-            color = fc if fc is not None else color_map(idx)
-
+            color = fc if fc is not None else color_map(cmap_idx[idx])
             if style.lower() == 'cell':
                 # Show a polygon for every grid cell that we are simulating:
                 if self.type == 'hexagonal':
@@ -318,8 +318,10 @@ class Grid2D(PrettyPrint):
                 points = points[:, ~np.logical_or(*np.isnan(points))]
                 if style.lower() == 'hull':
                     if self.retinotopy and self.retinotopy.split_map:
-                        points_right = points[:, points[0] >= 0]
-                        points_left = points[:, points[0] <= 0]
+                        # all split maps have an offset for left fovea
+                        divide = self.retinotopy.left_offset / 2
+                        points_right = points[:, points[0] >= divide]
+                        points_left = points[:, points[0] <= divide]
                         hull_right = ConvexHull(points_right.T)
                         hull_left = ConvexHull(points_left.T)
                         ax.add_patch(Polygon(points_right[:, hull_right.vertices].T, alpha=0.3, ec='k',
@@ -331,7 +333,7 @@ class Grid2D(PrettyPrint):
                         ax.add_patch(Polygon(points[:, hull.vertices].T, alpha=0.3, ec='k',
                                             fc=color, ls='--', zorder=zorder, label=label))
                 elif style.lower() == 'scatter':
-                    ax.scatter(*points, alpha=0.3, ec=color, color=color, marker='+',
+                    ax.scatter(*points, alpha=0.4, ec=color, color=color, marker='+',
                             zorder=zorder, label=label)
 
         
@@ -341,7 +343,7 @@ class Grid2D(PrettyPrint):
         # plot boundary between hemispheres if it exists
         # but don't change the plot limits 
         lim = ax.get_xlim()
-        if self.retinotopy and self.retinotopy.split_map and hasattr(self.retinotopy, 'left_offset'):
+        if self.retinotopy and self.retinotopy.split_map:
             boundary = self.retinotopy.left_offset / 2
             ax.axvline(boundary, linestyle=':', c='gray')
         ax.set_xlim(lim)
