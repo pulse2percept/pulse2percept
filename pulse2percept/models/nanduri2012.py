@@ -38,10 +38,10 @@ class Nanduri2012Spatial(SpatialModel):
         Nominator of the attentuation function
     atten_n : float32, optional
         Exponent of the attenuation function's denominator
-    retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
-        An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
+    retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+        An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
-        By default, :py:class:`~pulse2percept.utils.Curcio1990Map` is
+        By default, :py:class:`~pulse2percept.topography.Curcio1990Map` is
         used.
     n_gray : int, optional
         The number of gray levels to use. If an integer is given, k-means
@@ -222,10 +222,10 @@ class Nanduri2012Model(Model):
         A scaling factor applied to the output of the model
     thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
-    retinotopy : :py:class:`~pulse2percept.utils.VisualFieldMap`, optional
-        An instance of a :py:class:`~pulse2percept.utils.VisualFieldMap`
+    retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+        An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
-        By default, :py:class:`~pulse2percept.utils.Curcio1990Map` is
+        By default, :py:class:`~pulse2percept.topography.Curcio1990Map` is
         used.
     n_gray : int, optional
         The number of gray levels to use. If an integer is given, k-means

@@ -105,14 +105,14 @@ for ax, transform in zip(axes, transforms):
 # ----------------------------------
 #
 # To create your own visual field map, you need to subclass the
-# :py:class:`~pulse2percept.utils.RetinalMap` template and provide your own
+# :py:class:`~pulse2percept.topography.RetinalMap` template and provide your own
 # ``dva_to_ret`` and ``ret_to_dva`` methods.
 # For example, the following class would (wrongly) assume that retinal
 # coordinates are identical to visual field coordinates:
 #
 # .. code-block:: python
 #
-#     class MyVisualFieldMap(p2p.utils.VisualFieldMap):
+#     class MyVisualFieldMap(p2p.topography.VisualFieldMap):
 #
 #         def dva_to_ret(self, xdva, ydva):
 #             return xdva, ydva

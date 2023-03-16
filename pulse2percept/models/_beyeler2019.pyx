@@ -21,6 +21,8 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
                       const float32[::1] ygrid,
                       float32 rho,
                       float32 thresh_percept,
+                      uint32 separate,
+                      float32 offset,
                       uint32 n_threads):
     """Fast spatial response of the scoreboard model
 
@@ -42,7 +44,11 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
         Spatial responses smaller than ``thresh_percept`` will be set to zero
     n_threads: uint32
         Number of CPU threads to use during parallelization using OpenMP.
-    
+    separate: uint32 : 
+        If nonzero, then points on different side of x=offset than the electrode
+        will not contribute to the percept (used for cortical models)
+    offset : float32
+         Boundary for separation
     """
     cdef:
         int32 idx_el, idx_time, idx_space, idx_bright
@@ -71,6 +77,10 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
         for idx_el in range(n_el):
             amp = stim[idx_el, idx_time]
             if c_abs(amp) > 0:
+                if separate != 0:
+                    if ((xel[idx_el] < offset)  !=  
+                        (xgrid[idx_space] < offset)):
+                        continue
                 dist2 = (c_pow(xgrid[idx_space] - xel[idx_el], 2) +
                          c_pow(ygrid[idx_space] - yel[idx_el], 2))
                 gauss = c_exp(-dist2 / (2.0 * rho * rho))

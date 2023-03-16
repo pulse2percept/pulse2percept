@@ -15,7 +15,7 @@ from matplotlib.collections import PatchCollection
 
 from ..utils.base import PrettyPrint
 from ..utils.constants import ZORDER
-
+from ..models import BaseModel
 
 class Grid2D(PrettyPrint):
     """2D spatial grid
@@ -61,6 +61,8 @@ class Grid2D(PrettyPrint):
     """
 
     all_regions = ['dva', 'ret', 'v1', 'v2', 'v3']
+    discontinuous_x = ['v1', 'v2', 'v3']
+    discontinuous_y = ['v2', 'v3']
 
     @staticmethod
     def _register_regions(regions):
@@ -69,8 +71,9 @@ class Grid2D(PrettyPrint):
             tracked at the class level
             
             Note: The list of regions given does NOT need be the regions currently
-            being used. If a given region does not exist at call time, then a ValueError
-            will be raised (e.g. grid.v1 with retinal retinotopy will throw an error).
+            being used (can be all valid regions). If a given region does not exist 
+            at call time, then a ValueError will be raised (e.g. grid.v1 with a
+            retinal visual field map will throw an error).
 
             Parameters:
             ------------
@@ -118,6 +121,7 @@ class Grid2D(PrettyPrint):
         self.step = step
         self.type = grid_type
         self.regions = []
+        self.retinotopy = None
         # Datatype for storing the grid of coordinates
         self.CoordinateGrid = namedtuple("CoordinateGrid", ['x', 'y'])
         # Internally, coordinate grids for each region are stored in _grid
@@ -191,7 +195,17 @@ class Grid2D(PrettyPrint):
     def reset(self):
         self._iter = 0
 
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            return self._grid[key]
+        elif isinstance(key, int):
+            return self.CoordinateGrid(self.x.ravel()[key], self.y.ravel()[key])
+        else:
+            raise ValueError(f"Unknown key: {key}. Must be region name or \
+                              integer position")
+
     def build(self, retinotopy):
+        self.retinotopy = retinotopy
         for region, map_fn in retinotopy.from_dva().items():
             self._grid[region] = self.CoordinateGrid(*map_fn(self.x, self.y))
             if region not in self.regions:
@@ -267,6 +281,22 @@ class Grid2D(PrettyPrint):
                     [xret + x_step / 2, yret + y_step / 2],
                     [xret + x_step / 2, yret - y_step / 2],
                 ])
+                # Check for discontinuity.
+                # This is super hacky, but different regions need to be plotted
+                # differently, and it can't be implemented from outside this fn
+                # because it depends not only on retinotopy, but also transform.
+                # If region is discontinuous and vertices cross boundary, skip
+                # TODO Luke: This can be modified to no longer depend on the 
+                # transform name  when the transform parameter 
+                # is no longer passed (because we'll know region then)
+                if (transform and
+                    np.any([r in transform.__name__ for r in self.discontinuous_x]) and 
+                    np.sign(vertices[0][0]) != np.sign(vertices[2][0])):
+                    continue
+                if (transform and
+                    np.any([r in transform.__name__ for r in self.discontinuous_y]) and 
+                    np.sign(vertices[0][1]) != np.sign(vertices[1][1])):
+                    continue
                 if transform is not None:
                     vertices = np.array(transform(*vertices.T)).T
                 patches.append(Polygon(vertices, alpha=0.3, ec='k', fc=fc,
@@ -281,19 +311,49 @@ class Grid2D(PrettyPrint):
             # Remove NaN values from the grid:
             points = points[:, ~np.logical_or(*np.isnan(points))]
             if style.lower() == 'hull':
-                hull = ConvexHull(points.T)
-                ax.add_patch(Polygon(points[:, hull.vertices].T, alpha=0.3, ec='k',
-                                     fc=fc, ls='--', zorder=zorder, label=label))
+                if self.retinotopy and self.retinotopy.split_map:
+                    points_right = points[:, points[0] >= 0]
+                    points_left = points[:, points[0] <= 0]
+                    hull_right = ConvexHull(points_right.T)
+                    hull_left = ConvexHull(points_left.T)
+                    ax.add_patch(Polygon(points_right[:, hull_right.vertices].T, alpha=0.3, ec='k',
+                                         fc=fc, ls='--', zorder=zorder, label=label))
+                    ax.add_patch(Polygon(points_left[:, hull_left.vertices].T, alpha=0.3, ec='k',
+                                         fc=fc, ls='--', zorder=zorder))
+                else:
+                    hull = ConvexHull(points.T)
+                    ax.add_patch(Polygon(points[:, hull.vertices].T, alpha=0.3, ec='k',
+                                         fc=fc, ls='--', zorder=zorder, label=label))
+
             elif style.lower() == 'scatter':
                 ax.scatter(*points, alpha=0.3, ec=fc, color=fc, marker='+',
                            zorder=zorder, label=label)
+
+        
         # This is needed in MPL 3.0.X to set the axis limit correctly:
         ax.autoscale_view()
+
+        # plot boundary between hemispheres if it exists
+        # but don't change the plot limits 
+        lim = ax.get_xlim()
+        if self.retinotopy and self.retinotopy.split_map and hasattr(self.retinotopy, 'left_offset'):
+            boundary = self.retinotopy.left_offset / 2
+            ax.axvline(boundary, linestyle=':', c='gray')
+        ax.set_xlim(lim)
+
         return ax
 
 
-class VisualFieldMap(object, metaclass=ABCMeta):
+class VisualFieldMap(BaseModel):
     """ Base template class for a visual field map (retinotopy) """
+
+    # If the map is split into left and right hemispheres. 
+    split_map = False
+
+    def __init__(self, **params):
+        super().__init__(**params)
+        # don't need build functionality from BaseModel
+        self.is_built = True
 
     @abstractmethod
     def from_dva(self):
@@ -308,3 +368,27 @@ class VisualFieldMap(object, metaclass=ABCMeta):
             transform is optional for most models.
         """
         raise NotImplementedError
+
+    def get_default_params(self):
+        """Required to inherit from BaseModel"""
+        return {}
+
+    def __eq__(self, other):
+        """
+        Equality operator for VisualFieldMap.
+
+        Parameters
+        ----------
+        other: VisualFieldMap
+            VisualFieldMap to compare against
+
+        Returns
+        -------
+        bool:
+            True if the compared objects have identical attributes, False otherwise.
+        """
+        if not isinstance(other, self.__class__):
+            return False
+        if id(self) == id(other):
+            return True
+        return self.__dict__ == other.__dict__
