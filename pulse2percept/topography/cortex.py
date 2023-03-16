@@ -294,4 +294,10 @@ class Polimeni2006Map(CorticalMap):
         x, y = self.dva_to_v3(*pol2cart(theta, radius))
         for i in range(x.shape[0]):
             ax.plot(x[i, :], y[i, :], 'red', linewidth=1)
-        plt.legend()
+        
+
+        ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
+        ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
+        ax.set_xlabel('x (mm)')
+        ax.set_ylabel('y (mm)')
+        ax.legend()
