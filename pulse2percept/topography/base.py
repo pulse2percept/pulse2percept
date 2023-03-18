@@ -276,7 +276,13 @@ class Grid2D(PrettyPrint):
         cmap_idx[0] = 3
         cmap_idx[3] = 0
         for idx, (label, transform) in enumerate(transforms):
-            color = fc if fc is not None else color_map(cmap_idx[idx])
+            if fc is not None:
+                color = fc
+            elif len(transforms) == 1:
+                color = "gray"
+            else:
+                color = color_map(cmap_idx[idx])
+
             if style.lower() == 'cell':
                 # Show a polygon for every grid cell that we are simulating:
                 if self.type == 'hexagonal':
@@ -296,11 +302,11 @@ class Grid2D(PrettyPrint):
                     # because it depends not only on retinotopy, but also transform.
                     # If region is discontinuous and vertices cross boundary, skip
                     if (transform and
-                        np.any([r in transform.__name__ for r in self.discontinuous_x]) and 
+                        label in self.discontinuous_x and 
                         np.sign(vertices[0][0]) != np.sign(vertices[2][0])):
                         continue
                     if (transform and
-                        np.any([r in transform.__name__ for r in self.discontinuous_y]) and 
+                        label in self.discontinuous_y and 
                         np.sign(vertices[0][1]) != np.sign(vertices[1][1])):
                         continue
                     if transform is not None:
@@ -319,7 +325,7 @@ class Grid2D(PrettyPrint):
                 if style.lower() == 'hull':
                     if self.retinotopy and self.retinotopy.split_map:
                         # all split maps have an offset for left fovea
-                        divide = self.retinotopy.left_offset / 2
+                        divide = 0 if use_dva else self.retinotopy.left_offset / 2
                         points_right = points[:, points[0] >= divide]
                         points_left = points[:, points[0] <= divide]
                         hull_right = ConvexHull(points_right.T)
