@@ -218,7 +218,7 @@ class Grid2D(PrettyPrint):
                 self._register_regions([region])
 
     def plot(self, style='hull', autoscale=True, zorder=None, ax=None,
-            figsize=None, fc=None, use_dva=False):
+            figsize=None, fc=None, use_dva=False, legend=False):
         """Plot the extension of the grid
 
         Parameters
@@ -245,6 +245,9 @@ class Grid2D(PrettyPrint):
             Whether dva or transformed points should be plotted.  If True, will
             not apply any transformations, and if False, will apply all
             transformations in self.retinotopy
+        legend : bool, optional
+            Whether to add a plot legend. The legend is always added if there 
+            are 2 or more regions. This only applies if there is 1 region.
         """
         if style.lower() not in ['hull', 'scatter', 'cell']:
             raise ValueError(f'Unknown plotting style "{style}". Choose from: '
@@ -267,21 +270,26 @@ class Grid2D(PrettyPrint):
             x_step = self.step
             y_step = self.step
 
-        transforms = [(None, None)]
+        transforms = [('dva', None)]
         if not use_dva:
             transforms = self.retinotopy.from_dva().items()
 
-        color_map = mpl.colormaps['tab10']
-        cmap_idx = {i : i for i in range(len(transforms))}
-        cmap_idx[0] = 3
-        cmap_idx[3] = 0
+        color_map = {
+            'ret' : 'gray',
+            'dva' : 'gray',
+            'v1' : 'red',
+            'v2' : 'orange',
+            'v3' : 'green'
+        }        
+        # for tracking legend items when style='cell'
+        legends = []
         for idx, (label, transform) in enumerate(transforms):
             if fc is not None:
-                color = fc
-            elif len(transforms) == 1:
-                color = "gray"
+                color = fc[label] if isinstance(fc, dict) else fc     
+            elif label in color_map.keys():
+                color = color_map[label]
             else:
-                color = color_map(cmap_idx[idx])
+                color = 'gray'
 
             if style.lower() == 'cell':
                 # Show a polygon for every grid cell that we are simulating:
@@ -296,10 +304,6 @@ class Grid2D(PrettyPrint):
                         [xret + x_step / 2, yret + y_step / 2],
                         [xret + x_step / 2, yret - y_step / 2],
                     ])
-                    # Check for discontinuity.
-                    # This is super hacky, but different regions need to be plotted
-                    # differently, and it can't be implemented from outside this fn
-                    # because it depends not only on retinotopy, but also transform.
                     # If region is discontinuous and vertices cross boundary, skip
                     if (transform and
                         label in self.discontinuous_x and 
@@ -309,10 +313,12 @@ class Grid2D(PrettyPrint):
                         label in self.discontinuous_y and 
                         np.sign(vertices[0][1]) != np.sign(vertices[1][1])):
                         continue
+                    # transform the points
                     if transform is not None:
                         vertices = np.array(transform(*vertices.T)).T
                     patches.append(Polygon(vertices, alpha=0.3, ec='k', fc=color,
-                                        ls='--', zorder=zorder))
+                                        ls='--', zorder=zorder, label=label))
+                legends.append(patches[0])
                 ax.add_collection(PatchCollection(patches, match_original=True,
                                                 zorder=zorder, label=label))
             else:
@@ -323,36 +329,45 @@ class Grid2D(PrettyPrint):
                 # Remove NaN values from the grid:
                 points = points[:, ~np.logical_or(*np.isnan(points))]
                 if style.lower() == 'hull':
-                    if self.retinotopy and self.retinotopy.split_map:
+                    if self.retinotopy and self.retinotopy.split_map and not use_dva:
                         # all split maps have an offset for left fovea
                         divide = 0 if use_dva else self.retinotopy.left_offset / 2
                         points_right = points[:, points[0] >= divide]
                         points_left = points[:, points[0] <= divide]
-                        hull_right = ConvexHull(points_right.T)
-                        hull_left = ConvexHull(points_left.T)
-                        ax.add_patch(Polygon(points_right[:, hull_right.vertices].T, alpha=0.3, ec='k',
-                                            fc=color, ls='--', zorder=zorder, label=label))
-                        ax.add_patch(Polygon(points_left[:, hull_left.vertices].T, alpha=0.3, ec='k',
+                        if points_right.size > 0:
+                            hull_right = ConvexHull(points_right.T)
+                            ax.add_patch(Polygon(points_right[:, hull_right.vertices].T, alpha=0.3, ec='k',
+                                            fc=color, ls='--', zorder=zorder))
+                        if points_left.size > 0:
+                            hull_left = ConvexHull(points_left.T)
+                            ax.add_patch(Polygon(points_left[:, hull_left.vertices].T, alpha=0.3, ec='k',
                                             fc=color, ls='--', zorder=zorder))
                     else:
                         hull = ConvexHull(points.T)
                         ax.add_patch(Polygon(points[:, hull.vertices].T, alpha=0.3, ec='k',
-                                            fc=color, ls='--', zorder=zorder, label=label))
+                                            fc=color, ls='--', zorder=zorder))
+                    legends.append(ax.patches[-1])
                 elif style.lower() == 'scatter':
                     ax.scatter(*points, alpha=0.4, ec=color, color=color, marker='+',
                             zorder=zorder, label=label)
-
         
         # This is needed in MPL 3.0.X to set the axis limit correctly:
         ax.autoscale_view()
-
         # plot boundary between hemispheres if it exists
         # but don't change the plot limits 
         lim = ax.get_xlim()
         if self.retinotopy and self.retinotopy.split_map:
             boundary = self.retinotopy.left_offset / 2
+            if use_dva:
+                boundary = 0
             ax.axvline(boundary, linestyle=':', c='gray')
         ax.set_xlim(lim)
+
+        if len(transforms) > 1 or legend:
+            if style in ['cell', 'hull']:
+                ax.legend(legends, [t[0] for t in transforms], loc='upper right')
+            else:
+                ax.legend(loc='upper right')
 
         return ax
 

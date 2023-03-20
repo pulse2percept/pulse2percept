@@ -160,6 +160,50 @@ class ScoreboardSpatial(SpatialModel):
                                 self.n_threads)
                 for region in self.regions ],
             axis = 0)
+    
+    def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
+             figsize=None, fc=None):
+        """Plot the model
+        Parameters
+        ----------
+        use_dva : bool, optional
+            Plot points in visual field. If false, simulated points will be 
+            plotted in cortex
+        style : {'hull', 'scatter', 'cell'}, optional
+            Grid plotting style:
+            * 'hull': Show the convex hull of the grid (that is, the outline of
+              the smallest convex set that contains all grid points).
+            * 'scatter': Scatter plot all grid points
+            * 'cell': Show the outline of each grid cell as a polygon. Note that
+              this can be costly for a high-resolution grid.
+        autoscale : bool, optional
+            Whether to adjust the x,y limits of the plot to fit the implant
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
+            A Matplotlib axes object. If None, will either use the current axes
+            (if exists) or create a new Axes object.
+        figsize : (float, float), optional
+            Desired (width, height) of the figure in inches
+        Returns
+        -------
+        ax : ``matplotlib.axes.Axes``
+            Returns the axis object of the plot
+        """
+        if style is None:
+            style = 'hull' if use_dva else 'scatter'
+        ax = self.grid.plot(style=style, use_dva=use_dva, autoscale=autoscale, 
+                            ax=ax, figsize=figsize, fc=fc, 
+                            zorder=ZORDER['background'], 
+                            legend=True if not use_dva else False)
+        if use_dva:
+            ax.set_xlabel('x (dva)')
+            ax.set_ylabel('y (dva)')
+        else:
+            ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
+            ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
+            ax.set_xlabel('x (mm)')
+            ax.set_ylabel('y (mm)')
+        return ax
+
 
 class ScoreboardModel(Model):
     """Cortical adaptation of scoreboard model from [Beyeler2019]_ (standalone model)
