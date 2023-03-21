@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 class CorticalMap(VisualFieldMap):
     """Template class for V1/V2/V3 visuotopic maps"""
     allowed_regions = {'v1', 'v2', 'v3'}
+
+    # All cortical maps are split into 2 hemispheres
     split_map = True
 
     def __init__(self, **params):
@@ -47,6 +49,7 @@ class CorticalMap(VisualFieldMap):
     def get_default_params(self):
         params = {
             'regions' : ['v1'],
+            # Offset for the left hemisphere fovea
             'left_offset' : -20000
         }
         return params
