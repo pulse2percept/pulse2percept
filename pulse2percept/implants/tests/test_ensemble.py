@@ -9,6 +9,10 @@ def test_EnsembleImplant():
     # Invalid instantiations:
     with pytest.raises(TypeError):
         EnsembleImplant(implants="this can't happen")
+    with pytest.raises(TypeError):
+        EnsembleImplant(implants=[3,Cortivis()])
+    with pytest.raises(TypeError):
+        EnsembleImplant(implants={'1': Cortivis(), '2': 'abcd'})
 
     # Instantiate with list
     p1 = ProsthesisSystem(PointSource(0,0,0))
