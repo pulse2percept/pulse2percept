@@ -11,9 +11,11 @@
 
 """
 from .base import ScoreboardModel, ScoreboardSpatial
+from .dynaphos import DynaphosSpatial
 
 
 __all__ = [
+    'DynaphosSpatial',
     'ScoreboardModel',
     'ScoreboardSpatial'
 ]
