@@ -3,6 +3,7 @@ import numpy.testing as npt
 import pytest
 from pulse2percept.implants import (EnsembleImplant, PointSource, ProsthesisSystem)
 from pulse2percept.implants.cortex import Cortivis
+from pulse2percept.models.cortex.base import ScoreboardModel
 
 def test_EnsembleImplant():
     # Invalid instantiations:
@@ -24,6 +25,11 @@ def test_EnsembleImplant():
     npt.assert_equal(ensemble[0], p2[0])
     npt.assert_equal(ensemble[1], p1[0])
     npt.assert_equal(ensemble.electrode_names, ['A-0','B-0'])
+
+    # predict_percept smoke test
+    ensemble.stim = [1,1]
+    model = ScoreboardModel().build()
+    model.predict_percept(ensemble)
 
 # we essentially just need to make sure that electrode names are
 # set properly, the rest of the EnsembleImplant functionality 
