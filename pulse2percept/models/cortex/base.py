@@ -4,10 +4,104 @@ from ..base import Model, SpatialModel
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard
 from ...utils.constants import ZORDER
-import warnings
 import numpy as np
 
-class ScoreboardSpatial(SpatialModel):
+class CortexSpatial(SpatialModel):
+    """Abstract base class for cortical models
+    
+    This is an abstract class that cortical models can subclass
+    to get cortical implementation of the following features. 
+    1) Updated default parameters for cortex
+    2) Handling of multiple visual regions via regions property
+    3) Plotting, including multiple visual regions, legends, vertical 
+       divide at longitudinal fissure, etc.
+    """
+    @property
+    def regions(self):
+        return self._regions
+    
+    @regions.setter
+    def regions(self, regions):
+        
+        if not isinstance(regions, list):
+            regions = [regions]
+        self._regions = regions
+
+    def __init__(self, **params):
+        self._regions = None
+        super(CortexSpatial, self).__init__(**params)
+
+        # Use [Polemeni2006]_ visual field map by default
+        if 'retinotopy' not in params.keys():
+            self.retinotopy = Polimeni2006Map(regions=self.regions)
+        elif 'regions' in params.keys() and \
+            set(self.regions) != set(self.retinotopy.regions):
+            raise ValueError("Conflicting regions in provided retinotopy and regions")
+        else:
+            # need to override self.regions
+            self.regions = self.retinotopy.regions
+
+        if not isinstance(self.regions, list):
+            self.regions = [self.regions]
+
+    def get_default_params(self):
+        """Returns all settable parameters of the scoreboard model"""
+        base_params = super(CortexSpatial, self).get_default_params()
+        params = {
+                    'xrange' : (-5, 5),
+                    'yrange' : (-5, 5),
+                    'xystep' : 0.1,
+                    # Visual field regions to simulate
+                    'regions' : ['v1']
+                 }
+        return {**base_params, **params}
+    
+
+    def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
+             figsize=None, fc=None):
+        """Plot the model
+        Parameters
+        ----------
+        use_dva : bool, optional
+            Plot points in visual field. If false, simulated points will be 
+            plotted in cortex
+        style : {'hull', 'scatter', 'cell'}, optional
+            Grid plotting style:
+            * 'hull': Show the convex hull of the grid (that is, the outline of
+              the smallest convex set that contains all grid points).
+            * 'scatter': Scatter plot all grid points
+            * 'cell': Show the outline of each grid cell as a polygon. Note that
+              this can be costly for a high-resolution grid.
+        autoscale : bool, optional
+            Whether to adjust the x,y limits of the plot to fit the implant
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
+            A Matplotlib axes object. If None, will either use the current axes
+            (if exists) or create a new Axes object.
+        figsize : (float, float), optional
+            Desired (width, height) of the figure in inches
+        Returns
+        -------
+        ax : ``matplotlib.axes.Axes``
+            Returns the axis object of the plot
+        """
+        if style is None:
+            style = 'hull' if use_dva else 'scatter'
+        ax = self.grid.plot(style=style, use_dva=use_dva, autoscale=autoscale, 
+                            ax=ax, figsize=figsize, fc=fc, 
+                            zorder=ZORDER['background'], 
+                            legend=True if not use_dva else False)
+        if use_dva:
+            ax.set_xlabel('x (dva)')
+            ax.set_ylabel('y (dva)')
+        else:
+            ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
+            ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
+            ax.set_xlabel('x (mm)')
+            ax.set_ylabel('y (mm)')
+        return ax
+
+
+class ScoreboardSpatial(CortexSpatial):
     """Cortical adaptation of scoreboard model from [Beyeler2019]_
 
     Implements the scoreboard model described in [Beyeler2019]_, where percepts
@@ -69,75 +163,17 @@ class ScoreboardSpatial(SpatialModel):
         ``model.build()`` again for your changes to take effect.
 
     """
-    @property
-    def regions(self):
-        return self._regions
-    
-    @regions.setter
-    def regions(self, regions):
-        
-        if not isinstance(regions, list):
-            regions = [regions]
-        self._regions = regions
-
     def __init__(self, **params):
-        self._regions = None
         super(ScoreboardSpatial, self).__init__(**params)
-
-        # Use [Polemeni2006]_ visual field map by default
-        if 'retinotopy' not in params.keys():
-            self.retinotopy = Polimeni2006Map(regions=self.regions)
-        elif 'regions' in params.keys() and \
-            set(self.regions) != set(self.retinotopy.regions):
-            raise ValueError("Conflicting regions in provided retinotopy and regions")
-        else:
-            # need to override self.regions
-            self.regions = self.retinotopy.regions
-
-        if not isinstance(self.regions, list):
-            self.regions = [self.regions]
 
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
         base_params = super(ScoreboardSpatial, self).get_default_params()
         params = {
-                    'xrange' : (-5, 5),
-                    'yrange' : (-5, 5),
-                    'xystep' : 0.1,
                     # radial current spread
                     'rho': 200,  
-                    # Visual field regions to simulate
-                    'regions' : ['v1']
                  }
         return {**base_params, **params}
-
-    def _build(self):
-        # warn the user either that they are simulating points at discontinuous boundaries, 
-        # or that the points will be moved by a small constant
-        if np.any(self.grid['dva'].x == 0):
-            if hasattr(self.retinotopy, 'jitter_boundary') and self.retinotopy.jitter_boundary:
-                warnings.warn("Since the visual cortex is discontinuous " +
-                    "across hemispheres, it is recommended to not simulate points " +
-                    " at exactly x=0. Points on the boundary will be moved " +
-                    "by a small constant") 
-            else:
-                warnings.warn("Since the visual cortex is discontinuous " +
-                    "across hemispheres, it is recommended to not simulate points " +
-                    " at exactly x=0. This can be avoided by adding a small " + 
-                    "to both limits of xrange") 
-        if (np.any([r in self.regions for r in self.grid.discontinuous_y]) and 
-            np.any(self.grid['dva'].y == 0)):
-            if hasattr(self.retinotopy, 'jitter_boundary') and self.retinotopy.jitter_boundary:
-                warnings.warn("Since some simulated regions are discontinuous " +
-                    "across the y axis, it is recommended to not simulate points " +
-                    " at exactly y=0.  Points on the boundary will be moved " +
-                    "by a small constant") 
-            else:
-                warnings.warn(f"Since some simulated regions are discontinuous " +
-                    "across the y axis, it is recommended to not simulate points " +
-                    " at exactly y=0. This can be avoided by adding a small " + 
-                    "to both limits of yrange or setting " +
-                    "self.retinotopy.jitter_boundary=True")
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
@@ -160,65 +196,6 @@ class ScoreboardSpatial(SpatialModel):
                                 self.n_threads)
                 for region in self.regions ],
             axis = 0)
-
-
-    def plot(self, use_dva=False, style='scatter', autoscale=True, ax=None,
-             figsize=None):
-        """Plot the model
-
-        Parameters
-        ----------
-        use_dva : bool, optional
-            Uses degrees of visual angle (dva) if True, else retinal
-            coordinates (microns)
-        style : {'hull', 'scatter', 'cell'}, optional
-            Grid plotting style:
-
-            * 'hull': Show the convex hull of the grid (that is, the outline of
-              the smallest convex set that contains all grid points).
-            * 'scatter': Scatter plot all grid points
-            * 'cell': Show the outline of each grid cell as a polygon. Note that
-              this can be costly for a high-resolution grid.
-        autoscale : bool, optional
-            Whether to adjust the x,y limits of the plot to fit the implant
-        ax : matplotlib.axes._subplots.AxesSubplot, optional
-            A Matplotlib axes object. If None, will either use the current axes
-            (if exists) or create a new Axes object.
-        figsize : (float, float), optional
-            Desired (width, height) of the figure in inches
-
-        Returns
-        -------
-        ax : ``matplotlib.axes.Axes``
-            Returns the axis object of the plot
-        """
-        if not self.is_built:
-            self.build()
-        if use_dva:
-            ax = self.grid.plot(autoscale=autoscale, ax=ax, style=style,
-                                zorder=ZORDER['background'], figsize=figsize)
-            ax.set_xlabel('x (dva)')
-            ax.set_ylabel('y (dva)')
-        else:
-            for idx_region, region in enumerate(self.retinotopy.regions):
-                transform = self.retinotopy.from_dva()[region]
-                if region == 'v1':
-                    fc = 'red'
-                elif region == 'v2':
-                    fc = 'orange'
-                elif region == 'v3':
-                    fc = 'green'
-                ax = self.grid.plot(transform=transform, label=region, ax=ax,
-                                    zorder=ZORDER['background'] + 1, style=style,
-                                    figsize=figsize, autoscale=autoscale, fc=fc)
-
-
-            ax.legend(loc='upper right')
-            ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
-            ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
-            ax.set_xlabel('x (mm)')
-            ax.set_ylabel('y (mm)')
-        return ax
 
 
 class ScoreboardModel(Model):

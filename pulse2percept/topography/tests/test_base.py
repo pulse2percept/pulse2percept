@@ -2,9 +2,11 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 from matplotlib.axes import Axes
+import matplotlib.pyplot as plt
 
 from pulse2percept.topography import (VisualFieldMap, RetinalMap, 
-                                 CorticalMap, Grid2D)
+                                 CorticalMap, Grid2D, Polimeni2006Map,
+                                 Watson2014Map)
 
 @pytest.mark.parametrize('x_range', [(0, 0), (-3, 3), (4, -2), (1, -1)])
 @pytest.mark.parametrize('y_range', [(0, 0), (0, 7), (-3, 3), (2, -2)])
@@ -73,16 +75,24 @@ def test_Grid2D_make_rectangular_grid():
     npt.assert_almost_equal(Grid2D((-3, 3), (8, 12), step=0.123).x,
                             Grid2D((-3, 3), (8, 12), step=(0.123, 0.123)).x)
 
+class TestMapDouble(VisualFieldMap):
+    def from_dva(self):
+        return {
+            "double": lambda x, y: (2*x, 2*y)
+        }
 
-def test_Grid2D_plot():
+@pytest.mark.parametrize('vfmap', [Watson2014Map(), Polimeni2006Map(regions=['v1', 'v2', 'v3'])])
+def test_Grid2D_plot(vfmap):
+    plt.figure()
     # This test is slow
     grid = Grid2D((-20, 20), (-40, 40), step=0.5)
-    ax = grid.plot()
+    ax = grid.plot(use_dva=True)
     npt.assert_equal(isinstance(ax, Axes), True)
     npt.assert_almost_equal(ax.get_xlim(), (-22, 22))
 
     # You can change the scaling:
-    ax = grid.plot(transform=lambda x, y: (2*x, 2*y))
+    grid.build(TestMapDouble())
+    ax = grid.plot()
     npt.assert_equal(isinstance(ax, Axes), True)
     npt.assert_almost_equal(ax.get_xlim(), (-44, 44))
 
@@ -90,15 +100,21 @@ def test_Grid2D_plot():
     ax = grid.plot(figsize=(9, 7))
     npt.assert_almost_equal(ax.figure.get_size_inches(), (9, 7))
 
+    # Step might be a tuple (smoke test):
+    grid = Grid2D((-5, 5), (-5, 5), step=(2, 1))
+    grid.plot(style='cell', use_dva=True)
+
+    plt.figure()
+    grid = Grid2D((-5, 5), (-5, 5), step=1)
+    grid.build(retinotopy=vfmap)
     # You can change the style (smoke test):
     ax = grid.plot(style='hull')
+    if isinstance(vfmap, Polimeni2006Map):
+        npt.assert_equal(len(ax.patches), 6)
+    elif isinstance(vfmap, Watson2014Map):
+        npt.assert_equal(len(ax.patches), 1)
     ax = grid.plot(style='cell')
     ax = grid.plot(style='scatter')
-
-    # Step might be a tuple (smoke test):
-    Grid2D((-5, 5), (-5, 5), step=(0.5, 1)).plot(style='cell')
-
-
 
 
 class ValidCoordTransform(RetinalMap):
