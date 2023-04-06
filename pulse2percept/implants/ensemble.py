@@ -7,12 +7,12 @@ class EnsembleImplant(ProsthesisSystem):
     """Ensemble implant
 
     An ensemble implant combines multiple implants into one larger electrode array
-    for the purpose of modelling implants used in tandem, e.g. CORTIVIS
+    for the purpose of modeling tandem implants, e.g. CORTIVIS, ICVP
     
     Parameters
     ----------
     implants : list or dict
-        The list of implants to be combined.
+        A list or dict of implants to be combined.
     stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
         A valid source type for the :py:class:`~pulse2percept.stimuli.Stimulus`
         object (e.g., scalar, NumPy array, pulse train).
