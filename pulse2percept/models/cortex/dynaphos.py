@@ -103,7 +103,7 @@ class DynaphosSpatial(SpatialModel):
                amp = stim.data[el_idx, time_idx]
                if np.abs(amp) > 0:
                   if separate and not ((x_el[el_idx] < boundary) == 
-                           (xgrid[space_idx] < boundary)):
+                           (xgrid[space_idx] > 0)):
                      continue
                   D = 2 * np.sqrt(amp / K) # mm
                   P = (D / M[el_idx]) # dva
@@ -112,7 +112,6 @@ class DynaphosSpatial(SpatialModel):
                   sigma = P / 2
                   gauss = np.exp(-dist2 / (2 * sigma ** 2))
                   px_bright += amp * gauss
-            # print('brightness at (', xgrid[space_idx], ',' , ygrid[space_idx],'):', px_bright)
             bright[space_idx, time_idx] = px_bright
 
       return np.asarray(bright)

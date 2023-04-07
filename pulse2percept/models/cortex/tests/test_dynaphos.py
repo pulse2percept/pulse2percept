@@ -27,7 +27,7 @@ def test_predict_spatial():
     # test that no current can spread between hemispheres
     model = DynaphosSpatial(xrange=(-3, 3), yrange=(-3, 3), xystep=0.5).build()
     implant = Orion(x = 15000)
-    implant.stim = {e:500 for e in implant.electrode_names}
+    implant.stim = {e:1000 for e in implant.electrode_names}
     percept = model.predict_percept(implant)
     half = percept.shape[1] // 2
     npt.assert_equal(np.all(percept.data[:, half+1:] == 0), True)
