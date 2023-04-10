@@ -14,6 +14,7 @@ and PRIMA.
     bvt
     imie
     prima
+    ensemble
 
 .. seealso::
 
@@ -28,6 +29,7 @@ from .alpha import AlphaIMS, AlphaAMS
 from .bvt import BVT24, BVT44
 from .prima import PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55, PRIMA40
 from .imie import IMIE
+from .ensemble import EnsembleImplant
 from . import cortex
 
 __all__ = [
@@ -42,6 +44,7 @@ __all__ = [
     'Electrode',
     'ElectrodeArray',
     'ElectrodeGrid',
+    'EnsembleImplant',
     'HexElectrode',
     'PhotovoltaicPixel',
     'PointSource',
