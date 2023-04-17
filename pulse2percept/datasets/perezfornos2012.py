@@ -90,12 +90,12 @@ def load_perezfornos2012(shuffle=False, subjects=None, figures=None,
         for time_step in time_steps:
             time_series = np.append(time_series, row[time_step])
 
-        raw_spec = {
+        raw_spec = pd.DataFrame([{
             'figure': row['Figure'],
             'subject': row['Subject'],
             'time_series': time_series
-        }
-        time_series_df = time_series_df.append(raw_spec, verify_integrity=False,
-                                               ignore_index=True)
+        }])
+        time_series_df = pd.concat([time_series_df, raw_spec], 
+                                   verify_integrity=False, ignore_index=True)
 
     return time_series_df.reset_index(drop=True)
