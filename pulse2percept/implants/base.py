@@ -68,8 +68,13 @@ class ProsthesisSystem(PrettyPrint):
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
-        return {'earray': self.earray, 'stim': self.stim, 'eye': self.eye,
-                'safe_mode': self.safe_mode, 'preprocess': self.preprocess}
+        params = {
+            'earray': self.earray, 'stim': self.stim, 'safe_mode': self.safe_mode, 
+            'preprocess': self.preprocess
+        }
+        if hasattr(self, "eye"):
+            params['eye'] = self.eye
+        return params
 
     @staticmethod
     def _require_charge_balanced(stim):
