@@ -16,10 +16,10 @@ from pulse2percept.topography import Watson2014Map
     [['v1'], ['v2'], ['v3'], ['v1', 'v2'], ['v2', 'v3'], ['v1', 'v3'], ['v1', 'v2', 'v3']])
 def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     # ScoreboardSpatial automatically sets `regions`
-    retinotopy = Polimeni2006Map(jitter_boundary=jitter_boundary, regions=regions)
-    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, retinotopy=retinotopy).build()
+    vfmap = Polimeni2006Map(jitter_boundary=jitter_boundary, regions=regions)
+    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, vfmap=vfmap).build()
     npt.assert_equal(model.regions, regions)
-    npt.assert_equal(model.retinotopy.regions, regions)
+    npt.assert_equal(model.vfmap.regions, regions)
 
     # User can set `rho`:
     model.rho = 123
@@ -31,11 +31,11 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     npt.assert_equal(model.predict_percept(Cortivis()), None)
 
     # Converting ret <=> dva
-    retinotopy = Polimeni2006Map(jitter_boundary=jitter_boundary, regions=regions)
-    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=1, retinotopy=retinotopy).build()
-    npt.assert_equal(isinstance(model.retinotopy, Polimeni2006Map), True)
+    vfmap = Polimeni2006Map(jitter_boundary=jitter_boundary, regions=regions)
+    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=1, vfmap=vfmap).build()
+    npt.assert_equal(isinstance(model.vfmap, Polimeni2006Map), True)
     if jitter_boundary:
-        npt.assert_equal(np.isnan(model.retinotopy.dva_to_v1([0], [0])), False)
+        npt.assert_equal(np.isnan(model.vfmap.dva_to_v1([0], [0])), False)
         if 'v1' in regions:
             npt.assert_equal(model.grid.v1.x[~np.isnan(model.grid.v1.x)].size, 49)
         if 'v2' in regions:
@@ -43,7 +43,7 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
         if 'v3' in regions:
             npt.assert_equal(model.grid.v3.x[~np.isnan(model.grid.v3.x)].size, 49)
     else:
-        npt.assert_equal(np.isnan(model.retinotopy.dva_to_v1([0], [0])), True)
+        npt.assert_equal(np.isnan(model.vfmap.dva_to_v1([0], [0])), True)
         if 'v1' in regions:
             npt.assert_equal(model.grid.v1.x[~np.isnan(model.grid.v1.x)].size, 42)
         if 'v2' in regions:
@@ -110,8 +110,8 @@ def test_predict_spatial_regionsum(ModelClass,regions):
 def test_eq_beyeler(ModelClass, stimval):
     
 
-    retinotopy = Watson2014Map()
-    cortex = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, rho=200 * stimval, regions=['ret'], retinotopy=retinotopy).build()
+    vfmap = Watson2014Map()
+    cortex = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, rho=200 * stimval, regions=['ret'], vfmap=vfmap).build()
     retina = BeyelerScoreboard(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, rho=200 * stimval).build()
 
     implant = ArgusII()

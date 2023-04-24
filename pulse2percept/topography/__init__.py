@@ -1,4 +1,4 @@
-"""Visual field maps, retinotopy, and visuotopy
+"""Visual field maps, vfmap, and visuotopy
 
 .. autosummary::
     :toctree: _api

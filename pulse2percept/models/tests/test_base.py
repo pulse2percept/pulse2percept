@@ -56,7 +56,7 @@ class ValidSpatialModel(SpatialModel):
 
     def get_default_params(self):
         params = super(ValidSpatialModel, self).get_default_params()
-        params.update({'retinotopy': Watson2014Map()})
+        params.update({'vfmap': Watson2014Map()})
         return params
 
     def _predict_spatial(self, earray, stim):
@@ -149,11 +149,11 @@ def test_deepcopy_SpatialModel():
     npt.assert_equal(copied.is_built, False)
     npt.assert_equal(original != copied, True)
 
-    # Change the copied attribute by "destroying" the retinotopy attribute
+    # Change the copied attribute by "destroying" the vfmap attribute
     # which should be unique to each SpatialModel object
     copied = copy.deepcopy(original)
-    copied.retinotopy = None
-    npt.assert_equal(original.retinotopy is not None, True)
+    copied.vfmap = None
+    npt.assert_equal(original.vfmap is not None, True)
     npt.assert_equal(original != copied, True)
 
     # Assert "destroying" the original doesn't affect the copied

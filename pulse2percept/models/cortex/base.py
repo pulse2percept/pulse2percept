@@ -32,14 +32,14 @@ class CortexSpatial(SpatialModel):
         super(CortexSpatial, self).__init__(**params)
 
         # Use [Polemeni2006]_ visual field map by default
-        if 'retinotopy' not in params.keys():
-            self.retinotopy = Polimeni2006Map(regions=self.regions)
+        if 'vfmap' not in params.keys():
+            self.vfmap = Polimeni2006Map(regions=self.regions)
         elif 'regions' in params.keys() and \
-            set(self.regions) != set(self.retinotopy.regions):
-            raise ValueError("Conflicting regions in provided retinotopy and regions")
+            set(self.regions) != set(self.vfmap.regions):
+            raise ValueError("Conflicting regions in provided vfmap and regions")
         else:
             # need to override self.regions
-            self.regions = self.retinotopy.regions
+            self.regions = self.vfmap.regions
 
         if not isinstance(self.regions, list):
             self.regions = [self.regions]
@@ -138,7 +138,7 @@ class ScoreboardSpatial(CortexSpatial):
         use ``xrange=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
-    retinotopy : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
+    vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.topography.Polimeni2006Map` is
@@ -185,9 +185,9 @@ class ScoreboardSpatial(CortexSpatial):
         # whether to allow current to spread between hemispheres
         separate = 0
         boundary = 0
-        if self.retinotopy.split_map:
+        if self.vfmap.split_map:
             separate = 1
-            boundary = self.retinotopy.left_offset/2
+            boundary = self.vfmap.left_offset/2
         return np.sum([
                 fast_scoreboard(stim.data, x_el, y_el,
                                 self.grid[region].x.ravel(), self.grid[region].y.ravel(),
@@ -234,7 +234,7 @@ class ScoreboardModel(Model):
         use ``xrange=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
-    retinotopy : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
+    vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.topography.Polimeni2006Map` is

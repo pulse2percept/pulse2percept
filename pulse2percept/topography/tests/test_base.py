@@ -106,7 +106,7 @@ def test_Grid2D_plot(vfmap):
 
     plt.figure()
     grid = Grid2D((-5, 5), (-5, 5), step=1)
-    grid.build(retinotopy=vfmap)
+    grid.build(vfmap=vfmap)
     # You can change the style (smoke test):
     ax = grid.plot(style='hull')
     if isinstance(vfmap, Polimeni2006Map):
@@ -163,14 +163,14 @@ def test_grid_regions():
     npt.assert_equal(grid.x, grid.dva.x)
     npt.assert_equal(grid.x, grid._grid['dva'].x)
 
-    retinotopy = ValidCoordTransform()
-    grid.build(retinotopy)
+    vfmap = ValidCoordTransform()
+    grid.build(vfmap)
     # Make sure xret gets populated
     npt.assert_equal(grid.dva.x, grid.ret.x)
 
     grid = Grid2D((-2, 2), (-2, 2), step=1)
-    retinotopy = ValidCorticalTransform(regions=['v1', 'v2', 'v3'])
-    grid.build(retinotopy)
+    vfmap = ValidCorticalTransform(regions=['v1', 'v2', 'v3'])
+    grid.build(vfmap)
     npt.assert_equal(grid.x, grid.v1.x)
     npt.assert_equal(grid.x, grid.v2.x)
     npt.assert_equal(grid.x, grid.v3.x)

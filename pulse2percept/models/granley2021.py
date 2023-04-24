@@ -251,7 +251,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             use ``x_range=(0, 1)`` and ``xystep=0.5``.
         grid_type : {'rectangular', 'hexagonal'}
             Whether to simulate points on a rectangular or hexagonal grid
-        retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+        vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
             An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
             object that provides retinotopic mappings.
             By default, :py:class:`~pulse2percept.topography.Watson2014Map` is
@@ -776,7 +776,7 @@ class BiphasicAxonMapModel(Model):
             use ``x_range=(0, 1)`` and ``xystep=0.5``.
         grid_type : {'rectangular', 'hexagonal'}
             Whether to simulate points on a rectangular or hexagonal grid
-        retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+        vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
             An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
             object that provides retinotopic mappings.
             By default, :py:class:`~pulse2percept.topography.Watson2014Map` is

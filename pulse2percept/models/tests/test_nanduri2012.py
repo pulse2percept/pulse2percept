@@ -55,10 +55,10 @@ def test_Nanduri2012Spatial():
 
     # Nanduri model uses a linear dva_to_ret conversion factor:
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(model.retinotopy.dva_to_ret(factor, factor),
+        npt.assert_almost_equal(model.vfmap.dva_to_ret(factor, factor),
                                 (280.0 * factor, 280.0 * factor))
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(model.retinotopy.ret_to_dva(280.0 * factor,
+        npt.assert_almost_equal(model.vfmap.ret_to_dva(280.0 * factor,
                                                          280.0 * factor),
                                 (factor, factor))
 

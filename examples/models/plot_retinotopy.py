@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================================================
-Retinotopy: Predicting the perceptual effects of different visual field maps
+vfmap: Predicting the perceptual effects of different visual field maps
 ===============================================================================
 
 Every computational model needs to assume a mapping between retinal and visual
@@ -84,14 +84,14 @@ implant = p2p.implants.AlphaAMS(stim=p2p.stimuli.LogoUCSB())
 implant.stim
 
 ###############################################################################
-# We can easily switch out the visual field maps by passing a ``retinotopy``
+# We can easily switch out the visual field maps by passing a ``vfmap``
 # attribute to :py:class:`~pulse2percept.models.ScoreboardModel` (by default,
 # the scoreboard model will use [Curcio1990]_):
 
 fig, axes = plt.subplots(ncols=3, sharey=True, figsize=(13, 4))
 for ax, transform in zip(axes, transforms):
     model = p2p.models.ScoreboardModel(xrange=(-6, 6), yrange=(-6, 6),
-                                       retinotopy=transform())
+                                       vfmap=transform())
     model.build()
     model.predict_percept(implant).plot(ax=ax)
     ax.set_title(transform().__class__.__name__)
@@ -120,5 +120,5 @@ for ax, transform in zip(axes, transforms):
 #         def ret_to_dva(self, xret, yret):
 #             return xret, yret
 #
-# To use it with a model, you need to pass ``retinotopy=MyVisualFieldMap()``
+# To use it with a model, you need to pass ``vfmap=MyVisualFieldMap()``
 # to the model's constructor.

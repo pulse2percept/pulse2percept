@@ -228,7 +228,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
             # Retinotopic map to be used:
-            'retinotopy': Curcio1990Map(),
+            'vfmap': Curcio1990Map(),
             # Number of gray levels to use in the percept:
             'n_gray': None,
             # Salt-and-pepper noise on the output:
@@ -271,7 +271,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         # Build the spatial grid:
         self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
                            grid_type=self.grid_type)
-        self.grid.build(self.retinotopy)
+        self.grid.build(self.vfmap)
         self._build()
         self.is_built = True
         return self

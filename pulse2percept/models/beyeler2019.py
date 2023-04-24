@@ -55,7 +55,7 @@ class ScoreboardSpatial(SpatialModel):
         use ``xrange=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
-    retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.topography.Watson2014Map` is
@@ -83,7 +83,7 @@ class ScoreboardSpatial(SpatialModel):
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
         base_params = super(ScoreboardSpatial, self).get_default_params()
-        params = {'rho': 100, 'retinotopy': Watson2014Map()}
+        params = {'rho': 100, 'vfmap': Watson2014Map()}
         return {**base_params, **params}
 
     def _predict_spatial(self, earray, stim):
@@ -138,7 +138,7 @@ class ScoreboardModel(Model):
         use ``xrange=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
-    retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.topography.Watson2014Map` is
@@ -205,7 +205,7 @@ class AxonMapSpatial(SpatialModel):
         use ``xrange=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
-    retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.topography.Watson2014Map` is
@@ -292,7 +292,7 @@ class AxonMapSpatial(SpatialModel):
             # You can force a build by ignoring pickles:
             'ignore_pickle': False,
             # Use the Watson transform for dva <=> ret:
-            'retinotopy': Watson2014Map()
+            'vfmap': Watson2014Map()
         }
         return {**base_params, **params}
 
@@ -454,7 +454,7 @@ class AxonMapSpatial(SpatialModel):
             # Keep only reasonably sized axon bundles:
             bundles = list(filter(lambda x: len(x) > 10, bundles))
         # Convert to um:
-        bundles = [np.array(self.retinotopy.dva_to_ret(b[:, 0], b[:, 1])).T
+        bundles = [np.array(self.vfmap.dva_to_ret(b[:, 0], b[:, 1])).T
                    for b in bundles]
         return bundles
 
@@ -790,7 +790,7 @@ class AxonMapSpatial(SpatialModel):
             od_w = 6.44
             od_h = 6.85
             # Flip y upside down for dva:
-            axon_bundles = [np.array(self.retinotopy.ret_to_dva(bundle[:, 0],
+            axon_bundles = [np.array(self.vfmap.ret_to_dva(bundle[:, 0],
                                                              -bundle[:, 1])).T
                             for bundle in axon_bundles]
             labels = ['upper', 'lower', 'left', 'right']
@@ -799,13 +799,13 @@ class AxonMapSpatial(SpatialModel):
             units = 'microns'
             # Make sure we're filling the simulated area, rounded up/down,
             # but no smaller than (-5000, 5000):
-            xmin, ymin = self.retinotopy.dva_to_ret(self.xrange[0], self.yrange[0])
+            xmin, ymin = self.vfmap.dva_to_ret(self.xrange[0], self.yrange[0])
             xmin = min(np.floor(xmin / 1000) * 1000, -5000)
             ymin = min(np.floor(ymin / 1000) * 1000, -5000)
-            xmax, ymax = self.retinotopy.dva_to_ret(self.xrange[1], self.yrange[1])
+            xmax, ymax = self.vfmap.dva_to_ret(self.xrange[1], self.yrange[1])
             xmax = max(np.ceil(xmax / 1000) * 1000, 5000)
             ymax = max(np.ceil(ymax / 1000) * 1000, 5000)
-            od_xy = self.retinotopy.dva_to_ret(*self.loc_od)
+            od_xy = self.vfmap.dva_to_ret(*self.loc_od)
             od_w = 1770
             od_h = 1880
             if self.eye == 'RE':
@@ -887,7 +887,7 @@ class AxonMapModel(Model):
         use ``xrange=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
-    retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.topography.Watson2014Map` is
