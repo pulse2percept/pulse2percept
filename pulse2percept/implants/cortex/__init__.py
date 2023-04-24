@@ -11,8 +11,10 @@ Different cortical prosthetic implants such as TODO.
 
 from .orion import Orion
 from .cortivis import Cortivis
+from .icvp import ICVP
 
 __all__ = [
     "Orion",
-    "Cortivis"
+    "Cortivis",
+    "ICVP",
 ]
