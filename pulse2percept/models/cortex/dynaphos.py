@@ -203,11 +203,11 @@ class DynaphosModel(BaseModel):
                 time_idx += 1
             amp = stim.data[:, time_idx]
             # Ieff = max(0, (Istim - I0 - Q) * Pw * f)
-            Ieff = np.maximum(0, (amp - I0 - Q) * elec_params[:,0] * elec_params[:,2])
+            Ieff = np.maximum(0, (amp - I0 - Q) * elec_params[:,0] * (elec_params[:,2] / 1000))
             # update memory trace
             Q = Q + ((-Q / tau_trace) + Ieff * trace_kappa) * (self.dt / 1000)
             # get phosphene size
-            D = 2 * np.sqrt(Ieff / K) # mm
+            D = 2 * np.sqrt(np.maximum(0, amp) / K) # mm
             P = (D / M) # dva
             sigma = P / 2
             # get activation
@@ -221,7 +221,7 @@ class DynaphosModel(BaseModel):
                         cutoff = xRange > 0
                 gaussX = np.where(cutoff, 0, np.exp(-(xRange - x0)**2 / (2 * sigma ** 2)))
                 gaussY = np.exp(-(yRange - y0)**2 / (2 * sigma ** 2))
-                gauss = np.outer(gaussX, gaussY)
+                gauss = np.outer(gaussY, gaussX)
                 return gauss
             for el_idx in range(stim.data.shape[0]):
                 gauss = np.zeros(self.grid['dva'].x.shape)
