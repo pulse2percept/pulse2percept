@@ -297,6 +297,9 @@ class DynaphosModel(BaseModel):
             raise ValueError(f"Cannot calculate spatial response at times "
                              f"t_percept={t_percept} because stimulus does not "
                              f"have a time component.")
+        if implant.stim.time is None:
+            raise ValueError(f"Cannot calculate response because stimulus does not "
+                             f"have a time component.")
         # Make sure we don't change the user's Stimulus object:
         stim = deepcopy(implant.stim)
         # Make sure to operate on the compressed stim:
