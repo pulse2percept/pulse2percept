@@ -67,15 +67,23 @@ class DynaphosModel(BaseModel):
                 # Time step in ms
                 'dt': 20,
                 # Activation decay constant (ms)
-                'tau_act': 111,
+                'tau_act': 111.111111,
                 # Rheobase current constant (uA)
                 'rheobase': 23.9,
                 # Trace decay constant (ms)
-                'tau_trace': 1.97e6,
+                'tau_trace': 1.96765520573e6,
                 # Input effect modifier for memory trace
-                'kappa': 14,
+                'kappa': 13.95528162,
                 # Excitability constant (uA/mm^2)
                 'excitability': 675,
+                # Slope of the sigmoidal curve
+                'sigSlope': 19152642.500946816,
+                # A50 - activation for which a phosphene reaches half of its maximum brightness
+                'A50': 1.057631326853325e-07,
+                # Default stimulus frequency (Hz)
+                'freq': 300,
+                # Default stimulus pulse duration (ms)
+                'p_dur': 0.170,
             }
             return {**params}
     
@@ -136,7 +144,7 @@ class DynaphosModel(BaseModel):
         return self
                     
     def _predict_percept(self, earray, stim, t_percept):
-        """Predicts the brightness at spatial locations and over time"""
+        """Predicts the brightness at spatial locations over time"""
         x_el = np.array([earray[e].x for e in stim.electrodes],
                                         dtype=np.float32)
         y_el = np.array([earray[e].y for e in stim.electrodes],
@@ -163,32 +171,40 @@ class DynaphosModel(BaseModel):
         xRange = self.grid['dva'].x[0, :]
         yRange = self.grid['dva'].y[:, 0]
         xgrid = self.grid['dva'].x.ravel()
-        ygrid = self.grid['dva'].y.ravel()
         n_space = len(xgrid)
         n_time = len(t_percept)
         idx_percept = np.uint32(np.round(t_percept / self.dt))
 
-        elec_params = []
+        # default values
+        freq = self.freq
+        p_dur = self.p_dur
+        
+        # get from biphasic pulse train data if possible
         try:
+            elec_params = []
             for e in stim.electrodes:
                 amp = stim.metadata['electrodes'][str(e)]['metadata']['amp']
                 freq = stim.metadata['electrodes'][str(e)]['metadata']['freq']
                 pdur = stim.metadata['electrodes'][str(e)]['metadata']['phase_dur']
                 elec_params.append([freq, amp, pdur])
+            elec_params = np.array(elec_params)
+            freq = elec_params[:,0]
+            p_dur = elec_params[:,2]
         except KeyError:
-            raise TypeError(f"All stimuli must be BiphasicPulseTrains with no delay dur")
-        elec_params = np.array(elec_params)
+            pass
 
         # holds current activation for each phosphene
-        A = np.zeros(len(elec_params))
+        A = np.zeros(len(x_el))
         # holds effective current for each phosphene
-        Ieff = np.zeros(len(elec_params))
+        Ieff = np.zeros(len(x_el))
         # rheobase current (uA)
         I0 = self.rheobase
         # holds memory trace for each phosphene
-        Q = np.zeros(len(elec_params))
+        Q = np.zeros(len(x_el))
+        # holds diameter of activated cortical tissue
+        D = np.zeros(len(x_el))
         # constant for trace decay (seconds)
-        tau_trace = self.tau_trace / 1000
+        tau_trace = self.tau_trace
         # input effect for trace
         trace_kappa = self.kappa
 
@@ -196,22 +212,30 @@ class DynaphosModel(BaseModel):
         # holds (n_space) x (n_time)
         bright = np.zeros((n_space,n_time), dtype=np.float32)
 
-        time_idx = 0
-        for frame_idx in idx_percept:
-            # move to the correct amp value
-            while frame_idx * self.dt > stim.time[time_idx + 1]:
-                time_idx += 1
-            amp = stim.data[:, time_idx]
-            # Ieff = max(0, (Istim - I0 - Q) * Pw * f)
-            Ieff = np.maximum(0, (amp - I0 - Q) * elec_params[:,0] * (elec_params[:,2] / 1000))
-            # update memory trace
-            Q = Q + ((-Q / tau_trace) + Ieff * trace_kappa) * (self.dt / 1000)
-            # get phosphene size
-            D = 2 * np.sqrt(np.maximum(0, amp) / K) # mm
+        n_percept = len(idx_percept)
+        n_stim = len(stim.time)
+        n_sim = idx_percept[n_percept - 1] + 1 # no negative indices
+        stim_idx = 0
+        frame_idx = 0
+        for sim_idx in range(n_sim):
+            t_sim = sim_idx * self.dt
+            # get highest amp value over the frame
+            amp = np.zeros(len(x_el))
+            while stim_idx + 1 < n_stim and t_sim >= stim.time[stim_idx + 1]:
+                stim_idx += 1
+                amp = np.maximum(amp, stim.data[:,stim_idx])
+            # Ieff = max(0, (Istim - I0 - Q) * f * Pw) (uA)
+            Ieff = np.maximum(0, (amp - I0 - Q) * freq * (p_dur / 1000))
+            # update memory trace (uA)
+            Q = Q + ((-Q / (tau_trace / 1000)) + Ieff * trace_kappa) * (self.dt / 1000)
+            # update phosphene size
+            D = 2 * np.sqrt(amp / K) # mm
             P = (D / M) # dva
-            sigma = P / 2
-            # get activation
-            A = A + ((-A / self.tau_act) + Ieff) * (self.dt / 1000)
+            sigma = np.clip(P / 2, 1e-22, None)
+            # get activation (convert Ieff from uA to A)
+            A = A + ((-A / (self.tau_act / 1000)) + Ieff * 1e-6) * (self.dt / 1000)
+            # get brightness
+            brightness = np.divide(1, 1 + np.exp(-self.sigSlope * (A - self.A50)))
             # create gaussian blobs & add to frame
             def create_gaussian(x0,y0,sigma,x_el):
                 if separate:
@@ -223,17 +247,27 @@ class DynaphosModel(BaseModel):
                 gaussY = np.exp(-(yRange - y0)**2 / (2 * sigma ** 2))
                 gauss = np.outer(gaussY, gaussX)
                 return gauss
-            for el_idx in range(stim.data.shape[0]):
-                gauss = np.zeros(self.grid['dva'].x.shape)
-                if A[el_idx] != 0:
-                    gauss = create_gaussian(phosphene_locations['v1'][0][el_idx], 
-                                            phosphene_locations['v1'][1][el_idx], 
-                                            sigma[el_idx], x_el[el_idx])
-                bright[:,frame_idx] += gauss.ravel() * A[el_idx]
+            if sim_idx == idx_percept[frame_idx]:
+                # `idx_t_percept` stores the time points at which we need to
+                # output a percept. We compare `idx_sim` to `idx_t_percept`
+                # rather than `t_sim` to `t_percept` because there is no good
+                # (fast) way to compare two floating point numbers:
+                for el_idx in range(stim.data.shape[0]):
+                    gauss = np.zeros(self.grid['dva'].x.shape)
+                    try:
+                        if A[el_idx] != 0:
+                            gauss = create_gaussian(phosphene_locations['v1'][0][el_idx], 
+                                                    phosphene_locations['v1'][1][el_idx], 
+                                                    sigma[el_idx], x_el[el_idx])
+                            bright[:,frame_idx] += gauss.ravel() * brightness[el_idx]
+                    except:
+                        raise ValueError(f"{A[el_idx]}")
+                bright[:,frame_idx] = np.clip(bright[:,frame_idx], 0, 1)
+                frame_idx = frame_idx + 1
         return np.asarray(bright)
     
     def predict_percept(self, implant, t_percept=None):
-        """Predict the spatial and temporal response
+        """Predict the spatiotemporal response
 
         Parameters
         ----------
@@ -269,8 +303,16 @@ class DynaphosModel(BaseModel):
         if not stim.is_compressed:
             stim.compress()
         if t_percept is None:
-            # times at which to output a percept (dt intervals)
-            t_percept = np.arange(0, max(self.dt, stim.time[-1])+1, self.dt)
+            # If no time vector is given, output at 50 Hz frame rate. We always
+            # start at zero and include the last time point:
+            t_percept = np.arange(0, np.maximum(20, stim.time[-1]) + 1, 20)
+        t_percept = np.sort([t_percept]).flatten()
+        remainder = np.mod(t_percept, self.dt) / self.dt
+        atol = 1e-3
+        within_atol = (remainder < atol) | (np.abs(1 - remainder) < atol)
+        if not np.all(within_atol):
+            raise ValueError(f"t={t_percept[np.logical_not(within_atol)]} are "
+                             f"not multiples of dt={self.dt:.2e}.")
         n_time = np.array([t_percept]).size
         if stim.data.size == 0:
             # Stimulus was compressed to zero:

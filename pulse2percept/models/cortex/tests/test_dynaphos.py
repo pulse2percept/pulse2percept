@@ -2,13 +2,14 @@ import numpy.testing as npt
 import pytest
 import numpy as np
 import copy
-from pulse2percept.models.cortex import DynaphosSpatial
+from pulse2percept.models.cortex import DynaphosModel
 from pulse2percept.implants.cortex import Cortivis, Orion
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.percepts import Percept
+from pulse2percept.stimuli import BiphasicPulseTrain
 
-def test_DynaphosSpatial():
-    model = DynaphosSpatial(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1).build()
+def test_DynaphosModel():
+    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1).build()
 
     npt.assert_equal(model.regions, ['v1'])
     npt.assert_equal(model.retinotopy.regions, ['v1'])
@@ -16,26 +17,26 @@ def test_DynaphosSpatial():
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(Cortivis()), None)
 
-    implant = Cortivis(x=1000, stim=np.zeros(96))
+    implant = Cortivis(x=1000, stim={e:BiphasicPulseTrain(freq=300,amp=0,phase_dur=1) for e in Cortivis().electrode_names})
     # Zero in = zero out:
     percept = model.predict_percept(implant)
     npt.assert_equal(isinstance(percept, Percept), True)
-    npt.assert_equal(percept.shape, list(model.grid.x.shape) + [1])
+    npt.assert_equal(percept.shape, list(model.grid.x.shape)+[51]) # 51 time points
     npt.assert_almost_equal(percept.data, 0)
 
 def test_predict_spatial():
     # test that no current can spread between hemispheres
-    model = DynaphosSpatial(xrange=(-3, 3), yrange=(-3, 3), xystep=0.5).build()
+    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), xystep=0.5).build()
     implant = Orion(x = 15000)
-    implant.stim = {e:1000 for e in implant.electrode_names}
-    percept = model.predict_percept(implant)
+    implant.stim = {e:BiphasicPulseTrain(freq=300,amp=2000,phase_dur=0.17) for e in implant.electrode_names}
+    # Check brightest frame of percept
+    percept = model.predict_percept(implant).max(axis='frames')
     half = percept.shape[1] // 2
-    npt.assert_equal(np.all(percept.data[:, half+1:] == 0), True)
-    npt.assert_equal(np.all(percept.data[:, :half] != 0), True)
+    npt.assert_equal(np.all(percept[:, half+1:] == 0), True)
+    npt.assert_equal(np.all(percept[:, :half] != 0), True)
 
-@pytest.mark.parametrize('ModelClass', [DynaphosSpatial])
-def test_deepcopy_Dynaphos(ModelClass):
-    original = ModelClass()
+def test_deepcopy_Dynaphos():
+    original = DynaphosModel()
     copied = copy.deepcopy(original)
 
     # Assert these are two different objects
