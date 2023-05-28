@@ -303,9 +303,9 @@ class DynaphosModel(BaseModel):
         if not stim.is_compressed:
             stim.compress()
         if t_percept is None:
-            # If no time vector is given, output at 50 Hz frame rate. We always
+            # If no time vector is given, output at frame rate determined by self.dt. We always
             # start at zero and include the last time point:
-            t_percept = np.arange(0, np.maximum(20, stim.time[-1]) + 1, 20)
+            t_percept = np.arange(0, np.maximum(self.dt, stim.time[-1]) + 1, self.dt)
         t_percept = np.sort([t_percept]).flatten()
         remainder = np.mod(t_percept, self.dt) / self.dt
         atol = 1e-3
