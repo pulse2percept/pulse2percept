@@ -308,9 +308,6 @@ class ProsthesisSystem(PrettyPrint):
                 if not self.earray[electrode]:
                     raise ValueError(f'Electrode "{electrode}" not found in '
                                      f'implant.')
-            # Remove deactivated electrodes from the stimulus:
-            stim.remove([name for (name, e) in self.electrodes.items()
-                         if not e.activated])
             # Perform safety checks, etc.:
             self.check_stim(stim)
             # Store stimulus:
