@@ -310,7 +310,7 @@ class ProsthesisSystem(PrettyPrint):
                                      f'implant.')
             # Remove deactivated electrodes from the stimulus:
             stim.remove([name for (name, e) in self.electrodes.items()
-                         if not e.activated])
+                         if not e.activated and name in stim.electrodes])
             # Perform safety checks, etc.:
             self.check_stim(stim)
             # Store stimulus:
