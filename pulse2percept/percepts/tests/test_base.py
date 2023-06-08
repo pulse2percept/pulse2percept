@@ -176,7 +176,7 @@ def test_Percept_save(dtype):
 
     # Cannot save multiple frames image:
     fname = 'test.jpg'
-    with pytest.raises(RuntimeError):
+    with pytest.raises(KeyError):
         percept.save(fname)
 
     # But, can save single frame as image:

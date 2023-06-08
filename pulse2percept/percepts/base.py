@@ -375,7 +375,7 @@ class Percept(Data):
         if self.time is None:
             # No time component, store as an image. imwrite will automatically
             # scale the gray levels:
-            imageio.imwrite(fname, img_as_uint(data).astype(np.uint8))
+            imageio.imwrite(fname, img_as_uint(data).astype(np.uint8).squeeze(2))
         else:
             # With time component, store as a movie:
             if fps is None:
@@ -397,5 +397,8 @@ class Percept(Data):
                         out_h += VIDEO_BLOCK_SIZE - (h % VIDEO_BLOCK_SIZE)
                     data = resize(data, (out_h, out_w))
             data = img_as_uint(data).astype(np.uint8)
-            imageio.mimwrite(fname, data.transpose((2, 0, 1)), fps=fps)
+            if fname[-4:] in ['.mp4', '.avi', '.mov','.wmv']:
+                imageio.mimwrite(fname, data.transpose((2, 0, 1)), fps=fps)
+            else:
+                imageio.mimwrite(fname, data.transpose((2, 0, 1)), duration=1000/fps)
         logging.getLogger(__name__).info(f'Created {fname}.')
