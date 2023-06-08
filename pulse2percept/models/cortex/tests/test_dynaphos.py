@@ -41,7 +41,7 @@ def test_predict_spatial():
     npt.assert_equal(np.all(percept[:, :half] != 0), True)
 
 def test_temporal_predict():
-    model = DynaphosModel().build()
+    model = DynaphosModel(xystep=0.1).build()
     # User can set params
     model.dt = 40
     npt.assert_equal(model.dt, 40)
@@ -63,14 +63,21 @@ def test_temporal_predict():
     implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
     bright_amp = []
     for amp in np.linspace(20, 70, 5):
-        # implant.stim = PulseTrain(model.dt, freq=20, amp=amp, dur=sdur,
-        #                           pulse_dur=pdur, interphase_dur=pdur)
         implant.stim = BiphasicPulseTrain(20, amp, pdur, interphase_dur=pdur,
                                           stim_dur=sdur)
         percept = model.predict_percept(implant, t_percept=t_percept)
         bright_amp.append(percept.data.max())
     bright_amp_ref = np.array([0.0, 0.165, 0.262, 0.391, 0.536])
     npt.assert_almost_equal(bright_amp, bright_amp_ref, decimal=3)
+
+    # Test that default models give expected values
+    implant = Orion(x=15000, stim={'55': BiphasicPulseTrain(freq=300, amp=100, phase_dur=0.17)})
+    percept = model.predict_percept(implant)
+    npt.assert_equal(np.sum(percept.data > 0.0122), 149)
+    npt.assert_equal(np.sum(percept.data > 0.0375), 97)
+    npt.assert_equal(np.sum(percept.data > 0.3305), 50)
+    npt.assert_equal(np.sum(percept.data > 0.8451), 39)
+    npt.assert_equal(np.sum(percept.data > 0.8883), 9)
 
 def test_deepcopy_Dynaphos():
     original = DynaphosModel()

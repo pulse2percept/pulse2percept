@@ -17,6 +17,69 @@ class DynaphosModel(BaseModel):
     Implements the Dynaphos model. Percepts from each
     electrode are Gaussian blobs, with the size dictated by a magnification factor
     M determined by the electrode's position in the visual cortex.
+    
+    Parameters:
+    -----------
+    **params: optional keyword arguments to be passed to DynaphosModel
+
+    Options:
+    ^^^^^^^^
+    dt : float, optional
+        Sampling time step of the simulation (ms)
+    regions : list of str, optional
+        The visual regions to simulate. Options are 'v1', 'v2', or 'v3'.
+        Default: ['v1']
+    tau_act : float, optional
+        Activation decay constant (ms)
+    rheobase : float, optional
+        Rheobase current constant (uA)
+    tau_trace : float, optional
+        Trace decay constant (ms)
+    kappa_trace : float, optional
+        Stimulus input effect modifier constant for memory trace
+    excitability : float, optional
+        Excitability constant for current spread (uA/mm^2)
+    sig_slope : float, optional
+        Slope of the sigmoidal brightness curve
+    a50 : float, optional
+        Activation value for which a phosphene reaches half of its maximum brightness
+    freq : int, optional
+        Default stimulus frequency (Hz)
+    p_dur : float, optional
+        Default stimulus pulse duration (ms)
+    xrange : (x_min, x_max), optional
+        A tuple indicating the range of x values to simulate (in degrees of
+        visual angle). Negative values correspond to the right hemisphere of
+        visual cortex, and positive values correspond to the left hemisphere.
+    yrange : (y_min, y_max), optional
+        A tuple indicating the range of y values to simulate (in degrees of
+        visual angle).
+    xystep : int, double, tuple, optional
+        Step size for the range of (x,y) values to simulate (in degrees of
+        visual angle). For example, to create a grid with x values [0, 0.5, 1]
+        use ``x_range=(0, 1)`` and ``xystep=0.5``.
+    grid_type : {'rectangular', 'hexagonal'}, optional
+        Whether to simulate points on a rectangular or hexagonal grid.
+    retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+        An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
+        object that provides visual field mappings.
+        By default, :py:class:`~pulse2percept.topography.Polimeni2006Map` is
+        used.
+    n_gray : int, optional
+        The number of gray levels to use. If an integer is given, k-means
+        clustering is used to compress the color space of the percept into
+        ``n_gray`` bins. If None, no compression is performed.
+    noise : float or int, optional
+        Adds salt-and-pepper noise to each percept frame. An integer will be
+        interpreted as the number of pixels to subject to noise in each 
+        frame. A float between 0 and 1 will be interpreted as a ratio of 
+        pixels to subject to noise in each frame.
+
+    .. important ::
+    
+        If you change important model parameters outside the constructor (e.g.,
+        by directly setting ``model.xrange = (-10, 10)``), you will have to call
+        ``model.build()`` again for your changes to take effect.
     """
     @property
     def regions(self):
@@ -30,11 +93,85 @@ class DynaphosModel(BaseModel):
         self._regions = regions
 
     def __init__(self, **params):
+            """Adaptation of the Dynaphos model from Grinten, Stevenick, Lozano (2022)
+
+            Implements the Dynaphos model. Percepts from each
+            electrode are Gaussian blobs, with the size dictated by a magnification factor
+            M determined by the electrode's position in the visual cortex.
+            
+            Parameters:
+            -----------
+            **params: optional keyword arguments to be passed to DynaphosModel
+
+            Options:
+            ++++++++
+            dt: float, optional
+                Sampling time step of the simulation (ms)
+            regions : list of str, optional
+                The visual regions to simulate. Options are 'v1', 'v2', or 'v3'.
+                Default: ['v1']
+            tau_act : float, optional
+                Activation decay constant (ms)
+            rheobase : float, optional
+                Rheobase current constant (uA)
+            tau_trace : float, optional
+                Trace decay constant (ms)
+            kappa_trace : float, optional
+                Stimulus input effect modifier constant for memory trace
+            excitability : float, optional
+                Excitability constant for current spread (uA/mm^2)
+            sig_slope : float, optional
+                Slope of the sigmoidal brightness curve
+            a50 : float, optional
+                Activation value for which a phosphene reaches half of its maximum brightness
+            freq : int, optional
+                Default stimulus frequency (Hz)
+            p_dur: float, optional
+                Default stimulus pulse duration (ms)
+            xrange : (x_min, x_max), optional
+                A tuple indicating the range of x values to simulate (in degrees of
+                visual angle). Negative values correspond to the right hemisphere of
+                visual cortex, and positive values correspond to the left hemisphere.
+            yrange : (y_min, y_max), optional
+                A tuple indicating the range of y values to simulate (in degrees of
+                visual angle).
+            xystep : int, double, tuple, optional
+                Step size for the range of (x,y) values to simulate (in degrees of
+                visual angle). For example, to create a grid with x values [0, 0.5, 1]
+                use ``x_range=(0, 1)`` and ``xystep=0.5``.
+            grid_type : {'rectangular', 'hexagonal'}, optional
+                Whether to simulate points on a rectangular or hexagonal grid.
+            retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+                An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
+                object that provides visual field mappings.
+                By default, :py:class:`~pulse2percept.topography.Polimeni2006Map` is
+                used.
+            n_gray : int, optional
+                The number of gray levels to use. If an integer is given, k-means
+                clustering is used to compress the color space of the percept into
+                ``n_gray`` bins. If None, no compression is performed.
+            noise : float or int, optional
+                Adds salt-and-pepper noise to each percept frame. An integer will be
+                interpreted as the number of pixels to subject to noise in each 
+                frame. A float between 0 and 1 will be interpreted as a ratio of 
+                pixels to subject to noise in each frame.
+
+            .. important ::
+            
+                If you change important model parameters outside the constructor (e.g.,
+                by directly setting ``model.xrange = (-10, 10)``), you will have to call
+                ``model.build()`` again for your changes to take effect.
+            """
             self._regions = None
             super().__init__(**params)
+            
+            window_dur = 1000.0 / self.freq
+            if self.p_dur > window_dur:
+                raise ValueError(f"Pulse (dur={self.p_dur:.2f} ms) does not fit into "
+                                 f"pulse train window (dur={window_dur:.2f} "
+                                 f"ms)")
 
-            # Use [Polemeni2006]_ visual field map with parameters specified in the paper
-            self.retinotopy = Polimeni2006Map(a=0.75,k=17.3,b=120,alpha1=0.95,regions=self.regions)
+            self.retinotopy.regions = self.regions
             self.grid = None
     
     def get_default_params(self):
@@ -43,25 +180,19 @@ class DynaphosModel(BaseModel):
                 # We will be simulating a patch of the visual field (xrange/yrange
                 # in degrees of visual angle), at a given spatial resolution (step
                 # size):
-                'xrange': (-15, 15),  # dva
-                'yrange': (-15, 15),  # dva
+                'xrange': (-5, 5),  # dva
+                'yrange': (-5, 5),  # dva
                 'xystep': 0.25,  # dva
                 'grid_type': 'rectangular',
-                # Below threshold, percept has brightness zero:
-                'thresh_percept': 0,
                 # Visual field map to be used:
-                'retinotopy': Polimeni2006Map(),
+                # Use [Polemeni2006]_ visual field map with parameters specified in the paper
+                'retinotopy': Polimeni2006Map(a=0.75,k=17.3,b=120,alpha1=0.95),
                 # Number of gray levels to use in the percept:
                 'n_gray': None,
                 # Salt-and-pepper noise on the output:
                 'noise': None,
-                # JobLib or Dask can be used to parallelize computations:
-                'engine': None,
-                'scheduler': 'threading',
-                'n_jobs': 1,
                 # True: print status messages, 0: silent
                 'verbose': True,
-                'n_threads': multiprocessing.cpu_count(),
                 # Visual field regions to simulate
                 'regions': ['v1'],
                 # Time step in ms
@@ -73,13 +204,13 @@ class DynaphosModel(BaseModel):
                 # Trace decay constant (ms)
                 'tau_trace': 1.96765520573e6,
                 # Input effect modifier for memory trace
-                'kappa': 13.95528162,
+                'kappa_trace': 13.95528162,
                 # Excitability constant (uA/mm^2)
                 'excitability': 675,
                 # Slope of the sigmoidal curve
-                'sigSlope': 19152642.500946816,
+                'sig_slope': 19152642.500946816,
                 # A50 - activation for which a phosphene reaches half of its maximum brightness
-                'A50': 1.057631326853325e-07,
+                'a50': 1.057631326853325e-07,
                 # Default stimulus frequency (Hz)
                 'freq': 300,
                 # Default stimulus pulse duration (ms)
@@ -206,7 +337,7 @@ class DynaphosModel(BaseModel):
         # constant for trace decay (seconds)
         tau_trace = self.tau_trace
         # input effect for trace
-        trace_kappa = self.kappa
+        kappa_trace = self.kappa_trace
 
         # brightness array
         # holds (n_space) x (n_time)
@@ -227,7 +358,7 @@ class DynaphosModel(BaseModel):
             # Ieff = max(0, (Istim - I0 - Q) * f * Pw) (uA)
             Ieff = np.maximum(0, (amp - I0 - Q) * freq * (p_dur / 1000))
             # update memory trace (uA)
-            Q = Q + ((-Q / (tau_trace / 1000)) + Ieff * trace_kappa) * (self.dt / 1000)
+            Q = Q + ((-Q / (tau_trace / 1000)) + Ieff * kappa_trace) * (self.dt / 1000)
             # update phosphene size
             D = 2 * np.sqrt(amp / K) # mm
             P = (D / M) # dva
@@ -235,7 +366,7 @@ class DynaphosModel(BaseModel):
             # get activation (convert Ieff from uA to A)
             A = A + ((-A / (self.tau_act / 1000)) + Ieff * 1e-6) * (self.dt / 1000)
             # get brightness
-            brightness = np.divide(1, 1 + np.exp(-self.sigSlope * (A - self.A50)))
+            brightness = np.divide(1, 1 + np.exp(-self.sig_slope * (A - self.a50)))
             # create gaussian blobs & add to frame
             def create_gaussian(x0,y0,sigma,x_el):
                 if separate:
