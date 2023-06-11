@@ -39,14 +39,12 @@ class ImageStimulus(Stimulus):
     source : str
         Path to image file. Supported image types include JPG, PNG, and TIF;
         and are inferred from the file ending. If the file does not have a
-        proper file ending, specify the file type via ``format``.
+        proper file ending, specify the file ending via ``extension``.
         Use :py:class:`~pulse2percept.stimuli.VideoStimulus` for GIFs.
 
-    format : str, optional
-        An image format string supported by imageio, such as 'JPG', 'PNG', or
-        'TIFF'. Use if the file type cannot be inferred from ``source``.
-        For a full list of supported formats, see
-        https://imageio.readthedocs.io/en/stable/formats.html.
+    extension : str, optional
+        A lowercase file extension string supported by imageio, such as '.jpg',
+        '.png', or '.tif'. Use if the file type cannot be inferred from ``source``.
 
     resize : (height, width) or None, optional
         Shape of the resized image. If one of the dimensions is set to -1,
@@ -74,7 +72,7 @@ class ImageStimulus(Stimulus):
     """
     __slots__ = ('img_shape',)
 
-    def __init__(self, source, format=None, resize=None, as_gray=False,
+    def __init__(self, source, extension=None, resize=None, as_gray=False,
                  electrodes=None, metadata=None, compress=False):
         if metadata is None:
             metadata = {}
@@ -82,7 +80,7 @@ class ImageStimulus(Stimulus):
             metadata = {'user': metadata}
         if isinstance(source, str):
             # Filename provided:
-            img = imread(source, format=format)
+            img = imread(source, extension=extension)
             metadata['source'] = source
             metadata['source_shape'] = img.shape
         elif isinstance(source, ImageStimulus):
@@ -684,7 +682,7 @@ class SnellenChart(ImageStimulus):
                     raise ValueError(f'Invalid value for "row": {row}. Choose '
                                      f'an int between 1 and 11.')
         # Call ImageStimulus constructor:
-        super(SnellenChart, self).__init__(source, format="PNG",
+        super(SnellenChart, self).__init__(source, extension=".png",
                                            resize=resize,
                                            as_gray=True,
                                            electrodes=electrodes,
@@ -724,7 +722,7 @@ class LogoBVL(ImageStimulus):
         module_path = dirname(__file__)
         source = join(module_path, 'data', 'bionic-vision-lab.png')
         # Call ImageStimulus constructor:
-        super(LogoBVL, self).__init__(source, format="PNG",
+        super(LogoBVL, self).__init__(source, extension=".png",
                                       resize=resize,
                                       as_gray=as_gray,
                                       electrodes=electrodes,
@@ -764,7 +762,7 @@ class LogoUCSB(ImageStimulus):
         module_path = dirname(__file__)
         source = join(module_path, 'data', 'ucsb.png')
         # Call ImageStimulus constructor:
-        super(LogoUCSB, self).__init__(source, format="PNG",
+        super(LogoUCSB, self).__init__(source, extension=".png",
                                        resize=resize,
                                        as_gray=True,
                                        electrodes=electrodes,
