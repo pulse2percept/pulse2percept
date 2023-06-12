@@ -20,10 +20,6 @@ class DynaphosModel(BaseModel):
     
     Parameters:
     -----------
-    **params: optional keyword arguments to be passed to DynaphosModel
-
-    Options:
-    ^^^^^^^^
     dt : float, optional
         Sampling time step of the simulation (ms)
     regions : list of str, optional
@@ -93,75 +89,6 @@ class DynaphosModel(BaseModel):
         self._regions = regions
 
     def __init__(self, **params):
-            """Adaptation of the Dynaphos model from Grinten, Stevenick, Lozano (2022)
-
-            Implements the Dynaphos model. Percepts from each
-            electrode are Gaussian blobs, with the size dictated by a magnification factor
-            M determined by the electrode's position in the visual cortex.
-            
-            Parameters:
-            -----------
-            **params: optional keyword arguments to be passed to DynaphosModel
-
-            Options:
-            ++++++++
-            dt: float, optional
-                Sampling time step of the simulation (ms)
-            regions : list of str, optional
-                The visual regions to simulate. Options are 'v1', 'v2', or 'v3'.
-                Default: ['v1']
-            tau_act : float, optional
-                Activation decay constant (ms)
-            rheobase : float, optional
-                Rheobase current constant (uA)
-            tau_trace : float, optional
-                Trace decay constant (ms)
-            kappa_trace : float, optional
-                Stimulus input effect modifier constant for memory trace
-            excitability : float, optional
-                Excitability constant for current spread (uA/mm^2)
-            sig_slope : float, optional
-                Slope of the sigmoidal brightness curve
-            a50 : float, optional
-                Activation value for which a phosphene reaches half of its maximum brightness
-            freq : int, optional
-                Default stimulus frequency (Hz)
-            p_dur: float, optional
-                Default stimulus pulse duration (ms)
-            xrange : (x_min, x_max), optional
-                A tuple indicating the range of x values to simulate (in degrees of
-                visual angle). Negative values correspond to the right hemisphere of
-                visual cortex, and positive values correspond to the left hemisphere.
-            yrange : (y_min, y_max), optional
-                A tuple indicating the range of y values to simulate (in degrees of
-                visual angle).
-            xystep : int, double, tuple, optional
-                Step size for the range of (x,y) values to simulate (in degrees of
-                visual angle). For example, to create a grid with x values [0, 0.5, 1]
-                use ``x_range=(0, 1)`` and ``xystep=0.5``.
-            grid_type : {'rectangular', 'hexagonal'}, optional
-                Whether to simulate points on a rectangular or hexagonal grid.
-            retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
-                An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
-                object that provides visual field mappings.
-                By default, :py:class:`~pulse2percept.topography.Polimeni2006Map` is
-                used.
-            n_gray : int, optional
-                The number of gray levels to use. If an integer is given, k-means
-                clustering is used to compress the color space of the percept into
-                ``n_gray`` bins. If None, no compression is performed.
-            noise : float or int, optional
-                Adds salt-and-pepper noise to each percept frame. An integer will be
-                interpreted as the number of pixels to subject to noise in each 
-                frame. A float between 0 and 1 will be interpreted as a ratio of 
-                pixels to subject to noise in each frame.
-
-            .. important ::
-            
-                If you change important model parameters outside the constructor (e.g.,
-                by directly setting ``model.xrange = (-10, 10)``), you will have to call
-                ``model.build()`` again for your changes to take effect.
-            """
             self._regions = None
             super().__init__(**params)
             
@@ -177,14 +104,10 @@ class DynaphosModel(BaseModel):
     def get_default_params(self):
             """Returns all settable parameters of the Dynaphos model"""
             params = {
-                # We will be simulating a patch of the visual field (xrange/yrange
-                # in degrees of visual angle), at a given spatial resolution (step
-                # size):
                 'xrange': (-5, 5),  # dva
                 'yrange': (-5, 5),  # dva
                 'xystep': 0.25,  # dva
                 'grid_type': 'rectangular',
-                # Visual field map to be used:
                 # Use [Polemeni2006]_ visual field map with parameters specified in the paper
                 'retinotopy': Polimeni2006Map(a=0.75,k=17.3,b=120,alpha1=0.95),
                 # Number of gray levels to use in the percept:
@@ -219,32 +142,7 @@ class DynaphosModel(BaseModel):
             return {**params}
     
     def _build(self):
-        # warn the user either that they are simulating points at discontinuous boundaries, 
-        # or that the points will be moved by a small constant
-        if np.any(self.grid['dva'].x == 0):
-            if hasattr(self.retinotopy, 'jitter_boundary') and self.retinotopy.jitter_boundary:
-                warnings.warn("Since the visual cortex is discontinuous " +
-                    "across hemispheres, it is recommended to not simulate points " +
-                    " at exactly x=0. Points on the boundary will be moved " +
-                    "by a small constant") 
-            else:
-                warnings.warn("Since the visual cortex is discontinuous " +
-                    "across hemispheres, it is recommended to not simulate points " +
-                    " at exactly x=0. This can be avoided by adding a small " + 
-                    "to both limits of xrange") 
-        if (np.any([r in self.regions for r in self.grid.discontinuous_y]) and 
-            np.any(self.grid['dva'].y == 0)):
-            if hasattr(self.retinotopy, 'jitter_boundary') and self.retinotopy.jitter_boundary:
-                warnings.warn("Since some simulated regions are discontinuous " +
-                    "across the y axis, it is recommended to not simulate points " +
-                    " at exactly y=0.  Points on the boundary will be moved " +
-                    "by a small constant") 
-            else:
-                warnings.warn(f"Since some simulated regions are discontinuous " +
-                    "across the y axis, it is recommended to not simulate points " +
-                    " at exactly y=0. This can be avoided by adding a small " + 
-                        "to both limits of yrange or setting " +
-                        "self.retinotopy.jitter_boundary=True")
+        pass
                 
     def build(self, **build_params):
         """Build the model
