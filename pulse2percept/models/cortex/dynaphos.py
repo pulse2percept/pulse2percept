@@ -12,7 +12,7 @@ from ...utils import cart2pol
 from ...topography import Polimeni2006Map
 
 class DynaphosModel(BaseModel):
-    """Adaptation of the Dynaphos model from Grinten, Stevenick, Lozano (2022)
+    """Adaptation of the Dynaphos model from [Grinten2023]_
 
     Implements the Dynaphos model. Percepts from each
     electrode are Gaussian blobs, with the size dictated by a magnification factor
