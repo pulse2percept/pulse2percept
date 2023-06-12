@@ -25,8 +25,6 @@ class DynaphosModel(BaseModel):
     regions : list of str, optional
         The visual regions to simulate. Options are 'v1', 'v2', or 'v3'.
         Default: ['v1']
-    tau_act : float, optional
-        Activation decay constant (ms)
     rheobase : float, optional
         Rheobase current constant (uA)
     tau_trace : float, optional
@@ -35,11 +33,13 @@ class DynaphosModel(BaseModel):
         Stimulus input effect modifier constant for memory trace
     excitability : float, optional
         Excitability constant for current spread (uA/mm^2)
+    tau_act : float, optional
+        Activation decay constant (ms)
     sig_slope : float, optional
         Slope of the sigmoidal brightness curve
     a50 : float, optional
         Activation value for which a phosphene reaches half of its maximum brightness
-    freq : int, optional
+    freq : float, optional
         Default stimulus frequency (Hz)
     p_dur : float, optional
         Default stimulus pulse duration (ms)
@@ -93,8 +93,8 @@ class DynaphosModel(BaseModel):
             super().__init__(**params)
             
             window_dur = 1000.0 / self.freq
-            if self.p_dur > window_dur:
-                raise ValueError(f"Pulse (dur={self.p_dur:.2f} ms) does not fit into "
+            if self.p_dur*2 > window_dur:
+                raise ValueError(f"Pulse (dur={self.p_dur*2:.2f} ms) does not fit into "
                                  f"pulse train window (dur={window_dur:.2f} "
                                  f"ms)")
 
@@ -283,14 +283,11 @@ class DynaphosModel(BaseModel):
                 # (fast) way to compare two floating point numbers:
                 for el_idx in range(stim.data.shape[0]):
                     gauss = np.zeros(self.grid['dva'].x.shape)
-                    try:
-                        if A[el_idx] != 0:
-                            gauss = create_gaussian(phosphene_locations['v1'][0][el_idx], 
-                                                    phosphene_locations['v1'][1][el_idx], 
-                                                    sigma[el_idx], x_el[el_idx])
-                            bright[:,frame_idx] += gauss.ravel() * brightness[el_idx]
-                    except:
-                        raise ValueError(f"{A[el_idx]}")
+                    if A[el_idx] != 0:
+                        gauss = create_gaussian(phosphene_locations['v1'][0][el_idx], 
+                                                phosphene_locations['v1'][1][el_idx], 
+                                                sigma[el_idx], x_el[el_idx])
+                        bright[:,frame_idx] += gauss.ravel() * brightness[el_idx]
                 bright[:,frame_idx] = np.clip(bright[:,frame_idx], 0, 1)
                 frame_idx = frame_idx + 1
         return np.asarray(bright)
