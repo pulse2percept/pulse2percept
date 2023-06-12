@@ -1,5 +1,5 @@
 """
-`RetinalMap`, `Curcio1990Map`, `Watson2014Map`,`Watson2014DisplaceMap`
+`RetinalMap`, `Curcio1990Map`, `Watson2014Map`, `Watson2014DisplaceMap`
 """
 import numpy as np
 from abc import abstractmethod
@@ -161,7 +161,7 @@ class Watson2014Map(RetinalMap):
 
 class Watson2014DisplaceMap(Watson2014Map):
     """Converts between visual angle and retinal eccentricity using RGC
-       displacement [Watson2014]_
+    displacement [Watson2014]_
 
     Converts from eccentricity (defined as distance from a visual center) in
     degrees of visual angle (dva) to microns on the retina using Eqs. 5, A5,

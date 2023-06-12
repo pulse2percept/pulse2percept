@@ -42,7 +42,7 @@ import pulse2percept as p2p
 import matplotlib.pyplot as plt
 
 grid = p2p.topography.Grid2D((-50, 50), (-50, 50), step=5)
-grid.plot(style='scatter')
+grid.plot(style='scatter', use_dva=True)
 plt.xlabel('x (degrees of visual angle)')
 plt.ylabel('y (degrees of visual angle)')
 plt.axis('square')
@@ -59,7 +59,8 @@ transforms = [p2p.topography.Curcio1990Map,
               p2p.topography.Watson2014DisplaceMap]
 fig, axes = plt.subplots(ncols=3, sharey=True, figsize=(13, 4))
 for ax, transform in zip(axes, transforms):
-    grid.plot(transform=transform().dva_to_ret, style='cell', ax=ax)
+    grid.build(transform())
+    grid.plot(style='cell', ax=ax)
     ax.set_title(transform().__class__.__name__)
     ax.set_xlabel('x (microns)')
     ax.set_ylabel('y (microns)')

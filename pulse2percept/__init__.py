@@ -13,6 +13,7 @@ pulse2percept is organized into the following subpackages:
     model_selection
     viz
     utils
+    topography
 """
 import matplotlib as mpl
 from os import environ
@@ -53,6 +54,7 @@ from . import model_selection
 from . import percepts
 from . import stimuli
 from . import viz
+from . import topography
 
 __all__ = [
     'datasets',
@@ -62,5 +64,6 @@ __all__ = [
     'percepts',
     'stimuli',
     'utils',
-    'viz'
+    'viz',
+    'topography'
 ]

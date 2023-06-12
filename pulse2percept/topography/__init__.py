@@ -4,7 +4,7 @@
     :toctree: _api
 
     base
-    retinal
+    retina
     cortex
 
 """

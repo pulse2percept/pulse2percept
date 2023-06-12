@@ -278,7 +278,8 @@ sphinx_gallery_conf = {
                                        '../examples/stimuli',
                                        '../examples/models',
                                        '../examples/datasets',
-                                       '../examples/developers'])
+                                       '../examples/developers',
+                                       '../examples/cortex']),
 }
 
 # The following is used by sphinx.ext.linkcode to provide links to github
@@ -286,3 +287,6 @@ linkcode_resolve = make_linkcode_resolve('pulse2percept',
                                          'https://github.com/pulse2percept/'
                                          'pulse2percept/blob/{revision}/'
                                          '{package}/{path}#L{lineno}')
+
+warnings.filterwarnings("ignore", category=UserWarning,
+                        message='FixedFormatter should only be used together with FixedLocator')
