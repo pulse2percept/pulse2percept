@@ -1,7 +1,6 @@
 """`DynaphosModel`"""
 import numpy as np
 import warnings
-import multiprocessing
 from copy import deepcopy, copy
 
 from ..base import BaseModel, NotBuiltError
@@ -12,7 +11,7 @@ from ...utils import cart2pol
 from ...topography import Polimeni2006Map
 
 class DynaphosModel(BaseModel):
-    """Adaptation of the Dynaphos model from Grinten, Stevenick, Lozano (2022)
+    """Adaptation of the Dynaphos model from [Grinten2023]_
 
     Implements the Dynaphos model. Percepts from each
     electrode are Gaussian blobs, with the size dictated by a magnification factor
@@ -24,7 +23,7 @@ class DynaphosModel(BaseModel):
         Sampling time step of the simulation (ms)
     regions : list of str, optional
         The visual regions to simulate. Options are 'v1', 'v2', or 'v3'.
-        Default: ['v1']
+        Default : ['v1']
     rheobase : float, optional
         Rheobase current constant (uA)
     tau_trace : float, optional

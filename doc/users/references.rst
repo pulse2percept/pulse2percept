@@ -45,6 +45,11 @@ Studies referenced throughout the Documentation:
                    Retinal Electrical Simulation. *Investigative Ophthalmology & Visual
                    Science November 2009* Vol.50, 5017-5025, doi:`10.1167/iovs.08-2897
                    <https://doi.org/10.1167/iovs.08-2897>`_.
+.. [Grinten2023] Maureen van der Grinten, Jaap de Ruyter van Steveninck, Antonio Lozano, 
+                 Laura Pijnacker, Bodo Rückauer, Pieter Roelfsema, Marcel van Gerven, 
+                 Richard van Wezel, Umut Güçlü, Yağmur Güçlütürk (2022). Biologically
+                 plausible phosphene simulation for the differentiable optimization of
+                 visual cortical prostheses. *bioRxiv*, doi:`10.1101/2022.12.23.521749 <https://doi.org/10.1101/2022.12.23.521749>`_.
 .. [Hayes2003] JS Hayes et al. (2003). Visually guided performance of
                simple tasks using simulated prosthetic vision.
                *Artificial Organs* 27, 1016-1028.
