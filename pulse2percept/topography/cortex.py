@@ -59,15 +59,13 @@ class CorticalMap(VisualFieldMap):
         """Convert degrees visual angle (dva) to V1 coordinates (um)"""
         raise NotImplementedError
 
-    @abstractmethod
     def dva_to_v2(self, x, y):
-        """Convert degrees visual angle (dva) to V2 coordinates (um)"""
-        raise NotImplementedError
+        """Abstract Method: Convert degrees visual angle (dva) to V2 coordinates (um)"""
+        raise NotImplementedError("Must implement dva_to_v2 when creating a map with region 'v2'")
 
-    @abstractmethod
     def dva_to_v3(self, x, y):
-        """Convert degrees visual angle (dva) to V3 coordinates (um)"""
-        raise NotImplementedError
+        """Abstract Method: Convert degrees visual angle (dva) to V3 coordinates (um)"""
+        raise NotImplementedError("Must implement dva_to_v3 when creating a map with region 'v3'")
 
     def v1_to_dva(self, x, y):
         """Convert V1 coordinates (um) to degrees visual angle (dva)"""
