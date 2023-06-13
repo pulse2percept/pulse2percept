@@ -90,12 +90,6 @@ class DynaphosModel(BaseModel):
     def __init__(self, **params):
             self._regions = None
             super().__init__(**params)
-            
-            window_dur = 1000.0 / self.freq
-            if self.p_dur*2 > window_dur:
-                raise ValueError(f"Pulse (dur={self.p_dur*2:.2f} ms) does not fit into "
-                                 f"pulse train window (dur={window_dur:.2f} "
-                                 f"ms)")
 
             self.retinotopy.regions = self.regions
             self.grid = None
@@ -163,6 +157,12 @@ class DynaphosModel(BaseModel):
         from ...topography import Grid2D
         for key, val in build_params.items():
             setattr(self, key, val)
+        # check that freq/pdur fit
+        window_dur = 1000.0 / self.freq
+        if self.p_dur*2 > window_dur:
+            raise ValueError(f"Pulse (dur={self.p_dur*2:.2f} ms) does not fit into "
+                            f"pulse train window (dur={window_dur:.2f} "
+                            f"ms)")
         # Build the spatial grid:
         self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
                            grid_type=self.grid_type)
@@ -220,7 +220,9 @@ class DynaphosModel(BaseModel):
             p_dur = elec_params[:,2]
         except KeyError:
             pass
-
+        
+        # holds instantaneous current for each phosphene
+        amp = np.zeros(len(x_el))
         # holds current activation for each phosphene
         A = np.zeros(len(x_el))
         # holds effective current for each phosphene
@@ -248,7 +250,9 @@ class DynaphosModel(BaseModel):
         for sim_idx in range(n_sim):
             t_sim = sim_idx * self.dt
             # get highest amp value over the frame
-            amp = np.zeros(len(x_el))
+            # but only reset amp to 0 if stimulus is updated at all during the frame
+            if stim_idx + 1 < n_stim and t_sim >= stim.time[stim_idx + 1]:
+                amp = np.zeros(len(x_el))
             while stim_idx + 1 < n_stim and t_sim >= stim.time[stim_idx + 1]:
                 stim_idx += 1
                 amp = np.maximum(amp, stim.data[:,stim_idx])
