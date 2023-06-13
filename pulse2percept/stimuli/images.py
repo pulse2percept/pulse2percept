@@ -1,11 +1,12 @@
 """`ImageStimulus`, `LogoBVL`, `LogoUCSB`, `SnellenChart`"""
 from os.path import dirname, join
 import numpy as np
+import warnings
 from math import isclose
 from copy import deepcopy
 import matplotlib.pyplot as plt
 
-from skimage import img_as_float32
+from skimage import img_as_float32, img_as_ubyte
 from skimage.io import imread, imsave
 from skimage.color import rgba2rgb, rgb2gray
 from skimage.transform import (resize as img_resize, rotate as img_rotate,
@@ -38,13 +39,8 @@ class ImageStimulus(Stimulus):
     ----------
     source : str
         Path to image file. Supported image types include JPG, PNG, and TIF;
-        and are inferred from the file ending. If the file does not have a
-        proper file ending, specify the file ending via ``extension``.
+        and are inferred from the file ending.
         Use :py:class:`~pulse2percept.stimuli.VideoStimulus` for GIFs.
-
-    extension : str, optional
-        A lowercase file extension string supported by imageio, such as '.jpg',
-        '.png', or '.tif'. Use if the file type cannot be inferred from ``source``.
 
     resize : (height, width) or None, optional
         Shape of the resized image. If one of the dimensions is set to -1,
@@ -72,7 +68,7 @@ class ImageStimulus(Stimulus):
     """
     __slots__ = ('img_shape',)
 
-    def __init__(self, source, extension=None, resize=None, as_gray=False,
+    def __init__(self, source, resize=None, as_gray=False,
                  electrodes=None, metadata=None, compress=False):
         if metadata is None:
             metadata = {}
@@ -80,7 +76,7 @@ class ImageStimulus(Stimulus):
             metadata = {'user': metadata}
         if isinstance(source, str):
             # Filename provided:
-            img = imread(source, extension=extension)
+            img = imread(source)
             metadata['source'] = source
             metadata['source_shape'] = img.shape
         elif isinstance(source, ImageStimulus):
@@ -597,7 +593,7 @@ class ImageStimulus(Stimulus):
                   **kwargs)
         return ax
 
-    def save(self, fname):
+    def save(self, fname, vmin = None, vmax = None):
         """Save the stimulus as an image
 
         Parameters
@@ -607,7 +603,21 @@ class ImageStimulus(Stimulus):
             inferred from the file extension.
 
         """
-        imsave(fname, self.data.reshape(self.img_shape))
+        # if vmin/vmax is not passed by user
+        if vmin is None:
+            vmin = self.data.min()
+        if vmax is None:
+            vmax = self.data.max()
+        # clip to vmin, vmax vals
+        clipped_data = self.data.clip(vmin,vmax)
+        # if not a TIFF file, scale to uint8
+        if not fname.endswith(".tif") and not fname.endswith(".tiff"):
+            # scale to [0,255] 
+            scaled_data = ((clipped_data - vmin) * ( 1 / (vmax - vmin) * 255)).astype('uint8')
+            imsave(fname, scaled_data.reshape(self.img_shape))
+            warnings.warn(f"Stimulus {fname} has been scaled & compressed to the range [0, 255]. To retain the full precision and scaling of the original stimulus, please save using the TIFF format.", UserWarning)
+        else:
+            imsave(fname, clipped_data.reshape(self.img_shape))
 
 
 class SnellenChart(ImageStimulus):
@@ -682,7 +692,7 @@ class SnellenChart(ImageStimulus):
                     raise ValueError(f'Invalid value for "row": {row}. Choose '
                                      f'an int between 1 and 11.')
         # Call ImageStimulus constructor:
-        super(SnellenChart, self).__init__(source, extension=".png",
+        super(SnellenChart, self).__init__(source,
                                            resize=resize,
                                            as_gray=True,
                                            electrodes=electrodes,
@@ -722,7 +732,7 @@ class LogoBVL(ImageStimulus):
         module_path = dirname(__file__)
         source = join(module_path, 'data', 'bionic-vision-lab.png')
         # Call ImageStimulus constructor:
-        super(LogoBVL, self).__init__(source, extension=".png",
+        super(LogoBVL, self).__init__(source,
                                       resize=resize,
                                       as_gray=as_gray,
                                       electrodes=electrodes,
@@ -762,7 +772,7 @@ class LogoUCSB(ImageStimulus):
         module_path = dirname(__file__)
         source = join(module_path, 'data', 'ucsb.png')
         # Call ImageStimulus constructor:
-        super(LogoUCSB, self).__init__(source, extension=".png",
+        super(LogoUCSB, self).__init__(source,
                                        resize=resize,
                                        as_gray=True,
                                        electrodes=electrodes,

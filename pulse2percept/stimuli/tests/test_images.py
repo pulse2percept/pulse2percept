@@ -338,6 +338,18 @@ def test_ImageStimulus_save():
     os.remove(fname)
     os.remove(fname2)
 
+    # Test that TIFF retains scaling between saving and loading
+    fname3 = 'test.tif'
+    shape = (5,5)
+    ndarray = np.random.rand(*shape).astype('float32')
+    imsave(fname3, ndarray)
+    stim2 = ImageStimulus(fname3)
+    fname4 = 'test2.tif'
+    stim2.save(fname4)
+    npt.assert_almost_equal(stim2.data, ImageStimulus(fname4).data)
+    os.remove(fname3)
+    os.remove(fname4)
+
 
 @pytest.mark.parametrize('show_annotations', (True, False))
 def test_SnellenChart(show_annotations):

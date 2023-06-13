@@ -397,8 +397,8 @@ class Percept(Data):
                         out_h += VIDEO_BLOCK_SIZE - (h % VIDEO_BLOCK_SIZE)
                     data = resize(data, (out_h, out_w))
             data = img_as_ubyte(data)
-            if fname[-4:] in ['.mp4', '.avi', '.mov','.wmv']:
+            try:
                 imageio.mimwrite(fname, data.transpose((2, 0, 1)), fps=fps)
-            else:
+            except:
                 imageio.mimwrite(fname, data.transpose((2, 0, 1)), duration=1000/fps)
         logging.getLogger(__name__).info(f'Created {fname}.')
