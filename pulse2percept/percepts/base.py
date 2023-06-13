@@ -8,7 +8,7 @@ from math import isclose
 from scipy.cluster.vq import kmeans2
 import imageio
 import logging
-from skimage import img_as_uint
+from skimage import img_as_ubyte
 from skimage.transform import resize
 
 from ..utils import Data, Grid2D, deprecated, unique, sample
@@ -355,7 +355,7 @@ class Percept(Data):
         data = self.data - self.data.min()
         if not isclose(np.max(data), 0):
             data = data / np.max(data)
-        data = img_as_uint(data)
+        data = img_as_ubyte(data)
 
         if shape is None:
             # Use 320px width and infer height from aspect ratio:
@@ -375,7 +375,7 @@ class Percept(Data):
         if self.time is None:
             # No time component, store as an image. imwrite will automatically
             # scale the gray levels:
-            imageio.imwrite(fname, img_as_uint(data).astype(np.uint8).squeeze(2))
+            imageio.imwrite(fname, img_as_ubyte(data).squeeze(2))
         else:
             # With time component, store as a movie:
             if fps is None:
@@ -396,7 +396,7 @@ class Percept(Data):
                     if h % VIDEO_BLOCK_SIZE > 0:
                         out_h += VIDEO_BLOCK_SIZE - (h % VIDEO_BLOCK_SIZE)
                     data = resize(data, (out_h, out_w))
-            data = img_as_uint(data).astype(np.uint8)
+            data = img_as_ubyte(data)
             if fname[-4:] in ['.mp4', '.avi', '.mov','.wmv']:
                 imageio.mimwrite(fname, data.transpose((2, 0, 1)), fps=fps)
             else:
