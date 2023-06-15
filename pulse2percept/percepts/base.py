@@ -378,9 +378,9 @@ class Percept(Data):
             imageio.imwrite(fname, img_as_ubyte(data).squeeze(2))
         else:
             # Throw error if we try to save as a static image
-            # if any(fname.endswith(ext) for ext in 
-            #        ['.jpg','.jpeg','.bmp','.png','.tif','.tiff','.jif','.jfif']):
-            #     raise ValueError(f"Cannot save multi-frame percept as a static image: {fname}")
+            for ext in ['.jpg','.jpeg','.bmp','.png','.tif','.tiff','.jif','.jfif']:
+                if fname.endswith(ext):
+                    raise ValueError(f"Cannot save multi-frame percept as a static image: {fname}")
             # With time component, store as a movie:
             if fps is None:
                 interval = unique(np.diff(self.time))
