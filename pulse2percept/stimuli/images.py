@@ -593,7 +593,7 @@ class ImageStimulus(Stimulus):
                   **kwargs)
         return ax
 
-    def save(self, fname, vmin = None, vmax = None):
+    def save(self, fname, vmin=0, vmax=None):
         """Save the stimulus as an image
 
         Parameters
@@ -603,9 +603,7 @@ class ImageStimulus(Stimulus):
             inferred from the file extension.
 
         """
-        # if vmin/vmax is not passed by user
-        if vmin is None:
-            vmin = self.data.min()
+        # if vmax is not passed by user
         if vmax is None:
             vmax = self.data.max()
         # clip to vmin, vmax vals
