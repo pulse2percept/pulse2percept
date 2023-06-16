@@ -403,6 +403,6 @@ class Percept(Data):
             data = img_as_ubyte(data)
             try:
                 imageio.mimwrite(fname, data.transpose((2, 0, 1)), fps=fps)
-            except:
+            except TypeError:
                 imageio.mimwrite(fname, data.transpose((2, 0, 1)), duration=1000/fps)
         logging.getLogger(__name__).info(f'Created {fname}.')
