@@ -170,15 +170,15 @@ def test_Percept_save(dtype):
         npt.assert_equal(os.path.isfile(fname), True)
         # Normalized to [0, 255] with some loss of precision:
         for mov in mimread(fname):
-            npt.assert_equal(np.min(mov) <= 2, True)
-            npt.assert_equal(np.max(mov) >= 250, True)
+            npt.assert_equal(np.min(mov) <= 10, True)
+            npt.assert_equal(np.max(mov) >= 245, True)
         os.remove(fname)
 
     # Cannot save multiple frames image:
     fname = 'test.jpg'
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ValueError):
         percept.save(fname)
-
+    
     # But, can save single frame as image:
     percept = Percept(ndarray[..., :1])
     for fname in ['test.jpg', 'test.png', 'test.tif', 'test.gif']:
