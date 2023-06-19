@@ -37,12 +37,13 @@ jobs:
           CIBW_SKIP: "*-manylinux_i686 cp38-win32 cp39-win32"
 
       - name: Build Py3.7 wheels
+        if: ${{ matrix.os != macos-12}}
         uses: pypa/cibuildwheel@v2.1.3
         env:
           CIBW_BEFORE_BUILD_LINUX: "yum install -y python-devel zlib-devel libjpeg-turbo-devel wget && python -m pip install pip==20.3 && python -m pip install Pillow==6.2.1 && python -m pip install -r requirements.txt && python -m pip install -e ."
           CIBW_BEFORE_BUILD: "python -m pip install pip==20.3 && python -m pip install Pillow==6.2.1 && python -m pip install -r requirements.txt && python -m pip install -e ."
           CIBW_BUILD: "cp37-*"
-          CIBW_SKIP: "*-manylinux_i686 cp37-win32 *macosx*"
+          CIBW_SKIP: "*-manylinux_i686 cp37-win32"
 
       - uses: actions/upload-artifact@v2
         with:
