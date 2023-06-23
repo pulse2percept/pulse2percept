@@ -205,7 +205,7 @@ class ProsthesisSystem(PrettyPrint):
                 raise ValueError("Must assign a stimulus in order to enable stimulus coloring")
             stim = self.stim
             if stim_cmap == True:
-                stim_cmap = 'hot'
+                stim_cmap = 'YlOrRd'
         return self.earray.plot(annotate=annotate, autoscale=autoscale, ax=ax, color_stim=stim, cmap=stim_cmap)
 
     def activate(self, electrodes):
@@ -310,7 +310,7 @@ class ProsthesisSystem(PrettyPrint):
                                      f'implant.')
             # Remove deactivated electrodes from the stimulus:
             stim.remove([name for (name, e) in self.electrodes.items()
-                         if not e.activated])
+                         if not e.activated and name in stim.electrodes])
             # Perform safety checks, etc.:
             self.check_stim(stim)
             # Store stimulus:

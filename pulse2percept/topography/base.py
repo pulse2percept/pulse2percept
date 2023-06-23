@@ -360,8 +360,8 @@ class Grid2D(PrettyPrint):
             boundary = self.retinotopy.left_offset / 2
             if use_dva:
                 boundary = 0
-            ax.axvline(boundary, linestyle=':', c='gray')
-        ax.set_xlim(lim)
+            if lim[0] < boundary < lim[1]:
+                ax.axvline(boundary, linestyle=':', c='gray')
 
         if len(transforms) > 1 or legend:
             if style in ['cell', 'hull']:
