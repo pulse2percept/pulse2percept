@@ -31,7 +31,9 @@ class Cortivis(ProsthesisSystem):
         names = ['01','1','2','3','4','5','6','7','8','02'] \
                 + [str(i) for i in range(9, 89)] \
                 + ['03','89','90','91','92','93','94','95','96','04']
-        # account for depth of shanks
+        # Flip to match Fernandez 2022
+        names = names[::-1]
+        # Account for depth of shanks
         z -= 1500
         self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, rot=rot,
                                     names=names, type='rect', r=40,
