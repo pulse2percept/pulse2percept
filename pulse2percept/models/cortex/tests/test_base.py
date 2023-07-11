@@ -74,8 +74,8 @@ def test_predict_spatial(ModelClass, regions):
 
     # implant only in v1, shouldnt change with v2/v3
     model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), xystep=0.1, rho=400).build()
-    # Reverse test to match electrode naming flip
-    implant = Cortivis(x=30000, stim={str(i) : [1, 0] for i in range(96, 0, -3)})
+    elecs = [79, 49, 19, 80, 50, 20, 90, 61, 31, 2, 72, 42, 12, 83, 53, 23, 93, 64, 34, 5, 75, 45, 15, 86, 56, 26, 96, 67, 37, 8, 68, 38]
+    implant = Cortivis(x=30000, stim={str(i) : [1, 0] for i in elecs})
     percept = model.predict_percept(implant)
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
     npt.assert_equal(np.all(percept.data[:, :, 1] == 0), True)
