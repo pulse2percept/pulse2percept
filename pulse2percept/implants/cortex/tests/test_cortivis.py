@@ -11,7 +11,7 @@ def test_Cortivis(x, y, rot):
     # Create a Cortivis implant and make sure location is correct
     # Depth 'z' must be 0
     cortivis = Cortivis(x=x, y=y, rot=rot)
-    cortivis0 = Cortivis(0)
+    cortivis0 = Cortivis(x=0, y=0, rot=0)
     
     # Slots:
     npt.assert_equal(hasattr(cortivis, '__slots__'), True)
