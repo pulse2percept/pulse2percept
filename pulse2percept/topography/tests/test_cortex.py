@@ -5,7 +5,7 @@ import numpy.testing as npt
 
 
 def test_polimeni_v1():
-    map = Polimeni2006Map(regions=['v1'])
+    map = Polimeni2006Map(k=15, a=0.5, b=90, regions=['v1'])
     theta = np.array([(i * np.pi - 0.1) / 6 for i in range(-5, 7)])
     radius = np.array([i for i in range(1, 13)])
 
@@ -47,7 +47,7 @@ def test_polimeni_v1():
 
 
 def test_polimeni_v2():
-    map = Polimeni2006Map(regions=['v2'])
+    map = Polimeni2006Map(k=15, a=0.5, b=90,regions=['v2'])
     theta = np.array([(i * np.pi - 0.1) / 6 for i in range(-5, 7)])
     radius = np.array([i for i in range(1, 13)])
 
@@ -89,7 +89,7 @@ def test_polimeni_v2():
 
 
 def test_polimeni_v3():
-    map = Polimeni2006Map(regions=['v3'])
+    map = Polimeni2006Map(k=15, a=0.5, b=90, regions=['v3'])
     theta = np.array([(i * np.pi - 0.1) / 6 for i in range(-5, 7)])
     radius = np.array([i for i in range(1, 13)])
 

@@ -88,9 +88,9 @@ class Polimeni2006Map(CorticalMap):
     def get_default_params(self):
         base_params = super(Polimeni2006Map, self).get_default_params()
         params = {
-            'k' : 15,
-            'a' : 0.5,
-            'b' : 90,
+            'k' : 15, 
+            'a' : 0.69, # average of values in sec 4.6
+            'b' : 80,
             'alpha1' : 1,
             'alpha2' : 0.333,
             'alpha3' : 0.25,
