@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - master
+      - cortex
     tags:
       - v*
   pull_request:
     branches:
       - master
+      - cortex
 
 jobs:
   build_wheels:
