@@ -22,7 +22,7 @@ jobs:
         include:
           - runs-on: ubuntu-20.04
             compiler: gcc
-            gcc: 11
+            gcc: 10
 
     steps:
       - uses: actions/checkout@v2
