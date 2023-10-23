@@ -146,3 +146,11 @@ def test_deepcopy_Scoreboard(ModelClass):
     original = None
     npt.assert_equal(copied is not None, True)
 
+
+@pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
+def test_plot(ModelClass):
+    # make sure that plotting works before and after building
+    m = ModelClass()
+    m.plot()
+    m.build()
+    m.plot()

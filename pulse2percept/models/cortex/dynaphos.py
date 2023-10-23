@@ -384,6 +384,9 @@ class DynaphosModel(BaseModel):
         """
         if style is None:
             style = 'hull' if use_dva else 'scatter'
+        # Model must be built to access cortical coordinates
+        if not self.is_built:
+            self.build()
         ax = self.grid.plot(style=style, use_dva=use_dva, autoscale=autoscale, 
                             ax=ax, figsize=figsize, fc=fc, 
                             zorder=ZORDER['background'], 

@@ -101,3 +101,10 @@ def test_deepcopy_Dynaphos():
     # Assert destroying the original doesn't affect the copied
     original = None
     npt.assert_equal(copied is not None, True)
+
+def test_dynaphos_plot():
+    # make sure that plotting works before and after building
+    m = DynaphosModel()
+    m.plot()
+    m.build()
+    m.plot()
