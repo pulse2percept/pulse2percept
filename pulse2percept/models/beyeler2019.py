@@ -648,6 +648,59 @@ class AxonMapSpatial(SpatialModel):
         if tangent > np.deg2rad(90):
             tangent -= np.deg2rad(180)
         return tangent
+    
+
+    def calc_bundle_tangent_fast(self, xc, yc, bundles=None):
+        """Calculates orientation of fiber bundle tangent at (xc, yc)
+        This function supports multiple queries (xc and yc can be arrays), without
+        requiring growing the axon bundles again for each point (like calc_bundle_tangent).
+        It uses a ckdtree, which will be slower for single points, but significantly faster 
+        for multiple points. 
+
+        Parameters
+        ----------
+        xc, yc: array of floats
+            (x, y) retinal location of point at which to calculate bundle 
+            orientation in microns.
+
+        Returns
+        -------
+        tangent : array of floats
+            Angles in radians
+        """
+
+        if bundles is None:
+            bundles = self.grow_axon_bundles()
+        xc = np.asarray(xc, dtype=np.float32)
+        yc = np.asarray(yc, dtype=np.float32)
+        # For every axon segment, store the corresponding axon ID:
+        axon_idx = [[idx] * len(ax) for idx, ax in enumerate(bundles)]
+        axon_idx = [item for sublist in axon_idx for item in sublist]
+        axon_idx = np.array(axon_idx, dtype=np.uint32)
+        # Build a long list of all axon segments - their corresponding axon IDs
+        # is given by `axon_idx` above:
+        flat_bundles = np.concatenate(bundles)
+        kdtree = cKDTree(flat_bundles, leafsize=60)
+        # Create query list of xy pairs
+        query = np.stack((xc.ravel(), yc.ravel()), axis=1)
+        # Find index of closest segment
+        _, closest_seg = kdtree.query(query)
+        segs = axon_idx[closest_seg]
+        prev_segs = axon_idx[np.where(closest_seg > 0, closest_seg, 1) - 1]
+        next_segs = axon_idx[np.where(closest_seg < len(axon_idx)-2, closest_seg, len(axon_idx)-2) + 1]
+
+        offset_l = np.where(prev_segs == segs, -1, 0)
+        offset_r = np.where(next_segs == segs, 1, 0)
+        dx = flat_bundles[np.minimum(closest_seg + offset_r, len(flat_bundles)-1)] - flat_bundles[np.maximum(closest_seg + offset_l, 0)]
+
+        dx[:, 1] *= -1
+        tangent = np.arctan2(dx[:, 1], dx[:, 0])
+
+        # Confine to (-pi/2, pi/2):
+        tangent = np.where(tangent < -np.pi/2, tangent+np.pi, tangent)
+        tangent = np.where(tangent > np.pi/2, tangent - np.pi, tangent)
+        return tangent.reshape(xc.shape)
+
 
     def _correct_loc_od(self):
         if self.eye.upper() == 'LE':

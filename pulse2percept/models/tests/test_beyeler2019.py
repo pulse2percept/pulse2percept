@@ -499,6 +499,22 @@ def test_AxonMapModel_calc_bundle_tangent(engine):
 
 
 @ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+def test_AxonMapModel_calc_bundle_tangent_fast(engine):
+    model = AxonMapModel(xystep=5, engine=engine, n_axons=500,
+                         xrange=(-20, 20), yrange=(-15, 15),
+                         n_ax_segments=500, axons_range=(-180, 180),
+                         ax_segments_range=(3, 50))
+    npt.assert_almost_equal(model.spatial.calc_bundle_tangent_fast(0, 0), 0.4819,
+                            decimal=3)
+    npt.assert_almost_equal(model.spatial.calc_bundle_tangent_fast(0, 1000),
+                            -0.5514, decimal=3)
+    
+    npt.assert_almost_equal(model.spatial.calc_bundle_tangent_fast(np.array([0, 0.]), np.array([0, 1000.])),
+                            np.array([0.4819, -0.5514]), decimal=3)
+
+
+
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
 def test_AxonMapModel_predict_percept(engine):
     model = AxonMapModel(xystep=0.55, axlambda=100, rho=100,
                          thresh_percept=0, engine=engine,
