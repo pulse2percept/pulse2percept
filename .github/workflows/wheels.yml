@@ -27,8 +27,8 @@ jobs:
       - name: Build Py3.10 wheels
         uses: pypa/cibuildwheel@v2.16.2
         env:
-          CIBW_BEFORE_BUILD_LINUX: "apt install -y python-devel zlib-devel libjpeg-turbo-devel wget && python -m pip install -U pip pillow numpy && wget https://github.com/scipy/scipy/releases/download/v1.8.0/scipy-1.8.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl && mv scipy-1.8.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl scipy-1.8.0-cp310-none-any.whl && python -m pip install scipy-1.8.0-cp310-none-any.whl && python -m pip install -r requirements.txt && python -m pip install -e ."
-          # CIBW_BEFORE_BUILD_LINUX: "apt install -y python-devel zlib-devel libjpeg-turbo-devel wget && python -m pip install -U pip pillow numpy && python -m pip install -r requirements.txt && python -m pip install -e ."
+          # CIBW_BEFORE_BUILD_LINUX: "apt install -y python-devel zlib-devel libjpeg-turbo-devel wget && python -m pip install -U pip pillow numpy && wget https://github.com/scipy/scipy/releases/download/v1.8.0/scipy-1.8.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl && mv scipy-1.8.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl scipy-1.8.0-cp310-none-any.whl && python -m pip install scipy-1.8.0-cp310-none-any.whl && python -m pip install -r requirements.txt && python -m pip install -e ."
+          CIBW_BEFORE_BUILD_LINUX: "apt install -y python-devel zlib-devel libjpeg-turbo-devel wget && python -m pip install -U pip pillow numpy && python -m pip install -r requirements.txt && python -m pip install -e ."
           CIBW_BEFORE_BUILD: "python -m pip install -U pip numpy pillow && python -m pip install -r requirements.txt && python -m pip install -e ."
           CIBW_BUILD: "cp310-*"
           CIBW_SKIP: "*-manylinux_i686 cp310-win32"
