@@ -48,7 +48,7 @@ class DefaultBrightModel(BaseModel):
     a0, a1 : float, optional
         Linear regression coefficients (slope and intercept) of pulse_duration
         vs threshold curve (Eq 3). Amplitude factor will be scaled by 
-        (a0*pdur + a1)^-1.
+        a0*pdur + a1.
     a2, a3, a4: float, optional
         Linear regression coefficients for brightness vs amplitude and frequency (Eq 4)
         F_bright = a2*scaled_amp + a3*freq + a4 
@@ -72,6 +72,9 @@ class DefaultBrightModel(BaseModel):
         """ 
         Based on eq 3 in paper, this function produces the factor that amplitude
         will be scaled by to produce a_tilde. Computes A_0 * t + A_1 (1/threshold)
+        .. note::
+            This equation has been updated from the original paper, and has been refit
+            to data from Argus II users from Horsager et al. 2009.
         """
         return self.a1 + self.a0*pdur
 
@@ -104,7 +107,7 @@ class DefaultSizeModel(BaseModel):
     a0, a1 : float, optional
         Linear regression coefficients (slope and intercept) of pulse_duration
         vs threshold curve (Eq 3). Amplitude factor will be scaled by 
-        (a0*pdur + a1)^-1.
+        a0*pdur + a1.
     a5, a6 : float, optional
         Linear regression coefficients for size vs amplitude (Eq 5)
         F_size = a5*scaled_amp + a6 
@@ -131,6 +134,9 @@ class DefaultSizeModel(BaseModel):
         """ 
         Based on eq 3 in paper, this function produces the factor that amplitude
         will be scaled by to produce a_tilde. Computes A_0 * t + A_1 (1/threshold)
+        .. note::
+            This equation has been updated from the original paper, and has been refit
+            to data from Argus II users from Horsager et al. 2009.
         """
         return self.a1 + self.a0*pdur
 
