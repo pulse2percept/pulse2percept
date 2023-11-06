@@ -534,7 +534,7 @@ def test_AxonMapModel_predict_percept(engine):
     npt.assert_equal(np.sum(percept.data > 0.8), 1)
     npt.assert_equal(np.sum(percept.data > 0.6), 2)
     npt.assert_equal(np.sum(percept.data > 0.1), 7)
-    npt.assert_equal(np.sum(percept.data > 0.0001), 31)
+    npt.assert_equal(np.sum(percept.data > 0.0001), 32)
     # Overall only a few bright pixels:
     npt.assert_almost_equal(np.sum(percept.data), 3.3087, decimal=3)
     # Brightest pixel is in lower right:

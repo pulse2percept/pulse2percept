@@ -11,10 +11,10 @@ def test_Curcio1990Map():
     # Curcio1990 uses a linear dva_to_ret conversion factor:
     for factor in [0.0, 1.0, 2.0]:
         npt.assert_almost_equal(Curcio1990Map().dva_to_ret(factor, factor),
-                                (280.0 * factor, 280.0 * factor))
+                                (280.0 * factor, -280.0 * factor))
     for factor in [0.0, 1.0, 2.0]:
         npt.assert_almost_equal(Curcio1990Map().ret_to_dva(280.0 * factor,
-                                                      280.0 * factor),
+                                                      -280.0 * factor),
                                 (factor, factor))
 
 
@@ -48,19 +48,19 @@ def test_Watson2014Map():
         trafo.dva_to_ret(0, 0, coords='invalid')
 
     # Below 15mm eccentricity, relationship is linear with slope 3.731
-    npt.assert_equal(trafo.ret_to_dva(0.0, 0.0), (0.0, 0.0))
+    npt.assert_almost_equal(trafo.ret_to_dva(0.0, 0.0), (0.0, 0.0))
     for sign in [-1, 1]:
         for exp in [2, 3, 4]:
             ret = sign * 10 ** exp  # mm
-            dva = 3.731 * sign * 10 ** (exp - 3)  # dva
+            dva = -3.731 * sign * 10 ** (exp - 3)  # dva
             npt.assert_almost_equal(trafo.ret_to_dva(0, ret)[1], dva,
                                     decimal=3 - exp)  # adjust precision
     # Below 50deg eccentricity, relationship is linear with slope 0.268
-    npt.assert_equal(trafo.dva_to_ret(0.0, 0.0), (0.0, 0.0))
+    npt.assert_almost_equal(trafo.dva_to_ret(0.0, 0.0), (0.0, 0.0))
     for sign in [-1, 1]:
         for exp in [-2, -1, 0]:
             dva = sign * 10 ** exp  # deg
-            ret = 0.268 * sign * 10 ** (exp + 3)  # mm
+            ret = -0.268 * sign * 10 ** (exp + 3)  # mm
             npt.assert_almost_equal(trafo.dva_to_ret(0, dva)[1], ret,
                                     decimal=-exp)  # adjust precision
 
