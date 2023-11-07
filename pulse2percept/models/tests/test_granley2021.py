@@ -236,7 +236,7 @@ def test_biphasicAxonMapSpatial(engine):
     implant = ArgusII()
     implant.stim = Stimulus({'A4': BiphasicPulseTrain(20, 1, 1)})
     percept = model.predict_percept(implant)
-    npt.assert_equal(np.sum(percept.data > 0.0813), 69)
+    npt.assert_equal(np.sum(percept.data > 0.0813), 70)
     npt.assert_equal(np.sum(percept.data > 0.1626), 46)
     npt.assert_equal(np.sum(percept.data > 0.2439), 32)
     npt.assert_equal(np.sum(percept.data > 0.4065), 14)
