@@ -174,9 +174,10 @@ class Grid2D(PrettyPrint):
         self._xflat = np.linspace(*x_range, num=nx, dtype=np.float32)
         ydiff = np.abs(np.diff(y_range))
         ny = int(np.round(ydiff / y_step) + 1) if ydiff != 0 else 1
-        self._yflat = np.linspace(*y_range, num=ny, dtype=np.float32)[::-1]
+        self._yflat = np.linspace(*y_range, num=ny, dtype=np.float32)
+        # Create the grid, flip y axis so that it increases from bottom to top:
         self._grid['dva'] = self.CoordinateGrid(
-            *np.meshgrid(self._xflat, self._yflat, indexing='xy'))
+            *np.meshgrid(self._xflat, self._yflat[::-1], indexing='xy'))
         self.shape = self.x.shape
         self.reset()
 
