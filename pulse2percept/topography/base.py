@@ -50,15 +50,17 @@ class Grid2D(PrettyPrint):
 
     Examples
     --------
-    You can iterate through a grid as if it were a list:
+    You can iterate through a grid as if it were a list.
+    Notice, the grid is indexed in (x, y) order, starting in the upper 
+    left of the grid (following image convention)
 
     >>> grid = Grid2D((0, 1), (2, 3))
     >>> for x, y in grid:
     ...     print(x, y)
-    0.0 2.0
-    1.0 2.0
     0.0 3.0
     1.0 3.0
+    0.0 2.0
+    1.0 2.0
 
     """
 
