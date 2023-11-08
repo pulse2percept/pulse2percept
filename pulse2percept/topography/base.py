@@ -181,6 +181,7 @@ class Grid2D(PrettyPrint):
         self._grid['dva'] = self.CoordinateGrid(
             *np.meshgrid(self._xflat, self._yflat[::-1], indexing='xy'))
         self.shape = self.x.shape
+        self.size = self.x.size
         self.reset()
 
     def _make_hexagonal_grid(self, x_range, y_range, step):
