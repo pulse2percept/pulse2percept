@@ -454,8 +454,7 @@ class AxonMapSpatial(SpatialModel):
             # Keep only reasonably sized axon bundles:
             bundles = list(filter(lambda x: len(x) > 10, bundles))
         # Convert to um:
-        # Use negative y coord: Want slope in DVA not ret (compat)
-        bundles = [np.array(self.retinotopy.dva_to_ret(b[:, 0], -b[:, 1])).T
+        bundles = [np.array(self.retinotopy.dva_to_ret(b[:, 0], b[:, 1])).T
                    for b in bundles]
         return bundles
 
