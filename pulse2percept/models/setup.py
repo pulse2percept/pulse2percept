@@ -37,5 +37,7 @@ def configuration(parent_package='', top_path=None):
                              include_dirs=[numpy.get_include()],
                              libraries=libraries)
     config.add_subpackage("tests")
+    config.add_subpackage("cortex")
+    config.add_subpackage("cortex/tests")
 
     return config

@@ -37,7 +37,7 @@ __all__ = [
     'AxonMapModel',
     'AxonMapSpatial',
     'BaseModel',
-    # 'cortex',
+    'cortex',
     'FadingTemporal',
     'Horsager2009Model',
     'Horsager2009Temporal',

@@ -39,7 +39,7 @@ __all__ = [
     'ArgusII',
     'BVT24',
     'BVT44',
-    # 'cortex',
+    'cortex',
     'DiskElectrode',
     'Electrode',
     'ElectrodeArray',
