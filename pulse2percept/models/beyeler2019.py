@@ -10,7 +10,6 @@ from matplotlib.patches import Ellipse
 
 from ..utils import parfor
 from ..utils.constants import ZORDER
-from ..topography import Watson2014Map
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
@@ -81,6 +80,9 @@ class ScoreboardSpatial(SpatialModel):
     """
 
     def get_default_params(self):
+        # import at runtime to avoid circular import
+        from ..topography import Watson2014Map
+        
         """Returns all settable parameters of the scoreboard model"""
         base_params = super(ScoreboardSpatial, self).get_default_params()
         params = {'rho': 100, 'retinotopy': Watson2014Map()}
