@@ -50,7 +50,6 @@ from . import datasets
 from . import implants
 from . import models
 from . import model_selection
-from . import topography
 from . import percepts
 from . import stimuli
 from . import viz
