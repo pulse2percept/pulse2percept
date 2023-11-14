@@ -61,6 +61,7 @@ __all__ = [
     'model_selection',
     'percepts',
     'stimuli',
+    'topography',
     'utils',
     'viz'
 ]
