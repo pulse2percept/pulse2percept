@@ -15,7 +15,7 @@ from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
 from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
-                           fast_find_closest_axon)
+                           fast_find_closest_axon)        
 
 # Log all warnings.warn() at the WARNING level:
 import warnings
