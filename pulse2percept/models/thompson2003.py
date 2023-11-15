@@ -3,6 +3,7 @@
 import numpy as np
 import copy
 from ..utils import sample
+from ..topography import Curcio1990Map
 from ..models import Model, SpatialModel
 from ._thompson2003 import fast_thompson2003
 
@@ -68,10 +69,7 @@ class Thompson2003Spatial(SpatialModel):
         ``model.build()`` again for your changes to take effect.
     """
 
-    def get_default_params(self):
-        # import at runtime to avoid circular import
-        from ..topography import Curcio1990Map
-        
+    def get_default_params(self):        
         """Returns all settable parameters of the model"""
         base_params = super(Thompson2003Spatial, self).get_default_params()
         params = {'radius': None, 'dropout': None,
