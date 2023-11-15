@@ -137,7 +137,9 @@ class ProsthesisSystem(PrettyPrint):
             # - Fit electrode locations to a rectangular grid
             # - Downscale the image to that grid size
             # - Index into grid to determine electrode activation
-            data = stim.rgb2gray()
+
+            # Flip image vertically, since retinal representation is upside down:
+            data = stim.rgb2gray().apply(lambda x : x[::-1])
             if hasattr(self.earray, 'rot'):
                 # We need to rotate the array & image first, otherwise we may
                 # end up with an infinitesimally small (dx,dy); for example,
@@ -145,7 +147,8 @@ class ProsthesisSystem(PrettyPrint):
                 tf = SimilarityTransform(rotation=np.deg2rad(self.earray.rot))
                 x, y = np.array([tf.inverse([e.x, e.y])
                                  for e in self.electrode_objects]).squeeze().T
-                data = data.rotate(self.earray.rot)
+                # Rotate image backwards, since retinal image upside down
+                data = data.rotate(-self.earray.rot)
             else:
                 x = [e.x for e in self.electrode_objects]
                 y = [e.y for e in self.electrode_objects]
@@ -163,7 +166,7 @@ class ProsthesisSystem(PrettyPrint):
                                  "will need to resize the stimulus yourself "
                                  "so that there is one activation value per "
                                  "electrode.")
-            # For each electrode, find the closest pixel on the grid:
+            # For each electrode, find the closest pixel on the grid
             kdtree = cKDTree(np.vstack((grid.x.ravel(), grid.y.ravel())).T)
             _, e_idx = kdtree.query(np.vstack((x, y)).T)
             data = data.resize(grid.x.shape).data[e_idx, ...].squeeze()

@@ -27,10 +27,10 @@ def test_Grid2D(x_range, y_range):
     npt.assert_almost_equal(grid.x[0, -1], x_range[1])
     npt.assert_almost_equal(grid.x[-1, 0], x_range[0])
     npt.assert_almost_equal(grid.x[-1, -1], x_range[1])
-    npt.assert_almost_equal(grid.y[0, 0], y_range[0])
-    npt.assert_almost_equal(grid.y[0, -1], y_range[0])
-    npt.assert_almost_equal(grid.y[-1, 0], y_range[1])
-    npt.assert_almost_equal(grid.y[-1, -1], y_range[1])
+    npt.assert_almost_equal(grid.y[0, 0], y_range[1])
+    npt.assert_almost_equal(grid.y[0, -1], y_range[1])
+    npt.assert_almost_equal(grid.y[-1, 0], y_range[0])
+    npt.assert_almost_equal(grid.y[-1, -1], y_range[0])
 
 
 def test_Grid2D_make_rectangular_grid():
@@ -43,7 +43,7 @@ def test_Grid2D_make_rectangular_grid():
                       step=5 * mlt)
         npt.assert_almost_equal(grid.x[0], mlt * np.array([-10, -5, 0, 5, 10]))
         npt.assert_almost_equal(grid.y[:, 0],
-                                mlt * np.array([-10, -5, 0, 5, 10]))
+                                mlt * np.array([-10, -5, 0, 5, 10])[::-1])
 
     # Another way to verify this is to manually check the step size:
     for step in [0.25, 0.5, 1, 2]:
@@ -51,7 +51,7 @@ def test_Grid2D_make_rectangular_grid():
         npt.assert_equal(len(np.unique(np.diff(grid.x[0, :]))), 1)
         npt.assert_equal(len(np.unique(np.diff(grid.y[:, 0]))), 1)
         npt.assert_almost_equal(np.unique(np.diff(grid.x[0, :]))[0], step)
-        npt.assert_almost_equal(np.unique(np.diff(grid.y[:, 0]))[0], step)
+        npt.assert_almost_equal(np.unique(np.diff(grid.y[:, 0]))[0], -step)
 
     # Step size just a little too small/big to fit into range. In this case,
     # the step size gets adjusted so that the range is as specified by the
@@ -69,7 +69,7 @@ def test_Grid2D_make_rectangular_grid():
     npt.assert_almost_equal(grid.y, [[0, 0, 0, 0, 0]])
     grid = Grid2D((0, 0), (-1, 1), step=(2, 0.5))
     npt.assert_almost_equal(grid.x, [[0], [0], [0], [0], [0]])
-    npt.assert_almost_equal(grid.y[:, 0], [-1, -0.5, 0, 0.5, 1])
+    npt.assert_almost_equal(grid.y[:, 0], [-1, -0.5, 0, 0.5, 1][::-1])
 
     # Same step size, but given explicitly:
     npt.assert_almost_equal(Grid2D((-3, 3), (8, 12), step=0.123).x,

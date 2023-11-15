@@ -842,9 +842,9 @@ class AxonMapSpatial(SpatialModel):
             od_xy = self.loc_od
             od_w = 6.44
             od_h = 6.85
-            # Flip y upside down for dva:
+            # Convert axon bundles to dva:
             axon_bundles = [np.array(self.retinotopy.ret_to_dva(bundle[:, 0],
-                                                             -bundle[:, 1])).T
+                                                             bundle[:, 1])).T
                             for bundle in axon_bundles]
             labels = ['upper', 'lower', 'left', 'right']
         else:
