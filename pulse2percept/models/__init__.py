@@ -32,6 +32,8 @@ from .nanduri2012 import (Nanduri2012Model, Nanduri2012Spatial,
 from .granley2021 import BiphasicAxonMapModel, BiphasicAxonMapSpatial
 from .thompson2003 import Thompson2003Model, Thompson2003Spatial
 
+from . import cortex
+
 __all__ = [
     'AxonMapModel',
     'AxonMapSpatial',
