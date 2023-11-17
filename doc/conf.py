@@ -11,6 +11,11 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+# Hack collections import (in 3.10, collections.callable moved to collections.abc.Callable, 
+# but our super old sphinx still uses the old import)
+import collections
+collections.Callable = collections.abc.Callable
+
 import sphinx_gallery
 from sphinx_gallery.sorting import ExplicitOrder
 import sphinx_rtd_theme
