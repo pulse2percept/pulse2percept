@@ -196,7 +196,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             # the right frame. Each frame is associated with a time, `t_stim`.
             # We use that frame until `t_sim` advances past it. In other words,
             # we use the `idx_stim`-th frame for all times
-            t_stim[idx_stim] <= t_sim < t_stim[idx_stim + 1]:
+            t_stim[idx_stim] <= t_sim < t_stim[idx_stim + 1]
             if idx_stim + 1 < n_stim:
                 if t_sim >= t_stim[idx_stim + 1]:
                     idx_stim = idx_stim + 1
