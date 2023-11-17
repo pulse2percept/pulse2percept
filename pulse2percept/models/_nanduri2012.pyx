@@ -2,7 +2,6 @@ from ..utils._fast_math cimport c_fmax, c_expit
 
 from libc.math cimport(pow as c_pow, fabs as c_abs, sqrt as c_sqrt,
                        isnan as c_isnan)
-from libc.stdio cimport printf
 from cython.parallel import prange, parallel
 from cython import cdivision  # modulo, division by zero
 import numpy as np
@@ -189,7 +188,6 @@ cpdef temporal_fast(const float32[:, ::1] stim,
         r2 = 0.0
         idx_stim = 0
         max_r3 = 1e-37
-        # printf("%d: %d \n", idx_space, n_sim)
         for idx_sim in range(n_sim):
             t_sim = idx_sim * dt
             # Since the stimulus is compressed ('sparse'), we need to access
@@ -204,13 +202,13 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             # Fast ganglion cell response:
             r1 = r1 + dt * (amp - r1) / tau1  # += in threads is a reduction
             # Charge accumulation:
-            # printf("amp: %f ", amp)
-            # ca = ca + dt * c_fmax(amp, 0)
-            ca = ca + dt * amp
+            # ca = ca + dt * c_fmax(amp, 0.0) # SLOW
+            ca = ca + dt * (amp if amp > 0.0 else 0.0)
             r2 = r2 + dt * (ca - r2) / tau2
             # Half-rectification:
-            # r3 = c_fmax(r1 - eps * r2, 0.0)
+            # r3 = c_fmax(r1 - eps * r2, 0.0) # SLOW
             r3 = r1 - eps * r2
+            r3 = (r3 if r3 >= 0.0 else 0.0)
             # Store `r3` for Step 2:
             all_r3[idx_space, idx_sim] = r3
             # Find the largest `r3` across time for Step 2:
@@ -248,7 +246,3 @@ cpdef temporal_fast(const float32[:, ::1] stim,
                 idx_frame = idx_frame + 1
 
     return np.asarray(percept)  # Py overhead
-
-
-cpdef nan_c_fmax():
-    c_fmax(2.05, 0.0)

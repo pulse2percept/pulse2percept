@@ -311,13 +311,3 @@ def test_Nanduri2012Model_predict_percept():
         frames_freq.append(brightest_frame)
     npt.assert_equal([np.sum(f > bright_th) for f in frames_freq], [21, 49])
 
-
-
-def test_time_c_fmax():
-    import time
-    n = 100000000
-    start = time.time()
-    for _ in range(n):
-        nan_c_fmax()
-    end = time.time()
-    print('Cython ', n, ' c_fmax: ', (end - start) / n * 1000000, 'us')
