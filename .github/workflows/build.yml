@@ -57,6 +57,7 @@ jobs:
       run: |
         mkdir test_dir
         cd test_dir
+        pip freeze
         pytest --pyargs pulse2percept --cov-report=xml --cov=pulse2percept --doctest-modules
     - name: Upload coveragei report to codecov.io
       uses: codecov/codecov-action@v1
