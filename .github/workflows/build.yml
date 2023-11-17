@@ -53,6 +53,7 @@ jobs:
       if: matrix.os != 'windows-latest'
       run: |
         pip install -e .
+        echo |cpp -fopenmp -dM |grep -i open
     - name: Run test suite with pytest
       run: |
         mkdir test_dir
