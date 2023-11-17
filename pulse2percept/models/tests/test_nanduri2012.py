@@ -10,6 +10,7 @@ from pulse2percept.percepts import Percept
 from pulse2percept.models import (Nanduri2012Model, Nanduri2012Spatial,
                                   Nanduri2012Temporal)
 from pulse2percept.utils import FreezeError
+from pulse2percept.models._nanduri2012 import nan_c_fmax
 
 
 def test_Nanduri2012Spatial():
@@ -309,3 +310,14 @@ def test_Nanduri2012Model_predict_percept():
         brightest_frame = percept.data[..., idx_frame]
         frames_freq.append(brightest_frame)
     npt.assert_equal([np.sum(f > bright_th) for f in frames_freq], [21, 49])
+
+
+
+def test_time_c_fmax():
+    import time
+    n = 100000000
+    start = time.time()
+    for _ in range(n):
+        nan_c_fmax()
+    end = time.time()
+    print('Cython ', n, ' c_fmax: ', (end - start) / n * 1000000, 'us')
