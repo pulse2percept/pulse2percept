@@ -170,6 +170,8 @@ class Nanduri2012Temporal(TemporalModel):
         if np.unique(idx_percept).size < t_percept.size:
             raise ValueError(f"All times 't_percept' must be distinct multiples "
                              f"of `dt`={self.dt:.2e}")
+        print('idx_percept', idx_percept)
+        print('len', len(idx_percept))
         # Cython returns a 2D (space x time) NumPy array:
         return temporal_fast(stim_data.astype(np.float32),
                              stim.time.astype(np.float32),
