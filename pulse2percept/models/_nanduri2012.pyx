@@ -202,10 +202,13 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             # Fast ganglion cell response:
             r1 = r1 + dt * (amp - r1) / tau1  # += in threads is a reduction
             # Charge accumulation:
-            ca = ca + dt * c_fmax(amp, 0)
+            # ca = ca + dt * c_fmax(amp, 0.0) # SLOW
+            ca = ca + dt * (amp if amp > 0.0 else 0.0)
             r2 = r2 + dt * (ca - r2) / tau2
             # Half-rectification:
-            r3 = c_fmax(r1 - eps * r2, 0)
+            # r3 = c_fmax(r1 - eps * r2, 0.0) # SLOW
+            r3 = r1 - eps * r2
+            r3 = (r3 if r3 >= 0.0 else 0.0)
             # Store `r3` for Step 2:
             all_r3[idx_space, idx_sim] = r3
             # Find the largest `r3` across time for Step 2:
