@@ -30,6 +30,7 @@ from .bvt import BVT24, BVT44
 from .prima import PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55, PRIMA40
 from .imie import IMIE
 from .ensemble import EnsembleImplant
+from . import cortex
 
 __all__ = [
     'AlphaAMS',
