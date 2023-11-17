@@ -225,7 +225,7 @@ percept_dilate.plot(ax=ax2)
 
 ##############################################################################
 # Converting the image to a series of electrical pulses
-# ---------------------------------------------------
+# -----------------------------------------------------
 #
 # :py:class:`~pulse2percept.stimuli.ImageStimulus` has an
 # :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` method

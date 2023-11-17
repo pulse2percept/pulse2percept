@@ -62,7 +62,7 @@ jobs:
       run: |
         mkdir test_dir
         cd test_dir
-        pytest --pyargs pulse2percept -s --cov-report=xml --cov=pulse2percept --doctest-modules
+        pytest --pyargs pulse2percept --cov-report=xml --cov=pulse2percept --doctest-modules
     - name: Upload coveragei report to codecov.io
       uses: codecov/codecov-action@v1
       # Cannot yet post coverage report as comments on the PR, but see:
