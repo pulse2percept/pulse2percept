@@ -196,54 +196,54 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             # the right frame. Each frame is associated with a time, `t_stim`.
             # We use that frame until `t_sim` advances past it. In other words,
             # we use the `idx_stim`-th frame for all times
-            # t_stim[idx_stim] <= t_sim < t_stim[idx_stim + 1]:
-            # if idx_stim + 1 < n_stim:
-            #     if t_sim >= t_stim[idx_stim + 1]:
-            #         idx_stim = idx_stim + 1
-            # amp = stim[idx_space, idx_stim]
-            # # Fast ganglion cell response:
-            # r1 = r1 + dt * (amp - r1) / tau1  # += in threads is a reduction
-            # # Charge accumulation:
-            # printf("amp: %f ", amp)
-            # ca = ca + dt * c_fmax(amp, 0)
-            # r2 = r2 + dt * (ca - r2) / tau2
-            # # Half-rectification:
-            # r3 = c_fmax(r1 - eps * r2, 0)
-            # # Store `r3` for Step 2:
-            # all_r3[idx_space, idx_sim] = r3
-            # # Find the largest `r3` across time for Step 2:
-            # if r3 > max_r3:
-            #     max_r3 = r3
+            t_stim[idx_stim] <= t_sim < t_stim[idx_stim + 1]:
+            if idx_stim + 1 < n_stim:
+                if t_sim >= t_stim[idx_stim + 1]:
+                    idx_stim = idx_stim + 1
+            amp = stim[idx_space, idx_stim]
+            # Fast ganglion cell response:
+            r1 = r1 + dt * (amp - r1) / tau1  # += in threads is a reduction
+            # Charge accumulation:
+            printf("amp: %f ", amp)
+            ca = ca + dt * c_fmax(amp, 0)
+            r2 = r2 + dt * (ca - r2) / tau2
+            # Half-rectification:
+            r3 = c_fmax(r1 - eps * r2, 0)
+            # Store `r3` for Step 2:
+            all_r3[idx_space, idx_sim] = r3
+            # Find the largest `r3` across time for Step 2:
+            if r3 > max_r3:
+                max_r3 = r3
 
-        # # Step 2: Use `max_R3` from Step 1 to calculate the slow response for
-        # # time points:
-        # r4a = 0.0
-        # r4b = 0.0
-        # r4c = 0.0
-        # idx_stim = 0
-        # idx_frame = 0
-        # # Scaling factor depends on `max_r3` from Step 1:
-        # scale = asymptote * c_expit((max_r3 - shift) / slope) / max_r3
-        # # We have to restart the loop over all simulation time steps from 0:
-        # for idx_sim in range(n_sim):
-        #     t_sim = idx_sim * dt
-        #     # Access the right stimulus frame (same as above):
-        #     if idx_stim + 1 < n_stim:
-        #         if t_sim >= t_stim[idx_stim + 1]:
-        #             idx_stim = idx_stim + 1
-        #     # Slow response (3-stage leaky integrator):
-        #     r4a = r4a + dt * (all_r3[idx_space, idx_sim] * scale - r4a) / tau3
-        #     r4b = r4b + dt * (r4a - r4b) / tau3
-        #     r4c = r4c + dt * (r4b - r4c) / tau3
-        #     if idx_sim == idx_t_percept[idx_frame]:
-        #         # `idx_t_percept` stores the time points at which we need to
-        #         # output a percept. We compare `idx_sim` to `idx_t_percept`
-        #         # rather than `t_sim` to `t_percept` because there is no good
-        #         # (fast) way to compare two floating point numbers:
-        #         if c_abs(r4c) < thresh_percept:
-        #             r4c = 0.0
-        #         percept[idx_space, idx_frame] = r4c * scale_out
-        #         idx_frame = idx_frame + 1
+        # Step 2: Use `max_R3` from Step 1 to calculate the slow response for
+        # time points:
+        r4a = 0.0
+        r4b = 0.0
+        r4c = 0.0
+        idx_stim = 0
+        idx_frame = 0
+        # Scaling factor depends on `max_r3` from Step 1:
+        scale = asymptote * c_expit((max_r3 - shift) / slope) / max_r3
+        # We have to restart the loop over all simulation time steps from 0:
+        for idx_sim in range(n_sim):
+            t_sim = idx_sim * dt
+            # Access the right stimulus frame (same as above):
+            if idx_stim + 1 < n_stim:
+                if t_sim >= t_stim[idx_stim + 1]:
+                    idx_stim = idx_stim + 1
+            # Slow response (3-stage leaky integrator):
+            r4a = r4a + dt * (all_r3[idx_space, idx_sim] * scale - r4a) / tau3
+            r4b = r4b + dt * (r4a - r4b) / tau3
+            r4c = r4c + dt * (r4b - r4c) / tau3
+            if idx_sim == idx_t_percept[idx_frame]:
+                # `idx_t_percept` stores the time points at which we need to
+                # output a percept. We compare `idx_sim` to `idx_t_percept`
+                # rather than `t_sim` to `t_percept` because there is no good
+                # (fast) way to compare two floating point numbers:
+                if c_abs(r4c) < thresh_percept:
+                    r4c = 0.0
+                percept[idx_space, idx_frame] = r4c * scale_out
+                idx_frame = idx_frame + 1
 
     return np.asarray(percept)  # Py overhead
 
