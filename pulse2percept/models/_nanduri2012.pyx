@@ -189,7 +189,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
         r2 = 0.0
         idx_stim = 0
         max_r3 = 1e-37
-        printf("%d: %d \n", idx_space, n_sim)
+        # printf("%d: %d \n", idx_space, n_sim)
         for idx_sim in range(n_sim):
             t_sim = idx_sim * dt
             # Since the stimulus is compressed ('sparse'), we need to access
@@ -204,11 +204,12 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             # Fast ganglion cell response:
             r1 = r1 + dt * (amp - r1) / tau1  # += in threads is a reduction
             # Charge accumulation:
-            printf("amp: %f ", amp)
+            # printf("amp: %f ", amp)
             ca = ca + dt * c_fmax(amp, 0)
             r2 = r2 + dt * (ca - r2) / tau2
             # Half-rectification:
-            r3 = c_fmax(r1 - eps * r2, 0)
+            r3 = c_fmax(r1 - eps * r2, 0.0)
+            # r3 = r1 - eps * r2
             # Store `r3` for Step 2:
             all_r3[idx_space, idx_sim] = r3
             # Find the largest `r3` across time for Step 2:
