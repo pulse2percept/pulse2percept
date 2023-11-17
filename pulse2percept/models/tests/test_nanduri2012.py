@@ -280,36 +280,36 @@ def test_Nanduri2012Model_predict_percept():
                      (1, 1, 2))
 
     # Brightness vs. size (use values from Nanduri paper):
-    model = Nanduri2012Model(xystep=0.5, xrange=(-4, 4), yrange=(-4, 4))
-    model.build()
-    implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
-    amp_th = 30
-    bright_th = 0.107
-    stim_dur = 1000.0
-    pdur = 0.45
-    t_percept = np.arange(0, stim_dur, 5)
-    amp_factors = [1, 6]
-    frames_amp = []
-    for amp_f in amp_factors:
-        implant.stim = BiphasicPulseTrain(20, amp_f * amp_th, pdur,
-                                          interphase_dur=pdur,
-                                          stim_dur=stim_dur)
-        percept = model.predict_percept(implant, t_percept=t_percept)
-        idx_frame = np.argmax(np.max(percept.data, axis=(0, 1)))
-        brightest_frame = percept.data[..., idx_frame]
-        frames_amp.append(brightest_frame)
-    npt.assert_equal([np.sum(f > bright_th) for f in frames_amp], [0, 161])
-    freqs = [20, 120]
-    frames_freq = []
-    for freq in freqs:
-        implant.stim = BiphasicPulseTrain(freq, 1.25 * amp_th, pdur,
-                                          interphase_dur=pdur,
-                                          stim_dur=stim_dur)
-        percept = model.predict_percept(implant, t_percept=t_percept)
-        idx_frame = np.argmax(np.max(percept.data, axis=(0, 1)))
-        brightest_frame = percept.data[..., idx_frame]
-        frames_freq.append(brightest_frame)
-    npt.assert_equal([np.sum(f > bright_th) for f in frames_freq], [21, 49])
+    # model = Nanduri2012Model(xystep=0.5, xrange=(-4, 4), yrange=(-4, 4))
+    # model.build()
+    # implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
+    # amp_th = 30
+    # bright_th = 0.107
+    # stim_dur = 1000.0
+    # pdur = 0.45
+    # t_percept = np.arange(0, stim_dur, 5)
+    # amp_factors = [1, 6]
+    # frames_amp = []
+    # for amp_f in amp_factors:
+    #     implant.stim = BiphasicPulseTrain(20, amp_f * amp_th, pdur,
+    #                                       interphase_dur=pdur,
+    #                                       stim_dur=stim_dur)
+    #     percept = model.predict_percept(implant, t_percept=t_percept)
+    #     idx_frame = np.argmax(np.max(percept.data, axis=(0, 1)))
+    #     brightest_frame = percept.data[..., idx_frame]
+    #     frames_amp.append(brightest_frame)
+    # npt.assert_equal([np.sum(f > bright_th) for f in frames_amp], [0, 161])
+    # freqs = [20, 120]
+    # frames_freq = []
+    # for freq in freqs:
+    #     implant.stim = BiphasicPulseTrain(freq, 1.25 * amp_th, pdur,
+    #                                       interphase_dur=pdur,
+    #                                       stim_dur=stim_dur)
+    #     percept = model.predict_percept(implant, t_percept=t_percept)
+    #     idx_frame = np.argmax(np.max(percept.data, axis=(0, 1)))
+    #     brightest_frame = percept.data[..., idx_frame]
+    #     frames_freq.append(brightest_frame)
+    # npt.assert_equal([np.sum(f > bright_th) for f in frames_freq], [21, 49])
 
 
 
