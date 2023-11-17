@@ -53,12 +53,15 @@ jobs:
       if: matrix.os != 'windows-latest'
       run: |
         pip install -e .
+    - name: Log environment info
+      run: |
+        python --version
+        pip freeze
+        gcc --version
     - name: Run test suite with pytest
       run: |
         mkdir test_dir
         cd test_dir
-        pip freeze
-        gcc --version
         pytest --pyargs pulse2percept -s --cov-report=xml --cov=pulse2percept --doctest-modules
     - name: Upload coveragei report to codecov.io
       uses: codecov/codecov-action@v1

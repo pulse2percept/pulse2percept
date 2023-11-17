@@ -205,11 +205,12 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             r1 = r1 + dt * (amp - r1) / tau1  # += in threads is a reduction
             # Charge accumulation:
             # printf("amp: %f ", amp)
-            ca = ca + dt * c_fmax(amp, 0)
+            # ca = ca + dt * c_fmax(amp, 0)
+            ca = ca + dt * amp
             r2 = r2 + dt * (ca - r2) / tau2
             # Half-rectification:
-            r3 = c_fmax(r1 - eps * r2, 0.0)
-            # r3 = r1 - eps * r2
+            # r3 = c_fmax(r1 - eps * r2, 0.0)
+            r3 = r1 - eps * r2
             # Store `r3` for Step 2:
             all_r3[idx_space, idx_sim] = r3
             # Find the largest `r3` across time for Step 2:
