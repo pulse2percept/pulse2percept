@@ -124,7 +124,7 @@ plt.title('Amplitude Modulation Brightness')
 
 ###############################################################################
 # Using Built-In Plotting Functionality
-# -----------------
+# -------------------------------------
 #
 # Arguably the most important column is "freq". This is the current
 # amplitude of the different stimuli (single pulse, pulse trains, etc.) used
