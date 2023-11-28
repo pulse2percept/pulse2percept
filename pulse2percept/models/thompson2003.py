@@ -69,7 +69,7 @@ class Thompson2003Spatial(SpatialModel):
         ``model.build()`` again for your changes to take effect.
     """
 
-    def get_default_params(self):
+    def get_default_params(self):        
         """Returns all settable parameters of the model"""
         base_params = super(Thompson2003Spatial, self).get_default_params()
         params = {'radius': None, 'dropout': None,

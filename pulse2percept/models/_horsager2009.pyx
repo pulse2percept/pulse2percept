@@ -1,4 +1,4 @@
-from ..utils._fast_math cimport c_fmax, c_expit
+from ..utils._fast_math cimport c_fmax
 from libc.math cimport pow as c_pow, fabs as c_abs, sqrt as c_sqrt
 from cython.parallel import prange
 from cython import cdivision  # modulo, division by zero
@@ -56,7 +56,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
 
     """
     cdef:
-        float32 ca, r1, r2, r3, r4a, r4b, r4c
+        float32 ca, r1, r2, r3_a, r3, r4a, r4b, r4c
         float32 t_sim, amp
         float32[:, ::1] percept
         int32 idx_space, idx_sim, idx_stim, idx_frame
@@ -103,10 +103,13 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             # "anodic" current:
             r1 = r1 + dt * (-amp - r1) / tau1  # += in threads is a reduction
             # Charge accumulation:
-            ca = ca + dt * c_fmax(amp, 0)
+            # ca = ca + dt * c_fmax(amp, 0) # SLOW
+            ca = ca + dt * (amp if amp > 0.0 else 0.0)
             r2 = r2 + dt * (ca - r2) / tau2
             # Half-rectification and power nonlinearity:
-            r3 = c_pow(c_fmax(r1 - eps * r2, 0), beta)
+            # r3 = c_pow(c_fmax(r1 - eps * r2, 0), beta) # SLOW
+            r3_a = r1 - eps * r2
+            r3 = c_pow((r3_a if r3_a > 0.0 else 0.0), beta)
             # Slow response (3-stage leaky integrator):
             r4a = r4a + dt * (r3 - r4a) / tau3
             r4b = r4b + dt * (r4a - r4b) / tau3

@@ -154,7 +154,7 @@ ax[1].set_title('Alpha-AMS')
 # ------------------------------------------------------------------
 #
 # :py:class:`~pulse2percept.implants.IMIE` is an epiretinal implant co-developed
-#  by Golden Eye Bionic, LLC (Pasadena CA) and IntelliMicro Medical Co., Ltd. 
+# by Golden Eye Bionic, LLC (Pasadena CA) and IntelliMicro Medical Co., Ltd. 
 # (Changsha, Hunan Province, China) and is manufactured by IntelliMicro. 
 #
 # IMIE consists of 248 large disc-shaped electrodes (210 µm in diameter) and 8 

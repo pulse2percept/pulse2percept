@@ -15,7 +15,7 @@ from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
 from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
-                           fast_find_closest_axon)
+                           fast_find_closest_axon)        
 
 # Log all warnings.warn() at the WARNING level:
 import warnings
@@ -842,9 +842,9 @@ class AxonMapSpatial(SpatialModel):
             od_xy = self.loc_od
             od_w = 6.44
             od_h = 6.85
-            # Flip y upside down for dva:
+            # Convert axon bundles to dva:
             axon_bundles = [np.array(self.retinotopy.ret_to_dva(bundle[:, 0],
-                                                             -bundle[:, 1])).T
+                                                             bundle[:, 1])).T
                             for bundle in axon_bundles]
             labels = ['upper', 'lower', 'left', 'right']
         else:

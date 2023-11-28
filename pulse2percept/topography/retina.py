@@ -41,7 +41,7 @@ class Curcio1990Map(RetinalMap):
         Assumes that one degree of visual angle is equal to 280 um on the
         retina [Curcio1990]_.
         """
-        return 280.0 * xdva, 280.0 * ydva
+        return 280.0 * xdva, -280.0 * ydva
 
     def ret_to_dva(self, xret, yret):
         """Convert retinal eccentricity (um) to degrees of visual angle (dva)
@@ -49,7 +49,7 @@ class Curcio1990Map(RetinalMap):
         Assumes that one degree of visual angle is equal to 280 um on the
         retina [Curcio1990]_
         """
-        return xret / 280.0, yret / 280.0
+        return xret / 280.0, -yret / 280.0
 
     def __eq__(self, other):
         """
@@ -101,6 +101,10 @@ class Watson2014Map(RetinalMap):
         r_deg = 3.556 * r_mm + 0.05993 * r_mm ** 2 - 0.007358 * r_mm ** 3
         r_deg += 3.027e-4 * r_mm ** 4
         r_deg *= sign
+
+        # flip y axis
+        phi_um *= -1
+
         if coords.lower() == 'cart':
             return pol2cart(phi_um, r_deg)
         elif coords.lower() == 'polar':
@@ -131,6 +135,10 @@ class Watson2014Map(RetinalMap):
         r_deg = np.abs(r_deg)
         r_mm = 0.268 * r_deg + 3.427e-4 * r_deg ** 2 - 8.3309e-6 * r_deg ** 3
         r_um = 1e3 * r_mm * sign
+
+        # flip y axis
+        phi_deg *= -1
+
         if coords.lower() == 'cart':
             return pol2cart(phi_deg, r_um)
         elif coords.lower() == 'polar':

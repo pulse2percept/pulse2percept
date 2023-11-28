@@ -10,6 +10,7 @@ from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.percepts import Percept
 from pulse2percept.topography import Watson2014Map
 
+
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
 @pytest.mark.parametrize('jitter_boundary', [True, False])
 @pytest.mark.parametrize('regions', 
@@ -81,12 +82,21 @@ def test_predict_spatial(ModelClass, regions):
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
     npt.assert_equal(np.all(percept.data[:, :, 1] == 0), True)
     pmax = percept.data.max()
-    npt.assert_almost_equal(percept.data[27, 18, 0], pmax)
+    npt.assert_almost_equal(percept.data[33, 18, 0], pmax)
     npt.assert_almost_equal(percept.data[30, 13, 0], 1.96066, 5)
-    npt.assert_almost_equal(percept.data[32, 8, 0], 0.013483, 5)
+    npt.assert_almost_equal(percept.data[32, 8, 0], 0.013312, 5)
     npt.assert_equal(np.sum(percept.data > 0.75), 122)
     npt.assert_equal(np.sum(percept.data > 1), 105)
     npt.assert_almost_equal(percept.time, [0, 1])
+
+    if 'v1' in regions:
+        # make sure cortical representation is flipped
+        vfmap = Polimeni2006Map(k=15, a=0.5, b=90)
+        model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), xystep=0.1, rho=400, retinotopy=vfmap).build()
+        implant = Orion(x=30000, y=0, rot=0, stim={'40' : 1,  '94' :5})
+        percept = model.predict_percept(implant)
+        half = model.grid.shape[0] // 2
+        npt.assert_equal(np.sum(percept.data[:half, :, :]) >  np.sum(percept.data[half:, :, :]), True)
 
 
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
