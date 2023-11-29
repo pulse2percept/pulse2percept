@@ -53,6 +53,11 @@ jobs:
       if: matrix.os != 'windows-latest'
       run: |
         pip install -e .
+    - name: Log environment info
+      run: |
+        python --version
+        pip freeze
+        gcc --version
     - name: Run test suite with pytest
       run: |
         mkdir test_dir
