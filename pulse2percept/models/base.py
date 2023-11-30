@@ -210,11 +210,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     """
 
     def __init__(self, **params):
-        # import at runtime to avoid circular import
-        from ..topography import Grid2D
         super().__init__(**params)
-        self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
-                           grid_type=self.grid_type)
+        self.grid = None
 
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
@@ -269,7 +266,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         for key, val in build_params.items():
             setattr(self, key, val)
-        
+        # import at runtime to avoid circular import
+        from ..topography import Grid2D
+        self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
+                           grid_type=self.grid_type)
         self.grid.build(self.retinotopy)
         self._build()
         self.is_built = True
@@ -446,8 +446,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         ax : ``matplotlib.axes.Axes``
             Returns the axis object of the plot
         """
-        if not self.is_built and not use_dva:
-            self.build()
+        # if not self.is_built:
+        #     self.build()
 
         zorder = ZORDER['background'] + (0 if use_dva else 1)
 
