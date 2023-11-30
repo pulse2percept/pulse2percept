@@ -2,6 +2,8 @@ import numpy.testing as npt
 import pytest
 import numpy as np
 import copy
+import matplotlib.pyplot as plt
+
 from pulse2percept.models.cortex import DynaphosModel
 from pulse2percept.implants import ProsthesisSystem, ElectrodeArray, DiskElectrode
 from pulse2percept.implants.cortex import Cortivis, Orion
@@ -106,5 +108,7 @@ def test_dynaphos_plot():
     # make sure that plotting works before and after building
     m = DynaphosModel()
     m.plot()
+    plt.close()
     m.build()
     m.plot()
+    plt.close()
