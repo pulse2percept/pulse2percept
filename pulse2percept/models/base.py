@@ -131,6 +131,8 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
         copied = copy(self)
         for attr in self.__dict__:
             copied.__setattr__(attr, deepcopy(self.__getattribute__(attr)))
+        if self.is_built:
+            copied.build()
         return copied
 
     def __eq__(self, other):
@@ -151,7 +153,15 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
             return False
         if id(self) == id(other):
             return True
-        return self.__dict__ == other.__dict__
+        if self.__dict__.keys() != other.__dict__.keys():
+            return False
+        for key in self.__dict__.keys():
+            if isinstance(self.__dict__[key], np.ndarray):
+                if not np.array_equal(self.__dict__[key], other.__dict__[key]):
+                    return False
+            elif self.__dict__[key] != other.__dict__[key]:
+                return False
+        return True
 
     def __hash__(self):
         # Default python 2.6+ implementation
@@ -823,6 +833,8 @@ class Model(PrettyPrint):
         attributes.pop('spatial')
         attributes.pop('temporal')
         result = self.__class__(**attributes)
+        if self.is_built:
+            result.build()
         memodict[id(self)] = result
         return result
 
