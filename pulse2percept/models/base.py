@@ -446,8 +446,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         ax : ``matplotlib.axes.Axes``
             Returns the axis object of the plot
         """
-        # if not self.is_built:
-        #     self.build()
+        if not self.is_built:
+            self.build()
 
         zorder = ZORDER['background'] + (0 if use_dva else 1)
 
