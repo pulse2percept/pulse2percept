@@ -42,7 +42,7 @@ import pulse2percept as p2p
 import matplotlib.pyplot as plt
 
 grid = p2p.topography.Grid2D((-50, 50), (-50, 50), step=5)
-grid.plot(style='scatter')
+grid.plot(style='scatter', use_dva=True)
 plt.xlabel('x (degrees of visual angle)')
 plt.ylabel('y (degrees of visual angle)')
 plt.axis('square')
@@ -54,13 +54,14 @@ plt.axis('square')
 # However, these visual field coordinates are mapped onto different retinal
 # coordinates under the three visual field maps:
 
-transforms = [p2p.topography.Curcio1990Map,
-              p2p.topography.Watson2014Map,
-              p2p.topography.Watson2014DisplaceMap]
+transforms = [p2p.topography.Curcio1990Map(),
+              p2p.topography.Watson2014Map(),
+              p2p.topography.Watson2014DisplaceMap()]
 fig, axes = plt.subplots(ncols=3, sharey=True, figsize=(13, 4))
 for ax, transform in zip(axes, transforms):
-    grid.plot(transform=transform().dva_to_ret, style='cell', ax=ax)
-    ax.set_title(transform().__class__.__name__)
+    grid.build(transform)
+    grid.plot(style='cell', ax=ax)
+    ax.set_title(transform.__class__.__name__)
     ax.set_xlabel('x (microns)')
     ax.set_ylabel('y (microns)')
     ax.axis('equal')
@@ -91,10 +92,10 @@ implant.stim
 fig, axes = plt.subplots(ncols=3, sharey=True, figsize=(13, 4))
 for ax, transform in zip(axes, transforms):
     model = p2p.models.ScoreboardModel(xrange=(-6, 6), yrange=(-6, 6),
-                                       retinotopy=transform())
+                                       retinotopy=transform)
     model.build()
     model.predict_percept(implant).plot(ax=ax)
-    ax.set_title(transform().__class__.__name__)
+    ax.set_title(transform.__class__.__name__)
 
 ###############################################################################
 # Whereas the left and center panel look virtually identical, the rightmost

@@ -2,6 +2,8 @@ import numpy.testing as npt
 import pytest
 import numpy as np
 import copy
+import matplotlib.pyplot as plt
+
 from pulse2percept.models.cortex import ScoreboardModel, ScoreboardSpatial
 from pulse2percept.models import ScoreboardSpatial as BeyelerScoreboard
 from pulse2percept.implants.cortex import Cortivis, Orion
@@ -156,3 +158,13 @@ def test_deepcopy_Scoreboard(ModelClass):
     original = None
     npt.assert_equal(copied is not None, True)
 
+
+@pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
+def test_plot(ModelClass):
+    # make sure that plotting works before and after building
+    m = ModelClass()
+    m.plot()
+    plt.close()
+    m.build()
+    m.plot()
+    plt.close()
