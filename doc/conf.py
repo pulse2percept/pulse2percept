@@ -283,6 +283,7 @@ sphinx_gallery_conf = {
                                        '../examples/stimuli',
                                        '../examples/models',
                                        '../examples/datasets',
+                                       '../examples/cortex',
                                        '../examples/developers'])
 }
 

@@ -1,8 +1,12 @@
 """
-Different cortical prosthetic implants such as TODO.
+Different cortical prosthetic implants such as Orion, Cortivis, and ICVP.
 
 .. autosummary::
     : toctree: _api
+
+    orion
+    cortivis
+    icvp
 
 .. seealso::
 

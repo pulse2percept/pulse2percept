@@ -13,6 +13,7 @@ pulse2percept is organized into the following subpackages:
     model_selection
     viz
     utils
+    topography
 """
 import matplotlib as mpl
 from os import environ

@@ -3,9 +3,13 @@ Different retinal prosthetic implants, such as Argus II, Alpha-IMS, BVT-24,
 and PRIMA.
 
 .. autosummary::
-    : toctree: _api
+    :toctree: _api
 
     cortex
+
+.. autosummary::
+    : toctree: _api
+
     base
     electrodes
     electrode_arrays
