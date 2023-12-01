@@ -207,7 +207,7 @@ html_sidebars = {}
 html_domain_indices = False
 
 # If false, no index is generated.
-html_use_index = True
+html_use_index = False
 
 # If true, the index is split into individual pages for each letter.
 # html_split_index = False
@@ -283,8 +283,9 @@ sphinx_gallery_conf = {
                                        '../examples/stimuli',
                                        '../examples/models',
                                        '../examples/datasets',
-                                       '../examples/cortex',
-                                       '../examples/developers'])
+                                       '../examples/developers',
+                                       '../examples/cortex'
+                                       ])
 }
 
 # The following is used by sphinx.ext.linkcode to provide links to github

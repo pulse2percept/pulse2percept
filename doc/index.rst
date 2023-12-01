@@ -2,8 +2,8 @@
 
 .. toctree::
    :caption: First steps
-   :hidden:
-   :maxdepth: 1
+   :titlesonly:
+   :maxdepth: 4
 
    Overview <self>
    install
