@@ -1,6 +1,5 @@
 """
-Different retinal prosthetic implants, such as Argus II, Alpha-IMS, BVT-24,
-and PRIMA.
+Different prosthetic implants, such as Argus II, Alpha-IMS, BVT-24, PRIMA, Cortivis, etc.
 
 .. autosummary::
     :toctree: _api

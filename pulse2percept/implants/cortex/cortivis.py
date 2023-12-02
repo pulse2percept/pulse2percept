@@ -14,7 +14,11 @@ class Cortivis(ProsthesisSystem):
 
     Cortivis is a Utah electrode array containing 96 electrodes in a 10x10 array
     with 400 um spacing, and electrode diameter of 80 um at the base.
+    
+    .. note::
 
+        By default the implant is in right hemisphere, use negative x-values to shift it to left hemisphere
+    
     Parameters
     ----------
     x/y/z : double
@@ -35,6 +39,21 @@ class Cortivis(ProsthesisSystem):
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
 
+    Examples
+    --------
+    Create an Cortivis array, by default centered 20mm to the right of fovea in V1:
+
+    >>> from pulse2percept.implants.cortex import Cortivis
+    >>> Cortivis() # doctest: +NORMALIZE_WHITESPACE
+    Cortivis(earray=ElectrodeGrid, preprocess=False, 
+         safe_mode=False, shape=(10, 10), stim=None)
+
+    Get access to electrode '11':
+
+    >>> cortivis = Cortivis()
+    >>> cortivis['11'] # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='11', r=40.0, x=16400.0, 
+                  y=-1000.0, z=-1500.0)
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)

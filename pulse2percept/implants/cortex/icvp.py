@@ -19,6 +19,10 @@ class ICVP(ProsthesisSystem):
     a diameter of 15 um at the laser cut.  They are inserted either 650 um
     or 850 um into the cortex.
 
+    .. note::
+
+        By default the implant is in right hemisphere, use negative x-values to shift it to left hemisphere
+    
     Parameters
     ----------
     x/y/z : double
@@ -39,6 +43,21 @@ class ICVP(ProsthesisSystem):
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
 
+    Examples
+    --------
+    Create an ICVP array, by default centered 15mm to the right of fovea in V1:
+
+    >>> from pulse2percept.implants.cortex import Orion
+    >>> ICVP() # doctest: +NORMALIZE_WHITESPACE
+    ICVP(earray=ElectrodeGrid, preprocess=False, 
+         safe_mode=False, shape=(5, 4), stim=None)
+
+    Get access to electrode '96':
+
+    >>> icvp = ICVP()
+    >>> icvp['96'] # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='11', r=50.0, 
+                  x=15173.205080756888, y=100.0, z=-650.0)
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)

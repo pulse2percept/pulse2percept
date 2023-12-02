@@ -1,5 +1,4 @@
-"""
-Different cortical prosthetic implants such as Orion, Cortivis, and ICVP.
+"""`Orion`, `Cortivis`, `ICVP`
 
 .. autosummary::
     : toctree: _api
