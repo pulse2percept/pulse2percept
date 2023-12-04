@@ -16,7 +16,7 @@ following categories:
    :py:class:`~pulse2percept.implants.ElectrodeArray` class.
 
 *  :ref:`Prosthesis systems <topics-implants-prosthesis-system>` (aka
-   'retinal implants', aka 'bionic eye') are comprised of an
+   'implants', aka 'bionic eye') are comprised of an
    :py:class:`~pulse2percept.implants.ElectrodeArray` object and (optionally) a
    :py:class:`~pulse2percept.stimuli.Stimulus` object. Their behavior is
    dictated by the :py:class:`~pulse2percept.implants.ProsthesisSystem` base
@@ -27,24 +27,26 @@ following categories:
 Prosthesis systems
 ------------------
 
-pulse2percept provides the following prosthesis systems (aka 'retinal
-implants', 'bionic eyes'):
+pulse2percept provides the following prosthesis systems (aka *'implants', 'bionic eyes', 'neuroprostheses'*):
 
-==========  ==============  ==============  =================================
-Implant     Location        Num Electrodes  Manufacturer
-----------  --------------  --------------  ---------------------------------
-`ArgusI`    epiretinal      16              Second Sight Medical Products Inc
-`ArgusII`   epiretinal      60              Second Sight Medical Products Inc
-`IMIE`      epiretinal      256             IntelliMicro Medical Co., Ltd
-`AlphaIMS`  subretinal      1500            Retina Implant AG
-`AlphaAMS`  subretinal      1600            Retina Implant AG
-`PRIMA`     subretinal      378             Pixium Vision SA
-`PRIMA75`   subretinal      142             Pixium Vision SA
-`PRIMA55`   subretinal      273(?)          Pixium Vision SA
-`PRIMA40`   subretinal      532(?)          Pixium Vision SA
-`BVT24`     suprachoroidal  24              Bionic Vision Technologies
-`BVT44`     suprachoroidal  44              Bionic Vision Technologies
-==========  ==============  ==============  =================================
+===========  ==============  ==================  =================================
+**Implant**  **Location**    **Num Electrodes**  **Manufacturer**
+-----------  --------------  ------------------  ---------------------------------
+`ArgusI`     epiretinal      16                  Second Sight Medical Products Inc
+`ArgusII`    epiretinal      60                  Second Sight Medical Products Inc
+`IMIE`       epiretinal      256                 IntelliMicro Medical Co., Ltd
+`AlphaIMS`   subretinal      1500                Retina Implant AG
+`AlphaAMS`   subretinal      1600                Retina Implant AG
+`PRIMA`      subretinal      378                 Pixium Vision SA
+`PRIMA75`    subretinal      142                 Pixium Vision SA
+`PRIMA55`    subretinal      273(?)              Pixium Vision SA
+`PRIMA40`    subretinal      532(?)              Pixium Vision SA
+`BVT24`      suprachoroidal  24                  Bionic Vision Technologies
+`BVT44`      suprachoroidal  44                  Bionic Vision Technologies
+`Orion`      cortical        60                  Cortigent Inc
+`Cortivis`   cortical        96                  Biomedical Technologies
+`ICVP`       cortical        16                  Sigenics Inc
+===========  ==============  ==================  =================================
 
 Stimuli can be assigned to the various electrodes in the electrode array,
 who will deliver them to the retina
