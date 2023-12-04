@@ -1,13 +1,11 @@
-"""Computational models of the prosthetic vision, such as phosphene and neural response models.
-   Cortical models are in the cortex submodule.
+"""
+Computational models of the prosthetic vision, such as phosphene and neural response models. Cortical models are in the cortex submodule.
+
 
 .. autosummary::
     :toctree: _api
 
     cortex
-
-.. autosummary::
-    :toctree: _api
     base
     temporal
     thompson2003

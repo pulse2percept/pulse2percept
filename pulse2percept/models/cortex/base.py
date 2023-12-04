@@ -1,4 +1,4 @@
-"""`ScoreboardSpatial`, `ScoreboardModel"""
+"""`CortexSpatial`, `ScoreboardSpatial`, `ScoreboardModel`"""
 
 from ..base import Model, SpatialModel
 from ...topography import Polimeni2006Map
