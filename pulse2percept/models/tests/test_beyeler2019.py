@@ -324,9 +324,8 @@ def test_AxonMapModel(engine):
     with pytest.raises(ValueError):
         AxonMapModel(axlambda=9).build()
 
-
-def test_deepcopy_AxonMapModel():
-    original = AxonMapModel()
+@pytest.mark.parametrize('original', [AxonMapModel(), AxonMapModel().build()])
+def test_deepcopy_AxonMapModel(original):
     copied = copy.deepcopy(original)
 
     # Assert these are two different objects

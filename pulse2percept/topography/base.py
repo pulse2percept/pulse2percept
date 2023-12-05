@@ -13,11 +13,44 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
 import matplotlib as mpl
-
+from copy import copy, deepcopy
 
 from ..utils.base import PrettyPrint
 from ..utils.constants import ZORDER
 from ..models import BaseModel
+
+
+class CoordinateGrid:
+        """
+        Datatype for storing a grid of coordinates
+        Basically an overriden namedtuple with custom __eq__ method
+        """
+        x : np.ndarray
+        y : np.ndarray
+        def __init__(self, x, y):
+            self.x = x
+            self.y = y
+        def __eq__(self, other):
+            if not isinstance(other, self.__class__):
+                return False
+            if id(self) == id(other):
+                return True
+            if self.__dict__.keys() != other.__dict__.keys():
+                return False
+            for key in self.__dict__.keys():
+                if isinstance(self.__dict__[key], np.ndarray):
+                    if not np.array_equal(self.__dict__[key], other.__dict__[key]):
+                        return False
+                elif self.__dict__[key] != other.__dict__[key]:
+                    return False
+            return True
+        def __hash__(self):
+            # Default python 2.6+ implementation
+            return id(self) // 16
+        def __repr__(self):
+            return f"CoordinateGrid(x={self.x}, y={self.y})"
+        def __str__(self):
+            return f"CoordinateGrid(x={self.x}, y={self.y})"
 
 class Grid2D(PrettyPrint):
     """2D spatial grid
@@ -108,7 +141,7 @@ class Grid2D(PrettyPrint):
 
     @x.setter
     def x(self, value):
-        self._grid['dva'] = self.CoordinateGrid(value, self.y)
+        self._grid['dva'] = CoordinateGrid(value, self.y)
     
     @property 
     def y(self):
@@ -116,8 +149,7 @@ class Grid2D(PrettyPrint):
     
     @y.setter
     def y(self, value):
-        self._grid['dva'] = self.CoordinateGrid(self.x, value)
-
+        self._grid['dva'] = CoordinateGrid(self.x, value)
 
     def __init__(self, x_range, y_range, step=1, grid_type='rectangular'):
         self.x_range = x_range
@@ -126,9 +158,6 @@ class Grid2D(PrettyPrint):
         self.type = grid_type
         self.retinotopy = None
         self.regions = []
-        self.retinotopy = None
-        # Datatype for storing the grid of coordinates
-        self.CoordinateGrid = namedtuple("CoordinateGrid", ['x', 'y'])
         # Internally, coordinate grids for each region are stored in _grid
         self._grid = {}
         # Register helper getters and setters for region names. This is slightly
@@ -178,7 +207,7 @@ class Grid2D(PrettyPrint):
         ny = int(np.round(ydiff / y_step) + 1) if ydiff != 0 else 1
         self._yflat = np.linspace(*y_range, num=ny, dtype=np.float32)
         # Create the grid, flip y axis so that it increases from bottom to top:
-        self._grid['dva'] = self.CoordinateGrid(
+        self._grid['dva'] = CoordinateGrid(
             *np.meshgrid(self._xflat, self._yflat[::-1], indexing='xy'))
         self.shape = self.x.shape
         self.size = self.x.size
@@ -206,7 +235,7 @@ class Grid2D(PrettyPrint):
         if isinstance(key, str):
             return self._grid[key]
         elif isinstance(key, int):
-            return self.CoordinateGrid(self.x.ravel()[key], self.y.ravel()[key])
+            return CoordinateGrid(self.x.ravel()[key], self.y.ravel()[key])
         else:
             raise ValueError(f"Unknown key: {key}. Must be region name or \
                               integer position")
@@ -214,7 +243,7 @@ class Grid2D(PrettyPrint):
     def build(self, retinotopy):
         self.retinotopy = retinotopy
         for region, map_fn in retinotopy.from_dva().items():
-            self._grid[region] = self.CoordinateGrid(*map_fn(self.x, self.y))
+            self._grid[region] = CoordinateGrid(*map_fn(self.x, self.y))
             if region not in self.regions:
                 self.regions.append(region)
             # Register the mapping if it wasn't already
@@ -374,6 +403,47 @@ class Grid2D(PrettyPrint):
                 ax.legend(loc='upper right')
 
         return ax
+    
+    def __deepcopy__(self, memodict={}):
+        if id(self) in memodict:
+            return memodict[id(self)]
+        copied = copy(self)
+        for attr in self.__dict__:
+            copied.__setattr__(attr, deepcopy(self.__getattribute__(attr)))
+        return copied
+
+    def __eq__(self, other):
+        """
+        Equality operator for Grid2D.
+
+        Parameters
+        ----------
+        other: Grid2D
+            Grid2D to compare against
+
+        Returns
+        -------
+        bool:
+            True if the compared objects have identical attributes, False otherwise.
+        """
+        if not isinstance(other, self.__class__):
+            return False
+        if id(self) == id(other):
+            return True
+        if self.__dict__.keys() != other.__dict__.keys():
+            return False
+        for key in self.__dict__.keys():
+            if isinstance(self.__dict__[key], np.ndarray):
+                if not np.array_equal(self.__dict__[key], other.__dict__[key]):
+                    return False
+            elif self.__dict__[key] != other.__dict__[key]:
+                return False
+            
+        return True
+
+    def __hash__(self):
+        # Default python 2.6+ implementation
+        return id(self) // 16
 
 
 class VisualFieldMap(BaseModel):
