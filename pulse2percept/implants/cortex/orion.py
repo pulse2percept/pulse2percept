@@ -1,3 +1,4 @@
+"""`Orion`"""
 import numpy as np
 from pulse2percept.implants import ProsthesisSystem
 
@@ -7,31 +8,58 @@ from ..electrode_arrays import ElectrodeGrid
 
 
 class Orion(ProsthesisSystem):
+    """Create a Orion array.
+    
+    This function creates a Orion array and places it on the visual cortex
+    such that the center of the base of the array is at 3D location (x,y,z) given
+    in microns, and the array is rotated by angle ``rot``, given in degrees.
+
+    Orion contains 60 electrodes in a hex shaped grid inspired by Argus II.
+    
+    .. note::
+
+        By default the implant is in right hemisphere, use negative x-values to shift it to left hemisphere
+    
+    Parameters
+    ----------
+    x/y/z : double
+        3D location of the center of the electrode array.
+        ``z`` can either be a list with 35 entries or a scalar that is applied
+        to all electrodes.
+    rot : float
+        Rotation angle of the array (deg). Positive values denote
+        counter-clock-wise (CCW) rotations in the retinal coordinate
+        system.
+    stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+        A valid source type for the :py:class:`~pulse2percept.stimuli.Stimulus`
+        object (e.g., scalar, NumPy array, pulse train).
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
+    
+    Examples
+    --------
+    Create an Orion array, by default centered 15mm to the right of fovea in V1:
+
+    >>> from pulse2percept.implants.cortex import Orion
+    >>> Orion() # doctest: +NORMALIZE_WHITESPACE
+    Orion(earray=ElectrodeGrid, preprocess=False, 
+          safe_mode=False, shape=(10, 7), stim=None)
+
+    Get access to electrode '96':
+
+    >>> orion = Orion()
+    >>> orion['96'] # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='96', r=1000.0, 
+                  x=3450.0, y=-9640.928378532848, z=0.0)
+    """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
     def __init__(self, x=15000, y=0, z=0, rot=0, stim=None,
                  preprocess=False, safe_mode=False):
-        """Orion I
-        Parameters
-        ----------
-        x/y/z : double
-            3D location (mm) of the center of the electrode array.
-            The coordinate system is centered over the fovea on the cortical
-            surface.
-            Positive ``x`` values move the electrode into the periphery
-            (azimuth), whereas positive ``y`` values move the electrode into
-            the upper visual field (elevation). ``z`` is ignored for now.
-        rot : float, optional
-            Rotation angle of the array (deg). Positive values denote
-            counter-clock-wise (CCW) rotations in the cortical coordinate
-            system.
-        preprocess : bool or callable, optional
-            Either True/False to indicate whether to execute the implant's
-            default preprocessing method whenever a new stimulus is assigned, 
-            or a custom function (callable).
-        safe_mode : bool, optional
-            If safe mode is enabled, only charge-balanced stimuli are allowed.
-        """
 
         if not np.isclose(z, 0):
             raise NotImplementedError

@@ -1,5 +1,4 @@
-"""`BaseModel`, `Model`, `NotBuiltError`, `SpatialModel`,
-   `TemporalModel`"""
+"""`BaseModel`, `Model`, `NotBuiltError`, `SpatialModel`, `TemporalModel`"""
 import sys
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy

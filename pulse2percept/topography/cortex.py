@@ -1,5 +1,5 @@
 """
-`CorticalMap`
+`CorticalMap`, `Polimeni2006Map`
 """
 import numpy as np
 from abc import abstractmethod

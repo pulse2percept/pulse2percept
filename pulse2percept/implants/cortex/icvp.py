@@ -18,6 +18,46 @@ class ICVP(ProsthesisSystem):
     electrodes in a 4 column array with 400 um spacing.  The electrodes have
     a diameter of 15 um at the laser cut.  They are inserted either 650 um
     or 850 um into the cortex.
+
+    .. note::
+
+        By default the implant is in right hemisphere, use negative x-values to shift it to left hemisphere
+    
+    Parameters
+    ----------
+    x/y/z : double
+        3D location of the center of the electrode array.
+        ``z`` can either be a list with 35 entries or a scalar that is applied
+        to all electrodes.
+    rot : float
+        Rotation angle of the array (deg). Positive values denote
+        counter-clock-wise (CCW) rotations in the retinal coordinate
+        system.
+    stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+        A valid source type for the :py:class:`~pulse2percept.stimuli.Stimulus`
+        object (e.g., scalar, NumPy array, pulse train).
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a new stimulus is assigned, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
+
+    Examples
+    --------
+    Create an ICVP array, by default centered 15mm to the right of fovea in V1:
+
+    >>> from pulse2percept.implants.cortex import Orion
+    >>> ICVP() # doctest: +NORMALIZE_WHITESPACE
+    ICVP(earray=ElectrodeGrid, preprocess=False, 
+         safe_mode=False, shape=(5, 4), stim=None)
+
+    Get access to electrode '11':
+
+    >>> icvp = ICVP()
+    >>> icvp['11'] # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='11', r=50.0, 
+                  x=15173.205080756888, y=100.0, z=-650.0)
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)

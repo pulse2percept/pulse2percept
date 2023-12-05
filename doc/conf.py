@@ -283,7 +283,9 @@ sphinx_gallery_conf = {
                                        '../examples/stimuli',
                                        '../examples/models',
                                        '../examples/datasets',
-                                       '../examples/developers'])
+                                       '../examples/cortex',
+                                       '../examples/developers'
+                                       ])
 }
 
 # The following is used by sphinx.ext.linkcode to provide links to github
