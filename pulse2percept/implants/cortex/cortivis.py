@@ -52,8 +52,8 @@ class Cortivis(ProsthesisSystem):
 
     >>> cortivis = Cortivis()
     >>> cortivis['11'] # doctest: +NORMALIZE_WHITESPACE
-    DiskElectrode(activated=True, name='11', r=40.0, x=16400.0, 
-                  y=-1000.0, z=-1500.0)
+    DiskElectrode(activated=True, name='11', r=40.0, x=21400.0, 
+                  y=-6000.0, z=-1500.0)
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
