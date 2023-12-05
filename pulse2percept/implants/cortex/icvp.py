@@ -52,10 +52,10 @@ class ICVP(ProsthesisSystem):
     ICVP(earray=ElectrodeGrid, preprocess=False, 
          safe_mode=False, shape=(5, 4), stim=None)
 
-    Get access to electrode '96':
+    Get access to electrode '11':
 
     >>> icvp = ICVP()
-    >>> icvp['96'] # doctest: +NORMALIZE_WHITESPACE
+    >>> icvp['11'] # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='11', r=50.0, 
                   x=15173.205080756888, y=100.0, z=-650.0)
     """
