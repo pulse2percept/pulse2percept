@@ -19,10 +19,10 @@ from pulse2percept.topography import Watson2014Map
     [['v1'], ['v2'], ['v3'], ['v1', 'v2'], ['v2', 'v3'], ['v1', 'v3'], ['v1', 'v2', 'v3']])
 def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     # ScoreboardSpatial automatically sets `regions`
-    retinotopy = Polimeni2006Map(k=15, a=.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
-    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, retinotopy=retinotopy).build()
+    vfmap = Polimeni2006Map(k=15, a=.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
+    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, vfmap=vfmap).build()
     npt.assert_equal(model.regions, regions)
-    npt.assert_equal(model.retinotopy.regions, regions)
+    npt.assert_equal(model.vfmap.regions, regions)
 
     # User can set `rho`:
     model.rho = 123
@@ -34,11 +34,11 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     npt.assert_equal(model.predict_percept(Cortivis()), None)
 
     # Converting ret <=> dva
-    retinotopy = Polimeni2006Map(k=15, a=0.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
-    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=1, retinotopy=retinotopy).build()
-    npt.assert_equal(isinstance(model.retinotopy, Polimeni2006Map), True)
+    vfmap = Polimeni2006Map(k=15, a=0.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
+    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=1, vfmap=vfmap).build()
+    npt.assert_equal(isinstance(model.vfmap, Polimeni2006Map), True)
     if jitter_boundary:
-        npt.assert_equal(np.isnan(model.retinotopy.dva_to_v1([0], [0])), False)
+        npt.assert_equal(np.isnan(model.vfmap.dva_to_v1([0], [0])), False)
         if 'v1' in regions:
             npt.assert_equal(model.grid.v1.x[~np.isnan(model.grid.v1.x)].size, 49)
         if 'v2' in regions:
@@ -46,7 +46,7 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
         if 'v3' in regions:
             npt.assert_equal(model.grid.v3.x[~np.isnan(model.grid.v3.x)].size, 49)
     else:
-        npt.assert_equal(np.isnan(model.retinotopy.dva_to_v1([0], [0])), True)
+        npt.assert_equal(np.isnan(model.vfmap.dva_to_v1([0], [0])), True)
         if 'v1' in regions:
             npt.assert_equal(model.grid.v1.x[~np.isnan(model.grid.v1.x)].size, 42)
         if 'v2' in regions:
@@ -77,7 +77,7 @@ def test_predict_spatial(ModelClass, regions):
 
     # implant only in v1, shouldnt change with v2/v3
     vfmap = Polimeni2006Map(k=15, a=0.5, b=90)
-    model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), xystep=0.1, rho=400, retinotopy=vfmap).build()
+    model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), xystep=0.1, rho=400, vfmap=vfmap).build()
     elecs = [79, 49, 19, 80, 50, 20, 90, 61, 31, 2, 72, 42, 12, 83, 53, 23, 93, 64, 34, 5, 75, 45, 15, 86, 56, 26, 96, 67, 37, 8, 68, 38]
     implant = Cortivis(x=30000, y=0, rot=0, stim={str(i) : [1, 0] for i in elecs})
     percept = model.predict_percept(implant)
@@ -94,7 +94,7 @@ def test_predict_spatial(ModelClass, regions):
     if 'v1' in regions:
         # make sure cortical representation is flipped
         vfmap = Polimeni2006Map(k=15, a=0.5, b=90)
-        model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), xystep=0.1, rho=400, retinotopy=vfmap).build()
+        model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), xystep=0.1, rho=400, vfmap=vfmap).build()
         implant = Orion(x=30000, y=0, rot=0, stim={'40' : 1,  '94' :5})
         percept = model.predict_percept(implant)
         half = model.grid.shape[0] // 2
@@ -124,8 +124,8 @@ def test_predict_spatial_regionsum(ModelClass,regions):
 def test_eq_beyeler(ModelClass, stimval):
     
 
-    retinotopy = Watson2014Map()
-    cortex = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, rho=200 * stimval, regions=['ret'], retinotopy=retinotopy).build()
+    vfmap = Watson2014Map()
+    cortex = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, rho=200 * stimval, regions=['ret'], vfmap=vfmap).build()
     retina = BeyelerScoreboard(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, rho=200 * stimval).build()
 
     implant = ArgusII()

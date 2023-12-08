@@ -123,7 +123,7 @@ class Grid2D(PrettyPrint):
                     return self._grid[regionname]
                 else:
                     raise ValueError(f"Region {regionname} not found. Make sure the model is" \
-                        " built with the correct retinotopy")
+                        " built with the correct visual field map (vfmap)")
             return fn
         def setter(regionname):
             def fn(self, value):
@@ -156,7 +156,7 @@ class Grid2D(PrettyPrint):
         self.y_range = y_range
         self.step = step
         self.type = grid_type
-        self.retinotopy = None
+        self.vfmap = None
         self.regions = []
         # Internally, coordinate grids for each region are stored in _grid
         self._grid = {}
@@ -240,9 +240,9 @@ class Grid2D(PrettyPrint):
             raise ValueError(f"Unknown key: {key}. Must be region name or \
                               integer position")
 
-    def build(self, retinotopy):
-        self.retinotopy = retinotopy
-        for region, map_fn in retinotopy.from_dva().items():
+    def build(self, vfmap):
+        self.vfmap = vfmap
+        for region, map_fn in vfmap.from_dva().items():
             self._grid[region] = CoordinateGrid(*map_fn(self.x, self.y))
             if region not in self.regions:
                 self.regions.append(region)
@@ -277,7 +277,7 @@ class Grid2D(PrettyPrint):
         use_dva : bool, optional
             Whether dva or transformed points should be plotted.  If True, will
             not apply any transformations, and if False, will apply all
-            transformations in self.retinotopy
+            transformations in self.vfmap
         legend : bool, optional
             Whether to add a plot legend. The legend is always added if there 
             are 2 or more regions. This only applies if there is 1 region.
@@ -305,7 +305,7 @@ class Grid2D(PrettyPrint):
 
         transforms = [('dva', None)]
         if not use_dva:
-            transforms = self.retinotopy.from_dva().items()
+            transforms = self.vfmap.from_dva().items()
 
         color_map = {
             'ret' : 'gray',
@@ -362,9 +362,9 @@ class Grid2D(PrettyPrint):
                 # Remove NaN values from the grid:
                 points = points[:, ~np.logical_or(*np.isnan(points))]
                 if style.lower() == 'hull':
-                    if self.retinotopy and self.retinotopy.split_map and not use_dva:
+                    if self.vfmap and self.vfmap.split_map and not use_dva:
                         # all split maps have an offset for left fovea
-                        divide = 0 if use_dva else self.retinotopy.left_offset / 2
+                        divide = 0 if use_dva else self.vfmap.left_offset / 2
                         points_right = points[:, points[0] >= divide]
                         points_left = points[:, points[0] <= divide]
                         if points_right.size > 0:
@@ -389,8 +389,8 @@ class Grid2D(PrettyPrint):
         # plot boundary between hemispheres if it exists
         # but don't change the plot limits 
         lim = ax.get_xlim()
-        if self.retinotopy and self.retinotopy.split_map:
-            boundary = self.retinotopy.left_offset / 2
+        if self.vfmap and self.vfmap.split_map:
+            boundary = self.vfmap.left_offset / 2
             if use_dva:
                 boundary = 0
             if lim[0] < boundary < lim[1]:
@@ -459,13 +459,13 @@ class VisualFieldMap(BaseModel):
 
     @abstractmethod
     def from_dva(self):
-        """ Returns a dict containing the region(s) that this retinotopy maps 
+        """ Returns a dict containing the region(s) that this visuotopy maps 
             to, and the corresponding mapping function(s).
         """
         raise NotImplementedError
 
     def to_dva(self):
-        """ Returns a dict containing the region(s) that this retinotopy maps 
+        """ Returns a dict containing the region(s) that this visuotopy maps 
             from, and the corresponding inverse mapping function(s). This 
             transform is optional for most models.
         """

@@ -15,7 +15,7 @@ def test_DynaphosModel():
     model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1).build()
 
     npt.assert_equal(model.regions, ['v1'])
-    npt.assert_equal(model.retinotopy.regions, ['v1'])
+    npt.assert_equal(model.vfmap.regions, ['v1'])
 
     # can't set frequency/pulse dur that don't match up
     with pytest.raises(ValueError):

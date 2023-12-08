@@ -55,7 +55,7 @@ class DynaphosModel(BaseModel):
         use ``x_range=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid.
-    retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides visual field mappings.
         By default, :py:class:`~pulse2percept.topography.Polimeni2006Map` is
@@ -91,7 +91,7 @@ class DynaphosModel(BaseModel):
             self._regions = None
             super().__init__(**params)
 
-            self.retinotopy.regions = self.regions
+            self.vfmap.regions = self.regions
             self.grid = None
     
     def get_default_params(self):
@@ -102,7 +102,7 @@ class DynaphosModel(BaseModel):
                 'xystep': 0.25,  # dva
                 'grid_type': 'rectangular',
                 # Use [Polemeni2006]_ visual field map with parameters specified in the paper
-                'retinotopy': Polimeni2006Map(a=0.75,k=17.3,b=120,alpha1=0.95),
+                'vfmap': Polimeni2006Map(a=0.75,k=17.3,b=120,alpha1=0.95),
                 # Number of gray levels to use in the percept:
                 'n_gray': None,
                 # Salt-and-pepper noise on the output:
@@ -166,7 +166,7 @@ class DynaphosModel(BaseModel):
         # Build the spatial grid:
         self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
                            grid_type=self.grid_type)
-        self.grid.build(self.retinotopy)
+        self.grid.build(self.vfmap)
         self._build()
         self.is_built = True
         return self
@@ -180,18 +180,18 @@ class DynaphosModel(BaseModel):
         # whether to allow current to spread between hemispheres
         separate = 0
         boundary = 0
-        if self.retinotopy.split_map:
+        if self.vfmap.split_map:
             separate = 1
-            boundary = self.retinotopy.left_offset/2
+            boundary = self.vfmap.left_offset/2
 
         phosphene_locations = {}
         for region in self.regions:
-            phosphene_locations[region] = self.retinotopy.to_dva()[region](x_el, y_el)
+            phosphene_locations[region] = self.vfmap.to_dva()[region](x_el, y_el)
 
         theta, r = cart2pol(*phosphene_locations['v1'])
 
         # magnification factors (mm/dva)
-        M = self.retinotopy.k * (self.retinotopy.b - self.retinotopy.a) / ((r + self.retinotopy.a) * (r + self.retinotopy.b))
+        M = self.vfmap.k * (self.vfmap.b - self.vfmap.a) / ((r + self.vfmap.a) * (r + self.vfmap.b))
 
         # excitability constant uA/mm^2
         K = self.excitability

@@ -100,6 +100,10 @@ Studies referenced throughout the Documentation:
                Retinal Prosthesis: Interim Clinical Trial Results.
                *Translational Vision Science & Technology*, doi: `10.1167/tvst.10.10.12 
                <https://doi.org/10.1167/tvst.10.10.12>`_.
+.. [Polimeni2006] Polimeni, J. R., Balasubramanian, M., & Schwartz, E. L. (2006). Multi-area 
+                  visuotopic map complexes in macaque striate and extra-striate cortex. 
+                  Vision research, 46(20), 3336-3359. doi: `10.1016/j.visres.2006.03.006
+                  <https://doi.org/10.1016/j.visres.2006.03.006>`_.
 .. [Stingl2013] K Stingl, KU Bartz-Schmidt, D Besch, A Braun, A Bruckmann,
                 F Gekeler, U Greppmaier, S Hipp, G Hortdorfer, C Kernstock,
                 A Koitschev, A Kusnyerik, H Sachs, A Schatz, KT Stingl,
