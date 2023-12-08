@@ -62,6 +62,6 @@ You can delete the folder and all its contents as follows:
 
     Make sure you have write access to the specified data directory.
 
-.. minigallery:: pulse2percept.datasets.load_horsager2009
-    :add-heading: Examples using datasets
-    :heading-level: -
+.. .. minigallery:: pulse2percept.datasets.load_horsager2009
+..     :add-heading: Examples using datasets
+..     :heading-level: -

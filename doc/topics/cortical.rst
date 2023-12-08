@@ -48,6 +48,6 @@ the points in the visual field.  The points in the visual field are evenly
 spaced, and are represented by `+` symbols.
 
 .. ipython:: python
-    
+
+    @savefig score.png align=center
     model.plot(style="scatter", use_dva=True)
-    plt.show()

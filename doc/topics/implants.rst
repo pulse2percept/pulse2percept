@@ -64,6 +64,7 @@ organization of the optic fiber layer:
 .. ipython:: python
 
     from pulse2percept.models import AxonMapModel
+    @savefig axonmap.png align=center
     AxonMapModel(eye='RE').plot()
 
 Here you can see that:
