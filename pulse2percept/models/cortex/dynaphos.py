@@ -17,8 +17,8 @@ class DynaphosModel(BaseModel):
     electrode are Gaussian blobs, with the size dictated by a magnification factor
     M determined by the electrode's position in the visual cortex.
     
-    Parameters:
-    -----------
+    Parameters
+    ----------
     dt : float, optional
         Sampling time step of the simulation (ms)
     regions : list of str, optional
@@ -70,6 +70,7 @@ class DynaphosModel(BaseModel):
         frame. A float between 0 and 1 will be interpreted as a ratio of 
         pixels to subject to noise in each frame.
 
+        
     .. important ::
     
         If you change important model parameters outside the constructor (e.g.,
@@ -252,6 +253,9 @@ class DynaphosModel(BaseModel):
             # get highest amp value over the frame
             # but only reset amp to 0 if stimulus is updated at all during the frame
             if stim_idx + 1 < n_stim and t_sim >= stim.time[stim_idx + 1]:
+                amp = np.zeros(len(x_el))
+            # or stimulus has ended but we still want to predict
+            if t_sim > stim.time[-1]:
                 amp = np.zeros(len(x_el))
             while stim_idx + 1 < n_stim and t_sim >= stim.time[stim_idx + 1]:
                 stim_idx += 1

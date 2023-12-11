@@ -32,6 +32,7 @@ generic           `FadingTemporal`           temporal
 [Beyeler2019]_    `AxonMapModel`             spatial
 [Beyeler2019]_    `ScoreboardModel`          spatial
 [Granley2021]_    `BiphasicAxonMapModel`     spatial + temporal
+[Grinten2023]_    `DynaphosModel`            spatiotemporal
 ================  =========================  ===================
 
 .. note::
