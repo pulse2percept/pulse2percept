@@ -233,6 +233,8 @@ class DynaphosModel(BaseModel):
         Q = np.zeros(len(x_el))
         # holds diameter of activated cortical tissue
         D = np.zeros(len(x_el))
+        # holds sigma for gaussian phosphene generation
+        sigma = np.zeros(len(x_el))
         # constant for trace decay (seconds)
         tau_trace = self.tau_trace
         # input effect for trace
@@ -253,6 +255,9 @@ class DynaphosModel(BaseModel):
             # but only reset amp to 0 if stimulus is updated at all during the frame
             if stim_idx + 1 < n_stim and t_sim >= stim.time[stim_idx + 1]:
                 amp = np.zeros(len(x_el))
+            # or stimulus has ended but we still want to predict
+            if t_sim > stim.time[-1]:
+                amp = np.zeros(len(x_el))
             while stim_idx + 1 < n_stim and t_sim >= stim.time[stim_idx + 1]:
                 stim_idx += 1
                 amp = np.maximum(amp, stim.data[:,stim_idx])
@@ -263,7 +268,8 @@ class DynaphosModel(BaseModel):
             # update phosphene size
             D = 2 * np.sqrt(amp / K) # mm
             P = (D / M) # dva
-            sigma = np.clip(P / 2, 1e-22, None)
+            # calculate sigma for gaussian (only update sigma if amplitude > 0)
+            sigma = np.where(amp > 0, np.clip(P / 2, 1e-22, None), sigma) 
             # get activation (convert Ieff from uA to A)
             A = A + ((-A / (self.tau_act / 1000)) + Ieff * 1e-6) * (self.dt / 1000)
             # get brightness
