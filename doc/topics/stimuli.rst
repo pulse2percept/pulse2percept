@@ -292,6 +292,6 @@ in ``metadata["electrodes"][electrode]["metadata"]``:
                     metadata='stimulus metadata')
     stim.metadata
     
-.. minigallery:: pulse2percept.stimuli.Stimulus
-    :add-heading: Examples using ``Stimulus``
-    :heading-level: -
+.. .. minigallery:: pulse2percept.stimuli.Stimulus
+..     :add-heading: Examples using ``Stimulus``
+..     :heading-level: -

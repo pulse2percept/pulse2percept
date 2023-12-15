@@ -14,6 +14,7 @@
    :hidden:
 
    topics/implants
+   topics/cortical
    topics/stimuli
    topics/models
    topics/datasets

@@ -6,7 +6,7 @@ Retinal implant gallery
 pulse2percept supports the following implants:
 
 Argus Retinal Prosthesis System (Second Sight Medical Products Inc.)
----------------------------------------------------------------------
+--------------------------------------------------------------------
 
 :py:class:`~pulse2percept.implants.ArgusI` and
 :py:class:`~pulse2percept.implants.ArgusII` are epiretinal implants
