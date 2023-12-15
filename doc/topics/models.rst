@@ -31,7 +31,8 @@ generic           `FadingTemporal`           temporal
 [Nanduri2012]_    `Nanduri2012Temporal`      temporal
 [Beyeler2019]_    `AxonMapModel`             spatial
 [Beyeler2019]_    `ScoreboardModel`          spatial
-[Granley2021]_    `BiphasicAxonMapModel`     spatial + temporal
+[Granley2021]_    `BiphasicAxonMapModel`     spatiotemporal
+[Grinten2023]_    `DynaphosModel`            spatiotemporal
 ================  =========================  ===================
 
 .. note::
@@ -241,6 +242,8 @@ main model.
     Alternatively, use ``model.spatial.thresh_percept = 0`` or
     ``model.temporal.thresh_percept = 0``.
 
+
 .. .. minigallery:: pulse2percept.models.Model
 ..     :add-heading: Examples using ``Model``
 ..     :heading-level: -
+

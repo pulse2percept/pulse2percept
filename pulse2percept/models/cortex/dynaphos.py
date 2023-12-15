@@ -17,8 +17,8 @@ class DynaphosModel(BaseModel):
     electrode are Gaussian blobs, with the size dictated by a magnification factor
     M determined by the electrode's position in the visual cortex.
     
-    Parameters:
-    -----------
+    Parameters
+    ----------
     dt : float, optional
         Sampling time step of the simulation (ms)
     regions : list of str, optional
@@ -70,6 +70,7 @@ class DynaphosModel(BaseModel):
         frame. A float between 0 and 1 will be interpreted as a ratio of 
         pixels to subject to noise in each frame.
 
+        
     .. important ::
     
         If you change important model parameters outside the constructor (e.g.,
