@@ -128,6 +128,8 @@ class DynaphosModel(BaseModel):
                 'sig_slope': 19152642.500946816,
                 # A50 - activation for which a phosphene reaches half of its maximum brightness
                 'a50': 1.057631326853325e-07,
+                # A_Thr - activation threshold under which a phosphene is not generated
+                'a_thr': 9.141886000943878e-08,
                 # Default stimulus frequency (Hz)
                 'freq': 300,
                 # Default stimulus pulse duration (ms)
@@ -293,7 +295,7 @@ class DynaphosModel(BaseModel):
                 # (fast) way to compare two floating point numbers:
                 for el_idx in range(stim.data.shape[0]):
                     gauss = np.zeros(self.grid['dva'].x.shape)
-                    if A[el_idx] != 0:
+                    if A[el_idx] >= self.a_thr:
                         gauss = create_gaussian(phosphene_locations['v1'][0][el_idx], 
                                                 phosphene_locations['v1'][1][el_idx], 
                                                 sigma[el_idx], x_el[el_idx])
