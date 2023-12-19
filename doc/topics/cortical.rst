@@ -51,7 +51,8 @@ If we want to plot the model in the visual field, we can do so by setting
 the points in the visual field.  The points in the visual field are evenly
 spaced, and are represented by `+` symbols.
 
-.. ipython:: python
+.. ipython:: python 
+    :okwarning:
 
     @savefig score.png align=center
     model.plot(style="scatter", use_dva=True)

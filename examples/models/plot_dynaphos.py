@@ -26,6 +26,7 @@ constructor method.
 # sphinx_gallery_thumbnail_number = 1
 
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.implants.cortex import Orion
@@ -61,6 +62,7 @@ print(model)
 # * ``tau_trace``: The trace decay constant, in ms.
 # * ``kappa_trace``: The stimulus effect modifier
 # * ``tau_act``: The activation decay constant, in ms.
+# * ``a_thr``: The tissue activation threshold, under which a percept is not generated.
 # * ``sig_slope``, ``a50``: The slope of the sigmoidal brightness curve and
 #   activation value for which the brightness reaches half of its maximum.
 #
@@ -183,9 +185,9 @@ amps = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 # Output brightness in 20ms time steps for 700ms:
 t_percept = np.arange(0, 700, 20)
 
-# Initialize an empty list that will contain the peak brightness
+# Initialize an empty list that will contain the brightness-over-time
 # For each amplitude
-brightness = []
+bright_over_time = []
 
 for amp in amps:
     # For each value in the `amps` vector, now stored as `amp`, do:
@@ -197,15 +199,32 @@ for amp in amps:
                     for e in implant.electrode_names }
     # 2. Run the model:
     percept = model.predict_percept(implant, t_percept=t_percept)
-    # 3. Save the peak brightness
-    brightness.append(percept.max())
+    # 3. Save the brightness over time
+    bright_over_time.append(np.max(np.max(percept.data, axis=1), axis=0))
 
 ###############################################################################
-# This allows us to reproduce Fig. 3a of [Grinten2023]_: (Note that for stimulation amplitudes of 20.0µA
-# and lower, the simulator generated no phosphenes as the threshold for activation
-# was not reached.)
+# We can also reproduce the percept brightness plot in Fig. 3b: 
 
-plt.plot(amps, brightness, 'o-', label="predicted peak brightness levels")
-plt.xlabel('stimulation amplitude (uA)')
-plt.ylabel('relative brightness')
-plt.legend()
+fig, ax = plt.subplots(1, figsize=(7.5,3))
+
+cmap = mpl.cm.YlOrBr
+norm = mpl.colors.Normalize(vmin=0, vmax=100)
+fig.colorbar(None,ax=ax,cmap=cmap,norm=norm,shrink=0.5,orientation='vertical',ticks=[0,100],label="Stim. Amplitude (uA)")
+
+ax.set_yticks([0.2, 0.6, 1.0])
+ax.set_xticks([0.0, 0.2, 0.4, 0.6])
+ax.set_ylim([0,1.1])
+ax.set_xlim([0,0.7])
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.set(ylabel='Brightness', xlabel='Time [s]')
+
+for i, amp in enumerate(amps):
+    ax.plot(t_percept / 1000, bright_over_time[i], color=cmap(amp/100), linewidth=5)
+
+###############################################################################
+# Note: For the above plot, note that we plot the generated percept
+# brightness (which is limited by phosphene size & the tissue activation threshold)
+# while [Grinten2023]_ plots the internal brightness state. The dashed lines in 
+# [Grinten2023]_ represent time points at which a percept is not generated, 
+# as the activation threshold was not reached.
