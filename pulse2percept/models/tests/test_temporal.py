@@ -70,7 +70,6 @@ def test_deepcopy_FadingTemporal():
     npt.assert_equal(copied.is_built, False)
     npt.assert_equal(original != copied, True)
 
-    # Change the copied attribute by "destroying" the retinotopy attribute
     # which should be unique to each SpatialModel object
     copied = copy.deepcopy(original)
     copied.verbose = False

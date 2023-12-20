@@ -30,11 +30,11 @@ def test_ScoreboardSpatial():
     npt.assert_equal(model.predict_percept(ArgusI()), None)
 
     # Converting ret <=> dva
-    npt.assert_equal(isinstance(model.retinotopy, Watson2014Map), True)
-    npt.assert_almost_equal(model.retinotopy.ret_to_dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.retinotopy.dva_to_ret(0, 0), (0, 0))
-    model2 = ScoreboardSpatial(retinotopy=Watson2014DisplaceMap())
-    npt.assert_equal(isinstance(model2.retinotopy, Watson2014DisplaceMap),
+    npt.assert_equal(isinstance(model.vfmap, Watson2014Map), True)
+    npt.assert_almost_equal(model.vfmap.ret_to_dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.vfmap.dva_to_ret(0, 0), (0, 0))
+    model2 = ScoreboardSpatial(vfmap=Watson2014DisplaceMap())
+    npt.assert_equal(isinstance(model2.vfmap, Watson2014DisplaceMap),
                      True)
 
     implant = ArgusI(stim=np.zeros(16))
@@ -93,11 +93,11 @@ def test_ScoreboardModel():
     npt.assert_equal(model.spatial.rho, 987)
 
     # Converting ret <=> dva
-    npt.assert_equal(isinstance(model.retinotopy, Watson2014Map), True)
-    npt.assert_almost_equal(model.retinotopy.ret_to_dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.retinotopy.dva_to_ret(0, 0), (0, 0))
-    model2 = ScoreboardModel(retinotopy=Watson2014DisplaceMap())
-    npt.assert_equal(isinstance(model2.retinotopy, Watson2014DisplaceMap),
+    npt.assert_equal(isinstance(model.vfmap, Watson2014Map), True)
+    npt.assert_almost_equal(model.vfmap.ret_to_dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.vfmap.dva_to_ret(0, 0), (0, 0))
+    model2 = ScoreboardModel(vfmap=Watson2014DisplaceMap())
+    npt.assert_equal(isinstance(model2.vfmap, Watson2014DisplaceMap),
                      True)
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(ArgusI()), None)
@@ -187,11 +187,11 @@ def test_AxonMapSpatial(engine):
     npt.assert_equal(model.rho, 987)
 
     # Converting ret <=> dva
-    npt.assert_equal(isinstance(model.retinotopy, Watson2014Map), True)
-    npt.assert_almost_equal(model.retinotopy.ret_to_dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.retinotopy.dva_to_ret(0, 0), (0, 0))
-    model2 = AxonMapSpatial(retinotopy=Watson2014DisplaceMap())
-    npt.assert_equal(isinstance(model2.retinotopy, Watson2014DisplaceMap),
+    npt.assert_equal(isinstance(model.vfmap, Watson2014Map), True)
+    npt.assert_almost_equal(model.vfmap.ret_to_dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.vfmap.dva_to_ret(0, 0), (0, 0))
+    model2 = AxonMapSpatial(vfmap=Watson2014DisplaceMap())
+    npt.assert_equal(isinstance(model2.vfmap, Watson2014DisplaceMap),
                      True)
 
     # Nothing in, None out:
@@ -298,11 +298,11 @@ def test_AxonMapModel(engine):
         npt.assert_equal(getattr(model.spatial, key), value)
 
     # Converting ret <=> dva
-    npt.assert_equal(isinstance(model.retinotopy, Watson2014Map), True)
-    npt.assert_almost_equal(model.retinotopy.ret_to_dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.retinotopy.dva_to_ret(0, 0), (0, 0))
-    model2 = AxonMapModel(retinotopy=Watson2014DisplaceMap())
-    npt.assert_equal(isinstance(model2.retinotopy, Watson2014DisplaceMap),
+    npt.assert_equal(isinstance(model.vfmap, Watson2014Map), True)
+    npt.assert_almost_equal(model.vfmap.ret_to_dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.vfmap.dva_to_ret(0, 0), (0, 0))
+    model2 = AxonMapModel(vfmap=Watson2014DisplaceMap())
+    npt.assert_equal(isinstance(model2.vfmap, Watson2014DisplaceMap),
                      True)
 
     # Zeros in, zeros out:

@@ -279,6 +279,7 @@ sphinx_gallery_conf = {
     'gallery_dirs': ['examples'],
     'remove_config_comments': True,
     'thumbnail_size': (320, 224),
+    'ignore_repr_types': r'matplotlib[text, axes]',
     'subsection_order': ExplicitOrder(['../examples/implants',
                                        '../examples/stimuli',
                                        '../examples/models',

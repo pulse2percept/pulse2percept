@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================================================
-Retinotopy: Predicting the perceptual effects of different visual field maps
+Predicting the perceptual effects of different visual field maps
 ===============================================================================
 
 Every computational model needs to assume a mapping between retinal and visual
-field coordinates. A number of these visual field maps are provided in the
-:py:mod:`~pulse2percept.topography.geometry` module of the utilities subpackage:
+field coordinates (``vfmap``). A number of these visual field maps are provided in the
+:py:mod:`~pulse2percept.topography` module:
 
 *  :py:class:`~pulse2percept.topography.Curcio1990Map`: The [Curcio1990]_ model
    simply assumes that one degree of visual angle (dva) is equal to 280 um on
@@ -22,12 +22,21 @@ field coordinates. A number of these visual field maps are provided in the
    are displaced centrifugally some distance from the inner segments of the
    cones to which they are connected through the bipolar cells, and thus from
    their receptive field (see Eq. 5 [Watson2014]_).
+*  :py:class:`~pulse2percept.topography.Polimeni2006Map`: The [Polimeni2006]_
+   model is based on a high-resolution MRI scan of the human visual cortex. It
+   provides a mapping between visual field coordinates and cortical coordinates 
+   using a wedge-dipole model for regions V1, V2, and V3. See Appendix B of 
+   [Polimeni2006]_ for details.
 
-All of these visual field maps follow the
-:py:class:`~pulse2percept.topography.VisualFieldMap` template.
-This means that they have to specify a ``dva_to_ret`` method, which transforms
-visual field coordinates into retinal coordinates, and a complementary 
-``ret_to_dva`` method.
+All of these visual field maps follow the templates in either 
+:py:class:`~pulse2percept.topography.RetinalMap` or 
+:py:class:`~pulse2percept.topography.CorticalMap`.
+This means that all retinal visual field maps have to specify a ``dva_to_ret`` method, 
+which transforms visual field coordinates into retinal coordinates, and all cortical 
+visual field maps have to specify atleast a ``dva_to_v1`` method, which transforms visual 
+field coordinates into cortical V1 coordinates. Cortical models map also specify ``dva_to_v2``
+and ``dva_to_v3`` methods, which transform visual field coordinates into cortical V2 and V3.
+Most visual field maps also specify the inverse transform, e.g. ``ret_to_dva`` or ``v1_to_dva``.
 
 Visual field maps
 -----------------
@@ -85,14 +94,14 @@ implant = p2p.implants.AlphaAMS(stim=p2p.stimuli.LogoUCSB())
 implant.stim
 
 ###############################################################################
-# We can easily switch out the visual field maps by passing a ``retinotopy``
+# We can easily switch out the visual field maps by passing a ``vfmap``
 # attribute to :py:class:`~pulse2percept.models.ScoreboardModel` (by default,
 # the scoreboard model will use [Curcio1990]_):
 
 fig, axes = plt.subplots(ncols=3, sharey=True, figsize=(13, 4))
 for ax, transform in zip(axes, transforms):
     model = p2p.models.ScoreboardModel(xrange=(-6, 6), yrange=(-6, 6),
-                                       retinotopy=transform)
+                                       vfmap=transform)
     model.build()
     model.predict_percept(implant).plot(ax=ax)
     ax.set_title(transform.__class__.__name__)
@@ -102,10 +111,46 @@ for ax, transform in zip(axes, transforms):
 # panel predicts a rather striking perceptual effect of the RGC displacement
 # zone.
 #
+#
+# Cortical visual field maps
+# --------------------------
+#
+# When working with a cortical model (e.g. from pulse2percept.models.cortex),
+# then you should use a cortical visual field map. These maps are subclasses of
+# :py:class:`~pulse2percept.topography.CorticalMap`. Each cortical map has a 
+# ``regions`` attribute, which specifies the cortical regions that the map uses.
+# 
+# Cortical maps simulate both hemispheres of the visual cortex on a single coordinate 
+# plane. The left hemisphere fovea is located at ``vfmap.left_offset`` (default: 
+# -20 mm), and current is not allowed to spread between hemispheres. 
+# 
+# The standard cortical map is :py:class:`~pulse2percept.topography.Polimeni2006Map`, 
+# which uses a wedge-dipole model to map visual field coordinates onto cortical 
+# coordinates in V1, V2, and V3. 
+fig, ax = plt.subplots(ncols=2, figsize=(9, 4))
+vfmap = p2p.topography.Polimeni2006Map(regions=['v1', 'v2', 'v3']) # simulate all 3 regions
+model = p2p.models.cortex.ScoreboardModel(vfmap=vfmap)
+model.build()
+vfmap.plot(ax=ax[0])
+ax[0].set_title('Polimeni Mapping')
+model.plot(ax=ax[1])
+ax[1].set_title('Points in Cortex')
+plt.show()
+
+###############################################################################
+# The Polimeni map has 6 parameters that can be adjusted: ``k``, a global scaling
+# factor; ``a``, and ``b``, which are global wedge-dipole parameters, and 
+# ``alpha1``, ``alpha2``, and ``alpha3``, which are azimuthal shear parameters 
+# for V1, V2, and V3, respectively. The default values for these parameters are
+# taken from [Polimeni2006]_ based on MRI fits to human visual cortex. These 
+# values are known to change dramatically between individuals, so it may be important
+# to adjust these parameters to fit the individual subject.
+#
+#
 # Creating your own visual field map
 # ----------------------------------
 #
-# To create your own visual field map, you need to subclass the
+# To create your own (retinal) visual field map, you need to subclass the
 # :py:class:`~pulse2percept.topography.RetinalMap` template and provide your own
 # ``dva_to_ret`` and ``ret_to_dva`` methods.
 # For example, the following class would (wrongly) assume that retinal
@@ -113,7 +158,7 @@ for ax, transform in zip(axes, transforms):
 #
 # .. code-block:: python
 #
-#     class MyVisualFieldMap(p2p.topography.VisualFieldMap):
+#     class MyVisualFieldMap(p2p.topography.RetinalMap):
 #
 #         def dva_to_ret(self, xdva, ydva):
 #             return xdva, ydva
@@ -121,5 +166,6 @@ for ax, transform in zip(axes, transforms):
 #         def ret_to_dva(self, xret, yret):
 #             return xret, yret
 #
-# To use it with a model, you need to pass ``retinotopy=MyVisualFieldMap()``
+# To use it with a model, you need to pass ``vfmap=MyVisualFieldMap()``
 # to the model's constructor.
+#

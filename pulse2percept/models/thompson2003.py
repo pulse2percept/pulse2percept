@@ -52,7 +52,7 @@ class Thompson2003Spatial(SpatialModel):
         use ``xrange=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
-    retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.topography.Curcio1990Map` is
@@ -73,7 +73,7 @@ class Thompson2003Spatial(SpatialModel):
         """Returns all settable parameters of the model"""
         base_params = super(Thompson2003Spatial, self).get_default_params()
         params = {'radius': None, 'dropout': None,
-                  'retinotopy': Curcio1990Map()}
+                  'vfmap': Curcio1990Map()}
         return {**base_params, **params}
 
     def _predict_spatial(self, earray, stim):
@@ -142,7 +142,7 @@ class Thompson2003Model(Model):
         use ``xrange=(0, 1)`` and ``xystep=0.5``.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
-    retinotopy : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.topography.Watson2014Map` is
