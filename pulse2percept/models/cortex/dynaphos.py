@@ -36,6 +36,8 @@ class DynaphosModel(BaseModel):
         Activation decay constant (ms)
     sig_slope : float, optional
         Slope of the sigmoidal brightness curve
+    a_thr : float, optional
+        Activation threshold value, under which a phosphene is not generated
     a50 : float, optional
         Activation value for which a phosphene reaches half of its maximum brightness
     freq : float, optional
