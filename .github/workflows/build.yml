@@ -15,11 +15,8 @@ jobs:
     strategy:
       # Test on all supported platforms using all supported Python versions:
       matrix:
-        python-version: ["3.11", "3.10", 3.9, 3.8, 3.7]
+        python-version: ["3.11", "3.10", 3.9, 3.8]
         os: [ubuntu-latest, ubuntu-20.04, windows-latest, macOS-latest]
-        exclude:
-          - os: macOS-latest
-            python-version: 3.7 
     
     steps:
     - uses: actions/checkout@v1
