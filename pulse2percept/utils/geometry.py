@@ -5,6 +5,7 @@
 """
 import numpy as np
 from abc import ABCMeta, abstractmethod
+import random
 import scipy.stats as spst
 from scipy.spatial import ConvexHull
 # Using or importing the ABCs from 'collections' instead of from
@@ -13,6 +14,7 @@ from collections.abc import Sequence
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
+from scipy.interpolate import LinearNDInterpolator
 
 from .base import PrettyPrint
 from .constants import ZORDER
@@ -227,22 +229,67 @@ class VisualFieldMap(object, metaclass=ABCMeta):
 
     """
 
+    def __init__(self, noise=None, **kwargs):
+        self.noise = noise
+        if noise is not None:
+            self._setup_noise(noise, **kwargs)
+
+    def _setup_noise(self, noise, **kwargs):
+        # Generate grid of points to form interpolation function
+        xdva, ydva = np.meshgrid(np.arange(-45, 45, 2), np.arange(-45, 45, 2))
+        xret, yret = self._dva2ret(xdva.ravel(), ydva.ravel())
+        xydva = np.vstack((xdva.ravel(), ydva.ravel())).T
+        xyret = np.vstack((xret.ravel(), yret.ravel())).T
+        # Set random seed if desired:
+        if 'seed' in kwargs.keys():
+            np.random.seed(kwargs['seed'])
+        # Add noise to transform:
+        if noise == 'uniform':
+            if 'scale' not in kwargs.keys():
+                raise ValueError('Noise type "uniform" requires a "scale" '
+                                 'keyword argument.')
+            scale = kwargs['scale']
+            xyret = xyret + scale * (np.random.rand(*xyret.shape) - 0.5)
+        else:
+            raise NotImplementedError
+        # Set up interpolator:
+        self.dva2ret_interp = LinearNDInterpolator(xydva, xyret)
+        self.ret2dva_interp = LinearNDInterpolator(xyret, xydva)
+
     @abstractmethod
-    def dva2ret(self, x, y):
+    def _dva2ret(self, x, y):
         """Convert degrees of visual angle (dva) to retinal coords (um)"""
         raise NotImplementedError
 
+    def dva2ret(self, x, y):
+        """Convert degrees of visual angle (dva) to retinal coords (um)"""
+        if self.noise is not None:
+            xydva = np.vstack((x.ravel(), y.ravel())).T
+            xyret = self.dva2ret_interp(xydva).astype(np.float32)
+            return xyret[:, 0], xyret[:, 1]
+        else:
+            return self._dva2ret(x, y)
+
     @abstractmethod
-    def ret2dva(self, x, y):
+    def _ret2dva(self, x, y):
         """Convert retinal coords (um) to degrees of visual angle (dva)"""
         raise NotImplementedError
+
+    def ret2dva(self, x, y):
+        """Convert degrees of retinal coords (um) to visual angle (dva)"""
+        if self.noise is not None:
+            xyret = np.vstack((x.ravel(), y.ravel())).T
+            xydva = self.ret2dva_interp(xyret).astype(np.float32)
+            return xydva[:, 0], xydva[:, 1]
+        else:
+            return self._ret2dva(x, y)
 
 
 class Curcio1990Map(VisualFieldMap):
     """Converts between visual angle and retinal eccentricity [Curcio1990]_"""
 
     @staticmethod
-    def dva2ret(xdva, ydva):
+    def _dva2ret(xdva, ydva):
         """Convert degrees of visual angle (dva) to retinal eccentricity (um)
 
         Assumes that one degree of visual angle is equal to 280 um on the
@@ -251,7 +298,7 @@ class Curcio1990Map(VisualFieldMap):
         return 280.0 * xdva, 280.0 * ydva
 
     @staticmethod
-    def ret2dva(xret, yret):
+    def _ret2dva(xret, yret):
         """Convert retinal eccentricity (um) to degrees of visual angle (dva)
 
         Assumes that one degree of visual angle is equal to 280 um on the
@@ -285,7 +332,7 @@ class Watson2014Map(VisualFieldMap):
     """Converts between visual angle and retinal eccentricity [Watson2014]_"""
 
     @staticmethod
-    def ret2dva(x_um, y_um, coords='cart'):
+    def _ret2dva(x_um, y_um, coords='cart'):
         """Converts retinal distances (um) to visual angles (deg)
 
         This function converts an eccentricity measurement on the retinal
@@ -317,7 +364,7 @@ class Watson2014Map(VisualFieldMap):
         raise ValueError(f'Unknown coordinate system "{coords}".')
 
     @staticmethod
-    def dva2ret(x_deg, y_deg, coords='cart'):
+    def _dva2ret(x_deg, y_deg, coords='cart'):
         """Converts visual angles (deg) into retinal distances (um)
 
         This function converts degrees of visual angle into a retinal distance 
@@ -421,7 +468,7 @@ class Watson2014DisplaceMap(Watson2014Map):
         denom = beta * spst.gamma.pdf(alpha, 5)
         return numer / denom / scale
 
-    def dva2ret(self, xdva, ydva):
+    def _dva2ret(self, xdva, ydva):
         """Converts dva to retinal coords
 
         Parameters
@@ -443,7 +490,7 @@ class Watson2014DisplaceMap(Watson2014Map):
         x, y = pol2cart(theta, rho_dva)
         return super(Watson2014DisplaceMap, self).dva2ret(x, y)
 
-    def ret2dva(self, xret, yret):
+    def _ret2dva(self, xret, yret):
         raise NotImplementedError
 
 
