@@ -27,9 +27,11 @@ class CoordinateGrid:
         """
         x : np.ndarray
         y : np.ndarray
-        def __init__(self, x, y):
+        z : np.ndarray
+        def __init__(self, x, y, z=None):
             self.x = x
             self.y = y
+            self.z = z
         def __eq__(self, other):
             if not isinstance(other, self.__class__):
                 return False
@@ -48,8 +50,12 @@ class CoordinateGrid:
             # Default python 2.6+ implementation
             return id(self) // 16
         def __repr__(self):
+            if self.z is not None:
+                return f"CoordinateGrid(x={self.x}, y={self.y}, z={self.z})"
             return f"CoordinateGrid(x={self.x}, y={self.y})"
         def __str__(self):
+            if self.z is not None:
+                return f"CoordinateGrid(x={self.x}, y={self.y}, z={self.z})"
             return f"CoordinateGrid(x={self.x}, y={self.y})"
 
 class Grid2D(PrettyPrint):
