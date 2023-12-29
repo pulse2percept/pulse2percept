@@ -180,3 +180,33 @@ def test_grid_regions():
     grid.build(NewRegionTransform())
     npt.assert_equal(grid.newlayer.x, grid.x)
     npt.assert_equal('newlayer' in grid.regions, True)
+
+
+class Valid3DTransform(RetinalMap):
+
+    def dva_to_ret(self, x_dva, y_dva):
+        return x_dva, y_dva, np.ones_like(x_dva)
+
+    def ret_to_dva(self, x_ret, y_ret, z_ret=None):
+        return x_ret, y_ret
+    
+def test_3D_transform():
+    grid = Grid2D((-2, 2), (-2, 2), step=1)
+    vfmap = Valid3DTransform()
+    grid.build(vfmap)
+    npt.assert_equal(hasattr(grid.ret, 'z'), True)
+    npt.assert_equal(grid.ret.x.shape, (5, 5))
+    npt.assert_equal(grid.ret.y.shape, (5, 5))
+    npt.assert_equal(grid.ret.z.shape, (5, 5))
+    npt.assert_equal(grid.ret.x[0, 0], -2)
+    npt.assert_equal(grid.ret.y[0, 0], 2)
+    npt.assert_equal(grid.ret.z[0, 0], 1)
+    npt.assert_equal(grid.ret.x[0, -1], 2)
+    npt.assert_equal(grid.ret.y[0, -1], 2)
+    npt.assert_equal(grid.ret.z[0, -1], 1)
+    npt.assert_equal(grid.ret.x[-1, 0], -2)
+    npt.assert_equal(grid.ret.y[-1, 0], -2)
+    npt.assert_equal(grid.ret.z[-1, 0], 1)
+    npt.assert_equal(grid.ret.x[-1, -1], 2)
+    npt.assert_equal(grid.ret.y[-1, -1], -2)
+    npt.assert_equal(grid.ret.z[-1, -1], 1)
