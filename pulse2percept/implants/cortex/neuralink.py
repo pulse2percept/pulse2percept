@@ -4,114 +4,16 @@ import numpy as np
 from matplotlib.patches import Ellipse
 import matplotlib.pyplot as plt
 
-from ..base import ProsthesisSystem
+from ..ensemble import EnsembleImplant
 from ..electrodes import Electrode
 from ..electrode_arrays import ElectrodeArray
-
-
-def parse_3d_orient(orient, orient_mode):
-    """Parse the orient parameter
-    Given either a 3D rotation matrix, vector of angles of rotation,
-    or direction vector, this function will calculate and return the 
-    all three representations.
-    
-    Parameters
-    ----------
-    orient : np.ndarray with shape (3) or (3, 3)
-        Orientation of the electrode in 3D space.
-        orient can be:
-        - A length 3 vector specifying the direction that the
-            electrode should extend in (if orient_mode == 'direction')
-        - A list of 3 angles, (r_x, r_y, r_z), specifying the rotation
-            in degrees about each axis (starting with x).
-            (If orient_mode == 'angle')
-        - 3D rotation matrix, specifying the direction that the electrode
-            should extend in (i.e. a unit vector in the x direction will
-            point in the direction after being rotated by this matrix)
-    orient_mode : str
-        If 'direction', orient is a vector specifying the direction that the
-        electrode should extend in. If 'angle', orient is a vector of 3 angles,
-        (r_x, r_y, r_z), specifying the rotation in degrees about each axis
-        (starting with x). Does not apply if orient is a 3D rotation matrix.
-
-    Returns
-    -------
-    rot : np.ndarray with shape (3, 3)
-        Rotation matrix
-    angles : np.ndarray with shape (3)
-        Angles of rotation (degrees) about each axis (x, y, z).
-        Note that this mapping is not unique. This function will always
-        set the rotation about the x axis to be 0, meaning that the
-        returned coordinates will match spherical coordinates (i.e.
-        r_y is phi and r_z is theta).
-    direction : np.ndarray with shape (3)
-        Unit vector specifying the direction of the orientation.
-    """
-
-    def construct_rot_matrix(angles):
-        """Construct a rotation matrix from angles of rotation"""
-        rot_x = np.array([[1, 0, 0],
-                          [0, np.cos(angles[0]), -np.sin(angles[0])],
-                          [0, np.sin(angles[0]), np.cos(angles[0])]])
-        rot_y = np.array([[np.cos(angles[1]), 0, np.sin(angles[1])],
-                          [0, 1, 0],
-                          [-np.sin(angles[1]), 0, np.cos(angles[1])]])
-        rot_z = np.array([[np.cos(angles[2]), -np.sin(angles[2]), 0],
-                          [np.sin(angles[2]), np.cos(angles[2]), 0],
-                          [0, 0, 1]])
-        return rot_z @ rot_y @ rot_x
-    
-    def extract_direction(rot):
-        """Extract direction vector from rotation matrix"""
-        # Do this by rotating the point (0, 0, 1)
-        direction = np.matmul(rot, np.array([0, 0, 1]))
-        return direction
-    
-    def extract_angles(direction):
-        """Extract angles of rotation from direction vector"""
-        rot_x = 0
-        rot_y = np.arctan2(direction[0], direction[2]) # i.e. phi
-        rot_z = np.arctan2(direction[1], direction[0]) # i.e. theta
-        angles = np.array([rot_x, rot_y, rot_z])
-        return angles
-
-    if isinstance(orient, list):
-        orient = np.array(orient)
-    if not isinstance(orient, np.ndarray) or orient.shape not in [(3,), (3, 3)]:
-        raise ValueError(f'Incorrect value for orient parameter {orient}, ', 
-                         'please pass an array with shape (3) or (3, 3)')
-    if orient.ndim == 1:
-        if orient_mode == 'direction':
-            if not np.allclose(np.linalg.norm(orient), 1):
-                # unnormalized
-                if np.linalg.norm(orient) == 0:
-                    raise ValueError('orient cannot be a zero vector if orient_mode is "direction"')
-                orient = orient / np.linalg.norm(orient)
-
-            direction = orient
-            angles = extract_angles(direction)
-            rot = construct_rot_matrix(angles)
-        elif orient_mode == 'angle':
-            angles = orient
-            rot = construct_rot_matrix(angles)
-            direction = extract_direction(rot)
-        else:
-            raise ValueError('orient_mode must be either "direction" or "angle".')
-        
-    elif orient.ndim == 2:
-        if not np.allclose(np.linalg.inv(orient), orient.T) or orient.shape != (3, 3):
-            raise ValueError(f'Invalid rotation matrix {orient}')
-        rot = orient
-        direction = extract_direction(rot)
-        angles = extract_angles(direction)
-
-    return rot, angles, direction
+from ...utils import parse_3d_orient
 
 
 class EllipsoidElectrode(Electrode):
     
     __slots__ = ('rx', 'ry', 'rz', 'orient', 'plot_3d_kwargs', 
-                 'plotx', 'ploty', 'plotz', 'rot', 'angles', 'direction')
+                 'rot', 'angles', 'direction')
     
     def __init__(self, x=0, y=0, z=0, rx=7, ry=7, rz=12, orient=np.array([0, 0, 1]), 
                  orient_mode='direction', name=None, activated=True):
@@ -155,19 +57,6 @@ class EllipsoidElectrode(Electrode):
                                'rstride': 2, 'cstride': 2}
         
         self.rot, self.angles, self.direction = parse_3d_orient(orient, orient_mode)
-        
-        # prepare for plotting in 3d
-        npoints = 15 # resolution, less is faster
-        thetas = np.linspace(0, 2 * np.pi, npoints)
-        phis = np.linspace(0, np.pi, npoints)
-        plotx = self.rx * np.outer(np.cos(thetas), np.sin(phis))
-        ploty = self.ry * np.outer(np.sin(thetas), np.sin(phis))
-        plotz = self.rz * np.outer(np.ones_like(thetas), np.cos(phis))
-        stacked_points = np.stack([plotx, ploty, plotz], axis=-1).reshape(plotx.shape[0], plotx.shape[1], 3, 1)
-        rotated = np.matmul(self.rot, stacked_points).reshape(plotx.shape[0], plotx.shape[1], 3)
-        self.plotx = rotated[:, :, 0] + self.x
-        self.ploty = rotated[:, :, 1] + self.y
-        self.plotz = rotated[:, :, 2] + self.z
 
 
     def _pprint_params(self):
@@ -202,7 +91,20 @@ class EllipsoidElectrode(Electrode):
             if ax.name != '3d':
                 raise ValueError('ax must be a 3D axis')
         
-        ax.plot_surface(self.plotx, self.ploty, self.plotz, **self.plot_3d_kwargs)
+        # prepare for plotting in 3d
+        npoints = 15 # resolution, less is faster
+        thetas = np.linspace(0, 2 * np.pi, npoints)
+        phis = np.linspace(0, np.pi, npoints)
+        plotx = self.rx * np.outer(np.cos(thetas), np.sin(phis))
+        ploty = self.ry * np.outer(np.sin(thetas), np.sin(phis))
+        plotz = self.rz * np.outer(np.ones_like(thetas), np.cos(phis))
+        stacked_points = np.stack([plotx, ploty, plotz], axis=-1).reshape(plotx.shape[0], plotx.shape[1], 3, 1)
+        rotated = np.matmul(self.rot, stacked_points).reshape(plotx.shape[0], plotx.shape[1], 3)
+        plotx = rotated[:, :, 0] + self.x
+        ploty = rotated[:, :, 1] + self.y
+        plotz = rotated[:, :, 2] + self.z
+
+        ax.plot_surface(plotx, ploty, plotz, **self.plot_3d_kwargs)
         return ax
 
 
@@ -216,7 +118,7 @@ class LinearEdgeThread(NeuralinkThread):
     # __slots__ = ('r', 'l', 'n', 'pitch', 'orient') # TODO
     
     def __init__(self, x=0, y=0, z=0, orient=np.array([0,0,1]), orient_mode='direction', 
-                 dim=3, r=5, n_elecs=32, spacing=50, insertion_depth=0, 
+                 r=5, n_elecs=32, spacing=50, insertion_depth=0, 
                  electrode=EllipsoidElectrode, name=None):
         """
         Neuralink thread
@@ -225,24 +127,20 @@ class LinearEdgeThread(NeuralinkThread):
         ----------
         x, y, z : float
             Coordinates of the thread insertion point on the surface of the cortex.
-            z is optional if dim==2 
+            z is optional and defaults to 0.
         orient : np.ndarray with shape (3) or (3, 3) 
             Orientation of the thread in 3D space. 
-            If dim=2, orient defaults to being perpendicular to cortical surface.
-            If dim=3, orient defaults to being parallel to the z axis.
 
             orient can be:
             - A length 3 vector specifying the direction that the 
               thread should extend in (if orient_mode == 'direction')
             - A list of 3 angles, (r_x, r_y, r_z), specifying the rotation 
-              in degrees about each axis (starting with x). 
+              in degrees about each axis (x rotation performed first). 
               (If orient_mode == 'angle')
             - 3D rotation matrix, specifying the direction that the thread 
-              should extend in (i.e. a unit vector in the x direction will
+              should extend in (i.e. a unit vector in the z direction will
               point in the direction after being rotated by this matrix)
 
-        dim : int
-            Dimensionality of the simulation. Must be 2 or 3.
         r : float
             Radius of the thread.
         n_elecs : int
@@ -266,7 +164,6 @@ class LinearEdgeThread(NeuralinkThread):
         self.spacing = spacing
         self.electrode = electrode
         self.name = name
-        self.dim = dim
         self.insertion_depth = insertion_depth
         # microns out of cortex that thread should extend (for visualization only)
         self.extracortical_depth = 1000
@@ -274,12 +171,6 @@ class LinearEdgeThread(NeuralinkThread):
         self.rot, self.angles, self.direction = parse_3d_orient(orient, orient_mode)
         self.plot_3d_kwargs = {'color': 'gray', 'alpha': 0.5,
                                'rstride': 2, 'cstride': 2}
-
-        if self.dim not in [2, 3]:
-            raise ValueError("dim must be either 2 or 3")
-
-        if self.dim == 2:
-            raise NotImplementedError("2D implant not yet implemented")
         
         # calculate the coordinates of the electrodes
         electrodes = []
@@ -334,3 +225,90 @@ class LinearEdgeThread(NeuralinkThread):
             electrode.plot3D(ax=ax)
 
         return ax
+
+
+    class Neuralink(EnsembleImplant):
+
+        @classmethod
+        def from_neuropythy(cls, vfmap, xrange=None, yrange=None, xystep=None, 
+                            rand_insertion_angle=None, region='v1'):
+            """
+            Create a neuralink implant from a neuropythy visual field map.
+
+            The implant will be created by creating a NeuralinkThread for each
+            location specified by xrange, yrange, and xystep. Each thread will be 
+            inserted perpendicular to the cortical surface at the corresponding
+            location in cortex, with rand_insertion_angle degrees of azimuthal 
+            rotation.
+
+            Parameters
+            ----------
+            vfmap : p2p.topography.NeuropythyMap
+                Visual field map to create implant from.
+            xrange, yrange: tuple of floats, optional
+                Range of x and y coordinates to create threads at. If None, 
+                defaults to the range of the visual field map.
+            xystep : float, optional
+                Spacing between threads. If None, defaults to the spacing of the 
+                visual field map.
+            rand_insertion_angle : float, optional
+                If not none, insert threads at a random offset from perpendicular,
+                with a maximum azimuthal rotation of rand_insertion_angle degrees.
+            region : str, optional
+                Region of cortex to create implant in.
+
+            Returns
+            -------
+            Neuralink : p2p.implants.Neuralink
+                Neuralink ensemble implant created from the visual field map.
+            """
+            # import at runtime to avoid circular imports
+            from ...topography import NeuropythyMap, Grid2D
+            if not isinstance(vfmap, NeuropythyMap):
+                raise TypeError("vfmap must be a p2p.topography.NeuropythyMap")
+            if xrange is None:
+                xrange = vfmap.xrange
+            if yrange is None:
+                yrange = vfmap.yrange
+            if xystep is None:
+                xystep = vfmap.xystep
+            
+            # make a grid of points
+            grid = Grid2D(xrange, yrange, xystep)
+            xlocs = grid.x.flatten()
+            ylocs = grid.y.flatten()
+
+            # TODO
+
+
+
+
+        def __init__(self, threads, stim=None, preprocess=False, safe_mode=False):
+            """
+            Neuralink implant, consisting of one or more 
+            :py:class:`~pulse2percept.implants.cortex.NeuralinkThread`s.
+
+            This is just a wrapper class for EnsembleImplant, with extra
+            functionality for plotting in 3D and a factory method to easily create 
+            a Neuralink implant (see :py:meth:`~Neuralink.from_neuropythy`).
+
+            Parameters
+            ----------
+            threads : collection of NeuralinkThread
+                Collection (list) of NeuralinkThread objects to combine into an \
+                implant.
+            stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+                A valid source type for the :py:class:`~pulse2percept.stimuli.Stimulus`
+                object (e.g., scalar, NumPy array, pulse train).
+            preprocess : bool or callable, optional
+                Either True/False to indicate whether to execute the implant's default
+                preprocessing method whenever a new stimulus is assigned, or a custom
+                function (callable).
+            safe_mode : bool, optional
+                If safe mode is enabled, only charge-balanced stimuli are allowed.
+            """
+            for thread in threads:
+                if not isinstance(thread, NeuralinkThread):
+                    raise TypeError("threads must be a collection of NeuralinkThread objects")
+            super().__init__(threads, stim=stim, preprocess=preprocess, safe_mode=safe_mode)
+        

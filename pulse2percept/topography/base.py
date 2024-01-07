@@ -163,6 +163,7 @@ class Grid2D(PrettyPrint):
         self.step = step
         self.type = grid_type
         self.vfmap = None
+        self.ndim = 2
         self.regions = []
         # Internally, coordinate grids for each region are stored in _grid
         self._grid = {}
@@ -248,6 +249,7 @@ class Grid2D(PrettyPrint):
 
     def build(self, vfmap):
         self.vfmap = vfmap
+        self.ndim = self.vfmap.ndim
         for region, map_fn in vfmap.from_dva().items():
             self._grid[region] = CoordinateGrid(*map_fn(self.x, self.y))
             if region not in self.regions:
@@ -479,7 +481,9 @@ class VisualFieldMap(BaseModel):
 
     def get_default_params(self):
         """Required to inherit from BaseModel"""
-        return {}
+        return {
+            'ndim': 2,
+        }
 
     def __eq__(self, other):
         """

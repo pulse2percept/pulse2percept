@@ -2,7 +2,7 @@
 
 from ..base import Model, SpatialModel
 from ...topography import Polimeni2006Map
-from .._beyeler2019 import fast_scoreboard
+from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
 from ...utils.constants import ZORDER
 import numpy as np
 
@@ -220,6 +220,7 @@ class ScoreboardSpatial(CortexSpatial):
         params = {
                     # radial current spread
                     'rho': 200,  
+                    'ndim' : [2, 3]
                  }
         return {**base_params, **params}
 
@@ -229,6 +230,8 @@ class ScoreboardSpatial(CortexSpatial):
                                         dtype=np.float32)
         y_el = np.array([earray[e].y for e in stim.electrodes],
                                         dtype=np.float32)
+        z_el = np.array([earray[e].z for e in stim.electrodes],
+                                        dtype=np.float32)
 
         # whether to allow current to spread between hemispheres
         separate = 0
@@ -236,7 +239,19 @@ class ScoreboardSpatial(CortexSpatial):
         if self.vfmap.split_map:
             separate = 1
             boundary = self.vfmap.left_offset/2
-        return np.sum([
+        if self.vfmap.ndim == 3:
+            return np.sum([
+                fast_scoreboard_3d(stim.data, x_el, y_el, z_el,
+                                self.grid[region].x.ravel(), 
+                                self.grid[region].y.ravel(),
+                                self.grid[region].z.ravel(),
+                                self.rho, self.thresh_percept, 
+                                separate, boundary, 
+                                self.n_threads)
+                for region in self.regions ],
+            axis = 0)
+        elif self.vfmap.ndim == 2:
+            return np.sum([
                 fast_scoreboard(stim.data, x_el, y_el,
                                 self.grid[region].x.ravel(), self.grid[region].y.ravel(),
                                 self.rho, self.thresh_percept, 
@@ -244,6 +259,8 @@ class ScoreboardSpatial(CortexSpatial):
                                 self.n_threads)
                 for region in self.regions ],
             axis = 0)
+        else:
+            raise ValueError("Invalid dimensionality of visual field map")
 
 
 class ScoreboardModel(Model):

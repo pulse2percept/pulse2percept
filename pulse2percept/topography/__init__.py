@@ -6,12 +6,14 @@
     base
     retina
     cortex
+    neuropythy
 
 """
 from .base import (Grid2D, VisualFieldMap,)
 from .retina import (RetinalMap, Curcio1990Map,
                        Watson2014Map, Watson2014DisplaceMap,)
 from .cortex import (CorticalMap, Polimeni2006Map)
+from .neuropythy import NeuropythyMap 
 
 
 __all__ = [
@@ -22,5 +24,6 @@ __all__ = [
     'VisualFieldMap',
     'Watson2014DisplaceMap',
     'Watson2014Map',
-    'Polimeni2006Map'
+    'Polimeni2006Map',
+    'NeuropythyMap'
 ]

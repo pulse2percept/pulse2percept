@@ -13,6 +13,7 @@
     stats
     parallel
     deprecation
+    three_dim
 
 """
 from .base import (PrettyPrint, FreezeError, Frozen, Data, bijective26_name,
@@ -25,6 +26,7 @@ from .optimize import bisect
 from .stats import r2_score, circ_r2_score
 from .parallel import parfor
 from .deprecation import deprecated
+from .three_dim import parse_3d_orient
 
 __all__ = [
     'bijective26_name',
@@ -43,6 +45,7 @@ __all__ = [
     'gamma',
     'is_strictly_increasing',
     'parfor',
+    'parse_3d_orient',
     'pol2cart',
     'PrettyPrint',
     'r2_score',

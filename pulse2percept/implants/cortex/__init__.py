@@ -1,4 +1,4 @@
-"""`Orion`, `Cortivis`, `ICVP`
+"""`Orion`, `Cortivis`, `ICVP`, `EllipsoidElectrode`, `NeuralinkThread`, `LinearEdgeThread`, `Neuralink`
 
 .. autosummary::
     : toctree: _api
@@ -25,4 +25,5 @@ __all__ = [
     "EllipsoidElectrode",
     "NeuralinkThread",
     "LinearEdgeThread",
+    "Neuralink"
 ]
