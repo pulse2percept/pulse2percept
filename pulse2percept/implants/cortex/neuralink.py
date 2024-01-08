@@ -230,21 +230,24 @@ class LinearEdgeThread(NeuralinkThread):
     class Neuralink(EnsembleImplant):
 
         @classmethod
-        def from_neuropythy(cls, vfmap, xrange=None, yrange=None, xystep=None, 
+        def from_neuropythy(cls, vfmap, locs=None, xrange=None, yrange=None, xystep=None, 
                             rand_insertion_angle=None, region='v1'):
             """
             Create a neuralink implant from a neuropythy visual field map.
 
             The implant will be created by creating a NeuralinkThread for each
-            location specified by xrange, yrange, and xystep. Each thread will be 
-            inserted perpendicular to the cortical surface at the corresponding
-            location in cortex, with rand_insertion_angle degrees of azimuthal 
-            rotation.
+            visual field location specified either by locs or by xrange, yrange, 
+            and xystep. Each thread will be inserted perpendicular to the 
+            cortical surface at the corresponding location in cortex, with 
+            up to rand_insertion_angle degrees of azimuthal rotation.
 
             Parameters
             ----------
             vfmap : p2p.topography.NeuropythyMap
                 Visual field map to create implant from.
+            locs : np.ndarray with shape (n, 2), optional
+                Array of visual field locations to create threads at. Not
+                needed if using xrange, yrange, and xystep.
             xrange, yrange: tuple of floats, optional
                 Range of x and y coordinates to create threads at. If None, 
                 defaults to the range of the visual field map.
@@ -266,19 +269,35 @@ class LinearEdgeThread(NeuralinkThread):
             from ...topography import NeuropythyMap, Grid2D
             if not isinstance(vfmap, NeuropythyMap):
                 raise TypeError("vfmap must be a p2p.topography.NeuropythyMap")
-            if xrange is None:
-                xrange = vfmap.xrange
-            if yrange is None:
-                yrange = vfmap.yrange
-            if xystep is None:
-                xystep = vfmap.xystep
             
-            # make a grid of points
-            grid = Grid2D(xrange, yrange, xystep)
-            xlocs = grid.x.flatten()
-            ylocs = grid.y.flatten()
+            if locs is None:
+                if xrange is None:
+                    xrange = vfmap.xrange
+                if yrange is None:
+                    yrange = vfmap.yrange
+                if xystep is None:
+                    xystep = vfmap.xystep
+                
+                # make a grid of points
+                grid = Grid2D(xrange, yrange, xystep)
+                xlocs = grid.x.flatten()
+                ylocs = grid.y.flatten()
+            else:
+                xlocs = locs[:, 0]
+                ylocs = locs[:, 1]
+            
+            # thread will extend from the pial point to the intracortical point
+            # will be (3, npoints) shape
+            surface_points = np.array(vfmap.from_dva()[region](xlocs, ylocs, surface='pial'))
+            intra_points = np.array(vfmap.from_dva()[region](xlocs, ylocs, surface='midgray'))
 
-            # TODO
+            threads = []
+            for i in range(len(xlocs)):
+                # get the direction vector of the thread
+                direction = intra_points[:, i] - surface_points[:, i]
+                location = surface_points[:, i]
+                threads.append(LinearEdgeThread(x=location[0], y=location[1], z=location[2],
+                                                orient=direction, orient_mode='direction'))
 
 
 
