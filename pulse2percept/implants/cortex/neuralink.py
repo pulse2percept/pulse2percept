@@ -295,12 +295,27 @@ class LinearEdgeThread(NeuralinkThread):
             for i in range(len(xlocs)):
                 # get the direction vector of the thread
                 direction = intra_points[:, i] - surface_points[:, i]
+                direction /= np.linalg.norm(direction)
+
+                # if rand_insertion_angle is not None, rotate the direction vector
+                if rand_insertion_angle is not None:
+                    rho = np.random.uniform(-rand_insertion_angle, rand_insertion_angle)
+                    theta = np.random.uniform(0, 360)
+                    rot_rand, _, _ = parse_3d_orient([0, rho, theta], 'angle')
+                    rot_direction, _, _= parse_3d_orient(direction, 'direction')
+                    direction = rot_direction @ rot_rand
+
                 location = surface_points[:, i]
+                name = ''
+                j = i
+                while j >= 26:
+                    name = chr(65 + j % 26) + name
+                    j = j // 26 - 1
+                name = chr(65 + j) + name
                 threads.append(LinearEdgeThread(x=location[0], y=location[1], z=location[2],
-                                                orient=direction, orient_mode='direction'))
-
-
-
+                                                orient=direction, orient_mode='direction',
+                                                name=name))
+            return cls(threads)
 
         def __init__(self, threads, stim=None, preprocess=False, safe_mode=False):
             """
