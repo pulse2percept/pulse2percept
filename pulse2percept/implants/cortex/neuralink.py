@@ -70,22 +70,20 @@ class EllipsoidElectrode(Electrode):
         raise NotImplementedError
     
 
-    def plot3D(self, ax=None):
+    def plot3D(self, ax=None, **kwargs):
         """Plot the electrode in 3D space
         
         Parameters
         ----------
         ax : matplotlib.axes.Axes
             Axes to plot on. If None, a new figure and axes will be created.
-        .. note::
-            Unlike with 2D plots, you must pass an Axes object to plot on the 
-            same axes. This is because of how plt.gca() works with 3D plots.
         """
         if ax is None:
+            fig_kwargs = ['figsize']
             ax = plt.gca()
             if ax.name != '3d':
                 plt.close()
-                fig = plt.figure()
+                fig = plt.figure(**{k:v for k, v in kwargs.items() if k in fig_kwargs})
                 ax = fig.add_subplot(111, projection='3d')
         else:
             if ax.name != '3d':
@@ -196,11 +194,20 @@ class LinearEdgeThread(NeuralinkThread):
         return params
     
     def plot3D(self, ax=None, **kwargs):
+        """Plot the thread in 3D space
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axes to plot on. If None, a new figure and axes will be created.
+        """
+        
+        fig_kwargs = ['figsize']
         if ax is None:
             ax = plt.gca()
             if ax.name != '3d':
                 plt.close()
-                fig = plt.figure(**kwargs)
+                fig = plt.figure(**{k:v for k, v in kwargs.items() if k in fig_kwargs})
                 ax = fig.add_subplot(111, projection='3d')
         else:
             if ax.name != '3d':
@@ -222,127 +229,149 @@ class LinearEdgeThread(NeuralinkThread):
         ax.plot_surface(plotx, ploty, plotz, **self.plot_3d_kwargs)
 
         for electrode in self.electrode_objects:
-            electrode.plot3D(ax=ax)
+            electrode.plot3D(ax=ax, **{k:v for k, v in kwargs.items() if k not in fig_kwargs})
 
         return ax
 
 
-    class Neuralink(EnsembleImplant):
+class Neuralink(EnsembleImplant):
 
-        @classmethod
-        def from_neuropythy(cls, vfmap, locs=None, xrange=None, yrange=None, xystep=None, 
-                            rand_insertion_angle=None, region='v1'):
-            """
-            Create a neuralink implant from a neuropythy visual field map.
+    @classmethod
+    def from_neuropythy(cls, vfmap, locs=None, xrange=None, yrange=None, xystep=None, 
+                        rand_insertion_angle=None, region='v1'):
+        """
+        Create a neuralink implant from a neuropythy visual field map.
 
-            The implant will be created by creating a NeuralinkThread for each
-            visual field location specified either by locs or by xrange, yrange, 
-            and xystep. Each thread will be inserted perpendicular to the 
-            cortical surface at the corresponding location in cortex, with 
-            up to rand_insertion_angle degrees of azimuthal rotation.
+        The implant will be created by creating a NeuralinkThread for each
+        visual field location specified either by locs or by xrange, yrange, 
+        and xystep. Each thread will be inserted perpendicular to the 
+        cortical surface at the corresponding location in cortex, with 
+        up to rand_insertion_angle degrees of azimuthal rotation.
 
-            Parameters
-            ----------
-            vfmap : p2p.topography.NeuropythyMap
-                Visual field map to create implant from.
-            locs : np.ndarray with shape (n, 2), optional
-                Array of visual field locations to create threads at. Not
-                needed if using xrange, yrange, and xystep.
-            xrange, yrange: tuple of floats, optional
-                Range of x and y coordinates to create threads at. If None, 
-                defaults to the range of the visual field map.
-            xystep : float, optional
-                Spacing between threads. If None, defaults to the spacing of the 
-                visual field map.
-            rand_insertion_angle : float, optional
-                If not none, insert threads at a random offset from perpendicular,
-                with a maximum azimuthal rotation of rand_insertion_angle degrees.
-            region : str, optional
-                Region of cortex to create implant in.
+        Parameters
+        ----------
+        vfmap : p2p.topography.NeuropythyMap
+            Visual field map to create implant from.
+        locs : np.ndarray with shape (n, 2), optional
+            Array of visual field locations to create threads at. Not
+            needed if using xrange, yrange, and xystep.
+        xrange, yrange: tuple of floats, optional
+            Range of x and y coordinates to create threads at. If None, 
+            defaults to the range of the visual field map.
+        xystep : float, optional
+            Spacing between threads. If None, defaults to the spacing of the 
+            visual field map.
+        rand_insertion_angle : float, optional
+            If not none, insert threads at a random offset from perpendicular,
+            with a maximum azimuthal rotation of rand_insertion_angle degrees.
+        region : str, optional
+            Region of cortex to create implant in.
 
-            Returns
-            -------
-            Neuralink : p2p.implants.Neuralink
-                Neuralink ensemble implant created from the visual field map.
-            """
-            # import at runtime to avoid circular imports
-            from ...topography import NeuropythyMap, Grid2D
-            if not isinstance(vfmap, NeuropythyMap):
-                raise TypeError("vfmap must be a p2p.topography.NeuropythyMap")
-            
-            if locs is None:
-                if xrange is None:
-                    xrange = vfmap.xrange
-                if yrange is None:
-                    yrange = vfmap.yrange
-                if xystep is None:
-                    xystep = vfmap.xystep
-                
-                # make a grid of points
-                grid = Grid2D(xrange, yrange, xystep)
-                xlocs = grid.x.flatten()
-                ylocs = grid.y.flatten()
-            else:
-                xlocs = locs[:, 0]
-                ylocs = locs[:, 1]
-            
-            # thread will extend from the pial point to the intracortical point
-            # will be (3, npoints) shape
-            surface_points = np.array(vfmap.from_dva()[region](xlocs, ylocs, surface='pial'))
-            intra_points = np.array(vfmap.from_dva()[region](xlocs, ylocs, surface='midgray'))
-
-            threads = []
-            for i in range(len(xlocs)):
-                # get the direction vector of the thread
-                direction = intra_points[:, i] - surface_points[:, i]
-                direction /= np.linalg.norm(direction)
-
-                # if rand_insertion_angle is not None, rotate the direction vector
-                if rand_insertion_angle is not None:
-                    rho = np.random.uniform(-rand_insertion_angle, rand_insertion_angle)
-                    theta = np.random.uniform(0, 360)
-                    rot_rand, _, _ = parse_3d_orient([0, rho, theta], 'angle')
-                    rot_direction, _, _= parse_3d_orient(direction, 'direction')
-                    direction = rot_direction @ rot_rand
-
-                location = surface_points[:, i]
-                name = ''
-                j = i
-                while j >= 26:
-                    name = chr(65 + j % 26) + name
-                    j = j // 26 - 1
-                name = chr(65 + j) + name
-                threads.append(LinearEdgeThread(x=location[0], y=location[1], z=location[2],
-                                                orient=direction, orient_mode='direction',
-                                                name=name))
-            return cls(threads)
-
-        def __init__(self, threads, stim=None, preprocess=False, safe_mode=False):
-            """
-            Neuralink implant, consisting of one or more 
-            :py:class:`~pulse2percept.implants.cortex.NeuralinkThread`s.
-
-            This is just a wrapper class for EnsembleImplant, with extra
-            functionality for plotting in 3D and a factory method to easily create 
-            a Neuralink implant (see :py:meth:`~Neuralink.from_neuropythy`).
-
-            Parameters
-            ----------
-            threads : collection of NeuralinkThread
-                Collection (list) of NeuralinkThread objects to combine into an \
-                implant.
-            stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
-                A valid source type for the :py:class:`~pulse2percept.stimuli.Stimulus`
-                object (e.g., scalar, NumPy array, pulse train).
-            preprocess : bool or callable, optional
-                Either True/False to indicate whether to execute the implant's default
-                preprocessing method whenever a new stimulus is assigned, or a custom
-                function (callable).
-            safe_mode : bool, optional
-                If safe mode is enabled, only charge-balanced stimuli are allowed.
-            """
-            for thread in threads:
-                if not isinstance(thread, NeuralinkThread):
-                    raise TypeError("threads must be a collection of NeuralinkThread objects")
-            super().__init__(threads, stim=stim, preprocess=preprocess, safe_mode=safe_mode)
+        Returns
+        -------
+        Neuralink : p2p.implants.Neuralink
+            Neuralink ensemble implant created from the visual field map.
+        """
+        # import at runtime to avoid circular imports
+        from ...topography import NeuropythyMap, Grid2D
+        if not isinstance(vfmap, NeuropythyMap):
+            raise TypeError("vfmap must be a p2p.topography.NeuropythyMap")
         
+        if locs is None:
+            if xrange is None:
+                xrange = vfmap.xrange
+            if yrange is None:
+                yrange = vfmap.yrange
+            if xystep is None:
+                xystep = vfmap.xystep
+            
+            # make a grid of points
+            grid = Grid2D(xrange, yrange, xystep)
+            xlocs = grid.x.flatten()
+            ylocs = grid.y.flatten()
+        else:
+            xlocs = locs[:, 0]
+            ylocs = locs[:, 1]
+        
+        # thread will extend from the pial point to the intracortical point
+        # will be (3, npoints) shape
+        surface_points = np.array(vfmap.from_dva()[region](xlocs, ylocs, surface='pial'))
+        intra_points = np.array(vfmap.from_dva()[region](xlocs, ylocs, surface='midgray'))
+
+        threads = []
+        for i in range(len(xlocs)):
+            # get the direction vector of the thread
+            direction = intra_points[:, i] - surface_points[:, i]
+            direction /= np.linalg.norm(direction)
+
+            # if rand_insertion_angle is not None, rotate the direction vector
+            if rand_insertion_angle is not None:
+                rho = np.random.uniform(-rand_insertion_angle, rand_insertion_angle)
+                theta = np.random.uniform(0, 360)
+                rot_rand, _, _ = parse_3d_orient([0, rho, theta], 'angle')
+                rot_direction, _, _= parse_3d_orient(direction, 'direction')
+                direction = rot_direction @ rot_rand
+
+            location = surface_points[:, i]
+            name = ''
+            j = i
+            while j >= 26:
+                name = chr(65 + j % 26) + name
+                j = j // 26 - 1
+            name = chr(65 + j) + name
+            threads.append(LinearEdgeThread(x=location[0], y=location[1], z=location[2],
+                                            orient=direction, orient_mode='direction',
+                                            name=name))
+        return cls(threads)
+
+    def __init__(self, threads, stim=None, preprocess=False, safe_mode=False):
+        """
+        Neuralink implant, consisting of one or more 
+        :py:class:`~pulse2percept.implants.cortex.NeuralinkThread`s.
+
+        This is just a wrapper class for EnsembleImplant, with extra
+        functionality for plotting in 3D and a factory method to easily create 
+        a Neuralink implant (see :py:meth:`~Neuralink.from_neuropythy`).
+
+        Parameters
+        ----------
+        threads : collection of NeuralinkThread
+            Collection (list) of NeuralinkThread objects to combine into an \
+            implant.
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+            A valid source type for the :py:class:`~pulse2percept.stimuli.Stimulus`
+            object (e.g., scalar, NumPy array, pulse train).
+        preprocess : bool or callable, optional
+            Either True/False to indicate whether to execute the implant's default
+            preprocessing method whenever a new stimulus is assigned, or a custom
+            function (callable).
+        safe_mode : bool, optional
+            If safe mode is enabled, only charge-balanced stimuli are allowed.
+        """
+        for thread in threads:
+            if not isinstance(thread, NeuralinkThread):
+                raise TypeError("threads must be a collection of NeuralinkThread objects")
+        super().__init__(threads, stim=stim, preprocess=preprocess, safe_mode=safe_mode)
+    
+    def plot3D(self, ax=None, **kwargs):
+        """Plot the implant in 3D space
+        
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axes to plot on. If None, a new figure and axes will be created.
+        """
+        fig_kwargs = ['figsize']
+        if ax is None:
+            ax = plt.gca()
+            if ax.name != '3d':
+                plt.close()
+                fig = plt.figure(**{k:v for k, v in kwargs.items() if k in fig_kwargs})
+                ax = fig.add_subplot(111, projection='3d')
+        else:
+            if ax.name != '3d':
+                raise ValueError('ax must be a 3D axis')
+        
+        for thread in self.implant_objects:
+            thread.plot3D(ax=ax, **{k:v for k, v in kwargs.items() if k not in fig_kwargs})
+        return ax
