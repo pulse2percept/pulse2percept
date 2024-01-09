@@ -201,7 +201,6 @@ class LinearEdgeThread(NeuralinkThread):
         ax : matplotlib.axes.Axes
             Axes to plot on. If None, a new figure and axes will be created.
         """
-        
         fig_kwargs = ['figsize']
         if ax is None:
             ax = plt.gca()
