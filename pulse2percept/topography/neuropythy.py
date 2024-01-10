@@ -102,8 +102,9 @@ class NeuropythyMap(CorticalMap):
                 (ang, ecc) = (retinotopy['angle'], retinotopy['eccen'])
                 ang = np.pi/180 * (90 - ang)
                 (x, y) = (ecc*np.cos(ang), ecc*np.sin(ang))
-                # doesn't matter what surface is used here
-                submesh = subject.hemis[hemi].white_surface.submesh(ii)
+                # doesn't matter what surface is used here for dva_to_*
+                # but use pial so plotting is easier
+                submesh = subject.hemis[hemi].pial_surface.submesh(ii)
                 ii = submesh.labels
                 submesh = submesh.copy(coordinates=[x[ii], y[ii]])
                 vfmeshes.append(submesh)

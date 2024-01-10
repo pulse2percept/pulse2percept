@@ -240,16 +240,17 @@ class ScoreboardSpatial(CortexSpatial):
             separate = 1
             boundary = self.vfmap.left_offset/2
         if self.vfmap.ndim == 3:
-            return np.sum([
-                fast_scoreboard_3d(stim.data, x_el, y_el, z_el,
-                                self.grid[region].x.ravel(), 
-                                self.grid[region].y.ravel(),
-                                self.grid[region].z.ravel(),
-                                self.rho, self.thresh_percept, 
-                                separate, boundary, 
-                                self.n_threads)
-                for region in self.regions ],
-            axis = 0)
+            # return np.sum([
+            #     fast_scoreboard_3d(stim.data, x_el, y_el, z_el,
+            #                     self.grid[region].x.ravel(), 
+            #                     self.grid[region].y.ravel(),
+            #                     self.grid[region].z.ravel(),
+            #                     self.rho, self.thresh_percept, 
+            #                     separate, boundary, 
+            #                     self.n_threads)
+            #     for region in self.regions ],
+            # axis = 0)
+            pass
         elif self.vfmap.ndim == 2:
             return np.sum([
                 fast_scoreboard(stim.data, x_el, y_el,
