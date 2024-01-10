@@ -7,7 +7,7 @@ class NeuropythyMap(CorticalMap):
 
     split_map = False
 
-    def __init__(self, subject, cache_dir='~/.neuropythy_p2p', **params):
+    def __init__(self, subject, cache_dir=None, **params):
         """
         Uses the visual field maps from the neuropythy package
 
@@ -38,9 +38,9 @@ class NeuropythyMap(CorticalMap):
         except ImportError:
             raise ImportError("NeuropythyMap requires the neuropythy package.")
         super().__init__(**params)
-        self.cache_dir = os.path.expanduser(cache_dir)
+        self.cache_dir = os.path.join('~', '.neuropythy_p2p') if cache_dir is None else os.path.expanduser(cache_dir)
         self.subject = self.parse_subject(subject)
-        self.meshes = self.load_meshes(self.subject)
+        self.region_meshes = self.load_meshes(self.subject)
 
     
     def get_default_params(self):
@@ -49,6 +49,8 @@ class NeuropythyMap(CorticalMap):
             'regions' : ['v1'],
             # slightly move points at discontinuities
             'jitter_boundary' : True,
+            # no split map
+            'left_offset' : None,
         }
         return {**super().get_default_params(), **params}
 
@@ -93,7 +95,7 @@ class NeuropythyMap(CorticalMap):
         left, right = ny.vision.predict_retinotopy(subject, sym_angle=False)
 
         self.predicted_retinotopy = (left, right)
-        self.region_meshes = {}
+        region_meshes = {}
         for region in self.regions:
             region_lbl = int(region[-1])
             vfmeshes = []
@@ -108,7 +110,8 @@ class NeuropythyMap(CorticalMap):
                 ii = submesh.labels
                 submesh = submesh.copy(coordinates=[x[ii], y[ii]])
                 vfmeshes.append(submesh)
-            self.region_meshes[region] = tuple(vfmeshes)
+            region_meshes[region] = tuple(vfmeshes)
+        return region_meshes
             
 
     def dva_to_cortex(self, x, y, region='v1', hemi=None, surface='midgray'):
@@ -136,6 +139,8 @@ class NeuropythyMap(CorticalMap):
 
         Adapted from code courtesy of Noah Benson
         """
+        if x is None or y is None or x.size==0 or y.size==0:
+            return np.array([]), np.array([]), np.array([])
         import neuropythy as ny
         if hemi is None:
             raise ValueError("cannot deduce hemisphere")
@@ -158,7 +163,7 @@ class NeuropythyMap(CorticalMap):
             # Convert addresses to surface points.
             surf_pts = surf.unaddress(addr)
             # Fix the nans and return.
-            surf_pts[:, iinan] = 9999
+            surf_pts[:, iinan] = np.nan
             return surf_pts
         
 
@@ -185,7 +190,8 @@ class NeuropythyMap(CorticalMap):
         if self.jitter_boundary:
             # remove and discontinuities across x axis
             # shift to the same side as existing points
-            x[np.isclose(x, 0, rtol=0, atol=1e-7)] += np.copysign(1e-3, np.mean(x)) 
+            # this is a big shift but it's what neuroypythy needs to not be nan
+            x[np.isclose(x, 0, rtol=0, atol=.3)] = np.copysign(.3, np.mean(x)) 
         ret = np.zeros((3, x.size))
         idx = x < 0
         # l and r are (3, npoints)

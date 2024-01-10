@@ -91,85 +91,85 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
     return np.asarray(bright)  # Py overhead
 
 
-# @cdivision(True)
-# cpdef fast_scoreboard_3d(const float32[:, ::1] stim,
-#                       const float32[::1] xel,
-#                       const float32[::1] yel,
-#                       const float32[::1] zel,
-#                       const float32[::1] xgrid,
-#                       const float32[::1] ygrid,
-#                       const float32[::1] zgrid,
-#                       float32 rho,
-#                       float32 thresh_percept,
-#                       uint32 separate,
-#                       float32 offset,
-#                       uint32 n_threads):
-#     """Fast spatial response of the scoreboard model
+@cdivision(True)
+cpdef fast_scoreboard_3d(const float32[:, ::1] stim,
+                      const float32[::1] xel,
+                      const float32[::1] yel,
+                      const float32[::1] zel,
+                      const float32[::1] xgrid,
+                      const float32[::1] ygrid,
+                      const float32[::1] zgrid,
+                      float32 rho,
+                      float32 thresh_percept,
+                      uint32 separate,
+                      float32 offset,
+                      uint32 n_threads):
+    """Fast spatial response of the scoreboard model
 
-#     Parameters
-#     ----------
-#     stim : 2D float32 array
-#         A ``Stimulus.data`` container that contains electrodes as rows and
-#         time points as columns. The spatial response will be calculated for
-#         each column independently.
-#     xel, yel, zel : 1D float32 array
-#         An array of x or y coordinates for each electrode (microns)
-#     xgrid, ygrid, zgrid : 1D float32 array
-#         An array of x or y coordinates at which to calculate the spatial
-#         response (microns)
-#     rho : float32
-#         The rho parameter of the scoreboard model (microns): exponential decay
-#         constant for the current spread
-#     thresh_percept : float32
-#         Spatial responses smaller than ``thresh_percept`` will be set to zero
-#     n_threads: uint32
-#         Number of CPU threads to use during parallelization using OpenMP.
-#     separate: uint32 : 
-#         If nonzero, then points on different side of x=offset than the electrode
-#         will not contribute to the percept (used for cortical models)
-#     offset : float32
-#          Boundary for separation
-#     """
-#     cdef:
-#         int32 idx_el, idx_time, idx_space, idx_bright
-#         int32 n_el, n_time, n_space, n_bright
-#         float32[:, ::1] bright
-#         float32 px_bright, dist2, gauss, amp
+    Parameters
+    ----------
+    stim : 2D float32 array
+        A ``Stimulus.data`` container that contains electrodes as rows and
+        time points as columns. The spatial response will be calculated for
+        each column independently.
+    xel, yel, zel : 1D float32 array
+        An array of x or y coordinates for each electrode (microns)
+    xgrid, ygrid, zgrid : 1D float32 array
+        An array of x or y coordinates at which to calculate the spatial
+        response (microns)
+    rho : float32
+        The rho parameter of the scoreboard model (microns): exponential decay
+        constant for the current spread
+    thresh_percept : float32
+        Spatial responses smaller than ``thresh_percept`` will be set to zero
+    n_threads: uint32
+        Number of CPU threads to use during parallelization using OpenMP.
+    separate: uint32 : 
+        If nonzero, then points on different side of x=offset than the electrode
+        will not contribute to the percept (used for cortical models)
+    offset : float32
+         Boundary for separation
+    """
+    cdef:
+        int32 idx_el, idx_time, idx_space, idx_bright
+        int32 n_el, n_time, n_space, n_bright
+        float32[:, ::1] bright
+        float32 px_bright, dist2, gauss, amp
 
-#     n_el = stim.shape[0]
-#     n_time = stim.shape[1]
-#     n_space = len(xgrid)
-#     n_bright = n_time * n_space
+    n_el = stim.shape[0]
+    n_time = stim.shape[1]
+    n_space = len(xgrid)
+    n_bright = n_time * n_space
 
-#     # A flattened array containing n_time x n_space entries:
-#     bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
+    # A flattened array containing n_time x n_space entries:
+    bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
 
-#     for idx_bright in prange(n_bright, schedule='static', nogil=True, num_threads=n_threads):
-#         # For each entry in the output matrix:
-#         idx_space = idx_bright % n_space
-#         idx_time = idx_bright / n_space
+    for idx_bright in prange(n_bright, schedule='static', nogil=True, num_threads=n_threads):
+        # For each entry in the output matrix:
+        idx_space = idx_bright % n_space
+        idx_time = idx_bright / n_space
 
-#         if c_isnan(xgrid[idx_space]) or c_isnan(ygrid[idx_space]):
-#             bright[idx_space, idx_time] = 0.0
-#             continue
+        if c_isnan(xgrid[idx_space]) or c_isnan(ygrid[idx_space]):
+            bright[idx_space, idx_time] = 0.0
+            continue
 
-#         px_bright = 0.0
-#         for idx_el in range(n_el):
-#             amp = stim[idx_el, idx_time]
-#             if c_abs(amp) > 0:
-#                 if separate != 0:
-#                     if ((xel[idx_el] < offset)  !=  
-#                         (xgrid[idx_space] < offset)):
-#                         continue
-#                 dist2 = (c_pow(xgrid[idx_space] - xel[idx_el], 2) +
-#                          c_pow(ygrid[idx_space] - yel[idx_el], 2) +
-#                          c_pow(zgrid[idx_space] - zel[idx_el], 2))
-#                 gauss = c_exp(-dist2 / (2.0 * rho * rho))
-#                 px_bright = px_bright + amp * gauss
-#         if c_abs(px_bright) < thresh_percept:
-#             px_bright = 0.0
-#         bright[idx_space, idx_time] = px_bright  # Py overhead
-#     return np.asarray(bright)  # Py overhead
+        px_bright = 0.0
+        for idx_el in range(n_el):
+            amp = stim[idx_el, idx_time]
+            if c_abs(amp) > 0:
+                if separate != 0:
+                    if ((xel[idx_el] < offset)  !=  
+                        (xgrid[idx_space] < offset)):
+                        continue
+                dist2 = (c_pow(xgrid[idx_space] - xel[idx_el], 2) +
+                         c_pow(ygrid[idx_space] - yel[idx_el], 2) +
+                         c_pow(zgrid[idx_space] - zel[idx_el], 2))
+                gauss = c_exp(-dist2 / (2.0 * rho * rho))
+                px_bright = px_bright + amp * gauss
+        if c_abs(px_bright) < thresh_percept:
+            px_bright = 0.0
+        bright[idx_space, idx_time] = px_bright  # Py overhead
+    return np.asarray(bright)  # Py overhead
 
 
 
