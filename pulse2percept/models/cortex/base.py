@@ -103,7 +103,7 @@ class CortexSpatial(SpatialModel):
     
 
     def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
-             figsize=None, fc=None):
+             figsize=None, fc=None, **kwargs):
         """Plot the model
         Parameters
         ----------
@@ -124,6 +124,11 @@ class CortexSpatial(SpatialModel):
             (if exists) or create a new Axes object.
         figsize : (float, float), optional
             Desired (width, height) of the figure in inches
+        fc : matplotlib color, optional
+            Face color for the grid cells. If None, will use the default
+            matplotlib color cycle.
+        kwargs : dict, optional
+            Additional keyword arguments are passed on to Grid2D.plot()
         Returns
         -------
         ax : ``matplotlib.axes.Axes``
@@ -146,6 +151,20 @@ class CortexSpatial(SpatialModel):
             ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
             ax.set_xlabel('x (mm)')
             ax.set_ylabel('y (mm)')
+        return ax
+
+    def plot3D(self, style='scatter', ax=None, **kwargs):
+        if not self.is_built:
+            self.build()
+        ax = self.grid.plot3D(style=style, ax=ax, **kwargs)
+        # this is only ever for cortex right now so this is safe
+        ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
+        ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
+        ax.set_zticklabels(np.array(ax.get_zticks()) / 1000)
+        ax.set_xlabel('x (mm)')
+        ax.set_ylabel('y (mm)')
+        ax.set_zlabel('z (mm)')
+        ax.view_init(elev=20, azim=110)
         return ax
 
 

@@ -259,7 +259,7 @@ class Grid2D(PrettyPrint):
                 self._register_regions([region])
 
     def plot(self, style='hull', autoscale=True, zorder=None, ax=None,
-            figsize=None, fc=None, use_dva=False, legend=False):
+            figsize=None, fc=None, use_dva=False, legend=False, surface=None):
         """Plot the extension of the grid
 
         Parameters
@@ -289,6 +289,8 @@ class Grid2D(PrettyPrint):
         legend : bool, optional
             Whether to add a plot legend. The legend is always added if there 
             are 2 or more regions. This only applies if there is 1 region.
+        surface : str, optional
+            Name of the surface to plot (only for vfmaps that accept a surface argument)
         """
         if self.vfmap.ndim == 3:
             print("Warning: Plotting 2D projection of 3D data. You might want plot3D() instead")
@@ -358,16 +360,23 @@ class Grid2D(PrettyPrint):
                         continue
                     # transform the points
                     if transform is not None:
-                        vertices = np.array(transform(*vertices.T)[:2]).T
+                        if surface is None:
+                            vertices = np.array(transform(*vertices.T)[:2]).T
+                        else:
+                            vertices = np.array(transform(*vertices.T, surface=surface)[:2]).T
+                    labelstr = label if surface is None else f'{label}: {surface}'
                     patches.append(Polygon(vertices, alpha=0.3, ec='k', fc=color,
-                                        ls='--', zorder=zorder, label=label))
+                                        ls='--', zorder=zorder, label=labelstr))
                 legends.append(patches[0])
                 ax.add_collection(PatchCollection(patches, match_original=True,
-                                                zorder=zorder, label=label))
+                                                zorder=zorder, label=labelstr))
             else:
                 # Show either the convex hull or a scatter plot:
                 if transform is not None:
-                    x, y = transform(self.x, self.y)[:2] # :2 in case of 3D
+                    if surface is None:
+                        x, y = transform(self.x, self.y)[:2] # :2 in case of 3D
+                    else:
+                        x, y = transform(self.x, self.y, surface=surface)[:2]
                 points = np.vstack((x.ravel(), y.ravel()))
                 # Remove NaN values from the grid:
                 points = points[:, ~np.logical_or(*np.isnan(points))]
@@ -391,8 +400,9 @@ class Grid2D(PrettyPrint):
                                             fc=color, ls='--', zorder=zorder))
                     legends.append(ax.patches[-1])
                 elif style.lower() == 'scatter':
+                    labelstr = label if surface is None else f'{label}: {surface}'
                     ax.scatter(*points, alpha=0.4, ec=color, color=color, marker='+',
-                            zorder=zorder, label=label)
+                            zorder=zorder, label=labelstr)
         
         # This is needed in MPL 3.0.X to set the axis limit correctly:
         ax.autoscale_view()
@@ -408,7 +418,10 @@ class Grid2D(PrettyPrint):
 
         if len(transforms) > 1 or legend:
             if style in ['cell', 'hull']:
-                ax.legend(legends, [t[0] for t in transforms], loc='upper right')
+                if surface is None:
+                    ax.legend(legends, [t[0] for t in transforms], loc='upper right')
+                else:
+                    ax.legend(legends, [f'{t[0]}: {surface}' for t in transforms], loc='upper right')
             else:
                 ax.legend(loc='upper right')
 
@@ -466,7 +479,8 @@ class Grid2D(PrettyPrint):
         }    
         default_kwargs = {
             's' : 5,
-            'alpha' : 0.4,
+            'alpha' : 0.55,
+            'marker' : '+'
         }
 
         for region, transform in self.vfmap.from_dva().items():
@@ -494,26 +508,34 @@ class Grid2D(PrettyPrint):
             
             
             if style.lower() == 'scatter':
-                ax.scatter(cx, cy, cz, c=color, 
+                plotted = ax.scatter(cx, cy, cz, c=color, 
                            alpha=default_kwargs['alpha'] if 'alpha' not in kwargs.keys() else kwargs['alpha'],
                             s=default_kwargs['s'] if 's' not in kwargs.keys() else kwargs['s'],
+                            marker=default_kwargs['marker'] if 'marker' not in kwargs.keys() else kwargs['marker'],
+                            label=region if color_by == 'region' else None,
                            **{k:v for k, v in kwargs.items() if (k not in fig_kwargs and
                                                                  k not in default_kwargs.keys())})
             elif style.lower() == 'cell':
-                triangulation = mpl.tri.Triangulation(vx, vy)
-                ax.plot_trisurf(cx, cy, cz, triangles=triangulation.triangles,
-                                color=color,
-                                alpha=default_kwargs['alpha'] if 'alpha' not in kwargs.keys() else kwargs['alpha'],
-                                **{k:v for k, v in kwargs.items() if (k not in fig_kwargs and
-                                                                      k not in default_kwargs.keys())})
-        # this is only ever for cortex right now so this is safe
-        ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
-        ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
-        ax.set_zticklabels(np.array(ax.get_zticks()) / 1000)
-        ax.set_xlabel('x (mm)')
-        ax.set_ylabel('y (mm)')
-        ax.set_zlabel('z (mm)')
-
+                # need to plot both hemispheres separately
+                left = vx > 0
+                right = vx < 0
+                for i, idx in enumerate([right, left]):
+                    if np.sum(idx) == 0:
+                        continue
+                    triangulation = mpl.tri.Triangulation(vx[idx], vy[idx])
+                    label = None
+                    if i == 0 and color_by == 'region':
+                        label = region
+                    plotted = ax.plot_trisurf(cx[idx], cy[idx], cz[idx], triangles=triangulation.triangles,
+                                    color=color, label=label,
+                                    alpha=default_kwargs['alpha'] if 'alpha' not in kwargs.keys() else kwargs['alpha'],
+                                    **{k:v for k, v in kwargs.items() if (k not in fig_kwargs and
+                                                                        k not in default_kwargs.keys())})
+        if color_by == 'region':
+            ax.legend()
+        else:
+            plt.colorbar(plotted)
+        
         return ax
 
         

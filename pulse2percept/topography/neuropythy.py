@@ -169,7 +169,7 @@ class NeuropythyMap(CorticalMap):
             surf_pts = surf.unaddress(addr)
             # Fix the nans and return.
             surf_pts[:, iinan] = np.nan
-            return surf_pts * 1000
+            return np.array(surf_pts * 1000, dtype='float32')
         
 
     def dva_to_v1(self, x, y, surface='midgray'):
@@ -198,7 +198,7 @@ class NeuropythyMap(CorticalMap):
             # this won't get all of them, and really we should be using a threshold based on
             # angle, not x and y coords. But this will be decent for near the fovea
             x[np.isclose(x, 0, rtol=0, atol=self.jitter_thresh)] = np.copysign(self.jitter_thresh, np.mean(x)) 
-        ret = np.zeros((3, x.size))
+        ret = np.zeros((3, x.size), dtype='float32')
         idx = x < 0
         # l and r are (3, npoints)
         r = self.dva_to_cortex(x[idx], y[idx], region='v1', hemi='rh', surface=surface)
@@ -234,7 +234,7 @@ class NeuropythyMap(CorticalMap):
             # shift to the same side as existing points
             x[np.isclose(x, 0, rtol=0, atol=self.jitter_thresh)] = np.copysign(self.jitter_thresh, np.mean(x)) 
             y[np.isclose(y, 0, rtol=0, atol=self.jitter_thresh)] = np.copysign(self.jitter_thresh, np.mean(y)) 
-        ret = np.zeros((3, x.size))
+        ret = np.zeros((3, x.size), dtype='float32')
         idx = x < 0
         # l and r are (3, npoints)
         r = self.dva_to_cortex(x[idx], y[idx], region='v2', hemi='rh', surface=surface)
@@ -269,7 +269,7 @@ class NeuropythyMap(CorticalMap):
             # shift to the same side as existing points
             x[np.isclose(x, 0, rtol=0, atol=self.jitter_thresh)] = np.copysign(self.jitter_thresh, np.mean(x)) 
             y[np.isclose(y, 0, rtol=0, atol=self.jitter_thresh)] = np.copysign(self.jitter_thresh, np.mean(y)) 
-        ret = np.zeros((3, x.size))
+        ret = np.zeros((3, x.size), dtype='float32')
         idx = x < 0
         # l and r are (3, npoints)
         r = self.dva_to_cortex(x[idx], y[idx], region='v3', hemi='rh', surface=surface)

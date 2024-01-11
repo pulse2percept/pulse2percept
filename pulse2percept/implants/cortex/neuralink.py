@@ -299,9 +299,13 @@ class Neuralink(EnsembleImplant):
         # will be (3, npoints) shape
         surface_points = np.array(vfmap.from_dva()[region](xlocs, ylocs, surface='pial'))
         intra_points = np.array(vfmap.from_dva()[region](xlocs, ylocs, surface='midgray'))
+        surface_points= surface_points[:, np.isnan(surface_points).sum(axis=0) == 0]
+        intra_points = intra_points[:, np.isnan(intra_points).sum(axis=0) == 0]
+        if len(surface_points) != len(intra_points):
+            raise ValueError('Unable to create implant, try using jitter_boundary=True')
 
         threads = {}
-        for i in range(len(xlocs)):
+        for i in range(len(surface_points[0])):
             # get the direction vector of the thread
             direction = intra_points[:, i] - surface_points[:, i]
             direction /= np.linalg.norm(direction)
@@ -321,7 +325,7 @@ class Neuralink(EnsembleImplant):
                 name = chr(65 + j % 26) + name
                 j = j // 26 - 1
             name = chr(65 + j) + name
-            
+
             threads[name] = Thread(x=location[0], y=location[1], z=location[2],
                                             orient=direction, orient_mode='direction')
         return cls(threads)
