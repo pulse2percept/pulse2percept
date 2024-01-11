@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from ..ensemble import EnsembleImplant
 from ..electrodes import Electrode
 from ..electrode_arrays import ElectrodeArray
+from ..base import ProsthesisSystem
 from ...utils import parse_3d_orient
 
 
@@ -27,8 +28,7 @@ class EllipsoidElectrode(Electrode):
             Radii of the ellipsoid along the x, y, and z axes.
         orient : np.ndarray with shape (3) or (3, 3)
             Orientation of the thread in 3D space. 
-            If dim=2, orient defaults to being perpendicular to cortical surface.
-            If dim=3, orient defaults to being parallel to the z axis.
+            orient defaults to positive z direction
 
             orient can be:
             - A length 3 vector specifying the direction that the 
@@ -53,7 +53,7 @@ class EllipsoidElectrode(Electrode):
                                         'linewidth': 2,
                                         'ec': (0.6, 0.6, 0.6, 1),
                                         'fc': (1, 1, 1, 0.6)}
-        self.plot_3d_kwargs = {'color': 'yellow', 'alpha': 0.9,
+        self.plot_3d_kwargs = {'color': 'yellow', 'alpha': 0.95,
                                'rstride': 2, 'cstride': 2}
         
         self.rot, self.angles, self.direction = parse_3d_orient(orient, orient_mode)
@@ -106,7 +106,7 @@ class EllipsoidElectrode(Electrode):
         return ax
 
 
-class NeuralinkThread(ElectrodeArray, metaclass=ABCMeta):
+class NeuralinkThread(ProsthesisSystem, metaclass=ABCMeta):
     """Base class for Neuralink threads"""
     pass
 
@@ -117,7 +117,8 @@ class LinearEdgeThread(NeuralinkThread):
     
     def __init__(self, x=0, y=0, z=0, orient=np.array([0,0,1]), orient_mode='direction', 
                  r=5, n_elecs=32, spacing=50, insertion_depth=0, 
-                 electrode=EllipsoidElectrode, name=None):
+                 electrode=EllipsoidElectrode, name=None,
+                 stim=None, preprocess=False, safe_mode=False):
         """
         Neuralink thread
         
@@ -152,8 +153,6 @@ class LinearEdgeThread(NeuralinkThread):
             Electrode class to use for the individual electrodes.
             Must accept x, y, z, and orient parameters, and contain a plot_patch
             and plot_kwargs if dim=2 or a plot_3d method if dim=3.
-        name : str
-            Name of the thread.
         """
         self.x, self.y, self.z = x, y, z
         self.loc = np.array([x, y, z])
@@ -161,13 +160,12 @@ class LinearEdgeThread(NeuralinkThread):
         self.n_elecs = n_elecs
         self.spacing = spacing
         self.electrode = electrode
-        self.name = name
         self.insertion_depth = insertion_depth
         # microns out of cortex that thread should extend (for visualization only)
         self.extracortical_depth = 1000
         self.thread_length = self.n_elecs * self.spacing + self.extracortical_depth + self.insertion_depth
         self.rot, self.angles, self.direction = parse_3d_orient(orient, orient_mode)
-        self.plot_3d_kwargs = {'color': 'gray', 'alpha': 0.5,
+        self.plot_3d_kwargs = {'color': 'gray', 'alpha': 0.75,
                                'rstride': 2, 'cstride': 2}
         
         # calculate the coordinates of the electrodes
@@ -183,14 +181,16 @@ class LinearEdgeThread(NeuralinkThread):
         for loc in electrode_locs:
             electrodes.append(self.electrode(loc[0], loc[1], loc[2], orient=self.rot))
         
-        super().__init__(electrodes)
+        self.earray = ElectrodeArray(electrodes)
+        self.safe_mode = safe_mode
+        self.preprocess = preprocess
+        self.stim = stim
 
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
-        params.update({'angles' : self.angles, 'r': self.r, 'n_elecs': self.n_elecs, 'spacing': self.spacing, 
-                       'name': self.name})
+        params.update({'angles' : self.angles, 'r': self.r, 'n_elecs': self.n_elecs, 'spacing': self.spacing})
         return params
     
     def plot3D(self, ax=None, **kwargs):
@@ -237,7 +237,7 @@ class Neuralink(EnsembleImplant):
 
     @classmethod
     def from_neuropythy(cls, vfmap, locs=None, xrange=None, yrange=None, xystep=None, 
-                        rand_insertion_angle=None, region='v1'):
+                        rand_insertion_angle=None, region='v1', Thread=LinearEdgeThread):
         """
         Create a neuralink implant from a neuropythy visual field map.
 
@@ -265,6 +265,9 @@ class Neuralink(EnsembleImplant):
             with a maximum azimuthal rotation of rand_insertion_angle degrees.
         region : str, optional
             Region of cortex to create implant in.
+        Thread : NeuralinkThread, optional
+            Thread class to use for the implant. Must accept x, y, z, and orient
+            parameters.
 
         Returns
         -------
@@ -297,7 +300,7 @@ class Neuralink(EnsembleImplant):
         surface_points = np.array(vfmap.from_dva()[region](xlocs, ylocs, surface='pial'))
         intra_points = np.array(vfmap.from_dva()[region](xlocs, ylocs, surface='midgray'))
 
-        threads = []
+        threads = {}
         for i in range(len(xlocs)):
             # get the direction vector of the thread
             direction = intra_points[:, i] - surface_points[:, i]
@@ -318,10 +321,10 @@ class Neuralink(EnsembleImplant):
                 name = chr(65 + j % 26) + name
                 j = j // 26 - 1
             name = chr(65 + j) + name
-            threads.append(LinearEdgeThread(x=location[0], y=location[1], z=location[2],
-                                            orient=direction, orient_mode='direction',
-                                            name=name))
+            threads[name] = Thread(x=location[0], y=location[1], z=location[2],
+                                            orient=direction, orient_mode='direction')
         return cls(threads)
+    
 
     def __init__(self, threads, stim=None, preprocess=False, safe_mode=False):
         """
@@ -347,9 +350,14 @@ class Neuralink(EnsembleImplant):
         safe_mode : bool, optional
             If safe mode is enabled, only charge-balanced stimuli are allowed.
         """
-        for thread in threads:
-            if not isinstance(thread, NeuralinkThread):
-                raise TypeError("threads must be a collection of NeuralinkThread objects")
+        if isinstance(threads, dict):
+            for key, thread in threads.items():
+                if not isinstance(thread, NeuralinkThread):
+                    raise TypeError("threads must be a collection of NeuralinkThread objects")
+        else: 
+            for thread in threads:
+                if not isinstance(thread, NeuralinkThread):
+                    raise TypeError("threads must be a collection of NeuralinkThread objects")
         super().__init__(threads, stim=stim, preprocess=preprocess, safe_mode=safe_mode)
     
     def plot3D(self, ax=None, **kwargs):
@@ -371,6 +379,6 @@ class Neuralink(EnsembleImplant):
             if ax.name != '3d':
                 raise ValueError('ax must be a 3D axis')
         
-        for thread in self.implant_objects:
+        for thread in self.implants.values():
             thread.plot3D(ax=ax, **{k:v for k, v in kwargs.items() if k not in fig_kwargs})
         return ax

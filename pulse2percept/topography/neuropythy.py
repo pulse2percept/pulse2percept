@@ -31,14 +31,17 @@ class NeuropythyMap(CorticalMap):
         regions : list of str
             The regions to include in the map ('v1', 'v2', and/or 'v3'). 
             The default is ['v1'].
-            
+        jitter_boundary : bool
+            If True, slightly move points at discontinuities. Default is False.
+            Note that with neuropythy, there will always be some discontinuities that 
+            remain, depending on the subject.
         """
         try:
             import neuropythy as ny
         except ImportError:
             raise ImportError("NeuropythyMap requires the neuropythy package.")
         super().__init__(**params)
-        self.cache_dir = os.path.join('~', '.neuropythy_p2p') if cache_dir is None else os.path.expanduser(cache_dir)
+        self.cache_dir = os.path.expanduser(os.path.join('~', '.neuropythy_p2p')) if cache_dir is None else os.path.expanduser(cache_dir)
         self.subject = self.parse_subject(subject)
         self.region_meshes = self.load_meshes(self.subject)
 
@@ -48,7 +51,9 @@ class NeuropythyMap(CorticalMap):
             'ndim' : 3,
             'regions' : ['v1'],
             # slightly move points at discontinuities
-            'jitter_boundary' : True,
+            'jitter_boundary' : False,
+            # jitter points within this close of boundary
+            'jitter_thresh' : 0.3,
             # no split map
             'left_offset' : None,
         }
@@ -164,7 +169,7 @@ class NeuropythyMap(CorticalMap):
             surf_pts = surf.unaddress(addr)
             # Fix the nans and return.
             surf_pts[:, iinan] = np.nan
-            return surf_pts
+            return surf_pts * 1000
         
 
     def dva_to_v1(self, x, y, surface='midgray'):
@@ -190,8 +195,9 @@ class NeuropythyMap(CorticalMap):
         if self.jitter_boundary:
             # remove and discontinuities across x axis
             # shift to the same side as existing points
-            # this is a big shift but it's what neuroypythy needs to not be nan
-            x[np.isclose(x, 0, rtol=0, atol=.3)] = np.copysign(.3, np.mean(x)) 
+            # this won't get all of them, and really we should be using a threshold based on
+            # angle, not x and y coords. But this will be decent for near the fovea
+            x[np.isclose(x, 0, rtol=0, atol=self.jitter_thresh)] = np.copysign(self.jitter_thresh, np.mean(x)) 
         ret = np.zeros((3, x.size))
         idx = x < 0
         # l and r are (3, npoints)
@@ -226,8 +232,8 @@ class NeuropythyMap(CorticalMap):
         if self.jitter_boundary:
             # remove and discontinuities across x axis
             # shift to the same side as existing points
-            x[np.isclose(x, 0, rtol=0, atol=1e-7)] += np.copysign(1e-3, np.mean(x)) 
-            y[np.isclose(y, 0, rtol=0, atol=1e-7)] += np.copysign(1e-3, np.mean(y)) 
+            x[np.isclose(x, 0, rtol=0, atol=self.jitter_thresh)] = np.copysign(self.jitter_thresh, np.mean(x)) 
+            y[np.isclose(y, 0, rtol=0, atol=self.jitter_thresh)] = np.copysign(self.jitter_thresh, np.mean(y)) 
         ret = np.zeros((3, x.size))
         idx = x < 0
         # l and r are (3, npoints)
@@ -261,8 +267,8 @@ class NeuropythyMap(CorticalMap):
         if self.jitter_boundary:
             # remove and discontinuities across x axis
             # shift to the same side as existing points
-            x[np.isclose(x, 0, rtol=0, atol=1e-7)] += np.copysign(1e-3, np.mean(x)) 
-            y[np.isclose(y, 0, rtol=0, atol=1e-7)] += np.copysign(1e-3, np.mean(y)) 
+            x[np.isclose(x, 0, rtol=0, atol=self.jitter_thresh)] = np.copysign(self.jitter_thresh, np.mean(x)) 
+            y[np.isclose(y, 0, rtol=0, atol=self.jitter_thresh)] = np.copysign(self.jitter_thresh, np.mean(y)) 
         ret = np.zeros((3, x.size))
         idx = x < 0
         # l and r are (3, npoints)

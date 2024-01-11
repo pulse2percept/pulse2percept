@@ -2,7 +2,7 @@
 
 import numpy as np
 
-def parse_3d_orient(orient, orient_mode):
+def parse_3d_orient(orient, orient_mode='direction'):
     """Parse the orient parameter
     Given either a 3D rotation matrix, vector of angles of rotation,
     or direction vector, this function will calculate and return the 
@@ -63,15 +63,15 @@ def parse_3d_orient(orient, orient_mode):
     def extract_angles(direction):
         """Extract angles of rotation from direction vector"""
         rot_x = 0
-        rot_y = np.arctan2(direction[0], direction[2]) # i.e. phi
+        rot_y = np.arctan2(np.sqrt(direction[0]**2 + direction[1]**2), direction[2]) # i.e. phi
         rot_z = np.arctan2(direction[1], direction[0]) # i.e. theta
         angles = np.array([rot_x, rot_y, rot_z])
         return angles
 
-    if isinstance(orient, list):
+    if isinstance(orient, list) or isinstance(orient, tuple):
         orient = np.array(orient)
     if not isinstance(orient, np.ndarray) or orient.shape not in [(3,), (3, 3)]:
-        raise ValueError(f'Incorrect value for orient parameter {orient}, ', 
+        raise TypeError(f'Incorrect type for orient parameter {orient}, ', 
                          'please pass an array with shape (3) or (3, 3)')
     if orient.ndim == 1:
         if orient_mode == 'direction':
@@ -85,7 +85,7 @@ def parse_3d_orient(orient, orient_mode):
             angles = extract_angles(direction)
             rot = construct_rot_matrix(angles)
         elif orient_mode == 'angle':
-            angles = orient
+            angles = orient * np.pi / 180
             rot = construct_rot_matrix(angles)
             direction = extract_direction(rot)
         else:
@@ -98,4 +98,4 @@ def parse_3d_orient(orient, orient_mode):
         direction = extract_direction(rot)
         angles = extract_angles(direction)
 
-    return rot, angles, direction
+    return rot, angles * 180 / np.pi, direction

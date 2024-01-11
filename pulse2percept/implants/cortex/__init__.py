@@ -16,7 +16,7 @@
 from .orion import Orion
 from .cortivis import Cortivis
 from .icvp import ICVP
-from .neuralink import EllipsoidElectrode, NeuralinkThread, LinearEdgeThread
+from .neuralink import EllipsoidElectrode, NeuralinkThread, LinearEdgeThread, Neuralink
 
 __all__ = [
     "Orion",
