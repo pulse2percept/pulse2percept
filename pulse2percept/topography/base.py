@@ -15,7 +15,6 @@ from matplotlib.collections import PatchCollection
 import matplotlib as mpl
 from copy import copy, deepcopy
 
-from .neuropythy import NeuropythyMap
 from ..utils.base import PrettyPrint
 from ..utils.constants import ZORDER
 from ..models import BaseModel
@@ -438,6 +437,8 @@ class Grid2D(PrettyPrint):
             Additional keyword arguments to pass to plt.figure() (figsize) or ax.scatter() or
             ax.plot_trisurf()
         """
+        # avoid circular import
+        from .neuropythy import NeuropythyMap
         fig_kwargs = ['figsize']
         if ax is None:
             ax = plt.gca()
@@ -508,8 +509,10 @@ class Grid2D(PrettyPrint):
         # this is only ever for cortex right now so this is safe
         ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
         ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
+        ax.set_zticklabels(np.array(ax.get_zticks()) / 1000)
         ax.set_xlabel('x (mm)')
         ax.set_ylabel('y (mm)')
+        ax.set_zlabel('z (mm)')
 
         return ax
 

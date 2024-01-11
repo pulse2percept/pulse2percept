@@ -165,7 +165,7 @@ class LinearEdgeThread(NeuralinkThread):
         self.extracortical_depth = 1000
         self.thread_length = self.n_elecs * self.spacing + self.extracortical_depth + self.insertion_depth
         self.rot, self.angles, self.direction = parse_3d_orient(orient, orient_mode)
-        self.plot_3d_kwargs = {'color': 'gray', 'alpha': 0.85,
+        self.plot_3d_kwargs = {'color': 'gray', 'alpha': 0.75,
                                'rstride': 2, 'cstride': 2}
         
         # calculate the coordinates of the electrodes
@@ -321,6 +321,7 @@ class Neuralink(EnsembleImplant):
                 name = chr(65 + j % 26) + name
                 j = j // 26 - 1
             name = chr(65 + j) + name
+            
             threads[name] = Thread(x=location[0], y=location[1], z=location[2],
                                             orient=direction, orient_mode='direction')
         return cls(threads)
