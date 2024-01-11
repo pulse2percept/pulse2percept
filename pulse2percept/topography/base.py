@@ -15,6 +15,7 @@ from matplotlib.collections import PatchCollection
 import matplotlib as mpl
 from copy import copy, deepcopy
 
+from .neuropythy import NeuropythyMap
 from ..utils.base import PrettyPrint
 from ..utils.constants import ZORDER
 from ..models import BaseModel
@@ -290,6 +291,8 @@ class Grid2D(PrettyPrint):
             Whether to add a plot legend. The legend is always added if there 
             are 2 or more regions. This only applies if there is 1 region.
         """
+        if self.vfmap.ndim == 3:
+            print("Warning: Plotting 2D projection of 3D data. You might want plot3D() instead")
         if style.lower() not in ['hull', 'scatter', 'cell']:
             raise ValueError(f'Unknown plotting style "{style}". Choose from: '
                              f'"hull", "scatter", "cell"')
@@ -356,7 +359,7 @@ class Grid2D(PrettyPrint):
                         continue
                     # transform the points
                     if transform is not None:
-                        vertices = np.array(transform(*vertices.T)).T
+                        vertices = np.array(transform(*vertices.T)[:2]).T
                     patches.append(Polygon(vertices, alpha=0.3, ec='k', fc=color,
                                         ls='--', zorder=zorder, label=label))
                 legends.append(patches[0])
@@ -365,7 +368,7 @@ class Grid2D(PrettyPrint):
             else:
                 # Show either the convex hull or a scatter plot:
                 if transform is not None:
-                    x, y = transform(self.x, self.y)
+                    x, y = transform(self.x, self.y)[:2] # :2 in case of 3D
                 points = np.vstack((x.ravel(), y.ravel()))
                 # Remove NaN values from the grid:
                 points = points[:, ~np.logical_or(*np.isnan(points))]
@@ -411,6 +414,109 @@ class Grid2D(PrettyPrint):
                 ax.legend(loc='upper right')
 
         return ax
+    
+    def plot3D(self, style='scatter', ax=None, surface='midgray', color_by='region',
+               **kwargs):
+        """
+        Plots grid points in 3D space.
+        Note, you must have a 3D visual field map to use this method.
+        Parameters
+        ----------
+        style : {'scatter', 'cell'}, optional
+            * 'scatter': Scatter plot all grid points
+            * 'cell': Show the outline of each grid cell as a polygon. Note that
+              this can be costly for a high-resolution grid.
+        ax : matplotlib.axes._subplots.AxesSubplot, optional
+            A Matplotlib axes object. If None, will either use the current axes
+            (if exists) or create a new Axes object
+        surface : str, optional
+            Name of the cortical surface to plot (only with neuropythy vfmap)
+        color_by : str, optional
+            What to color the points by. Options are 'region' (default), 'eccentricity',
+            or 'angle'
+        kwargs : dict
+            Additional keyword arguments to pass to plt.figure() (figsize) or ax.scatter() or
+            ax.plot_trisurf()
+        """
+        fig_kwargs = ['figsize']
+        if ax is None:
+            ax = plt.gca()
+            if ax.name != '3d':
+                plt.close()
+                fig = plt.figure(**{k:v for k, v in kwargs.items() if k in fig_kwargs})
+                ax = fig.add_subplot(111, projection='3d')
+        else:
+            if ax.name != '3d':
+                raise ValueError('ax must be a 3D axis')
+            
+        if self.vfmap.ndim != 3:
+            raise ValueError('vfmap must be 3D to plot in 3D')
+        if style.lower() not in ['scatter', 'cell']:
+            raise ValueError(f'Unknown plotting style "{style}". Choose from: '
+                             f'"scatter", "cell"')
+        if surface not in ['pial', 'midgray', 'white']:
+            raise ValueError(f'Unknown surface "{surface}". Choose from: '
+                             f'"pial", "midgray", "white"')
+        
+        color_map = {
+            'v1' : 'red',
+            'v2' : 'orange',
+            'v3' : 'green'
+        }    
+        default_kwargs = {
+            's' : 5,
+            'alpha' : 0.4,
+        }
+
+        for region, transform in self.vfmap.from_dva().items():
+            # get 3D coordinates
+            vx, vy = self.x.flatten(), self.y.flatten()
+            if isinstance(self.vfmap, NeuropythyMap):
+                cx, cy, cz = transform(vx, vy, surface=surface)
+            else:
+                cx, cy, cz = transform(vx, vy)
+            
+            # get color
+            if 'c' in kwargs.keys():
+                color = kwargs['c']
+            elif color_by == 'region':
+                color = color_map[region] if region in color_map.keys() else 'gray'
+            elif color_by == 'eccentricity':
+                ecc = np.sqrt(vx**2 + vy**2)
+                color = ecc
+            elif color_by == 'angle':
+                angle = np.arctan2(vy, vx)
+                color = angle
+            else:
+                raise ValueError(f'Unknown color_by "{color_by}". Choose from: '
+                                 f'"region", "eccentricity", "angle"')
+            
+            
+            if style.lower() == 'scatter':
+                ax.scatter(cx, cy, cz, c=color, 
+                           alpha=default_kwargs['alpha'] if 'alpha' not in kwargs.keys() else kwargs['alpha'],
+                            s=default_kwargs['s'] if 's' not in kwargs.keys() else kwargs['s'],
+                           **{k:v for k, v in kwargs.items() if (k not in fig_kwargs and
+                                                                 k not in default_kwargs.keys())})
+            elif style.lower() == 'cell':
+                triangulation = mpl.tri.Triangulation(vx, vy)
+                ax.plot_trisurf(cx, cy, cz, triangles=triangulation.triangles,
+                                color=color,
+                                alpha=default_kwargs['alpha'] if 'alpha' not in kwargs.keys() else kwargs['alpha'],
+                                **{k:v for k, v in kwargs.items() if (k not in fig_kwargs and
+                                                                      k not in default_kwargs.keys())})
+        # this is only ever for cortex right now so this is safe
+        ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
+        ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
+        ax.set_xlabel('x (mm)')
+        ax.set_ylabel('y (mm)')
+
+        return ax
+
+        
+            
+
+
     
     def __deepcopy__(self, memodict={}):
         if id(self) in memodict:

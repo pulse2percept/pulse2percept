@@ -165,7 +165,7 @@ class LinearEdgeThread(NeuralinkThread):
         self.extracortical_depth = 1000
         self.thread_length = self.n_elecs * self.spacing + self.extracortical_depth + self.insertion_depth
         self.rot, self.angles, self.direction = parse_3d_orient(orient, orient_mode)
-        self.plot_3d_kwargs = {'color': 'gray', 'alpha': 0.75,
+        self.plot_3d_kwargs = {'color': 'gray', 'alpha': 0.85,
                                'rstride': 2, 'cstride': 2}
         
         # calculate the coordinates of the electrodes
