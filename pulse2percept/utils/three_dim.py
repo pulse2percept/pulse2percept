@@ -92,7 +92,12 @@ def parse_3d_orient(orient, orient_mode='direction'):
             raise ValueError('orient_mode must be either "direction" or "angle".')
         
     elif orient.ndim == 2:
-        if not np.allclose(np.linalg.inv(orient), orient.T) or orient.shape != (3, 3):
+        try:
+            cond = np.allclose(np.linalg.inv(orient), orient.T)
+        except np.linalg.LinAlgError:
+            # singular matrix
+            cond = False
+        if not cond:
             raise ValueError(f'Invalid rotation matrix {orient}')
         rot = orient
         direction = extract_direction(rot)
