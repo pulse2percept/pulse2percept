@@ -13,7 +13,7 @@ class EnsembleImplant(ProsthesisSystem):
         """Ensemble implant
 
         An ensemble implant combines multiple implants into one larger electrode array
-        for the purpose of modeling tandem implants, e.g. CORTIVIS, ICVP
+        for the purpose of modeling tandem implants, e.g. ICVP, Neuralink
         
         Parameters
         ----------

@@ -85,7 +85,7 @@ class TestMapDouble(VisualFieldMap):
 def test_Grid2D_plot(vfmap):
     plt.figure()
     # This test is slow
-    grid = Grid2D((-20, 20), (-40, 40), step=0.5)
+    grid = Grid2D((-20, 20), (-40, 40), step=1)
     ax = grid.plot(use_dva=True)
     npt.assert_equal(isinstance(ax, Axes), True)
     npt.assert_almost_equal(ax.get_xlim(), (-22, 22))

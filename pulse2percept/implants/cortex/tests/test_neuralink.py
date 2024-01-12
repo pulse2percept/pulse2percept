@@ -38,7 +38,8 @@ def test_LinearEdgeThread():
         npt.assert_almost_equal(e.y, 0)
         npt.assert_almost_equal(e.rot, thread.rot)
         zs.append(e.z)
-    npt.assert_almost_equal(np.all(np.diff(zs) == thread.spacing), True)
+    print(zs)
+    npt.assert_equal(np.allclose(np.diff(zs), thread.spacing), True)
 
 
     thread = LinearEdgeThread(orient=[1, 0, 0])
@@ -47,7 +48,7 @@ def test_LinearEdgeThread():
         npt.assert_almost_equal(e.z, -thread.r - 7 // 2)
         npt.assert_almost_equal(e.y, 0)
         xs.append(e.x)
-    npt.assert_almost_equal(np.all(np.diff(xs) == thread.spacing), True)
+    npt.assert_equal(np.allclose(np.diff(xs), thread.spacing), True)
 
     thread = LinearEdgeThread(orient=[1, 1, 1], spacing=np.sqrt(3))
     locs = []
@@ -56,7 +57,7 @@ def test_LinearEdgeThread():
         npt.assert_almost_equal(e.y, i)
         npt.assert_almost_equal(e.z, i)
         locs.append([e.x, e.y, e.z])
-    npt.assert_almost_equal(np.all(np.diff(locs, axis=0) == 1), True)
+    npt.assert_equal(np.allclose(np.diff(locs, axis=0), 1), True)
 
 
 

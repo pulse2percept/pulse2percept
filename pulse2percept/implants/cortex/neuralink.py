@@ -169,7 +169,7 @@ class LinearEdgeThread(NeuralinkThread):
                                'rstride': 2, 'cstride': 2}
         
         # calculate the coordinates of the electrodes
-        electrodes = []
+        electrodes = {}
         start = self.loc + self.insertion_depth * self.direction 
         # this is a little hacky, but basically, we don't want the electrodes
         # exactly on the thread, but rather, on the edge. 
@@ -178,8 +178,8 @@ class LinearEdgeThread(NeuralinkThread):
         # also, the exact specs are unclear from the paper here
         offset = parse_3d_orient([1, 0, 0], 'direction')[0] @ self.direction * (self.r + 7//2) 
         electrode_locs = [start + i*self.spacing*self.direction + offset for i in range(self.n_elecs)]
-        for loc in electrode_locs:
-            electrodes.append(self.electrode(loc[0], loc[1], loc[2], orient=self.rot))
+        for i, loc in enumerate(electrode_locs):
+            electrodes[str(i)] = self.electrode(loc[0], loc[1], loc[2], orient=self.rot)
         
         self.earray = ElectrodeArray(electrodes)
         self.safe_mode = safe_mode

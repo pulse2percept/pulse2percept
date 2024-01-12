@@ -292,7 +292,7 @@ class Grid2D(PrettyPrint):
         surface : str, optional
             Name of the surface to plot (only for vfmaps that accept a surface argument)
         """
-        if self.vfmap.ndim == 3:
+        if self.vfmap is not None and self.vfmap.ndim == 3:
             print("Warning: Plotting 2D projection of 3D data. You might want plot3D() instead")
         if style.lower() not in ['hull', 'scatter', 'cell']:
             raise ValueError(f'Unknown plotting style "{style}". Choose from: '
