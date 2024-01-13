@@ -38,7 +38,6 @@ def test_LinearEdgeThread():
         npt.assert_almost_equal(e.y, 0)
         npt.assert_almost_equal(e.rot, thread.rot)
         zs.append(e.z)
-    print(zs)
     npt.assert_equal(np.allclose(np.diff(zs), thread.spacing), True)
 
 
@@ -50,14 +49,14 @@ def test_LinearEdgeThread():
         xs.append(e.x)
     npt.assert_equal(np.allclose(np.diff(xs), thread.spacing), True)
 
-    thread = LinearEdgeThread(orient=[1, 1, 1], spacing=np.sqrt(3))
+    thread = LinearEdgeThread(orient=[1, 1, 1], spacing=3*np.sqrt(3))
     locs = []
     for i, e in enumerate(thread.electrode_objects):
-        npt.assert_almost_equal(e.x, i)
-        npt.assert_almost_equal(e.y, i)
-        npt.assert_almost_equal(e.z, i)
+        npt.assert_almost_equal(e.x, 3*i + 4.618802, decimal=5)
+        npt.assert_almost_equal(e.y, 3*i + 4.618802, decimal=5)
+        npt.assert_almost_equal(e.z, 3*i - 4.618802, decimal=5)
         locs.append([e.x, e.y, e.z])
-    npt.assert_equal(np.allclose(np.diff(locs, axis=0), 1), True)
+    npt.assert_equal(np.allclose(np.diff(locs, axis=0), 3), True)
 
 
 
@@ -71,5 +70,7 @@ def test_Neuralink():
     npt.assert_equal(nlink['0-1'].y, t1['1'].y)
     npt.assert_equal(nlink['1-1'].x, t2['1'].x)
     npt.assert_equal(nlink['1-1'].y, t2['1'].y)
+
+    
 
 

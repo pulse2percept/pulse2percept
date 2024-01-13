@@ -1,8 +1,11 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
-import matplotlib.pyplot as plt
+from pulse2percept.models.cortex import ScoreboardModel
+from pulse2percept.models import ScoreboardModel as BeyelerScoreboard
 from pulse2percept.topography import NeuropythyMap
+from pulse2percept.implants.cortex import Neuralink, LinearEdgeThread
+from pulse2percept.implants import EnsembleImplant
 import time
 import os
 
@@ -12,23 +15,20 @@ import os
 # done either from the root p2p directory or from this tests
 # folder.
 @pytest.mark.slow
-def test_slow_test():
-    print("This should not run")
-    npt.assert_equal(True, False)
-
-@pytest.mark.slow
 def test_subject_parsing():
     import neuropythy as ny
     # random subject shouldn't download 
     start = time.time()
     with pytest.raises(ValueError):
         nmap = NeuropythyMap('invalid_subject')
-    npt.assert_equal(time.time() - start < 20, True)
+    npt.assert_equal(time.time() - start < 10, True)
 
     # test non fsaverage subject first, to see if it downloads
     # (since this is non default behaviour for neuropythy)
     # this test will also pass if the subject has been previously downloaded
     nmap = NeuropythyMap('S1201')
+    # smoke test
+    nmap.dva_to_v1(1, 1)
 
     # should have been cached to cache_dir
     npt.assert_equal(os.path.exists(os.path.join(nmap.cache_dir, 'benson_winawer_2018', 'freesurfer_subjects')), True)
@@ -41,12 +41,12 @@ def test_subject_parsing():
     npt.assert_equal(time.time() - start < 40, True)
 
     npt.assert_equal(nmap.predicted_retinotopy is not None, True)
-    npt.assert_equal('v1' in nmap.region_meshes.keys())
+    npt.assert_equal('v1' in nmap.region_meshes.keys(), True)
 
 
 # these take long so dont do every combo
 @pytest.mark.slow()
-@pytest.mark.parametrize('regions' : [['v1'], ['v1', 'v3'], ['v1', 'v2', 'v3']])
+@pytest.mark.parametrize('regions', [['v1'], ['v1', 'v3'], ['v1', 'v2', 'v3']])
 @pytest.mark.parametrize('jitter_boundary', [True, False])
 def test_dva_to_cortex(regions, jitter_boundary):
     nmap = NeuropythyMap('fsaverage', regions=regions, jitter_boundary=jitter_boundary)
@@ -126,3 +126,99 @@ def test_dva_to_cortex(regions, jitter_boundary):
             npt.assert_almost_equal(x, np.array([-23812.113, -23514.828, np.nan,  np.nan,  np.nan,  28547.275]), decimal=3)
             npt.assert_almost_equal(y, np.array([-84409.51, -93015.07, np.nan, np.nan, np.nan, -93238.63]), decimal=2)
             npt.assert_almost_equal(z, np.array([-15261.302,   4050.124, np.nan,   np.nan,   np.nan,   8467.487]), decimal=3)
+
+
+@pytest.mark.slow
+def test_Neuralink_from_neuropythy():
+    nmap = NeuropythyMap('fsaverage', regions=['v1'], jitter_boundary=False)
+    nlink = Neuralink.from_neuropythy(nmap, locs=np.array([[0, 0], [3, 3], [-2, -2]]))
+    print(nmap.dva_to_v1(3, 3))
+    print(nmap.dva_to_v1(-2, -2))
+    # 0, 0 should be nan so it wont make one
+    npt.assert_equal(len(nlink.implants), 2)
+    npt.assert_equal(nlink.implants['A'].x, nmap.dva_to_v1(3, 3)[0])
+    npt.assert_equal(nlink.implants['A'].y, nmap.dva_to_v1(3, 3)[1])
+    npt.assert_equal(nlink.implants['A'].z, nmap.dva_to_v1(3, 3)[2])
+    npt.assert_equal(nlink.implants['B'].x, nmap.dva_to_v1(-2, -2)[0])
+    npt.assert_equal(nlink.implants['B'].y, nmap.dva_to_v1(-2, -2)[1])
+    npt.assert_equal(nlink.implants['B'].z, nmap.dva_to_v1(-2, -2)[2])
+
+    orient1 = nmap.dva_to_v1(3, 3, surface='midgray') - nmap.dva_to_v1(3, 3, surface='pial')
+    orient2 = nmap.dva_to_v1(-2, -2, surface='midgray') - nmap.dva_to_v1(-2, -2, surface='pial')
+    orient1 = orient1 / np.linalg.norm(orient1)
+    orient2 = orient2 / np.linalg.norm(orient2)
+    npt.assert_almost_equal(nlink.implants['A'].direction, orient1)
+    npt.assert_almost_equal(nlink.implants['B'].direction, orient2)
+
+    nmap.jitter_boundary=True
+    nlink = Neuralink.from_neuropythy(nmap, xrange=[-5, 5], yrange=(-3, 3), xystep=1)
+    npt.assert_equal(len(nlink.implants), 77)
+    # thank god for chatgpt
+    npt.assert_equal(list(nlink.implants.keys()), ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+                                                   'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
+                                                   'U', 'V', 'W', 'X', 'Y', 'Z', 'AA', 'AB', 'AC', 'AD',
+                                                   'AE', 'AF', 'AG', 'AH', 'AI', 'AJ', 'AK', 'AL', 'AM',
+                                                   'AN', 'AO', 'AP', 'AQ', 'AR', 'AS', 'AT', 'AU', 'AV',
+                                                   'AW', 'AX', 'AY', 'AZ', 'BA', 'BB', 'BC', 'BD', 'BE',
+                                                   'BF', 'BG', 'BH', 'BI', 'BJ', 'BK'])
+    idx = 0
+    for vx in range(-5, 5.1, 1):
+        for vy in range(-3, 3.1, 1):
+            implant = nlink.implants[list(nlink.implants.keys())[idx]]
+            cx, cy, cz = nmap.dva_to_v1(vx, vy)
+            npt.assert_almost_equal(implant.x, cx)
+            npt.assert_almost_equal(implant.y, cy)
+            npt.assert_almost_equal(implant.z, cz)
+
+            orient = nmap.dva_to_v1(vx, vy, surface='midgray') - nmap.dva_to_v1(vx, vy, surface='pial')
+            orient = orient / np.linalg.norm(orient)
+            npt.assert_almost_equal(implant.direction, orient)
+
+            idx += 1
+            
+
+
+@pytest.mark.slow
+def test_ndim_mixup():
+    nmap = NeuropythyMap('fsaverage')
+    model = BeyelerScoreboard(vfmap=nmap)
+    npt.assert_equal(2 in model.ndim, True)
+    npt.assert_equal(3 in model.ndim, False)
+    with pytest.raises(ValueError):
+        model.build()
+
+
+@pytest.mark.slow
+def test_neuropythy_scoreboard():
+    nmap = NeuropythyMap('fsaverage')
+    model = ScoreboardModel(rho=800, xystep=.25, vfmap=nmap).build()
+    implant = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3))
+    implant.stim = {e : 1 for e in implant.electrode_names}
+    percept = model.predict_percept(implant)
+    npt.assert_almost_equal(np.sum(percept.data), 5600.183, decimal=3)
+    npt.assert_almost_equal(np.max(percept.data), 27.3698, decimal=3)
+
+    nmap = NeuropythyMap('fsaverage', regions=['v2'])
+    model = ScoreboardModel(rho=800, xystep=.25, vfmap=nmap).build()
+    implant = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v2')
+    implant.stim = {e : 1 for e in implant.electrode_names}
+    percept = model.predict_percept(implant)
+    npt.assert_almost_equal(np.sum(percept.data), 5344.173, decimal=3)
+    npt.assert_almost_equal(np.max(percept.data), 27.845, decimal=3)
+
+    # mega implant
+    nmap = NeuropythyMap('fsaverage', regions=['v1', 'v2', 'v3'])
+    model = ScoreboardModel(rho=800, xystep=.25, vfmap=nmap).build()
+    i1 = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v1')
+    i2 = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v2')
+    i3 = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v3')
+    implant = EnsembleImplant([i1, i2, i3])
+    implant.stim = {e : 1 for e in implant.electrode_names}
+    percept = model.predict_percept(implant)
+    npt.assert_almost_equal(np.sum(percept.data), 20245.45, decimal=3)
+    npt.assert_almost_equal(np.max(percept.data), 86.4913, decimal=3)
+
+
+
+
+    

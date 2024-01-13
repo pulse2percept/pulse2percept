@@ -48,7 +48,7 @@ class EllipsoidElectrode(Electrode):
         self.plot_kwargs = {'width': rx, 'height': ry, 'angle': 0,
                             'linewidth': 2,
                             'ec': (0.3, 0.3, 0.3, 1),
-                            'fc': (1, 1, 1, 0.8)}
+                            'fc': (1, 1, 1, 0.9)}
         self.plot_deactivated_kwargs = {'width': rx, 'height': ry, 'angle': 0,
                                         'linewidth': 2,
                                         'ec': (0.6, 0.6, 0.6, 1),
@@ -117,7 +117,7 @@ class LinearEdgeThread(NeuralinkThread):
     
     def __init__(self, x=0, y=0, z=0, orient=np.array([0,0,1]), orient_mode='direction', 
                  r=5, n_elecs=32, spacing=50, insertion_depth=0, 
-                 electrode=EllipsoidElectrode, name=None,
+                 electrode=EllipsoidElectrode,
                  stim=None, preprocess=False, safe_mode=False):
         """
         Neuralink thread
@@ -165,7 +165,7 @@ class LinearEdgeThread(NeuralinkThread):
         self.extracortical_depth = 1000
         self.thread_length = self.n_elecs * self.spacing + self.extracortical_depth + self.insertion_depth
         self.rot, self.angles, self.direction = parse_3d_orient(orient, orient_mode)
-        self.plot_3d_kwargs = {'color': 'gray', 'alpha': 0.75,
+        self.plot_3d_kwargs = {'color': 'gray', 'alpha': 0.95,
                                'rstride': 2, 'cstride': 2}
         
         # calculate the coordinates of the electrodes
@@ -255,11 +255,9 @@ class Neuralink(EnsembleImplant):
             Array of visual field locations to create threads at. Not
             needed if using xrange, yrange, and xystep.
         xrange, yrange: tuple of floats, optional
-            Range of x and y coordinates to create threads at. If None, 
-            defaults to the range of the visual field map.
+            Range of x and y coordinates to create threads at.
         xystep : float, optional
-            Spacing between threads. If None, defaults to the spacing of the 
-            visual field map.
+            Spacing between threads. 
         rand_insertion_angle : float, optional
             If not none, insert threads at a random offset from perpendicular,
             with a maximum azimuthal rotation of rand_insertion_angle degrees.
@@ -281,11 +279,11 @@ class Neuralink(EnsembleImplant):
         
         if locs is None:
             if xrange is None:
-                xrange = vfmap.xrange
+                xrange = (-3, 3)
             if yrange is None:
-                yrange = vfmap.yrange
+                yrange = (-3, 3)
             if xystep is None:
-                xystep = vfmap.xystep
+                xystep = 1
             
             # make a grid of points
             grid = Grid2D(xrange, yrange, xystep)

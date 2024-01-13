@@ -517,8 +517,9 @@ class Grid2D(PrettyPrint):
                                                                  k not in default_kwargs.keys())})
             elif style.lower() == 'cell':
                 # need to plot both hemispheres separately
-                left = vx > 0
-                right = vx < 0
+                bound = 0 if not self.vfmap.jitter_boundary else .5
+                left = vx > bound
+                right = vx < -bound
                 for i, idx in enumerate([right, left]):
                     if np.sum(idx) == 0:
                         continue
