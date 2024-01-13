@@ -289,16 +289,23 @@ class ImageStimulus(Stimulus):
         if y0 < 0 or x0 < 0:
             raise ValueError(f"Top-left corner (y0,x0)=({y0},{x0}) lies "
                              f"outside the image.")
-        if y1 >= self.img_shape[0] or x1 >= self.img_shape[1]:
-            raise ValueError(f"Bottom-right corner (y1,x1)=({y1},{x1}) lies "
+        if y1 > self.img_shape[0] or x1 > self.img_shape[1]:
+            raise ValueError(f"Bottom-right corner (y1-1,x1-1)=({y1-1},{x1-1}) lies "
                              f"outside the image.")
         # Crop the image:
         img = self.data.reshape(self.img_shape)
-        cropped_img = img[y0:y1, x0:x1, :3]
+        # Check if we have color channels & index appropriately
+        if len(self.img_shape) == 3:
+            cropped_img = img[y0:y1, x0:x1, :3]
+        else:
+            cropped_img = img[y0:y1, x0:x1]
         electrodes = self.electrodes
         if electrodes is not None:
             electrodes = electrodes.reshape(self.img_shape)
-            electrodes = electrodes[y0:y1, x0:x1, :3].ravel()
+            if len(self.img_shape) == 3:
+                electrodes = electrodes[y0:y1, x0:x1, :3].ravel()
+            else:
+                electrodes = electrodes[y0:y1, x0:x1].ravel()
         return ImageStimulus(cropped_img, electrodes=electrodes,
                              metadata=self.metadata)
 
