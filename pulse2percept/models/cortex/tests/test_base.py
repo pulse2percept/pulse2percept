@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from pulse2percept.models.cortex import ScoreboardModel, ScoreboardSpatial
 from pulse2percept.models import ScoreboardSpatial as BeyelerScoreboard
-from pulse2percept.implants.cortex import Cortivis, Orion
+from pulse2percept.implants.cortex import Cortivis, Orion, LinearEdgeThread
 from pulse2percept.implants import ArgusII
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.percepts import Percept
@@ -168,3 +168,16 @@ def test_plot(ModelClass):
     m.build()
     m.plot()
     plt.close()
+
+
+def test_poli_nlink():
+    # make sure that the polimeni map and neuralink work togther with scoreboard
+    # since this is an odd combo of 2d map and 3d implant
+    model = ScoreboardModel(rho=800, xystep=.5).build()
+    npt.assert_equal(model.grid.v1.z is None, True)
+    npt.assert_equal(model.grid.v1.x is None, False)
+    implant = LinearEdgeThread(x=20000,)
+    implant.stim = {e : 1 for e in implant.electrode_names}
+    percept = model.predict_percept(implant)
+    npt.assert_almost_equal(np.sum(percept.data), 32.494125, decimal=3)
+    npt.assert_equal(np.sum(percept.data > .05), 4)

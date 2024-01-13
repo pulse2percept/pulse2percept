@@ -24,10 +24,10 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
     x/y/z : double
         3D location of the electrode.
         The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
+        Positive ``x`` values move the electrode into the right visual field.
+        Positive ``y`` values move the electrode into the left visual field.
+        Positive ``z`` values move the electrode either into the cortex or 
+        into the vitreos humor.
     name : str, optional
         Electrode name
     activated : bool

@@ -13,7 +13,7 @@ class CorticalMap(VisualFieldMap):
     """Template class for V1/V2/V3 visuotopic maps"""
     allowed_regions = {'v1', 'v2', 'v3'}
 
-    # All cortical maps are split into 2 hemispheres
+    # All 2D cortical maps are split into 2 separate grids for hemispheres
     split_map = True
 
     def __init__(self, **params):
@@ -52,7 +52,7 @@ class CorticalMap(VisualFieldMap):
             # Offset for the left hemisphere fovea
             'left_offset' : -20000
         }
-        return params
+        return {**super().get_default_params(),**params}
 
     @abstractmethod
     def dva_to_v1(self, x, y):
