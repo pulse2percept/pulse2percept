@@ -158,10 +158,13 @@ def test_Neuralink_from_neuropythy():
                                                    'AE', 'AF', 'AG', 'AH', 'AI', 'AJ', 'AK', 'AL', 'AM',
                                                    'AN', 'AO', 'AP', 'AQ', 'AR', 'AS', 'AT', 'AU', 'AV',
                                                    'AW', 'AX', 'AY', 'AZ', 'BA', 'BB', 'BC', 'BD', 'BE',
-                                                   'BF', 'BG', 'BH', 'BI', 'BJ', 'BK'])
+                                                   'BF', 'BG', 'BH', 'BI', 'BJ', 'BK', 'BL', 'BM', 'BN',
+                                                   'BO', 'BP', 'BQ', 'BR', 'BS', 'BT', 'BU', 'BV', 'BW',
+                                                   'BX', 'BY'])
     idx = 0
-    for vx in range(-5, 5.1, 1):
-        for vy in range(-3, 3.1, 1):
+    for vy in range(3, -4, -1):
+        for vx in range(-5, 6, 1):
+            print(idx, vx, vy)
             implant = nlink.implants[list(nlink.implants.keys())[idx]]
             cx, cy, cz = nmap.dva_to_v1(vx, vy, surface='pial')
             npt.assert_almost_equal(implant.x, cx)

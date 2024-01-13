@@ -190,7 +190,8 @@ class LinearEdgeThread(NeuralinkThread):
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
-        params.update({'angles' : self.angles, 'r': self.r, 'n_elecs': self.n_elecs, 'spacing': self.spacing})
+        params.update({'location' : (self.x, self.y, self.z), 'angles' : self.angles, 
+                       'r': self.r, 'n_elecs': self.n_elecs, 'spacing': self.spacing})
         return params
     
     def plot3D(self, ax=None, **kwargs):
