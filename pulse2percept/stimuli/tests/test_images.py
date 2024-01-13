@@ -86,8 +86,8 @@ def test_ImageStimulus_resize():
         stim.resize((-1, -1))
     os.remove(fname)
 
-
 def test_ImageStimulus_crop():
+    # test img with color channels
     fname = 'test.png'
     shape = (30, 50, 3)
     gray = create_dummy_img(fname, shape, 'rand')
@@ -102,6 +102,22 @@ def test_ImageStimulus_crop():
                      stim_cropped.electrodes.reshape(20, 30, 3)[3, 7, 0])
     npt.assert_equal(stim.electrodes.reshape(30, 50, 3)[15, 38, 2],
                      stim_cropped.electrodes.reshape(20, 30, 3)[10, 28, 2])
+
+    # test img with no color channels
+    fname_bw = 'test_bw.png'
+    shape_bw = (30, 50)
+    gray_bw = create_dummy_img(fname_bw, shape_bw, 'rand')
+    stim_bw = ImageStimulus(fname_bw)
+    stim_cropped_bw = stim_bw.crop(idx_rect=[5, 10, 25, 40])
+    npt.assert_equal(stim_cropped_bw.img_shape, (20, 30))
+    npt.assert_equal(stim_cropped_bw.data.reshape(stim_cropped_bw.img_shape)[3, 7],
+                     stim_bw.data.reshape(stim_bw.img_shape)[8, 17])
+    npt.assert_equal(stim_cropped_bw.data.reshape(stim_cropped_bw.img_shape)[10, 28],
+                     stim_bw.data.reshape(stim_bw.img_shape)[15, 38])
+    npt.assert_equal(stim_bw.electrodes.reshape(30, 50)[8, 17],
+                     stim_cropped_bw.electrodes.reshape(20, 30)[3, 7])
+    npt.assert_equal(stim_bw.electrodes.reshape(30, 50)[15, 38],
+                     stim_cropped_bw.electrodes.reshape(20, 30)[10, 28])
 
     stim_cropped2 = stim.crop(left=10, right=8, top=6, bottom=7)
     npt.assert_equal(stim_cropped2.img_shape, (17, 32, 3))
@@ -147,6 +163,9 @@ def test_ImageStimulus_crop():
         stim.crop([5, 10, 4, 40])
     with pytest.raises(ValueError):
         stim.crop([5, 10, 25, 9])
+    
+    os.remove(fname)
+    os.remove(fname_bw)
 
 
 def test_ImageStimulus_trim():
