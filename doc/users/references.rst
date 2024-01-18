@@ -19,6 +19,9 @@ Studies referenced throughout the Documentation:
 .. [Al-Atabany2010] WT Al-Atabany, T Tong, PA Degenaar (2010). Improved 
                     content aware scene retargeting for retinitis pigmentosa
                     patients. *BioMedical Engineering OnLine*, 9(1), 52. 
+.. [Benson2018] Benson NC, Winawer J (2018) Bayesian Analysis of Retinotopic Maps. 
+                eLife 2018, doi:`10.1101/325597
+                <https://www.biorxiv.org/content/10.1101/325597v4>`_.
 .. [Beyeler2019] M Beyeler, D Nanduri, JD Weiland, A Rokem, GM Boynton, I Fine
                  (2019). A model of ganglion axon pathways accounts for
                  percepts elicited by retinal implants. *Scientific Reports*
