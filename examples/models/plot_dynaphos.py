@@ -98,10 +98,8 @@ model.build()
 # :py:mod:`~pulse2percept.implants` module.
 #
 # In the following, we will create an 
-# :py:class:`~pulse2percept.implants.EnsembleImplant` consisting 
-# of :py:class:`~pulse2percept.implants.cortex.Cortivis` implants. 
-# We will place these in a 3x3 grid centered at (18000, 0), which 
-# is 18000mm into the right hemisphere of the visual cortex.
+# :py:class:`~pulse2percept.implants.cortex.Orion` implant 
+# at the default location.
 
 implant = Orion()
 
