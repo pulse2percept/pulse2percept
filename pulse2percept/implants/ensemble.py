@@ -39,6 +39,8 @@ class EnsembleImplant(ProsthesisSystem):
             If safe mode is enabled, only charge-balanced stimuli are allowed.
         """
 
+        if not issubclass(implant_type, ProsthesisSystem):
+            raise TypeError("implant_type must be a sub-type of ProsthesisSystem")
         n = len(x_coords)
         if len(y_coords) != n:
             raise ValueError("y-coordinate list must be the same length as x-coordinate list")
