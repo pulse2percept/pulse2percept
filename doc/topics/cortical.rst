@@ -18,19 +18,17 @@ left and right.  The visual cortex is divided into multiple regions, including
 v1, v2, and v3, with each region performing a different function required
 to process visual information.
 
-Each region processes an aspect (such as color or motion) of the entire visual
-field.  Within a region, different parts of the visual field are processed by
+Within a region, different parts of the visual field are processed by
 different neurons.  We can define a mapping between locations in the visual field
-and locations in the cortex.  This mapping is called a visual field map, or
-topography.
+and locations in the cortex.  This mapping is called a visual field map, also
+called retinotopy or visuotopy.
 
 Model Plotting
 ^^^^^^^^^^^^^^
-One way to visualize the mapping between the visual field and the cortex is
-to plot a spatial model.  A spatial model consists of a set of points in the
+One way to visualize the mapping between the visual field and the cortex in pulse2percept
+is to plot a model. A model simulates a set of points in the
 visual field and the corresponding points in the cortex (using a visual field
-map).  The plot of a model shows all of these points, either in the visual
-field or on the cortex depending on the parameters used to create the plot.
+map).
 
 The first step is to create a model, for example
 :py:class:`~pulse2percept.models.cortex.ScoreboardModel`.  We can create the
@@ -59,21 +57,17 @@ spaced, and are represented by `+` symbols.
 
 If we don't set `use_dva=True`, then the visual field mapping will be applied
 to the points in the visual field, and the points on the cortex will be
-plotted instead.  Because we created a model with three regions, each point
-in the visual field will be transformed to three new points: one in v1, one
-in v2, and one in v3.
+plotted instead. ScoreboardModel by default uses the 
+:py:class:`~pulse2percept.topography.Polimeni2006Map` visual field map, but 
+it can also use :py:class:`~pulse2percept.topography.NeuropythyMap` for
+3D patient-specific MRI based retinotopy.
 
 The cortex is split into left and right hemispheres, with each side being
 responsible for processing information from one eye.  In reality, the left
-and right hemispheres of our brain are disconnected, but to simplify the
-code, pulse2percept represents them as one continuous space.  The origin
-of both hemispheres corresponds to the center of our visual field, as defined
-by the visual field map.  However, because we represent both hemispheres as
-one continuous space, this would result in both hemispheres overlapping
-around the origin.
-
-To avoid this, the left hemisphere are offset by 20mm, meaning the origin
-of the left hemisphere is (-20, 0).  In addition, cortical visual field maps
+and right hemispheres of our brain are disconnected, but to simplify 
+the Polimeni map represents them as one continuous space. 
+The left hemisphere is offset by 20mm, meaning the origin
+of the left hemisphere is (-20000, 0).  In addition, cortical visual field maps
 have a `split_map` attribute set to `True`, which means that no current will
 be allowed to cross between the hemispheres.
 
@@ -89,7 +83,7 @@ center of our visual field is represented by a larger area on the cortex than
 equally sized area at the periphery of our visual field, an effect called
 cortical magnification.
 
-Another style option for the plot is `"hull"`` (the default):
+Another style option for the plot is `"hull"`:
 
 .. ipython:: python
     :okwarning:
@@ -183,6 +177,46 @@ and "counter" electrodes.
     icvp = ICVP()
     @savefig icvp.png align=center
     icvp.plot(annotate=True)
+
+
+Neuralink
+^^^^^^^^^
+:py:class:`~pulse2percept.implants.cortex.Neuralink` is an implant 
+consisting of multiple Neuralink threads. Currently the only thread implemented
+is the :py:class:`~pulse2percept.implants.cortex.LinearEdgeThread` which 
+consists of 32 electrodes. 
+
+.. ipython:: python
+
+    from pulse2percept.implants.cortex import LinearEdgeThread
+    thread = LinearEdgeThread()
+    thread.plot3D()
+    @savefig neuralink_thread.png align=center
+    plt.axis('equal')
+
+
+Neuralink works well with the :py:class:`~pulse2percept.topography.NeuropythyMap`,
+which is a 3D patient-specific MRI based retinotopy. You can easily create
+a Neuralink implant with multiple threads using the NeuropythyMap as follows:
+
+.. ipython:: python
+    :okwarning:
+
+    from pulse2percept.implants.cortex import Neuralink
+    from pulse2percept.topography import NeuropythyMap
+    from pulse2percept.models.cortex import ScoreboardModel
+    map = NeuropythyMap('fsaverage', regions=['v1'])
+    model = ScoreboardModel(vfmap=map, xrange=(-4, 0), yrange=(-4, 4), xystep=.25).build()
+    neuralink = Neuralink.from_neuropythy(map, xrange=model.xrange, yrange=model.yrange, xystep=1, rand_insertion_angle=0)
+    fig = plt.figure(figsize=(10, 5))
+    ax1 = fig.add_subplot(121, projection='3d')
+    neuralink.plot3D(ax=ax1)
+    model.plot3D(style='cell', ax=ax1)
+    ax2 = fig.add_subplot(122)
+    neuralink.plot(ax=ax2)
+    model.plot(style='cell', ax=ax2)
+    @savefig neuralink.png align=center
+    plt.show()
 
 
 .. _topics-cortical-models:
@@ -325,6 +359,27 @@ see that the predicted percept is now larger due to cortical magnification:
     percept.plot()
 
 
+Pulse2percept currently has 2 cortical models, :py:class:`~pulse2percept.models.cortex.ScoreboardModel` 
+and :py:class:`~pulse2percept.models.cortex.DynaphosModel`. The ScoreboardModel 
+is a simple model that assumes that each electrode creates a circular patch of 
+brightness. The DynaphosModel is a more complex model that takes into account
+both spatial current spread and temporal effects such as charge accumulation. 
+
+.. ipython:: python
+
+    from pulse2percept.models.cortex import DynaphosModel
+    from pulse2percept.stimuli import BiphasicPulseTrain
+    from pulse2percept.implants.cortex import Orion
+
+    model = DynaphosModel().build()
+    implant = Orion()
+    implant.stim = {e : BiphasicPulseTrain(20, 200, .45) for e in implant.electrode_names}
+    percept = model.predict_percept(implant)
+    @savefig model_dynaphos.png align=center
+    percept.plot()
+
+You can also play the percept as a video with `percept.play()`.
+
 .. _topics-cortical-developers:
 
 For Developers
@@ -333,16 +388,6 @@ For Developers
 In this section we will discuss some of the changes made under the hood
 accomadate cortical features, as well as some important notes for developers
 to keep in mind.
-
-Grid Plotting
-^^^^^^^^^^^^^
-Previously, the grid's plot function took in an optional `transform`
-function that would be applied to all of the points.  This parameter has been
-removed, and instead the plot function will automatically apply all of the
-transforms in the grid's `retinotopy` attribute.  This is a dictionary of
-different transforms that can be applied to the grid, such as dva to retinal
-coordinates or dva to cortical coordinates.  If you want to plot the grid
-without transformed points, you can pass in `use_dva=True`.
 
 Units
 ^^^^^
