@@ -9,6 +9,49 @@ class EnsembleImplant(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_implants', '_earray', '_stim', 'safe_mode', 'preprocess')
 
+    @classmethod
+    def from_coords(cls, implant_type: type, x_coords, y_coords, z_coords = None, 
+                    stim=None, preprocess=False, safe_mode=False):
+        """
+        Create an ensemble of implants of type `implant_type`, with the
+        i-th implant being centered at (`x_coords[i]`, `y_coords[i]`) or
+        (`x_coords[i]`, `y_coords[i]`, `z_coords[i]`).
+
+        Parameters
+        ----------
+        implant_type : type
+            The type of implant to create for the ensemble.
+        x_coords : list
+            A list of the x-coordinates of the center of each implant.
+        y_coords : list
+            A list of the y-coordinates of the center of each implant.
+        z_coords : list, optional
+            An optional list of the z-coordinates of the center of each implant.
+            If this parameter is passed, a z-coordinate must be provided for each implant.
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+            A valid source type for the :py:class:`~pulse2percept.stimuli.Stimulus`
+            object (e.g., scalar, NumPy array, pulse train).
+        preprocess : bool or callable, optional
+            Either True/False to indicate whether to execute the implant's default
+            preprocessing method whenever a new stimulus is assigned, or a custom
+            function (callable).
+        safe_mode : bool, optional
+            If safe mode is enabled, only charge-balanced stimuli are allowed.
+        """
+
+        n = len(x_coords)
+        if len(y_coords) != n:
+            raise ValueError("y-coordinate list must be the same length as x-coordinate list")
+        if z_coords is not None and len(z_coords) != n:
+            raise ValueError("z-coordinate list must be the same length as x-coordinate list")
+        
+        if z_coords is not None:
+            implant_list = [implant_type(x=x, y=y, z=z) for x,y,z in zip(x_coords, y_coords, z_coords)]
+        else:
+            implant_list = [implant_type(x=x, y=y) for x,y in zip(x_coords, y_coords)]
+        
+        return cls(implant_list, stim=stim, preprocess=preprocess, safe_mode=safe_mode)
+
     def __init__(self, implants, stim=None, preprocess=False,safe_mode=False):
         """Ensemble implant
 
