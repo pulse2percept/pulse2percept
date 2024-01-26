@@ -180,44 +180,6 @@ and "counter" electrodes.
 
 .. _topics-ensemble-implant:
 
-Ensemble Implants
------------------
-
-:py:class:`~pulse2percept.implants.EnsembleImplant` is a new class which
-allows the user to use multiple implants in tandem. It can be used with any 
-implant type, but was made for use with small implants meant to be used together,
-such as :py:class:`~pulse2percept.implants.cortex.Cortivis`. This tutorial will 
-demonstrate how to create an :py:class:`~pulse2percept.implants.EnsembleImplant`,
-to combine multiple :py:class:`~pulse2percept.implants.cortex.Cortivis` objects.
-
-The first step is to create the individual implants that will be combined.
-
-.. ipython:: python
-    :okwarning:
-
-    i1 = Cortivis(x=15000,y=0)
-    i2 = Cortivis(x=20000,y=0)
-    i1.plot(annotate=True)
-    i2.plot(annotate=True)
-    @savefig cortivis_multiple.png align=center
-    plt.show()
-
-Then, we can create an EnsembleImplant using these two implants. 
-
-.. ipython:: python
-
-    from pulse2percept.implants import EnsembleImplant
-
-    ensemble = EnsembleImplant(implants=[i1,i2])
-    _,ax = plt.subplots(1, 1, figsize=(12,7))
-    @savefig ensemble.png align=center
-    ensemble.plot(annotate=True, ax=ax)
-
-Note that electrodes are renamed, with the pattern `index-electrode` where `index`
-is the index of the implant in the constructor list. Implants can also be passed using
-a dictionary, in which case the naming pattern is `key-electrode` where `key` is the
-electrode's dictionary key.
-
 Neuralink
 ^^^^^^^^^
 :py:class:`~pulse2percept.implants.cortex.Neuralink` is an implant 
@@ -256,6 +218,45 @@ a Neuralink implant with multiple threads using the NeuropythyMap as follows:
     model.plot(style='cell', ax=ax2)
     @savefig neuralink.png align=center
     plt.show()
+
+
+Ensemble Implants
+-----------------
+
+:py:class:`~pulse2percept.implants.EnsembleImplant` is a new class which
+allows the user to use multiple implants in tandem. It can be used with any 
+implant type, but was made for use with small implants meant to be used together,
+such as :py:class:`~pulse2percept.implants.cortex.ICVP`. This tutorial will 
+demonstrate how to create an :py:class:`~pulse2percept.implants.EnsembleImplant`,
+to combine multiple :py:class:`~pulse2percept.implants.cortex.Cortivis` objects.
+
+The first step is to create the individual implants that will be combined.
+
+.. ipython:: python
+    :okwarning:
+
+    i1 = Cortivis(x=15000,y=0)
+    i2 = Cortivis(x=20000,y=0)
+    i1.plot(annotate=True)
+    i2.plot(annotate=True)
+    @savefig cortivis_multiple.png align=center
+    plt.show()
+
+Then, we can create an EnsembleImplant using these two implants. 
+
+.. ipython:: python
+
+    from pulse2percept.implants import EnsembleImplant
+
+    ensemble = EnsembleImplant(implants=[i1,i2])
+    _,ax = plt.subplots(1, 1, figsize=(12,7))
+    @savefig ensemble.png align=center
+    ensemble.plot(annotate=True, ax=ax)
+
+Note that electrodes are renamed, with the pattern `index-electrode` where `index`
+is the index of the implant in the constructor list. Implants can also be passed using
+a dictionary, in which case the naming pattern is `key-electrode` where `key` is the
+electrode's dictionary key.
 
 
 .. _topics-cortical-models:
