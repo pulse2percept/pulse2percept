@@ -27,6 +27,10 @@ field coordinates (``vfmap``). A number of these visual field maps are provided 
    provides a mapping between visual field coordinates and cortical coordinates 
    using a wedge-dipole model for regions V1, V2, and V3. See Appendix B of 
    [Polimeni2006]_ for details.
+* :py:class:`~pulse2percept.topography.NeuropythyMap`: Neuropythy is a python
+   package that predicts patient-specific visuotopies based on MRI scans of the
+   human visual cortex. It provides a mapping between visual field coordinates
+   and 3D cortical coordinates for regions V1, V2, V3. See [Benson2018]_ for details.
 
 All of these visual field maps follow the templates in either 
 :py:class:`~pulse2percept.topography.RetinalMap` or 
