@@ -46,6 +46,7 @@ pulse2percept provides the following prosthesis systems (aka *'implants', 'bioni
 `Orion`      cortical        60                  Cortigent Inc
 `Cortivis`   cortical        96                  Biomedical Technologies
 `ICVP`       cortical        16                  Sigenics Inc
+`Neuralink`  cortical        32 / thread         Neuralink Corp
 ===========  ==============  ==================  =================================
 
 Stimuli can be assigned to the various electrodes in the electrode array,
@@ -55,7 +56,7 @@ A mathematical model is then used to compute the neural stimulus response and
 predict the resulting visual percept
 (see :ref:`Computational Models <topics-models>`).
 
-Understanding the coordinate system
+Understanding the coordinate system (Retina)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The easiest way to understand the coordinate system is to look at the
