@@ -1,17 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-============================================================================
-Grinten et al. (2022): Phosphene simulation using cortical prostheses
-============================================================================
+===============================================================================================================
+van der Grinten, de Ruyter van Steveninck, Lozano et al. (2023): Phosphene simulation using cortical prostheses
+===============================================================================================================
 
 This example shows how to apply the
-:py:class:`~pulse2percept.models.cortex.DynaphosModel` to an
+:py:class:`~pulse2percept.models.cortex.DynaphosModel` (original and official 
+implementation available `here <https://github.com/neuralcodinglab/dynaphos>`_) to an
 :py:class:`~pulse2percept.implants.cortex.Orion` implant.
 
 The Dynaphos model assumes that all stimuli are applied as biphasic pulse
-trains. 
-
-This model cannot be decomposed into spatial and temporal components, and
+trains. Unlike other models in p2p, this model is not separated into spatial and temporal components, and
 must be run as a single composite model.
 
 The model can be instantiated and run in three steps.
@@ -125,7 +124,7 @@ implant.plot()
 
 stim_freq = 300  # stimulus frequency (Hz)
 phase_dur = 0.17  # duration of the cathodic/anodic phase (ms)
-stim_dur = 1000  # stimulus duration (ms)
+stim_dur = 2000  # stimulus duration (ms)
 stim_amp = 100  # stimulus current (uA)
 implant.stim = {e: BiphasicPulseTrain(amp=stim_amp, freq=stim_freq, 
                                       phase_dur=phase_dur, stim_dur=stim_dur) 
@@ -153,7 +152,7 @@ plt.imshow(brightest_frame, cmap='gray')
 # that the model predicts the perceived brightness to increase rapidly and
 # then drop off slowly (over the time course of seconds).
 
-fig, ax = plt.subplots(figsize=(12, 5))
+fig, ax = plt.subplots(figsize=(10, 5))
 ax.plot(implant.stim.time,
         -0.02 + 0.01 * implant.stim.data[0, :] / implant.stim.data.max(),
         linewidth=3, label='pulse')
@@ -161,7 +160,7 @@ ax.plot(percept.time, np.max(np.max(percept.data, axis=1), axis=0), linewidth=3,
 ax.plot([0, stim_dur], [percept.max(), percept.max()], 'k--', label='max brightness')
 ax.plot([0, stim_dur], [0, 0], 'k')
 
-ax.set_xlabel('time (s)')
+ax.set_xlabel('time (ms)')
 ax.set_ylabel('predicted brightness (a.u.)')
 ax.set_yticks(np.arange(0, 1.01, 0.1))
 ax.set_xlim(0, stim_dur)
