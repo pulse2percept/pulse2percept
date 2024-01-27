@@ -329,6 +329,45 @@ class Neuralink(EnsembleImplant):
                                             orient=direction, orient_mode='direction')
         return cls(threads)
     
+    @classmethod
+    def from_cortical_map(cls, implant_type, vfmap, locs=None, xrange=None, 
+                          yrange=None, xystep=None, region='v1'):
+        """
+        Override of parent class from cortical map method.
+        Uses from_neuropythy instead of from_cortical_map if the provided
+        vfmap is a NeuropythyMap.
+
+        Parameters
+        ----------
+        implant_type : p2p.implants.ProsthesisSystem
+            Type of implant to create. Currently only NeuralinkThread is supported.
+        vfmap : p2p.topography.CorticalMap
+            Cortical map to create implant from.
+        locs : np.ndarray with shape (n, 2), optional
+            Array of visual field locations to create threads at. Not
+            needed if using xrange, yrange, and xystep.
+        xrange, yrange: tuple of floats, optional
+            Range of x and y coordinates to create threads at.
+        xystep : float, optional
+            Spacing between threads.
+        region : str, optional
+            Region of cortex to create implant in.
+
+        Returns
+        -------
+        Neuralink : p2p.implants.Neuralink
+            Neuralink ensemble implant created from the visual field map.
+        """
+        if not issubclass(implant_type, NeuralinkThread):
+            raise TypeError("implant_type must be a subclass of NeuralinkThread")
+        from ...topography import NeuropythyMap
+        if not isinstance(vfmap, NeuropythyMap):
+            return super().from_cortical_map(implant_type, vfmap, locs=locs, xrange=xrange, 
+                                             yrange=yrange, xystep=xystep, region=region)
+        return cls.from_neuropythy(vfmap, locs=locs, xrange=xrange, yrange=yrange, 
+                                    xystep=xystep, region=region, Thread=implant_type)
+
+    
 
     def __init__(self, threads, stim=None, preprocess=False, safe_mode=False):
         """
