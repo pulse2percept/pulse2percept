@@ -278,6 +278,10 @@ class NeuropythyMap(CorticalMap):
         ret[:, ~idx] = l
         ret = ret.reshape((3, *shape))
         return ret[0], ret[1], ret[2]
+    
+
+    def v1_to_dva(self, xv1, yv1, zv1):
+        pass
 
         
 
