@@ -13,6 +13,8 @@ from ...topography import Polimeni2006Map
 class DynaphosModel(BaseModel):
     """Adaptation of the Dynaphos model from [Grinten2023]_
 
+    The original and official implementation is available at https://github.com/neuralcodinglab/dynaphos.
+
     Implements the Dynaphos model. Percepts from each
     electrode are Gaussian blobs, with the size dictated by a magnification factor
     M determined by the electrode's position in the visual cortex.
