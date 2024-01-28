@@ -221,5 +221,112 @@ def test_neuropythy_scoreboard():
 
 
 
+@pytest.mark.slow()
+@pytest.mark.parametrize('regions', [['v1'], ['v1', 'v3'], ['v1', 'v2', 'v3']])
+def test_cortex_to_dva(regions):
+    nmap = NeuropythyMap('fsaverage', regions=regions, jitter_boundary=True)
+    npt.assert_equal(nmap.predicted_retinotopy is not None, True)
+    npt.assert_equal(nmap.region_meshes is not None, True)
+    if 'v1' in regions:
+        npt.assert_equal(nmap.region_meshes['v1'] is not None, True)
+    if 'v2' in regions:
+        npt.assert_equal(nmap.region_meshes['v2'] is not None, True)
+    if 'v3' in regions:
+        npt.assert_equal(nmap.region_meshes['v3'] is not None, True)
+
+    
+    npt.assert_equal(list(nmap.region_meshes.keys()), regions)
+    
+    if 'v1' in regions:
+        # should work with all shapes
+        npt.assert_equal(nmap.v1_to_dva(0, 0, 0)[0], np.array([np.nan]))
+        nmap.v1_to_dva([100, 200, 300], [100, 200, 300], [100, 200, 300])
+        nmap.v1_to_dva(np.eye(3), np.eye(3), np.eye(3))       
+        
+        x = np.array([-10035.355, -13315.073,  12075.739, 13630.971])
+        y = np.array([ -96637.12, -102852.29,   -95358.4,  -101546.41])
+        z = np.array([-10769.129, -3861.491, -7168.826, 924.938])
+
+
+        xdva, ydva = nmap.v1_to_dva(x, y, z)
+        npt.assert_equal(x.shape, (4,))
+        npt.assert_equal(y.shape, (4,))
+        npt.assert_almost_equal(xdva, np.array([1, 1, -1, -1]), decimal=1)
+        npt.assert_almost_equal(ydva, np.array([1, -1,  1, -1]), decimal=1)
+
+        x = np.arange(-10, -1, .1)
+        y = np.arange(-10, -1, .1)
+        x1, y2 = nmap.v1_to_dva(*nmap.dva_to_v1(x, y))
+        npt.assert_allclose(x, x1, rtol=.05, atol=0.1)
+        npt.assert_allclose(y, y2, rtol=.05, atol=0.1)
+
+
+        # test cort_nn_thresh
+        idx = np.argmax(nmap.subject.hemis['rh'].surface('midgray').coordinates[0])
+        x = np.array([nmap.subject.hemis['rh'].surface('midgray').coordinates[0][idx]])
+        y = np.array([nmap.subject.hemis['rh'].surface('midgray').coordinates[1][idx]])
+        z = np.array([nmap.subject.hemis['rh'].surface('midgray').coordinates[2][idx]])
+        xdva, ydva = nmap.v1_to_dva(x, y, z)
+        npt.assert_equal(xdva != np.array([np.nan]), True)
+        npt.assert_equal(ydva != np.array([np.nan]), True)
+        x1 = x + 999
+        xdva, ydva = nmap.v1_to_dva(x1, y, z)
+        npt.assert_equal(xdva != np.array([np.nan]), True)
+        npt.assert_equal(ydva != np.array([np.nan]), True)
+        x1 = x +1001
+        xdva, ydva = nmap.v1_to_dva(x1, y, z)
+        npt.assert_equal(xdva, np.array([np.nan]))
+        npt.assert_equal(ydva, np.array([np.nan]))
+
+
+
+
+    if 'v2' in regions:
+        npt.assert_equal(nmap.v2_to_dva(0, 0, 0)[0], np.array([np.nan]))
+        nmap.v2_to_dva([100, 200, 300], [100, 200, 300], [100, 200, 300])
+        nmap.v2_to_dva(np.eye(3), np.eye(3), np.eye(3))     
+
+
+        x = np.array([-11731.504, -20458.03,  22283.799] )
+        y = np.array([ -93461.92,  -100803.35, -99334.945])
+        z = np.array([-11246.644,   1673.845,    7011.859])
+        
+        xdva, ydva = nmap.v2_to_dva(x, y, z)
+        npt.assert_equal(xdva.shape, (3,))
+        npt.assert_equal(ydva.shape, (3,))
+        npt.assert_allclose(xdva, np.array([1, 1, -1]), rtol=.05, atol=0.1)
+        npt.assert_allclose(ydva, np.array([1, -1, -1]), rtol=.05, atol=0.1)
+
+        x = np.arange(-10, -1, .1)
+        y = np.arange(-10, -1, .1)
+        x1, y2 = nmap.v2_to_dva(*nmap.dva_to_v2(x, y))
+        npt.assert_allclose(x, x1, rtol=.05, atol=0.1)
+        npt.assert_allclose(y, y2, rtol=.05, atol=0.1)
+
+    
+    if 'v3' in regions:
+        npt.assert_equal(nmap.v3_to_dva(0, 0, 0)[0], np.array([np.nan]))
+        nmap.v3_to_dva([100, 200, 300], [100, 200, 300], [100, 200, 300])
+        nmap.v3_to_dva(np.eye(3), np.eye(3), np.eye(3))
+
+
+        x = np.array([-23812.113, -23514.828,  28547.275])
+        y = np.array([-84409.51, -93015.07,  -93238.63])
+        z = np.array([-15261.302,   4050.124,    8467.487])
+
+        xdva, ydva = nmap.v3_to_dva(x, y, z)
+        
+        npt.assert_equal(xdva.shape, (3,))
+        npt.assert_equal(ydva.shape, (3,))
+        npt.assert_allclose(xdva, np.array([1, 1, -1]), rtol=.05, atol=0.1)
+        npt.assert_allclose(ydva, np.array([1, -1, -1]), rtol=.05, atol=0.1)
+
+        x = np.arange(-10, -1, .1)
+        y = np.arange(-10, -1, .1)
+        x1, y2 = nmap.v3_to_dva(*nmap.dva_to_v3(x, y))
+        npt.assert_allclose(x, x1, rtol=.05, atol=0.1)
+        npt.assert_allclose(y, y2, rtol=.05, atol=0.1)
+
+
 
     
