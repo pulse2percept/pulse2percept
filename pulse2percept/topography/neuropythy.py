@@ -1,5 +1,6 @@
 import numpy as np
 import os
+from scipy.spatial import cKDTree
 
 from .cortex import CorticalMap
 
@@ -56,6 +57,8 @@ class NeuropythyMap(CorticalMap):
             'jitter_thresh' : 0.3,
             # no split map
             'left_offset' : None,
+            # max nearest neighbor distance for v*_to_dva
+            'cort_nn_thresh' : 1000, # 1mm
         }
         return {**super().get_default_params(), **params}
 
@@ -100,6 +103,10 @@ class NeuropythyMap(CorticalMap):
         left, right = ny.vision.predict_retinotopy(subject, sym_angle=False)
 
         self.predicted_retinotopy = (left, right)
+        cortex_pts = [] # (npoints, 3)
+        addr_idxs = [] # (npoints, 2)
+        region_idxs = [] # (npoints, 2)
+        hemi_idxs = [] # (npoints, 2)
         region_meshes = {}
         for region in self.regions:
             region_lbl = int(region[-1])
@@ -109,13 +116,25 @@ class NeuropythyMap(CorticalMap):
                 (ang, ecc) = (retinotopy['angle'], retinotopy['eccen'])
                 ang = np.pi/180 * (90 - ang)
                 (x, y) = (ecc*np.cos(ang), ecc*np.sin(ang))
-                # doesn't matter what surface is used here for dva_to_*
-                # but use pial so plotting is easier
-                submesh = subject.hemis[hemi].pial_surface.submesh(ii)
+                # doesn't matter what surface is used here for dva_to_v*
+                # but grab all the points for a ckdtree for v*_to_dva
+                for surface in ['midgray', 'white', 'pial']:
+                    submesh = subject.hemis[hemi].surface(surface).submesh(ii)
+                    cortex_pts.append(submesh.coordinates.T.astype('float32'))
+                    addr_idxs.append(np.arange(submesh.coordinates.shape[1]))
+                    region_idxs.append([region for _ in range(submesh.coordinates.shape[1])])
+                    hemi_idxs.append([1 if hemi=='rh' else 0 for _ in range(submesh.coordinates.shape[1])])
                 ii = submesh.labels
                 submesh = submesh.copy(coordinates=[x[ii], y[ii]])
                 vfmeshes.append(submesh)
             region_meshes[region] = tuple(vfmeshes)
+        
+        self.addr_idxs = {'addr' : np.concatenate(addr_idxs), 
+                     'region' : np.concatenate(region_idxs),
+                     'hemi' : np.concatenate(hemi_idxs)}
+        cortex_pts = np.concatenate(cortex_pts)
+        self.cortex_tree = cKDTree(cortex_pts)
+
         return region_meshes
             
 
@@ -278,6 +297,101 @@ class NeuropythyMap(CorticalMap):
         ret[:, ~idx] = l
         ret = ret.reshape((3, *shape))
         return ret[0], ret[1], ret[2]
+    
+
+    def cortex_to_dva(self, xc, yc, zc):
+        """
+        Gives the visual field position(s) of the cortex point(s) `(xc,yc,zc)`.
+
+        Parameters
+        ----------
+        xc, yc, zc : float or array_like
+            The x, y, and z-coordinate(s) of the cortex point(s) to look up (in mm).
+        
+        Returns
+        -------
+        x, y : array_like
+            The x and y-coordinate(s) of the visual field point(s) (in dva).
+        """
+        xc = np.array(xc, dtype='float32')
+        yc = np.array(yc, dtype='float32')
+        zc = np.array(zc, dtype='float32')
+        if np.shape(xc) != np.shape(yc) or np.shape(xc) != np.shape(zc):
+            raise ValueError("x, y, and z must have the same shape")
+        id_nan = np.isnan(xc) | np.isnan(yc) | np.isnan(zc)
+        query = np.stack([np.ravel(xc[~id_nan]), np.ravel(yc[~id_nan]), np.ravel(zc[~id_nan])], axis=-1) / 1000 # convert to mm
+        if np.size(query) == 0:
+            return np.ones((*np.shape(xc), 2)) * np.nan
+        dist, idx = self.cortex_tree.query(query, k=5)#, distance_upper_bound=self.cort_nn_thresh / 1000)
+        idx_nan = np.all(dist > self.cort_nn_thresh / 1000, axis=-1)
+        dist[dist > self.cort_nn_thresh / 1000] = 999999999 # make high so it doesn't contribute to geometric mean
+        neighbors = np.array([[self.region_meshes[self.addr_idxs['region'][i]][self.addr_idxs['hemi'][i]].coordinates[:, self.addr_idxs['addr'][i]] 
+                               for i in nb_pts] 
+                              for nb_pts in idx])
+        # use geometric mean based on distance
+        pts = np.sum(neighbors * 1/dist[..., None], axis=1) / np.sum(1/dist, axis=1)[:, None]
+        pts[idx_nan] = [np.nan, np.nan]
+        out = np.ones((*np.shape(xc), 2)) * np.nan
+        out[~id_nan] = pts
+        return pts[:, 0], pts[:, 1]
+    
+
+    def v1_to_dva(self, xv1, yv1, zv1):
+        """
+        Convert points in v1 to dva. Uses the mean of the 5 nearest neighbors
+        in the cortical mesh, weighted by 1/distance, to interpolate dva. 
+        Any points that are more than self.cort_nn_thresh um from the
+        nearest neighbor will be set to nan.
+
+        Parameters
+        ----------
+        xv1, yv1, zv1 : float or array_like
+            The x, y, and z-coordinate(s) of the v1 point(s) to look up (in mm).
+
+        Returns
+        -------
+        x, y : array_like
+            The x and y-coordinate(s) of the visual field point(s) (in dva).
+        """
+        return self.cortex_to_dva(xv1, yv1, zv1)
+    
+    def v2_to_dva(self, xv2, yv2, zv2):
+        """
+        Convert points in v2 to dva. Uses the mean of the 5 nearest neighbors
+        in the cortical mesh, weighted by 1/distance, to interpolate dva.
+        Any points that are more than self.cort_nn_thresh um from the
+        nearest neighbor will be set to nan.
+
+        Parameters
+        ----------
+        xv2, yv2, zv2 : float or array_like
+            The x, y, and z-coordinate(s) of the v2 point(s) to look up (in mm).
+
+        Returns
+        -------
+        x, y : array_like
+            The x and y-coordinate(s) of the visual field point(s) (in dva).
+        """
+        return self.cortex_to_dva(xv2, yv2, zv2)
+    
+    def v3_to_dva(self, xv3, yv3, zv3):
+        """
+        Convert points in v3 to dva. Uses the mean of the 5 nearest neighbors
+        in the cortical mesh, weighted by 1/distance, to interpolate dva.
+        Any points that are more than self.cort_nn_thresh um from the
+        nearest neighbor will be set to nan.
+
+        Parameters
+        ----------
+        xv3, yv3, zv3 : float or array_like
+            The x, y, and z-coordinate(s) of the v3 point(s) to look up (in mm).
+
+        Returns
+        -------
+        x, y : array_like
+            The x and y-coordinate(s) of the visual field point(s) (in dva).
+        """
+        return self.cortex_to_dva(xv3, yv3, zv3)
 
         
 
