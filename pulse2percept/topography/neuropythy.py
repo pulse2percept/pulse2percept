@@ -10,7 +10,8 @@ class NeuropythyMap(CorticalMap):
 
     def __init__(self, subject, cache_dir=None, **params):
         """
-        Uses the visual field maps from the neuropythy package
+        Uses the visual field maps from the neuropythy package.
+        Requires the neuropythy package to be installed (`pip install neuropythy`)
 
         Parameters
         ----------
@@ -40,7 +41,7 @@ class NeuropythyMap(CorticalMap):
         try:
             import neuropythy as ny
         except ImportError:
-            raise ImportError("NeuropythyMap requires the neuropythy package.")
+            raise ImportError("NeuropythyMap requires the neuropythy package  (`pip install neuropythy`).")
         super().__init__(**params)
         self.cache_dir = os.path.expanduser(os.path.join('~', '.neuropythy_p2p')) if cache_dir is None else os.path.expanduser(cache_dir)
         self.subject = self.parse_subject(subject)
