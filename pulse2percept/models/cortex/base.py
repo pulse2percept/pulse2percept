@@ -5,6 +5,8 @@ from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
 from ...utils.constants import ZORDER
 import numpy as np
+import torch
+import torch.nn as nn
 
 class CortexSpatial(SpatialModel):
     """Abstract base class for cortical models
@@ -167,6 +169,36 @@ class CortexSpatial(SpatialModel):
         ax.view_init(elev=20, azim=110)
         return ax
 
+class TorchScoreboardSpatial(nn.Module):
+    def __init__(self, p2pmodel):
+        super().__init__()
+        if not p2pmodel.is_built:
+            p2pmodel.build()
+        self.rho = torch.tensor(p2pmodel.rho)
+        self.shape = p2pmodel.grid.shape
+        xV1 = torch.tensor(p2pmodel.grid.v1.x.ravel())
+        yV1 = torch.tensor(p2pmodel.grid.v1.y.ravel())
+        if p2pmodel.grid.v1.z is not None:
+            zV1 = torch.tensor(p2pmodel.grid.v1.z.ravel())
+            self.v1_locs = torch.stack([xV1, yV1, zV1], axis=-1)
+        else:
+            self.v1_locs = torch.stack([xV1, yV1], axis=-1)
+
+    def forward(self, amps, e_locs):
+        """Predicts the percept
+        Parameters
+        ----------
+        amps: (n_elecs) shaped tensor
+            Amplitude for each electrode in the implant
+        e_locs: (n_elecs, dim) shaped tensor
+            electrode location (x, y, [z optional]) for each electrode
+        """
+
+        # (npixels, nelecs)
+        d2_el = torch.sum((self.v1_locs[:, None, :] - e_locs[None, :, :] )**2, axis=-1)
+        intensities = amps[None, :] * torch.exp(-d2_el / (2 * self.rho**2))
+        intensities = torch.sum(intensities, axis=-1)
+        return intensities
 
 class ScoreboardSpatial(CortexSpatial):
     """Cortical adaptation of scoreboard model from [Beyeler2019]_
@@ -233,13 +265,18 @@ class ScoreboardSpatial(CortexSpatial):
     def __init__(self, **params):
         super(ScoreboardSpatial, self).__init__(**params)
 
+    def _build(self):
+        if self.engine == 'torch':
+            self.torchmodel = TorchScoreboardSpatial(self)
+
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
         base_params = super(ScoreboardSpatial, self).get_default_params()
         params = {
                     # radial current spread
                     'rho': 200,  
-                    'ndim' : [2, 3]
+                    'ndim' : [2, 3],
+                    'engine': 'cython'
                  }
         return {**base_params, **params}
 
@@ -258,28 +295,40 @@ class ScoreboardSpatial(CortexSpatial):
         if self.vfmap.split_map:
             separate = 1
             boundary = self.vfmap.left_offset/2
-        if self.vfmap.ndim == 3:
-            return np.sum([
-                fast_scoreboard_3d(stim.data, x_el, y_el, z_el,
-                                self.grid[region].x.ravel(), 
-                                self.grid[region].y.ravel(),
-                                self.grid[region].z.ravel(),
-                                self.rho, self.thresh_percept, 
-                                separate, boundary, 
-                                self.n_threads)
-                for region in self.regions ],
-            axis = 0)
-        elif self.vfmap.ndim == 2:
-            return np.sum([
-                fast_scoreboard(stim.data, x_el, y_el,
-                                self.grid[region].x.ravel(), self.grid[region].y.ravel(),
-                                self.rho, self.thresh_percept, 
-                                separate, boundary, 
-                                self.n_threads)
-                for region in self.regions ],
-            axis = 0)
-        else:
-            raise ValueError("Invalid dimensionality of visual field map")
+        if self.engine == "torch":
+            if self.vfmap.ndim == 2:
+                e_locs = torch.tensor([(x,y) for x,y in zip(x_el, y_el)])
+                amps = torch.tensor(stim.data)
+                if stim.time is not None:
+                    raise NotImplementedError("Torch engine does not support stimulus with time component yet")
+                else:
+                    percept = self.torchmodel(amps=amps.squeeze(), e_locs=e_locs).reshape(self.grid.x.ravel().size).numpy()
+                return percept
+            else:
+                raise ValueError("Invalid dimensionality of visual field map")
+        elif self.engine == "cython":
+            if self.vfmap.ndim == 3:
+                return np.sum([
+                    fast_scoreboard_3d(stim.data, x_el, y_el, z_el,
+                                    self.grid[region].x.ravel(), 
+                                    self.grid[region].y.ravel(),
+                                    self.grid[region].z.ravel(),
+                                    self.rho, self.thresh_percept, 
+                                    separate, boundary, 
+                                    self.n_threads)
+                    for region in self.regions ],
+                axis = 0)
+            elif self.vfmap.ndim == 2:
+                return np.sum([
+                    fast_scoreboard(stim.data, x_el, y_el,
+                                    self.grid[region].x.ravel(), self.grid[region].y.ravel(),
+                                    self.rho, self.thresh_percept, 
+                                    separate, boundary, 
+                                    self.n_threads)
+                    for region in self.regions ],
+                axis = 0)
+            else:
+                raise ValueError("Invalid dimensionality of visual field map")
 
 
 class ScoreboardModel(Model):
