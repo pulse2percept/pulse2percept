@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Build Py3.11 wheels
-        uses: pypa/cibuildwheel@v2.16.2
+        uses: pypa/cibuildwheel@v2.16.5
         env:
           CIBW_BEFORE_BUILD_LINUX: "yum install -y python-devel zlib-devel libjpeg-turbo-devel wget && python -m pip install -U pip pillow numpy && python -m pip install -r requirements.txt && python -m pip install -e ."
           CIBW_BEFORE_BUILD: "python -m pip install -U pip numpy pillow && python -m pip install -r requirements.txt && python -m pip install -e ."
@@ -33,7 +33,7 @@ jobs:
           CIBW_SKIP: "*-manylinux_i686 cp311-win32 *musllinux*"
 
       - name: Build Py3.10 wheels
-        uses: pypa/cibuildwheel@v2.16.2
+        uses: pypa/cibuildwheel@v2.16.5
         env:
           CIBW_BEFORE_BUILD_LINUX: "yum install -y python-devel zlib-devel libjpeg-turbo-devel wget && python -m pip install -U pip pillow numpy && python -m pip install -r requirements.txt && python -m pip install -e ."
           CIBW_BEFORE_BUILD: "python -m pip install -U pip numpy pillow && python -m pip install -r requirements.txt && python -m pip install -e ."
@@ -41,7 +41,7 @@ jobs:
           CIBW_SKIP: "*-manylinux_i686 cp310-win32 *musllinux*"
 
       - name: Build Py3.8-3.9 wheels
-        uses: pypa/cibuildwheel@v2.16.2
+        uses: pypa/cibuildwheel@v2.16.5
         env:
           CIBW_BEFORE_BUILD: "python -m pip install -U pip numpy && python -m pip install Pillow==8.3.2 && python -m pip install -r requirements.txt && python -m pip install -e ."
           CIBW_BUILD: "cp39-* cp38-*"
