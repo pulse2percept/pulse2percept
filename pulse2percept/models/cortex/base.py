@@ -196,7 +196,7 @@ class TorchScoreboardSpatial(nn.Module):
 
         # (npixels, nelecs)
         d2_el = torch.sum((self.v1_locs[:, None, :] - e_locs[None, :, :] )**2, axis=-1)
-        intensities = amps[None, :] * torch.exp(-d2_el / (2 * self.rho**2))
+        intensities = amps.T[:, None, :] * torch.exp(-d2_el / (2 * self.rho**2))
         intensities = torch.sum(intensities, axis=-1)
         return intensities
 
@@ -264,9 +264,11 @@ class ScoreboardSpatial(CortexSpatial):
     """
     def __init__(self, **params):
         super(ScoreboardSpatial, self).__init__(**params)
+        self.torchmodel = None
 
     def _build(self):
         if self.engine == 'torch':
+            self.is_built = True
             self.torchmodel = TorchScoreboardSpatial(self)
 
     def get_default_params(self):
@@ -299,11 +301,8 @@ class ScoreboardSpatial(CortexSpatial):
             if self.vfmap.ndim == 2:
                 e_locs = torch.tensor([(x,y) for x,y in zip(x_el, y_el)])
                 amps = torch.tensor(stim.data)
-                if stim.time is not None:
-                    raise NotImplementedError("Torch engine does not support stimulus with time component yet")
-                else:
-                    percept = self.torchmodel(amps=amps.squeeze(), e_locs=e_locs).reshape(self.grid.x.ravel().size).numpy()
-                return percept
+                print(amps)
+                return self.torchmodel(amps=amps, e_locs=e_locs).T.numpy()
             else:
                 raise ValueError("Invalid dimensionality of visual field map")
         elif self.engine == "cython":
