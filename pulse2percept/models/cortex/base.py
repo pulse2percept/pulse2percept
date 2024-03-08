@@ -301,7 +301,6 @@ class ScoreboardSpatial(CortexSpatial):
             if self.vfmap.ndim == 2:
                 e_locs = torch.tensor([(x,y) for x,y in zip(x_el, y_el)])
                 amps = torch.tensor(stim.data)
-                print(amps)
                 return self.torchmodel(amps=amps, e_locs=e_locs).T.numpy()
             else:
                 raise ValueError("Invalid dimensionality of visual field map")
