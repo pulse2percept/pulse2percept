@@ -119,7 +119,7 @@ class Polimeni2006Map(CorticalMap):
     
     def _invert_left_cart(self, x, y, inverted = None, boundary=0):
         """
-        'Corrects' the mapping by flipping x axis if neccesary, allowing for both
+        'Corrects' the mapping by flipping x axis if necessary, allowing for both
          left and right hemisphere to use the same map.
         """
         # Check if we're reverting from an existing inversion

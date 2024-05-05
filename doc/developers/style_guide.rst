@@ -20,7 +20,7 @@ Coding style
 ============
 
 pulse2percept uses the standard Python `PEP8`_ style guide to ensure
-readibility and consistency of the code base.
+readability and consistency of the code base.
 
 .. note::
 
@@ -44,7 +44,7 @@ Imports
 -------
 
 pulse2percept recommends using the following package shorthands to increase
-consistency and readibility across the library:
+consistency and readability across the library:
 
 .. code-block:: python
 
@@ -92,7 +92,7 @@ The recommended style is to break a line after binary operators:
               - student_loan_interest)
 
 Yes, we are aware of the ongoing `W503 vs W504 discussion <https://www.python.org/dev/peps/pep-0008/#should-a-line-break-before-or-after-a-binary-operator>`_.
-W504 would improve readibility.
+W504 would improve readability.
 However, for now, we want to ensure consistency with the existing code.
 
 Class layout (slots, properties)

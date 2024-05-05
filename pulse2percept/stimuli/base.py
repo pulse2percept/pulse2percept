@@ -118,7 +118,7 @@ class Stimulus(PrettyPrint):
            The number of time points provided must match the number of time
            points extracted from the source type (i.e., M).
            Stimuli created from scalars or 1-D NumPy arrays will have no time
-           componenet, in which case you cannot provide your own time points.
+           component, in which case you cannot provide your own time points.
 
     metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.

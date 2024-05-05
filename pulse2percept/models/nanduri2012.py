@@ -35,7 +35,7 @@ class Nanduri2012Spatial(SpatialModel):
     Parameters
     ----------
     atten_a : float, optional
-        Nominator of the attentuation function
+        Nominator of the attenuation function
     atten_n : float32, optional
         Exponent of the attenuation function's denominator
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -198,7 +198,7 @@ class Nanduri2012Model(Model):
     Parameters
     ----------
     atten_a : float, optional
-        Nominator of the attentuation function (Eq.2 in the paper)
+        Nominator of the attenuation function (Eq.2 in the paper)
     atten_n : float32, optional
         Exponent of the attenuation function's denominator (Eq.2 in the paper)
     dt : float, optional

@@ -314,7 +314,7 @@ def test_biphasicAxonMapModel(engine):
     for atr in ['a' + str(i) for i in range(0, 10)]:
         npt.assert_equal(hasattr(model, atr), True)
     model.a0 = 5
-    # Should propogate to size and bright model
+    # Should propagate to size and bright model
     # But should not be a member of streak or spatial
     npt.assert_equal(model.spatial.size_model.a0, 5)
     npt.assert_equal(model.spatial.bright_model.a0, 5)
@@ -337,11 +337,11 @@ def test_biphasicAxonMapModel(engine):
     npt.assert_equal(model.rho, 432)
     npt.assert_equal(model.spatial.size_model.rho, 432)
 
-    # If parameter is not an effects model param, it cant be set
+    # If parameter is not an effects model param, it can't be set
     with pytest.raises(FreezeError):
         model.invalid_param = 5
 
-    # Custom parameters also propogate to effects models
+    # Custom parameters also propagate to effects models
     model = BiphasicAxonMapModel(engine=engine)
 
     class TestSizeModel():
@@ -361,7 +361,7 @@ def test_biphasicAxonMapModel(engine):
     class TestInitClassGood():
         def __init__(self):
             self.model = BiphasicAxonMapModel()
-            # This shouldnt raise an error
+            # This shouldn't raise an error
             self.model.a0
 
     class TestInitClassBad():

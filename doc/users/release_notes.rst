@@ -174,7 +174,7 @@ API changes
 Backward-incompatible changes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-*  Implants rotation angles are now speicified in degrees, not radians (:pull:`357`)
+*  Implants rotation angles are now specified in degrees, not radians (:pull:`357`)
 *  pulse2percept now requires Matplotlib 3.0.2 or newer (:pull:`223`)
 *  FFMPEG and scikit-video dependencies have been removed (:pull:`196`)
 *  ``TimeSeries`` has been removed. Please use

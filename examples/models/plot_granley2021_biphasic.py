@@ -305,7 +305,7 @@ plt.show()
 # its faster, stripped version `_predict_spatial_batched`. This 
 # function is only intended to be used if you are repeatedly simulating batches of percepts. 
 # Since jax compiles each function the first time it is used, using this function only once
-# for a singular group of stimuli will be noticably slower than repeatedly applying 
+# for a singular group of stimuli will be noticeably slower than repeatedly applying 
 # `predict_percept`. However, splitting a very large set of stimuli into smaller batches and 
 # using `predict_percept_batched` will be significantly faster than `predict_percept` on each
 # individual stimuli.

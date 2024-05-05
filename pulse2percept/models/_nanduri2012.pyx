@@ -38,7 +38,7 @@ cpdef spatial_fast(const float32[:, ::1] stim,
         An array of x or y coordinates at which to calculate the spatial
         response (microns)
     atten_a : float32
-        Nominator of the attentuation function (Eq.2 in the paper)
+        Nominator of the attenuation function (Eq.2 in the paper)
     atten_n : float32
         Exponent of the attenuation function's denominator (Eq.2 in the paper)
     thresh_percept : float32
@@ -91,7 +91,7 @@ cpdef spatial_fast(const float32[:, ::1] stim,
                     denom = atten_a + c_pow(zel[idx_el], atten_n)
                 else:
                     # Away from the electrode surface, calculate the distance
-                    # to the electrode egde (`d2e`):
+                    # to the electrode edge (`d2e`):
                     d2e = (c_pow(c_sqrt(d2c) - rel[idx_el], 2) +
                            c_pow(zel[idx_el], 2))
                     denom = atten_a + c_pow(c_sqrt(d2e), atten_n)
