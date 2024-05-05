@@ -208,7 +208,7 @@ class Stimulus(PrettyPrint):
             time = None
             electrodes = None
         elif isinstance(source, (list, tuple)):
-            # List or touple with N elements: 1 electrode, N time points
+            # List or tuple with N elements: 1 electrode, N time points
             data = np.array(source, dtype=np.float32).reshape((1, -1))
             time = np.arange(data.shape[-1], dtype=np.float32)
             electrodes = None

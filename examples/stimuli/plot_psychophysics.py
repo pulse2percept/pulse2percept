@@ -6,7 +6,7 @@ Generating a drifting sinusoidal grating or drifting bar stimulus
 
 *This example shows how to use drifting psychophysics-based stimuli for a retinal implant.*
 
-Along with images, videos, and oter built-in stimuli, pulse2percept supports
+Along with images, videos, and other built-in stimuli, pulse2percept supports
 generating :py:class:`~pulse2percept.stimuli.GratingStimulus` and :py:class:`~pulse2percept.stimuli.BarStimulus` as stimuli
 that can be passed as percepts to implants.
 

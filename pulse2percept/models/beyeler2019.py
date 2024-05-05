@@ -474,7 +474,7 @@ class AxonMapSpatial(SpatialModel):
             Note that each bundle will most likely have a different N
         xret, yret : scalar or list of scalars
             The x,y location on the retina (in microns, where the fovea is the
-            origin) for which to find the closests axon.
+            origin) for which to find the closest axon.
         return_index : bool, optional
             If True, the function will also return the index into ``bundles``
             that represents the closest axon
