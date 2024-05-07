@@ -3,6 +3,7 @@
 import os
 import numpy as np
 import pickle
+import torch
 from scipy.spatial import cKDTree
 
 import matplotlib.pyplot as plt
@@ -267,6 +268,7 @@ class AxonMapSpatial(SpatialModel):
         self.axon_contrib = None
         self.axon_idx_start = None
         self.axon_idx_end = None
+        self.torchmodel = None
 
     def get_default_params(self):
         base_params = super(AxonMapSpatial, self).get_default_params()
@@ -748,15 +750,19 @@ class AxonMapSpatial(SpatialModel):
         # If engine is jax:
         #   All axons are the same length, so Axon contribution is an array with
         #   shape (n, axon_length, 3)
-        if self.engine == 'jax':
-            self.axon_contrib = self.calc_axon_sensitivity(
-                axons, pad=True).astype(np.float32)
-        else:
-            axon_contrib = self.calc_axon_sensitivity(axons)
-            self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
-            len_axons = [a.shape[0] for a in axon_contrib]
-            self.axon_idx_end = np.cumsum(len_axons)
-            self.axon_idx_start = self.axon_idx_end - np.array(len_axons)
+        match (self.engine):
+            case 'jax':
+                self.axon_contrib = self.calc_axon_sensitivity(
+                    axons, pad=True).astype(np.float32)
+            case 'torch':
+                self.torchmodel = TorchAxonMapSpatial(self)
+                self.is_built = True
+            case _:
+                axon_contrib = self.calc_axon_sensitivity(axons)
+                self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
+                len_axons = [a.shape[0] for a in axon_contrib]
+                self.axon_idx_end = np.cumsum(len_axons)
+                self.axon_idx_start = self.axon_idx_end - np.array(len_axons)
         if need_axons:
             # Pickle axons along with all important parameters:
             params = {'loc_od': self.loc_od,
@@ -774,20 +780,26 @@ class AxonMapSpatial(SpatialModel):
             warnings.warn(msg)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        if self.engine != 'jax':
-            return fast_axon_map(stim.data,
-                                 np.array([earray[e].x for e in stim.electrodes],
-                                          dtype=np.float32),
-                                 np.array([earray[e].y for e in stim.electrodes],
-                                          dtype=np.float32),
-                                 self.axon_contrib,
-                                 self.axon_idx_start.astype(np.uint32),
-                                 self.axon_idx_end.astype(np.uint32),
-                                 self.rho,
-                                 self.thresh_percept,
-                                 self.n_threads)
-        else:
-            raise NotImplementedError("Jax will be supported in future release")
+        match (self.engine):
+            case 'cython':
+                return fast_axon_map(stim.data,
+                                    np.array([earray[e].x for e in stim.electrodes],
+                                            dtype=np.float32),
+                                    np.array([earray[e].y for e in stim.electrodes],
+                                            dtype=np.float32),
+                                    self.axon_contrib,
+                                    self.axon_idx_start.astype(np.uint32),
+                                    self.axon_idx_end.astype(np.uint32),
+                                    self.rho,
+                                    self.thresh_percept,
+                                    self.n_threads)
+            case 'torch':
+                inputs = [stim.data, self.rho] # add more if necessary
+                return self.torchmodel(inputs).numpy()
+            case 'jax':
+                raise NotImplementedError("Jax will be supported in future release")
+            case _:
+                raise NotImplementedError("Unknown engine selected")
 
     def plot(self, use_dva=False, style='hull', annotate=True, autoscale=True,
              ax=None, figsize=None):
@@ -903,6 +915,60 @@ class AxonMapSpatial(SpatialModel):
             ann.set_xticks([])
             ann.set_yticks([])
         return ax
+
+class TorchAxonMapSpatial(torch.nn.Module):
+    def __init__(self, p2pmodel, implant): # implanet parameter currently not used
+        super().__init__()
+
+        # Check for model validity
+        if isinstance(p2pmodel, AxonMapModel) or not isinstance(p2pmodel, AxonMapSpatial):
+            raise ValueError("Must pass in a valid AxonMapModelSpatial")
+        if p2pmodel.engine != 'torch':
+            raise ValueError("Engine Selection Conflict : Constructing TorchAxonMapSpatial with engine", p2pmodel.engine)
+        if not p2pmodel.is_built:
+            p2pmodel.build() #should account for most build necessity
+            bundles = p2pmodel.grow_axon_bundles()
+            axons = p2pmodel.find_closest_axon(bundles)
+            axon_contrib = p2pmodel.calc_axon_sensitivity(axons, pad=True)
+        else:
+            axon_contrib = p2pmodel.axon_contrib
+        
+
+        self.rho = torch.tensor(p2pmodel.rho, torch.get_default_dtype())
+        self.shape = p2pmodel.grid.shape # doesn't seem necessary as of right now
+        self.axon_contrib = torch.tensor(axon_contrib, torch.get_default_dtype())
+
+        self.elec_x = torch.tensor([implant[e].x for e in implant.electrodes], torch.get_default_dtype())
+        self.elec_y = torch.tensor([implant[e].y for e in implant.electrodes], torch.get_default_dtype())
+
+        
+    
+    def forward(self, inputs):
+        # n_el = self.stim.shape[0]
+        # n_time = self.stim.shape[1]
+        # n_space = len(self.idx_start)
+        # n_bright = n_time * n_space
+        
+        # I_axon(x,y;p, lambda) = I_score(x,y; p) * exp(-( (x-x_soma)**2 + (y-y_soma)**2) / (2 * lambda**2))
+        amp = torch.tensor(inputs[0][:, :]) # I_score
+        axlambda = torch.tensor(inputs[1][:,1][:, None], dtype='float32') # lambda
+
+        d2_el = torch.sum((self.axon_contrib[:, :, 0, None] - self.elec_x)**2, 
+                          (self.axon_contrib[:, :, 1, None] - self.elec_y)**2) # (x-x_soma)**2 + (y-y_soma)**2)
+        
+        # Note to Jacob / whoever sees this
+        # I am basing this intensities calculation based on the equation from the paper and the Cython code
+
+        # intensities = (amp[:, None, None, :] * torch.exp(-d2_el/ ( 2 * axlambda**2))) # based on inversep2p
+        intensities = (amp[:, None, None, :] * torch.exp(-d2_el/ ( 2 * self.rho**2))) # based on cython code
+        intensities = intensities * self.axon_contrib[None, :, :, 2, None]
+
+        # post processing required, double check with jacob
+        # TODO
+
+        return intensities
+
+
 
 
 class AxonMapModel(Model):
