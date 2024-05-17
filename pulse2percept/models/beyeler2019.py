@@ -755,6 +755,7 @@ class AxonMapSpatial(SpatialModel):
                 self.axon_contrib = self.calc_axon_sensitivity(
                     axons, pad=True).astype(np.float32)
             case 'torch':
+                self.axon_contrib = self.calc_axon_sensitivity(axons)
                 self.torchmodel = TorchAxonMapSpatial(self)
                 self.is_built = True
             case _:
@@ -944,10 +945,6 @@ class TorchAxonMapSpatial(torch.nn.Module):
         
     
     def forward(self, inputs):
-        # n_el = self.stim.shape[0]
-        # n_time = self.stim.shape[1]
-        # n_space = len(self.idx_start)
-        # n_bright = n_time * n_space
         
         # I_axon(x,y;p, lambda) = I_score(x,y; p) * exp(-( (x-x_soma)**2 + (y-y_soma)**2) / (2 * lambda**2))
         amp = torch.tensor(inputs[0][:, :]) # I_score
@@ -956,10 +953,6 @@ class TorchAxonMapSpatial(torch.nn.Module):
         d2_el = torch.sum((self.axon_contrib[:, :, 0, None] - self.elec_x)**2, 
                           (self.axon_contrib[:, :, 1, None] - self.elec_y)**2) # (x-x_soma)**2 + (y-y_soma)**2)
         
-        # Note to Jacob / whoever sees this
-        # I am basing this intensities calculation based on the equation from the paper and the Cython code
-
-        # intensities = (amp[:, None, None, :] * torch.exp(-d2_el/ ( 2 * axlambda**2))) # based on inversep2p
         intensities = (amp[:, None, None, :] * torch.exp(-d2_el/ ( 2 * self.rho**2))) # based on cython code
         intensities = intensities * self.axon_contrib[None, :, :, 2, None]
 
