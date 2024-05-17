@@ -750,20 +750,19 @@ class AxonMapSpatial(SpatialModel):
         # If engine is jax:
         #   All axons are the same length, so Axon contribution is an array with
         #   shape (n, axon_length, 3)
-        match (self.engine):
-            case 'jax':
-                self.axon_contrib = self.calc_axon_sensitivity(
-                    axons, pad=True).astype(np.float32)
-            case 'torch':
-                self.axon_contrib = self.calc_axon_sensitivity(axons)
-                self.torchmodel = TorchAxonMapSpatial(self)
-                self.is_built = True
-            case _:
-                axon_contrib = self.calc_axon_sensitivity(axons)
-                self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
-                len_axons = [a.shape[0] for a in axon_contrib]
-                self.axon_idx_end = np.cumsum(len_axons)
-                self.axon_idx_start = self.axon_idx_end - np.array(len_axons)
+        if self.engine == 'jax':
+            self.axon_contrib = self.calc_axon_sensitivity(
+                axons, pad=True).astype(np.float32)
+        elif self.engine == 'torch':
+            self.axon_contrib = self.calc_axon_sensitivity(axons)
+            self.torchmodel = TorchAxonMapSpatial(self)
+            self.is_built = True
+        else: 
+            axon_contrib = self.calc_axon_sensitivity(axons)
+            self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
+            len_axons = [a.shape[0] for a in axon_contrib]
+            self.axon_idx_end = np.cumsum(len_axons)
+            self.axon_idx_start = self.axon_idx_end - np.array(len_axons)
         if need_axons:
             # Pickle axons along with all important parameters:
             params = {'loc_od': self.loc_od,
@@ -781,27 +780,25 @@ class AxonMapSpatial(SpatialModel):
             warnings.warn(msg)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        match (self.engine):
-            case 'cython':
-                return fast_axon_map(stim.data,
-                                    np.array([earray[e].x for e in stim.electrodes],
-                                            dtype=np.float32),
-                                    np.array([earray[e].y for e in stim.electrodes],
-                                            dtype=np.float32),
-                                    self.axon_contrib,
-                                    self.axon_idx_start.astype(np.uint32),
-                                    self.axon_idx_end.astype(np.uint32),
-                                    self.rho,
-                                    self.thresh_percept,
-                                    self.n_threads)
-            case 'torch':
-                inputs = [stim.data, self.rho] # add more if necessary
-                return self.torchmodel(inputs).numpy()
-            case 'jax':
-                raise NotImplementedError("Jax will be supported in future release")
-            case _:
-                raise NotImplementedError("Unknown engine selected")
-
+        if self.engine == 'cython':
+            return fast_axon_map(stim.data,
+                                np.array([earray[e].x for e in stim.electrodes],
+                                        dtype=np.float32),
+                                np.array([earray[e].y for e in stim.electrodes],
+                                        dtype=np.float32),
+                                self.axon_contrib,
+                                self.axon_idx_start.astype(np.uint32),
+                                self.axon_idx_end.astype(np.uint32),
+                                self.rho,
+                                self.thresh_percept,
+                                self.n_threads)
+        elif self.engine == 'torch':
+            inputs = [stim.data, self.rho] # add more if necessary
+            return self.torchmodel(inputs).numpy()
+        elif self.engine == 'jax':
+            raise NotImplementedError("Jax will be supported in future release")
+        else: 
+            raise NotImplementedError("Unknown engine selected")
     def plot(self, use_dva=False, style='hull', annotate=True, autoscale=True,
              ax=None, figsize=None):
         """Plot the axon map
