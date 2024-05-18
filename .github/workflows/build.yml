@@ -19,9 +19,9 @@ jobs:
         os: [ubuntu-latest, ubuntu-20.04, windows-latest, macOS-latest]
         exclude:
           - python-version: "3.8"
-            runs-on: macos-latest
+            os: macos-latest
           - python-version: "3.9"
-            runs-on: macos-latest
+            os: macos-latest
     
     steps:
     - uses: actions/checkout@v1
