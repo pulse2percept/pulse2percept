@@ -170,21 +170,27 @@ class CortexSpatial(SpatialModel):
         return ax
 
 class TorchScoreboardSpatial(nn.Module):
-    def __init__(self, p2pmodel):
+    def __init__(self, p2pmodel, device=None):
         super().__init__()
         if not p2pmodel.is_built:
             p2pmodel.build()
+        if device is None:
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = torch.device(device)
         self.rho = torch.tensor(p2pmodel.rho)
         self.shape = p2pmodel.grid.shape
-        xV1 = torch.tensor(p2pmodel.grid.v1.x.ravel())
-        yV1 = torch.tensor(p2pmodel.grid.v1.y.ravel())
-        if p2pmodel.grid.v1.z is not None:
-            zV1 = torch.tensor(p2pmodel.grid.v1.z.ravel())
-            self.v1_locs = torch.stack([xV1, yV1, zV1], axis=-1)
-        else:
-            self.v1_locs = torch.stack([xV1, yV1], axis=-1)
+        self.regions = p2pmodel.regions
+        self.locs = {}
+        for region in self.regions:
+            x = torch.tensor(p2pmodel.grid[region].x.ravel())
+            y = torch.tensor(p2pmodel.grid[region].y.ravel())
+            if p2pmodel.grid[region].z is not None:
+                z = torch.tensor(p2pmodel.grid[region].z.ravel())
+                self.locs[region] = torch.stack([x, y, z], axis=-1)
+            else:
+                self.locs[region] = torch.stack([x, y], axis=-1)
 
-    def forward(self, amps, e_locs):
+    def forward(self, amps, e_locs, separate, boundary):
         """Predicts the percept
         Parameters
         ----------
@@ -195,10 +201,14 @@ class TorchScoreboardSpatial(nn.Module):
         """
 
         # (npixels, nelecs)
-        d2_el = torch.sum((self.v1_locs[:, None, :] - e_locs[None, :, :] )**2, axis=-1)
-        intensities = amps.T[:, None, :] * torch.exp(-d2_el / (2 * self.rho**2))
-        intensities = torch.sum(intensities, axis=-1)
-        return intensities
+        tot_intensities = 0
+        for region in self.regions:
+            d2_el = torch.sum((self.locs[region][:, None, :] - e_locs[None, :, :] )**2, axis=-1)
+            intensities = amps.T[:, None, :] * torch.exp(-d2_el / (2 * self.rho**2)) # generate gaussian blobs for each electrode
+            intensities *= separate * torch.where((e_locs[None,:,0] < boundary) == (self.locs[region][:,None,0] < boundary), 1, 0) # ensure current cannot spread between hemispheres
+            intensities = torch.sum(intensities, axis=-1) # add up all gaussian blobs
+            tot_intensities += intensities
+        return tot_intensities
 
 class ScoreboardSpatial(CortexSpatial):
     """Cortical adaptation of scoreboard model from [Beyeler2019]_
@@ -299,9 +309,9 @@ class ScoreboardSpatial(CortexSpatial):
             boundary = self.vfmap.left_offset/2
         if self.engine == "torch":
             if self.vfmap.ndim == 2:
-                e_locs = torch.tensor([(x,y) for x,y in zip(x_el, y_el)])
-                amps = torch.tensor(stim.data)
-                return self.torchmodel(amps=amps, e_locs=e_locs).T.numpy()
+                e_locs = torch.tensor([(x,y) for x,y in zip(x_el, y_el)]).to(self.torchmodel.device)
+                amps = torch.tensor(stim.data).to(self.torchmodel.device)
+                return self.torchmodel(amps=amps, e_locs=e_locs, separate=separate, boundary=boundary).T.numpy()
             else:
                 raise ValueError("Invalid dimensionality of visual field map")
         elif self.engine == "cython":
