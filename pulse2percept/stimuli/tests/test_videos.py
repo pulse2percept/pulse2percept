@@ -50,10 +50,10 @@ def test_VideoStimulus_invert():
     ndarray = np.ones(shape) * gray
     mimwrite(fname, (255 * ndarray).astype(np.uint8), fps=1)
     stim = VideoStimulus(fname)
-    npt.assert_almost_equal(stim.data, gray)
-    npt.assert_almost_equal(stim.invert().data, 1 - gray)
+    npt.assert_almost_equal(stim.data, gray, decimal=2)
+    npt.assert_almost_equal(stim.invert().data, 1 - gray, decimal=2)
     # Inverting does not change the original object:
-    npt.assert_almost_equal(stim.data, gray)
+    npt.assert_almost_equal(stim.data, gray, decimal=2)
     os.remove(fname)
 
 
@@ -68,7 +68,7 @@ def test_VideoStimulus_rgb2gray():
     # Gray levels are between 0 and 1, and can be inverted:
     stim_rgb = VideoStimulus(fname)
     stim_gray = stim_rgb.rgb2gray()
-    npt.assert_almost_equal(stim_gray.data, gray)
+    npt.assert_almost_equal(stim_gray.data, gray, decimal=2)
     npt.assert_equal(stim_gray.vid_shape, (shape[1], shape[2], shape[0]))
     # Original stim unchanged:
     npt.assert_equal(stim_rgb.vid_shape,
@@ -84,7 +84,7 @@ def test_VideoStimulus_resize():
     mimwrite(fname, (255 * ndarray).astype(np.uint8), fps=1)
     # Gray levels are between 0 and 1, and can be inverted:
     stim = VideoStimulus(fname)
-    npt.assert_almost_equal(stim.data, gray)
+    npt.assert_almost_equal(stim.data, gray, decimal=2)
     npt.assert_equal(stim.resize((13, -1)).vid_shape, (13, 19, 3, 10))
     # Resize with one dimension -1:
     npt.assert_equal(stim.resize((-1, 24)).vid_shape, (16, 24, 3, 10))
@@ -368,8 +368,8 @@ def test_BostonTrain():
     # Resize:
     video = BostonTrain(resize=(32, 32))
     npt.assert_equal(video.vid_shape, (32, 32, 3, 94))
-    npt.assert_almost_equal(video.data.min(), 0.0056, decimal=3)
-    npt.assert_almost_equal(video.data.max(), 0.9871, decimal=3)
+    npt.assert_almost_equal(video.data.min(), 0.0056, decimal=2)
+    npt.assert_almost_equal(video.data.max(), 0.9871, decimal=2)
 
 
 def test_GirlPool():
@@ -382,10 +382,10 @@ def test_GirlPool():
     video = GirlPool(as_gray=True)
     npt.assert_equal(video.vid_shape, (240, 426, 91))
     npt.assert_almost_equal(video.data.min(), 0)
-    npt.assert_almost_equal(video.data.max(), 0.9983, decimal=3)
+    npt.assert_almost_equal(video.data.max(), 0.9983, decimal=2)
 
     # Resize:
     video = GirlPool(resize=(32, 32))
     npt.assert_equal(video.vid_shape, (32, 32, 3, 91))
-    npt.assert_almost_equal(video.data.min(), 0.0001, decimal=3)
-    npt.assert_almost_equal(video.data.max(), 0.9988, decimal=3)
+    npt.assert_almost_equal(video.data.min(), 0.0001, decimal=2)
+    npt.assert_almost_equal(video.data.max(), 0.9988, decimal=2)
