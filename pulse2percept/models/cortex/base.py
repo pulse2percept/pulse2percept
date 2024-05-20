@@ -205,7 +205,8 @@ class TorchScoreboardSpatial(nn.Module):
         for region in self.regions:
             d2_el = torch.sum((self.locs[region][:, None, :] - e_locs[None, :, :] )**2, axis=-1)
             intensities = amps.T[:, None, :] * torch.exp(-d2_el / (2 * self.rho**2)) # generate gaussian blobs for each electrode
-            intensities *= separate * torch.where((e_locs[None,:,0] < boundary) == (self.locs[region][:,None,0] < boundary), 1, 0) # ensure current cannot spread between hemispheres
+            if separate:
+                intensities *= torch.where((e_locs[None,:,0] < boundary) == (self.locs[region][:,None,0] < boundary), 1, 0) # ensure current cannot spread between hemispheres
             intensities = torch.sum(intensities, axis=-1) # add up all gaussian blobs
             tot_intensities += intensities
         return tot_intensities
