@@ -188,10 +188,10 @@ class TorchScoreboardSpatial(nn.Module):
             self.boundary = p2pmodel.vfmap.left_offset/2
         self.locs = {}
         for region in self.regions:
-            x = torch.tensor(p2pmodel.grid[region].x.ravel())
-            y = torch.tensor(p2pmodel.grid[region].y.ravel())
+            x = torch.tensor(p2pmodel.grid[region].x.ravel(),device=self.device)
+            y = torch.tensor(p2pmodel.grid[region].y.ravel(),device=self.device)
             if p2pmodel.grid[region].z is not None:
-                z = torch.tensor(p2pmodel.grid[region].z.ravel())
+                z = torch.tensor(p2pmodel.grid[region].z.ravel(),device=self.device)
                 self.locs[region] = torch.stack([x, y, z], axis=-1)
             else:
                 self.locs[region] = torch.stack([x, y], axis=-1)
