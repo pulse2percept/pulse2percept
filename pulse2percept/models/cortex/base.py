@@ -200,7 +200,7 @@ class TorchScoreboardSpatial(nn.Module):
         """Predicts the percept
         Parameters
         ----------
-        amps: (n_elecs) shaped tensor
+        amps: (t, n_elecs) shaped tensor
             Amplitude for each electrode in the implant
         e_locs: (n_elecs, dim) shaped tensor
             electrode location (x, y, [z optional]) for each electrode
@@ -210,7 +210,7 @@ class TorchScoreboardSpatial(nn.Module):
         tot_intensities = 0
         for region in self.regions:
             d2_el = torch.sum((self.locs[region][:, None, :] - e_locs[None, :, :] )**2, axis=-1)
-            intensities = amps.T[:, None, :] * torch.exp(-d2_el / (2 * self.rho**2)) # generate gaussian blobs for each electrode
+            intensities = amps[:, None, :] * torch.exp(-d2_el / (2 * self.rho**2)) # generate gaussian blobs for each electrode
             if self.separate:
                 intensities *= torch.where((e_locs[None,:,0] < self.boundary) == (self.locs[region][:,None,0] < self.boundary), 1, 0) # ensure current cannot spread between hemispheres
             intensities = torch.sum(intensities, axis=-1) # add up all gaussian blobs
@@ -318,7 +318,7 @@ class ScoreboardSpatial(CortexSpatial):
             if self.vfmap.ndim == 2:
                 e_locs = torch.tensor([(x,y) for x,y in zip(x_el, y_el)]).to(self.torchmodel.device)
                 amps = torch.tensor(stim.data).to(self.torchmodel.device)
-                return self.torchmodel(amps=amps, e_locs=e_locs).T.numpy()
+                return self.torchmodel(amps=amps.T, e_locs=e_locs).T.numpy()
             else:
                 raise ValueError("Invalid dimensionality of visual field map")
         elif self.engine == "cython":
