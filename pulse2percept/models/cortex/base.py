@@ -6,7 +6,6 @@ from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
 from ...utils.constants import ZORDER
 import numpy as np
 import torch
-import torch.nn as nn
 
 class CortexSpatial(SpatialModel):
     """Abstract base class for cortical models
