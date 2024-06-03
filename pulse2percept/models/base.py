@@ -251,7 +251,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'verbose': True,
             # default to 2d model. 3d models should override this
             'ndim' : [2],
-            'n_threads': multiprocessing.cpu_count()
+            'n_threads': multiprocessing.cpu_count(),
+            # default to cpu, can force cuda if using torch on gpu
+            'device': 'cpu'
         }
         return params
 
@@ -530,7 +532,9 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             'thresh_percept': 0,
             # True: print status messages, False: silent
             'verbose': True,
-            'n_threads': multiprocessing.cpu_count()
+            'n_threads': multiprocessing.cpu_count(),
+            # default to cpu, can force cuda if using torch on gpu
+            'device': 'cpu'
         }
         return params
 
@@ -1050,7 +1054,7 @@ class Model(PrettyPrint):
 
 
 class TorchBaseModel(torch.nn.Module, metaclass=ABCMeta):
-    def __init__(self, p2pmodel, device=None):
+    def __init__(self, p2pmodel):
         """
         Base class constructor for common logic
 
@@ -1064,17 +1068,12 @@ class TorchBaseModel(torch.nn.Module, metaclass=ABCMeta):
         ----------
         p2pmodel : pulse2percept.models.Model
             The pulse2percept model to wrap
-        device : str, torch.device, optional
-            The device on which to run the model. If None, will use 'cuda' if
-            available, else 'cpu'
 
         """
         super().__init__()
         if not p2pmodel.is_built:
             p2pmodel.build()
-        if device is None:
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.device = torch.device(device)
+        self.device = torch.device(p2pmodel.device)
 
     def forward(self, stim, e_locs, model_params=None):
         """

@@ -170,8 +170,8 @@ class CortexSpatial(SpatialModel):
         return ax
 
 class TorchScoreboardSpatial(TorchBaseModel):
-    def __init__(self, p2pmodel, device=None):
-        super().__init__(p2pmodel, device=device)
+    def __init__(self, p2pmodel):
+        super().__init__(p2pmodel)
         self.rho = torch.tensor(p2pmodel.rho, device=self.device)
         self.shape = p2pmodel.grid.shape
         self.regions = p2pmodel.regions
@@ -317,8 +317,8 @@ class ScoreboardSpatial(CortexSpatial):
             boundary = self.vfmap.left_offset/2
         if self.engine == "torch":
             if self.vfmap.ndim == 2:
-                e_locs = torch.tensor([(x,y) for x,y in zip(x_el, y_el)]).to(self.torchmodel.device)
-                amps = torch.tensor(stim.data).to(self.torchmodel.device)
+                e_locs = torch.tensor([(x,y) for x,y in zip(x_el, y_el)]).to(self.device)
+                amps = torch.tensor(stim.data).to(self.device)
                 return self.torchmodel(amps=amps.T, e_locs=e_locs).T.numpy()
             else:
                 raise ValueError("Invalid dimensionality of visual field map")
