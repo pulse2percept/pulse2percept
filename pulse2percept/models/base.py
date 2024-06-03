@@ -1076,14 +1076,15 @@ class TorchBaseModel(torch.nn.Module, metaclass=ABCMeta):
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(device)
 
-    def forward(self, amps, e_locs, model_params=None):
+    def forward(self, stim, e_locs, model_params=None):
         """
         Forward pass of the model
 
         Parameters
         ----------
-        amps : torch.Tensor
-            The amplitudes of the electrodes
+        stim : torch.Tensor
+            The stimulation tensor for each electrode. 
+            Shape (n_time, n_elecs) or (n_time, n_elecs, 3) for biphasic models
         e_locs : torch.Tensor
             The locations of the electrodes
         model_params : Tensor, optional
