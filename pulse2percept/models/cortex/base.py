@@ -286,7 +286,6 @@ class ScoreboardSpatial(CortexSpatial):
 
     def _build(self):
         if self.engine == 'torch':
-            self.is_built = True
             self.torchmodel = TorchScoreboardSpatial(self)
 
     def get_default_params(self):

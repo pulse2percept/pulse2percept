@@ -288,8 +288,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
                            grid_type=self.grid_type)
         self.grid.build(self.vfmap)
+        self.is_built = True # this is so that torch models don't need to manually set is_built in order to access the model grid
         self._build()
-        self.is_built = True
         return self
 
     @abstractmethod
