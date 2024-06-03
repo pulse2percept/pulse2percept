@@ -1,6 +1,6 @@
 """`CortexSpatial`, `ScoreboardSpatial`, `ScoreboardModel`"""
 
-from ..base import Model, SpatialModel
+from ..base import Model, SpatialModel, TorchBaseModel
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
 from ...utils.constants import ZORDER
@@ -169,15 +169,10 @@ class CortexSpatial(SpatialModel):
         ax.view_init(elev=20, azim=110)
         return ax
 
-class TorchScoreboardSpatial(nn.Module):
+class TorchScoreboardSpatial(TorchBaseModel):
     def __init__(self, p2pmodel, device=None):
-        super().__init__()
-        if not p2pmodel.is_built:
-            p2pmodel.build()
-        if device is None:
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.device = torch.device(device)
-        self.rho = torch.tensor(p2pmodel.rho)
+        super().__init__(p2pmodel, device=device)
+        self.rho = torch.tensor(p2pmodel.rho, device=self.device)
         self.shape = p2pmodel.grid.shape
         self.regions = p2pmodel.regions
         # whether to let current spread between regions
@@ -196,7 +191,7 @@ class TorchScoreboardSpatial(nn.Module):
             else:
                 self.locs[region] = torch.stack([x, y], axis=-1)
 
-    def forward(self, amps, e_locs):
+    def forward(self, amps, e_locs, model_params=None):
         """Predicts the percept
         Parameters
         ----------
@@ -204,13 +199,19 @@ class TorchScoreboardSpatial(nn.Module):
             Amplitude for each electrode in the implant
         e_locs: (n_elecs, dim) shaped tensor
             electrode location (x, y, [z optional]) for each electrode
+        model_params: tensor, optional
+            rho parameter for current spread
         """
+        if model_params is None:
+            rho = self.rho
+        else:
+            rho = model_params[0]
 
         # (npixels, nelecs)
         tot_intensities = 0
         for region in self.regions:
             d2_el = torch.sum((self.locs[region][:, None, :] - e_locs[None, :, :] )**2, axis=-1)
-            intensities = amps[:, None, :] * torch.exp(-d2_el / (2 * self.rho**2)) # generate gaussian blobs for each electrode
+            intensities = amps[:, None, :] * torch.exp(-d2_el / (2 * rho**2)) # generate gaussian blobs for each electrode
             if self.separate:
                 intensities *= torch.where((e_locs[None,:,0] < self.boundary) == (self.locs[region][:,None,0] < self.boundary), 1, 0) # ensure current cannot spread between hemispheres
             intensities = torch.sum(intensities, axis=-1) # add up all gaussian blobs

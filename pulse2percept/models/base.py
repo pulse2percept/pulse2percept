@@ -4,6 +4,7 @@ from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
 import numpy as np
 import multiprocessing
+import torch
 
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
@@ -1046,3 +1047,58 @@ class Model(PrettyPrint):
         if self.has_time:
             _is_built &= self.temporal.is_built
         return _is_built
+
+
+class TorchBaseModel(torch.nn.Module, metaclass=ABCMeta):
+    def __init__(self, p2pmodel, device=None):
+        """
+        Base class constructor for common logic
+
+        Subclasses should call this constructor and then should 
+        read in any relevant information from the p2pmodel (which is NOT stored),
+        including model parameters and the spatial grid.
+
+        TODO: Can we move spatial grid reading into this?
+
+        Parameters
+        ----------
+        p2pmodel : pulse2percept.models.Model
+            The pulse2percept model to wrap
+        device : str, torch.device, optional
+            The device on which to run the model. If None, will use 'cuda' if
+            available, else 'cpu'
+
+        """
+        super().__init__()
+        if not p2pmodel.is_built:
+            p2pmodel.build()
+        if device is None:
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = torch.device(device)
+
+    def forward(self, amps, e_locs, model_params=None):
+        """
+        Forward pass of the model
+
+        Parameters
+        ----------
+        amps : torch.Tensor
+            The amplitudes of the electrodes
+        e_locs : torch.Tensor
+            The locations of the electrodes
+        model_params : Tensor, optional
+            The model parameters to use. If None, will use the default parameters
+            Each subclass should use this, if provided, instead of parameters from the p2pmodel,
+            so that it is possible to differentiate wrt the parameters.
+
+            Only parameters that make sense to differentiate wrt and don't require
+            rebuild should go here.
+            For example, Scoreboard model would take in torch.tensor([rho])
+
+        Returns
+        -------
+        torch.Tensor
+            The predicted percept, with dimensions (n_time, n_pixels)
+
+        """
+        raise NotImplementedError
