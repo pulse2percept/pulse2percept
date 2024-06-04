@@ -13,3 +13,4 @@ docutils<0.18
 jax[cpu]<=0.4.3
 neuropythy
 pickleshare
+torch
