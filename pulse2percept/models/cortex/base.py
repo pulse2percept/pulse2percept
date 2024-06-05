@@ -1,10 +1,11 @@
 """`CortexSpatial`, `ScoreboardSpatial`, `ScoreboardModel`"""
 
-from ..base import Model, SpatialModel
+from ..base import Model, SpatialModel, TorchBaseModel
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
 from ...utils.constants import ZORDER
 import numpy as np
+import torch
 
 class CortexSpatial(SpatialModel):
     """Abstract base class for cortical models
@@ -167,6 +168,54 @@ class CortexSpatial(SpatialModel):
         ax.view_init(elev=20, azim=110)
         return ax
 
+class TorchScoreboardSpatial(TorchBaseModel):
+    def __init__(self, p2pmodel):
+        super().__init__(p2pmodel)
+        self.rho = torch.tensor(p2pmodel.rho, device=self.device)
+        self.shape = p2pmodel.grid.shape
+        self.regions = p2pmodel.regions
+        # whether to let current spread between regions
+        self.separate = 0
+        self.boundary = 0
+        if p2pmodel.vfmap.split_map:
+            self.separate = 1
+            self.boundary = p2pmodel.vfmap.left_offset/2
+        self.locs = {}
+        for region in self.regions:
+            x = torch.tensor(p2pmodel.grid[region].x.ravel(),device=self.device)
+            y = torch.tensor(p2pmodel.grid[region].y.ravel(),device=self.device)
+            if p2pmodel.grid[region].z is not None:
+                z = torch.tensor(p2pmodel.grid[region].z.ravel(),device=self.device)
+                self.locs[region] = torch.stack([x, y, z], axis=-1)
+            else:
+                self.locs[region] = torch.stack([x, y], axis=-1)
+
+    def forward(self, amps, e_locs, model_params=None):
+        """Predicts the percept
+        Parameters
+        ----------
+        amps: (t, n_elecs) shaped tensor
+            Amplitude for each electrode in the implant
+        e_locs: (n_elecs, dim) shaped tensor
+            electrode location (x, y, [z optional]) for each electrode
+        model_params: tensor, optional
+            rho parameter for current spread
+        """
+        if model_params is None:
+            rho = self.rho
+        else:
+            rho = model_params[0]
+
+        # (npixels, nelecs)
+        tot_intensities = 0
+        for region in self.regions:
+            d2_el = torch.sum((self.locs[region][:, None, :] - e_locs[None, :, :] )**2, axis=-1)
+            intensities = amps[:, None, :] * torch.exp(-d2_el / (2 * rho**2)) # generate gaussian blobs for each electrode
+            if self.separate:
+                intensities *= torch.where((e_locs[None,:,0] < self.boundary) == (self.locs[region][:,None,0] < self.boundary), 1, 0) # ensure current cannot spread between hemispheres
+            intensities = torch.sum(intensities, axis=-1) # add up all gaussian blobs
+            tot_intensities += intensities
+        return tot_intensities
 
 class ScoreboardSpatial(CortexSpatial):
     """Cortical adaptation of scoreboard model from [Beyeler2019]_
@@ -232,6 +281,11 @@ class ScoreboardSpatial(CortexSpatial):
     """
     def __init__(self, **params):
         super(ScoreboardSpatial, self).__init__(**params)
+        self.torchmodel = None
+
+    def _build(self):
+        if self.engine == 'torch':
+            self.torchmodel = TorchScoreboardSpatial(self)
 
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
@@ -239,7 +293,8 @@ class ScoreboardSpatial(CortexSpatial):
         params = {
                     # radial current spread
                     'rho': 200,  
-                    'ndim' : [2, 3]
+                    'ndim' : [2, 3],
+                    'engine': 'cython'
                  }
         return {**base_params, **params}
 
@@ -258,28 +313,36 @@ class ScoreboardSpatial(CortexSpatial):
         if self.vfmap.split_map:
             separate = 1
             boundary = self.vfmap.left_offset/2
-        if self.vfmap.ndim == 3:
-            return np.sum([
-                fast_scoreboard_3d(stim.data, x_el, y_el, z_el,
-                                self.grid[region].x.ravel(), 
-                                self.grid[region].y.ravel(),
-                                self.grid[region].z.ravel(),
-                                self.rho, self.thresh_percept, 
-                                separate, boundary, 
-                                self.n_threads)
-                for region in self.regions ],
-            axis = 0)
-        elif self.vfmap.ndim == 2:
-            return np.sum([
-                fast_scoreboard(stim.data, x_el, y_el,
-                                self.grid[region].x.ravel(), self.grid[region].y.ravel(),
-                                self.rho, self.thresh_percept, 
-                                separate, boundary, 
-                                self.n_threads)
-                for region in self.regions ],
-            axis = 0)
-        else:
-            raise ValueError("Invalid dimensionality of visual field map")
+        if self.engine == "torch":
+            if self.vfmap.ndim == 2:
+                e_locs = torch.tensor([(x,y) for x,y in zip(x_el, y_el)]).to(self.device)
+                amps = torch.tensor(stim.data).to(self.device)
+                return self.torchmodel(amps=amps.T, e_locs=e_locs).T.numpy()
+            else:
+                raise ValueError("Invalid dimensionality of visual field map")
+        elif self.engine == "cython":
+            if self.vfmap.ndim == 3:
+                return np.sum([
+                    fast_scoreboard_3d(stim.data, x_el, y_el, z_el,
+                                    self.grid[region].x.ravel(), 
+                                    self.grid[region].y.ravel(),
+                                    self.grid[region].z.ravel(),
+                                    self.rho, self.thresh_percept, 
+                                    separate, boundary, 
+                                    self.n_threads)
+                    for region in self.regions ],
+                axis = 0)
+            elif self.vfmap.ndim == 2:
+                return np.sum([
+                    fast_scoreboard(stim.data, x_el, y_el,
+                                    self.grid[region].x.ravel(), self.grid[region].y.ravel(),
+                                    self.rho, self.thresh_percept, 
+                                    separate, boundary, 
+                                    self.n_threads)
+                    for region in self.regions ],
+                axis = 0)
+            else:
+                raise ValueError("Invalid dimensionality of visual field map")
 
 
 class ScoreboardModel(Model):

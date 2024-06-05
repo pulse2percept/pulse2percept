@@ -4,6 +4,7 @@ from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
 import numpy as np
 import multiprocessing
+import torch
 
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
@@ -250,7 +251,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'verbose': True,
             # default to 2d model. 3d models should override this
             'ndim' : [2],
-            'n_threads': multiprocessing.cpu_count()
+            'n_threads': multiprocessing.cpu_count(),
+            # default to cpu, can force cuda if using torch on gpu
+            'device': 'cpu'
         }
         return params
 
@@ -285,8 +288,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
                            grid_type=self.grid_type)
         self.grid.build(self.vfmap)
+        self.is_built = True # this is so that torch models don't need to manually set is_built in order to access the model grid
         self._build()
-        self.is_built = True
         return self
 
     @abstractmethod
@@ -529,7 +532,9 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             'thresh_percept': 0,
             # True: print status messages, False: silent
             'verbose': True,
-            'n_threads': multiprocessing.cpu_count()
+            'n_threads': multiprocessing.cpu_count(),
+            # default to cpu, can force cuda if using torch on gpu
+            'device': 'cpu'
         }
         return params
 
@@ -1046,3 +1051,54 @@ class Model(PrettyPrint):
         if self.has_time:
             _is_built &= self.temporal.is_built
         return _is_built
+
+
+class TorchBaseModel(torch.nn.Module, metaclass=ABCMeta):
+    def __init__(self, p2pmodel):
+        """
+        Base class constructor for common logic
+
+        Subclasses should call this constructor and then should 
+        read in any relevant information from the p2pmodel (which is NOT stored),
+        including model parameters and the spatial grid.
+
+        TODO: Can we move spatial grid reading into this?
+
+        Parameters
+        ----------
+        p2pmodel : pulse2percept.models.Model
+            The pulse2percept model to wrap
+
+        """
+        super().__init__()
+        if not p2pmodel.is_built:
+            p2pmodel.build()
+        self.device = torch.device(p2pmodel.device)
+
+    def forward(self, stim, e_locs, model_params=None):
+        """
+        Forward pass of the model
+
+        Parameters
+        ----------
+        stim : torch.Tensor
+            The stimulation tensor for each electrode. 
+            Shape (n_time, n_elecs) or (n_time, n_elecs, 3) for biphasic models
+        e_locs : torch.Tensor
+            The locations of the electrodes
+        model_params : Tensor, optional
+            The model parameters to use. If None, will use the default parameters
+            Each subclass should use this, if provided, instead of parameters from the p2pmodel,
+            so that it is possible to differentiate wrt the parameters.
+
+            Only parameters that make sense to differentiate wrt and don't require
+            rebuild should go here.
+            For example, Scoreboard model would take in torch.tensor([rho])
+
+        Returns
+        -------
+        torch.Tensor
+            The predicted percept, with dimensions (n_time, n_pixels)
+
+        """
+        raise NotImplementedError
