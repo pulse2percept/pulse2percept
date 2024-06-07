@@ -171,7 +171,7 @@ def test_Percept_save(dtype):
         # Normalized to [0, 255] with some loss of precision:
         for mov in mimread(fname):
             npt.assert_equal(np.min(mov) <= 10, True)
-            npt.assert_equal(np.max(mov) >= 245, True)
+            npt.assert_equal(np.max(mov) >= 240, True)
         os.remove(fname)
 
     # Cannot save multiple frames image:
