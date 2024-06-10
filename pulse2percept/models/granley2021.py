@@ -932,7 +932,7 @@ do_thresholding: boolean
 
         self.rho = torch.tensor(p2pmodel.rho, device=self.device)
         # self.shape = p2pmodel.grid.shape
-        self.axon_contrib = p2pmodel.axon_contrib
+        self.axon_contrib = torch.tensor(p2pmodel.axon_contrib, device=self.device)
         self.axlambda = torch.tensor(p2pmodel.axlambda, device=self.device)
 
         if self.bright_model is None:
@@ -996,16 +996,10 @@ do_thresholding: boolean
         print("Electrodes shape:", e_locs.shape)
 
         d2_el = (axon_contrib[:, 0, None] - e_locs[:,0])**2 + (axon_contrib[:, 1, None] - e_locs[:,1])**2
+        print("D2_el shape:", d2_el.shape)
         # apply axon map
-        intensities = (
-            F_bright[:, None, None, :] *  # 1, 1, 1, 225
-            torch.exp(
-                -d2_el[None, :, :, :] /  # dist2el 1, 2401, 118, 225
-                (2. * rho**2 * F_size)[:, None, None, :] +  # 1, 1, 1, 225
-                self.axon_contrib[None, :, :, 2, None] /  # sens 1, 2401, 118, 1
-                (axlambda**2 * F_streak)[:, None, None, :]  # 1, 1, 1, 225
-            )  # 1, 2401, 118, 225, scaling between 0, 1
-        )  # 1, 2401, 118, 225
+        intensities = e_locs[:, 0] * torch.exp(-d2_el / (2. * rho**2 * e_locs[:, 1])) * (
+              axon_contrib[:, 2, None] ** (1. / e_locs[:, 2]))
 
         # after summing up...
         #intensities = torch.max(torch.sum(intensities, axis=-1), axis=-1).values  # sum over electrodes, max over segments
