@@ -15,6 +15,7 @@ from ..topography import Watson2014Map
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
+from .base import TorchBaseModel
 from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
                            fast_find_closest_axon)        
 
@@ -754,7 +755,7 @@ class AxonMapSpatial(SpatialModel):
             self.axon_contrib = self.calc_axon_sensitivity(
                 axons, pad=True).astype(np.float32)
         elif self.engine == 'torch':
-            self.axon_contrib = self.calc_axon_sensitivity(axons)
+            self.axon_contrib = self.calc_axon_sensitivity(axons, pad=True).astype(np.float32)
             self.torchmodel = TorchAxonMapSpatial(self)
             self.is_built = True
         else: 
@@ -793,10 +794,9 @@ class AxonMapSpatial(SpatialModel):
                                 self.thresh_percept,
                                 self.n_threads)
         elif self.engine == 'torch':
-            x_el = np.array([earray[e].x for e in stim.electrodes], dtype=np.float32)
-            y_el = np.array([earray[e].y for e in stim.electrodes], dtype=np.float32)
-            e_locs = torch.tensor([(x,y) for x,y in zip(x_el, y_el)]).to(self.device)
-            return self.torchmodel([stim.data, self.rho], e_locs).numpy()
+            e_locs = torch.tensor([(x,y) for x,y in zip(np.array([earray[e].x for e in stim.electrodes], dtype=np.float32),
+                                                        np.array([earray[e].y for e in stim.electrodes], dtype=np.float32))]).to(self.device)
+            return self.torchmodel(stim=stim.data, e_locs=e_locs).numpy()
         elif self.engine == 'jax':
             raise NotImplementedError("Jax will be supported in future release")
         else: 
@@ -916,9 +916,9 @@ class AxonMapSpatial(SpatialModel):
             ann.set_yticks([])
         return ax
 
-class TorchAxonMapSpatial(torch.nn.Module):
+class TorchAxonMapSpatial(TorchBaseModel):
     def __init__(self, p2pmodel): # implant parameter currently not used
-        super().__init__()
+        super().__init__(p2pmodel)
 
         # Check for model validity
         if isinstance(p2pmodel, AxonMapModel) or not isinstance(p2pmodel, AxonMapSpatial):
@@ -927,24 +927,24 @@ class TorchAxonMapSpatial(torch.nn.Module):
             raise ValueError("Engine Selection Conflict : Constructing TorchAxonMapSpatial with engine", p2pmodel.engine)
 
         self.rho = torch.tensor(p2pmodel.rho, dtype=torch.get_default_dtype())
-        self.shape = p2pmodel.grid.shape # doesn't seem necessary as of right now
-        self.axon_contrib = torch.tensor(p2pmodel.axon_contrib, dtype=torch.get_default_dtype())
+        self.axon_contrib = torch.tensor(p2pmodel.axon_contrib, dtype=torch.get_default_dtype()) # to(self.device)
+        self.axlambda = torch.tensor(p2pmodel.axlambda, dtype=torch.get_default_dtype())
 
         
     
-    def forward(self, inputs, e_locs):
+    def forward(self, stim, e_locs):
         
         # I_axon(x,y;p, lambda) = I_score(x,y; p) * exp(-( (x-x_soma)**2 + (y-y_soma)**2) / (2 * lambda**2))
-        amp = torch.tensor(inputs[0][:, :], dtype=torch.get_default_dtype()) # I_score
-        # axlambda = torch.tensor(inputs[1][:,1][:, None], dtype='float32') # lambda
+        #                       = amp * gauss / (2*lambda**2)
+        amp = torch.tensor(stim[:, ::1], dtype=torch.get_default_dtype()) # I_score
 
-        d2_el = torch.sum((self.axon_contrib[:, :, 0, None] - e_locs[0])**2, 
-                          (self.axon_contrib[:, :, 1, None] - e_locs[1])**2) # (x-x_soma)**2 + (y-y_soma)**2)
+        # x_soma = [e_locs[0][0]] if e_locs.shape[0]==1 else e_locs[0]
+        # y_soma = [e_locs[0][1]] if e_locs.shape[0]==1 else e_locs[1]
         
-        intensities = (amp[:, None, None, :] * torch.exp(-d2_el/ ( 2 * self.rho**2))) # based on cython code
-        intensities = intensities * self.axon_contrib[None, :, :, 2, None]
+        d2_el = (self.axon_contrib[:, :, 0, None] - e_locs[:,0])**2 + (self.axon_contrib[:, :, 1, None] - e_locs[:,1])**2 # (x-x_soma)**2 + (y-y_soma)**2
 
-        # post processing TODO
+        gauss = torch.exp(-d2_el / ( 2 * self.rho**2))
+        intensities = amp[:, None, None, :] * torch.exp(-d2_el) / ( 2 * self.rho**2)
         
         return intensities
 
