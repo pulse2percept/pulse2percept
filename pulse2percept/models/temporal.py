@@ -1,7 +1,60 @@
 """`FadingTemporal`"""
 import numpy as np
-from .base import TemporalModel
+from .base import TemporalModel, TorchBaseModel
 from ._temporal import fading_fast
+import torch
+
+class TorchFadingTemporal(TorchBaseModel):
+    
+    def __init__(self, p2pmodel):
+        super().__init__(p2pmodel)
+        self.dt = torch.tensor(p2pmodel.dt, device=self.device)
+        self.tau = torch.tensor(p2pmodel.tau, device=self.device)
+
+    def forward(self, stim, state=None, model_params=None):
+        """_summary_
+
+        Parameters
+        ----------
+        stim : torch.Tensor
+            One frame of output from a spatial model. This frame will represent
+            the stimulus at a given time point. Must have shape (n_pixels)
+        state : torch.Tensor, optional
+            The internal state of the model. state[0] corresponds to ``bright``
+            Defaults to None. If None, the state is assumed to be zero.
+        model_params : torch.Tensor, optional
+            The model parameters to use when predicting the percept.
+            model_params[0] is ``dt``, model_params[1] is ``tau``.
+
+        Returns
+        -------
+        percept : torch.Tensor
+            One frame of the predicted response
+        state : torch.Tensor
+            The internal state of the model after this pass. 
+            state[0] corresponds to ``bright``
+
+        """
+
+        if model_params is None:
+            dt = self.dt
+            tau = self.tau
+        else:
+            dt = model_params[0]
+            tau = model_params[1]
+
+        if state is None:
+            state = torch.unsqueeze(torch.zeros_like(stim, device=self.device), 0)
+        
+        # get brightness state out
+        bright = state[0]
+
+        bright = torch.relu(bright + dt * (-stim - bright) / tau)
+
+        # put brightness state back in
+        state[0] = bright
+
+        return bright, state
 
 
 class FadingTemporal(TemporalModel):
