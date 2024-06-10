@@ -456,7 +456,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             x_el = np.array([earray[e].x for e in stim.electrodes],dtype=np.float32)
             y_el = np.array([earray[e].y for e in stim.electrodes],dtype=np.float32)
             e_locs = torch.tensor([(x,y) for x,y in zip(x_el, y_el)], device= self.device)
-            stim = torch.tensor(stim.data).to(self.device)
+            # stim = torch.tensor(stim.data).to(self.device)
+            stim = torch.tensor(elec_params).to(self.device)
             return self.torchmodel(stim = stim, e_locs = e_locs).T.numpy()
 
         elif self.engine == 'jax':
@@ -971,6 +972,16 @@ do_thresholding: boolean
         if model_params is not None:
             a_attributes = [model_params[i] for i in range(2, 12)]
         a0, a1, a2, a3, a4, a5, a6, a7, a8, a9 = a_attributes
+        print("a0:", a0)
+        print("a1:", a1)
+        print("a2:", a2)
+        print("a3:", a3)
+        print("a4:", a4)
+        print("a5:", a5)
+        print("a6:", a6)
+        print("a7:", a7)
+        print("a8:", a8)
+        print("a9:", a9)
         
     # Convert the numpy array to a tensor
         freq = torch.tensor(stim[:,0], device=self.device)
@@ -979,20 +990,28 @@ do_thresholding: boolean
 
         scaled_amps = (a1 + a0*pdur) * amp
 
+        print("Scaled amps:", scaled_amps)
+        print("Freq:", freq)
+        print("Amp:", amp)
+        print("Pdur:", pdur)
+        print("axlambda:", axlambda)
         # bright
         F_bright = a2 * scaled_amps + a3 * freq + a4
         F_bright = torch.where(amp > 0, F_bright, torch.zeros_like(F_bright))
-
+        
         # size
         min_f_size = 10**2 / (rho**2)
         F_size = a5 * scaled_amps + a6
         F_size = torch.maximum(F_size, min_f_size)
-
+        
         # streak
         min_f_streak = 10**2 / (axlambda ** 2)
         F_streak = a9 - a7 * pdur ** a8
         F_streak = torch.maximum(F_streak, min_f_streak)
-
+       
+        print("F_bright:", F_bright)
+        print("F_bright", F_size)
+        print("F_streak",F_streak)
         print("Axon contrib shape:", axon_contrib.shape)
         print("Electrodes shape:", e_locs.shape)
         print("F_bright shape:", F_bright.shape)
@@ -1000,14 +1019,6 @@ do_thresholding: boolean
 
         d2_el = (axon_contrib[:, :, 0, None] - e_locs[:,0])**2 + (axon_contrib[:, :, 1, None] - e_locs[:,1])**2
         print("D2_el shape:", d2_el.shape)
-
-        # Calculate the denominator
-        denominator = 2. * rho**2 * F_size
-
-
-        if torch.any(denominator == 0):
-            raise ValueError("Denominator contains zero values, which could lead to division by zero.")
-        
 
         intensities = F_bright * torch.exp(-d2_el / (2. * rho**2 * F_size)) * (
               axon_contrib[:, :, 2, None] ** (1. / F_streak))
@@ -1019,4 +1030,5 @@ do_thresholding: boolean
         #batched_percept_shape = tuple([-1] + list(self.percept_shape))
         # intensities = intensities.reshape(batched_percept_shape)
         intensities = torch.max(torch.sum(intensities, axis=-1), dim=-1).values
+        print("Intensities: ", intensities)
         return intensities
