@@ -802,6 +802,7 @@ class AxonMapSpatial(SpatialModel):
             raise NotImplementedError("Jax will be supported in future release")
         else: 
             raise NotImplementedError("Unknown engine selected:", self.engine)
+
     def plot(self, use_dva=False, style='hull', annotate=True, autoscale=True,
              ax=None, figsize=None):
         """Plot the axon map
@@ -931,9 +932,6 @@ class TorchAxonMapSpatial(TorchBaseModel):
         self.axon_contrib = torch.tensor(p2pmodel.axon_contrib, device=p2pmodel.device, dtype=torch.get_default_dtype()) # to(self.device)
         self.axlambda = torch.tensor(p2pmodel.axlambda, device=p2pmodel.device, dtype=torch.get_default_dtype())
         self.thresh_percept = p2pmodel.thresh_percept
-        self.percept_shape = p2pmodel.grid.shape
-
-        
     
     def forward(self, stim, e_locs):
         
@@ -949,6 +947,7 @@ class TorchAxonMapSpatial(TorchBaseModel):
         intensities = amp * gauss
         intensities = torch.sum(intensities, axis=-1)
         intensities = torch.max(intensities, dim=-1).values
+        intensities = torch.where(intensities < self.thresh_percept, 0, intensities) # clip if less than thresh_percept
         
         return intensities.T
 
