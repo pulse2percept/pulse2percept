@@ -438,7 +438,7 @@ class AxonMapSpatial(SpatialModel):
             n_bundles = self.n_axons
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
         phi = np.linspace(*self.axons_range, num=n_bundles)
-        engine = 'serial' if self.engine in ['cython', 'jax', 'torch'] else self.engine
+        engine = 'serial' if self.engine in ['cython', 'jax', 'torch', None] else self.engine
         bundles = parfor(self._jansonius2009, phi,
                          func_kwargs={'eye': self.eye},
                          engine=engine, n_jobs=self.n_jobs,
@@ -780,7 +780,7 @@ class AxonMapSpatial(SpatialModel):
             warnings.warn(msg)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        if self.engine in ['serial', 'cython']:
+        if self.engine in ['serial', 'cython', None]:
             return fast_axon_map(stim.data,
                                 np.array([earray[e].x for e in stim.electrodes],
                                         dtype=np.float32),
