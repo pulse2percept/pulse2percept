@@ -19,6 +19,14 @@ try:
 except ImportError:
     has_jax = False
 
+try:
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    has_torch = True
+except ImportError:
+    has_torch = False
+
 def test_deepcopy_DefaultBrightModel():
     original = DefaultBrightModel()
     copied = copy.deepcopy(original)
@@ -166,11 +174,14 @@ def test_effects_models():
     npt.assert_equal(hasattr(model, 'a9'), True)
 
 
-@pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_biphasicAxonMapSpatial(engine):
     if engine == 'jax' and not has_jax:
         pytest.skip("Jax not installed")
 
+    if engine == 'torch' and not has_torch:
+        pytest.skip("Torch not installed")
+        
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
         BiphasicAxonMapSpatial(axlambda=9).build()
@@ -269,10 +280,13 @@ def test_predict_spatial_jax():
     p2 = model2.predict_percept(implant)
     npt.assert_almost_equal(p1.data, p2.data, decimal=4)
 
-@pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_predict_batched(engine):
     if not has_jax:
         pytest.skip("Jax not installed")
+    
+    if not has_torch:
+        pytest.skip("Torch not installed")
 
     # Allows mix of valid Stimulus types
     stims = [{'A5' : BiphasicPulseTrain(25, 4, 0.45),
@@ -283,7 +297,7 @@ def test_predict_batched(engine):
     model = BiphasicAxonMapModel(engine=engine, xystep=2)
     model.build()
     # Import error if we dont have jax
-    if engine != 'jax':
+    if (engine == 'jax' and not has_jax) or (engine == 'torch' and not has_torch):
         with pytest.raises(ImportError):
             model.predict_percept_batched(implant, stims)
         return
@@ -298,10 +312,12 @@ def test_predict_batched(engine):
     for p1, p2 in zip(percepts_batched, percepts_serial):
         npt.assert_almost_equal(p1.data, p2.data)
 
-@pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_biphasicAxonMapModel(engine):
     if engine == 'jax' and not has_jax:
         pytest.skip("Jax not installed")
+    if engine == 'torch' and not has_torch:
+        pytest.skip("torch not installed")
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),

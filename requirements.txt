@@ -8,3 +8,5 @@ matplotlib>=3.0.2
 imageio_ffmpeg>=0.4
 pandas
 joblib>=0.11
+torch
+pickleshare

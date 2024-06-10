@@ -8,4 +8,6 @@ mock
 seaborn
 scikit-learn
 pyswarm
+torch
+pickleshare
 -r doc/requirements.txt
