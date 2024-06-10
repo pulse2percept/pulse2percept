@@ -751,7 +751,9 @@ class AxonMapSpatial(SpatialModel):
         if self.engine == 'jax':
             self.axon_contrib = self.calc_axon_sensitivity(
                 axons, pad=True).astype(np.float32)
-        else:
+        elif self.engine == 'torch':
+            self.axon_contrib = self.calc_axon_sensitivity(axons, pad=True).astype(np.float32)
+        else: 
             axon_contrib = self.calc_axon_sensitivity(axons)
             self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
             len_axons = [a.shape[0] for a in axon_contrib]

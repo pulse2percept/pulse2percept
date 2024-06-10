@@ -419,7 +419,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             
         if self.engine == 'torch':
             self.torchmodel = TorchBiphasicAxonMapSpatial(self)
-            #self.axon_contrib = torch.tensor(self.axon_contrib).to(torch.device('cuda' if torch.cuda.is_available() else 'cpu')) # move axon_contrib to the appropriate torch device
+             
             
             
 
@@ -453,10 +453,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
 
         if self.engine == 'torch':
-            x_el = np.array([earray[e].x for e in stim.electrodes], dtype=np.float32)
-            y_el = np.array([earray[e].y for e in stim.electrodes], dtype=np.float32)
-            e_locs = torch.tensor([(x,y) for x,y in zip(x_el, y_el)]).to(self.device)
-            return self.torchmodel([stim.data, self.rho], e_locs).numpy()
+            x_el = np.array([earray[e].x for e in stim.electrodes],dtype=np.float32)
+            y_el = np.array([earray[e].y for e in stim.electrodes],dtype=np.float32)
+            e_locs = torch.tensor([(x,y) for x,y in zip(x_el, y_el)], device= self.device)
+            stim = torch.tensor(stim.data).to(self.device)
+            return self.torchmodel(stim = stim, e_locs = e_locs).T.numpy()
 
         elif self.engine == 'jax':
             return self._predict_spatial_jax(elec_params[:, :3], x, y)
@@ -925,31 +926,34 @@ do_thresholding: boolean
 """
     def __init__(self, p2pmodel):
         super().__init__(p2pmodel)
-        
+        self.bright_model = None
+        self.size_model = None
+        self.streak_model = None
+
         self.rho = torch.tensor(p2pmodel.rho, device=self.device)
-        self.shape = p2pmodel.grid.shape
-        self.axon_contrib = torch.tensor(p2pmodel.axon_contrib, device=self.device)
-        self.rho = torch.tensor(p2pmodel.rho, device=self.device)
+        # self.shape = p2pmodel.grid.shape
+        self.axon_contrib = p2pmodel.axon_contrib
         self.axlambda = torch.tensor(p2pmodel.axlambda, device=self.device)
-            
-        self.a0 = torch.tensor(p2pmodel.a0, device=self.device)
-        self.a1 = torch.tensor(p2pmodel.a1, device=self.device)
-        self.a2 = torch.tensor(p2pmodel.a2, device=self.device)
-        self.a3 = torch.tensor(p2pmodel.a3, device=self.device)
-        self.a4 = torch.tensor(p2pmodel.a4, device=self.device)
-        self.a5 = torch.tensor(p2pmodel.a5, device=self.device)
-        self.a6 = torch.tensor(p2pmodel.a6, device=self.device)
-        self.a7 = torch.tensor(p2pmodel.a7, device=self.device)
-        self.a8 = torch.tensor(p2pmodel.a8, device=self.device)
-        self.a9 = torch.tensor(p2pmodel.a9, device=self.device)
+
+        if self.bright_model is None:
+            self.bright_model = DefaultBrightModel()
+        if self.size_model is None:
+            self.size_model = DefaultSizeModel(self.rho)
+        if self.streak_model is None:
+            self.streak_model = DefaultStreakModel(self.axlambda)
         
-        self.locs = {}
-        # Other parameters from initialization args
-        self.percept_shape = p2pmodel.grid.shape  # p2pmodel has a grid attribute defining percept shape
+        for i in range(10):
+            name = f"a{i}"
+            for model in [self.bright_model, self.size_model, self.streak_model]:
+                if hasattr(model, name):
+                    setattr(self, name, torch.tensor(getattr(model, name), device=self.device))
+        
+
+        self.percept_shape = p2pmodel.grid.shape
         self.thresh_percept = p2pmodel.thresh_percept
     
     
-    def forward(self, stims, e_locs, model_params=None):
+    def forward(self, stim, e_locs, model_params=None):
         if model_params is None:
             rho = self.rho
         else:
@@ -960,27 +964,22 @@ do_thresholding: boolean
         else:
             axlambda = model_params[1]
 
-        
-        a0 = self.a0 if model_params is None else model_params[2]
-        a1 = self.a1 if model_params is None else model_params[3]
-        a2 = self.a2 if model_params is None else model_params[4]
-        a3 = self.a3 if model_params is None else model_params[5]
-        a4 = self.a4 if model_params is None else model_params[6] # not needed
-        a5 = self.a5 if model_params is None else model_params[7]
-        a6 = self.a6 if model_params is None else model_params[8]
-        a7 = self.a7 if model_params is None else model_params[9]
-        a8 = self.a8 if model_params is None else model_params[10]
-        a9 = self.a9 if model_params is None else model_params[11]
+        axon_contrib = self.axon_contrib
 
-        # parse from stims
-        freq = stims[:,0] 
-        amp = stims[:,1]
-        pdur = stims[:,2]
+        a_attributes = [self.a0, self.a1, self.a2, self.a3, self.a4, self.a5, self.a6, self.a7, self.a8, self.a9]
+        if model_params is not None:
+            a_attributes = [model_params[i] for i in range(2, 12)]
+        a0, a1, a2, a3, a4, a5, a6, a7, a8, a9 = a_attributes
+        
+    # Convert the numpy array to a tensor
+        freq = torch.tensor(stim[:,0], device=self.device)
+        amp = torch.tensor(stim[:,1], device=self.device) # I_score
+        pdur = torch.tensor(stim[:,2], device=self.device)  
 
         scaled_amps = (a1 + a0*pdur) * amp
 
         # bright
-        F_bright = a2 * scaled_amps + a3 * freq
+        F_bright = a2 * scaled_amps + a3 * freq + a4
         F_bright = torch.where(amp > 0, F_bright, torch.zeros_like(F_bright))
 
         # size
@@ -993,13 +992,15 @@ do_thresholding: boolean
         F_streak = a9 - a7 * pdur ** a8
         F_streak = torch.maximum(F_streak, min_f_streak)
 
-        self.d2_el = torch.sum((self.axon_contrib[:, :, 0, None] - e_locs[0])**2, 
-                          (self.axon_contrib[:, :, 1, None] - e_locs[1])**2)
+        print("Axon contrib shape:", axon_contrib.shape)
+        print("Electrodes shape:", e_locs.shape)
+
+        d2_el = (axon_contrib[:, 0, None] - e_locs[:,0])**2 + (axon_contrib[:, 1, None] - e_locs[:,1])**2
         # apply axon map
         intensities = (
             F_bright[:, None, None, :] *  # 1, 1, 1, 225
             torch.exp(
-                -self.d2_el[None, :, :, :] /  # dist2el 1, 2401, 118, 225
+                -d2_el[None, :, :, :] /  # dist2el 1, 2401, 118, 225
                 (2. * rho**2 * F_size)[:, None, None, :] +  # 1, 1, 1, 225
                 self.axon_contrib[None, :, :, 2, None] /  # sens 1, 2401, 118, 1
                 (axlambda**2 * F_streak)[:, None, None, :]  # 1, 1, 1, 225
