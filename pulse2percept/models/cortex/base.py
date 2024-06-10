@@ -213,9 +213,9 @@ class TorchScoreboardSpatial(TorchBaseModel):
                 intensities *= torch.where((e_locs[None,:,0] < self.boundary) == (self.locs[region][:,None,0] < self.boundary), 1, 0) # ensure current cannot spread between hemispheres
             intensities = torch.sum(intensities, axis=-1) # add up all gaussian blobs
             tot_intensities += intensities
-        intensities = torch.where(tot_intensities > self.thresh_percept, tot_intensities, 0.0)
+        tot_intensities = torch.where(tot_intensities > self.thresh_percept, tot_intensities, 0.0)
         # remove nans
-        intensities = torch.nan_to_num(intensities)
+        tot_intensities = torch.nan_to_num(tot_intensities)
         return tot_intensities
 
 class ScoreboardSpatial(CortexSpatial):
