@@ -190,9 +190,10 @@ def test_ndim_mixup():
 
 
 @pytest.mark.slow
-def test_neuropythy_scoreboard():
+@pytest.mark.parametrize('engine', ['cython', 'torch'])
+def test_neuropythy_scoreboard(engine):
     nmap = NeuropythyMap('fsaverage')
-    model = ScoreboardModel(rho=800, xystep=.25, vfmap=nmap).build()
+    model = ScoreboardModel(rho=800, xystep=.25, vfmap=nmap, engine=engine).build()
     implant = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3))
     implant.stim = {e : 1 for e in implant.electrode_names}
     percept = model.predict_percept(implant)
@@ -200,7 +201,7 @@ def test_neuropythy_scoreboard():
     npt.assert_almost_equal(np.max(percept.data), 27.3698, decimal=3)
 
     nmap = NeuropythyMap('fsaverage', regions=['v2'])
-    model = ScoreboardModel(rho=800, xystep=.25, vfmap=nmap).build()
+    model = ScoreboardModel(rho=800, xystep=.25, vfmap=nmap, engine=engine).build()
     implant = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v2')
     implant.stim = {e : 1 for e in implant.electrode_names}
     percept = model.predict_percept(implant)
@@ -209,7 +210,7 @@ def test_neuropythy_scoreboard():
 
     # mega implant
     nmap = NeuropythyMap('fsaverage', regions=['v1', 'v2', 'v3'])
-    model = ScoreboardModel(rho=800, xystep=.25, vfmap=nmap).build()
+    model = ScoreboardModel(rho=800, xystep=.25, vfmap=nmap, engine=engine).build()
     i1 = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v1')
     i2 = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v2')
     i3 = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v3')
