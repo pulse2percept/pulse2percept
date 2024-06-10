@@ -929,7 +929,7 @@ do_thresholding: boolean
         self.bright_model = None
         self.size_model = None
         self.streak_model = None
-        self.shape = p2pmodel.grid.shape
+        # self.shape = p2pmodel.grid.shape
 
         self.rho = torch.tensor(p2pmodel.rho, device=self.device)
         # self.shape = p2pmodel.grid.shape
@@ -998,11 +998,19 @@ do_thresholding: boolean
         print("F_bright shape:", F_bright.shape)
         print("F_size shape:", F_size.shape)
 
-        d2_el = (axon_contrib[:, 0, None] - e_locs[:,0])**2 + (axon_contrib[:, 1, None] - e_locs[:,1])**2
+        d2_el = (axon_contrib[:, :, 0, None] - e_locs[:,0])**2 + (axon_contrib[:, :, 1, None] - e_locs[:,1])**2
         print("D2_el shape:", d2_el.shape)
-        # apply axon map
+
+        # Calculate the denominator
+        denominator = 2. * rho**2 * F_size
+
+
+        if torch.any(denominator == 0):
+            raise ValueError("Denominator contains zero values, which could lead to division by zero.")
+        
+
         intensities = F_bright * torch.exp(-d2_el / (2. * rho**2 * F_size)) * (
-              axon_contrib[:, 2, None] ** (1. / F_streak))
+              axon_contrib[:, :, 2, None] ** (1. / F_streak))
 
         # after summing up...
         #intensities = torch.max(torch.sum(intensities, axis=-1), axis=-1).values  # sum over electrodes, max over segments
@@ -1010,4 +1018,5 @@ do_thresholding: boolean
 
         #batched_percept_shape = tuple([-1] + list(self.percept_shape))
         # intensities = intensities.reshape(batched_percept_shape)
+        intensities = torch.max(torch.sum(intensities, axis=-1), dim=-1).values
         return intensities
