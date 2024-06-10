@@ -757,7 +757,6 @@ class AxonMapSpatial(SpatialModel):
         elif self.engine == 'torch':
             self.axon_contrib = self.calc_axon_sensitivity(axons, pad=True).astype(np.float32)
             self.torchmodel = TorchAxonMapSpatial(self)
-            self.is_built = True
         else: 
             axon_contrib = self.calc_axon_sensitivity(axons)
             self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
@@ -794,13 +793,15 @@ class AxonMapSpatial(SpatialModel):
                                 self.thresh_percept,
                                 self.n_threads)
         elif self.engine == 'torch':
-            e_locs = torch.tensor([(x,y) for x,y in zip(np.array([earray[e].x for e in stim.electrodes], dtype=np.float32),
-                                                        np.array([earray[e].y for e in stim.electrodes], dtype=np.float32))]).to(self.device)
+            e_locs = torch.tensor(np.stack((
+                    np.array([earray[e].x for e in stim.electrodes], dtype=np.float32),
+                    np.array([earray[e].y for e in stim.electrodes], dtype=np.float32)), axis=-1),
+                device=self.device)
             return self.torchmodel(stim.data, e_locs).numpy()
         elif self.engine == 'jax':
             raise NotImplementedError("Jax will be supported in future release")
         else: 
-            raise NotImplementedError("Unknown engine selected")
+            raise NotImplementedError("Unknown engine selected:", self.engine)
     def plot(self, use_dva=False, style='hull', annotate=True, autoscale=True,
              ax=None, figsize=None):
         """Plot the axon map
@@ -940,15 +941,16 @@ class TorchAxonMapSpatial(TorchBaseModel):
         #                       = amp * gauss
         # gauss = self.axon_contrib[:,:,2,None] * torch.exp(-d2_el / (2*self.rho**2))
         
-        amp = torch.tensor(stim[:, ::1], dtype=torch.get_default_dtype()) # I_score
+        amp = torch.tensor(stim.T[:, ::1], dtype=torch.get_default_dtype())[:, None, None, :] # I_score
         
         d2_el = ((self.axon_contrib[:, :, 0, None] - e_locs[:,0])**2 + (self.axon_contrib[:, :, 1, None] - e_locs[:,1])**2)[None, :, :, :] # (x-x_soma)**2 + (y-y_soma)**2
         gauss = self.axon_contrib[:,:,2,None] * torch.exp(-d2_el / (2*self.rho**2))
-        intensities = amp[:, None, None, :] * gauss
+
+        intensities = amp * gauss
         intensities = torch.sum(intensities, axis=-1)
         intensities = torch.max(intensities, dim=-1).values
         
-        return intensities
+        return intensities.T
 
 
 
