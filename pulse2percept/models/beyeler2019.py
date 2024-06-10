@@ -796,7 +796,7 @@ class AxonMapSpatial(SpatialModel):
         elif self.engine == 'torch':
             e_locs = torch.tensor([(x,y) for x,y in zip(np.array([earray[e].x for e in stim.electrodes], dtype=np.float32),
                                                         np.array([earray[e].y for e in stim.electrodes], dtype=np.float32))]).to(self.device)
-            return self.torchmodel(stim=stim.data, e_locs=e_locs).numpy()
+            return self.torchmodel(stim.data, e_locs).numpy()
         elif self.engine == 'jax':
             raise NotImplementedError("Jax will be supported in future release")
         else: 
@@ -926,25 +926,27 @@ class TorchAxonMapSpatial(TorchBaseModel):
         if p2pmodel.engine != 'torch':
             raise ValueError("Engine Selection Conflict : Constructing TorchAxonMapSpatial with engine", p2pmodel.engine)
 
-        self.rho = torch.tensor(p2pmodel.rho, dtype=torch.get_default_dtype())
-        self.axon_contrib = torch.tensor(p2pmodel.axon_contrib, dtype=torch.get_default_dtype()) # to(self.device)
-        self.axlambda = torch.tensor(p2pmodel.axlambda, dtype=torch.get_default_dtype())
+        self.rho = torch.tensor(p2pmodel.rho, device=p2pmodel.device, dtype=torch.get_default_dtype())
+        self.axon_contrib = torch.tensor(p2pmodel.axon_contrib, device=p2pmodel.device, dtype=torch.get_default_dtype()) # to(self.device)
+        self.axlambda = torch.tensor(p2pmodel.axlambda, device=p2pmodel.device, dtype=torch.get_default_dtype())
+        self.thresh_percept = p2pmodel.thresh_percept
+        self.percept_shape = p2pmodel.grid.shape
 
         
     
     def forward(self, stim, e_locs):
         
         # I_axon(x,y;p, lambda) = I_score(x,y; p) * exp(-( (x-x_soma)**2 + (y-y_soma)**2) / (2 * lambda**2))
-        #                       = amp * gauss / (2*lambda**2)
-        amp = torch.tensor(stim[:, ::1], dtype=torch.get_default_dtype()) # I_score
-
-        # x_soma = [e_locs[0][0]] if e_locs.shape[0]==1 else e_locs[0]
-        # y_soma = [e_locs[0][1]] if e_locs.shape[0]==1 else e_locs[1]
+        #                       = amp * gauss
+        # gauss = self.axon_contrib[:,:,2,None] * torch.exp(-d2_el / (2*self.rho**2))
         
-        d2_el = (self.axon_contrib[:, :, 0, None] - e_locs[:,0])**2 + (self.axon_contrib[:, :, 1, None] - e_locs[:,1])**2 # (x-x_soma)**2 + (y-y_soma)**2
-
-        gauss = torch.exp(-d2_el / ( 2 * self.rho**2))
-        intensities = amp[:, None, None, :] * torch.exp(-d2_el) / ( 2 * self.rho**2)
+        amp = torch.tensor(stim[:, ::1], dtype=torch.get_default_dtype()) # I_score
+        
+        d2_el = ((self.axon_contrib[:, :, 0, None] - e_locs[:,0])**2 + (self.axon_contrib[:, :, 1, None] - e_locs[:,1])**2)[None, :, :, :] # (x-x_soma)**2 + (y-y_soma)**2
+        gauss = self.axon_contrib[:,:,2,None] * torch.exp(-d2_el / (2*self.rho**2))
+        intensities = amp[:, None, None, :] * gauss
+        intensities = torch.sum(intensities, axis=-1)
+        intensities = torch.max(intensities, dim=-1).values
         
         return intensities
 
