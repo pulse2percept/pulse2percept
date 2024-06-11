@@ -24,7 +24,7 @@ class TorchFadingTemporal(TorchBaseModel):
             Defaults to None. If None, the state is assumed to be zero.
         model_params : torch.Tensor, optional
             The model parameters to use when predicting the percept.
-            model_params[0] is ``dt``, model_params[1] is ``tau``.
+            model_params[0] is ``tau``.
 
         Returns
         -------
@@ -37,11 +37,9 @@ class TorchFadingTemporal(TorchBaseModel):
         """
 
         if model_params is None:
-            dt = self.dt
             tau = self.tau
         else:
-            dt = model_params[0]
-            tau = model_params[1]
+            tau = model_params[0]
 
         if state is None:
             state = torch.unsqueeze(torch.zeros_like(stim, device=self.device), 0)
@@ -49,7 +47,7 @@ class TorchFadingTemporal(TorchBaseModel):
         # get brightness state out
         bright = state[0]
 
-        bright = torch.relu(bright + dt * (-stim - bright) / tau)
+        bright = torch.relu(bright + self.dt * (-stim - bright) / tau)
 
         # put brightness state back in
         state[0] = bright
