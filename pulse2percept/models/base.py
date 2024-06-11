@@ -757,7 +757,7 @@ class Model(PrettyPrint):
             *  returns the attribute if found.
             *  if the attribute exists in both spatial / temporal model,
                returns a dictionary ``{'spatial': attr, 'temporal': attr}``.
-            *  if the attribtue is not found, raises an AttributeError.
+            *  if the attribute is not found, raises an AttributeError.
 
         """
         # Check the spatial/temporal model:

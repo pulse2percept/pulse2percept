@@ -118,7 +118,7 @@ class Stimulus(PrettyPrint):
            The number of time points provided must match the number of time
            points extracted from the source type (i.e., M).
            Stimuli created from scalars or 1-D NumPy arrays will have no time
-           componenet, in which case you cannot provide your own time points.
+           component, in which case you cannot provide your own time points.
 
     metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.
@@ -208,7 +208,7 @@ class Stimulus(PrettyPrint):
             time = None
             electrodes = None
         elif isinstance(source, (list, tuple)):
-            # List or touple with N elements: 1 electrode, N time points
+            # List or tuple with N elements: 1 electrode, N time points
             data = np.array(source, dtype=np.float32).reshape((1, -1))
             time = np.arange(data.shape[-1], dtype=np.float32)
             electrodes = None

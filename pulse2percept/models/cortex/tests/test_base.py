@@ -75,7 +75,7 @@ def test_predict_spatial(ModelClass, regions):
     npt.assert_equal(np.all(percept.data[:, half+1:] == 0), True)
     npt.assert_equal(np.all(percept.data[:, :half] != 0), True)
 
-    # implant only in v1, shouldnt change with v2/v3
+    # implant only in v1, shouldn't change with v2/v3
     vfmap = Polimeni2006Map(k=15, a=0.5, b=90)
     model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), xystep=0.1, rho=400, vfmap=vfmap).build()
     elecs = [79, 49, 19, 80, 50, 20, 90, 61, 31, 2, 72, 42, 12, 83, 53, 23, 93, 64, 34, 5, 75, 45, 15, 86, 56, 26, 96, 67, 37, 8, 68, 38]
@@ -171,7 +171,7 @@ def test_plot(ModelClass):
 
 
 def test_poli_nlink():
-    # make sure that the polimeni map and neuralink work togther with scoreboard
+    # make sure that the polimeni map and neuralink work together with scoreboard
     # since this is an odd combo of 2d map and 3d implant
     model = ScoreboardModel(rho=800, xystep=.5).build()
     npt.assert_equal(model.grid.v1.z is None, True)

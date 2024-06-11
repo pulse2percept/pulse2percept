@@ -72,7 +72,7 @@ implant = ProsthesisSystem(earray, stim=stim)
 #
 # Interacting with a model always involves three steps:
 #
-# 1.  **Initalize** the model by passing the desired parameters.
+# 1.  **Initialize** the model by passing the desired parameters.
 # 2.  **Build** the model to perform (sometimes expensive) one-time setup
 #     computations.
 # 3.  **Predict** the percept for a given stimulus.

@@ -347,7 +347,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         # try to set it ourselves, but can't use get_attr
         try:
             self.__getattribute__(name)
-            # if we get here, we have the attribute, not (neccesarily) an effects model
+            # if we get here, we have the attribute, not (necessarily) an effects model
             super().__setattr__(name, value)
             found = True
         except AttributeError:
@@ -571,7 +571,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     def predict_percept(self, implant, t_percept=None):
         """ Predicts the spatial response
         Override base predict percept to have desired timesteps and 
-        remove unneccesary computation
+        remove unnecessary computation
 
         Parameters
         ----------

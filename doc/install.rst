@@ -290,7 +290,7 @@ You can check the installation location:
 
    pip show pulse2percept
 
-Then add the specificed location to ``$PATH``; see `PATH on Windows`_, 
+Then add the specified location to ``$PATH``; see `PATH on Windows`_, 
 `PATH on macOS`_, `PATH on Linux`_.
 
 .. _PATH on Windows: https://helpdeskgeek.com/windows-10/add-windows-path-environment-variable/

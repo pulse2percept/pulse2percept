@@ -31,7 +31,7 @@ def test_LinearEdgeThread():
     npt.assert_almost_equal(thread.y, 0)
     npt.assert_almost_equal(thread.z, 0)
 
-    # elecs arent actually at this spot, but are on the edge, a few microns off
+    # elecs aren't actually at this spot, but are on the edge, a few microns off
     zs = []
     for e in thread.electrode_objects:
         npt.assert_almost_equal(e.x, thread.r + 7 // 2)

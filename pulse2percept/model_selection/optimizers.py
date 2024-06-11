@@ -138,7 +138,7 @@ class BaseOptimizer(Frozen, PrettyPrint, metaclass=ABCMeta):
         self._optimize(X, y, fit_params=fit_params)
         if self.verbose:
             print(f'Best score: {self._best_score}, Best params: {self._best_params}')
-        # Use the parameter values found during optimiziation to set the
+        # Use the parameter values found during optimization to set the
         # estimator one more time, then fit it:
         self.estimator.set_params(**self._best_params)
         if fit_params is None:
@@ -262,8 +262,8 @@ class FunctionMinimizer(BaseOptimizer):
     estimator : ``sklearn.base.estimator``
         A scikit-learn estimator, such as a classifier or regressor, that
         contains ``fit`` and ``predict`` methods.
-    serch_params : dict of tupels (lower bound, upper bound)
-        Dictionary of tupels containing the lower and upper bound of values
+    serch_params : dict of tuples (lower bound, upper bound)
+        Dictionary of tuples containing the lower and upper bound of values
         for each search parameter.
     search_params_init : dict of floats, optional
         Initial values of all search parameters. If None, initialize to
@@ -324,7 +324,7 @@ class FunctionMinimizer(BaseOptimizer):
         res = minimize(self._calc_error, init, args=(X, y, fit_params),
                        bounds=bounds, tol=self.tol, options=self.options)
         if not res['success']:
-            print('Optimization unsucessful:')
+            print('Optimization unsuccessful:')
             print(res)
 
         # Pair values of best params with their names to build a dict
@@ -347,8 +347,8 @@ class ParticleSwarmOptimizer(BaseOptimizer):
     estimator : ``sklearn.base.estimator``
         A scikit-learn estimator, such as a classifier or regressor, that
         contains ``fit`` and ``predict`` methods.
-    serch_params : dict of tupels (lower bound, upper bound)
-        Dictionary of tupels containing the lower and upper bound of values
+    serch_params : dict of tuples (lower bound, upper bound)
+        Dictionary of tuples containing the lower and upper bound of values
         for each search parameter.
     swarm_size : int, optional, default: 10 * number of search params
         The number of particles in the swarm.

@@ -37,7 +37,7 @@ All of these visual field maps follow the templates in either
 :py:class:`~pulse2percept.topography.CorticalMap`.
 This means that all retinal visual field maps have to specify a ``dva_to_ret`` method, 
 which transforms visual field coordinates into retinal coordinates, and all cortical 
-visual field maps have to specify atleast a ``dva_to_v1`` method, which transforms visual 
+visual field maps have to specify at least a ``dva_to_v1`` method, which transforms visual 
 field coordinates into cortical V1 coordinates. Cortical models map also specify ``dva_to_v2``
 and ``dva_to_v3`` methods, which transform visual field coordinates into cortical V2 and V3.
 Most visual field maps also specify the inverse transform, e.g. ``ret_to_dva`` or ``v1_to_dva``.

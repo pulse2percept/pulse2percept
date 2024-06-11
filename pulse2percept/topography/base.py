@@ -23,7 +23,7 @@ from ..models import BaseModel
 class CoordinateGrid:
         """
         Datatype for storing a grid of coordinates
-        Basically an overriden namedtuple with custom __eq__ method
+        Basically an overridden namedtuple with custom __eq__ method
         """
         x : np.ndarray
         y : np.ndarray

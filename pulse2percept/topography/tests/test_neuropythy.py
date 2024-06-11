@@ -132,7 +132,7 @@ def test_dva_to_cortex(regions, jitter_boundary):
 def test_Neuralink_from_neuropythy():
     nmap = NeuropythyMap('fsaverage', regions=['v1'], jitter_boundary=False)
     nlink = Neuralink.from_neuropythy(nmap, locs=np.array([[0, 0], [3, 3], [-2, -2]]))
-    # 0, 0 should be nan so it wont make one
+    # 0, 0 should be nan so it won't make one
     npt.assert_equal(len(nlink.implants), 2)
     npt.assert_equal(nlink.implants['A'].x, nmap.dva_to_v1(3, 3, surface='pial')[0])
     npt.assert_equal(nlink.implants['A'].y, nmap.dva_to_v1(3, 3, surface='pial')[1])

@@ -426,7 +426,7 @@ For Developers
 --------------
 
 In this section we will discuss some of the changes made under the hood
-accomadate cortical features, as well as some important notes for developers
+accommodate cortical features, as well as some important notes for developers
 to keep in mind.
 
 Units
@@ -449,7 +449,7 @@ the model plotting section.
 In order to create your own visual field map, you must create a subclass of
 :py:class:`~pulse2percept.topography.CorticalMap`, and implement the `dva_to_v1`
 method.  In addition, if your map also maps to v2 and/or v3, you must also
-implement the `dva_to_v2` and/or `dva_to_v3` methods. Optinally, you can also
+implement the `dva_to_v2` and/or `dva_to_v3` methods. Optionally, you can also
 implement `v1_to_dva`, `v2_to_dva`, and/or `v3_to_dva` methods.
 
 For example, if you wanted to create a map that mapped `(x, y)` in dva to

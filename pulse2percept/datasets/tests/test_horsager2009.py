@@ -33,7 +33,7 @@ def test_load_horsager2009():
     data = load_horsager2009(subjects='S05')
     npt.assert_equal(data.shape, (296, 21))
     npt.assert_equal(data.subject.unique(), 'S05')
-    data = load_horsager2009(subjects=['S05', 'S07'])  # 'S07' doesnt' exist
+    data = load_horsager2009(subjects=['S05', 'S07'])  # 'S07' doesn't exist
     npt.assert_equal(data.shape, (296, 21))
     npt.assert_equal(data.subject.unique(), 'S05')
     data = load_horsager2009(subjects=['S05', 'S06'])  # same as None
