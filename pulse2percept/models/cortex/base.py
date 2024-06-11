@@ -203,20 +203,20 @@ class TorchScoreboardSpatial(TorchBaseModel):
             rho parameter for current spread
         """
         rho = self.rho if model_params is None else model_params[0]
+        amps = amps.T
 
         # (npixels, nelecs)
         tot_intensities = 0
         for region in self.regions:
             d2_el = torch.sum((self.locs[region][:, None, :] - e_locs[None, :, :] )**2, axis=-1)
             intensities = amps[:, None, :] * torch.exp(-d2_el / (2 * rho**2)) # generate gaussian blobs for each electrode
+            intensities = torch.nan_to_num(intensities)
             if self.separate:
                 intensities *= torch.where((e_locs[None,:,0] < self.boundary) == (self.locs[region][:,None,0] < self.boundary), 1, 0) # ensure current cannot spread between hemispheres
             intensities = torch.sum(intensities, axis=-1) # add up all gaussian blobs
             tot_intensities += intensities
         tot_intensities = torch.where(tot_intensities > self.thresh_percept, tot_intensities, 0.0)
-        # remove nans
-        tot_intensities = torch.nan_to_num(tot_intensities)
-        return tot_intensities
+        return tot_intensities.T
 
 class ScoreboardSpatial(CortexSpatial):
     """Cortical adaptation of scoreboard model from [Beyeler2019]_
@@ -319,9 +319,8 @@ class ScoreboardSpatial(CortexSpatial):
                 e_locs = torch.tensor(np.stack([x_el, y_el], axis=-1), device=self.device)
             else:
                 e_locs = torch.tensor(np.stack([x_el, y_el, z_el], axis=-1), device=self.device)
-            print(stim.data.shape)
             amps = torch.tensor(stim.data, device=self.device)
-            return self.torchmodel(amps=amps.T, e_locs=e_locs).T.numpy()
+            return self.torchmodel(amps=amps, e_locs=e_locs).numpy()
 
         elif self.engine == "cython":
             if self.vfmap.ndim == 3:
