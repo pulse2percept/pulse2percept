@@ -797,11 +797,13 @@ class AxonMapSpatial(SpatialModel):
                     np.array([earray[e].x for e in stim.electrodes], dtype=np.float32),
                     np.array([earray[e].y for e in stim.electrodes], dtype=np.float32)), axis=-1),
                 device=self.device)
-            return self.torchmodel(stim.data, e_locs).numpy()
+            amps = torch.tensor(stim.data, device=self.device)
+            return self.torchmodel(amps, e_locs).numpy()
         elif self.engine == 'jax':
             raise NotImplementedError("Jax will be supported in future release")
         else: 
-            raise NotImplementedError("Unknown engine selected:", self.engine)
+            raise NotImplementedError("Unknown engine selected: ", self.engine,
+                                      'Choose from "serial", "cython", "torch", "jax"')
 
     def plot(self, use_dva=False, style='hull', annotate=True, autoscale=True,
              ax=None, figsize=None):
@@ -919,7 +921,19 @@ class AxonMapSpatial(SpatialModel):
         return ax
 
 class TorchAxonMapSpatial(TorchBaseModel):
-    def __init__(self, p2pmodel): # implant parameter currently not used
+    """
+    Torch implementation of AxonMapSpatial
+
+    All model parameters, including the device to run on,
+    will be pulled from the passed in AxonMapSpatial model.
+
+    Parameters
+    ----------
+    p2pmodel : AxonMapSpatial
+        The AxonMapSpatial model to convert to a torch model
+
+    """
+    def __init__(self, p2pmodel):
         super().__init__(p2pmodel)
 
         # Check for model validity
@@ -934,14 +948,26 @@ class TorchAxonMapSpatial(TorchBaseModel):
         self.thresh_percept = p2pmodel.thresh_percept
     
     def forward(self, stim, e_locs):
+        """Predicts the percept
+
+        Parameters
+        ----------
+        stim : torch.Tensor
+            A tensor of shape (n_electrodes, n_time) with the amplitudes over time
+        e_locs : torch.Tensor
+            A tensor of shape (n_electrodes, 2) with the x,y locations of the electrodes
+
+        Returns
+        -------
+        intensities : torch.Tensor
+            A tensor of shape (n_pixels, n_time) with the predicted brightness 
         
-        # I_axon(x,y;p, lambda) = I_score(x,y; p) * exp(-( (x-x_soma)**2 + (y-y_soma)**2) / (2 * lambda**2))
-        #                       = amp * gauss
-        # gauss = self.axon_contrib[:,:,2,None] * torch.exp(-d2_el / (2*self.rho**2))
+        """
         
-        amp = torch.tensor(stim.T[:, ::1], dtype=torch.get_default_dtype())[:, None, None, :] # I_score
+        amp = stim.T[:, None, None, :] # I_score
         
-        d2_el = ((self.axon_contrib[:, :, 0, None] - e_locs[:,0])**2 + (self.axon_contrib[:, :, 1, None] - e_locs[:,1])**2)[None, :, :, :] # (x-x_soma)**2 + (y-y_soma)**2
+        d2_el = ((self.axon_contrib[:, :, 0, None] - e_locs[:,0])**2 + \
+                 (self.axon_contrib[:, :, 1, None] - e_locs[:,1])**2)[None, :, :, :] # (x-x_soma)**2 + (y-y_soma)**2
         gauss = self.axon_contrib[:,:,2,None] * torch.exp(-d2_el / (2*self.rho**2))
 
         intensities = amp * gauss
