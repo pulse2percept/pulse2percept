@@ -175,7 +175,7 @@ def test_ScoreboardModel_predict_percept():
     assert_warns_msg(UserWarning, model.predict_percept, msg, implant)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapSpatial(engine):
     # AxonMapSpatial automatically sets `rho`, `axlambda`:
     model = AxonMapSpatial(engine=engine, xystep=5)
@@ -278,7 +278,7 @@ def test_AxonMapSpatial_plot():
         plt.close(fig)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel(engine):
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
@@ -349,7 +349,7 @@ def test_deepcopy_AxonMapModel(original):
 @ pytest.mark.parametrize('eye', ('LE', 'RE'))
 @ pytest.mark.parametrize('loc_od', ((15.5, 1.5), (7.0, 3.0), (-2.0, -2.0)))
 @ pytest.mark.parametrize('sign', (-1.0, 1.0))
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
     # With `rho` starting at 0, all axons should originate in the optic disc
     # center
@@ -404,7 +404,7 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
         npt.assert_almost_equal(single_fiber[0], loc_od)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel_grow_axon_bundles(engine):
     for n_axons in [1, 2, 3, 5, 10]:
         model = AxonMapModel(xystep=2, engine=engine, n_axons=n_axons,
@@ -414,7 +414,7 @@ def test_AxonMapModel_grow_axon_bundles(engine):
         npt.assert_equal(len(bundles), n_axons)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel_find_closest_axon(engine):
     model = AxonMapModel(xystep=1, engine=engine, n_axons=5,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -446,7 +446,7 @@ def test_AxonMapModel_find_closest_axon(engine):
     npt.assert_equal(closest_idx, 0)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel_calc_axon_sensitivity(engine):
     model = AxonMapModel(xystep=2, engine=engine, n_axons=10,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -481,7 +481,7 @@ def test_AxonMapModel_calc_axon_sensitivity(engine):
         npt.assert_almost_equal(sensitivity, model_ax[:, 2])
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel_calc_bundle_tangent(engine):
     model = AxonMapModel(xystep=5, engine=engine, n_axons=500,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -497,7 +497,7 @@ def test_AxonMapModel_calc_bundle_tangent(engine):
         model.spatial.calc_bundle_tangent(0, [1000])
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel_calc_bundle_tangent_fast(engine):
     model = AxonMapModel(xystep=5, engine=engine, n_axons=500,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -513,7 +513,7 @@ def test_AxonMapModel_calc_bundle_tangent_fast(engine):
 
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel_predict_percept(engine):
     model = AxonMapModel(xystep=0.55, axlambda=100, rho=100,
                          thresh_percept=0, engine=engine,

@@ -174,6 +174,7 @@ class TorchScoreboardSpatial(TorchBaseModel):
         self.rho = torch.tensor(p2pmodel.rho, device=self.device)
         self.shape = p2pmodel.grid.shape
         self.regions = p2pmodel.regions
+        self.thresh_percept = torch.tensor(p2pmodel.thresh_percept, device=self.device)
         # whether to let current spread between regions
         self.separate = 0
         self.boundary = 0
@@ -201,21 +202,21 @@ class TorchScoreboardSpatial(TorchBaseModel):
         model_params: tensor, optional
             rho parameter for current spread
         """
-        if model_params is None:
-            rho = self.rho
-        else:
-            rho = model_params[0]
+        rho = self.rho if model_params is None else model_params[0]
+        amps = amps.T
 
         # (npixels, nelecs)
         tot_intensities = 0
         for region in self.regions:
             d2_el = torch.sum((self.locs[region][:, None, :] - e_locs[None, :, :] )**2, axis=-1)
             intensities = amps[:, None, :] * torch.exp(-d2_el / (2 * rho**2)) # generate gaussian blobs for each electrode
+            intensities = torch.nan_to_num(intensities)
             if self.separate:
                 intensities *= torch.where((e_locs[None,:,0] < self.boundary) == (self.locs[region][:,None,0] < self.boundary), 1, 0) # ensure current cannot spread between hemispheres
             intensities = torch.sum(intensities, axis=-1) # add up all gaussian blobs
             tot_intensities += intensities
-        return tot_intensities
+        tot_intensities = torch.where(tot_intensities > self.thresh_percept, tot_intensities, 0.0)
+        return tot_intensities.T
 
 class ScoreboardSpatial(CortexSpatial):
     """Cortical adaptation of scoreboard model from [Beyeler2019]_
@@ -315,11 +316,12 @@ class ScoreboardSpatial(CortexSpatial):
             boundary = self.vfmap.left_offset/2
         if self.engine == "torch":
             if self.vfmap.ndim == 2:
-                e_locs = torch.tensor([(x,y) for x,y in zip(x_el, y_el)]).to(self.device)
-                amps = torch.tensor(stim.data).to(self.device)
-                return self.torchmodel(amps=amps.T, e_locs=e_locs).T.numpy()
+                e_locs = torch.tensor(np.stack([x_el, y_el], axis=-1), device=self.device)
             else:
-                raise ValueError("Invalid dimensionality of visual field map")
+                e_locs = torch.tensor(np.stack([x_el, y_el, z_el], axis=-1), device=self.device)
+            amps = torch.tensor(stim.data, device=self.device)
+            return self.torchmodel(amps=amps, e_locs=e_locs).numpy()
+
         elif self.engine == "cython":
             if self.vfmap.ndim == 3:
                 return np.sum([
