@@ -110,7 +110,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine=None,
         else:
             raise ValueError("Acceptable values for `scheduler` are: "
                              "'threading', 'multiprocessing'")
-    elif engine.lower() == 'serial' or engine.lower() == 'torch':
+    elif engine.lower() == 'serial':
         results = []
         for in_element in in_list:
             if isinstance(in_element, list):
@@ -119,7 +119,7 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine=None,
                 results.append(func(in_element, *func_args, **func_kwargs))
     else:
         raise ValueError(f'Acceptable values for `engine` are: "serial", '
-                         f'"joblib", "torch", or "dask", not "{engine}".')
+                         f'"joblib", or "dask", not "{engine}".')
     if out_shape is not None:
         return np.array(results).reshape(out_shape)
     else:
