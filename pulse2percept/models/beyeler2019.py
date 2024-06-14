@@ -976,9 +976,7 @@ class TorchAxonMapSpatial(TorchBaseModel):
         intensities = torch.where(intensities < self.thresh_percept, 0, intensities) # clip if less than thresh_percept
         
         return intensities.T
-
-
-
+    
 
 class AxonMapModel(Model):
     """Axon map model of [Beyeler2019]_ (standalone model)
