@@ -4,9 +4,10 @@ from copy import deepcopy
 from functools import reduce
 from scipy.spatial import cKDTree
 from skimage.transform import SimilarityTransform
+from collections import OrderedDict
 
-from .electrodes import Electrode
-from .electrode_arrays import ElectrodeArray
+from .electrodes import Electrode, DiskElectrode
+from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from ..stimuli import Stimulus, ImageStimulus, VideoStimulus
 from ..utils import PrettyPrint
 from ..utils._fast_math import c_gcd
@@ -390,3 +391,69 @@ class ProsthesisSystem(PrettyPrint):
     def electrode_objects(self):
         """Return a list of all electrode objects in the array"""
         return self.earray.electrode_objects
+
+
+
+class RectangleImplant(ProsthesisSystem):
+    """ A generic rectangular implant
+
+    Parameters
+    ----------
+    x, y, z : float, optional
+        The x, y, z coordinates of the center of the implant
+    rot : float, optional
+        The rotation of the implant in degrees
+    shape : tuple, optional
+        The number of rows and columns in the implant
+    r : float, optional
+        The radius of the implant
+    spacing : float, optional
+        The distance between electrodes in the implant
+    eye : str, optional
+        The eye in which the implant is implanted
+    stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+        A valid source type for a stimulus
+    preprocess : bool, optional
+        Whether to preprocess the stimulus
+    safe_mode : bool, optional
+        Whether to enforce charge balance
+
+    """
+    def __init__(self, x=0, y=0, z=0, rot=0, shape=(15, 15), r=150./2, spacing=400., eye='RE', stim=None,
+                 preprocess=True, safe_mode=False):
+        self.safe_mode = safe_mode
+        self.preprocess = preprocess
+        self.shape = shape
+        names = ('A', '1')
+        self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, r=r,
+                                    rot=rot, names=names, etype=DiskElectrode)
+        self.stim = stim
+        
+        # Set left/right eye:
+        if not isinstance(eye, str):
+            raise TypeError("'eye' must be a string, either 'LE' or 'RE'.")
+        if eye != 'LE' and eye != 'RE':
+            raise ValueError("'eye' must be either 'LE' or 'RE'.")
+        self.eye = eye
+        # Unfortunately, in the left eye the labeling of columns is reversed...
+        if eye == 'LE':
+            # TODO: Would be better to have more flexibility in the naming
+            # convention. This is a quick-and-dirty fix:
+            names = self.earray.electrode_names
+            objects = self.earray.electrode_objects
+            names = np.array(names).reshape(self.earray.shape)
+            # Reverse column names:
+            for row in range(self.earray.shape[0]):
+                names[row] = names[row][::-1]
+            # Build a new ordered dict:
+            electrodes = OrderedDict()
+            for name, obj in zip(names.ravel(), objects):
+                electrodes.update({name: obj})
+            # Assign the new ordered dict to earray:
+            self.earray._electrodes = electrodes
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
+        params = super()._pprint_params()
+        params.update({'shape': self.shape, 'safe_mode': self.safe_mode,
+                       'preprocess': self.preprocess})
+        return params

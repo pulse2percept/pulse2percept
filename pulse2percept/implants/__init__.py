@@ -23,7 +23,7 @@ Different prosthetic implants, such as Argus II, Alpha-IMS, BVT-24, PRIMA, Corti
 
     *  :ref:`Basic Concepts > Visual Prostheses <topics-implants>`
 """
-from .base import ProsthesisSystem
+from .base import ProsthesisSystem, RectangleImplant
 from .electrodes import (Electrode, PointSource, DiskElectrode,
                          SquareElectrode, HexElectrode)
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
@@ -56,6 +56,7 @@ __all__ = [
     'PRIMA55',
     'PRIMA40',
     'ProsthesisSystem',
+    'RectangleImplant',
     'SquareElectrode',
     'IMIE'
 ]
