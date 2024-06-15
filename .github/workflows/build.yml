@@ -70,7 +70,7 @@ jobs:
         cd test_dir
         pytest --pyargs pulse2percept --cov-report=xml --cov=pulse2percept --doctest-modules
     - name: Upload coveragei report to codecov.io
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v4
       # Cannot yet post coverage report as comments on the PR, but see:
       # https://github.com/codecov/codecov-python/pull/214
       with:
