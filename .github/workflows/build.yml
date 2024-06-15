@@ -69,13 +69,15 @@ jobs:
         mkdir test_dir
         cd test_dir
         pytest --pyargs pulse2percept --cov-report=xml --cov=pulse2percept --doctest-modules
-    - name: Upload coveragei report to codecov.io
-      uses: codecov/codecov-action@v1
-      # Cannot yet post coverage report as comments on the PR, but see:
-      # https://github.com/codecov/codecov-python/pull/214
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./test_dir/coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-        yml: ./codecov.yml
+    # removed for now since it fails to compare to recent parent
+    # - name: Upload coveragei report to codecov.io
+    #   uses: codecov/codecov-action@v4
+    #   # Cannot yet post coverage report as comments on the PR, but see:
+    #   # https://github.com/codecov/codecov-python/pull/214
+    #   with:
+    #     token: ${{ secrets.CODECOV_TOKEN }}
+    #     file: ./test_dir/coverage.xml
+    #     flags: unittests
+    #     name: codecov-umbrella
+    #     yml: ./codecov.yml
+    #     commit_parent: e5289c3
