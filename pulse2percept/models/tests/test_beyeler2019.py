@@ -3,6 +3,8 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 import copy
+import pytest_benchmark
+
 
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
@@ -13,7 +15,7 @@ from pulse2percept.percepts import Percept
 from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
                                   ScoreboardSpatial, ScoreboardModel)
 from pulse2percept.topography import Watson2014Map, Watson2014DisplaceMap
-from pulse2percept.utils.testing import assert_warns_msg
+from pulse2percept.utils.testing import assert_warns_msg, standard_model_benchmark
 
 
 def test_ScoreboardSpatial():
@@ -566,3 +568,33 @@ def test_AxonMapModel_predict_percept(engine):
     msg = ("Nonzero electrode-retina distances do not have any effect on the "
            "model output.")
     assert_warns_msg(UserWarning, model.predict_percept, msg, implant)
+
+
+
+from pulse2percept.utils.testing import get_bench_runspec
+# benchmarking 
+@pytest.mark.benchmark(group='AxonMap')
+@pytest.mark.parametrize('compile' , [False, True])
+@pytest.mark.parametrize('engine, device', [('cython', 'cpu'), 
+                                            ('torch', 'cpu'),
+                                            ('torch', 'cuda')])
+@pytest.mark.parametrize('grid, elecs, times', get_bench_runspec(biphasic=False))
+def test_bench_axonmap(benchmark, compile, engine, device, grid, elecs, times):
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning)
+    model = AxonMapModel(engine=engine, device=device, compile=compile)
+    phosphene = benchmark(standard_model_benchmark(model, grid=grid, elecs=elecs, times=times))
+    npt.assert_equal(phosphene.data.shape[0] * phosphene.data.shape[1], grid)
+
+
+@pytest.mark.benchmark(group='Scoreboard')
+@pytest.mark.parametrize('engine, device', [('cython', 'cpu'), 
+                                            ('torch', 'cpu'),
+                                            ('torch', 'cuda')])
+@pytest.mark.parametrize('grid, elecs, times', get_bench_runspec(biphasic=False))
+def test_bench_scoreboard(benchmark, engine, device, grid, elecs, times):
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning)
+    model = ScoreboardModel(engine=engine, device=device)
+    phosphene = benchmark(standard_model_benchmark(model, grid=grid, elecs=elecs, times=times))
+    npt.assert_equal(phosphene.data.shape[0] * phosphene.data.shape[1], grid)
