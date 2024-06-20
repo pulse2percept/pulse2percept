@@ -174,8 +174,15 @@ def test_effects_models():
     npt.assert_equal(hasattr(model, 'a9'), True)
 
 
-@pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
-def test_biphasicAxonMapSpatial(engine):
+@pytest.mark.parametrize('engine, device, compile', 
+                          (('serial', 'cpu', False), 
+                           ('cython', 'cpu', False), 
+                           ('jax', 'cpu', False), 
+                           ('torch', 'cpu', False),
+                           ('torch', 'cpu', True),
+                           ('torch', 'cuda', False),
+                           ('torch', 'cuda', True)))
+def test_biphasicAxonMapSpatial(engine, device, compile):
     if engine == 'jax' and not has_jax:
         pytest.skip("Jax not installed")
 

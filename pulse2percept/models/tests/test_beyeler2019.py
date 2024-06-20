@@ -513,10 +513,18 @@ def test_AxonMapModel_calc_bundle_tangent_fast(engine):
 
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
-def test_AxonMapModel_predict_percept(engine):
+@ pytest.mark.parametrize('engine, device, compile', 
+                          (('serial', 'cpu', False), 
+                           ('cython', 'cpu', False), 
+                           ('jax', 'cpu', False), 
+                           ('torch', 'cpu', False),
+                           ('torch', 'cpu', True),
+                           ('torch', 'cuda', False),
+                           ('torch', 'cuda', True)))
+def test_AxonMapModel_predict_percept(engine, device, compile):
     model = AxonMapModel(xystep=0.55, axlambda=100, rho=100,
                          thresh_percept=0, engine=engine,
+                         device=device, compile=compile,
                          xrange=(-20, 20), yrange=(-15, 15),
                          n_axons=500)
     model.build()
@@ -544,7 +552,8 @@ def test_AxonMapModel_predict_percept(engine):
     npt.assert_almost_equal(np.sum(percept.data[39:, :, 0]), 0)
 
     # Full Argus II with small lambda: 60 bright spots
-    model = AxonMapModel(engine='serial', xystep=1, rho=100, axlambda=40,
+    model = AxonMapModel(engine=engine, device=device, compile=compile,
+                         xystep=1, rho=100, axlambda=40,
                          xrange=(-20, 20), yrange=(-15, 15), n_axons=500)
     model.build()
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
@@ -554,7 +563,8 @@ def test_AxonMapModel_predict_percept(engine):
     npt.assert_equal(np.sum(percept.data > 0.275), 56)
 
     # Model gives same outcome as Spatial:
-    spatial = AxonMapSpatial(engine='serial', xystep=1, rho=100, axlambda=40,
+    spatial = AxonMapSpatial(engine=engine, device=device, compile=compile,
+                             xystep=1, rho=100, axlambda=40,
                              xrange=(-20, 20), yrange=(-15, 15), n_axons=500)
     spatial.build()
     spatial_percept = spatial.predict_percept(ArgusII(stim=np.ones(60)))
