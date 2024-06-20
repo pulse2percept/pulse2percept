@@ -337,6 +337,8 @@ class ScoreboardSpatial(CortexSpatial):
                     for region in self.regions ],
                 axis = 0)
             elif self.vfmap.ndim == 2:
+                print(stim.data.dtype, x_el.dtype, y_el.dtype, self.grid['V1'].x.ravel().dtype,
+                       self.rho.dtype, self.thresh_percept.dtype, separate, boundary, self.n_threads)
                 return np.sum([
                     fast_scoreboard(stim.data, x_el, y_el,
                                     self.grid[region].x.ravel(), self.grid[region].y.ravel(),
