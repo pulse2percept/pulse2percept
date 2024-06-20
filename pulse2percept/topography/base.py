@@ -32,9 +32,6 @@ class CoordinateGrid:
             self.x = x
             self.y = y
             self.z = z
-            # self.x = x.astype(np.float32) if x is not None else None
-            # self.y = y.astype(np.float32) if y is not None else None
-            # self.z = z.astype(np.float32) if z is not None else None
         def __eq__(self, other):
             if not isinstance(other, self.__class__):
                 return False
