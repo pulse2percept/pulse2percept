@@ -11,6 +11,7 @@ from pulse2percept.implants import ArgusII
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.percepts import Percept
 from pulse2percept.topography import Watson2014Map
+import torch
 
 
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
@@ -73,6 +74,8 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions, engine):
                            ('torch', 'cuda', False),
                            ('torch', 'cuda', True)))
 def test_predict_spatial(ModelClass, regions, engine, device, compile):
+    if device == 'cuda' and not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
     # test that no current can spread between hemispheres
     model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.5, rho=100000, regions=regions,
                        engine=engine, device=device, compile=compile).build()

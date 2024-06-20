@@ -183,6 +183,8 @@ def test_effects_models():
                            ('torch', 'cuda', False),
                            ('torch', 'cuda', True)))
 def test_biphasicAxonMapSpatial(engine, device, compile):
+    if device == 'cuda' and not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
     if engine == 'jax' and not has_jax:
         pytest.skip("Jax not installed")
 
@@ -191,9 +193,11 @@ def test_biphasicAxonMapSpatial(engine, device, compile):
         
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
-        BiphasicAxonMapSpatial(axlambda=9).build()
+        BiphasicAxonMapSpatial(axlambda=9, engine=engine, 
+                               device=device, compile=compile).build()
 
-    model = BiphasicAxonMapModel(engine=engine, xystep=2).build()
+    model = BiphasicAxonMapModel(engine=engine, xystep=2,
+                                 device=device, compile=compile).build()
     # Only accepts biphasic pulse trains with no delay dur
     implant = ArgusI(stim=np.ones(16))
     with pytest.raises(TypeError):

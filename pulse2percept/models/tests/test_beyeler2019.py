@@ -14,6 +14,7 @@ from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
                                   ScoreboardSpatial, ScoreboardModel)
 from pulse2percept.topography import Watson2014Map, Watson2014DisplaceMap
 from pulse2percept.utils.testing import assert_warns_msg
+import torch
 
 
 def test_ScoreboardSpatial():
@@ -522,6 +523,8 @@ def test_AxonMapModel_calc_bundle_tangent_fast(engine):
                            ('torch', 'cuda', False),
                            ('torch', 'cuda', True)))
 def test_AxonMapModel_predict_percept(engine, device, compile):
+    if device == 'cuda' and not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
     model = AxonMapModel(xystep=0.55, axlambda=100, rho=100,
                          thresh_percept=0, engine=engine,
                          device=device, compile=compile,
