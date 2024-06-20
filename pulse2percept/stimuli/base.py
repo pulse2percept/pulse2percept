@@ -666,10 +666,10 @@ class Stimulus(PrettyPrint):
         else:
             data = self.data[electrodes, :].reshape(-1, len(self.time))
         data = [np.interp(time, self.time, row) for row in data]
-        data = np.array(data).reshape((-1, len(time))).astype(np.float32)
+        data = np.array(data).reshape((-1, len(time)))
         # Return a single element as scalar:
         if data.size == 1:
-            data = data.ravel()[0].item()
+            data = data.ravel()[0]
         return data
 
     def __eq__(self, other):
