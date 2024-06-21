@@ -414,7 +414,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             self.axon_contrib = jax.device_put(
                 jnp.array(self.axon_contrib), jax.devices()[0])
         elif self.engine == 'torch':
-            self.torchmodel = TorchBiphasicAxonMapSpatial(self)       
+            self.torchmodel = TorchBiphasicAxonMapSpatial(self)     
+            if self.compile:
+                self.torchmodel = torch.compile(self.torchmodel)  
 
     def _predict_spatial(self, earray, stim):
         """Predicts the percept"""
@@ -450,7 +452,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             y_el = np.array([earray[e].y for e in stim.electrodes],dtype=np.float32)
             e_locs = torch.tensor(np.stack([x_el, y_el], axis=-1), device=self.device)
             stim = torch.tensor(elec_params, device=self.device)
-            return self.torchmodel(stim, e_locs).numpy()
+            return self.torchmodel(stim, e_locs).cpu().numpy()
 
         elif self.engine == 'jax':
             return self._predict_spatial_jax(elec_params[:, :3], x, y)

@@ -1,5 +1,5 @@
 import copy
-
+import sys
 import numpy as np
 import pytest
 import numpy.testing as npt
@@ -13,19 +13,15 @@ from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
 from pulse2percept.utils.base import FreezeError
 
+import torch
 try:
     import jax
     has_jax = True
 except ImportError:
     has_jax = False
 
-try:
-    import torch
-    import torch.nn as nn
-    import torch.optim as optim
-    has_torch = True
-except ImportError:
-    has_torch = False
+
+
 
 def test_deepcopy_DefaultBrightModel():
     original = DefaultBrightModel()
@@ -174,19 +170,29 @@ def test_effects_models():
     npt.assert_equal(hasattr(model, 'a9'), True)
 
 
-@pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
-def test_biphasicAxonMapSpatial(engine):
+@pytest.mark.parametrize('engine, device, compile', 
+                          (('serial', 'cpu', False), 
+                           ('cython', 'cpu', False), 
+                           ('jax', 'cpu', False), 
+                           ('torch', 'cpu', False),
+                           ('torch', 'cpu', True),
+                           ('torch', 'cuda', False),
+                           ('torch', 'cuda', True)))
+def test_biphasicAxonMapSpatial(engine, device, compile):
+    if device == 'cuda' and not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+    if device == 'cpu' and engine == 'torch' and compile and sys.platform != 'linux':
+        pytest.skip("Torch on CPU only available on posix/ubuntu")
     if engine == 'jax' and not has_jax:
         pytest.skip("Jax not installed")
-
-    if engine == 'torch' and not has_torch:
-        pytest.skip("Torch not installed")
         
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
-        BiphasicAxonMapSpatial(axlambda=9).build()
+        BiphasicAxonMapSpatial(axlambda=9, engine=engine, 
+                               device=device, compile=compile).build()
 
-    model = BiphasicAxonMapModel(engine=engine, xystep=2).build()
+    model = BiphasicAxonMapModel(engine=engine, xystep=2,
+                                 device=device, compile=compile).build()
     # Only accepts biphasic pulse trains with no delay dur
     implant = ArgusI(stim=np.ones(16))
     with pytest.raises(TypeError):
@@ -303,7 +309,7 @@ def test_predict_batched(engine):
     model = BiphasicAxonMapModel(engine=engine, xystep=2)
     model.build()
     # Import error if we dont have jax
-    if (engine == 'jax' and not has_jax) or (engine == 'torch' and not has_torch):
+    if (engine == 'jax' and not has_jax):
         with pytest.raises(ImportError):
             model.predict_percept_batched(implant, stims)
         return
@@ -322,8 +328,6 @@ def test_predict_batched(engine):
 def test_biphasicAxonMapModel(engine):
     if engine == 'jax' and not has_jax:
         pytest.skip("Jax not installed")
-    if engine == 'torch' and not has_torch:
-        pytest.skip("torch not installed")
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),

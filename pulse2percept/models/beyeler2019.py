@@ -757,6 +757,8 @@ class AxonMapSpatial(SpatialModel):
         elif self.engine == 'torch':
             self.axon_contrib = self.calc_axon_sensitivity(axons, pad=True).astype(np.float32)
             self.torchmodel = TorchAxonMapSpatial(self)
+            if self.compile:
+                self.torchmodel = torch.compile(self.torchmodel)
         else: 
             axon_contrib = self.calc_axon_sensitivity(axons)
             self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
@@ -798,7 +800,7 @@ class AxonMapSpatial(SpatialModel):
                     np.array([earray[e].y for e in stim.electrodes], dtype=np.float32)), axis=-1),
                 device=self.device)
             amps = torch.tensor(stim.data, device=self.device)
-            return self.torchmodel(amps, e_locs).numpy()
+            return self.torchmodel(amps, e_locs).cpu().numpy()
         elif self.engine == 'jax':
             raise NotImplementedError("Jax will be supported in future release")
         else: 
