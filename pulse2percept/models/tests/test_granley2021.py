@@ -1,5 +1,5 @@
 import copy
-
+import os
 import numpy as np
 import pytest
 import numpy.testing as npt
@@ -185,6 +185,8 @@ def test_effects_models():
 def test_biphasicAxonMapSpatial(engine, device, compile):
     if device == 'cuda' and not torch.cuda.is_available():
         pytest.skip("CUDA not available")
+    if device == 'cpu' and engine == 'torch' and os.name != 'posix':
+        pytest.skip("Torch on CPU only available on posix/ubuntu")
     if engine == 'jax' and not has_jax:
         pytest.skip("Jax not installed")
 

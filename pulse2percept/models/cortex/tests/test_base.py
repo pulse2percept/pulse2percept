@@ -1,5 +1,6 @@
 import numpy.testing as npt
 import pytest
+import os
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
@@ -76,6 +77,8 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions, engine):
 def test_predict_spatial(ModelClass, regions, engine, device, compile):
     if device == 'cuda' and not torch.cuda.is_available():
         pytest.skip("CUDA not available")
+    if device == 'cpu' and engine == 'torch' and os.name != 'posix':
+        pytest.skip("Torch on CPU only available on posix/ubuntu")
     # test that no current can spread between hemispheres
     model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.5, rho=100000, regions=regions,
                        engine=engine, device=device, compile=compile).build()
