@@ -13,19 +13,15 @@ from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
 from pulse2percept.utils.base import FreezeError
 
+import torch
 try:
     import jax
     has_jax = True
 except ImportError:
     has_jax = False
 
-try:
-    import torch
-    import torch.nn as nn
-    import torch.optim as optim
-    has_torch = True
-except ImportError:
-    has_torch = False
+
+
 
 def test_deepcopy_DefaultBrightModel():
     original = DefaultBrightModel()
@@ -189,9 +185,6 @@ def test_biphasicAxonMapSpatial(engine, device, compile):
         pytest.skip("Torch on CPU only available on posix/ubuntu")
     if engine == 'jax' and not has_jax:
         pytest.skip("Jax not installed")
-
-    if engine == 'torch' and not has_torch:
-        pytest.skip("Torch not installed")
         
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
@@ -316,7 +309,7 @@ def test_predict_batched(engine):
     model = BiphasicAxonMapModel(engine=engine, xystep=2)
     model.build()
     # Import error if we dont have jax
-    if (engine == 'jax' and not has_jax) or (engine == 'torch' and not has_torch):
+    if (engine == 'jax' and not has_jax):
         with pytest.raises(ImportError):
             model.predict_percept_batched(implant, stims)
         return
@@ -335,8 +328,6 @@ def test_predict_batched(engine):
 def test_biphasicAxonMapModel(engine):
     if engine == 'jax' and not has_jax:
         pytest.skip("Jax not installed")
-    if engine == 'torch' and not has_torch:
-        pytest.skip("torch not installed")
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
