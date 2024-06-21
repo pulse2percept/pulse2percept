@@ -1,5 +1,6 @@
 import numpy.testing as npt
 import pytest
+import sys
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
@@ -11,6 +12,7 @@ from pulse2percept.implants import ArgusII
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.percepts import Percept
 from pulse2percept.topography import Watson2014Map
+import torch
 
 
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
@@ -66,10 +68,20 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions, engine):
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
 @pytest.mark.parametrize('regions', 
     [['v1'], ['v2'], ['v3'], ['v1', 'v2'], ['v2', 'v3'], ['v1', 'v3'], ['v1', 'v2', 'v3']])
-@pytest.mark.parametrize('engine', ['cython', 'torch'])
-def test_predict_spatial(ModelClass, regions, engine):
+@pytest.mark.parametrize('engine, device, compile', 
+                          (('cython', 'cpu', False), 
+                           ('torch', 'cpu', False),
+                           ('torch', 'cpu', True),
+                           ('torch', 'cuda', False),
+                           ('torch', 'cuda', True)))
+def test_predict_spatial(ModelClass, regions, engine, device, compile):
+    if device == 'cuda' and not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+    if device == 'cpu' and engine == 'torch' and compile and sys.platform != 'linux':
+        pytest.skip("Torch on CPU only available on posix/ubuntu")
     # test that no current can spread between hemispheres
-    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.5, rho=100000, regions=regions, engine=engine).build()
+    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.5, rho=100000, regions=regions,
+                       engine=engine, device=device, compile=compile).build()
     implant = Orion(x = 15000)
     implant.stim = {e:5 for e in implant.electrode_names}
     percept = model.predict_percept(implant)
@@ -79,7 +91,8 @@ def test_predict_spatial(ModelClass, regions, engine):
 
     # implant only in v1, shouldnt change with v2/v3
     vfmap = Polimeni2006Map(k=15, a=0.5, b=90)
-    model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), xystep=0.1, rho=400, vfmap=vfmap, engine=engine).build()
+    model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), xystep=0.1, rho=400, vfmap=vfmap, 
+                       engine=engine, device=device, compile=compile).build()
     elecs = [79, 49, 19, 80, 50, 20, 90, 61, 31, 2, 72, 42, 12, 83, 53, 23, 93, 64, 34, 5, 75, 45, 15, 86, 56, 26, 96, 67, 37, 8, 68, 38]
     implant = Cortivis(x=30000, y=0, rot=0, stim={str(i) : [1, 0] for i in elecs})
     percept = model.predict_percept(implant)
@@ -96,7 +109,8 @@ def test_predict_spatial(ModelClass, regions, engine):
     if 'v1' in regions:
         # make sure cortical representation is flipped
         vfmap = Polimeni2006Map(k=15, a=0.5, b=90)
-        model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), xystep=0.1, rho=400, vfmap=vfmap, engine=engine).build()
+        model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), xystep=0.1, rho=400, vfmap=vfmap, 
+                           engine=engine, device=device, compile=compile).build()
         implant = Orion(x=30000, y=0, rot=0, stim={'40' : 1,  '94' :5})
         percept = model.predict_percept(implant)
         half = model.grid.shape[0] // 2
