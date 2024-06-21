@@ -79,6 +79,8 @@ def test_predict_spatial(ModelClass, regions, engine, device, compile):
         pytest.skip("CUDA not available")
     if device == 'cpu' and engine == 'torch' and compile and os.name != 'posix':
         pytest.skip("Torch on CPU only available on posix/ubuntu")
+    else:
+        print('not skipping')
     # test that no current can spread between hemispheres
     model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.5, rho=100000, regions=regions,
                        engine=engine, device=device, compile=compile).build()
