@@ -6,7 +6,7 @@ import copy
 
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
-import os
+import sys
 
 from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
@@ -525,7 +525,7 @@ def test_AxonMapModel_calc_bundle_tangent_fast(engine):
 def test_AxonMapModel_predict_percept(engine, device, compile):
     if device == 'cuda' and not torch.cuda.is_available():
         pytest.skip("CUDA not available")
-    if device == 'cpu' and engine == 'torch' and os.name != 'posix':
+    if device == 'cpu' and engine == 'torch' and compile and sys.platform != 'linux':
         pytest.skip("Torch on CPU only available on posix/ubuntu")
     model = AxonMapModel(xystep=0.55, axlambda=100, rho=100,
                          thresh_percept=0, engine=engine,
