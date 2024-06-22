@@ -20,9 +20,8 @@ class TorchFadingTemporal(TorchBaseModel):
         stim : torch.Tensor
             One frame of output from a spatial model. This frame will represent
             the stimulus at a given time point. Must have shape (n_pixels)
-        state : torch.Tensor, optional
+        state : torch.Tensor
             The internal state of the model. state[0] corresponds to ``bright``
-            Defaults to None. If None, the state is assumed to be zero.
         model_params : torch.Tensor, optional
             The model parameters to use when predicting the percept.
             model_params[0] is ``tau``.
@@ -38,9 +37,6 @@ class TorchFadingTemporal(TorchBaseModel):
         """
 
         tau = self.tau if model_params is None else torch.Tensor(model_params[0], device=self.device)
-
-        if state is None:
-            state = torch.unsqueeze(torch.zeros_like(stim, device=self.device), 0)
         
         # get brightness state out
         bright = state[0]
@@ -53,7 +49,7 @@ class TorchFadingTemporal(TorchBaseModel):
         return torch.where(bright > self.thresh_percept, bright, 0), state
     
     def offline_predict(self, stim, t_stim, idx_percept, model_params=None):
-        state = None
+        state = torch.unsqueeze(torch.zeros_like(stim[:,0], device=self.device), 0)
 
         # calculate the total number of time points to simulate
         n_sim = idx_percept[-1] + 1
