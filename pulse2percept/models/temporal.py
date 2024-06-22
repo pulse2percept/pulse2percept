@@ -36,10 +36,8 @@ class TorchFadingTemporal(TorchBaseModel):
 
         """
 
-        if model_params is None:
-            tau = self.tau
-        else:
-            tau = model_params[0]
+        tau = self.tau if model_params is None else torch.Tensor(model_params[0], device=self.device)
+
 
         if state is None:
             state = torch.unsqueeze(torch.zeros_like(stim, device=self.device), 0)
@@ -53,6 +51,11 @@ class TorchFadingTemporal(TorchBaseModel):
         state[0] = bright
 
         return bright, state
+    
+    def offline_predict(self, stim, model_params=None):
+        tau = self.tau if model_params is None else torch.Tensor(model_params[0], device=self.device)
+
+
 
 
 class FadingTemporal(TemporalModel):

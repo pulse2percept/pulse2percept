@@ -20,7 +20,7 @@ Computational models of the prosthetic vision, such as phosphene and neural resp
 
 """
 from .base import (BaseModel, Model, NotBuiltError, SpatialModel,
-                   TemporalModel, TorchSpatialModel, TorchTemporalModel)
+                   TemporalModel, TorchBaseModel)
 from .temporal import FadingTemporal, TorchFadingTemporal
 from .beyeler2019 import (ScoreboardModel, ScoreboardSpatial, AxonMapSpatial,
                           AxonMapModel)
@@ -50,9 +50,8 @@ __all__ = [
     'ScoreboardSpatial',
     'SpatialModel',
     'TemporalModel',
+    'TorchBaseModel',
     'TorchFadingTemporal',
-    'TorchSpatialModel',
-    'TorchTemporalModel',
     'Thompson2003Model',
     'Thompson2003Spatial',
 ]

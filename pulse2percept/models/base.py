@@ -1053,7 +1053,7 @@ class Model(PrettyPrint):
         return _is_built
 
 
-class TorchSpatialModel(torch.nn.Module, metaclass=ABCMeta):
+class TorchBaseModel(torch.nn.Module, metaclass=ABCMeta):
     def __init__(self, p2pmodel):
         """
         Base class constructor for common logic
@@ -1100,56 +1100,6 @@ class TorchSpatialModel(torch.nn.Module, metaclass=ABCMeta):
         -------
         percept : torch.Tensor
             The predicted percept, with dimensions (n_time, n_pixels)
-
-        """
-        raise NotImplementedError
-
-class TorchTemporalModel(torch.nn.Module, metaclass=ABCMeta):
-    def __init__(self, p2pmodel):
-        """
-        Base class constructor for common logic
-
-        Subclasses should call this constructor and then should 
-        read in any relevant information from the p2pmodel (which is NOT stored),
-        including model parameters.
-
-        Parameters
-        ----------
-        p2pmodel : pulse2percept.models.Model
-            The pulse2percept model to wrap
-
-        """
-        super().__init__()
-        self.device = torch.device(p2pmodel.device)
-
-    @abstractmethod
-    def forward(self, stim, state=None, model_params=None):
-        """
-        Forward pass of the model
-
-        Parameters
-        ----------
-        stim : torch.Tensor
-            The stimulation tensor. 
-            Shape (n_pixels) or (n_pixels, 3) for biphasic models
-        state : torch.Tensor, optional
-            The model's state. If None, we assume this is the first frame.
-            The dimensions will vary from subclass to subclass.
-        model_params : torch.Tensor, optional
-            The model parameters to use. If None, will use the default parameters
-            Each subclass should use this, if provided, instead of parameters from the p2pmodel,
-            so that it is possible to differentiate wrt the parameters.
-
-            Only parameters that make sense to differentiate wrt and don't require
-            rebuild should go here.
-            For example, the fading temporal model would take in ([tau])
-
-        Returns
-        -------
-        percept : torch.Tensor
-            The predicted percept, with dimensions (n_pixels)
-        state : torch.Tensor
-            The model's state at the time of the predicted percept
 
         """
         raise NotImplementedError
