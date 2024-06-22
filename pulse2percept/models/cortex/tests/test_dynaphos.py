@@ -10,6 +10,7 @@ from pulse2percept.implants.cortex import Cortivis, Orion
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import BiphasicPulseTrain
+from pulse2percept.utils.testing import get_bench_runspec, standard_model_benchmark
 
 def test_DynaphosModel():
     model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1).build()
@@ -112,3 +113,16 @@ def test_dynaphos_plot():
     m.build()
     m.plot()
     plt.close()
+
+@pytest.mark.benchmark(group='Dynaphos')
+@pytest.mark.parametrize('grid, elecs, times', get_bench_runspec())
+def test_bench_nanduri(benchmark, grid, elecs, times):
+    # if engine == 'torch' and device == 'cuda' and not torch.cuda.is_available():
+    #     pytest.skip("CUDA not available")
+    # if device == 'cpu' and engine == 'torch' and compile and sys.platform != 'linux':
+    #     pytest.skip("Torch on CPU only available on posix/ubuntu")
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning)
+    model = DynaphosModel()
+    phosphene = benchmark(standard_model_benchmark(model, grid=grid, elecs=elecs, times=times))
+    npt.assert_equal(phosphene.data.shape[0] * phosphene.data.shape[1], grid)

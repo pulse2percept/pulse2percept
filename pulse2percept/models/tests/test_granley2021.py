@@ -12,6 +12,7 @@ from pulse2percept.models import BiphasicAxonMapModel, BiphasicAxonMapSpatial, \
 from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
 from pulse2percept.utils.base import FreezeError
+from pulse2percept.utils.testing import get_bench_runspec, standard_model_benchmark
 
 import torch
 try:
@@ -428,3 +429,24 @@ def test_biphasicAxonMapModel(engine):
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
         BiphasicAxonMapModel(axlambda=9).build()
+
+
+
+# benchmarking 
+@pytest.mark.benchmark(group='BiphasicAxonMap')
+@pytest.mark.parametrize('engine, device, compile', [('cython', 'cpu', False), 
+                                                    ('torch', 'cpu', False),
+                                                    ('torch', 'cpu', True),
+                                                    ('torch', 'cuda', False),
+                                                    ('torch', 'cuda', True)])
+@pytest.mark.parametrize('grid, elecs, times', get_bench_runspec(biphasic=True))
+def test_bench_biphasicaxonmap(benchmark, engine, device, compile, grid, elecs, times):
+    if engine == 'torch' and device == 'cuda' and not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+    if device == 'cpu' and engine == 'torch' and compile and sys.platform != 'linux':
+        pytest.skip("Torch on CPU only available on posix/ubuntu")
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning)
+    model = BiphasicAxonMapModel(engine=engine, device=device, compile=compile)
+    phosphene = benchmark(standard_model_benchmark(model, grid=grid, elecs=elecs, times=times))
+    npt.assert_equal(phosphene.data.shape[0] * phosphene.data.shape[1], grid)

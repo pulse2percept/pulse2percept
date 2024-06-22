@@ -586,27 +586,19 @@ def test_AxonMapModel_predict_percept(engine, device, compile):
 from pulse2percept.utils.testing import get_bench_runspec
 # benchmarking 
 @pytest.mark.benchmark(group='AxonMap')
-@pytest.mark.parametrize('compile' , [False, True])
-@pytest.mark.parametrize('engine, device', [('cython', 'cpu'), 
-                                            ('torch', 'cpu'),
-                                            ('torch', 'cuda')])
+@pytest.mark.parametrize('engine, device, compile', [('cython', 'cpu', False), 
+                                                    ('torch', 'cpu', False),
+                                                    ('torch', 'cpu', True),
+                                                    ('torch', 'cuda', False),
+                                                    ('torch', 'cuda', True)])
 @pytest.mark.parametrize('grid, elecs, times', get_bench_runspec(biphasic=False))
-def test_bench_axonmap(benchmark, compile, engine, device, grid, elecs, times):
+def test_bench_axonmap(benchmark, engine, device, compile, grid, elecs, times):
+    if engine == 'torch' and device == 'cuda' and not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+    if device == 'cpu' and engine == 'torch' and compile and sys.platform != 'linux':
+        pytest.skip("Torch on CPU only available on posix/ubuntu")
     import warnings
     warnings.filterwarnings("ignore", category=UserWarning)
     model = AxonMapModel(engine=engine, device=device, compile=compile)
-    phosphene = benchmark(standard_model_benchmark(model, grid=grid, elecs=elecs, times=times))
-    npt.assert_equal(phosphene.data.shape[0] * phosphene.data.shape[1], grid)
-
-
-@pytest.mark.benchmark(group='Scoreboard')
-@pytest.mark.parametrize('engine, device', [('cython', 'cpu'), 
-                                            ('torch', 'cpu'),
-                                            ('torch', 'cuda')])
-@pytest.mark.parametrize('grid, elecs, times', get_bench_runspec(biphasic=False))
-def test_bench_scoreboard(benchmark, engine, device, grid, elecs, times):
-    import warnings
-    warnings.filterwarnings("ignore", category=UserWarning)
-    model = ScoreboardModel(engine=engine, device=device)
     phosphene = benchmark(standard_model_benchmark(model, grid=grid, elecs=elecs, times=times))
     npt.assert_equal(phosphene.data.shape[0] * phosphene.data.shape[1], grid)

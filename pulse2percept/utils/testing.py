@@ -106,11 +106,11 @@ def standard_model_benchmark(model, grid=None, elecs=None, times=None,
         'xrange': gridspec[0],
         'yrange': gridspec[1],
         'xystep': gridspec[2],
-    }
+    } if hasattr(model, 'xrange') else {}
     # replace defaults with user-provided values
     model_kwargs = {**model_kwargs, **kwargs} 
     model.build(**model_kwargs)
-    if not isinstance(grid, tuple):
+    if not isinstance(grid, tuple) and hasattr(model, 'grid'):
         npt.assert_equal(model.grid.shape[0] * model.grid.shape[1], int(grid))
 
     if elecs is None:
@@ -144,7 +144,7 @@ def standard_model_benchmark(model, grid=None, elecs=None, times=None,
         implant.stim = np.random.rand(len(implant.electrodes), int(times)).astype(np.float32)
     def bench_fn():
         return model.predict_percept(implant)
-    print(model.grid.shape, len(implant.electrodes), implant.stim.shape)
+    # print(model.grid.shape, len(implant.electrodes), implant.stim.shape)
     return bench_fn
         
     
