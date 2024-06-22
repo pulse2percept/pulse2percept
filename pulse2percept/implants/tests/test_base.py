@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
 
 from pulse2percept.implants import (PointSource, ElectrodeArray, ElectrodeGrid,
-                                    ProsthesisSystem)
+                                    ProsthesisSystem, RectangleImplant)
 from pulse2percept.stimuli import Stimulus, ImageStimulus, VideoStimulus
 from pulse2percept.models import ScoreboardModel
 
@@ -145,3 +145,82 @@ def test_ProsthesisSystem_deactivate():
     implant.deactivate(electrode)
     npt.assert_equal(implant[electrode].activated, False)
     npt.assert_equal(electrode in implant.stim.electrodes, False)
+
+@pytest.mark.parametrize('ztype', ('float', 'list'))
+@pytest.mark.parametrize('x', (-100, 200))
+@pytest.mark.parametrize('y', (-200, 400))
+@pytest.mark.parametrize('rot', (-45, 60))
+def test_rectangle_implant(ztype, x, y, rot):
+    # Create an argus like implant and make sure location is correct
+    z = 100 if ztype == 'float' else np.ones(60) * 20
+    implant = RectangleImplant(x=x, y=y, z=z, rot=rot, shape=(6, 10), r=112.5, spacing=575.0)
+
+    # Slots:
+    npt.assert_equal(hasattr(implant, '__slots__'), True)
+
+    # Coordinates of first electrode
+    xy = np.array([-2587.5, -1437.5]).T
+
+    # Rotate
+    rot_rad = np.deg2rad(rot)
+    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
+                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
+    xy = np.matmul(R, xy)
+
+    # Then off-set: Make sure first electrode is placed
+    # correctly
+    npt.assert_almost_equal(implant['A1'].x, xy[0] + x)
+    npt.assert_almost_equal(implant['A1'].y, xy[1] + y)
+
+    # Make sure array center is still (x,y)
+    y_center = implant['F1'].y + (implant['A10'].y - implant['F1'].y) / 2
+    npt.assert_almost_equal(y_center, y)
+    x_center = implant['A1'].x + (implant['F10'].x - implant['A1'].x) / 2
+    npt.assert_almost_equal(x_center, x)
+
+    # Make sure radius is correct
+    for e in ['A1', 'B3', 'C5', 'D7', 'E9', 'F10']:
+        npt.assert_almost_equal(implant[e].r, 112.5)
+
+    # Indexing must work for both integers and electrode names
+    for idx, (name, electrode) in enumerate(implant.electrodes.items()):
+        npt.assert_equal(electrode, implant[idx])
+        npt.assert_equal(electrode, implant[name])
+    npt.assert_equal(implant["unlikely name for an electrode"], None)
+
+    # Right-eye implant:
+    xc, yc = 500, -500
+    implant = RectangleImplant(eye='RE', x=xc, y=yc)
+    npt.assert_equal(implant['A10'].x > implant['A1'].x, True)
+    npt.assert_almost_equal(implant['A10'].y, implant['A1'].y)
+
+    # Left-eye implant:
+    implant = RectangleImplant(eye='LE', x=xc, y=yc)
+    npt.assert_equal(implant['A1'].x > implant['A10'].x, True)
+    npt.assert_almost_equal(implant['A10'].y, implant['A1'].y)
+
+    # In both left and right eyes, rotation with positive angle should be
+    # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
+    for eye, el in zip(['LE', 'RE'], ['O1', 'O15']):
+        # By default, electrode 'F1' in a left eye has the same coordinates as
+        # 'F10' in a right eye (because the columns are reversed). Thus both
+        # cases are testing an electrode with x>0, y>0:
+        before = RectangleImplant(eye=eye)
+        after = RectangleImplant(eye=eye, rot=20)
+        npt.assert_equal(after[el].x < before[el].x, True)
+        npt.assert_equal(after[el].y > before[el].y, True)
+
+    # Set a stimulus via dict:
+    implant = RectangleImplant(stim={'B7': 13})
+    npt.assert_equal(implant.stim.shape, (1, 1))
+    npt.assert_equal(implant.stim.electrodes, ['B7'])
+
+    # Set a stimulus via array:
+    implant = RectangleImplant(stim=np.ones(225))
+    npt.assert_equal(implant.stim.shape, (225, 1))
+    npt.assert_almost_equal(implant.stim.data, 1)
+
+    # test different shapes
+    for shape in [(6, 10), (5, 12), (15, 15)]:
+        implant = RectangleImplant(shape=shape)
+        npt.assert_equal(implant.earray.shape, shape)

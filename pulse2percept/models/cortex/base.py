@@ -287,6 +287,8 @@ class ScoreboardSpatial(CortexSpatial):
     def _build(self):
         if self.engine == 'torch':
             self.torchmodel = TorchScoreboardSpatial(self)
+            if self.compile:
+                self.torchmodel = torch.compile(self.torchmodel)
 
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
@@ -320,7 +322,7 @@ class ScoreboardSpatial(CortexSpatial):
             else:
                 e_locs = torch.tensor(np.stack([x_el, y_el, z_el], axis=-1), device=self.device)
             amps = torch.tensor(stim.data, device=self.device)
-            return self.torchmodel(amps=amps, e_locs=e_locs).numpy()
+            return self.torchmodel(amps=amps, e_locs=e_locs).cpu().numpy()
 
         elif self.engine == "cython":
             if self.vfmap.ndim == 3:
@@ -335,6 +337,7 @@ class ScoreboardSpatial(CortexSpatial):
                     for region in self.regions ],
                 axis = 0)
             elif self.vfmap.ndim == 2:
+                print(self.grid[self.regions[0]].x.ravel().dtype, self.grid.dva.x.dtype)
                 return np.sum([
                     fast_scoreboard(stim.data, x_el, y_el,
                                     self.grid[region].x.ravel(), self.grid[region].y.ravel(),

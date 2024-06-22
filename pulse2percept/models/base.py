@@ -253,7 +253,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'ndim' : [2],
             'n_threads': multiprocessing.cpu_count(),
             # default to cpu, can force cuda if using torch on gpu
-            'device': 'cpu'
+            'device': 'cpu',
+            # whether to use torch.compile
+            'compile' : False
         }
         return params
 

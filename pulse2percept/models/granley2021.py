@@ -2,13 +2,14 @@
 from functools import partial
 import numpy as np
 import sys
+import torch
 
 from . import AxonMapSpatial, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
 from ..percepts import Percept
 from ..utils import FreezeError
-from .base import NotBuiltError, BaseModel
+from .base import NotBuiltError, BaseModel,TorchBaseModel
 from ._granley2021 import fast_biphasic_axon_map
 
 
@@ -312,6 +313,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             if key in ['bright_model', 'size_model', 'streak_model']:
                 continue
             setattr(self, key, val)
+        self.torchmodel = None
 
     def __getattr__(self, attr):
         # Called when normal get attribute fails
@@ -354,7 +356,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             pass
         # Check whether the attribute is a part of any
         # bright/size/streak model
-        if name not in ['bright_model', 'size_model', 'streak_model', 'is_built', '_is_built']:
+        if name not in ['bright_model', 'size_model', 'streak_model', 'is_built', '_is_built', 'torchmodel']:
             try:
                 for m in [self.bright_model, self.size_model, self.streak_model]:
                     if hasattr(m, name):
@@ -411,6 +413,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Cache axon_contrib for fast access later
             self.axon_contrib = jax.device_put(
                 jnp.array(self.axon_contrib), jax.devices()[0])
+        elif self.engine == 'torch':
+            self.torchmodel = TorchBiphasicAxonMapSpatial(self)     
+            if self.compile:
+                self.torchmodel = torch.compile(self.torchmodel)  
 
     def _predict_spatial(self, earray, stim):
         """Predicts the percept"""
@@ -440,7 +446,18 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         x = np.array(x, dtype=np.float32)
         y = np.array(y, dtype=np.float32)
 
-        if self.engine != 'jax':
+
+        if self.engine == 'torch':
+            x_el = np.array([earray[e].x for e in stim.electrodes],dtype=np.float32)
+            y_el = np.array([earray[e].y for e in stim.electrodes],dtype=np.float32)
+            e_locs = torch.tensor(np.stack([x_el, y_el], axis=-1), device=self.device)
+            stim = torch.tensor(elec_params, device=self.device)
+            return self.torchmodel(stim, e_locs).cpu().numpy()
+
+        elif self.engine == 'jax':
+            return self._predict_spatial_jax(elec_params[:, :3], x, y)
+
+        else:
             bright_effects = np.array(self.bright_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]),
                                       dtype=np.float32).reshape((-1))
             size_effects = np.array(self.size_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]),
@@ -459,8 +476,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 self.axon_idx_end.astype(np.uint32),
                 self.rho, self.thresh_percept,
                 self.n_threads)
-        else:
-            return self._predict_spatial_jax(elec_params[:, :3], x, y)
 
     def predict_one_point_jax(self, axon, eparams, x, y, rho):
         """ Predicts the brightness contribution from each axon segment for each pixel"""
@@ -867,3 +882,104 @@ class BiphasicAxonMapModel(Model):
             return None
         resp = self.spatial.predict_percept(implant, t_percept=t_percept)
         return resp
+
+
+
+
+class TorchBiphasicAxonMapSpatial(TorchBaseModel):
+    """ Torch implementation of BiphasicAxonMapSpatial
+
+    All model parameters, including the device to run on,
+    will be pulled from the passed in p2pmodel model.
+    
+    Parameters
+    ----------
+    p2pmodel: BiphasicAxonMapSpatial or BiphasicAxonMapModel
+        The BiphasicAxonMap model to build the torch model for
+    
+    """
+    def __init__(self, p2pmodel):
+        super().__init__(p2pmodel)
+
+        if isinstance(p2pmodel, BiphasicAxonMapModel) and not isinstance(p2pmodel, BiphasicAxonMapSpatial):
+            raise ValueError("Must pass in a valid BiphasicAxonMapSpatial Model")
+        
+        if not isinstance(p2pmodel.bright_model, DefaultBrightModel):
+            raise ValueError("Bright model must be an instance of DefaultBrightModel")
+        if not isinstance(p2pmodel.size_model, DefaultSizeModel):
+            raise ValueError("Size model must be an instance of DefaultSizeModel")
+        if not isinstance(p2pmodel.streak_model, DefaultStreakModel):
+            raise ValueError("Streak model must be an instance of DefaultStreakModel")
+
+        # extract parameters from the models
+        self.axon_contrib = torch.tensor(p2pmodel.axon_contrib, device=self.device)
+        self.rho = torch.tensor(p2pmodel.rho, device=self.device)
+        self.axlambda = torch.tensor(p2pmodel.axlambda, device=self.device)
+        for i in range(10):
+            name = f"a{i}"
+            for model in [p2pmodel.bright_model, p2pmodel.size_model, p2pmodel.streak_model]:
+                if hasattr(model, name):
+                    setattr(self, name, torch.tensor(getattr(model, name), device=self.device))
+        
+        self.percept_shape = p2pmodel.grid.shape
+        self.thresh_percept = torch.tensor(p2pmodel.thresh_percept, device=self.device)
+    
+    
+    def forward(self, stim, e_locs, model_params=None):
+        """ Predicts the percept for a given stimulus
+
+        Parameters
+        ----------
+        stim: torch.tensor
+            A tensor of shape (n_elec, 3) containing the frequency, amplitude, and pulse duration
+            for each electrode
+        e_locs: torch.tensor
+            A tensor of shape (n_elec, 2) containing the x and y coordinates of each electrode
+        model_params: tensor, optional
+            A tensor of model parameters to use for the prediction. If None, the build model's parameters
+            will be used
+
+        Returns
+        -------
+        intensities: torch.tensor
+            A tensor of shape (n_points) containing the intensities at each point
+        """
+        axon_contrib = self.axon_contrib
+
+        if model_params is None:
+            rho = self.rho
+            axlambda = self.axlambda
+            a_attributes = [self.a0, self.a1, self.a2, self.a3, self.a4, self.a5, self.a6, self.a7, self.a8, self.a9]
+        else:
+            rho = model_params[0]
+            axlambda = model_params[1]
+            a_attributes = [model_params[i] for i in range(2, 12)]
+        a0, a1, a2, a3, a4, a5, a6, a7, a8, a9 = a_attributes
+        
+        freq = stim[:,0]
+        amp = stim[:,1]
+        pdur = stim[:,2]  
+
+        scaled_amps = (a1 + a0*pdur) * amp
+
+        # bright
+        F_bright = a2 * scaled_amps + a3 * freq + a4
+        F_bright = torch.where(amp > 0, F_bright, torch.zeros_like(F_bright))
+        
+        # size
+        min_f_size = 10**2 / (rho**2)
+        F_size = a5 * scaled_amps + a6
+        F_size = torch.maximum(F_size, min_f_size)
+        
+        # streak
+        min_f_streak = 10**2 / (axlambda ** 2)
+        F_streak = a9 - a7 * pdur ** a8
+        F_streak = torch.maximum(F_streak, min_f_streak)
+
+        d2_el = (axon_contrib[:, :, 0, None] - e_locs[:,0])**2 + (axon_contrib[:, :, 1, None] - e_locs[:,1])**2
+        intensities = F_bright * torch.exp(-d2_el / (2. * rho**2 * F_size)) * (
+              axon_contrib[:, :, 2, None] ** (1. / F_streak))
+
+        intensities = torch.max(torch.sum(intensities, axis=-1), dim=-1).values
+        intensities = torch.where(intensities < self.thresh_percept, 0, intensities) # clip if less than thresh_percept
+        return intensities

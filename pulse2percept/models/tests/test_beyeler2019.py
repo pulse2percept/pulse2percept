@@ -6,7 +6,7 @@ import copy
 
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
-
+import sys
 
 from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
@@ -14,6 +14,7 @@ from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
                                   ScoreboardSpatial, ScoreboardModel)
 from pulse2percept.topography import Watson2014Map, Watson2014DisplaceMap
 from pulse2percept.utils.testing import assert_warns_msg
+import torch
 
 
 def test_ScoreboardSpatial():
@@ -175,7 +176,7 @@ def test_ScoreboardModel_predict_percept():
     assert_warns_msg(UserWarning, model.predict_percept, msg, implant)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapSpatial(engine):
     # AxonMapSpatial automatically sets `rho`, `axlambda`:
     model = AxonMapSpatial(engine=engine, xystep=5)
@@ -278,7 +279,7 @@ def test_AxonMapSpatial_plot():
         plt.close(fig)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel(engine):
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
@@ -349,7 +350,7 @@ def test_deepcopy_AxonMapModel(original):
 @ pytest.mark.parametrize('eye', ('LE', 'RE'))
 @ pytest.mark.parametrize('loc_od', ((15.5, 1.5), (7.0, 3.0), (-2.0, -2.0)))
 @ pytest.mark.parametrize('sign', (-1.0, 1.0))
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
     # With `rho` starting at 0, all axons should originate in the optic disc
     # center
@@ -404,7 +405,7 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
         npt.assert_almost_equal(single_fiber[0], loc_od)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel_grow_axon_bundles(engine):
     for n_axons in [1, 2, 3, 5, 10]:
         model = AxonMapModel(xystep=2, engine=engine, n_axons=n_axons,
@@ -414,7 +415,7 @@ def test_AxonMapModel_grow_axon_bundles(engine):
         npt.assert_equal(len(bundles), n_axons)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel_find_closest_axon(engine):
     model = AxonMapModel(xystep=1, engine=engine, n_axons=5,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -446,7 +447,7 @@ def test_AxonMapModel_find_closest_axon(engine):
     npt.assert_equal(closest_idx, 0)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel_calc_axon_sensitivity(engine):
     model = AxonMapModel(xystep=2, engine=engine, n_axons=10,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -481,7 +482,7 @@ def test_AxonMapModel_calc_axon_sensitivity(engine):
         npt.assert_almost_equal(sensitivity, model_ax[:, 2])
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel_calc_bundle_tangent(engine):
     model = AxonMapModel(xystep=5, engine=engine, n_axons=500,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -497,7 +498,7 @@ def test_AxonMapModel_calc_bundle_tangent(engine):
         model.spatial.calc_bundle_tangent(0, [1000])
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax', 'torch'))
 def test_AxonMapModel_calc_bundle_tangent_fast(engine):
     model = AxonMapModel(xystep=5, engine=engine, n_axons=500,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -513,10 +514,22 @@ def test_AxonMapModel_calc_bundle_tangent_fast(engine):
 
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
-def test_AxonMapModel_predict_percept(engine):
+@ pytest.mark.parametrize('engine, device, compile', 
+                          (('serial', 'cpu', False), 
+                           ('cython', 'cpu', False), 
+                           ('jax', 'cpu', False), 
+                           ('torch', 'cpu', False),
+                           ('torch', 'cpu', True),
+                           ('torch', 'cuda', False),
+                           ('torch', 'cuda', True)))
+def test_AxonMapModel_predict_percept(engine, device, compile):
+    if device == 'cuda' and not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+    if device == 'cpu' and engine == 'torch' and compile and sys.platform != 'linux':
+        pytest.skip("Torch on CPU only available on posix/ubuntu")
     model = AxonMapModel(xystep=0.55, axlambda=100, rho=100,
                          thresh_percept=0, engine=engine,
+                         device=device, compile=compile,
                          xrange=(-20, 20), yrange=(-15, 15),
                          n_axons=500)
     model.build()
@@ -544,7 +557,8 @@ def test_AxonMapModel_predict_percept(engine):
     npt.assert_almost_equal(np.sum(percept.data[39:, :, 0]), 0)
 
     # Full Argus II with small lambda: 60 bright spots
-    model = AxonMapModel(engine='serial', xystep=1, rho=100, axlambda=40,
+    model = AxonMapModel(engine=engine, device=device, compile=compile,
+                         xystep=1, rho=100, axlambda=40,
                          xrange=(-20, 20), yrange=(-15, 15), n_axons=500)
     model.build()
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
@@ -554,7 +568,8 @@ def test_AxonMapModel_predict_percept(engine):
     npt.assert_equal(np.sum(percept.data > 0.275), 56)
 
     # Model gives same outcome as Spatial:
-    spatial = AxonMapSpatial(engine='serial', xystep=1, rho=100, axlambda=40,
+    spatial = AxonMapSpatial(engine=engine, device=device, compile=compile,
+                             xystep=1, rho=100, axlambda=40,
                              xrange=(-20, 20), yrange=(-15, 15), n_axons=500)
     spatial.build()
     spatial_percept = spatial.predict_percept(ArgusII(stim=np.ones(60)))
