@@ -296,8 +296,6 @@ class AxonMapSpatial(SpatialModel):
             'ignore_pickle': False,
             # Use the Watson transform for dva <=> ret:
             'vfmap': Watson2014Map(),
-            # whether or not to compile torch models
-            'compile': False
         }
         return {**base_params, **params}
 
