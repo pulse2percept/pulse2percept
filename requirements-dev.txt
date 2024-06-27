@@ -1,6 +1,7 @@
 dask
 h5py
 pytest>=5
+pytest-benchmark
 pytest-cov
 coveralls
 flake8

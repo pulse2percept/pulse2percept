@@ -12,7 +12,7 @@ from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (Thompson2003Spatial, Thompson2003Model)
 from pulse2percept.topography import Curcio1990Map, Watson2014DisplaceMap
-from pulse2percept.utils.testing import assert_warns_msg
+from pulse2percept.utils.testing import assert_warns_msg, standard_model_benchmark, get_bench_runspec
 
 
 def test_Thompson2003Spatial():
@@ -181,3 +181,18 @@ def test_deepcopy_Thompson2003Model():
     # Assert "destroying" the original doesn't affect the copied
     original = None
     npt.assert_equal(copied is not None, True)
+
+
+
+@pytest.mark.benchmark(group='Thompson')
+@pytest.mark.parametrize('grid, elecs, times', get_bench_runspec())
+def test_bench_thompson(benchmark, grid, elecs, times):
+    # if engine == 'torch' and device == 'cuda' and not torch.cuda.is_available():
+    #     pytest.skip("CUDA not available")
+    # if device == 'cpu' and engine == 'torch' and compile and sys.platform != 'linux':
+    #     pytest.skip("Torch on CPU only available on posix/ubuntu")
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning)
+    model = Thompson2003Model()
+    phosphene = benchmark(standard_model_benchmark(model, grid=grid, elecs=elecs, times=times))
+    npt.assert_equal(phosphene.data.shape[0] * phosphene.data.shape[1], grid)

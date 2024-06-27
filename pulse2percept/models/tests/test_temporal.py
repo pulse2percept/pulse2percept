@@ -3,10 +3,11 @@ import copy
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.models import FadingTemporal
+from pulse2percept.models import FadingTemporal, Model
 from pulse2percept.stimuli import Stimulus, MonophasicPulse, BiphasicPulse
 from pulse2percept.percepts import Percept
 from pulse2percept.utils import FreezeError
+from pulse2percept.utils.testing import get_bench_runspec, standard_model_benchmark
 
 
 def test_FadingTemporal():
@@ -79,3 +80,17 @@ def test_deepcopy_FadingTemporal():
     # Assert "destroying" the original doesn't affect the copied
     original = None
     npt.assert_equal(copied is not None, True)
+
+
+@pytest.mark.benchmark(group='FadingTemporal')
+@pytest.mark.parametrize('grid, elecs, times', get_bench_runspec(grids=None))
+def test_bench_fading_temporal(benchmark, grid, elecs, times):
+    # if engine == 'torch' and device == 'cuda' and not torch.cuda.is_available():
+    #     pytest.skip("CUDA not available")
+    # if device == 'cpu' and engine == 'torch' and compile and sys.platform != 'linux':
+    #     pytest.skip("Torch on CPU only available on posix/ubuntu")
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning)
+    model = Model(spatial=None, temporal=FadingTemporal())
+    phosphene = benchmark(standard_model_benchmark(model, grid=grid, elecs=elecs, times=times))
+    npt.assert_equal(phosphene.data.shape[0] * phosphene.data.shape[1], elecs)

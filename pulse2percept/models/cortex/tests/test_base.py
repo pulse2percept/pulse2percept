@@ -4,6 +4,7 @@ import sys
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
+import torch
 
 from pulse2percept.models.cortex import ScoreboardModel, ScoreboardSpatial
 from pulse2percept.models import ScoreboardSpatial as BeyelerScoreboard
@@ -12,7 +13,7 @@ from pulse2percept.implants import ArgusII
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.percepts import Percept
 from pulse2percept.topography import Watson2014Map
-import torch
+from pulse2percept.utils.testing import standard_model_benchmark, get_bench_runspec
 
 
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
@@ -199,3 +200,23 @@ def test_poli_nlink():
     percept = model.predict_percept(implant)
     npt.assert_almost_equal(np.sum(percept.data), 32.494125, decimal=3)
     npt.assert_equal(np.sum(percept.data > .05), 4)
+
+
+
+@pytest.mark.benchmark(group='Scoreboard')
+@pytest.mark.parametrize('engine, device, compile', [('cython', 'cpu', False), 
+                                                    ('torch', 'cpu', False),
+                                                    ('torch', 'cpu', True),
+                                                    ('torch', 'cuda', False),
+                                                    ('torch', 'cuda', True)])
+@pytest.mark.parametrize('grid, elecs, times', get_bench_runspec(biphasic=False))
+def test_bench_scoreboard(benchmark, engine, device, compile, grid, elecs, times,):
+    if engine == 'torch' and device == 'cuda' and not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+    if device == 'cpu' and engine == 'torch' and compile and sys.platform != 'linux':
+        pytest.skip("Torch on CPU only available on posix/ubuntu")
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning)
+    model = ScoreboardModel(engine=engine, device=device, compile=compile)
+    phosphene = benchmark(standard_model_benchmark(model, grid=grid, elecs=elecs, times=times))
+    npt.assert_equal(phosphene.data.shape[0] * phosphene.data.shape[1], grid)

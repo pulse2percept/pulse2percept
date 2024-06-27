@@ -72,6 +72,6 @@ class FadingTemporal(TemporalModel):
             raise ValueError(f"All times 't_percept' must be distinct multiples "
                              f"of `dt`={self.dt:.2e}")
         # Cython returns a 2D (space x time) NumPy array:
-        return fading_fast(stim_data.astype(np.float32),
+        return fading_fast(stim_data.astype(np.float32).copy(order='C'),
                            stim.time.astype(np.float32),
                            idx_percept, self.dt, self.tau, self.thresh_percept, self.n_threads)
