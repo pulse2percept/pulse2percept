@@ -1,0 +1,5 @@
+[build-system]
+requires = ["setuptools <= 50.0","cython>=0.28", "numpy>1.11"]
+build-backend = "setuptools.build_meta"
+[tool.pytest.ini_options]
+addopts = "--benchmark-disable --benchmark-sort=mean --benchmark-warmup=on --benchmark-warmup-iterations=2 --benchmark-max-time=0.5"

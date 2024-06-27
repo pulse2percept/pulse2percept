@@ -295,7 +295,7 @@ class AxonMapSpatial(SpatialModel):
             # You can force a build by ignoring pickles:
             'ignore_pickle': False,
             # Use the Watson transform for dva <=> ret:
-            'vfmap': Watson2014Map()
+            'vfmap': Watson2014Map(),
         }
         return {**base_params, **params}
 

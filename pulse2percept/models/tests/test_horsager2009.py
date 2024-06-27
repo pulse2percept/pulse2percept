@@ -9,7 +9,7 @@ from pulse2percept.stimuli import BiphasicPulse, BiphasicPulseTrain
 from pulse2percept.percepts import Percept
 from pulse2percept.models import Horsager2009Model, Horsager2009Temporal
 from pulse2percept.utils import FreezeError
-
+from pulse2percept.utils.testing import get_bench_runspec, standard_model_benchmark
 
 def test_Horsager2009Temporal():
     model = Horsager2009Temporal()
@@ -118,3 +118,16 @@ def test_deepcopy_Horsager2009Model():
     # Assert changing the original doesn't affect the copied
     original.verbose = False
     npt.assert_equal(original != copied, True)
+
+@pytest.mark.benchmark(group='Horsager')
+@pytest.mark.parametrize('grid, elecs, times', get_bench_runspec(grids=None))
+def test_bench_horsager(benchmark, grid, elecs, times):
+    # if engine == 'torch' and device == 'cuda' and not torch.cuda.is_available():
+    #     pytest.skip("CUDA not available")
+    # if device == 'cpu' and engine == 'torch' and compile and sys.platform != 'linux':
+    #     pytest.skip("Torch on CPU only available on posix/ubuntu")
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning)
+    model = Horsager2009Model()
+    phosphene = benchmark(standard_model_benchmark(model, grid=grid, elecs=elecs, times=times))
+    npt.assert_equal(phosphene.data.shape[0] * phosphene.data.shape[1], elecs)

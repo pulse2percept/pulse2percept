@@ -3,7 +3,6 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 import copy
-
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 import sys
@@ -13,7 +12,7 @@ from pulse2percept.percepts import Percept
 from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
                                   ScoreboardSpatial, ScoreboardModel)
 from pulse2percept.topography import Watson2014Map, Watson2014DisplaceMap
-from pulse2percept.utils.testing import assert_warns_msg
+from pulse2percept.utils.testing import assert_warns_msg, standard_model_benchmark
 import torch
 
 
@@ -581,3 +580,25 @@ def test_AxonMapModel_predict_percept(engine, device, compile):
     msg = ("Nonzero electrode-retina distances do not have any effect on the "
            "model output.")
     assert_warns_msg(UserWarning, model.predict_percept, msg, implant)
+
+
+
+from pulse2percept.utils.testing import get_bench_runspec
+# benchmarking 
+@pytest.mark.benchmark(group='AxonMap')
+@pytest.mark.parametrize('engine, device, compile', [('cython', 'cpu', False), 
+                                                    ('torch', 'cpu', False),
+                                                    ('torch', 'cpu', True),
+                                                    ('torch', 'cuda', False),
+                                                    ('torch', 'cuda', True)])
+@pytest.mark.parametrize('grid, elecs, times', get_bench_runspec(biphasic=False))
+def test_bench_axonmap(benchmark, engine, device, compile, grid, elecs, times):
+    if engine == 'torch' and device == 'cuda' and not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+    if device == 'cpu' and engine == 'torch' and compile and sys.platform != 'linux':
+        pytest.skip("Torch on CPU only available on posix/ubuntu")
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning)
+    model = AxonMapModel(engine=engine, device=device, compile=compile)
+    phosphene = benchmark(standard_model_benchmark(model, grid=grid, elecs=elecs, times=times))
+    npt.assert_equal(phosphene.data.shape[0] * phosphene.data.shape[1], grid)

@@ -10,6 +10,7 @@ from pulse2percept.percepts import Percept
 from pulse2percept.models import (Nanduri2012Model, Nanduri2012Spatial,
                                   Nanduri2012Temporal)
 from pulse2percept.utils import FreezeError
+from pulse2percept.utils.testing import get_bench_runspec, standard_model_benchmark
 
 
 def test_Nanduri2012Spatial():
@@ -309,3 +310,17 @@ def test_Nanduri2012Model_predict_percept():
         brightest_frame = percept.data[..., idx_frame]
         frames_freq.append(brightest_frame)
     npt.assert_equal([np.sum(f > bright_th) for f in frames_freq], [21, 49])
+
+
+@pytest.mark.benchmark(group='Nanduri')
+@pytest.mark.parametrize('grid, elecs, times', get_bench_runspec())
+def test_bench_nanduri(benchmark, grid, elecs, times):
+    # if engine == 'torch' and device == 'cuda' and not torch.cuda.is_available():
+    #     pytest.skip("CUDA not available")
+    # if device == 'cpu' and engine == 'torch' and compile and sys.platform != 'linux':
+    #     pytest.skip("Torch on CPU only available on posix/ubuntu")
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning)
+    model = Nanduri2012Model()
+    phosphene = benchmark(standard_model_benchmark(model, grid=grid, elecs=elecs, times=times))
+    npt.assert_equal(phosphene.data.shape[0] * phosphene.data.shape[1], grid)

@@ -14,6 +14,7 @@
     parallel
     deprecation
     three_dim
+    testing
 
 """
 from .base import (PrettyPrint, FreezeError, Frozen, Data, bijective26_name,
