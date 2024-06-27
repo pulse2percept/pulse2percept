@@ -1,8 +1,9 @@
 cython>=0.28
 numpy>=1.11,<=1.26
 setuptools<50.0
-scipy<=1.7.1; python_version < '3.10'
-scipy>=1.0.1; python_version >= '3.10'
+# scipy<=1.7.1; python_version < '3.10'
+# scipy>=1.0.1; python_version >= '3.10'
+scipy>=1.0.1
 scikit_image>=0.14
 matplotlib>=3.0.2
 imageio_ffmpeg>=0.4
