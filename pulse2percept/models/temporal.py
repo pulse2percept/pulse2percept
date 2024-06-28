@@ -141,7 +141,7 @@ class FadingTemporal(TemporalModel):
     def _predict_temporal(self, stim, t_percept):
         """Predict the temporal response"""
         # Pass the stimulus as a 2D NumPy array to the fast Cython function:
-        stim_data = stim.data.reshape((-1, len(stim.time)))
+        stim_data = stim.data.reshape((-1, len(stim.time))).copy(order='c')
         # Calculate at which simulation time steps we need to output a percept.
         # This is basically t_percept/self.dt, but we need to beware of
         # floating point rounding errors! 29.999 will be rounded down to 29 by
