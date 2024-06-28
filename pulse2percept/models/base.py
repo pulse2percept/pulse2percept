@@ -1077,7 +1077,8 @@ class TorchBaseModel(torch.nn.Module, metaclass=ABCMeta):
             p2pmodel.build()
         self.device = torch.device(p2pmodel.device)
 
-    def forward(self, stim, e_locs, model_params=None):
+    @abstractmethod
+    def forward(self, stim, e_locs=None, state=None, model_params=None):
         """
         Forward pass of the model
 
@@ -1087,7 +1088,9 @@ class TorchBaseModel(torch.nn.Module, metaclass=ABCMeta):
             The stimulation tensor for each electrode. 
             Shape (n_time, n_elecs) or (n_time, n_elecs, 3) for biphasic models
         e_locs : torch.Tensor
-            The locations of the electrodes
+            The locations of the electrodes (for spatial models)
+        state : torch.Tensor
+            The state of the model (for temporal models)
         model_params : Tensor, optional
             The model parameters to use. If None, will use the default parameters
             Each subclass should use this, if provided, instead of parameters from the p2pmodel,
@@ -1099,7 +1102,7 @@ class TorchBaseModel(torch.nn.Module, metaclass=ABCMeta):
 
         Returns
         -------
-        torch.Tensor
+        percept : torch.Tensor
             The predicted percept, with dimensions (n_time, n_pixels)
 
         """

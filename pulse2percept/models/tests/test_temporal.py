@@ -9,9 +9,9 @@ from pulse2percept.percepts import Percept
 from pulse2percept.utils import FreezeError
 from pulse2percept.utils.testing import get_bench_runspec, standard_model_benchmark
 
-
-def test_FadingTemporal():
-    model = FadingTemporal()
+@pytest.mark.parametrize('engine', ['cython', 'torch'])
+def test_FadingTemporal(engine):
+    model = FadingTemporal(engine=engine)
     # User can set their own params:
     model.dt = 0.1
     npt.assert_equal(model.dt, 0.1)
