@@ -2,80 +2,83 @@ name: build
 
 on: [push, pull_request]
 
-# By default, jobs run in parallel on a fresh instance of the virtual
-# environment. You can force sequential order by specifying a job's
-# dependencies with the "needs" attribute.
 jobs: 
-
-  # Continuous integration: Run unit tests on all supported platforms whenever
-  # someone pushes a new commit or creates a pull request. 
   build:
-    name: Building on ${{ matrix.os }}
+    name: Building on ${{ matrix.os }} with Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
-      # Test on all supported platforms using all supported Python versions:
       matrix:
-        python-version: ["3.12", "3.11", "3.10", 3.9]
-        os: [ubuntu-latest, ubuntu-20.04, windows-latest, macOS-latest, macos-13]
+        python-version: ["3.12", "3.11", "3.10", "3.9"]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         exclude:
           - python-version: "3.9"
             os: macos-latest
-    
+
     steps:
-    - uses: actions/checkout@v1
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip wheel
-        # Install p2p requirements:
-        pip install -r requirements.txt
-        pip install -r requirements-dev.txt
-    - name: Setup ffmpeg (MacOS M1)
-      if: matrix.os == 'macos-latest'
-      run: |
-          brew install ffmpeg
-    - name: Lint with flake8
-      run: |
-        pip install flake8
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 pulse2percept --ignore N802,N806,W504 --select W503 --count --show-source --statistics
-    - name: Install package (Windows)
-      # https://github.com/pandas-dev/pandas/issues/981
-      if: matrix.os == 'windows-latest'
-      run: |
-        $env:INCLUDE = 'C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\ucrt'
-        $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\shared'
-        $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\um'
-        $env:LIB = 'C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\ucrt\x64'
-        $env:LIB += ';C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\um\x64'
-        $env:PATH += ';C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64'
-        pip install -e .
-    - name: Install package (Unix)
-      if: matrix.os != 'windows-latest'
-      run: |
-        pip install -e .
-    - name: Log environment info
-      run: |
-        python --version
-        pip freeze
-        gcc --version
-    - name: Run test suite with pytest
-      run: |
-        mkdir test_dir
-        cd test_dir
-        pytest --pyargs pulse2percept --cov-report=xml --cov=pulse2percept --doctest-modules
-    # removed for now since it fails to compare to recent parent
-    # - name: Upload coveragei report to codecov.io
-    #   uses: codecov/codecov-action@v4
-    #   # Cannot yet post coverage report as comments on the PR, but see:
-    #   # https://github.com/codecov/codecov-python/pull/214
-    #   with:
-    #     token: ${{ secrets.CODECOV_TOKEN }}
-    #     file: ./test_dir/coverage.xml
-    #     flags: unittests
-    #     name: codecov-umbrella
-    #     yml: ./codecov.yml
-    #     commit_parent: e5289c3
+      # Check out the repository
+      - uses: actions/checkout@v3
+
+      # Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Install system dependencies on macOS for OpenMP and ffmpeg
+      - name: Install system dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install libomp ffmpeg
+
+      # Install system dependencies on Ubuntu for OpenMP
+      - name: Install system dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libomp-dev ffmpeg
+
+      # Install dependencies
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip wheel
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      # Lint with flake8
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          flake8 pulse2percept --ignore N802,N806,W504 --select W503 --count --show-source --statistics
+
+      # Install the package (Windows)
+      - name: Install package (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          pip install -e .
+
+      # Install the package (Non-Windows)
+      - name: Install package (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          pip install -e .
+
+      # Log environment info
+      - name: Log environment info
+        run: |
+          python --version
+          pip freeze
+          gcc --version || echo "gcc not found"
+
+      # Run tests
+      - name: Run test suite with pytest
+        run: |
+          mkdir test_dir
+          cd test_dir
+          pytest --pyargs pulse2percept --cov-report=xml --cov=pulse2percept --doctest-modules
+
+      # [Optional] Upload coverage report
+      # - name: Upload coverage report to codecov.io
+      #   uses: codecov/codecov-action@v4
+      #   with:
+      #     token: ${{ secrets.CODECOV_TOKEN }}
+      #     file: ./test_dir/coverage.xml
