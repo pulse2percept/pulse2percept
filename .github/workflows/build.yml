@@ -2,7 +2,7 @@ name: build
 
 on: [push, pull_request]
 
-jobs: 
+jobs:
   build:
     name: Building on ${{ matrix.os }} with Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
@@ -37,30 +37,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential libomp-dev ffmpeg
 
-      # Install dependencies
-      - name: Install Python dependencies
+      # Install build dependencies (including setuptools, wheel, etc.)
+      - name: Install build dependencies
         run: |
-          python -m pip install --upgrade pip wheel
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
+          python -m pip install --upgrade pip setuptools wheel build
+
+      # Build and install the package
+      - name: Build and install the package
+        run: |
+          python -m build
+          python -m pip install .
 
       # Lint with flake8
       - name: Lint with flake8
         run: |
-          pip install flake8
+          python -m pip install flake8
           flake8 pulse2percept --ignore N802,N806,W504 --select W503 --count --show-source --statistics
-
-      # Install the package (Windows)
-      - name: Install package (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          pip install -e .
-
-      # Install the package (Non-Windows)
-      - name: Install package (Unix)
-        if: matrix.os != 'windows-latest'
-        run: |
-          pip install -e .
 
       # Log environment info
       - name: Log environment info

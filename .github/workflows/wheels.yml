@@ -21,47 +21,31 @@ jobs:
         os: [ubuntu-22.04, windows-2019, macos-13]
 
     steps:
+      # Check out the repository
       - uses: actions/checkout@v2
 
-      - name: Install dependencies (macOS only)
+      # Install dependencies (macOS only)
+      - name: Install system dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
           brew install libomp
 
-      - name: Build Py3.12 wheels
+      # Build wheels
+      - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.5
         env:
-          CIBW_BEFORE_BUILD_LINUX: "yum install -y python-devel zlib-devel libjpeg-turbo-devel wget && python -m pip install -U pip setuptools wheel cython pillow numpy && python -m pip install -r requirements.txt && python -m pip install -e ."
-          CIBW_BEFORE_BUILD_MACOS: "brew install libomp && python -m pip install -U pip setuptools wheel cython numpy pillow && python -m pip install -r requirements.txt && python -m pip install -e ."
-          CIBW_BEFORE_BUILD: "python -m pip install -U pip setuptools wheel cython numpy pillow && python -m pip install -r requirements.txt && python -m pip install -e ."
-          CIBW_BUILD: "cp312-*"
-          CIBW_SKIP: "*-manylinux_i686 cp312-win32 *musllinux*"
+          CIBW_BEFORE_BUILD_LINUX: |
+            yum install -y libomp zlib-devel libjpeg-turbo-devel wget && \
+            python -m pip install --upgrade pip build
+          CIBW_BEFORE_BUILD_MACOS: |
+            brew install libomp && \
+            python -m pip install --upgrade pip build
+          CIBW_BEFORE_BUILD: |
+            python -m pip install --upgrade pip build
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
+          CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
 
-      - name: Build Py3.11 wheels
-        uses: pypa/cibuildwheel@v2.16.5
-        env:
-          CIBW_BEFORE_BUILD_LINUX: "yum install -y python-devel zlib-devel libjpeg-turbo-devel wget && python -m pip install -U pip setuptools wheel cython pillow numpy && python -m pip install -r requirements.txt && python -m pip install -e ."
-          CIBW_BEFORE_BUILD_MACOS: "brew install libomp && python -m pip install -U pip setuptools wheel cython numpy pillow && python -m pip install -r requirements.txt && python -m pip install -e ."
-          CIBW_BEFORE_BUILD: "python -m pip install -U pip setuptools wheel cython numpy pillow && python -m pip install -r requirements.txt && python -m pip install -e ."
-          CIBW_BUILD: "cp311-*"
-          CIBW_SKIP: "*-manylinux_i686 cp311-win32 *musllinux*"
-
-      - name: Build Py3.10 wheels
-        uses: pypa/cibuildwheel@v2.16.5
-        env:
-          CIBW_BEFORE_BUILD_LINUX: "yum install -y python-devel zlib-devel libjpeg-turbo-devel wget && python -m pip install -U pip setuptools wheel cython pillow numpy && python -m pip install -r requirements.txt && python -m pip install -e ."
-          CIBW_BEFORE_BUILD_MACOS: "brew install libomp && python -m pip install -U pip setuptools wheel cython numpy pillow && python -m pip install -r requirements.txt && python -m pip install -e ."
-          CIBW_BEFORE_BUILD: "python -m pip install -U pip setuptools wheel cython numpy pillow && python -m pip install -r requirements.txt && python -m pip install -e ."
-          CIBW_BUILD: "cp310-*"
-          CIBW_SKIP: "*-manylinux_i686 cp310-win32 *musllinux*"
-
-      - name: Build Py3.9 wheels
-        uses: pypa/cibuildwheel@v2.16.5
-        env:
-          CIBW_BEFORE_BUILD: "python -m pip install -U pip setuptools wheel cython numpy && python -m pip install Pillow==8.3.2 && python -m pip install -r requirements.txt && python -m pip install -e ."
-          CIBW_BUILD: "cp39-*"
-          CIBW_SKIP: "*-manylinux_i686 cp39-win32 *musllinux*"
-
+      # Upload the wheels
       - uses: actions/upload-artifact@v4
         with:
           path: ./wheelhouse/*.whl
