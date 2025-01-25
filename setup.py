@@ -7,11 +7,17 @@ import os
 
 class OpenMPBuildExt(build_ext):
     def build_extensions(self):
-        compile_flags = ["/openmp"] if os.name == "nt" else ["-fopenmp"]
-        link_flags = compile_flags
         for ext in self.extensions:
-            ext.extra_compile_args += compile_flags
-            ext.extra_link_args += link_flags
+            if sys.platform == "darwin":  # macOS
+                ext.extra_compile_args += ["-Xclang", "-fopenmp"]
+                ext.extra_link_args += ["-lomp"]
+            elif os.name == "posix":  # Linux
+                ext.extra_compile_args += ["-fopenmp"]
+                ext.extra_link_args += ["-fopenmp"]
+            elif os.name == "nt":  # Windows
+                ext.extra_compile_args += ["/openmp"]
+            else:
+                raise RuntimeError("Unsupported platform")
         super().build_extensions()
 
 

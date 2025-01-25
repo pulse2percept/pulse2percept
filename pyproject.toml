@@ -25,7 +25,7 @@ classifiers = [
     "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent"
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     "cython>=0.28",
     "numpy>=1.11,<1.27",
