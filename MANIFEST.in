@@ -3,6 +3,7 @@ include AUTHORS LICENSE CONTRIBUTING* CODE_OF_CONDUCT* Makefile* MANIFEST.in set
 
 # Include Cython source files
 recursive-include pulse2percept *.pyx *.pxd *.h
+recursive-include pulse2percept *.c *.cpp *.so
 
 # Include documentation files
 recursive-include doc *
