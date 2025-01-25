@@ -1,4 +1,4 @@
-from ..utils._fast_math cimport c_fmax, c_expit
+from pulse2percept.utils._fast_math cimport c_fmax, c_expit
 
 from libc.math cimport(pow as c_pow, fabs as c_abs, sqrt as c_sqrt,
                        isnan as c_isnan)

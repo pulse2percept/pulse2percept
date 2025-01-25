@@ -1,33 +1,34 @@
 # distutils: language = c++
 # ^ needed for bool
 
+from pulse2percept.utils._fast_math cimport float32, int32
 from cython import cdivision  # modulo, division by zero
-from libc.math cimport fabs as c_abs, exp as c_exp, pow as c_pow
+from libc.math cimport fabs as c_abs, exp as c_exp, pow as c_pow, HUGE_VALF
 from libcpp cimport bool
 import numpy as np
 cimport numpy as cnp
 
 # --- SCALAR FUNCTIONS ------------------------------------------------------- #
 
-cdef inline float32 c_fmax(float32 a, float32 b) nogil:
+cdef inline float32 c_fmax(float32 a, float32 b) noexcept nogil:
     return a if a >= b else b
 
-cdef inline float32 c_fmin(float32 a, float32 b) nogil:
+cdef inline float32 c_fmin(float32 a, float32 b) noexcept nogil:
     return a if a <= b else b
 
 cdef inline bool c_isclose(float32 a, float32 b, float32 rel_tol=1e-09,
-                           float32 abs_tol=0.0) nogil:
+                           float32 abs_tol=0.0) noexcept nogil:
     return c_abs(a-b) <= c_fmax(rel_tol * c_fmax(c_abs(a), c_abs(b)), abs_tol)
 
 
 @cdivision(True)
-cdef inline float32 c_expit(float32 x) nogil:
+cdef inline float32 c_expit(float32 x) noexcept nogil:
     return 1.0 / (1.0 + c_exp(-x))
 
 
 @cdivision(True)
-cpdef float32 c_gcd(float32 a, float32 b, float32 rtol=1e-5,
-                    float atol=1e-8) nogil:
+cdef inline float32 c_gcd(float32 a, float32 b, float32 rtol=1e-5,
+                          float32 atol=1e-8) noexcept nogil:
     cdef float32 t
     t = c_fmin(c_abs(a), c_abs(b))
     while c_abs(b) > rtol * t + atol:
@@ -37,12 +38,12 @@ cpdef float32 c_gcd(float32 a, float32 b, float32 rtol=1e-5,
 
 # --- ARRAY FUNCTIONS -------------------------------------------------------- #
 
-cdef float32 c_min(float32[::1] arr):
+cdef float32 c_min(float32[::1] arr) noexcept nogil:
     cdef:
         float32 arr_min
         int32 idx, arr_len
 
-    arr_min = np.inf
+    arr_min = HUGE_VALF
     arr_len = len(arr)
     for idx in range(arr_len):
         if arr[idx] < arr_min:
@@ -50,12 +51,12 @@ cdef float32 c_min(float32[::1] arr):
     return arr_min
 
 
-cdef float32 c_max(float32[::1] arr):
+cdef float32 c_max(float32[::1] arr) noexcept nogil:
     cdef:
         float32 arr_max
         int32 idx, arr_len
 
-    arr_max = -np.inf
+    arr_max = -HUGE_VALF
     arr_len = len(arr)
     for idx in range(arr_len):
         if arr[idx] > arr_max:
@@ -63,7 +64,7 @@ cdef float32 c_max(float32[::1] arr):
     return arr_max
 
 
-cdef void c_cumpow(float32* arr_in, float32* arr_out, int32 N, int32 exp) nogil:
+cdef void c_cumpow(float32* arr_in, float32* arr_out, int32 N, int32 exp) noexcept nogil:
     cdef:
         int32 i = 0
         float32 sum = 0

@@ -1,4 +1,4 @@
-from ..utils._fast_math cimport c_fmax
+from pulse2percept.utils._fast_math cimport c_fmax
 from libc.math cimport pow as c_pow, fabs as c_abs, sqrt as c_sqrt
 from cython.parallel import prange
 from cython import cdivision  # modulo, division by zero
