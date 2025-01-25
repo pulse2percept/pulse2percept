@@ -32,7 +32,7 @@ def find_pyx_modules(base_dir, exclude_dirs=None):
     Recursively find all `.pyx` files in subdirectories of `base_dir`, excluding certain directories.
     """
     if exclude_dirs is None:
-        exclude_dirs = {"tests", "examples"}  # Adjust as needed
+        exclude_dirs = []  # Adjust as needed
     extensions = []
     for root, dirs, files in os.walk(base_dir):
         # Exclude specific directories
@@ -53,6 +53,7 @@ def find_pyx_modules(base_dir, exclude_dirs=None):
 
 # Find all .pyx files in the relevant submodules
 cython_extensions = find_pyx_modules("pulse2percept")
+print("Discovered extensions:", [ext.name for ext in cython_extensions])
 
 setup(
     ext_modules=cythonize(
