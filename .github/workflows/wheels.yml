@@ -24,6 +24,11 @@ jobs:
       # Check out the repository
       - uses: actions/checkout@v2
 
+      # Clean up the wheelhouse directory
+      - name: Clean up wheelhouse
+        run: |
+          rm -rf wheelhouse
+
       # Install system dependencies (macOS only)
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
@@ -49,6 +54,7 @@ jobs:
             python -m pip install --upgrade pip setuptools wheel build numpy
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
           CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
+          CIBW_ENVIRONMENT_LINUX: "SETUPTOOLS_ENABLE_FEATURES=legacy-editable"
 
       # Upload the built wheels as artifacts
       - uses: actions/upload-artifact@v4

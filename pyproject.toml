@@ -45,3 +45,7 @@ dev = [
     "black",
     "tox"
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["wheelhouse", "tests", "*.tests", "*.tests.*", "tests.*"]

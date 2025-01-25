@@ -10,8 +10,9 @@ class OpenMPBuildExt(build_ext):
     def build_extensions(self):
         for ext in self.extensions:
             if sys.platform == "darwin":  # macOS
-                ext.extra_compile_args += ["-Xclang", "-fopenmp"]
-                ext.extra_link_args += ["-lomp"]
+                # Explicitly point to Homebrew-installed OpenMP headers and libraries
+                ext.extra_compile_args += ["-Xclang", "-fopenmp", "-I/usr/local/include"]
+                ext.extra_link_args += ["-lomp", "-L/usr/local/lib"]
             elif os.name == "posix":  # Linux
                 try:
                     ext.extra_compile_args += ["-fopenmp"]
@@ -48,7 +49,6 @@ def find_pyx_modules(base_dir, exclude_dirs=None):
                     )
                 )
     return extensions
-
 
 
 # Find all .pyx files in the relevant submodules

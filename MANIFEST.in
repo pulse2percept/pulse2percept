@@ -13,3 +13,6 @@ recursive-include examples *
 # Explicitly include Numpy headers
 # (This ensures the source distribution works across environments)
 recursive-include numpy/core/include *.h
+
+exclude wheelhouse/*
+prune wheelhouse
