@@ -35,7 +35,9 @@ jobs:
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          brew install libomp
+          brew install libomp  # Install OpenMP library
+          export CPPFLAGS="-Xclang -fopenmp -I/opt/homebrew/include"
+          export LDFLAGS="-L/opt/homebrew/lib -lomp"
 
       - name: Install dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -77,11 +79,3 @@ jobs:
           mkdir test_dir
           cd test_dir
           pytest --pyargs pulse2percept --cov=pulse2percept --doctest-modules
-
-      # Step 9: Upload test coverage [Optional]
-      # - name: Upload coverage report to codecov.io
-      #   uses: codecov/codecov-action@v4
-      #   with:
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-      #     file: ./test_dir/coverage.xml
-      #     flags: unittests

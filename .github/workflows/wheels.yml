@@ -21,43 +21,36 @@ jobs:
         os: [ubuntu-22.04, windows-2019, macos-13]
 
     steps:
-      # Check out the repository
-      - uses: actions/checkout@v2
+      # Step 1: Check out the repository
+      - uses: actions/checkout@v3
 
-      # Clean up the wheelhouse directory
-      - name: Clean up wheelhouse
+      # Step 2: Install system dependencies (macOS only)
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
         run: |
-          if [[ -d "wheelhouse" ]]; then rm -rf wheelhouse; fi
-        shell: bash
-        if: runner.os != 'Windows'
-      - name: Clean up wheelhouse (Windows)
-        run: |
-          if (Test-Path -Path "wheelhouse") { Remove-Item -Recurse -Force "wheelhouse" }
-        if: runner.os == 'Windows'
+          brew install libomp
+          export CPPFLAGS="-Xclang -fopenmp -I/opt/homebrew/include"
+          export LDFLAGS="-L/opt/homebrew/lib -lomp"
 
-      # Install system dependencies
-      - name: Install system dependencies
+      # Step 3: Install system dependencies (Linux only)
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
-          if [[ "${{ runner.os }}" == "Linux" ]]; then
-            sudo apt-get update
-            sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev wget
-          elif [[ "${{ runner.os }}" == "macOS" ]]; then
-            brew install libomp
-          fi
-        shell: bash
-        if: runner.os != 'Windows'
+          sudo apt-get update
+          sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
 
-      # Build wheels using cibuildwheel
+      # Step 4: Build wheels using cibuildwheel
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.5
         env:
-          CIBW_BEFORE_BUILD: |
-            python -m pip install --upgrade pip setuptools wheel build numpy
+          CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"
+          CIBW_ENVIRONMENT_MACOS: "CFLAGS='-Xclang -fopenmp -I/opt/homebrew/include' LDFLAGS='-L/opt/homebrew/lib -lomp'"
+          CIBW_ENVIRONMENT_WINDOWS: "CFLAGS='/openmp'"
+          CIBW_BEFORE_BUILD: "python -m pip install --upgrade pip setuptools wheel cython numpy"
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
           CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
-          CIBW_ENVIRONMENT_LINUX: "SETUPTOOLS_ENABLE_FEATURES=legacy-editable"
 
-      # Upload the built wheels as artifacts
-      - uses: actions/upload-artifact@v4
+      # Step 5: Upload the built wheels as artifacts
+      - uses: actions/upload-artifact@v3
         with:
           path: ./wheelhouse/*.whl
