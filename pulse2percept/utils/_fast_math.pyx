@@ -27,7 +27,7 @@ cdef inline float32 c_expit(float32 x) noexcept nogil:
 
 
 @cdivision(True)
-cdef inline float32 c_gcd(float32 a, float32 b, float32 rtol=1e-5,
+cpdef inline float32 c_gcd(float32 a, float32 b, float32 rtol=1e-5,
                           float32 atol=1e-8) noexcept nogil:
     cdef float32 t
     t = c_fmin(c_abs(a), c_abs(b))

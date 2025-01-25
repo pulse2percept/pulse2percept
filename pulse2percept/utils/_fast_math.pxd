@@ -18,7 +18,7 @@ cdef bool c_isclose(float32 a, float32 b, float32 rel_tol=*, float32 abs_tol=*) 
 
 cdef float32 c_expit(float32 x) noexcept nogil
 
-cdef float32 c_gcd(float32 a, float32 b, float32 rtol=*, float32 atol=*) noexcept nogil
+cpdef float32 c_gcd(float32 a, float32 b, float32 rtol=*, float32 atol=*) noexcept nogil
 
 # --- ARRAY FUNCTIONS -------------------------------------------------------- #
 

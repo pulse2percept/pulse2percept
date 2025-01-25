@@ -53,6 +53,7 @@ from . import models
 from . import model_selection
 from . import percepts
 from . import stimuli
+from . import utils
 from . import viz
 
 __all__ = [

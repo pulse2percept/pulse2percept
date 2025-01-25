@@ -32,7 +32,7 @@ def find_pyx_modules(base_dir, exclude_dirs=None):
     Recursively find all `.pyx` files in subdirectories of `base_dir`, excluding certain directories.
     """
     if exclude_dirs is None:
-        exclude_dirs = []  # Adjust as needed
+        exclude_dirs = ["doc", "wheelhouse"]  # Adjust as needed
     extensions = []
     for root, dirs, files in os.walk(base_dir):
         # Exclude specific directories
