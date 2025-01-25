@@ -3,6 +3,7 @@ from setuptools.command.build_ext import build_ext
 from Cython.Build import cythonize
 import numpy
 import os
+import sys
 
 
 class OpenMPBuildExt(build_ext):
@@ -12,21 +13,29 @@ class OpenMPBuildExt(build_ext):
                 ext.extra_compile_args += ["-Xclang", "-fopenmp"]
                 ext.extra_link_args += ["-lomp"]
             elif os.name == "posix":  # Linux
-                ext.extra_compile_args += ["-fopenmp"]
-                ext.extra_link_args += ["-fopenmp"]
+                try:
+                    ext.extra_compile_args += ["-fopenmp"]
+                    ext.extra_link_args += ["-fopenmp"]
+                except RuntimeError:
+                    print("Warning: OpenMP not supported on this platform. Compiling without OpenMP.")
             elif os.name == "nt":  # Windows
                 ext.extra_compile_args += ["/openmp"]
+                ext.extra_link_args += ["vcomp.lib"]
             else:
-                raise RuntimeError("Unsupported platform")
+                print("Warning: OpenMP not supported on this platform. Compiling without OpenMP.")
         super().build_extensions()
 
 
-def find_pyx_modules(base_dir):
+def find_pyx_modules(base_dir, exclude_dirs=None):
     """
-    Recursively find all `.pyx` files in subdirectories of `base_dir`.
+    Recursively find all `.pyx` files in subdirectories of `base_dir`, excluding certain directories.
     """
+    if exclude_dirs is None:
+        exclude_dirs = {"tests", "examples"}  # Adjust as needed
     extensions = []
-    for root, _, files in os.walk(base_dir):
+    for root, dirs, files in os.walk(base_dir):
+        # Exclude specific directories
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
         for file in files:
             if file.endswith(".pyx"):
                 module_path = os.path.relpath(os.path.join(root, file), base_dir)
@@ -39,6 +48,7 @@ def find_pyx_modules(base_dir):
                     )
                 )
     return extensions
+
 
 
 # Find all .pyx files in the relevant submodules
