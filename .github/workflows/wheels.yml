@@ -27,30 +27,31 @@ jobs:
       # Clean up the wheelhouse directory
       - name: Clean up wheelhouse
         run: |
-          rm -rf wheelhouse
-
-      # Install system dependencies (macOS only)
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
+          if [[ -d "wheelhouse" ]]; then rm -rf wheelhouse; fi
+        shell: bash
+        if: runner.os != 'Windows'
+      - name: Clean up wheelhouse (Windows)
         run: |
-          brew install libomp
+          if (Test-Path -Path "wheelhouse") { Remove-Item -Recurse -Force "wheelhouse" }
+        if: runner.os == 'Windows'
 
-      # Install system dependencies (Linux only)
-      - name: Install dependencies (Linux)
-        if: runner.os == 'Linux'
+      # Install system dependencies
+      - name: Install system dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev wget
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev wget
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            brew install libomp
+          fi
+        shell: bash
+        if: runner.os != 'Windows'
 
       # Build wheels using cibuildwheel
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.5
         env:
-          CIBW_BEFORE_BUILD_LINUX: |
-            python -m pip install --upgrade pip setuptools wheel build numpy
-          CIBW_BEFORE_BUILD_MACOS: |
-            python -m pip install --upgrade pip setuptools wheel build numpy
-          CIBW_BEFORE_BUILD_WINDOWS: |
+          CIBW_BEFORE_BUILD: |
             python -m pip install --upgrade pip setuptools wheel build numpy
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
           CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
