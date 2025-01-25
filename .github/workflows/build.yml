@@ -24,16 +24,16 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      # Step 3: Install system dependencies (macOS only)
+      # Step 3: Install dependencies (macOS only)
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install libomp
-          export CPPFLAGS="-Xclang -fopenmp -I$(brew --prefix libomp)/include"
-          export LDFLAGS="-L$(brew --prefix libomp)/lib -lomp"
-          export PATH="$(brew --prefix libomp)/bin:$PATH"
+          brew install libomp llvm
+          export PATH="/usr/local/opt/llvm/bin:$PATH"
+          export CPPFLAGS="-I/usr/local/opt/llvm/include -I$(brew --prefix libomp)/include"
+          export LDFLAGS="-L/usr/local/opt/llvm/lib -L$(brew --prefix libomp)/lib -lomp"
 
-      # Step 4: Install system dependencies (Linux only)
+      # Step 4: Install dependencies (Linux only)
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -45,13 +45,18 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel build numpy
 
-      # Step 6: Debug OpenMP paths (optional debugging step)
+      # Step 6: Debug OpenMP paths (macOS optional debugging step)
       - name: Debug OpenMP paths
         if: runner.os == 'macOS'
         run: |
-          brew --prefix libomp
-          ls -l $(brew --prefix libomp)/include
-          ls -l $(brew --prefix libomp)/lib
+          echo "Using Homebrew LLVM clang:"
+          which clang
+          which clang++
+          clang --version
+          echo "Include paths:"
+          ls -l /usr/local/opt/llvm/include
+          echo "Library paths:"
+          ls -l /usr/local/opt/llvm/lib
 
       # Step 7: Install the package (Windows)
       - name: Install package (Windows)
