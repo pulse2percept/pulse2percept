@@ -41,6 +41,7 @@ def find_pyx_modules(base_dir, exclude_dirs=None):
             if file.endswith(".pyx"):
                 module_path = os.path.relpath(os.path.join(root, file), base_dir)
                 module_name = module_path.replace(os.path.sep, ".").replace(".pyx", "")
+                module_name = f"pulse2percept.{module_name}"  # Ensure full module path
                 extensions.append(
                     Extension(
                         module_name,
