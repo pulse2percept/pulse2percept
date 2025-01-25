@@ -40,8 +40,15 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
+    "dask",
+    "h5py",
+    "pytest>=5",
+    "pytest-cov",
+    "coveralls",
     "flake8",
+    "mock",
+    "seaborn",
+    "scikit-learn",
     "black",
     "tox"
 ]
