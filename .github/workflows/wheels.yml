@@ -22,7 +22,7 @@ jobs:
 
     steps:
       # Step 1: Check out the repository
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       # Step 2: Install system dependencies (macOS only)
       - name: Install dependencies (macOS)
@@ -42,7 +42,7 @@ jobs:
 
       # Step 4: Build wheels using cibuildwheel
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.16.5
+        uses: pypa/cibuildwheel@v2.22.0
         env:
           CIBW_ENVIRONMENT_MACOS: "CFLAGS='-Xclang -fopenmp -I$(brew --prefix libomp)/include' LDFLAGS='-L$(brew --prefix libomp)/lib -lomp'"
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"
@@ -54,4 +54,5 @@ jobs:
       # Step 5: Upload the built wheels as artifacts
       - uses: actions/upload-artifact@v4
         with:
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
           path: ./wheelhouse/*.whl
