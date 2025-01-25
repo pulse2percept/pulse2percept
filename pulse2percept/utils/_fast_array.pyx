@@ -1,6 +1,6 @@
 import numpy as np
 cimport numpy as cnp
-from ._array cimport float32, int32
+from ._fast_array cimport float32, int32
 
 cpdef bint fast_is_strictly_increasing(float32[::1] a, float32[::1] b, float32 tol):
     cdef:
