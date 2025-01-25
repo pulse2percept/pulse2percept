@@ -18,7 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-latest]
 
     steps:
       # Step 1: Check out the repository
@@ -48,10 +48,10 @@ jobs:
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"
           CIBW_ENVIRONMENT_WINDOWS: "CFLAGS='/openmp'"
           CIBW_BEFORE_BUILD: "python -m pip install --upgrade pip setuptools wheel cython numpy"
-          CIBW_BUILD: "cp39-* cp310-* cp311-*"
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
           CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
 
       # Step 5: Upload the built wheels as artifacts
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           path: ./wheelhouse/*.whl
