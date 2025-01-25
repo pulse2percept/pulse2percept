@@ -29,8 +29,9 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install libomp
-          export CPPFLAGS="-Xclang -fopenmp -I/opt/homebrew/include"
-          export LDFLAGS="-L/opt/homebrew/lib -lomp"
+          export CPPFLAGS="-Xclang -fopenmp -I$(brew --prefix libomp)/include"
+          export LDFLAGS="-L$(brew --prefix libomp)/lib -lomp"
+          export PATH="$(brew --prefix libomp)/bin:$PATH"
 
       # Step 3: Install system dependencies (Linux only)
       - name: Install dependencies (Linux)
@@ -43,8 +44,8 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.5
         env:
+          CIBW_ENVIRONMENT_MACOS: "CFLAGS='-Xclang -fopenmp -I$(brew --prefix libomp)/include' LDFLAGS='-L$(brew --prefix libomp)/lib -lomp'"
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"
-          CIBW_ENVIRONMENT_MACOS: "CFLAGS='-Xclang -fopenmp -I/opt/homebrew/include' LDFLAGS='-L/opt/homebrew/lib -lomp'"
           CIBW_ENVIRONMENT_WINDOWS: "CFLAGS='/openmp'"
           CIBW_BEFORE_BUILD: "python -m pip install --upgrade pip setuptools wheel cython numpy"
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
