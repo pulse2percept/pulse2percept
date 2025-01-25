@@ -1,4 +1,6 @@
-ctypedef numpy.float32_t float32
-ctypedef numpy.int32_t int32
+cimport numpy as cnp
 
-cpdef bool fast_is_strictly_increasing(float32[::1] a, float32[::1] b, float32 tol)
+ctypedef cnp.float32_t float32
+ctypedef cnp.int32_t int32
+
+cpdef bint fast_is_strictly_increasing(float32[::1] a, float32[::1] b, float32 tol)
