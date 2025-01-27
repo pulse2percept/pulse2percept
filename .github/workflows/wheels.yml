@@ -18,40 +18,53 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       # Step 1: Check out the repository
       - uses: actions/checkout@v4
 
-      # Step 2: Install system dependencies (macOS only)
+      # Step 2a: Install dependencies (macOS only)
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install libomp
-          export CPPFLAGS="-Xclang -fopenmp -I$(brew --prefix libomp)/include"
-          export LDFLAGS="-L$(brew --prefix libomp)/lib -lomp"
-          export PATH="$(brew --prefix libomp)/bin:$PATH"
+          brew install libomp llvm
+          export PATH="$(brew --prefix llvm)/bin:$PATH"
+          export CC="$(brew --prefix llvm)/bin/clang"
+          export CXX="$(brew --prefix llvm)/bin/clang++"
+          export CPPFLAGS="-I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
+          export LDFLAGS="-L$(brew --prefix llvm)/lib -L$(brew --prefix libomp)/lib -lomp"
 
-      # Step 3: Install system dependencies (Linux only)
+      # Step 2b: Install dependencies (Linux only)
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
 
-      # Step 4: Build wheels using cibuildwheel
+      # Step 3: Build wheels using cibuildwheel
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22.0
         env:
-          CIBW_ENVIRONMENT_MACOS: "CFLAGS='-Xclang -fopenmp -I$(brew --prefix libomp)/include' LDFLAGS='-L$(brew --prefix libomp)/lib -lomp'"
+          # macOS-specific OpenMP settings
+          CIBW_ENVIRONMENT_MACOS: |
+            CFLAGS="-Xclang -fopenmp -I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
+            LDFLAGS="-L$(brew --prefix llvm)/lib -L$(brew --prefix libomp)/lib -lomp"
+            PATH="$(brew --prefix llvm)/bin:$PATH"
+            CC="$(brew --prefix llvm)/bin/clang"
+            CXX="$(brew --prefix llvm)/bin/clang++"
+          # Linux-specific OpenMP settings
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"
+          # Windows-specific OpenMP settings
           CIBW_ENVIRONMENT_WINDOWS: "CFLAGS='/openmp'"
+          # Pre-build steps
           CIBW_BEFORE_BUILD: "python -m pip install --upgrade pip setuptools wheel cython numpy"
+          # Python versions to build for
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
+          # Skip specific wheels
           CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
 
-      # Step 5: Upload the built wheels as artifacts
+      # Step 4: Upload the built wheels as artifacts
       - uses: actions/upload-artifact@v4
         with:
           name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}

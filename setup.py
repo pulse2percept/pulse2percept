@@ -42,7 +42,7 @@ def find_pyx_modules(base_dir, exclude_dirs=None):
     Recursively find all `.pyx` files in subdirectories of `base_dir`, excluding certain directories.
     """
     if exclude_dirs is None:
-        exclude_dirs = ["doc", "wheelhouse"]  # Adjust as needed
+        exclude_dirs = ["doc", "wheelhouse"]
     extensions = []
     for root, dirs, files in os.walk(base_dir):
         # Exclude specific directories
@@ -64,7 +64,6 @@ def find_pyx_modules(base_dir, exclude_dirs=None):
 
 # Find all .pyx files in the relevant submodules
 cython_extensions = find_pyx_modules("pulse2percept")
-print("Discovered extensions:", [ext.name for ext in cython_extensions])
 
 for ext in cython_extensions:
     ext.define_macros = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]

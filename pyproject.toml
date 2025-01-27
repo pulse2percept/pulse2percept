@@ -3,7 +3,7 @@ requires = [
     "setuptools>=42",
     "wheel",
     "Cython>=0.29.36",
-    "numpy"
+    "numpy>=1.11,<1.27"
 ]
 build-backend = "setuptools.build_meta"
 
@@ -57,4 +57,4 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-exclude = ["wheelhouse", "tests", "*.tests", "*.tests.*", "tests.*"]
+exclude = ["wheelhouse", "tests", "*/tests"]
