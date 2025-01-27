@@ -97,7 +97,6 @@ jobs:
           pip freeze
           gcc --version
           pip show pulse2percept
-          ls -R $(pip show -f pulse2percept | grep Location | cut -d' ' -f2)/pulse2percept
           
       # Step 9: Conditional Test Execution
       - name: Run default test suite for push
