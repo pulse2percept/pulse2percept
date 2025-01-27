@@ -4,7 +4,36 @@ from Cython.Build import cythonize
 import numpy
 import os
 import sys
+import platform
 
+# Define supported configurations
+SUPPORTED_PYTHON_VERSIONS = ["3.9", "3.10", "3.11", "3.12"]
+SUPPORTED_PLATFORMS = ["Linux", "Windows", "Darwin"]
+UNSUPPORTED_CONFIGS = [
+    {"os": "Darwin", "python_version": "3.9"}  # macOS + Python 3.9
+]
+
+# Compatibility check
+def is_supported():
+    current_os = platform.system()
+    current_python = f"{sys.version_info.major}.{sys.version_info.minor}"
+    if current_os not in SUPPORTED_PLATFORMS:
+        return False, f"{current_os} is not a supported platform."
+    if current_python not in SUPPORTED_PYTHON_VERSIONS:
+        return False, f"Python {current_python} is not supported."
+    for config in UNSUPPORTED_CONFIGS:
+        if current_os == config["os"] and current_python == config["python_version"]:
+            return False, f"Python {current_python} is not supported on {current_os}."
+    return True, None
+
+# Check compatibility and warn if unsupported
+is_supported, reason = is_supported()
+if not is_supported:
+    print(
+        f"WARNING: {reason}\n"
+        "Installation will proceed, but this configuration is not officially supported. "
+        "Use at your own risk!"
+    )
 
 class OpenMPBuildExt(build_ext):
     def build_extensions(self):
@@ -36,7 +65,6 @@ class OpenMPBuildExt(build_ext):
                 print("Warning: OpenMP not supported on this platform. Compiling without OpenMP.")
         super().build_extensions()
 
-
 def find_pyx_modules(base_dir, exclude_dirs=None):
     """
     Recursively find all `.pyx` files in subdirectories of `base_dir`, excluding certain directories.
@@ -60,7 +88,6 @@ def find_pyx_modules(base_dir, exclude_dirs=None):
                     )
                 )
     return extensions
-
 
 # Find all .pyx files in the relevant submodules
 cython_extensions = find_pyx_modules("pulse2percept")
