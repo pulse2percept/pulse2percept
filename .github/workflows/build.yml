@@ -44,7 +44,6 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel build
-          python -m pip install numpy pytest pytest-cov
 
       # Step 6: Debug OpenMP paths (macOS optional debugging step)
       - name: Debug OpenMP paths

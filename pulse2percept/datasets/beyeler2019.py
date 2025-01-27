@@ -193,10 +193,7 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     # Combine 'img_shape_x' and 'img_shape_y' into 'img_shape' tuple
     df['img_shape'] = df.apply(lambda x: (x['img_shape_x'], x['img_shape_y']),
                                axis=1)
-    df['xrange'] = df.apply(lambda x: (x['xrange_x'], x['xrange_y']), axis=1)
-    df['yrange'] = df.apply(lambda x: (x['yrange_x'], x['yrange_y']), axis=1)
-    df.drop(columns=['img_shape_x', 'img_shape_y', 'xrange_x', 'xrange_y',
-                     'yrange_x', 'yrange_y'], inplace=True)
+    df.drop(columns=['img_shape_x', 'img_shape_y'], inplace=True)
 
     # Verify integrity of the dataset:
     if len(df) != 400:
@@ -236,6 +233,8 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     df['implant_x'] = 0
     df['implant_y'] = 0
     df['implant_rot'] = 0
+    df['xrange'] = None
+    df['yrange'] = None
     for subject in df.subject.unique():
         df.loc[df.subject == subject,
                'implant_type_str'] = subject_params[subject]['implant_type_str']
@@ -245,6 +244,14 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
                'implant_y'] = subject_params[subject]['implant_y']
         df.loc[df.subject == subject,
                'implant_rot'] = subject_params[subject]['implant_rot']
+        df.loc[df.subject == subject, 'xrange'] = df.loc[df.subject == subject].apply(
+            lambda row: (subject_params[subject]['xmin'], 
+                         subject_params[subject]['xmax']), axis=1
+        )
+        df.loc[df.subject == subject, 'yrange'] = df.loc[df.subject == subject].apply(
+            lambda row: (subject_params[subject]['ymin'], 
+                         subject_params[subject]['ymax']), axis=1
+        )
 
     if shuffle:
         df = df.sample(n=len(df), random_state=random_state)
