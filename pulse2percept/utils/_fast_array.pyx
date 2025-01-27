@@ -1,10 +1,12 @@
 import numpy as np
 cimport numpy as cnp
-from ._fast_array cimport float32, int32
+
+ctypedef cnp.float32_t float32
+ctypedef cnp.uint32_t uint32
 
 cpdef bint fast_is_strictly_increasing(float32[::1] a, float32[::1] b, float32 tol):
     cdef:
-        int32 idx, arr_len
+        uint32 i, arr_len
     arr_len = len(a)
     with nogil:
         for i in range(arr_len):
