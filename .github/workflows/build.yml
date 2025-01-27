@@ -37,8 +37,8 @@ jobs:
           export PATH="$(brew --prefix llvm)/bin:$PATH"
           export CC="$(brew --prefix llvm)/bin/clang"
           export CXX="$(brew --prefix llvm)/bin/clang++"
-          export CPPFLAGS="-I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
-          export LDFLAGS="-L$(brew --prefix llvm)/lib -L$(brew --prefix libomp)/lib -lomp"  
+          export CPPFLAGS="-I$(brew --prefix libomp)/include -I$(brew --prefix llvm)/include"
+          export LDFLAGS="-L$(brew --prefix libomp)/lib -L$(brew --prefix llvm)/lib -lomp"
 
       # Step 3b: Install dependencies (Linux only)
       - name: Install dependencies (Linux)
@@ -66,10 +66,10 @@ jobs:
           which clang
           which clang++
           clang --version
-          brew --prefix llvm
-          brew --prefix libomp
-          ls $(brew --prefix llvm)/include/omp.h
-          ls $(brew --prefix llvm)/lib/libomp.*
+          echo "Include paths:"
+          ls -l $(brew --prefix libomp)/include
+          echo "Library paths:"
+          ls -l $(brew --prefix libomp)/lib
 
       # Step 7a: Install the package (Windows)
       - name: Install package (Windows)
