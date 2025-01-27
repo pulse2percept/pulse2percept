@@ -80,7 +80,8 @@ jobs:
       - name: Install package (Unix)
         if: runner.os != 'windows-latest'
         run: |
-          pip install .[dev]
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir .[dev]  # Install all dependencies including dev
       
       # Step 8: Log
       - name: Log environment info
@@ -88,6 +89,8 @@ jobs:
           python --version
           pip freeze
           gcc --version
+          pip show pulse2percept
+          ls -R $(pip show -f pulse2percept | grep Location | cut -d' ' -f2)/pulse2percept
           
       # Step 9: Run tests
       - name: Run test suite with pytest
