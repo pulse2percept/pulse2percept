@@ -10,9 +10,19 @@ class OpenMPBuildExt(build_ext):
     def build_extensions(self):
         for ext in self.extensions:
             if sys.platform == "darwin":  # macOS
-                # Explicitly point to Homebrew-installed OpenMP headers and libraries
-                ext.extra_compile_args += ["-Xclang", "-fopenmp", "-I" + os.getenv("CPPFLAGS")]
-                ext.extra_link_args += ["-lomp", "-L" + os.getenv("LDFLAGS")]
+                # Fetch CPPFLAGS and LDFLAGS, providing defaults to avoid errors
+                cppflags = os.getenv("CPPFLAGS", "")
+                ldflags = os.getenv("LDFLAGS", "")
+                
+                if cppflags:
+                    ext.extra_compile_args += ["-Xclang", "-fopenmp", "-I" + cppflags]
+                else:
+                    print("Warning: CPPFLAGS environment variable is not set.")
+
+                if ldflags:
+                    ext.extra_link_args += ["-lomp", "-L" + ldflags]
+                else:
+                    print("Warning: LDFLAGS environment variable is not set.")
             elif os.name == "posix":  # Linux
                 try:
                     ext.extra_compile_args += ["-fopenmp"]
