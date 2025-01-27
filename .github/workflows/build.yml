@@ -1,10 +1,16 @@
-name: Build
+name: Build and Test
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - '**'  # Trigger on all branches
+  pull_request:
+    branches:
+      - '**'  # Trigger on all branches involved in PRs
 
 jobs:
   build:
-    name: Building on ${{ matrix.os }} with Python ${{ matrix.python-version }}
+    name: Build & Test on ${{ matrix.os }} with Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -93,15 +99,24 @@ jobs:
           pip show pulse2percept
           ls -R $(pip show -f pulse2percept | grep Location | cut -d' ' -f2)/pulse2percept
           
-      # Step 9: Run tests
-      - name: Run test suite with pytest
+      # Step 9: Conditional Test Execution
+      - name: Run default test suite for push
+        if: github.event_name == 'push' && !github.event.pull_request
         run: |
           mkdir test_dir
           cd test_dir
-          pytest --pyargs pulse2percept --cov-report=xml --cov=pulse2percept --doctest-modules
+          pytest --pyargs pulse2percept --doctest-modules --cov-report=xml --cov=pulse2percept --doctest-modules
+
+      - name: Run slow tests for pull requests
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir test_dir
+          cd test_dir
+          pytest --pyargs pulse2percept --runslow --doctest-modules        
           
       # Step 10: Log
       - name: Upload coveragei report to codecov.io
+        if: github.event_name == 'pull_request'
         uses: codecov/codecov-action@v1
         # Cannot yet post coverage report as comments on the PR, but see:
         # https://github.com/codecov/codecov-python/pull/214
