@@ -4,13 +4,13 @@ on:
   push:
     branches:
       - master
-      - setup
+      - torch
     tags:
       - v*
   pull_request:
     branches:
       - master
-      - setup
+      - torch
 
 jobs:
   build_wheels:
