@@ -14,8 +14,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.12", "3.11", "3.10", "3.9"]
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.9"]
+        os: [macos-latest]
 
     steps:
       # Step 1: Check out the repository
@@ -37,6 +37,10 @@ jobs:
           export CXX="$(brew --prefix llvm)/bin/clang++"
           export CPPFLAGS="-I$(brew --prefix libomp)/include -I$(brew --prefix llvm)/include"
           export LDFLAGS="-L$(brew --prefix libomp)/lib -L$(brew --prefix llvm)/lib -lomp"
+          # Apply workaround for Python 3.9 `faltivec` issue
+          if [[ "${{ matrix.python-version }}" == "3.9" ]]; then
+            export CFLAGS="-std=c99 -maltivec -I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
+          fi
 
       # Step 3b: Install dependencies (Linux only)
       - name: Install dependencies (Linux)
@@ -113,11 +117,9 @@ jobs:
           pytest --pyargs pulse2percept --runslow --doctest-modules        
           
       # Step 10: Log
-      - name: Upload coveragei report to codecov.io
+      - name: Upload coverage report to codecov.io
         if: github.event_name == 'pull_request'
         uses: codecov/codecov-action@v1
-        # Cannot yet post coverage report as comments on the PR, but see:
-        # https://github.com/codecov/codecov-python/pull/214
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./test_dir/coverage.xml

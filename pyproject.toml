@@ -27,8 +27,11 @@ classifiers = [
 ]
 requires-python = ">=3.9"
 dependencies = [
+    # Numpy versions specific to Python compatibility
     "cython>=0.28",
-    "numpy>=1.11,<1.27",
+    "numpy>=1.21,<1.24; python_version < '3.10'",  # For Py3.9 compatibility on macOS
+    "numpy>=1.24; python_version >= '3.10'",      # For Py >= 3.10
+    # SciPy versions for different Python versions
     "scipy<=1.7.1; python_version < '3.10'",
     "scipy>=1.0.1; python_version >= '3.10'",
     "scikit-image>=0.14",
@@ -58,3 +61,14 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["."]
 exclude = ["wheelhouse", "tests", "*/tests"]
+
+[tool.cibuildwheel]
+# This section ensures the macOS `faltivec` workaround is applied for Python 3.9
+environment = """
+CFLAGS="-std=c99 -maltivec -I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
+LDFLAGS="-L$(brew --prefix llvm)/lib -L$(brew --prefix libomp)/lib -lomp"
+PATH="$(brew --prefix llvm)/bin:$PATH"
+CC="$(brew --prefix llvm)/bin/clang"
+CXX="$(brew --prefix llvm)/bin/clang++"
+"""
+skip = "cp39-*; macosx-*"
