@@ -34,10 +34,15 @@ jobs:
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install libomp llvm
-          export PATH="/usr/local/opt/llvm/bin:$PATH"
-          export CPPFLAGS="-I/usr/local/opt/llvm/include -I$(brew --prefix libomp)/include"
-          export LDFLAGS="-L/usr/local/opt/llvm/lib -L$(brew --prefix libomp)/lib -lomp"
+          if [ -d "/opt/homebrew/opt/llvm" ]; then
+            export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+            export CPPFLAGS="-I/opt/homebrew/opt/llvm/include -I/opt/homebrew/opt/libomp/include"
+            export LDFLAGS="-L/opt/homebrew/opt/llvm/lib -L/opt/homebrew/opt/libomp/lib -lomp"
+          else
+            export PATH="/usr/local/opt/llvm/bin:$PATH"
+            export CPPFLAGS="-I/usr/local/opt/llvm/include -I/usr/local/opt/libomp/include"
+            export LDFLAGS="-L/usr/local/opt/llvm/lib -L/usr/local/opt/libomp/lib -lomp"
+          fi
 
       # Step 3b: Install dependencies (Linux only)
       - name: Install dependencies (Linux)
@@ -65,10 +70,10 @@ jobs:
           which clang
           which clang++
           clang --version
-          echo "Include paths:"
-          ls -l /usr/local/opt/llvm/include
-          echo "Library paths:"
-          ls -l /usr/local/opt/llvm/lib
+          echo "LLVM Homebrew Prefix:"
+          brew --prefix llvm
+          echo "libomp Homebrew Prefix:"
+          brew --prefix libomp
 
       # Step 7a: Install the package (Windows)
       - name: Install package (Windows)
