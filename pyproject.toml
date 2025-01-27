@@ -47,10 +47,11 @@ dev = [
     "coveralls",
     "flake8",
     "mock",
-    "seaborn",
-    "scikit-learn",
     "black",
     "tox"
+    "seaborn",
+    "scikit-learn",
+    "neuropythy"
 ]
 
 [tool.setuptools.packages.find]

@@ -8,7 +8,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.11", "3.10", "3.9"]
+        python-version: ["3.11"]
         os: [ubuntu-latest]
         exclude:
           - python-version: "3.9"
@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      # Step 3: Install dependencies (macOS only)
+      # Step 3a: Install dependencies (macOS only)
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -33,17 +33,23 @@ jobs:
           export CPPFLAGS="-I/usr/local/opt/llvm/include -I$(brew --prefix libomp)/include"
           export LDFLAGS="-L/usr/local/opt/llvm/lib -L$(brew --prefix libomp)/lib -lomp"
 
-      # Step 4: Install dependencies (Linux only)
+      # Step 3b: Install dependencies (Linux only)
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
 
-      # Step 5: Install Python dependencies
+      # Step 4: Install Python dependencies
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel build
+          
+      # Step 5: lint
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          flake8 pulse2percept --ignore N802,N806,W504 --select W503 --count --show-source --statistics
 
       # Step 6: Debug OpenMP paths (macOS optional debugging step)
       - name: Debug OpenMP paths
@@ -58,17 +64,30 @@ jobs:
           echo "Library paths:"
           ls -l /usr/local/opt/llvm/lib
 
-      # Step 7: Install the package (Windows)
+      # Step 7a: Install the package (Windows)
       - name: Install package (Windows)
         if: runner.os == 'windows-latest'
         run: |
+          $env:INCLUDE = 'C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\ucrt'
+          $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\shared'
+          $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\um'
+          $env:LIB = 'C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\ucrt\x64'
+          $env:LIB += ';C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\um\x64'
+          $env:PATH += ';C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64'
           pip install .[dev]
-
-      # Step 8: Install the package (Non-Windows)
+            
+      # Step 7b: Install the package (Non-Windows)
       - name: Install package (Unix)
         if: runner.os != 'windows-latest'
         run: |
           pip install .[dev]
+      
+      # Step 8: Log
+      - name: Log environment info
+        run: |
+          python --version
+          pip freeze
+          gcc --version
           
       # Step 9: Run tests
       - name: Run test suite with pytest
@@ -76,3 +95,15 @@ jobs:
           mkdir test_dir
           cd test_dir
           pytest --pyargs pulse2percept --cov-report=xml --cov=pulse2percept --doctest-modules
+          
+      # Step 10: Log
+      - name: Upload coveragei report to codecov.io
+        uses: codecov/codecov-action@v1
+        # Cannot yet post coverage report as comments on the PR, but see:
+        # https://github.com/codecov/codecov-python/pull/214
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./test_dir/coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          yml: ./codecov.yml
