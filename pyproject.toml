@@ -50,6 +50,7 @@ dev = [
     "black",
     "tox",
     "seaborn",
+    "pyswarm",
     "scikit-learn",
     "neuropythy"
 ]
