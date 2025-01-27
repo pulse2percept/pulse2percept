@@ -11,8 +11,8 @@ class OpenMPBuildExt(build_ext):
         for ext in self.extensions:
             if sys.platform == "darwin":  # macOS
                 # Explicitly point to Homebrew-installed OpenMP headers and libraries
-                ext.extra_compile_args += ["-Xclang", "-fopenmp", "-I/usr/local/include"]
-                ext.extra_link_args += ["-lomp", "-L/usr/local/lib"]
+                ext.extra_compile_args += ["-Xclang", "-fopenmp", "-I" + os.getenv("CPPFLAGS")]
+                ext.extra_link_args += ["-lomp", "-L" + os.getenv("LDFLAGS")]
             elif os.name == "posix":  # Linux
                 try:
                     ext.extra_compile_args += ["-fopenmp"]
