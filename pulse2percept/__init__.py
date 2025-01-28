@@ -47,14 +47,20 @@ logging.basicConfig(
     level=logging.DEBUG, format=formatstr, filename="debug.log", filemode="w"
 )
 
-from . import datasets
-from . import implants
-from . import models
-from . import model_selection
-from . import percepts
-from . import stimuli
-from . import utils
-from . import viz
+# Lazy import submodules to avoid circular imports
+def _lazy_import(submodule_name):
+    import importlib
+    return importlib.import_module(f"pulse2percept.{submodule_name}")
+
+datasets = _lazy_import("datasets")
+implants = _lazy_import("implants")
+models = _lazy_import("models")
+model_selection = _lazy_import("model_selection")
+percepts = _lazy_import("percepts")
+stimuli = _lazy_import("stimuli")
+topography = _lazy_import("topography")
+utils = _lazy_import("utils")
+viz = _lazy_import("viz")
 
 __all__ = [
     "datasets",
