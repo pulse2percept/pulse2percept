@@ -1,4 +1,3 @@
-import imp
 import numpy as np
 import pytest
 import numpy.testing as npt

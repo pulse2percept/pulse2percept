@@ -1,3 +1,19 @@
+# Include metadata files
 include AUTHORS LICENSE CONTRIBUTING* CODE_OF_CONDUCT* Makefile* MANIFEST.in setup* README.*
+
+# Include Cython source files
+recursive-include pulse2percept *.pyx *.pxd *.h
+recursive-include pulse2percept *.c *.cpp *.so
+
+# Include documentation files
 recursive-include doc *
+
+# Include examples
 recursive-include examples *
+
+# Explicitly include Numpy headers
+# (This ensures the source distribution works across environments)
+recursive-include numpy/core/include *.h
+
+exclude wheelhouse/*
+prune wheelhouse
