@@ -5,6 +5,14 @@ include AUTHORS LICENSE CONTRIBUTING* CODE_OF_CONDUCT* Makefile* MANIFEST.in set
 recursive-include pulse2percept *.pyx *.pxd *.h
 recursive-include pulse2percept *.c *.cpp *.so
 
+# Include __init__.py at the root and submodules
+include pulse2percept/__init__.py
+recursive-include pulse2percept/stimuli/data *
+recursive-include pulse2percept/datasets/data *
+recursive-include pulse2percept/viz/data *
+recursive-include pulse2percept/implants/data *
+recursive-include pulse2percept/models/data *
+
 # Include documentation files
 recursive-include doc *
 
@@ -15,5 +23,6 @@ recursive-include examples *
 # (This ensures the source distribution works across environments)
 recursive-include numpy/core/include *.h
 
+# Exclude unnecessary directories
 exclude wheelhouse/*
 prune wheelhouse
