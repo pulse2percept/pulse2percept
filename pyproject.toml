@@ -58,10 +58,17 @@ dev = [
 
 [tool.setuptools]
 package-dir = {"" = "."}
-packages = ["pulse2percept"]
 include-package-data = true
 
 [tool.setuptools.package-data]
+# Include data files for specific submodules
 "pulse2percept.stimuli" = ["data/*"]
 "pulse2percept.datasets" = ["data/*"]
 "pulse2percept.viz" = ["data/*"]
+"pulse2percept.implants" = ["data/*"]
+"pulse2percept.models" = ["data/*"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pulse2percept.*"]
+exclude = ["wheelhouse", "tests", "*/tests"]
