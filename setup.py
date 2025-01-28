@@ -1,4 +1,4 @@
-from setuptools import setup, Extension
+from setuptools import setup, find_packages, Extension
 from setuptools.command.build_ext import build_ext
 from Cython.Build import cythonize
 import numpy
@@ -96,6 +96,16 @@ for ext in cython_extensions:
     ext.define_macros = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
 
 setup(
+    packages=find_packages(include=["pulse2percept", "pulse2percept.*"]),
+    package_data={
+        "pulse2percept": ["__init__.py"],
+        "pulse2percept.stimuli": ["data/*"],
+        "pulse2percept.datasets": ["data/*"],
+        "pulse2percept.viz": ["data/*"],
+        "pulse2percept.implants": ["data/*"],
+        "pulse2percept.models": ["data/*"],
+    },
+    include_package_data=True,
     ext_modules=cythonize(
         cython_extensions,
         compiler_directives={
