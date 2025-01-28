@@ -47,13 +47,13 @@ logging.basicConfig(
     level=logging.DEBUG, format=formatstr, filename="debug.log", filemode="w"
 )
 
+from . import utils
+from . import percepts
+from . import stimuli
 from . import datasets
 from . import implants
 from . import models
 from . import model_selection
-from . import percepts
-from . import stimuli
-from . import utils
 from . import viz
 
 __all__ = [
