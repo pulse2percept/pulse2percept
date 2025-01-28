@@ -59,17 +59,16 @@ __all__ = [
     "viz",
 ]
 
-# Lazy import mechanism for user-friendly API
+# Implement lazy imports
 def __getattr__(name):
     if name in __all__:
         try:
-            # Use __import__ for lazy import
-            module = __import__(f"{__name__}.{name}", fromlist=[""])
+            module = __import__(f"pulse2percept.{name}", fromlist=[""])
             globals()[name] = module
             return module
         except ModuleNotFoundError as e:
-            raise ModuleNotFoundError(
-                f"Failed to import submodule '{name}' in module '{__name__}'."
-                f" Check if the module is installed correctly."
+            raise AttributeError(
+                f"Module '{name}' not found in pulse2percept."
             ) from e
-    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+    raise AttributeError(f"Module '{name}' not found in pulse2percept.")
+    
