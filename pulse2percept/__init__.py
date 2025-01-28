@@ -47,21 +47,6 @@ logging.basicConfig(
     level=logging.DEBUG, format=formatstr, filename="debug.log", filemode="w"
 )
 
-# Lazy import submodules to avoid circular imports
-def _lazy_import(submodule_name):
-    import importlib
-    return importlib.import_module(f"pulse2percept.{submodule_name}")
-
-datasets = _lazy_import("datasets")
-implants = _lazy_import("implants")
-models = _lazy_import("models")
-model_selection = _lazy_import("model_selection")
-percepts = _lazy_import("percepts")
-stimuli = _lazy_import("stimuli")
-topography = _lazy_import("topography")
-utils = _lazy_import("utils")
-viz = _lazy_import("viz")
-
 __all__ = [
     "datasets",
     "implants",
@@ -73,3 +58,11 @@ __all__ = [
     "utils",
     "viz",
 ]
+
+# Lazy import mechanism for user-friendly API
+def __getattr__(name):
+    if name in __all__:
+        module = __import__(f"pulse2percept.{name}", fromlist=[""])
+        globals()[name] = module
+        return module
+    raise AttributeError(f"module 'pulse2percept' has no attribute '{name}'")

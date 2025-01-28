@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    name: Build & Test on ${{ matrix.os }} with Python ${{ matrix.python-version }}
+    name: Build: ${{ matrix.os }}, Py ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
