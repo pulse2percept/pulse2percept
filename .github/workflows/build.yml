@@ -91,7 +91,7 @@ jobs:
         run: |
           pip uninstall -y pulse2percept || true
           python setup.py build_ext --inplace
-          python -m pip install ".[dev]"
+          pip install ".[dev]"
       
       # Step 8: Log
       - name: Log environment info
