@@ -1,28 +1,37 @@
-# Include metadata files
-include AUTHORS LICENSE CONTRIBUTING* CODE_OF_CONDUCT* Makefile* MANIFEST.in setup* README.*
+# Include all files in the pulse2percept package
+recursive-include pulse2percept *
 
-# Include Cython source files
-recursive-include pulse2percept *.pyx *.pxd *.h
-recursive-include pulse2percept *.c *.cpp *.so
-
-# Include __init__.py at the root and submodules
+# Explicitly include __init__.py files to ensure package structure
 include pulse2percept/__init__.py
+
+# Exclude unnecessary directories or files
+exclude pulse2percept/*/tests/*
+prune wheelhouse
+exclude *.py[cod] __pycache__ *.so *.o *.log
+
+# Include important metadata files
+include LICENSE
+include README.rst
+include pyproject.toml
+include setup.py
+
+# Include Cython source files for compilation
+recursive-include pulse2percept *.pyx *.pxd *.c *.cpp *.h *.so
+
+# Include any data files or resources required by the package
 recursive-include pulse2percept/stimuli/data *
 recursive-include pulse2percept/datasets/data *
 recursive-include pulse2percept/viz/data *
 recursive-include pulse2percept/implants/data *
 recursive-include pulse2percept/models/data *
 
-# Include documentation files
+# Include documentation files if needed
 recursive-include doc *
 
-# Include examples
+# Include example scripts or files if you have them
 recursive-include examples *
 
-# Explicitly include Numpy headers
-# (This ensures the source distribution works across environments)
-recursive-include numpy/core/include *.h
-
-# Exclude unnecessary directories
-exclude wheelhouse/*
-prune wheelhouse
+# Exclude build artifacts or temporary files
+exclude build/*
+exclude dist/*
+exclude *.egg-info/*

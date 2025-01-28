@@ -47,6 +47,7 @@ logging.basicConfig(
     level=logging.DEBUG, format=formatstr, filename="debug.log", filemode="w"
 )
 
+# Explicitly import submodules to make them accessible via the package namespace
 from . import utils
 from . import percepts
 from . import stimuli
@@ -56,6 +57,7 @@ from . import models
 from . import model_selection
 from . import viz
 
+# Define the __all__ variable to explicitly expose the public API
 __all__ = [
     "datasets",
     "implants",

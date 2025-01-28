@@ -96,7 +96,15 @@ for ext in cython_extensions:
     ext.define_macros = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
 
 setup(
-    packages=find_packages(include=["pulse2percept", "pulse2percept.*"]),
+    packages=[
+        "pulse2percept",
+        "pulse2percept.implants",
+        "pulse2percept.stimuli",
+        "pulse2percept.datasets",
+        "pulse2percept.models",
+        "pulse2percept.viz",
+        "pulse2percept.utils",
+    ],
     package_data={
         "pulse2percept": ["__init__.py"],
         "pulse2percept.stimuli": ["data/*"],
