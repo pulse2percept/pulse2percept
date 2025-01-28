@@ -62,7 +62,14 @@ __all__ = [
 # Lazy import mechanism for user-friendly API
 def __getattr__(name):
     if name in __all__:
-        module = __import__(f"pulse2percept.{name}", fromlist=[""])
-        globals()[name] = module
-        return module
-    raise AttributeError(f"module 'pulse2percept' has no attribute '{name}'")
+        try:
+            # Use __import__ for lazy import
+            module = __import__(f"{__name__}.{name}", fromlist=[""])
+            globals()[name] = module
+            return module
+        except ModuleNotFoundError as e:
+            raise ModuleNotFoundError(
+                f"Failed to import submodule '{name}' in module '{__name__}'."
+                f" Check if the module is installed correctly."
+            ) from e
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
