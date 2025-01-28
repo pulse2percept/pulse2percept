@@ -47,6 +47,15 @@ logging.basicConfig(
     level=logging.DEBUG, format=formatstr, filename="debug.log", filemode="w"
 )
 
+from . import utils
+from . import percepts
+from . import stimuli
+from . import datasets
+from . import implants
+from . import models
+from . import model_selection
+from . import viz
+
 __all__ = [
     "datasets",
     "implants",
@@ -58,17 +67,3 @@ __all__ = [
     "utils",
     "viz",
 ]
-
-# Implement lazy imports
-def __getattr__(name):
-    if name in __all__:
-        try:
-            module = __import__(f"pulse2percept.{name}", fromlist=[""])
-            globals()[name] = module
-            return module
-        except ModuleNotFoundError as e:
-            raise AttributeError(
-                f"Module '{name}' not found in pulse2percept."
-            ) from e
-    raise AttributeError(f"Module '{name}' not found in pulse2percept.")
-    
