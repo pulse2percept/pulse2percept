@@ -56,6 +56,12 @@ dev = [
     "neuropythy"
 ]
 
-[tool.setuptools.packages.find]
-where = ["."]
-exclude = ["wheelhouse", "tests", "*/tests"]
+[tool.setuptools]
+package-dir = {"" = "."}
+packages = ["pulse2percept"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"pulse2percept.stimuli" = ["data/*"]
+"pulse2percept.datasets" = ["data/*"]
+"pulse2percept.viz" = ["data/*"]
