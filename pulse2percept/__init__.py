@@ -49,12 +49,12 @@ logging.basicConfig(
 
 from . import utils
 from . import stimuli
-from . import implants
 from . import models
 from . import model_selection
 from . import viz
 from . import percepts
 from . import datasets
+from . import implants
 
 __all__ = [
     "datasets",
