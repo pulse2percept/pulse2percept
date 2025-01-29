@@ -1,5 +1,4 @@
 jinja2<3.1
-setuptools>=42.0,<50.0
 sphinx==1.8.5
 alabaster<0.7.14
 sphinx_gallery>=0.7
