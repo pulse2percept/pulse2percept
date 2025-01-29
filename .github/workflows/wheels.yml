@@ -77,5 +77,5 @@ jobs:
       # Step 4: Upload the built wheels as artifacts
       - uses: actions/upload-artifact@v4
         with:
-          name: cibw-wheels-${{ matrix.os }}-${{ strategy.python-version }}
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.python-version }}-${{ strategy.job-index }}
           path: ./wheelhouse/*.whl
