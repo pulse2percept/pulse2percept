@@ -48,6 +48,7 @@ logging.basicConfig(
 )
 
 # Explicitly import submodules to make them accessible via the package namespace
+print('importing 1')
 from . import utils
 from . import percepts
 from . import stimuli
