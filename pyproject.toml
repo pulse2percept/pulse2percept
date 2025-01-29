@@ -71,5 +71,5 @@ pulse2percept = ["__init__.py"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["pulse2percept.*"]
+include = ["pulse2percept", "pulse2percept.*"]
 exclude = ["wheelhouse", "tests", "*/tests"]
