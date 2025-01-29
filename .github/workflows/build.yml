@@ -49,10 +49,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
 
-      # Step 4: Install Python dependencies
+      # Step 4a: Special NumPy Fix for Windows + Python 3.13
+      - name: Install NumPy workaround for Windows/Python 3.13
+        if: runner.os == 'Windows' && matrix.python-version == '3.13'
+        run: |
+          python -m pip install --upgrade --pre numpy
+          python -c "import numpy; print(numpy.__version__); print(numpy.__config__.show())"
+
+      # Step 4b: Install Python dependencies
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip setuptools wheel build numpy Cython
+          python -m pip install --upgrade pip setuptools wheel build Cython
+          python -m pip install numpy  # Ensures consistent NumPy install across all OSes
           
       # Step 5: lint
       - name: Lint with flake8
