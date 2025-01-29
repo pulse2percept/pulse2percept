@@ -1,4 +1,4 @@
-name: Build and Test
+name: Build & Test
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    name: Build & Test on ${{ matrix.os }} with Python ${{ matrix.python-version }}
+    name: Build ${{ matrix.os }} Py ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -60,20 +60,7 @@ jobs:
           pip install flake8
           flake8 pulse2percept --ignore N802,N806,W504 --select W503 --count --show-source --statistics
 
-      # Step 6: Debug OpenMP paths (macOS optional debugging step)
-      - name: Debug OpenMP paths
-        if: runner.os == 'macOS'
-        run: |
-          echo "Using Homebrew LLVM clang:"
-          which clang
-          which clang++
-          clang --version
-          echo "Include paths:"
-          ls -l $(brew --prefix libomp)/include
-          echo "Library paths:"
-          ls -l $(brew --prefix libomp)/lib
-
-      # Step 7a: Install the package (Windows)
+      # Step 6a: Install the package (Windows)
       - name: Install package (Windows)
         if: runner.os == 'windows-latest'
         run: |
@@ -85,7 +72,7 @@ jobs:
           $env:PATH += ';C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64'
           pip install .[dev]
             
-      # Step 7b: Install the package (Non-Windows)
+      # Step 6b: Install the package (Non-Windows)
       - name: Install package (Unix)
         if: runner.os != 'windows-latest'
         run: |
@@ -93,7 +80,7 @@ jobs:
           python setup.py build_ext --inplace
           python -m pip install ".[dev]"
       
-      # Step 8: Log
+      # Step 7: Log
       - name: Log environment info
         run: |
           python --version
@@ -101,22 +88,22 @@ jobs:
           gcc --version
           pip show pulse2percept
           
-      # Step 9: Conditional Test Execution
+      # Step 8: Conditional Test Execution
       - name: Run default test suite for push
         if: github.event_name == 'push' && !github.event.pull_request
         run: |
           mkdir test_dir
           cd test_dir
-          pytest --pyargs pulse2percept --doctest-modules --cov-report=xml --cov=pulse2percept --doctest-modules
+          pytest --pyargs pulse2percept --doctest-modules
 
       - name: Run slow tests for pull requests
         if: github.event_name == 'pull_request'
         run: |
           mkdir test_dir
           cd test_dir
-          pytest --pyargs pulse2percept --runslow --doctest-modules        
+          pytest --pyargs pulse2percept --runslow --cov-report=xml --cov=pulse2percept --doctest-modules        
           
-      # Step 10: Log
+      # Step 9: Codecov
       - name: Upload coverage report to codecov.io
         if: github.event_name == 'pull_request'
         uses: codecov/codecov-action@v1
