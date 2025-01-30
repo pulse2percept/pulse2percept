@@ -53,7 +53,9 @@ jobs:
       - name: Install stable NumPy version (Windows/Python 3.13)
         if: runner.os == 'Windows' && matrix.python-version == '3.13'
         run: |
-          pip install --pre --upgrade numpy --only-binary ":all:"
+          pip install --pre --upgrade "numpy<1.27" --only-binary ":all:"
+          pip install meson meson-python ninja
+
 
       # Step 4: Install Python dependencies
       - name: Install Python dependencies
