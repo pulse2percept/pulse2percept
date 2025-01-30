@@ -13,10 +13,6 @@ sphinx:
   fail_on_warning: false
   builder: "html"
 
-formats:
-  - pdf
-  - epub
-
 python:
   install:
     - requirements: doc/requirements.txt
