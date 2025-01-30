@@ -55,9 +55,6 @@ to install p2p from source.
 
 Similarly, if your platform is not officially supported (and hence we do
 not have a wheel for it), you will need to build p2p from source.
-Following recent trends in the NumPy and SciPy community, we do not provide
-wheels for 32-bit platforms (this includes all Unix platforms and Windows
-starting with Python 3.10).
 
 Prerequisites
 -------------
@@ -173,25 +170,6 @@ Obtaining the latest code from GitHub
         machinery and history) from
         "https://github.com/<username>/pulse2percept.git".
 
-3.  Install all dependencies listed in ``requirements.txt`` by using the
-    following command:
-
-    .. code-block:: bash
-
-        pip install -r requirements.txt
-
-    This includes Cython. If you are on Windows, make sure you followed the steps
-    outlined above to install a suitable C compiler (see 
-    :ref:`Prerequisites <install-source-prerequisites>` above).
-
-    If you plan on :ref:`contributing to pulse2percept <dev-contributing>`,
-    you should also install all developer dependencies listed in
-    ``requirements-dev.txt``:
-
-    .. code-block:: bash
-
-       pip install -r requirements-dev.txt
-
 .. _pulse2percept on GitHub: https://github.com/pulse2percept/pulse2percept
 .. _GitHub account: https://help.github.com/articles/signing-up-for-a-new-github-account
 
@@ -203,7 +181,7 @@ following (note the ``.``):
 
 .. code-block:: bash
 
-    pip install -e .
+    pip install -e .[dev]
 
 Then from any Python console or script, try:
 

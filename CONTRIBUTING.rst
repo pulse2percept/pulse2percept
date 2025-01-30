@@ -93,7 +93,7 @@ workflow similar to the following:
     This is now your own unique pulse2percept copy - changes here won't affect
     anyone else's work.
     Make sure to keep your code up-to-date
-    with the :ref:`upstream repository <install-upgrade>`.
+    with the upstream repository.
 
 4.  **Create a new branch**:
     You should always work on a `new branch`_ on your fork.
