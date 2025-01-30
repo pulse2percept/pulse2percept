@@ -57,7 +57,7 @@ predict the resulting visual percept
 (see :ref:`Computational Models <topics-models>`).
 
 Understanding the coordinate system (Retina)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The easiest way to understand the coordinate system is to look at the
 organization of the optic fiber layer:
@@ -80,7 +80,7 @@ Analogously, negative :math:`z` values move an electrode through the different
 retinal layers towards the outer retina.
 
 Understanding the ProsthesisSystem class
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The :py:class:`~pulse2percept.implants.ProsthesisSystem` base class provides
 a template for all prosthesis systems. It is comprised of:
@@ -178,7 +178,7 @@ dictated by the :py:class:`~pulse2percept.implants.ElectrodeArray` base class.
     *  :py:class:`~pulse2percept.implants.ElectrodeGrid`
 
 Understanding the ElectrodeArray class
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The :py:class:`~pulse2percept.implants.ElectrodeArray` base provides:
 
@@ -254,7 +254,7 @@ the electric potential at arbitrary 3D locations.
    *  :py:class:`~pulse2percept.implants.HexElectrode`
 
 Understanding the Electrode class
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The base class provides:
 
