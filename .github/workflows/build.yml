@@ -14,11 +14,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.13"]
-        os: [windows-latest]
+        python-version: ["3.13", "3.12", "3.11", "3.10", "3.9"]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         exclude:
-          - python-version: "3.9"
-            os: macos-latest  # Exclude Python 3.9 on macOS
+          - python-version: "3.9"  # Exclude Python 3.9 on macOS
+            os: macos-latest
+          - python-version: "3.13"  # Exclude Python 3.13 on Windows
+            os: windows-latest
       fail-fast: false
 
     steps:
@@ -53,9 +55,7 @@ jobs:
       - name: Install stable NumPy version (Windows/Python 3.13)
         if: runner.os == 'Windows' && matrix.python-version == '3.13'
         run: |
-          pip install --pre --upgrade "numpy<1.27" --only-binary ":all:"
-          pip install meson meson-python ninja
-
+          pip install --pre --upgrade numpy --only-binary ":all:"
 
       # Step 4: Install Python dependencies
       - name: Install Python dependencies
@@ -74,7 +74,7 @@ jobs:
         run: |
           pip uninstall -y pulse2percept || true
           python setup.py build_ext --inplace
-          python -m pip install --no-build-isolation ".[dev]"
+          python -m pip install ".[dev]"
       
       # Step 7: Log
       - name: Log environment info

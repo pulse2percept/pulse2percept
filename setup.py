@@ -5,17 +5,11 @@ import numpy
 import os
 import sys
 import platform
-import subprocess
-
-if platform.system() == "Windows" and sys.version_info >= (3, 13):
-    subprocess.run([sys.executable, "-m", "pip", "install", "--pre", "--upgrade", "numpy<1.27", "--only-binary=:all:"])
-    subprocess.run([sys.executable, "-m", "pip", "install", "meson", "meson-python", "ninja"])
-
 
 # Define supported configurations
 SUPPORTED_PYTHON_VERSIONS = {"3.9", "3.10", "3.11", "3.12", "3.13"}
 SUPPORTED_PLATFORMS = {"Linux", "Windows", "Darwin"}
-EXPLICITLY_UNSUPPORTED = {("Darwin", "3.9")}  # Specific exclusions
+EXPLICITLY_UNSUPPORTED = {("Darwin", "3.9"), ("Windows", "3.13")}  # Specific exclusions
 
 # Compatibility check
 def is_supported():
