@@ -14,11 +14,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.12", "3.11", "3.10", "3.9"]
+        python-version: ["3.13", "3.12", "3.11", "3.10", "3.9"]
         os: [ubuntu-latest, windows-latest, macos-latest]
         exclude:
-          - python-version: "3.9"
-            os: macos-latest  # Exclude Python 3.9 on macOS
+          - python-version: "3.9"  # Exclude Python 3.9 on macOS
+            os: macos-latest
+          - python-version: "3.13"  # Exclude Python 3.13 on Windows
+            os: windows-latest
       fail-fast: false
 
     steps:
@@ -49,32 +51,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
 
+      # Step 3c: NumPy workaround (Python 3.13 on Windows)
+      - name: Install stable NumPy version (Windows/Python 3.13)
+        if: runner.os == 'Windows' && matrix.python-version == '3.13'
+        run: |
+          pip install --pre --upgrade numpy --only-binary ":all:"
+
       # Step 4: Install Python dependencies
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip setuptools wheel build numpy Cython
+          python -m pip install --upgrade pip setuptools wheel build Cython
+          python -m pip install numpy
           
       # Step 5: lint
       - name: Lint with flake8
         run: |
           pip install flake8
           flake8 pulse2percept --ignore N802,N806,W504 --select W503 --count --show-source --statistics
-
-      # Step 6a: Install the package (Windows)
-      - name: Install package (Windows)
-        if: runner.os == 'windows-latest'
-        run: |
-          $env:INCLUDE = 'C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\ucrt'
-          $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\shared'
-          $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\um'
-          $env:LIB = 'C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\ucrt\x64'
-          $env:LIB += ';C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\um\x64'
-          $env:PATH += ';C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64'
-          pip install .[dev]
             
-      # Step 6b: Install the package (Non-Windows)
-      - name: Install package (Unix)
-        if: runner.os != 'windows-latest'
+      # Step 6b: Install the package
+      - name: Install package
         run: |
           pip uninstall -y pulse2percept || true
           python setup.py build_ext --inplace
