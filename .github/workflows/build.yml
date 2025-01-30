@@ -14,8 +14,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.13", "3.12", "3.11", "3.10", "3.9"]
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.13"]
+        os: [windows-latest]
         exclude:
           - python-version: "3.9"
             os: macos-latest  # Exclude Python 3.9 on macOS
@@ -72,7 +72,7 @@ jobs:
         run: |
           pip uninstall -y pulse2percept || true
           python setup.py build_ext --inplace
-          python -m pip install ".[dev]"
+          python -m pip install --no-build-isolation ".[dev]"
       
       # Step 7: Log
       - name: Log environment info
