@@ -51,15 +51,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
-
-      # Step 3a: Fix NumPy installation for Windows + Python 3.13
-      - name: Install NumPy workaround for Windows/Python 3.13
-        if: runner.os == 'Windows' && matrix.python-version == '3.13'
-        run: |
-          python -m pip install --upgrade --pre numpy
-          python -c "import numpy; print(numpy.__version__); print(numpy.__config__.show())"
           
-      # Step 3b: Build wheels using cibuildwheel
+      # Step 3: Build wheels using cibuildwheel
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22.0
         env:
@@ -77,8 +70,8 @@ jobs:
           # Pre-build steps
           CIBW_BEFORE_BUILD: "python -m pip install --upgrade pip setuptools wheel cython numpy"
           # Python versions to build for
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
-          # Skip specific wheels
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* cp313-*"
+          # Skip 32-bit wheels
           CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
 
       # Step 4: Upload the built wheels as artifacts

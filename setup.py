@@ -6,24 +6,29 @@ import os
 import sys
 import platform
 
+import platform
+import sys
+
 # Define supported configurations
-SUPPORTED_PYTHON_VERSIONS = ["3.9", "3.10", "3.11", "3.12"]
-SUPPORTED_PLATFORMS = ["Linux", "Windows", "Darwin"]
-UNSUPPORTED_CONFIGS = [
-    {"os": "Darwin", "python_version": "3.9"}  # macOS + Python 3.9
-]
+SUPPORTED_PYTHON_VERSIONS = {"3.9", "3.10", "3.11", "3.12", "3.13"}
+SUPPORTED_PLATFORMS = {"Linux", "Windows", "Darwin"}
+EXPLICITLY_UNSUPPORTED = {("Darwin", "3.9")}  # Specific exclusions
 
 # Compatibility check
 def is_supported():
     current_os = platform.system()
     current_python = f"{sys.version_info.major}.{sys.version_info.minor}"
+
+    # General support check
     if current_os not in SUPPORTED_PLATFORMS:
         return False, f"{current_os} is not a supported platform."
     if current_python not in SUPPORTED_PYTHON_VERSIONS:
         return False, f"Python {current_python} is not supported."
-    for config in UNSUPPORTED_CONFIGS:
-        if current_os == config["os"] and current_python == config["python_version"]:
-            return False, f"Python {current_python} is not supported on {current_os}."
+
+    # Check explicit unsupported combinations
+    if (current_os, current_python) in EXPLICITLY_UNSUPPORTED:
+        return False, f"Python {current_python} is explicitly not supported on {current_os}."
+
     return True, None
 
 # Check compatibility and warn if unsupported
