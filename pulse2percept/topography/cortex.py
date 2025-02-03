@@ -155,7 +155,7 @@ class Polimeni2006Map(CorticalMap):
         thetaV1 = self.alpha1 * theta
         zV1 = radius * np.exp(1j * thetaV1)
         wV1 = (self.k * np.log((zV1 + self.a) / (zV1 + self.b)) -
-               self.k * np.log(self.a/self.b))
+               self.k * np.log(self.a/self.b, dtype='float32'))
         xV1, yV1 = np.real(wV1), np.imag(wV1)
         xV1, yV1 = self.add_nans(xV1, yV1, theta, radius)
         xV1 *= 1000
@@ -177,7 +177,7 @@ class Polimeni2006Map(CorticalMap):
         thetaV2 = self.alpha2 * theta + np.sign(theta) * (phi2 + phi1)
         zV2 = -np.conj(radius * np.exp(1j * thetaV2))
         wV2 = (self.k * np.log((zV2 + self.a) / (zV2 + self.b)) -
-               self.k * np.log(self.a/self.b))
+               self.k * np.log(self.a/self.b, dtype='float32'))
         xV2, yV2 = np.real(wV2), np.imag(wV2)
         xV2, yV2 = self.add_nans(xV2, yV2, theta, radius, allow_zero=False)
         xV2 *= 1000
@@ -199,7 +199,7 @@ class Polimeni2006Map(CorticalMap):
         thetaV3 = self.alpha3 * theta + np.sign(theta) * (np.pi - phi1 - phi2)
         zV3 = radius * np.exp(1j * thetaV3)
         wV3 = (self.k * np.log((zV3 + self.a) / (zV3 + self.b)) -
-               self.k * np.log(self.a/self.b))
+               self.k * np.log(self.a/self.b, dtype='float32'))
         xV3, yV3 = np.real(wV3), np.imag(wV3)
         xV3, yV3 = self.add_nans(xV3, yV3, theta, radius, allow_zero=False)
         xV3 *= 1000
@@ -214,6 +214,7 @@ class Polimeni2006Map(CorticalMap):
         y /= 1000
         w = x + y*1j
         z = (self.a - self.a * np.exp(w/self.k)) / (self.a/self.b * np.exp(w/self.k) - 1)
+        z = z.astype('complex64')
         t1 = np.real(z)
         t2 = np.imag(z)
         r = np.sqrt(t1**2 + t2**2)
@@ -229,6 +230,7 @@ class Polimeni2006Map(CorticalMap):
         y /= 1000
         w = x + y * 1j
         z = (self.a - self.a*np.exp(w / self.k)) / (self.a/self.b * np.exp(w/self.k) - 1)
+        z = z.astype('complex64')
         re = np.real(z)
         im = np.imag(z)
         r = np.sqrt(re**2 + im**2)
@@ -247,6 +249,7 @@ class Polimeni2006Map(CorticalMap):
         y /= 1000
         w = x + y * 1j
         z = (self.a - self.a * np.exp(w/self.k)) / (self.a/self.b * np.exp(w/self.k) - 1)
+        z = z.astype('complex64')
         re, im = np.real(z), np.imag(z)
         r = np.sqrt(re**2 + im**2)
         thetav3 = np.arctan2(im,re)
