@@ -82,7 +82,7 @@ jobs:
 
       - name: Check if _fast_array.pyd exists
         run: |
-        Get-ChildItem pulse2percept/utils/
+          Get-ChildItem pulse2percept/utils/
 
       - name: Debug Import on Windows
         if: runner.os == 'Windows'
