@@ -38,6 +38,13 @@ autosummary_generate = True
 napoleon_numpy_docstring = True
 napoleon_use_param = True
 
+autodoc_default_options = {
+    'members': True,
+    'undoc-members': True,
+    'show-inheritance': True,
+    'special-members': '__init__',
+}
+
 # Math rendering
 extensions.append('sphinx.ext.mathjax')
 mathjax_path = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_SVG'
