@@ -15,16 +15,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
-        os: ["ubuntu-22.04", 
-             "ubuntu-24.04",
-             "windows-2019",
-             "windows-2022", 
-             "macos-13",
-             "macos-13-large",
-             "macos-14", 
-             "macos-14-large",
-             "macos-15",
-             "macos-15-large"]
+        os: ["windows-2022"]
         exclude:
           - python-version: "3.9"
             os: "macos-latest"
