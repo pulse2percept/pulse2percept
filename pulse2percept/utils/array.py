@@ -1,6 +1,6 @@
 """`is_strictly_increasing`, `sample`, `unique`, `radial_mask`"""
 
-from ._fast_array import fast_is_strictly_increasing
+from pulse2percept.utils._fast_array import fast_is_strictly_increasing
 import numpy as np
 
 
