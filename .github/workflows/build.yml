@@ -62,19 +62,15 @@ jobs:
 
       # Step 6a: Install the package (Windows)
       - name: Install package (Windows)
-        if: runner.os == 'windows-latest'
+        if: runner.os == 'Windows'
         run: |
-          $env:INCLUDE = 'C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\ucrt'
-          $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\shared'
-          $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\um'
-          $env:LIB = 'C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\ucrt\x64'
-          $env:LIB += ';C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\um\x64'
-          $env:PATH += ';C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64'
+          echo "Setting up MSVC environment..."
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           pip install .[dev]
             
       # Step 6b: Install the package (Non-Windows)
       - name: Install package (Unix)
-        if: runner.os != 'windows-latest'
+        if: runner.os != 'Windows'
         run: |
           pip uninstall -y pulse2percept || true
           python setup.py build_ext --inplace
