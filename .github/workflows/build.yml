@@ -18,7 +18,9 @@ jobs:
         os: ["ubuntu-latest", "windows-latest", "macos-latest", "macos-15"]
         exclude:
           - python-version: "3.9"
-            os: macos-latest  # Exclude Python 3.9 on macOS
+            os: "macos-latest"
+          - python-version: "3.9"
+            os: "macos-15"
       fail-fast: false
 
     steps:

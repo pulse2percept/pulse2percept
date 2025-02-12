@@ -1,11 +1,7 @@
-# distutils: language = c++
-# ^ needed for bool
+# distutils: language = c
 
-from libcpp cimport bool
-import numpy as np
 cimport numpy as cnp
-
 ctypedef cnp.float32_t float32
-ctypedef cnp.uint32_t uint32
+ctypedef Py_ssize_t index_t
 
-cpdef bool fast_is_strictly_increasing(float32[::1] a, float32[::1] b, float32 tol)
+cpdef bint fast_is_strictly_increasing(float32[::1] a, float32[::1] b, float32 tol)
