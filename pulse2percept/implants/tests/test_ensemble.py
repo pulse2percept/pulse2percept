@@ -135,13 +135,15 @@ def test_merge_stimuli():
 
     # biphasic pulse trains
     implant1 = Orion()
-    implant1.stim = {e : BiphasicPulseTrain(330, 1, .45) for e in implant1.electrode_names}
+    implant1.stim = {e : BiphasicPulseTrain(50, 1, .45) for e in implant1.electrode_names}
     implant2 = Orion(x=-35000)
     implant2.stim = {e : BiphasicPulseTrain(20, 2, .85) for e in implant2.electrode_names}
     implant = EnsembleImplant([implant1, implant2])
     npt.assert_equal(implant.stim.data.shape, (120, 471))
     # make sure that implant.metadata['electrodes'] is also merged
-    npt.assert_equal(list(implant.metadata['electrodes'].keys()), implant.electrode_names)
+    npt.assert_equal(list(implant.stim.metadata['electrodes'].keys()), implant.electrode_names)
+    npt.assert_equal(implant.stim.metadata['electrodes']['0-96'], implant1.stim.metadata['electrodes']['96'])
+    npt.assert_equal(implant.stim.metadata['electrodes']['1-96'], implant2.stim.metadata['electrodes']['96'])
 
     # with cortivis and orion
     implant = EnsembleImplant([Orion(stim=np.ones(60)),
@@ -150,6 +152,6 @@ def test_merge_stimuli():
 
     # make sure supplying stim still overrides individual implants
     implant = EnsembleImplant([Orion(stim=np.ones(60)*2),
-                               Orion(x=-35000, stim=np.ones(60)*2)], stim=np.ones(60)*3)
+                               Orion(x=-35000, stim=np.ones(60)*2)], stim=np.ones(120)*3)
     npt.assert_equal(implant.stim.data.shape, (120, 1))
     npt.assert_equal(implant.stim.data, 3)

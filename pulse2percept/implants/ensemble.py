@@ -223,7 +223,9 @@ class EnsembleImplant(ProsthesisSystem):
                     # Interpolate the stim data to new_times
                     new_stim = np.zeros((n_electrodes, len(new_times)))
                     for j in range(stim.data.shape[0]):  # Interpolate each electrode separately
-                        new_stim[j, :] = np.interp(new_times, t, stim.data[j, :])
+                        # if the stim ends, make it 0 instead of repeating the last value. Only interpolate
+                        # for the times that are in the original stim
+                        new_stim[j] = np.interp(new_times, t, stim.data[j], left=0, right=0)
                 
                 new_stims.append(new_stim)
             
