@@ -49,9 +49,13 @@ def check_windows_build_tools():
 class OpenMPBuildExt(build_ext):
     def build_extensions(self):
         for ext in self.extensions:
+            # Check if the extension has C++ sources
+            is_cpp = any(file.endswith(".cpp") or file.endswith(".cxx") for file in ext.sources)
+
             if sys.platform == "darwin":  # macOS
-                ext.extra_compile_args += ["-std=c++11", "-stdlib=libc++"]
-                ext.extra_link_args += ["-stdlib=libc++"]
+                if is_cpp:
+                    ext.extra_compile_args += ["-std=c++11", "-stdlib=libc++"]
+                    ext.extra_link_args += ["-stdlib=libc++"]
                 omp_include = os.popen("brew --prefix libomp").read().strip()
                 if omp_include:
                     ext.extra_compile_args += ["-Xclang", "-fopenmp", "-I" + omp_include + "/include"]
