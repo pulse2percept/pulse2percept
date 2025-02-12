@@ -1,10 +1,12 @@
+# distutils: language = c++
+# ^ needed for bool
+
+from pulse2percept.utils._fast_array cimport float32, uint32
+from libcpp cimport bool
 import numpy as np
 cimport numpy as cnp
 
-ctypedef cnp.float32_t float32
-ctypedef cnp.uint32_t uint32
-
-cpdef bint fast_is_strictly_increasing(float32[::1] a, float32[::1] b, float32 tol):
+cpdef bool fast_is_strictly_increasing(float32[::1] a, float32[::1] b, float32 tol):
     cdef:
         uint32 i, arr_len
     arr_len = len(a)
