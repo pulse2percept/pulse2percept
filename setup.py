@@ -2,6 +2,7 @@ import os
 import sys
 import platform
 import shutil
+import subprocess
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 from Cython.Build import cythonize
@@ -47,6 +48,8 @@ def check_windows_build_tools():
             sys.exit(1)
 
 class OpenMPBuildExt(build_ext):
+    """Custom build extension class to handle OpenMP settings conditionally."""
+    
     def build_extensions(self):
         for ext in self.extensions:
             # Check if the extension has C++ sources
@@ -56,25 +59,29 @@ class OpenMPBuildExt(build_ext):
                 if is_cpp:
                     ext.extra_compile_args += ["-std=c++11", "-stdlib=libc++"]
                     ext.extra_link_args += ["-stdlib=libc++"]
-                omp_include = os.popen("brew --prefix libomp").read().strip()
-                if omp_include:
-                    ext.extra_compile_args += ["-Xclang", "-fopenmp", "-I" + omp_include + "/include"]
-                    ext.extra_link_args += ["-L" + omp_include + "/lib", "-lomp"]
-                else:
-                    print("Warning: OpenMP is not installed. Compiling without OpenMP support.")
+                
+                try:
+                    omp_prefix = subprocess.check_output(["brew", "--prefix", "libomp"], text=True).strip()
+                    ext.extra_compile_args += ["-Xclang", "-fopenmp", f"-I{omp_prefix}/include"]
+                    ext.extra_link_args += [f"-L{omp_prefix}/lib", "-lomp"]
+                except subprocess.CalledProcessError:
+                    print("Warning: OpenMP not found via Homebrew. Compiling without OpenMP support.")
+
             elif os.name == "posix":  # Linux
                 try:
                     ext.extra_compile_args += ["-fopenmp"]
                     ext.extra_link_args += ["-fopenmp"]
                 except RuntimeError:
                     print("Warning: OpenMP not supported on this platform. Compiling without OpenMP.")
+
             elif os.name == "nt":  # Windows
                 ext.extra_compile_args += ["/openmp"]
                 ext.extra_link_args += ["vcomp.lib"]
+
             else:
                 print("Warning: OpenMP not supported on this platform. Compiling without OpenMP.")
-        super().build_extensions()
 
+        super().build_extensions()
 
 def find_pyx_modules(base_dir, exclude_dirs=None):
     """Recursively find all `.pyx` files for Cython compilation."""
@@ -115,6 +122,9 @@ cython_extensions = find_pyx_modules("pulse2percept")
 
 for ext in cython_extensions:
     ext.define_macros = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
+    # Force C++ compilation if the file requires it
+    if any(file.endswith(".cpp") or file.endswith(".cxx") or file.endswith(".pyx") for file in ext.sources):
+        ext.language = "c++"
 
 setup(
     ext_modules=cythonize(
