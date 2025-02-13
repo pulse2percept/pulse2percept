@@ -38,7 +38,7 @@ jobs:
           cd llvm-project/openmp
           mkdir build
           cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -G Ninja
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$HOME/.local -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -G Ninja
           ninja
           ninja install
         env:
@@ -55,11 +55,12 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22.0
         env:
-          # MacOS-specific OpenMP settings
+          # macOS-specific OpenMP settings (Point to locally built OpenMP)
           MACOSX_DEPLOYMENT_TARGET: "11.0"
           CIBW_ENVIRONMENT_MACOS: |
-            CFLAGS="-std=c99 -mmacosx-version-min=11.0"
-            LDFLAGS="-mmacosx-version-min=11.0 -lomp"
+            CFLAGS="-std=c99 -mmacosx-version-min=11.0 -I$HOME/.local/include"
+            LDFLAGS="-L$HOME/.local/lib -mmacosx-version-min=11.0 -lomp"
+            PATH="$HOME/.local/bin:$PATH"
           # Linux-specific OpenMP settings
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"
           # Windows-specific OpenMP settings
