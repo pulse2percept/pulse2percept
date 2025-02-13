@@ -171,6 +171,8 @@ class Stimulus(PrettyPrint):
     3.45...
 
     """
+    __module__ = "pulsepercept.stimuli"
+
     # Frozen class: Only the following class attributes are allowed
     __slots__ = ('metadata', '_is_compressed', '__stim')
 

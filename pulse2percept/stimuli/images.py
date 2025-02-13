@@ -349,23 +349,24 @@ class ImageStimulus(Stimulus):
 
             *  'mean': Threshold image based on the mean of grayscale values.
             *  'minimum': Threshold image based on the minimum method, where
-                          the histogram of the input image is computed and
-                          smoothed until there are only two maxima.
-            *  'local': Threshold image based on `local pixel neighborhood
-                        <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_local>_.
-                        Requires ``block_size``: odd number of pixels in the
-                        neighborhood.
-            *  'otsu': `Otsu's method
-                       <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_otsu>_
-            *  'isodata': `ISODATA method
-                          <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_isodata>`_,
-                          also known as the Ridler-Calvard method or
-                          intermeans.
+            the histogram of the input image is computed and smoothed
+            until there are only two maxima.
+            *  'local': Threshold image based on `local pixel neighborhood`_
+            Requires ``block_size``: odd number of pixels in the neighborhood.
+            *  'otsu': `Otsu's method`_
+            *  'isodata': `ISODATA method`_
 
         Returns
         -------
         stim : `ImageStimulus`
             A copy of the stimulus object with two gray levels 0.0 and 1.0
+
+        .. _local pixel neighborhood:
+           https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_local
+        .. _Otsu's method:
+           https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_otsu
+        .. _ISODATA method:
+           https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_isodata
         """
         if len(self.img_shape) > 2:
             raise ValueError("Thresholding is only supported for grayscale "

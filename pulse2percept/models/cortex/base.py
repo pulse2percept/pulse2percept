@@ -1,19 +1,20 @@
 """`CortexSpatial`, `ScoreboardSpatial`, `ScoreboardModel`"""
-
 from ..base import Model, SpatialModel
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
 from ...utils.constants import ZORDER
 import numpy as np
 
+
 class CortexSpatial(SpatialModel):
     """Abstract base class for cortical models
     
     This is an abstract class that cortical models can subclass
     to get cortical implementation of the following features. 
-    1) Updated default parameters for cortex
-    2) Handling of multiple visual regions via regions property
-    3) Plotting, including multiple visual regions, legends, vertical 
+
+    *  Updated default parameters for cortex
+    *  Handling of multiple visual regions via regions property
+    *  Plotting, including multiple visual regions, legends, vertical 
        divide at longitudinal fissure, etc.
 
     Parameters:
@@ -57,6 +58,7 @@ class CortexSpatial(SpatialModel):
         Defaults to max number of user CPU cores.
 
     .. important ::
+    
         If you change important model parameters outside the constructor (e.g.,
         by directly setting ``model.xrange = (-10, 10)``), you will have to call
         ``model.build()`` again for your changes to take effect.
@@ -105,6 +107,7 @@ class CortexSpatial(SpatialModel):
     def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
              figsize=None, fc=None, **kwargs):
         """Plot the model
+
         Parameters
         ----------
         use_dva : bool, optional
@@ -129,6 +132,7 @@ class CortexSpatial(SpatialModel):
             matplotlib color cycle.
         kwargs : dict, optional
             Additional keyword arguments are passed on to Grid2D.plot()
+
         Returns
         -------
         ax : ``matplotlib.axes.Axes``
@@ -337,6 +341,7 @@ class ScoreboardModel(Model):
         Defaults to max number of user CPU cores.
 
     .. important ::
+
         If you change important model parameters outside the constructor (e.g.,
         by directly setting ``model.xrange = (-10, 10)``), you will have to call
         ``model.build()`` again for your changes to take effect.

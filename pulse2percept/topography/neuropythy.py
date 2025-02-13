@@ -9,8 +9,8 @@ class NeuropythyMap(CorticalMap):
     split_map = False
 
     def __init__(self, subject, cache_dir=None, **params):
-        """
-        Uses the visual field maps from the neuropythy package.
+        """Uses the visual field maps from the neuropythy package.
+
         Requires the neuropythy package to be installed (`pip install neuropythy`)
 
         Parameters
@@ -142,6 +142,8 @@ class NeuropythyMap(CorticalMap):
     def dva_to_cortex(self, x, y, region='v1', hemi=None, surface='midgray'):
         """Gives the cortex position(s) of the visual field point(s) `(x,y)`.
 
+        Adapted from code courtesy of Noah Benson
+
         Parameters
         ----------
         x, y : float or array_like
@@ -161,8 +163,6 @@ class NeuropythyMap(CorticalMap):
             cortical addresses of the visual field points (cortical addresses 
             provide the face containing a point and the barycentric coordinates 
             of the point within that face).
-
-        Adapted from code courtesy of Noah Benson
         """
         if x is None or y is None or x.size==0 or y.size==0:
             return np.array([]), np.array([]), np.array([])

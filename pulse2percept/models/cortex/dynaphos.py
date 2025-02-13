@@ -10,10 +10,12 @@ from ...utils import cart2pol
 from ...utils.constants import ZORDER
 from ...topography import Polimeni2006Map
 
+
 class DynaphosModel(BaseModel):
     """Adaptation of the Dynaphos model from [Grinten2023]_
 
-    The original and official implementation is available at https://github.com/neuralcodinglab/dynaphos.
+    The original and official implementation is available at 
+    https://github.com/neuralcodinglab/dynaphos.
 
     Implements the Dynaphos model. Percepts from each
     electrode are Gaussian blobs, with the size dictated by a magnification factor
@@ -74,7 +76,6 @@ class DynaphosModel(BaseModel):
         frame. A float between 0 and 1 will be interpreted as a ratio of 
         pixels to subject to noise in each frame.
 
-        
     .. important ::
     
         If you change important model parameters outside the constructor (e.g.,
@@ -371,6 +372,7 @@ class DynaphosModel(BaseModel):
     def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
              figsize=None, fc=None):
         """Plot the model
+
         Parameters
         ----------
         use_dva : bool, optional
@@ -390,6 +392,7 @@ class DynaphosModel(BaseModel):
             (if exists) or create a new Axes object.
         figsize : (float, float), optional
             Desired (width, height) of the figure in inches
+            
         Returns
         -------
         ax : ``matplotlib.axes.Axes``

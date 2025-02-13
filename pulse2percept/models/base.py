@@ -33,6 +33,7 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
        (enforced via ``Frozen`` and ``FreezeError``).
 
     """
+    __module__ = "pulsepercept.models"
 
     def __init__(self, **params):
         """BaseModel constructor
@@ -217,6 +218,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         *  `Basic Concepts > Computational Models > Building your own model
            <topics-models-building-your-own>`
     """
+    __module__ = "pulsepercept.models"
 
     def __init__(self, **params):
         super().__init__(**params)
@@ -519,6 +521,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         *  `Basic Concepts > Computational Models > Building your own model
            <topics-models-building-your-own>`
     """
+    __module__ = "pulsepercept.models"
 
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
@@ -719,6 +722,7 @@ class Model(PrettyPrint):
         either the spatial model, the temporal model, or both.
 
     """
+    __module__ = "pulsepercept.models"
 
     def __init__(self, spatial=None, temporal=None, **params):
         # Set the spatial model:

@@ -1,8 +1,4 @@
-"""
-`Grid2D`, `VisualFieldMap`
-
-"""
-
+"""`Grid2D`, `VisualFieldMap`"""
 import numpy as np
 from abc import ABCMeta, abstractmethod
 from scipy.spatial import ConvexHull
@@ -21,8 +17,8 @@ from ..models import BaseModel
 
 
 class CoordinateGrid:
-        """
-        Datatype for storing a grid of coordinates
+        """Datatype for storing a grid of coordinates
+        
         Basically an overriden namedtuple with custom __eq__ method
         """
         x : np.ndarray
@@ -57,6 +53,7 @@ class CoordinateGrid:
             if self.z is not None:
                 return f"CoordinateGrid(x={self.x}, y={self.y}, z={self.z})"
             return f"CoordinateGrid(x={self.x}, y={self.y})"
+
 
 class Grid2D(PrettyPrint):
     """2D spatial grid
@@ -429,9 +426,10 @@ class Grid2D(PrettyPrint):
     
     def plot3D(self, style='scatter', ax=None, surface='midgray', color_by='region',
                **kwargs):
-        """
-        Plots grid points in 3D space.
+        """Plots grid points in 3D space.
+
         Note, you must have a 3D visual field map to use this method.
+        
         Parameters
         ----------
         style : {'scatter', 'cell'}, optional
@@ -539,10 +537,6 @@ class Grid2D(PrettyPrint):
         
         return ax
 
-        
-            
-
-
     
     def __deepcopy__(self, memodict={}):
         if id(self) in memodict:
@@ -553,8 +547,7 @@ class Grid2D(PrettyPrint):
         return copied
 
     def __eq__(self, other):
-        """
-        Equality operator for Grid2D.
+        """Equality operator for Grid2D.
 
         Parameters
         ----------
@@ -618,8 +611,7 @@ class VisualFieldMap(BaseModel):
         }
 
     def __eq__(self, other):
-        """
-        Equality operator for VisualFieldMap.
+        """Equality operator for VisualFieldMap.
 
         Parameters
         ----------

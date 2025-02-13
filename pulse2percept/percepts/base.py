@@ -43,6 +43,7 @@ class Percept(Data):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     """
+    __module__ = "pulsepercept.percepts"
 
     def __init__(self, data, space=None, time=None, metadata=None, n_gray=None,
                  noise=None):
