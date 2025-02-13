@@ -14,37 +14,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version:
-          - "3.9"
+        python-version: # old & new
           - "3.10"
-          - "3.11"
           - "3.12"
-        os:  # https://github.com/actions/runner-images/tree/main
-          - "windows-2019"
-          - "windows-2022" 
-          - "windows-2025"
-          - "macos-13"
-          - "macos-13-xlarge"
-          - "macos-14"
-          - "macos-14-large"
-          - "macos-15"
-          - "macos-15-large"
-          - "ubuntu-22.04"
-          - "ubuntu-24.04"
-        exclude:
-          - python-version: "3.9"
-            os: "macos-13"
-          - python-version: "3.9"
-            os: "macos-13-xlarge"
-          - python-version: "3.9"
-            os: "macos-14"
-          - python-version: "3.9"
-            os: "macos-14-large"
-          - python-version: "3.9"
-            os: "macos-15"
-          - python-version: "3.9"
-            os: "macos-15-large"
-      fail-fast: false
+        os:  # latest, for all see https://github.com/actions/runner-images/tree/main
+          - "windows-latest"
+          - "macos-latest"
+          - "macos-latest-large"
+          - "ubuntu-latest"
+      fail-fast: true
 
     steps:
       # Step 1: Check out the repository
@@ -92,18 +70,6 @@ jobs:
         run: |
           python setup.py build_ext --inplace
           python -m pip install ".[dev]"
-
-      - name: Check if _fast_array.pyd exists
-        run: |
-          Get-ChildItem pulse2percept/utils/
-
-      - name: Debug Import on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          python -c "import pulse2percept.utils._fast_math"
-          python -c "import pulse2percept.utils._fast_array"
-
             
       # Step 6b: Install the package (Non-Windows)
       - name: Install package (Unix)
