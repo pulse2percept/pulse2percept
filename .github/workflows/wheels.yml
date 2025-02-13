@@ -18,33 +18,33 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os:
-          - "ubuntu-latest"
-          - "ubuntu-24.04-arm"
-          - "windows-latest"
-          - "macos-13"
-          - "macos-14"
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       # Step 1: Check out the repository
       - uses: actions/checkout@v4
 
-      # Step 2a: Install dependencies (MacOS) and build OpenMP
-      - name: Install dependencies (MacOS)
+      # Step 2a: Install dependencies (macOS only)
+      - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install cmake ninja
-          git clone https://github.com/llvm/llvm-project.git --depth=1
-          cd llvm-project/openmp
-          mkdir build
-          cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$HOME/.local -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -G Ninja
-          ninja
-          ninja install
+          brew install libomp llvm
+          export PATH="$(brew --prefix llvm)/bin:$PATH"
+          export CC="$(brew --prefix llvm)/bin/clang"
+          export CXX="$(brew --prefix llvm)/bin/clang++"
+          export CPPFLAGS="-I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
+          export LDFLAGS="-L$(brew --prefix llvm)/lib -L$(brew --prefix libomp)/lib -lomp"
         env:
-          MACOSX_DEPLOYMENT_TARGET: "11.0"
+          # Override flags for Python 3.9 to resolve `faltivec` issues
+          CFLAGS: >
+            -std=c99 -maltivec
+            -I$(brew --prefix llvm)/include
+            -I$(brew --prefix libomp)/include
+          LDFLAGS: >
+            -L$(brew --prefix llvm)/lib
+            -L$(brew --prefix libomp)/lib -lomp
 
-      # Step 2b: Install dependencies (Linux)
+      # Step 2b: Install dependencies (Linux only)
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -55,13 +55,13 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22.0
         env:
-          # Ensure we use the manually built OpenMP
-          MACOSX_DEPLOYMENT_TARGET: "11.0"
+          # macOS-specific OpenMP settings
           CIBW_ENVIRONMENT_MACOS: |
-            OMP_PATH=$HOME/.local
-            CFLAGS="-std=c99 -mmacosx-version-min=11.0 -I$OMP_PATH/include -Xclang -fopenmp"
-            LDFLAGS="-L$OMP_PATH/lib -mmacosx-version-min=11.0 -Wl,-rpath,$OMP_PATH/lib -Wl,-rpath,@loader_path/../.dylibs -lomp"
-            PATH="$OMP_PATH/bin:$PATH"
+            CFLAGS="-std=c99 -maltivec -I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
+            LDFLAGS="-L$(brew --prefix llvm)/lib -L$(brew --prefix libomp)/lib -lomp"
+            PATH="$(brew --prefix llvm)/bin:$PATH"
+            CC="$(brew --prefix llvm)/bin/clang"
+            CXX="$(brew --prefix llvm)/bin/clang++"
           # Linux-specific OpenMP settings
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"
           # Windows-specific OpenMP settings
@@ -70,11 +70,11 @@ jobs:
           CIBW_BEFORE_BUILD: "python -m pip install --upgrade pip setuptools wheel cython numpy"
           # Python versions to build for
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
-          # Skip specific wheels (No Python 3.9 on macOS)
+          # Skip specific wheels
           CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux* cp39-macosx_*"
 
       # Step 4: Upload the built wheels as artifacts
       - uses: actions/upload-artifact@v4
         with:
-          name: cibw-wheels-${{ matrix.os }}
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
           path: ./wheelhouse/*.whl
