@@ -6,8 +6,4 @@ API Reference
 
 .. currentmodule:: pulse2percept
 
-.. autosummary::
-   :toctree: _autosummary
-   :recursive:
-
-   pulse2percept
+.. automodule:: pulse2percept

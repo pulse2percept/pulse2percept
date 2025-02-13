@@ -4,7 +4,10 @@ import sphinx_gallery
 from sphinx_gallery.sorting import ExplicitOrder
 import sphinx_rtd_theme
 
-# Ensure paths are set correctly
+# If extensions (or modules to document with autodoc) are in another
+# directory, add these directories to sys.path here. If the directory
+# is relative to the documentation root, use os.path.abspath to make it
+# absolute, like shown here.
 sys.path.insert(0, os.path.abspath('_ext'))
 
 from github_link import make_linkcode_resolve
@@ -25,7 +28,7 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.linkcode',
     'sphinx.ext.todo',
-    'sphinx_gallery.gen_gallery',
+    # 'sphinx_gallery.gen_gallery',
     'versionwarning.extension',
     'IPython.sphinxext.ipython_directive',
     'IPython.sphinxext.ipython_console_highlighting',
@@ -35,19 +38,33 @@ extensions = [
 
 # Autosummary & Napoleon settings
 autosummary_generate = True
-napoleon_numpy_docstring = True
-napoleon_use_param = True
-
 autodoc_default_options = {
-    'members': True,
-    'undoc-members': True,
-    'show-inheritance': True,
-    'special-members': '__init__',
+    'members': None,
+    'member-order': 'bysource',
+    'inherited-members': None
 }
+napoleon_google_docstring = False  # force consistency
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = False
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = False
+napoleon_use_admonition_for_examples = False
+napoleon_use_admonition_for_notes = False
+napoleon_use_admonition_for_references = False
+napoleon_use_ivar = False
+napoleon_use_param = True
+napoleon_use_rtype = False
 
 # Math rendering
-extensions.append('sphinx.ext.mathjax')
-mathjax_path = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_SVG'
+# For maths, use mathjax by default and svg if NO_MATHJAX env variable is set
+# (useful for viewing the doc offline)
+if os.environ.get('NO_MATHJAX'):
+    extensions.append('sphinx.ext.imgmath')
+    imgmath_image_format = 'svg'
+else:
+    extensions.append('sphinx.ext.mathjax')
+    mathjax_path = ('https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/'
+                    'MathJax.js?config=TeX-AMS_SVG')
 
 # Source files and paths
 templates_path = ['_templates']
@@ -68,7 +85,11 @@ intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
 sphinx_gallery_conf = {
     'examples_dirs': ['../examples'],
     'gallery_dirs': ['examples'],
+    'backreferences_dir': '_api',
+    'doc_module': 'pulse2percept',
     'reference_url': {'pulse2percept': None},
+    'remove_config_comments': True,
+    'thumbnail_size': (320, 224),
     'subsection_order': ExplicitOrder([
         '../examples/implants',
         '../examples/stimuli',

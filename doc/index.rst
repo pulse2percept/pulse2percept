@@ -3,7 +3,8 @@
 .. toctree::
    :caption: First steps
    :hidden:
-
+   :maxdepth: 1
+   
    Overview <self>
    install
    examples/index
