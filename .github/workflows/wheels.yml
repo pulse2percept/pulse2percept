@@ -18,8 +18,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ["ubuntu-latest", "windows-latest", "macos-latest", "macos-15"]
-        python-version: ["3.12", "3.11", "3.10", "3.9"]
+        python-version:
+          - "3.9"
+          - "3.10"
+          - "3.11"
+          - "3.12"
+        os:  # latest, for all see https://github.com/actions/runner-images/tree/main
+          - "windows-2019"
+          - "windows-2022"
+          - "windows-2025"
+          - "macos-13"
+          - "macos-14"
+          - "macos-15"
+          - "ubuntu-20.04"
+          - "ubuntu-22.04"
+          - "ubuntu-24.04"
 
     steps:
       # Step 1: Check out the repository
