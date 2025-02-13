@@ -1,5 +1,4 @@
-"""`BarStimulus`, `GratingStimulus`"""
-
+"""`GratingStimulus`, `BarStimulus`"""
 import numpy as np
 
 from .videos import VideoStimulus

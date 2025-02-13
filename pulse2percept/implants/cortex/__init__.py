@@ -1,7 +1,8 @@
 """`Orion`, `Cortivis`, `ICVP`, `EllipsoidElectrode`, `NeuralinkThread`, `LinearEdgeThread`, `Neuralink`
 
 .. autosummary::
-    : toctree: _api
+    :toctree: _api
+    :no-index:
 
     orion
     cortivis

@@ -1,4 +1,4 @@
-"""`PulseTrain`, `BiphasicPulseTrain`, `AsymmetricBiphasicPulseTrain`"""
+"""`PulseTrain`, `BiphasicPulseTrain`, `AsymmetricBiphasicPulseTrain`, `BiphasicTripletTrain`"""
 import numpy as np
 import logging
 

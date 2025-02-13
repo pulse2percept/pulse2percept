@@ -4,6 +4,7 @@ Computational models of the prosthetic vision, such as phosphene and neural resp
 
 .. autosummary::
     :toctree: _api
+    :no-index:
 
     cortex
     base

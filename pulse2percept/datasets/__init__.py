@@ -7,6 +7,7 @@
 
 .. autosummary::
     :toctree: _api
+    :no-index:
 
     base
     horsager2009

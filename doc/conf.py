@@ -41,8 +41,10 @@ autosummary_generate = True
 autodoc_default_options = {
     'members': None,
     'member-order': 'bysource',
-    'inherited-members': None
+    'inherited-members': None,
+    "imported-members": False,  # Don't document functions that were imported
 }
+autodoc_preserve_defaults = True
 napoleon_google_docstring = False  # force consistency
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False

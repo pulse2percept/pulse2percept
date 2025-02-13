@@ -2,6 +2,7 @@
 
 .. autosummary::
     :toctree: _api
+    :no-index:
 
     base
     dynaphos

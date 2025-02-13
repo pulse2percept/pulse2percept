@@ -1,4 +1,4 @@
-"""`Stimulus`, `ImageStimulus`"""
+"""`Stimulus`"""
 import warnings
 from ..utils import PrettyPrint, unique, is_strictly_increasing
 from ..utils.constants import DT, MIN_AMP
