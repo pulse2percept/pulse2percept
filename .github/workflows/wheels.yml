@@ -1,3 +1,17 @@
+name: Wheels
+
+on:
+  push:
+    branches:
+      - master
+      - torch
+    tags:
+      - v*
+  pull_request:
+    branches:
+      - master
+      - torch
+
 jobs:
   build_wheels:
     name: Wheels on ${{ matrix.os }}
