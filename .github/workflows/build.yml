@@ -65,9 +65,8 @@ jobs:
       # Step 6a: Install the package (Windows)
       - name: Install package (Windows)
         if: runner.os == 'Windows'
-        shell: cmd
+        shell: pwsh
         run: |
-          "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           python setup.py build_ext --inplace
           python -m pip install ".[dev]"
 
