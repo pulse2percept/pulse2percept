@@ -24,27 +24,7 @@ jobs:
       # Step 1: Check out the repository
       - uses: actions/checkout@v4
 
-      # Step 2a: Install dependencies (macOS only)
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install libomp llvm
-          export PATH="$(brew --prefix llvm)/bin:$PATH"
-          export CC="$(brew --prefix llvm)/bin/clang"
-          export CXX="$(brew --prefix llvm)/bin/clang++"
-          export CPPFLAGS="-I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
-          export LDFLAGS="-L$(brew --prefix llvm)/lib -L$(brew --prefix libomp)/lib -lomp"
-        env:
-          # Override flags for Python 3.9 to resolve `faltivec` issues
-          CFLAGS: >
-            -std=c99 -maltivec
-            -I$(brew --prefix llvm)/include
-            -I$(brew --prefix libomp)/include
-          LDFLAGS: >
-            -L$(brew --prefix llvm)/lib
-            -L$(brew --prefix libomp)/lib -lomp
-
-      # Step 2b: Install dependencies (Linux only)
+      # Step 2: Install dependencies (Linux only)
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
