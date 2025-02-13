@@ -133,11 +133,11 @@ setup(
     ext_modules=cythonize(
         cython_extensions,
         compiler_directives={
-            "language_level": 3,
-            "boundscheck": False,
-            "wraparound": False,
-            "cdivision": True,
-            "initializedcheck": False,
+            "language_level": 3,        # Use Python 3 syntax
+            "boundscheck": False,       # Disable bounds checking for arrays
+            "wraparound": False,        # Disable negative indexing
+            "cdivision": True,          # Optimize division operations
+            "initializedcheck": False,  # Skip uninitialized variables check
         },
     ),
     cmdclass={"build_ext": OpenMPBuildExt},
