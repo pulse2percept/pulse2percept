@@ -30,7 +30,7 @@ jobs:
 
       # Step 2a: Install dependencies (macOS only)
       - name: Install dependencies (macOS)
-        if: runner.os == 'macos-latest'
+        if: runner.os == 'macOS'
         run: |
           brew install libomp llvm
           export PATH="$(brew --prefix llvm)/bin:$PATH"
