@@ -18,7 +18,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-13, macos-14]
+        os:
+          - "ubuntu-latest"
+          - "ubuntu-24.04-arm"
+          - "windows-latest"
+          - "macos-13"
+          - "macos-14"
     steps:
       # Step 1: Check out the repository
       - uses: actions/checkout@v4
@@ -70,7 +75,7 @@ jobs:
           # Python versions to build for
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
           # Skip specific wheels
-          CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
+          CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux* cp39-macosx_*"
 
       # Step 4: Upload the built wheels as artifacts
       - uses: actions/upload-artifact@v4
