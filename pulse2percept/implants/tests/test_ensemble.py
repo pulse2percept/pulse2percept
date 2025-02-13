@@ -2,9 +2,10 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 from pulse2percept.implants import (EnsembleImplant, PointSource, ProsthesisSystem)
-from pulse2percept.implants.cortex import Cortivis
+from pulse2percept.implants.cortex import Cortivis, Orion
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.models.cortex.base import ScoreboardModel
+from pulse2percept.stimuli import BiphasicPulseTrain
 
 def test_EnsembleImplant():
     # Invalid instantiations:
@@ -107,3 +108,50 @@ def test_from_cortical_map():
     npt.assert_approx_equal(ensemble['2-1'].x, c2['1'].x, 5)
     npt.assert_approx_equal(ensemble['2-1'].y, c2['1'].y, 5)
     npt.assert_approx_equal(ensemble['2-1'].z, c2['1'].z, 5)
+
+
+def test_merge_stimuli():
+    implant = EnsembleImplant([Orion(),
+                               Orion(x=-35000)])
+    npt.assert_equal(implant.stim is None, True)
+    implant = EnsembleImplant([Orion(stim=np.ones(60)),
+                               Orion(x=-35000)])
+    npt.assert_equal(implant.stim.data.shape, (120, 1))
+    npt.assert_equal(implant.stim.electrodes, implant.electrode_names)
+    implant = EnsembleImplant([Orion(stim=np.ones(60)),
+                               Orion(x=-35000, stim=np.ones(60)*2)])
+    npt.assert_equal(implant.stim.data.shape, (120, 1))
+    npt.assert_equal(implant.stim.electrodes, implant.electrode_names)
+    npt.assert_equal(implant.stim.data[:60], 1)
+    npt.assert_equal(implant.stim.data[60:], 2)
+
+    # with time 
+    implant = EnsembleImplant([Orion(stim=np.ones((60, 5))),
+                               Orion(x=-35000, stim=np.ones((60, 2))*2)])
+    npt.assert_equal(implant.stim.data.shape, (120, 5))
+    npt.assert_equal(implant.stim.data[:60], 1)  
+    npt.assert_equal(implant.stim.data[60:, :2], 2)
+    npt.assert_equal(implant.stim.data[60:, 2:], 0)
+
+    # biphasic pulse trains
+    implant1 = Orion()
+    implant1.stim = {e : BiphasicPulseTrain(50, 1, .45) for e in implant1.electrode_names}
+    implant2 = Orion(x=-35000)
+    implant2.stim = {e : BiphasicPulseTrain(20, 2, .85) for e in implant2.electrode_names}
+    implant = EnsembleImplant([implant1, implant2])
+    npt.assert_equal(implant.stim.data.shape, (120, 471))
+    # make sure that implant.metadata['electrodes'] is also merged
+    npt.assert_equal(list(implant.stim.metadata['electrodes'].keys()), implant.electrode_names)
+    npt.assert_equal(implant.stim.metadata['electrodes']['0-96'], implant1.stim.metadata['electrodes']['96'])
+    npt.assert_equal(implant.stim.metadata['electrodes']['1-96'], implant2.stim.metadata['electrodes']['96'])
+
+    # with cortivis and orion
+    implant = EnsembleImplant([Orion(stim=np.ones(60)),
+                                 Cortivis(x=10000, stim=np.ones(96)*2)])
+    npt.assert_equal(implant.stim.data.shape, (156, 1))
+
+    # make sure supplying stim still overrides individual implants
+    implant = EnsembleImplant([Orion(stim=np.ones(60)*2),
+                               Orion(x=-35000, stim=np.ones(60)*2)], stim=np.ones(120)*3)
+    npt.assert_equal(implant.stim.data.shape, (120, 1))
+    npt.assert_equal(implant.stim.data, 3)
