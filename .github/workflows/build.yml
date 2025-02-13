@@ -20,17 +20,17 @@ jobs:
           - "3.11"
           - "3.12"
         os:  # https://github.com/actions/runner-images/tree/main
-          - "windows-2019", 
-          - "windows-2022", 
-          - "windows-2025",
-          - "macos-13",
-          - "macos-13-xlarge",
-          - "macos-14",
-          - "macos-14-large",
-          - "macos-15",
-          - "macos-15-large",
-          - "ubuntu-22.04",
-          - "ubuntu-24.04",
+          - "windows-2019"
+          - "windows-2022" 
+          - "windows-2025"
+          - "macos-13"
+          - "macos-13-xlarge"
+          - "macos-14"
+          - "macos-14-large"
+          - "macos-15"
+          - "macos-15-large"
+          - "ubuntu-22.04"
+          - "ubuntu-24.04"
         exclude:
           - python-version: "3.9"
             os: "macos-13"
