@@ -93,7 +93,7 @@ def find_pyx_modules(base_dir, exclude_dirs=None):
 cython_extensions = find_pyx_modules("pulse2percept")
 
 for ext in cython_extensions:
-    ext.define_macros = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
+    ext.define_macros = [("NPY_NO_DEPRECATED_API", "NPY_2_0_API_VERSION")]
 
 setup(
     ext_modules=cythonize(
