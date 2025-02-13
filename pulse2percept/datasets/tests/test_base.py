@@ -34,18 +34,12 @@ def test_data_dir(tmp_data_dir):
 
 
 def test_fetch_url(tmp_data_dir):
-    url1 = 'https://www.nature.com/articles/s41598-019-45416-4.pdf'
-    file_path1 = os.path.join(tmp_data_dir, 'paper1.pdf')
-    paper_checksum1 = 'e8a2db25916cdd15a4b7be75081ef3e57328fa5f335fb4664d1fb7090dcd6842'
-    fetch_url(url1, file_path1, remote_checksum=paper_checksum1)
-    npt.assert_equal(os.path.exists(file_path1), True)
-
-    url2 = 'https://bionicvisionlab.org/publications/2019-optimal-surgical-placement/2019-optimal-surgical-placement.pdf'
-    file_path2 = os.path.join(tmp_data_dir, 'paper2.pdf')
-    paper_checksum2 = 'e2d0cbecc9c2826f66f60576b44fe18ad6a635d394ae02c3f528b89cffcd9450'
+    url = 'https://bionicvisionlab.org/publications/2017-pulse2percept/2017-pulse2percept.pdf'
+    file_path = os.path.join(tmp_data_dir, 'paper2.pdf')
+    paper_checksum = '21fd40c6a3f6ae4f09838dc972b5caa5a7d5448bdced454285d2a5fa6cf0cf49'
     # Use wrong checksum:
     with pytest.raises(IOError):
-        fetch_url(url2, file_path2, remote_checksum=paper_checksum1)
+        fetch_url(url, file_path, remote_checksum='abcdef')
     # Use correct checksum:
-    fetch_url(url2, file_path2, remote_checksum=paper_checksum2)
-    npt.assert_equal(os.path.exists(file_path2), True)
+    fetch_url(url, file_path, remote_checksum=paper_checksum)
+    npt.assert_equal(os.path.exists(file_path), True)
