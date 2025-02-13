@@ -29,7 +29,7 @@ jobs:
       # Step 1: Check out the repository
       - uses: actions/checkout@v4
 
-      # Step 2a: Install dependencies (MacOS)
+      # Step 2a: Install dependencies (MacOS) and build OpenMP
       - name: Install dependencies (MacOS)
         if: runner.os == 'macOS'
         run: |
@@ -55,12 +55,13 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22.0
         env:
-          # macOS-specific OpenMP settings (Point to locally built OpenMP)
+          # Ensure we use the manually built OpenMP
           MACOSX_DEPLOYMENT_TARGET: "11.0"
           CIBW_ENVIRONMENT_MACOS: |
-            CFLAGS="-std=c99 -mmacosx-version-min=11.0 -I$HOME/.local/include"
-            LDFLAGS="-L$HOME/.local/lib -mmacosx-version-min=11.0 -lomp"
-            PATH="$HOME/.local/bin:$PATH"
+            OMP_PATH=$HOME/.local
+            CFLAGS="-std=c99 -mmacosx-version-min=11.0 -I$OMP_PATH/include -Xclang -fopenmp"
+            LDFLAGS="-L$OMP_PATH/lib -mmacosx-version-min=11.0 -Wl,-rpath,$OMP_PATH/lib -Wl,-rpath,@loader_path/../.dylibs -lomp"
+            PATH="$OMP_PATH/bin:$PATH"
           # Linux-specific OpenMP settings
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"
           # Windows-specific OpenMP settings
