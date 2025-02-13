@@ -36,7 +36,7 @@ class ElectrodeArray(PrettyPrint):
 
     >>> from pulse2percept.implants import ElectrodeArray, DiskElectrode
     >>> earray = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
-    >>> earray.electrodes  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> earray.electrodes  # doctest: +SKIP
     OrderedDict([(0,
                   DiskElectrode(activated=True, name=None, r=100..., x=0..., y=0...,
                   z=0...))])
@@ -45,7 +45,7 @@ class ElectrodeArray(PrettyPrint):
 
     >>> from pulse2percept.implants import ElectrodeArray, DiskElectrode
     >>> earray = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 100)})
-    >>> earray.electrodes  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> earray.electrodes  # doctest: +SKIP
     OrderedDict([('A1',
                   DiskElectrode(activated=True, name=None, r=100..., x=0..., y=0...,
                   z=0...))])

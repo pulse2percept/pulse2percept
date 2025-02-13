@@ -1,83 +1,115 @@
-name: build
+name: Build & Test
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - '**'  # Trigger on all branches
+  pull_request:
+    branches:
+      - '**'  # Trigger on all branches involved in PRs
 
-# By default, jobs run in parallel on a fresh instance of the virtual
-# environment. You can force sequential order by specifying a job's
-# dependencies with the "needs" attribute.
-jobs: 
-
-  # Continuous integration: Run unit tests on all supported platforms whenever
-  # someone pushes a new commit or creates a pull request. 
+jobs:
   build:
-    name: Building on ${{ matrix.os }}
+    name: Build ${{ matrix.os }} Py ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
-      # Test on all supported platforms using all supported Python versions:
       matrix:
-        python-version: ["3.11", "3.10", 3.9, 3.8]
-        os: [ubuntu-latest, ubuntu-20.04, windows-latest, macOS-latest, macos-13]
+        python-version: ["3.12", "3.11", "3.10", "3.9"]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         exclude:
-          - python-version: "3.8"
-            os: macos-latest
           - python-version: "3.9"
-            os: macos-latest
-    
+            os: macos-latest  # Exclude Python 3.9 on macOS
+      fail-fast: false
+
     steps:
-    - uses: actions/checkout@v1
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip wheel
-        # Install p2p requirements:
-        pip install -r requirements.txt
-        pip install -r requirements-dev.txt
-    - name: Setup ffmpeg (MacOS M1)
-      if: matrix.os == 'macos-latest'
-      run: |
-          brew install ffmpeg
-    - name: Lint with flake8
-      run: |
-        pip install flake8
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 pulse2percept --ignore N802,N806,W504 --select W503 --count --show-source --statistics
-    - name: Install package (Windows)
-      # https://github.com/pandas-dev/pandas/issues/981
-      if: matrix.os == 'windows-latest'
-      run: |
-        $env:INCLUDE = 'C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\ucrt'
-        $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\shared'
-        $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\um'
-        $env:LIB = 'C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\ucrt\x64'
-        $env:LIB += ';C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\um\x64'
-        $env:PATH += ';C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64'
-        pip install -e .
-    - name: Install package (Unix)
-      if: matrix.os != 'windows-latest'
-      run: |
-        pip install -e .
-    - name: Log environment info
-      run: |
-        python --version
-        pip freeze
-        gcc --version
-    - name: Run test suite with pytest
-      run: |
-        mkdir test_dir
-        cd test_dir
-        pytest --pyargs pulse2percept --cov-report=xml --cov=pulse2percept --doctest-modules
-    # removed for now since it fails to compare to recent parent
-    # - name: Upload coveragei report to codecov.io
-    #   uses: codecov/codecov-action@v4
-    #   # Cannot yet post coverage report as comments on the PR, but see:
-    #   # https://github.com/codecov/codecov-python/pull/214
-    #   with:
-    #     token: ${{ secrets.CODECOV_TOKEN }}
-    #     file: ./test_dir/coverage.xml
-    #     flags: unittests
-    #     name: codecov-umbrella
-    #     yml: ./codecov.yml
-    #     commit_parent: e5289c3
+      # Step 1: Check out the repository
+      - uses: actions/checkout@v3
+
+      # Step 2: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Step 3a: Install dependencies (macOS only)
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install libomp llvm
+          export PATH="$(brew --prefix llvm)/bin:$PATH"
+          export CC="$(brew --prefix llvm)/bin/clang"
+          export CXX="$(brew --prefix llvm)/bin/clang++"
+          export CPPFLAGS="-I$(brew --prefix libomp)/include -I$(brew --prefix llvm)/include"
+          export LDFLAGS="-L$(brew --prefix libomp)/lib -L$(brew --prefix llvm)/lib -lomp"
+
+      # Step 3b: Install dependencies (Linux only)
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
+
+      # Step 4: Install Python dependencies
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel build numpy Cython
+          
+      # Step 5: lint
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          flake8 pulse2percept --ignore N802,N806,W504 --select W503 --count --show-source --statistics
+
+      # Step 6a: Install the package (Windows)
+      - name: Install package (Windows)
+        if: runner.os == 'windows-latest'
+        run: |
+          $env:INCLUDE = 'C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\ucrt'
+          $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\shared'
+          $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\um'
+          $env:LIB = 'C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\ucrt\x64'
+          $env:LIB += ';C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\um\x64'
+          $env:PATH += ';C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64'
+          pip install .[dev]
+            
+      # Step 6b: Install the package (Non-Windows)
+      - name: Install package (Unix)
+        if: runner.os != 'windows-latest'
+        run: |
+          pip uninstall -y pulse2percept || true
+          python setup.py build_ext --inplace
+          python -m pip install ".[dev]"
+      
+      # Step 7: Log
+      - name: Log environment info
+        run: |
+          python --version
+          pip freeze
+          gcc --version
+          pip show pulse2percept
+          
+      # Step 8: Conditional Test Execution
+      - name: Run default test suite for push
+        if: github.event_name == 'push' && !github.event.pull_request
+        run: |
+          mkdir test_dir
+          cd test_dir
+          pytest --pyargs pulse2percept --doctest-modules
+
+      - name: Run slow tests for pull requests
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir test_dir
+          cd test_dir
+          pytest --pyargs pulse2percept --runslow --cov-report=xml --cov=pulse2percept --doctest-modules        
+          
+      # Step 9: Codecov
+      - name: Upload coverage report to codecov.io
+        if: github.event_name == 'pull_request'
+        uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./test_dir/coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          yml: ./codecov.yml

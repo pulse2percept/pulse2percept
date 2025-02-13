@@ -1,7 +1,7 @@
 # distutils: language = c++
 # ^ needed for bool
 
-from ..utils._fast_math cimport c_isclose, float32
+from pulse2percept.utils._fast_math cimport c_isclose, float32
 from libc.math cimport(fabs as c_abs, fmax as c_max)
 from libcpp cimport bool
 import numpy as np

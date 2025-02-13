@@ -1,0 +1,71 @@
+[build-system]
+requires = [
+    "setuptools>=42",
+    "wheel",
+    "Cython>=0.29.36",
+    "numpy>=1.11,<1.27"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pulse2percept"
+version = "0.9.0.dev0"
+description = "A Python-based simulation framework for bionic vision"
+readme = "README.rst"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Michael Beyeler", email = "mbeyeler@ucsb.edu" },
+    { name = "Jacob Granley", email = "jgranley@ucsb.edu" },
+    { name = "Apurv Varshney", email = "apurv@ucsb.edu" },
+    { name = "Ariel Rokem", email = "arokem@gmail.com" }
+]
+keywords = ["bionic vision", "simulation", "scientific computing"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent"
+]
+requires-python = ">=3.9"
+dependencies = [
+    # Numpy versions specific to Python compatibility
+    "cython>=0.28",
+    "numpy>=1.21,<1.27",
+    "scipy<=1.7.1; python_version < '3.10'",
+    "scipy>=1.0.1; python_version >= '3.10'",
+    "scikit-image>=0.14",
+    "matplotlib>=3.0.2",
+    "imageio-ffmpeg>=0.4",
+    "pandas",
+    "joblib>=0.11"
+]
+
+[project.optional-dependencies]
+dev = [
+    "dask",
+    "h5py",
+    "pytest>=5",
+    "pytest-cov",
+    "coveralls",
+    "flake8",
+    "mock",
+    "black",
+    "tox",
+    "seaborn",
+    "pyswarm",
+    "scikit-learn",
+    "neuropythy"
+]
+
+[tool.setuptools]
+package-dir = {"" = "."}
+include-package-data = true
+
+[tool.setuptools.package-data]
+"pulse2percept.stimuli" = ["data/*"]
+"pulse2percept.datasets" = ["data/*"]
+"pulse2percept.viz" = ["data/*"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pulse2percept", "pulse2percept.*"]
+exclude = ["wheelhouse", "tests", "*/tests"]

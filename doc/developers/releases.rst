@@ -7,9 +7,8 @@ Preparing a New Release
 Before the Release
 ------------------
 
-*  Make sure the version number is set correctly in "pulse2percept/version.py".
-   In specific, the ``__version__`` variable should not contain a ``.dev0``
-   substring.
+*  Make sure the version number is set correctly in "pulse2percept/pyproject.toml".
+   In specific, the ``version`` variable should not contain a ``.dev0`` substring.
 
 *  Make sure the Release Notes in "doc/users/release_notes.rst" are up-to-date
    and complete.
@@ -70,6 +69,6 @@ Releasing the code on GitHub
 After the release
 -----------------
 
-*  Bump the version number in "pulse2percept/version.py", add back the ".0dev"
+*  Bump the version number in "pulse2percept/pyproject.toml", add back the ".0dev"
    appendix, and add an entry for the next release in 
    "doc/users/release_notes.rst". Then commit to ``master``.
