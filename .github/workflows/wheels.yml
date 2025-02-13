@@ -24,6 +24,7 @@ jobs:
           - "windows-latest"
           - "macos-13"
           - "macos-14"
+
     steps:
       # Step 1: Check out the repository
       - uses: actions/checkout@v4
@@ -39,9 +40,9 @@ jobs:
           export CPPFLAGS="-I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
           export LDFLAGS="-L$(brew --prefix llvm)/lib -L$(brew --prefix libomp)/lib -lomp"
         env:
-          # Override flags for Python 3.9 to resolve `faltivec` issues
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
           CFLAGS: >
-            -std=c99 -maltivec
+            -std=c99 -mmacosx-version-min=11.0
             -I$(brew --prefix llvm)/include
             -I$(brew --prefix libomp)/include
           LDFLAGS: >
@@ -59,9 +60,10 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22.0
         env:
-          # macOS-specific OpenMP settings
+          # macOS-specific OpenMP settings (Fixed macOS 14 issue)
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
           CIBW_ENVIRONMENT_MACOS: |
-            CFLAGS="-std=c99 -maltivec -I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
+            CFLAGS="-std=c99 -mmacosx-version-min=11.0 -I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
             LDFLAGS="-L$(brew --prefix llvm)/lib -L$(brew --prefix libomp)/lib -lomp"
             PATH="$(brew --prefix llvm)/bin:$PATH"
             CC="$(brew --prefix llvm)/bin/clang"
@@ -74,11 +76,11 @@ jobs:
           CIBW_BEFORE_BUILD: "python -m pip install --upgrade pip setuptools wheel cython numpy"
           # Python versions to build for
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
-          # Skip specific wheels
+          # Skip specific wheels (No Python 3.9 on macOS)
           CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux* cp39-macosx_*"
 
       # Step 4: Upload the built wheels as artifacts
       - uses: actions/upload-artifact@v4
         with:
-          name: cibw-wheels-${{ matrix.os }}-py${{ matrix.python-version }}
+          name: cibw-wheels-${{ matrix.os }}
           path: ./wheelhouse/*.whl
