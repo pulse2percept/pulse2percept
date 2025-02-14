@@ -1,5 +1,4 @@
-from libc.math cimport(pow as c_pow, exp as c_exp, tanh as c_tanh,
-                       sin as c_sin, cos as c_cos, fabs as c_abs,
+from libc.math cimport(powf as c_pow, exp as c_exp, fabsf as c_abs,
                        isnan as c_isnan)
 from cython.parallel import prange
 from cython import cdivision  # for modulo operator
@@ -11,6 +10,7 @@ ctypedef cnp.float32_t float32
 ctypedef cnp.uint32_t uint32
 ctypedef cnp.int32_t int32
 ctypedef cnp.uint8_t uint8
+ctypedef Py_ssize_t index_t
 
 
 @cdivision(True)
@@ -43,8 +43,8 @@ cpdef fast_thompson2003(const float32[:, ::1] stim,
 
     """
     cdef:
-        int32 idx_el, idx_time, idx_space, idx_bright
-        int32 n_el, n_time, n_space, n_bright
+        index_t idx_el, idx_time, idx_space, idx_bright
+        index_t n_el, n_time, n_space, n_bright
         float32[:, ::1] bright
         float32 px_bright, dist2, gauss, amp
 
@@ -59,7 +59,7 @@ cpdef fast_thompson2003(const float32[:, ::1] stim,
     for idx_bright in prange(n_bright, schedule='static', nogil=True):
         # For each entry in the output matrix:
         idx_space = idx_bright % n_space
-        idx_time = idx_bright / n_space
+        idx_time = idx_bright // n_space
 
         if c_isnan(xgrid[idx_space]) or c_isnan(ygrid[idx_space]):
             bright[idx_space, idx_time] = 0.0

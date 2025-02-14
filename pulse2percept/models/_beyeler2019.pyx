@@ -1,5 +1,5 @@
-from libc.math cimport(pow as c_pow, exp as c_exp, tanh as c_tanh,
-                       sin as c_sin, cos as c_cos, fabs as c_abs,
+from libc.math cimport(powf as c_pow, expf as c_exp, tanhf as c_tanh,
+                       sinf as c_sin, cosf as c_cos, fabsf as c_abs,
                        isnan as c_isnan)
 from cython.parallel import prange
 from cython import cdivision  # for modulo operator
@@ -9,8 +9,9 @@ cimport numpy as cnp
 ctypedef cnp.float32_t float32
 ctypedef cnp.uint32_t uint32
 ctypedef cnp.int32_t int32
+ctypedef Py_ssize_t index_t
 
-cdef float32 deg2rad = 3.14159265358979323846 / 180.0
+cdef float32 deg2rad = <float32>(3.14159265358979323846 / 180.0)
 
 
 @cdivision(True)
@@ -51,8 +52,8 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
          Boundary for separation
     """
     cdef:
-        int32 idx_el, idx_time, idx_space, idx_bright
-        int32 n_el, n_time, n_space, n_bright
+        index_t idx_el, idx_time, idx_space, idx_bright
+        index_t n_el, n_time, n_space, n_bright
         float32[:, ::1] bright
         float32 px_bright, dist2, gauss, amp
 
@@ -67,13 +68,13 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
     for idx_bright in prange(n_bright, schedule='static', nogil=True, num_threads=n_threads):
         # For each entry in the output matrix:
         idx_space = idx_bright % n_space
-        idx_time = idx_bright / n_space
+        idx_time = idx_bright // n_space
 
         if c_isnan(xgrid[idx_space]) or c_isnan(ygrid[idx_space]):
-            bright[idx_space, idx_time] = 0.0
+            bright[idx_space, idx_time] = <float32>0.0
             continue
 
-        px_bright = 0.0
+        px_bright = <float32>0.0
         for idx_el in range(n_el):
             amp = stim[idx_el, idx_time]
             if c_abs(amp) > 0:
@@ -83,10 +84,10 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
                         continue
                 dist2 = (c_pow(xgrid[idx_space] - xel[idx_el], 2) +
                          c_pow(ygrid[idx_space] - yel[idx_el], 2))
-                gauss = c_exp(-dist2 / (2.0 * rho * rho))
+                gauss = c_exp(-dist2 / (<float32>2.0 * rho * rho))
                 px_bright = px_bright + amp * gauss
         if c_abs(px_bright) < thresh_percept:
-            px_bright = 0.0
+            px_bright = <float32>0.0
         bright[idx_space, idx_time] = px_bright  # Py overhead
     return np.asarray(bright)  # Py overhead
 
@@ -131,8 +132,8 @@ cpdef fast_scoreboard_3d(const float32[:, ::1] stim,
          Boundary for separation
     """
     cdef:
-        int32 idx_el, idx_time, idx_space, idx_bright
-        int32 n_el, n_time, n_space, n_bright
+        index_t idx_el, idx_time, idx_space, idx_bright
+        index_t n_el, n_time, n_space, n_bright
         float32[:, ::1] bright
         float32 px_bright, dist2, gauss, amp
 
@@ -147,13 +148,13 @@ cpdef fast_scoreboard_3d(const float32[:, ::1] stim,
     for idx_bright in prange(n_bright, schedule='static', nogil=True, num_threads=n_threads):
         # For each entry in the output matrix:
         idx_space = idx_bright % n_space
-        idx_time = idx_bright / n_space
+        idx_time = idx_bright // n_space
 
         if c_isnan(xgrid[idx_space]) or c_isnan(ygrid[idx_space]):
-            bright[idx_space, idx_time] = 0.0
+            bright[idx_space, idx_time] = <float32>0.0
             continue
 
-        px_bright = 0.0
+        px_bright = <float32>0.0
         for idx_el in range(n_el):
             amp = stim[idx_el, idx_time]
             if c_abs(amp) > 0:
@@ -164,10 +165,10 @@ cpdef fast_scoreboard_3d(const float32[:, ::1] stim,
                 dist2 = (c_pow(xgrid[idx_space] - xel[idx_el], 2) +
                          c_pow(ygrid[idx_space] - yel[idx_el], 2) +
                          c_pow(zgrid[idx_space] - zel[idx_el], 2))
-                gauss = c_exp(-dist2 / (2.0 * rho * rho))
+                gauss = c_exp(-dist2 / (<float32>2.0 * rho * rho))
                 px_bright = px_bright + amp * gauss
         if c_abs(px_bright) < thresh_percept:
-            px_bright = 0.0
+            px_bright = <float32>0.0
         bright[idx_space, idx_time] = px_bright  # Py overhead
     return np.asarray(bright)  # Py overhead
 
@@ -178,18 +179,18 @@ cpdef fast_jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
     cdef:
         float32[::1] xprime, yprime
         float32 b, c, rho_min, tmp_phi, tmp_rho
-        int32 idx
+        index_t idx
 
     if phi0 > 0:
         # Axon is in superior retina, compute `b` (real number) from Eq. 5:
-        b = c_exp(beta_s + 3.9 * c_tanh(-(phi0 - 121.0) / 14.0))
+        b = c_exp(beta_s + <float32>3.9 * c_tanh(-(phi0 - <float32>121.0) / <float32>14.0))
         # Equation 3, `c` a positive real number:
-        c = 1.9 + 1.4 * c_tanh((phi0 - 121.0) / 14.0)
+        c = <float32>1.9 + <float32>1.4 * c_tanh((phi0 - <float32>121.0) / <float32>14.0)
     else:
         # Axon is in inferior retina: compute `b` (real number) from Eq. 6:
-        b = -c_exp(beta_i + 1.5 * c_tanh(-(-phi0 - 90.0) / 25.0))
+        b = -c_exp(beta_i + <float32>1.5 * c_tanh(-(-phi0 - <float32>90.0) / <float32>25.0))
         # Equation 4, `c` a positive real number:
-        c = 1.0 + 0.5 * c_tanh((-phi0 - 90.0) / 25.0)
+        c = <float32>1.0 + <float32>0.5 * c_tanh((-phi0 - <float32>90.0) / <float32>25.0)
 
     xprime = np.empty_like(rho)
     yprime = np.empty_like(rho)
@@ -203,13 +204,13 @@ cpdef fast_jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
     return np.asarray(xprime), np.asarray(yprime)
 
 
-cdef uint32 argmin_segment(float32[:, :] flat_bundles, float32 x, float32 y):
+cdef index_t argmin_segment(float32[:, :] flat_bundles, float32 x, float32 y):
     cdef:
         float32 dist2, min_dist2
-        int32 seg, n_seg
-        uint32 min_seg
+        index_t seg, n_seg
+        index_t min_seg
 
-    min_dist2 = 1e12
+    min_dist2 = <float32>1e12
     n_seg = flat_bundles.shape[0]
     for seg in range(n_seg):
         dist2 = (c_pow(flat_bundles[seg, 0] - x, 2) +
@@ -224,9 +225,9 @@ cpdef fast_find_closest_axon(float32[:, :] flat_bundles,
                              float32[::1] xret,
                              float32[::1] yret):
     cdef:
-        uint32[::1] closest_seg
-        int32 n_xy, n_seg
-        int32 pos
+        index_t[::1] closest_seg
+        index_t n_xy, n_seg
+        index_t pos
     closest_seg = np.empty(len(xret), dtype=np.uint32)
     n_xy = len(xret)
     n_seg = flat_bundles.shape[0]
@@ -277,11 +278,10 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
     
     """
     cdef:
-        int32 idx_el, idx_time, idx_space, idx_ax, idx_bright
-        int32 n_el, n_time, n_space, n_ax, n_bright
+        index_t idx_el, idx_time, idx_space, idx_ax, idx_bright
+        index_t n_el, n_time, n_space, n_ax, n_bright
         float32[:, ::1] bright
         float32 px_bright, xdiff, ydiff, r2, gauss, sgm_bright, amp
-        int32 i0, i1
 
     n_el = stim.shape[0]
     n_time = stim.shape[1]
@@ -298,7 +298,7 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
         for idx_time in range(n_time):
             # Find the brightness value of each pixel (`px_bright`) by finding
             # the strongest activated axon segment:
-            px_bright = 0.0
+            px_bright = <float32>0.0
             # Slice `axon_contrib` (but don't assign the slice to a variable).
             # `idx_start` and `idx_end` serve as indexes into `axon_segments`.
             # For example, the axon belonging to the neuron sitting at pixel
@@ -307,7 +307,7 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
             for idx_ax in range(idx_start[idx_space], idx_end[idx_space]):
                 # Calculate the activation of each axon segment by adding up
                 # the contribution of each electrode:
-                sgm_bright = 0.0
+                sgm_bright = <float32>0.0
                 for idx_el in range(n_el):
                     amp = stim[idx_el, idx_time]
                     if c_abs(amp) > 0:
@@ -323,7 +323,7 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
                         # consisting of two things:
                         # - activation as a function of distance to the
                         #   stimulating electrode (depends on `rho`):
-                        gauss = c_exp(-r2 / (2.0 * rho * rho))
+                        gauss = c_exp(-r2 / (<float32>2.0 * rho * rho))
                         # - activation as a function of distance to the cell
                         #   body (depends on `axlambda`, precalculated during
                         #   `build` and stored in `axon_segments[idx_ax, 2]`:
@@ -336,6 +336,6 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
                 if c_abs(sgm_bright) > c_abs(px_bright):
                     px_bright = sgm_bright
             if c_abs(px_bright) < thresh_percept:
-                px_bright = 0.0
+                px_bright = <float32>0.0
             bright[idx_space, idx_time] = px_bright  # Py overhead
     return np.asarray(bright)  # Py overhead
