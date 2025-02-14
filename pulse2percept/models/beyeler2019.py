@@ -1,4 +1,5 @@
-"""`AxonMapModel`, `AxonMapSpatial` [Beyeler2019]_"""
+""":py:class:`~pulse2percept.models.AxonMapModel`,
+   :py:class:`~pulse2percept.models.AxonMapSpatial` [Beyeler2019]_"""
 
 import os
 import numpy as np

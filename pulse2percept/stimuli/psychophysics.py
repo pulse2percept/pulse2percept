@@ -1,4 +1,5 @@
-"""`BarStimulus`, `GratingStimulus`"""
+""":py:class:`~pulse2percept.stimuli.BarStimulus`, 
+   :py:class:`~pulse2percept.stimuli.GratingStimulus`"""
 
 import numpy as np
 

@@ -1,5 +1,6 @@
-"""
-`cart2pol`, `pol2cart`, `delta_angle`
+""":py:class:`~pulse2percept.utils.cart2pol`, 
+   :py:class:`~pulse2percept.utils.pol2cart`, 
+   :py:class:`~pulse2percept.utils.delta_angle`
 """
 
 import numpy as np

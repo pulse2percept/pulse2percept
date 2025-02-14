@@ -1,4 +1,5 @@
-"""`Horsager2009Model`, `Horsager2009Temporal` [Horsager2009]_"""
+""":py:class:`~pulse2percept.models.Horsager2009Model`,
+   :py:class:`~pulse2percept.models.`Horsager2009Temporal` [Horsager2009]_"""
 import numpy as np
 from .base import Model, TemporalModel
 from ._horsager2009 import temporal_fast

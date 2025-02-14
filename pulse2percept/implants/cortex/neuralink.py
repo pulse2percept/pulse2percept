@@ -1,4 +1,6 @@
-"""`EllipsoidElectrode`, `LinearEdgeThread`, `NeuralinkThread`"""
+""":py:class:`~pulse2percept.implants.cortex.EllipsoidElectrode`, 
+   :py:class:`~pulse2percept.implants.cortex.LinearEdgeThread`,
+   :py:class:`~pulse2percept.implants.cortex.NeuralinkThread`"""
 from abc import ABCMeta, abstractmethod
 import numpy as np
 from matplotlib.patches import Ellipse

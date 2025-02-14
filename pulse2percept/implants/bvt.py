@@ -1,4 +1,5 @@
-"""`BVT24`, `BVT44`"""
+""":py:class:`~pulse2percept.implants.BVT24`, 
+   :py:class:`~pulse2percept.implants.BVT44`"""
 import numpy as np
 from skimage.transform import SimilarityTransform
 

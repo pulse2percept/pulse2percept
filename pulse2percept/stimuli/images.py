@@ -1,4 +1,7 @@
-"""`ImageStimulus`, `LogoBVL`, `LogoUCSB`, `SnellenChart`"""
+""":py:class:`~pulse2percept.stimuli.ImageStimulus`, 
+   :py:class:`~pulse2percept.stimuli.LogoBVL`, 
+   :py:class:`~pulse2percept.stimuli.LogoUCSB`, 
+   :py:class:`~pulse2percept.stimuli.SnellenChart`"""
 from os.path import dirname, join
 import numpy as np
 import warnings

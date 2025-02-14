@@ -1,4 +1,8 @@
-"""`BaseModel`, `Model`, `NotBuiltError`, `SpatialModel`, `TemporalModel`"""
+""":py:class:`~pulse2percept.models.BaseModel`, 
+   :py:class:`~pulse2percept.models.Model`,
+   :py:class:`~pulse2percept.models.NotBuiltError`,
+   :py:class:`~pulse2percept.models.SpatialModel`,
+   :py:class:`~pulse2percept.models.TemporalModel`"""
 import sys
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy

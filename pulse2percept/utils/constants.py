@@ -1,4 +1,7 @@
-"""`DT`, `MIN_AMP`, `VIDEO_BLOCK_SIZE`, `ZORDER`"""
+""":py:class:`~pulse2percept.utils.DT`, 
+   :py:class:`~pulse2percept.utils.MIN_AMP`, 
+   :py:class:`~pulse2percept.utils.VIDEO_BLOCK_SIZE`, 
+   :py:class:`~pulse2percept.utils.ZORDER`"""
 
 #: Pulses with net currents smaller than 10 picoamps are considered
 #: charge-balanced (here expressed in microamps).

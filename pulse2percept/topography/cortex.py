@@ -1,5 +1,5 @@
-"""
-`CorticalMap`, `Polimeni2006Map`
+""":py:class:`~pulse2percept.topography.CorticalMap`, 
+   :py:class:`~pulse2percept.topography.Polimeni2006Map`
 """
 import numpy as np
 from abc import abstractmethod

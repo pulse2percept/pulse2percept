@@ -1,4 +1,4 @@
-"""`load_nanduri2012`"""
+""":py:class:`~pulse2percept.datasets.load_nanduri2012`"""
 from os.path import dirname, join
 import numpy as np
 

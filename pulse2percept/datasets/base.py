@@ -1,4 +1,6 @@
-"""`get_data_dir`, `clear_data_dir`, `fetch_url`"""
+""":py:class:`~pulse2percept.datasets.get_data_dir`, 
+   :py:class:`~pulse2percept.datasets.clear_data_dir`, 
+   :py:class:`~pulse2percept.datasets.fetch_url`"""
 import sys
 from os import environ, makedirs
 from os.path import exists, expanduser, join

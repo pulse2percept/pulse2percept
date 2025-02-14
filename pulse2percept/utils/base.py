@@ -1,5 +1,10 @@
-"""`PrettyPrint`, `Frozen`, `Data`, `bijective26_name`, `cached`, `gamma`,
-   `unique`"""
+""":py:class:`~pulse2percept.utils.PrettyPrint`, 
+   :py:class:`~pulse2percept.utils.Frozen`, 
+   :py:class:`~pulse2percept.utils.Data`,
+   :py:class:`~pulse2percept.utils.bijective26_name`,
+   :py:class:`~pulse2percept.utils.cached`,
+   :py:class:`~pulse2percept.utils.gamma`,
+   :py:class:`~pulse2percept.utils.unique`"""
 import numpy as np
 import sys
 import abc

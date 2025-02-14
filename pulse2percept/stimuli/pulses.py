@@ -1,4 +1,6 @@
-"""`MonophasicPulse`, `BiphasicPulse`, `AsymmetricBiphasicPulse`"""
+""":py:class:`~pulse2percept.stimuli.MonophasicPulse`, 
+   :py:class:`~pulse2percept.stimuli.BiphasicPulse`,
+   :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulse`"""
 import numpy as np
 
 # DT: Sampling time step (ms); defines the duration of the signal edge

@@ -1,4 +1,4 @@
-"""`DynaphosModel`"""
+""":py:class:`~pulse2percept.models.cortex.DynaphosModel`"""
 import numpy as np
 import warnings
 from copy import deepcopy, copy

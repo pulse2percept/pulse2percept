@@ -1,4 +1,8 @@
-"""`PhotovoltaicPixel`, `PRIMA`, `PRIMA75`, `PRIMA55`, `PRIMA40`"""
+""":py:class:`~pulse2percept.implants.PhotovoltaicPixel`, 
+   :py:class:`~pulse2percept.implants.PRIMA`, 
+   :py:class:`~pulse2percept.implants.PRIMA75`, 
+   :py:class:`~pulse2percept.implants.PRIMA55`, 
+   :py:class:`~pulse2percept.implants.PRIMA40`"""
 
 from matplotlib.patches import Circle, RegularPolygon
 

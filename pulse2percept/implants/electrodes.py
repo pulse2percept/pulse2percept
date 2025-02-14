@@ -1,4 +1,8 @@
-"""`Electrode`, `PointSource`, `DiskElectrode`, `SquareElectrode`, `HexElectrode`"""
+""":py:class:`~pulse2percept.implants.Electrode`, 
+   :py:class:`~pulse2percept.implants.PointSource`, 
+   :py:class:`~pulse2percept.implants.DiskElectrode`, 
+   :py:class:`~pulse2percept.implants.SquareElectrode`,
+   :py:class:`~pulse2percept.implants.HexElectrode`"""
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Rectangle, RegularPolygon

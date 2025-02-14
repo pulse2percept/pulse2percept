@@ -1,4 +1,5 @@
-"""`conv`, `center_vector`"""
+""":py:class:`~pulse2percept.utils.conv`, 
+   :py:class:`~pulse2percept.utils.center_vector`"""
 
 import numpy as np
 from scipy import signal as sps

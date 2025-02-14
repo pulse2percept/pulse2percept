@@ -1,4 +1,4 @@
-"""`EnsembleImplant`"""
+""":py:class:`~pulse2percept.implants.EnsembleImplant`"""
 import numpy as np
 from .base import ProsthesisSystem
 from .electrodes import Electrode

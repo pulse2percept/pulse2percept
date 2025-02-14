@@ -1,6 +1,5 @@
-"""
-`Grid2D`, `VisualFieldMap`
-
+""":py:class:`~pulse2percept.topography.Grid2D`, 
+   :py:class:`~pulse2percept.topography.VisualFieldMap`
 """
 
 import numpy as np

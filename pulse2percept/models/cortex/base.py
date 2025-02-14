@@ -1,4 +1,6 @@
-"""`CortexSpatial`, `ScoreboardSpatial`, `ScoreboardModel`"""
+""":py:class:`~pulse2percept.models.cortex.CortexSpatial`, 
+   :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`, 
+   :py:class:`~pulse2percept.models.cortex.ScoreboardModel`"""
 
 from ..base import Model, SpatialModel
 from ...topography import Polimeni2006Map

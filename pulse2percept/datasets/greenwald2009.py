@@ -1,4 +1,4 @@
-"""`load_greenwald2009`"""
+""":py:class:`~pulse2percept.datasets.load_greenwald2009`"""
 
 from os.path import dirname, join
 

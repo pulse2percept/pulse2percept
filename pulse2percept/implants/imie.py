@@ -1,4 +1,4 @@
-"""`IMIE`"""
+""":py:class:`~pulse2percept.implants.IMIE`"""
 import numpy as np
 from collections import OrderedDict
 

@@ -1,4 +1,5 @@
-"""`AlphaIMS`, `AlphaAMS`"""
+""":py:class:`~pulse2percept.implants.AlphaIMS`, 
+   :py:class:`~pulse2percept.implants.AlphaAMS`"""
 import numpy as np
 from collections import OrderedDict
 
