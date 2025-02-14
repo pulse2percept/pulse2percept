@@ -4,41 +4,9 @@
 Installation
 ============
 
-Because pulse2percept is in active development, there are at least three versions
-to choose from:
-
--  ``stable``: Our :ref:`stable release <install-release>` can be installed
-   with:
-
-   .. code-block:: bash
-
-       pip install pulse2percept
-
-   It may not have all the latest features, but the ones it has are well
-   tested.
-   You can read the corresponding docs
-   `here <https://pulse2percept.readthedocs.io/en/stable>`_.
-
-   If you have previously installed p2p this way and wish to upgrade it to
-   the latest *stable* version, use the ``-U`` option with pip:
-
-   .. code-block:: bash
-
-       pip install -U pulse2percept
-
--  ``latest``: Our bleeding-edge version can be installed with:
-
-   .. code-block:: bash
-
-       pip install git+https://github.com/pulse2percept/pulse2percept
-
-   This will pull the latest code from the ``master`` branch of our
-   `GitHub repo <https://github.com/pulse2percept/pulse2percept/tree/master>`_.
-   You can read the corresponding docs
-   `here <https://pulse2percept.readthedocs.io/en/stable>`_.
-
--  Developer version: Finally, if you wish to contribute to the p2p code
-   base, you will need to install p2p :ref:`from source <install-source>`.
+.. include:: ../README.rst
+    :start-line: 69
+    :end-line: 131
 
 .. note::
 
@@ -50,11 +18,8 @@ to choose from:
 Installing version |version| from source
 ========================================
 
-If you want to contribute to the p2p code base, you will need
-to install p2p from source.
-
-Similarly, if your platform is not officially supported (and hence we do
-not have a wheel for it), you will need to build p2p from source.
+If no prebuilt wheel is available for your system or you wish to contribue to
+p2p, you will want to install the latest version from source.
 
 Prerequisites
 -------------
@@ -65,15 +30,15 @@ Before getting started, you will need the following:
    ``python --version`` in a terminal or command prompt.
 
    .. include:: ../README.rst
-      :start-line: 97
-      :end-line: 113
+      :start-line: 93
+      :end-line: 100
 
    If you don't have Python, there are several options:
 
    -  If you're unsure where to start, check out the `Python Wiki`_.
    
-   -  `Python Anaconda`_ (good but slow in 2020): comes with the conda package
-      manager and a range of scientific software pre-installed (NumPy, SciPy,
+   -  `Python Anaconda`_ (slow but comprehensive): comes with the conda package
+      manager and a range of scientific software pre-installed (NumPy, SciPy, 
       Matplotlib, etc.).
 
    -  `Python Miniconda`_ (fast but minimal): comes with the conda package manager
@@ -94,18 +59,21 @@ Before getting started, you will need the following:
 
           python get-pip.py
 
--  **NumPy**: Once you have Python and pip, simply open a terminal and type 
-   ``pip install numpy``.
+-  **NumPy**: Once you have Python and pip, open a terminal and type:
+
+   .. code-block:: bash
+   
+        pip install numpy
 
 -  **Cython** (>= 0.28): pulse2percept relies on C extension modules for code
    acceleration. These require a C compiler, which on Unix platforms is
    already installed (``gcc``). However, on Windows you will have to install a
    compiler yourself:
 
-   1.  Install **Build Tools for Visual Studio 2019** from the `Microsoft website`_.
-       Note that the build tools for Visual Studio 2015 or 2017 should work as
-       well (Python >= 3.7 requires C++ 14.X to be exact).
-       Also note that you don't need to install Visual Studio itself.
+   1.  Install **Build Tools for Visual Studio** from the `Microsoft website`_.
+       Make sure to select "Desktop Development with C++", which should include
+       the MSVC compiler libraries.
+       You don't need to install Visual Studio itself.
 
    2.  `Install Cython <https://cython.readthedocs.io/en/latest/src/quickstart/install.html>`_:
 
@@ -138,7 +106,7 @@ Before getting started, you will need the following:
 .. _Python Wiki: https://wiki.python.org/moin/BeginnersGuide/Download
 .. _Python Miniconda: https://docs.conda.io/en/latest/miniconda.html
 .. _get-pip.py: https://bootstrap.pypa.io/get-pip.py
-.. _Microsoft website: https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2019
+.. _Microsoft website: https://visualstudio.microsoft.com/visual-cpp-build-tools/
 
 Obtaining the latest code from GitHub
 -------------------------------------
