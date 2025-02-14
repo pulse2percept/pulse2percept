@@ -5,13 +5,27 @@ Installation
 ============
 
 .. include:: ../README.rst
-    :start-line: 69
-    :end-line: 131
+    :start-line: 70
+    :end-line: 82
+
+Compatibility and Building from Source
+======================================
+
+.. include:: ../README.rst
+    :start-line: 87
+    :end-line: 116
 
 .. note::
 
     Having trouble with the installation?
     Please refer to our :ref:`Troubleshooting Guide <install-troubleshooting>`.
+
+Upgrading and Uninstalling
+==========================
+
+.. include:: ../README.rst
+    :start-line: 121
+    :end-line: 131
 
 .. _install-source:
 
@@ -29,9 +43,11 @@ Before getting started, you will need the following:
 -  **Python**: You can check whether Python is already installed by typing
    ``python --version`` in a terminal or command prompt.
 
+   The latest development version supports:
+
    .. include:: ../README.rst
-      :start-line: 93
-      :end-line: 100
+      :start-line: 98
+      :end-line: 102
 
    If you don't have Python, there are several options:
 

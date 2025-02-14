@@ -11,9 +11,10 @@ class CortexSpatial(SpatialModel):
     
     This is an abstract class that cortical models can subclass
     to get cortical implementation of the following features. 
-    1) Updated default parameters for cortex
-    2) Handling of multiple visual regions via regions property
-    3) Plotting, including multiple visual regions, legends, vertical 
+
+    *  Updated default parameters for cortex
+    *  Handling of multiple visual regions via regions property
+    *  Plotting, including multiple visual regions, legends, vertical 
        divide at longitudinal fissure, etc.
 
     Parameters:
@@ -56,7 +57,8 @@ class CortexSpatial(SpatialModel):
         Number of CPU threads to use during parallelization using OpenMP. 
         Defaults to max number of user CPU cores.
 
-    .. important ::
+    .. important::
+
         If you change important model parameters outside the constructor (e.g.,
         by directly setting ``model.xrange = (-10, 10)``), you will have to call
         ``model.build()`` again for your changes to take effect.
@@ -105,6 +107,7 @@ class CortexSpatial(SpatialModel):
     def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
              figsize=None, fc=None, **kwargs):
         """Plot the model
+
         Parameters
         ----------
         use_dva : bool, optional
@@ -112,11 +115,13 @@ class CortexSpatial(SpatialModel):
             plotted in cortex
         style : {'hull', 'scatter', 'cell'}, optional
             Grid plotting style:
+
             * 'hull': Show the convex hull of the grid (that is, the outline of
               the smallest convex set that contains all grid points).
             * 'scatter': Scatter plot all grid points
             * 'cell': Show the outline of each grid cell as a polygon. Note that
               this can be costly for a high-resolution grid.
+              
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot to fit the implant
         ax : matplotlib.axes._subplots.AxesSubplot, optional
@@ -129,6 +134,7 @@ class CortexSpatial(SpatialModel):
             matplotlib color cycle.
         kwargs : dict, optional
             Additional keyword arguments are passed on to Grid2D.plot()
+        
         Returns
         -------
         ax : ``matplotlib.axes.Axes``

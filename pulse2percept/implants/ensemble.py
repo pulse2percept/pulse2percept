@@ -6,7 +6,6 @@ from .electrode_arrays import ElectrodeArray
 
 class EnsembleImplant(ProsthesisSystem):
     
-
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_implants', '_earray', '_stim', 'safe_mode', 'preprocess')
 

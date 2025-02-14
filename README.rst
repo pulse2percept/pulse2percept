@@ -79,6 +79,8 @@ Linux (e.g., Ubuntu 24.04 LTS), and Windows (e.g., Windows Server 2022).
 You can find the full documentation
 `here <https://pulse2percept.readthedocs.io/en/stable>`_.
 
+.. _stable release: https://pulse2percept.readthedocs.io/en/stable/index.html
+
 Compatibility and Building from Source
 --------------------------------------
 
@@ -110,6 +112,9 @@ Supported Python versions:
 Our `GitHub Action Runners`_ ensure that p2p works as expected on macOS 14 Arm64,
 Ubuntu 24.04, and Windows Server 2022.
 
+.. _Visual Studio Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+.. _GitHub Action Runners: https://github.com/pulse2percept/pulse2percept/actions
+
 Upgrading and Uninstalling
 --------------------------
 
@@ -125,16 +130,12 @@ To uninstall:
 
     pip uninstall pulse2percept -y
 
-.. _stable release: https://pulse2percept.readthedocs.io/en/stable/index.html
-.. _GitHub Action Runners: https://github.com/pulse2percept/pulse2percept/actions
-.. _Visual Studio Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
-
-Installing the Bluiding-Edge Version
+Installing the Bleeding-Edge Version
 ------------------------------------
 
 If you want to install the `latest development version`_ from source, first
 ensure that you have **NumPy and Cython** installed.
-On Windows, you will also need `Visual Studio Build Tools`_.
+On Windows, you will also need Visual Studio Build Tools.
 Then run:
 
 .. code-block:: bash

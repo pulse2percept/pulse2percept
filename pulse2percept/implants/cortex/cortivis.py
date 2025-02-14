@@ -6,7 +6,7 @@ from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
 
 class Cortivis(ProsthesisSystem):
-    """Create a Cortivis array.
+    """Create a Cortivis array
     
     This function creates a Cortivis array and places it on the visual cortex
     such that the center of the base of the array is at 3D location (x,y,z) given
