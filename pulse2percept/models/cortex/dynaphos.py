@@ -75,7 +75,7 @@ class DynaphosModel(BaseModel):
         pixels to subject to noise in each frame.
 
         
-    .. important ::
+    .. important::
     
         If you change important model parameters outside the constructor (e.g.,
         by directly setting ``model.xrange = (-10, 10)``), you will have to call
@@ -378,11 +378,13 @@ class DynaphosModel(BaseModel):
             plotted in cortex
         style : {'hull', 'scatter', 'cell'}, optional
             Grid plotting style:
+
             * 'hull': Show the convex hull of the grid (that is, the outline of
               the smallest convex set that contains all grid points).
             * 'scatter': Scatter plot all grid points
             * 'cell': Show the outline of each grid cell as a polygon. Note that
               this can be costly for a high-resolution grid.
+              
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot to fit the implant
         ax : matplotlib.axes._subplots.AxesSubplot, optional

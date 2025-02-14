@@ -8,7 +8,7 @@ from ..electrode_arrays import ElectrodeGrid
 
 
 class Orion(ProsthesisSystem):
-    """Create a Orion array.
+    """Create a Orion array
     
     This function creates a Orion array and places it on the visual cortex
     such that the center of the base of the array is at 3D location (x,y,z) given
