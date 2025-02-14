@@ -9,12 +9,12 @@ cimport numpy as cnp
 ctypedef Py_ssize_t index_t
 
 
-cpdef object fast_compress_space(float32[:, ::1] data):
+cpdef bool[::1] fast_compress_space(float32[:, ::1] data):
     """Compress a stimulus in space"""
     # In space, we only keep electrodes with nonzero activation values
     cdef:
         index_t e, n_elec, t, n_time
-        bint[::1] idx_space
+        bool[::1] idx_space
 
     n_elec = data.shape[0]
     n_time = data.shape[1]
@@ -28,7 +28,7 @@ cpdef object fast_compress_space(float32[:, ::1] data):
 
     return np.asarray(idx_space)
 
-cpdef object fast_compress_time(float32[:, ::1] data, float32[::1] time):
+cpdef bool[::1] fast_compress_time(float32[:, ::1] data, float32[::1] time):
     """Compress a stimulus in time"""
     # In time, we can't just remove empty columns. We need to walk
     # through each column and save all the "state transitions" along
@@ -42,7 +42,7 @@ cpdef object fast_compress_time(float32[:, ::1] data, float32[::1] time):
     # edge.
     cdef:
         index_t e, n_elec, t, n_time
-        bint[::1] idx_time
+        bool[::1] idx_time
 
     n_elec = data.shape[0]  # Py overhead
     n_time = data.shape[1]  # Py overhead
