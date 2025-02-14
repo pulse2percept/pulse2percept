@@ -1,10 +1,12 @@
+import os
+import sys
+import platform
+import shutil
+import subprocess
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 from Cython.Build import cythonize
 import numpy
-import os
-import sys
-import platform
 
 # Define supported configurations
 SUPPORTED_PYTHON_VERSIONS = ["3.9", "3.10", "3.11", "3.12"]
@@ -13,7 +15,7 @@ UNSUPPORTED_CONFIGS = [
     {"os": "Darwin", "python_version": "3.9"}  # macOS + Python 3.9
 ]
 
-# Compatibility check
+
 def is_supported():
     current_os = platform.system()
     current_python = f"{sys.version_info.major}.{sys.version_info.minor}"
@@ -25,15 +27,6 @@ def is_supported():
         if current_os == config["os"] and current_python == config["python_version"]:
             return False, f"Python {current_python} is not supported on {current_os}."
     return True, None
-
-# Check compatibility and warn if unsupported
-is_supported, reason = is_supported()
-if not is_supported:
-    print(
-        f"WARNING: {reason}\n"
-        "Installation will proceed, but this configuration is not officially supported. "
-        "Use at your own risk!"
-    )
 
 class OpenMPBuildExt(build_ext):
     def build_extensions(self):
@@ -89,11 +82,24 @@ def find_pyx_modules(base_dir, exclude_dirs=None):
                 )
     return extensions
 
+# Run pre-build checks
+is_supported, reason = is_supported()
+if not is_supported:
+    print(f"WARNING: {reason}\n"
+          "Installation will proceed, but this configuration is not officially supported. "
+          "Use at your own risk!")
+
 # Find all .pyx files in the relevant submodules
 cython_extensions = find_pyx_modules("pulse2percept")
 
 for ext in cython_extensions:
     ext.define_macros = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
+    # Ensure only files needing C++ are compiled as C++:
+    if "_fast_array.pyx" in ext.sources[0]:  # This has been an issue
+        ext.language = "c"
+    elif any(file.endswith(".cpp") or file.endswith(".cxx") or file.endswith(".pyx") for file in ext.sources):
+        # Force C++ compilation if the file requires it
+        ext.language = "c++"
 
 setup(
     ext_modules=cythonize(
