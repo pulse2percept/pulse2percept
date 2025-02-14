@@ -351,16 +351,16 @@ class ImageStimulus(Stimulus):
             *  'minimum': Threshold image based on the minimum method, where
                           the histogram of the input image is computed and
                           smoothed until there are only two maxima.
-            *  'local': Threshold image based on `local pixel neighborhood
-                        <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_local>_.
+            *  'local': Threshold image based on `local pixel neighborhood`_.
                         Requires ``block_size``: odd number of pixels in the
                         neighborhood.
-            *  'otsu': `Otsu's method
-                       <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_otsu>_
-            *  'isodata': `ISODATA method
-                          <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_isodata>`_,
-                          also known as the Ridler-Calvard method or
-                          intermeans.
+            *  'otsu': `Otsu's method`_
+            *  'isodata': `ISODATA method`_, also known as the Ridler-Calvard 
+                          method or intermeans.
+
+        .. _local pixel neighborhood: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_local
+        .. _Otsu's method: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_otsu
+        .. _ISODATA method: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_isodata
 
         Returns
         -------
@@ -490,17 +490,18 @@ class ImageStimulus(Stimulus):
             Image filter. Additional parameters can be passed as keyword
             arguments. The following filters are supported:
 
-            *  'sobel': Edge filter the image using the `Sobel filter
-               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.sobel>`_.
-            *  'scharr': Edge filter the image using the `Scarr filter
-               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.scharr>`_.
-            *  'canny': Edge filter the image using the `Canny algorithm
-               <https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.canny>`_.
+            *  'sobel': Edge filter the image using the `Sobel filter`_.
+            *  'scharr': Edge filter the image using the `Scharr filter`_.
+            *  'canny': Edge filter the image using the `Canny algorithm`_.
                You can also specify ``sigma``, ``low_threshold``,
                ``high_threshold``, ``mask``, and ``use_quantiles``.
             *  'median': Return local median of the image.
         **kwargs :
             Additional parameters passed to the filter
+
+        .. _Sobel filter: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.sobel
+        .. _Scharr filter: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.scharr
+        .. _Canny algorithm: https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.canny
 
         Returns
         -------

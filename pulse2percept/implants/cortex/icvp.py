@@ -7,7 +7,7 @@ from ..electrode_arrays import ElectrodeGrid
 
 
 class ICVP(ProsthesisSystem):
-    """Create an ICVP array.
+    """Create an ICVP array
 
     This function creates a ICVP array and places it on the visual cortex
     such that the center of the base of the array is at 3D location (x,y,z) given

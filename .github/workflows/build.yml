@@ -59,22 +59,9 @@ jobs:
         run: |
           pip install flake8
           flake8 pulse2percept --ignore N802,N806,W504 --select W503 --count --show-source --statistics
-
-      # Step 6a: Install the package (Windows)
-      - name: Install package (Windows)
-        if: runner.os == 'windows-latest'
-        run: |
-          $env:INCLUDE = 'C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\ucrt'
-          $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\shared'
-          $env:INCLUDE += ';C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\um'
-          $env:LIB = 'C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\ucrt\x64'
-          $env:LIB += ';C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\um\x64'
-          $env:PATH += ';C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64'
-          pip install .[dev]
             
-      # Step 6b: Install the package (Non-Windows)
-      - name: Install package (Unix)
-        if: runner.os != 'windows-latest'
+      # Step 6: Install the package (Non-Windows)
+      - name: Install package
         run: |
           pip uninstall -y pulse2percept || true
           python setup.py build_ext --inplace
