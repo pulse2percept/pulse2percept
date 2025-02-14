@@ -3,10 +3,12 @@
 
 from pulse2percept.utils._fast_math cimport float32, int32
 from cython import cdivision  # modulo, division by zero
-from libc.math cimport fabs as c_abs, exp as c_exp, pow as c_pow, HUGE_VALF
+from libc.math cimport fabs as c_abs, expf as c_exp, powf as c_pow, HUGE_VALF
 from libcpp cimport bool
 import numpy as np
 cimport numpy as cnp
+ctypedef Py_ssize_t index_t
+
 
 # --- SCALAR FUNCTIONS ------------------------------------------------------- #
 
@@ -41,7 +43,7 @@ cpdef inline float32 c_gcd(float32 a, float32 b, float32 rtol=1e-5,
 cdef float32 c_min(float32[::1] arr) noexcept nogil:
     cdef:
         float32 arr_min
-        int32 idx, arr_len
+        index_t idx, arr_len
 
     arr_min = HUGE_VALF
     arr_len = len(arr)
@@ -54,7 +56,7 @@ cdef float32 c_min(float32[::1] arr) noexcept nogil:
 cdef float32 c_max(float32[::1] arr) noexcept nogil:
     cdef:
         float32 arr_max
-        int32 idx, arr_len
+        index_t idx, arr_len
 
     arr_max = -HUGE_VALF
     arr_len = len(arr)
@@ -66,8 +68,9 @@ cdef float32 c_max(float32[::1] arr) noexcept nogil:
 
 cdef void c_cumpow(float32* arr_in, float32* arr_out, int32 N, int32 exp) noexcept nogil:
     cdef:
-        int32 i = 0
+        index_t i = 0
         float32 sum = 0
+
     for i in range(N):
         sum += arr_in[i]
         arr_out[i] = c_pow(sum, exp)

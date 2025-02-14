@@ -8,6 +8,7 @@ cimport numpy as cnp
 ctypedef cnp.float32_t float32
 ctypedef cnp.int32_t int32
 ctypedef cnp.uint32_t uint32
+ctypedef Py_ssize_t index_t
 
 
 @cdivision(True)
@@ -46,8 +47,8 @@ cpdef fading_fast(const float32[:, ::1] stim,
     cdef:
         float32 t_sim, amp, bright
         float32[:, ::1] percept
-        int32 idx_space, idx_sim, idx_stim, idx_frame
-        int32 n_space, n_stim, n_percept, n_sim
+        index_t idx_space, idx_sim, idx_stim, idx_frame
+        index_t n_space, n_stim, n_percept, n_sim
 
     n_percept = len(idx_t_percept)  # Py overhead
     n_stim = len(t_stim)  # Py overhead

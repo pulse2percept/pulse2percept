@@ -1,5 +1,5 @@
 from pulse2percept.utils._fast_math cimport c_fmax
-from libc.math cimport pow as c_pow, fabs as c_abs, sqrt as c_sqrt
+from libc.math cimport powf as c_pow, fabs as c_abs, sqrtf as c_sqrt
 from cython.parallel import prange
 from cython import cdivision  # modulo, division by zero
 import numpy as np
@@ -8,6 +8,7 @@ cimport numpy as cnp
 ctypedef cnp.float32_t float32
 ctypedef cnp.int32_t int32
 ctypedef cnp.uint32_t uint32
+ctypedef Py_ssize_t index_t
 
 
 @cdivision(True)
@@ -59,8 +60,8 @@ cpdef temporal_fast(const float32[:, ::1] stim,
         float32 ca, r1, r2, r3_a, r3, r4a, r4b, r4c
         float32 t_sim, amp
         float32[:, ::1] percept
-        int32 idx_space, idx_sim, idx_stim, idx_frame
-        int32 n_space, n_stim, n_percept, n_sim
+        index_t idx_space, idx_sim, idx_stim, idx_frame
+        index_t n_space, n_stim, n_percept, n_sim
 
     # Note that eps must be divided by 1000, because the original model was fit
     # with a microsecond time step and now we are running milliseconds:
