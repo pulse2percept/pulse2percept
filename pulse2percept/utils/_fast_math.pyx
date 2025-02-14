@@ -1,12 +1,9 @@
 # distutils: language = c
 
+from pulse2percept.utils._fast_math cimport float32, int32, index_t
 from cython import cdivision  # modulo, division by zero
 from libc.math cimport fabsf as c_abs, expf as c_exp, powf as c_pow, HUGE_VALF
 cimport numpy as cnp
-
-ctypedef cnp.float32_t float32
-ctypedef cnp.int32_t int32
-ctypedef Py_ssize_t index_t
 
 
 # --- SCALAR FUNCTIONS ------------------------------------------------------- #
@@ -69,11 +66,11 @@ cdef float32 c_max(float32[::1] arr) noexcept nogil:
     return arr_max
 
 
-cdef void c_cumpow(float32* arr_in, float32* arr_out, int32 N, int32 exp) noexcept nogil:
+cdef void c_cumpow(float32* arr_in, float32* arr_out, index_t N, float32 exp) noexcept nogil:
     cdef:
         index_t i = 0
         float32 sum = <float32>0
 
     for i in range(N):
         sum += arr_in[i]
-        arr_out[i] = c_pow(sum, <float32>exp)
+        arr_out[i] = c_pow(sum, exp)
