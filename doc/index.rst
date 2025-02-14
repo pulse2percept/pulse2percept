@@ -47,4 +47,4 @@ pulse2percept |version| documentation
 
 .. include:: ../README.rst
    :start-line: 28
-   :end-line: 169
+   :end-line: 170

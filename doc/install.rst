@@ -5,15 +5,15 @@ Installation
 ============
 
 .. include:: ../README.rst
-    :start-line: 70
-    :end-line: 82
+    :start-line: 69
+    :end-line: 83
 
 Compatibility and Building from Source
 ======================================
 
 .. include:: ../README.rst
-    :start-line: 87
-    :end-line: 116
+    :start-line: 86
+    :end-line: 117
 
 .. note::
 
@@ -24,8 +24,8 @@ Upgrading and Uninstalling
 ==========================
 
 .. include:: ../README.rst
-    :start-line: 121
-    :end-line: 131
+    :start-line: 120
+    :end-line: 132
 
 .. _install-source:
 
@@ -46,7 +46,7 @@ Before getting started, you will need the following:
    The latest development version supports:
 
    .. include:: ../README.rst
-      :start-line: 98
+      :start-line: 97
       :end-line: 102
 
    If you don't have Python, there are several options:
