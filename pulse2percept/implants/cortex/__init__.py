@@ -1,10 +1,4 @@
-""":py:class:`~pulse2percept.implants.cortex.Orion`,
-   :py:class:`~pulse2percept.implants.cortex.Cortivis`, 
-   :py:class:`~pulse2percept.implants.cortex.ICVP`, 
-   :py:class:`~pulse2percept.implants.cortex.EllipsoidElectrode`, 
-   :py:class:`~pulse2percept.implants.cortex.NeuralinkThread`,
-   :py:class:`~pulse2percept.implants.cortex.LinearEdgeThread`,
-   :py:class:`~pulse2percept.implants.cortex.Neuralink`
+"""Cortical implants such as Orion, ICVP, and Neuralink
 
 .. autosummary::
     :toctree: _api

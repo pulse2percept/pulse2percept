@@ -1,7 +1,4 @@
-""":py:class:`~pulse2percept.implants.cortex.CortexSpatial`,
-   :py:class:`~pulse2percept.implants.cortex.DynaphosModel`,
-   :py:class:`~pulse2percept.implants.cortex.ScoreboardModel`,
-   :py:class:`~pulse2percept.implants.cortex.ScoreboardSpatial`
+"""Phosphene models for cortical implants
 
 .. autosummary::
     :toctree: _api
