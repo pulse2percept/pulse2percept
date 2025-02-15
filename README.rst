@@ -10,7 +10,7 @@
    :target: https://pypi.org/project/pulse2percept
    :alt: PyPI
 
-.. image:: https://github.com/pulse2percept/pulse2percept/workflows/build/badge.svg
+.. image:: https://github.com/pulse2percept/pulse2percept/actions/workflows/build.yml/badge.svg
    :target: https://github.com/pulse2percept/pulse2percept/actions
    :alt: build
 
