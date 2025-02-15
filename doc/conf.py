@@ -76,7 +76,6 @@ intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
 # Gallery configuration
 sphinx_gallery_conf = {
     'examples_dirs': ['../examples'],
-    'backreferences_dir': '_api',
     'gallery_dirs': ['examples'],
     'reference_url': {'pulse2percept': None},
     'thumbnail_size': (320, 224),
