@@ -1,4 +1,7 @@
-"""
+""":py:class:`~pulse2percept.implants.cortex.CortexSpatial`,
+   :py:class:`~pulse2percept.implants.cortex.DynaphosModel`,
+   :py:class:`~pulse2percept.implants.cortex.ScoreboardModel`,
+   :py:class:`~pulse2percept.implants.cortex.ScoreboardSpatial`
 
 .. autosummary::
     :toctree: _api
