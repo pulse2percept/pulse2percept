@@ -1,4 +1,10 @@
-"""`Orion`, `Cortivis`, `ICVP`, `EllipsoidElectrode`, `NeuralinkThread`, `LinearEdgeThread`, `Neuralink`
+""":py:class:`~pulse2percept.implants.cortex.Orion`,
+   :py:class:`~pulse2percept.implants.cortex.Cortivis`, 
+   :py:class:`~pulse2percept.implants.cortex.ICVP`, 
+   :py:class:`~pulse2percept.implants.cortex.EllipsoidElectrode`, 
+   :py:class:`~pulse2percept.implants.cortex.NeuralinkThread`,
+   :py:class:`~pulse2percept.implants.cortex.LinearEdgeThread`,
+   :py:class:`~pulse2percept.implants.cortex.Neuralink`
 
 .. autosummary::
     :toctree: _api
