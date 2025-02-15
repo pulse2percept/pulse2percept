@@ -1,4 +1,4 @@
-"""`parfor`"""
+""":py:class:`~pulse2percept.utils.parfor`"""
 import numpy as np
 import multiprocessing
 import joblib

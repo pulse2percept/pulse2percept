@@ -1,4 +1,4 @@
-"""`bisect`"""
+""":py:class:`~pulse2percept.utils.bisect`"""
 import numpy as np
 import logging
 

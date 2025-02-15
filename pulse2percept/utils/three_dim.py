@@ -1,4 +1,4 @@
-"""`parse_3d_orient`"""
+""":py:class:`~pulse2percept.utils.parse_3d_orient`"""
 
 import numpy as np
 

@@ -1,4 +1,5 @@
-"""`ElectrodeArray`, `ElectrodeGrid`"""
+""":py:class:`~pulse2percept.implants.ElectrodeArray`, 
+   :py:class:`~pulse2percept.implants.ElectrodeGrid`"""
 from matplotlib.colors import Normalize
 import numpy as np
 from collections import OrderedDict

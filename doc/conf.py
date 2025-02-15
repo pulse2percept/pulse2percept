@@ -78,6 +78,8 @@ sphinx_gallery_conf = {
     'examples_dirs': ['../examples'],
     'gallery_dirs': ['examples'],
     'reference_url': {'pulse2percept': None},
+    'thumbnail_size': (320, 224),
+    'remove_config_comments': True,
     'subsection_order': ExplicitOrder([
         '../examples/implants',
         '../examples/stimuli',

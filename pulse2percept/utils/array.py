@@ -1,4 +1,7 @@
-"""`is_strictly_increasing`, `sample`, `unique`, `radial_mask`"""
+""":py:class:`~pulse2percept.utils.is_strictly_increasing`, 
+   :py:class:`~pulse2percept.utils.sample`, 
+   :py:class:`~pulse2percept.utils.unique`, 
+   :py:class:`~pulse2percept.utils.radial_mask`"""
 
 from ._fast_array import fast_is_strictly_increasing
 import numpy as np

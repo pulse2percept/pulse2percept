@@ -1,4 +1,5 @@
-"""`deprecated`, `is_deprecated`"""
+""":py:class:`~pulse2percept.utils.deprecated`, 
+   :py:class:`~pulse2percept.utils.is_deprecated`"""
 
 import sys
 import warnings

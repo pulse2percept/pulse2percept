@@ -1,4 +1,5 @@
-"""`fetch_beyeler2019`, `subject_params`"""
+""":py:class:`~pulse2percept.datasets.fetch_beyeler2019`, 
+   :py:class:`~pulse2percept.datasets.subject_params`"""
 from os.path import join, isfile
 import numpy as np
 

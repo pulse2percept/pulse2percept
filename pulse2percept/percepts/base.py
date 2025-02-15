@@ -1,4 +1,4 @@
-"""`Percept`"""
+""":py:class:`~pulse2percept.percepts.Percept`"""
 import numpy as np
 from copy import deepcopy
 import matplotlib.pyplot as plt

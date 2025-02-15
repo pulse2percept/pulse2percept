@@ -1,4 +1,4 @@
-"""`Orion`"""
+""":py:class:`~pulse2percept.implants.cortex.Orion`"""
 import numpy as np
 from pulse2percept.implants import ProsthesisSystem
 

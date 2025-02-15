@@ -1,4 +1,5 @@
-"""`plot_argus_phosphenes`, `plot_argus_simulated_phosphenes`"""
+""":py:class:`~pulse2percept.viz.plot_argus_phosphenes`, 
+   :py:class:`~pulse2percept.viz.plot_argus_simulated_phosphenes`"""
 import numpy as np
 import pandas as pd
 from skimage.io import imread

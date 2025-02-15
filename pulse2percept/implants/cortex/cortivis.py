@@ -1,4 +1,4 @@
-"""`Cortivis`"""
+""":py:class:`~pulse2percept.implants.cortex.Cortivis`"""
 import numpy as np
 
 from ..base import ProsthesisSystem

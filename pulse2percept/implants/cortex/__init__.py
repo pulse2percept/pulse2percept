@@ -1,4 +1,4 @@
-"""`Orion`, `Cortivis`, `ICVP`, `EllipsoidElectrode`, `NeuralinkThread`, `LinearEdgeThread`, `Neuralink`
+"""Cortical implants such as Orion, ICVP, and Neuralink
 
 .. autosummary::
     :toctree: _api

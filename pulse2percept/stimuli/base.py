@@ -1,4 +1,5 @@
-"""`Stimulus`, `ImageStimulus`"""
+""":py:class:`~pulse2percept.stimuli.Stimulus`, 
+   :py:class:`~pulse2percept.stimuli.ImageStimulus`"""
 import warnings
 from ..utils import PrettyPrint, unique, is_strictly_increasing
 from ..utils.constants import DT, MIN_AMP

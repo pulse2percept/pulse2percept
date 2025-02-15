@@ -1,4 +1,4 @@
-"""`fetch_han2021`"""
+""":py:class:`~pulse2percept.datasets.fetch_han2021`"""
 from os.path import join, isfile
 import numpy as np
 

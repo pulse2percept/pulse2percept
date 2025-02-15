@@ -1,4 +1,4 @@
-"""
+"""Phosphene models for cortical implants
 
 .. autosummary::
     :toctree: _api

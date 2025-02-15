@@ -1,6 +1,8 @@
-"""
-`BaseOptimizer`, `GridSearchOptimizer`, `FunctionMinimizer`,
-`NotFittedError`, `ParticleSwarmOptimizer`
+""":py:class:`~pulse2percept.model_selection.BaseOptimizer`,
+   :py:class:`~pulse2percept.model_selection.GridSearchOptimizer`,
+   :py:class:`~pulse2percept.model_selection.FunctionMinimizer`,
+   :py:class:`~pulse2percept.model_selection.NotFittedError`,
+   :py:class:`~pulse2percept.model_selection.ParticleSwarmOptimizer`
 """
 import numpy as np
 from abc import ABCMeta, abstractmethod

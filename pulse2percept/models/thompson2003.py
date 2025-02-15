@@ -1,4 +1,5 @@
-"""`Thompson2003Model`, `Thompson2003Spatial` [Thompson2003]_"""
+""":py:class:`~pulse2percept.models.Thompson2003Model`, 
+   :py:class:`~pulse2percept.models.Thompson2003Spatial` [Thompson2003]_"""
 
 import numpy as np
 import copy
