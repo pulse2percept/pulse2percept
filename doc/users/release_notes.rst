@@ -4,27 +4,6 @@
 Release Notes
 =============
 
-v0.10.0 (TBD)
--------------
-
-Highlights
-~~~~~~~~~~
-
-New features
-~~~~~~~~~~~~
-
-API changes
-~~~~~~~~~~~
-
-Backward-incompatible changes
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Deprecations
-^^^^^^^^^^^^
-
-Bug fixes
-~~~~~~~~~
-
 v0.9.0 (2025-02-17)
 -------------------
 
