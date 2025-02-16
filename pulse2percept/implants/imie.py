@@ -10,7 +10,7 @@ class IMIE(ProsthesisSystem):
     """The 256-channel epiretinal prosthesis system (IMIE 256)
 
     This class implements a 256-channel Intelligent Micro Implant Eye 
-    epiretinal prosthesis system (IMIE 256) [Xu2021]. It was 
+    epiretinal prosthesis system (IMIE 256) [Xu2021]_. It was 
     co-developed by Golden Eye Bionic, LLC (Pasadena CA) and 
     IntelliMicro Medical Co., Ltd. (Changsha, Hunan Province, China) 
     and is manufactured by IntelliMicro.

@@ -68,7 +68,7 @@ Installation
 ============
 
 Once you have Python 3.9 or later (but not yet 3.13), you can install the
-`stable release`_ of p2p using ``pip``:
+`stable release`_ of p2p using:
 
 .. code-block:: bash
 

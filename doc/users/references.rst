@@ -34,7 +34,11 @@ Studies referenced throughout the Documentation:
                 <https://doi.org/10.1002/cne.902920402>`_.
 .. [EricksonDavis2021] C Erickson-Davis, H Korzybska (2021). What do blind people 
                        "see" with retinal prostheses? Observations and qualitative
-                       reports of epiretinal implant users. *PLOS ONE* 16(2), doi:`10.1371/journal.pone.0229189 <https://doi.org/10.1371/journal.pone.0229189>`_.
+                       reports of epiretinal implant users. *PLOS ONE* 16(2), 
+                       doi:`10.1371/journal.pone.0229189 <https://doi.org/10.1371/journal.pone.0229189>`_.
+.. [Fernandez2017] E Fernandez & R Normann (2017). CORTIVIS Approach for an 
+                   Intracortical Visual Prostheses. *Springer International Publishing*,
+                   doi: `10.1007/978-3-319-41876-6_15 <https://doi.org/10.1007/978-3-319-41876-6_15>`_.
 .. [Han2021] N Han, S Srivastava, A Xu, D Klein, M Beyeler (2021). Deep Learning–Based
              Scene Simplification for Bionic Vision. *Augmented Humans Conference* 2021,
              45–54. <https://doi.org/10.1145/3458709.3458982>`_.
@@ -48,11 +52,15 @@ Studies referenced throughout the Documentation:
                    Retinal Electrical Simulation. *Investigative Ophthalmology & Visual
                    Science November 2009* Vol.50, 5017-5025, doi:`10.1167/iovs.08-2897
                    <https://doi.org/10.1167/iovs.08-2897>`_.
-.. [Grinten2023] Maureen van der Grinten, Jaap de Ruyter van Steveninck, Antonio Lozano, 
-                 Laura Pijnacker, Bodo Rückauer, Pieter Roelfsema, Marcel van Gerven, 
-                 Richard van Wezel, Umut Güçlü, Yağmur Güçlütürk (2022). Biologically
-                 plausible phosphene simulation for the differentiable optimization of
-                 visual cortical prostheses. *bioRxiv*, doi:`10.1101/2022.12.23.521749 <https://doi.org/10.1101/2022.12.23.521749>`_.
+.. [vanderGrinten2023] M van der Grinten, J de Ruyter van Steveninck, A Lozano, 
+                       L Pijnacker, B Rückauer, P Roelfsema, M van Gerven, 
+                       R van Wezel, Umut Güçlü, Y Güçlütürk (2022). Biologically
+                       plausible phosphene simulation for the differentiable optimization of
+                       visual cortical prostheses. *bioRxiv*, 
+                       doi:`10.1101/2022.12.23.521749 <https://doi.org/10.1101/2022.12.23.521749>`_.
+.. [Han2021] N Han, S Srivastava, A Xu, D Klein, M Beyeler (2021). Deep learning-based 
+                 scene simplification for bionic vision. *ACM Augmented Humans* 2021,
+                 doi:`10.1145/3458709.3458982 <https://doi.org/10.1145/3458709.3458982>`_.
 .. [Hayes2003] JS Hayes et al. (2003). Visually guided performance of
                simple tasks using simulated prosthetic vision.
                *Artificial Organs* 27, 1016-1028.
@@ -83,6 +91,9 @@ Studies referenced throughout the Documentation:
              Reproducibility of Phosphene Characteristics in Chronically Implanted
              Argus(R) II Retinal Prosthesis Subjects. *Am J Ophthalmol*, 
              doi:`10.1016/j.ajo.2016.07.021 <https://doi.org/10.1016/j.ajo.2016.07.021>`_.
+.. [Musk2019] E Musk & Neuralink (2019). An Integrated Brain-Machine Interface 
+              Platform With Thousands of Channels. *Journal of Medical Internet Research*,
+              doi: `10.2196/16194 <https://doi.org/10.2196/16194>`_.
 .. [Nanduri2012] D Nanduri, I Fine, A Horsager, GM Boynton, MS Humayun,
                  RJ Greenberg, JD Weiland (2012), Frequency and amplitude
                  modulation have different effects on the percepts elicited
@@ -126,6 +137,10 @@ Studies referenced throughout the Documentation:
                   pixelized vision.
                   *Investigative Ophthalmolology & Visual Science* 44,
                   5035-5042.
+.. [Troyk2003] P Troyk, M Bak, J Berg, D Bradley, S Cogan, R Erickson, C Kufta,
+               D McCreery, E Schmidt, V Towle (2003). A model for Intracortical
+               visual prosthesis research. *Artificial Organs*,
+               doi: `10.1046/j.1525-1594.2003.07308.x <https://doi.org/10.1046/j.1525-1594.2003.07308.x>`_.
 .. [Watson2014] A.B. Watson (2014). A formula for human retinal ganglion cell
                 receptive field density as a function of visual field
                 location. *Journal of Vision* 14(7):1-17,

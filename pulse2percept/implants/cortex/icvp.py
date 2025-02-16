@@ -15,9 +15,9 @@ class ICVP(ProsthesisSystem):
 
     ICVP (Intracortical Visual Prosthesis Project) is an electrode array containing 
     16 Parylene-insulated (and 2 uninsulated reference and counter) iridium shaft
-    electrodes in a 4 column array with 400 um spacing.  The electrodes have
-    a diameter of 15 um at the laser cut.  They are inserted either 650 um
-    or 850 um into the cortex.
+    electrodes in a 4 column array with 400 um spacing [Troyk2003]_.
+    The electrodes have a diameter of 15 um at the laser cut.
+    They are inserted either 650 um or 850 um into the cortex.
 
     .. note::
 

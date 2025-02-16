@@ -1,4 +1,5 @@
-""":py:class:`~pulse2percept.implants.ProsthesisSystem`"""
+""":py:class:`~pulse2percept.implants.ProsthesisSystem`,
+   :py:class:`~pulse2percept.implants.RectangleImplant`"""
 import numpy as np
 from copy import deepcopy
 from functools import reduce

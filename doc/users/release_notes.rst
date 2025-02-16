@@ -4,8 +4,8 @@
 Release Notes
 =============
 
-v0.9.0 (TBD)
-------------
+v0.10.0 (TBD)
+-------------
 
 Highlights
 ~~~~~~~~~~
@@ -25,6 +25,31 @@ Deprecations
 Bug fixes
 ~~~~~~~~~
 
+v0.9.0 (2025-02-17)
+-------------------
+
+Highlights
+~~~~~~~~~~
+
+*  Cortical implants: :py:class:`~pulse2percept.implants.cortex.Cortivis`
+   [Fernandez2017]_ (:pull:`525`),
+   :py:class:`~pulse2percept.implants.cortex.ICVP` [Troyk2003]_ (:pull:`542`),
+   :py:class:`~pulse2percept.implants.cortex.Neuralink` [Musk2019]_
+   (:pull:`597`)
+*  Cortical models: :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
+   (:pull:`533`), :py:class:`~pulse2percept.models.cortex.DynaphosModel`
+   [vanderGrinten2023]_ (:pull:`547`)
+*  Cortical maps: :py:class:`~pulse2percept.topography.Polimeni2006Map`
+   (:pull:`509`), :py:class:`~pulse2percept.topography.NeuropythyMap` 
+   (:pull:`597`)
+*  Other new implants: :py:class:`~pulse2percept.implants.IMIE` [Xu2021]_
+   (:pull:`492`), :py:class:`~pulse2percept.implants.EnsembleImplant` 
+   (:pull:`537`), :py:class:`~pulse2percept.implants.RectangleImplant`
+   (:pull:`631`)
+*  New datasets: :py:class:`~pulse2percept.datasets.fetch_han2021` 
+   [Han2021]_ (:pull:`494`)
+*  Torch and CUDA support (:pull:`633`)
+*  Python 3.11 and 3.12 support
 
 v0.8.0 (2022-05-05)
 -------------------

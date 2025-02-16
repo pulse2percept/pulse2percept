@@ -219,6 +219,6 @@ for i, amp in enumerate(amps):
 ###############################################################################
 # Note: For the above plot, note that we plot the generated percept
 # brightness (which is limited by phosphene size & the tissue activation threshold)
-# while [Grinten2023]_ plots the internal brightness state. The dashed lines in 
-# [Grinten2023]_ represent time points at which a percept is not generated, 
+# while [vanderGrinten2023]_ plots the internal brightness state. The dashed lines in 
+# [vanderGrinten2023]_ represent time points at which a percept is not generated, 
 # as the activation threshold was not reached.
