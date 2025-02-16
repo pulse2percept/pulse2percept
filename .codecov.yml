@@ -1,11 +1,11 @@
 coverage:
   status:
+    changes: false
+    patch: false
     project:
       default:
         target: auto
-        threshold: 5%
-    patch: false
-    changes: false
+        threshold: 5.0
     ignore:
       - "pulse2percept/datasets/tests/**/*"
       - "pulse2percept/implants/tests/**/*"
