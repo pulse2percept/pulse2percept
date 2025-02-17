@@ -93,13 +93,14 @@ if not is_supported:
 cython_extensions = find_pyx_modules("pulse2percept")
 
 for ext in cython_extensions:
-    ext.define_macros = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
+    ext.define_macros = [("NPY_NO_DEPRECATED_API", "NPY_2_0_API_VERSION")]
     # Ensure only files needing C++ are compiled as C++:
     if "_fast_array.pyx" in ext.sources[0]:  # This has been an issue
         ext.language = "c"
     elif any(file.endswith(".cpp") or file.endswith(".cxx") or file.endswith(".pyx") for file in ext.sources):
         # Force C++ compilation if the file requires it
         ext.language = "c++"
+
 
 setup(
     ext_modules=cythonize(

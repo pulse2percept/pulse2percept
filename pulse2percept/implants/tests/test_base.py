@@ -104,7 +104,7 @@ def test_ProsthesisSystem_stim():
     npt.assert_equal('H4' in implant.stim.electrodes, False)
 
     implant.deactivate('all')
-    npt.assert_equal(not implant.stim.data, True)
+    npt.assert_equal(implant.stim.data.size == 0, True)
     implant.activate('all')
     implant.stim = {'H4': 1}
     npt.assert_equal('H4' in implant.stim.electrodes, True)
