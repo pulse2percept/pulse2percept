@@ -1,4 +1,5 @@
-"""`r2_score`, `circ_r2_score`"""
+""":py:class:`~pulse2percept.utils.r2_score`, 
+   :py:class:`~pulse2percept.utils.circ_r2_score`"""
 import numpy as np
 from math import isclose
 from scipy.stats import circvar

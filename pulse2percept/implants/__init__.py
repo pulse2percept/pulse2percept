@@ -7,7 +7,7 @@ Different prosthetic implants, such as Argus II, Alpha-IMS, BVT-24, PRIMA, Corti
     cortex
 
 .. autosummary::
-    : toctree: _api
+    :toctree: _api
 
     base
     electrodes

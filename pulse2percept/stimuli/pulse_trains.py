@@ -1,4 +1,6 @@
-"""`PulseTrain`, `BiphasicPulseTrain`, `AsymmetricBiphasicPulseTrain`"""
+""":py:class:`~pulse2percept.stimuli.PulseTrain`, 
+   :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`, 
+   :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`"""
 import numpy as np
 import logging
 

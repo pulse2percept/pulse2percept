@@ -19,39 +19,18 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.13", "3.12", "3.11", "3.10", "3.9"]
 
     steps:
       # Step 1: Check out the repository
       - uses: actions/checkout@v4
 
-      # Step 2a: Install dependencies (macOS only)
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install libomp llvm
-          export PATH="$(brew --prefix llvm)/bin:$PATH"
-          export CC="$(brew --prefix llvm)/bin/clang"
-          export CXX="$(brew --prefix llvm)/bin/clang++"
-          export CPPFLAGS="-I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
-          export LDFLAGS="-L$(brew --prefix llvm)/lib -L$(brew --prefix libomp)/lib -lomp"
-        env:
-          # Override flags for Python 3.9 to resolve `faltivec` issues
-          CFLAGS: >
-            -std=c99 -maltivec
-            -I$(brew --prefix llvm)/include
-            -I$(brew --prefix libomp)/include
-          LDFLAGS: >
-            -L$(brew --prefix llvm)/lib
-            -L$(brew --prefix libomp)/lib -lomp
-
-      # Step 2b: Install dependencies (Linux only)
+      # Step 2: Install dependencies (Linux only)
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
-          
+
       # Step 3: Build wheels using cibuildwheel
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22.0
@@ -70,8 +49,8 @@ jobs:
           # Pre-build steps
           CIBW_BEFORE_BUILD: "python -m pip install --upgrade pip setuptools wheel cython numpy"
           # Python versions to build for
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* cp313-*"
-          # Skip 32-bit wheels
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
+          # Skip specific wheels
           CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
 
       # Step 4: Upload the built wheels as artifacts

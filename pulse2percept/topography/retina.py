@@ -1,5 +1,7 @@
-"""
-`RetinalMap`, `Curcio1990Map`, `Watson2014Map`, `Watson2014DisplaceMap`
+""":py:class:`~pulse2percept.topography.RetinalMap`, 
+   :py:class:`~pulse2percept.topography.Curcio1990Map`,
+   :py:class:`~pulse2percept.topography.Watson2014Map`,
+   :py:class:`~pulse2percept.topography.Watson2014DisplaceMap`
 """
 import numpy as np
 from abc import abstractmethod

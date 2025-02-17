@@ -1,4 +1,5 @@
-"""`BiphasicAxonMapModel`, `BiphasicAxonMapSpatial`, [Granley2021]_"""
+""":py:class:`~pulse2percept.models.BiphasicAxonMapModel`,
+   :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` [Granley2021]_"""
 from functools import partial
 import numpy as np
 import sys

@@ -1,4 +1,7 @@
-"""`center_image`, `scale_image`, `shift_image`, `trim_image`"""
+""":py:class:`~pulse2percept.utils.center_image`, 
+   :py:class:`~pulse2percept.utils.scale_image`,
+   :py:class:`~pulse2percept.utils.shift_image`,
+   :py:class:`~pulse2percept.utils.trim_image`"""
 import numpy as np
 from math import isclose
 from skimage import img_as_bool, img_as_ubyte, img_as_float32

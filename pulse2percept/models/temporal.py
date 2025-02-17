@@ -1,4 +1,4 @@
-"""`FadingTemporal`"""
+""":py:class:`~pulse2percept.models.FadingTemporal`"""
 import numpy as np
 from .base import TemporalModel
 from ._temporal import fading_fast

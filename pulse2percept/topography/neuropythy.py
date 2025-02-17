@@ -1,3 +1,4 @@
+""":py:class:`~pulse2percept.topography.NeuropythyMap`"""
 import numpy as np
 import os
 from scipy.spatial import cKDTree

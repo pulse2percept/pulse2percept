@@ -1,4 +1,4 @@
-"""`assert_warns_msg`"""
+""":py:class:`~pulse2percept.utils.assert_warns_msg`"""
 
 import pytest
 import numpy.testing as npt

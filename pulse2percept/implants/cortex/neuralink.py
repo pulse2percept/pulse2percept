@@ -1,4 +1,6 @@
-"""`EllipsoidElectrode`, `LinearEdgeThread`, `NeuralinkThread`"""
+""":py:class:`~pulse2percept.implants.cortex.EllipsoidElectrode`, 
+   :py:class:`~pulse2percept.implants.cortex.LinearEdgeThread`,
+   :py:class:`~pulse2percept.implants.cortex.NeuralinkThread`"""
 from abc import ABCMeta, abstractmethod
 import numpy as np
 from matplotlib.patches import Ellipse
@@ -30,7 +32,7 @@ class EllipsoidElectrode(Electrode):
             Orientation of the thread in 3D space. 
             orient defaults to positive z direction
 
-            orient can be:
+            ``orient`` can be:
             - A length 3 vector specifying the direction that the 
               thread should extend in (if orient_mode == 'direction')
             - A list of 3 angles, (r_x, r_y, r_z), specifying the rotation 
@@ -130,7 +132,7 @@ class LinearEdgeThread(NeuralinkThread):
         orient : np.ndarray with shape (3) or (3, 3) 
             Orientation of the thread in 3D space. 
 
-            orient can be:
+            ``orient`` can be:
             - A length 3 vector specifying the direction that the 
               thread should extend in (if orient_mode == 'direction')
             - A list of 3 angles, (r_x, r_y, r_z), specifying the rotation 
@@ -240,7 +242,7 @@ class Neuralink(EnsembleImplant):
     def from_neuropythy(cls, vfmap, locs=None, xrange=None, yrange=None, xystep=None, 
                         rand_insertion_angle=None, region='v1', Thread=LinearEdgeThread):
         """
-        Create a neuralink implant from a neuropythy visual field map.
+        Create a Neuralink implant [Musk2019]_ from a neuropythy visual field map.
 
         The implant will be created by creating a NeuralinkThread for each
         visual field location specified either by locs or by xrange, yrange, 

@@ -1,4 +1,4 @@
-"""`ICVP`"""
+""":py:class:`~pulse2percept.implants.cortex.ICVP`"""
 import numpy as np
 
 from ..base import ProsthesisSystem
@@ -7,7 +7,7 @@ from ..electrode_arrays import ElectrodeGrid
 
 
 class ICVP(ProsthesisSystem):
-    """Create an ICVP array.
+    """Create an ICVP array
 
     This function creates a ICVP array and places it on the visual cortex
     such that the center of the base of the array is at 3D location (x,y,z) given
@@ -15,9 +15,9 @@ class ICVP(ProsthesisSystem):
 
     ICVP (Intracortical Visual Prosthesis Project) is an electrode array containing 
     16 Parylene-insulated (and 2 uninsulated reference and counter) iridium shaft
-    electrodes in a 4 column array with 400 um spacing.  The electrodes have
-    a diameter of 15 um at the laser cut.  They are inserted either 650 um
-    or 850 um into the cortex.
+    electrodes in a 4 column array with 400 um spacing [Troyk2003]_.
+    The electrodes have a diameter of 15 um at the laser cut.
+    They are inserted either 650 um or 850 um into the cortex.
 
     .. note::
 

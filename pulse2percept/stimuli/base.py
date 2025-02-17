@@ -1,4 +1,5 @@
-"""`Stimulus`, `ImageStimulus`"""
+""":py:class:`~pulse2percept.stimuli.Stimulus`, 
+   :py:class:`~pulse2percept.stimuli.ImageStimulus`"""
 import warnings
 from ..utils import PrettyPrint, unique, is_strictly_increasing
 from ..utils.constants import DT, MIN_AMP
@@ -666,10 +667,10 @@ class Stimulus(PrettyPrint):
         else:
             data = self.data[electrodes, :].reshape(-1, len(self.time))
         data = [np.interp(time, self.time, row) for row in data]
-        data = np.array(data).reshape((-1, len(time)))
+        data = np.array(data).reshape((-1, len(time))).astype(np.float32)
         # Return a single element as scalar:
         if data.size == 1:
-            data = data.ravel()[0]
+            data = data.ravel()[0].item()
         return data
 
     def __eq__(self, other):

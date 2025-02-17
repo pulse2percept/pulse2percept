@@ -1,4 +1,6 @@
-"""`VideoStimulus`, `BostonTrain`, `GirlPool`"""
+""":py:class:`~pulse2percept.stimuli.VideoStimulus`, 
+   :py:class:`~pulse2percept.stimuli.BostonTrain`, 
+   :py:class:`~pulse2percept.stimuli.GirlPool`"""
 from os.path import dirname, join
 import numpy as np
 from math import isclose

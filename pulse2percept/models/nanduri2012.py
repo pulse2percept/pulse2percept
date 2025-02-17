@@ -1,5 +1,6 @@
-"""`Nanduri2012Model`, `Nanduri2012Spatial`, `Nanduri2012Temporal`
-   [Nanduri2012]_"""
+""":py:class:`~pulse2percept.models.Nanduri2012Model`, 
+   :py:class:`~pulse2percept.models.Nanduri2012Spatial`, 
+   :py:class:`~pulse2percept.models.Nanduri2012Temporal` [Nanduri2012]_"""
 import numpy as np
 from .base import Model, SpatialModel, TemporalModel
 from ._nanduri2012 import spatial_fast, temporal_fast

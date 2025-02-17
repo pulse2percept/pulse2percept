@@ -1,4 +1,5 @@
-"""`correlation_matrix`, `scatter_correlation`"""
+""":py:class:`~pulse2percept.viz.correlation_matrix`, 
+   :py:class:`~pulse2percept.viz.scatter_correlation`"""
 import numpy as np
 import pandas as pd
 import scipy.stats as spst

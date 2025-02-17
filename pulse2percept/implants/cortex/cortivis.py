@@ -1,4 +1,4 @@
-"""`Cortivis`"""
+""":py:class:`~pulse2percept.implants.cortex.Cortivis`"""
 import numpy as np
 
 from ..base import ProsthesisSystem
@@ -6,14 +6,15 @@ from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
 
 class Cortivis(ProsthesisSystem):
-    """Create a Cortivis array.
+    """Create a Cortivis array
     
     This function creates a Cortivis array and places it on the visual cortex
     such that the center of the base of the array is at 3D location (x,y,z) given
     in microns, and the array is rotated by angle ``rot``, given in degrees.
 
     Cortivis is a Utah electrode array containing 96 electrodes in a 10x10 array
-    with 400 um spacing, and electrode diameter of 80 um at the base.
+    with 400 um spacing, and electrode diameter of 80 um at the base
+    [Fernandez2017]_.
     
     .. note::
 
