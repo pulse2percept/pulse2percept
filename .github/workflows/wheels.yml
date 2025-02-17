@@ -54,7 +54,7 @@ jobs:
           # Pre-build steps
           CIBW_BEFORE_BUILD: "python -m pip install --upgrade pip setuptools wheel cython numpy"
           # Python versions to build for
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
           # Skip specific wheels
           CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
 
