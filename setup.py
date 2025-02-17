@@ -9,9 +9,9 @@ from Cython.Build import cythonize
 import numpy
 
 # Define supported configurations
-SUPPORTED_PYTHON_VERSIONS = {"3.9", "3.10", "3.11", "3.12", "3.13"}
+SUPPORTED_PYTHON_VERSIONS = {"3.10", "3.11", "3.12", "3.13"}
 SUPPORTED_PLATFORMS = {"Linux", "Windows", "Darwin"}
-EXPLICITLY_UNSUPPORTED = {("Darwin", "3.9"), ("Windows", "3.13")}  # Specific exclusions
+EXPLICITLY_UNSUPPORTED = {}  # Specific exclusions
 
 
 def is_supported():
