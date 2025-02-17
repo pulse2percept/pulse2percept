@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pulse2percept"
-version = "0.9.0"
+version = "0.10.0dev"
 description = "A Python-based simulation framework for bionic vision"
 readme = "README.rst"
 license = { file = "LICENSE" }
