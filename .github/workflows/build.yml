@@ -88,15 +88,12 @@ jobs:
         run: |
           mkdir test_dir
           cd test_dir
-          pytest --pyargs pulse2percept --runslow --cov-report=xml --cov=pulse2percept --doctest-modules        
+          pytest --pyargs pulse2percept --runslow --cov-branch --cov-report=xml --doctest-modules
           
       # Step 9: Codecov
       - name: Upload coverage report to codecov.io
-        if: github.event_name == 'pull_request'
-        uses: codecov/codecov-action@v1
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: ./test_dir/coverage.xml
-          flags: unittests
-          name: codecov-umbrella
-          yml: ./codecov.yml
+          slug: pulse2percept/pulse2percept
