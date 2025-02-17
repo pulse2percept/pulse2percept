@@ -9,12 +9,12 @@
     :toctree: _api
 
     base
-    horsager2009
+    han2021
     beyeler2019
     nanduri2012
     perezfornos2012
-    beyeler2019
     greenwald2009
+    horsager2009
 
 .. seealso::
 

@@ -13,7 +13,8 @@ class Cortivis(ProsthesisSystem):
     in microns, and the array is rotated by angle ``rot``, given in degrees.
 
     Cortivis is a Utah electrode array containing 96 electrodes in a 10x10 array
-    with 400 um spacing, and electrode diameter of 80 um at the base.
+    with 400 um spacing, and electrode diameter of 80 um at the base
+    [Fernandez2017]_.
     
     .. note::
 

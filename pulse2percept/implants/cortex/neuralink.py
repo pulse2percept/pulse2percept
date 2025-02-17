@@ -242,7 +242,7 @@ class Neuralink(EnsembleImplant):
     def from_neuropythy(cls, vfmap, locs=None, xrange=None, yrange=None, xystep=None, 
                         rand_insertion_angle=None, region='v1', Thread=LinearEdgeThread):
         """
-        Create a neuralink implant from a neuropythy visual field map.
+        Create a Neuralink implant [Musk2019]_ from a neuropythy visual field map.
 
         The implant will be created by creating a NeuralinkThread for each
         visual field location specified either by locs or by xrange, yrange, 
