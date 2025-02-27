@@ -7,9 +7,41 @@ import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
 
 from pulse2percept.implants import (PointSource, ElectrodeArray, ElectrodeGrid,
-                                    ProsthesisSystem, RectangleImplant)
-from pulse2percept.stimuli import Stimulus, ImageStimulus, VideoStimulus
+                                    ProsthesisSystem, RectangleImplant,
+                                    PhotovoltaicPixel)
+from pulse2percept.stimuli import Stimulus, ImageStimulus, VideoStimulus, LogoBVL
 from pulse2percept.models import ScoreboardModel
+
+
+class PhotovoltaicArray(ProsthesisSystem):
+    def __init__(self, x=0, y=0, z=-100, r=5, spacing=40, rot=0,
+                 stim=None, preprocess=False, safe_mode=False):
+        # 35 um pixels with 5 um trenches, 16 um active electrode:
+        self.spacing = spacing  # um
+        self.trench = 5  # um
+        elec_radius = 8  # um
+        self.shape = (int(r * 600 / spacing), int(r * 700 / spacing))
+        self.eye = 'RE'
+        self.preprocess = preprocess
+        self.safe_mode = safe_mode
+        dva2ret = 280.0
+
+        self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z,
+                                    rot=rot, type='hex',
+                                    orientation='vertical',
+                                    etype=PhotovoltaicPixel, r=elec_radius,
+                                    a=(self.spacing - self.trench) / 2)
+
+        rm_names = []
+        for name, electrode in self.earray.electrodes.items():
+            if (electrode.x - x) ** 2 + (electrode.y - y) ** 2 > (r * dva2ret) ** 2:
+                rm_names.append(name)
+        for e in rm_names:
+            self.earray.remove_electrode(e)
+
+        # Beware of race condition: Stim must be set last, because it requires
+        # indexing into self.electrodes:
+        self.stim = stim
 
 
 def test_ProsthesisSystem():
@@ -135,6 +167,10 @@ def test_ProsthesisSystem_reshape_stim(rot, gtype, n_frames):
     model.build()
     percept = label(model.predict_percept(implant).data.squeeze().T > 0.2)
     npt.assert_almost_equal(regionprops(percept)[0].orientation, 0, decimal=1)
+
+    # Smoke test a large hex grid (old code results in MemoryError):
+    implant = PhotovoltaicArray(r=2, spacing=40, rot=rot)
+    implant.stim = LogoBVL()
 
 
 def test_ProsthesisSystem_deactivate():

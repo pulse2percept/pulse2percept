@@ -2,16 +2,13 @@
    :py:class:`~pulse2percept.implants.RectangleImplant`"""
 import numpy as np
 from copy import deepcopy
-from functools import reduce
-from scipy.spatial import cKDTree
-from skimage.transform import SimilarityTransform
 from collections import OrderedDict
+from scipy.interpolate import RegularGridInterpolator
 
 from .electrodes import Electrode, DiskElectrode
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from ..stimuli import Stimulus, ImageStimulus, VideoStimulus
 from ..utils import PrettyPrint
-from ..utils._fast_math import c_gcd
 
 
 class ProsthesisSystem(PrettyPrint):
@@ -134,53 +131,54 @@ class ProsthesisSystem(PrettyPrint):
 
     def reshape_stim(self, stim):
         if isinstance(stim, (ImageStimulus, VideoStimulus)):
-            # In the more general case, the implant might not have a 'shape'
-            # attribute or have a hex grid. Idea:
-            # - Fit electrode locations to a rectangular grid
-            # - Downscale the image to that grid size
-            # - Index into grid to determine electrode activation
+            # Convert to grayscale:
+            img = stim.rgb2gray()
 
-            # Flip image vertically, since retinal representation is upside down:
-            data = stim.rgb2gray().apply(lambda x : x[::-1])
-            if hasattr(self.earray, 'rot'):
-                # We need to rotate the array & image first, otherwise we may
-                # end up with an infinitesimally small (dx,dy); for example,
-                # when a rectangular grid is rotated by 1deg:
-                tf = SimilarityTransform(rotation=np.deg2rad(self.earray.rot))
-                x, y = np.array([tf.inverse([e.x, e.y])
-                                 for e in self.electrode_objects]).squeeze().T
-                # Rotate image backwards, since retinal image upside down
-                data = data.rotate(-self.earray.rot)
+            # Extract electrode coordinates
+            x = np.array([e.x for e in self.electrode_objects])
+            y = np.array([e.y for e in self.electrode_objects])
+
+            # Define image coordinate space
+            if isinstance(stim, ImageStimulus):
+                img_h, img_w = img.img_shape
+                n_frames = 1
+                data = img.data.reshape(img_h, img_w)  # Ensure 2D format
+            elif isinstance(stim, VideoStimulus):
+                img_h, img_w, n_frames = img.vid_shape
+                data = img.data.reshape(img_h, img_w, n_frames)  # 3D format
+            
+            x_min, x_max = np.min(x), np.max(x)
+            y_min, y_max = np.min(y), np.max(y)
+
+            # Create grid along original image axes
+            img_x = np.linspace(x_min, x_max, img_w)
+            img_y = np.linspace(y_min, y_max, img_h)
+
+            # If single-frame image, interpolate directly
+            if n_frames == 1:
+                interpolator = RegularGridInterpolator(
+                    (img_y, img_x), data, method='linear', 
+                    bounds_error=False, fill_value=0
+                )
+                pixel_values = interpolator(np.vstack((y, x)).T)
             else:
-                x = [e.x for e in self.electrode_objects]
-                y = [e.y for e in self.electrode_objects]
-            # Determine grid step by finding the greatest common denominator:
-            dx = abs(reduce(lambda a, b: c_gcd(a, b), np.diff(x)))
-            dy = abs(reduce(lambda a, b: c_gcd(a, b), np.diff(y)))
-            # Build a new rectangular grid:
-            try:
-                # import at runtime to avoid circular import
-                from ..topography import Grid2D
-                grid = Grid2D((np.min(x), np.max(x)), (np.min(y), np.max(y)),
-                              step=(dx, dy))
-            except MemoryError:
-                raise ValueError("Automatic stimulus reshaping failed. You "
-                                 "will need to resize the stimulus yourself "
-                                 "so that there is one activation value per "
-                                 "electrode.")
-            # For each electrode, find the closest pixel on the grid
-            kdtree = cKDTree(np.vstack((grid.x.ravel(), grid.y.ravel())).T)
-            _, e_idx = kdtree.query(np.vstack((x, y)).T)
-            data = data.resize(grid.x.shape).data[e_idx, ...].squeeze()
-            # Sample the stimulus at the correct pixel locations:
-            return Stimulus(data, electrodes=self.electrode_names,
+                # Handle multiple frames by interpolating each frame separately
+                pixel_values = np.zeros((len(x), n_frames))
+                for f in range(n_frames):
+                    interpolator = RegularGridInterpolator(
+                        (img_y, img_x), data[..., f], method='linear', 
+                        bounds_error=False, fill_value=0
+                    )
+                    pixel_values[:, f] = interpolator(np.vstack((y, x)).T)
+
+            return Stimulus(pixel_values, electrodes=self.electrode_names,
                             time=stim.time, metadata=stim.metadata)
+        
         else:
-            err_str = (f"Number of electrodes in the stimulus ({len(stim.electrodes)}) "
-                       f"does not match the number of electrodes in "
-                       f"the implant ({self.n_electrodes}).")
-            raise ValueError(err_str)
-        return stim
+            raise ValueError(
+                f"Number of electrodes in the stimulus ({len(stim.electrodes)}) "
+                f"does not match the number of electrodes in the implant ({self.n_electrodes})."
+            )
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim_cmap=False):
         """Plot
