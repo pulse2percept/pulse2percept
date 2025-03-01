@@ -86,14 +86,14 @@ jobs:
         run: |
           mkdir test_dir
           cd test_dir
-          pytest --pyargs pulse2percept --doctest-modules
+          pytest --pyargs pulse2percept --doctest-modules --durations=20
 
       - name: Run slow tests for pull requests
         if: github.event_name == 'pull_request'
         run: |
           mkdir test_dir
           cd test_dir
-          pytest --pyargs pulse2percept --runslow --cov-branch --cov-report=xml --doctest-modules
+          pytest --cov=pulse2percept --runslow --cov-branch --cov-report=xml --doctest-modules
           
       # Step 9: Codecov
       - name: Upload coverage report to codecov.io
