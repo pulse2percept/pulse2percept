@@ -9,7 +9,6 @@ from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
-from ..utils import parfor
 from ..utils.constants import ZORDER
 from ..topography import Watson2014Map
 from ..implants import ProsthesisSystem, ElectrodeArray
