@@ -7,7 +7,8 @@ from matplotlib.patches import Circle, RegularPolygon
 
 from pulse2percept.implants import (PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55,
                                     PRIMA40)
-
+from pulse2percept.stimuli import LogoBVL
+from pulse2percept.models import ScoreboardModel
 
 def test_PhotovoltaicPixel():
     electrode = PhotovoltaicPixel(0, 1, 2, 3, 4)
@@ -230,3 +231,10 @@ def test_PRIMA40(ztype, x, y, rot):
 
     with pytest.raises(ValueError):
         PRIMA40(0, 0, z=np.ones(16))
+
+
+def test_PRIMA40_reshape_stim():
+    # Smoke test a high-res hex implant with an ImageStimulus, where the
+    # old approach runs out of memory easily
+    PRIMA40(stim=LogoBVL())
+    
