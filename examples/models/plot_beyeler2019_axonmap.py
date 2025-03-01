@@ -85,25 +85,9 @@ print(model)
 # * ``axons_pickle``: path to a pickle file where previously generated axon
 #   maps are stored
 #
-# In addition, you can choose the parallelization back end used to speed up
-# simulations:
-#
-# * ``engine``:
-#    * 'serial': single-core processing (no parallelization)
-#    * 'joblib': parallelization using the `JobLib`_ library
-#
-# * ``scheduler``:
-#    * 'threading': a scheduler backed by a thread pool
-#    * 'multiprocessing': a scheduler backed by a process pool
-#
-# .. _JobLib: https://joblib.readthedocs.io
-#
 # To change parameter values, either pass them directly to the constructor
-# above or set them by hand, like this:
-
-model.engine = 'serial'
-
-##############################################################################
+# above or set them by hand.
+#
 # Then build the model. This is a necessary step before you can actually use
 # the model to predict a percept, as it performs a number of expensive setup
 # computations (e.g., building the axon map, calculating electric potentials):

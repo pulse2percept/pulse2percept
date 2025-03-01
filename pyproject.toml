@@ -35,7 +35,6 @@ dependencies = [
     "matplotlib>=3.0.2",
     "imageio-ffmpeg>=0.4",
     "pandas",
-    "joblib>=0.11"
 ]
 
 [project.optional-dependencies]
