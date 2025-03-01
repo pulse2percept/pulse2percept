@@ -9,7 +9,6 @@ pulse2percept is organized into the following subpackages:
     models
     percepts
     datasets
-    model_selection
     viz
     utils
     topography
@@ -50,7 +49,6 @@ logging.basicConfig(
 from . import datasets
 from . import implants
 from . import models
-from . import model_selection
 from . import percepts
 from . import stimuli
 from . import utils
@@ -60,7 +58,6 @@ __all__ = [
     "datasets",
     "implants",
     "models",
-    "model_selection",
     "percepts",
     "stimuli",
     "topography",
