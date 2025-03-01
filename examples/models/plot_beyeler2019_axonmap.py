@@ -91,14 +91,12 @@ print(model)
 # * ``engine``:
 #    * 'serial': single-core processing (no parallelization)
 #    * 'joblib': parallelization using the `JobLib`_ library
-#    * 'dask': parallelization using the `Dask`_ library
 #
 # * ``scheduler``:
 #    * 'threading': a scheduler backed by a thread pool
 #    * 'multiprocessing': a scheduler backed by a process pool
 #
 # .. _JobLib: https://joblib.readthedocs.io
-# .. _Dask: https://dask.org
 #
 # To change parameter values, either pass them directly to the constructor
 # above or set them by hand, like this:

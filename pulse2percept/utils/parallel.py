@@ -4,20 +4,13 @@ import multiprocessing
 import joblib
 
 
-# JobLib and Dask are optional. Rather than trying to import them all over, try
+# JobLib is optional. Rather than trying to import them all over, try
 # once and then remember by setting a flag.
 try:
     import joblib
     has_joblib = True
 except (ImportError, AttributeError):
     has_joblib = False
-try:
-    import dask
-    import dask.multiprocessing
-    dask.delayed
-    has_dask = True
-except (ImportError, AttributeError):
-    has_dask = False
 
 
 def parfor(func, in_list, out_shape=None, n_jobs=-1, engine=None,
@@ -42,8 +35,8 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine=None,
         dimensions.
     n_jobs : integer, optional, default: 1
         The number of jobs to perform in parallel. -1 to use all cpus
-    engine : str, optional, default: JobLib or Dask (if available), else serial
-        {'dask', 'joblib', 'serial'}
+    engine : str, optional, default: JobLib (if available), else serial
+        {'joblib', 'serial'}
         The last one is useful for debugging -- runs the code without any
         parallelization.
     scheduler : str, optional, default: 'threading'
@@ -72,8 +65,6 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine=None,
     if engine is None:
         if has_joblib:
             engine = 'joblib'
-        elif has_dask:
-            engine = 'dask'
         else:
             engine = 'serial'
     if engine.lower() == 'joblib':
@@ -86,30 +77,6 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine=None,
             else:
                 d_l.append(d(in_element, *func_args, **func_kwargs))
         results = p(d_l)
-    elif engine.lower() == 'dask':
-        if not has_dask:
-            err = "You do not have `dask` installed. Consider setting"
-            err += "`engine` to 'serial' or 'joblib'."
-            raise ImportError(err)
-
-        def partial(func, *args, **keywords):
-            def newfunc(in_arg):
-                return func(in_arg, *args, **keywords)
-            return newfunc
-        p = dask.delayed(partial(func, *func_args, **func_kwargs))
-        d = []
-        for in_element in in_list:
-            if isinstance(in_element, list):
-                d.append(p(*in_element))
-            else:
-                d.append(p(in_element))
-        if scheduler == 'multiprocessing':
-            results = dask.compute(*d, scheduler='processes', workers=n_jobs)
-        elif scheduler == 'threading':
-            results = dask.compute(*d, scheduler='threads', workers=n_jobs)
-        else:
-            raise ValueError("Acceptable values for `scheduler` are: "
-                             "'threading', 'multiprocessing'")
     elif engine.lower() == 'serial':
         results = []
         for in_element in in_list:
@@ -118,8 +85,8 @@ def parfor(func, in_list, out_shape=None, n_jobs=-1, engine=None,
             else:
                 results.append(func(in_element, *func_args, **func_kwargs))
     else:
-        raise ValueError(f'Acceptable values for `engine` are: "serial", '
-                         f'"joblib", or "dask", not "{engine}".')
+        raise ValueError(f'Acceptable values for `engine` are: "serial" '
+                         f'or "joblib", not "{engine}".')
     if out_shape is not None:
         return np.array(results).reshape(out_shape)
     else:

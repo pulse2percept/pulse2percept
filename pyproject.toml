@@ -40,7 +40,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "dask",
     "h5py",
     "pytest>=5",
     "pytest-cov",

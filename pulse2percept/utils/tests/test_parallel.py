@@ -12,7 +12,7 @@ def power_it(num, n=2):
 
 
 @pytest.mark.xfail
-@pytest.mark.parametrize('engine', ('serial', 'joblib', 'dask'))
+@pytest.mark.parametrize('engine', ('serial', 'joblib'))
 @pytest.mark.parametrize('scheduler', ('threading', 'multiprocessing'))
 def test_parfor(engine, scheduler):
     my_array = np.arange(100).reshape(10, 10)
@@ -23,12 +23,10 @@ def test_parfor(engine, scheduler):
     expected_ij = power_it(my_array[i, j])
 
     with pytest.raises(ValueError):
-        parallel.parfor(power_it, my_list, engine='unknown')
+        parallel.parfor(power_it, my_list, engine='dask')
     with pytest.raises(ValueError):
-        parallel.parfor(power_it, my_list, engine='dask', scheduler='unknown')
+        parallel.parfor(power_it, my_list, engine='joblib', scheduler='unknown')
 
-    # `backend` only relevant for dask, will be ignored for others
-    # and should thus still give the right result
     calculated_00 = parallel.parfor(power_it, my_list, engine=engine,
                                     scheduler=scheduler,
                                     out_shape=my_array.shape)[0, 0]
@@ -39,9 +37,9 @@ def test_parfor(engine, scheduler):
     npt.assert_equal(expected_00, calculated_00)
     npt.assert_equal(expected_ij, calculated_ij)
 
-    with mock.patch.dict("sys.modules", {'dask': {}}):
+    with mock.patch.dict("sys.modules", {'joblib': {}}):
         reload(parallel)
         with pytest.raises(ImportError):
-            parallel.parfor(power_it, my_list, engine='dask',
+            parallel.parfor(power_it, my_list, engine='joblib',
                             out_shape=my_array.shape)[0, 0]
     reload(parallel)

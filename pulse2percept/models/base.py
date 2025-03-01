@@ -246,7 +246,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'n_gray': None,
             # Salt-and-pepper noise on the output:
             'noise': None,
-            # JobLib or Dask can be used to parallelize computations:
+            # JobLib can be used to parallelize computations:
             'engine': None,
             'scheduler': 'threading',
             'n_jobs': 1,
