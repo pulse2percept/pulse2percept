@@ -86,7 +86,7 @@ jobs:
         run: |
           mkdir test_dir
           cd test_dir
-          pytest --pyargs pulse2percept --doctest-modules --durations=20
+          pytest --cov=pulse2percept --cov-branch --cov-report=xml --doctest-modules
 
       - name: Run slow tests for pull requests
         if: github.event_name == 'pull_request'
@@ -97,7 +97,7 @@ jobs:
           
       # Step 9: Codecov
       - name: Upload coverage report to codecov.io
-        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: codecov/codecov-action@0565863a31f2c772f9f0395002a31e3f06189574 # v5.4.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
