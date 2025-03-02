@@ -21,13 +21,14 @@ class ValidBaseModel(BaseModel):
         return {'a': 1, 'b': 2}
 
 
-def test_BaseModel():
+@pytest.mark.parametrize('auto_build', [True, False])
+def test_BaseModel(auto_build):
     # Test PrettyPrint:
     model = ValidBaseModel()
     npt.assert_equal(str(model), 'ValidBaseModel(a=1, b=2)')
 
     # Can overwrite default values:
-    model = ValidBaseModel(b=3)
+    model = ValidBaseModel(b=3, auto_build=auto_build)
     npt.assert_almost_equal(model.b, 3)
 
     # Use the sklearn syntax:
@@ -40,9 +41,10 @@ def test_BaseModel():
         model.c = 3
 
     # Check the build switch:
-    npt.assert_equal(model.is_built, False)
-    model.build(a=3)
-    npt.assert_almost_equal(model.a, 3)
+    if not auto_build:
+        npt.assert_equal(model.is_built, False)
+        model.build(a=3)
+        npt.assert_almost_equal(model.a, 3)
     npt.assert_equal(model.is_built, True)
 
     # Attributes must be in `get_default_params`:
@@ -66,12 +68,14 @@ class ValidSpatialModel(SpatialModel):
         return np.zeros((self.grid.x.size, n_time), dtype=np.float32)
 
 
-def test_SpatialModel():
+@pytest.mark.parametrize('auto_build', [True, False])
+def test_SpatialModel(auto_build):
     # Build grid:
-    model = ValidSpatialModel()
-    npt.assert_equal(model.grid, None)
-    npt.assert_equal(model.is_built, False)
-    model.build()
+    model = ValidSpatialModel(auto_build=auto_build)
+    if not auto_build:
+        npt.assert_equal(model.grid, None)
+        npt.assert_equal(model.is_built, False)
+        model.build()
     npt.assert_equal(model.is_built, True)
     npt.assert_equal(isinstance(model.grid, Grid2D), True)
     npt.assert_equal(isinstance(model.grid.ret.x, np.ndarray), True)
@@ -135,7 +139,7 @@ def test_eq_SpatialModel():
     npt.assert_equal(valid != differing_model, True)
 
 def test_deepcopy_SpatialModel():
-    original = ValidSpatialModel()
+    original = ValidSpatialModel(auto_build=False)
     copied = copy.deepcopy(original)
 
     # Assert they are different objects
@@ -161,12 +165,17 @@ def test_deepcopy_SpatialModel():
     npt.assert_equal(copied is not None, True)
 
 
-def test_SpatialModel_plot():
-    model = ValidSpatialModel()
-    model.build()
+@pytest.mark.parametrize('auto_build', [True, False])
+def test_SpatialModel_plot(auto_build):
+    model = ValidSpatialModel(auto_build=auto_build)
+    if not auto_build:
+        model.build()
     # Simulated area might be larger than that:
-    model = ValidSpatialModel(xrange=(-20.5, 20.5), yrange=(-16.1, 16.1))
+    model = ValidSpatialModel(auto_build=auto_build,
+                              xrange=(-20.5, 20.5), 
+                              yrange=(-16.1, 16.1))
     model.build()
+    print(model.grid)
     ax = model.plot(use_dva=True)
     npt.assert_almost_equal(ax.get_xlim(), (-22.55, 22.55))
     ax = model.plot(use_dva=False)
@@ -186,11 +195,13 @@ class ValidTemporalModel(TemporalModel):
         return np.zeros((stim.data.shape[0], len(t_percept)), dtype=np.float32)
 
 
-def test_TemporalModel():
+@pytest.mark.parametrize('auto_build', [True, False])
+def test_TemporalModel(auto_build):
     # Build grid:
-    model = ValidTemporalModel()
-    npt.assert_equal(model.is_built, False)
-    model.build()
+    model = ValidTemporalModel(auto_build=auto_build)
+    if not auto_build:
+        npt.assert_equal(model.is_built, False)
+        model.build()
     npt.assert_equal(model.is_built, True)
 
     # Can overwrite default values:
@@ -243,7 +254,7 @@ def test_TemporalModel():
         ValidTemporalModel().build().predict_percept(ArgusI())
 
 def test_eq_TemporalModel():
-    valid = ValidTemporalModel()
+    valid = ValidTemporalModel(auto_build=False)
 
     # Assert not equal for differing classes
     npt.assert_equal(valid == ValidBaseModel(), False)
@@ -265,7 +276,7 @@ def test_eq_TemporalModel():
 
 
 def test_deepcopy_TemporalModel():
-    original = ValidTemporalModel()
+    original = ValidTemporalModel(auto_build=False)
     copied = copy.deepcopy(original)
 
     # Assert they are different objects
@@ -392,7 +403,8 @@ def test_Model_set_params():
     npt.assert_equal(hasattr(model.spatial, 'dt'), False)
 
 
-def test_Model_build():
+@pytest.mark.parametrize('auto_build', [True, False])
+def test_Model_build(auto_build):
     # A None model:
     model = Model()
     # Nothing to build, so `is_built` is always True (we want to be able to
@@ -402,21 +414,25 @@ def test_Model_build():
     npt.assert_equal(model.is_built, True)
 
     # SpatialModel, but no TemporalModel:
-    model = Model(spatial=ValidSpatialModel())
-    npt.assert_equal(model.is_built, False)
-    model.build()
+    model = Model(spatial=ValidSpatialModel(auto_build=auto_build))
+    if not auto_build:
+        npt.assert_equal(model.is_built, False)
+        model.build()
     npt.assert_equal(model.is_built, True)
 
     # TemporalModel, but no SpatialModel:
-    model = Model(temporal=ValidTemporalModel())
-    npt.assert_equal(model.is_built, False)
-    model.build()
+    model = Model(temporal=ValidTemporalModel(auto_build=auto_build))
+    if not auto_build:
+        npt.assert_equal(model.is_built, False)
+        model.build()
     npt.assert_equal(model.is_built, True)
 
     # SpatialModel and TemporalModel:
-    model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
-    npt.assert_equal(model.is_built, False)
-    model.build()
+    model = Model(spatial=ValidSpatialModel(auto_build=auto_build), 
+                  temporal=ValidTemporalModel(auto_build=auto_build))
+    if not auto_build:
+        npt.assert_equal(model.is_built, False)
+        model.build()
     npt.assert_equal(model.is_built, True)
 
 
@@ -437,7 +453,8 @@ def test_Model_predict_percept():
     # Both spatial and temporal:
 
     # Invalid calls:
-    model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
+    model = Model(spatial=ValidSpatialModel(auto_build=False), 
+                  temporal=ValidTemporalModel(auto_build=False))
     with pytest.raises(NotBuiltError):
         # Must call build first:
         model.predict_percept(ArgusI())

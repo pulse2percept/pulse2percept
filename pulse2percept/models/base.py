@@ -38,7 +38,7 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
 
     """
 
-    def __init__(self, **params):
+    def __init__(self, auto_build=False, **params):
         """BaseModel constructor
 
         Parameters
@@ -60,6 +60,8 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
                 raise AttributeError(err_str)
         # This flag will be flipped once the ``build`` method was called
         self._is_built = False
+        if auto_build:
+            self.build()
 
     @abstractmethod
     def get_default_params(self):
@@ -222,9 +224,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
            <topics-models-building-your-own>`
     """
 
-    def __init__(self, **params):
-        super().__init__(**params)
+    def __init__(self, auto_build=False, **params):
         self.grid = None
+        super().__init__(auto_build=auto_build, **params)
 
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
@@ -724,12 +726,12 @@ class Model(PrettyPrint):
 
     """
 
-    def __init__(self, spatial=None, temporal=None, **params):
+    def __init__(self, auto_build=False, spatial=None, temporal=None, **params):
         # Set the spatial model:
         if spatial is not None and not isinstance(spatial, SpatialModel):
             if issubclass(spatial, SpatialModel):
                 # User should have passed an instance, not a class:
-                spatial = spatial(**params)
+                spatial = spatial(auto_build=auto_build, **params)
             else:
                 raise TypeError(f"'spatial' must be a SpatialModel instance, "
                                 f"not {type(spatial)}.")
@@ -738,7 +740,7 @@ class Model(PrettyPrint):
         if temporal is not None and not isinstance(temporal, TemporalModel):
             if issubclass(temporal, TemporalModel):
                 # User should have passed an instance, not a class:
-                temporal = temporal(**params)
+                temporal = temporal(auto_build=auto_build, **params)
             else:
                 raise TypeError(f"'temporal' must be a TemporalModel instance, "
                                 f"not {type(temporal)}.")
