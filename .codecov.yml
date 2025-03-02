@@ -9,8 +9,9 @@ coverage:
     ignore:
       - "pulse2percept/datasets/tests/**/*"
       - "pulse2percept/implants/tests/**/*"
-      - "pulse2percept/model_selection/tests/**/*"
+      - "pulse2percept/implants/cortex/tests/**/*"
       - "pulse2percept/models/tests/**/*"
+      - "pulse2percept/models/cortex/tests/**/*"
       - "pulse2percept/percepts/tests/**/*"
       - "pulse2percept/stimuli/tests/**/*"
       - "pulse2percept/utils/tests/**/*"
