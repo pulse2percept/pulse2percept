@@ -246,8 +246,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'n_gray': None,
             # Salt-and-pepper noise on the output:
             'noise': None,
-            # JobLib or Dask can be used to parallelize computations:
-            'engine': None,
+            # Cython/Jax can be used to speed up computations:
+            'engine': 'cython',
             'scheduler': 'threading',
             'n_jobs': 1,
             # True: print status messages, 0: silent

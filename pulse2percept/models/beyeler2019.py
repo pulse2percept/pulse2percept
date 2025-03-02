@@ -9,7 +9,6 @@ from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
-from ..utils import parfor
 from ..utils.constants import ZORDER
 from ..topography import Watson2014Map
 from ..implants import ProsthesisSystem, ElectrodeArray
@@ -436,11 +435,7 @@ class AxonMapSpatial(SpatialModel):
             n_bundles = self.n_axons
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
         phi = np.linspace(*self.axons_range, num=n_bundles)
-        engine = 'serial' if self.engine in ['cython', 'jax'] else self.engine
-        bundles = parfor(self._jansonius2009, phi,
-                         func_kwargs={'eye': self.eye},
-                         engine=engine, n_jobs=self.n_jobs,
-                         scheduler=self.scheduler)
+        bundles = [self._jansonius2009(p, eye=self.eye) for p in phi]
         # Keep only non-zero sized bundles:
         bundles = list(filter(lambda x: len(x) > 0, bundles))
         if prune:

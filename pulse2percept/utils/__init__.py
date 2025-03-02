@@ -11,7 +11,6 @@
     convolution
     optimize
     stats
-    parallel
     deprecation
     three_dim
 
@@ -24,7 +23,6 @@ from .images import center_image, scale_image, shift_image, trim_image
 from .convolution import center_vector, conv
 from .optimize import bisect
 from .stats import r2_score, circ_r2_score
-from .parallel import parfor
 from .deprecation import deprecated
 from .three_dim import parse_3d_orient
 
@@ -44,7 +42,6 @@ __all__ = [
     'Frozen',
     'gamma',
     'is_strictly_increasing',
-    'parfor',
     'parse_3d_orient',
     'pol2cart',
     'PrettyPrint',
