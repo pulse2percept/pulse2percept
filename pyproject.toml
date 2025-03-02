@@ -44,14 +44,8 @@ dev = [
     "h5py",
     "pytest>=5",
     "pytest-cov",
-    "coveralls",
     "flake8",
-    "mock",
-    "black",
-    "tox",
     "seaborn",
-    "pyswarm",
-    "scikit-learn",
     "neuropythy"
 ]
 
