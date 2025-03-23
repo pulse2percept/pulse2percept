@@ -56,18 +56,37 @@ class ElectrodeArray(PrettyPrint):
     __slots__ = ('_electrodes',)
 
     def __init__(self, electrodes):
-        self._electrodes = OrderedDict()
         if isinstance(electrodes, dict):
-            for name, electrode in electrodes.items():
-                self.add_electrode(name, electrode)
+            # Create a new OrderedDict from sorted dictionary items.
+            new_electrodes = OrderedDict()
+            for name, electrode in sorted(electrodes.items(), key=lambda x: x[0]):
+                if not isinstance(electrode, Electrode):
+                    raise TypeError(
+                        f"Electrode {name} must be an Electrode object, not {type(electrode)}."
+                    )
+                new_electrodes[name] = electrode
+            self._electrodes = new_electrodes
+
         elif isinstance(electrodes, list):
-            for electrode in electrodes:
-                self.add_electrode(self.n_electrodes, electrode)
+            # Use enumerate to generate keys and check each electrode.
+            new_electrodes = OrderedDict()
+            for idx, electrode in enumerate(electrodes):
+                if not isinstance(electrode, Electrode):
+                    raise TypeError(
+                        f"Electrode at index {idx} must be an Electrode object, not {type(electrode)}."
+                    )
+                new_electrodes[idx] = electrode
+            self._electrodes = new_electrodes
+
         elif isinstance(electrodes, Electrode):
-            self.add_electrode(self.n_electrodes, electrodes)
+            # Single electrode passed.
+            self._electrodes = OrderedDict({0: electrodes})
+
         else:
-            raise TypeError((f"electrodes must be a list or dict, not "
-                             f"{type(electrodes)}"))
+            raise TypeError(
+                f"electrodes must be a list or dict, not {type(electrodes)}"
+            )
+
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -562,21 +581,31 @@ class ElectrodeGrid(ElectrodeArray):
         tf = SimilarityTransform(rotation=np.deg2rad(rot), translation=[x, y])
         x_arr, y_arr = tf(np.vstack([x_arr.ravel(), y_arr.ravel()]).T).T
 
+        # Prepare the dictionary of electrodes
+        new_electrodes = OrderedDict()
+        
         if issubclass(etype, DiskElectrode):
+            # Process radius: list or scalar
             if isinstance(kwargs['r'], (list, np.ndarray)):
-                # Specify different radius for every electrode in a list:
                 if len(kwargs['r']) != n_elecs:
-                    err_s = (f"If `r` is a list, it must have {n_elecs} entries, not "
-                             f"{len(kwargs['r'])}.")
-                    raise ValueError(err_s)
+                    raise ValueError(f"If `r` is a list, it must have {n_elecs} entries, "
+                                    f"not {len(kwargs['r'])}.")
                 r_arr = kwargs['r']
             else:
-                # If `r` is a scalar, choose same radius for all electrodes:
-                r_arr = np.ones(n_elecs, dtype=float) * kwargs['r']
-            # Create a grid of DiskElectrode objects:
-            for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
-                self.add_electrode(name, DiskElectrode(x, y, z, r, name=name))
+                r_arr = np.full(n_elecs, kwargs['r'], dtype=float)
+
+            for x_val, y_val, z_val, r_val, name in zip(x_arr, y_arr, z_arr, r_arr, names):
+                electrode = DiskElectrode(x_val, y_val, z_val, r_val, name=name)
+                # Inline type checking:
+                if not isinstance(electrode, Electrode):
+                    raise TypeError(f"Electrode {name} must be an Electrode object, not {type(electrode)}.")
+                new_electrodes[name] = electrode
         else:
-            # Pass keyword arguments to the electrode constructor:
-            for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
-                self.add_electrode(name, etype(x, y, z, name=name, **kwargs))
+            for x_val, y_val, z_val, name in zip(x_arr, y_arr, z_arr, names):
+                electrode = etype(x_val, y_val, z_val, name=name, **kwargs)
+                if not isinstance(electrode, Electrode):
+                    raise TypeError(f"Electrode {name} must be an Electrode object, not {type(electrode)}.")
+                new_electrodes[name] = electrode
+
+        # Bulk assign the electrode dictionary:
+        self._electrodes = new_electrodes
