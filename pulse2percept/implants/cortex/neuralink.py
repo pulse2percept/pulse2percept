@@ -181,7 +181,7 @@ class LinearEdgeThread(NeuralinkThread):
         offset = parse_3d_orient([1, 0, 0], 'direction')[0] @ self.direction * (self.r + 7//2) 
         electrode_locs = [start + i*self.spacing*self.direction + offset for i in range(self.n_elecs)]
         for i, loc in enumerate(electrode_locs):
-            electrodes[str(i)] = self.electrode(loc[0], loc[1], loc[2], orient=self.rot)
+            electrodes[str(i)] = self.electrode(loc[0], loc[1], loc[2], orient=self.rot, orient_mode='rot')
         
         self.earray = ElectrodeArray(electrodes)
         self.safe_mode = safe_mode
@@ -316,7 +316,8 @@ class Neuralink(EnsembleImplant):
                 rho = np.random.uniform(-rand_insertion_angle, rand_insertion_angle)
                 theta = np.random.uniform(0, 360)
                 rot_rand, _, _ = parse_3d_orient([0, rho, theta], 'angle')
-                rot_direction, _, _= parse_3d_orient(direction, 'direction')
+                rot_direction, _, _ = parse_3d_orient(direction, 'direction')
+
                 direction = rot_direction @ rot_rand
 
             location = surface_points[:, i]
@@ -328,7 +329,7 @@ class Neuralink(EnsembleImplant):
             name = chr(65 + j) + name
 
             threads[name] = Thread(x=location[0], y=location[1], z=location[2],
-                                            orient=direction, orient_mode='direction')
+                                            orient=direction, orient_mode='rot')
         return cls(threads)
     
     @classmethod
