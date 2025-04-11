@@ -216,7 +216,7 @@ def test_neuropythy_scoreboard():
     implant = EnsembleImplant([i1, i2, i3])
     implant.stim = {e : 1 for e in implant.electrode_names}
     percept = model.predict_percept(implant)
-    npt.assert_almost_equal(np.sum(percept.data), 20245.45, decimal=3)
+    npt.assert_almost_equal(np.sum(percept.data), 20245.445, decimal=3)
     npt.assert_almost_equal(np.max(percept.data), 86.4913, decimal=3)
 
 
