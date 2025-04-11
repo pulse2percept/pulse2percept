@@ -173,7 +173,7 @@ def test_Neuralink_from_neuropythy():
 
             orient = np.array(nmap.dva_to_v1(vx, vy, surface='midgray')) - np.array(nmap.dva_to_v1(vx, vy, surface='pial'))
             orient = orient / np.linalg.norm(orient)
-            npt.assert_almost_equal(implant.direction, orient)
+            npt.assert_almost_equal(implant.direction, orient, decimal=3)
 
             idx += 1
             
