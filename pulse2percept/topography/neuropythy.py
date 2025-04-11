@@ -9,7 +9,7 @@ class NeuropythyMap(CorticalMap):
 
     split_map = False
 
-    def __init__(self, subject, cache_dir=None, **params):
+    def __init__(self, subject='fsaverage', cache_dir=None, **params):
         """
         Uses the visual field maps from the neuropythy package.
         Requires the neuropythy package to be installed (`pip install neuropythy`)

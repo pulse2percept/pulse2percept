@@ -34,7 +34,7 @@ def test_parse_3d_orient():
     npt.assert_almost_equal(rot, np.eye(3))
     npt.assert_almost_equal(angles, [0, 0, 0])
     npt.assert_almost_equal(direction, [0, 0, 1])
-    rot, angles, direction = parse_3d_orient(np.eye(3))
+    rot, angles, direction = parse_3d_orient(np.eye(3), orient_mode='rot')
     npt.assert_almost_equal(rot, np.eye(3))
     npt.assert_almost_equal(angles, [0, 0, 0])
     npt.assert_almost_equal(direction, [0, 0, 1])
