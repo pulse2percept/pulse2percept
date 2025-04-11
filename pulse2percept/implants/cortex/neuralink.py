@@ -311,14 +311,16 @@ class Neuralink(EnsembleImplant):
             direction = intra_points[:, i] - surface_points[:, i]
             direction /= np.linalg.norm(direction)
 
+            rot_direction, _, _ = parse_3d_orient(direction, 'direction')
             # if rand_insertion_angle is not None, rotate the direction vector
             if rand_insertion_angle is not None:
                 rho = np.random.uniform(-rand_insertion_angle, rand_insertion_angle)
                 theta = np.random.uniform(0, 360)
                 rot_rand, _, _ = parse_3d_orient([0, rho, theta], 'angle')
-                rot_direction, _, _ = parse_3d_orient(direction, 'direction')
-
                 direction = rot_direction @ rot_rand
+            else:
+                direction = rot_direction
+
 
             location = surface_points[:, i]
             name = ''
