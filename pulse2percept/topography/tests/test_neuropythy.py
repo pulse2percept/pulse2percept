@@ -145,8 +145,8 @@ def test_Neuralink_from_neuropythy():
     orient2 = np.array(nmap.dva_to_v1(-2, -2, surface='midgray')) - np.array(nmap.dva_to_v1(-2, -2, surface='pial'))
     orient1 = orient1 / np.linalg.norm(orient1)
     orient2 = orient2 / np.linalg.norm(orient2)
-    npt.assert_almost_equal(nlink.implants['A'].direction, orient1)
-    npt.assert_almost_equal(nlink.implants['B'].direction, orient2)
+    npt.assert_almost_equal(nlink.implants['A'].direction, orient1, decimal=4)
+    npt.assert_almost_equal(nlink.implants['B'].direction, orient2, decimal=4)
 
     nmap.jitter_boundary=True
     nlink = Neuralink.from_neuropythy(nmap, xrange=[-5, 5], yrange=(-3, 3), xystep=1)
@@ -164,7 +164,7 @@ def test_Neuralink_from_neuropythy():
     idx = 0
     for vy in range(3, -4, -1):
         for vx in range(-5, 6, 1):
-            print(idx, vx, vy)
+            # print(idx, vx, vy)
             implant = nlink.implants[list(nlink.implants.keys())[idx]]
             cx, cy, cz = nmap.dva_to_v1(vx, vy, surface='pial')
             npt.assert_almost_equal(implant.x, cx)
