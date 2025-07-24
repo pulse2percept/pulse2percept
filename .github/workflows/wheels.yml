@@ -38,7 +38,7 @@ jobs:
 
       # Step 3: Build wheels using cibuildwheel
       - name: Build wheels
-        uses: pypa/cibuildwheel@d04cacbc9866d432033b1d09142936e6a0e2121a # v2.23.2
+        uses: pypa/cibuildwheel@ffd835cef18fa11522f608fc0fa973b89f5ddc87 # v3.1.0
         env:
           # macOS-specific OpenMP settings
           CIBW_ENVIRONMENT_MACOS: |
