@@ -42,7 +42,8 @@ jobs:
         env:
           # macOS-specific OpenMP settings
           CIBW_ENVIRONMENT_MACOS: |
-            CFLAGS="-std=c99 -maltivec -I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
+            CFLAGS="-std=c99 -O3 -fopenmp -I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
+            CPPFLAGS="-I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
             LDFLAGS="-L$(brew --prefix llvm)/lib -L$(brew --prefix libomp)/lib -lomp"
             PATH="$(brew --prefix llvm)/bin:$PATH"
             CC="$(brew --prefix llvm)/bin/clang"
