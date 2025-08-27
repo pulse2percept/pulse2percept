@@ -41,13 +41,12 @@ jobs:
         uses: pypa/cibuildwheel@352e01339f0a173aa2a3eb57f01492e341e83865 # v3.1.3
         env:
           # macOS-specific OpenMP settings
+          # Use Apple clang; enable OpenMP via -Xpreprocessor and link libomp
           CIBW_ENVIRONMENT_MACOS: |
-            CFLAGS="-std=c99 -O3 -fopenmp -I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
-            CPPFLAGS="-I$(brew --prefix llvm)/include -I$(brew --prefix libomp)/include"
-            LDFLAGS="-L$(brew --prefix llvm)/lib -L$(brew --prefix libomp)/lib -lomp"
-            PATH="$(brew --prefix llvm)/bin:$PATH"
-            CC="$(brew --prefix llvm)/bin/clang"
-            CXX="$(brew --prefix llvm)/bin/clang++"
+            CFLAGS="-std=c99 -O3 -Xpreprocessor -fopenmp -I$(brew --prefix libomp)/include"
+            CPPFLAGS="-I$(brew --prefix libomp)/include"
+            LDFLAGS="-L$(brew --prefix libomp)/lib -lomp"
+            MACOSX_DEPLOYMENT_TARGET=11.0
           # Linux-specific OpenMP settings
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"
           # Windows-specific OpenMP settings
