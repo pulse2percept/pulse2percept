@@ -21,45 +21,54 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
-      # Step 1: Check out the repository
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      # Step 2: Install dependencies (Linux only)
+      # Linux-only system deps
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
 
-      # Step 3: Build wheels using cibuildwheel
       - name: Build wheels
         uses: pypa/cibuildwheel@352e01339f0a173aa2a3eb57f01492e341e83865 # v3.1.3
         env:
-          # macOS-specific OpenMP settings
-          # Use Apple clang; enable OpenMP via -Xpreprocessor and link libomp
+          # macOS: ensure libomp exists and wire up Apple clang for OpenMP
+          CIBW_BEFORE_ALL_MACOS: |
+            brew update
+            brew install libomp || brew reinstall libomp
+          CIBW_BEFORE_BUILD_MACOS: |
+            echo "libomp prefix: $(brew --prefix libomp)"
+            ls -l "$(brew --prefix libomp)/include/omp.h" || (echo "omp.h missing" && exit 1)
+            python -m pip install --upgrade pip setuptools wheel cython numpy
           CIBW_ENVIRONMENT_MACOS: |
-            CFLAGS="-std=c99 -O3 -Xpreprocessor -fopenmp -I$(brew --prefix libomp)/include"
-            CPPFLAGS="-I$(brew --prefix libomp)/include"
-            LDFLAGS="-L$(brew --prefix libomp)/lib -lomp"
+            OMP_PREFIX="$(brew --prefix libomp)"
             MACOSX_DEPLOYMENT_TARGET=11.0
-          # Linux-specific OpenMP settings
+            CFLAGS="-std=c99 -O3 -Xpreprocessor -fopenmp -I${OMP_PREFIX}/include"
+            CPPFLAGS="-I${OMP_PREFIX}/include"
+            LDFLAGS="-L${OMP_PREFIX}/lib -lomp"
+
+          # Linux: enable OpenMP
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"
-          # Windows-specific OpenMP settings
+
+          # Windows: enable OpenMP
           CIBW_ENVIRONMENT_WINDOWS: "CFLAGS='/openmp'"
-          # Pre-build steps
+
+          # Pre-build (non-macOS platforms)
           CIBW_BEFORE_BUILD: "python -m pip install --upgrade pip setuptools wheel cython numpy"
-          # Python versions to build for
+
+          # Python versions / skips
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
-          # Skip specific wheels
           CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
 
-      # Step 4: Upload the built wheels as artifacts
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - name: Upload wheels
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
           path: ./wheelhouse/*.whl
