@@ -4,6 +4,7 @@ from cython.parallel import prange
 from cython import cdivision  # modulo, division by zero
 import numpy as np
 cimport numpy as cnp
+cnp.import_array()
 
 ctypedef cnp.float32_t float32
 ctypedef cnp.int32_t int32

@@ -5,6 +5,7 @@ from cython.parallel import prange
 from cython import cdivision  # for modulo operator
 import numpy as np
 cimport numpy as cnp
+cnp.import_array()
 
 ctypedef cnp.float32_t float32
 ctypedef cnp.uint32_t uint32

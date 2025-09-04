@@ -6,6 +6,7 @@ from libc.math cimport(fabs as c_abs, fmax as c_max)
 from libcpp cimport bool
 import numpy as np
 cimport numpy as cnp
+cnp.import_array()
 ctypedef Py_ssize_t index_t
 
 

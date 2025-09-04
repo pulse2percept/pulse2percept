@@ -4,6 +4,7 @@ from pulse2percept.utils._fast_math cimport float32, int32, index_t
 from cython import cdivision  # modulo, division by zero
 from libc.math cimport fabsf as c_abs, expf as c_exp, powf as c_pow, HUGE_VALF
 cimport numpy as cnp
+cnp.import_array()
 
 
 # --- SCALAR FUNCTIONS ------------------------------------------------------- #

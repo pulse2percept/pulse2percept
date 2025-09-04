@@ -1,6 +1,8 @@
 # distutils: language = c
-
+# cython: language_level=3
 cimport numpy as cnp
+cnp.import_array()
+
 
 ctypedef cnp.float32_t float32
 ctypedef Py_ssize_t index_t
