@@ -2,15 +2,10 @@ name: Wheels
 
 on:
   push:
-    branches:
-      - master
-      - torch
-    tags:
-      - v*
+    branches: [ master, torch ]
+    tags: [ v* ]
   pull_request:
-    branches:
-      - master
-      - torch
+    branches: [ master, torch ]
 
 jobs:
   build_wheels:
@@ -18,7 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -39,33 +34,37 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@c923d83ad9c1bc00211c5041d0c3f73294ff88f6 # v3.1.4
         env:
-          # macOS: ensure libomp exists and wire up Apple clang for OpenMP
+          # ---------- macOS: ensure libomp exists; bundle it into wheels ----------
           CIBW_BEFORE_ALL_MACOS: |
             brew update
             brew install libomp || brew reinstall libomp
           CIBW_BEFORE_BUILD_MACOS: |
             echo "libomp prefix: $(brew --prefix libomp)"
             ls -l "$(brew --prefix libomp)/include/omp.h" || (echo "omp.h missing" && exit 1)
-            python -m pip install --upgrade pip setuptools wheel cython numpy
+            python -m pip install --upgrade pip setuptools wheel cython delocate oldest-supported-numpy
           CIBW_ENVIRONMENT_MACOS: |
             OMP_PREFIX="$(brew --prefix libomp)"
             MACOSX_DEPLOYMENT_TARGET=11.0
             CFLAGS="-std=c99 -O3 -Xpreprocessor -fopenmp -I${OMP_PREFIX}/include"
             CPPFLAGS="-I${OMP_PREFIX}/include"
             LDFLAGS="-L${OMP_PREFIX}/lib -lomp"
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: >
+            delocate-wheel -w {dest_dir} {wheel}
 
-          # Linux: enable OpenMP
+          # ---------- Linux: enable OpenMP; OSN installs the right NumPy ----------
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"
+          CIBW_BEFORE_BUILD_LINUX: "python -m pip install --upgrade pip setuptools wheel cython oldest-supported-numpy"
 
-          # Windows: enable OpenMP
+          # ---------- Windows: enable OpenMP; OSN installs the right NumPy ----------
           CIBW_ENVIRONMENT_WINDOWS: "CFLAGS='/openmp'"
+          CIBW_BEFORE_BUILD_WINDOWS: "python -m pip install --upgrade pip setuptools wheel cython oldest-supported-numpy"
 
-          # Pre-build (non-macOS platforms)
-          CIBW_BEFORE_BUILD: "python -m pip install --upgrade pip setuptools wheel cython numpy"
-
-          # Python versions / skips
+          # ---------- Python versions / skips ----------
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
           CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
+
+          # (Optional) Build for both Apple architectures as separate wheels
+          CIBW_ARCHS_MACOS: "x86_64 arm64"
 
       - name: Upload wheels
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

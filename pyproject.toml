@@ -1,9 +1,9 @@
 [build-system]
 requires = [
-    "setuptools>=42",
+    "setuptools>=64",
     "wheel",
     "Cython>=0.29.36",
-    "numpy>=1.21",
+    "oldest-supported-numpy"
 ]
 build-backend = "setuptools.build_meta"
 
@@ -22,19 +22,19 @@ authors = [
 keywords = ["bionic vision", "simulation", "scientific computing"]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent"
 ]
 requires-python = ">=3.10"
 dependencies = [
-    # Numpy versions specific to Python compatibility
-    "cython>=0.28",
-    "numpy>=1.21",
+    "numpy>=1.21,<3",
     "scipy>=1.0.1",
     "scikit-image>=0.14",
     "matplotlib>=3.0.2",
     "imageio-ffmpeg>=0.4",
     "pandas",
+    "joblib>=0.11"
 ]
 
 [project.optional-dependencies]
@@ -45,6 +45,10 @@ dev = [
     "flake8",
     "seaborn",
     "neuropythy"
+]
+# (Optional) convenience extra for docs/Colab how-tos
+colab = [
+    "numpy>=2,<3"
 ]
 
 [tool.setuptools]

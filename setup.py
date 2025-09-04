@@ -1,119 +1,114 @@
 import os
 import sys
 import platform
-import shutil
-import subprocess
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 from Cython.Build import cythonize
-import numpy
+import numpy as _np
 
-# Define supported configurations
 SUPPORTED_PYTHON_VERSIONS = {"3.10", "3.11", "3.12", "3.13"}
 SUPPORTED_PLATFORMS = {"Linux", "Windows", "Darwin"}
-EXPLICITLY_UNSUPPORTED = {}  # Specific exclusions
+EXPLICITLY_UNSUPPORTED = set()  # e.g., {("Windows", "3.10")}
 
-
-def is_supported():
+def _is_supported():
     current_os = platform.system()
     current_python = f"{sys.version_info.major}.{sys.version_info.minor}"
-
-    # General support check
     if current_os not in SUPPORTED_PLATFORMS:
         return False, f"{current_os} is not a supported platform."
     if current_python not in SUPPORTED_PYTHON_VERSIONS:
         return False, f"Python {current_python} is not supported."
-
-    # Check explicit unsupported combinations
     if (current_os, current_python) in EXPLICITLY_UNSUPPORTED:
         return False, f"Python {current_python} is explicitly not supported on {current_os}."
-
     return True, None
 
-class OpenMPBuildExt(build_ext):
-    def build_extensions(self):
-        for ext in self.extensions:
-            if sys.platform == "darwin":  # macOS
-                # Fetch CPPFLAGS and LDFLAGS, providing defaults to avoid errors
-                cppflags = os.getenv("CPPFLAGS", "")
-                ldflags = os.getenv("LDFLAGS", "")
-                
-                if cppflags:
-                    ext.extra_compile_args += ["-Xclang", "-fopenmp", "-I" + cppflags]
-                else:
-                    print("Warning: CPPFLAGS environment variable is not set.")
+_ok, _reason = _is_supported()
+if not _ok:
+    print(f"WARNING: {_reason}\n"
+          "Installation will proceed, but this configuration is not officially supported.")
 
-                if ldflags:
-                    ext.extra_link_args += ["-lomp", "-L" + ldflags]
-                else:
-                    print("Warning: LDFLAGS environment variable is not set.")
-            elif os.name == "posix":  # Linux
-                try:
-                    ext.extra_compile_args += ["-fopenmp"]
-                    ext.extra_link_args += ["-fopenmp"]
-                except RuntimeError:
-                    print("Warning: OpenMP not supported on this platform. Compiling without OpenMP.")
-            elif os.name == "nt":  # Windows
-                ext.extra_compile_args += ["/openmp"]
-                ext.extra_link_args += ["vcomp.lib"]
-            else:
-                print("Warning: OpenMP not supported on this platform. Compiling without OpenMP.")
-        super().build_extensions()
+def _numpy_api_macro():
+    """Choose the right NPY_*_API_VERSION for NumPy 1.x vs 2.x."""
+    major = int(_np.__version__.split(".")[0])
+    if major >= 2:
+        return ("NPY_NO_DEPRECATED_API", "NPY_2_0_API_VERSION")
+    else:
+        # 1.7 is the canonical stable API macro for NumPy 1.x
+        return ("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")
 
-def find_pyx_modules(base_dir, exclude_dirs=None):
-    """
-    Recursively find all `.pyx` files in subdirectories of `base_dir`, excluding certain directories.
-    """
+def _find_pyx_modules(base_dir, exclude_dirs=None):
+    import os
     if exclude_dirs is None:
-        exclude_dirs = ["doc", "wheelhouse"]
+        exclude_dirs = {"doc", "wheelhouse"}
     extensions = []
     for root, dirs, files in os.walk(base_dir):
-        # Exclude specific directories
         dirs[:] = [d for d in dirs if d not in exclude_dirs]
-        for file in files:
-            if file.endswith(".pyx"):
-                module_path = os.path.relpath(os.path.join(root, file), base_dir)
-                module_name = module_path.replace(os.path.sep, ".").replace(".pyx", "")
-                module_name = f"pulse2percept.{module_name}"  # Ensure full module path
-                extensions.append(
-                    Extension(
-                        module_name,
-                        [os.path.join(root, file)],
-                        include_dirs=[numpy.get_include()],
-                    )
+        for fn in files:
+            if fn.endswith(".pyx"):
+                rel = os.path.relpath(os.path.join(root, fn), base_dir)
+                mod = rel.replace(os.path.sep, ".")[:-4]  # strip .pyx
+                fullmod = f"pulse2percept.{mod}"
+                ext = Extension(
+                    name=fullmod,
+                    sources=[os.path.join(root, fn)],
+                    include_dirs=[_np.get_include()],
                 )
+                extensions.append(ext)
     return extensions
 
-# Run pre-build checks
-is_supported, reason = is_supported()
-if not is_supported:
-    print(f"WARNING: {reason}\n"
-          "Installation will proceed, but this configuration is not officially supported. "
-          "Use at your own risk!")
+class OpenMPBuildExt(build_ext):
+    """Enable OpenMP when available; degrade gracefully otherwise."""
+    def build_extensions(self):
+        omp_macro = _numpy_api_macro()
+        for ext in self.extensions:
+            # Always set the NumPy API macro
+            ext.define_macros = list(getattr(ext, "define_macros", [])) + [omp_macro]
 
-# Find all .pyx files in the relevant submodules
-cython_extensions = find_pyx_modules("pulse2percept")
+            # Heuristic: compile most .pyx as C unless they clearly require C++
+            if any(s.endswith((".cpp", ".cxx")) for s in ext.sources):
+                ext.language = "c++"
+            else:
+                ext.language = "c"
 
-for ext in cython_extensions:
-    ext.define_macros = [("NPY_NO_DEPRECATED_API", "NPY_2_0_API_VERSION")]
-    # Ensure only files needing C++ are compiled as C++:
-    if "_fast_array.pyx" in ext.sources[0]:  # This has been an issue
-        ext.language = "c"
-    elif any(file.endswith(".cpp") or file.endswith(".cxx") or file.endswith(".pyx") for file in ext.sources):
-        # Force C++ compilation if the file requires it
-        ext.language = "c++"
+            try:
+                if sys.platform == "darwin":
+                    # Prefer OMP_PREFIX from CI to construct include/lib paths
+                    omp_prefix = os.environ.get("OMP_PREFIX")
+                    if omp_prefix:
+                        include = os.path.join(omp_prefix, "include")
+                        lib = os.path.join(omp_prefix, "lib")
+                        ext.extra_compile_args += ["-Xpreprocessor", "-fopenmp", f"-I{include}"]
+                        ext.extra_link_args += [f"-L{lib}", "-lomp"]
+                    else:
+                        # Fallback: try generic flags; delocate will handle libs in CI
+                        ext.extra_compile_args += ["-Xpreprocessor", "-fopenmp"]
+                        ext.extra_link_args += ["-lomp"]
 
+                elif os.name == "posix":  # Linux
+                    ext.extra_compile_args += ["-fopenmp"]
+                    ext.extra_link_args += ["-fopenmp"]
+
+                elif os.name == "nt":     # Windows (MSVC)
+                    # /openmp is enough on supported MSVC; avoid vcomp.lib
+                    ext.extra_compile_args += ["/openmp"]
+
+            except Exception as e:
+                # Do not fail the build because of OpenMP flags
+                print(f"Warning: OpenMP flags not applied ({e}). Building without OpenMP.")
+        super().build_extensions()
+
+extensions = _find_pyx_modules("pulse2percept")
 
 setup(
     ext_modules=cythonize(
-        cython_extensions,
+        extensions,
         compiler_directives={
-            "language_level": 3,       # Use Python 3 syntax
-            "boundscheck": False,      # Disable bounds checking for arrays
-            "wraparound": False,       # Disable negative indexing
-            "cdivision": True,         # Optimize division operations
-            "initializedcheck": False  # Skip uninitialized variable checks
+            "language_level": 3,
+            "boundscheck": False,
+            "wraparound": False,
+            "cdivision": True,
+            "initializedcheck": False,
         },
+        annotate=False,
     ),
     cmdclass={"build_ext": OpenMPBuildExt},
 )
