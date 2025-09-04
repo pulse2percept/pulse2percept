@@ -55,6 +55,34 @@ jobs:
         run: |
           python -m pip install --upgrade pip
 
+      # Step 4.1 Clean any stale build artifacts (prevents cross-job ABI reuse)
+      - name: Clean working tree and build dirs
+        run: |
+          git clean -xdf
+          python - <<'PY'
+          import shutil, pathlib
+          for p in ("build", "dist", "pulse2percept.egg-info"):
+              shutil.rmtree(p, ignore_errors=True)
+          # also prune any in-tree compiled .so/.pyd just in case
+          for so in pathlib.Path(".").rglob("*.so"):
+              so.unlink()
+          for pyd in pathlib.Path(".").rglob("*.pyd"):
+              pyd.unlink()
+          PY
+
+      # Step 4.2 Pre-install the correct NumPy *runtime* major for this Python
+      - name: Preinstall NumPy matching ABI
+        run: |
+          case "${{ matrix.python-version }}" in
+            3.10|3.11)
+              python -m pip install "numpy<2"
+              ;;
+            3.12|3.13)
+              python -m pip install "numpy>=2,<3"
+              ;;
+          esac
+          python -c "import numpy,sys; print('Runtime NumPy:', numpy.__version__); sys.exit(0)"
+
       # Step 5: Lint
       - name: Lint with flake8
         run: |
