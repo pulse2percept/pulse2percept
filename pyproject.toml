@@ -3,12 +3,10 @@ requires = [
   "setuptools>=64",
   "wheel",
   "Cython>=3.0.8",
-  # Build-time NumPy pinned by Python version so Cython extensions compile
-  "numpy>=1.21,<2 ; python_version < '3.12'",
-  "numpy>=2,<3      ; python_version >= '3.12'",
+  'oldest-supported-numpy==2023.12.21; python_version < "3.12"',
+  'numpy>=2.0; python_version >= "3.12"',
 ]
 build-backend = "setuptools.build_meta"
-
 
 [project]
 name = "pulse2percept"
