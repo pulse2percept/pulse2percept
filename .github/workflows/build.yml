@@ -52,20 +52,34 @@ jobs:
         run: |
           py="${{ matrix.python-version }}"
           if [[ "$py" == 3.10* || "$py" == 3.11* ]]; then
-            echo "NUMPY_SPEC=<2" >> "$GITHUB_ENV"         # NumPy 1.26.x ABI
-            echo "OSN_PIN=oldest-supported-numpy==2023.12.21" >> "$GITHUB_ENV"
+            echo "NUMPY_SPEC=<2" >> "$GITHUB_ENV"         # compile & run on NumPy 1.26.x ABI
           else
-            echo "NUMPY_SPEC=>=2,<3" >> "$GITHUB_ENV"     # NumPy 2.x ABI
-            echo "OSN_PIN=" >> "$GITHUB_ENV"
+            echo "NUMPY_SPEC=>=2,<3" >> "$GITHUB_ENV"     # compile & run on NumPy 2.x ABI
           fi
 
+      # Bootstrap build toolchain + the right NumPy headers for compilation
       - name: Upgrade pip and bootstrap build tools
         shell: bash
         run: |
           python -m pip install --upgrade pip
           python -m pip install "setuptools>=64" wheel "Cython>=3.0.8" "numpy${NUMPY_SPEC}"
-          if [[ -n "${OSN_PIN}" ]]; then python -m pip install "${OSN_PIN}"; fi
-          python -c "import numpy, sys; print('Using NumPy', numpy.__version__, 'on', sys.version)"
+          python -c "import numpy, sys; print('Build NumPy', numpy.__version__, 'on', sys.version)"
+
+      # For Py 3.10/3.11, constrain test-time deps so they don't upgrade NumPy to 2.x
+      - name: Write constraints
+        shell: bash
+        run: |
+          CFILE="$RUNNER_TEMP/constraints.txt"
+          py="${{ matrix.python-version }}"
+          if [[ "$py" == 3.10* || "$py" == 3.11* ]]; then
+            {
+              echo "numpy<2"
+              echo "scipy<1.16"
+            } > "$CFILE"
+          else
+            : > "$CFILE"
+          fi
+          echo "CONSTRAINTS_FILE=$CFILE" >> "$GITHUB_ENV"
 
       # ----- Lint -----
       - name: Lint with flake8
@@ -74,10 +88,11 @@ jobs:
           flake8 pulse2percept --ignore N802,N806,W504 --select W503 --count --show-source --statistics
 
       # ----- Install package (editable) with dev extras -----
-      # --no-build-isolation ensures Cython extensions use the preinstalled NumPy headers.
+      # --no-build-isolation ensures Cython uses the preinstalled NumPy headers.
+      # The constraints file prevents test deps (e.g. SciPy) from upgrading NumPy on 3.10/3.11.
       - name: Install package (editable + dev extras)
         run: |
-          python -m pip install -e ".[dev]" --no-build-isolation --force-reinstall
+          python -m pip install -e ".[dev]" --no-build-isolation -c "$CONSTRAINTS_FILE"
           python -c "import numpy, pulse2percept as p2p; print('Runtime NumPy', numpy.__version__); print('p2p version:', getattr(p2p, '__version__', 'unknown'))"
 
       # ----- Log env -----
@@ -85,6 +100,7 @@ jobs:
         run: |
           python --version
           pip show numpy
+          pip show scipy || true
           pip show pulse2percept
           pip freeze | sed -n '1,120p'
 
