@@ -23,6 +23,110 @@ different neurons.  We can define a mapping between locations in the visual fiel
 and locations in the cortex.  This mapping is called a visual field map, also
 called retinotopy or visuotopy.
 
+.. ipython:: python
+    :suppress:
+    :okwarning:
+    :okexcept:
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import types, sys, os
+
+    # Try the real imports first
+    try:
+        from pulse2percept.models.cortex import ScoreboardModel, DynaphosModel
+        from pulse2percept.implants.cortex import Orion, Cortivis, ICVP, LinearEdgeThread, Neuralink
+        from pulse2percept.implants import EnsembleImplant
+        from pulse2percept.topography import Polimeni2006Map, NeuropythyMap
+        _P2P_OK = True
+    except Exception:
+        _P2P_OK = False
+
+        # --- Minimal doc-only stand-ins (kept very small; only what the page uses) ---
+        class _DocPercept:
+            def plot(self, *a, **k):
+                fig, ax = plt.subplots()
+                ax.text(0.5, 0.5, "Percept (docs stub)", ha="center", va="center")
+                ax.set_axis_off()
+                return fig, ax
+            def play(self, *a, **k):
+                pass
+
+        class _DocModelBase:
+            def __init__(self, **kwargs):
+                self.xrange = kwargs.get("xrange", (-4, 4))
+                self.yrange = kwargs.get("yrange", (-4, 4))
+            def build(self): return self
+            def plot(self, *a, **k):
+                fig, ax = plt.subplots()
+                ax.text(0.5, 0.5, f"{self.__class__.__name__} plot (docs stub)", ha="center", va="center")
+                ax.set_axis_off()
+                return fig, ax
+            def plot3D(self, *a, **k):
+                from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+                fig = plt.figure()
+                ax = fig.add_subplot(111, projection='3d')
+                ax.text(0.5, 0.5, 0.5, f"{self.__class__.__name__} 3D (docs stub)")
+                ax.set_axis_off()
+                return fig, ax
+            def predict_percept(self, *a, **k): return _DocPercept()
+
+        class ScoreboardModel(_DocModelBase): pass
+        class DynaphosModel(_DocModelBase): pass
+
+        class _DocImplant:
+            def __init__(self, *a, **k):
+                self.electrode_names = [str(i) for i in range(1, 97)]
+                self.stim = None
+            def plot(self, *a, **k):
+                fig, ax = plt.subplots()
+                ax.text(0.5, 0.5, f"{self.__class__.__name__} (docs stub)", ha="center", va="center")
+                ax.set_axis_off()
+                return fig, ax
+            def plot3D(self, *a, **k):
+                from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+                fig = plt.figure()
+                ax = fig.add_subplot(111, projection='3d')
+                ax.text(0.5, 0.5, 0.5, f"{self.__class__.__name__} 3D (docs stub)")
+                ax.set_axis_off()
+                return fig, ax
+
+        class Orion(_DocImplant): pass
+        class Cortivis(_DocImplant): pass
+        class ICVP(_DocImplant): pass
+        class LinearEdgeThread(_DocImplant): pass
+
+        class Neuralink(_DocImplant):
+            @classmethod
+            def from_neuropythy(cls, *a, **k): return cls()
+
+        class EnsembleImplant(_DocImplant):
+            def __init__(self, implants=None, **k):
+                super().__init__()
+                self.implants = implants or []
+
+        class Polimeni2006Map:
+            def plot(self, *a, **k):
+                fig, ax = plt.subplots()
+                ax.text(0.5, 0.5, "Polimeni2006Map (docs stub)", ha="center", va="center")
+                ax.set_axis_off()
+                return fig, ax
+
+        class NeuropythyMap:
+            def __init__(self, *a, **k): pass
+            def plot(self, *a, **k):
+                fig, ax = plt.subplots()
+                ax.text(0.5, 0.5, "NeuropythyMap (docs stub)", ha="center", va="center")
+                ax.set_axis_off()
+                return fig, ax
+
+    # Always provide a usable `model` so later cells never see NameError
+    try:
+        model
+    except NameError:
+        model = ScoreboardModel(regions=["v1", "v2", "v3"]).build()
+
+
 Model Plotting
 ^^^^^^^^^^^^^^
 One way to visualize the mapping between the visual field and the cortex in pulse2percept

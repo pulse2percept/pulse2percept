@@ -1,85 +1,70 @@
+# -- stdlib / setup -----------------------------------------------------------
 import os
 import sys
 import types
+
+# Put _ext on path (for github_link.py)
+sys.path.insert(0, os.path.abspath('_ext'))
+
+# Use a non-interactive backend for any plotting during doc builds
+import matplotlib
+matplotlib.use('Agg')
+
+# -- RTD-only: stub compiled extensions so imports don't fail -----------------
+def _stub_module(qualname: str, **attrs):
+    """Create a minimal module and register in sys.modules."""
+    m = types.ModuleType(qualname)
+    for k, v in attrs.items():
+        setattr(m, k, v)
+    sys.modules[qualname] = m
+
+def _stub_func(return_value=None):
+    def _f(*args, **kwargs):
+        return return_value
+    return _f
+
+if os.environ.get("READTHEDOCS") == "True":
+    # Utils / stimuli Cython bits
+    _stub_module("pulse2percept.utils._fast_array",
+                 fast_is_strictly_increasing=_stub_func(True))
+    _stub_module("pulse2percept.stimuli._base",
+                 fast_compress_space=_stub_func(None),
+                 fast_compress_time=_stub_func(None))
+
+    # Models Cython bits seen in your logs
+    _stub_module("pulse2percept.models._temporal", fading_fast=_stub_func(None))
+    _stub_module("pulse2percept.models._beyeler2019",
+                 fast_scoreboard=_stub_func(None),
+                 fast_axon_map=_stub_func(None),
+                 fast_jansonius=_stub_func(None),
+                 fast_find_closest_axon=_stub_func(None))
+    _stub_module("pulse2percept.models._horsager2009",
+                 temporal_fast=_stub_func(None))
+    _stub_module("pulse2percept.models._nanduri2012",
+                 spatial_fast=_stub_func(None),
+                 temporal_fast=_stub_func(None))
+    _stub_module("pulse2percept.models._granley2021",
+                 fast_biphasic_axon_map=_stub_func(None))
+
+# -- Sphinx basics ------------------------------------------------------------
 import sphinx_gallery
 from sphinx_gallery.sorting import ExplicitOrder
 import sphinx_rtd_theme
-
-# Ensure _ext is importable (for github_link)
-sys.path.insert(0, os.path.abspath('_ext'))
 from github_link import make_linkcode_resolve
 
-# ----------------------
 # Project metadata
-# ----------------------
 project = 'pulse2percept'
 copyright = '2016 - 2025, pulse2percept developers (BSD License)'
 
-# Get version WITHOUT importing the package (avoids compiled imports on RTD)
+# Retrieve version from package (be tolerant on RTD)
 try:
-    from importlib.metadata import version as _dist_version
-    version = release = _dist_version("pulse2percept")
+    from pulse2percept import __version__
+    version = release = __version__
 except Exception:
-    # Fallback for local builds / PR previews
+    # Fallback so Sphinx doesn't die if import chain still fails
     version = release = os.environ.get("P2P_DOC_VERSION", "0.0.dev")
 
-# ----------------------
-# Mock compiled submodules early so imports succeed in docs
-# ----------------------
-def _mock(modname, attrs=None):
-    if modname in sys.modules:
-        return
-    m = types.ModuleType(modname)
-    for k, v in (attrs or {}).items():
-        setattr(m, k, v)
-    sys.modules[modname] = m
-
-# These are the ones tripping your build
-_mock('pulse2percept.utils._fast_array', {
-    'fast_is_strictly_increasing': lambda *a, **k: True,
-})
-_mock('pulse2percept.stimuli._base', {
-    'fast_compress_space': lambda *a, **k: None,
-    'fast_compress_time': lambda *a, **k: None,
-})
-_mock('pulse2percept.models._temporal', {
-    'fading_fast': lambda *a, **k: 0.0,
-})
-_mock('pulse2percept.models._beyeler2019', {
-    'fast_scoreboard':       lambda *a, **k: None,
-    'fast_axon_map':         lambda *a, **k: None,
-    'fast_jansonius':        lambda *a, **k: None,
-    'fast_find_closest_axon':lambda *a, **k: (None, None),
-})
-_mock('pulse2percept.models._horsager2009', {
-    'temporal_fast': lambda *a, **k: None,
-})
-_mock('pulse2percept.models._nanduri2012', {
-    'spatial_fast':  lambda *a, **k: None,
-    'temporal_fast': lambda *a, **k: None,
-})
-_mock('pulse2percept.models._granley2021', {
-    'biphasic_axonmap_fast': lambda *a, **k: None,
-})
-_mock('pulse2percept.models._thompson2003', {
-    'spatial_fast': lambda *a, **k: None,
-})
-
-# Tell autodoc to treat them as mocked as well
-autodoc_mock_imports = [
-    'pulse2percept.utils._fast_array',
-    'pulse2percept.stimuli._base',
-    'pulse2percept.models._temporal',
-    'pulse2percept.models._beyeler2019',
-    'pulse2percept.models._horsager2009',
-    'pulse2percept.models._nanduri2012',
-    'pulse2percept.models._granley2021',
-    'pulse2percept.models._thompson2003',
-]
-
-# ----------------------
 # Sphinx extensions
-# ----------------------
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
@@ -95,13 +80,15 @@ extensions = [
     'sphinx.ext.mathjax',
 ]
 
-# Autodoc / Napoleon
+# Autodoc
 autosummary_generate = True
 autodoc_default_options = {
     'members': None,
     'member-order': 'bysource',
     'inherited-members': None,
 }
+
+# Napoleon
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
@@ -148,24 +135,15 @@ sphinx_gallery_conf = {
         '../examples/cortex',
         '../examples/developers',
     ]),
-    # On RTD, avoid executing examples to reduce chances of runtime import/ABI issues
-    'plot_gallery': False if os.environ.get('READTHEDOCS') == 'True' else True,
 }
 
-# IPython: make sure we use a non-interactive backend; pre-set any env you need
-ipython_execlines = [
-    "import os; os.environ.setdefault('MPLBACKEND', 'Agg')",
-]
-
-# GitHub link code resolver — wrap the partial so Sphinx sees a function
-_linkcode_partial = make_linkcode_resolve(
+# GitHub linkcode resolver
+linkcode_resolve = make_linkcode_resolve(
     'pulse2percept',
-    'https://github.com/pulse2percept/pulse2percept/blob/{revision}/{package}/{path}#L{lineno}',
+    'https://github.com/pulse2percept/pulse2percept/blob/{revision}/{package}/{path}#L{lineno}'
 )
-def linkcode_resolve(domain, info):
-    return _linkcode_partial(domain, info)
 
-# Short external links
+# External links
 extlinks = {
     'pull':   ('https://github.com/pulse2percept/pulse2percept/pull/%s', 'PR #%s'),
     'issue':  ('https://github.com/pulse2percept/pulse2percept/issues/%s', 'Issue #%s'),
