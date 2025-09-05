@@ -25,10 +25,10 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Install build essentials (Colab-ish)
+      - name: Install build toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config
+          sudo apt-get install -y build-essential gfortran libomp-dev
 
       - name: Create venv
         run: |
@@ -36,39 +36,35 @@ jobs:
           source .venv/bin/activate
           python -m pip install -U pip setuptools wheel
 
-      - name: Compute VCS URL for this ref
-        id: vcs
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            REPO="${{ github.event.pull_request.head.repo.full_name }}"
-            REF="${{ github.event.pull_request.head.sha }}"
-          else
-            REPO="${{ github.repository }}"
-            REF="${{ github.sha }}"
-          fi
-          echo "url=git+https://github.com/${REPO}@${REF}" >> "$GITHUB_OUTPUT"
-
-      - name: Install package from VCS
-        env:
-          PIP_NO_INPUT: "1"
+      - name: Install from VCS (verbose)
+        env: { PIP_NO_INPUT: "1" }
         run: |
           source .venv/bin/activate
-          python -m pip install "${{ steps.vcs.outputs.url }}"
-          python -m pip install packaging  # for dep checks
-
-      - name: Verify runtime deps from installed metadata
-        run: |
-          source .venv/bin/activate
+          python -m pip install -v "${{ steps.vcs.outputs.url }}"
           python -m pip install packaging
+
+      - name: Verify runtime deps
+        run: |
+          source .venv/bin/activate
           python .github/scripts/verify_runtime_deps.py
           python -m pip check
 
-      - name: Smoke import
+      - name: Assert C-extension presence
         run: |
           source .venv/bin/activate
           python - <<'PY'
-          import pulse2percept as p2p
-          print("p2p:", getattr(p2p, "__version__", "unknown"))
-          _ = p2p.models.ScoreboardModel().build()
+          import pathlib, pulse2percept as p2p
+          utils_dir = pathlib.Path(p2p.__file__).with_name("utils")
+          so = list(utils_dir.glob("_fast_array*.so"))
+          print("utils_dir:", utils_dir)
+          print("compiled:", [s.name for s in so])
+          PY
+
+      - name: Smoke import (minimal path)
+        run: |
+          source .venv/bin/activate
+          python - <<'PY'
+          from pulse2percept.models import ScoreboardModel
+          _ = ScoreboardModel().build()
           print("Smoke OK")
           PY
