@@ -72,3 +72,142 @@ jobs:
         with:
           name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
           path: ./wheelhouse/*.whl
+
+  # ------------------------------------------------------------------------------------
+  # Install & smoke-test using the freshly-built LINUX wheel (Colab-ish environment)
+  # ------------------------------------------------------------------------------------
+  colab_smoke_from_wheel:
+    name: Colab-ish (from wheel) • py${{ matrix.py }}
+    runs-on: ubuntu-latest
+    needs: build_wheels
+    strategy:
+      fail-fast: false
+      matrix:
+        py: [ "3.12" ]  # keep in sync with Colab
+
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.py }}
+
+      - name: Create venv
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install -U pip setuptools wheel packaging
+
+      - name: Download wheel artifacts (all OS)
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          pattern: cibw-wheels-*
+          merge-multiple: true
+          path: ./dist-all
+
+      - name: Select Linux wheel matching this Python
+        id: pick
+        run: |
+          set -euo pipefail
+          ls -1 dist-all || true
+          PYTAG="cp$(python -c 'import sys; print(str(sys.version_info.major)+str(sys.version_info.minor))')"
+          echo "Looking for manylinux wheel for $PYTAG"
+          WHEEL=$(ls dist-all/*${PYTAG}*manylinux*.whl | head -n 1 || true)
+          if [ -z "${WHEEL:-}" ]; then
+            echo "No manylinux wheel found for $PYTAG" >&2
+            exit 1
+          fi
+          echo "wheel=$WHEEL" >> "$GITHUB_OUTPUT"
+          echo "Selected wheel: $WHEEL"
+
+      - name: Install wheel
+        run: |
+          source .venv/bin/activate
+          python -m pip install "${{ steps.pick.outputs.wheel }}"
+
+      - name: Verify runtime deps from installed metadata
+        run: |
+          source .venv/bin/activate
+          python .github/scripts/verify_runtime_deps.py
+          python -m pip check
+
+      - name: Smoke import (minimal path)
+        run: |
+          source .venv/bin/activate
+          python - <<'PY'
+          from pulse2percept.models import ScoreboardModel
+          _ = ScoreboardModel().build()
+          print("ScoreboardModel build OK (wheel)")
+          PY
+
+  # ------------------------------------------------------------------------------------
+  # Optional: also test installing from git+<ref> (source build), like users do in Colab
+  # ------------------------------------------------------------------------------------
+  colab_smoke_from_git:
+    name: Colab-ish (from git) • py${{ matrix.py }}
+    runs-on: ubuntu-latest
+    needs: build_wheels
+    strategy:
+      fail-fast: false
+      matrix:
+        py: [ "3.12" ]
+
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.py }}
+
+      # Toolchain similar to Colab base image; helps source builds
+      - name: Install build toolchain (gcc/OpenMP/Fortran)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gfortran libomp-dev pkg-config
+
+      - name: Create venv
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install -U pip setuptools wheel packaging
+
+      # Pre-install build deps and avoid surprises from build isolation
+      - name: Install from current ref (source)
+        env:
+          PIP_NO_INPUT: "1"
+        run: |
+          set -euo pipefail
+          source .venv/bin/activate
+          # build deps (headers) for Cython extensions
+          python -m pip install -U cython "numpy>=2"
+          # build from the exact ref under test
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            REPO="${{ github.event.pull_request.head.repo.full_name }}"
+            REF="${{ github.event.pull_request.head.sha }}"
+          else:
+            REPO="${{ github.repository }}"
+            REF="${{ github.sha }}"
+          fi
+          URL="git+https://github.com/${REPO}@${REF}"
+          echo "Installing from: $URL"
+          # If your PEP 517 backend needs isolation, drop --no-build-isolation
+          python -m pip install --no-build-isolation -v "$URL"
+
+      - name: Verify runtime deps from installed metadata
+        run: |
+          source .venv/bin/activate
+          python .github/scripts/verify_runtime_deps.py
+          python -m pip check
+
+      - name: Smoke import (minimal path)
+        run: |
+          source .venv/bin/activate
+          python - <<'PY'
+          from pulse2percept.models import ScoreboardModel
+          _ = ScoreboardModel().build()
+          print("ScoreboardModel build OK (git)")
+          PY
