@@ -77,7 +77,11 @@ class OpenMPBuildExt(build_ext):
 
     def build_extensions(self):
         api_macro = _numpy_api_macro()
-        disable_omp = os.environ.get("P2P_DISABLE_OPENMP", "0") == "1"
+        # Disable OMP if explicitly requested *or* when building on RTD
+        disable_omp = (
+            os.environ.get("P2P_DISABLE_OPENMP", "0") == "1"
+            or os.environ.get("READTHEDOCS") == "True"
+        )
 
         for ext in self.extensions:
             ext.define_macros = list(getattr(ext, "define_macros", []))
