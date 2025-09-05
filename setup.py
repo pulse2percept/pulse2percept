@@ -77,8 +77,9 @@ class OpenMPBuildExt(build_ext):
 
     def build_extensions(self):
         api_macro = _numpy_api_macro()
+        disable_omp = os.environ.get("P2P_DISABLE_OPENMP", "0") == "1"
+
         for ext in self.extensions:
-            # Ensure lists exist before appending
             ext.define_macros = list(getattr(ext, "define_macros", []))
             ext.extra_compile_args = list(getattr(ext, "extra_compile_args", []))
             ext.extra_link_args = list(getattr(ext, "extra_link_args", []))
@@ -86,9 +87,12 @@ class OpenMPBuildExt(build_ext):
             # Always add the NumPy API macro
             ext.define_macros.append(api_macro)
 
+            if disable_omp:
+                # Don’t add any OpenMP flags; useful on RTD
+                continue
+
             try:
                 if sys.platform == "darwin":
-                    # Prefer OMP_PREFIX from CI to construct include/lib paths
                     omp_prefix = os.environ.get("OMP_PREFIX")
                     if omp_prefix:
                         omp_inc = os.path.join(omp_prefix, "include")
@@ -100,7 +104,6 @@ class OpenMPBuildExt(build_ext):
                             ext.extra_link_args += [f"-L{omp_lib}"]
                         ext.extra_link_args += ["-lomp"]
                     else:
-                        # Fallback to generic flags (Homebrew delocation will handle rpaths in CI)
                         ext.extra_compile_args += ["-Xpreprocessor", "-fopenmp"]
                         ext.extra_link_args += ["-lomp"]
 
@@ -109,7 +112,6 @@ class OpenMPBuildExt(build_ext):
                     ext.extra_link_args += ["-fopenmp"]
 
                 elif os.name == "nt":  # Windows (MSVC)
-                    # /openmp is the supported flag for MSVC; avoid hardcoding vcomp.lib
                     ext.extra_compile_args += ["/openmp"]
 
             except Exception as e:
