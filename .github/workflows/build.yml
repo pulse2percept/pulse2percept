@@ -116,13 +116,13 @@ jobs:
         if: github.event_name == 'push' && !github.event.pull_request
         run: |
           mkdir -p test_dir && cd test_dir
-          pytest --pyargs pulse2percept --cov=pulse2percept --cov-branch --cov-report=xml --doctest-modules
+          pytest --pyargs pulse2percept --cov=pulse2percept --cov-branch --cov-report=xml --doctest-modules -x
 
       - name: Run slow tests for pull requests
         if: github.event_name == 'pull_request'
         run: |
           mkdir -p test_dir && cd test_dir
-          pytest --pyargs pulse2percept --cov=pulse2percept --runslow --cov-branch --cov-report=xml --doctest-modules
+          pytest --pyargs pulse2percept --cov=pulse2percept --runslow --cov-branch --cov-report=xml --doctest-modules -x
 
       # ---- Coverage upload ----
       - name: Upload coverage report to codecov.io

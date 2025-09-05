@@ -45,12 +45,19 @@ _mock('pulse2percept.stimuli._base', {
 _mock('pulse2percept.models._temporal', {
     'fading_fast': lambda *a, **k: 0.0,
 })
+_mock('pulse2percept.models._beyeler2019', {
+    'fast_scoreboard':       lambda *a, **k: None,
+    'fast_axon_map':         lambda *a, **k: None,
+    'fast_jansonius':        lambda *a, **k: None,
+    'fast_find_closest_axon':lambda *a, **k: (None, None),
+})
 
 # Tell autodoc to treat them as mocked as well
 autodoc_mock_imports = [
     'pulse2percept.utils._fast_array',
     'pulse2percept.stimuli._base',
-    'pulse2percept.models._temporal'
+    'pulse2percept.models._temporal',
+    'pulse2percept.models._beyeler2019',
 ]
 
 # ----------------------
