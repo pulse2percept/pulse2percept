@@ -55,10 +55,14 @@ _mock('pulse2percept.models._horsager2009', {
     'temporal_fast': lambda *a, **k: None,
 })
 _mock('pulse2percept.models._nanduri2012', {
+    'spatial_fast':  lambda *a, **k: None,
     'temporal_fast': lambda *a, **k: None,
 })
 _mock('pulse2percept.models._granley2021', {
     'biphasic_axonmap_fast': lambda *a, **k: None,
+})
+_mock('pulse2percept.models._thompson2003', {
+    'spatial_fast': lambda *a, **k: None,
 })
 
 # Tell autodoc to treat them as mocked as well
@@ -70,6 +74,7 @@ autodoc_mock_imports = [
     'pulse2percept.models._horsager2009',
     'pulse2percept.models._nanduri2012',
     'pulse2percept.models._granley2021',
+    'pulse2percept.models._thompson2003',
 ]
 
 # ----------------------

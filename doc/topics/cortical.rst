@@ -35,6 +35,8 @@ The first step is to create a model, for example
 model in regions v1, v2, and v3 as follows:
 
 .. ipython:: python
+    :okexcept:
+    :okwarning:
 
     from pulse2percept.models.cortex import ScoreboardModel
     import matplotlib.pyplot as plt
