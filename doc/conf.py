@@ -10,36 +10,59 @@ sys.path.insert(0, os.path.abspath('_ext'))
 import matplotlib
 matplotlib.use('Agg')
 
-# -- RTD-only: stub compiled extensions so imports don't fail -----------------
+# -- tiny helpers for stubbing modules on RTD --------------------------------
 def _stub_module(qualname: str, **attrs):
     """Create a minimal module and register in sys.modules."""
     m = types.ModuleType(qualname)
     for k, v in attrs.items():
-        setattr(m, k, v)
+        setattr(m, v.__name__ if callable(v) else k, v)
     sys.modules[qualname] = m
+    return m
+
+def _stub_package(qualname: str):
+    """Create a minimal *package* (has __path__) and register it."""
+    m = types.ModuleType(qualname)
+    m.__path__ = []  # mark as a package
+    sys.modules[qualname] = m
+    return m
 
 def _stub_func(return_value=None):
     def _f(*args, **kwargs):
         return return_value
     return _f
 
-if os.environ.get("READTHEDOCS") == "True":
-    # Utils / stimuli Cython bits
+ON_RTD = os.environ.get("READTHEDOCS") == "True"
+
+if ON_RTD:
+    # --- Stub JAX/JAXLIB to prevent importing heavy binary wheels on RTD ----
+    import numpy as _np
+    jax_pkg = _stub_package("jax")
+    # common jax APIs that might be referenced (no-ops)
+    jax_pkg.jit = lambda f=None, *a, **k: (f if f is not None else (lambda x: x))
+    jax_pkg.grad = _stub_func(None)
+    jax_pkg.device_put = _stub_func(None)
+    jax_pkg.random = types.SimpleNamespace(PRNGKey=_stub_func(0), normal=_stub_func(_np.array([])))
+    # jax.numpy as a separate importable module; alias to numpy for basic ops
+    _stub_package("jax.numpy")
+    sys.modules["jax.numpy"].__dict__.update(_np.__dict__)
+
+    jaxlib_pkg = _stub_package("jaxlib")
+    _stub_module("jaxlib.xla_client")
+    _stub_module("jaxlib.xla_extension")
+
+    # --- Stub your Cython extensions that showed up in RTD logs -------------
     _stub_module("pulse2percept.utils._fast_array",
                  fast_is_strictly_increasing=_stub_func(True))
     _stub_module("pulse2percept.stimuli._base",
                  fast_compress_space=_stub_func(None),
                  fast_compress_time=_stub_func(None))
-
-    # Models Cython bits seen in your logs
     _stub_module("pulse2percept.models._temporal", fading_fast=_stub_func(None))
     _stub_module("pulse2percept.models._beyeler2019",
                  fast_scoreboard=_stub_func(None),
                  fast_axon_map=_stub_func(None),
                  fast_jansonius=_stub_func(None),
                  fast_find_closest_axon=_stub_func(None))
-    _stub_module("pulse2percept.models._horsager2009",
-                 temporal_fast=_stub_func(None))
+    _stub_module("pulse2percept.models._horsager2009", temporal_fast=_stub_func(None))
     _stub_module("pulse2percept.models._nanduri2012",
                  spatial_fast=_stub_func(None),
                  temporal_fast=_stub_func(None))
@@ -56,13 +79,16 @@ from github_link import make_linkcode_resolve
 project = 'pulse2percept'
 copyright = '2016 - 2025, pulse2percept developers (BSD License)'
 
-# Retrieve version from package (be tolerant on RTD)
-try:
-    from pulse2percept import __version__
-    version = release = __version__
-except Exception:
-    # Fallback so Sphinx doesn't die if import chain still fails
-    version = release = os.environ.get("P2P_DOC_VERSION", "0.0.dev")
+# Version: NEVER import the package on RTD (avoids JAX/NumPy ABI crashes)
+if ON_RTD:
+    # Prefer RTD-provided version strings if available; otherwise a safe fallback
+    version = release = os.environ.get("READTHEDOCS_VERSION", "0.0.dev")
+else:
+    try:
+        from pulse2percept import __version__
+        version = release = __version__
+    except Exception:
+        version = release = os.environ.get("P2P_DOC_VERSION", "0.0.dev")
 
 # Sphinx extensions
 extensions = [
