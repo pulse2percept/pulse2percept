@@ -1,0 +1,74 @@
+name: Colab-ish PR install smoke
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  colab_smoke:
+    name: Colab-ish • py${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12"]  # keep aligned with Colab
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install build essentials (Colab-ish)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config
+
+      - name: Create venv
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install -U pip setuptools wheel
+
+      - name: Compute VCS URL for this ref
+        id: vcs
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            REPO="${{ github.event.pull_request.head.repo.full_name }}"
+            REF="${{ github.event.pull_request.head.sha }}"
+          else
+            REPO="${{ github.repository }}"
+            REF="${{ github.sha }}"
+          fi
+          echo "url=git+https://github.com/${REPO}@${REF}" >> "$GITHUB_OUTPUT"
+
+      - name: Install package from VCS
+        env:
+          PIP_NO_INPUT: "1"
+        run: |
+          source .venv/bin/activate
+          python -m pip install "${{ steps.vcs.outputs.url }}"
+          python -m pip install packaging  # for dep checks
+
+      - name: Verify runtime deps from installed metadata
+        run: |
+          source .venv/bin/activate
+          python -m pip install packaging
+          python .github/scripts/verify_runtime_deps.py
+          python -m pip check
+
+      - name: Smoke import
+        run: |
+          source .venv/bin/activate
+          python - <<'PY'
+          import pulse2percept as p2p
+          print("p2p:", getattr(p2p, "__version__", "unknown"))
+          _ = p2p.models.ScoreboardModel().build()
+          print("Smoke OK")
+          PY

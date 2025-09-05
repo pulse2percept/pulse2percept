@@ -1,0 +1,97 @@
+name: Colab-ish daily install drift
+
+on:
+  schedule:
+    - cron: "13 7 * * *"   # daily at 07:13 UTC
+  workflow_dispatch: {}
+
+jobs:
+  drift:
+    name: ${{ matrix.channel }} • py${{ matrix.python }} • ${{ matrix.profile }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12"]                    # Colab: Python 3.12.11 currently
+        channel: ["git-master", "pypi-stable"]
+        profile: ["latest", "colab-pins"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install build essentials (Colab-ish)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config
+
+      - name: Create venv
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install -U pip setuptools wheel packaging
+
+      - name: (Optional) Pre-pin Colab packages
+        if: matrix.profile == 'colab-pins'
+        env:
+          PIP_NO_INPUT: "1"
+        run: |
+          source .venv/bin/activate
+          # PyTorch cu126 wheels need the PyTorch index (adjust if Colab CUDA changes)
+          python -m pip install -r .github/colab-pins.txt --index-url https://download.pytorch.org/whl/cu126
+          python - <<'PY'
+          import importlib, sys
+          for m in ["numpy","jax","jaxlib","tensorflow","torch","torchvision","torchaudio"]:
+              try:
+                  mod = importlib.import_module(m)
+                  print(f"{m}=={getattr(mod,'__version__','?')}")
+              except Exception as e:
+                  print(f"{m} import failed: {e}")
+          print(sys.version)
+          PY
+
+      - name: Install pulse2percept (${{ matrix.channel }})
+        env:
+          PIP_NO_INPUT: "1"
+        run: |
+          source .venv/bin/activate
+          if [ "${{ matrix.channel }}" = "git-master" ]; then
+            TARGET="git+https://github.com/pulse2percept/pulse2percept"
+          else
+            TARGET="pulse2percept"
+          fi
+          echo "Installing: $TARGET"
+          python -m pip install "$TARGET"
+
+      - name: Verify runtime deps from installed metadata
+        run: |
+          source .venv/bin/activate
+          python -m pip install packaging
+          python .github/scripts/verify_runtime_deps.py
+          python -m pip check
+
+      - name: Smoke import
+        run: |
+          source .venv/bin/activate
+          python - <<'PY'
+          import pulse2percept as p2p
+          print("p2p:", getattr(p2p, "__version__", "unknown"))
+          _ = p2p.models.ScoreboardModel()
+          print("Smoke OK")
+          PY
+
+      # Optional: uncomment to force wheel-only installs (catches missing wheels)
+      # - name: Wheel-only sanity (optional)
+      #   run: |
+      #     source .venv/bin/activate
+      #     python -m pip uninstall -y pulse2percept || true
+      #     if [ "${{ matrix.channel }}" = "git-master" ]; then
+      #       TARGET="git+https://github.com/pulse2percept/pulse2percept"
+      #     else
+      #       TARGET="pulse2percept"
+      #     fi
+      #     python -m pip install --only-binary=:all: "$TARGET"
