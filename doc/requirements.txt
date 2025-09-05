@@ -1,14 +1,16 @@
+# doc/requirements.txt
+numpy<2,>=1.26
+oldest-supported-numpy==2023.12.21
+Cython>=3.0.8
 sphinx==8.2.3
 sphinx_rtd_theme
 sphinx_gallery==0.19.0
-sphinx_version_warning
+versionwarning
 ipython>=8.12
 matplotlib>=3.8
-Pillow
-pandas
+pandas>=2.0,<2.3
 h5py
-scikit-image
-# Runtime NumPy must match extensions compiled against OSN (NumPy 1.26 on py311)
-numpy<2,>=1.26
-# JAX is optional but supported; this version works with NumPy 1.26 runtime
+nibabel>=5
+pooch
+neuropythy==0.13.9
 jax[cpu]==0.4.31
