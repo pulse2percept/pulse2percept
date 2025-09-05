@@ -14,7 +14,6 @@ jobs:
     strategy:
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
-      fail-fast: false
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -35,43 +34,38 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@c923d83ad9c1bc00211c5041d0c3f73294ff88f6 # v3.1.4
         env:
-          # ---------- Build matrix ----------
-          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
-          CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
-          CIBW_BUILD_VERBOSITY: "1"
-
-          # ---------- macOS: libomp + deployment target 15.0 (matches Homebrew libomp) ----------
-          CIBW_ARCHS_MACOS: "x86_64 arm64"
+          # ---------- macOS: install libomp; compile & repair with macOS 15 target ----------
           CIBW_BEFORE_ALL_MACOS: |
             brew update
             brew install libomp || brew reinstall libomp
           CIBW_BEFORE_BUILD_MACOS: |
-            python -m pip install --upgrade pip setuptools wheel cython delocate
-            # Build against NumPy 2.0.* to get dual-ABI (works on NumPy 1.x and 2.x at runtime)
-            python -m pip install "numpy>=2.0,<2.1"
+            echo "libomp prefix: $(brew --prefix libomp)"
+            ls -l "$(brew --prefix libomp)/include/omp.h" || (echo "omp.h missing" && exit 1)
+            python -m pip install --upgrade pip setuptools wheel cython delocate oldest-supported-numpy
           CIBW_ENVIRONMENT_MACOS: |
             OMP_PREFIX="$(brew --prefix libomp)"
             MACOSX_DEPLOYMENT_TARGET=15.0
             CFLAGS="-std=c99 -O3 -Xpreprocessor -fopenmp -I${OMP_PREFIX}/include"
             CPPFLAGS="-I${OMP_PREFIX}/include"
             LDFLAGS="-L${OMP_PREFIX}/lib -lomp"
-          # Make wheel tag match the vendored libomp’s min version
-          CIBW_MACOSX_DEPLOYMENT_TARGET: "15.0"
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: >
-            delocate-listdeps {wheel} &&
-            delocate-wheel -w {dest_dir} {wheel}
+            MACOSX_DEPLOYMENT_TARGET=15.0 delocate-listdeps {wheel} &&
+            MACOSX_DEPLOYMENT_TARGET=15.0 delocate-wheel -w {dest_dir} {wheel}
 
-          # ---------- Linux: OpenMP; build against NumPy 2.0.* ----------
-          CIBW_BEFORE_BUILD_LINUX: |
-            python -m pip install --upgrade pip setuptools wheel cython
-            python -m pip install "numpy>=2.0,<2.1"
+          # ---------- Linux: enable OpenMP; OSN picks a compatible NumPy ----------
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"
+          CIBW_BEFORE_BUILD_LINUX: "python -m pip install --upgrade pip setuptools wheel cython oldest-supported-numpy"
 
-          # ---------- Windows: OpenMP; build against NumPy 2.0.* ----------
-          CIBW_BEFORE_BUILD_WINDOWS: |
-            python -m pip install --upgrade pip setuptools wheel cython
-            python -m pip install "numpy>=2.0,<2.1"
+          # ---------- Windows: enable OpenMP; OSN picks a compatible NumPy ----------
           CIBW_ENVIRONMENT_WINDOWS: "CFLAGS='/openmp'"
+          CIBW_BEFORE_BUILD_WINDOWS: "python -m pip install --upgrade pip setuptools wheel cython oldest-supported-numpy"
+
+          # ---------- Python versions / skips ----------
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
+          CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
+
+          # Build separate wheels for both Apple architectures
+          CIBW_ARCHS_MACOS: "x86_64 arm64"
 
       - name: Upload wheels
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
