@@ -1,3 +1,5 @@
+oldest-supported-numpy==2023.12.21
+Cython>=3.0.8
 sphinx>=7.2.6
 sphinx_rtd_theme
 sphinx_gallery>=0.11
