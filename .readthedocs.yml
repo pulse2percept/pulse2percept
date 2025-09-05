@@ -4,16 +4,14 @@ build:
   os: "ubuntu-lts-latest"
   tools:
     python: "3.11"
+  environment:
+    P2P_PLOT_GALLERY: "0"
+    P2P_DOC_BUILD: "1"
 
 sphinx:
   configuration: doc/conf.py
   fail_on_warning: false
   builder: "html"
-
-# Turn off example execution on RTD; keep a flag the code can read if needed
-environment:
-  P2P_PLOT_GALLERY: "0"
-  P2P_DOC_BUILD: "1"
 
 python:
   install:
