@@ -13,13 +13,15 @@ pulse2percept is organized into the following subpackages:
     utils
     topography
 """
-import matplotlib as mpl
+from __future__ import annotations
+
+import logging
 from os import environ
 from sys import platform
-import logging
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
 
-# Use TkAgg on macOS, Agg elsewhere if no display:
+# Matplotlib backend hygiene
+import matplotlib as mpl
 if platform == "darwin":
     mpl.use("TkAgg")
 else:
@@ -27,40 +29,42 @@ else:
         if environ.get("DISPLAY", "") == "":
             mpl.use("Agg")
 
-# Fetch version from pyproject.toml
+# Package version
 try:
-    __version__ = version("pulse2percept")
+    __version__ = _pkg_version("pulse2percept")
 except PackageNotFoundError:
     __version__ = "unknown"
 
-# Disable Jupyter Notebook handlers
-# https://github.com/ipython/ipython/issues/8282
+# Disable Jupyter Notebook handlers (https://github.com/ipython/ipython/issues/8282)
 logging.getLogger().handlers = []
-
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
 
-# Set up root logger for debug file
-formatstr = "%(asctime)s [%(name)s] [%(levelname)s] %(message)s"
-logging.basicConfig(
-    level=logging.DEBUG, format=formatstr, filename="debug.log", filemode="w"
-)
+_format = "%(asctime)s [%(name)s] [%(levelname)s] %(message)s"
+logging.basicConfig(level=logging.DEBUG, format=_format, filename="debug.log", filemode="w")
 
-from . import datasets
-from . import implants
-from . import models
-from . import percepts
-from . import stimuli
-from . import utils
-from . import viz
-
-__all__ = [
+# Lazy import of submodules to avoid importing C extensions at top-level
+_SUBMODULES = {
     "datasets",
     "implants",
     "models",
     "percepts",
     "stimuli",
-    "topography",
     "utils",
     "viz",
-]
+    "topography",
+}
+
+__all__ = sorted(list(_SUBMODULES))
+
+def __getattr__(name: str):
+    # Lazy-load known submodules on first access
+    if name in _SUBMODULES:
+        import importlib
+        mod = importlib.import_module(f".{name}", __name__)
+        globals()[name] = mod  # cache for subsequent access
+        return mod
+    raise AttributeError(name)
+
+def __dir__():
+    return sorted(list(globals().keys()) + list(_SUBMODULES))
