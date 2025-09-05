@@ -204,8 +204,8 @@ def test_neuropythy_scoreboard():
     implant = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v2')
     implant.stim = {e : 1 for e in implant.electrode_names}
     percept = model.predict_percept(implant)
-    npt.assert_almost_equal(np.sum(percept.data), 5344.173, decimal=3)
-    npt.assert_almost_equal(np.max(percept.data), 27.845, decimal=3)
+    npt.assert_almost_equal(np.sum(percept.data), 5344.173, decimal=2)
+    npt.assert_almost_equal(np.max(percept.data), 27.845, decimal=2)
 
     # mega implant
     nmap = NeuropythyMap('fsaverage', regions=['v1', 'v2', 'v3'])

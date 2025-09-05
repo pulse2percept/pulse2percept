@@ -1,10 +1,16 @@
-sphinx>=7.2.6
+# doc/requirements.txt
+numpy<2,>=1.26
+Cython>=3.0.8
+sphinx==8.2.3
 sphinx_rtd_theme
-sphinx_gallery>=0.11
-sphinx_version_warning
-ipython
-pandas
+sphinx_gallery==0.19.0
+sphinx-version-warning==1.1.2
+ipython>=8.12
+matplotlib>=3.8
+pandas<2.3,>=2.0
 h5py
-neuropythy
+nibabel>=5
+pooch>=1.8
+neuropythy==0.12.16
 pickleshare
-jax[cpu]>=0.4.3
+jax[cpu]==0.4.31

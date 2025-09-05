@@ -2,11 +2,9 @@ name: Build & Test
 
 on:
   push:
-    branches:
-      - '**'  # Trigger on all branches
+    branches: ["**"]
   pull_request:
-    branches:
-      - '**'  # Trigger on all branches involved in PRs
+    branches: ["**"]
 
 permissions:
   contents: read
@@ -16,86 +14,117 @@ jobs:
     name: Build ${{ matrix.os }} Py ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.13", "3.12", "3.11", "3.10"]
         os: [ubuntu-latest, windows-latest, macos-latest]
-      fail-fast: false
+
+    # Force bash on all OSes (avoids PowerShell var-expansion issues on Windows)
+    defaults:
+      run:
+        shell: bash
 
     steps:
-      # Step 1: Check out the repository
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
-      # Step 2: Set up Python
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
         with:
           python-version: ${{ matrix.python-version }}
 
-      # Step 3a: Install dependencies (macOS only)
+      # ---- System deps ----
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install libomp llvm
-          export PATH="$(brew --prefix llvm)/bin:$PATH"
-          export CC="$(brew --prefix llvm)/bin/clang"
-          export CXX="$(brew --prefix llvm)/bin/clang++"
-          export CPPFLAGS="-I$(brew --prefix libomp)/include -I$(brew --prefix llvm)/include"
-          export LDFLAGS="-L$(brew --prefix libomp)/lib -L$(brew --prefix llvm)/lib -lomp"
+          brew install libomp
+          echo "OMP_PREFIX=$(brew --prefix libomp)" >> "$GITHUB_ENV"
 
-      # Step 3b: Install dependencies (Linux only)
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
 
-      # Step 4: Install Python dependencies
-      - name: Install Python dependencies
+      # ---- Decide NumPy major per Python ----
+      - name: Choose NumPy major
         run: |
-          python -m pip install --upgrade pip setuptools wheel build numpy Cython
-          
-      # Step 5: lint
+          py="${{ matrix.python-version }}"
+          if [[ "$py" == 3.10* || "$py" == 3.11* ]]; then
+            echo "NUMPY_SPEC=<2" >> "$GITHUB_ENV"       # build+run on NumPy 1.26.x ABI
+          else
+            echo "NUMPY_SPEC=>=2,<3" >> "$GITHUB_ENV"   # build+run on NumPy 2.x ABI
+          fi
+
+      # ---- Bootstrap build toolchain + the right NumPy headers ----
+      - name: Upgrade pip and bootstrap build tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "setuptools>=64" wheel "Cython>=3.0.8" "numpy${NUMPY_SPEC}"
+          python -c "import numpy, sys; print('Build NumPy', numpy.__version__, 'on', sys.version)"
+
+      # ---- Constraints to stop test deps from upgrading NumPy on 3.10/3.11 ----
+      - name: Write constraints
+        run: |
+          CFILE="$RUNNER_TEMP/constraints.txt"
+          py="${{ matrix.python-version }}"
+          if [[ "$py" == 3.10* || "$py" == 3.11* ]]; then
+            {
+              echo "numpy<2"
+              echo "scipy<1.16"
+            } > "$CFILE"
+          else
+            # empty file
+            : > "$CFILE"
+          fi
+          echo "CONSTRAINTS_FILE=$CFILE" >> "$GITHUB_ENV"
+
+      # ---- Lint ----
       - name: Lint with flake8
         run: |
-          pip install flake8
+          python -m pip install flake8
           flake8 pulse2percept --ignore N802,N806,W504 --select W503 --count --show-source --statistics
-            
-      # Step 6: Install the package (Non-Windows)
-      - name: Install package
+
+      # ---- Install package (editable) with dev extras ----
+      # Use --no-build-isolation so Cython uses the preinstalled NumPy headers.
+      # Only pass -c if the constraints file is non-empty.
+      - name: Install package (editable + dev extras)
         run: |
-          pip uninstall -y pulse2percept || true
-          python setup.py build_ext --inplace
-          python -m pip install ".[dev]"
-      
-      # Step 7: Log
+          CONS_ARGS=()
+          if [[ -s "$CONSTRAINTS_FILE" ]]; then
+            CONS_ARGS=(-c "$CONSTRAINTS_FILE")
+          fi
+          python -m pip install -e ".[dev]" --no-build-isolation "${CONS_ARGS[@]}"
+          python -c "import numpy, pulse2percept as p2p; print('Runtime NumPy', numpy.__version__); print('p2p version:', getattr(p2p, '__version__', 'unknown'))"
+
+      # ---- Log env ----
       - name: Log environment info
         run: |
           python --version
-          pip freeze
-          gcc --version
+          pip show numpy
+          pip show scipy || true
           pip show pulse2percept
-          
-      # Step 8: Conditional Test Execution
+          pip freeze | sed -n '1,120p'
+
+      # ---- Tests ----
       - name: Run default test suite for push
         if: github.event_name == 'push' && !github.event.pull_request
         run: |
-          mkdir test_dir
-          cd test_dir
-          pytest --pyargs pulse2percept --cov=pulse2percept --cov-branch --cov-report=xml --doctest-modules
+          mkdir -p test_dir && cd test_dir
+          pytest --pyargs pulse2percept --cov=pulse2percept --cov-branch --cov-report=xml --doctest-modules -x
 
       - name: Run slow tests for pull requests
         if: github.event_name == 'pull_request'
         run: |
-          mkdir test_dir
-          cd test_dir
-          pytest --pyargs pulse2percept --cov=pulse2percept --runslow --cov-branch --cov-report=xml --doctest-modules
-          
-      # Step 9: Codecov
+          mkdir -p test_dir && cd test_dir
+          pytest --pyargs pulse2percept --cov=pulse2percept --runslow --cov-branch --cov-report=xml --doctest-modules -x
+
+      # ---- Coverage upload ----
       - name: Upload coverage report to codecov.io
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.5.1

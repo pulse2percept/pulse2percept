@@ -1,104 +1,99 @@
+# -- stdlib / setup -----------------------------------------------------------
 import os
 import sys
-import sphinx_gallery
-from sphinx_gallery.sorting import ExplicitOrder
-import sphinx_rtd_theme
+import importlib.metadata
 
-# Ensure paths are set correctly
+# Make local extensions importable first (e.g., github_link.py)
 sys.path.insert(0, os.path.abspath('_ext'))
 
+# Use a non-interactive backend for any plots
+import matplotlib
+matplotlib.use("Agg")
+
+ON_RTD = os.environ.get("READTHEDOCS") == "True"
+
+# -- Sphinx config ------------------------------------------------------------
 from github_link import make_linkcode_resolve
+import sphinx_rtd_theme
+from sphinx_gallery.sorting import ExplicitOrder
 
-# Project metadata
-project = 'pulse2percept'
-copyright = '2016 - 2025, pulse2percept developers (BSD License)'
+project = "pulse2percept"
+copyright = "2016 - 2025, pulse2percept developers"
 
-# Retrieve version from package
-from pulse2percept import __version__
-version = release = __version__
+# Never import the package here; use package metadata if present
+try:
+    release = importlib.metadata.version("pulse2percept")
+    version = release
+except importlib.metadata.PackageNotFoundError:
+    # During first phase of RTD build, the package may not yet be installed
+    version = release = os.environ.get("READTHEDOCS_VERSION", "0.0.dev")
 
-# Sphinx extensions
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.autosummary',
-    'sphinx.ext.napoleon',
-    'sphinx.ext.intersphinx',
-    'sphinx.ext.linkcode',
-    'sphinx.ext.todo',
-    'sphinx_gallery.gen_gallery',
-    'versionwarning.extension',
-    'IPython.sphinxext.ipython_directive',
-    'IPython.sphinxext.ipython_console_highlighting',
-    'sphinx.ext.extlinks', 
+    "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.linkcode",
+    "sphinx.ext.todo",
+    "sphinx_gallery.gen_gallery",
+    "versionwarning.extension",
+    "IPython.sphinxext.ipython_directive",
+    "IPython.sphinxext.ipython_console_highlighting",
+    "sphinx.ext.extlinks",
+    "sphinx.ext.mathjax",
 ]
 
-# Autodoc
 autosummary_generate = True
 autodoc_default_options = {
-    'members': None,
-    'member-order': 'bysource',
-    'inherited-members': None
+    "members": True,
+    "member-order": "bysource",
+    "inherited-members": True,
 }
-
-# Napoleon settings
-napoleon_google_docstring = False  # force consistency
-napoleon_numpy_docstring = True
-napoleon_include_init_with_doc = False
-napoleon_include_private_with_doc = False
-napoleon_include_special_with_doc = False
-napoleon_use_admonition_for_examples = False
-napoleon_use_admonition_for_notes = False
-napoleon_use_admonition_for_references = False
-napoleon_use_ivar = False
-napoleon_use_param = True
-napoleon_use_rtype = False
 todo_include_todos = True
 
-# Math rendering
-extensions.append('sphinx.ext.mathjax')
-mathjax_path = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_SVG'
+source_suffix = ".rst"
+master_doc = "index"
+templates_path = ["_templates"]
+exclude_patterns = ["_build", "**/.ipynb_checkpoints"]
 
-# Source files and paths
-templates_path = ['_templates']
-exclude_patterns = ['_build', '**/.ipynb_checkpoints']
-source_suffix = '.rst'
-master_doc = 'index'
+html_theme = "sphinx_rtd_theme"
+html_static_path = ["_static"]
+html_css_files = ["css/custom.css"]
 
-# HTML output
-html_theme = 'sphinx_rtd_theme'  # Switch to 'furo' if preferred
-html_static_path = ['_static']
-html_css_files = ['css/custom.css']
-html_last_updated_fmt = '%b %d, %Y'
+intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}
 
-# InterSphinx mapping
-intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
-
-# Gallery configuration
+# Sphinx-Gallery: keep execution on (your examples produce images),
+# but never fail the build if an example hiccups.
+from sphinx_gallery.sorting import ExplicitOrder
 sphinx_gallery_conf = {
-    'examples_dirs': ['../examples'],
-    'gallery_dirs': ['examples'],
-    'reference_url': {'pulse2percept': None},
-    'thumbnail_size': (320, 224),
-    'remove_config_comments': True,
-    'subsection_order': ExplicitOrder([
-        '../examples/implants',
-        '../examples/stimuli',
-        '../examples/models',
-        '../examples/datasets',
-        '../examples/cortex',
-        '../examples/developers'
-    ])
+    "examples_dirs": ["../examples"],
+    "gallery_dirs": ["examples"],
+    "reference_url": {"pulse2percept": None},
+    "thumbnail_size": (320, 224),
+    "remove_config_comments": True,
+    "subsection_order": ExplicitOrder([
+        "../examples/implants",
+        "../examples/stimuli",
+        "../examples/models",
+        "../examples/datasets",
+        "../examples/developers",
+    ]),
+    "only_warn_on_example_error": True,
 }
 
-# GitHub link code resolver
-linkcode_resolve = make_linkcode_resolve(
-    'pulse2percept',
-    'https://github.com/pulse2percept/pulse2percept/blob/{revision}/{package}/{path}#L{lineno}'
+# linkcode_resolve must be a function (avoid partial warning)
+_resolver = make_linkcode_resolve(
+    "pulse2percept",
+    "https://github.com/pulse2percept/pulse2percept/blob/{revision}/{package}/{path}#L{lineno}",
 )
+def linkcode_resolve(domain, info):
+    return _resolver(domain, info)
 
 extlinks = {
-    'pull': ('https://github.com/pulse2percept/pulse2percept/pull/%s', 'PR #%s'),
-    'issue': ('https://github.com/pulse2percept/pulse2percept/issues/%s', 'Issue #%s'),
-    'commit': ('https://github.com/pulse2percept/pulse2percept/commit/%s', 'Commit %s'),
+    "pull":   ("https://github.com/pulse2percept/pulse2percept/pull/%s", "PR #%s"),
+    "issue":  ("https://github.com/pulse2percept/pulse2percept/issues/%s", "Issue #%s"),
+    "commit": ("https://github.com/pulse2percept/pulse2percept/commit/%s", "Commit %s"),
 }
 
+# MathJax (older URL that loads reliably on RTD)
+mathjax_path = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_SVG"
