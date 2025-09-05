@@ -3,52 +3,73 @@
 ==========================
 Cortical Visual Prostheses
 ==========================
-Visual prostheses can either be implanted on the retina or the cortex.
-pulse2percept was originally designed for retinal implants, but now
-supports cortical implants. In this section, we cover cortical
-topography, implants, and models, with runnable examples.
+Visual prostheses can either be implanted on the retina or the cortex.  
+pulse2percept was originally designed for retinal implants, but now 
+supports cortical implants.  In this section, we will cover cortical 
+topography, implants, and models, and provide code examples of using them.
 
 .. _topics-cortical-topography:
 
 Topography
 ----------
-The visual cortex processes visual information and is split into left and
-right hemispheres. It contains multiple regions (V1, V2, V3, …) that
-arrange visual input retinotopically (a mapping from visual field coordinates
-to cortical coordinates).
+The visual cortex is the part of our brain that processes visual information.
+It is located at the back of our brain, and is split into two hemispheres:
+left and right.  The visual cortex is divided into multiple regions, including
+v1, v2, and v3, with each region performing a different function required
+to process visual information.
+
+Within a region, different parts of the visual field are processed by
+different neurons.  We can define a mapping between locations in the visual field
+and locations in the cortex.  This mapping is called a visual field map, also
+called retinotopy or visuotopy.
 
 Model Plotting
 ^^^^^^^^^^^^^^
-A simple way to visualize cortical retinotopy is with a model that samples
-points in the visual field and maps them onto cortex.
+One way to visualize the mapping between the visual field and the cortex in pulse2percept
+is to plot a model. A model simulates a set of points in the
+visual field and the corresponding points in the cortex (using a visual field
+map).
+
+The first step is to create a model, for example
+:py:class:`~pulse2percept.models.cortex.ScoreboardModel`.  We can create the
+model in regions v1, v2, and v3 as follows:
 
 .. ipython:: python
-    :okwarning:
 
-    import matplotlib.pyplot as plt
     from pulse2percept.models.cortex import ScoreboardModel
-
+    import matplotlib.pyplot as plt
     model = ScoreboardModel(regions=["v1", "v2", "v3"]).build()
 
-Note the `model.build()` call; you must call this before plotting.
+Note the `model.build()` call.  This must be called before we can plot the
+model.
 
-If we want to plot the model in the visual field, set `use_dva=True`. With
-style `"scatter"`, you can see the sampling points in visual degrees (dva):
 
-.. ipython:: python
+If we want to plot the model in the visual field, we can do so by setting
+`use_dva=True`.  If we use the style `"scatter"`, then we will be able to see
+the points in the visual field.  The points in the visual field are evenly
+spaced, and are represented by `+` symbols.
+
+.. ipython:: python 
     :okwarning:
 
     @savefig score.png align=center
     model.plot(style="scatter", use_dva=True)
 
-If we omit `use_dva=True`, the points are shown **on cortex** (in mm). The
-default scoreboard model uses :py:class:`~pulse2percept.topography.Polimeni2006Map`,
-but you can also use :py:class:`~pulse2percept.topography.NeuropythyMap`
-(3D, subject-specific, MRI-based) when available.
+If we don't set `use_dva=True`, then the visual field mapping will be applied
+to the points in the visual field, and the points on the cortex will be
+plotted instead. ScoreboardModel by default uses the 
+:py:class:`~pulse2percept.topography.Polimeni2006Map` visual field map, but 
+it can also use :py:class:`~pulse2percept.topography.NeuropythyMap` for
+3D patient-specific MRI based retinotopy.
 
-The cortex is represented as two hemifields with a 20 mm left-hemisphere
-offset, and cortical maps have `split_map=True` so current doesn’t cross
-between hemispheres.
+The cortex is split into left and right hemispheres, with each side being
+responsible for processing information from one eye.  In reality, the left
+and right hemispheres of our brain are disconnected, but to simplify 
+the Polimeni map represents them as one continuous space. 
+The left hemisphere is offset by 20mm, meaning the origin
+of the left hemisphere is (-20000, 0).  In addition, cortical visual field maps
+have a `split_map` attribute set to `True`, which means that no current will
+be allowed to cross between the hemispheres.
 
 .. ipython:: python
     :okwarning:
@@ -56,8 +77,13 @@ between hemispheres.
     @savefig model_scatter.png align=center
     model.plot(style="scatter")
 
-Cortical magnification yields denser sampling near the fovea origin; another
-useful style is `"hull"`:
+One effect that can be seen in the plot is that around the origins of each
+hemisphere, the points are less dense.  This is because an area at the
+center of our visual field is represented by a larger area on the cortex than
+equally sized area at the periphery of our visual field, an effect called
+cortical magnification.
+
+Another style option for the plot is `"hull"`:
 
 .. ipython:: python
     :okwarning:
@@ -65,7 +91,7 @@ useful style is `"hull"`:
     @savefig model_hull.png align=center
     model.plot(style="hull")
 
-And `"cell"`:
+And the last style is `"cell"`:
 
 .. ipython:: python
     :okwarning:
@@ -73,41 +99,47 @@ And `"cell"`:
     @savefig model_cell.png align=center
     model.plot(style="cell")
 
-Visual Field Map Plotting
-^^^^^^^^^^^^^^^^^^^^^^^^^
-You can also plot a visual field map directly. We’ll **try** Neuropythy’s
-MRI-based fsaverage V1 map, and gracefully fall back to Polimeni if
-Neuropythy (or its data) isn’t usable at build time.
+Visual Field Mapping Plotting
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We can also directly plot visual field maps, such as
+:py:class:`~pulse2percept.topography.Polimeni2006Map`, which is a cortical
+map.  The origin corresponds to the fovea (center of our visual field).  The
+units of the plot are in mm.  The plot also shows what part of the visual
+field is represented by different areas along the cortex in dva.  This
+shows the cortical magnification effect mentioned above, since for a given
+area of the cortex near the fovea, a larger area of the visual field is
+represented than the same area of the cortex near the periphery of the
+visual field.
 
 .. ipython:: python
     :okwarning:
 
-    import matplotlib.pyplot as plt
     from pulse2percept.topography import Polimeni2006Map
-    try:
-        from pulse2percept.topography import NeuropythyMap
-        vfmap = NeuropythyMap('fsaverage', regions=['v1'])
-        print("Using NeuropythyMap(fsaverage).")
-    except Exception as e:
-        print("Neuropythy unavailable on this build (falling back to Polimeni2006Map):", e)
-        vfmap = Polimeni2006Map()
+    map = Polimeni2006Map()
+    @savefig polimeni.png align=center
+    map.plot()
 
-    @savefig neuropythy_or_polimeni.png align=center
-    vfmap.plot()
 
 .. _topics-cortical-implants:
 
 Cortical Implants
 -----------------
-:py:class:`~pulse2percept.implants.cortex.Orion`,
-:py:class:`~pulse2percept.implants.cortex.Cortivis`,
-and :py:class:`~pulse2percept.implants.cortex.ICVP` are cortical implants.
-Setting `annotate=True` shows electrode names, useful for assigning
-per-electrode stimuli.
 
-Orion
+:py:class:`~pulse2percept.implants.cortex.Orion`, 
+:py:class:`~pulse2percept.implants.cortex.Cortivis`, 
+and :py:class:`~pulse2percept.implants.cortex.ICVP`  are cortical implants.
+This tutorial will show you how to create and plot these implants.  Setting
+`annotate=True` will show the implant names for each electrode.  The 
+electrode names are useful if you want to add a stimulus to specific
+electrodes.  For more information about these implants, see the documentation
+for each specific implant.
+
+Orion 
 ^^^^^
-:py:class:`~pulse2percept.implants.cortex.Orion` has 60 electrodes in a hex grid.
+
+:py:class:`~pulse2percept.implants.cortex.Orion` is an implant with 60 
+electrodes in a hex shaped grid.
 
 .. ipython:: python
 
@@ -119,7 +151,9 @@ Orion
 
 Cortivis
 ^^^^^^^^
-:py:class:`~pulse2percept.implants.cortex.Cortivis` has 96 electrodes in a square grid.
+
+:py:class:`~pulse2percept.implants.cortex.Cortivis` is an implant with 96 
+electrodes in a square shaped grid.
 
 .. ipython:: python
 
@@ -131,8 +165,10 @@ Cortivis
 
 ICVP
 ^^^^
-:py:class:`~pulse2percept.implants.cortex.ICVP` has 16 primary electrodes plus
-reference/counter electrodes.
+
+:py:class:`~pulse2percept.implants.cortex.ICVP` is an implant with 16 
+primary electrodes in a hex shaped grid, along with 2 additional "reference" 
+and "counter" electrodes.
 
 .. ipython:: python
 
@@ -146,46 +182,33 @@ reference/counter electrodes.
 
 Neuralink
 ^^^^^^^^^
-:py:class:`~pulse2percept.implants.cortex.Neuralink` is composed of multiple
-threads; currently :py:class:`~pulse2percept.implants.cortex.LinearEdgeThread`
-(32 electrodes) is implemented.
+:py:class:`~pulse2percept.implants.cortex.Neuralink` is an implant 
+consisting of multiple Neuralink threads. Currently the only thread implemented
+is the :py:class:`~pulse2percept.implants.cortex.LinearEdgeThread` which 
+consists of 32 electrodes. 
 
 .. ipython:: python
 
-    import matplotlib.pyplot as plt
     from pulse2percept.implants.cortex import LinearEdgeThread
-
     thread = LinearEdgeThread()
     thread.plot3D()
     @savefig neuralink_thread.png align=center
     plt.axis('equal')
 
-Neuropythy works well for 3D, subject-specific retinotopy. The code below
-**tries** `NeuropythyMap('fsaverage', ['v1'])` and falls back to `Polimeni2006Map`
-if Neuropythy (or its dataset) isn’t available during the docs build. The example
-still produces a figure either way.
+
+Neuralink works well with the :py:class:`~pulse2percept.topography.NeuropythyMap`,
+which is a 3D patient-specific MRI based retinotopy. You can easily create
+a Neuralink implant with multiple threads using the NeuropythyMap as follows:
 
 .. ipython:: python
     :okwarning:
 
-    import matplotlib.pyplot as plt
     from pulse2percept.implants.cortex import Neuralink
+    from pulse2percept.topography import NeuropythyMap
     from pulse2percept.models.cortex import ScoreboardModel
-    from pulse2percept.topography import Polimeni2006Map
-
-    try:
-        from pulse2percept.topography import NeuropythyMap
-        nmap = NeuropythyMap('fsaverage', regions=['v1'])
-        print("Using NeuropythyMap(fsaverage).")
-    except Exception as e:
-        print("Neuropythy unavailable on this build (falling back to Polimeni2006Map):", e)
-        nmap = Polimeni2006Map()
-
-    model = ScoreboardModel(vfmap=nmap, xrange=(-4, 0), yrange=(-4, 4), xystep=.25).build()
-    neuralink = Neuralink.from_neuropythy(
-        nmap, xrange=model.xrange, yrange=model.yrange, xystep=1, rand_insertion_angle=0
-    )
-
+    map = NeuropythyMap('fsaverage', regions=['v1'])
+    model = ScoreboardModel(vfmap=map, xrange=(-4, 0), yrange=(-4, 4), xystep=.25).build()
+    neuralink = Neuralink.from_neuropythy(map, xrange=model.xrange, yrange=model.yrange, xystep=1, rand_insertion_angle=0)
     fig = plt.figure(figsize=(10, 5))
     ax1 = fig.add_subplot(121, projection='3d')
     neuralink.plot3D(ax=ax1)
@@ -193,43 +216,59 @@ still produces a figure either way.
     ax2 = fig.add_subplot(122)
     neuralink.plot(ax=ax2)
     model.plot(style='cell', ax=ax2)
-
     @savefig neuralink.png align=center
     plt.show()
 
+
 Ensemble Implants
 -----------------
-:py:class:`~pulse2percept.implants.EnsembleImplant` lets you combine multiple
-implants (e.g., two :py:class:`~pulse2percept.implants.cortex.Cortivis`):
+
+:py:class:`~pulse2percept.implants.EnsembleImplant` is a new class which
+allows the user to use multiple implants in tandem. It can be used with any 
+implant type, but was made for use with small implants meant to be used together,
+such as :py:class:`~pulse2percept.implants.cortex.ICVP`. This tutorial will 
+demonstrate how to create an :py:class:`~pulse2percept.implants.EnsembleImplant`,
+to combine multiple :py:class:`~pulse2percept.implants.cortex.Cortivis` objects.
+
+The first step is to create the individual implants that will be combined.
 
 .. ipython:: python
     :okwarning:
 
-    i1 = Cortivis(x=15000, y=0)
-    i2 = Cortivis(x=20000, y=0)
+    i1 = Cortivis(x=15000,y=0)
+    i2 = Cortivis(x=20000,y=0)
     i1.plot(annotate=True)
     i2.plot(annotate=True)
     @savefig cortivis_multiple.png align=center
     plt.show()
 
+Then, we can create an EnsembleImplant using these two implants. 
+
 .. ipython:: python
 
     from pulse2percept.implants import EnsembleImplant
 
-    ensemble = EnsembleImplant(implants=[i1, i2])
-    _, ax = plt.subplots(1, 1, figsize=(12, 7))
+    ensemble = EnsembleImplant(implants=[i1,i2])
+    _,ax = plt.subplots(1, 1, figsize=(12,7))
     @savefig ensemble.png align=center
     ensemble.plot(annotate=True, ax=ax)
 
-Electrodes are renamed `index-electrode` by constructor order; with dict
-input they’re `key-electrode`.
+Note that electrodes are renamed, with the pattern `index-electrode` where `index`
+is the index of the implant in the constructor list. Implants can also be passed using
+a dictionary, in which case the naming pattern is `key-electrode` where `key` is the
+electrode's dictionary key.
+
 
 .. _topics-cortical-models:
 
 Models
 ------
-Apply :py:class:`~pulse2percept.models.cortex.ScoreboardModel` to a
-:py:class:`~pulse2percept.implants.cortex.Cortivis` implant:
+
+This example shows how to apply the
+:py:class:`~pulse2percept.models.cortex.ScoreboardModel` to an
+:py:class:`~pulse2percept.implants.cortex.Cortivis` implant.
+
+First, we create the model and build it:
 
 .. ipython:: python
 
@@ -237,7 +276,7 @@ Apply :py:class:`~pulse2percept.models.cortex.ScoreboardModel` to a
 
     model = ScoreboardModel(rho=1000).build()
 
-Create an implant:
+Next, we can create the implant:
 
 .. ipython:: python
 
@@ -245,7 +284,8 @@ Create an implant:
 
     implant = Cortivis()
 
-Plot the model and implant together (Cortivis defaults to (15, 0)):
+Now, we can plot the model and implant together to see where the implant is
+(by default, Cortivis is centered at (15,0))
 
 .. ipython:: python
     :okwarning:
@@ -255,16 +295,35 @@ Plot the model and implant together (Cortivis defaults to (15, 0)):
     @savefig model_implant_cortivis.png align=center
     plt.show()
 
-Add a stimulus: here we apply 0, 1, and 2 (arbitrary units) to thirds of the array:
+After that, we can add a stimulus to the implant.  One simple way to do this
+is to create an array of the same shape as the implant (which has 96
+electrodes), where each value in the array represents the current to apply
+to the corresponding electrode.  For example, if we want to apply no current
+to the first 32 electrodes, 1 microamp of current to the next 32 electrodes,
+and 2 microamps of current to the last 32 electrodes, we can do the
+following:
 
 .. ipython:: python
 
     import numpy as np
-    implant.stim = np.concatenate((np.zeros(32), np.zeros(32) + 1, np.zeros(32) + 2))
+    implant.stim = np.concatenate(
+        (
+            np.zeros(32),
+            np.zeros(32) + 1,
+            np.zeros(32) + 2,
+        )
+    )
     @savefig model_stim.png align=center
     implant.plot(stim_cmap=True)
 
-Or set a few electrodes explicitly:
+In the implant plots, darker colors indicate low current and lighter colors
+indicate high current (relative to the other currents).
+Alternatively, we can set the current for specific electrodes by passing in
+a dictionary, where the keys are the electrode names and the values are the
+current to apply to that electrode.  For example, if we want to apply 1
+microamp of current to the electrode named "15", 1.5 microamps of current
+to the electrode named "37", and 0.5 microamps of current to the electrode
+named "61", we can do the following:
 
 .. ipython:: python
 
@@ -272,18 +331,27 @@ Or set a few electrodes explicitly:
     @savefig model_stim_specific.png align=center
     implant.plot(stim_cmap=True)
 
-Use a larger Orion to make the pattern more obvious:
+In order to make the stimulus more visible, we can use the larger
+:py:class:`~pulse2percept.implants.cortex.Orion` implant instead.
+We can add a current to the top 30 electrodes as follows:
 
 .. ipython:: python
 
     from pulse2percept.implants.cortex import Orion
 
     implant = Orion()
-    implant.stim = np.concatenate((np.zeros(30), np.zeros(30) + 1))
+    implant.stim = np.concatenate(
+        (
+            np.zeros(30),
+            np.zeros(30) + 1,
+        )
+    )
     @savefig model_implant_orion.png align=center
     implant.plot(stim_cmap=True)
 
-Predict a percept and plot it:
+The final step is to run the model using `predict_percept`.  This will return
+the calculated brightness at each location in the grid.  We can then plot
+the brightness using the `plot` function:
 
 .. ipython:: python
 
@@ -291,13 +359,22 @@ Predict a percept and plot it:
     @savefig model_percept.png align=center
     percept.plot()
 
-Stimulate the other half instead:
+The plot shows that the top half of the visual field has brightness.  If we
+instead stimulate the bottom 30 electrodes:
 
 .. ipython:: python
 
-    implant.stim = np.concatenate((np.zeros(30) + 1, np.zeros(30)))
+    implant.stim = np.concatenate(
+        (
+            np.zeros(30) + 1,
+            np.zeros(30),
+        )
+    )
     @savefig model_stim_bottom.png align=center
     implant.plot(stim_cmap=True)
+
+Then we will see that the bottom half of the visual field has brightness
+instead.
 
 .. ipython:: python
 
@@ -305,20 +382,28 @@ Stimulate the other half instead:
     @savefig model_percept_bottom.png align=center
     percept.plot()
 
-Move the implant more peripheral to show cortical magnification:
+If we move the implant closer to the periphery of the visual field, we can
+see that the predicted percept is now larger due to cortical magnification:
 
 .. ipython:: python
 
     implant = Orion(x=25000)
-    implant.stim = np.concatenate((np.zeros(30) + 1, np.zeros(30)))
+    implant.stim = np.concatenate(
+        (
+            np.zeros(30) + 1,
+            np.zeros(30),
+        )
+    )
     percept = model.predict_percept(implant)
     @savefig model_stim_periphery.png align=center
     percept.plot()
 
-pulse2percept currently has two cortical models,
-:py:class:`~pulse2percept.models.cortex.ScoreboardModel` (simple radial spread)
-and :py:class:`~pulse2percept.models.cortex.DynaphosModel` (adds temporal
-and charge-related effects).
+
+Pulse2percept currently has 2 cortical models, :py:class:`~pulse2percept.models.cortex.ScoreboardModel` 
+and :py:class:`~pulse2percept.models.cortex.DynaphosModel`. The ScoreboardModel 
+is a simple model that assumes that each electrode creates a circular patch of 
+brightness. The DynaphosModel is a more complex model that takes into account
+both spatial current spread and temporal effects such as charge accumulation. 
 
 .. ipython:: python
 
@@ -328,7 +413,7 @@ and charge-related effects).
 
     model = DynaphosModel().build()
     implant = Orion()
-    implant.stim = {e: BiphasicPulseTrain(20, 200, .45) for e in implant.electrode_names}
+    implant.stim = {e : BiphasicPulseTrain(20, 200, .45) for e in implant.electrode_names}
     percept = model.predict_percept(implant)
     @savefig model_dynaphos.png align=center
     percept.plot()
@@ -339,22 +424,39 @@ You can also play the percept as a video with `percept.play()`.
 
 For Developers
 --------------
-Notes for implementers of cortical features.
+
+In this section we will discuss some of the changes made under the hood
+accomadate cortical features, as well as some important notes for developers
+to keep in mind.
 
 Units
 ^^^^^
-pulse2percept uses microns for length, microamps for current, and milliseconds
-for time.
+Keep in mind that pulse2percept uses units of microns for length, microamps
+for current, and milliseconds for time.
 
 Topography
 ^^^^^^^^^^
-Maps are subclasses of :py:class:`~pulse2percept.topography.CorticalMap`
-(e.g., :py:class:`~pulse2percept.topography.Polimeni2006Map`). They typically
-set `split_map=True` and `left_offset=20` mm, as visualized above.
+Mappings from the visual field to cortical coordinates are implemented
+as a subclass of :py:class:`~pulse2percept.topography.CorticalMap`,
+such as :py:class:`~pulse2percept.topography.Polimeni2006Map`.  These
+classes have a `split_map` attribute, which is set to `True` by default,
+meaning that no current will be allowed to cross between the hemispheres.
+These classes also have a `left_offset` attribute, which is set to 20mm by
+default, meaning that the origin of the left hemisphere is (-20, 0) to
+avoid overlapping with the right hemisphere.  This is visualized above in
+the model plotting section.
 
-To create a new map, subclass `CorticalMap` and implement `dva_to_v1`; add
-`dva_to_v2`/`dva_to_v3` as applicable. Optionally implement the inverse
-`v*_to_dva` methods.
+In order to create your own visual field map, you must create a subclass of
+:py:class:`~pulse2percept.topography.CorticalMap`, and implement the `dva_to_v1`
+method.  In addition, if your map also maps to v2 and/or v3, you must also
+implement the `dva_to_v2` and/or `dva_to_v3` methods. Optinally, you can also
+implement `v1_to_dva`, `v2_to_dva`, and/or `v3_to_dva` methods.
+
+For example, if you wanted to create a map that mapped `(x, y)` in dva to
+`(x, y)` in v1, `(2x, 2y)` in v2, and `(3x, 3y)` in v3, you would do the
+following (note that this is not a real map, and is only used for demonstration
+purposes).  See 
+:py:class:`~pulse2percept.topography.CorticalMap` for an example of a real map:
 
 .. code-block:: python
 
@@ -362,15 +464,35 @@ To create a new map, subclass `CorticalMap` and implement `dva_to_v1`; add
     import numpy as np
 
     class TestMap(CorticalMap):
-        def dva_to_v1(self, x, y):  # -> (x, y)
+        # Maps an array of points x, y in dva to an array of points x, y in v1
+        def dva_to_v1(self, x, y):
             return x, y
-        def dva_to_v2(self, x, y):  # -> (2x, 2y)
+        
+        # Maps an array of points x, y in dva to an array of points x, y in v2
+        def dva_to_v2(self, x, y):
             return 2 * x, 2 * y
-        def dva_to_v3(self, x, y):  # -> (3x, 3y)
+        
+        # Maps an array of points x, y in dva to an array of points x, y in v3
+        def dva_to_v3(self, x, y):
             return 3 * x, 3 * y
 
-    m = TestMap(regions=["v1", "v2", "v3"])
-    x = np.array([0, 1, 2]); y = np.array([3, 4, 5])
-    print(m.from_dva()["v1"](x, y))
-    print(m.from_dva()["v2"](x, y))
-    print(m.from_dva()["v3"](x, y))
+    map = TestMap(regions=["v1", "v2", "v3"])
+
+    points_dva_x = np.array([0, 1, 2])
+    points_dva_y = np.array([3, 4, 5])
+
+    points_v1 = map.from_dva()["v1"](points_dva_x, points_dva_y)
+    points_v2 = map.from_dva()["v2"](points_dva_x, points_dva_y)
+    points_v3 = map.from_dva()["v3"](points_dva_x, points_dva_y)
+
+    print(f"Points in v1: {points_v1}")
+    print(f"Points in v2: {points_v2}")
+    print(f"Points in v3: {points_v3}")
+
+Points in v1: (array([0, 1, 2]), array([3, 4, 5]))
+
+
+Points in v2: (array([0, 2, 4]), array([ 6,  8, 10]))
+
+
+Points in v3: (array([0, 3, 6]), array([ 9, 12, 15]))
