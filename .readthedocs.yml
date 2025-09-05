@@ -1,6 +1,3 @@
-# Read the Docs configuration file for Sphinx projects
-# See https://docs.readthedocs.io/en/stable/config-file/v2.html
-
 version: 2
 
 build:
@@ -12,6 +9,11 @@ sphinx:
   configuration: doc/conf.py
   fail_on_warning: false
   builder: "html"
+
+# Turn off example execution on RTD; keep a flag the code can read if needed
+environment:
+  P2P_PLOT_GALLERY: "0"
+  P2P_DOC_BUILD: "1"
 
 python:
   install:
