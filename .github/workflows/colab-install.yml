@@ -36,12 +36,28 @@ jobs:
           source .venv/bin/activate
           python -m pip install -U pip setuptools wheel
 
-      - name: Install from VCS (verbose)
-        env: { PIP_NO_INPUT: "1" }
+      - name: Install from current ref (robust)
+        env:
+          PIP_NO_INPUT: "1"
         run: |
+          set -euo pipefail
           source .venv/bin/activate
-          python -m pip install -v "${{ steps.vcs.outputs.url }}"
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            REPO="${{ github.event.pull_request.head.repo.full_name }}"
+            REF="${{ github.event.pull_request.head.sha }}"
+          else
+            REPO="${{ github.repository }}"
+            REF="${{ github.sha }}"
+          fi
+
+          URL="git+https://github.com/${REPO}@${REF}"
+          echo "Installing from: $URL"
+          [ -n "$URL" ] || { echo "ERROR: VCS URL is empty"; exit 2; }
+
+          python -m pip install -v "$URL"
           python -m pip install packaging
+
 
       - name: Verify runtime deps
         run: |
