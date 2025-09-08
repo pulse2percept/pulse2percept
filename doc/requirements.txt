@@ -7,7 +7,7 @@ sphinx_gallery==0.19.0
 sphinx-version-warning==1.1.2
 ipython>=8.12
 matplotlib>=3.8
-pandas<2.3,>=2.0
+pandas>=2.0,<2.4
 h5py
 nibabel>=5
 pooch>=1.8
