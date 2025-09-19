@@ -1,5 +1,5 @@
 # doc/requirements.txt
-numpy<3,>=1.26
+numpy<2,>=1.26
 Cython>=3.0.8
 sphinx==8.2.3
 sphinx_rtd_theme
