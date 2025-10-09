@@ -3,8 +3,13 @@
    :py:class:`~pulse2percept.utils.unique`, 
    :py:class:`~pulse2percept.utils.radial_mask`"""
 
-from ._fast_array import fast_is_strictly_increasing
 import numpy as np
+try:
+    from ._fast_array import fast_is_strictly_increasing
+except Exception:
+    def fast_is_strictly_increasing(x):
+        x = np.asarray(x)
+        return np.all(np.diff(x) > 0)
 
 
 def is_strictly_increasing(arr, tol=1e-6):

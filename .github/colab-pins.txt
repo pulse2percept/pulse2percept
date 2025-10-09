@@ -1,0 +1,18 @@
+# Colab Pins
+# Python 3.12.11
+geopandas==1.1.1
+imageio-ffmpeg==0.6.0
+joblib==1.5.2
+matplotlib==3.10.0
+matplotlib-inline==0.1.7
+matplotlib-venn==1.1.2
+numpy==2.0.2
+pandas==2.2.2
+pandas-datareader==0.10.0
+pandas-gbq==0.29.2
+pandas-stubs==2.2.2.240909
+scikit-image==0.25.2
+scipy==1.16.1
+setuptools==75.2.0
+sklearn-pandas==2.2.0
+types-setuptools==80.9.0.20250822
