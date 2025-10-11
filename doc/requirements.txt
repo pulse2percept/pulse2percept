@@ -13,4 +13,4 @@ nibabel>=5
 pooch>=1.8
 neuropythy==0.12.16
 pickleshare
-jax[cpu]==0.4.31
+jax[cpu]==0.7.2
