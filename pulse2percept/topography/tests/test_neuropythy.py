@@ -3,11 +3,18 @@ import numpy.testing as npt
 import pytest
 from pulse2percept.models.cortex import ScoreboardModel
 from pulse2percept.models import ScoreboardModel as BeyelerScoreboard
-from pulse2percept.topography import NeuropythyMap
-from pulse2percept.implants.cortex import Neuralink, LinearEdgeThread
+from pulse2percept.implants.cortex import Neuralink
 from pulse2percept.implants import EnsembleImplant
+from pulse2percept.topography import NeuropythyMap
 import time
 import os
+
+def _is_neuropythy_not_available():
+    try:
+        NeuropythyMap('fsaverage')
+        return False
+    except IOError:
+        return True
 
 # use pytest.mark.slow because all neuropythy tests
 # take a long time to run. This way, they will be skipped
@@ -15,6 +22,10 @@ import os
 # done either from the root p2p directory or from this tests
 # folder.
 @pytest.mark.slow
+@pytest.mark.skipif(
+    _is_neuropythy_not_available(),
+    reason='Download Neuropythy Benson & Winawer dataset to run this test'
+)
 def test_subject_parsing():
     import neuropythy as ny
     # random subject shouldn't download 
@@ -48,6 +59,10 @@ def test_subject_parsing():
 @pytest.mark.slow()
 @pytest.mark.parametrize('regions', [['v1'], ['v1', 'v3'], ['v1', 'v2', 'v3']])
 @pytest.mark.parametrize('jitter_boundary', [True, False])
+@pytest.mark.skipif(
+    _is_neuropythy_not_available(),
+    reason='Download Neuropythy Benson & Winawer dataset to run this test'
+)
 def test_dva_to_cortex(regions, jitter_boundary):
     nmap = NeuropythyMap('fsaverage', regions=regions, jitter_boundary=jitter_boundary)
     npt.assert_equal(nmap.predicted_retinotopy is not None, True)
@@ -129,6 +144,10 @@ def test_dva_to_cortex(regions, jitter_boundary):
 
 
 @pytest.mark.slow
+@pytest.mark.skipif(
+    _is_neuropythy_not_available(),
+    reason='Download Neuropythy Benson & Winawer dataset to run this test'
+)
 def test_Neuralink_from_neuropythy():
     nmap = NeuropythyMap('fsaverage', regions=['v1'], jitter_boundary=False)
     nlink = Neuralink.from_neuropythy(nmap, locs=np.array([[0, 0], [3, 3], [-2, -2]]))
@@ -178,8 +197,11 @@ def test_Neuralink_from_neuropythy():
             idx += 1
             
 
-
 @pytest.mark.slow
+@pytest.mark.skipif(
+    _is_neuropythy_not_available(),
+    reason='Download Neuropythy Benson & Winawer dataset to run this test'
+)
 def test_ndim_mixup():
     nmap = NeuropythyMap('fsaverage')
     model = BeyelerScoreboard(vfmap=nmap)
@@ -190,6 +212,10 @@ def test_ndim_mixup():
 
 
 @pytest.mark.slow
+@pytest.mark.skipif(
+    _is_neuropythy_not_available(),
+    reason='Download Neuropythy Benson & Winawer dataset to run this test'
+)
 def test_neuropythy_scoreboard():
     nmap = NeuropythyMap('fsaverage')
     model = ScoreboardModel(rho=800, xystep=.25, vfmap=nmap).build()
@@ -220,9 +246,12 @@ def test_neuropythy_scoreboard():
     npt.assert_almost_equal(np.max(percept.data), 86.4913, decimal=1)
 
 
-
 @pytest.mark.slow()
 @pytest.mark.parametrize('regions', [['v1'], ['v1', 'v3'], ['v1', 'v2', 'v3']])
+@pytest.mark.skipif(
+    _is_neuropythy_not_available(),
+    reason='Download Neuropythy Benson & Winawer dataset to run this test'
+)
 def test_cortex_to_dva(regions):
     nmap = NeuropythyMap('fsaverage', regions=regions, jitter_boundary=True)
     npt.assert_equal(nmap.predicted_retinotopy is not None, True)
