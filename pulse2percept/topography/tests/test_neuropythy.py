@@ -13,7 +13,7 @@ def _is_neuropythy_not_available():
     try:
         NeuropythyMap('fsaverage')
         return False
-    except IOError:
+    except ValueError:
         return True
 
 # use pytest.mark.slow because all neuropythy tests
