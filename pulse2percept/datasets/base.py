@@ -67,10 +67,21 @@ def clear_data_dir(data_dir=None):
 
 
 def has_network(timeout=3.0):
-    """Return True if we appear to have general network connectivity.
+    """Check for general network connectivity
 
-    Tries a few common endpoints; success on ANY is considered 'online'.
-    Keeps it simple and fast; no DNS resolution required for the IP checks.
+    Attempts TCP connections to a small set of well-known hosts (e.g., DNS and OSF).
+    If any connection succeeds within the timeout, the host is considered online.
+    This is a fast pre-flight check that avoids unnecessary download attempts.
+
+    Parameters
+    ----------
+    timeout : float, optional
+        Timeout in seconds for each connectivity attempt. Default is 3.0.
+
+    Returns
+    -------
+    bool
+        True if at least one probe succeeds; False otherwise.
     """
     checks = [
         ("1.1.1.1", 53),     # Cloudflare DNS (TCP)
@@ -166,6 +177,25 @@ def _normalize_osf_download(osf_id_or_url):
 
 
 def osf_is_reachable(test_url="https://osf.io/rduj4", timeout=5.0):
+    """Check whether OSF downloads are reachable
+
+    Probes OSF by normalizing the given URL or GUID to the direct download
+    form (``https://osf.io/download/<GUID>``) and issuing a quick HEAD request.
+    If HEAD is not supported, falls back to fetching a few bytes with GET.
+    No files are written to disk.
+
+    Parameters
+    ----------
+    test_url : str, optional
+        An OSF GUID or URL used for the probe (defaults to a tiny file you own).
+    timeout : float, optional
+        Request timeout in seconds. Default is 5.0.
+
+    Returns
+    -------
+    bool
+        True if OSF responds successfully; False otherwise.
+    """
     url = _normalize_osf_download(test_url)
     try:
         req = Request(url, method="HEAD")
@@ -185,7 +215,42 @@ def osf_is_reachable(test_url="https://osf.io/rduj4", timeout=5.0):
 def download_from_osf(osf_id_or_url, filename, checksum=None,
                       data_path=None, download_if_missing=True,
                       progress_bar=_report_hook):
-    """Download once from OSF into the data dir, via fetch_url."""
+    """Download a file from OSF into the data directory (once)
+
+    Normalizes an OSF GUID or URL to the direct download endpoint
+    (``https://osf.io/download/<GUID>``), performs quick pre-flight checks
+    (general network + OSF reachability), and downloads the file via
+    :py:func:`~pulse2percept.datasets.fetch_url`. If the file already exists,
+    it is not downloaded again.
+
+    Parameters
+    ----------
+    osf_id_or_url : str
+        OSF GUID (e.g., ``'pf2ja'``) or OSF URL (with or without ``/download``).
+    filename : str
+        Local filename to save under the data directory (e.g., ``'han2021.zip'``).
+    checksum : str or None, optional
+        Expected SHA-256 hex digest. If provided, integrity is verified.
+    data_path : str or None, optional
+        Custom data directory. Defaults to :py:func:`~pulse2percept.datasets.get_data_dir`.
+    download_if_missing : bool, optional
+        If False and the file is missing locally, raises an IOError instead of downloading.
+        Default is True.
+    progress_bar : callable, optional
+        Progress callback with signature ``func(count, block_size, total_size)``.
+        Defaults to :py:func:`~pulse2percept.datasets._report_hook`.
+
+    Returns
+    -------
+    str
+        Absolute path to the downloaded (or already present) local file.
+
+    Raises
+    ------
+    IOError
+        If the file is missing and ``download_if_missing`` is False; if there is no
+        network connectivity; if OSF is unreachable; or if the checksum verification fails.
+    """
     data_path = get_data_dir(data_path)
     file_path = join(data_path, filename)
 
