@@ -35,6 +35,37 @@ import pulse2percept as p2p
 import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings("ignore") # ignore matplotlib warnings
+import os
+import matplotlib.pyplot as plt
+from pulse2percept.datasets.base import has_network, osf_is_reachable
+
+def _placeholder(msg):
+    fig = plt.figure(figsize=(8, 2))
+    ax = fig.add_subplot(111)
+    ax.text(0.5, 0.5, msg, ha='center', va='center', wrap=True)
+    ax.axis('off')
+    plt.show()
+
+# Hard skip on RTD (avoid large external downloads)
+if os.environ.get("READTHEDOCS") == "True":
+    _placeholder("Skipping Neuropythy example on ReadTheDocs.")
+    raise SystemExit
+
+# Require neuropythy + network + OSF before proceeding
+try:
+    import neuropythy  # noqa: F401
+except Exception as e:
+    _placeholder(f"Neuropythy not installed: {e}\nSkipping example.")
+    raise SystemExit
+
+if not has_network():
+    _placeholder("No internet connection; skipping Neuropythy example.")
+    raise SystemExit
+
+if not osf_is_reachable():
+    _placeholder("OSF unreachable (cannot fetch Benson & Winawer data); skipping.")
+    raise SystemExit
+
 
 # this could take a while if you haven't already downloaded the dataset
 nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'])
