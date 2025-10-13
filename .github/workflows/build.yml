@@ -55,27 +55,68 @@ jobs:
           BASE="$HOME/.neuropythy_p2p/benson_winawer_2018"
           mkdir -p "$BASE"
 
-          # Dir -> OSF URL (from Neuropythy)
+          # Dir -> base OSF url (as in Neuropythy)
           declare -A URLS=(
-            [analyses]="https://osf.io/cpfa8/download?direct=1"
-            [retinotopy]="https://osf.io/m4k8q/download?direct=1"
-            [freesurfer_subjects]="https://osf.io/pu9js/download?direct=1"
+            [analyses]="https://osf.io/cpfa8/download"
+            [retinotopy]="https://osf.io/m4k8q/download"
+            [freesurfer_subjects]="https://osf.io/pu9js/download"
           )
 
           UA="neuropythy-ci/1.0 (+https://github.com/pulse2percept/pulse2percept)"
+          CURL="curl -fL --retry 5 --retry-delay 2 -A \"$UA\""
+
+          # Given an OSF download url, try several direct-download flavors until tar -tzf succeeds.
+          fetch_targz() {
+            local url="$1" out="$2"
+            # Build candidate variants
+            local base="${url%%\?*}" qs="${url#*$base}"
+            local qprefix="?"
+            [[ "$qs" == "$url" ]] || qprefix="&"
+
+            # 1) original
+            # 2) ?direct=1
+            # 3) ?download=1
+            # 4) /?action=download (replace trailing /download)
+            # 5) /download?direct=1 (explicit)
+            local cand=()
+            cand+=("$url")
+            cand+=("$base${qprefix}direct=1")
+            cand+=("$base${qprefix}download=1")
+            if [[ "$base" == */download ]]; then
+              cand+=("${base%/download}/?action=download")
+              cand+=("$base?direct=1")
+            fi
+
+            for u in "${cand[@]}"; do
+              echo "Attempting: $u"
+              # Download
+              bash -lc "$CURL -o \"$out\" \"$u\"" || true
+              # Validate it's a gzip'd tar (quick and reliable)
+              if tar -tzf "$out" >/dev/null 2>&1; then
+                echo "Valid tar.gz from: $u"
+                return 0
+              else
+                echo "Not a valid tar.gz from: $u"
+                echo "First 200 bytes (UTF-8 guess):"
+                head -c 200 "$out" | tr -dc '[:print:]\n' || true
+                echo
+              fi
+            done
+            return 1
+          }
 
           for d in "${!URLS[@]}"; do
             TARBALL="$BASE/$d.tar.gz"
             echo "Downloading $d -> $TARBALL"
-            curl -fL --retry 5 --retry-delay 2 -A "$UA" -o "$TARBALL" "${URLS[$d]}"
-
-            echo "Verifying $TARBALL is a valid tar.gz"
-            tar -tzf "$TARBALL" >/dev/null
+            fetch_targz "${URLS[$d]}" "$TARBALL" || {
+              echo "ERROR: Could not obtain a valid tar.gz for $d from OSF."
+              exit 2
+            }
 
             echo "Extracting $TARBALL into $BASE"
             tar -xzf "$TARBALL" -C "$BASE"
 
-            # Ensure $BASE/$d exists even if archive created a different top-level dir
+            # Ensure $BASE/$d exists even if archive used a wrapper dir
             if [[ ! -d "$BASE/$d" ]]; then
               TOPDIR="$(tar -tzf "$TARBALL" | head -1 | cut -d/ -f1 || true)"
               if [[ -n "$TOPDIR" && -d "$BASE/$TOPDIR" ]]; then
@@ -90,6 +131,9 @@ jobs:
 
             rm -f "$TARBALL"
           done
+
+          echo "Dataset warmed at $BASE"
+
 
       - name: Verify Neuropythy dataset layout
         shell: bash
