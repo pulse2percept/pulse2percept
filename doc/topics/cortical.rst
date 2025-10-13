@@ -197,11 +197,10 @@ consists of 32 electrodes.
 
 
 Neuralink works well with the :py:class:`~pulse2percept.topography.NeuropythyMap`,
-which is a 3D patient-specific MRI based retinotopy. You can easily create
+which is a 3D patient-specific MRI based retinotopy. You can create
 a Neuralink implant with multiple threads using the NeuropythyMap as follows:
 
-.. ipython:: python
-    :okwarning:
+.. code-block:: python
 
     from pulse2percept.implants.cortex import Neuralink
     from pulse2percept.topography import NeuropythyMap
