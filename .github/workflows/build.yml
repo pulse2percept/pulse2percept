@@ -38,6 +38,71 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # ---- Preseed Neuropythy dataset & cache it ----
+      - name: Cache Neuropythy Benson-Winawer dataset
+        uses: actions/cache@v4
+        id: npy_cache
+        with:
+          path: ~/.neuropythy_p2p/benson_winawer_2018
+          # Per-OS cache (tar/extract behavior differs slightly); bump suffix to bust cache
+          key: neuropythy-bw2018-${{ runner.os }}-v1
+
+      - name: Warm Neuropythy dataset (first run only)
+        if: steps.npy_cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="$HOME/.neuropythy_p2p/benson_winawer_2018"
+          mkdir -p "$BASE"
+
+          # Dir -> OSF URL (from Neuropythy)
+          declare -A URLS=(
+            [analyses]="https://osf.io/cpfa8/download?direct=1"
+            [retinotopy]="https://osf.io/m4k8q/download?direct=1"
+            [freesurfer_subjects]="https://osf.io/pu9js/download?direct=1"
+          )
+
+          UA="neuropythy-ci/1.0 (+https://github.com/pulse2percept/pulse2percept)"
+
+          for d in "${!URLS[@]}"; do
+            TARBALL="$BASE/$d.tar.gz"
+            echo "Downloading $d -> $TARBALL"
+            curl -fL --retry 5 --retry-delay 2 -A "$UA" -o "$TARBALL" "${URLS[$d]}"
+
+            echo "Verifying $TARBALL is a valid tar.gz"
+            tar -tzf "$TARBALL" >/dev/null
+
+            echo "Extracting $TARBALL into $BASE"
+            tar -xzf "$TARBALL" -C "$BASE"
+
+            # Ensure $BASE/$d exists even if archive created a different top-level dir
+            if [[ ! -d "$BASE/$d" ]]; then
+              TOPDIR="$(tar -tzf "$TARBALL" | head -1 | cut -d/ -f1 || true)"
+              if [[ -n "$TOPDIR" && -d "$BASE/$TOPDIR" ]]; then
+                mkdir -p "$BASE/$d"
+                shopt -s dotglob nullglob
+                mv "$BASE/$TOPDIR"/* "$BASE/$d" || true
+                rmdir "$BASE/$TOPDIR" || true
+              else
+                mkdir -p "$BASE/$d"
+              fi
+            fi
+
+            rm -f "$TARBALL"
+          done
+
+      - name: Verify Neuropythy dataset layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="$HOME/.neuropythy_p2p/benson_winawer_2018"
+          for d in analyses retinotopy freesurfer_subjects; do
+            [[ -d "$BASE/$d" ]] || { echo "Missing $BASE/$d"; exit 1; }
+          done
+          echo "Dataset ready at $BASE"
+          # Optional: quick tree for debugging
+          find "$BASE" -maxdepth 2 -type d | sort
+
       # ---- System deps ----
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
