@@ -4,7 +4,7 @@
 Neuropythy and Neuralink: Patient specific visual field maps based on MRI
 ===============================================================================
 
-Neuropythy [Benson2018]_ is a python package that predicts patient-specific 
+Neuropythy [Benson2018]_ is a Python package that predicts patient-specific 
 visuotopies based on MRI scans of the human visual cortex. It is possible to use 
 Neuropythy within pulse2percept as the visual field map for cortical models.
 
@@ -143,9 +143,14 @@ model.plot3D(ax=ax2, style='scatter')
 #
 # Lets place a Neuralink implant across the right hemisphere of the cortex:
 nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'])
-model = p2p.models.cortex.ScoreboardModel(vfmap=nmap, xrange=(-4, 0), yrange=(-4, 4), xystep=.25).build()
-nlink = p2p.implants.cortex.Neuralink.from_neuropythy(nmap, xrange=model.xrange, yrange=model.yrange, 
-                                                      xystep=1,rand_insertion_angle=0)
+model = p2p.models.cortex.ScoreboardModel(vfmap=nmap, 
+                                          xrange=(-4, 0), yrange=(-4, 4), 
+                                          xystep=.25).build()
+nlink = p2p.implants.cortex.Neuralink.from_neuropythy(nmap, 
+                                                      xrange=model.xrange, 
+                                                      yrange=model.yrange, 
+                                                      xystep=1,
+                                                      rand_insertion_angle=0)
 print(len(nlink.implants), " total threads")
 fig = plt.figure(figsize=(10, 4))
 ax1 = fig.add_subplot(121, projection='3d')
@@ -158,10 +163,18 @@ nlink.plot(ax=ax2)
 ##################################################################################
 # Finally, lets predict what a percept would look like if we stimulated one 
 # electrode on each thread, using the scoreboard model:
-nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'], jitter_boundary=True)
-model = p2p.models.cortex.ScoreboardModel(rho=800, xrange=(-15, 15), yrange=(-15, 15), xystep=.25, vfmap=nmap).build()
-nlink = p2p.implants.cortex.Neuralink.from_neuropythy(nmap, xrange=model.xrange, yrange=model.yrange, 
-                                                      xystep=3,rand_insertion_angle=0)
+nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'], 
+                                    jitter_boundary=True)
+model = p2p.models.cortex.ScoreboardModel(rho=800, 
+                                          xrange=(-15, 15), 
+                                          yrange=(-15, 15), 
+                                          xystep=.25, 
+                                          vfmap=nmap).build()
+nlink = p2p.implants.cortex.Neuralink.from_neuropythy(nmap, 
+                                                      xrange=model.xrange, 
+                                                      yrange=model.yrange, 
+                                                      xystep=3,
+                                                      rand_insertion_angle=0)
 nlink.stim = {e : 1 for e in [i for i in nlink.electrode_names if i[-1] == '1']}
 percept = model.predict_percept(nlink)
 percept.plot()

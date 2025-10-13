@@ -67,6 +67,7 @@ intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}
 from sphinx_gallery.sorting import ExplicitOrder
 sphinx_gallery_conf = {
     "examples_dirs": ["../examples"],
+    "abort_on_example_error": False,
     "gallery_dirs": ["examples"],
     "reference_url": {"pulse2percept": None},
     "thumbnail_size": (320, 224),
