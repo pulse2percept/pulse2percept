@@ -2,7 +2,7 @@
 from os.path import join, isfile
 import numpy as np
 
-from .base import get_data_dir, fetch_url
+from .base import get_data_dir, download_from_osf
 from pulse2percept.stimuli import VideoStimulus
 
 try:
@@ -89,14 +89,11 @@ def fetch_han2021(videos=None, resize=None, as_gray=None, data_path=None,
     data_path = get_data_dir(data_path)
 
     # Download the dataset if it doesn't already exist:
-    file_path = join(data_path, 'han2021.zip')
-    if not isfile(file_path):
-        if download_if_missing:
-            url = 'https://osf.io/pf2ja/download'
-            checksum = 'e31a74a6ac9decfa8d8b9eccd0c71da868f8dfa9f0475a4caca82085307d67b1'
-            fetch_url(url, file_path, remote_checksum=checksum)
-        else:
-            raise IOError(f"No local file {file_path} found")
+    file_path = download_from_osf(
+        "pf2ja", "han2021.zip",
+        checksum="e31a74a6ac9decfa8d8b9eccd0c71da868f8dfa9f0475a4caca82085307d67b1",
+        data_path=data_path, download_if_missing=download_if_missing
+    )
 
     # Open the HDF5 file:
     hf = h5py.File(file_path, 'r')

@@ -8,11 +8,12 @@ import sys
 from os import environ, makedirs
 from os.path import exists, expanduser, join
 from shutil import rmtree
+import socket
+import re
 import hashlib
 import ssl
 from urllib.request import urlretrieve, urlopen, Request
-import socket
-import re
+from urllib.error import URLError, HTTPError
 
 
 def get_data_dir(data_dir=None):
@@ -140,38 +141,45 @@ def fetch_url(url, file_path, progress_bar=_report_hook, remote_checksum=None):
                       f"file may be corrupted.")
 
 
-def osf_is_reachable(test_url="https://osf.io/rduj4", timeout=5.0):
-    # Convert bare GUID to /download if needed
-    m = re.match(r"^https?://(?:www\.)?osf\.io/([a-z0-9]+)/?$", test_url, flags=re.I)
-    if m:
-        test_url = "https://osf.io/%s/download" % m.group(1)
+def _normalize_osf_download(osf_id_or_url):
+    """Return a direct OSF download URL in the new form: https://osf.io/download/<GUID>.
 
+    Accepts:
+      - bare GUID:          pf2ja
+      - old forms:          https://osf.io/pf2ja  or  https://osf.io/pf2ja/download
+      - new form already:   https://osf.io/download/pf2ja
+    """
+    # Bare GUID?
+    if re.fullmatch(r"[a-z0-9]{5}", osf_id_or_url, flags=re.I):
+        return "https://osf.io/download/%s" % osf_id_or_url
+
+    # URL forms -> extract GUID (handles old/new)
+    m = re.match(
+        r"^https?://(?:www\.)?osf\.io/(?:(?:download/)?([a-z0-9]{5})(?:/download)?)\/?$",
+        osf_id_or_url, flags=re.I
+    )
+    if m:
+        return "https://osf.io/download/%s" % m.group(1)
+
+    # If it's some other OSF URL (e.g., already has query params), just return as-is
+    return osf_id_or_url
+
+
+def osf_is_reachable(test_url="https://osf.io/rduj4", timeout=5.0):
+    url = _normalize_osf_download(test_url)
     try:
-        # HEAD first
-        req = Request(test_url, method="HEAD")
+        req = Request(url, method="HEAD")
         with urlopen(req, timeout=timeout) as resp:
             code = getattr(resp, "status", 200)
             if 200 <= code < 400:
                 return True
     except Exception:
         pass
-
-    # Fallback: GET a few bytes
     try:
-        with urlopen(test_url, timeout=timeout) as resp:
+        with urlopen(url, timeout=timeout) as resp:
             return len(resp.read(64)) > 0
-    except Exception:
+    except (HTTPError, URLError, OSError):
         return False
-
-
-def _normalize_osf_download(osf_id_or_url):
-    """Return a direct OSF download URL from a GUID or URL."""
-    if re.match(r"^https?://", osf_id_or_url, flags=re.I):
-        m = re.match(r"^(https?://(?:www\.)?osf\.io/[a-z0-9]+)/?$", osf_id_or_url, flags=re.I)
-        if m:
-            return m.group(1) + "/download"
-        return osf_id_or_url  # may already include /download
-    return f"https://osf.io/{osf_id_or_url}/download"
 
 
 def download_from_osf(osf_id_or_url, filename, checksum=None,

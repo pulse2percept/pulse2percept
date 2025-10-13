@@ -83,10 +83,11 @@ def test_fetch_url(tmp_data_dir):
 
 
 def test_normalize_osf_download_variants():
-    assert _normalize_osf_download("pf2ja").endswith("/pf2ja/download")
-    assert _normalize_osf_download("https://osf.io/pf2ja").endswith("/pf2ja/download")
-    assert _normalize_osf_download("https://osf.io/pf2ja/").endswith("/pf2ja/download")
-    assert _normalize_osf_download("https://osf.io/pf2ja/download").endswith("/pf2ja/download")
+    assert _normalize_osf_download("pf2ja") == "https://osf.io/download/pf2ja"
+    assert _normalize_osf_download("https://osf.io/pf2ja") == "https://osf.io/download/pf2ja"
+    assert _normalize_osf_download("https://osf.io/pf2ja/") == "https://osf.io/download/pf2ja"
+    assert _normalize_osf_download("https://osf.io/pf2ja/download") == "https://osf.io/download/pf2ja"
+    assert _normalize_osf_download("https://osf.io/download/pf2ja") == "https://osf.io/download/pf2ja"
 
 
 def test_osf_is_reachable_head_success(monkeypatch):
@@ -166,8 +167,7 @@ def test_download_from_osf_calls_fetch_url(tmp_path, monkeypatch):
 
     called = {}
     def _fake_fetch(url, file_path, progress_bar=None, remote_checksum=None):
-        # Normalize expectation: ends with /download
-        assert url.startswith("https://osf.io/28uqg") and url.endswith("/download")
+        assert url == "https://osf.io/download/28uqg"
         # Create the file to satisfy subsequent existence checks
         with open(file_path, "wb") as f:
             f.write(b"ok")
