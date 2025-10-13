@@ -3,7 +3,7 @@
 from os.path import join, isfile
 import numpy as np
 
-from .base import get_data_dir, fetch_url
+from .base import get_data_dir, download_from_osf
 
 try:
     import pandas as pd
@@ -156,14 +156,11 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     data_path = get_data_dir(data_path)
 
     # Download the dataset if it doesn't already exist:
-    file_path = join(data_path, 'beyeler2019.h5')
-    if not isfile(file_path):
-        if download_if_missing:
-            url = 'https://osf.io/28uqg/download'
-            checksum = '19817990a615d289cdc93b928c138f71977ea2cab54fd1b35d186f3b5a3c4ff5'
-            fetch_url(url, file_path, remote_checksum=checksum)
-        else:
-            raise IOError(f"No local file {file_path} found")
+    file_path = download_from_osf(
+        "28uqg", "beyeler2019.h5",
+        checksum="19817990a615d289cdc93b928c138f71977ea2cab54fd1b35d186f3b5a3c4ff5",
+        data_path=data_path, download_if_missing=download_if_missing
+    )
 
     # Open the HDF5 file:
     f = h5py.File(file_path, 'r')

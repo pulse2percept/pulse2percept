@@ -7,7 +7,8 @@ pulse2percept supports the following cortical implants:
 
 Orion Prosthesis System (Cortigent Inc.)
 ----------------------------------------
-:py:class:`~pulse2percept.implants.cortex.Orion` contains 60 electrodes in a hex shaped grid inspired by Argus II.
+:py:class:`~pulse2percept.implants.cortex.Orion` contains 60 electrodes in a 
+hex shaped grid inspired by Argus II.
 """
 
 import matplotlib.pyplot as plt
@@ -74,18 +75,22 @@ plt.axis('equal')
 plt.show()
 
 ###############################################################################
-# Neuralink implants can be easily created from a NeuropythyMap
+# Neuralink implants can be created from a NeuropythyMap
 # enabling easy placement of implants across the cortical surface.
-# See the neuropythy example for more details.
-nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'])
-model = p2p.models.cortex.ScoreboardModel(rho=500, xrange=(-6, 0), yrange=(-5, 5), xystep=.25, vfmap=nmap).build()
-nlink = Neuralink.from_neuropythy(nmap, xrange=model.xrange, yrange=model.yrange, 
-                                                      xystep=2, rand_insertion_angle=0)
-print(len(nlink.implants), " total threads")
-fig = plt.figure(figsize=(10, 4))
-ax1 = fig.add_subplot(121, projection='3d')
-model.plot3D(ax=ax1, style='cell')
-nlink.plot3D(ax=ax1)
-ax2 = fig.add_subplot(122)
-model.plot(style='cell', ax=ax2)
-nlink.plot(ax=ax2)
+#
+# .. code-block:: python
+#
+#     nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'])
+#     model = p2p.models.cortex.ScoreboardModel(
+#         rho=500, xrange=(-6, 0), yrange=(-5, 5), xystep=.25, vfmap=nmap
+#     ).build()
+#     nlink = Neuralink.from_neuropythy(
+#         nmap, xrange=model.xrange, yrange=model.yrange, xystep=2, rand_insertion_angle=0
+#     )
+#     print(len(nlink.implants), " total threads")
+#     fig = plt.figure(figsize=(10, 4))
+#     ax1 = fig.add_subplot(121, projection='3d')
+#     model.plot3D(ax=ax1, style='cell'); nlink.plot3D(ax=ax1)
+#     ax2 = fig.add_subplot(122)
+#     model.plot(style='cell', ax=ax2); nlink.plot(ax=ax2)
+#     plt.show()
