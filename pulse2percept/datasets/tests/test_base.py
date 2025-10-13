@@ -8,8 +8,9 @@ from urllib.error import URLError
 from urllib.request import Request
 import tempfile, os, hashlib
 from pulse2percept.datasets.base import (
-    has_network, osf_is_reachable, download_from_osf,
-    _normalize_osf_download, _sha256, _report_hook, fetch_url
+    get_data_dir, clear_data_dir, has_network, 
+    osf_is_reachable, download_from_osf, _normalize_osf_download, 
+    _sha256, _report_hook, fetch_url
 )
 
 
