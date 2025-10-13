@@ -1,4 +1,4 @@
--*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 ===============================================================================
 Neuropythy and Neuralink: Patient specific visual field maps based on MRI

@@ -7,7 +7,8 @@ pulse2percept supports the following cortical implants:
 
 Orion Prosthesis System (Cortigent Inc.)
 ----------------------------------------
-:py:class:`~pulse2percept.implants.cortex.Orion` contains 60 electrodes in a hex shaped grid inspired by Argus II.
+:py:class:`~pulse2percept.implants.cortex.Orion` contains 60 electrodes in a 
+hex shaped grid inspired by Argus II.
 """
 
 import matplotlib.pyplot as plt
@@ -74,50 +75,22 @@ plt.axis('equal')
 plt.show()
 
 ###############################################################################
-# Neuralink implants can be easily created from a NeuropythyMap
+# Neuralink implants can be created from a NeuropythyMap
 # enabling easy placement of implants across the cortical surface.
-
-import os
-from pulse2percept.datasets.base import has_network, osf_is_reachable
-
-def _placeholder(msg):
-    fig = plt.figure(figsize=(8, 2))
-    ax = fig.add_subplot(111)
-    ax.text(0.5, 0.5, msg, ha='center', va='center', wrap=True)
-    ax.axis('off')
-    plt.show()
-
-# Hard skip on RTD to avoid flaky external downloads:
-if os.environ.get("READTHEDOCS") == "True":
-    _placeholder("Skipping Neuropythy demo on ReadTheDocs.")
-else:
-    msg = None
-    try:
-        import neuropythy  # noqa: F401
-    except Exception as e:
-        msg = f"Neuropythy not installed: {e}"
-    if msg is None and not has_network():
-        msg = "No internet connection; skipping Neuropythy demo."
-    if msg is None and not osf_is_reachable():
-        msg = "OSF is unreachable; skipping Neuropythy demo."
-
-    try:
-        if msg is None:
-            nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'])
-            model = p2p.models.cortex.ScoreboardModel(
-                rho=500, xrange=(-6, 0), yrange=(-5, 5), xystep=.25, vfmap=nmap
-            ).build()
-            nlink = Neuralink.from_neuropythy(
-                nmap, xrange=model.xrange, yrange=model.yrange, xystep=2, rand_insertion_angle=0
-            )
-            print(len(nlink.implants), " total threads")
-            fig = plt.figure(figsize=(10, 4))
-            ax1 = fig.add_subplot(121, projection='3d')
-            model.plot3D(ax=ax1, style='cell'); nlink.plot3D(ax=ax1)
-            ax2 = fig.add_subplot(122)
-            model.plot(style='cell', ax=ax2); nlink.plot(ax=ax2)
-            plt.show()
-        else:
-            _placeholder(msg)
-    except Exception as e:
-        _placeholder(f"Neuropythy demo failed: {e}\n(Continuing without this figure.)")
+#
+# .. code-block:: python
+#
+#     nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'])
+#     model = p2p.models.cortex.ScoreboardModel(
+#         rho=500, xrange=(-6, 0), yrange=(-5, 5), xystep=.25, vfmap=nmap
+#     ).build()
+#     nlink = Neuralink.from_neuropythy(
+#         nmap, xrange=model.xrange, yrange=model.yrange, xystep=2, rand_insertion_angle=0
+#     )
+#     print(len(nlink.implants), " total threads")
+#     fig = plt.figure(figsize=(10, 4))
+#     ax1 = fig.add_subplot(121, projection='3d')
+#     model.plot3D(ax=ax1, style='cell'); nlink.plot3D(ax=ax1)
+#     ax2 = fig.add_subplot(122)
+#     model.plot(style='cell', ax=ax2); nlink.plot(ax=ax2)
+#     plt.show()
