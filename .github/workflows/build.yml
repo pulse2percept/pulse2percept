@@ -63,43 +63,39 @@ jobs:
           )
 
           UA="neuropythy-ci/1.0 (+https://github.com/pulse2percept/pulse2percept)"
-          CURL="curl -fL --retry 5 --retry-delay 2 -A \"$UA\""
+          CURL_BASE=(curl -fL --retry 5 --retry-delay 2 -A "$UA" -H "Referer: https://osf.io/")
 
-          # Given an OSF download url, try several direct-download flavors until tar -tzf succeeds.
           fetch_targz() {
             local url="$1" out="$2"
-            # Build candidate variants
-            local base="${url%%\?*}" qs="${url#*$base}"
-            local qprefix="?"
-            [[ "$qs" == "$url" ]] || qprefix="&"
+            # Build candidate variants WITHOUT referencing unset vars
+            local base
+            base="${url%%\?*}"
 
-            # 1) original
-            # 2) ?direct=1
-            # 3) ?download=1
-            # 4) /?action=download (replace trailing /download)
-            # 5) /download?direct=1 (explicit)
-            local cand=()
-            cand+=("$url")
-            cand+=("$base${qprefix}direct=1")
-            cand+=("$base${qprefix}download=1")
+            # Try a few common direct-download patterns
+            local cand=(
+              "$url"
+              "${base}?direct=1"
+              "${base}?download=1"
+              "${base}?action=download"
+            )
+            # If the URL ends with /download, also try the parent action form
             if [[ "$base" == */download ]]; then
               cand+=("${base%/download}/?action=download")
+              cand+=("${base%/download}?action=download")
               cand+=("$base?direct=1")
             fi
 
             for u in "${cand[@]}"; do
               echo "Attempting: $u"
-              # Download
-              bash -lc "$CURL -o \"$out\" \"$u\"" || true
-              # Validate it's a gzip'd tar (quick and reliable)
-              if tar -tzf "$out" >/dev/null 2>&1; then
-                echo "Valid tar.gz from: $u"
-                return 0
-              else
-                echo "Not a valid tar.gz from: $u"
-                echo "First 200 bytes (UTF-8 guess):"
-                head -c 200 "$out" | tr -dc '[:print:]\n' || true
-                echo
+              if "${CURL_BASE[@]}" -o "$out" "$u"; then
+                if tar -tzf "$out" >/dev/null 2>&1; then
+                  echo "Valid tar.gz from: $u"
+                  return 0
+                else
+                  echo "Not a valid tar.gz from: $u"
+                  head -c 200 "$out" | tr -dc '[:print:]\n' || true
+                  echo
+                fi
               fi
             done
             return 1
@@ -133,7 +129,6 @@ jobs:
           done
 
           echo "Dataset warmed at $BASE"
-
 
       - name: Verify Neuropythy dataset layout
         shell: bash
