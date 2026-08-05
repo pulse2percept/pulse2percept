@@ -16,7 +16,7 @@ def test_load_nanduri2012():
         npt.assert_equal(expected_col in data.columns, True)
 
     npt.assert_equal(data.shape, (128, 17))
-    npt.assert_equal(data.subject.unique(), ['S06'])
+    npt.assert_equal(list(data.subject.unique()), ['S06'])
 
     # Shuffle dataset (index will always be range(552), but rows are shuffled):
     data = load_nanduri2012(shuffle=True, random_state=42)
@@ -28,17 +28,18 @@ def test_load_nanduri2012():
     # Select electrodes:
     data = load_nanduri2012(electrodes='A2')
     npt.assert_equal(data.shape, (16, 17))
-    npt.assert_equal(data.electrode.unique(), 'A2')
-    npt.assert_equal(data.subject.unique(), 'S06')
-    data = load_nanduri2012(electrodes=['A1', 'A9'])  # 'A9' doesn't exist
+    npt.assert_equal(list(data.electrode.unique()), ['A2'])
+    npt.assert_equal(list(data.subject.unique()), ['S06'])
+    # neither 'A1' nor 'A9' exists, so the selection comes back empty:
+    data = load_nanduri2012(electrodes=['A1', 'A9'])
     npt.assert_equal(data.shape, (0, 17))
-    npt.assert_equal(data.electrode.unique(), 'A1')
-    npt.assert_equal(data.subject.unique(), 'S06')
+    npt.assert_equal(list(data.electrode.unique()), [])
+    npt.assert_equal(list(data.subject.unique()), [])
 
     # Select task
     data = load_nanduri2012(task='rate')
     npt.assert_equal(data.shape, (88, 17))
-    npt.assert_equal(data.task.unique(), 'rate')
+    npt.assert_equal(list(data.task.unique()), ['rate'])
     data = load_nanduri2012(task='size')
     npt.assert_equal(data.shape, (40, 17))
-    npt.assert_equal(data.task.unique(), 'size')
+    npt.assert_equal(list(data.task.unique()), ['size'])

@@ -36,15 +36,15 @@ def test_load_perezfornos2012():
     # Test selecting by subjects
     data = load_perezfornos2012(subjects='S2')
     npt.assert_equal(data.shape, (5, 3))
-    npt.assert_equal(data.subject.unique(), 'S2')
+    npt.assert_equal(list(data.subject.unique()), ['S2'])
     data = load_perezfornos2012(subjects=['S2', 'S3'])
     npt.assert_equal(data.shape, (10, 3))
-    npt.assert_equal(data.subject.unique(), ['S2', 'S3'])
+    npt.assert_equal(list(data.subject.unique()), ['S2', 'S3'])
 
     # Test selecting by figure
     data = load_perezfornos2012(figures='fig3_S7')
     npt.assert_equal(data.shape, (1, 3))
-    npt.assert_equal(data.figure.unique(), 'fig3_S7')
+    npt.assert_equal(list(data.figure.unique()), ['fig3_S7'])
     data = load_perezfornos2012(figures=['fig3_S7', 'fig4_S3'])
     npt.assert_equal(data.shape, (2, 3))
-    npt.assert_equal(data.figure.unique(), ['fig3_S7', 'fig4_S3'])
+    npt.assert_equal(list(data.figure.unique()), ['fig3_S7', 'fig4_S3'])
