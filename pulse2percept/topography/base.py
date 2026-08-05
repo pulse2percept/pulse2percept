@@ -206,10 +206,12 @@ class Grid2D(PrettyPrint):
         # Build the grid from `x_range`, `y_range`. If the range is 0, make
         # sure that the number of steps is 1, because linspace(0, 0, num=5)
         # will return a 1x5 array:
-        xdiff = np.abs(np.diff(x_range))
+        # `np.diff` returns a 1-element array, so pull out the scalar: NumPy
+        # does not allow converting an array with ndim > 0 to a Python scalar.
+        xdiff = np.abs(np.diff(x_range)).item()
         nx = int(np.round(xdiff / x_step) + 1) if xdiff != 0 else 1
         self._xflat = np.linspace(*x_range, num=nx, dtype=np.float32)
-        ydiff = np.abs(np.diff(y_range))
+        ydiff = np.abs(np.diff(y_range)).item()
         ny = int(np.round(ydiff / y_step) + 1) if ydiff != 0 else 1
         self._yflat = np.linspace(*y_range, num=ny, dtype=np.float32)
         # Create the grid, flip y axis so that it increases from bottom to top:
