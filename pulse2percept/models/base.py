@@ -128,12 +128,18 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
                      f"constructor or in ``build``, not in ``{f_caller_2}``.")
             raise AttributeError(err_s)
 
-    def __deepcopy__(self, memodict={}):
+    def __deepcopy__(self, memodict=None):
+        if memodict is None:
+            memodict = {}
         if id(self) in memodict:
             return memodict[id(self)]
         copied = copy(self)
+        # Register before recursing, and pass `memodict` down, so that shared
+        # references are copied once and reference cycles terminate:
+        memodict[id(self)] = copied
         for attr in self.__dict__:
-            copied.__setattr__(attr, deepcopy(self.__getattribute__(attr)))
+            copied.__setattr__(attr,
+                               deepcopy(self.__getattribute__(attr), memodict))
         if self.is_built:
             copied.build()
         return copied
@@ -820,7 +826,7 @@ class Model(PrettyPrint):
                        f"{self.__class__.__name__} outside the constructor.")
             raise FreezeError(err_str)
 
-    def __deepcopy__(self, memodict={}):
+    def __deepcopy__(self, memodict=None):
         """
         Perform a deep copy of the Model object.
 
@@ -834,9 +840,11 @@ class Model(PrettyPrint):
         -------
 
         """
+        if memodict is None:
+            memodict = {}
         if id(self) in memodict:
             return memodict[id(self)]
-        attributes = deepcopy(self.__dict__)
+        attributes = deepcopy(self.__dict__, memodict)
         # Remove Spatial and Temporal Model attributes, they are created internally.
         attributes.pop('spatial')
         attributes.pop('temporal')

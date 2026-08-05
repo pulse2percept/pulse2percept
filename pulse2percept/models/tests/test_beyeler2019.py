@@ -324,8 +324,15 @@ def test_AxonMapModel(engine):
     with pytest.raises(ValueError):
         AxonMapModel(axlambda=9).build()
 
-@pytest.mark.parametrize('original', [AxonMapModel(), AxonMapModel().build()])
-def test_deepcopy_AxonMapModel(original):
+# Build the model inside the test, not in the decorator: arguments to
+# `parametrize` are evaluated at import time, so building here would run on
+# every pytest invocation (even `--collect-only`, even when this test is
+# deselected) and would surface any failure as a collection error.
+@pytest.mark.parametrize('build', (False, True))
+def test_deepcopy_AxonMapModel(build):
+    original = AxonMapModel()
+    if build:
+        original.build()
     copied = copy.deepcopy(original)
 
     # Assert these are two different objects

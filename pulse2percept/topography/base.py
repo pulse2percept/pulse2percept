@@ -545,12 +545,18 @@ class Grid2D(PrettyPrint):
 
 
     
-    def __deepcopy__(self, memodict={}):
+    def __deepcopy__(self, memodict=None):
+        if memodict is None:
+            memodict = {}
         if id(self) in memodict:
             return memodict[id(self)]
         copied = copy(self)
+        # Register before recursing, and pass `memodict` down, so that shared
+        # references are copied once and reference cycles terminate:
+        memodict[id(self)] = copied
         for attr in self.__dict__:
-            copied.__setattr__(attr, deepcopy(self.__getattribute__(attr)))
+            copied.__setattr__(attr,
+                               deepcopy(self.__getattribute__(attr), memodict))
         return copied
 
     def __eq__(self, other):

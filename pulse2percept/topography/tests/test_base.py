@@ -81,8 +81,16 @@ class TestMapDouble(VisualFieldMap):
             "double": lambda x, y: (2*x, 2*y)
         }
 
-@pytest.mark.parametrize('vfmap', [Watson2014Map(), Polimeni2006Map(regions=['v1', 'v2', 'v3'])])
-def test_Grid2D_plot(vfmap):
+# Parametrize over a factory, not over instances: arguments to `parametrize`
+# are built at import time (on every pytest run, even when this test is
+# deselected) and are shared across invocations.
+@pytest.mark.parametrize('make_vfmap', [
+    pytest.param(Watson2014Map, id='Watson2014Map'),
+    pytest.param(lambda: Polimeni2006Map(regions=['v1', 'v2', 'v3']),
+                 id='Polimeni2006Map'),
+])
+def test_Grid2D_plot(make_vfmap):
+    vfmap = make_vfmap()
     plt.figure()
     # This test is slow
     grid = Grid2D((-20, 20), (-40, 40), step=1)

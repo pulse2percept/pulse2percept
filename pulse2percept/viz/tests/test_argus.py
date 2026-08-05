@@ -54,8 +54,12 @@ def test_plot_argus_phosphenes():
     plot_argus_phosphenes(df, ax=ax)
 
 
-@pytest.mark.parametrize('implant', (ArgusI(), ArgusII()))
-def test_plot_argus_simulated_phosphenes(implant):
+# Parametrize over the class, not over instances: arguments to `parametrize`
+# are built at import time and shared across invocations, so mutating one
+# (as this test does with `implant.stim`) would leak state between tests.
+@pytest.mark.parametrize('ImplantType', (ArgusI, ArgusII))
+def test_plot_argus_simulated_phosphenes(ImplantType):
+    implant = ImplantType()
     implant.stim = {'A1': [1, 0, 0], 'B2': [0, 1, 0], 'C3': [0, 0, 1]}
     percepts = ScoreboardModel().build().predict_percept(implant)
 

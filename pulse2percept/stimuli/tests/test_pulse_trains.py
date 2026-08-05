@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import numpy.testing as npt
+from scipy.integrate import trapezoid
 
 from pulse2percept.stimuli import (Stimulus, PulseTrain, BiphasicPulseTrain,
                                    BiphasicTripletTrain,
@@ -75,7 +76,7 @@ def test_BiphasicPulseTrain(amp, interphase_dur, delay_dur, cathodic_first):
     npt.assert_almost_equal(pt.time[-1], stim_dur, decimal=2)
     npt.assert_equal(pt.cathodic_first, cathodic_first)
     npt.assert_equal(pt.is_charge_balanced,
-                     np.isclose(np.trapz(pt.data, pt.time)[0], 0, atol=1e-5))
+                     np.isclose(trapezoid(pt.data, pt.time)[0], 0, atol=1e-5))
 
     # Zero frequency:
     pt = BiphasicPulseTrain(0, amp, phase_dur)
@@ -88,7 +89,7 @@ def test_BiphasicPulseTrain(amp, interphase_dur, delay_dur, cathodic_first):
     # Pulse can fill the entire window (no "unique time points" error):
     pt = BiphasicPulseTrain(10, 20, 50, stim_dur=500)
     npt.assert_almost_equal(pt.time[-1], 500)
-    npt.assert_equal(np.round(np.trapz(np.abs(pt.data), pt.time)[0]), 10000)
+    npt.assert_equal(np.round(trapezoid(np.abs(pt.data), pt.time)[0]), 10000)
 
     # Specific number of pulses
     for n_pulses in [2, 4, 5]:
@@ -132,7 +133,7 @@ def test_AsymmetricBiphasicPulseTrain(amp1, amp2, interphase_dur, delay_dur,
     npt.assert_almost_equal(pt.time[-1], stim_dur, decimal=2)
     npt.assert_equal(pt.cathodic_first, cathodic_first)
     npt.assert_equal(pt.is_charge_balanced,
-                     np.isclose(np.trapz(pt.data, pt.time)[0], 0, atol=1e-5))
+                     np.isclose(trapezoid(pt.data, pt.time)[0], 0, atol=1e-5))
 
     # Zero frequency:
     pt = AsymmetricBiphasicPulseTrain(0, amp1, amp2, phase_dur1, phase_dur2)
@@ -145,7 +146,7 @@ def test_AsymmetricBiphasicPulseTrain(amp1, amp2, interphase_dur, delay_dur,
     # Pulse can fill the entire window (no "unique time points" error):
     pt = AsymmetricBiphasicPulseTrain(10, 40, 10, 20, 80, stim_dur=500)
     npt.assert_almost_equal(pt.time[-1], 500)
-    npt.assert_equal(np.round(np.trapz(np.abs(pt.data), pt.time)[0]), 8000)
+    npt.assert_equal(np.round(trapezoid(np.abs(pt.data), pt.time)[0]), 8000)
 
     # Specific number of pulses
     for n_pulses in [2, 4, 5]:
@@ -193,7 +194,7 @@ def test_BiphasicTripletTrain(amp, interphase_dur, interpulse_dur, delay_dur, ca
     npt.assert_almost_equal(pt.time[-1], stim_dur, decimal=2)
     npt.assert_equal(pt.cathodic_first, cathodic_first)
     npt.assert_equal(pt.is_charge_balanced,
-                     np.isclose(np.trapz(pt.data, pt.time)[0], 0, atol=1e-5))
+                     np.isclose(trapezoid(pt.data, pt.time)[0], 0, atol=1e-5))
 
     # Zero frequency:
     pt = BiphasicPulseTrain(0, amp, phase_dur)
@@ -206,7 +207,7 @@ def test_BiphasicTripletTrain(amp, interphase_dur, interpulse_dur, delay_dur, ca
     # Pulse can fill the entire window (no "unique time points" error):
     pt = BiphasicTripletTrain(10, 20, 100 / 6.001, stim_dur=500)
     npt.assert_almost_equal(pt.time[-1], 500)
-    npt.assert_equal(np.round(np.trapz(np.abs(pt.data), pt.time)[0]), 9998)
+    npt.assert_equal(np.round(trapezoid(np.abs(pt.data), pt.time)[0]), 9998)
 
     # Specific number of pulses
     for n_pulses in [2, 4, 5]:

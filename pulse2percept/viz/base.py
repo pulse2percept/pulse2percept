@@ -103,8 +103,8 @@ def correlation_matrix(X, cols=None, dropna=True, ax=None):
     # Calculate column-wise correlation:
     corr = X.corr()
     if dropna:
-        corr.dropna(how='all', axis=0, inplace=True)
-        corr.dropna(how='all', axis=1, inplace=True)
+        corr = corr.dropna(how='all', axis=0)
+        corr = corr.dropna(how='all', axis=1)
     if ax is None:
         ax = plt.gca()
     sns.heatmap(corr, mask=np.triu(np.ones(corr.shape), k=1).astype(bool),

@@ -2,6 +2,7 @@ import numpy as np
 import copy
 import pytest
 import numpy.testing as npt
+from scipy.integrate import trapezoid
 
 from pulse2percept.utils import (Frozen, FreezeError, PrettyPrint, Data,
                                  bijective26_name, cached, gamma)
@@ -157,7 +158,7 @@ def test_gamma():
                 npt.assert_equal(g[0], 0.0)
 
             # Make sure area under the curve is normalized
-            npt.assert_almost_equal(np.trapz(np.abs(g), dx=tsample), 1.0,
+            npt.assert_almost_equal(trapezoid(np.abs(g), dx=tsample), 1.0,
                                     decimal=2)
 
             # Make sure peak sits correctly
