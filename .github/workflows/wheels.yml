@@ -63,6 +63,12 @@ jobs:
             lipo -info /tmp/omp/lib/libomp.dylib
           CIBW_BEFORE_BUILD_MACOS: |
             set -eux
+            # CIBW_ENVIRONMENT only keeps the *first* assignment when the
+            # value spans multiple lines, which silently dropped the
+            # deployment target for a long time. Fail with a clear message if
+            # that ever regresses:
+            : "${OMP_PREFIX:?not set - check CIBW_ENVIRONMENT_MACOS is one line}"
+            : "${MACOSX_DEPLOYMENT_TARGET:?not set - check CIBW_ENVIRONMENT_MACOS is one line}"
             ls -l "${OMP_PREFIX}/include/omp.h"
             # Fail loudly here rather than deep inside delocate if the OpenMP
             # runtime ever requires a newer macOS than the wheels target:
@@ -77,15 +83,19 @@ jobs:
               exit 1
             fi
             python -m pip install --upgrade pip setuptools wheel cython delocate oldest-supported-numpy
+          # NOTE: must stay a *folded* scalar (>-), i.e. a single line of
+          # space-separated assignments. With a literal block (|),
+          # cibuildwheel keeps only the first assignment and silently drops
+          # the rest -- which is how the deployment target below went missing
+          # for so long. setup.py derives the OpenMP compile/link flags from
+          # OMP_PREFIX, so nothing else needs setting here.
+          #
           # A fixed target for both arches, so the ABI floor is a decision we
           # make rather than a side effect of the runner image. macOS 11 is
           # the oldest release Apple silicon supports.
-          CIBW_ENVIRONMENT_MACOS: |
+          CIBW_ENVIRONMENT_MACOS: >-
             OMP_PREFIX=/tmp/omp
             MACOSX_DEPLOYMENT_TARGET=11.0
-            CFLAGS="-std=c99 -O3 -Xpreprocessor -fopenmp -I/tmp/omp/include"
-            CPPFLAGS="-I/tmp/omp/include"
-            LDFLAGS="-L/tmp/omp/lib -lomp"
           # No custom repair command: cibuildwheel's default delocate-wheel
           # invocation is correct once the deployment target and the vendored
           # libomp agree.
