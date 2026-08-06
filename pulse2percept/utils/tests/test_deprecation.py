@@ -65,6 +65,11 @@ def test_deprecated_property():
                      'since version 0.5')
     npt.assert_equal(obj.deprecated_attribute, 42)
 
+    # The warning names the property. `property` objects only have a
+    # `__name__` on Python 3.13+, so the name has to come from the getter:
+    assert_warns_msg(DeprecationWarning, lambda: obj.deprecated_attribute,
+                     'Property deprecated_attribute is deprecated')
+
     # The deprecation directive is prepended to the original docstring:
     doc = MockClassProperty.deprecated_attribute.__doc__
     npt.assert_equal('.. deprecated:: 0.5' in doc, True)
