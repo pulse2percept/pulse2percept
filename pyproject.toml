@@ -52,6 +52,15 @@ colab = [
     "numpy>=2,<3"
 ]
 
+[tool.coverage.run]
+# Measure coverage of the library, not of the test suite itself: test modules
+# that are skipped (e.g. because an optional dataset isn't available) would
+# otherwise report as large blocks of uncovered code.
+omit = [
+    "*/tests/*",
+    "*/conftest.py",
+]
+
 [tool.setuptools]
 package-dir = {"" = "."}
 include-package-data = true

@@ -218,3 +218,132 @@ def test_3D_transform():
     npt.assert_equal(grid.ret.x[-1, -1], 2)
     npt.assert_equal(grid.ret.y[-1, -1], -2)
     npt.assert_equal(grid.ret.z[-1, -1], 1)
+
+def test_Grid2D_deepcopy_memo():
+    import copy
+    grid = Grid2D((-2, 2), (-2, 2), step=1)
+
+    # Called directly, without a memo dict:
+    copied = grid.__deepcopy__()
+    npt.assert_equal(copied == grid, True)
+    npt.assert_equal(id(copied) != id(grid), True)
+
+    # The default memo must not persist between calls (a shared mutable
+    # default would leak copies from one call into the next):
+    other = Grid2D((-1, 1), (-1, 1), step=1)
+    npt.assert_equal(other.__deepcopy__() == other, True)
+
+    # An object already in the memo is returned as-is, not re-copied:
+    sentinel = 'already copied'
+    npt.assert_equal(grid.__deepcopy__({id(grid): sentinel}), sentinel)
+
+    # Copies are independent of the original:
+    copied = copy.deepcopy(grid)
+    copied.x_range = (-9, 9)
+    npt.assert_equal(grid.x_range != copied.x_range, True)
+
+
+def test_Grid2D_plot3D_validation():
+    grid = Grid2D((-2, 2), (-2, 2), step=1)
+    grid.build(Watson2014Map())
+
+    # A 2D axis cannot be used for a 3D plot:
+    _, ax2d = plt.subplots()
+    with pytest.raises(ValueError):
+        grid.plot3D(ax=ax2d)
+
+    # A 2D visual field map has nothing to plot in 3D:
+    fig = plt.figure()
+    ax3d = fig.add_subplot(111, projection='3d')
+    with pytest.raises(ValueError):
+        grid.plot3D(ax=ax3d)
+
+    # A 3D map gets past the ndim check, so style and surface are validated:
+    grid3d = Grid2D((-2, 2), (-2, 2), step=1)
+    grid3d.build(Valid3DTransform())
+    with pytest.raises(ValueError):
+        grid3d.plot3D(style='invalid', ax=ax3d)
+    with pytest.raises(ValueError):
+        grid3d.plot3D(surface='invalid', ax=ax3d)
+    plt.close('all')
+
+
+def test_CoordinateGrid():
+    from pulse2percept.topography.base import CoordinateGrid
+    x, y = np.arange(4.0), np.arange(4.0) * 2
+    grid = CoordinateGrid(x, y)
+
+    # 2D grid has no z:
+    npt.assert_equal(grid.z, None)
+    npt.assert_equal('CoordinateGrid(x=' in repr(grid), True)
+    npt.assert_equal('z=' in repr(grid), False)
+    npt.assert_equal(str(grid), repr(grid))
+
+    # 3D grid reports z:
+    grid3d = CoordinateGrid(x, y, np.ones(4))
+    npt.assert_equal('z=' in repr(grid3d), True)
+    npt.assert_equal('z=' in str(grid3d), True)
+
+    # Equality: identity, equal values, different values, different type,
+    # and a differing set of attributes:
+    npt.assert_equal(grid == grid, True)
+    npt.assert_equal(grid == CoordinateGrid(x.copy(), y.copy()), True)
+    npt.assert_equal(grid == CoordinateGrid(x, y + 1), False)
+    npt.assert_equal(grid == 'not a grid', False)
+    npt.assert_equal(grid == grid3d, False)
+
+    # Non-array attributes are compared directly:
+    npt.assert_equal(CoordinateGrid(1, 2) == CoordinateGrid(1, 2), True)
+    npt.assert_equal(CoordinateGrid(1, 2) == CoordinateGrid(1, 3), False)
+
+    # Hashable, so grids can go in sets/dicts:
+    npt.assert_equal(isinstance(hash(grid), int), True)
+    npt.assert_equal(len({grid, grid}), 1)
+
+
+class Valid3DMap(RetinalMap):
+    """A 3D retinal map, so `plot3D` can be exercised without neuropythy."""
+
+    def get_default_params(self):
+        params = super().get_default_params()
+        params.update({'ndim': 3, 'jitter_boundary': False})
+        return params
+
+    def dva_to_ret(self, x_dva, y_dva):
+        x = np.asarray(x_dva, dtype=float)
+        return x_dva, y_dva, np.ones_like(x)
+
+    def ret_to_dva(self, x_ret, y_ret, z_ret=None):
+        return x_ret, y_ret
+
+
+def test_Grid2D_plot3D():
+    grid = Grid2D((-2, 2), (-2, 2), step=1)
+    grid.build(Valid3DMap())
+
+    def new_ax():
+        fig = plt.figure()
+        return fig.add_subplot(111, projection='3d')
+
+    # Both styles (smoke tests):
+    for style in ['scatter', 'cell']:
+        npt.assert_equal(grid.plot3D(style=style, ax=new_ax()) is not None, True)
+
+    # All colorings:
+    for color_by in ['region', 'eccentricity', 'angle']:
+        npt.assert_equal(
+            grid.plot3D(color_by=color_by, ax=new_ax()) is not None, True)
+    with pytest.raises(ValueError):
+        grid.plot3D(color_by='unknown', ax=new_ax())
+
+    # An explicit color overrides `color_by`:
+    npt.assert_equal(grid.plot3D(ax=new_ax(), c='blue') is not None, True)
+
+    # Without an `ax`, a 3D axis is created. Close any open figures first:
+    # if a 3D axis is already current, `plot3D` reuses it as-is.
+    plt.close('all')
+    npt.assert_equal(grid.plot3D() is not None, True)
+    plt.close('all')
+    ax = grid.plot3D(figsize=(9, 7))
+    npt.assert_almost_equal(ax.figure.get_size_inches(), (9, 7))
+    plt.close('all')

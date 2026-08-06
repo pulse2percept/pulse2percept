@@ -76,3 +76,20 @@ def test_fetch_beyeler2019():
         with pytest.raises(ImportError):
             reload(datasets)
             datasets.fetch_beyeler2019()
+
+
+def test_fetch_beyeler2019_missing_dependencies():
+    """The loader must explain which optional dependency is missing.
+
+    These guards run before any download, so they are testable without the
+    dataset being present.
+    """
+    from pulse2percept.datasets import beyeler2019 as mod
+
+    with mock.patch.object(mod, 'has_h5py', False):
+        with pytest.raises(ImportError):
+            mod.fetch_beyeler2019()
+
+    with mock.patch.object(mod, 'has_pandas', False):
+        with pytest.raises(ImportError):
+            mod.fetch_beyeler2019()

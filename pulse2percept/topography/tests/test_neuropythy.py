@@ -9,25 +9,57 @@ from pulse2percept.topography import NeuropythyMap
 import time
 import os
 
-@pytest.fixture(scope='session')
-def neuropythy_available():
-    """Skip the test unless the Neuropythy 'fsaverage' subject can be loaded.
+def load_fsaverage_or_skip():
+    """Load the Neuropythy 'fsaverage' subject, or skip the calling test.
 
     Loading a subject may download the Benson & Winawer (2018) dataset, which
     can fail for any number of reasons outside our control (neuropythy not
     installed, no network, moved download endpoints, no disk space, ...). All
     of them should skip the test rather than error it out.
-
-    This is a fixture rather than a ``skipif`` condition on purpose: conditions
-    are evaluated at collection time, so a ``skipif`` would hit the network on
-    every test run, including runs where these tests are all skipped anyway.
     """
     try:
-        NeuropythyMap('fsaverage')
+        return NeuropythyMap('fsaverage')
     except Exception as err:
         pytest.skip(f"Could not load the Neuropythy 'fsaverage' subject "
                     f"({type(err).__name__}: {err}). Download the Benson & "
                     f"Winawer 2018 dataset to run this test.")
+
+
+@pytest.fixture(scope='session')
+def neuropythy_available():
+    """Skip the test unless the 'fsaverage' subject can be loaded.
+
+    This is a fixture rather than a ``skipif`` condition on purpose:
+    conditions are evaluated at collection time, so a ``skipif`` would hit the
+    network on every test run, including runs where these tests are all
+    skipped anyway.
+    """
+    return load_fsaverage_or_skip()
+
+
+def test_load_fsaverage_or_skip_swallows_any_error():
+    """Any failure to load the subject must skip, not error out.
+
+    This runs without neuropythy installed and without touching the network,
+    so it guards the fixture that gates every other test in this module.
+    """
+    import pulse2percept.topography.tests.test_neuropythy as mod
+
+    for err in (ImportError('no neuropythy'), ValueError('no such subject'),
+                OSError('network is down'), RuntimeError('something else')):
+        def boom(*args, _err=err, **kwargs):
+            raise _err
+
+        orig = mod.NeuropythyMap
+        mod.NeuropythyMap = boom
+        try:
+            with pytest.raises(pytest.skip.Exception) as excinfo:
+                load_fsaverage_or_skip()
+            # The skip reason names the underlying error, so a future
+            # breakage is diagnosable straight from the CI log:
+            npt.assert_equal(type(err).__name__ in str(excinfo.value), True)
+        finally:
+            mod.NeuropythyMap = orig
 
 
 # use pytest.mark.slow because all neuropythy tests

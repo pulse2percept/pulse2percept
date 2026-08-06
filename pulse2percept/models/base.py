@@ -371,7 +371,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # Calculate the Stimulus at requested time points:
             if t_percept is not None:
                 # Save electrode parameters
-                stim = Stimulus(stim[:, t_percept].reshape((-1, n_time)),
+                # np.asarray: indexing a single-electrode stimulus returns a
+                # scalar, which has no `reshape`:
+                stim = Stimulus(np.asarray(stim[:, t_percept]).reshape((-1,
+                                                                       n_time)),
                                 electrodes=stim.electrodes, time=t_percept,
                                 metadata=stim.metadata)
                 # find unique stimulus points
@@ -845,10 +848,22 @@ class Model(PrettyPrint):
         if id(self) in memodict:
             return memodict[id(self)]
         attributes = deepcopy(self.__dict__, memodict)
-        # Remove Spatial and Temporal Model attributes, they are created internally.
-        attributes.pop('spatial')
-        attributes.pop('temporal')
+        # Most Model subclasses create their spatial and temporal models in
+        # the constructor, so those cannot be passed in as parameters:
+        spatial = attributes.pop('spatial', None)
+        temporal = attributes.pop('temporal', None)
         result = self.__class__(**attributes)
+        # Whatever the constructor made, replace it with our copies. Model
+        # parameters (e.g. `rho`) are forwarded to the sub-models by
+        # `__setattr__`, so they live in `spatial`/`temporal`, not in
+        # `self.__dict__` -- reconstructing from the constructor alone would
+        # silently reset them to their defaults. This bypasses
+        # `Model.__setattr__`, which outside the constructor forwards
+        # attributes to the sub-models; it is the assignment __init__ makes.
+        if spatial is not None:
+            object.__setattr__(result, 'spatial', spatial)
+        if temporal is not None:
+            object.__setattr__(result, 'temporal', temporal)
         if self.is_built:
             result.build()
         memodict[id(self)] = result

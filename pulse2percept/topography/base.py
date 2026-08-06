@@ -39,10 +39,14 @@ class CoordinateGrid:
             if self.__dict__.keys() != other.__dict__.keys():
                 return False
             for key in self.__dict__.keys():
-                if isinstance(self.__dict__[key], np.ndarray):
-                    if not np.array_equal(self.__dict__[key], other.__dict__[key]):
+                mine, theirs = self.__dict__[key], other.__dict__[key]
+                # If either side is an array, compare as arrays: `!=` between
+                # None and an array is elementwise, not a bool (this is how a
+                # 2D grid, whose z is None, compares against a 3D one).
+                if isinstance(mine, np.ndarray) or isinstance(theirs, np.ndarray):
+                    if not np.array_equal(mine, theirs):
                         return False
-                elif self.__dict__[key] != other.__dict__[key]:
+                elif mine != theirs:
                     return False
             return True
         def __hash__(self):
@@ -453,7 +457,9 @@ class Grid2D(PrettyPrint):
         """
         # avoid circular import
         from .neuropythy import NeuropythyMap
-        fig_kwargs = ['figsize']
+        # 'c' is passed to the plotting call explicitly (as `color`), so it
+        # must not also be forwarded through **kwargs:
+        fig_kwargs = ['figsize', 'c']
         if ax is None:
             ax = plt.gca()
             if ax.name != '3d':
