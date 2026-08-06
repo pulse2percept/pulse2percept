@@ -11,6 +11,7 @@ from matplotlib.patches import Ellipse
 
 from ..utils.constants import ZORDER
 from ..topography import Watson2014Map
+from ..utils import deprecate_parameter
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
@@ -71,8 +72,10 @@ class ScoreboardSpatial(SpatialModel):
         subject to noise in each frame.
 
     n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP. 
+        Number of CPU threads to use during parallelization using OpenMP.
         Defaults to max number of user CPU cores.
+    n_jobs : int, optional
+        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     .. important ::
         If you change important model parameters outside the constructor (e.g.,
@@ -153,8 +156,10 @@ class ScoreboardModel(Model):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP. 
+        Number of CPU threads to use during parallelization using OpenMP.
         Defaults to max number of user CPU cores.
+    n_jobs : int, optional
+        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     .. important ::
         If you change important model parameters outside the constructor (e.g.,
@@ -237,19 +242,23 @@ class AxonMapSpatial(SpatialModel):
     min_ax_sensitivity : float, optional
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
-        value between 0 and 1. If engine is jax, all other axons will be padded
-        to the length enforced by this constraint.
+        value between 0 and 1.
     engine : string, optional
-        Engine to use for computation. Options are 'serial', 'cython', and 'jax'.
-        Defaults to 'cython'
+        .. deprecated:: 0.9.1
+
+            Accepted but ignored, and will be removed in version 0.10.0. It
+            chose between the Cython and the pure-Python implementation of the
+            Jansonius axon-growth model; the Cython one is now always used.
     axon_pickle : str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle : bool, optional
         A flag whether to ignore the pickle file in future calls to
         ``model.build()``.
     n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP. 
+        Number of CPU threads to use during parallelization using OpenMP.
         Defaults to max number of user CPU cores.
+    n_jobs : int, optional
+        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     .. important ::
         If you change important model parameters outside the constructor (e.g.,
@@ -350,27 +359,7 @@ class AxonMapSpatial(SpatialModel):
         is_superior = phi0 > 0
         rho = np.linspace(*self.ax_segments_range, num=self.n_ax_segments,
                           dtype=np.float32)
-        if self.engine == 'cython':
-            xprime, yprime = fast_jansonius(rho, phi0, beta_sup, beta_inf)
-        else:
-            if is_superior:
-                # Axon is in superior retina, compute `b` (real number) from
-                # Eq. 5:
-                b = np.exp(beta_sup + 3.9 * np.tanh(-(phi0 - 121.0) / 14.0))
-                # Equation 3, `c` a positive real number:
-                c = 1.9 + 1.4 * np.tanh((phi0 - 121.0) / 14.0)
-            else:
-                # Axon is in inferior retina: compute `b` (real number) from
-                # Eq. 6:
-                b = -np.exp(beta_inf + 1.5 * np.tanh(-(-phi0 - 90.0) / 25.0))
-                # Equation 4, `c` a positive real number:
-                c = 1.0 + 0.5 * np.tanh((-phi0 - 90.0) / 25.0)
-
-            # Spiral as a function of `rho`:
-            phi = phi0 + b * (rho - rho.min()) ** c
-            # Convert to Cartesian coordinates:
-            xprime = rho * np.cos(np.deg2rad(phi))
-            yprime = rho * np.sin(np.deg2rad(phi))
+        xprime, yprime = fast_jansonius(rho, phi0, beta_sup, beta_inf)
         # Find the array elements where the axon crosses the meridian:
         if is_superior:
             # Find elements in inferior retina
@@ -518,7 +507,11 @@ class AxonMapSpatial(SpatialModel):
             return closest_axon, closest_idx
         return closest_axon
 
-    def calc_axon_sensitivity(self, bundles, pad=False):
+    @deprecate_parameter('pad', deprecated_version='0.9.1',
+                         removed_version='0.10.0',
+                         addendum="An unpadded list of Nx3 arrays is always "
+                                  "returned, even for pad=True.")
+    def calc_axon_sensitivity(self, bundles, pad=None):
         """Calculate the sensitivity of each axon segment to electrical current
 
         This function combines the x,y coordinates of each bundle segment with
@@ -539,25 +532,31 @@ class AxonMapSpatial(SpatialModel):
         that the only work left to do during run time is to multiply the
         sensitivity value with the current applied to each segment.
 
-        If pad is True (set when engine is 'jax'), axons are padded to all have 
-        the same length as the longest axon
-
         Parameters
         ----------
         bundles : list of Nx2 arrays
             A list of bundles, where every bundle is an Nx2 array consisting of
-            the x,y coordinates of each axon segment (retinal coords, microns). 
+            the x,y coordinates of each axon segment (retinal coords, microns).
             Note that each bundle will most likely have a different N
+        pad : bool, optional
+            .. deprecated:: 0.9.1
+
+                Accepted but ignored, and will be removed in version 0.10.0.
+                ``pad=True`` used to pad all axons to the length of the longest
+                one and return a single (n_points, axon_length, 3) array, which
+                only the (now removed) jax backend consumed. This method now
+                always returns the unpadded list described below.
 
         Returns
         -------
-        axon_contrib : numpy array with shape (n_points, axon_length, 3)
-            An array of axon segments and sensitivity values. Each entry in the
-            array is a Nx3 array, where the first two columns contain the retinal
+        axon_contrib : list of Nx3 arrays
+            A list with one entry per point on ``self.grid``. Each entry is a
+            Nx3 array, where the first two columns contain the retinal
             coordinates of each axon segment (microns), and the third column
             contains the sensitivity of the segment to electrical current.
-            The latter depends on ``self.axlambda``. axon_length is set to the 
-            maximum length of any axon after being trimmed due to min_sensitivity 
+            The latter depends on ``self.axlambda``. Note that each axon will
+            most likely have a different N, since segments whose sensitivity
+            falls below ``min_ax_sensitivity`` are trimmed.
 
         """
         xyret = np.column_stack((self.grid.ret.x.ravel(),
@@ -584,22 +583,7 @@ class AxonMapSpatial(SpatialModel):
             contrib = np.column_stack((axon[idx_d2, :], sensitivity))
             axon_contrib.append(contrib)
 
-        if pad:
-            # pad to length of longest axon
-            axon_length = max([len(axon) for axon in axon_contrib])
-            axon_sensitivities = np.zeros((len(axon_contrib), axon_length, 3))
-            for i, axon in enumerate(axon_contrib):
-                original_len = len(axon)
-                if original_len >= axon_length:
-                    axon_sensitivities[i] = axon[:axon_length]
-                elif original_len != 0:
-                    axon_sensitivities[i, :original_len] = axon
-                    axon_sensitivities[i, original_len:] = axon[-1]
-
-            del axon_contrib
-            return axon_sensitivities
-        else:
-            return axon_contrib
+        return axon_contrib
 
     def calc_bundle_tangent(self, xc, yc):
         """Calculates orientation of fiber bundle tangent at (xc, yc)
@@ -735,24 +719,16 @@ class AxonMapSpatial(SpatialModel):
             axons = self.find_closest_axon(bundles)
             if type(axons) != list:
                 axons = [axons]
-        # Calculate axon contributions (depends on engine):
-        # If engine is cython or serial:
-        #   Axon contribution is a list of (differently shaped) NumPy arrays,
-        #   and a list cannot be accessed in parallel without the gil. Instead
-        #   we need to concatenate it into a really long Nx3 array, and pass the
-        #   start and end indices of each slice:
-        # If engine is jax:
-        #   All axons are the same length, so Axon contribution is an array with
-        #   shape (n, axon_length, 3)
-        if self.engine == 'jax':
-            self.axon_contrib = self.calc_axon_sensitivity(
-                axons, pad=True).astype(np.float32)
-        else:
-            axon_contrib = self.calc_axon_sensitivity(axons)
-            self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
-            len_axons = [a.shape[0] for a in axon_contrib]
-            self.axon_idx_end = np.cumsum(len_axons)
-            self.axon_idx_start = self.axon_idx_end - np.array(len_axons)
+        # Calculate axon contributions. Axon contribution is a list of
+        # (differently shaped) NumPy arrays, and a list cannot be accessed in
+        # parallel without the gil. Instead we need to concatenate it into a
+        # really long Nx3 array, and pass the start and end indices of each
+        # slice:
+        axon_contrib = self.calc_axon_sensitivity(axons)
+        self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
+        len_axons = [a.shape[0] for a in axon_contrib]
+        self.axon_idx_end = np.cumsum(len_axons)
+        self.axon_idx_start = self.axon_idx_end - np.array(len_axons)
         if need_axons:
             # Pickle axons along with all important parameters:
             params = {'loc_od': self.loc_od,
@@ -770,20 +746,17 @@ class AxonMapSpatial(SpatialModel):
             warnings.warn(msg)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        if self.engine != 'jax':
-            return fast_axon_map(stim.data,
-                                 np.array([earray[e].x for e in stim.electrodes],
-                                          dtype=np.float32),
-                                 np.array([earray[e].y for e in stim.electrodes],
-                                          dtype=np.float32),
-                                 self.axon_contrib,
-                                 self.axon_idx_start.astype(np.uint32),
-                                 self.axon_idx_end.astype(np.uint32),
-                                 self.rho,
-                                 self.thresh_percept,
-                                 self.n_threads)
-        else:
-            raise NotImplementedError("Jax will be supported in future release")
+        return fast_axon_map(stim.data,
+                             np.array([earray[e].x for e in stim.electrodes],
+                                      dtype=np.float32),
+                             np.array([earray[e].y for e in stim.electrodes],
+                                      dtype=np.float32),
+                             self.axon_contrib,
+                             self.axon_idx_start.astype(np.uint32),
+                             self.axon_idx_end.astype(np.uint32),
+                             self.rho,
+                             self.thresh_percept,
+                             self.n_threads)
 
     def plot(self, use_dva=False, style='hull', annotate=True, autoscale=True,
              ax=None, figsize=None):
@@ -968,19 +941,23 @@ class AxonMapModel(Model):
     min_ax_sensitivity : float, optional
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
-        value between 0 and 1. If engine is jax, all other axons will be padded
-        to the length enforced by this constraint.
+        value between 0 and 1.
     engine : string, optional
-        Engine to use for computation. Options are 'serial', 'cython', and 'jax'.
-        Defaults to 'cython'
+        .. deprecated:: 0.9.1
+
+            Accepted but ignored, and will be removed in version 0.10.0. It
+            chose between the Cython and the pure-Python implementation of the
+            Jansonius axon-growth model; the Cython one is now always used.
     axon_pickle : str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle : bool, optional
         A flag whether to ignore the pickle file in future calls to
         ``model.build()``.
     n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP. 
+        Number of CPU threads to use during parallelization using OpenMP.
         Defaults to max number of user CPU cores.
+    n_jobs : int, optional
+        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     .. important ::
         If you change important model parameters outside the constructor (e.g.,

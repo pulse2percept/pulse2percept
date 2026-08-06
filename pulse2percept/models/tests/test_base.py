@@ -1,4 +1,6 @@
 import copy
+import multiprocessing
+import warnings
 
 import numpy as np
 import pytest
@@ -112,6 +114,49 @@ def test_SpatialModel():
     with pytest.raises(TypeError):
         # must pass an implant
         ValidSpatialModel().build().predict_percept(Stimulus(3))
+
+@pytest.mark.parametrize('param, value', [('engine', 'serial'),
+                                          ('scheduler', 'dask')])
+def test_SpatialModel_deprecated_params(param, value):
+    # `engine` chose the Cython vs pure-Python axon-growth path (Cython is now
+    # always used) and `scheduler` drove the joblib/dask backends, removed in
+    # 0.9.1. Both are still accepted, but ignored:
+    with pytest.deprecated_call():
+        model = ValidSpatialModel(**{param: value})
+    # Still stored and readable, just unused by anything:
+    npt.assert_equal(getattr(model, param), value)
+    # Naming it later warns as well:
+    with pytest.deprecated_call():
+        model.set_params(**{param: value})
+    # Falling back to the default must stay silent, as must reading the
+    # parameters back out -- the warning is for explicit use only:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        silent = ValidSpatialModel()
+        repr(silent)
+        silent.set_params(xystep=0.5)
+        copy.deepcopy(silent)
+
+
+@pytest.mark.parametrize('param, value', [('engine', 'serial'),
+                                          ('scheduler', 'dask')])
+def test_Model_deprecated_params(param, value):
+    # A Model built from instances never reaches BaseModel.__init__, so this
+    # path needs catching separately, and should warn only once:
+    with pytest.deprecated_call() as record:
+        model = Model(spatial=ValidSpatialModel(), **{param: value})
+    deprecations = [w for w in record
+                    if issubclass(w.category, DeprecationWarning)]
+    npt.assert_equal(len(deprecations), 1)
+    # The warning names the model the user actually constructed:
+    npt.assert_equal('Model' in str(deprecations[0].message), True)
+    npt.assert_equal(getattr(model, param), value)
+    with pytest.deprecated_call():
+        model.set_params({param: value})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        Model(spatial=ValidSpatialModel())
+
 
 def test_eq_SpatialModel():
     valid = ValidSpatialModel()
@@ -288,6 +333,49 @@ def test_deepcopy_TemporalModel():
     # Assert "destroying" the original doesn't affect the copied
     original = None
     npt.assert_equal(copied is not None, True)
+
+
+@pytest.mark.parametrize('cls', [ValidSpatialModel, ValidTemporalModel])
+def test_n_jobs_aliases_n_threads(cls):
+    # `n_jobs` and `n_threads` are two names for the OpenMP thread count, and
+    # must never disagree:
+    model = cls()
+    npt.assert_equal(model.n_jobs, model.n_threads)
+    # Setting either name moves both, whether in the constructor...
+    model = cls(n_jobs=3)
+    npt.assert_equal(model.n_threads, 3)
+    npt.assert_equal(model.n_jobs, 3)
+    # ...or afterwards, by attribute or by set_params:
+    model.n_jobs = 5
+    npt.assert_equal(model.n_threads, 5)
+    model.n_threads = 7
+    npt.assert_equal(model.n_jobs, 7)
+    model.set_params(n_jobs=2)
+    npt.assert_equal(model.n_threads, 2)
+    # The default must not quietly drop us to a single thread:
+    npt.assert_equal(cls().n_threads, multiprocessing.cpu_count())
+    # None and -1 both mean "every core", following scikit-learn:
+    npt.assert_equal(cls(n_jobs=None).n_threads, multiprocessing.cpu_count())
+    npt.assert_equal(cls(n_jobs=-1).n_threads, multiprocessing.cpu_count())
+    # Nonsense is rejected rather than silently ignored:
+    for bad in (0, -2, 2.5, 'many'):
+        with pytest.raises(ValueError):
+            cls(n_jobs=bad)
+    # It is an alias, not a deprecation -- it must not warn:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        cls(n_jobs=4)
+
+
+def test_Model_n_jobs_aliases_n_threads():
+    # Through a Model, n_jobs has to reach both sub-models:
+    model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel(),
+                  n_jobs=3)
+    npt.assert_equal(model.spatial.n_threads, 3)
+    npt.assert_equal(model.temporal.n_threads, 3)
+    model.n_jobs = 6
+    npt.assert_equal(model.spatial.n_threads, 6)
+    npt.assert_equal(model.temporal.n_threads, 6)
 
 
 def test_Model():

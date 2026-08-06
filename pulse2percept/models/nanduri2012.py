@@ -54,8 +54,10 @@ class Nanduri2012Spatial(SpatialModel):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP. 
+        Number of CPU threads to use during parallelization using OpenMP.
         Defaults to max number of user CPU cores.
+    n_jobs : int, optional
+        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     """
 
@@ -132,8 +134,10 @@ class Nanduri2012Temporal(TemporalModel):
     thresh_percept : float, optional
         Below threshold, the percept has brightness zero.
     n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP. 
+        Number of CPU threads to use during parallelization using OpenMP.
         Defaults to max number of user CPU cores.
+    n_jobs : int, optional
+        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     """
 

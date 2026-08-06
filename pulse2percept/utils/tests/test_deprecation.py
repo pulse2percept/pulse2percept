@@ -1,5 +1,8 @@
+import warnings
 import numpy.testing as npt
-from pulse2percept.utils.deprecation import deprecated, is_deprecated
+import pytest
+from pulse2percept.utils.deprecation import (deprecated, deprecate_parameter,
+                                             is_deprecated)
 from pulse2percept.utils.testing import assert_warns_msg
 
 
@@ -90,3 +93,73 @@ def test_deprecated_update_doc():
 def test_is_deprecated_without_closure():
     # A function with no closure cells at all (`__closure__` is None):
     npt.assert_equal(is_deprecated(lambda: None), False)
+
+
+@deprecate_parameter('old', deprecated_version=0.1, removed_version=0.2)
+def mock_func_old_param(a, old=None, b=3):
+    return a + b
+
+
+class MockClassOldParam:
+
+    @deprecate_parameter('old', deprecated_version=0.1, removed_version=0.2,
+                         addendum='It used to do nothing.')
+    def __init__(self, a, old=None):
+        self.a = a
+
+
+def test_deprecate_parameter():
+    # Passing the parameter warns, by keyword or by position:
+    assert_warns_msg(DeprecationWarning, mock_func_old_param,
+                     "The 'old' parameter of mock_func_old_param is "
+                     "deprecated since version 0.1, and will be removed in "
+                     "version 0.2. It is ignored.", 1, old='x')
+    assert_warns_msg(DeprecationWarning, mock_func_old_param,
+                     "'old' parameter", 1, 'x')
+    # But the parameter is ignored: the return value is unaffected:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        npt.assert_equal(mock_func_old_param(1, old='x'), 4)
+        npt.assert_equal(mock_func_old_param(1, 'x', 10), 11)
+    # Omitting the parameter does not warn:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        npt.assert_equal(mock_func_old_param(1), 4)
+        npt.assert_equal(mock_func_old_param(1, b=10), 11)
+
+
+def test_deprecate_parameter_method():
+    # On a constructor, the warning names the class, not `__init__`:
+    assert_warns_msg(DeprecationWarning, MockClassOldParam,
+                     "parameter of MockClassOldParam is deprecated",
+                     1, old='x')
+    # The addendum is appended to the message:
+    assert_warns_msg(DeprecationWarning, MockClassOldParam,
+                     'It used to do nothing.', 1, old='x')
+    # The wrapped callable still works:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        npt.assert_equal(MockClassOldParam(1, old='x').a, 1)
+    # Docstring and name survive the wrapping:
+    npt.assert_equal(mock_func_old_param.__name__, 'mock_func_old_param')
+
+
+def test_deprecate_parameter_is_not_is_deprecated():
+    # Deprecating a parameter does not deprecate the callable itself, so
+    # `is_deprecated` must keep reporting False for it:
+    npt.assert_equal(is_deprecated(mock_func_old_param), False)
+    npt.assert_equal(is_deprecated(MockClassOldParam.__init__), False)
+
+
+def test_deprecate_parameter_unknown_param():
+    # A typo'd or already-removed parameter fails loudly at decoration time,
+    # rather than silently never warning:
+    with pytest.raises(ValueError):
+        @deprecate_parameter('nonexistent')
+        def func(a, b=2):
+            return a
+
+    # An invalid call is left to raise its own error, not preempted by the
+    # decorator's signature binding:
+    with pytest.raises(TypeError):
+        mock_func_old_param()
