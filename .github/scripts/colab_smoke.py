@@ -25,6 +25,10 @@ preinstalled, so it structurally cannot reproduce that. So we install into the
 real thing and compare `pip freeze` either side.
 
 Packages that appear are fine. Packages that *change version* are not.
+
+When something does move, the report also says *why*: pip states the
+requirement it was resolving and who asked for it, which is the difference
+between "numpy got downgraded" and "our own numpy ceiling downgraded it".
 """
 
 from __future__ import annotations
@@ -35,16 +39,94 @@ import subprocess
 import sys
 from pathlib import Path
 
+# The distribution under test. A version change traceable to a requirement
+# this package declares itself is the actionable kind: it is ours to fix.
+DIST_NAME = "pulse2percept"
+
+# `Collecting numpy<1.27,>=1.21 (from pulse2percept)`, or with a chain of
+# requirers: `(from scikit-image>=0.14->pulse2percept)`. This is the only
+# place pip states the *reason* it picked a version.
+COLLECTING = re.compile(
+    r"^\s*Collecting\s+(?P<req>[^\s(]+)"
+    r"(?:\s+\(from\s+(?P<chain>[^)]*)\))?\s*$"
+)
+# Leading distribution name of a requirement, e.g. `numpy` of `numpy<1.27`.
+REQ_NAME = re.compile(r"^[A-Za-z0-9._-]+")
+# Any version specifier. An unpinned requirement cannot move anything, so it
+# is never the thing to go fix. Both directions matter: an upper bound drags a
+# package down, a lower bound pushes it up.
+HAS_SPECIFIER = re.compile(r"[<>=!~]")
+
 
 def canonicalize(name: str) -> str:
     """Normalize a distribution name (PEP 503)."""
     return re.sub(r"[-_.]+", "-", name).strip().lower()
 
 
-def run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess:
-    """Run a command, echoing it so CI logs show exactly what happened."""
+def run(cmd: list[str], *, check: bool = True,
+        tee: bool = False) -> subprocess.CompletedProcess:
+    """Run a command, echoing it so CI logs show exactly what happened.
+
+    With ``tee``, the output is captured *and* printed: the CI log stays
+    complete, and the text remains available to attribute version changes to
+    the requirement that caused them.
+    """
     print(f"\n$ {' '.join(cmd)}", flush=True)
-    return subprocess.run(cmd, check=check, text=True)
+    if not tee:
+        return subprocess.run(cmd, check=check, text=True)
+    proc = subprocess.run(cmd, check=check, text=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if proc.stdout:
+        print(proc.stdout, end="", flush=True)
+    return proc
+
+
+def parse_requirements(output: str) -> dict[str, list[tuple[str, str]]]:
+    """Map each package pip resolved to the requirement(s) it was satisfying.
+
+    Returns ``{canonical name: [(requirement, requirer chain), ...]}``, where
+    the chain is pip's own ``a->b`` rendering, nearest requirer first, and is
+    empty for a package asked for on the command line.
+    """
+    found: dict[str, list[tuple[str, str]]] = {}
+    for line in output.splitlines():
+        match = COLLECTING.match(line)
+        if not match:
+            continue
+        req = match.group("req")
+        name = REQ_NAME.match(req)
+        if not name:
+            continue
+        entry = (req, (match.group("chain") or "").strip())
+        bucket = found.setdefault(canonicalize(name.group(0)), [])
+        if entry not in bucket:
+            bucket.append(entry)
+    return found
+
+
+def explain(names: list[str],
+            requirements: dict[str, list[tuple[str, str]]]) -> list[str]:
+    """Say which requirement pip was resolving for each of ``names``."""
+    rows: list[str] = []
+    for name in names:
+        reqs = requirements.get(name)
+        if not reqs:
+            # pip only prints `Collecting` for packages it (re)installs by
+            # name; a version can also move as a side effect of backtracking.
+            rows.append(f"{name}: no requirement line from pip -- most likely "
+                        f"resolver backtracking to satisfy another pin")
+            continue
+        for req, chain in reqs:
+            who = chain.replace("->", " -> ") if chain else "the install target"
+            rows.append(f"{name}: required by {who} as `{req}`")
+            # Whoever asked for it first is the one holding the constraint.
+            immediate = REQ_NAME.match(chain.split("->")[0].strip()) if chain else None
+            specifier = req[len(REQ_NAME.match(req).group(0)):]
+            if (immediate and canonicalize(immediate.group(0)) == DIST_NAME
+                    and HAS_SPECIFIER.search(specifier)):
+                rows.append(f"    ^ that bound is declared by {DIST_NAME} "
+                            f"itself -- ours to fix, in pyproject.toml")
+    return rows
 
 
 def pip(*args: str, capture: bool = False) -> str:
@@ -164,6 +246,7 @@ def main() -> int:
     install = run(
         [sys.executable, "-m", "pip", "install", "--root-user-action=ignore", args.spec],
         check=False,
+        tee=True,
     )
     if install.returncode != 0:
         print(
@@ -175,11 +258,12 @@ def main() -> int:
 
     after = freeze()
 
-    changed = [
-        f"{name}: {before[name]} -> {after[name]}"
-        for name in sorted(before.keys() & after.keys())
+    changed_names = [
+        name for name in sorted(before.keys() & after.keys())
         if before[name] != after[name] and name not in tolerated
     ]
+    changed = [f"{name}: {before[name]} -> {after[name]}"
+               for name in changed_names]
     removed = sorted(before.keys() - after.keys() - tolerated)
     added = sorted(after.keys() - before.keys())
 
@@ -190,6 +274,15 @@ def main() -> int:
     # Only conflicts we introduced count; Colab's own are not our problem.
     new_conflicts = sorted(pip_check() - conflicts_before)
     report("New dependency conflicts (must be empty)", new_conflicts)
+
+    # A bare list of what moved sends the reader digging through pip's log for
+    # the requirement behind it -- and the conflicts above name whichever
+    # preinstalled packages happened to be caught in the blast, which reads
+    # like the cause and is not.
+    if changed_names or removed:
+        report("Why those versions moved",
+               explain(changed_names + removed,
+                       parse_requirements(install.stdout or "")))
 
     problems = []
     if changed:
