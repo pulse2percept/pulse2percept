@@ -252,7 +252,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'n_gray': None,
             # Salt-and-pepper noise on the output:
             'noise': None,
-            # Cython/Jax can be used to speed up computations:
+            # Cython can be used to speed up computations:
             'engine': 'cython',
             'scheduler': 'threading',
             'n_jobs': 1,

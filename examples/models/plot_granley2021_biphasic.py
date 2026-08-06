@@ -59,9 +59,8 @@ print(model)
 ##############################################################################
 # The most important parameters are ``rho`` and ``axlambda``, which control the 
 # radial and axonal current spread, respectively. The parameters ``a0``-``a9`` are 
-# coefficients for the size, streak, and bright models, which will be discussed 
-# later in this example. The biphasic axon map model supports both the default 
-# cython engine and a faster, gpu-enabled jax engine.
+# coefficients for the size, streak, and bright models, which will be discussed
+# later in this example.
 #
 # The rest of the parameters are shared with 
 # :py:class:`~pulse2percept.models.AxonMapModel`. For full details on these 
@@ -254,62 +253,4 @@ plt.show()
 # which can be shared with the overarching BiphasicAxonMapModel itself (e.g. an effect 
 # model can depend on ``rho``, and if ``model.rho`` is changed, ``rho`` will also be changed in
 # the effect model). For an example of this, 
-# see :py:class:`~pulse2percept.models.granley2021.DefaultSizeModel` 
-#
-#
-# If using custom effect models with jax, the effect models must be written for jax so they can
-# be JIT compiled (i.e. using jax.numpy instead of numpy)
-
-########################################################################################
-# JAX Engine
-# ============
-#
-# The default computational engine is cython, but an engine based on 
-# `jax <https://github.com/google/jax>`_ is also provided. The jax engine is slightly faster on CPU
-# and significantly faster on GPU, at the cost of increased memory usage. The jax-based model 
-# can be used identically to the cython engine, but it also has some additional features
-# and limitations. 
-# 
-# .. note ::
-#
-#     Jax functions are compiled the first time they are called. Thus, the first
-#     `predict_percept` will be slow. Subsequent calls reuse the compiled and
-#     optimized function, and are much faster
-#
-# One additional feature is the 
-# `_predict_spatial_jax` function,
-# which is a stripped, purely functional version of 
-# `predict_percept` that operates on
-# numpy arrays. This avoids the overhead of creating p2p stimulus and percept objects,
-# and if used correctly, provides an additional speedup. 
-#
-# `_predict_spatial_jax` takes in 
-# a (n_elecs, 3) numpy array specifying the frequency, amplitude, and pulse duration on
-# each electrode, and two (n_elec) shaped arrays specifying the x and y locations of each
-# electrode
-model = BiphasicAxonMapModel(engine='jax')
-model.build()
-implant = ArgusII()
-ex = np.array([implant[e].x for e in implant.electrodes])
-ey = np.array([implant[e].y for e in implant.electrodes]) 
-stim = np.zeros((60, 3))
-stim[3] = [20, 1, 0.45]
-percept = model._predict_spatial_jax(stim, ex, ey)
-percept = np.array(percept).reshape(model.grid.shape)
-plt.imshow(percept, cmap='gray')
-plt.show()
-##################################################################################################
-# One other useful feature is the 
-# `predict_percept_batched` function. This
-# applies predict_percept to batches of input stimuli, using optimized matrix operations. See also 
-# its faster, stripped version `_predict_spatial_batched`. This 
-# function is only intended to be used if you are repeatedly simulating batches of percepts. 
-# Since jax compiles each function the first time it is used, using this function only once
-# for a singular group of stimuli will be noticably slower than repeatedly applying 
-# `predict_percept`. However, splitting a very large set of stimuli into smaller batches and 
-# using `predict_percept_batched` will be significantly faster than `predict_percept` on each
-# individual stimuli.
-#
-# Note that this function consumes a large amount of memory, and may not run on systems or 
-# GPUs with limited memory. 
-
+# see :py:class:`~pulse2percept.models.granley2021.DefaultSizeModel`

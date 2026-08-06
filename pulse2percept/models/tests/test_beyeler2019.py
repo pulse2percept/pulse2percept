@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 import copy
+import warnings
 
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
@@ -175,7 +176,7 @@ def test_ScoreboardModel_predict_percept():
     assert_warns_msg(UserWarning, model.predict_percept, msg, implant)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython'))
 def test_AxonMapSpatial(engine):
     # AxonMapSpatial automatically sets `rho`, `axlambda`:
     model = AxonMapSpatial(engine=engine, xystep=5)
@@ -213,12 +214,6 @@ def test_AxonMapSpatial(engine):
     model = AxonMapSpatial(engine=engine, rho=200, axlambda=100, xystep=5,
                            xrange=(-20, 20), yrange=(-15, 15))
     model.build()
-    # Axon map jax predict_percept not implemented yet
-    if engine == 'jax':
-        with pytest.raises(NotImplementedError):
-            percept = model.predict_percept(
-                ArgusII(stim={'A1': [1, 0], 'B3': [0, 2]}))
-        return
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 0], 'B3': [0, 2]}))
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
     pmax = percept.data.max(axis=(0, 1))
@@ -278,7 +273,7 @@ def test_AxonMapSpatial_plot():
         plt.close(fig)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython'))
 def test_AxonMapModel(engine):
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
@@ -356,7 +351,7 @@ def test_deepcopy_AxonMapModel(build):
 @ pytest.mark.parametrize('eye', ('LE', 'RE'))
 @ pytest.mark.parametrize('loc_od', ((15.5, 1.5), (7.0, 3.0), (-2.0, -2.0)))
 @ pytest.mark.parametrize('sign', (-1.0, 1.0))
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython'))
 def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
     # With `rho` starting at 0, all axons should originate in the optic disc
     # center
@@ -411,7 +406,7 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign, engine):
         npt.assert_almost_equal(single_fiber[0], loc_od)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython'))
 def test_AxonMapModel_grow_axon_bundles(engine):
     for n_axons in [1, 2, 3, 5, 10]:
         model = AxonMapModel(xystep=2, engine=engine, n_axons=n_axons,
@@ -421,7 +416,7 @@ def test_AxonMapModel_grow_axon_bundles(engine):
         npt.assert_equal(len(bundles), n_axons)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython'))
 def test_AxonMapModel_find_closest_axon(engine):
     model = AxonMapModel(xystep=1, engine=engine, n_axons=5,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -453,7 +448,7 @@ def test_AxonMapModel_find_closest_axon(engine):
     npt.assert_equal(closest_idx, 0)
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython'))
 def test_AxonMapModel_calc_axon_sensitivity(engine):
     model = AxonMapModel(xystep=2, engine=engine, n_axons=10,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -463,32 +458,42 @@ def test_AxonMapModel_calc_axon_sensitivity(engine):
                              model.spatial.grid.ret.y.ravel()))
     bundles = model.spatial.grow_axon_bundles()
     axons = model.spatial.find_closest_axon(bundles)
-    # Need two separate contribs, one to get cut off axons from, and another
-    # to actually test against (with/without padding)
-    contrib = model.spatial.calc_axon_sensitivity(axons, pad=False)
-    pad = engine == 'jax'
-    axon_contrib = model.spatial.calc_axon_sensitivity(axons, pad=pad)
+    axon_contrib = model.spatial.calc_axon_sensitivity(axons)
 
     # Check lambda math:
-    max_axon_length = max([len(ax) for ax in contrib])
-    for ax, xy, model_ax in zip(contrib, xyret, axon_contrib):
-        axon = np.insert(ax, 0, list(xy) + [0], axis=0)
+    for model_ax, xy in zip(axon_contrib, xyret):
+        axon = np.insert(model_ax, 0, list(xy) + [0], axis=0)
         d2 = np.cumsum(np.sqrt(np.diff(axon[:, 0], axis=0) ** 2 +
                                np.diff(axon[:, 1], axis=0) ** 2))**2
         max_d2 = -2.0 * model.axlambda ** 2 * np.log(model.min_ax_sensitivity)
         idx_d2 = d2 < max_d2
         sensitivity = np.exp(-d2[idx_d2] / (2.0 * model.spatial.axlambda ** 2))
-        # Axons need to be padded for jax
-        if engine == 'jax':
-            s = np.zeros((max_axon_length))
-            s[:len(sensitivity)] = sensitivity
-            if len(sensitivity) > 0:
-                s[len(sensitivity):] = sensitivity[-1]
-            sensitivity = s.astype(np.float32)
         npt.assert_almost_equal(sensitivity, model_ax[:, 2])
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('pad', (True, False))
+def test_AxonMapModel_calc_axon_sensitivity_deprecated_pad(pad):
+    # 'pad' used to pad all axons to the length of the longest one for the
+    # (now removed) jax backend. It is still accepted, but ignored:
+    model = AxonMapModel(xystep=2, n_axons=10, xrange=(-20, 20),
+                         yrange=(-15, 15), axons_range=(-30, 30))
+    model.build()
+    axons = model.spatial.find_closest_axon(model.spatial.grow_axon_bundles())
+    with pytest.deprecated_call():
+        deprecated = model.spatial.calc_axon_sensitivity(axons, pad=pad)
+    # Always the unpadded list, even for pad=True:
+    expected = model.spatial.calc_axon_sensitivity(axons)
+    npt.assert_equal(isinstance(deprecated, list), True)
+    npt.assert_equal(len(deprecated), len(expected))
+    for ax_dep, ax_exp in zip(deprecated, expected):
+        npt.assert_almost_equal(ax_dep, ax_exp)
+    # Not passing it does not warn:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        model.spatial.calc_axon_sensitivity(axons)
+
+
+@ pytest.mark.parametrize('engine', ('serial', 'cython'))
 def test_AxonMapModel_calc_bundle_tangent(engine):
     model = AxonMapModel(xystep=5, engine=engine, n_axons=500,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -504,7 +509,7 @@ def test_AxonMapModel_calc_bundle_tangent(engine):
         model.spatial.calc_bundle_tangent(0, [1000])
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython'))
 def test_AxonMapModel_calc_bundle_tangent_fast(engine):
     model = AxonMapModel(xystep=5, engine=engine, n_axons=500,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -520,7 +525,7 @@ def test_AxonMapModel_calc_bundle_tangent_fast(engine):
 
 
 
-@ pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@ pytest.mark.parametrize('engine', ('serial', 'cython'))
 def test_AxonMapModel_predict_percept(engine):
     model = AxonMapModel(xystep=0.55, axlambda=100, rho=100,
                          thresh_percept=0, engine=engine,
@@ -530,11 +535,6 @@ def test_AxonMapModel_predict_percept(engine):
     # Single-electrode stim:
     img_stim = np.zeros(60)
     img_stim[47] = 1
-    # Axon map jax predict_percept not implemented yet
-    if engine == 'jax':
-        with pytest.raises(NotImplementedError):
-            percept = model.predict_percept(ArgusII(stim=img_stim))
-        return
     percept = model.predict_percept(ArgusII(stim=img_stim))
     # Single bright pixel, rest of arc is less bright:
     npt.assert_equal(np.sum(percept.data > 0.8), 1)

@@ -1,4 +1,5 @@
 import copy
+import warnings
 
 import numpy as np
 import pytest
@@ -13,11 +14,6 @@ from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
 from pulse2percept.utils.base import FreezeError
 
-try:
-    import jax
-    has_jax = True
-except ImportError:
-    has_jax = False
 
 def test_deepcopy_DefaultBrightModel():
     original = DefaultBrightModel()
@@ -166,11 +162,26 @@ def test_effects_models():
     npt.assert_equal(hasattr(model, 'a9'), True)
 
 
-@pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
-def test_biphasicAxonMapSpatial(engine):
-    if engine == 'jax' and not has_jax:
-        pytest.skip("Jax not installed")
+@pytest.mark.parametrize('cls, arg', [(DefaultSizeModel, 200),
+                                      (DefaultStreakModel, 200)])
+def test_effects_models_deprecated_engine(cls, arg):
+    # 'engine' used to switch between the numpy and the (now removed) jax
+    # backend. It is still accepted, but ignored:
+    with pytest.deprecated_call():
+        deprecated = cls(arg, engine='serial')
+    # Passing it changes nothing about the model's output:
+    npt.assert_almost_equal(deprecated(20, 1, 0.45), cls(arg)(20, 1, 0.45))
+    # Even a value that used to select a different backend is a no-op:
+    with pytest.deprecated_call():
+        cls(arg, engine='jax')
+    # Not passing it does not warn:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        cls(arg)
 
+
+@pytest.mark.parametrize('engine', ('serial', 'cython'))
+def test_biphasicAxonMapSpatial(engine):
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
         BiphasicAxonMapSpatial(axlambda=9).build()
@@ -243,65 +254,8 @@ def test_biphasicAxonMapSpatial(engine):
     npt.assert_equal(np.sum(percept.data > 0.5691), 4)
 
 
-def test_predict_spatial_jax():
-    # ensure jax predict spatial is equal to normal
-    if not has_jax:
-        pytest.skip("Jax not installed")
-    model1 = BiphasicAxonMapModel(engine='jax', xystep=2)
-    model2 = BiphasicAxonMapModel(engine='cython', xystep=2)
-    model1.build()
-    model2.build()
-    implant = ArgusII()
-    implant.stim = {'A5' : BiphasicPulseTrain(25, 4, 0.45),
-                    'C7' : BiphasicPulseTrain(50, 2.5, 0.75)}
-    p1 = model1.predict_percept(implant)
-    p2 = model2.predict_percept(implant)
-    npt.assert_almost_equal(p1.data, p2.data, decimal=4)
-
-    # test changing model parameters, make sure jax is clearing cache on build
-    model1.axlambda = 800
-    model2.axlambda = 800
-    model1.rho = 50
-    model2.rho = 50
-    model1.build()
-    model2.build()
-    p1 = model1.predict_percept(implant)
-    p2 = model2.predict_percept(implant)
-    npt.assert_almost_equal(p1.data, p2.data, decimal=4)
-
-@pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
-def test_predict_batched(engine):
-    if not has_jax:
-        pytest.skip("Jax not installed")
-
-    # Allows mix of valid Stimulus types
-    stims = [{'A5' : BiphasicPulseTrain(25, 4, 0.45),
-              'C7' : BiphasicPulseTrain(50, 2.5, 0.75)},
-             {'B4' : BiphasicPulseTrain(3, 1, 0.32)},
-             Stimulus({'F3' : BiphasicPulseTrain(12, 3, 1.2)})]
-    implant = ArgusII()
-    model = BiphasicAxonMapModel(engine=engine, xystep=2)
-    model.build()
-    # Import error if we dont have jax
-    if engine != 'jax':
-        with pytest.raises(ImportError):
-            model.predict_percept_batched(implant, stims)
-        return
-    
-    percepts_batched = model.predict_percept_batched(implant, stims)
-    percepts_serial = []
-    for stim in stims:
-        implant.stim = stim
-        percepts_serial.append(model.predict_percept(implant))
-
-    npt.assert_equal(len(percepts_serial), len(percepts_batched))
-    for p1, p2 in zip(percepts_batched, percepts_serial):
-        npt.assert_almost_equal(p1.data, p2.data)
-
-@pytest.mark.parametrize('engine', ('serial', 'cython', 'jax'))
+@pytest.mark.parametrize('engine', ('serial', 'cython'))
 def test_biphasicAxonMapModel(engine):
-    if engine == 'jax' and not has_jax:
-        pytest.skip("Jax not installed")
     set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
