@@ -1,0 +1,190 @@
+name: Colab
+
+# Colab is where most people first run pulse2percept, and it is the one
+# environment we do not control: it arrives with numpy, scipy, pandas,
+# TensorFlow, JAX and PyTorch already installed, and `!pip install
+# pulse2percept` has to slot into that without disturbing any of it.
+#
+# Rather than approximate that with a pinned requirements file that nobody
+# will remember to refresh, this runs against the runtime image Google
+# publishes for the "connect to a local runtime" flow. It is public, needs no
+# authentication, costs nothing beyond a normal ubuntu runner, and Google
+# rebuilds it as Colab changes -- so the environment under test tracks Colab
+# on its own.
+
+on:
+  push:
+    branches: [ master, torch ]
+  pull_request:
+    branches: [ master, torch ]
+  schedule:
+    # Daily drift check: catches upstream releases breaking us even when
+    # nothing here changed.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: colab-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  COLAB_IMAGE: us-docker.pkg.dev/colab-images/public/cpu-runtime:latest
+
+jobs:
+  colab:
+    name: Colab runtime (${{ matrix.source }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # On a PR, test the code under review. On a schedule, also test the
+        # released package, since `!pip install pulse2percept` is what most
+        # notebooks actually run and it can break without anyone pushing.
+        source: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && fromJSON('["ref","pypi"]') || fromJSON('["ref"]') }}
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Free up disk space
+        # The image is ~6.8 GB compressed and ~15 GB unpacked; an
+        # ubuntu-latest runner starts with roughly 14 GB free. Dropping the
+        # preinstalled toolchains we never use buys about 20 GB more, which
+        # is comfortably enough. Done inline rather than with a third-party
+        # action to avoid widening the supply chain this repo scans.
+        run: |
+          set -euo pipefail
+          echo "Before:"
+          df -h /
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          echo "After:"
+          df -h /
+
+      - name: Work out what to install
+        id: spec
+        env:
+          SOURCE: ${{ matrix.source }}
+          # On a pull request these point at the PR head; everywhere else
+          # (push, schedule) they fall back to this repo at the current sha,
+          # which on a scheduled run is master.
+          REPO: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$SOURCE" = "pypi" ]; then
+            spec="pulse2percept"
+          else
+            spec="git+https://github.com/${REPO}@${SHA}"
+          fi
+          echo "spec=${spec}" >> "$GITHUB_OUTPUT"
+          echo "Will install: ${spec}"
+
+      - name: Pull the Colab runtime image
+        run: |
+          set -euo pipefail
+          docker pull "$COLAB_IMAGE"
+          # Record which Colab build this was, so a failure months from now is
+          # still traceable to a specific runtime.
+          docker run --rm "$COLAB_IMAGE" \
+            bash -lc 'echo "$COLAB_RELEASE_TAG"; python3 --version'
+
+      - name: Install into Colab and check what moved
+        # The repo is mounted read-only somewhere that is not the working
+        # directory: the scripts need it to find the .pyx files, but it must
+        # never end up shadowing the installed package on sys.path. Working
+        # directory is /tmp, which is writable (importing pulse2percept drops
+        # a debug.log next to wherever you are).
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/repo:ro" \
+            -w /tmp \
+            "$COLAB_IMAGE" \
+            python3 /repo/.github/scripts/colab_smoke.py \
+              "${{ steps.spec.outputs.spec }}" \
+              --source-root /repo \
+              ${{ matrix.source == 'pypi' && '--require-wheel' || '' }}
+
+  numpy-abi:
+    # An extension compiled against numpy 1.x cannot be imported under numpy
+    # 2.x -- users hit "A module that was compiled using NumPy 1.x cannot be
+    # run in NumPy 2.x" and the install looks broken. Building against 2.x is
+    # what makes a wheel work on both, so every wheel we ship must import
+    # under either. The regular test matrix pins 3.10/3.11 to numpy 1.x and so
+    # never exercises this.
+    name: NumPy ABI py${{ matrix.py }} on ${{ matrix.numpy }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        py: [ "3.10", "3.11", "3.12", "3.13" ]
+        numpy: [ "numpy>=2,<3", "numpy==1.26.4" ]
+        exclude:
+          # numpy 1.26 has no 3.13 wheels.
+          - py: "3.13"
+            numpy: "numpy==1.26.4"
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up Python ${{ matrix.py }}
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: ${{ matrix.py }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
+
+      - name: Build a wheel
+        # Build isolation on, so this uses the build requirements declared in
+        # pyproject.toml -- the thing under test.
+        env:
+          CFLAGS: -fopenmp
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir dist
+          ls -l dist
+
+      - name: Install the wheel, then force ${{ matrix.numpy }}
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/python" -m pip install --upgrade pip
+          "$RUNNER_TEMP/venv/bin/python" -m pip install dist/*.whl
+          # Install the wheel first and move numpy afterwards, so this tests
+          # the ABI rather than whatever the resolver happened to prefer.
+          "$RUNNER_TEMP/venv/bin/python" -m pip install "${{ matrix.numpy }}"
+          "$RUNNER_TEMP/venv/bin/python" -c "import numpy; print('numpy', numpy.__version__)"
+
+      - name: Import against ${{ matrix.numpy }}
+        # Run from a directory that is not the checkout: from the repo root
+        # the source tree shadows the wheel and this would quietly test the
+        # wrong thing.
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" \
+            "$GITHUB_WORKSPACE/.github/scripts/check_install.py" \
+            --source-root "$GITHUB_WORKSPACE"

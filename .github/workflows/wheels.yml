@@ -89,7 +89,7 @@ jobs:
               echo "delocate cannot vendor it; pick an OpenMP build with an older minimum."
               exit 1
             fi
-            python -m pip install --upgrade pip setuptools wheel cython delocate oldest-supported-numpy
+            python -m pip install --upgrade pip setuptools wheel cython delocate "numpy>=2.0"
           # NOTE: must stay a *folded* scalar (>-), i.e. a single line of
           # space-separated assignments. With a literal block (|),
           # cibuildwheel keeps only the first assignment and silently drops
@@ -110,13 +110,15 @@ jobs:
             delocate-listdeps --all --depending {wheel} &&
             delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}
 
-          # ---------- Linux: enable OpenMP; OSN picks a compatible NumPy ----------
+          # ---------- Linux: enable OpenMP ----------
+          # NumPy comes from the build requirements in pyproject.toml, which
+          # pin 2.x so the wheels import under both NumPy 1.x and 2.x.
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"
-          CIBW_BEFORE_BUILD_LINUX: "python -m pip install --upgrade pip setuptools wheel cython oldest-supported-numpy"
+          CIBW_BEFORE_BUILD_LINUX: "python -m pip install --upgrade pip setuptools wheel cython 'numpy>=2.0'"
 
-          # ---------- Windows: enable OpenMP; OSN picks a compatible NumPy ----------
+          # ---------- Windows: enable OpenMP ----------
           CIBW_ENVIRONMENT_WINDOWS: "CFLAGS='/openmp'"
-          CIBW_BEFORE_BUILD_WINDOWS: "python -m pip install --upgrade pip setuptools wheel cython oldest-supported-numpy"
+          CIBW_BEFORE_BUILD_WINDOWS: "python -m pip install --upgrade pip setuptools wheel cython \"numpy>=2.0\""
 
           # ---------- Python versions / skips ----------
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"

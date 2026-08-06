@@ -3,8 +3,18 @@ requires = [
   "setuptools>=64",
   "wheel",
   "Cython>=3.0.8",
-  'oldest-supported-numpy==2023.12.21; python_version < "3.12"',
-  'numpy>=2.0; python_version >= "3.12"',
+  # Build against NumPy 2.x on every supported Python, not just 3.12+.
+  #
+  # An extension compiled against 2.x imports fine under both 1.x (>=1.19)
+  # and 2.x, because building against 2.x targets the older C API by default.
+  # One compiled against 1.x does *not* work under 2.x -- it raises "A module
+  # that was compiled using NumPy 1.x cannot be run in NumPy 2.x". Since the
+  # runtime requirement below allows numpy>=1.21,<3, the 3.10/3.11 wheels
+  # built against oldest-supported-numpy broke for anyone who had numpy 2
+  # installed, which is now the default nearly everywhere.
+  #
+  # oldest-supported-numpy is deprecated and documents this as the migration.
+  "numpy>=2.0",
 ]
 build-backend = "setuptools.build_meta"
 
