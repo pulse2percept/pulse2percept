@@ -1,6 +1,6 @@
 # doc/requirements.txt
 numpy<2,>=1.26
-Cython>=3.0.8
+Cython>=3.2.9
 sphinx==8.2.3
 sphinx_rtd_theme
 sphinx_gallery==0.21.0
