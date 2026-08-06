@@ -11,6 +11,7 @@ from matplotlib.patches import Ellipse
 
 from ..utils.constants import ZORDER
 from ..topography import Watson2014Map
+from ..utils import deprecate_parameter
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
@@ -517,6 +518,10 @@ class AxonMapSpatial(SpatialModel):
             return closest_axon, closest_idx
         return closest_axon
 
+    @deprecate_parameter('pad', deprecated_version='0.9.1',
+                         removed_version='0.10.0',
+                         addendum="An unpadded list of Nx3 arrays is always "
+                                  "returned, even for pad=True.")
     def calc_axon_sensitivity(self, bundles, pad=None):
         """Calculate the sensitivity of each axon segment to electrical current
 
@@ -545,9 +550,9 @@ class AxonMapSpatial(SpatialModel):
             the x,y coordinates of each axon segment (retinal coords, microns).
             Note that each bundle will most likely have a different N
         pad : bool, optional
-            .. deprecated:: 0.10
+            .. deprecated:: 0.9.1
 
-                Accepted but ignored, and will be removed in version 0.12.
+                Accepted but ignored, and will be removed in version 0.10.0.
                 ``pad=True`` used to pad all axons to the length of the longest
                 one and return a single (n_points, axon_length, 3) array, which
                 only the (now removed) jax backend consumed. This method now
@@ -565,12 +570,6 @@ class AxonMapSpatial(SpatialModel):
             falls below ``min_ax_sensitivity`` are trimmed.
 
         """
-        if pad is not None:
-            warnings.warn("The 'pad' parameter of calc_axon_sensitivity is "
-                          "deprecated since version 0.10, and will be removed "
-                          "in version 0.12. It is ignored: an unpadded list of "
-                          "Nx3 arrays is always returned, even for pad=True.",
-                          DeprecationWarning, stacklevel=2)
         xyret = np.column_stack((self.grid.ret.x.ravel(),
                                  self.grid.ret.y.ravel()))
         # Only include axon segments that are < `max_d2` from the soma. These

@@ -1,9 +1,26 @@
-""":py:class:`~pulse2percept.utils.deprecated`, 
+""":py:class:`~pulse2percept.utils.deprecated`,
+   :py:class:`~pulse2percept.utils.deprecate_parameter`,
    :py:class:`~pulse2percept.utils.is_deprecated`"""
 
 import sys
+import inspect
 import warnings
 import functools
+
+
+def _version_clause(deprecated_version=None, removed_version=None):
+    """Build the " since version X, and will be removed in version Y" clause
+
+    Shared by :py:class:`deprecated` and :py:class:`deprecate_parameter` so
+    that all deprecation messages are worded the same way.
+    """
+    dep_msg = ""
+    if deprecated_version is not None:
+        dep_msg = f" since version {deprecated_version}"
+    rmv_msg = ""
+    if removed_version is not None:
+        rmv_msg = f", and will be removed in version {removed_version}"
+    return dep_msg + rmv_msg
 
 
 class deprecated:
@@ -53,13 +70,8 @@ class deprecated:
         alt_msg = ""
         if self.alt_func is not None:
             alt_msg = f"Use ``{self.alt_func}`` instead."
-        dep_msg = ""
-        if self.deprecated_version is not None:
-            dep_msg = f" since version {self.deprecated_version}"
-        rmv_msg = ""
-        if self.removed_version is not None:
-            rmv_msg = f", and will be removed in version {self.removed_version}"
-        return msg + dep_msg + rmv_msg + ". " + alt_msg
+        clause = _version_clause(self.deprecated_version, self.removed_version)
+        return msg + clause + ". " + alt_msg
 
     def _update_doc(self, old_doc, msg=None):
         """Updates the docstring"""
@@ -126,6 +138,108 @@ class deprecated:
         wrapped.__doc__ = self._update_doc(wrapped.__doc__, msg)
 
         return wrapped
+
+class deprecate_parameter:
+    """Decorator to mark a single function or method parameter as deprecated
+
+    The decorated callable keeps *accepting* the parameter, so that existing
+    code does not break, but the value is ignored. A ``DeprecationWarning`` is
+    raised whenever the parameter is passed explicitly, whether by keyword or
+    by position.
+
+    Use this when a parameter is going away but the callable itself stays. To
+    deprecate an entire function, class, or property, use
+    :py:class:`~pulse2percept.utils.deprecated` instead.
+
+    .. versionadded:: 0.9.1
+
+    .. note::
+
+        This decorator only produces the *warning*. Document the parameter
+        itself by adding a ``.. deprecated::`` directive to its entry in the
+        docstring's ``Parameters`` section, which is where numpydoc expects it.
+
+    .. seealso::
+
+        Modeled on matplotlib's ``matplotlib._api.delete_parameter``.
+
+    Parameters
+    ----------
+    name : str
+        Name of the deprecated parameter. Must appear in the signature of the
+        decorated callable, otherwise a ``ValueError`` is raised at decoration
+        time (which catches the parameter being renamed or dropped).
+    deprecated_version : float or str
+        The package version in which the parameter was first marked as
+        deprecated.
+    removed_version : float or str
+        The package version in which the parameter will be removed.
+    addendum : str, optional
+        Text appended to the warning, e.g. to spell out what the parameter
+        used to do or how the behavior differs now that it is ignored.
+
+    Examples
+    --------
+    >>> from pulse2percept.utils import deprecate_parameter
+    >>> @deprecate_parameter('engine', deprecated_version='0.9.1',
+    ...                      removed_version='0.10.0')
+    ... def predict(data, engine=None):
+    ...     return data
+    >>> predict([1, 2])  # no warning
+    [1, 2]
+
+    """
+
+    def __init__(self, name, deprecated_version=None, removed_version=None,
+                 addendum=None):
+        self.name = name
+        self.deprecated_version = deprecated_version
+        self.removed_version = removed_version
+        self.addendum = addendum
+
+    def _get_message(self, obj_name):
+        """Builds the message string"""
+        msg = (f"The '{self.name}' parameter of {obj_name} is deprecated"
+               f"{_version_clause(self.deprecated_version, self.removed_version)}"
+               f". It is ignored.")
+        if self.addendum is not None:
+            msg = f"{msg} {self.addendum}"
+        return msg
+
+    def _get_obj_name(self, func):
+        """Names the decorated callable the way a user would refer to it"""
+        obj_name = getattr(func, '__qualname__', None) or func.__name__
+        # A decorated constructor is really about the class, so report
+        # `MyClass`, not `MyClass.__init__`:
+        if obj_name.endswith('.__init__'):
+            obj_name = obj_name[:-len('.__init__')]
+        return obj_name
+
+    def __call__(self, func):
+        signature = inspect.signature(func)
+        obj_name = self._get_obj_name(func)
+        if self.name not in signature.parameters:
+            raise ValueError(f"'{self.name}' is not a parameter of "
+                             f"{obj_name}. Its signature is {signature}.")
+
+        @functools.wraps(func)
+        def wrapped(*args, **kwargs):
+            try:
+                passed = self.name in signature.bind(*args, **kwargs).arguments
+            except TypeError:
+                # The call does not match the signature. Don't preempt the
+                # error the wrapped callable is about to raise itself:
+                passed = False
+            if passed:
+                # Build the message here rather than capturing it in the
+                # closure: `is_deprecated` looks for the word "deprecated" in
+                # closure cells, and the callable itself is *not* deprecated.
+                warnings.warn(self._get_message(obj_name),
+                              category=DeprecationWarning, stacklevel=2)
+            return func(*args, **kwargs)
+
+        return wrapped
+
 
 def is_deprecated(func):
     """Helper to check if ``func`` is wrapped by the deprecated decorator"""
