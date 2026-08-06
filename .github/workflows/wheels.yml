@@ -32,7 +32,7 @@ jobs:
           sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@7c619efba910c04005a835b110b057fc28fd6e93 # v3.2.0
+        uses: pypa/cibuildwheel@4726cd35bb13f7bde50cf2761f2499ac7b3aa32c # v4.1.1
         env:
           # ---------- macOS: OpenMP runtime independent of the runner image ----------
           # Do NOT use Homebrew's libomp. Homebrew bottles are built for the
