@@ -192,6 +192,10 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     df['img_shape'] = df.apply(lambda x: (x['img_shape_x'], x['img_shape_y']),
                                axis=1)
     df = df.drop(columns=['img_shape_x', 'img_shape_y'])
+    # 'xrange' and 'yrange' are rebuilt as tuples from ``subject_params``
+    # below, so the raw min/max columns they arrive in would just be
+    # undocumented duplicates of what ends up in those two columns:
+    df = df.drop(columns=['xrange_x', 'xrange_y', 'yrange_x', 'yrange_y'])
 
     # Verify integrity of the dataset:
     if len(df) != 400:

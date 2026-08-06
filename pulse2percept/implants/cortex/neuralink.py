@@ -302,7 +302,10 @@ class Neuralink(EnsembleImplant):
         intra_points = np.array(vfmap.from_dva()[region](xlocs, ylocs, surface='midgray'))
         surface_points= surface_points[:, np.isnan(surface_points).sum(axis=0) == 0]
         intra_points = intra_points[:, np.isnan(intra_points).sum(axis=0) == 0]
-        if len(surface_points) != len(intra_points):
+        # Both surfaces must have dropped the same points, or else the two
+        # arrays no longer line up (len() would compare the number of
+        # coordinates, which is always 3):
+        if surface_points.shape[1] != intra_points.shape[1]:
             raise ValueError('Unable to create implant, try using jitter_boundary=True')
 
         threads = {}
