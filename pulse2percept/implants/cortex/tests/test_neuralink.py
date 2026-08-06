@@ -465,14 +465,21 @@ def test_Neuralink_from_neuropythy_grid_args():
                             points)
 
 
-def test_Neuralink_from_neuropythy_region():
+@pytest.mark.parametrize('region', ['v1', 'v2', 'v3'])
+def test_Neuralink_from_neuropythy_region(region):
+    # Each region is a differently offset copy of the same map, so the threads
+    # land somewhere else depending on which one is asked for:
     locs = np.array([[1., 1.], [-1., 2.]])
     nlink = Neuralink.from_neuropythy(
-        StubNeuropythyMap(regions=['v1', 'v2', 'v3']), locs=locs, region='v3')
-    points, _ = stub_map_expected(locs, region='v3')
+        StubNeuropythyMap(regions=['v1', 'v2', 'v3']), locs=locs, region=region)
+    points, _ = stub_map_expected(locs, region=region)
     npt.assert_almost_equal([[t.x, t.y, t.z] for t in nlink.implants.values()],
                             points)
-    # An unmapped region is not silently ignored:
+
+
+def test_Neuralink_from_neuropythy_unmapped_region():
+    # A region the map was not built for is not silently ignored:
+    locs = np.array([[1., 1.], [-1., 2.]])
     with pytest.raises(KeyError):
         Neuralink.from_neuropythy(StubNeuropythyMap(), locs=locs, region='v2')
 
