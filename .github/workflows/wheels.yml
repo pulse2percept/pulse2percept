@@ -34,23 +34,81 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@7c619efba910c04005a835b110b057fc28fd6e93 # v3.2.0
         env:
-          # ---------- macOS: install libomp; compile & repair with macOS 15 target ----------
+          # ---------- macOS: OpenMP runtime independent of the runner image ----------
+          # Do NOT use Homebrew's libomp. Homebrew bottles are built for the
+          # runner's own macOS version, so the dylib's minimum-OS tracks
+          # whatever image GitHub happens to ship (`macos-latest` moved to the
+          # macOS 26 Apple-silicon image in June 2026). delocate then refuses
+          # to vendor it into a wheel tagged for an older macOS -- correctly,
+          # since that wheel would crash for anyone on an older system.
+          #
+          # conda-forge's llvm-openmp is built against an old deployment
+          # target, so it can be bundled into wheels that still install on
+          # macOS 11+. Both arch slices are merged into one universal binary
+          # so a single OMP_PREFIX serves the x86_64 and arm64 builds.
           CIBW_BEFORE_ALL_MACOS: |
-            brew update
-            brew install libomp || brew reinstall libomp
+            set -eux
+            curl -Ls https://micro.mamba.pm/api/micromamba/osx-arm64/latest \
+              | tar -xvj bin/micromamba
+            for arch in osx-arm64 osx-64; do
+              ./bin/micromamba create -y -p "/tmp/omp-${arch}" \
+                --platform "${arch}" -c conda-forge llvm-openmp
+            done
+            mkdir -p /tmp/omp/lib /tmp/omp/include
+            cp -R /tmp/omp-osx-arm64/include/. /tmp/omp/include/
+            lipo -create /tmp/omp-osx-arm64/lib/libomp.dylib \
+                         /tmp/omp-osx-64/lib/libomp.dylib \
+                 -output /tmp/omp/lib/libomp.dylib
+            # Give libomp an absolute install name. The extension records
+            # whatever LC_ID_DYLIB says, and conda-forge ships `@rpath/...`,
+            # which delocate cannot resolve because setup.py links without an
+            # -rpath. An absolute path is what Homebrew's libomp provides and
+            # what delocate expects; it is rewritten to @loader_path when the
+            # dylib is vendored into the wheel.
+            install_name_tool -id /tmp/omp/lib/libomp.dylib /tmp/omp/lib/libomp.dylib
+            lipo -info /tmp/omp/lib/libomp.dylib
+            otool -D /tmp/omp/lib/libomp.dylib
           CIBW_BEFORE_BUILD_MACOS: |
-            echo "libomp prefix: $(brew --prefix libomp)"
-            ls -l "$(brew --prefix libomp)/include/omp.h" || (echo "omp.h missing" && exit 1)
+            set -eux
+            # CIBW_ENVIRONMENT only keeps the *first* assignment when the
+            # value spans multiple lines, which silently dropped the
+            # deployment target for a long time. Fail with a clear message if
+            # that ever regresses:
+            : "${OMP_PREFIX:?not set - check CIBW_ENVIRONMENT_MACOS is one line}"
+            : "${MACOSX_DEPLOYMENT_TARGET:?not set - check CIBW_ENVIRONMENT_MACOS is one line}"
+            ls -l "${OMP_PREFIX}/include/omp.h"
+            # Fail loudly here rather than deep inside delocate if the OpenMP
+            # runtime ever requires a newer macOS than the wheels target:
+            MINOS=$(otool -l "${OMP_PREFIX}/lib/libomp.dylib" \
+                    | awk '/LC_BUILD_VERSION/{f=1} f && /minos/{print $2; exit}')
+            echo "libomp minos='${MINOS}' deployment target=${MACOSX_DEPLOYMENT_TARGET}"
+            if [ -z "${MINOS}" ]; then
+              echo "note: no LC_BUILD_VERSION found, skipping the minimum-OS check"
+            elif [ "${MINOS%%.*}" -gt "${MACOSX_DEPLOYMENT_TARGET%%.*}" ]; then
+              echo "ERROR: libomp needs macOS ${MINOS}, wheels target ${MACOSX_DEPLOYMENT_TARGET}."
+              echo "delocate cannot vendor it; pick an OpenMP build with an older minimum."
+              exit 1
+            fi
             python -m pip install --upgrade pip setuptools wheel cython delocate oldest-supported-numpy
-          CIBW_ENVIRONMENT_MACOS: |
-            OMP_PREFIX="$(brew --prefix libomp)"
-            MACOSX_DEPLOYMENT_TARGET=15.0
-            CFLAGS="-std=c99 -O3 -Xpreprocessor -fopenmp -I${OMP_PREFIX}/include"
-            CPPFLAGS="-I${OMP_PREFIX}/include"
-            LDFLAGS="-L${OMP_PREFIX}/lib -lomp"
-          CIBW_REPAIR_WHEEL_COMMAND_MACOS: >
-            MACOSX_DEPLOYMENT_TARGET=15.0 delocate-listdeps {wheel} &&
-            MACOSX_DEPLOYMENT_TARGET=15.0 delocate-wheel -w {dest_dir} {wheel}
+          # NOTE: must stay a *folded* scalar (>-), i.e. a single line of
+          # space-separated assignments. With a literal block (|),
+          # cibuildwheel keeps only the first assignment and silently drops
+          # the rest -- which is how the deployment target below went missing
+          # for so long. setup.py derives the OpenMP compile/link flags from
+          # OMP_PREFIX, so nothing else needs setting here.
+          #
+          # A fixed target for both arches, so the ABI floor is a decision we
+          # make rather than a side effect of the runner image. macOS 11 is
+          # the oldest release Apple silicon supports.
+          CIBW_ENVIRONMENT_MACOS: >-
+            OMP_PREFIX=/tmp/omp
+            MACOSX_DEPLOYMENT_TARGET=11.0
+          # Same as cibuildwheel's default repair, but prints the dependency
+          # graph first: when delocate fails, cibuildwheel reports only the
+          # exit code, and `listdeps` shows which library went unresolved.
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: >-
+            delocate-listdeps --all --depending {wheel} &&
+            delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}
 
           # ---------- Linux: enable OpenMP; OSN picks a compatible NumPy ----------
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"

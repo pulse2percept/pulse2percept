@@ -74,3 +74,49 @@ def test_Neuralink():
     
 
 
+
+
+def _ax3d():
+    fig = plt.figure()
+    return fig.add_subplot(111, projection='3d')
+
+
+@pytest.mark.parametrize('make_obj', [
+    pytest.param(lambda: EllipsoidElectrode(0, 1, 2, 3, 4, 5, name='A001'),
+                 id='EllipsoidElectrode'),
+    pytest.param(lambda: LinearEdgeThread(0, 0, 0), id='LinearEdgeThread'),
+    pytest.param(lambda: Neuralink([LinearEdgeThread(0, 0, 0),
+                                    LinearEdgeThread(100, 0, 0)]),
+                 id='Neuralink'),
+])
+def test_plot3D(make_obj):
+    obj = make_obj()
+
+    # Plots onto a given 3D axis:
+    plt.close('all')
+    ax = _ax3d()
+    npt.assert_equal(obj.plot3D(ax=ax) is not None, True)
+
+    # Creates its own 3D axis when none is given:
+    plt.close('all')
+    npt.assert_equal(obj.plot3D() is not None, True)
+
+    # ... and honors `figsize` when it does:
+    plt.close('all')
+    ax = obj.plot3D(figsize=(8, 6))
+    npt.assert_almost_equal(ax.figure.get_size_inches(), (8, 6))
+
+    # A 2D axis is rejected:
+    plt.close('all')
+    _, ax2d = plt.subplots()
+    with pytest.raises(ValueError):
+        obj.plot3D(ax=ax2d)
+    plt.close('all')
+
+
+def test_Neuralink_from_neuropythy_requires_neuropythy_map():
+    # The vfmap must be a NeuropythyMap; this guard runs before any dataset
+    # is touched, so it is testable without neuropythy installed:
+    from pulse2percept.topography import Watson2014Map
+    with pytest.raises(TypeError):
+        Neuralink.from_neuropythy(Watson2014Map())

@@ -6,13 +6,10 @@ coverage:
       default:
         target: auto
         threshold: 5.0
-    ignore:
-      - "pulse2percept/datasets/tests/**/*"
-      - "pulse2percept/implants/tests/**/*"
-      - "pulse2percept/implants/cortex/tests/**/*"
-      - "pulse2percept/models/tests/**/*"
-      - "pulse2percept/models/cortex/tests/**/*"
-      - "pulse2percept/percepts/tests/**/*"
-      - "pulse2percept/stimuli/tests/**/*"
-      - "pulse2percept/utils/tests/**/*"
-      - "pulse2percept/viz/tests/**/*"
+
+# `ignore` is a top-level key: nested under `coverage.status` it is silently
+# dropped, which is how test modules ended up in the report. One glob covers
+# every tests/ directory, including ones added later.
+ignore:
+  - "pulse2percept/**/tests/**/*"
+  - "**/conftest.py"

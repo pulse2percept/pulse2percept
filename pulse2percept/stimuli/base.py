@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 import operator as ops
 from math import isclose
+from scipy.integrate import trapezoid
 import numpy as np
 np.set_printoptions(precision=2, threshold=5, edgeitems=2)
 
@@ -912,7 +913,7 @@ class Stimulus(PrettyPrint):
         """
         if self.time is None:
             return np.allclose(self.data, 0, atol=MIN_AMP)
-        return np.allclose(np.trapz(self.data, x=self.time), 0, atol=MIN_AMP)
+        return np.allclose(trapezoid(self.data, x=self.time), 0, atol=MIN_AMP)
 
     @property
     def duration(self):

@@ -9,12 +9,58 @@ from pulse2percept.topography import NeuropythyMap
 import time
 import os
 
-def _is_neuropythy_not_available():
+def load_fsaverage_or_skip():
+    """Load the Neuropythy 'fsaverage' subject, or skip the calling test.
+
+    Loading a subject may download the Benson & Winawer (2018) dataset, which
+    can fail for any number of reasons outside our control (neuropythy not
+    installed, no network, moved download endpoints, no disk space, ...). All
+    of them should skip the test rather than error it out.
+    """
     try:
-        NeuropythyMap('fsaverage')
-        return False
-    except ValueError:
-        return True
+        return NeuropythyMap('fsaverage')
+    except Exception as err:
+        pytest.skip(f"Could not load the Neuropythy 'fsaverage' subject "
+                    f"({type(err).__name__}: {err}). Download the Benson & "
+                    f"Winawer 2018 dataset to run this test.")
+
+
+@pytest.fixture(scope='session')
+def neuropythy_available():
+    """Skip the test unless the 'fsaverage' subject can be loaded.
+
+    This is a fixture rather than a ``skipif`` condition on purpose:
+    conditions are evaluated at collection time, so a ``skipif`` would hit the
+    network on every test run, including runs where these tests are all
+    skipped anyway.
+    """
+    return load_fsaverage_or_skip()
+
+
+def test_load_fsaverage_or_skip_swallows_any_error():
+    """Any failure to load the subject must skip, not error out.
+
+    This runs without neuropythy installed and without touching the network,
+    so it guards the fixture that gates every other test in this module.
+    """
+    import pulse2percept.topography.tests.test_neuropythy as mod
+
+    for err in (ImportError('no neuropythy'), ValueError('no such subject'),
+                OSError('network is down'), RuntimeError('something else')):
+        def boom(*args, _err=err, **kwargs):
+            raise _err
+
+        orig = mod.NeuropythyMap
+        mod.NeuropythyMap = boom
+        try:
+            with pytest.raises(pytest.skip.Exception) as excinfo:
+                load_fsaverage_or_skip()
+            # The skip reason names the underlying error, so a future
+            # breakage is diagnosable straight from the CI log:
+            npt.assert_equal(type(err).__name__ in str(excinfo.value), True)
+        finally:
+            mod.NeuropythyMap = orig
+
 
 # use pytest.mark.slow because all neuropythy tests
 # take a long time to run. This way, they will be skipped
@@ -22,11 +68,7 @@ def _is_neuropythy_not_available():
 # done either from the root p2p directory or from this tests
 # folder.
 @pytest.mark.slow
-@pytest.mark.skipif(
-    _is_neuropythy_not_available(),
-    reason='Download Neuropythy Benson & Winawer dataset to run this test'
-)
-def test_subject_parsing():
+def test_subject_parsing(neuropythy_available):
     import neuropythy as ny
     # random subject shouldn't download 
     start = time.time()
@@ -59,11 +101,7 @@ def test_subject_parsing():
 @pytest.mark.slow()
 @pytest.mark.parametrize('regions', [['v1'], ['v1', 'v3'], ['v1', 'v2', 'v3']])
 @pytest.mark.parametrize('jitter_boundary', [True, False])
-@pytest.mark.skipif(
-    _is_neuropythy_not_available(),
-    reason='Download Neuropythy Benson & Winawer dataset to run this test'
-)
-def test_dva_to_cortex(regions, jitter_boundary):
+def test_dva_to_cortex(regions, jitter_boundary, neuropythy_available):
     nmap = NeuropythyMap('fsaverage', regions=regions, jitter_boundary=jitter_boundary)
     npt.assert_equal(nmap.predicted_retinotopy is not None, True)
     npt.assert_equal(nmap.region_meshes is not None, True)
@@ -144,11 +182,7 @@ def test_dva_to_cortex(regions, jitter_boundary):
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(
-    _is_neuropythy_not_available(),
-    reason='Download Neuropythy Benson & Winawer dataset to run this test'
-)
-def test_Neuralink_from_neuropythy():
+def test_Neuralink_from_neuropythy(neuropythy_available):
     nmap = NeuropythyMap('fsaverage', regions=['v1'], jitter_boundary=False)
     nlink = Neuralink.from_neuropythy(nmap, locs=np.array([[0, 0], [3, 3], [-2, -2]]))
     # 0, 0 should be nan so it wont make one
@@ -198,11 +232,7 @@ def test_Neuralink_from_neuropythy():
             
 
 @pytest.mark.slow
-@pytest.mark.skipif(
-    _is_neuropythy_not_available(),
-    reason='Download Neuropythy Benson & Winawer dataset to run this test'
-)
-def test_ndim_mixup():
+def test_ndim_mixup(neuropythy_available):
     nmap = NeuropythyMap('fsaverage')
     model = BeyelerScoreboard(vfmap=nmap)
     npt.assert_equal(2 in model.ndim, True)
@@ -212,11 +242,7 @@ def test_ndim_mixup():
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(
-    _is_neuropythy_not_available(),
-    reason='Download Neuropythy Benson & Winawer dataset to run this test'
-)
-def test_neuropythy_scoreboard():
+def test_neuropythy_scoreboard(neuropythy_available):
     nmap = NeuropythyMap('fsaverage')
     model = ScoreboardModel(rho=800, xystep=.25, vfmap=nmap).build()
     implant = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3))
@@ -248,11 +274,7 @@ def test_neuropythy_scoreboard():
 
 @pytest.mark.slow()
 @pytest.mark.parametrize('regions', [['v1'], ['v1', 'v3'], ['v1', 'v2', 'v3']])
-@pytest.mark.skipif(
-    _is_neuropythy_not_available(),
-    reason='Download Neuropythy Benson & Winawer dataset to run this test'
-)
-def test_cortex_to_dva(regions):
+def test_cortex_to_dva(regions, neuropythy_available):
     nmap = NeuropythyMap('fsaverage', regions=regions, jitter_boundary=True)
     npt.assert_equal(nmap.predicted_retinotopy is not None, True)
     npt.assert_equal(nmap.region_meshes is not None, True)

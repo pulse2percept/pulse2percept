@@ -102,7 +102,9 @@ class deprecated:
             def deprecated_attribute_(self):
                 ...
         """
-        msg = self._get_message(f"Property {prop.__name__}")
+        # Use the getter's name, not `prop.__name__`: properties only grew a
+        # `__name__` attribute in Python 3.13.
+        msg = self._get_message(f"Property {prop.fget.__name__}")
 
         @property
         def wrapped(*args, **kwargs):

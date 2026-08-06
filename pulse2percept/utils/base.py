@@ -8,6 +8,7 @@
 import numpy as np
 import sys
 import abc
+from scipy.integrate import trapezoid
 from scipy.special import factorial
 from collections import OrderedDict as ODict
 from functools import wraps
@@ -47,8 +48,6 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
 
     def __repr__(self):
         """Pretty print class as: ClassName(arg1=val1, arg2=val2)"""
-        # Shorten NumPy array output:
-        np.set_printoptions(precision=3, threshold=7, edgeitems=3)
         # Line width:
         lwidth = 60
         # Sort list of parameters alphabetically:
@@ -66,8 +65,12 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
                 sparam = key + '=\'' + str(val) + '\', '
             else:
                 if isinstance(val, np.ndarray):
-                    # Print NumPy arrays without line breaks:
-                    strobj = np.array2string(val).replace('\n', ',')
+                    # Print NumPy arrays without line breaks. Pass the
+                    # shortening options to `array2string` rather than calling
+                    # `np.set_printoptions`, which would change how arrays
+                    # print globally for anyone who reprs a p2p object.
+                    strobj = np.array2string(val, precision=3, threshold=7,
+                                             edgeitems=3).replace('\n', ',')
                     # If still too long, show shape:
                     if len(strobj) > lwidth - lindent:
                         strobj = f'<{str(val.shape)} np.ndarray>'
@@ -305,7 +308,7 @@ def gamma(n, tau, tsample, tol=0.01):
     y /= (tau * factorial(n - 1))
 
     # Normalize to unit area
-    y /= np.trapz(np.abs(y), dx=tsample)
+    y /= trapezoid(np.abs(y), dx=tsample)
 
     # Cut off tail where values are smaller than `tol`.
     # Make sure to start search on the right-hand side of the peak.

@@ -488,3 +488,146 @@ def test_Model_predict_percept_correctly_parallelizes():
 
     # we expect roughly a linear decrease in time as thread count increases
     npt.assert_almost_equal(actual=two_thread_temporal_predict_time, desired=one_thread_temporal_predict_time / 2, decimal=1e-5)
+
+
+class ScalingSpatialModel(ValidSpatialModel):
+    """Spatial model whose brightness equals the stimulus amplitude.
+
+    `find_threshold` bisects on amplitude, so a model with a known,
+    monotonic amplitude-to-brightness mapping gives a predictable threshold.
+    """
+
+    def _predict_spatial(self, earray, stim):
+        if not self.is_built:
+            raise NotBuiltError
+        n_time = 1 if stim.time is None else stim.time.size
+        out = np.zeros((self.grid.x.size, n_time), dtype=np.float32)
+        out[:] = np.abs(stim.data).max()
+        return out
+
+
+class ScalingTemporalModel(ValidTemporalModel):
+    """Temporal model whose brightness equals the stimulus amplitude."""
+
+    def _predict_temporal(self, stim, t_percept):
+        if not self.is_built:
+            raise NotBuiltError
+        out = np.zeros((stim.data.shape[0], len(t_percept)), dtype=np.float32)
+        out[:] = np.abs(stim.data).max()
+        return out
+
+
+def test_SpatialModel_find_threshold():
+    model = ScalingSpatialModel(xystep=5).build()
+    implant = ArgusI(stim={'A1': 1})
+
+    # Brightness equals amplitude, so the threshold is the target brightness:
+    npt.assert_almost_equal(model.find_threshold(implant, 20), 20, decimal=0)
+    npt.assert_almost_equal(model.find_threshold(implant, 55), 55, decimal=0)
+
+    # `implant` must be a ProsthesisSystem:
+    with pytest.raises(TypeError):
+        model.find_threshold(Stimulus({'A1': 1}), 20)
+
+
+def test_TemporalModel_find_threshold():
+    model = ScalingTemporalModel().build()
+    stim = Stimulus({'A1': 1})
+
+    npt.assert_almost_equal(model.find_threshold(stim, 20), 20, decimal=0)
+
+    # `stim` must be a Stimulus:
+    with pytest.raises(TypeError):
+        model.find_threshold(ArgusI(stim={'A1': 1}), 20)
+
+
+def test_Model_find_threshold():
+    model = Model(spatial=ScalingSpatialModel(xystep=5)).build()
+    implant = ArgusI(stim={'A1': 1})
+
+    npt.assert_almost_equal(model.find_threshold(implant, 20), 20, decimal=0)
+
+    # `implant` must be a ProsthesisSystem:
+    with pytest.raises(TypeError):
+        model.find_threshold(Stimulus({'A1': 1}), 20)
+
+
+def test_Model_deepcopy_memo():
+    model = Model(spatial=ValidSpatialModel())
+
+    # Called directly, without a memo dict:
+    copied = model.__deepcopy__()
+    npt.assert_equal(isinstance(copied, Model), True)
+    npt.assert_equal(id(copied) != id(model), True)
+
+    # An object already in the memo is returned as-is, not re-copied:
+    sentinel = 'already copied'
+    npt.assert_equal(model.__deepcopy__({id(model): sentinel}), sentinel)
+
+    # Shared references are copied once, not duplicated:
+    shared = ValidSpatialModel()
+    pair = copy.deepcopy({'a': shared, 'b': shared})
+    npt.assert_equal(pair['a'] is pair['b'], True)
+
+
+def test_SpatialModel_deepcopy_memo():
+    model = ValidSpatialModel()
+    npt.assert_equal(model.__deepcopy__() == model, True)
+    sentinel = 'already copied'
+    npt.assert_equal(model.__deepcopy__({id(model): sentinel}), sentinel)
+
+
+def test_Model_eq_and_hash():
+    model = Model(spatial=ValidSpatialModel())
+
+    # Identity short-circuit:
+    npt.assert_equal(model == model, True)
+    # Different type:
+    npt.assert_equal(model == 'not a model', False)
+    npt.assert_equal(model == ValidSpatialModel(), False)
+
+    # Hashable, so models can go in sets/dicts:
+    npt.assert_equal(isinstance(hash(model), int), True)
+    npt.assert_equal(len({model, model}), 1)
+
+
+def test_Model_pprint_params():
+    # Covers both the spatial and the temporal branch of _pprint_params:
+    both = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
+    params = both._pprint_params()
+    npt.assert_equal('spatial' in params, True)
+    npt.assert_equal('temporal' in params, True)
+    # Parameters of the sub-models are pulled up:
+    npt.assert_equal('xystep' in params, True)
+    npt.assert_equal('dt' in params, True)
+    npt.assert_equal(isinstance(str(both), str), True)
+
+
+def test_Model_deepcopy_preserves_submodels_and_params():
+    # A plain Model takes spatial/temporal as constructor arguments and does
+    # not recreate them, so they must survive the copy:
+    model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
+    copied = copy.deepcopy(model)
+    npt.assert_equal(isinstance(copied.spatial, ValidSpatialModel), True)
+    npt.assert_equal(isinstance(copied.temporal, ValidTemporalModel), True)
+    npt.assert_equal(copied == model, True)
+    # ... as real copies, not as shared references:
+    npt.assert_equal(id(copied.spatial) != id(model.spatial), True)
+    npt.assert_equal(id(copied.temporal) != id(model.temporal), True)
+
+    # Model parameters are forwarded to the sub-models, so they live in
+    # `spatial`/`temporal` rather than in `Model.__dict__`. Rebuilding the
+    # copy from the constructor alone would silently reset them to defaults:
+    model = Model(spatial=ValidSpatialModel(xystep=5, thresh_percept=0.5))
+    copied = copy.deepcopy(model)
+    npt.assert_almost_equal(copied.xystep, 5)
+    npt.assert_almost_equal(copied.thresh_percept, 0.5)
+    npt.assert_equal(copied == model, True)
+
+    # The copy is independent of the original:
+    copied.xystep = 3
+    npt.assert_almost_equal(model.xystep, 5)
+
+    # A built model stays built:
+    built = Model(spatial=ValidSpatialModel(xystep=5)).build()
+    npt.assert_equal(copy.deepcopy(built).is_built, True)

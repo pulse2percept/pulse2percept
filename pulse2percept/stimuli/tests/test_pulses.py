@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
+from scipy.integrate import trapezoid
 
 from pulse2percept.stimuli import (AsymmetricBiphasicPulse, BiphasicPulse,
                                    MonophasicPulse, Stimulus)
@@ -187,7 +188,7 @@ def test_AsymmetricBiphasicPulse(amp1, amp2, interphase_dur, delay_dur,
     npt.assert_almost_equal(pulse.time[-1], min_dur, decimal=3)
     npt.assert_equal(pulse.cathodic_first, cathodic_first)
     npt.assert_equal(pulse.is_charge_balanced,
-                     np.isclose(np.trapz(pulse.data, pulse.time)[0], 0))
+                     np.isclose(trapezoid(pulse.data, pulse.time)[0], 0))
 
     # Custom stim dur:
     pulse = AsymmetricBiphasicPulse(amp1, amp2, phase_dur1, phase_dur2,
@@ -222,7 +223,7 @@ def test_AsymmetricBiphasicPulse(amp1, amp2, interphase_dur, delay_dur,
     npt.assert_almost_equal(pulse.time[0], 0)
     npt.assert_almost_equal(pulse.time[-1], min_dur, decimal=3)
     npt.assert_equal(pulse.is_charge_balanced,
-                     np.isclose(np.trapz(pulse.data, pulse.time)[0], 0))
+                     np.isclose(trapezoid(pulse.data, pulse.time)[0], 0))
 
     # If both phases have the same values, it's basically a symmetric biphasic
     # pulse:

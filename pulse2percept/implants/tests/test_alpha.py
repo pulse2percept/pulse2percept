@@ -50,6 +50,11 @@ def test_AlphaIMS(ztype, x, y, rot):
     for e in ['A1', 'B2', 'C3']:
         npt.assert_equal(alpha[e].a, 50)
 
+
+# The checks below don't depend on x/y/rot/ztype, so they live outside the
+# parametrized test above: running them once covers the same code as running
+# them for all 16 parameter combinations.
+def test_AlphaIMS_indexing():
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
         AlphaIMS(x=-100, y=10, z=np.arange(28))
@@ -63,6 +68,8 @@ def test_AlphaIMS(ztype, x, y, rot):
         npt.assert_equal(electrode, alpha[name])
         npt.assert_equal(alpha["unlikely name for an electrode"], None)
 
+
+def test_AlphaIMS_eye():
     # Right-eye implant:
     xc, yc = 1600, -1600
     alpha_re = AlphaIMS(eye='RE', x=xc, y=yc)
@@ -129,6 +136,9 @@ def test_AlphaAMS(ztype, x, y, rot):
     for e in ['A1', 'B2', 'C3']:
         npt.assert_equal(alpha[e].r, 15)
 
+
+# As above: independent of x/y/rot/ztype, so run once rather than 16 times.
+def test_AlphaAMS_indexing():
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
         AlphaAMS(x=-100, y=10, z=np.arange(12))
@@ -142,6 +152,8 @@ def test_AlphaAMS(ztype, x, y, rot):
         npt.assert_equal(electrode, alpha[name])
         npt.assert_equal(alpha["unlikely name for an electrode"], None)
 
+
+def test_AlphaAMS_eye():
     # Right-eye implant:
     xc, yc = 1600, -1600
     alpha_re = AlphaAMS(eye='RE', x=xc, y=yc)
@@ -163,6 +175,6 @@ def test_AlphaAMS(ztype, x, y, rot):
 
     # Invalid eye string:
     with pytest.raises(TypeError):
-        AlphaIMS(eye=[1, 2])
+        AlphaAMS(eye=[1, 2])
     with pytest.raises(ValueError):
-        AlphaIMS(eye='left eye')
+        AlphaAMS(eye='left eye')

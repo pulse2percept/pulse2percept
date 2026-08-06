@@ -2,6 +2,7 @@
    :py:class:`~pulse2percept.viz.plot_argus_simulated_phosphenes`"""
 import numpy as np
 import pandas as pd
+from os.path import dirname, join
 from skimage.io import imread
 from skimage.measure import moments as img_moments
 from skimage.transform import (estimate_transform as img_transform,
@@ -9,7 +10,6 @@ from skimage.transform import (estimate_transform as img_transform,
 
 import matplotlib.pyplot as plt
 from matplotlib import patches
-from pkg_resources import resource_filename
 
 from ..implants import ArgusI, ArgusII
 from ..models import AxonMapModel
@@ -17,8 +17,8 @@ from ..utils import scale_image, center_image
 from ..utils.constants import ZORDER
 from ..topography import Watson2014Map
 
-PATH_ARGUS1 = resource_filename('pulse2percept', 'viz/data/argus1.png')
-PATH_ARGUS2 = resource_filename('pulse2percept', 'viz/data/argus2.png')
+PATH_ARGUS1 = join(dirname(__file__), 'data', 'argus1.png')
+PATH_ARGUS2 = join(dirname(__file__), 'data', 'argus2.png')
 # Pixel locations of electrodes (Argus I: A1-4, B1-4, ...; Argus II: A1-10,
 # B1-10, ...) in the above images:
 PX_ARGUS1 = np.array([

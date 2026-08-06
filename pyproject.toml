@@ -30,13 +30,12 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.21,<3",
-    "scipy>=1.0.1",
+    "scipy>=1.6",
     "scikit-image>=0.14",
     "matplotlib>=3.0.2",
     "imageio-ffmpeg>=0.4",
     "pandas",
-    "joblib>=0.11",
-    "setuptools>=65"
+    "joblib>=0.11"
 ]
 
 [project.optional-dependencies]
@@ -51,6 +50,15 @@ dev = [
 # (Optional) convenience extra for docs/Colab how-tos
 colab = [
     "numpy>=2,<3"
+]
+
+[tool.coverage.run]
+# Measure coverage of the library, not of the test suite itself: test modules
+# that are skipped (e.g. because an optional dataset isn't available) would
+# otherwise report as large blocks of uncovered code.
+omit = [
+    "*/tests/*",
+    "*/conftest.py",
 ]
 
 [tool.setuptools]

@@ -39,10 +39,14 @@ class CoordinateGrid:
             if self.__dict__.keys() != other.__dict__.keys():
                 return False
             for key in self.__dict__.keys():
-                if isinstance(self.__dict__[key], np.ndarray):
-                    if not np.array_equal(self.__dict__[key], other.__dict__[key]):
+                mine, theirs = self.__dict__[key], other.__dict__[key]
+                # If either side is an array, compare as arrays: `!=` between
+                # None and an array is elementwise, not a bool (this is how a
+                # 2D grid, whose z is None, compares against a 3D one).
+                if isinstance(mine, np.ndarray) or isinstance(theirs, np.ndarray):
+                    if not np.array_equal(mine, theirs):
                         return False
-                elif self.__dict__[key] != other.__dict__[key]:
+                elif mine != theirs:
                     return False
             return True
         def __hash__(self):
@@ -206,10 +210,12 @@ class Grid2D(PrettyPrint):
         # Build the grid from `x_range`, `y_range`. If the range is 0, make
         # sure that the number of steps is 1, because linspace(0, 0, num=5)
         # will return a 1x5 array:
-        xdiff = np.abs(np.diff(x_range))
+        # `np.diff` returns a 1-element array, so pull out the scalar: NumPy
+        # does not allow converting an array with ndim > 0 to a Python scalar.
+        xdiff = np.abs(np.diff(x_range)).item()
         nx = int(np.round(xdiff / x_step) + 1) if xdiff != 0 else 1
         self._xflat = np.linspace(*x_range, num=nx, dtype=np.float32)
-        ydiff = np.abs(np.diff(y_range))
+        ydiff = np.abs(np.diff(y_range)).item()
         ny = int(np.round(ydiff / y_step) + 1) if ydiff != 0 else 1
         self._yflat = np.linspace(*y_range, num=ny, dtype=np.float32)
         # Create the grid, flip y axis so that it increases from bottom to top:
@@ -451,7 +457,9 @@ class Grid2D(PrettyPrint):
         """
         # avoid circular import
         from .neuropythy import NeuropythyMap
-        fig_kwargs = ['figsize']
+        # 'c' is passed to the plotting call explicitly (as `color`), so it
+        # must not also be forwarded through **kwargs:
+        fig_kwargs = ['figsize', 'c']
         if ax is None:
             ax = plt.gca()
             if ax.name != '3d':
@@ -543,12 +551,18 @@ class Grid2D(PrettyPrint):
 
 
     
-    def __deepcopy__(self, memodict={}):
+    def __deepcopy__(self, memodict=None):
+        if memodict is None:
+            memodict = {}
         if id(self) in memodict:
             return memodict[id(self)]
         copied = copy(self)
+        # Register before recursing, and pass `memodict` down, so that shared
+        # references are copied once and reference cycles terminate:
+        memodict[id(self)] = copied
         for attr in self.__dict__:
-            copied.__setattr__(attr, deepcopy(self.__getattribute__(attr)))
+            copied.__setattr__(attr,
+                               deepcopy(self.__getattribute__(attr), memodict))
         return copied
 
     def __eq__(self, other):

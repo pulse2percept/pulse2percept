@@ -18,7 +18,7 @@ def test_load_horsager2009():
         npt.assert_equal(expected_col in data.columns, True)
 
     npt.assert_equal(data.shape, (608, 21))
-    npt.assert_equal(data.subject.unique(), ['S05', 'S06'])
+    npt.assert_equal(list(data.subject.unique()), ['S05', 'S06'])
 
     # Shuffle dataset (index will always be range(608), but rows are shuffled):
     data = load_horsager2009(shuffle=True, random_state=42)
@@ -32,30 +32,30 @@ def test_load_horsager2009():
     # Select subjects:
     data = load_horsager2009(subjects='S05')
     npt.assert_equal(data.shape, (296, 21))
-    npt.assert_equal(data.subject.unique(), 'S05')
+    npt.assert_equal(list(data.subject.unique()), ['S05'])
     data = load_horsager2009(subjects=['S05', 'S07'])  # 'S07' doesnt' exist
     npt.assert_equal(data.shape, (296, 21))
-    npt.assert_equal(data.subject.unique(), 'S05')
+    npt.assert_equal(list(data.subject.unique()), ['S05'])
     data = load_horsager2009(subjects=['S05', 'S06'])  # same as None
     npt.assert_equal(data.shape, (608, 21))
     data = load_horsager2009(subjects='S6')  # 'S6' doesn't exist
     npt.assert_equal(data.shape, (0, 21))
-    npt.assert_equal(data.subject.unique(), [])
+    npt.assert_equal(list(data.subject.unique()), [])
 
     # Select electrodes:
     data = load_horsager2009(electrodes='A1')
     npt.assert_equal(data.shape, (114, 21))
-    npt.assert_equal(data.electrode.unique(), 'A1')
-    npt.assert_equal(data.subject.unique(), ['S06', 'S05'])
+    npt.assert_equal(list(data.electrode.unique()), ['A1'])
+    npt.assert_equal(list(data.subject.unique()), ['S06', 'S05'])
     data = load_horsager2009(electrodes=['A1', 'A9'])  # 'A9' doesn't exist
     npt.assert_equal(data.shape, (114, 21))
-    npt.assert_equal(data.electrode.unique(), 'A1')
-    npt.assert_equal(data.subject.unique(), ['S06', 'S05'])
+    npt.assert_equal(list(data.electrode.unique()), ['A1'])
+    npt.assert_equal(list(data.subject.unique()), ['S06', 'S05'])
 
     # Select stimulus types:
     data = load_horsager2009(stim_types='single_pulse')
     npt.assert_equal(data.shape, (80, 21))
-    npt.assert_equal(data.stim_type.unique(), 'single_pulse')
+    npt.assert_equal(list(data.stim_type.unique()), ['single_pulse'])
     npt.assert_equal(list(data.subject.unique()), ['S05', 'S06'])
     data = load_horsager2009(stim_types=['single_pulse', 'fixed_duration'])
     npt.assert_equal(data.shape, (200, 21))
@@ -67,6 +67,6 @@ def test_load_horsager2009():
     data = load_horsager2009(subjects='S05', electrodes=['A1', 'C3'],
                              stim_types='single_pulse')
     npt.assert_equal(data.shape, (16, 21))
-    npt.assert_equal(data.subject.unique(), 'S05')
+    npt.assert_equal(list(data.subject.unique()), ['S05'])
     npt.assert_equal(list(data.electrode.unique()), ['C3', 'A1'])
-    npt.assert_equal(data.stim_type.unique(), 'single_pulse')
+    npt.assert_equal(list(data.stim_type.unique()), ['single_pulse'])

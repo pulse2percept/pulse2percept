@@ -191,7 +191,7 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     # Combine 'img_shape_x' and 'img_shape_y' into 'img_shape' tuple
     df['img_shape'] = df.apply(lambda x: (x['img_shape_x'], x['img_shape_y']),
                                axis=1)
-    df.drop(columns=['img_shape_x', 'img_shape_y'], inplace=True)
+    df = df.drop(columns=['img_shape_x', 'img_shape_y'])
 
     # Verify integrity of the dataset:
     if len(df) != 400:
@@ -226,30 +226,17 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
         idx &= idx_electrode
     df = df[idx]
 
-    # Augment with implant type & location data:
-    df['implant_type_str'] = ''
-    df['implant_x'] = 0
-    df['implant_y'] = 0
-    df['implant_rot'] = 0
-    df['xrange'] = None
-    df['yrange'] = None
-    for subject in df.subject.unique():
-        df.loc[df.subject == subject,
-               'implant_type_str'] = subject_params[subject]['implant_type_str']
-        df.loc[df.subject == subject,
-               'implant_x'] = subject_params[subject]['implant_x']
-        df.loc[df.subject == subject,
-               'implant_y'] = subject_params[subject]['implant_y']
-        df.loc[df.subject == subject,
-               'implant_rot'] = subject_params[subject]['implant_rot']
-        df.loc[df.subject == subject, 'xrange'] = df.loc[df.subject == subject].apply(
-            lambda row: (subject_params[subject]['xmin'], 
-                         subject_params[subject]['xmax']), axis=1
-        )
-        df.loc[df.subject == subject, 'yrange'] = df.loc[df.subject == subject].apply(
-            lambda row: (subject_params[subject]['ymin'], 
-                         subject_params[subject]['ymax']), axis=1
-        )
+    # Augment with implant type & location data. Build each column in one go
+    # rather than pre-initializing it and then writing into it per subject:
+    # writing a float (e.g. `implant_rot`) into a column created as int is an
+    # incompatible-dtype setitem, which pandas will turn into an error.
+    params = df.subject.map(subject_params)
+    df['implant_type_str'] = params.map(lambda p: p['implant_type_str'])
+    df['implant_x'] = params.map(lambda p: p['implant_x'])
+    df['implant_y'] = params.map(lambda p: p['implant_y'])
+    df['implant_rot'] = params.map(lambda p: p['implant_rot'])
+    df['xrange'] = params.map(lambda p: (p['xmin'], p['xmax']))
+    df['yrange'] = params.map(lambda p: (p['ymin'], p['ymax']))
 
     if shuffle:
         df = df.sample(n=len(df), random_state=random_state)
