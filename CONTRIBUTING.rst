@@ -2,299 +2,277 @@
 Contributing to pulse2percept
 =============================
 
-.. note::
+Thank you for contributing to pulse2percept.
 
-    If you found a bug or want to request a feature, please open an issue in our
-    `Issue Tracker`_ on GitHub.
+If you found a bug or want to request a feature, please open an issue in the
+`Issue Tracker`_. Small, self-contained fixes may be submitted directly as a
+pull request, but please discuss substantial changes with the maintainers before
+investing significant time in an implementation.
+
+.. warning::
+
+   **Every contribution must have an accountable human contributor.**
+
+   AI-assisted tools may be used, but fully autonomous submissions are not
+   accepted. The submitting human must review and understand the changes, take
+   responsibility for them, and participate in the review process. See
+   :ref:`dev-contributing-ai` for the complete policy.
+
+This guide covers:
+
+* `Recommended workflow`_
+* `Human responsibility and AI-assisted tools`_
+* `Setting up a development environment`_
+* `Submitting a pull request`_
+* `Code style`_
+* `Documenting your code`_
+* `Documenting API changes`_
+* `Testing your code`_
 
 .. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues
 
-We are excited that you are here and want to contribute!
-
-Already know what you're looking for in this guide? Jump to the following
-sections:
-
-*   `Recommended workflow`_
-*   `Contributing code`_
-*   `Documenting your code`_
-*   `Documenting API changes`_
-*   `Testing your code`_
 
 .. _dev-contributing-workflow:
 
 Recommended workflow
 ====================
 
-We appreciate all contributions, but those accepted fastest will follow a
-workflow similar to the following:
+1. **Choose or open an issue.**
 
-1.  **GitHub account**:
-    Before getting started, you will need to set up a free `GitHub account`_.
+   Check the `Issue Tracker`_ for existing work. For nontrivial bug fixes,
+   enhancements, or API changes, comment on the issue before starting so that
+   the scope can be agreed upon and duplicate work can be avoided.
 
-2.  **Claim an issue on GitHub**:
-    Check the `Issue Tracker`_ to find an issue you want to work on, and add a
-    comment announcing your intention to work on it.
-    This allows other members of the development team to confirm that you
-    aren't overlapping with existing work and that everyone is on the same page
-    with the goal of your proposed work.
+2. **Fork and install the repository.**
 
-    .. image:: https://img.shields.io/badge/-bug-fc2929.svg
-       :target: https://github.com/pulse2percept/pulse2percept/labels/bug
-       :alt: Bug
-       :align: left
+   Follow the :ref:`Installation Guide <install-source>` and install the
+   development dependencies as described below.
 
-    These issues point to problems in the project.
-    The bug report should already contain steps for you to reproduce the issue.
-    Make sure to include a :ref:`test case <dev-contributing-test>` verifying
-    that the issue was indeed solved.
+3. **Create a focused branch.**
 
-    .. image:: https://img.shields.io/badge/-enhancement-00FF09.svg
-       :target: https://github.com/pulse2percept/pulse2percept/labels/enhancement
-       :alt: Enhancement
-       :align: left
+   Use a short, descriptive branch name and keep unrelated changes out of the
+   same pull request.
 
-    These issues are asking for new features to be added to the project.
-    Make sure to include a :ref:`test case <dev-contributing-test>` for every
-    new function/class that you write.
-    Each API change should be :ref:`annotated in the docstring 
-    <dev-contributing-changes>`.
+4. **Implement, document, and test the change.**
 
-    .. image:: https://img.shields.io/badge/-doc-FEF2C0.svg
-       :target: https://github.com/pulse2percept/pulse2percept/labels/doc
-       :alt: Documentation
-       :align: left
+   Bug fixes should include a regression test. New features should include
+   tests and user-facing documentation where appropriate.
 
-    These issues concern the documentation / user guide of the project.
-    Code changes should therefore be limited to the user guide and docstrings
-    only.
+5. **Open a pull request.**
 
-    .. image:: https://img.shields.io/badge/-help%20wanted-c2e0c6.svg
-       :target: https://github.com/pulse2percept/pulse2percept/labels/help-wanted
-       :alt: Help wanted
-       :align: left
+   Explain what changed, why it changed, and how it was tested. Link the
+   relevant issue and disclose substantial use of AI-assisted tools as
+   described below.
 
-    These issues contain a task that a member of the team has determined we
-    need additional help with.
+6. **Participate in review.**
 
-    .. image:: https://img.shields.io/badge/-good%20first%20issue-5fe28d.svg
-       :target: https://github.com/pulse2percept/pulse2percept/labels/good-first-issue
-       :alt: Good first issue
-       :align: left
+   Respond to questions, revise the contribution when needed, and keep the
+   branch current enough for the test suite to run against the proposed
+   change.
 
-    These issues are good entry points if you're new to the project.
-    They usually require only minimal code changes or are restricted to a
-    single file.
-    If you run into trouble, add a comment to the issue on GitHub or reach out
-    to `@mbeyeler`_ and/or `@arokem`_ directly.
 
-3.  **Fork the repo**:
-    Follow the :ref:`Installation Guide <install-source>` to fork the repo and
-    install all developer dependencies.
-    This is now your own unique pulse2percept copy - changes here won't affect
-    anyone else's work.
-    Make sure to keep your code up-to-date
-    with the upstream repository.
+.. _dev-contributing-ai:
 
-4.  **Create a new branch**:
-    You should always work on a `new branch`_ on your fork.
-    Once you made the code changes, "git add" and "git commit" them, and then
-    "git push" them to your remote repository on GitHub.
+Human responsibility and AI-assisted tools
+==========================================
 
-    .. important::
+AI-assisted tools may be used to help write code, tests, documentation, issue
+reports, or pull-request text. However, every contribution must have a clearly
+identified human contributor who takes responsibility for the submitted work.
 
-        All code additions must be :ref:`documented <dev-contributing-doc>` and
-        :ref:`tested <dev-contributing-test>`.
-        See `Contributing code`_ below for more detailed instructions.
+The human contributor must:
 
-5.  **Submit a pull request**:
-    You can open a `pull request`_ (PR) as soon as you have pushed a new branch
-    on your fork.
-    This will trigger the :ref:`test suite <dev-contributing-test>` to make
-    sure your code does not introduce any new issues.
+* review and understand every submitted change;
+* verify the behavior and tests to a reasonable extent before submission;
+* describe the change and its limitations accurately;
+* be able to explain and revise the contribution during review; and
+* disclose substantial use of AI-assisted tools in the pull-request
+  description.
 
-    Choose one of the following prefixes for your PR:
+Substantial use includes tools that generated or materially rewrote code,
+tests, or documentation, as well as agents that selected an issue, implemented
+a solution, reviewed their own output, or opened the pull request. Routine
+autocomplete and spelling or grammar assistance do not need to be disclosed.
 
-    * **[ENH]** for enhancements
-    * **[FIX]** for bug fixes
-    * **[TST]** for new or updated tests
-    * **[DOC]** for new or updated documentation
-    * **[STY]** for stylistic changes
-    * **[REF]** for refactoring existing code
+Fully autonomous submissions are not accepted. Pull requests submitted by an
+agent or bot account without an accountable human contributor may be closed
+even when the proposed change appears useful. Automated analysis or self-review
+by the same system does not count as independent review.
 
-    Once your PR is ready, request a review from `@mbeyeler`_ and/or
-    `@arokem`_, who will review your changes before merging them into the
-    main codebase.
+This policy does not apply to project automation explicitly installed or
+configured by the maintainers, such as dependency-update bots.
 
-    .. note:: 
- 
-        If your PR is not yet ready to be merged, click on the dropdown arrow
-        next to the "Create pull request" button and choose "Create draft pull
-        request" instead.
 
-        This will put your PR in `draft state`_ and block merging until you
-        change the status of the PR to "Ready for review".
+.. _dev-contributing-setup:
 
-More detailed instructions can be found below.
+Setting up a development environment
+====================================
 
-.. _GitHub account: https://help.github.com/articles/signing-up-for-a-new-github-account
-.. _good-first-issue: https://github.com/pulse2percept/pulse2percept/labels/good-first-issue
-.. _help-wanted: https://github.com/pulse2percept/pulse2percept/labels/help-wanted
-.. _new branch: https://help.github.com/articles/about-branches
-.. _pull request: https://help.github.com/articles/creating-a-pull-request-from-a-fork/
-.. _@arokem: https://github.com/arokem
-.. _@mbeyeler: https://github.com/mbeyeler
-.. _draft state: https://github.blog/2019-02-14-introducing-draft-pull-requests
+pulse2percept requires Python 3.10 or newer.
 
-Contributing code
-=================
+After forking the repository, clone your fork and add the main repository as
+``upstream``:
 
-Perform all your work on a `new branch`_ of the repository. For example,
-say you want to add "feature1" to the latest version of pulse2percept:
+.. code-block:: bash
 
-1.  Make sure you have the latest code:
+    git clone https://github.com/<username>/pulse2percept.git
+    cd pulse2percept
+    git remote add upstream https://github.com/pulse2percept/pulse2percept.git
 
-    .. code-block:: bash
+Create and activate a virtual environment using your preferred environment
+manager. Then install pulse2percept in editable mode with the development
+dependencies:
 
-        git checkout master
-        git pull upstream master
+.. code-block:: bash
 
-    .. note::
+    python -m pip install --upgrade pip
+    python -m pip install -e ".[dev]"
 
-        If you get an error saying "upstream does not appear to be a git
-        repository", you need to run the following command first:
-        ``git remote add upstream https://github.com/pulse2percept/pulse2percept.git``
+Before starting new work, update your local ``master`` branch:
 
-2.  Create a new branch (aptly named "feature1" or similar):
+.. code-block:: bash
 
-    .. code-block:: bash
+    git fetch upstream
+    git switch master
+    git merge --ff-only upstream/master
 
-        git checkout -b feature1
+Create a branch for the change:
 
-3.  Add and commit your changes to this branch:
-    
-    .. code-block:: bash
+.. code-block:: bash
 
-        git add newfile.py
-        git commit -m "add new feature1 file"
-    
-4.  Then push it to your remote repository on GitHub:
+    git switch -c fix-short-description
 
-    .. code-block:: bash
+If ``git switch`` is unavailable in your Git version, the equivalent command
+is:
 
-        git push origin feature1
+.. code-block:: bash
 
-    .. important::
+    git checkout -b fix-short-description
 
-        All code additions must be :ref:`documented <dev-contributing-doc>` and
-        :ref:`tested <dev-contributing-test>`.
 
-5.  Go to GitHub and `submit a pull request`_:
+.. _dev-contributing-pr:
 
-    1.  Click on "compare & pull request" at the top of the page.
+Submitting a pull request
+=========================
 
-    2.  Choose "pulse2percept/pulse2percept" as the base repository and "master"
-        as the base branch.
+Commit the change with a concise, descriptive message and push the branch to
+your fork:
 
-    3.  Choose "<username>/pulse2percept" as the head repository and "feature1"
-        as the compare branch, where "<username>" is your GitHub user name.
+.. code-block:: bash
 
-    4.  Click on "Create pull request" (or "Create draft pull request" if your work
-        is not ready to be merged) and describe the work you have done.
-        Make sure to mention the issue number you are addressing (use # as
-        prefix).
+    git add <changed-files>
+    git commit -m "Fix short description of the issue"
+    git push -u origin fix-short-description
 
-        An easy way to list all the things you changed is to use a list of
-        checkboxes (type ``- [X]``; or ``- [ ]`` for an item that has yet to be
-        implemented).
+Open a pull request against the ``master`` branch of
+``pulse2percept/pulse2percept``.
 
-.. _submit a pull request: https://github.com/pulse2percept/pulse2percept/compare
+Use one of the following prefixes in the pull-request title:
+
+* ``[ENH]`` for enhancements
+* ``[FIX]`` for bug fixes
+* ``[TST]`` for new or updated tests
+* ``[DOC]`` for new or updated documentation
+* ``[STY]`` for stylistic changes
+* ``[REF]`` for refactoring existing code
+
+A good pull request:
+
+* addresses one coherent issue;
+* links the relevant issue, for example ``Fixes #123``;
+* explains the problem, the proposed solution, and important tradeoffs;
+* lists the tests that were run;
+* includes tests and documentation required by the change;
+* avoids unrelated formatting or refactoring; and
+* passes the automated checks, or clearly identifies any failure believed to
+  be unrelated.
+
+Do not assume that a failing check is unrelated to the pull request.
+Investigate the failure and document what you found. The maintainers will
+decide whether a failure can safely be treated as independent of the proposed
+change.
+
+Open a draft pull request when the implementation is incomplete or when early
+feedback would be useful. Mark it ready for review only when you believe the
+change is complete.
+
+
+Code style
+==========
+
+Follow the style of the surrounding code and keep changes easy to review.
+Prefer clear, maintainable code over clever or compressed implementations.
+
+The continuous-integration workflow runs ``flake8``. To run the corresponding
+check locally:
+
+.. code-block:: bash
+
+    flake8 pulse2percept --ignore N802,N806,W504 --select W503 \
+        --count --show-source --statistics
+
+Avoid reformatting code that is unrelated to the contribution.
+
 
 .. _dev-contributing-doc:
 
 Documenting your code
 =====================
 
-You are expected to document your code using `NumPy docstrings`_.
-Make sure to:
+Public functions, methods, classes, and modules should use `NumPy docstrings`_.
 
-*  supply short and long descriptions,
-*  describe all input arguments to a function/method,
-*  describe the output of a function/method,
-*  provide examples of how to use your code.
+Document:
 
-For example, consider an appropriate docstring for a hypothetical function
-``rad2deg``:
+* the purpose and behavior of the object;
+* parameters and their accepted types or shapes;
+* return values;
+* relevant exceptions, warnings, units, and side effects; and
+* examples or notes when they materially help users understand the API.
 
-.. code-block:: python
+Documentation should describe the actual behavior of the code, including edge
+cases introduced or fixed by the contribution.
 
-    def rad2deg(angle_rad):
-        """Converts radians to degrees
-
-        This function converts an angle in radians to degrees.
-
-        Parameters
-        ----------
-        angle_rad : int, float
-            The input angle in radians in (between 0 and 2pi)
-
-        Returns
-        -------
-        angle_deg : float
-            The corresponding angle in degrees (between 0 and 360 deg)
-
-        Examples
-        --------
-        Converting pi to degrees:
-        >>> import numpy as np
-        >>> rad2deg(np.pi)
-        180.0
-
-        .. seealso:: `deg2rad`
-        """
-        ...
-
-You can generate the documentation yourself using Sphinx.
-If you installed ``make``, type the following from your root directory:
+To build the documentation locally:
 
 .. code-block:: bash
 
+    python -m pip install -r doc/requirements.txt
     make doc
 
-Otherwise, type the following from your root directory:
+Alternatively, invoke Sphinx directly:
 
 .. code-block:: bash
 
-    cd doc
-    pip3 install -r requirements.txt
-    make html
+    python -m sphinx -b html doc doc/_build/html
 
-The generated documentation can then be found in ``doc/_build/html``.
-To see the documentation, "doc/_build/html/index.html" in your browser of
-choice, e.g.:
+The generated documentation is available at
+``doc/_build/html/index.html``.
 
-.. code-block:: bash
+.. _NumPy docstrings:
+   https://numpydoc.readthedocs.io/en/latest/format.html
 
-    google-chrome doc/_build/html/index.html
-
-.. _NumPy docstrings: https://numpydoc.readthedocs.io/en/latest/format.html 
 
 .. _dev-contributing-changes:
 
 Documenting API changes
 =======================
 
-API changes that affect the user should be documented in order to help the user
-sort out version differences (see `reST directives`_):
+Discuss substantial changes to the public API with the maintainers before
+implementation. Preserve backward compatibility unless an incompatible change
+has been explicitly agreed upon.
 
-*  Whenever a new API call is added, include a ``.. versionadded::`` statement
-   right before listing the function parameters that mentions the pulse2percept
-   version where the feature first appeared.
-*  Whenever the API of a function/class is changed, include a
-   ``.. versionchanged::`` statement right before listing the function 
-   parameters that explains what/how functionality changed in a particular
-   pulse2percept version.
+User-facing API changes should be annotated in the relevant docstring:
 
-.. _reST directives: https://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html
+* Use ``.. versionadded::`` when adding a new public API.
+* Use ``.. versionchanged::`` when changing documented behavior, accepted
+  inputs, return values, shapes, units, or other user-visible semantics.
+* Use ``.. deprecated::`` when deprecating a public API.
+
+Include the pulse2percept version in which the change will appear. Ask a
+maintainer which version to use if it is not yet clear.
+
+.. _reST directives:
+   https://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html
 
 
 .. _dev-contributing-test:
@@ -302,89 +280,48 @@ sort out version differences (see `reST directives`_):
 Testing your code
 =================
 
-You are expected to test your code using `pytest`_:
+Tests are written with `pytest`_ and `NumPy testing`_ utilities.
 
-*   Bug fixes should include an example that exposes the issue.
+* Bug fixes must include a regression test that fails without the fix and
+  passes with it.
+* New features must include tests for their core behavior and important edge
+  cases.
+* Tests should be deterministic, focused, and independent of local machine
+  state whenever possible.
+* Place tests in the relevant ``tests`` directory and follow the naming and
+  organization of nearby tests.
 
-*   New features should have tests that show at least a minimal example.
-
-Running the test suite
-----------------------
-
-pulse2percept uses `pytest`_ and `numpy-testing`_ for testing.
-
-Every subpackage of pulse2percept (e.g., :py:mod:`~pulse2percept.stimuli`)
-has a subdirectory called "tests".
-Within the test directory, there is a "test_<subsubpackage>.py" file for every
-subsubpackage of pulse2percept (e.g.,
-"pulse2percept/stimuli/tests/test_pulse_trains.py" for the
-:py:mod:`~pulse2percept.stimuli.pulse_trains` module).
-
-When you contribute new code, you are expected to test your code in the
-corresponding test file.
-
-You can run the test suite from your root directory with:
+Run a focused test while developing:
 
 .. code-block:: bash
 
-    pip3 install -r requirements-dev.txt
-    pytest --doctest-modules --showlocals -v pulse2percept
+    pytest path/to/test_file.py -q
 
-Successful tasks will be marked with "PASSED", unsuccessful ones with "FAILED".
-We will usually not accept pull requests that don't pass all tests.
+Run the full default test suite from the repository root:
 
-.. note::
+.. code-block:: bash
 
-    Whenever you submit a pull request, the test suite is automatically run in the
-    background using `GitHub Actions`_. This will make sure that all tests pass on
-    all supported platforms whenever changes are made to the code.
+    pytest --pyargs pulse2percept --doctest-modules
 
-.. _pytest: https://pytest.org
-.. _numpy-testing: https://docs.scipy.org/doc/numpy/reference/routines.testing.html
-.. _GitHub Actions: https://github.com/pulse2percept/pulse2percept/actions
+Pull-request checks also run tests marked as slow. Run them locally when the
+change affects those code paths:
 
-Writing your own tests
-----------------------
+.. code-block:: bash
 
-If you work on code from an existing subpackage (e.g.,
-:py:mod:`pulse2percept.stimuli.pulse_trains`), open the corresponding test file
-(e.g., "pulse2percept/stimuli/tests/test_pulse_trains.py").
+    pytest --pyargs pulse2percept --doctest-modules --runslow
 
-You can add a new test by adding a function whose name starts with "test\_",
-followed by the name of the class or function you want to test.
-For example:
+GitHub Actions runs the test suite on the supported Python versions and
+operating systems. A pull request is normally merged only after the required
+checks pass.
 
-*   ``def test_TimeSeries`` for testing the
-    :py:class:`~pulse2percept.stimuli.TimeSeries` object (note that this
-    function already exists).
-*   ``def test_TimeSeries_resample`` for testing the
-    :py:meth:`~pulse2percept.stimuli.TimeSeries.resample` method of the
-    :py:class:`~pulse2percept.stimuli.TimeSeries` object.
-*   ``def test_newfunc`` for a new function called ``newfunc``.
+.. _pytest: https://docs.pytest.org/
+.. _NumPy testing:
+   https://numpy.org/doc/stable/reference/routines.testing.html
+.. _GitHub Actions:
+   https://github.com/pulse2percept/pulse2percept/actions
 
-Within this function, you want to make sure your code works as expected.
-Useful `numpy-testing`_ routines for achieving this include:
-
-*   ``assert_equal(actual, desired)`` returns an ``AssertionError`` if two
-    objects are not equal.
-*   ``assert_almost_equal(actual, desired, decimal=7)`` returns an
-    ``AssertionError`` if two items are not equal up to desired precision
-    (good for testing doubles).
-*   ``assert_raises(exception_class)`` fails unless an ``Exception`` of class
-    ``exception_class`` is thrown.
-
-In addition, we provide
-:py:meth:`~pulse2percept.utils.testing.assert_warns_msg` to ensure that a
-specific warning message is thrown.
-
-.. seealso:: :ref:`Tutorial: Writing your own test case <tutorial-writing-tests>`
 
 Thank you
 =========
 
-You are awesome!
-
-*This guide is based on contributing guidelines from the `Nipype`_ project.*
-
-.. _Nipype: https://github.com/nipy/nipype
-
+Thank you for helping improve pulse2percept.
