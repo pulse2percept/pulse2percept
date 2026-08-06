@@ -37,6 +37,10 @@ jobs:
   colab:
     name: Colab runtime (${{ matrix.source }})
     runs-on: ubuntu-latest
+    # The image is ~7 GB to pull and the install is quick; anything past this
+    # means something is wedged. The default is 6 hours, which leaves a PR
+    # showing "checks haven't completed yet" for most of a day.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -97,10 +101,16 @@ jobs:
         run: |
           set -euo pipefail
           docker pull "$COLAB_IMAGE"
+          # Every `docker run` here must override the entrypoint. The image
+          # ships ENTRYPOINT ["/datalab/run.sh"], which boots the Colab
+          # Jupyter server and ignores whatever command follows it -- so
+          # without --entrypoint the container serves notebooks until the job
+          # times out and no step ever runs.
+          #
           # Record which Colab build this was, so a failure months from now is
           # still traceable to a specific runtime.
-          docker run --rm "$COLAB_IMAGE" \
-            bash -lc 'echo "$COLAB_RELEASE_TAG"; python3 --version'
+          docker run --rm --entrypoint bash "$COLAB_IMAGE" \
+            -lc 'echo "$COLAB_RELEASE_TAG"; python3 --version'
 
       - name: Install into Colab and check what moved
         # The repo is mounted read-only somewhere that is not the working
@@ -111,10 +121,11 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm \
+            --entrypoint python3 \
             -v "$GITHUB_WORKSPACE:/repo:ro" \
             -w /tmp \
             "$COLAB_IMAGE" \
-            python3 /repo/.github/scripts/colab_smoke.py \
+            /repo/.github/scripts/colab_smoke.py \
               "${{ steps.spec.outputs.spec }}" \
               --source-root /repo \
               ${{ matrix.source == 'pypi' && '--require-wheel' || '' }}
@@ -128,6 +139,7 @@ jobs:
     # never exercises this.
     name: NumPy ABI py${{ matrix.py }} on NumPy ${{ matrix.numpy }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
