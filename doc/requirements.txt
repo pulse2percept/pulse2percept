@@ -9,7 +9,7 @@ ipython>=8.12
 matplotlib>=3.8
 pandas>=3.0.5,<3.1
 h5py
-nibabel>=5
+nibabel>=5.4.2
 pooch>=1.8
 neuropythy==0.12.16
 pickleshare
