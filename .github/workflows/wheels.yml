@@ -59,8 +59,15 @@ jobs:
             lipo -create /tmp/omp-osx-arm64/lib/libomp.dylib \
                          /tmp/omp-osx-64/lib/libomp.dylib \
                  -output /tmp/omp/lib/libomp.dylib
-            install_name_tool -id @rpath/libomp.dylib /tmp/omp/lib/libomp.dylib
+            # Give libomp an absolute install name. The extension records
+            # whatever LC_ID_DYLIB says, and conda-forge ships `@rpath/...`,
+            # which delocate cannot resolve because setup.py links without an
+            # -rpath. An absolute path is what Homebrew's libomp provides and
+            # what delocate expects; it is rewritten to @loader_path when the
+            # dylib is vendored into the wheel.
+            install_name_tool -id /tmp/omp/lib/libomp.dylib /tmp/omp/lib/libomp.dylib
             lipo -info /tmp/omp/lib/libomp.dylib
+            otool -D /tmp/omp/lib/libomp.dylib
           CIBW_BEFORE_BUILD_MACOS: |
             set -eux
             # CIBW_ENVIRONMENT only keeps the *first* assignment when the
@@ -96,9 +103,12 @@ jobs:
           CIBW_ENVIRONMENT_MACOS: >-
             OMP_PREFIX=/tmp/omp
             MACOSX_DEPLOYMENT_TARGET=11.0
-          # No custom repair command: cibuildwheel's default delocate-wheel
-          # invocation is correct once the deployment target and the vendored
-          # libomp agree.
+          # Same as cibuildwheel's default repair, but prints the dependency
+          # graph first: when delocate fails, cibuildwheel reports only the
+          # exit code, and `listdeps` shows which library went unresolved.
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: >-
+            delocate-listdeps --all --depending {wheel} &&
+            delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}
 
           # ---------- Linux: enable OpenMP; OSN picks a compatible NumPy ----------
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"
