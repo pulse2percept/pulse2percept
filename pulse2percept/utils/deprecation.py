@@ -241,6 +241,40 @@ class deprecate_parameter:
         return wrapped
 
 
+def warn_deprecated_params(obj_name, supplied, specs, stacklevel=3):
+    """Warn about deprecated *model* parameters that were supplied by name
+
+    pulse2percept models take their parameters as ``**params``, validated
+    against ``get_default_params`` rather than declared in a signature, so
+    :py:class:`~pulse2percept.utils.deprecate_parameter` cannot see them. This
+    is the equivalent for that path: hand it the names the caller actually
+    supplied, and it warns for the deprecated ones.
+
+    .. versionadded:: 0.9.1
+
+    Parameters
+    ----------
+    obj_name : str
+        Name of the model, as it should appear in the warning.
+    supplied : iterable of str
+        Parameter names the caller passed explicitly. Names that are not
+        deprecated are skipped, so it is fine to pass all of them.
+    specs : dict
+        Maps a deprecated parameter name to the
+        :py:class:`~pulse2percept.utils.deprecate_parameter` describing it, so
+        that signature-level and model-level deprecations word alike.
+    stacklevel : int, optional
+        Passed to ``warnings.warn``. Exact attribution is not possible through
+        a chain of ``super().__init__`` calls of varying depth, so the message
+        names the parameter and the model rather than relying on it.
+    """
+    for name in supplied:
+        spec = specs.get(name)
+        if spec is not None:
+            warnings.warn(spec._get_message(obj_name),
+                          category=DeprecationWarning, stacklevel=stacklevel)
+
+
 def is_deprecated(func):
     """Helper to check if ``func`` is wrapped by the deprecated decorator"""
     if sys.version_info < (3, 5):

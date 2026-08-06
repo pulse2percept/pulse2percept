@@ -285,9 +285,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         ignore_pickle: bool, optional
             A flag whether to ignore the pickle file in future calls to
             ``model.build()``.
-        n_threads: int, optional
-            Number of CPU threads to use during parallelization using OpenMP. 
+        n_threads : int, optional
+            Number of CPU threads to use during parallelization using OpenMP.
             Defaults to max number of user CPU cores.
+        n_jobs : int, optional
+            Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
     """
 
     def __init__(self, **params):
@@ -603,9 +605,11 @@ class BiphasicAxonMapModel(Model):
         ignore_pickle: bool, optional
             A flag whether to ignore the pickle file in future calls to
             ``model.build()``.
-        n_threads: int, optional
-            Number of CPU threads to use during parallelization using OpenMP. 
+        n_threads : int, optional
+            Number of CPU threads to use during parallelization using OpenMP.
             Defaults to max number of user CPU cores.
+        n_jobs : int, optional
+            Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     """
 

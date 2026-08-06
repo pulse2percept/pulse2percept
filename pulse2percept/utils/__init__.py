@@ -23,7 +23,8 @@ from .images import center_image, scale_image, shift_image, trim_image
 from .convolution import center_vector, conv
 from .optimize import bisect
 from .stats import r2_score, circ_r2_score
-from .deprecation import deprecated, deprecate_parameter
+from .deprecation import (deprecated, deprecate_parameter,
+                          warn_deprecated_params)
 from .three_dim import parse_3d_orient
 
 __all__ = [
@@ -53,4 +54,5 @@ __all__ = [
     'shift_image',
     'trim_image',
     'unique',
+    'warn_deprecated_params',
 ]

@@ -180,13 +180,12 @@ def test_effects_models_deprecated_engine(cls, arg):
         cls(arg)
 
 
-@pytest.mark.parametrize('engine', ('serial', 'cython'))
-def test_biphasicAxonMapSpatial(engine):
+def test_biphasicAxonMapSpatial():
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
         BiphasicAxonMapSpatial(axlambda=9).build()
 
-    model = BiphasicAxonMapModel(engine=engine, xystep=2).build()
+    model = BiphasicAxonMapModel(xystep=2).build()
     # Only accepts biphasic pulse trains with no delay dur
     implant = ArgusI(stim=np.ones(16))
     with pytest.raises(TypeError):
@@ -204,7 +203,7 @@ def test_biphasicAxonMapSpatial(engine):
     npt.assert_equal(percept.time, None)
 
     # Should be equal to axon map model if effects models return 1
-    model = BiphasicAxonMapSpatial(engine=engine, xystep=2)
+    model = BiphasicAxonMapSpatial(xystep=2)
     def bright_model(freq, amp, pdur): return 1
     def size_model(freq, amp, pdur): return 1
     def streak_model(freq, amp, pdur): return 1
@@ -221,13 +220,13 @@ def test_biphasicAxonMapSpatial(engine):
         percept.data[:, :, 0], percept_axon.max(axis='frames'))
 
     # Effect models must be callable
-    model = BiphasicAxonMapSpatial(engine=engine, xystep=2)
+    model = BiphasicAxonMapSpatial(xystep=2)
     model.bright_model = 1.0
     with pytest.raises(TypeError):
         model.build()
 
     # If t_percept is not specified, there should only be one frame
-    model = BiphasicAxonMapSpatial(engine=engine, xystep=2)
+    model = BiphasicAxonMapSpatial(xystep=2)
     model.build()
     implant = ArgusII()
     implant.stim = Stimulus({'A5': BiphasicPulseTrain(20, 1, 0.45)})
@@ -241,7 +240,7 @@ def test_biphasicAxonMapSpatial(engine):
     npt.assert_equal(np.any(percept.data[:, :, 1:]), False)
 
     # Test that default models give expected values
-    model = BiphasicAxonMapSpatial(engine=engine, rho=400, axlambda=600,
+    model = BiphasicAxonMapSpatial(rho=400, axlambda=600,
                                    xystep=1, xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     implant = ArgusII()
@@ -254,13 +253,12 @@ def test_biphasicAxonMapSpatial(engine):
     npt.assert_equal(np.sum(percept.data > 0.5691), 4)
 
 
-@pytest.mark.parametrize('engine', ('serial', 'cython'))
-def test_biphasicAxonMapModel(engine):
-    set_params = {'xystep': 2, 'engine': engine, 'rho': 432, 'axlambda': 20,
+def test_biphasicAxonMapModel():
+    set_params = {'xystep': 2, 'rho': 432, 'axlambda': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
                   'loc_od': (5, 6)}
-    model = BiphasicAxonMapModel(engine=engine)
+    model = BiphasicAxonMapModel()
     for param in set_params:
         npt.assert_equal(hasattr(model.spatial, param), True)
 
@@ -285,7 +283,7 @@ def test_biphasicAxonMapModel(engine):
     npt.assert_equal(model.axlambda, 450)
 
     # Effect model parameters can be passed even in constructor
-    model = BiphasicAxonMapModel(engine=engine, a0=5, rho=432)
+    model = BiphasicAxonMapModel(a0=5, rho=432)
     npt.assert_equal(model.a0, 5)
     npt.assert_equal(model.spatial.bright_model.a0, 5)
     npt.assert_equal(model.rho, 432)
@@ -296,7 +294,7 @@ def test_biphasicAxonMapModel(engine):
         model.invalid_param = 5
 
     # Custom parameters also propogate to effects models
-    model = BiphasicAxonMapModel(engine=engine)
+    model = BiphasicAxonMapModel()
 
     class TestSizeModel():
         def __init__(self):
@@ -329,7 +327,7 @@ def test_biphasicAxonMapModel(engine):
         TestInitClassBad()
 
     # User can override default values
-    model = BiphasicAxonMapModel(engine=engine)
+    model = BiphasicAxonMapModel()
     for key, value in set_params.items():
         setattr(model.spatial, key, value)
         npt.assert_equal(getattr(model.spatial, key), value)

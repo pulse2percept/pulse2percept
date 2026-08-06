@@ -72,8 +72,10 @@ class ScoreboardSpatial(SpatialModel):
         subject to noise in each frame.
 
     n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP. 
+        Number of CPU threads to use during parallelization using OpenMP.
         Defaults to max number of user CPU cores.
+    n_jobs : int, optional
+        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     .. important ::
         If you change important model parameters outside the constructor (e.g.,
@@ -154,8 +156,10 @@ class ScoreboardModel(Model):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP. 
+        Number of CPU threads to use during parallelization using OpenMP.
         Defaults to max number of user CPU cores.
+    n_jobs : int, optional
+        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     .. important ::
         If you change important model parameters outside the constructor (e.g.,
@@ -240,16 +244,21 @@ class AxonMapSpatial(SpatialModel):
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
     engine : string, optional
-        Engine to use for computation. Options are 'serial' and 'cython'.
-        Defaults to 'cython'
+        .. deprecated:: 0.9.1
+
+            Accepted but ignored, and will be removed in version 0.10.0. It
+            chose between the Cython and the pure-Python implementation of the
+            Jansonius axon-growth model; the Cython one is now always used.
     axon_pickle : str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle : bool, optional
         A flag whether to ignore the pickle file in future calls to
         ``model.build()``.
     n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP. 
+        Number of CPU threads to use during parallelization using OpenMP.
         Defaults to max number of user CPU cores.
+    n_jobs : int, optional
+        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     .. important ::
         If you change important model parameters outside the constructor (e.g.,
@@ -350,27 +359,7 @@ class AxonMapSpatial(SpatialModel):
         is_superior = phi0 > 0
         rho = np.linspace(*self.ax_segments_range, num=self.n_ax_segments,
                           dtype=np.float32)
-        if self.engine == 'cython':
-            xprime, yprime = fast_jansonius(rho, phi0, beta_sup, beta_inf)
-        else:
-            if is_superior:
-                # Axon is in superior retina, compute `b` (real number) from
-                # Eq. 5:
-                b = np.exp(beta_sup + 3.9 * np.tanh(-(phi0 - 121.0) / 14.0))
-                # Equation 3, `c` a positive real number:
-                c = 1.9 + 1.4 * np.tanh((phi0 - 121.0) / 14.0)
-            else:
-                # Axon is in inferior retina: compute `b` (real number) from
-                # Eq. 6:
-                b = -np.exp(beta_inf + 1.5 * np.tanh(-(-phi0 - 90.0) / 25.0))
-                # Equation 4, `c` a positive real number:
-                c = 1.0 + 0.5 * np.tanh((-phi0 - 90.0) / 25.0)
-
-            # Spiral as a function of `rho`:
-            phi = phi0 + b * (rho - rho.min()) ** c
-            # Convert to Cartesian coordinates:
-            xprime = rho * np.cos(np.deg2rad(phi))
-            yprime = rho * np.sin(np.deg2rad(phi))
+        xprime, yprime = fast_jansonius(rho, phi0, beta_sup, beta_inf)
         # Find the array elements where the axon crosses the meridian:
         if is_superior:
             # Find elements in inferior retina
@@ -954,16 +943,21 @@ class AxonMapModel(Model):
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
     engine : string, optional
-        Engine to use for computation. Options are 'serial' and 'cython'.
-        Defaults to 'cython'
+        .. deprecated:: 0.9.1
+
+            Accepted but ignored, and will be removed in version 0.10.0. It
+            chose between the Cython and the pure-Python implementation of the
+            Jansonius axon-growth model; the Cython one is now always used.
     axon_pickle : str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle : bool, optional
         A flag whether to ignore the pickle file in future calls to
         ``model.build()``.
     n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP. 
+        Number of CPU threads to use during parallelization using OpenMP.
         Defaults to max number of user CPU cores.
+    n_jobs : int, optional
+        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     .. important ::
         If you change important model parameters outside the constructor (e.g.,

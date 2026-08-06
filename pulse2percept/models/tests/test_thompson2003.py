@@ -17,7 +17,7 @@ from pulse2percept.utils.testing import assert_warns_msg
 
 def test_Thompson2003Spatial():
     # Thompson2003Spatial automatically sets `radius`:
-    model = Thompson2003Spatial(engine='serial', xystep=5)
+    model = Thompson2003Spatial(xystep=5)
     # User can set `radius`:
     model.radius = 123
     npt.assert_equal(model.radius, 123)
@@ -40,7 +40,7 @@ def test_Thompson2003Spatial():
     npt.assert_almost_equal(percept.data, 0)
 
     # Multiple frames are processed independently:
-    model = Thompson2003Spatial(engine='serial', radius=200, xystep=5,
+    model = Thompson2003Spatial(radius=200, xystep=5,
                                 xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 0], 'B3': [0, 2]}))
@@ -81,7 +81,7 @@ def test_deepcopy_Thompson2003Spatial():
 
 
 def test_Thompson2003Model():
-    model = Thompson2003Model(engine='serial', xystep=5)
+    model = Thompson2003Model(xystep=5)
     npt.assert_equal(model.has_space, True)
     npt.assert_equal(model.has_time, False)
     npt.assert_equal(hasattr(model.spatial, 'radius'), True)
@@ -109,7 +109,7 @@ def test_Thompson2003Model():
     npt.assert_almost_equal(model.predict_percept(implant).data, 0)
 
     # Multiple frames are processed independently:
-    model = Thompson2003Model(engine='serial', radius=1000, xystep=5,
+    model = Thompson2003Model(radius=1000, xystep=5,
                               xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 2]}))
@@ -136,14 +136,14 @@ def test_Thompson2003Model_predict_percept():
     npt.assert_almost_equal(percept.data[33, 46, 0], np.max(percept.data))
 
     # Full Argus II: 60 bright spots
-    model = Thompson2003Model(engine='serial', xystep=0.55, radius=100)
+    model = Thompson2003Model(xystep=0.55, radius=100)
     model.build()
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     npt.assert_equal(np.sum(np.isclose(percept.data, 1.0, rtol=0.1, atol=0.1)),
                      84)
 
     # Model gives same outcome as Spatial:
-    spatial = Thompson2003Spatial(engine='serial', xystep=1, radius=100)
+    spatial = Thompson2003Spatial(xystep=1, radius=100)
     spatial.build()
     spatial_percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     npt.assert_almost_equal(percept.data, spatial_percept.data)

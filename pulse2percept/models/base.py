@@ -12,8 +12,38 @@ import multiprocessing
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
 from ..percepts import Percept
-from ..utils import (PrettyPrint, Frozen, FreezeError, bisect)
+from ..utils import (PrettyPrint, Frozen, FreezeError, bisect,
+                     deprecate_parameter, warn_deprecated_params)
 from ..utils.constants import ZORDER
+
+
+def _n_jobs_alias():
+    """Build the ``n_jobs`` property, an alias for ``n_threads``
+
+    Both names refer to the same OpenMP thread count, and both read and write
+    the same storage, so they can never drift apart. ``None`` and ``-1`` mean
+    "use every core", following the scikit-learn convention.
+    """
+    def getter(self):
+        return self.n_threads
+
+    def setter(self, val):
+        if val is None:
+            val = multiprocessing.cpu_count()
+        if isinstance(val, bool) or not isinstance(val, (int, np.integer)):
+            raise ValueError(f"n_jobs must be an integer, None, or -1 (all "
+                             f"cores), not {val!r}.")
+        if val == -1:
+            val = multiprocessing.cpu_count()
+        if val < 1:
+            raise ValueError(f"n_jobs must be >= 1, or -1 for all cores, "
+                             f"not {val}.")
+        self.n_threads = int(val)
+
+    return property(getter, setter,
+                    doc="Number of OpenMP threads to use during "
+                        "parallelization. An alias for ``n_threads``: both "
+                        "names read and write the same value.")
 
 
 class NotBuiltError(ValueError, AttributeError):
@@ -38,6 +68,11 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
 
     """
 
+    # Parameters that are still accepted, but that nothing reads any more.
+    # Maps a name to the ``deprecate_parameter`` describing it; subclasses
+    # override this (see ``SpatialModel``).
+    _deprecated_params = {}
+
     def __init__(self, **params):
         """BaseModel constructor
 
@@ -50,6 +85,10 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
         defaults = self.get_default_params()
         for key, val in defaults.items():
             setattr(self, key, val)
+        # Warn on the ones the user named explicitly, before they are set:
+        # applying a default must stay silent.
+        warn_deprecated_params(type(self).__name__, params,
+                               self._deprecated_params)
         # Then overwrite any arguments also given in `params`:
         for key, val in params.items():
             if key in defaults:
@@ -68,6 +107,8 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
 
     def set_params(self, **params):
         """Set the parameters of this model"""
+        warn_deprecated_params(type(self).__name__, params,
+                               self._deprecated_params)
         for key, value in params.items():
             setattr(self, key, value)
 
@@ -228,6 +269,25 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
            <topics-models-building-your-own>`
     """
 
+    # Parameters that are still accepted so existing code keeps running, but
+    # that nothing reads any more.
+    _deprecated_params = {
+        'engine': deprecate_parameter(
+            'engine', deprecated_version='0.9.1', removed_version='0.10.0',
+            addendum="It chose between the Cython and the pure-Python "
+                     "implementation of the Jansonius axon-growth model; the "
+                     "Cython one is now always used. Use ``n_threads`` (or "
+                     "its alias ``n_jobs``) to control parallelism."),
+        'scheduler': deprecate_parameter(
+            'scheduler', deprecated_version='0.9.1',
+            removed_version='0.10.0',
+            addendum="It selected the joblib or dask parallel backend, "
+                     "support for which was removed in v0.9.1."),
+    }
+
+    #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
+    n_jobs = _n_jobs_alias()
+
     def __init__(self, **params):
         super().__init__(**params)
         self.grid = None
@@ -252,15 +312,17 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'n_gray': None,
             # Salt-and-pepper noise on the output:
             'noise': None,
-            # Cython can be used to speed up computations:
+            # Deprecated in 0.9.1, removed in 0.10.0; see _deprecated_params:
             'engine': 'cython',
             'scheduler': 'threading',
-            'n_jobs': 1,
             # True: print status messages, 0: silent
             'verbose': True,
             # default to 2d model. 3d models should override this
             'ndim' : [2],
-            'n_threads': multiprocessing.cpu_count()
+            # Number of OpenMP threads. `n_jobs` is an alias that writes
+            # through to `n_threads`, so it has to be applied *after* it:
+            'n_threads': multiprocessing.cpu_count(),
+            'n_jobs': None,
         }
         return params
 
@@ -533,6 +595,9 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
            <topics-models-building-your-own>`
     """
 
+    #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
+    n_jobs = _n_jobs_alias()
+
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
         params = {
@@ -542,7 +607,10 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             'thresh_percept': 0,
             # True: print status messages, False: silent
             'verbose': True,
-            'n_threads': multiprocessing.cpu_count()
+            # `n_jobs` is an alias that writes through to `n_threads`, so it
+            # has to be applied *after* it:
+            'n_threads': multiprocessing.cpu_count(),
+            'n_jobs': None,
         }
         return params
 
@@ -922,6 +990,14 @@ class Model(PrettyPrint):
         params: dict
             A dictionary of parameters to set.
         """
+        # A Model built from *instances* never routes through
+        # ``BaseModel.__init__``, so the deprecated names have to be caught
+        # here too. Collect both sides first so a parameter deprecated on the
+        # spatial *and* temporal model only warns once.
+        specs = {}
+        for model in (self.spatial, self.temporal):
+            specs.update(getattr(model, '_deprecated_params', {}))
+        warn_deprecated_params(type(self).__name__, params, specs)
         for key, val in params.items():
             setattr(self, key, val)
 
