@@ -22,9 +22,16 @@ def _interp_rows(x, xp, fp):
     electrodes.
 
     The arithmetic is deliberately carried out in double precision and in the
-    same order as ``np.interp``'s C loop, so that the result is identical down
-    to the last bit: temporal models resolve stimulus edges on a fixed
-    simulation grid, where a one-ulp difference can change the output.
+    same order as ``np.interp``'s C loop, because temporal models resolve
+    stimulus edges on a fixed simulation grid.
+
+    Agreement with ``np.interp`` is exact wherever no arithmetic is needed:
+    on a knot, or beyond the end points, where the stored value is assigned
+    verbatim. For interior points it is exact to within one rounding - a C
+    compiler may contract ``slope * dx + y0`` into a single fused
+    multiply-add (it does on arm64), whereas the NumPy expression below
+    always rounds twice. That is at most a few ULP of float64, well below the
+    float32 that the caller ends up storing.
 
     Parameters
     ----------

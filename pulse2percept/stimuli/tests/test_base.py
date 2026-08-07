@@ -709,8 +709,13 @@ def test_Stimulus_shallow_copy():
 def test_interp_rows(n_el, n_t, n_q):
     # `_interp_rows` replaces a per-electrode np.interp loop, and switches
     # between a vectorized and a looped implementation depending on the shape.
-    # Both must agree with np.interp down to the last bit, because temporal
-    # models resolve stimulus edges on a fixed simulation grid.
+    # Both must agree with np.interp, because temporal models resolve stimulus
+    # edges on a fixed simulation grid.
+    #
+    # Interior points are allowed to differ by a rounding: a C compiler may
+    # contract `slope * dx + y0` into a single fused multiply-add inside
+    # np.interp (it does on arm64), where the NumPy expression rounds twice.
+    # Points that need no arithmetic must match exactly on every platform.
     rng = np.random.default_rng(n_el * 1000 + n_t * 10 + n_q)
     xp = np.unique(np.sort(rng.random(n_t).astype(np.float32) * 100))
     fp = ((rng.random((n_el, xp.size)) - 0.5) * 200).astype(np.float32)
@@ -720,7 +725,17 @@ def test_interp_rows(n_el, n_t, n_q):
               np.full(n_q, xp[-1], dtype=np.float32)):         # right end point
         expected = np.array([np.interp(x, xp, row) for row in fp])
         expected = expected.reshape((-1, x.size))
-        npt.assert_array_equal(_interp_rows(x, xp, fp), expected)
+        actual = _interp_rows(x, xp, fp)
+        # Scale the tolerance by the size of the data, not of the result: the
+        # rounding happens on the intermediate product, which stays the size
+        # of the inputs even where the result is near zero (any interpolation
+        # across a zero crossing, which biphasic pulses do all the time).
+        npt.assert_allclose(actual, expected, rtol=1e-12,
+                            atol=1e-10 * np.abs(fp).max())
+        # End points and exact knots are assigned verbatim, never computed,
+        # so those must agree exactly on every platform:
+        verbatim = (x <= xp[0]) | (x >= xp[-1]) | np.isin(x, xp)
+        npt.assert_array_equal(actual[:, verbatim], expected[:, verbatim])
 
 
 def test_interp_rows_edge_cases():
@@ -744,7 +759,9 @@ def test_interp_rows_edge_cases():
 
 def test_Stimulus_getitem_many_electrodes():
     # Interpolating a stimulus with many electrodes takes the vectorized path;
-    # the result must be identical to interpolating each electrode by itself.
+    # the result must match interpolating each electrode by itself, to within
+    # the one float32 ULP that a fused multiply-add inside np.interp can cost
+    # (see `test_interp_rows`):
     rng = np.random.default_rng(0)
     data = rng.random((200, 25)).astype(np.float32)
     stim = Stimulus(data)
@@ -753,8 +770,8 @@ def test_Stimulus_getitem_many_electrodes():
         t32 = np.float32(np.atleast_1d(t))
         expected = np.array([np.interp(t32, stim.time, row)
                              for row in data]).astype(np.float32)
-        npt.assert_array_equal(np.asarray(stim[:, t]).reshape(expected.shape),
-                               expected)
+        actual = np.asarray(stim[:, t]).reshape(expected.shape)
+        npt.assert_almost_equal(actual, expected, decimal=6)
     # A single electrode of that stimulus must give the same values:
     npt.assert_almost_equal(stim[7, 3.7], stim[:, 3.7][7, 0])
 
