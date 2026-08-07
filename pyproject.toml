@@ -9,8 +9,8 @@ requires = [
   # and 2.x, because building against 2.x targets the older C API by default.
   # One compiled against 1.x does *not* work under 2.x -- it raises "A module
   # that was compiled using NumPy 1.x cannot be run in NumPy 2.x". Since the
-  # runtime requirement below allows numpy>=1.21,<3, the 3.10/3.11 wheels
-  # built against oldest-supported-numpy broke for anyone who had numpy 2
+  # runtime requirement below allows numpy>=1.23.2,<3, the 3.11 wheels built
+  # against oldest-supported-numpy broke for anyone who had numpy 2
   # installed, which is now the default nearly everywhere.
   #
   # oldest-supported-numpy is deprecated and documents this as the migration.
@@ -20,7 +20,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pulse2percept"
-version = "0.9.1"
+version = "0.9.2.dev0"
 description = "A Python-based simulation framework for bionic vision"
 readme = "README.rst"
 license = { file = "LICENSE" }
@@ -37,14 +37,18 @@ classifiers = [
     "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent"
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
+# Lower bounds are the first release of each package that ships wheels for the
+# oldest Python we support. Anything older cannot be installed on 3.11 anyway,
+# so declaring it only makes the metadata claim something we never test.
+# Revisit these whenever the minimum Python moves.
 dependencies = [
-    "numpy>=1.21,<3",
-    "scipy>=1.6",
-    "scikit-image>=0.14",
-    "matplotlib>=3.0.2",
+    "numpy>=1.23.2,<3",
+    "scipy>=1.9.2",
+    "scikit-image>=0.20",
+    "matplotlib>=3.6",
     "imageio-ffmpeg>=0.4",
-    "pandas",
+    "pandas>=1.5",
 ]
 
 [project.optional-dependencies]

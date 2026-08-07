@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13", "3.12", "3.11", "3.10"]
+        python-version: ["3.13", "3.12", "3.11"]
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     # Force bash on all OSes (avoids PowerShell var-expansion issues on Windows)
@@ -52,10 +52,14 @@ jobs:
           sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
 
       # ---- Decide NumPy major per Python ----
+      # Runtime metadata allows numpy>=1.23.2,<3, so the matrix has to cover
+      # both majors. The oldest supported Python carries the 1.x leg -- 1.26
+      # is the last 1.x release and has no wheels past 3.12 -- and everything
+      # newer runs on 2.x.
       - name: Choose NumPy major
         run: |
           py="${{ matrix.python-version }}"
-          if [[ "$py" == 3.10* || "$py" == 3.11* ]]; then
+          if [[ "$py" == 3.11* ]]; then
             echo "NUMPY_SPEC=<2" >> "$GITHUB_ENV"       # build+run on NumPy 1.26.x ABI
           else
             echo "NUMPY_SPEC=>=2,<3" >> "$GITHUB_ENV"   # build+run on NumPy 2.x ABI
@@ -68,12 +72,12 @@ jobs:
           python -m pip install "setuptools>=64" wheel "Cython>=3.0.8" "numpy${NUMPY_SPEC}"
           python -c "import numpy, sys; print('Build NumPy', numpy.__version__, 'on', sys.version)"
 
-      # ---- Constraints to stop test deps from upgrading NumPy on 3.10/3.11 ----
+      # ---- Constraints to stop test deps from upgrading NumPy on 3.11 ----
       - name: Write constraints
         run: |
           CFILE="$RUNNER_TEMP/constraints.txt"
           py="${{ matrix.python-version }}"
-          if [[ "$py" == 3.10* || "$py" == 3.11* ]]; then
+          if [[ "$py" == 3.11* ]]; then
             {
               echo "numpy<2"
               echo "scipy<1.16"

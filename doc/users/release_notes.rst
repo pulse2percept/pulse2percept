@@ -4,6 +4,16 @@
 Release Notes
 =============
 
+v0.9.2 (unreleased)
+-------------------
+
+Highlights:
+
+*  The minimum supported Python is now 3.11. Along with it, the minimum
+   versions of NumPy (1.23.2), SciPy (1.9.2), scikit-image (0.20), Matplotlib
+   (3.6) and pandas (1.5) now match the oldest release of each that ships
+   wheels for Python 3.11
+
 v0.9.1 (2026-08-06)
 -------------------
 

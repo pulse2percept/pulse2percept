@@ -7,9 +7,9 @@ from Cython.Build import cythonize
 import numpy as _np
 
 # Supported matrix (purely informational warning)
-SUPPORTED_PYTHON_VERSIONS = {"3.10", "3.11", "3.12", "3.13"}
+SUPPORTED_PYTHON_VERSIONS = {"3.11", "3.12", "3.13"}
 SUPPORTED_PLATFORMS = {"Linux", "Windows", "Darwin"}
-EXPLICITLY_UNSUPPORTED = set()  # e.g., {("Windows", "3.10")}
+EXPLICITLY_UNSUPPORTED = set()  # e.g., {("Windows", "3.11")}
 
 
 def _is_supported():

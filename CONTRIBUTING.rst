@@ -108,7 +108,7 @@ configured by the maintainers, such as dependency-update bots.
 Setting up a development environment
 ====================================
 
-pulse2percept requires Python 3.10 or newer.
+pulse2percept requires Python 3.11 or newer.
 
 After forking the repository, clone your fork and add the main repository as
 ``upstream``:

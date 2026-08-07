@@ -277,9 +277,6 @@ def warn_deprecated_params(obj_name, supplied, specs, stacklevel=3):
 
 def is_deprecated(func):
     """Helper to check if ``func`` is wrapped by the deprecated decorator"""
-    if sys.version_info < (3, 5):
-        raise NotImplementedError("This is only available for Python 3.5 "
-                                  "or above")
     closures = getattr(func, '__closure__', [])
     if closures is None:
         closures = []
