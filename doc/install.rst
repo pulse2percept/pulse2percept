@@ -220,8 +220,8 @@ Cannot install platform-specific wheel
 --------------------------------------
 
 Following recent trends in the NumPy and SciPy community, we do not provide
-wheels for 32-bit platforms (this includes all Unix platforms and Windows
-starting with Python 3.10).
+wheels for 32-bit platforms, on any operating system or Python version we
+support.
 
 The main reason is that p2p heavily depends on NumPy, SciPy, Matplotlib,
 and Scikit-Image. Since these packages no longer provide wheels for 32-bit

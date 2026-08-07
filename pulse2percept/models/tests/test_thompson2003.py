@@ -164,7 +164,7 @@ def test_deepcopy_Thompson2003Model():
     npt.assert_equal(id(original) != id(copied), True)
 
     # Assert the objects are equivalent to each other
-    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+    npt.assert_equal(original.__dict__, copied.__dict__)
 
     # Assert building one object does not affect the copied
     original.build()
