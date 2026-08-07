@@ -10,6 +10,6 @@ matplotlib>=3.9
 pandas>=3.0.5,<3.1
 h5py
 nibabel>=5.4.2
-pooch>=1.8
+pooch>=1.9.0
 neuropythy==0.12.16
 pickleshare
