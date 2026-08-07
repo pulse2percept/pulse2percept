@@ -4,6 +4,7 @@ import warnings
 from ..utils import PrettyPrint, unique, is_strictly_increasing
 from ..utils.constants import DT, MIN_AMP
 from ._base import fast_compress_space, fast_compress_time
+from .names import ElectrodeNames
 
 from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
@@ -127,6 +128,31 @@ def _as_scalar_column(source):
     if flat.ndim != 1 or flat.dtype.kind not in 'biuf':
         return None
     return flat.astype(np.float32).reshape((-1, 1))
+
+
+def _names_equal(a, b):
+    """Whether two containers hold the same electrode names
+
+    Two ``ElectrodeNames`` over the same grid hold the same names iff they
+    select the same indices, which compares a few million integers rather than
+    generating (and then comparing) a few million strings.
+    """
+    if isinstance(a, ElectrodeNames) and isinstance(b, ElectrodeNames):
+        if a.grid_shape == b.grid_shape:
+            return np.array_equal(a.indices, b.indices)
+    return np.array_equal(np.asarray(a), np.asarray(b))
+
+
+def _index_of_name(electrodes, name):
+    """Return the position of electrode ``name`` in ``electrodes``
+
+    ``ElectrodeNames`` can do this arithmetically, in constant time.
+    Everything else falls back to a linear scan, which is what looking up a
+    name in a plain array of names has always cost.
+    """
+    if isinstance(electrodes, ElectrodeNames):
+        return electrodes.index(name)
+    return list(electrodes).index(name)
 
 
 def merge_time_axes(data, time, merge_tolerance=1e-6):
@@ -440,11 +466,27 @@ class Stimulus(PrettyPrint):
         # User can overwrite the names of the electrodes:
         if electrodes is not None:
             _renamed_from = _electrodes
-            _electrodes = np.array([electrodes]).flatten()
-            _auto_electrodes = False
+            if isinstance(electrodes, ElectrodeNames):
+                # Names generated from a grid pattern. Flattening one is a
+                # view, not a copy, and it already knows whether it can
+                # contain duplicates - so neither the copy below nor the
+                # `np.unique` further down is needed. This is the path taken
+                # by every image and video stimulus, where `electrodes` has
+                # one entry per pixel:
+                _electrodes = electrodes.ravel()
+                _auto_electrodes = _electrodes.check_unique()
+            else:
+                _electrodes = np.array([electrodes]).flatten()
+                _auto_electrodes = False
         else:
             _renamed_from = None
-            if not isinstance(_electrodes, np.ndarray):
+            if isinstance(_electrodes, ElectrodeNames):
+                # The source brought its own generated names along (e.g.
+                # `Stimulus(image_stim)`). Keep them lazy rather than
+                # flattening them into actual strings below:
+                _electrodes = _electrodes.ravel()
+                _auto_electrodes = _electrodes.check_unique()
+            elif not isinstance(_electrodes, np.ndarray):
                 # Could be a list of NumPy arrays, need to flatten:
                 try:
                     _electrodes = np.concatenate(_electrodes)
@@ -458,6 +500,12 @@ class Stimulus(PrettyPrint):
         # construction, so the sort that np.unique performs can be skipped
         # (it dominates the cost of building an image or video stimulus):
         if not _auto_electrodes:
+            if isinstance(_electrodes, ElectrodeNames):
+                # Only a repeated index can make grid names collide, and
+                # `check_unique` has just established that one does. The
+                # renaming below writes into the container, so it needs the
+                # actual names:
+                _electrodes = np.asarray(_electrodes)
             unq, nunq = np.unique(_electrodes, return_index=True)
             if len(unq) != _data.shape[0]:
                 # We found duplicate names: replace them by integer index
@@ -474,18 +522,24 @@ class Stimulus(PrettyPrint):
                         np.result_type(_electrodes.dtype, f'U{n_digits}'))
                 _electrodes[idx] = idx
 
-        if _renamed_from is not None and len(_renamed_from) == len(_electrodes):
-            # Per-electrode metadata is addressed by electrode name (that is
-            # how BiphasicAxonMapModel finds its stimulus parameters), so
-            # renaming the electrodes has to rename those keys too. Keys that
-            # do not belong to any electrode are left alone, and `metadata`
-            # may be shared with the source stimulus, so never rename in
-            # place:
-            elec_meta = self.metadata.get('electrodes')
+        # Per-electrode metadata is addressed by electrode name (that is how
+        # BiphasicAxonMapModel finds its stimulus parameters), so renaming the
+        # electrodes has to rename those keys too. Only stimuli that carry
+        # such metadata need any of this, and they are the small ones: an
+        # image or video stimulus has one electrode per pixel and no
+        # per-electrode metadata at all. Testing that first keeps the
+        # pair-by-pair walk below off the path that renames a million
+        # electrodes:
+        elec_meta = self.metadata.get('electrodes')
+        if (elec_meta and _renamed_from is not None and
+                len(_renamed_from) == len(_electrodes)):
+            # Keys that do not belong to any electrode are left alone, and
+            # `metadata` may be shared with the source stimulus, so never
+            # rename in place:
             rename = {str(old): str(new)
                       for old, new in zip(_renamed_from, _electrodes)
                       if str(old) != str(new)}
-            if elec_meta and rename:
+            if rename:
                 self.metadata = dict(self.metadata)
                 self.metadata['electrodes'] = {rename.get(k, k): v
                                                for k, v in elec_meta.items()}
@@ -583,7 +637,7 @@ class Stimulus(PrettyPrint):
                             f"{type(other)}.")
         if self.time is None or other.time is None:
             raise ValueError("Cannot append another stimulus if time=None.")
-        if not np.all(other.electrodes == self.electrodes):
+        if not _names_equal(self.electrodes, other.electrodes):
             raise ValueError("Both stimuli must have the same electrodes.")
         if other.time[0] < 0:
             raise NotImplementedError("Appending a stimulus with a negative "
@@ -647,7 +701,7 @@ class Stimulus(PrettyPrint):
                 # Another possibility is that a string with the electrode name
                 # was passed. In this case, find the corresponding list index:
                 try:
-                    keep_el[list(self.electrodes).index(electrode)] = False
+                    keep_el[_index_of_name(self.electrodes, electrode)] = False
                 except ValueError:
                     raise ValueError(f'Electrode "{electrode}" not found.')
         self._stim = {
@@ -807,7 +861,7 @@ class Stimulus(PrettyPrint):
             for e in np.array([electrodes]).ravel():
                 if isinstance(e, str):
                     # Use string as index into the list of electrode names:
-                    parsed_electrodes.append(list(self.electrodes).index(e))
+                    parsed_electrodes.append(_index_of_name(self.electrodes, e))
                 else:
                     # Most likely an integer index:
                     parsed_electrodes.append(e)
@@ -896,7 +950,7 @@ class Stimulus(PrettyPrint):
                 return False
         if len(self.electrodes) != len(other.electrodes):
             return False
-        if not np.array_equal(self.electrodes, other.electrodes):
+        if not _names_equal(self.electrodes, other.electrodes):
             return False
         if self.shape != other.shape:
             return False

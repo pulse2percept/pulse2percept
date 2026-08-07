@@ -20,6 +20,7 @@ from skimage.filters import (threshold_mean, threshold_minimum, threshold_otsu,
 from skimage.feature import canny
 
 from .base import Stimulus
+from .names import ElectrodeNames
 from .pulses import BiphasicPulse
 from ..utils import center_image, shift_image, scale_image, trim_image
 
@@ -56,7 +57,10 @@ class ImageStimulus(Stimulus):
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. If none are
-        given, electrode names will be numbered 0..N.
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
         .. note::
            The number of electrode names provided must match the number of
@@ -114,6 +118,13 @@ class ImageStimulus(Stimulus):
             img = img_resize(img, (height, width))
         # Store the original image shape for resizing and color conversion:
         self.img_shape = img.shape
+        if electrodes is None:
+            # Name every pixel after its place in the image: 'A1' is the
+            # top-left pixel, 'C12' sits in the third row and twelfth column,
+            # and a color image suffixes the channel ('A1_R'). The names are
+            # generated on demand rather than stored, which is what keeps a
+            # megapixel image from paying for a million strings:
+            electrodes = ElectrodeNames(self.img_shape)
         # Convert to float array in [0, 1] and call the Stimulus constructor:
         super().__init__(img_as_float32(img).ravel(),
                                             time=None, electrodes=electrodes,
@@ -173,7 +184,9 @@ class ImageStimulus(Stimulus):
         ----------
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
-            given, electrode names will be numbered 0..N.
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
             .. note::
                The number of electrode names provided must match the number of
@@ -209,7 +222,9 @@ class ImageStimulus(Stimulus):
             Shape of the resized image
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
-            given, electrode names will be numbered 0..N.
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
             .. note::
                The number of electrode names provided must match the number of
@@ -259,7 +274,9 @@ class ImageStimulus(Stimulus):
             Number of rows to crop from the bottom
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
-            given, electrode names will be numbered 0..N.
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
             .. note::
 
@@ -302,9 +319,10 @@ class ImageStimulus(Stimulus):
             cropped_img = img[y0:y1, x0:x1, :3]
         else:
             cropped_img = img[y0:y1, x0:x1]
-        electrodes = self.electrodes
-        if electrodes is not None:
-            electrodes = electrodes.reshape(self.img_shape)
+        if electrodes is None:
+            # Carry the cropped pixels' original names over, so that a pixel
+            # keeps the same name before and after cropping:
+            electrodes = self.electrodes.reshape(self.img_shape)
             if len(self.img_shape) == 3:
                 electrodes = electrodes[y0:y1, x0:x1, :3].ravel()
             else:
@@ -323,7 +341,9 @@ class ImageStimulus(Stimulus):
             Any pixels with gray levels > tol will be trimmed.
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
-            given, electrode names will be numbered 0..N.
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
             .. note::
                The number of electrode names provided must match the number of
@@ -652,7 +672,10 @@ class SnellenChart(ImageStimulus):
 
     electrodes : int, string or list thereof; optional, default: None
         Optionally, you can provide your own electrode names. If none are
-        given, electrode names will be numbered 0..N.
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
         .. note::
            The number of electrode names provided must match the number of
@@ -725,7 +748,10 @@ class LogoBVL(ImageStimulus):
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. If none are
-        given, electrode names will be numbered 0..N.
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
         .. note::
            The number of electrode names provided must match the number of
@@ -767,7 +793,10 @@ class LogoUCSB(ImageStimulus):
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. If none are
-        given, electrode names will be numbered 0..N.
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
         .. note::
            The number of electrode names provided must match the number of

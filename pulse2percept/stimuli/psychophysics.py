@@ -55,7 +55,10 @@ class GratingStimulus(VideoStimulus):
 
     electrodes : int, string or list thereof; optional, default: None
         Optionally, you can provide your own electrode names. If none are
-        given, electrode names will be numbered 0..N.
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
     metadata : dict, optional, default: None
         Additional stimulus metadata can be stored in a dictionary.
@@ -157,7 +160,10 @@ class BarStimulus(VideoStimulus):
 
     electrodes : int, string or list thereof; optional, default: None
         Optionally, you can provide your own electrode names. If none are
-        given, electrode names will be numbered 0..N.
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
     metadata : dict, optional, default: None
         Additional stimulus metadata can be stored in a dictionary.

@@ -17,6 +17,7 @@ from skimage import img_as_float32
 from imageio import get_reader as video_reader
 
 from .base import Stimulus
+from .names import ElectrodeNames
 from .pulses import BiphasicPulse
 from ..utils import center_image, shift_image, scale_image, trim_image, unique
 from ..utils.constants import DT
@@ -65,7 +66,10 @@ class VideoStimulus(Stimulus):
 
     electrodes : int, string or list thereof; optional, default: None
         Optionally, you can provide your own electrode names. If none are
-        given, electrode names will be numbered 0..N.
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
         .. note::
            The number of electrode names provided must match the number of
@@ -141,6 +145,11 @@ class VideoStimulus(Stimulus):
             vid = vid_resize(vid, (height, width, *vid.shape[2:]))
         # Store the original image shape for resizing and color conversion:
         self.vid_shape = vid.shape
+        if electrodes is None:
+            # One electrode per pixel, named after its place in the frame
+            # ('A1', 'C12', 'A1_R' for a color video). The last axis holds the
+            # frames, which are the time component and not electrodes:
+            electrodes = ElectrodeNames(self.vid_shape[:-1])
         super().__init__(vid.reshape((-1, vid.shape[-1])),
                                             time=time, electrodes=electrodes,
                                             metadata=metadata,
@@ -200,7 +209,9 @@ class VideoStimulus(Stimulus):
         ----------
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
-            given, electrode names will be numbered 0..N.
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
             .. note::
                The number of electrode names provided must match the number of
@@ -230,7 +241,9 @@ class VideoStimulus(Stimulus):
             aspect ratio.
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
-            given, electrode names will be numbered 0..N.
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
             .. note::
                The number of electrode names provided must match the number of
@@ -291,7 +304,9 @@ class VideoStimulus(Stimulus):
             Number of frames to crop from the back (end) of the video
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
-            given, electrode names will be numbered 0..N.
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
             .. note::
 
@@ -348,9 +363,10 @@ class VideoStimulus(Stimulus):
         vid = self.data.reshape(self.vid_shape)
         cropped_vid = vid[y0:y1, x0:x1, ..., t0:t1]  # could be RGB or gray
         time = self.time[t0:t1]
-        electrodes = self.electrodes
-        if electrodes is not None:
-            electrodes = electrodes.reshape(self.vid_shape[:-1])
+        if electrodes is None:
+            # Carry the cropped pixels' original names over, so that a pixel
+            # keeps the same name before and after cropping:
+            electrodes = self.electrodes.reshape(self.vid_shape[:-1])
             electrodes = electrodes[y0:y1, x0:x1, ...].ravel()
         return VideoStimulus(cropped_vid, electrodes=electrodes, time=time,
                              metadata=self.metadata)
@@ -366,7 +382,9 @@ class VideoStimulus(Stimulus):
             Any pixels with gray levels > tol will be trimmed.
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
-            given, electrode names will be numbered 0..N.
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
             .. note::
                The number of electrode names provided must match the number of
@@ -696,7 +714,10 @@ class BostonTrain(VideoStimulus):
 
     electrodes : int, string or list thereof; optional, default: None
         Optionally, you can provide your own electrode names. If none are
-        given, electrode names will be numbered 0..N.
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
         .. note::
            The number of electrode names provided must match the number of
@@ -743,7 +764,10 @@ class GirlPool(VideoStimulus):
 
     electrodes : int, string or list thereof; optional, default: None
         Optionally, you can provide your own electrode names. If none are
-        given, electrode names will be numbered 0..N.
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
 
         .. note::
            The number of electrode names provided must match the number of
