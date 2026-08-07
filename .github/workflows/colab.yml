@@ -130,25 +130,24 @@ jobs:
               --source-root /repo \
               ${{ matrix.source == 'pypi' && '--require-wheel' || '' }}
 
-  numpy-abi:
-    # An extension compiled against numpy 1.x cannot be imported under numpy
-    # 2.x -- users hit "A module that was compiled using NumPy 1.x cannot be
-    # run in NumPy 2.x" and the install looks broken. Building against 2.x is
-    # what makes a wheel work on both, so every wheel we ship must import
-    # under either. The regular test matrix pins 3.11 to numpy 1.x and so
-    # never exercises this.
-    name: NumPy ABI py${{ matrix.py }} on NumPy ${{ matrix.numpy }}
+  wheel-install:
+    # Build a wheel the way pip would and install it clean-room. Nothing else
+    # covers that path: build.yml only ever does an editable install with
+    # --no-build-isolation and preinstalled headers, and wheels.yml builds
+    # wheels without importing them.
+    #
+    # This used to also test importing under NumPy 1.x. That is gone with the
+    # move to numpy>=2 -- there is one ABI now, and the resolver cannot pick
+    # anything else -- but building against 2.x and proving the result
+    # imports is still the check that keeps "A module that was compiled using
+    # NumPy 1.x cannot be run in NumPy 2.x" from reaching users.
+    name: Wheel install py${{ matrix.py }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         py: [ "3.11", "3.12", "3.13" ]
-        numpy: [ "2.x", "1.x" ]
-        exclude:
-          # NumPy 1.26 is the last 1.x release and has no 3.13 wheels.
-          - py: "3.13"
-            numpy: "1.x"
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -180,43 +179,18 @@ jobs:
           python -m build --wheel --outdir dist
           ls -l dist
 
-      - name: Install the wheel under NumPy ${{ matrix.numpy }}
+      - name: Install the wheel
+        # No constraints file: the declared requirements are the thing under
+        # test, so let the resolver do exactly what a user's pip would do.
         run: |
           set -euo pipefail
-          CFILE="$RUNNER_TEMP/constraints.txt"
-
-          # Resolve the whole environment against the NumPy under test.
-          #
-          # Installing and *then* downgrading NumPy does not work: it leaves
-          # SciPy built against one major running against the other, which is
-          # a combination no user could have. SciPy also has to be pinned
-          # explicitly rather than left to the resolver -- scipy 1.16 declares
-          # "numpy>=1.25.2,<2.6", so a numpy<2 constraint alone happily keeps
-          # it, but its wheels are built against NumPy 2 and die on import
-          # under 1.26 with "module 'numpy' has no attribute 'long'". pip
-          # cannot see that from the metadata. This mirrors the constraints in
-          # build.yml, which exist for the same reason.
-          case "${{ matrix.numpy }}" in
-            2.x)
-              printf 'numpy>=2,<3\n' > "$CFILE"
-              ;;
-            1.x)
-              printf 'numpy<2\nscipy<1.16\n' > "$CFILE"
-              ;;
-            *)
-              echo "unknown NumPy profile: ${{ matrix.numpy }}" >&2
-              exit 1
-              ;;
-          esac
-          echo "Constraints:"; cat "$CFILE"
-
           python -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/python" -m pip install --upgrade pip
-          "$RUNNER_TEMP/venv/bin/python" -m pip install -c "$CFILE" dist/*.whl
+          "$RUNNER_TEMP/venv/bin/python" -m pip install dist/*.whl
           "$RUNNER_TEMP/venv/bin/python" -c \
             "import numpy, scipy; print('numpy', numpy.__version__, '/ scipy', scipy.__version__)"
 
-      - name: Import against NumPy ${{ matrix.numpy }}
+      - name: Import the installed package
         # Run from a directory that is not the checkout: from the repo root
         # the source tree shadows the wheel and this would quietly test the
         # wrong thing.

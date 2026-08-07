@@ -43,8 +43,8 @@ from pathlib import Path
 # this package declares itself is the actionable kind: it is ours to fix.
 DIST_NAME = "pulse2percept"
 
-# `Collecting numpy<1.27,>=1.21 (from pulse2percept)`, or with a chain of
-# requirers: `(from scikit-image>=0.14->pulse2percept)`. This is the only
+# `Collecting numpy<3,>=2.0 (from pulse2percept)`, or with a chain of
+# requirers: `(from scikit-image>=0.24->pulse2percept)`. This is the only
 # place pip states the *reason* it picked a version.
 COLLECTING = re.compile(
     r"^\s*Collecting\s+(?P<req>[^\s(]+)"

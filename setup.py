@@ -32,13 +32,19 @@ if not _ok:
     )
 
 
-def _numpy_api_macro():
-    """Pick the correct API macro for NumPy 1.x vs 2.x at *build* time."""
-    major = int(_np.__version__.split(".")[0])
-    if major >= 2:
-        return ("NPY_NO_DEPRECATED_API", "NPY_2_0_API_VERSION")
-    # 1.7 is the canonical stable API for NumPy 1.x builds
-    return ("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")
+# NumPy 2.x is the only supported build and runtime, so target its C API
+# unconditionally.
+NUMPY_API_MACRO = ("NPY_NO_DEPRECATED_API", "NPY_2_0_API_VERSION")
+
+if int(_np.__version__.split(".")[0]) < 2:
+    # pyproject.toml pins numpy>=2.0 as a build requirement, so this is only
+    # reachable with --no-build-isolation. Say so here rather than let it
+    # surface as a compiler error about a missing macro.
+    raise RuntimeError(
+        f"Building pulse2percept requires NumPy 2.0 or newer, found "
+        f"{_np.__version__}. Upgrade NumPy, or drop --no-build-isolation and "
+        f"let pip install the declared build requirements."
+    )
 
 
 def _find_pyx_modules(base_dir, exclude_dirs=None):
@@ -76,7 +82,6 @@ class OpenMPBuildExt(build_ext):
     """Enable OpenMP when available; degrade gracefully otherwise."""
 
     def build_extensions(self):
-        api_macro = _numpy_api_macro()
         # Disable OMP if explicitly requested *or* when building on RTD
         disable_omp = (
             os.environ.get("P2P_DISABLE_OPENMP", "0") == "1"
@@ -89,7 +94,7 @@ class OpenMPBuildExt(build_ext):
             ext.extra_link_args = list(getattr(ext, "extra_link_args", []))
 
             # Always add the NumPy API macro
-            ext.define_macros.append(api_macro)
+            ext.define_macros.append(NUMPY_API_MACRO)
 
             if disable_omp:
                 # Don’t add any OpenMP flags; useful on RTD

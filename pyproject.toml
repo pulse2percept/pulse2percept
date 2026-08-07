@@ -3,16 +3,12 @@ requires = [
   "setuptools>=64",
   "wheel",
   "Cython>=3.0.8",
-  # Build against NumPy 2.x on every supported Python, not just 3.12+.
+  # Build and run on NumPy 2.x, which is also the runtime requirement below.
   #
-  # An extension compiled against 2.x imports fine under both 1.x (>=1.19)
-  # and 2.x, because building against 2.x targets the older C API by default.
-  # One compiled against 1.x does *not* work under 2.x -- it raises "A module
-  # that was compiled using NumPy 1.x cannot be run in NumPy 2.x". Since the
-  # runtime requirement below allows numpy>=1.23.2,<3, the 3.11 wheels built
-  # against oldest-supported-numpy broke for anyone who had numpy 2
-  # installed, which is now the default nearly everywhere.
-  #
+  # An extension compiled against 1.x cannot be imported under 2.x -- it
+  # raises "A module that was compiled using NumPy 1.x cannot be run in NumPy
+  # 2.x" -- which is how the old oldest-supported-numpy builds broke for
+  # anyone who had NumPy 2 installed, now the default nearly everywhere.
   # oldest-supported-numpy is deprecated and documents this as the migration.
   "numpy>=2.0",
 ]
@@ -38,17 +34,18 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 requires-python = ">=3.11"
-# Lower bounds are the first release of each package that ships wheels for the
-# oldest Python we support. Anything older cannot be installed on 3.11 anyway,
-# so declaring it only makes the metadata claim something we never test.
-# Revisit these whenever the minimum Python moves.
+# Lower bounds are the first release of each package that supports NumPy 2 on
+# the oldest Python we support. Older releases were compiled against the NumPy
+# 1.x ABI and fail to import next to the NumPy required here, so declaring
+# them would only make the metadata promise something that cannot work.
+# Revisit whenever the minimum Python or the minimum NumPy moves.
 dependencies = [
-    "numpy>=1.23.2,<3",
-    "scipy>=1.9.2",
-    "scikit-image>=0.20",
-    "matplotlib>=3.6",
+    "numpy>=2.0,<3",
+    "scipy>=1.13",
+    "scikit-image>=0.24",
+    "matplotlib>=3.9",
     "imageio-ffmpeg>=0.4",
-    "pandas>=1.5",
+    "pandas>=2.2.2",
 ]
 
 [project.optional-dependencies]
@@ -59,10 +56,6 @@ dev = [
     "flake8",
     "seaborn",
     "neuropythy"
-]
-# (Optional) convenience extra for docs/Colab how-tos
-colab = [
-    "numpy>=2,<3"
 ]
 
 [tool.coverage.run]
