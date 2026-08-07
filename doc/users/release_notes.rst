@@ -4,26 +4,26 @@
 Release Notes
 =============
 
-v0.9.1 (unreleased)
+v0.9.1 (2026-08-06)
 -------------------
 
 Highlights:
 
+*  Python 3.13 support; the minimum supported Python is now 3.10 (:pull:`649`)
 *  NumPy 2.x support: wheels import under both NumPy 1.x and 2.x, so installing
    pulse2percept no longer downgrades NumPy in environments that ship it, such
    as Google Colab (:pull:`635`, :pull:`736`)
-*  Python 3.13 support; the minimum supported Python is now 3.10 (:pull:`649`)
 *  Removed the jax engine and ``predict_percept_batched`` from
    :py:class:`~pulse2percept.models.BiphasicAxonMapModel`; the ``engine``
    argument of the effect models and the ``pad`` argument of
    :py:meth:`~pulse2percept.models.AxonMapSpatial.calc_axon_sensitivity` are
-   deprecated, and will be removed in v0.10.0 (:pull:`XXX`)
+   deprecated, and will be removed in v0.10.0 (:pull:`788`)
 *  Removed the ``model_selection`` module (:pull:`685`) and support for the
    joblib and dask parallel backends (:pull:`686`); the ``engine`` and
    ``scheduler`` model parameters are deprecated, and will be removed in
-   v0.10.0 (:pull:`XXX`)
+   v0.10.0 (:pull:`788`)
 *  ``n_jobs`` is now an alias for ``n_threads``: either name sets the number
-   of OpenMP threads, and ``None`` or ``-1`` uses every core (:pull:`XXX`)
+   of OpenMP threads, and ``None`` or ``-1`` uses every core (:pull:`788`)
 *  More robust dataset downloads, with updated OSF endpoints (:pull:`754`)
 *  Smarter ``reshape_stim`` for implants (:pull:`680`)
 *  Installation is now tested inside the real Google Colab runtime (:pull:`777`)
