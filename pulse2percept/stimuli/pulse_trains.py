@@ -2,7 +2,6 @@
    :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`, 
    :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`"""
 import numpy as np
-import logging
 
 # DT: Sampling time step (ms); defines the duration of the signal edge
 # transitions:

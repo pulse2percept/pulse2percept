@@ -5,7 +5,6 @@ from ..utils import PrettyPrint, unique, is_strictly_increasing
 from ..utils.constants import DT, MIN_AMP
 from ._base import fast_compress_space, fast_compress_time
 
-import logging
 from sys import _getframe
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
@@ -14,10 +13,6 @@ import operator as ops
 from math import isclose
 from scipy.integrate import trapezoid
 import numpy as np
-np.set_printoptions(precision=2, threshold=5, edgeitems=2)
-
-# Log all warnings.warn() at the WARNING level:
-logging.captureWarnings(True)
 
 
 def merge_time_axes(data, time, merge_tolerance=1e-6):
@@ -326,6 +321,13 @@ class Stimulus(PrettyPrint):
             msg = (f"Duplicate electrode names detected {_electrodes[idx]}, "
                    f"and replaced with integer values")
             warnings.warn(msg)
+            if _electrodes.dtype.kind in 'US':
+                # A fixed-width string array may be too narrow to hold the
+                # integer replacements, which would truncate them silently
+                # (and could even reintroduce duplicates), so widen it first:
+                n_digits = len(str(len(_electrodes) - 1))
+                _electrodes = _electrodes.astype(
+                    np.result_type(_electrodes.dtype, f'U{n_digits}'))
             _electrodes[idx] = idx
 
         # User can overwrite time:
@@ -444,12 +446,16 @@ class Stimulus(PrettyPrint):
             The item(s) to remove from the stimulus. Can either be an electrode
             index, electrode name, or a list thereof.
         """
-        if not electrodes:
+        # Nothing to remove. Note that ``electrodes`` must not be tested for
+        # falsiness here, because 0 is a perfectly valid electrode index:
+        if electrodes is None or np.size(electrodes) == 0:
             return
         if np.isscalar(electrodes) and electrodes == 'all':
             self._stim = {
                 'data': self.data[[]],
-                'electrodes': [],
+                # Keep `electrodes` an array (of the same dtype) so that it can
+                # still be indexed with a boolean mask afterwards:
+                'electrodes': self.electrodes[[]],
                 'time': self.time
             }
             return
@@ -797,6 +803,8 @@ class Stimulus(PrettyPrint):
 
     def __rshift__(self, scalar):
         """Shift every time point in the stimulus some ms into the future"""
+        if self.time is None:
+            raise ValueError("Cannot shift a stimulus in time if time=None.")
         return self._apply_operator(self.time, ops.add, scalar, field='time')
 
     def __lshift__(self, scalar):
