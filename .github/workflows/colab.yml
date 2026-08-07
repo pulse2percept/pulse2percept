@@ -147,7 +147,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        py: [ "3.11", "3.12", "3.13" ]
+        py: [ "3.11", "3.12", "3.13", "3.14" ]
 
     steps:
       - name: Harden the runner (Audit all outbound calls)

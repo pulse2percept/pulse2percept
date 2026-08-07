@@ -9,16 +9,12 @@ v0.9.2 (unreleased)
 
 Highlights:
 
-*  The minimum supported Python is now 3.11
-*  NumPy 2 is now required (``numpy>=2,<3``). Support for NumPy 1.x is
-   dropped: every supported Python has NumPy 2 wheels, so the dual-ABI
-   machinery no longer bought anything. If you are pinned to NumPy 1.x, stay
-   on v0.9.1 -- ``pip`` will select it for you
+*  Python 3.14 support; the minimum supported Python is now 3.11
+*  NumPy 2 is now required (``numpy>=2,<3``). If you are pinned to NumPy 
+   1.x, stay on v0.9.1 -- ``pip`` will select it for you
 *  Minimum dependency versions now match the oldest release of each that
    supports NumPy 2: SciPy 1.13, scikit-image 0.24, Matplotlib 3.9 and
    pandas 2.2.2
-*  Removed the ``colab`` install extra; ``pip install pulse2percept`` now
-   requires NumPy 2 on its own, which is all the extra ever did
 
 v0.9.1 (2026-08-06)
 -------------------

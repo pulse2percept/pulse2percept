@@ -2,7 +2,9 @@
 requires = [
   "setuptools>=64",
   "wheel",
-  "Cython>=3.0.8",
+  # 3.1.3 is the first Cython release with Python 3.14 wheels; older ones
+  # cannot target 3.14.
+  "Cython>=3.1.3",
   # Build and run on NumPy 2.x, which is also the runtime requirement below.
   #
   # An extension compiled against 1.x cannot be imported under 2.x -- it
