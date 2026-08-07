@@ -303,101 +303,87 @@ class Stimulus(PrettyPrint):
                 'is_charge_balanced': self.is_charge_balanced,
                 'metadata': self.metadata}
 
-    def _from_source(self, source):
-        """Extract the data container and time information from source data
+    def _parse_source(self, source, nested=False):
+        """Extract data, time and electrode names from a single source
 
         This private method converts input data from allowable source types
-        into a 2D NumPy array, where the first dimension denotes electrodes
+        into a 2-D NumPy array, where the first dimension denotes electrodes
         and the second dimension denotes points in time.
 
-        Some stimuli don't have a time component (such as a stimulus created
-        from a scalar or 1D NumPy array. In this case, times=None.
+        The same source is read in one of two ways, depending on where it
+        appears:
+
+        * At the top level, a flat sequence of N values means N electrodes
+          stimulated once each, with no time component.
+        * As an element of a collection (a list entry or a dict value), that
+          same sequence means a *single* electrode sampled at N points in
+          time.
+
+        ``nested`` selects between the two readings. Only a collection can
+        contain a nested source, so only a collection passes ``nested=True``.
+
+        Returns ``electrodes=None`` when the source does not name its own
+        electrodes; it is then up to the caller to number them. Likewise,
+        ``time=None`` means the source has no time component (e.g. a scalar).
         """
+        if isinstance(source, Stimulus):
+            # e.g. a Stimulus being renamed, or a dict of Stimulus objects.
+            # Brings along its own electrode names and time axis:
+            return source.data, source.time, source.electrodes
         if np.isscalar(source) and not isinstance(source, str):
-            # Scalar: 1 electrode, no time component
-            data = np.array([source], dtype=np.float32).reshape((1, -1))
-            time = None
-            electrodes = None
-        elif isinstance(source, (list, tuple)):
-            # List or touple with N elements: 1 electrode, N time points
+            # Scalar: 1 electrode, no time component - either way round
+            return np.array([source], dtype=np.float32).reshape((1, -1)), \
+                None, None
+        if isinstance(source, np.ndarray):
+            if nested:
+                if source.ndim > 1:
+                    raise ValueError(f"Cannot create Stimulus object from a "
+                                     f"{source.ndim}-D NumPy array. Must be "
+                                     f"1-D.")
+                # 1-D NumPy array with N elements: 1 electrode, N time points
+                data = source.astype(np.float32).reshape((1, -1))
+                return data, np.arange(data.shape[-1], dtype=np.float32), None
+            if source.ndim == 1:
+                # N electrodes, no time component
+                return source.reshape((-1, 1)), None, None
+            if source.ndim == 2:
+                # N electrodes x M time points
+                return source, np.arange(source.shape[-1],
+                                         dtype=np.float32), None
+            raise ValueError(f"Cannot create Stimulus object from a "
+                             f"{source.ndim}-D NumPy array. Must be < 2-D.")
+        if nested and isinstance(source, (list, tuple)):
+            # List or tuple with N elements: 1 electrode, N time points.
+            # At the top level these are collections, handled by `_factory`:
             data = np.array(source, dtype=np.float32).reshape((1, -1))
-            time = np.arange(data.shape[-1], dtype=np.float32)
-            electrodes = None
-        elif isinstance(source, np.ndarray):
-            if source.ndim > 1:
-                raise ValueError(f"Cannot create Stimulus object from a "
-                                 f"{source.ndim}-D NumPy array. Must be 1-D.")
-            # 1D NumPy array with N elements: 1 electrode, N time points
-            data = source.astype(np.float32).reshape((1, -1))
-            time = np.arange(data.shape[-1], dtype=np.float32)
-            electrodes = None
-        elif isinstance(source, Stimulus):
-            # e.g. from a dictionary of Stimulus objects
-            data = source.data
-            time = source.time
-            electrodes = source.electrodes
-        else:
-            raise TypeError(f"Cannot create Stimulus object from {type(source)}. Choose "
-                            f"from: scalar, tuple, list, NumPy array, or "
-                            f"Stimulus.")
-        return time, data, electrodes
+            return data, np.arange(data.shape[-1], dtype=np.float32), None
+        raise TypeError(f"Cannot create Stimulus object from {type(source)}. Choose "
+                        f"from: scalar, tuple, list, NumPy array, or "
+                        f"Stimulus.")
 
     def _factory(self, source, electrodes, time, compress):
         """Build the Stimulus object from the specified source type"""
         # Whether we numbered the electrodes ourselves (0..N-1), in which case
         # they cannot possibly contain duplicates:
         _auto_electrodes = False
-        if isinstance(source, self.__class__):
-            # Stimulus: We're done. This might happen in ProsthesisSystem if
-            # the user builds the stimulus themselves. It can also be used to
-            # overwrite the time axis or provide new electrode names:
-            _data = source.data
-            _time = source.time
-            _electrodes = source.electrodes
-            if 'electrodes' not in source.metadata.keys():
-                self.metadata['electrodes'][str(_electrodes[0])] = {
-                    'metadata': source.metadata, 'type': type(source)}
-            else:
-                self.metadata = source.metadata
-        elif isinstance(source, np.ndarray):
-            # A NumPy array is either 1-D (list of electrodes, time=None) or
-            # 2-D (electrodes x time points):
-            if source.ndim == 1:
-                _data = source.reshape((-1, 1))
-                _time = None
-                _electrodes = np.arange(_data.shape[0])
-                _auto_electrodes = True
-            elif source.ndim == 2:
-                _data = source
-                _time = np.arange(_data.shape[-1], dtype=np.float32)
-                _electrodes = np.arange(_data.shape[0])
-                _auto_electrodes = True
-            else:
-                raise ValueError(f"Cannot create Stimulus object from a "
-                                 f"{source.ndim}-D NumPy array. Must be < 2-D.")
-        elif (_flat := _as_scalar_column(source)) is not None:
+        if (_flat := _as_scalar_column(source)) is not None:
             # A flat sequence of scalars is one electrode per element, with no
-            # time component. The generic path below would build a separate
+            # time component. The collection path below would build a separate
             # 1x1 array (and time axis) for every single electrode:
-            _data = _flat
-            _time = None
-            _electrodes = np.arange(_data.shape[0])
-            _auto_electrodes = True
-        else:
-            # Input is either a scalar or (more likely) a collection of source
-            # types. Easiest to tream them all as a collection and iterate:
+            _data, _time, _electrodes = _flat, None, None
+        elif isinstance(source, (dict, list, tuple)):
+            # A collection: every entry is itself a source, contributing one
+            # electrode (or, for a Stimulus, however many it already has):
             if isinstance(source, dict):
                 iterator = source.items()
-            elif isinstance(source, (list, tuple)):
-                iterator = enumerate(source)
             else:
-                iterator = enumerate([source])
+                iterator = enumerate(source)
             _time = []
             _electrodes = []
             _data = []
             for ele, src in iterator:
                 # Extract times and data from source:
-                t, d, e = self._from_source(src)
+                d, t, e = self._parse_source(src, nested=True)
                 _time.append(t)
                 _data.append(d)
                 if isinstance(source, dict):
@@ -426,6 +412,24 @@ class Stimulus(PrettyPrint):
             # and `_time` as columns (except sometimes `_time` is None).
             _data = np.vstack(_data) if _data else np.array([])
             _time = _time[0] if _time else None
+        else:
+            # A single source: a scalar, a NumPy array, or a Stimulus. The
+            # latter might be handed to us by ProsthesisSystem if the user
+            # built the stimulus themselves, and is also how a stimulus gets
+            # new electrode names or a new time axis:
+            _data, _time, _electrodes = self._parse_source(source)
+            if isinstance(source, Stimulus):
+                if 'electrodes' not in source.metadata.keys():
+                    self.metadata['electrodes'][str(_electrodes[0])] = {
+                        'metadata': source.metadata, 'type': type(source)}
+                else:
+                    self.metadata = source.metadata
+
+        if _electrodes is None:
+            # The source did not name its electrodes, so number them 0..N-1.
+            # Those are unique by construction:
+            _electrodes = np.arange(_data.shape[0])
+            _auto_electrodes = True
 
         # User can overwrite the names of the electrodes:
         if electrodes is not None:
