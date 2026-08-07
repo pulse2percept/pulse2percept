@@ -72,7 +72,15 @@ def axon_pickle(tmp_path_factory):
 
 @pytest.fixture(scope='module', params=SCENARIOS, ids=lambda s: s.id)
 def scenario(request):
-    """The pipeline under test."""
+    """The pipeline under test.
+
+    Scenarios flagged ``slow`` are skipped unless ``--runslow`` is given. That
+    option comes from the repository's root ``conftest.py``, which is why it is
+    not registered here: adding it twice is a conflicting-option error.
+    """
+    if request.param.slow and not request.config.getoption('runslow',
+                                                           default=False):
+        pytest.skip(f'{request.param.id} is slow; use --runslow to include it')
     return request.param
 
 

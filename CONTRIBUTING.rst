@@ -344,8 +344,11 @@ after:
     pytest benchmarks/ --benchmark-only --benchmark-save=baseline
     pytest benchmarks/ --benchmark-only --benchmark-compare=0001
 
-See ``benchmarks/README.md`` for what each number measures, how to read it,
-and how to add a scenario.
+A few scenarios are too slow for the default run and need ``--runslow``, the
+same flag the test suite uses.
+
+See :ref:`dev-benchmarks` for what each number measures, how to read it, and
+how to add a scenario.
 
 .. _pytest: https://docs.pytest.org/
 .. _NumPy testing:

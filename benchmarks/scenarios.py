@@ -48,6 +48,12 @@ class Scenario:
         attributes, so an unknown keyword raises ``FreezeError`` rather than
         being ignored -- which is why the benchmarks have to know which model
         is which.
+    slow : bool
+        Whether the scenario is too slow for the default run. Set this when a
+        single ``predict_percept`` takes more than a few seconds: the timing
+        loop calls it several times over, and measuring peak memory calls it
+        once more under ``tracemalloc``, so the cost is multiplied by roughly
+        an order of magnitude. Slow scenarios run only with ``--runslow``.
     """
 
     id: str
@@ -55,11 +61,12 @@ class Scenario:
     implant: Callable
     model: Callable
     caches_axons: bool = False
+    slow: bool = False
 
 
 SCENARIOS = [
     Scenario(
-        id='argus2_axonmap',
+        id='argus2_axonmap_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL(),
         implant=lambda stim: p2p.implants.ArgusII(stim=stim),
         model=lambda **kwargs: p2p.models.AxonMapModel(xrange=(-12, 12),
@@ -68,12 +75,25 @@ SCENARIOS = [
         caches_axons=True,
     ),
     Scenario(
-        id='prima_scoreboard',
+        id='prima_scoreboard_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL().invert(),
         implant=lambda stim: p2p.implants.PRIMA(stim=stim),
         model=lambda **kwargs: p2p.models.ScoreboardModel(xrange=(-4, 4),
                                                           yrange=(-4, 4),
                                                           rho=50, xystep=0.1,
                                                           **kwargs),
+    ),
+    # A 94-frame video: the spatial model runs once per frame, so a single
+    # predict_percept takes roughly a minute where the image scenarios above
+    # take well under a second. Slow, so it stays out of the default run.
+    Scenario(
+        id='argus2_axonmap_bostontrain',
+        stimulus=lambda: p2p.stimuli.BostonTrain().rgb2gray(),
+        implant=lambda stim: p2p.implants.ArgusII(stim=stim),
+        model=lambda **kwargs: p2p.models.AxonMapModel(xrange=(-12, 12),
+                                                       yrange=(-8, 8),
+                                                       **kwargs),
+        caches_axons=True,
+        slow=True,
     ),
 ]
