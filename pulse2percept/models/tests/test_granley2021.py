@@ -23,7 +23,7 @@ def test_deepcopy_DefaultBrightModel():
     npt.assert_equal(id(original) != id(copied), True)
 
     # Assert the objects are equivalent
-    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+    npt.assert_equal(original.__dict__, copied.__dict__)
 
     # Assert changing copied doesn't change original
     copied.a4 = 5
@@ -38,7 +38,7 @@ def test_deepcopy_DefaultSizeModel():
     npt.assert_equal(id(original) != id(copied), True)
 
     # Assert the objects are equivalent
-    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+    npt.assert_equal(original.__dict__, copied.__dict__)
 
     # Assert changing copied doesn't change original
     copied.a0 = 5
@@ -52,7 +52,7 @@ def test_deepcopy_DefaultStreakModel():
     npt.assert_equal(id(original) != id(copied), True)
 
     # Assert the objects are equivalent
-    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+    npt.assert_equal(original.__dict__, copied.__dict__)
 
     # Assert changing copied doesn't change original
     copied.a7 = 5
@@ -127,7 +127,7 @@ def test_deepcopy_BiphasicAxonMapModel():
     npt.assert_equal(id(original) != id(copied), True)
 
     # Assert the objects are equivalent
-    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+    npt.assert_equal(original.__dict__, copied.__dict__)
 
     # Assert changing copied doesn't change original
     copied.spatial.axlambda = 200

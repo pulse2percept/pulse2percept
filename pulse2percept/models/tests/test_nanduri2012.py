@@ -94,7 +94,7 @@ def test_deepcopy_Nanduri2012Spatial():
     npt.assert_equal(id(original) != id(copied), True)
 
     # Assert the objects are equivalent
-    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+    npt.assert_equal(original.__dict__, copied.__dict__)
     npt.assert_equal(original == copied, True)
 
     # Assert changing the original doesn't affect the copied
@@ -169,7 +169,7 @@ def test_deepcopy_Nanduri2012Temporal():
     npt.assert_equal(id(original) != id(copied), True)
 
     # Assert the objects are equivalent
-    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+    npt.assert_equal(original.__dict__, copied.__dict__)
 
     # Assert changing the original doesn't affect the copied
     original.verbose = False
@@ -211,7 +211,7 @@ def test_deepcopy_Nanduri2012Model():
     npt.assert_equal(id(original) != id(copied), True)
 
     # Assert the objects are equivalent
-    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+    npt.assert_equal(original.__dict__, copied.__dict__)
 
     # Assert changing the original doesn't affect the copied
     original.verbose = False
