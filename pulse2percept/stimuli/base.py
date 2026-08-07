@@ -439,9 +439,11 @@ class Stimulus(PrettyPrint):
 
         # User can overwrite the names of the electrodes:
         if electrodes is not None:
+            _renamed_from = _electrodes
             _electrodes = np.array([electrodes]).flatten()
             _auto_electrodes = False
         else:
+            _renamed_from = None
             if not isinstance(_electrodes, np.ndarray):
                 # Could be a list of NumPy arrays, need to flatten:
                 try:
@@ -471,6 +473,22 @@ class Stimulus(PrettyPrint):
                     _electrodes = _electrodes.astype(
                         np.result_type(_electrodes.dtype, f'U{n_digits}'))
                 _electrodes[idx] = idx
+
+        if _renamed_from is not None and len(_renamed_from) == len(_electrodes):
+            # Per-electrode metadata is addressed by electrode name (that is
+            # how BiphasicAxonMapModel finds its stimulus parameters), so
+            # renaming the electrodes has to rename those keys too. Keys that
+            # do not belong to any electrode are left alone, and `metadata`
+            # may be shared with the source stimulus, so never rename in
+            # place:
+            elec_meta = self.metadata.get('electrodes')
+            rename = {str(old): str(new)
+                      for old, new in zip(_renamed_from, _electrodes)
+                      if str(old) != str(new)}
+            if elec_meta and rename:
+                self.metadata = dict(self.metadata)
+                self.metadata['electrodes'] = {rename.get(k, k): v
+                                               for k, v in elec_meta.items()}
 
         # User can overwrite time:
         if time is not None:

@@ -842,3 +842,34 @@ def test_Stimulus___eq___tolerance():
                      False)
     npt.assert_equal(Stimulus([[np.inf, 1.0]]) == Stimulus([[np.inf, 1.0]]),
                      True)
+
+
+def test_Stimulus_rename_electrodes_metadata():
+    # Per-electrode metadata is keyed by electrode name (BiphasicAxonMapModel
+    # reads its stimulus parameters from there), so renaming the electrodes
+    # has to rename those keys as well.
+    stim = Stimulus({'A1': BiphasicPulseTrain(20, 30, 0.45, stim_dur=100),
+                     'B3': BiphasicPulseTrain(40, 20, 0.45, stim_dur=100)})
+    npt.assert_equal(sorted(stim.metadata['electrodes'].keys()), ['A1', 'B3'])
+
+    renamed = Stimulus(stim, electrodes=['Z9', 'Y8'])
+    npt.assert_equal(sorted(renamed.metadata['electrodes'].keys()), ['Y8', 'Z9'])
+    for old, new in [('A1', 'Z9'), ('B3', 'Y8')]:
+        npt.assert_equal(renamed.metadata['electrodes'][new],
+                         stim.metadata['electrodes'][old])
+    # The source must not be touched (its metadata may be shared):
+    npt.assert_equal(sorted(stim.metadata['electrodes'].keys()), ['A1', 'B3'])
+
+    # Swapping two names is a simultaneous remap, not two sequential ones:
+    swapped = Stimulus(stim, electrodes=['B3', 'A1'])
+    npt.assert_equal(swapped.metadata['electrodes']['B3'],
+                     stim.metadata['electrodes']['A1'])
+    npt.assert_equal(swapped.metadata['electrodes']['A1'],
+                     stim.metadata['electrodes']['B3'])
+
+    # Renaming a stimulus that has no per-electrode metadata is a no-op:
+    plain = Stimulus(np.ones((2, 3)))
+    npt.assert_equal(Stimulus(plain, electrodes=['P1', 'P2']).electrodes,
+                     ['P1', 'P2'])
+    npt.assert_equal(Stimulus(plain, electrodes=['P1', 'P2'])
+                     .metadata['electrodes'], {})

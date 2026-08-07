@@ -11,6 +11,17 @@ from ..utils import FreezeError, deprecate_parameter
 from .base import NotBuiltError, BaseModel
 from ._granley2021 import fast_biphasic_axon_map
 
+# `find_threshold` bisects on a scaled copy of the stimulus *data*. This model
+# reads amplitude from the stimulus metadata instead, where it means a
+# multiple of threshold rather than a current, so scaling the data leaves the
+# prediction untouched and the search cannot converge:
+_FIND_THRESHOLD_MSG = (
+    "{cls} does not support find_threshold. It takes amplitude as a multiple "
+    "of threshold and reads it from the stimulus metadata, not from the "
+    "stimulus data, so scaling the data leaves the percept unchanged. Vary "
+    "`amp` when building the BiphasicPulseTrain instead."
+)
+
 
 class DefaultBrightModel(BaseModel):
     """
@@ -206,7 +217,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     individually customized by setting the bright_model, size_model, or streak_model
     to any python callable with signature f(freq, amp, pdur)
 
-    .. note::
+    .. important::
+    
         Using this model in combination with a temporal model is not currently
         supported and will give unexpected results
 
@@ -506,12 +518,23 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         return Percept(resp, space=self.grid, time=t_percept,
                        metadata={'stim': stim.metadata})
 
+    def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
+                       bright_tol=0.1, max_iter=100):
+        """Not supported by this model
+
+        Raises
+        ------
+        NotImplementedError
+        """
+        raise NotImplementedError(_FIND_THRESHOLD_MSG.format(
+            cls=type(self).__name__))
+
 
 class BiphasicAxonMapModel(Model):
     """ BiphasicAxonMapModel of [Granley2021]_ (standalone model)
 
     An AxonMapModel where phosphene brightness, size, and streak length scale
-    according to amplitude, frequency, and pulse duration
+    according to amplitude, frequency, and pulse duration.
 
     All stimuli must be BiphasicPulseTrains.
 
@@ -522,11 +545,17 @@ class BiphasicAxonMapModel(Model):
     bright_model, size_model, and streak model respectively. By default, these are
     set to classes that implement Eqs 3-6 from Granley 2021. These models can be
     individually customized by setting the bright_model, size_model, or streak_model
-    to any python callable with signature f(freq, amp, pdur)
+    to any python callable with signature f(freq, amp, pdur).
 
-    .. note::
-        Using this model in combination with a temporal model is not currently
-        supported and will give unexpected results
+    .. important::
+
+        Stimuli should pass amplitude as a factor of threshold, NOT as raw
+        amplitude in microamps.
+
+        This model interacts with `Stimulus` objects by reading the intended
+        amplitude, frequency, and pulse duration from their metadata.
+        Scaling, shifting, or otherwise manipulating the raw stimulus data
+        will not change the predicted percept.
 
     Parameters
     ----------
@@ -622,12 +651,19 @@ class BiphasicAxonMapModel(Model):
 
         Overrides base predict percept to keep desired time axes
 
-        .. important::
+        .. note::
 
             You must call ``build`` before calling ``predict_percept``.
 
-        Note: The stimuli should use amplitude as a factor of threshold,
-        NOT raw amplitude in microamps
+        .. important::
+
+            Stimuli should pass amplitude as a factor of threshold,
+            NOT as raw amplitude in microamps.
+
+            The model interacts with `Stimulus` objects by reading the
+            intended amplitude, frequency, and pulse duration from their 
+            metadata. Manipulating the raw stimulus data will not change
+            the predicted percept.
 
         Parameters
         ----------
@@ -654,3 +690,14 @@ class BiphasicAxonMapModel(Model):
             return None
         resp = self.spatial.predict_percept(implant, t_percept=t_percept)
         return resp
+
+    def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
+                       bright_tol=0.1, max_iter=100, t_percept=None):
+        """Not supported by this model
+
+        Raises
+        ------
+        NotImplementedError
+        """
+        raise NotImplementedError(_FIND_THRESHOLD_MSG.format(
+            cls=type(self).__name__))

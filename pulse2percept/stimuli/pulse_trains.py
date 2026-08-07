@@ -223,7 +223,8 @@ class BiphasicPulseTrain(Stimulus):
                               electrode=electrode)
         # Concatenate the pulses:
         pt = PulseTrain(freq, pulse, n_pulses=n_pulses, stim_dur=stim_dur)
-        super().__init__(pt.data, time=pt.time, compress=False)
+        super().__init__(pt.data, time=pt.time, electrodes=electrode,
+                         compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
 
@@ -296,7 +297,8 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
                                         electrode=electrode)
         # Concatenate the pulses:
         pt = PulseTrain(freq, pulse, n_pulses=n_pulses, stim_dur=stim_dur)
-        super().__init__(pt.data, time=pt.time, compress=False)
+        super().__init__(pt.data, time=pt.time, electrodes=electrode,
+                         compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
         self.metadata = {'user': metadata}
@@ -370,16 +372,17 @@ class BiphasicTripletTrain(Stimulus):
                               cathodic_first=cathodic_first,
                               electrode=electrode)
         if interpulse_dur != 0:
-            # Create an interpulse 'delay' pulse:
-            delay_pulse = MonophasicPulse(0, interpulse_dur)
+            # Create an interpulse 'delay' pulse. It has to sit on the same
+            # electrode as `pulse`, or the two cannot be appended:
+            delay_pulse = MonophasicPulse(0, interpulse_dur, electrode=electrode)
             pulse = pulse.append(delay_pulse)
         # Create the pulse triplet:
         triplet = pulse.append(pulse).append(pulse)
         # Create the triplet train:
         pt = PulseTrain(freq, triplet, n_pulses=n_pulses, stim_dur=stim_dur)
         # Set up the Stimulus object through the constructor:
-        super().__init__(pt.data, time=pt.time,
-                                                   compress=False)
+        super().__init__(pt.data, time=pt.time, electrodes=electrode,
+                         compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
         self.metadata = {'user': metadata}

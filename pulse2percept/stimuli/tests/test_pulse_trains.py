@@ -281,3 +281,26 @@ def test_PulseTrain_tiling_errors():
     # A negative time axis is not supported:
     with pytest.raises(NotImplementedError):
         _tile_pulse(Stimulus([[0, 5, 0]], time=[-2.0, 0.0, 4.0]), 0.0, 3)
+
+
+@pytest.mark.parametrize('cls, args, kwargs', [
+    (PulseTrain, (20, BiphasicPulse(30, 0.45)), {}),
+    (BiphasicPulseTrain, (20, 30, 0.45), {}),
+    (AsymmetricBiphasicPulseTrain, (20, -40, 10, 1, 4), {}),
+    (BiphasicTripletTrain, (20, 30, 0.45), {}),
+    (BiphasicTripletTrain, (20, 30, 0.45), {'interpulse_dur': 0.5}),
+])
+def test_PulseTrain_electrode_name(cls, args, kwargs):
+    # The `electrode` argument is documented on every pulse train, so it must
+    # actually reach the Stimulus constructor. It also decides the key under
+    # which per-electrode metadata is filed, which is how BiphasicAxonMapModel
+    # looks up freq/amp/phase_dur.
+    stim = cls(*args, stim_dur=100, electrode='A1', **kwargs)
+    npt.assert_equal(stim.electrodes, ['A1'])
+    # Without a name, electrodes are still numbered from 0:
+    stim = cls(*args, stim_dur=100, **kwargs)
+    npt.assert_equal(stim.electrodes, [0])
+    # And the name has to survive the trip through Stimulus():
+    stim = Stimulus(cls(*args, stim_dur=100, electrode='A1', **kwargs))
+    npt.assert_equal(stim.electrodes, ['A1'])
+    npt.assert_equal('A1' in stim.metadata['electrodes'], True)
