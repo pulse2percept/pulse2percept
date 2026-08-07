@@ -757,3 +757,71 @@ def test_Stimulus_getitem_many_electrodes():
                                expected)
     # A single electrode of that stimulus must give the same values:
     npt.assert_almost_equal(stim[7, 3.7], stim[:, 3.7][7, 0])
+
+
+def test_Stimulus_scalar_sequence():
+    # A flat sequence of scalars takes a fast path in the constructor, which
+    # must agree with the generic per-element path in every respect:
+    for source in ([3, 5], (3, 5), [7], [3.5, -2.25, 0.0], [True, False],
+                   [np.float32(3), np.float64(5), np.int32(7)]):
+        stim = Stimulus(source)
+        npt.assert_equal(stim.shape, (len(source), 1))
+        npt.assert_equal(stim.time, None)
+        npt.assert_equal(stim.electrodes, np.arange(len(source)))
+        npt.assert_equal(stim.data.dtype, np.float32)
+        npt.assert_almost_equal(stim.data.ravel(),
+                                np.asarray(source, dtype=np.float32))
+    # Electrode names, metadata and compression still work:
+    stim = Stimulus([3, 5], electrodes=['A1', 'B2'], metadata={'x': 1})
+    npt.assert_equal(stim.electrodes, ['A1', 'B2'])
+    npt.assert_equal(stim.metadata['user'], {'x': 1})
+    npt.assert_equal(Stimulus([0, 3, 0, 5], compress=True).shape, (2, 1))
+
+    # An empty sequence still yields a 1-D (empty) data container:
+    for source in ([], ()):
+        npt.assert_equal(Stimulus(source).shape, (0,))
+        npt.assert_equal(Stimulus(source).time, None)
+
+    # Sequences that are not flat scalars must keep their old meaning: a
+    # nested sequence is a single electrode in time, not several electrodes
+    npt.assert_equal(Stimulus([[1, 5, 7, 2, 4]]).shape, (1, 5))
+    npt.assert_equal(Stimulus([[1, 1], [1, 1]]).shape, (2, 2))
+    npt.assert_equal(Stimulus(((1, 1), (1, 1))).shape, (2, 2))
+    # ...and invalid elements must still raise, not be coerced. `None` in
+    # particular converts to NaN if handed straight to np.asarray:
+    for source in (['a', 'b'], [1, 'a'], [1, None], [1, [2, 3]]):
+        with pytest.raises((TypeError, ValueError)):
+            Stimulus(source)
+
+
+def test_Stimulus_near_identical_time_axes():
+    # Merging is skipped when all time axes are *close*, not just equal - the
+    # fast path added for the common case must not tighten that tolerance.
+    t1 = np.array([0., 1., 2.], dtype=np.float32)
+    t2 = np.array([0., 1. + 3e-7, 2.], dtype=np.float32)
+    npt.assert_equal(np.array_equal(t1, t2), False)   # differ in float32...
+    npt.assert_equal(np.allclose(t1, t2), True)       # ...but within tolerance
+    stim1 = Stimulus([[0., 5., 0.]], time=t1)
+    stim2 = Stimulus([[0., 7., 0.]], time=t2)
+    merged = Stimulus([stim1, stim2])
+    # No interpolation: the first time axis is adopted verbatim
+    npt.assert_array_equal(np.asarray(merged.time), t1)
+    npt.assert_array_equal(merged.data, np.vstack((stim1.data, stim2.data)))
+    # Genuinely different axes are still merged by interpolation:
+    stim3 = Stimulus([[0., 9., 0.]], time=[0., 1.5, 2.])
+    merged = Stimulus([stim1, stim3])
+    npt.assert_equal(len(merged.time) > 3, True)
+
+
+def test_Stimulus___eq___tolerance():
+    # __eq__ compares with a tolerance; the exact-equality fast path must not
+    # change that:
+    npt.assert_equal(Stimulus([[1.0, 2.0]]) == Stimulus([[1.0, 2.0]]), True)
+    npt.assert_equal(Stimulus([[1.0, 2.0]]) == Stimulus([[1.0, 2.0 + 1e-9]]),
+                     True)
+    npt.assert_equal(Stimulus([[1.0, 2.0]]) == Stimulus([[1.0, 2.5]]), False)
+    # NaN never compares equal, with or without the fast path:
+    npt.assert_equal(Stimulus([[np.nan, 1.0]]) == Stimulus([[np.nan, 1.0]]),
+                     False)
+    npt.assert_equal(Stimulus([[np.inf, 1.0]]) == Stimulus([[np.inf, 1.0]]),
+                     True)

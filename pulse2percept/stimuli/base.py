@@ -52,8 +52,8 @@ def _interp_rows(x, xp, fp):
     # np.interp's guess-based bracket search cannot be reproduced in a
     # vectorized way because its result depends on the preceding query point),
     # defer to np.interp itself:
-    if (fp.shape[0] < 32 or x.size > 256 or xp.size < 2
-            or not np.all(np.diff(xp) > 0)):
+    if (fp.shape[0] < 32 or x.size > 256 or xp.size < 2 or
+            not np.all(np.diff(xp) > 0)):
         return np.array([np.interp(x, xp, row)
                          for row in fp]).reshape((-1, x.size))
     # Bracket index j such that xp[j] <= x < xp[j+1], as np.interp does. Note
@@ -96,6 +96,33 @@ def _interp_rows(x, xp, fp):
     return out
 
 
+def _as_scalar_column(source):
+    """Convert a flat sequence of scalars into an (N, 1) data container
+
+    Returns None if ``source`` is not a non-empty list or tuple of scalars, in
+    which case the caller has to fall back to the generic per-element path.
+    An empty sequence is excluded on purpose: it must keep producing a 1-D
+    (empty) data container.
+    """
+    if not isinstance(source, (list, tuple)) or not source:
+        return None
+    if not np.isscalar(source[0]) or isinstance(source[0], str):
+        return None
+    try:
+        flat = np.asarray(source)
+    except (TypeError, ValueError):
+        # Ragged (e.g. [1, [2, 3]]): let the generic path run, so that it
+        # raises the error it has always raised:
+        return None
+    # Let the dtype NumPy infers decide. Forcing float32 here would quietly
+    # accept sequences the generic path rejects: `[1, None]` would become
+    # `[1.0, nan]` rather than a TypeError. Strings, None and complex values
+    # all infer to a non-numeric dtype and so fall through:
+    if flat.ndim != 1 or flat.dtype.kind not in 'biuf':
+        return None
+    return flat.astype(np.float32).reshape((-1, 1))
+
+
 def merge_time_axes(data, time, merge_tolerance=1e-6):
     """
     Merge time axes
@@ -120,13 +147,19 @@ def merge_time_axes(data, time, merge_tolerance=1e-6):
     """
     # We can skip the costly interpolation if all `time` vectors are
     # identical:
+    t0 = time[0]
     identical = True
     for t in time:
-        if len(t) != len(time[0]) or not np.allclose(t, time[0]):
+        # np.array_equal is a lot cheaper than np.allclose (which builds
+        # several full-size temporaries) and, whenever it succeeds, implies
+        # it. Use it as a fast path for the common case where all stimuli
+        # share the very same time axis:
+        if len(t) != len(t0) or not (np.array_equal(t, t0) or
+                                     np.allclose(t, t0)):
             identical = False
             break
     if identical:
-        return data, [time[0]]
+        return data, [t0]
     # Otherwise, we need to interpolate. Keep only the unique time points
     # across stimuli. We need a higher tolerance to ensure interpolation is correct.
     new_time = unique(np.concatenate(time), tol=merge_tolerance)
@@ -311,6 +344,9 @@ class Stimulus(PrettyPrint):
 
     def _factory(self, source, electrodes, time, compress):
         """Build the Stimulus object from the specified source type"""
+        # Whether we numbered the electrodes ourselves (0..N-1), in which case
+        # they cannot possibly contain duplicates:
+        _auto_electrodes = False
         if isinstance(source, self.__class__):
             # Stimulus: We're done. This might happen in ProsthesisSystem if
             # the user builds the stimulus themselves. It can also be used to
@@ -330,13 +366,23 @@ class Stimulus(PrettyPrint):
                 _data = source.reshape((-1, 1))
                 _time = None
                 _electrodes = np.arange(_data.shape[0])
+                _auto_electrodes = True
             elif source.ndim == 2:
                 _data = source
                 _time = np.arange(_data.shape[-1], dtype=np.float32)
                 _electrodes = np.arange(_data.shape[0])
+                _auto_electrodes = True
             else:
                 raise ValueError(f"Cannot create Stimulus object from a "
                                  f"{source.ndim}-D NumPy array. Must be < 2-D.")
+        elif (_flat := _as_scalar_column(source)) is not None:
+            # A flat sequence of scalars is one electrode per element, with no
+            # time component. The generic path below would build a separate
+            # 1x1 array (and time axis) for every single electrode:
+            _data = _flat
+            _time = None
+            _electrodes = np.arange(_data.shape[0])
+            _auto_electrodes = True
         else:
             # Input is either a scalar or (more likely) a collection of source
             # types. Easiest to tream them all as a collection and iterate:
@@ -384,6 +430,7 @@ class Stimulus(PrettyPrint):
         # User can overwrite the names of the electrodes:
         if electrodes is not None:
             _electrodes = np.array([electrodes]).flatten()
+            _auto_electrodes = False
         else:
             if not isinstance(_electrodes, np.ndarray):
                 # Could be a list of NumPy arrays, need to flatten:
@@ -395,21 +442,25 @@ class Stimulus(PrettyPrint):
             raise ValueError(f"Number of electrodes provided ({len(_electrodes)}) does "
                              f"not match the number of electrodes in the data "
                              f"({_data.shape[0]}).")
-        unq, nunq = np.unique(_electrodes, return_index=True)
-        if len(unq) != _data.shape[0]:
-            # We found duplicate names: replace them by integer index
-            idx = np.delete(np.arange(len(_electrodes)), nunq)
-            msg = (f"Duplicate electrode names detected {_electrodes[idx]}, "
-                   f"and replaced with integer values")
-            warnings.warn(msg)
-            if _electrodes.dtype.kind in 'US':
-                # A fixed-width string array may be too narrow to hold the
-                # integer replacements, which would truncate them silently
-                # (and could even reintroduce duplicates), so widen it first:
-                n_digits = len(str(len(_electrodes) - 1))
-                _electrodes = _electrodes.astype(
-                    np.result_type(_electrodes.dtype, f'U{n_digits}'))
-            _electrodes[idx] = idx
+        # Electrodes we numbered ourselves are 0..N-1 and therefore unique by
+        # construction, so the sort that np.unique performs can be skipped
+        # (it dominates the cost of building an image or video stimulus):
+        if not _auto_electrodes:
+            unq, nunq = np.unique(_electrodes, return_index=True)
+            if len(unq) != _data.shape[0]:
+                # We found duplicate names: replace them by integer index
+                idx = np.delete(np.arange(len(_electrodes)), nunq)
+                msg = (f"Duplicate electrode names detected "
+                       f"{_electrodes[idx]}, and replaced with integer values")
+                warnings.warn(msg)
+                if _electrodes.dtype.kind in 'US':
+                    # A fixed-width string array may be too narrow to hold the
+                    # integer replacements, which would truncate them silently
+                    # (and could even reintroduce duplicates), so widen first:
+                    n_digits = len(str(len(_electrodes) - 1))
+                    _electrodes = _electrodes.astype(
+                        np.result_type(_electrodes.dtype, f'U{n_digits}'))
+                _electrodes[idx] = idx
 
         # User can overwrite time:
         if time is not None:
@@ -822,7 +873,11 @@ class Stimulus(PrettyPrint):
             return False
         if self.shape != other.shape:
             return False
-        if not np.allclose(self.data, other.data):
+        # np.allclose builds several full-size temporaries. np.array_equal is
+        # much cheaper and, whenever it succeeds, implies it - so use it as a
+        # fast path for the common case of comparing identical stimuli:
+        if not (np.array_equal(self.data, other.data) or
+                np.allclose(self.data, other.data)):
             return False
         return True
 
