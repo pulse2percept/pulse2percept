@@ -518,7 +518,7 @@ class Stimulus(PrettyPrint):
         electrodes = electrodes[keep_el]
 
         if time is not None:
-            idx_time = fast_compress_time(data, time)
+            idx_time = fast_compress_time(data)
             data = data[:, idx_time]
             time = time[idx_time]
 
