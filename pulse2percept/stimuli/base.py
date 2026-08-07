@@ -8,7 +8,7 @@ from ._base import fast_compress_space, fast_compress_time
 from sys import _getframe
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
-from copy import deepcopy
+from copy import copy, deepcopy
 import operator as ops
 from math import isclose
 from scipy.integrate import trapezoid
@@ -353,6 +353,23 @@ class Stimulus(PrettyPrint):
         if compress:
             self.compress()
 
+    def _shallow_copy(self):
+        """Copy the object without duplicating the data container
+
+        Methods that return a new stimulus (``append``, the arithmetic
+        operators) replace ``_stim`` wholesale, so there is no point in
+        deep-copying the (potentially large) data arrays first. Everything
+        else is preserved as it would be by ``deepcopy``: the subclass, its
+        additional attributes, and an independent copy of ``metadata``.
+
+        Note that the returned object shares its ``_stim`` dict with ``self``
+        until the caller assigns a new one, which the ``_stim`` setter always
+        does (it never mutates the dict in place).
+        """
+        stim = copy(self)
+        stim.metadata = deepcopy(self.metadata)
+        return stim
+
     def compress(self):
         """Compress the source data
 
@@ -411,7 +428,7 @@ class Stimulus(PrettyPrint):
         if other.time[0] < 0:
             raise NotImplementedError("Appending a stimulus with a negative "
                                       "time axis is currently not supported.")
-        stim = deepcopy(self)
+        stim = self._shallow_copy()
         # Last time point of `self` can be merged with first point of `other`
         # but only if they have the same amplitude(s):
         if isclose(other.time[0], 0, abs_tol=DT):
@@ -762,11 +779,19 @@ class Stimulus(PrettyPrint):
         if not a_supported and not b_supported:
             raise TypeError(f"Unsupported operand for types {(type(a))} and "
                             f"{type(b)}")
-        # Return a copy of the current object with the new data:
-        stim = deepcopy(self)
-        stim._stim = {'data': op(a, b) if field == 'data' else stim.data,
-                      'electrodes': stim.electrodes,
-                      'time': op(a, b) if field == 'time' else stim.time}
+        # Return a copy of the current object with the new data. The operator
+        # produces a new array for `field`; the other fields must be copied
+        # explicitly, so that the returned stimulus shares no buffer with the
+        # original (`_shallow_copy` does not duplicate the data container):
+        stim = self._shallow_copy()
+        time = stim.time
+        if field == 'time':
+            time = op(a, b)
+        elif time is not None:
+            time = time.copy()
+        stim._stim = {'data': op(a, b) if field == 'data' else stim.data.copy(),
+                      'electrodes': stim.electrodes.copy(),
+                      'time': time}
         return stim
 
     def __add__(self, scalar):

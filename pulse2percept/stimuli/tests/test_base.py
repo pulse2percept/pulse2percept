@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 
 from pulse2percept.stimuli import Stimulus
 from pulse2percept.stimuli import BiphasicPulseTrain
+from pulse2percept.stimuli import ImageStimulus
 from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
 
@@ -668,3 +669,34 @@ def test_merge_time_axes_merge_tolerance():
     # Assert no value goes close to 1/3 or -1/3, i.e. a corrupted data point
     npt.assert_equal(np.isclose(1/3, unique_points, atol=0.1).any(), False)
     npt.assert_equal(np.isclose(-1/3, unique_points, atol=0.1).any(), False)
+
+
+def test_Stimulus_shallow_copy():
+    # `append` and the arithmetic operators return a copy that shares nothing
+    # mutable with the original, even though the data container is no longer
+    # deep-copied first.
+    stim = BiphasicPulseTrain(20, 20, 0.45, stim_dur=100)
+    for derive in (lambda s: s * 2, lambda s: s + 1, lambda s: -s,
+                   lambda s: s >> 1.0, lambda s: s.append(s >> 1.0)):
+        copied = derive(stim)
+        # Same class and extra attributes:
+        npt.assert_equal(type(copied), type(stim))
+        npt.assert_equal(copied.freq, stim.freq)
+        npt.assert_equal(copied.cathodic_first, stim.cathodic_first)
+        npt.assert_equal(copied.is_compressed, stim.is_compressed)
+        # Metadata is equal but independent:
+        npt.assert_equal(copied.metadata, stim.metadata)
+        npt.assert_equal(copied.metadata is stim.metadata, False)
+        copied.metadata['user'] = 'changed'
+        npt.assert_equal(stim.metadata['user'], None)
+        # The data container is independent, too:
+        npt.assert_equal(copied._stim is stim._stim, False)
+        before = stim.data.copy()
+        copied.data[:] = 0
+        npt.assert_array_equal(stim.data, before)
+
+    # Subclass-specific attributes survive as well:
+    img = ImageStimulus(np.ones((4, 5), dtype=np.float32))
+    npt.assert_equal(type(img * 2), ImageStimulus)
+    npt.assert_equal((img * 2).img_shape, img.img_shape)
+    npt.assert_almost_equal((img * 2).data, 2 * img.data)

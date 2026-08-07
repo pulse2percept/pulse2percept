@@ -2,12 +2,66 @@
    :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`, 
    :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`"""
 import numpy as np
+from math import isclose
 
 # DT: Sampling time step (ms); defines the duration of the signal edge
 # transitions:
 from .base import Stimulus
 from .pulses import BiphasicPulse, AsymmetricBiphasicPulse, MonophasicPulse
 from ..utils.constants import DT
+
+
+def _tile_pulse(pulse, shift, n_pulses):
+    """Concatenate ``n_pulses`` copies of ``pulse``, spaced by ``shift`` ms
+
+    Vectorized equivalent of repeatedly calling
+    ``pt = pt.append(pulse >> shift)``, which copies the ever-growing data
+    container once per pulse (and is therefore quadratic in ``n_pulses``).
+
+    Parameters
+    ----------
+    pulse : :py:class:`~pulse2percept.stimuli.Stimulus`
+        A stimulus containing a single pulse, with a time component.
+    shift : float
+        Time (ms) by which each copy is shifted with respect to the previous
+        one, in addition to the duration of the pulse itself.
+    n_pulses : int
+        Number of copies to concatenate.
+
+    Returns
+    -------
+    data, time : np.ndarray
+        The data container and time axis of the concatenated pulse train.
+    """
+    time, data = pulse.time, pulse.data
+    # The time axis of each appended copy, i.e. of ``pulse >> shift``:
+    shifted = time + shift
+    if shifted[0] < 0:
+        raise NotImplementedError("Appending a stimulus with a negative "
+                                  "time axis is currently not supported.")
+    # ``append`` offsets copy k by the last time point of copy k-1, so the
+    # offsets follow the recurrence last[k] = shifted[-1] + last[k-1], seeded
+    # with last[0] = time[-1]. A float32 cumsum accumulates in exactly the
+    # same order (and therefore rounds identically), which matters because
+    # temporal models resolve stimulus edges on a fixed simulation grid:
+    steps = np.full(n_pulses, shifted[-1], dtype=np.float32)
+    steps[0] = time[-1]
+    offsets = np.cumsum(steps, dtype=np.float32)[:-1, np.newaxis]
+    if isclose(shifted[0], 0, abs_tol=DT):
+        # The last time point of one copy coincides with the first time point
+        # of the next, so the two are merged into one - but only if they carry
+        # the same amplitude(s):
+        if not np.allclose(data[:, 0], data[:, -1]):
+            raise ValueError(f"Data mismatch: Cannot append other stimulus "
+                             f"because other[t=0] != this[t={time[-1]}ms]. "
+                             f"You may need to shift the other stimulus in "
+                             f"time by at least {DT:.1e} ms.")
+        new_time = np.concatenate((time, (shifted[1:] + offsets).ravel()))
+        new_data = np.hstack((data, np.tile(data[:, 1:], n_pulses - 1)))
+    else:
+        new_time = np.concatenate((time, (shifted + offsets).ravel()))
+        new_data = np.tile(data, n_pulses)
+    return new_data, new_time
 
 
 class PulseTrain(Stimulus):
@@ -82,11 +136,7 @@ class PulseTrain(Stimulus):
                                  f"pulse train window (dur={window_dur:.2f} "
                                  f"ms)")
             shift = np.maximum(0, window_dur - pulse.time[-1])
-            pt = pulse
-            for i in range(1, n_pulses):
-                pt = pt.append(pulse >> shift)
-            data = pt.data
-            time = pt.time
+            data, time = _tile_pulse(pulse, shift, n_pulses)
         if time[-1] > stim_dur + DT:
             # If stimulus is longer than the requested `stim_dur`, trim it.
             # Make sure to interpolate the end point:
