@@ -354,3 +354,22 @@ def test_biphasicAxonMapModel():
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
         BiphasicAxonMapModel(axlambda=9).build()
+
+
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+def test_find_threshold_not_supported(model_cls):
+    # This model takes amplitude as a multiple of threshold and reads it from
+    # the stimulus metadata, so the inherited `find_threshold` - which bisects
+    # on a scaled copy of the stimulus data - cannot converge. It has to say
+    # so rather than fail somewhere deeper with a confusing message.
+    model = model_cls(xrange=(-3, 3), yrange=(-2, 2), xystep=1,
+                      n_ax_segments=30).build()
+    implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 1, 0.45,
+                                                     stim_dur=100)})
+    with pytest.raises(NotImplementedError) as excinfo:
+        model.find_threshold(implant, 0.5)
+    npt.assert_equal(model_cls.__name__ in str(excinfo.value), True)
+    npt.assert_equal('metadata' in str(excinfo.value), True)
+    # predict_percept is unaffected:
+    npt.assert_equal(model.predict_percept(implant) is not None, True)

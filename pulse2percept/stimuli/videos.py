@@ -80,12 +80,13 @@ class VideoStimulus(Stimulus):
         * Retain only the time points at which the stimulus changes.
 
     """
+    __slots__ = ('vid_shape', '_next_frame')
 
     def __init__(self, source, format=None, resize=None, as_gray=False,
                  electrodes=None, time=None, metadata=None, compress=False):
         if metadata is None:
             metadata = {}
-        elif type(metadata) != dict:
+        elif not isinstance(metadata, dict):
             metadata = {'user': metadata}
         if isinstance(source, str):
             # Filename provided, read the video:
@@ -140,7 +141,7 @@ class VideoStimulus(Stimulus):
             vid = vid_resize(vid, (height, width, *vid.shape[2:]))
         # Store the original image shape for resizing and color conversion:
         self.vid_shape = vid.shape
-        super(VideoStimulus, self).__init__(vid.reshape((-1, vid.shape[-1])),
+        super().__init__(vid.reshape((-1, vid.shape[-1])),
                                             time=time, electrodes=electrodes,
                                             metadata=metadata,
                                             compress=compress)
@@ -148,7 +149,7 @@ class VideoStimulus(Stimulus):
         self.rewind()
 
     def _pprint_params(self):
-        params = super(VideoStimulus, self)._pprint_params()
+        params = super()._pprint_params()
         params.update({'vid_shape': self.vid_shape})
         return params
 
@@ -710,6 +711,7 @@ class BostonTrain(VideoStimulus):
         Additional stimulus metadata can be stored in a dictionary.
 
     """
+    __slots__ = ()
 
     def __init__(self, resize=None, electrodes=None, as_gray=False,
                  metadata=None):
@@ -717,7 +719,7 @@ class BostonTrain(VideoStimulus):
         module_path = dirname(__file__)
         source = join(module_path, 'data', 'boston-train.mp4')
         # Call VideoStimulus constructor:
-        super(BostonTrain, self).__init__(source, format="MP4",
+        super().__init__(source, format="MP4",
                                           resize=resize,
                                           as_gray=as_gray,
                                           electrodes=electrodes,
@@ -756,6 +758,7 @@ class GirlPool(VideoStimulus):
         Additional stimulus metadata can be stored in a dictionary.
 
     """
+    __slots__ = ()
 
     def __init__(self, resize=None, electrodes=None, as_gray=False,
                  metadata=None):
@@ -763,7 +766,7 @@ class GirlPool(VideoStimulus):
         module_path = dirname(__file__)
         source = join(module_path, 'data', 'girl-pool.mp4')
         # Call VideoStimulus constructor:
-        super(GirlPool, self).__init__(source, format="MP4",
+        super().__init__(source, format="MP4",
                                        resize=resize,
                                        as_gray=as_gray,
                                        electrodes=electrodes,

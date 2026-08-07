@@ -20,8 +20,6 @@ from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
 
 # Log all warnings.warn() at the WARNING level:
 import warnings
-import logging
-logging.captureWarnings(True)
 
 
 class ScoreboardSpatial(SpatialModel):

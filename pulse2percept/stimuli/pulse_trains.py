@@ -2,13 +2,66 @@
    :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`, 
    :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`"""
 import numpy as np
-import logging
+from math import isclose
 
 # DT: Sampling time step (ms); defines the duration of the signal edge
 # transitions:
 from .base import Stimulus
 from .pulses import BiphasicPulse, AsymmetricBiphasicPulse, MonophasicPulse
 from ..utils.constants import DT
+
+
+def _tile_pulse(pulse, shift, n_pulses):
+    """Concatenate ``n_pulses`` copies of ``pulse``, spaced by ``shift`` ms
+
+    Vectorized equivalent of repeatedly calling
+    ``pt = pt.append(pulse >> shift)``, which copies the ever-growing data
+    container once per pulse (and is therefore quadratic in ``n_pulses``).
+
+    Parameters
+    ----------
+    pulse : :py:class:`~pulse2percept.stimuli.Stimulus`
+        A stimulus containing a single pulse, with a time component.
+    shift : float
+        Time (ms) by which each copy is shifted with respect to the previous
+        one, in addition to the duration of the pulse itself.
+    n_pulses : int
+        Number of copies to concatenate.
+
+    Returns
+    -------
+    data, time : np.ndarray
+        The data container and time axis of the concatenated pulse train.
+    """
+    time, data = pulse.time, pulse.data
+    # The time axis of each appended copy, i.e. of ``pulse >> shift``:
+    shifted = time + shift
+    if shifted[0] < 0:
+        raise NotImplementedError("Appending a stimulus with a negative "
+                                  "time axis is currently not supported.")
+    # ``append`` offsets copy k by the last time point of copy k-1, so the
+    # offsets follow the recurrence last[k] = shifted[-1] + last[k-1], seeded
+    # with last[0] = time[-1]. A float32 cumsum accumulates in exactly the
+    # same order (and therefore rounds identically), which matters because
+    # temporal models resolve stimulus edges on a fixed simulation grid:
+    steps = np.full(n_pulses, shifted[-1], dtype=np.float32)
+    steps[0] = time[-1]
+    offsets = np.cumsum(steps, dtype=np.float32)[:-1, np.newaxis]
+    if isclose(shifted[0], 0, abs_tol=DT):
+        # The last time point of one copy coincides with the first time point
+        # of the next, so the two are merged into one - but only if they carry
+        # the same amplitude(s):
+        if not np.allclose(data[:, 0], data[:, -1]):
+            raise ValueError(f"Data mismatch: Cannot append other stimulus "
+                             f"because other[t=0] != this[t={time[-1]}ms]. "
+                             f"You may need to shift the other stimulus in "
+                             f"time by at least {DT:.1e} ms.")
+        new_time = np.concatenate((time, (shifted[1:] + offsets).ravel()))
+        new_data = np.hstack((data, np.tile(data[:, 1:], n_pulses - 1)))
+    else:
+        new_time = np.concatenate((time, (shifted + offsets).ravel()))
+        new_data = np.tile(data, n_pulses)
+    return new_data, new_time
 
 
 class PulseTrain(Stimulus):
@@ -47,6 +100,7 @@ class PulseTrain(Stimulus):
        a 11 Hz pulse train into a 100 ms window, there will be 9 pulses.
 
     """
+    __slots__ = ('freq', 'pulse_type')
 
     def __init__(self, freq, pulse, n_pulses=None, stim_dur=1000.0,
                  electrode=None, metadata=None):
@@ -83,11 +137,7 @@ class PulseTrain(Stimulus):
                                  f"pulse train window (dur={window_dur:.2f} "
                                  f"ms)")
             shift = np.maximum(0, window_dur - pulse.time[-1])
-            pt = pulse
-            for i in range(1, n_pulses):
-                pt = pt.append(pulse >> shift)
-            data = pt.data
-            time = pt.time
+            data, time = _tile_pulse(pulse, shift, n_pulses)
         if time[-1] > stim_dur + DT:
             # If stimulus is longer than the requested `stim_dur`, trim it.
             # Make sure to interpolate the end point:
@@ -108,7 +158,7 @@ class PulseTrain(Stimulus):
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        params = super(PulseTrain, self)._pprint_params()
+        params = super()._pprint_params()
         params.update({'freq': self.freq,
                        'pulse_type': self.pulse_type})
         return params
@@ -161,6 +211,7 @@ class BiphasicPulseTrain(Stimulus):
        smaller than 10 picoamps.
 
     """
+    __slots__ = ('freq', 'cathodic_first')
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
                  n_pulses=None, stim_dur=1000.0, cathodic_first=True,
@@ -172,7 +223,8 @@ class BiphasicPulseTrain(Stimulus):
                               electrode=electrode)
         # Concatenate the pulses:
         pt = PulseTrain(freq, pulse, n_pulses=n_pulses, stim_dur=stim_dur)
-        super().__init__(pt.data, time=pt.time, compress=False)
+        super().__init__(pt.data, time=pt.time, electrodes=electrode,
+                         compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
 
@@ -185,7 +237,7 @@ class BiphasicPulseTrain(Stimulus):
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        params = super(BiphasicPulseTrain, self)._pprint_params()
+        params = super()._pprint_params()
         params.update({'cathodic_first': self.cathodic_first,
                        'freq': self.freq})
         return params
@@ -232,6 +284,7 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
         A dictionary of meta-data
 
     """
+    __slots__ = ('freq', 'cathodic_first')
 
     def __init__(self, freq, amp1, amp2, phase_dur1, phase_dur2,
                  interphase_dur=0, delay_dur=0, n_pulses=None, stim_dur=1000.0,
@@ -244,14 +297,15 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
                                         electrode=electrode)
         # Concatenate the pulses:
         pt = PulseTrain(freq, pulse, n_pulses=n_pulses, stim_dur=stim_dur)
-        super().__init__(pt.data, time=pt.time, compress=False)
+        super().__init__(pt.data, time=pt.time, electrodes=electrode,
+                         compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
         self.metadata = {'user': metadata}
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        params = super(AsymmetricBiphasicPulseTrain, self)._pprint_params()
+        params = super()._pprint_params()
         params.update({'cathodic_first': self.cathodic_first,
                        'freq': self.freq})
         return params
@@ -307,6 +361,7 @@ class BiphasicTripletTrain(Stimulus):
        smaller than 10 picoamps.
 
     """
+    __slots__ = ('freq', 'cathodic_first')
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, interpulse_dur=0,
                  delay_dur=0, n_pulses=None, stim_dur=1000.0, cathodic_first=True,
@@ -317,23 +372,24 @@ class BiphasicTripletTrain(Stimulus):
                               cathodic_first=cathodic_first,
                               electrode=electrode)
         if interpulse_dur != 0:
-            # Create an interpulse 'delay' pulse:
-            delay_pulse = MonophasicPulse(0, interpulse_dur)
+            # Create an interpulse 'delay' pulse. It has to sit on the same
+            # electrode as `pulse`, or the two cannot be appended:
+            delay_pulse = MonophasicPulse(0, interpulse_dur, electrode=electrode)
             pulse = pulse.append(delay_pulse)
         # Create the pulse triplet:
         triplet = pulse.append(pulse).append(pulse)
         # Create the triplet train:
         pt = PulseTrain(freq, triplet, n_pulses=n_pulses, stim_dur=stim_dur)
         # Set up the Stimulus object through the constructor:
-        super(BiphasicTripletTrain, self).__init__(pt.data, time=pt.time,
-                                                   compress=False)
+        super().__init__(pt.data, time=pt.time, electrodes=electrode,
+                         compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
         self.metadata = {'user': metadata}
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        params = super(BiphasicTripletTrain, self)._pprint_params()
+        params = super()._pprint_params()
         params.update({'cathodic_first': self.cathodic_first,
                        'freq': self.freq})
         return params

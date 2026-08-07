@@ -5,19 +5,128 @@ from ..utils import PrettyPrint, unique, is_strictly_increasing
 from ..utils.constants import DT, MIN_AMP
 from ._base import fast_compress_space, fast_compress_time
 
-import logging
-from sys import _getframe
-from matplotlib.axes import Subplot
+from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
-from copy import deepcopy
+from copy import copy, deepcopy
 import operator as ops
 from math import isclose
 from scipy.integrate import trapezoid
 import numpy as np
-np.set_printoptions(precision=2, threshold=5, edgeitems=2)
 
-# Log all warnings.warn() at the WARNING level:
-logging.captureWarnings(True)
+
+def _interp_rows(x, xp, fp):
+    """Linearly interpolate every row of ``fp`` at the time points ``x``
+
+    Vectorized equivalent of ``[np.interp(x, xp, row) for row in fp]``, which
+    is otherwise a Python-level loop over (potentially many thousands of)
+    electrodes.
+
+    The arithmetic is deliberately carried out in double precision and in the
+    same order as ``np.interp``'s C loop, because temporal models resolve
+    stimulus edges on a fixed simulation grid.
+
+    Agreement with ``np.interp`` is exact wherever no arithmetic is needed:
+    on a knot, or beyond the end points, where the stored value is assigned
+    verbatim. For interior points it is exact to within one rounding - a C
+    compiler may contract ``slope * dx + y0`` into a single fused
+    multiply-add (it does on arm64), whereas the NumPy expression below
+    always rounds twice. That is at most a few ULP of float64, well below the
+    float32 that the caller ends up storing.
+
+    Parameters
+    ----------
+    x : 1-D array
+        Time points at which to interpolate.
+    xp : 1-D array
+        The stimulus time axis.
+    fp : 2-D array
+        The stimulus data, one row per electrode.
+
+    Returns
+    -------
+    data : 2-D array
+        Interpolated data, of shape ``(len(fp), len(x))``.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    xp = np.asarray(xp, dtype=np.float64)
+    fp = np.asarray(fp)
+    # np.interp's C loop is hard to beat per element; what the vectorized path
+    # saves is one Python-level call per electrode. That only pays off with
+    # enough electrodes to amortize its setup, and only while the result stays
+    # small enough that the extra passes over it are cheaper than those calls.
+    # Outside that regime (and for a non-monotonic time axis, where
+    # np.interp's guess-based bracket search cannot be reproduced in a
+    # vectorized way because its result depends on the preceding query point),
+    # defer to np.interp itself:
+    if (fp.shape[0] < 32 or x.size > 256 or xp.size < 2 or
+            not np.all(np.diff(xp) > 0)):
+        return np.array([np.interp(x, xp, row)
+                         for row in fp]).reshape((-1, x.size))
+    # Bracket index j such that xp[j] <= x < xp[j+1], as np.interp does. Note
+    # that `j`, `x0` and `x1` are all 1-D (one entry per requested time point):
+    j = np.clip(np.searchsorted(xp, x, side='right') - 1, 0, xp.size - 2)
+    x0, x1 = xp[j], xp[j + 1]
+    # Gather first and widen afterwards: upcasting all of `fp` would touch the
+    # whole (potentially large) data container instead of just two columns
+    # per requested time point:
+    y0 = fp[:, j].astype(np.float64)
+    y1 = fp[:, j + 1].astype(np.float64)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        out = (y1 - y0) / (x1 - x0)     # slope; reused in place below
+        out *= x - x0
+        out += y0
+        # np.interp retries from the right end of the interval if that gave a
+        # NaN (which happens for infinite slopes), then gives up:
+        nan = np.isnan(out)
+        if nan.any():
+            slope = (y1 - y0) / (x1 - x0)
+            out = np.where(nan, slope * (x - x1) + y1, out)
+            out = np.where(np.isnan(out) & (y0 == y1), y0, out)
+    # The remaining corrections all select whole columns, so build the masks
+    # on the 1-D time axis and write in place rather than allocating another
+    # full-size array per correction:
+    exact = x == x0
+    if exact.any():
+        # Exact hits on a knot return the stored value verbatim:
+        out[:, exact] = y0[:, exact]
+    # Beyond the end points, the value of the closest end point is returned:
+    below = x <= xp[0]
+    if below.any():
+        out[:, below] = fp[:, :1]
+    above = x >= xp[-1]
+    if above.any():
+        out[:, above] = fp[:, -1:]
+    undefined = np.isnan(x)
+    if undefined.any():
+        out[:, undefined] = x[undefined]
+    return out
+
+
+def _as_scalar_column(source):
+    """Convert a flat sequence of scalars into an (N, 1) data container
+
+    Returns None if ``source`` is not a non-empty list or tuple of scalars, in
+    which case the caller has to fall back to the generic per-element path.
+    An empty sequence is excluded on purpose: it must keep producing a 1-D
+    (empty) data container.
+    """
+    if not isinstance(source, (list, tuple)) or not source:
+        return None
+    if not np.isscalar(source[0]) or isinstance(source[0], str):
+        return None
+    try:
+        flat = np.asarray(source)
+    except (TypeError, ValueError):
+        # Ragged (e.g. [1, [2, 3]]): let the generic path run, so that it
+        # raises the error it has always raised:
+        return None
+    # Let the dtype NumPy infers decide. Forcing float32 here would quietly
+    # accept sequences the generic path rejects: `[1, None]` would become
+    # `[1.0, nan]` rather than a TypeError. Strings, None and complex values
+    # all infer to a non-numeric dtype and so fall through:
+    if flat.ndim != 1 or flat.dtype.kind not in 'biuf':
+        return None
+    return flat.astype(np.float32).reshape((-1, 1))
 
 
 def merge_time_axes(data, time, merge_tolerance=1e-6):
@@ -44,13 +153,19 @@ def merge_time_axes(data, time, merge_tolerance=1e-6):
     """
     # We can skip the costly interpolation if all `time` vectors are
     # identical:
+    t0 = time[0]
     identical = True
     for t in time:
-        if len(t) != len(time[0]) or not np.allclose(t, time[0]):
+        # np.array_equal is a lot cheaper than np.allclose (which builds
+        # several full-size temporaries) and, whenever it succeeds, implies
+        # it. Use it as a fast path for the common case where all stimuli
+        # share the very same time axis:
+        if len(t) != len(t0) or not (np.array_equal(t, t0) or
+                                     np.allclose(t, t0)):
             identical = False
             break
     if identical:
-        return data, [time[0]]
+        return data, [t0]
     # Otherwise, we need to interpolate. Keep only the unique time points
     # across stimuli. We need a higher tolerance to ensure interpolation is correct.
     new_time = unique(np.concatenate(time), tol=merge_tolerance)
@@ -183,7 +298,7 @@ class Stimulus(PrettyPrint):
         else:
             self.metadata = {'electrodes': {}, 'user': metadata}
         # Flag will be flipped in the compress method:
-        self.is_compressed = False
+        self._is_compressed = False
         # Extract the data and coordinates (electrodes, time) from the source:
         self._factory(source, electrodes, time, compress)
 
@@ -194,88 +309,87 @@ class Stimulus(PrettyPrint):
                 'is_charge_balanced': self.is_charge_balanced,
                 'metadata': self.metadata}
 
-    def _from_source(self, source):
-        """Extract the data container and time information from source data
+    def _parse_source(self, source, nested=False):
+        """Extract data, time and electrode names from a single source
 
         This private method converts input data from allowable source types
-        into a 2D NumPy array, where the first dimension denotes electrodes
+        into a 2-D NumPy array, where the first dimension denotes electrodes
         and the second dimension denotes points in time.
 
-        Some stimuli don't have a time component (such as a stimulus created
-        from a scalar or 1D NumPy array. In this case, times=None.
+        The same source is read in one of two ways, depending on where it
+        appears:
+
+        * At the top level, a flat sequence of N values means N electrodes
+          stimulated once each, with no time component.
+        * As an element of a collection (a list entry or a dict value), that
+          same sequence means a *single* electrode sampled at N points in
+          time.
+
+        ``nested`` selects between the two readings. Only a collection can
+        contain a nested source, so only a collection passes ``nested=True``.
+
+        Returns ``electrodes=None`` when the source does not name its own
+        electrodes; it is then up to the caller to number them. Likewise,
+        ``time=None`` means the source has no time component (e.g. a scalar).
         """
+        if isinstance(source, Stimulus):
+            # e.g. a Stimulus being renamed, or a dict of Stimulus objects.
+            # Brings along its own electrode names and time axis:
+            return source.data, source.time, source.electrodes
         if np.isscalar(source) and not isinstance(source, str):
-            # Scalar: 1 electrode, no time component
-            data = np.array([source], dtype=np.float32).reshape((1, -1))
-            time = None
-            electrodes = None
-        elif isinstance(source, (list, tuple)):
-            # List or touple with N elements: 1 electrode, N time points
+            # Scalar: 1 electrode, no time component - either way round
+            return np.array([source], dtype=np.float32).reshape((1, -1)), \
+                None, None
+        if isinstance(source, np.ndarray):
+            if nested:
+                if source.ndim > 1:
+                    raise ValueError(f"Cannot create Stimulus object from a "
+                                     f"{source.ndim}-D NumPy array. Must be "
+                                     f"1-D.")
+                # 1-D NumPy array with N elements: 1 electrode, N time points
+                data = source.astype(np.float32).reshape((1, -1))
+                return data, np.arange(data.shape[-1], dtype=np.float32), None
+            if source.ndim == 1:
+                # N electrodes, no time component
+                return source.reshape((-1, 1)), None, None
+            if source.ndim == 2:
+                # N electrodes x M time points
+                return source, np.arange(source.shape[-1],
+                                         dtype=np.float32), None
+            raise ValueError(f"Cannot create Stimulus object from a "
+                             f"{source.ndim}-D NumPy array. Must be < 2-D.")
+        if nested and isinstance(source, (list, tuple)):
+            # List or tuple with N elements: 1 electrode, N time points.
+            # At the top level these are collections, handled by `_factory`:
             data = np.array(source, dtype=np.float32).reshape((1, -1))
-            time = np.arange(data.shape[-1], dtype=np.float32)
-            electrodes = None
-        elif isinstance(source, np.ndarray):
-            if source.ndim > 1:
-                raise ValueError(f"Cannot create Stimulus object from a "
-                                 f"{source.ndim}-D NumPy array. Must be 1-D.")
-            # 1D NumPy array with N elements: 1 electrode, N time points
-            data = source.astype(np.float32).reshape((1, -1))
-            time = np.arange(data.shape[-1], dtype=np.float32)
-            electrodes = None
-        elif isinstance(source, Stimulus):
-            # e.g. from a dictionary of Stimulus objects
-            data = source.data
-            time = source.time
-            electrodes = source.electrodes
-        else:
-            raise TypeError(f"Cannot create Stimulus object from {type(source)}. Choose "
-                            f"from: scalar, tuple, list, NumPy array, or "
-                            f"Stimulus.")
-        return time, data, electrodes
+            return data, np.arange(data.shape[-1], dtype=np.float32), None
+        raise TypeError(f"Cannot create Stimulus object from {type(source)}. Choose "
+                        f"from: scalar, tuple, list, NumPy array, or "
+                        f"Stimulus.")
 
     def _factory(self, source, electrodes, time, compress):
         """Build the Stimulus object from the specified source type"""
-        if isinstance(source, self.__class__):
-            # Stimulus: We're done. This might happen in ProsthesisSystem if
-            # the user builds the stimulus themselves. It can also be used to
-            # overwrite the time axis or provide new electrode names:
-            _data = source.data
-            _time = source.time
-            _electrodes = source.electrodes
-            if 'electrodes' not in source.metadata.keys():
-                self.metadata['electrodes'][str(_electrodes[0])] = {
-                    'metadata': source.metadata, 'type': type(source)}
-            else:
-                self.metadata = source.metadata
-        elif isinstance(source, np.ndarray):
-            # A NumPy array is either 1-D (list of electrodes, time=None) or
-            # 2-D (electrodes x time points):
-            if source.ndim == 1:
-                _data = source.reshape((-1, 1))
-                _time = None
-                _electrodes = np.arange(_data.shape[0])
-            elif source.ndim == 2:
-                _data = source
-                _time = np.arange(_data.shape[-1], dtype=np.float32)
-                _electrodes = np.arange(_data.shape[0])
-            else:
-                raise ValueError(f"Cannot create Stimulus object from a "
-                                 f"{source.ndim}-D NumPy array. Must be < 2-D.")
-        else:
-            # Input is either a scalar or (more likely) a collection of source
-            # types. Easiest to tream them all as a collection and iterate:
+        # Whether we numbered the electrodes ourselves (0..N-1), in which case
+        # they cannot possibly contain duplicates:
+        _auto_electrodes = False
+        if (_flat := _as_scalar_column(source)) is not None:
+            # A flat sequence of scalars is one electrode per element, with no
+            # time component. The collection path below would build a separate
+            # 1x1 array (and time axis) for every single electrode:
+            _data, _time, _electrodes = _flat, None, None
+        elif isinstance(source, (dict, list, tuple)):
+            # A collection: every entry is itself a source, contributing one
+            # electrode (or, for a Stimulus, however many it already has):
             if isinstance(source, dict):
                 iterator = source.items()
-            elif isinstance(source, (list, tuple)):
-                iterator = enumerate(source)
             else:
-                iterator = enumerate([source])
+                iterator = enumerate(source)
             _time = []
             _electrodes = []
             _data = []
             for ele, src in iterator:
                 # Extract times and data from source:
-                t, d, e = self._from_source(src)
+                d, t, e = self._parse_source(src, nested=True)
                 _time.append(t)
                 _data.append(d)
                 if isinstance(source, dict):
@@ -304,11 +418,32 @@ class Stimulus(PrettyPrint):
             # and `_time` as columns (except sometimes `_time` is None).
             _data = np.vstack(_data) if _data else np.array([])
             _time = _time[0] if _time else None
+        else:
+            # A single source: a scalar, a NumPy array, or a Stimulus. The
+            # latter might be handed to us by ProsthesisSystem if the user
+            # built the stimulus themselves, and is also how a stimulus gets
+            # new electrode names or a new time axis:
+            _data, _time, _electrodes = self._parse_source(source)
+            if isinstance(source, Stimulus):
+                if 'electrodes' not in source.metadata.keys():
+                    self.metadata['electrodes'][str(_electrodes[0])] = {
+                        'metadata': source.metadata, 'type': type(source)}
+                else:
+                    self.metadata = source.metadata
+
+        if _electrodes is None:
+            # The source did not name its electrodes, so number them 0..N-1.
+            # Those are unique by construction:
+            _electrodes = np.arange(_data.shape[0])
+            _auto_electrodes = True
 
         # User can overwrite the names of the electrodes:
         if electrodes is not None:
+            _renamed_from = _electrodes
             _electrodes = np.array([electrodes]).flatten()
+            _auto_electrodes = False
         else:
+            _renamed_from = None
             if not isinstance(_electrodes, np.ndarray):
                 # Could be a list of NumPy arrays, need to flatten:
                 try:
@@ -319,14 +454,41 @@ class Stimulus(PrettyPrint):
             raise ValueError(f"Number of electrodes provided ({len(_electrodes)}) does "
                              f"not match the number of electrodes in the data "
                              f"({_data.shape[0]}).")
-        unq, nunq = np.unique(_electrodes, return_index=True)
-        if len(unq) != _data.shape[0]:
-            # We found duplicate names: replace them by integer index
-            idx = np.delete(np.arange(len(_electrodes)), nunq)
-            msg = (f"Duplicate electrode names detected {_electrodes[idx]}, "
-                   f"and replaced with integer values")
-            warnings.warn(msg)
-            _electrodes[idx] = idx
+        # Electrodes we numbered ourselves are 0..N-1 and therefore unique by
+        # construction, so the sort that np.unique performs can be skipped
+        # (it dominates the cost of building an image or video stimulus):
+        if not _auto_electrodes:
+            unq, nunq = np.unique(_electrodes, return_index=True)
+            if len(unq) != _data.shape[0]:
+                # We found duplicate names: replace them by integer index
+                idx = np.delete(np.arange(len(_electrodes)), nunq)
+                msg = (f"Duplicate electrode names detected "
+                       f"{_electrodes[idx]}, and replaced with integer values")
+                warnings.warn(msg)
+                if _electrodes.dtype.kind in 'US':
+                    # A fixed-width string array may be too narrow to hold the
+                    # integer replacements, which would truncate them silently
+                    # (and could even reintroduce duplicates), so widen first:
+                    n_digits = len(str(len(_electrodes) - 1))
+                    _electrodes = _electrodes.astype(
+                        np.result_type(_electrodes.dtype, f'U{n_digits}'))
+                _electrodes[idx] = idx
+
+        if _renamed_from is not None and len(_renamed_from) == len(_electrodes):
+            # Per-electrode metadata is addressed by electrode name (that is
+            # how BiphasicAxonMapModel finds its stimulus parameters), so
+            # renaming the electrodes has to rename those keys too. Keys that
+            # do not belong to any electrode are left alone, and `metadata`
+            # may be shared with the source stimulus, so never rename in
+            # place:
+            elec_meta = self.metadata.get('electrodes')
+            rename = {str(old): str(new)
+                      for old, new in zip(_renamed_from, _electrodes)
+                      if str(old) != str(new)}
+            if elec_meta and rename:
+                self.metadata = dict(self.metadata)
+                self.metadata['electrodes'] = {rename.get(k, k): v
+                                               for k, v in elec_meta.items()}
 
         # User can overwrite time:
         if time is not None:
@@ -351,6 +513,23 @@ class Stimulus(PrettyPrint):
         if compress:
             self.compress()
 
+    def _shallow_copy(self):
+        """Copy the object without duplicating the data container
+
+        Methods that return a new stimulus (``append``, the arithmetic
+        operators) replace ``_stim`` wholesale, so there is no point in
+        deep-copying the (potentially large) data arrays first. Everything
+        else is preserved as it would be by ``deepcopy``: the subclass, its
+        additional attributes, and an independent copy of ``metadata``.
+
+        Note that the returned object shares its ``_stim`` dict with ``self``
+        until the caller assigns a new one, which the ``_stim`` setter always
+        does (it never mutates the dict in place).
+        """
+        stim = copy(self)
+        stim.metadata = deepcopy(self.metadata)
+        return stim
+
     def compress(self):
         """Compress the source data
 
@@ -367,7 +546,7 @@ class Stimulus(PrettyPrint):
         electrodes = electrodes[keep_el]
 
         if time is not None:
-            idx_time = fast_compress_time(data, time)
+            idx_time = fast_compress_time(data)
             data = data[:, idx_time]
             time = time[idx_time]
 
@@ -376,7 +555,7 @@ class Stimulus(PrettyPrint):
             'electrodes': electrodes,
             'time': time,
         }
-        self.is_compressed = True
+        self._is_compressed = True
 
     def append(self, other):
         """Append another stimulus
@@ -409,7 +588,7 @@ class Stimulus(PrettyPrint):
         if other.time[0] < 0:
             raise NotImplementedError("Appending a stimulus with a negative "
                                       "time axis is currently not supported.")
-        stim = deepcopy(self)
+        stim = self._shallow_copy()
         # Last time point of `self` can be merged with first point of `other`
         # but only if they have the same amplitude(s):
         if isclose(other.time[0], 0, abs_tol=DT):
@@ -444,12 +623,16 @@ class Stimulus(PrettyPrint):
             The item(s) to remove from the stimulus. Can either be an electrode
             index, electrode name, or a list thereof.
         """
-        if not electrodes:
+        # Nothing to remove. Note that ``electrodes`` must not be tested for
+        # falsiness here, because 0 is a perfectly valid electrode index:
+        if electrodes is None or np.size(electrodes) == 0:
             return
         if np.isscalar(electrodes) and electrodes == 'all':
             self._stim = {
                 'data': self.data[[]],
-                'electrodes': [],
+                # Keep `electrodes` an array (of the same dtype) so that it can
+                # still be indexed with a boolean mask afterwards:
+                'electrodes': self.electrodes[[]],
                 'time': self.time
             }
             return
@@ -542,7 +725,7 @@ class Stimulus(PrettyPrint):
             # Convert to list so w can iterate over it:
             axes = [axes]
         for i, ax in enumerate(axes):
-            if not isinstance(ax, Subplot):
+            if not isinstance(ax, Axes):
                 raise TypeError(f"'axes' must be a list of subplots, but "
                                 f"axes[{i}] is {type(ax)}.")
         if len(axes) != len(electrodes):
@@ -608,11 +791,10 @@ class Stimulus(PrettyPrint):
                     start = self.time[0] if time.start is None else time.start
                     stop = self.time[-1] if time.stop is None else time.stop
                     time = np.arange(start, stop, time.step, dtype=np.float32)
-            else:
-                if not np.any(time == Ellipsis):
-                    # Convert to float so time is not mistaken for column index
-                    if np.array(time).dtype != bool:
-                        time = np.float32(time)
+            elif time is not Ellipsis:
+                # Convert to float so time is not mistaken for column index
+                if np.array(time).dtype != bool:
+                    time = np.float32(time)
         else:
             electrodes = item
             time = None
@@ -667,8 +849,7 @@ class Stimulus(PrettyPrint):
             data = self.data
         else:
             data = self.data[electrodes, :].reshape(-1, len(self.time))
-        data = [np.interp(time, self.time, row) for row in data]
-        data = np.array(data).reshape((-1, len(time))).astype(np.float32)
+        data = _interp_rows(time, self.time, data).astype(np.float32)
         # Return a single element as scalar:
         if data.size == 1:
             data = data.ravel()[0].item()
@@ -719,7 +900,11 @@ class Stimulus(PrettyPrint):
             return False
         if self.shape != other.shape:
             return False
-        if not np.allclose(self.data, other.data):
+        # np.allclose builds several full-size temporaries. np.array_equal is
+        # much cheaper and, whenever it succeeds, implies it - so use it as a
+        # fast path for the common case of comparing identical stimuli:
+        if not (np.array_equal(self.data, other.data) or
+                np.allclose(self.data, other.data)):
             return False
         return True
 
@@ -756,11 +941,19 @@ class Stimulus(PrettyPrint):
         if not a_supported and not b_supported:
             raise TypeError(f"Unsupported operand for types {(type(a))} and "
                             f"{type(b)}")
-        # Return a copy of the current object with the new data:
-        stim = deepcopy(self)
-        stim._stim = {'data': op(a, b) if field == 'data' else stim.data,
-                      'electrodes': stim.electrodes,
-                      'time': op(a, b) if field == 'time' else stim.time}
+        # Return a copy of the current object with the new data. The operator
+        # produces a new array for `field`; the other fields must be copied
+        # explicitly, so that the returned stimulus shares no buffer with the
+        # original (`_shallow_copy` does not duplicate the data container):
+        stim = self._shallow_copy()
+        time = stim.time
+        if field == 'time':
+            time = op(a, b)
+        elif time is not None:
+            time = time.copy()
+        stim._stim = {'data': op(a, b) if field == 'data' else stim.data.copy(),
+                      'electrodes': stim.electrodes.copy(),
+                      'time': time}
         return stim
 
     def __add__(self, scalar):
@@ -797,6 +990,8 @@ class Stimulus(PrettyPrint):
 
     def __rshift__(self, scalar):
         """Shift every time point in the stimulus some ms into the future"""
+        if self.time is None:
+            raise ValueError("Cannot shift a stimulus in time if time=None.")
         return self._apply_operator(self.time, ops.add, scalar, field='time')
 
     def __lshift__(self, scalar):
@@ -875,21 +1070,12 @@ class Stimulus(PrettyPrint):
 
     @property
     def is_compressed(self):
-        """Flag indicating whether the stimulus has been compressed"""
-        return self._is_compressed
+        """Flag indicating whether the stimulus has been compressed
 
-    @is_compressed.setter
-    def is_compressed(self, val):
-        """This flag can only be set in ``compress``"""
-        # getframe(0) is 'is_compressed'
-        # getframe(1) is the one we are looking for:
-        f_caller = _getframe(1).f_code.co_name
-        if f_caller in ["__init__", "compress"]:
-            self._is_compressed = val
-        else:
-            err_s = (f"The attribute `is_compressed` can only be set in the "
-                     f"constructor or in `compress`, not in `{f_caller}`.")
-            raise AttributeError(err_s)
+        Read-only: the flag is maintained by ``compress``. Assigning to it
+        raises an ``AttributeError``.
+        """
+        return self._is_compressed
 
     @property
     def dt(self):

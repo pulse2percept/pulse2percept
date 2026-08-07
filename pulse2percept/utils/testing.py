@@ -6,7 +6,7 @@ import warnings
 
 
 def assert_warns_msg(expected_warning, func, msg, *args, **kwargs):
-    """Assert a call leads to a warning with a specific message
+    r"""Assert a call leads to a warning with a specific message
 
     Test whether a function call leads to a warning of type
     ``expected_warning`` with a message that contains the string ``msg``.

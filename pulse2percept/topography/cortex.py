@@ -269,7 +269,7 @@ class Polimeni2006Map(CorticalMap):
             ax.plot(x[i, :], y[i, :], 'gray', label='v1' if i == 0 else None)
             rad = f"{radius[i, 0] : .1f}" if radius[i, 0] < 5 else f"{radius[i, 0] : .0f}"
             x_val = x[i, np.argsort(np.abs(y[i]))[0]]
-            ax.annotate(f"{rad}$\degree$", (x_val + 2000, 500),
+            ax.annotate(rf"{rad}$\degree$", (x_val + 2000, 500),
                          ha='center')
         x, y = self.dva_to_v2(*pol2cart(theta, radius))
         for i in range(x.shape[0]):

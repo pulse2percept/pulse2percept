@@ -3,9 +3,11 @@ import pytest
 import numpy.testing as npt
 from scipy.integrate import trapezoid
 
-from pulse2percept.stimuli import (Stimulus, PulseTrain, BiphasicPulseTrain,
+from pulse2percept.stimuli import (Stimulus, PulseTrain, BiphasicPulse,
+                                   BiphasicPulseTrain,
                                    BiphasicTripletTrain,
                                    AsymmetricBiphasicPulseTrain)
+from pulse2percept.stimuli.pulse_trains import _tile_pulse
 from pulse2percept.utils.constants import DT
 
 
@@ -235,3 +237,70 @@ def test_metadata():
     npt.assert_equal(stim.metadata['electrodes']['B1']['metadata']['freq'], 11)
     npt.assert_equal(stim.metadata['electrodes']
                      ['C3']['metadata']['user'], 'userdataC3')
+
+
+@pytest.mark.parametrize('freq, phase_dur, interphase_dur',
+                         [(20, 0.45, 0), (100, 0.45, 0.2), (13, 0.1, 0),
+                          (225, 0.075, 0.075), (2000, 0.1, 0)])
+def test_PulseTrain_tiling(freq, phase_dur, interphase_dur):
+    # The pulse train is assembled by tiling rather than by repeatedly calling
+    # `append`. The two must agree bit-for-bit: temporal models resolve
+    # stimulus edges on a fixed simulation grid, so even a sub-nanosecond
+    # difference in the time axis can change model output.
+    pulse = BiphasicPulse(20, phase_dur, interphase_dur=interphase_dur)
+    n_pulses = 7
+    window_dur = 1000.0 / freq
+    shift = np.maximum(0, window_dur - pulse.time[-1])
+
+    # Reference: the original implementation
+    ref = pulse
+    for _ in range(1, n_pulses):
+        ref = ref.append(pulse >> shift)
+
+    data, time = _tile_pulse(pulse, shift, n_pulses)
+    npt.assert_array_equal(data, ref.data)
+    npt.assert_array_equal(time, ref.time)
+    npt.assert_equal(data.dtype, ref.data.dtype)
+    npt.assert_equal(time.dtype, ref.time.dtype)
+
+    # A single pulse must come out unchanged:
+    data, time = _tile_pulse(pulse, shift, 1)
+    npt.assert_array_equal(data, pulse.data)
+    npt.assert_array_equal(time, pulse.time)
+
+
+def test_PulseTrain_tiling_errors():
+    # A pulse whose first and last sample differ cannot be tiled without a gap
+    # between the copies (the junction points would have to be merged):
+    pulse = Stimulus([[1, 2, 3]], time=[0, 0.5, 1.0])
+    with pytest.raises(ValueError):
+        _tile_pulse(pulse, 0.0, 3)
+    # ...but with a gap it is fine:
+    data, time = _tile_pulse(pulse, 5.0, 3)
+    npt.assert_equal(data.shape, (1, 9))
+    # A negative time axis is not supported:
+    with pytest.raises(NotImplementedError):
+        _tile_pulse(Stimulus([[0, 5, 0]], time=[-2.0, 0.0, 4.0]), 0.0, 3)
+
+
+@pytest.mark.parametrize('cls, args, kwargs', [
+    (PulseTrain, (20, BiphasicPulse(30, 0.45)), {}),
+    (BiphasicPulseTrain, (20, 30, 0.45), {}),
+    (AsymmetricBiphasicPulseTrain, (20, -40, 10, 1, 4), {}),
+    (BiphasicTripletTrain, (20, 30, 0.45), {}),
+    (BiphasicTripletTrain, (20, 30, 0.45), {'interpulse_dur': 0.5}),
+])
+def test_PulseTrain_electrode_name(cls, args, kwargs):
+    # The `electrode` argument is documented on every pulse train, so it must
+    # actually reach the Stimulus constructor. It also decides the key under
+    # which per-electrode metadata is filed, which is how BiphasicAxonMapModel
+    # looks up freq/amp/phase_dur.
+    stim = cls(*args, stim_dur=100, electrode='A1', **kwargs)
+    npt.assert_equal(stim.electrodes, ['A1'])
+    # Without a name, electrodes are still numbered from 0:
+    stim = cls(*args, stim_dur=100, **kwargs)
+    npt.assert_equal(stim.electrodes, [0])
+    # And the name has to survive the trip through Stimulus():
+    stim = Stimulus(cls(*args, stim_dur=100, electrode='A1', **kwargs))
+    npt.assert_equal(stim.electrodes, ['A1'])
+    npt.assert_equal('A1' in stim.metadata['electrodes'], True)

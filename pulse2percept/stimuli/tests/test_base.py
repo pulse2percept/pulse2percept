@@ -1,3 +1,6 @@
+import subprocess
+import sys
+
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -9,6 +12,8 @@ import matplotlib.pyplot as plt
 
 from pulse2percept.stimuli import Stimulus
 from pulse2percept.stimuli import BiphasicPulseTrain
+from pulse2percept.stimuli import ImageStimulus
+from pulse2percept.stimuli.base import _interp_rows
 from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
 
@@ -557,6 +562,100 @@ def test_Stimulus_remove():
     npt.assert_equal('A1' in stim.electrodes, False)
     npt.assert_equal('C3' in stim.electrodes, True)
 
+    # Electrode 0 must be removable: `0` is falsy, but it is a valid index:
+    stim = Stimulus([[0, 1, 2], [3, 4, 5]])
+    stim.remove(0)
+    npt.assert_equal(stim.shape, (1, 3))
+    npt.assert_equal(stim.electrodes, [1])
+    npt.assert_almost_equal(stim.data, [[3, 4, 5]])
+    # Removing index 0 by index or by name gives the same result:
+    stim = Stimulus([[0, 1, 2], [3, 4, 5]], electrodes=['A1', 'C3'])
+    stim.remove(0)
+    npt.assert_equal(stim.electrodes, ['C3'])
+
+    # Removing a list of electrodes:
+    stim = Stimulus([[0, 1, 2], [3, 4, 5]], electrodes=['A1', 'C3'])
+    stim.remove(['A1', 'C3'])
+    npt.assert_equal(stim.shape, (0, 3))
+
+    # Removing "nothing" is a no-op. ProsthesisSystem relies on this when none
+    # of its electrodes are deactivated:
+    for nothing in (None, [], (), np.array([])):
+        stim = Stimulus([[0, 1, 2], [3, 4, 5]])
+        stim.remove(nothing)
+        npt.assert_equal(stim.shape, (2, 3))
+        npt.assert_equal(stim.electrodes, [0, 1])
+
+    # After 'all', `electrodes` must stay an array of the same dtype, so that
+    # it can still be indexed with a boolean mask:
+    stim = Stimulus([[0, 1, 2], [3, 4, 5]], electrodes=['A1', 'C3'])
+    dtype = stim.electrodes.dtype
+    stim.remove('all')
+    npt.assert_equal(isinstance(stim.electrodes, np.ndarray), True)
+    npt.assert_equal(stim.electrodes.dtype, dtype)
+    npt.assert_equal(stim.shape, (0, 3))
+    npt.assert_equal(stim.electrodes[np.zeros(0, dtype=bool)].size, 0)
+
+    # Unknown electrodes are an error:
+    stim = Stimulus([[0, 1, 2], [3, 4, 5]], electrodes=['A1', 'C3'])
+    with pytest.raises(ValueError):
+        stim.remove('B2')
+
+
+def test_Stimulus_duplicate_electrodes():
+    # Duplicate names are replaced with their integer index:
+    with pytest.warns(UserWarning, match='Duplicate electrode names'):
+        stim = Stimulus(np.ones((3, 2)), electrodes=['AA', 'AA', 'BB'])
+    npt.assert_equal(stim.electrodes, ['AA', '1', 'BB'])
+    # Integer names stay integers:
+    with pytest.warns(UserWarning, match='Duplicate electrode names'):
+        stim = Stimulus([Stimulus(1), Stimulus(2)])
+    npt.assert_equal(stim.electrodes, [0, 1])
+    # The integer replacements must not be truncated by a string dtype that is
+    # too narrow to hold them - the "fixed" names would be duplicates again:
+    n_el = 200
+    with pytest.warns(UserWarning, match='Duplicate electrode names'):
+        stim = Stimulus(np.ones((n_el, 2)), electrodes=['A'] * n_el)
+    npt.assert_equal(len(np.unique(stim.electrodes)), n_el)
+    npt.assert_equal(stim.electrodes[0], 'A')
+    npt.assert_equal(stim.electrodes[-1], str(n_el - 1))
+
+
+def test_Stimulus_shift_without_time():
+    # Shifting a stimulus that has no time component must be reported as such,
+    # not as a TypeError from adding a scalar to None:
+    stim = Stimulus(3)
+    npt.assert_equal(stim.time, None)
+    with pytest.raises(ValueError):
+        stim >> 1.0
+    with pytest.raises(ValueError):
+        stim << 1.0
+    # Stimuli that do have a time axis are unaffected:
+    stim = Stimulus([[0, 1, 2]], time=[0, 1, 2])
+    npt.assert_almost_equal((stim >> 1.5).time, [1.5, 2.5, 3.5])
+    npt.assert_almost_equal((stim << 1.5).time, [-1.5, -0.5, 0.5])
+
+
+def test_Stimulus_no_global_side_effects():
+    # Importing the module must not change NumPy's print options for the rest
+    # of the user's session (`Stimulus` used to call `np.set_printoptions` at
+    # module level). This has to run in a subprocess, because by the time this
+    # test executes the module has long been imported.
+    code = ("import numpy as np;"
+            "before = np.get_printoptions();"
+            "import pulse2percept.stimuli.base;"
+            "after = np.get_printoptions();"
+            "print('UNCHANGED' if before == after "
+            "else f'CHANGED: {before} -> {after}')")
+    out = subprocess.run([sys.executable, '-c', code], capture_output=True,
+                         text=True, check=True)
+    npt.assert_equal(out.stdout.strip().splitlines()[-1], 'UNCHANGED')
+    # Long arrays are still abbreviated in the repr, which is what the global
+    # print options used to (redundantly) take care of:
+    stim = Stimulus(np.arange(1000).reshape((10, 100)))
+    npt.assert_equal('...' in repr(stim), True)
+    npt.assert_equal('\n'.join(repr(stim).split()).count('electrodes='), 1)
+
 
 def test_merge_time_axes_merge_tolerance():
     # Test issue where not enough unique points were collected
@@ -571,3 +670,206 @@ def test_merge_time_axes_merge_tolerance():
     # Assert no value goes close to 1/3 or -1/3, i.e. a corrupted data point
     npt.assert_equal(np.isclose(1/3, unique_points, atol=0.1).any(), False)
     npt.assert_equal(np.isclose(-1/3, unique_points, atol=0.1).any(), False)
+
+
+def test_Stimulus_shallow_copy():
+    # `append` and the arithmetic operators return a copy that shares nothing
+    # mutable with the original, even though the data container is no longer
+    # deep-copied first.
+    stim = BiphasicPulseTrain(20, 20, 0.45, stim_dur=100)
+    for derive in (lambda s: s * 2, lambda s: s + 1, lambda s: -s,
+                   lambda s: s >> 1.0, lambda s: s.append(s >> 1.0)):
+        copied = derive(stim)
+        # Same class and extra attributes:
+        npt.assert_equal(type(copied), type(stim))
+        npt.assert_equal(copied.freq, stim.freq)
+        npt.assert_equal(copied.cathodic_first, stim.cathodic_first)
+        npt.assert_equal(copied.is_compressed, stim.is_compressed)
+        # Metadata is equal but independent:
+        npt.assert_equal(copied.metadata, stim.metadata)
+        npt.assert_equal(copied.metadata is stim.metadata, False)
+        copied.metadata['user'] = 'changed'
+        npt.assert_equal(stim.metadata['user'], None)
+        # The data container is independent, too:
+        npt.assert_equal(copied._stim is stim._stim, False)
+        before = stim.data.copy()
+        copied.data[:] = 0
+        npt.assert_array_equal(stim.data, before)
+
+    # Subclass-specific attributes survive as well:
+    img = ImageStimulus(np.ones((4, 5), dtype=np.float32))
+    npt.assert_equal(type(img * 2), ImageStimulus)
+    npt.assert_equal((img * 2).img_shape, img.img_shape)
+    npt.assert_almost_equal((img * 2).data, 2 * img.data)
+
+
+@pytest.mark.parametrize('n_el, n_t, n_q', [(1, 5, 3), (2, 12, 40), (40, 8, 5),
+                                            (40, 8, 400), (64, 300, 64),
+                                            (33, 4, 257)])
+def test_interp_rows(n_el, n_t, n_q):
+    # `_interp_rows` replaces a per-electrode np.interp loop, and switches
+    # between a vectorized and a looped implementation depending on the shape.
+    # Both must agree with np.interp, because temporal models resolve stimulus
+    # edges on a fixed simulation grid.
+    #
+    # Interior points are allowed to differ by a rounding: a C compiler may
+    # contract `slope * dx + y0` into a single fused multiply-add inside
+    # np.interp (it does on arm64), where the NumPy expression rounds twice.
+    # Points that need no arithmetic must match exactly on every platform.
+    rng = np.random.default_rng(n_el * 1000 + n_t * 10 + n_q)
+    xp = np.unique(np.sort(rng.random(n_t).astype(np.float32) * 100))
+    fp = ((rng.random((n_el, xp.size)) - 0.5) * 200).astype(np.float32)
+    for x in (rng.random(n_q).astype(np.float32) * 140 - 20,   # incl. outside
+              np.resize(xp, n_q),                              # exactly on knots
+              np.full(n_q, xp[0], dtype=np.float32),           # left end point
+              np.full(n_q, xp[-1], dtype=np.float32)):         # right end point
+        expected = np.array([np.interp(x, xp, row) for row in fp])
+        expected = expected.reshape((-1, x.size))
+        actual = _interp_rows(x, xp, fp)
+        # Scale the tolerance by the size of the data, not of the result: the
+        # rounding happens on the intermediate product, which stays the size
+        # of the inputs even where the result is near zero (any interpolation
+        # across a zero crossing, which biphasic pulses do all the time).
+        npt.assert_allclose(actual, expected, rtol=1e-12,
+                            atol=1e-10 * np.abs(fp).max())
+        # End points and exact knots are assigned verbatim, never computed,
+        # so those must agree exactly on every platform:
+        verbatim = (x <= xp[0]) | (x >= xp[-1]) | np.isin(x, xp)
+        npt.assert_array_equal(actual[:, verbatim], expected[:, verbatim])
+
+
+def test_interp_rows_edge_cases():
+    # A single time point: np.interp returns it everywhere
+    fp = np.array([[3.0], [4.0]], dtype=np.float32)
+    xp = np.array([2.5], dtype=np.float32)
+    x = np.array([-1.0, 2.5, 99.0], dtype=np.float32)
+    npt.assert_array_equal(_interp_rows(x, xp, fp),
+                           np.array([[3, 3, 3], [4, 4, 4]], dtype=np.float64))
+    # No electrodes at all:
+    npt.assert_equal(_interp_rows(x, np.array([0., 1.], np.float32),
+                                  np.zeros((0, 2), np.float32)).shape, (0, 3))
+    # A non-monotonic time axis is allowed (it only warns), but np.interp's
+    # bracket search is guess-based there, so we must defer to it verbatim:
+    xp = np.array([0., 1., 1., 2., 2.], dtype=np.float32)
+    fp = np.array([[1., 0., 1., 0., 2.]] * 40, dtype=np.float32)
+    x = np.array([0.0, 0.5, 1.0, 1.5, 2.0, 3.0], dtype=np.float32)
+    expected = np.array([np.interp(x, xp, row) for row in fp])
+    npt.assert_array_equal(_interp_rows(x, xp, fp), expected)
+
+
+def test_Stimulus_getitem_many_electrodes():
+    # Interpolating a stimulus with many electrodes takes the vectorized path;
+    # the result must match interpolating each electrode by itself, to within
+    # the one float32 ULP that a fused multiply-add inside np.interp can cost
+    # (see `test_interp_rows`):
+    rng = np.random.default_rng(0)
+    data = rng.random((200, 25)).astype(np.float32)
+    stim = Stimulus(data)
+    for t in (3.7, [3.7], np.linspace(-2, 26, 37), np.asarray(stim.time)):
+        # __getitem__ casts the requested time points to float32 first:
+        t32 = np.float32(np.atleast_1d(t))
+        expected = np.array([np.interp(t32, stim.time, row)
+                             for row in data]).astype(np.float32)
+        actual = np.asarray(stim[:, t]).reshape(expected.shape)
+        npt.assert_almost_equal(actual, expected, decimal=6)
+    # A single electrode of that stimulus must give the same values:
+    npt.assert_almost_equal(stim[7, 3.7], stim[:, 3.7][7, 0])
+
+
+def test_Stimulus_scalar_sequence():
+    # A flat sequence of scalars takes a fast path in the constructor, which
+    # must agree with the generic per-element path in every respect:
+    for source in ([3, 5], (3, 5), [7], [3.5, -2.25, 0.0], [True, False],
+                   [np.float32(3), np.float64(5), np.int32(7)]):
+        stim = Stimulus(source)
+        npt.assert_equal(stim.shape, (len(source), 1))
+        npt.assert_equal(stim.time, None)
+        npt.assert_equal(stim.electrodes, np.arange(len(source)))
+        npt.assert_equal(stim.data.dtype, np.float32)
+        npt.assert_almost_equal(stim.data.ravel(),
+                                np.asarray(source, dtype=np.float32))
+    # Electrode names, metadata and compression still work:
+    stim = Stimulus([3, 5], electrodes=['A1', 'B2'], metadata={'x': 1})
+    npt.assert_equal(stim.electrodes, ['A1', 'B2'])
+    npt.assert_equal(stim.metadata['user'], {'x': 1})
+    npt.assert_equal(Stimulus([0, 3, 0, 5], compress=True).shape, (2, 1))
+
+    # An empty sequence still yields a 1-D (empty) data container:
+    for source in ([], ()):
+        npt.assert_equal(Stimulus(source).shape, (0,))
+        npt.assert_equal(Stimulus(source).time, None)
+
+    # Sequences that are not flat scalars must keep their old meaning: a
+    # nested sequence is a single electrode in time, not several electrodes
+    npt.assert_equal(Stimulus([[1, 5, 7, 2, 4]]).shape, (1, 5))
+    npt.assert_equal(Stimulus([[1, 1], [1, 1]]).shape, (2, 2))
+    npt.assert_equal(Stimulus(((1, 1), (1, 1))).shape, (2, 2))
+    # ...and invalid elements must still raise, not be coerced. `None` in
+    # particular converts to NaN if handed straight to np.asarray:
+    for source in (['a', 'b'], [1, 'a'], [1, None], [1, [2, 3]]):
+        with pytest.raises((TypeError, ValueError)):
+            Stimulus(source)
+
+
+def test_Stimulus_near_identical_time_axes():
+    # Merging is skipped when all time axes are *close*, not just equal - the
+    # fast path added for the common case must not tighten that tolerance.
+    t1 = np.array([0., 1., 2.], dtype=np.float32)
+    t2 = np.array([0., 1. + 3e-7, 2.], dtype=np.float32)
+    npt.assert_equal(np.array_equal(t1, t2), False)   # differ in float32...
+    npt.assert_equal(np.allclose(t1, t2), True)       # ...but within tolerance
+    stim1 = Stimulus([[0., 5., 0.]], time=t1)
+    stim2 = Stimulus([[0., 7., 0.]], time=t2)
+    merged = Stimulus([stim1, stim2])
+    # No interpolation: the first time axis is adopted verbatim
+    npt.assert_array_equal(np.asarray(merged.time), t1)
+    npt.assert_array_equal(merged.data, np.vstack((stim1.data, stim2.data)))
+    # Genuinely different axes are still merged by interpolation:
+    stim3 = Stimulus([[0., 9., 0.]], time=[0., 1.5, 2.])
+    merged = Stimulus([stim1, stim3])
+    npt.assert_equal(len(merged.time) > 3, True)
+
+
+def test_Stimulus___eq___tolerance():
+    # __eq__ compares with a tolerance; the exact-equality fast path must not
+    # change that:
+    npt.assert_equal(Stimulus([[1.0, 2.0]]) == Stimulus([[1.0, 2.0]]), True)
+    npt.assert_equal(Stimulus([[1.0, 2.0]]) == Stimulus([[1.0, 2.0 + 1e-9]]),
+                     True)
+    npt.assert_equal(Stimulus([[1.0, 2.0]]) == Stimulus([[1.0, 2.5]]), False)
+    # NaN never compares equal, with or without the fast path:
+    npt.assert_equal(Stimulus([[np.nan, 1.0]]) == Stimulus([[np.nan, 1.0]]),
+                     False)
+    npt.assert_equal(Stimulus([[np.inf, 1.0]]) == Stimulus([[np.inf, 1.0]]),
+                     True)
+
+
+def test_Stimulus_rename_electrodes_metadata():
+    # Per-electrode metadata is keyed by electrode name (BiphasicAxonMapModel
+    # reads its stimulus parameters from there), so renaming the electrodes
+    # has to rename those keys as well.
+    stim = Stimulus({'A1': BiphasicPulseTrain(20, 30, 0.45, stim_dur=100),
+                     'B3': BiphasicPulseTrain(40, 20, 0.45, stim_dur=100)})
+    npt.assert_equal(sorted(stim.metadata['electrodes'].keys()), ['A1', 'B3'])
+
+    renamed = Stimulus(stim, electrodes=['Z9', 'Y8'])
+    npt.assert_equal(sorted(renamed.metadata['electrodes'].keys()), ['Y8', 'Z9'])
+    for old, new in [('A1', 'Z9'), ('B3', 'Y8')]:
+        npt.assert_equal(renamed.metadata['electrodes'][new],
+                         stim.metadata['electrodes'][old])
+    # The source must not be touched (its metadata may be shared):
+    npt.assert_equal(sorted(stim.metadata['electrodes'].keys()), ['A1', 'B3'])
+
+    # Swapping two names is a simultaneous remap, not two sequential ones:
+    swapped = Stimulus(stim, electrodes=['B3', 'A1'])
+    npt.assert_equal(swapped.metadata['electrodes']['B3'],
+                     stim.metadata['electrodes']['A1'])
+    npt.assert_equal(swapped.metadata['electrodes']['A1'],
+                     stim.metadata['electrodes']['B3'])
+
+    # Renaming a stimulus that has no per-electrode metadata is a no-op:
+    plain = Stimulus(np.ones((2, 3)))
+    npt.assert_equal(Stimulus(plain, electrodes=['P1', 'P2']).electrodes,
+                     ['P1', 'P2'])
+    npt.assert_equal(Stimulus(plain, electrodes=['P1', 'P2'])
+                     .metadata['electrodes'], {})
