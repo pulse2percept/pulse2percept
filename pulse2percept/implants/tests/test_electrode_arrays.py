@@ -398,7 +398,8 @@ def test_ElectrodeGrid___get_item__(gtype):
                      [grid['A1'], grid['A2'], grid['A3']])
 
 
-@pytest.mark.parametrize('shape', [(3, 4), (5, 5), (1, 3), (30, 40), (2, 3)])
+@pytest.mark.parametrize('shape', [(3, 4), (5, 5), (1, 3), (30, 40), (2, 3),
+                                   (1, 2), (2, 1), (1, 1)])
 def test_ElectrodeGrid_canonical_names(shape):
     # A generic grid names its electrodes the same way an ImageStimulus names
     # its pixels: a letter for the row, a number for the column. Both come
@@ -430,8 +431,30 @@ def test_ElectrodeGrid_naming_schemes():
     npt.assert_equal(ElectrodeGrid((2, 2), 20,
                                    names=['w', 'x', 'y', 'z']).electrode_names,
                      ['w', 'x', 'y', 'z'])
-    # A two-electrode grid reads `names` as that explicit list, not as a
-    # (rows, cols) scheme -- a long-standing quirk of the two-entry check:
+    # A two-entry tuple is the naming scheme at every grid size, including the
+    # two-electrode grids where it used to be read as the names themselves:
     npt.assert_equal(ElectrodeGrid((1, 2), 20,
                                    names=('A', '1')).electrode_names,
+                     ['A1', 'A2'])
+    npt.assert_equal(ElectrodeGrid((2, 1), 20,
+                                   names=('A', '1')).electrode_names,
+                     ['A1', 'B1'])
+    npt.assert_equal(ElectrodeGrid((1, 2), 20,
+                                   names=('1', 'A')).electrode_names,
+                     ['A1', 'B1'])
+    # On a two-electrode grid the two readings collide, so only something that
+    # could actually be a scheme is read as one. Entries that cannot be name
+    # the two electrodes instead:
+    npt.assert_equal(ElectrodeGrid((1, 2), 20,
+                                   names=('C1', '4')).electrode_names,
+                     ['C1', '4'])
+    # ... as does a list or array, whatever it contains:
+    npt.assert_equal(ElectrodeGrid((1, 2), 20,
+                                   names=['x', 'y']).electrode_names,
+                     ['x', 'y'])
+    npt.assert_equal(ElectrodeGrid((2, 1), 20,
+                                   names=['A', '1']).electrode_names,
                      ['A', '1'])
+    npt.assert_equal(ElectrodeGrid((2, 1), 20,
+                                   names=np.array(['x', 'y'])).electrode_names,
+                     ['x', 'y'])
