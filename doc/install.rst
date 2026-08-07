@@ -5,15 +5,17 @@ Installation
 ============
 
 .. include:: ../README.rst
-    :start-line: 69
-    :end-line: 83
+    :start-after: .. quickstart-begin
+    :end-before: .. quickstart-end
+
+.. _install-compatibility:
 
 Compatibility and Building from Source
 ======================================
 
 .. include:: ../README.rst
-    :start-line: 86
-    :end-line: 117
+    :start-after: .. compat-begin
+    :end-before: .. compat-end
 
 .. note::
 
@@ -24,8 +26,8 @@ Upgrading and Uninstalling
 ==========================
 
 .. include:: ../README.rst
-    :start-line: 120
-    :end-line: 132
+    :start-after: .. upgrade-begin
+    :end-before: .. upgrade-end
 
 .. _install-source:
 
@@ -43,11 +45,8 @@ Before getting started, you will need the following:
 -  **Python**: You can check whether Python is already installed by typing
    ``python --version`` in a terminal or command prompt.
 
-   The latest development version supports:
-
-   .. include:: ../README.rst
-      :start-line: 97
-      :end-line: 102
+   The latest development version supports the Python versions listed for the
+   current release under :ref:`install-compatibility` above.
 
    If you don't have Python, there are several options:
 
@@ -75,37 +74,23 @@ Before getting started, you will need the following:
 
           python get-pip.py
 
--  **NumPy**: Once you have Python and pip, open a terminal and type:
+-  **A C compiler**: pulse2percept relies on C extension modules for code
+   acceleration. On Unix platforms a compiler is already installed (``gcc``).
+   On Windows you will have to install one yourself: get **Build Tools for
+   Visual Studio** from the `Microsoft website`_ and make sure to select
+   "Desktop Development with C++", which includes the MSVC compiler libraries.
+   You don't need to install Visual Studio itself.
 
-   .. code-block:: bash
-   
-        pip install numpy
-
--  **Cython** (>= 0.28): pulse2percept relies on C extension modules for code
-   acceleration. These require a C compiler, which on Unix platforms is
-   already installed (``gcc``). However, on Windows you will have to install a
-   compiler yourself:
-
-   1.  Install **Build Tools for Visual Studio** from the `Microsoft website`_.
-       Make sure to select "Desktop Development with C++", which should include
-       the MSVC compiler libraries.
-       You don't need to install Visual Studio itself.
-
-   2.  `Install Cython <https://cython.readthedocs.io/en/latest/src/quickstart/install.html>`_:
-
-       .. code-block:: bash
-
-           pip install Cython
-
-       If you get an error saying ``unable to find vcvarsall.bat``, then there
-       is a problem with your Build Tools installation, in which case you
-       should follow `this guide`_.
+   If you get an error saying ``unable to find vcvarsall.bat``, then there is a
+   problem with your Build Tools installation, in which case you should follow
+   `this guide <https://github.com/cython/cython/wiki/CythonExtensionsOnWindows>`_.
 
    .. warning::
 
        Some guides on the web tell you to install MinGW instead of Visual Studio.
        However, this is not recommended for 64-bit platforms.
-       When in doubt, follow `this guide <https://github.com/cython/cython/wiki/CythonExtensionsOnWindows>`_.
+       When in doubt, follow `the same guide
+       <https://github.com/cython/cython/wiki/CythonExtensionsOnWindows>`__.
 
 -  **Git**: On Unix, you can install git from the
    `command line <https://git-scm.com/book/en/v2/Getting-Started-Installing-Git>`_. 
@@ -115,8 +100,16 @@ Before getting started, you will need the following:
    or C. OpenMP is part of the GCC compiler on Unix, and part of the
    `MinGW compiler <https://stackoverflow.com/a/38389181>`_ on Windows.
    Follow `these instructions 
-   <https://dipy.org/documentation/1.0.0./installation/#openmp-with-osx>`_ 
+   <https://dipy.org/documentation/1.0.0./installation/#openmp-with-osx>`_
    to get it to work on macOS.
+
+.. note::
+
+   You do not need to install **NumPy** or **Cython** by hand. Both are
+   declared as build requirements in ``pyproject.toml``, so ``pip`` installs
+   them into an isolated build environment when it compiles p2p, and NumPy is
+   installed again as a regular runtime dependency. Only if you build with
+   ``pip install --no-build-isolation`` do you have to provide them yourself.
 
 .. _Python Anaconda: https://www.anaconda.com/distribution
 .. _Python Wiki: https://wiki.python.org/moin/BeginnersGuide/Download
