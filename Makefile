@@ -26,6 +26,10 @@ doc: install
 tests: install
 	$(PYTEST) --doctest-modules --showlocals -v pulse2percept
 
+bench: install
+	$(PIP) install -e ".[benchmark]"
+	$(PYTEST) benchmarks --benchmark-only
+
 flake:
 	$(FLAKE) --ignore N802,N806,W504 --select W503 `find . -name \*.py | grep -v setup.py | grep -v __init__.py | grep -v /doc/`
 
@@ -36,6 +40,7 @@ help:
 	@ echo "make               Installs pulse2percept"
 	@ echo "make uninstall     Uninstalls pulse2percept"       
 	@ echo "make tests         Installs pulse2percept and runs the test suite"
+	@ echo "make bench         Installs pulse2percept and runs the benchmark suite"
 	@ echo "make doc           Installs pulse2percept and generates the documentation"
 	@ echo "make clean         Cleans out all build files"
 	@ echo "make distclean     Cleans out all build and dist files"

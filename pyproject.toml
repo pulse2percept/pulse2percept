@@ -59,6 +59,11 @@ dev = [
     "seaborn",
     "neuropythy"
 ]
+# Kept out of `dev` so the test matrix does not install a runner it never uses;
+# see benchmarks/README.md.
+benchmark = [
+    "pytest-benchmark>=4",
+]
 
 [tool.coverage.run]
 # Measure coverage of the library, not of the test suite itself: test modules

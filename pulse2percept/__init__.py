@@ -33,18 +33,55 @@ try:
 except PackageNotFoundError:
     __version__ = "unknown"
 
-# Disable Jupyter Notebook handlers
-# https://github.com/ipython/ipython/issues/8282
-logging.getLogger().handlers = []
-
+# A library must not configure logging on behalf of the application that
+# imports it: handlers, levels and destinations are the application's to
+# choose. Attaching a NullHandler to our own logger silences the "no handler
+# could be found" fallback without touching the root logger, which is what the
+# logging documentation prescribes for libraries. Call ``set_debug_logging``
+# to opt in to the debug file that used to be configured on import.
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler())
+logger.addHandler(logging.NullHandler())
 
-# Set up root logger for debug file
-formatstr = "%(asctime)s [%(name)s] [%(levelname)s] %(message)s"
-logging.basicConfig(
-    level=logging.DEBUG, format=formatstr, filename="debug.log", filemode="w"
-)
+
+def set_debug_logging(fname="debug.log", level=logging.DEBUG, filemode="w"):
+    """Write pulse2percept's log messages to a file
+
+    Importing pulse2percept does not configure logging: which messages are
+    emitted, and where they go, is the application's decision. Call this to
+    opt in to a file-based log of pulse2percept's own messages.
+
+    Note that this configures the ``pulse2percept`` logger only, not the root
+    logger, so it will not capture messages from other libraries.
+
+    Parameters
+    ----------
+    fname : str, optional
+        File to write the log to.
+    level : int, optional
+        Logging level, e.g. ``logging.DEBUG`` or ``logging.INFO``.
+    filemode : str, optional
+        ``'w'`` to start a fresh log, ``'a'`` to append to an existing one.
+
+    Returns
+    -------
+    handler : :py:class:`logging.FileHandler`
+        The handler that was installed. Pass it to
+        ``logging.getLogger('pulse2percept').removeHandler`` to undo.
+
+    Examples
+    --------
+    >>> import pulse2percept as p2p
+    >>> handler = p2p.set_debug_logging()  # doctest: +SKIP
+
+    """
+    handler = logging.FileHandler(fname, mode=filemode)
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(name)s] [%(levelname)s] %(message)s")
+    )
+    logger.addHandler(handler)
+    logger.setLevel(level)
+    return handler
+
 
 from . import datasets
 from . import implants
@@ -59,6 +96,7 @@ __all__ = [
     "implants",
     "models",
     "percepts",
+    "set_debug_logging",
     "stimuli",
     "topography",
     "utils",

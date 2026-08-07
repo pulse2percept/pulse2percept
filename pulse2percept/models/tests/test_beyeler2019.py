@@ -16,6 +16,10 @@ from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
 from pulse2percept.topography import Watson2014Map, Watson2014DisplaceMap
 from pulse2percept.utils.testing import assert_warns_msg
 
+# Building an axon map writes a cache to a relative path; keep it in a
+# temporary directory instead of wherever pytest was started from:
+pytestmark = pytest.mark.usefixtures('axon_cache_in_tmp')
+
 
 def test_ScoreboardSpatial():
     # ScoreboardSpatial automatically sets `rho`:

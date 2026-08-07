@@ -116,8 +116,7 @@ jobs:
         # The repo is mounted read-only somewhere that is not the working
         # directory: the scripts need it to find the .pyx files, but it must
         # never end up shadowing the installed package on sys.path. Working
-        # directory is /tmp, which is writable (importing pulse2percept drops
-        # a debug.log next to wherever you are).
+        # directory is /tmp, which is writable.
         run: |
           set -euo pipefail
           docker run --rm \

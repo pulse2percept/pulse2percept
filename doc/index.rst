@@ -35,6 +35,7 @@
 
    developers/contributing
    developers/style_guide
+   developers/benchmarks
    developers/releases
 
 .. include:: ../README.rst

@@ -1,7 +1,6 @@
 from pulse2percept.stimuli import VideoStimulus, BostonTrain, GirlPool
 from skimage.io import imsave
 from matplotlib.animation import FuncAnimation
-import os
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -10,9 +9,9 @@ import matplotlib
 matplotlib.use('Agg')
 
 
-def test_VideoStimulus():
+def test_VideoStimulus(tmp_path):
     # Create a dummy video:
-    fname = 'test.mp4'
+    fname = str(tmp_path / 'test.mp4')
     shape = (10, 32, 48)
     ndarray = np.random.rand(*shape)
     fps = 1
@@ -26,7 +25,6 @@ def test_VideoStimulus():
     npt.assert_equal(stim.metadata['source_size'], (shape[2], shape[1]))
     npt.assert_almost_equal(stim.time, np.arange(shape[0]) * 1000.0 / fps)
     npt.assert_equal(stim.electrodes, np.arange(np.prod(shape[1:])))
-    os.remove(fname)
 
     # Resize the video:
     ndarray = np.ones(shape)
@@ -40,11 +38,10 @@ def test_VideoStimulus():
     npt.assert_equal(stim.metadata['source_size'], (shape[2], shape[1]))
     npt.assert_almost_equal(stim.time, np.arange(shape[0]) * 1000 / fps)
     npt.assert_equal(stim.electrodes, np.arange(np.prod(resize)))
-    os.remove(fname)
 
 
-def test_VideoStimulus_invert():
-    fname = 'test.mp4'
+def test_VideoStimulus_invert(tmp_path):
+    fname = str(tmp_path / 'test.mp4')
     shape = (10, 32, 48, 3)
     gray = 129 / 255.0
     ndarray = np.ones(shape) * gray
@@ -54,11 +51,10 @@ def test_VideoStimulus_invert():
     npt.assert_almost_equal(stim.invert().data, 1 - gray, decimal=2)
     # Inverting does not change the original object:
     npt.assert_almost_equal(stim.data, gray, decimal=2)
-    os.remove(fname)
 
 
-def test_VideoStimulus_rgb2gray():
-    fname = 'test.mp4'
+def test_VideoStimulus_rgb2gray(tmp_path):
+    fname = str(tmp_path / 'test.mp4')
     shape = (10, 32, 48, 3)
     gray = 129 / 255.0
     ndarray = np.ones(shape) * gray
@@ -73,11 +69,10 @@ def test_VideoStimulus_rgb2gray():
     # Original stim unchanged:
     npt.assert_equal(stim_rgb.vid_shape,
                      (shape[1], shape[2], shape[3], shape[0]))
-    os.remove(fname)
 
 
-def test_VideoStimulus_resize():
-    fname = 'test.mp4'
+def test_VideoStimulus_resize(tmp_path):
+    fname = str(tmp_path / 'test.mp4')
     shape = (10, 32, 48)
     gray = 129 / 255.0
     ndarray = np.ones(shape) * gray
@@ -90,11 +85,10 @@ def test_VideoStimulus_resize():
     npt.assert_equal(stim.resize((-1, 24)).vid_shape, (16, 24, 3, 10))
     with pytest.raises(ValueError):
         stim.resize((-1, -1))
-    os.remove(fname)
 
 
-def test_VideoStimulus_crop():
-    fname = 'test.mp4'
+def test_VideoStimulus_crop(tmp_path):
+    fname = str(tmp_path / 'test.mp4')
     shape = (10, 48, 32)
     ndarray = np.random.rand(*shape)
     fps = 1
@@ -274,8 +268,8 @@ def test_ImageStimulus_scale():
         stim.scale(0)
 
 
-def test_VideoStimulus_filter():
-    fname = 'test.mp4'
+def test_VideoStimulus_filter(tmp_path):
+    fname = str(tmp_path / 'test.mp4')
     shape = (10, 32, 48)
     gray = 129 / 255.0
     ndarray = np.ones(shape) * gray
@@ -302,8 +296,6 @@ def test_VideoStimulus_filter():
     stim = VideoStimulus(fname)
     with pytest.raises(ValueError):
         stim.filter('sobel')
-
-    os.remove(fname)
 
 
 def test_VideoStimulus_encode():
@@ -332,8 +324,8 @@ def test_VideoStimulus_encode():
         stim.encode(pulse=BostonTrain())
 
 
-def test_VideoStimulus_apply():
-    fname = 'test.mp4'
+def test_VideoStimulus_apply(tmp_path):
+    fname = str(tmp_path / 'test.mp4')
     shape = (10, 32, 48)
     gray = 129 / 255.0
     ndarray = np.ones(shape) * gray
