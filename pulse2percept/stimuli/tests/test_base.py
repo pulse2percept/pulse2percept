@@ -1,3 +1,6 @@
+import subprocess
+import sys
+
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -556,6 +559,100 @@ def test_Stimulus_remove():
     stim.remove('A1')
     npt.assert_equal('A1' in stim.electrodes, False)
     npt.assert_equal('C3' in stim.electrodes, True)
+
+    # Electrode 0 must be removable: `0` is falsy, but it is a valid index:
+    stim = Stimulus([[0, 1, 2], [3, 4, 5]])
+    stim.remove(0)
+    npt.assert_equal(stim.shape, (1, 3))
+    npt.assert_equal(stim.electrodes, [1])
+    npt.assert_almost_equal(stim.data, [[3, 4, 5]])
+    # Removing index 0 by index or by name gives the same result:
+    stim = Stimulus([[0, 1, 2], [3, 4, 5]], electrodes=['A1', 'C3'])
+    stim.remove(0)
+    npt.assert_equal(stim.electrodes, ['C3'])
+
+    # Removing a list of electrodes:
+    stim = Stimulus([[0, 1, 2], [3, 4, 5]], electrodes=['A1', 'C3'])
+    stim.remove(['A1', 'C3'])
+    npt.assert_equal(stim.shape, (0, 3))
+
+    # Removing "nothing" is a no-op. ProsthesisSystem relies on this when none
+    # of its electrodes are deactivated:
+    for nothing in (None, [], (), np.array([])):
+        stim = Stimulus([[0, 1, 2], [3, 4, 5]])
+        stim.remove(nothing)
+        npt.assert_equal(stim.shape, (2, 3))
+        npt.assert_equal(stim.electrodes, [0, 1])
+
+    # After 'all', `electrodes` must stay an array of the same dtype, so that
+    # it can still be indexed with a boolean mask:
+    stim = Stimulus([[0, 1, 2], [3, 4, 5]], electrodes=['A1', 'C3'])
+    dtype = stim.electrodes.dtype
+    stim.remove('all')
+    npt.assert_equal(isinstance(stim.electrodes, np.ndarray), True)
+    npt.assert_equal(stim.electrodes.dtype, dtype)
+    npt.assert_equal(stim.shape, (0, 3))
+    npt.assert_equal(stim.electrodes[np.zeros(0, dtype=bool)].size, 0)
+
+    # Unknown electrodes are an error:
+    stim = Stimulus([[0, 1, 2], [3, 4, 5]], electrodes=['A1', 'C3'])
+    with pytest.raises(ValueError):
+        stim.remove('B2')
+
+
+def test_Stimulus_duplicate_electrodes():
+    # Duplicate names are replaced with their integer index:
+    with pytest.warns(UserWarning, match='Duplicate electrode names'):
+        stim = Stimulus(np.ones((3, 2)), electrodes=['AA', 'AA', 'BB'])
+    npt.assert_equal(stim.electrodes, ['AA', '1', 'BB'])
+    # Integer names stay integers:
+    with pytest.warns(UserWarning, match='Duplicate electrode names'):
+        stim = Stimulus([Stimulus(1), Stimulus(2)])
+    npt.assert_equal(stim.electrodes, [0, 1])
+    # The integer replacements must not be truncated by a string dtype that is
+    # too narrow to hold them - the "fixed" names would be duplicates again:
+    n_el = 200
+    with pytest.warns(UserWarning, match='Duplicate electrode names'):
+        stim = Stimulus(np.ones((n_el, 2)), electrodes=['A'] * n_el)
+    npt.assert_equal(len(np.unique(stim.electrodes)), n_el)
+    npt.assert_equal(stim.electrodes[0], 'A')
+    npt.assert_equal(stim.electrodes[-1], str(n_el - 1))
+
+
+def test_Stimulus_shift_without_time():
+    # Shifting a stimulus that has no time component must be reported as such,
+    # not as a TypeError from adding a scalar to None:
+    stim = Stimulus(3)
+    npt.assert_equal(stim.time, None)
+    with pytest.raises(ValueError):
+        stim >> 1.0
+    with pytest.raises(ValueError):
+        stim << 1.0
+    # Stimuli that do have a time axis are unaffected:
+    stim = Stimulus([[0, 1, 2]], time=[0, 1, 2])
+    npt.assert_almost_equal((stim >> 1.5).time, [1.5, 2.5, 3.5])
+    npt.assert_almost_equal((stim << 1.5).time, [-1.5, -0.5, 0.5])
+
+
+def test_Stimulus_no_global_side_effects():
+    # Importing the module must not change NumPy's print options for the rest
+    # of the user's session (`Stimulus` used to call `np.set_printoptions` at
+    # module level). This has to run in a subprocess, because by the time this
+    # test executes the module has long been imported.
+    code = ("import numpy as np;"
+            "before = np.get_printoptions();"
+            "import pulse2percept.stimuli.base;"
+            "after = np.get_printoptions();"
+            "print('UNCHANGED' if before == after "
+            "else f'CHANGED: {before} -> {after}')")
+    out = subprocess.run([sys.executable, '-c', code], capture_output=True,
+                         text=True, check=True)
+    npt.assert_equal(out.stdout.strip().splitlines()[-1], 'UNCHANGED')
+    # Long arrays are still abbreviated in the repr, which is what the global
+    # print options used to (redundantly) take care of:
+    stim = Stimulus(np.arange(1000).reshape((10, 100)))
+    npt.assert_equal('...' in repr(stim), True)
+    npt.assert_equal('\n'.join(repr(stim).split()).count('electrodes='), 1)
 
 
 def test_merge_time_axes_merge_tolerance():
