@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import warnings
 
 import numpy as np
 import numpy.testing as npt
@@ -13,7 +14,7 @@ import matplotlib.pyplot as plt
 from pulse2percept.stimuli import Stimulus
 from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.stimuli import ImageStimulus
-from pulse2percept.stimuli.base import _interp_rows
+from pulse2percept.stimuli.base import _interp_rows, merge_time_axes
 from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
 
@@ -670,6 +671,39 @@ def test_merge_time_axes_merge_tolerance():
     # Assert no value goes close to 1/3 or -1/3, i.e. a corrupted data point
     npt.assert_equal(np.isclose(1/3, unique_points, atol=0.1).any(), False)
     npt.assert_equal(np.isclose(-1/3, unique_points, atol=0.1).any(), False)
+
+
+def test_merge_time_axes_float32_resolution():
+    # Time is stored as float32, whose resolution is coarser than the absolute
+    # merge tolerance for t > ~10 ms. Two stimuli that sample the same instant
+    # then hand us time points a few ulps apart, which used to survive the
+    # merge as separate columns: they were closer together than DT (so the
+    # merged stimulus was not strictly increasing anymore) and interpolating
+    # one stimulus at the other's time point invented data values halfway up a
+    # pulse edge.
+    freqs = (10, 11, 12, 13, 20, 30, 41)
+    trains = {f'A{f}': BiphasicPulseTrain(f, 10, 0.45, stim_dur=1000)
+              for f in freqs}
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        stim = Stimulus(trains)
+    # Every pair of time points is at least a time step apart:
+    npt.assert_equal(np.diff(stim.time.astype(np.float64)) >= 0.95 * DT, True)
+    # And no data value was invented that is not in one of the sources:
+    src_amps = np.unique(np.concatenate([t.data.ravel()
+                                         for t in trains.values()]))
+    npt.assert_equal(np.isin(np.unique(stim.data), src_amps), True)
+
+
+def test_merge_time_axes_keeps_distinct_points():
+    # The magnitude-scaled tolerance must never merge time points that are a
+    # genuine time step apart, however large `t` gets:
+    for t0 in (0.0, 10.0, 100.0, 1000.0, 4000.0):
+        t1 = np.float32([t0, t0 + DT, t0 + 2 * DT])
+        t2 = np.float32([t0, t0 + 3 * DT, t0 + 4 * DT])
+        merged = merge_time_axes([np.zeros((1, 3)), np.zeros((1, 3))],
+                                 [t1, t2])[1][0]
+        npt.assert_almost_equal(merged, np.union1d(t1, t2), decimal=6)
 
 
 def test_Stimulus_shallow_copy():
