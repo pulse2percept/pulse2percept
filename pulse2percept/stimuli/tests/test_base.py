@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from pulse2percept.stimuli import Stimulus
 from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.stimuli import ImageStimulus
+from pulse2percept.stimuli.base import _interp_rows
 from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
 
@@ -700,3 +701,59 @@ def test_Stimulus_shallow_copy():
     npt.assert_equal(type(img * 2), ImageStimulus)
     npt.assert_equal((img * 2).img_shape, img.img_shape)
     npt.assert_almost_equal((img * 2).data, 2 * img.data)
+
+
+@pytest.mark.parametrize('n_el, n_t, n_q', [(1, 5, 3), (2, 12, 40), (40, 8, 5),
+                                            (40, 8, 400), (64, 300, 64),
+                                            (33, 4, 257)])
+def test_interp_rows(n_el, n_t, n_q):
+    # `_interp_rows` replaces a per-electrode np.interp loop, and switches
+    # between a vectorized and a looped implementation depending on the shape.
+    # Both must agree with np.interp down to the last bit, because temporal
+    # models resolve stimulus edges on a fixed simulation grid.
+    rng = np.random.default_rng(n_el * 1000 + n_t * 10 + n_q)
+    xp = np.unique(np.sort(rng.random(n_t).astype(np.float32) * 100))
+    fp = ((rng.random((n_el, xp.size)) - 0.5) * 200).astype(np.float32)
+    for x in (rng.random(n_q).astype(np.float32) * 140 - 20,   # incl. outside
+              np.resize(xp, n_q),                              # exactly on knots
+              np.full(n_q, xp[0], dtype=np.float32),           # left end point
+              np.full(n_q, xp[-1], dtype=np.float32)):         # right end point
+        expected = np.array([np.interp(x, xp, row) for row in fp])
+        expected = expected.reshape((-1, x.size))
+        npt.assert_array_equal(_interp_rows(x, xp, fp), expected)
+
+
+def test_interp_rows_edge_cases():
+    # A single time point: np.interp returns it everywhere
+    fp = np.array([[3.0], [4.0]], dtype=np.float32)
+    xp = np.array([2.5], dtype=np.float32)
+    x = np.array([-1.0, 2.5, 99.0], dtype=np.float32)
+    npt.assert_array_equal(_interp_rows(x, xp, fp),
+                           np.array([[3, 3, 3], [4, 4, 4]], dtype=np.float64))
+    # No electrodes at all:
+    npt.assert_equal(_interp_rows(x, np.array([0., 1.], np.float32),
+                                  np.zeros((0, 2), np.float32)).shape, (0, 3))
+    # A non-monotonic time axis is allowed (it only warns), but np.interp's
+    # bracket search is guess-based there, so we must defer to it verbatim:
+    xp = np.array([0., 1., 1., 2., 2.], dtype=np.float32)
+    fp = np.array([[1., 0., 1., 0., 2.]] * 40, dtype=np.float32)
+    x = np.array([0.0, 0.5, 1.0, 1.5, 2.0, 3.0], dtype=np.float32)
+    expected = np.array([np.interp(x, xp, row) for row in fp])
+    npt.assert_array_equal(_interp_rows(x, xp, fp), expected)
+
+
+def test_Stimulus_getitem_many_electrodes():
+    # Interpolating a stimulus with many electrodes takes the vectorized path;
+    # the result must be identical to interpolating each electrode by itself.
+    rng = np.random.default_rng(0)
+    data = rng.random((200, 25)).astype(np.float32)
+    stim = Stimulus(data)
+    for t in (3.7, [3.7], np.linspace(-2, 26, 37), np.asarray(stim.time)):
+        # __getitem__ casts the requested time points to float32 first:
+        t32 = np.float32(np.atleast_1d(t))
+        expected = np.array([np.interp(t32, stim.time, row)
+                             for row in data]).astype(np.float32)
+        npt.assert_array_equal(np.asarray(stim[:, t]).reshape(expected.shape),
+                               expected)
+    # A single electrode of that stimulus must give the same values:
+    npt.assert_almost_equal(stim[7, 3.7], stim[:, 3.7][7, 0])
