@@ -115,14 +115,14 @@ class ImageStimulus(Stimulus):
         # Store the original image shape for resizing and color conversion:
         self.img_shape = img.shape
         # Convert to float array in [0, 1] and call the Stimulus constructor:
-        super(ImageStimulus, self).__init__(img_as_float32(img).ravel(),
+        super().__init__(img_as_float32(img).ravel(),
                                             time=None, electrodes=electrodes,
                                             metadata=metadata,
                                             compress=compress)
         self.metadata = metadata
 
     def _pprint_params(self):
-        params = super(ImageStimulus, self)._pprint_params()
+        params = super()._pprint_params()
         params.update({'img_shape': self.img_shape})
         return params
 
@@ -662,6 +662,7 @@ class SnellenChart(ImageStimulus):
         Additional stimulus metadata can be stored in a dictionary.
 
     """
+    __slots__ = ()
 
     def __init__(self, resize=None, show_annotations=True, row=None,
                  electrodes=None, metadata=None):
@@ -701,7 +702,7 @@ class SnellenChart(ImageStimulus):
                     raise ValueError(f'Invalid value for "row": {row}. Choose '
                                      f'an int between 1 and 11.')
         # Call ImageStimulus constructor:
-        super(SnellenChart, self).__init__(source,
+        super().__init__(source,
                                            resize=resize,
                                            as_gray=True,
                                            electrodes=electrodes,
@@ -734,6 +735,7 @@ class LogoBVL(ImageStimulus):
         Additional stimulus metadata can be stored in a dictionary.
 
     """
+    __slots__ = ()
 
     def __init__(self, resize=None, electrodes=None, metadata=None,
                  as_gray=False):
@@ -741,7 +743,7 @@ class LogoBVL(ImageStimulus):
         module_path = dirname(__file__)
         source = join(module_path, 'data', 'bionic-vision-lab.png')
         # Call ImageStimulus constructor:
-        super(LogoBVL, self).__init__(source,
+        super().__init__(source,
                                       resize=resize,
                                       as_gray=as_gray,
                                       electrodes=electrodes,
@@ -775,13 +777,14 @@ class LogoUCSB(ImageStimulus):
         Additional stimulus metadata can be stored in a dictionary.
 
     """
+    __slots__ = ()
 
     def __init__(self, resize=None, electrodes=None, metadata=None):
         # Load logo from data dir:
         module_path = dirname(__file__)
         source = join(module_path, 'data', 'ucsb.png')
         # Call ImageStimulus constructor:
-        super(LogoUCSB, self).__init__(source,
+        super().__init__(source,
                                        resize=resize,
                                        as_gray=True,
                                        electrodes=electrodes,

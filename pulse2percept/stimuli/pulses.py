@@ -49,6 +49,7 @@ class MonophasicPulse(Stimulus):
     >>> pulse = MonophasicPulse(-20, 1, delay_dur=2, stim_dur=10)
 
     """
+    __slots__ = ('cathodic',)
 
     def __init__(self, amp, phase_dur, delay_dur=0, stim_dur=None,
                  electrode=None):
@@ -91,7 +92,7 @@ class MonophasicPulse(Stimulus):
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        params = super(MonophasicPulse, self)._pprint_params()
+        params = super()._pprint_params()
         params.update({'cathodic': self.cathodic})
         return params
 
@@ -142,6 +143,7 @@ class BiphasicPulse(Stimulus):
     >>> pulse = BiphasicPulse(-20, 1, delay_dur=2, stim_dur=10)
 
     """
+    __slots__ = ('cathodic_first',)
 
     def __init__(self, amp, phase_dur, interphase_dur=0, delay_dur=0,
                  stim_dur=None, cathodic_first=True, electrode=None):
@@ -194,7 +196,7 @@ class BiphasicPulse(Stimulus):
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        params = super(BiphasicPulse, self)._pprint_params()
+        params = super()._pprint_params()
         params.update({'cathodic_first': self.cathodic_first})
         return params
 
@@ -251,6 +253,7 @@ class AsymmetricBiphasicPulse(Stimulus):
     ...                                 delay_dur=2, stim_dur=15)
 
     """
+    __slots__ = ('cathodic_first',)
 
     def __init__(self, amp1, amp2, phase_dur1, phase_dur2, interphase_dur=0,
                  delay_dur=0, stim_dur=None, cathodic_first=True,
@@ -311,6 +314,6 @@ class AsymmetricBiphasicPulse(Stimulus):
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        params = super(AsymmetricBiphasicPulse, self)._pprint_params()
+        params = super()._pprint_params()
         params.update({'cathodic_first': self.cathodic_first})
         return params

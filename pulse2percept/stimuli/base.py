@@ -5,8 +5,7 @@ from ..utils import PrettyPrint, unique, is_strictly_increasing
 from ..utils.constants import DT, MIN_AMP
 from ._base import fast_compress_space, fast_compress_time
 
-from sys import _getframe
-from matplotlib.axes import Subplot
+from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
 from copy import copy, deepcopy
 import operator as ops
@@ -292,7 +291,7 @@ class Stimulus(PrettyPrint):
         else:
             self.metadata = {'electrodes': {}, 'user': metadata}
         # Flag will be flipped in the compress method:
-        self.is_compressed = False
+        self._is_compressed = False
         # Extract the data and coordinates (electrodes, time) from the source:
         self._factory(source, electrodes, time, compress)
 
@@ -531,7 +530,7 @@ class Stimulus(PrettyPrint):
             'electrodes': electrodes,
             'time': time,
         }
-        self.is_compressed = True
+        self._is_compressed = True
 
     def append(self, other):
         """Append another stimulus
@@ -701,7 +700,7 @@ class Stimulus(PrettyPrint):
             # Convert to list so w can iterate over it:
             axes = [axes]
         for i, ax in enumerate(axes):
-            if not isinstance(ax, Subplot):
+            if not isinstance(ax, Axes):
                 raise TypeError(f"'axes' must be a list of subplots, but "
                                 f"axes[{i}] is {type(ax)}.")
         if len(axes) != len(electrodes):
@@ -767,11 +766,10 @@ class Stimulus(PrettyPrint):
                     start = self.time[0] if time.start is None else time.start
                     stop = self.time[-1] if time.stop is None else time.stop
                     time = np.arange(start, stop, time.step, dtype=np.float32)
-            else:
-                if not np.any(time == Ellipsis):
-                    # Convert to float so time is not mistaken for column index
-                    if np.array(time).dtype != bool:
-                        time = np.float32(time)
+            elif time is not Ellipsis:
+                # Convert to float so time is not mistaken for column index
+                if np.array(time).dtype != bool:
+                    time = np.float32(time)
         else:
             electrodes = item
             time = None
@@ -1047,21 +1045,12 @@ class Stimulus(PrettyPrint):
 
     @property
     def is_compressed(self):
-        """Flag indicating whether the stimulus has been compressed"""
-        return self._is_compressed
+        """Flag indicating whether the stimulus has been compressed
 
-    @is_compressed.setter
-    def is_compressed(self, val):
-        """This flag can only be set in ``compress``"""
-        # getframe(0) is 'is_compressed'
-        # getframe(1) is the one we are looking for:
-        f_caller = _getframe(1).f_code.co_name
-        if f_caller in ["__init__", "compress"]:
-            self._is_compressed = val
-        else:
-            err_s = (f"The attribute `is_compressed` can only be set in the "
-                     f"constructor or in `compress`, not in `{f_caller}`.")
-            raise AttributeError(err_s)
+        Read-only: the flag is maintained by ``compress``. Assigning to it
+        raises an ``AttributeError``.
+        """
+        return self._is_compressed
 
     @property
     def dt(self):

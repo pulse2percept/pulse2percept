@@ -61,6 +61,7 @@ class GratingStimulus(VideoStimulus):
         Additional stimulus metadata can be stored in a dictionary.
 
     """
+    __slots__ = ()
 
     def __init__(self, shape, direction=0, spatial_freq=0.1,
                  temporal_freq=0.001, phase=0, contrast=1, time=None,
@@ -91,7 +92,7 @@ class GratingStimulus(VideoStimulus):
         channel = contrast * channel / 2.0 + 0.5
 
         # Call VideoStimulus constructor:
-        super(GratingStimulus, self).__init__(channel, as_gray=True,
+        super().__init__(channel, as_gray=True,
                                               time=time,
                                               electrodes=electrodes,
                                               metadata=metadata,
@@ -162,6 +163,7 @@ class BarStimulus(VideoStimulus):
         Additional stimulus metadata can be stored in a dictionary.
 
     """
+    __slots__ = ()
 
     def __init__(self, shape, direction=0, speed=0.1, bar_width=1,
                  edge_width=3, px_btw_bars=None, start_pos=0, contrast=1,
@@ -217,7 +219,7 @@ class BarStimulus(VideoStimulus):
         bar = contrast * bar / 2.0 + 0.5
 
         # Call VideoStimulus constructor:
-        super(BarStimulus, self).__init__(bar, as_gray=True,
+        super().__init__(bar, as_gray=True,
                                           time=grating.time,
                                           electrodes=electrodes,
                                           metadata=metadata,

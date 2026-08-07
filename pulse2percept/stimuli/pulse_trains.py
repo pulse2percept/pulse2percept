@@ -100,6 +100,7 @@ class PulseTrain(Stimulus):
        a 11 Hz pulse train into a 100 ms window, there will be 9 pulses.
 
     """
+    __slots__ = ('freq', 'pulse_type')
 
     def __init__(self, freq, pulse, n_pulses=None, stim_dur=1000.0,
                  electrode=None, metadata=None):
@@ -157,7 +158,7 @@ class PulseTrain(Stimulus):
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        params = super(PulseTrain, self)._pprint_params()
+        params = super()._pprint_params()
         params.update({'freq': self.freq,
                        'pulse_type': self.pulse_type})
         return params
@@ -210,6 +211,7 @@ class BiphasicPulseTrain(Stimulus):
        smaller than 10 picoamps.
 
     """
+    __slots__ = ('freq', 'cathodic_first')
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
                  n_pulses=None, stim_dur=1000.0, cathodic_first=True,
@@ -234,7 +236,7 @@ class BiphasicPulseTrain(Stimulus):
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        params = super(BiphasicPulseTrain, self)._pprint_params()
+        params = super()._pprint_params()
         params.update({'cathodic_first': self.cathodic_first,
                        'freq': self.freq})
         return params
@@ -281,6 +283,7 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
         A dictionary of meta-data
 
     """
+    __slots__ = ('freq', 'cathodic_first')
 
     def __init__(self, freq, amp1, amp2, phase_dur1, phase_dur2,
                  interphase_dur=0, delay_dur=0, n_pulses=None, stim_dur=1000.0,
@@ -300,7 +303,7 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        params = super(AsymmetricBiphasicPulseTrain, self)._pprint_params()
+        params = super()._pprint_params()
         params.update({'cathodic_first': self.cathodic_first,
                        'freq': self.freq})
         return params
@@ -356,6 +359,7 @@ class BiphasicTripletTrain(Stimulus):
        smaller than 10 picoamps.
 
     """
+    __slots__ = ('freq', 'cathodic_first')
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, interpulse_dur=0,
                  delay_dur=0, n_pulses=None, stim_dur=1000.0, cathodic_first=True,
@@ -374,7 +378,7 @@ class BiphasicTripletTrain(Stimulus):
         # Create the triplet train:
         pt = PulseTrain(freq, triplet, n_pulses=n_pulses, stim_dur=stim_dur)
         # Set up the Stimulus object through the constructor:
-        super(BiphasicTripletTrain, self).__init__(pt.data, time=pt.time,
+        super().__init__(pt.data, time=pt.time,
                                                    compress=False)
         self.freq = freq
         self.cathodic_first = cathodic_first
@@ -382,7 +386,7 @@ class BiphasicTripletTrain(Stimulus):
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        params = super(BiphasicTripletTrain, self)._pprint_params()
+        params = super()._pprint_params()
         params.update({'cathodic_first': self.cathodic_first,
                        'freq': self.freq})
         return params

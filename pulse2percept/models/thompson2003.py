@@ -10,8 +10,6 @@ from ._thompson2003 import fast_thompson2003
 
 # Log all warnings.warn() at the WARNING level:
 import warnings
-import logging
-logging.captureWarnings(True)
 
 
 class Thompson2003Spatial(SpatialModel):
