@@ -115,6 +115,62 @@ def test_SpatialModel():
         # must pass an implant
         ValidSpatialModel().build().predict_percept(Stimulus(3))
 
+
+def test_SpatialModel_predict_percept_time_order():
+    # Before predicting, identical stimulus frames are collapsed with
+    # np.unique, which orders what it returns by stimulus value rather than by
+    # time. The de-duplicated stimulus handed to _predict_spatial must still
+    # run forwards in time, and the frames must be put back where they belong.
+    seen_time = []
+
+    class RecordingSpatialModel(ValidSpatialModel):
+
+        def _predict_spatial(self, earray, stim):
+            seen_time.append(np.asarray(stim.time))
+            # Hand back the first electrode's amplitude at every grid point,
+            # so the caller can tell which frame ended up where:
+            return np.tile(stim.data[0], (self.grid.x.size, 1))
+
+    model = RecordingSpatialModel(xystep=2).build()
+    # Amplitudes chosen so that sorting the frames by value shuffles them with
+    # respect to time (sorted: 1, 2, 3 -> frames 1, 2, 0):
+    implant = ArgusI(stim={'A1': [3, 1, 2]})
+    with warnings.catch_warnings():
+        # A shuffled time axis makes Stimulus warn:
+        warnings.simplefilter('error', UserWarning)
+        percept = model.predict_percept(implant)
+
+    # The model saw time running forwards:
+    npt.assert_equal(len(seen_time), 1)
+    npt.assert_almost_equal(seen_time[0], [0, 1, 2])
+    # ...and every frame was restored to its original position:
+    npt.assert_almost_equal(percept.time, [0, 1, 2])
+    for idx, amp in enumerate([3, 1, 2]):
+        npt.assert_almost_equal(percept.data[..., idx], amp)
+
+
+def test_SpatialModel_predict_percept_deduplicates_frames():
+    # Repeated frames must be computed once and then handed back to every time
+    # point they belong to.
+    n_calls = []
+
+    class CountingSpatialModel(ValidSpatialModel):
+
+        def _predict_spatial(self, earray, stim):
+            n_calls.append(stim.data.shape[1])
+            return np.tile(stim.data[0], (self.grid.x.size, 1))
+
+    model = CountingSpatialModel(xystep=2).build()
+    # Four time points, but only two distinct frames:
+    implant = ArgusI(stim={'A1': [2, 5, 2, 5]})
+    percept = model.predict_percept(implant)
+    # _predict_spatial was called once, on the two unique frames only:
+    npt.assert_equal(n_calls, [2])
+    npt.assert_almost_equal(percept.time, [0, 1, 2, 3])
+    for idx, amp in enumerate([2, 5, 2, 5]):
+        npt.assert_almost_equal(percept.data[..., idx], amp)
+
+
 @pytest.mark.parametrize('param, value', [('engine', 'serial'),
                                           ('scheduler', 'dask')])
 def test_SpatialModel_deprecated_params(param, value):

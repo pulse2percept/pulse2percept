@@ -160,31 +160,31 @@ def test_Percept_play(n_frames):
 
 
 @ pytest.mark.parametrize('dtype', (np.float32, np.uint8))
-def test_Percept_save(dtype):
+def test_Percept_save(dtype, tmp_path):
     ndarray = np.arange(256, dtype=dtype).repeat(31).reshape((-1, 16, 16))
     percept = Percept(ndarray.transpose((2, 0, 1)))
 
     # Save multiple frames as a gif or movie:
-    for fname in ['test.mp4', 'test.avi', 'test.mov', 'test.wmv', 'test.gif']:
+    for name in ['test.mp4', 'test.avi', 'test.mov', 'test.wmv', 'test.gif']:
+        fname = str(tmp_path / name)
         percept.save(fname)
         npt.assert_equal(os.path.isfile(fname), True)
         # Normalized to [0, 255] with some loss of precision:
         for mov in mimread(fname):
             npt.assert_equal(np.min(mov) <= 10, True)
             npt.assert_equal(np.max(mov) >= 240, True)
-        os.remove(fname)
 
     # Cannot save multiple frames image:
-    fname = 'test.jpg'
+    fname = str(tmp_path / 'test.jpg')
     with pytest.raises(ValueError):
         percept.save(fname)
-    
+
     # But, can save single frame as image:
     percept = Percept(ndarray[..., :1])
-    for fname in ['test.jpg', 'test.png', 'test.tif', 'test.gif']:
+    for name in ['test.jpg', 'test.png', 'test.tif', 'test.gif']:
+        fname = str(tmp_path / name)
         percept.save(fname)
         npt.assert_equal(os.path.isfile(fname), True)
         img = img_as_float(imread(fname))
         npt.assert_almost_equal(np.min(img), 0, decimal=3)
         npt.assert_almost_equal(np.max(img), 1.0, decimal=3)
-        os.remove(fname)

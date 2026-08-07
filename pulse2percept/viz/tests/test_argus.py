@@ -10,6 +10,10 @@ import pytest
 import matplotlib
 matplotlib.use('Agg')
 
+# Building an axon map writes a cache to a relative path; keep it in a
+# temporary directory instead of wherever pytest was started from:
+pytestmark = pytest.mark.usefixtures('axon_cache_in_tmp')
+
 
 def test_plot_argus_phosphenes():
     df = pd.DataFrame([

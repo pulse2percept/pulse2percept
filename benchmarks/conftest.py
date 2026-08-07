@@ -6,7 +6,6 @@ is not installed, the benchmark modules are not collected at all, so
 contributors without the ``benchmark`` extra see nothing break.
 """
 import gc
-import logging
 import tracemalloc
 from pathlib import Path
 
@@ -52,23 +51,6 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if HERE in Path(str(item.fspath)).parents:
             item.add_marker(skip)
-
-
-@pytest.fixture(scope='session', autouse=True)
-def quiet_logging():
-    """Silence debug logging for the duration of the run.
-
-    Importing pulse2percept calls ``logging.basicConfig`` with
-    ``level=DEBUG`` and a file handler, which puts every chatty dependency
-    (matplotlib in particular) on disk in the working directory. That is not a
-    hot-path cost for these workloads, but it does add first-call variance and
-    it litters whatever directory the benchmarks ran from.
-    """
-    root = logging.getLogger()
-    previous = root.level
-    root.setLevel(logging.WARNING)
-    yield
-    root.setLevel(previous)
 
 
 @pytest.fixture(scope='session')

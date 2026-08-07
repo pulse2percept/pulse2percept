@@ -14,6 +14,10 @@ from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
 from pulse2percept.utils.base import FreezeError
 
+# Building an axon map writes a cache to a relative path; keep it in a
+# temporary directory instead of wherever pytest was started from:
+pytestmark = pytest.mark.usefixtures('axon_cache_in_tmp')
+
 
 def test_deepcopy_DefaultBrightModel():
     original = DefaultBrightModel()

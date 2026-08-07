@@ -369,8 +369,25 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                                 electrodes=stim.electrodes, time=t_percept,
                                 metadata=stim.metadata)
                 # find unique stimulus points
-                _, t_unique, inverse = np.unique(stim.data.T, axis=0, 
-                                                return_index=True, return_inverse=True)
+                _, t_unique, inverse = np.unique(stim.data.T, axis=0,
+                                                 return_index=True,
+                                                 return_inverse=True)
+                # np.unique orders what it returns by stimulus value, not by
+                # time, so `t_unique` comes back shuffled with respect to the
+                # time axis. Sort it back into chronological order and remap
+                # `inverse` to match, so that the de-duplicated stimulus below
+                # is built with strictly increasing time. The percept is
+                # correct either way -- `inverse` undoes whatever order was
+                # used -- but a Stimulus with shuffled time warns, and any
+                # model that looks at `stim.time` would read it wrong.
+                # np.ravel: NumPy has changed the shape of `inverse` for
+                # axis-wise calls between 2.x releases, and the remap below
+                # needs it flat.
+                order = np.argsort(t_unique)
+                t_unique = t_unique[order]
+                rank = np.empty_like(order)
+                rank[order] = np.arange(order.size)
+                inverse = rank[np.ravel(inverse)]
                 uniq_time = stim.time[t_unique]
                 if len(uniq_time) == 1:
                     uniq_time = None
