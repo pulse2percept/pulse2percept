@@ -9,16 +9,18 @@ v0.9.2 (unreleased)
 
 Highlights:
 
+*  Python 3.14 support; the minimum supported Python is now 3.11
+*  NumPy 2 is now required (``numpy>=2,<3``). If you are pinned to NumPy 
+   1.x, stay on v0.9.1 -- ``pip`` will select it for you
+*  Minimum dependency versions now match the oldest release of each that
+   supports NumPy 2: SciPy 1.13, scikit-image 0.24, Matplotlib 3.9 and
+   pandas 2.2.2
 *  :py:class:`~pulse2percept.topography.VisualFieldMap` no longer derives from
    :py:class:`~pulse2percept.models.BaseModel`. A visual field map is passed
    *to* a model so it knows how to convert between tissue and visual field
-   coordinates; it is not itself something you build or predict a percept
-   with. Both now share the new
+   coordinates. Both now share the new
    :py:class:`~pulse2percept.utils.Parametrized` base class, which supplies
    the parameter, pretty-printing, equality and deep-copy machinery
-*  Visual field maps therefore no longer have ``build``, ``is_built`` or the
-   ``_is_built`` attribute, all of which were inert: ``VisualFieldMap``
-   forced ``is_built`` to ``True`` in its constructor to neutralize them
 *  Map equality now compares array-valued attributes elementwise instead of
    raising ``ValueError``, and maps are hashable again. Maps of different
    classes no longer compare equal, so

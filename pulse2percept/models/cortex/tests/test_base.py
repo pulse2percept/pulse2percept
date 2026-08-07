@@ -147,12 +147,15 @@ def test_deepcopy_Scoreboard(ModelClass):
     npt.assert_equal(id(original) != id(copied), True)
 
     # Assert these objects are equivalent
-    npt.assert_equal(original.__dict__ == copied.__dict__, True)
+    npt.assert_equal(original.__dict__, copied.__dict__)
 
     # Assert building one object does not affect the copied
     original.build()
     npt.assert_equal(copied.is_built, False)
-    npt.assert_equal(original.__dict__ != copied.__dict__, True)
+    # Array-aware: a plain dict comparison raises once the model is
+    # built, because `array == array` cannot be coerced to a bool.
+    npt.assert_raises(AssertionError, npt.assert_equal,
+                      original.__dict__, copied.__dict__)
 
     # Assert destroying the original doesn't affect the copied
     original = None

@@ -32,7 +32,7 @@ jobs:
           sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@4726cd35bb13f7bde50cf2761f2499ac7b3aa32c # v4.1.1
+        uses: pypa/cibuildwheel@1828c10ab37f080699c7b81cea34097c684a7074 # v4.2.0
         env:
           # ---------- macOS: OpenMP runtime independent of the runner image ----------
           # Do NOT use Homebrew's libomp. Homebrew bottles are built for the
@@ -121,7 +121,10 @@ jobs:
           CIBW_BEFORE_BUILD_WINDOWS: "python -m pip install --upgrade pip setuptools wheel cython \"numpy>=2.0\""
 
           # ---------- Python versions / skips ----------
-          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
+          # Free-threaded builds are a separate set of identifiers (cp314t-*),
+          # so this does not pick them up. That is deliberate: the extensions
+          # use OpenMP and have not been audited for the no-GIL build.
+          CIBW_BUILD: "cp311-* cp312-* cp313-* cp314-*"
           CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
 
           # Build separate wheels for both Apple architectures
