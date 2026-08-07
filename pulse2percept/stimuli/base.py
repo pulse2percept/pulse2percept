@@ -1,7 +1,7 @@
 """:py:class:`~pulse2percept.stimuli.Stimulus`, 
    :py:class:`~pulse2percept.stimuli.ImageStimulus`"""
 import warnings
-from ..utils import PrettyPrint, unique, is_strictly_increasing
+from ..utils import PrettyPrint, is_strictly_increasing
 from ..utils.constants import DT, MIN_AMP
 from ._base import fast_compress_space, fast_compress_time
 
@@ -129,6 +129,38 @@ def _as_scalar_column(source):
     return flat.astype(np.float32).reshape((-1, 1))
 
 
+def _same_time_point(t, merge_tolerance):
+    """How close two time points have to be to count as the same point
+
+    Time is stored as float32, whose resolution (7.6e-6 ms at t = 100 ms,
+    6.1e-5 ms at t = 1000 ms) is much coarser than ``merge_tolerance``. Two
+    stimuli that sample the very same instant therefore hand us time points
+    that differ by a few ulps - pulse trains build their time axis by
+    accumulating a window duration, so the drift between two frequencies grows
+    with t. Those are far too far apart to merge on an absolute tolerance, yet
+    far closer than the DT that the rest of the code expects to separate two
+    distinct time points, so scale the tolerance with the magnitude of ``t``.
+    The cap keeps the tolerance below DT no matter how large ``t`` gets, so
+    that points which really are a time step apart are never merged.
+
+    Parameters
+    ----------
+    t : np.ndarray
+        The time points whose magnitude sets the tolerance.
+    merge_tolerance : float
+        Lower bound on the tolerance, used where float32 is more precise than
+        it (i.e., for small ``t``).
+
+    Returns
+    -------
+    tol : np.ndarray
+        Element-wise tolerance, same shape as ``t``.
+    """
+    return np.minimum(0.5 * DT,
+                      np.maximum(merge_tolerance,
+                                 8 * np.spacing(np.abs(t).astype(np.float32))))
+
+
 def merge_time_axes(data, time, merge_tolerance=1e-6):
     """
     Merge time axes
@@ -145,7 +177,10 @@ def merge_time_axes(data, time, merge_tolerance=1e-6):
     time: list
         List of numpy.ndarray's containing time points to merge
     merge_tolerance: float
-        Float representing the tolerance used when collecting unique time points from the time axes.
+        Absolute tolerance used when collecting unique time points from the
+        time axes. Two time points that are closer together than this (or
+        closer than float32 can resolve at their own magnitude, whichever is
+        coarser) are treated as the same point.
     Returns
         Tuple of: list of new data points (linearly interpolated from merged time axis), list of new merged time axis.
     -------
@@ -154,25 +189,48 @@ def merge_time_axes(data, time, merge_tolerance=1e-6):
     # We can skip the costly interpolation if all `time` vectors are
     # identical:
     t0 = time[0]
+    t0_tol = None
     identical = True
     for t in time:
-        # np.array_equal is a lot cheaper than np.allclose (which builds
-        # several full-size temporaries) and, whenever it succeeds, implies
-        # it. Use it as a fast path for the common case where all stimuli
-        # share the very same time axis:
-        if len(t) != len(t0) or not (np.array_equal(t, t0) or
-                                     np.allclose(t, t0)):
+        # np.array_equal is a lot cheaper than the element-wise comparison
+        # (which builds several full-size temporaries) and, whenever it
+        # succeeds, implies it. Use it as a fast path for the common case
+        # where all stimuli share the very same time axis:
+        if len(t) != len(t0):
+            identical = False
+            break
+        if np.array_equal(t, t0):
+            continue
+        if t0_tol is None:
+            t0_tol = _same_time_point(t0, merge_tolerance)
+        # The axes may still be the same axis up to float32 noise. This used
+        # to be an `np.allclose`, whose relative tolerance is 0.01 ms at
+        # t = 1000 ms - ten time steps, which silently threw away time points
+        # that differ by much more than float32 noise:
+        if not np.all(np.abs(np.subtract(t, t0, dtype=np.float64)) <= t0_tol):
             identical = False
             break
     if identical:
         return data, [t0]
     # Otherwise, we need to interpolate. Keep only the unique time points
-    # across stimuli. We need a higher tolerance to ensure interpolation is correct.
-    new_time = unique(np.concatenate(time), tol=merge_tolerance)
+    # across stimuli. We need a higher tolerance to ensure interpolation is
+    # correct.
+    lengths = [len(t) for t in time]
+    t_all = np.concatenate(time).astype(np.float64)
+    order = np.argsort(t_all, kind='stable')
+    t_sorted = t_all[order]
+    tol = _same_time_point(t_sorted[:-1], merge_tolerance)
+    starts_group = np.concatenate(([True], np.diff(t_sorted) > tol))
+    new_time = t_sorted[starts_group]
+    # Snap every time axis onto the merged one, so that interpolating below
+    # reproduces each stimulus exactly at its own sample points rather than an
+    # ulp before or after them:
+    snapped = np.empty_like(t_all)
+    snapped[order] = new_time[np.cumsum(starts_group) - 1]
     # Now we need to interpolate the data values at each of these
     # new time points.
     new_data = []
-    for t, d in zip(time, data):
+    for t, d in zip(np.split(snapped, np.cumsum(lengths)[:-1]), data):
         # t is a 1D vector, d is a 2D data matrix and might have more than
         # one row:
         new_rows = [np.interp(new_time, t, row) for row in d]
