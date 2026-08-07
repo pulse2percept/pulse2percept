@@ -15,6 +15,19 @@ Highlights:
 *  Minimum dependency versions now match the oldest release of each that
    supports NumPy 2: SciPy 1.13, scikit-image 0.24, Matplotlib 3.9 and
    pandas 2.2.2
+*  :py:class:`~pulse2percept.topography.VisualFieldMap` no longer derives from
+   :py:class:`~pulse2percept.models.BaseModel`. A visual field map is passed
+   *to* a model so it knows how to convert between tissue and visual field
+   coordinates. Both now share the new
+   :py:class:`~pulse2percept.utils.Parametrized` base class, which supplies
+   the parameter, pretty-printing, equality and deep-copy machinery
+*  Map equality now compares array-valued attributes elementwise instead of
+   raising ``ValueError``, and maps are hashable again. Maps of different
+   classes no longer compare equal, so
+   ``Watson2014DisplaceMap() == Watson2014Map()`` is now ``False``
+*  ``pulse2percept.topography`` no longer imports from
+   ``pulse2percept.models``, removing a circular dependency between the two
+   subpackages that had to be worked around with function-local imports
 
 v0.9.1 (2026-08-06)
 -------------------

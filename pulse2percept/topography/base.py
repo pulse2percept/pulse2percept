@@ -14,9 +14,8 @@ from matplotlib.collections import PatchCollection
 import matplotlib as mpl
 from copy import copy, deepcopy
 
-from ..utils.base import PrettyPrint
+from ..utils.base import PrettyPrint, Parametrized
 from ..utils.constants import ZORDER
-from ..models import BaseModel
 
 
 class CoordinateGrid:
@@ -599,16 +598,25 @@ class Grid2D(PrettyPrint):
         return id(self) // 16
 
 
-class VisualFieldMap(BaseModel):
-    """ Base template class for a visual field map (retinotopy) """
+class VisualFieldMap(Parametrized):
+    """ Base template class for a visual field map (retinotopy)
 
-    # If the map is split into left and right hemispheres. 
+    A visual field map is handed to a model so it knows how to convert between
+    tissue and visual field coordinates. It is not itself a model: there is
+    nothing to build and no percept to predict.
+
+    .. versionchanged:: 0.9.2
+
+        Derives from :py:class:`~pulse2percept.utils.Parametrized` rather than
+        :py:class:`~pulse2percept.models.BaseModel`. Maps therefore no longer
+        carry ``build``, ``is_built`` or the ``_is_built`` attribute, and
+        ``pulse2percept.topography`` no longer imports from
+        ``pulse2percept.models``.
+
+    """
+
+    # If the map is split into left and right hemispheres.
     split_map = False
-
-    def __init__(self, **params):
-        super().__init__(**params)
-        # don't need build functionality from BaseModel
-        self.is_built = True
 
     @abstractmethod
     def from_dva(self):
@@ -625,27 +633,13 @@ class VisualFieldMap(BaseModel):
         raise NotImplementedError
 
     def get_default_params(self):
-        """Required to inherit from BaseModel"""
+        """Required to inherit from Parametrized"""
         return {
             'ndim': 2,
         }
 
-    def __eq__(self, other):
-        """
-        Equality operator for VisualFieldMap.
-
-        Parameters
-        ----------
-        other: VisualFieldMap
-            VisualFieldMap to compare against
-
-        Returns
-        -------
-        bool:
-            True if the compared objects have identical attributes, False otherwise.
-        """
-        if not isinstance(other, self.__class__):
-            return False
-        if id(self) == id(other):
-            return True
-        return self.__dict__ == other.__dict__
+    # Equality and hashing come from Parametrized, which compares attributes
+    # with ``np.array_equal`` where they are arrays. Re-implementing either
+    # here with a plain ``self.__dict__ == other.__dict__`` raises ValueError
+    # as soon as any attribute is an array, and defining __eq__ without
+    # __hash__ would silently make the maps unhashable.

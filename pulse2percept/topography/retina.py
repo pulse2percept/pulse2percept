@@ -53,27 +53,6 @@ class Curcio1990Map(RetinalMap):
         """
         return xret / 280.0, -yret / 280.0
 
-    def __eq__(self, other):
-        """
-        Equality operator for Curcio1990Map.
-        Compares two Curcio1990Map's based attribute equality
-
-        Parameters
-        ----------
-        other: SpatialModel
-            SpatialModel to compare with
-
-        Returns
-        -------
-        bool:
-            True if the compared objects have identical attributes, False otherwise.
-        """
-        if not isinstance(other, Curcio1990Map):
-            return False
-        if id(self) == id(other):
-            return True
-        return self.__dict__ == other.__dict__
-
 
 class Watson2014Map(RetinalMap):
     """Converts between visual angle and retinal eccentricity [Watson2014]_"""
@@ -146,27 +125,6 @@ class Watson2014Map(RetinalMap):
         elif coords.lower() == 'polar':
             return phi_deg, r_um
         raise ValueError(f'Unknown coordinate system "{coords}".')
-
-    def __eq__(self, other):
-        """
-        Equality operator for Watson2014 Object.
-        Compares two Watson2014 Objects based attribute equality
-
-        Parameters
-        ----------
-        other: Watson2014Map
-            Watson2014 Object to compare against
-
-        Returns
-        -------
-        bool:
-            True if the compared objects have identical attributes, False otherwise.
-        """
-        if not isinstance(other, Watson2014Map):
-            return False
-        if id(self) == id(other):
-            return True
-        return self.__dict__ == other.__dict__
 
 
 class Watson2014DisplaceMap(Watson2014Map):

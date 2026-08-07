@@ -4,9 +4,12 @@ import numpy.testing as npt
 from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
 
-from pulse2percept.topography import (VisualFieldMap, RetinalMap, 
+from pulse2percept.models import BaseModel
+from pulse2percept.topography import (VisualFieldMap, RetinalMap,
                                  CorticalMap, Grid2D, Polimeni2006Map,
-                                 Watson2014Map)
+                                 Watson2014Map, Watson2014DisplaceMap,
+                                 Curcio1990Map)
+from pulse2percept.utils import Parametrized
 
 @pytest.mark.parametrize('x_range', [(0, 0), (-3, 3), (4, -2), (1, -1)])
 @pytest.mark.parametrize('y_range', [(0, 0), (0, 7), (-3, 3), (2, -2)])
@@ -347,3 +350,52 @@ def test_Grid2D_plot3D():
     ax = grid.plot3D(figsize=(9, 7))
     npt.assert_almost_equal(ax.figure.get_size_inches(), (9, 7))
     plt.close('all')
+
+
+@pytest.mark.parametrize('make_vfmap', [
+    pytest.param(Curcio1990Map, id='Curcio1990Map'),
+    pytest.param(Watson2014Map, id='Watson2014Map'),
+    pytest.param(lambda: Polimeni2006Map(regions=['v1']), id='Polimeni2006Map'),
+])
+def test_VisualFieldMap_is_not_a_model(make_vfmap):
+    # A visual field map is handed *to* a model; it is not one itself. It must
+    # therefore not carry the build workflow, nor the `_is_built` attribute
+    # that used to be set (and immediately forced to True) by BaseModel.
+    vfmap = make_vfmap()
+    npt.assert_equal(isinstance(vfmap, Parametrized), True)
+    npt.assert_equal(isinstance(vfmap, BaseModel), False)
+    for attr in ('build', '_build', 'is_built', '_is_built'):
+        npt.assert_equal(hasattr(vfmap, attr), False)
+
+
+@pytest.mark.parametrize('make_vfmap', [
+    pytest.param(Curcio1990Map, id='Curcio1990Map'),
+    pytest.param(Watson2014Map, id='Watson2014Map'),
+    pytest.param(lambda: Polimeni2006Map(regions=['v1']), id='Polimeni2006Map'),
+])
+def test_VisualFieldMap_eq_handles_arrays(make_vfmap):
+    # Comparing attributes with a plain `self.__dict__ == other.__dict__`
+    # raises ValueError as soon as one of them is an array, and defining
+    # __eq__ without __hash__ makes the map unhashable. Both are inherited
+    # from Parametrized, so neither can regress silently.
+    one, two = make_vfmap(), make_vfmap()
+    npt.assert_equal(one == two, True)
+
+    # Bypass Frozen to attach an array: no map ships one today, but nothing
+    # stops a user-defined map from caching one.
+    one.__dict__['cached'] = np.arange(4)
+    two.__dict__['cached'] = np.arange(4)
+    npt.assert_equal(one == two, True)
+    two.__dict__['cached'] = np.arange(1, 5)
+    npt.assert_equal(one == two, False)
+
+    # Still hashable, so maps can go in sets and dict keys:
+    npt.assert_equal(isinstance(hash(make_vfmap()), int), True)
+
+
+def test_VisualFieldMap_subclasses_do_not_compare_equal():
+    # Equality is exact-class, as it is for every other Parametrized object:
+    # a displacement map computes a different transform than a plain one.
+    npt.assert_equal(Watson2014DisplaceMap() == Watson2014Map(), False)
+    npt.assert_equal(Watson2014Map() == Watson2014DisplaceMap(), False)
+    npt.assert_equal(Watson2014Map() == Watson2014Map(), True)
