@@ -1,5 +1,6 @@
-""":py:class:`~pulse2percept.utils.PrettyPrint`, 
-   :py:class:`~pulse2percept.utils.Frozen`, 
+""":py:class:`~pulse2percept.utils.PrettyPrint`,
+   :py:class:`~pulse2percept.utils.Frozen`,
+   :py:class:`~pulse2percept.utils.Parametrized`,
    :py:class:`~pulse2percept.utils.Data`,
    :py:class:`~pulse2percept.utils.bijective26_name`,
    :py:class:`~pulse2percept.utils.cached`,
@@ -8,11 +9,14 @@
 import numpy as np
 import sys
 import abc
+from copy import copy, deepcopy
 from scipy.integrate import trapezoid
 from scipy.special import factorial
 from collections import OrderedDict as ODict
 from functools import wraps
 from string import ascii_uppercase
+
+from .deprecation import warn_deprecated_params
 
 
 class PrettyPrint(object, metaclass=abc.ABCMeta):
@@ -148,6 +152,128 @@ class Frozen(object):
 
     class __metaclass__(type):
         __setattr__ = freeze_class(type.__setattr__)
+
+
+class Parametrized(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
+    """Abstract base class for objects with user-settable parameters
+
+    Provides the following functionality:
+
+    *  Pretty-print class attributes (via ``_pprint_params`` and
+       ``PrettyPrint``)
+    *  User-settable parameters must be listed in ``get_default_params``
+    *  New class attributes can only be added in the constructor
+       (enforced via ``Frozen`` and ``FreezeError``)
+    *  Value-based equality and deep copying that understand NumPy arrays
+
+    This deliberately stops short of the build/predict workflow that
+    :py:class:`~pulse2percept.models.BaseModel` layers on top, because not
+    every parametrized object is a model. A
+    :py:class:`~pulse2percept.topography.VisualFieldMap`, for example, is
+    handed *to* a model so it knows how to convert between tissue and visual
+    field coordinates; it is never built and never predicts a percept.
+
+    .. versionadded:: 0.9.2
+
+    """
+
+    # Parameters that are still accepted, but that nothing reads any more.
+    # Maps a name to the ``deprecate_parameter`` describing it; subclasses
+    # override this (see ``SpatialModel``).
+    _deprecated_params = {}
+
+    def __init__(self, **params):
+        """Parametrized constructor
+
+        Parameters
+        ----------
+        **params : optional keyword arguments
+            All keyword arguments must be listed in ``get_default_params``
+        """
+        # Set all default arguments:
+        defaults = self.get_default_params()
+        for key, val in defaults.items():
+            setattr(self, key, val)
+        # Warn on the ones the user named explicitly, before they are set:
+        # applying a default must stay silent.
+        warn_deprecated_params(type(self).__name__, params,
+                               self._deprecated_params)
+        # Then overwrite any arguments also given in `params`:
+        for key, val in params.items():
+            if key in defaults:
+                setattr(self, key, val)
+            else:
+                err_str = (f"'{key}' is not a valid parameter. Choose "
+                           f"from: {', '.join(defaults.keys())}.")
+                raise AttributeError(err_str)
+
+    @abc.abstractmethod
+    def get_default_params(self):
+        """Return a dict of user-settable parameters"""
+        raise NotImplementedError
+
+    def set_params(self, **params):
+        """Set the parameters of this object"""
+        warn_deprecated_params(type(self).__name__, params,
+                               self._deprecated_params)
+        for key, value in params.items():
+            setattr(self, key, value)
+
+    def _pprint_params(self):
+        """Return a dict of class attributes to display when pretty-printing"""
+        return {key: getattr(self, key)
+                for key, _ in self.get_default_params().items()}
+
+    def __deepcopy__(self, memodict=None):
+        if memodict is None:
+            memodict = {}
+        if id(self) in memodict:
+            return memodict[id(self)]
+        copied = copy(self)
+        # Register before recursing, and pass `memodict` down, so that shared
+        # references are copied once and reference cycles terminate:
+        memodict[id(self)] = copied
+        for attr in self.__dict__:
+            copied.__setattr__(attr,
+                               deepcopy(self.__getattribute__(attr), memodict))
+        return copied
+
+    def __eq__(self, other):
+        """
+        Equality operator for Parametrized.
+
+        Parameters
+        ----------
+        other: Parametrized
+            Object to compare against
+
+        Returns
+        -------
+        bool:
+            True if the compared objects have identical attributes, False
+            otherwise.
+        """
+        if not isinstance(other, self.__class__):
+            return False
+        if id(self) == id(other):
+            return True
+        if self.__dict__.keys() != other.__dict__.keys():
+            return False
+        for key in self.__dict__.keys():
+            mine, theirs = self.__dict__[key], other.__dict__[key]
+            # If either side is an array, compare as arrays: `!=` between an
+            # array and anything else is elementwise, and the result cannot be
+            # coerced to a bool.
+            if isinstance(mine, np.ndarray) or isinstance(theirs, np.ndarray):
+                if not np.array_equal(mine, theirs):
+                    return False
+            elif mine != theirs:
+                return False
+        return True
+
+    def __hash__(self):
+        # Default python 2.6+ implementation
+        return id(self) // 16
 
 
 class Data(PrettyPrint):

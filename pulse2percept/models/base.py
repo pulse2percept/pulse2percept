@@ -12,7 +12,8 @@ import multiprocessing
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
 from ..percepts import Percept
-from ..utils import (PrettyPrint, Frozen, FreezeError, bisect,
+from ..topography import Curcio1990Map, Grid2D
+from ..utils import (PrettyPrint, FreezeError, Parametrized, bisect,
                      deprecate_parameter, warn_deprecated_params)
 from ..utils.constants import ZORDER
 
@@ -54,24 +55,24 @@ class NotBuiltError(ValueError, AttributeError):
     """
 
 
-class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
+class BaseModel(Parametrized, metaclass=ABCMeta):
     """Abstract base class for all models
 
-    Provides the following functionality:
+    Adds the build workflow on top of
+    :py:class:`~pulse2percept.utils.Parametrized`, which supplies the
+    parameter, pretty-printing, equality and deep-copy machinery:
 
-    *  Pretty-print class attributes (via ``_pprint_params`` and
-       ``PrettyPrint``)
     *  Build a model (via ``build``) and flip the ``is_built`` switch
-    *  User-settable parameters must be listed in ``get_default_params``
-    *  New class attributes can only be added in the constructor
-       (enforced via ``Frozen`` and ``FreezeError``).
+
+    .. versionchanged:: 0.9.2
+
+        Everything other than the build workflow moved to
+        :py:class:`~pulse2percept.utils.Parametrized`, so that objects which
+        are not models -- notably
+        :py:class:`~pulse2percept.topography.VisualFieldMap` -- can share it
+        without inheriting ``build`` and ``is_built``.
 
     """
-
-    # Parameters that are still accepted, but that nothing reads any more.
-    # Maps a name to the ``deprecate_parameter`` describing it; subclasses
-    # override this (see ``SpatialModel``).
-    _deprecated_params = {}
 
     def __init__(self, **params):
         """BaseModel constructor
@@ -81,41 +82,9 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
         **params : optional keyword arguments
             All keyword arguments must be listed in ``get_default_params``
         """
-        # Set all default arguments:
-        defaults = self.get_default_params()
-        for key, val in defaults.items():
-            setattr(self, key, val)
-        # Warn on the ones the user named explicitly, before they are set:
-        # applying a default must stay silent.
-        warn_deprecated_params(type(self).__name__, params,
-                               self._deprecated_params)
-        # Then overwrite any arguments also given in `params`:
-        for key, val in params.items():
-            if key in defaults:
-                setattr(self, key, val)
-            else:
-                err_str = (f"'{key}' is not a valid model parameter. Choose "
-                           f"from: {', '.join(defaults.keys())}.")
-                raise AttributeError(err_str)
+        super().__init__(**params)
         # This flag will be flipped once the ``build`` method was called
         self._is_built = False
-
-    @abstractmethod
-    def get_default_params(self):
-        """Return a dict of user-settable model parameters"""
-        raise NotImplementedError
-
-    def set_params(self, **params):
-        """Set the parameters of this model"""
-        warn_deprecated_params(type(self).__name__, params,
-                               self._deprecated_params)
-        for key, value in params.items():
-            setattr(self, key, value)
-
-    def _pprint_params(self):
-        """Return a dict of class attributes to display when pretty-printing"""
-        return {key: getattr(self, key)
-                for key, _ in self.get_default_params().items()}
 
     def _build(self):
         """Customize the building process by implementing this method"""
@@ -172,50 +141,14 @@ class BaseModel(Frozen, PrettyPrint, metaclass=ABCMeta):
     def __deepcopy__(self, memodict=None):
         if memodict is None:
             memodict = {}
+        # Guard here as well as in the base implementation: without it, an
+        # already-copied model would be rebuilt on every revisit.
         if id(self) in memodict:
             return memodict[id(self)]
-        copied = copy(self)
-        # Register before recursing, and pass `memodict` down, so that shared
-        # references are copied once and reference cycles terminate:
-        memodict[id(self)] = copied
-        for attr in self.__dict__:
-            copied.__setattr__(attr,
-                               deepcopy(self.__getattribute__(attr), memodict))
+        copied = super().__deepcopy__(memodict)
         if self.is_built:
             copied.build()
         return copied
-
-    def __eq__(self, other):
-        """
-        Equality operator for BaseModel.
-
-        Parameters
-        ----------
-        other: BaseModel
-            BaseModel to compare against
-
-        Returns
-        -------
-        bool:
-            True if the compared objects have identical attributes, False otherwise.
-        """
-        if not isinstance(other, self.__class__):
-            return False
-        if id(self) == id(other):
-            return True
-        if self.__dict__.keys() != other.__dict__.keys():
-            return False
-        for key in self.__dict__.keys():
-            if isinstance(self.__dict__[key], np.ndarray):
-                if not np.array_equal(self.__dict__[key], other.__dict__[key]):
-                    return False
-            elif self.__dict__[key] != other.__dict__[key]:
-                return False
-        return True
-
-    def __hash__(self):
-        # Default python 2.6+ implementation
-        return id(self) // 16
 
 
 class SpatialModel(BaseModel, metaclass=ABCMeta):
@@ -294,8 +227,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
-        # import at runtime to avoid circular import
-        from ..topography import Curcio1990Map
         params = {
             # We will be simulating a patch of the visual field (xrange/yrange
             # in degrees of visual angle), at a given spatial resolution (step
@@ -349,8 +280,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         for key, val in build_params.items():
             setattr(self, key, val)
-        # import at runtime to avoid circular import
-        from ..topography import Grid2D
         if self.vfmap.ndim not in self.ndim:
             raise ValueError(f"Model expects one of {self.ndim} dimensions, but "
                              f"visual field map has {self.vfmap.ndim} dimensions.")

@@ -4,6 +4,29 @@
 Release Notes
 =============
 
+v0.9.2 (unreleased)
+-------------------
+
+Highlights:
+
+*  :py:class:`~pulse2percept.topography.VisualFieldMap` no longer derives from
+   :py:class:`~pulse2percept.models.BaseModel`. A visual field map is passed
+   *to* a model so it knows how to convert between tissue and visual field
+   coordinates; it is not itself something you build or predict a percept
+   with. Both now share the new
+   :py:class:`~pulse2percept.utils.Parametrized` base class, which supplies
+   the parameter, pretty-printing, equality and deep-copy machinery
+*  Visual field maps therefore no longer have ``build``, ``is_built`` or the
+   ``_is_built`` attribute, all of which were inert: ``VisualFieldMap``
+   forced ``is_built`` to ``True`` in its constructor to neutralize them
+*  Map equality now compares array-valued attributes elementwise instead of
+   raising ``ValueError``, and maps are hashable again. Maps of different
+   classes no longer compare equal, so
+   ``Watson2014DisplaceMap() == Watson2014Map()`` is now ``False``
+*  ``pulse2percept.topography`` no longer imports from
+   ``pulse2percept.models``, removing a circular dependency between the two
+   subpackages that had to be worked around with function-local imports
+
 v0.9.1 (2026-08-06)
 -------------------
 
