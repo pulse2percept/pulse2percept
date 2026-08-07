@@ -5,6 +5,7 @@ from collections import OrderedDict
 
 from pulse2percept.implants import (DiskElectrode, PointSource,
                                     ElectrodeArray, ElectrodeGrid)
+from pulse2percept.stimuli import ElectrodeNames
 
 
 def test_ElectrodeArray():
@@ -395,3 +396,42 @@ def test_ElectrodeGrid___get_item__(gtype):
     npt.assert_equal(grid[0, 1], grid['A2'])
     npt.assert_equal(grid[['A1', 1, (0, 2)]],
                      [grid['A1'], grid['A2'], grid['A3']])
+
+
+@pytest.mark.parametrize('shape', [(3, 4), (5, 5), (1, 3), (30, 40), (2, 3)])
+def test_ElectrodeGrid_canonical_names(shape):
+    # A generic grid names its electrodes the same way an ImageStimulus names
+    # its pixels: a letter for the row, a number for the column. Both come
+    # from ElectrodeNames, so this pins them together.
+    grid = ElectrodeGrid(shape, 20, names=('A', '1'))
+    npt.assert_equal(grid.electrode_names,
+                     np.asarray(ElectrodeNames(shape)).tolist())
+    # ... and the name still addresses the electrode it describes:
+    npt.assert_equal(grid['A1'], grid[0])
+    npt.assert_equal(grid[ElectrodeNames(shape)[-1]], grid[np.prod(shape) - 1])
+
+
+def test_ElectrodeGrid_naming_schemes():
+    # The non-default schemes exist to reproduce published implants (ArgusI
+    # uses ('1', 'A'), Orion ('A', '-1')). They are pinned here so that
+    # routing the default through ElectrodeNames cannot disturb them.
+    expected = {
+        ('A', '1'): ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'],
+        ('1', 'A'): ['A1', 'B1', 'C1', 'A2', 'B2', 'C2'],
+        ('A', '-1'): ['A3', 'A2', 'A1', 'B3', 'B2', 'B1'],
+        ('-A', '1'): ['B1', 'B2', 'B3', 'A1', 'A2', 'A3'],
+        ('1', '1'): ['11', '12', '13', '21', '22', '23'],
+        ('A', 'A'): ['AA', 'AB', 'AC', 'BA', 'BB', 'BC'],
+    }
+    for names, want in expected.items():
+        npt.assert_equal(ElectrodeGrid((2, 3), 20, names=names).electrode_names,
+                         want)
+    # An explicit list of names is passed through verbatim:
+    npt.assert_equal(ElectrodeGrid((2, 2), 20,
+                                   names=['w', 'x', 'y', 'z']).electrode_names,
+                     ['w', 'x', 'y', 'z'])
+    # A two-electrode grid reads `names` as that explicit list, not as a
+    # (rows, cols) scheme -- a long-standing quirk of the two-entry check:
+    npt.assert_equal(ElectrodeGrid((1, 2), 20,
+                                   names=('A', '1')).electrode_names,
+                     ['A', '1'])
