@@ -314,6 +314,39 @@ GitHub Actions runs the test suite on the supported Python versions and
 operating systems. A pull request is normally merged only after the required
 checks pass.
 
+
+.. _dev-contributing-bench:
+
+Benchmarking your code
+======================
+
+The ``benchmarks`` directory holds a small suite that measures execution time
+and peak memory for the library's main job: predicting a percept from a
+stimulus, an implant and a phosphene model. Run it when a change touches a
+hot path:
+
+.. code-block:: bash
+
+    pip install -e ".[benchmark]"
+    pytest benchmarks/ --benchmark-only
+
+Benchmarks are skipped unless ``--benchmark-only`` is given, and they live
+outside the ``pulse2percept`` package, so a normal test run never pays for
+them. Nothing gates a pull request on them: shared CI runners are too noisy
+for the numbers to mean much, so a run on a quiet local machine is the source
+of truth.
+
+To check a change for a regression, save a baseline before it and compare
+after:
+
+.. code-block:: bash
+
+    pytest benchmarks/ --benchmark-only --benchmark-save=baseline
+    pytest benchmarks/ --benchmark-only --benchmark-compare=0001
+
+See ``benchmarks/README.md`` for what each number measures, how to read it,
+and how to add a scenario.
+
 .. _pytest: https://docs.pytest.org/
 .. _NumPy testing:
    https://numpy.org/doc/stable/reference/routines.testing.html
