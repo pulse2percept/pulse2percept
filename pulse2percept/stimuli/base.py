@@ -516,13 +516,21 @@ class Stimulus(PrettyPrint):
                     self.metadata = source.metadata
 
         if _electrodes is None:
-            # The source did not name its electrodes, so number them 0..N-1.
-            # Those are unique by construction:
-            _electrodes = np.arange(_data.shape[0])
+            # The source did not name its electrodes, so they are 0..N-1 --
+            # unique by construction. Only build that array if something will
+            # read it: user-supplied `electrodes` replaces it immediately
+            # below, and the sole other reader is the metadata rename further
+            # down, which needs per-electrode metadata to do anything at all.
+            # An image or video stimulus has neither, so skipping this keeps a
+            # million-element arange off the path that builds one.
             _auto_electrodes = True
+            if electrodes is None or self.metadata.get('electrodes'):
+                _electrodes = np.arange(_data.shape[0])
 
         # User can overwrite the names of the electrodes:
         if electrodes is not None:
+            # May still be None, when the block above declined to build it.
+            # The rename below already guards against that.
             _renamed_from = _electrodes
             if isinstance(electrodes, ElectrodeNames):
                 # Names generated from a grid pattern. Flattening one is a

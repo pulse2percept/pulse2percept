@@ -413,3 +413,47 @@ def test_LogoUCSB():
     npt.assert_equal(logo.time, None)
     npt.assert_almost_equal(logo.data.min(), 0)
     npt.assert_almost_equal(logo.data.max(), 1)
+
+
+def test_ImageStimulus_rgb2gray_matches_skimage():
+    """The fused RGBA blend must agree with skimage's two-step conversion.
+
+    ``rgb2gray`` blends the alpha channel against black itself rather than
+    calling ``rgba2rgb``, to avoid building a full-resolution intermediate.
+    This pins the arithmetic to what skimage would have produced.
+    """
+    from skimage.color import rgba2rgb, rgb2gray as sk_rgb2gray
+
+    rng = np.random.default_rng(0)
+    rgba = rng.random((37, 53, 4)).astype(np.float32)
+    got = ImageStimulus(rgba).rgb2gray().data
+    want = sk_rgb2gray(rgba2rgb(rgba, background=(0, 0, 0)))
+    npt.assert_array_equal(got.ravel(), want.ravel().astype(got.dtype))
+
+    # Three channels take the other branch and must be untouched by the above:
+    rgb = rng.random((37, 53, 3)).astype(np.float32)
+    npt.assert_array_equal(ImageStimulus(rgb).rgb2gray().data.ravel(),
+                           sk_rgb2gray(rgb).ravel())
+
+    # A fully transparent image blends to black; a fully opaque one is
+    # unaffected by the alpha channel:
+    opaque = np.concatenate((rgb, np.ones((37, 53, 1), dtype=np.float32)),
+                            axis=-1)
+    npt.assert_allclose(ImageStimulus(opaque).rgb2gray().data,
+                        ImageStimulus(rgb).rgb2gray().data, rtol=1e-6)
+    clear = np.concatenate((rgb, np.zeros((37, 53, 1), dtype=np.float32)),
+                           axis=-1)
+    npt.assert_equal(np.all(ImageStimulus(clear).rgb2gray().data == 0), True)
+
+
+def test_ImageStimulus_invert_preserves_alpha():
+    """Inverting must leave the alpha channel alone and not touch the source"""
+    rng = np.random.default_rng(1)
+    rgba = rng.random((11, 13, 4)).astype(np.float32)
+    stim = ImageStimulus(rgba)
+    before = stim.data.copy()
+    inverted = stim.invert().data.reshape(11, 13, 4)
+    npt.assert_allclose(inverted[..., :3], 1.0 - rgba[..., :3], rtol=1e-6)
+    npt.assert_array_equal(inverted[..., 3], rgba[..., 3])
+    # The original is untouched:
+    npt.assert_array_equal(stim.data, before)
