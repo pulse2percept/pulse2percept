@@ -468,15 +468,24 @@ def test_AxonMapModel_calc_axon_sensitivity():
     axons = model.spatial.find_closest_axon(bundles)
     axon_contrib = model.spatial.calc_axon_sensitivity(axons)
 
-    # Check lambda math:
+    # Check lambda math. `calc_axon_sensitivity` walks the axon in float64
+    # and rounds once at the end, so the reference has to be built the same
+    # way: `model_ax` is float32, and accumulating the arc length at that
+    # precision costs about as much accuracy as the whole comparison has to
+    # spare. Building it here in float32 left roughly a 1.2x margin against
+    # the tolerance, which held on some platforms and not on others.
+    max_d2 = -2.0 * model.axlambda ** 2 * np.log(model.min_ax_sensitivity)
     for model_ax, xy in zip(axon_contrib, xyret):
-        axon = np.insert(model_ax, 0, list(xy) + [0], axis=0)
+        axon = np.insert(model_ax, 0, list(xy) + [0],
+                         axis=0).astype(np.float64)
         d2 = np.cumsum(np.sqrt(np.diff(axon[:, 0], axis=0) ** 2 +
                                np.diff(axon[:, 1], axis=0) ** 2))**2
-        max_d2 = -2.0 * model.axlambda ** 2 * np.log(model.min_ax_sensitivity)
         idx_d2 = d2 < max_d2
         sensitivity = np.exp(-d2[idx_d2] / (2.0 * model.spatial.axlambda ** 2))
-        npt.assert_almost_equal(sensitivity, model_ax[:, 2])
+        # A relative bound, unlike `assert_almost_equal`'s absolute one: the
+        # sensitivities span [min_ax_sensitivity, 1], and float32 resolves
+        # them to ~1.2e-7 relative wherever they sit in that range.
+        npt.assert_allclose(model_ax[:, 2], sensitivity, rtol=1e-6)
 
 
 @ pytest.mark.parametrize('pad', (True, False))
