@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 
 from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
+from pulse2percept.stimuli import Stimulus
 from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
                                   ScoreboardSpatial, ScoreboardModel)
 from pulse2percept.topography import Watson2014Map, Watson2014DisplaceMap
@@ -574,3 +575,94 @@ def test_AxonMapModel_predict_percept():
     msg = ("Nonzero electrode-retina distances do not have any effect on the "
            "model output.")
     assert_warns_msg(UserWarning, model.predict_percept, msg, implant)
+
+
+@pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
+def test_min_current_spread(ModelClass):
+    """The default current-spread cutoff must not change the percept.
+
+    ``min_current_spread`` drops an electrode's contribution once its
+    Gaussian has decayed past the given fraction of its peak. At the default
+    of 1e-8 the dropped term is below what a float32 sum can resolve, so it
+    is meant to buy speed at no cost to the result.
+    """
+    stim = np.zeros(60)
+    stim[[10, 33, 47]] = [1.0, -0.5, 0.75]
+    implant = ArgusII(stim=stim)
+    kwargs = {'xystep': 0.75, 'xrange': (-12, 12), 'yrange': (-8, 8),
+              'rho': 200}
+
+    exact = ModelClass(min_current_spread=0,
+                       **kwargs).build().predict_percept(implant).data
+    default = ModelClass(**kwargs).build().predict_percept(implant).data
+    npt.assert_allclose(default, exact, rtol=1e-5,
+                        atol=1e-6 * np.abs(exact).max())
+
+    # A coarse cutoff *does* change the result, which is how we know the
+    # parameter reaches the kernel at all:
+    coarse = ModelClass(min_current_spread=0.5,
+                        **kwargs).build().predict_percept(implant).data
+    assert np.abs(coarse - exact).max() > 1e-3
+
+    # A cutoff of 1 or more would drop every electrode:
+    model = ModelClass(min_current_spread=1, **kwargs).build()
+    with pytest.raises(ValueError):
+        model.predict_percept(implant)
+
+
+@pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
+def test_predict_percept_frames_are_independent(ModelClass):
+    """Each frame of a multi-frame stimulus is predicted on its own.
+
+    The spatial kernels evaluate the electrode-to-point Gaussian once and
+    reuse it across every time point, so this guards against one frame
+    leaking into another.
+    """
+    rng = np.random.default_rng(42)
+    data = rng.normal(size=(60, 4)).astype(np.float32)
+    model = ModelClass(xystep=1, xrange=(-10, 10), yrange=(-8, 8),
+                       rho=200).build()
+
+    joint = model.predict_percept(
+        ArgusII(stim=Stimulus(data, time=[0, 1, 2, 3]))).data
+    npt.assert_equal(joint.shape[-1], 4)
+    for i in range(data.shape[1]):
+        frame = model.predict_percept(
+            ArgusII(stim=Stimulus(data[:, i:i + 1]))).data
+        npt.assert_allclose(joint[..., i], frame[..., 0], rtol=1e-5,
+                            atol=1e-6 * np.abs(frame).max())
+
+
+@pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
+def test_predict_percept_all_zero_stim(ModelClass):
+    """An all-zero stimulus produces an all-zero percept.
+
+    The kernels skip electrodes that are zero for the whole stimulus, so the
+    case where *every* electrode is skipped is worth pinning down.
+    """
+    model = ModelClass(xystep=1, xrange=(-10, 10), yrange=(-8, 8)).build()
+    percept = model.predict_percept(ArgusII(stim=np.zeros(60)))
+    npt.assert_equal(np.all(percept.data == 0), True)
+
+
+@pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
+def test_predict_percept_thread_count_invariant(ModelClass):
+    """The percept must not depend on how many threads computed it.
+
+    ``fast_axon_map`` hands each thread its own row of a scratch buffer, so
+    this covers both the indexing of that buffer and the case where the
+    stimulus has a single frame (the padding that keeps two threads off the
+    same cache line).
+    """
+    stim = np.zeros(60)
+    stim[[5, 22, 51]] = [1.0, 0.6, -0.3]
+    implant = ArgusII(stim=stim)
+    kwargs = {'xystep': 1, 'xrange': (-10, 10), 'yrange': (-8, 8),
+              'rho': 200}
+
+    serial = ModelClass(n_threads=1,
+                        **kwargs).build().predict_percept(implant).data
+    for n_threads in (2, 3, 8):
+        parallel = ModelClass(
+            n_threads=n_threads, **kwargs).build().predict_percept(implant)
+        npt.assert_array_equal(parallel.data, serial)

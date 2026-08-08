@@ -26,6 +26,12 @@ class CortexSpatial(SpatialModel):
         Default: ['v1']. 
     rho : double, optional
         Exponential decay constant describing current spread size (microns).
+    min_current_spread : float, optional
+        An electrode is skipped at grid points where its Gaussian current
+        spread has decayed below this fraction of its peak. The default
+        (1e-8, about 6.1 ``rho`` away) is small enough that the skipped term
+        could not have changed the float32 result, so it buys speed rather
+        than costing accuracy. Set to 0 to sum over every electrode.
     xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). In a right eye, negative x values correspond to the
@@ -197,6 +203,12 @@ class ScoreboardSpatial(CortexSpatial):
     ----------
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
+    min_current_spread : float, optional
+        An electrode is skipped at grid points where its Gaussian current
+        spread has decayed below this fraction of its peak. The default
+        (1e-8, about 6.1 ``rho`` away) is small enough that the skipped term
+        could not have changed the float32 result, so it buys speed rather
+        than costing accuracy. Set to 0 to sum over every electrode.
     regions : list of str, optional
         The regions to simulate. Options are 'v1', 'v2', or 'v3'. Default:
         ['v1']
@@ -270,14 +282,15 @@ class ScoreboardSpatial(CortexSpatial):
         if self.vfmap.split_map:
             separate = 1
             boundary = self.vfmap.left_offset/2
+        cutoff_r2 = self._cutoff_r2(self.rho)
         if self.vfmap.ndim == 3:
             return np.sum([
                 fast_scoreboard_3d(stim.data, x_el, y_el, z_el,
-                                self.grid[region].x.ravel(), 
+                                self.grid[region].x.ravel(),
                                 self.grid[region].y.ravel(),
                                 self.grid[region].z.ravel(),
-                                self.rho, self.thresh_percept, 
-                                separate, boundary, 
+                                self.rho, self.thresh_percept, cutoff_r2,
+                                separate, boundary,
                                 self.n_threads)
                 for region in self.regions ],
             axis = 0)
@@ -285,8 +298,8 @@ class ScoreboardSpatial(CortexSpatial):
             return np.sum([
                 fast_scoreboard(stim.data, x_el, y_el,
                                 self.grid[region].x.ravel(), self.grid[region].y.ravel(),
-                                self.rho, self.thresh_percept, 
-                                separate, boundary, 
+                                self.rho, self.thresh_percept, cutoff_r2,
+                                separate, boundary,
                                 self.n_threads)
                 for region in self.regions ],
             axis = 0)
@@ -312,6 +325,12 @@ class ScoreboardModel(Model):
     ----------
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
+    min_current_spread : float, optional
+        An electrode is skipped at grid points where its Gaussian current
+        spread has decayed below this fraction of its peak. The default
+        (1e-8, about 6.1 ``rho`` away) is small enough that the skipped term
+        could not have changed the float32 result, so it buys speed rather
+        than costing accuracy. Set to 0 to sum over every electrode.
     regions : list of str, optional
         The regions to simulate. Options are 'v1', 'v2', or 'v3'. Default:
         ['v1']

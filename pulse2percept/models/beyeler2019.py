@@ -39,6 +39,12 @@ class ScoreboardSpatial(SpatialModel):
     ----------
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
+    min_current_spread : float, optional
+        An electrode is skipped at grid points where its Gaussian current
+        spread has decayed below this fraction of its peak. The default
+        (1e-8, about 6.1 ``rho`` away) is small enough that the skipped term
+        could not have changed the float32 result, so it buys speed rather
+        than costing accuracy. Set to 0 to sum over every electrode.
     xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). In a right eye, negative x values correspond to the
@@ -104,6 +110,7 @@ class ScoreboardSpatial(SpatialModel):
                                self.grid.ret.y.ravel(),
                                self.rho,
                                self.thresh_percept,
+                               self._cutoff_r2(self.rho),
                                0, 0, # don't set current boundaries
                                self.n_threads)
 
@@ -124,6 +131,12 @@ class ScoreboardModel(Model):
     ----------
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
+    min_current_spread : float, optional
+        An electrode is skipped at grid points where its Gaussian current
+        spread has decayed below this fraction of its peak. The default
+        (1e-8, about 6.1 ``rho`` away) is small enough that the skipped term
+        could not have changed the float32 result, so it buys speed rather
+        than costing accuracy. Set to 0 to sum over every electrode.
     xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). In a right eye, negative x values correspond to the
@@ -191,6 +204,12 @@ class AxonMapSpatial(SpatialModel):
         Exponential decay constant along the axon(microns).
     rho : double, optional
         Exponential decay constant away from the axon(microns).
+    min_current_spread : float, optional
+        An electrode is skipped at axon segments where its Gaussian current
+        spread has decayed below this fraction of its peak. The default
+        (1e-8, about 6.1 ``rho`` away) is small enough that the skipped term
+        could not have changed the float32 result, so it buys speed rather
+        than costing accuracy. Set to 0 to sum over every electrode.
     eye : {'RE', LE'}, optional
         Eye for which to generate the axon map.
     xrange : (x_min, x_max), optional
@@ -754,6 +773,7 @@ class AxonMapSpatial(SpatialModel):
                              self.axon_idx_end.astype(np.uint32),
                              self.rho,
                              self.thresh_percept,
+                             self._cutoff_r2(self.rho),
                              self.n_threads)
 
     def plot(self, use_dva=False, style='hull', annotate=True, autoscale=True,
@@ -890,6 +910,12 @@ class AxonMapModel(Model):
         Exponential decay constant along the axon(microns).
     rho : double, optional
         Exponential decay constant away from the axon(microns).
+    min_current_spread : float, optional
+        An electrode is skipped at axon segments where its Gaussian current
+        spread has decayed below this fraction of its peak. The default
+        (1e-8, about 6.1 ``rho`` away) is small enough that the skipped term
+        could not have changed the float32 result, so it buys speed rather
+        than costing accuracy. Set to 0 to sum over every electrode.
     eye : {'RE', LE'}, optional
         Eye for which to generate the axon map.
     xrange : (x_min, x_max), optional
