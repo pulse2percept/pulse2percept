@@ -3,6 +3,8 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 import copy
+import os
+import pickle
 import warnings
 
 from matplotlib.axes import Subplot
@@ -14,6 +16,7 @@ from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import Stimulus
 from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
                                   ScoreboardSpatial, ScoreboardModel)
+from pulse2percept.models.beyeler2019 import _AXON_CACHE_VERSION
 from pulse2percept.topography import Watson2014Map, Watson2014DisplaceMap
 from pulse2percept.utils.testing import assert_warns_msg
 
@@ -666,3 +669,76 @@ def test_predict_percept_thread_count_invariant(ModelClass):
         parallel = ModelClass(
             n_threads=n_threads, **kwargs).build().predict_percept(implant)
         npt.assert_array_equal(parallel.data, serial)
+
+
+def test_AxonMapModel_find_closest_axon_return_segment():
+    """``return_segment`` reports where in the axon the closest point is."""
+    model = AxonMapModel(xystep=2, n_axons=20, xrange=(-12, 12),
+                         yrange=(-12, 12), axons_range=(-45, 45))
+    model.build()
+    spatial = model.spatial
+    bundles = spatial.grow_axon_bundles()
+    xyret = np.column_stack((spatial.grid.ret.x.ravel(),
+                             spatial.grid.ret.y.ravel()))
+
+    axons, idx_seg = spatial.find_closest_axon(bundles, return_segment=True)
+    npt.assert_equal(len(idx_seg), len(xyret))
+    # The reported segment is the one `argmin` would have picked:
+    for axon, seg, xy in zip(axons, idx_seg, xyret):
+        expected = np.argmin((axon[:, 0] - xy[0]) ** 2 +
+                             (axon[:, 1] - xy[1]) ** 2)
+        npt.assert_equal(seg, expected)
+
+    # Both flags together, in the documented order:
+    axons2, idx_ax, idx_seg2 = spatial.find_closest_axon(
+        bundles, return_index=True, return_segment=True)
+    npt.assert_array_equal(idx_seg2, idx_seg)
+    for axon, idx in zip(axons2, idx_ax):
+        npt.assert_array_equal(axon, bundles[idx])
+
+    # A single query point still returns scalars, not arrays:
+    single, idx_ax1, idx_seg1 = spatial.find_closest_axon(
+        bundles, xret=xyret[0, 0], yret=xyret[0, 1], return_index=True,
+        return_segment=True)
+    npt.assert_equal(np.ndim(idx_ax1), 0)
+    npt.assert_equal(np.ndim(idx_seg1), 0)
+    npt.assert_array_equal(single, bundles[idx_ax1])
+
+
+def test_AxonMapModel_calc_axon_sensitivity_empty_bundle():
+    """A bundle with no segments is rejected rather than silently skipped."""
+    model = AxonMapModel(xystep=4, n_axons=5, xrange=(-8, 8), yrange=(-8, 8))
+    model.build()
+    n_points = model.spatial.grid.ret.x.size
+    bundles = [np.zeros((0, 2), dtype=np.float32)] * n_points
+    with pytest.raises(ValueError):
+        model.spatial.calc_axon_sensitivity(bundles)
+
+
+def test_AxonMapModel_build_cache_roundtrip(tmp_path):
+    """A warm build off the cache reproduces the cold build exactly."""
+    pickle_file = str(tmp_path / 'axons.pickle')
+
+    def build(ignore_pickle):
+        return AxonMapModel(xystep=1, xrange=(-8, 8), yrange=(-8, 8),
+                            n_axons=200, axon_pickle=pickle_file,
+                            ignore_pickle=ignore_pickle).build().spatial
+
+    cold = build(True)
+    npt.assert_equal(os.path.isfile(pickle_file), True)
+    warm = build(False)
+    npt.assert_array_equal(warm.axon_contrib, cold.axon_contrib)
+    npt.assert_array_equal(warm.axon_idx_start, cold.axon_idx_start)
+    npt.assert_array_equal(warm.axon_idx_end, cold.axon_idx_end)
+
+    # A cache written by an older version is regrown, not misread:
+    with open(pickle_file, 'rb') as f:
+        params, _ = pickle.load(f)
+    with open(pickle_file, 'wb') as f:
+        pickle.dump((params, [np.zeros((3, 2), dtype=np.float32)]), f)
+    stale = build(False)
+    npt.assert_array_equal(stale.axon_contrib, cold.axon_contrib)
+    # ...and the file is left in the current format:
+    with open(pickle_file, 'rb') as f:
+        _, payload = pickle.load(f)
+    npt.assert_equal(payload[0], _AXON_CACHE_VERSION)
