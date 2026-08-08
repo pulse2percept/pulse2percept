@@ -10,7 +10,7 @@ import logging
 from skimage import img_as_ubyte
 from skimage.transform import resize
 
-from ..utils import Data, HTMLAnimation, frame_interval, unique, sample
+from ..utils import Data, HTMLAnimation, frame_interval, sample
 from ..utils.constants import VIDEO_BLOCK_SIZE
 
 
@@ -397,12 +397,10 @@ class Percept(Data):
             for ext in ['.jpg','.jpeg','.bmp','.png','.tif','.tiff','.jif','.jfif']:
                 if fname.endswith(ext):
                     raise ValueError(f"Cannot save multi-frame percept as a static image: {fname}")
-            # With time component, store as a movie:
+            # With time component, store as a movie. A single-frame percept
+            # has no frame rate of its own, but can still be written out:
             if fps is None:
-                interval = unique(np.diff(self.time))
-                if len(interval) > 1:
-                    raise NotImplementedError
-                fps = 1000.0 / interval[0]
+                fps = 1000.0 / frame_interval(self.time, tol=1e-6)
             # Note, for most codecs, the image dimensions must be divisible by
             # 16 the default for the VIDEO_BLOCK_SIZE is 16. Check if image is
             # divisible, if not have ffmpeg upsize to nearest size and warn

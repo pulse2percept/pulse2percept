@@ -112,6 +112,10 @@ def test_frame_interval():
     with pytest.raises(NotImplementedError):
         frame_interval([0, 1, 10])
     npt.assert_almost_equal(frame_interval([0, 1, 10], fps=20), 50)
+    # 'tol' decides how much jitter still counts as homogeneous:
+    npt.assert_almost_equal(frame_interval([0, 10, 20.005], tol=1), 10)
+    with pytest.raises(NotImplementedError):
+        frame_interval([0, 10, 20.005], tol=1e-6)
 
 
 @pytest.mark.parametrize('n_frames', (1, 2, 5, 17))

@@ -217,3 +217,16 @@ def test_Percept_save(dtype, tmp_path):
         img = img_as_float(imread(fname))
         npt.assert_almost_equal(np.min(img), 0, decimal=3)
         npt.assert_almost_equal(np.max(img), 1.0, decimal=3)
+
+
+def test_Percept_save_single_frame(tmp_path):
+    """A percept with a single time point has no frame rate of its own"""
+    percept = Percept(np.random.rand(16, 16, 1), time=[3.5])
+    for name in ['test.mp4', 'test.avi', 'test.gif']:
+        fname = str(tmp_path / name)
+        percept.save(fname)
+        npt.assert_equal(len(mimread(fname)), 1)
+    # An explicit frame rate is still honored:
+    fname = str(tmp_path / 'fps.mp4')
+    percept.save(fname, fps=12)
+    npt.assert_equal(len(mimread(fname)), 1)

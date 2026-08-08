@@ -67,7 +67,7 @@ JPEG_MACROBLOCK = 16
 SINGLE_FRAME_INTERVAL = 1000.0 / 30
 
 
-def frame_interval(time, fps=None):
+def frame_interval(time, fps=None, tol=1e-2):
     """Determine the delay between two frames of an animation
 
     .. versionadded:: 0.9.2
@@ -79,6 +79,8 @@ def frame_interval(time, fps=None):
     fps : float or None
         Frames per second. If None, the interval is inferred from ``time``,
         which is not supported for a non-homogeneous time axis.
+    tol : float, optional
+        Tolerance within which two time steps count as equal
 
     Returns
     -------
@@ -89,7 +91,7 @@ def frame_interval(time, fps=None):
     """
     if fps is not None:
         return 1000.0 / fps
-    interval = unique(np.diff(time), tol=1e-2)
+    interval = unique(np.diff(time), tol=tol)
     if len(interval) > 1:
         raise NotImplementedError(
             f"Cannot infer the frame rate from a non-homogeneous time axis "
@@ -539,8 +541,8 @@ class HTMLAnimation(FuncAnimation):
             'rect': rect,
             # Mirror Matplotlib's 'antialiased' interpolation, which switches
             # to nearest-neighbor once the image is strongly magnified:
-            'smooth': (rect[2] <= MAX_SMOOTH_UPSAMPLE * sheet['fw']
-                       and rect[3] <= MAX_SMOOTH_UPSAMPLE * sheet['fh']),
+            'smooth': (rect[2] <= MAX_SMOOTH_UPSAMPLE * sheet['fw'] and
+                       rect[3] <= MAX_SMOOTH_UPSAMPLE * sheet['fh']),
             'interval': float(interval),
             'mode': default_mode,
             'title': title,
