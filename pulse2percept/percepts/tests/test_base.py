@@ -157,6 +157,14 @@ def test_Percept_play(n_frames):
     ani = percept.play()
     npt.assert_equal(isinstance(ani, FuncAnimation), True)
     npt.assert_equal(len(list(ani.frame_seq)), n_frames)
+    # The animation renders as a self-contained HTML player:
+    html = ani.to_jshtml()
+    npt.assert_equal('p2p-anim' in html, True)
+    npt.assert_equal(f'"n": {n_frames}' in html, True)
+    # Time is annotated in the title unless turned off:
+    npt.assert_equal(f't = {percept.time[1]:.2f} ms' in html, True)
+    html = percept.play(annotate_time=False).to_jshtml()
+    npt.assert_equal(f't = {percept.time[1]:.2f} ms' in html, False)
 
 
 @ pytest.mark.parametrize('dtype', (np.float32, np.uint8))

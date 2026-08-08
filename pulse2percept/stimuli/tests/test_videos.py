@@ -353,6 +353,14 @@ def test_VideoStimulus_play(n_frames):
     ani = video.play()
     npt.assert_equal(isinstance(ani, FuncAnimation), True)
     npt.assert_equal(len(list(ani.frame_seq)), n_frames)
+    # The animation renders as a self-contained HTML player:
+    html = ani.to_jshtml()
+    npt.assert_equal('p2p-anim' in html, True)
+    npt.assert_equal(f'"n": {n_frames}' in html, True)
+    npt.assert_equal(f't = {video.time[1]:.2f} ms' in html, True)
+    # Color videos are played back in color:
+    rgb = VideoStimulus(np.random.rand(2, 4, 3, n_frames))
+    npt.assert_equal('p2p-anim' in rgb.play().to_jshtml(), True)
 
 
 def test_BostonTrain():

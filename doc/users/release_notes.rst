@@ -30,6 +30,15 @@ Highlights:
    :py:class:`~pulse2percept.stimuli.Stimulus` now compares time points with a
    tolerance that scales with their magnitude so that time points stay
    strictly monotonically increasing even after merging two stimuli.
+*  ``Percept.play`` and ``VideoStimulus.play`` are roughly 100x faster and
+   produce much smaller notebooks and doc pages. Instead of re-rendering the
+   whole figure once per frame and embedding every frame as its own PNG (as
+   Matplotlib's ``to_jshtml`` does), the new
+   :py:class:`~pulse2percept.utils.HTMLAnimation` renders the figure once and
+   ships all frames as a single color-mapped sprite sheet that is played back
+   by a small, self-contained JavaScript player. Animating a 65x97x94 percept
+   now takes 0.24s instead of 25s, and long videos are no longer silently
+   truncated at Matplotlib's 20 MB embed limit
 
 v0.9.1 (2026-08-06)
 -------------------
