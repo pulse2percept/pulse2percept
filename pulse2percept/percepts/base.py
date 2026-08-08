@@ -10,7 +10,7 @@ import logging
 from skimage import img_as_ubyte
 from skimage.transform import resize
 
-from ..utils import Data, HTMLAnimation, deprecated, unique, sample
+from ..utils import Data, HTMLAnimation, frame_interval, unique, sample
 from ..utils.constants import VIDEO_BLOCK_SIZE
 
 
@@ -248,7 +248,7 @@ class Percept(Data):
         return ax
 
     def play(self, fps=None, repeat=True, annotate_time=True, ax=None,
-             colorbar=True):
+             colorbar=True, fmt='jpg'):
         """Animate the percept as HTML with JavaScript
 
         The percept will be played in an interactive player in IPython or
@@ -269,6 +269,12 @@ class Percept(Data):
             A Matplotlib axes object. If None, will create a new Axes object
         colorbar : {True, False}
             Whether to show the colorbar
+        fmt : {'jpg', 'png'}, optional
+            The image format used to embed the frames. 'jpg' keeps notebooks
+            and doc pages an order of magnitude smaller; use 'png' if you need
+            the frames to be pixel-exact.
+
+            .. versionadded:: 0.9.2
 
         Returns
         -------
@@ -325,21 +331,15 @@ class Percept(Data):
             cbar.ax.set_ylabel('Phosphene brightness (a.u.)', rotation=-90,
                                va='center')
         plt.close(fig)
-        if fps is None:
-            interval = unique(np.diff(self.time), tol=1e-2)
-            if len(interval) > 1:
-                raise NotImplementedError
-            interval = interval[0]
-        else:
-            interval = 1000.0 / fps
         # Create the animation. The frame data is handed to HTMLAnimation so
         # that it can render the HTML player without going through Matplotlib:
         labels = None
         if annotate_time:
             labels = [f't = {t:.2f} ms' for t in self.time]
-        return HTMLAnimation(fig, update, data_gen, interval=interval,
-                             save_count=len(self.time), repeat=repeat,
-                             image=mat, frame_data=self.data, labels=labels)
+        return HTMLAnimation(fig, update, data_gen, repeat=repeat,
+                             interval=frame_interval(self.time, fps=fps),
+                             save_count=len(self.time), image=mat,
+                             frame_data=self.data, labels=labels, fmt=fmt)
 
     def save(self, fname, shape=None, fps=None):
         """Save the percept as an MP4 or GIF

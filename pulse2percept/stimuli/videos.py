@@ -7,8 +7,7 @@ from math import isclose
 import matplotlib.pyplot as plt
 
 from skimage.color import rgb2gray
-from skimage.transform import (resize as vid_resize, rotate as vid_rotate,
-                               SimilarityTransform)
+from skimage.transform import resize as vid_resize, rotate as vid_rotate
 from skimage.filters import scharr, sobel, median
 from skimage.feature import canny
 
@@ -19,7 +18,7 @@ from .base import Stimulus
 from .names import ElectrodeNames
 from .pulses import BiphasicPulse
 from ..utils import (center_image, shift_image, scale_image, trim_image,
-                     unique, HTMLAnimation)
+                     unique, frame_interval, HTMLAnimation)
 from ..utils.constants import DT
 
 
@@ -631,7 +630,8 @@ class VideoStimulus(Stimulus):
         """Rewind the iterator"""
         self._next_frame = 0
 
-    def play(self, fps=None, repeat=True, annotate_time=True, ax=None):
+    def play(self, fps=None, repeat=True, annotate_time=True, ax=None,
+             fmt='jpg'):
         """Animate the video as HTML with JavaScript
 
         The video will be played in an interactive player in IPython or
@@ -650,6 +650,12 @@ class VideoStimulus(Stimulus):
             title of the panel.
         ax : matplotlib.axes.AxesSubplot, optional
             A Matplotlib axes object. If None, will create a new Axes object
+        fmt : {'jpg', 'png'}, optional
+            The image format used to embed the frames. 'jpg' keeps notebooks
+            and doc pages an order of magnitude smaller; use 'png' if you need
+            the frames to be pixel-exact.
+
+            .. versionadded:: 0.9.2
 
         Returns
         -------
@@ -700,21 +706,15 @@ class VideoStimulus(Stimulus):
         mat = ax.imshow(np.zeros(self.vid_shape[:-1]), cmap='gray',
                         vmin=0, vmax=self.data.max())
         plt.close(fig)
-        if fps is None:
-            interval = unique(np.diff(self.time), tol=1e-2)
-            if len(interval) > 1:
-                raise NotImplementedError
-            interval = interval[0]
-        else:
-            interval = 1000.0 / fps
         # Create the animation. The frame data is handed to HTMLAnimation so
         # that it can render the HTML player without going through Matplotlib:
         labels = None
         if annotate_time:
             labels = [f't = {t:.2f} ms' for t in self.time]
-        return HTMLAnimation(fig, update, data_gen, interval=interval,
-                             save_count=len(self.time), repeat=repeat,
-                             image=mat, labels=labels,
+        return HTMLAnimation(fig, update, data_gen, repeat=repeat,
+                             interval=frame_interval(self.time, fps=fps),
+                             save_count=len(self.time), image=mat,
+                             labels=labels, fmt=fmt,
                              frame_data=self.data.reshape(self.vid_shape))
 
 

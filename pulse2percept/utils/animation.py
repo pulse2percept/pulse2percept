@@ -12,6 +12,9 @@ order of hundreds of milliseconds, and the resulting HTML is tens of megabytes.
 and packs all frames into a single, color-mapped sprite sheet that is blitted
 into a ``<canvas>`` by a small vanilla-JavaScript player. This is typically two
 orders of magnitude faster and produces much smaller notebooks and doc pages.
+
+The sheet is encoded as JPEG by default, which roughly halves it again; pass
+``fmt='png'`` if you need the frames to be pixel-exact.
 """
 import base64
 from io import BytesIO
@@ -24,7 +27,9 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.colors import to_hex
 from PIL import Image
 
-__all__ = ['HTMLAnimation']
+from .array import unique
+
+__all__ = ['HTMLAnimation', 'frame_interval']
 
 # Frames are packed into a single sprite sheet. Browsers put a cap on the size
 # of an image they are willing to decode; 8192px per side is safe everywhere,
@@ -41,6 +46,61 @@ MAX_SMOOTH_UPSAMPLE = 3
 # levels before the colormap lookup as well, so nothing is lost here:
 N_LEVELS = 256
 
+# PNG compression level. Anything above this buys a few percent in size for
+# several times the encoding time:
+PNG_COMPRESS_LEVEL = 3
+
+# JPEG quality. High enough that the artifacts stay invisible next to the blur
+# of a phosphene (a mean error of about 1 gray level out of 255), while still
+# cutting the size of the sprite sheet roughly in half:
+JPEG_QUALITY = 90
+
+# Frames are padded so that no JPEG block ever straddles two frames of the
+# sprite sheet, which would bleed one frame into the next. Grayscale sheets are
+# coded in 8x8 DCT blocks; color sheets additionally use 4:2:0 chroma
+# subsampling, whose macroblocks are 16x16:
+JPEG_BLOCK = 8
+JPEG_MACROBLOCK = 16
+
+# Frame duration (in ms) to fall back on for single-frame animations, which
+# have no time step of their own:
+SINGLE_FRAME_INTERVAL = 1000.0 / 30
+
+
+def frame_interval(time, fps=None):
+    """Determine the delay between two frames of an animation
+
+    .. versionadded:: 0.9.2
+
+    Parameters
+    ----------
+    time : array_like
+        The time points of the animation (in ms)
+    fps : float or None
+        Frames per second. If None, the interval is inferred from ``time``,
+        which is not supported for a non-homogeneous time axis.
+
+    Returns
+    -------
+    interval : float
+        The delay between two frames (in ms). A single-frame animation has no
+        time step of its own and falls back on ``SINGLE_FRAME_INTERVAL``.
+
+    """
+    if fps is not None:
+        return 1000.0 / fps
+    interval = unique(np.diff(time), tol=1e-2)
+    if len(interval) > 1:
+        raise NotImplementedError(
+            f"Cannot infer the frame rate from a non-homogeneous time axis "
+            f"(found {len(interval)} different time steps). Pass 'fps' "
+            f"instead.")
+    if len(interval) == 0:
+        # A single frame has no time step, and there is nothing to advance to,
+        # so any interval will do:
+        return SINGLE_FRAME_INTERVAL
+    return float(interval[0])
+
 
 def _weight2css(weight):
     """Translate a Matplotlib font weight into a CSS font weight"""
@@ -52,6 +112,21 @@ def _weight2css(weight):
     return 'normal'
 
 
+def _check_fmt(fmt):
+    """Normalize and validate the sprite sheet image format"""
+    known = {'jpg': 'jpg', 'jpeg': 'jpg', 'png': 'png'}
+    normalized = known.get(str(fmt).lower())
+    if normalized is None:
+        raise ValueError(f"Unknown image format '{fmt}'. Choose either 'jpg' "
+                         f"or 'png'.")
+    return normalized
+
+
+def _round_up(value, multiple):
+    """Round ``value`` up to the next multiple of ``multiple``"""
+    return int(np.ceil(value / multiple)) * multiple
+
+
 def _sprite_grid(n_frames, height, width):
     """Lay out ``n_frames`` frames in a roughly square sprite sheet
 
@@ -60,16 +135,18 @@ def _sprite_grid(n_frames, height, width):
     about.
     """
     n_cols = max(1, int(np.ceil(np.sqrt(n_frames * height / width))))
+    n_cols = min(n_frames, n_cols)
     n_rows = int(np.ceil(n_frames / n_cols))
     return n_rows, n_cols
 
 
-def _frame_shape(data_shape, n_frames, max_shape):
+def _frame_shape(data_shape, n_frames, max_shape, pad_to=1):
     """Determine the size at which each frame is embedded
 
     Frames are never upsampled (the browser does that for free) and are
     downsampled if they are either larger than the area they are displayed in
-    or too large to fit in a sprite sheet.
+    or too large to fit in a sprite sheet. ``pad_to`` is the multiple that
+    each tile is padded to on the sheet.
     """
     height, width = data_shape
     # No point in shipping more pixels than are actually displayed:
@@ -78,11 +155,19 @@ def _frame_shape(data_shape, n_frames, max_shape):
     for _ in range(20):
         out_h = max(1, int(round(height * scale)))
         out_w = max(1, int(round(width * scale)))
-        n_rows, n_cols = _sprite_grid(n_frames, out_h, out_w)
-        if max(n_rows * out_h, n_cols * out_w) <= MAX_SPRITE_PX:
+        n_rows, n_cols = _sprite_grid(n_frames, _round_up(out_h, pad_to),
+                                      _round_up(out_w, pad_to))
+        if max(n_rows * _round_up(out_h, pad_to),
+               n_cols * _round_up(out_w, pad_to)) <= MAX_SPRITE_PX:
             break
         scale *= 0.75
     return out_h, out_w
+
+
+def _is_gray(lut):
+    """Whether a color lookup table contains nothing but shades of gray"""
+    return bool((lut[:, 0] == lut[:, 1]).all() and
+                (lut[:, 1] == lut[:, 2]).all())
 
 
 def _quantize(data, norm):
@@ -99,8 +184,14 @@ def _quantize(data, norm):
     return np.ascontiguousarray(idx.transpose((2, 0, 1)))
 
 
-def _sprite_sheet(data, norm, cmap, max_shape):
-    """Color-map every frame and pack them all into a single PNG
+def _color_lut(cmap):
+    """The colormap as a 256x3 table of 8-bit RGB values"""
+    lut = cmap((np.arange(N_LEVELS) + 0.5) / N_LEVELS)
+    return (np.asarray(lut)[:, :3] * 255).astype(np.uint8)
+
+
+def _sprite_sheet(data, norm, cmap, max_shape, fmt):
+    """Color-map every frame and pack them all into a single image
 
     Parameters
     ----------
@@ -112,15 +203,15 @@ def _sprite_sheet(data, norm, cmap, max_shape):
         The colormap of the animated image (ignored for RGB data)
     max_shape : (height, width)
         Frames are downsampled to at most this size
+    fmt : {'jpg', 'png'}
+        Whether to encode the sheet as (lossy) JPEG or (lossless) PNG
 
     Returns
     -------
-    png : bytes
-        The sprite sheet, encoded as PNG
-    n_cols : int
-        Number of frames per sheet row
-    frame_shape : (height, width)
-        Size of a single frame within the sheet
+    sheet : dict
+        The encoded sheet ('data', 'mime') and its geometry: the number of
+        frames per row ('ncols'), the size of a frame ('fw', 'fh'), and the
+        distance between two frames on the sheet ('sw', 'sh')
     """
     rgb = np.ndim(data) == 4
     n_frames = np.shape(data)[-1]
@@ -132,7 +223,16 @@ def _sprite_sheet(data, norm, cmap, max_shape):
             scaled.transpose((3, 0, 1, 2)).astype(np.uint8))
     else:
         frames = _quantize(data, norm)
-    out_h, out_w = _frame_shape(frames.shape[1:3], n_frames, max_shape)
+    # JPEG has no palette, so scalar data must carry its colors itself. Gray
+    # colormaps stay single-channel; anything else is expanded to RGB:
+    if fmt == 'jpg' and not rgb:
+        lut = _color_lut(cmap)
+        frames = lut[..., 0][frames] if _is_gray(lut) else lut[frames]
+    if fmt != 'jpg':
+        pad_to = 1
+    else:
+        pad_to = JPEG_MACROBLOCK if frames.ndim == 4 else JPEG_BLOCK
+    out_h, out_w = _frame_shape(frames.shape[1:3], n_frames, max_shape, pad_to)
     if (out_h, out_w) != frames.shape[1:3]:
         # Downsample in index space, which is what Matplotlib does as well (it
         # resamples the normalized data before the colormap lookup):
@@ -140,26 +240,39 @@ def _sprite_sheet(data, norm, cmap, max_shape):
             np.asarray(Image.fromarray(frame).resize((out_w, out_h),
                                                      Image.BILINEAR))
             for frame in frames])
+    # Pad the tiles so that JPEG macroblocks cannot straddle two frames.
+    # Repeating the edge pixel keeps the padding from ringing into the frame:
+    stride_h, stride_w = _round_up(out_h, pad_to), _round_up(out_w, pad_to)
+    if (stride_h, stride_w) != (out_h, out_w):
+        pad = [(0, 0), (0, stride_h - out_h), (0, stride_w - out_w)]
+        frames = np.pad(frames, pad + [(0, 0)] * (frames.ndim - 3),
+                        mode='edge')
     # Tile the frames into a single sheet, filling it row by row:
-    n_rows, n_cols = _sprite_grid(n_frames, out_h, out_w)
+    n_rows, n_cols = _sprite_grid(n_frames, stride_h, stride_w)
     n_pad = n_rows * n_cols - n_frames
     if n_pad:
         frames = np.concatenate([frames, np.zeros((n_pad, *frames.shape[1:]),
                                                   dtype=np.uint8)])
     sheet = frames.reshape((n_rows, n_cols, *frames.shape[1:]))
-    sheet = sheet.swapaxes(1, 2).reshape((n_rows * out_h, n_cols * out_w,
+    sheet = sheet.swapaxes(1, 2).reshape((n_rows * stride_h, n_cols * stride_w,
                                           *frames.shape[3:]))
-    if rgb:
-        img = Image.fromarray(sheet, mode='RGB')
+    buf = BytesIO()
+    if fmt == 'jpg':
+        Image.fromarray(sheet, mode='RGB' if sheet.ndim == 3 else 'L').save(
+            buf, format='jpeg', quality=JPEG_QUALITY)
+    elif rgb:
+        Image.fromarray(sheet, mode='RGB').save(
+            buf, format='png', compress_level=PNG_COMPRESS_LEVEL)
     else:
         # Ship the colormap as a PNG palette: this keeps the sheet at one byte
         # per pixel no matter how colorful the colormap is:
         img = Image.fromarray(sheet, mode='P')
-        lut = cmap((np.arange(N_LEVELS) + 0.5) / N_LEVELS)
-        img.putpalette((np.asarray(lut)[:, :3] * 255).astype(np.uint8).ravel())
-    buf = BytesIO()
-    img.save(buf, format='png', compress_level=3)
-    return buf.getvalue(), n_cols, (out_h, out_w)
+        img.putpalette(_color_lut(cmap).ravel())
+        img.save(buf, format='png', compress_level=PNG_COMPRESS_LEVEL)
+    return {'data': buf.getvalue(),
+            'mime': 'image/jpeg' if fmt == 'jpg' else 'image/png',
+            'ncols': n_cols, 'fw': out_w, 'fh': out_h,
+            'sw': stride_w, 'sh': stride_h}
 
 
 def _background(fig, im):
@@ -218,12 +331,17 @@ _PLAYER = Template("""
     <canvas class="p2p-canvas" width="$width" height="$height"></canvas>
   </div>
   <div class="p2p-controls">
-    <button class="p2p-btn" data-p2p-go="first" title="First frame">&#9198;</button>
-    <button class="p2p-btn" data-p2p-go="prev" title="Previous frame">&#9194;</button>
+    <button class="p2p-btn" data-p2p-go="first"
+            title="First frame">&#9198;</button>
+    <button class="p2p-btn" data-p2p-go="prev"
+            title="Previous frame">&#9194;</button>
     <button class="p2p-btn p2p-toggle" title="Play/Pause">&#9654;</button>
-    <button class="p2p-btn" data-p2p-go="next" title="Next frame">&#9193;</button>
-    <button class="p2p-btn" data-p2p-go="last" title="Last frame">&#9197;</button>
-    <input class="p2p-slider" type="range" min="0" max="$last" value="0" step="1">
+    <button class="p2p-btn" data-p2p-go="next"
+            title="Next frame">&#9193;</button>
+    <button class="p2p-btn" data-p2p-go="last"
+            title="Last frame">&#9197;</button>
+    <input class="p2p-slider" type="range" min="0" max="$last" value="0"
+           step="1">
     <span class="p2p-count">1/$n_frames</span>
     <select class="p2p-mode" title="Loop mode">
       <option value="once">Once</option>
@@ -249,7 +367,8 @@ _PLAYER = Template("""
 #$uid .p2p-count { font-variant-numeric: tabular-nums; opacity: 0.7;
                    white-space: nowrap; }
 #$uid .p2p-mode { background: transparent; color: inherit; font-size: 12px;
-                  border: 1px solid rgba(128,128,128,0.4); border-radius: 3px; }
+                  border-radius: 3px;
+                  border: 1px solid rgba(128,128,128,0.4); }
 </style>
 <script>
 (function () {
@@ -267,7 +386,7 @@ _PLAYER = Template("""
     if (!sheet.complete || !sheet.naturalWidth) { return; }
     var col = frame % cfg.ncols, row = (frame - col) / cfg.ncols;
     ctx.imageSmoothingEnabled = cfg.smooth;
-    ctx.drawImage(sheet, col * cfg.fw, row * cfg.fh, cfg.fw, cfg.fh,
+    ctx.drawImage(sheet, col * cfg.sw, row * cfg.sh, cfg.fw, cfg.fh,
                   cfg.rect[0], cfg.rect[1], cfg.rect[2], cfg.rect[3]);
     if (cfg.title) {
       ctx.clearRect(cfg.title.rect[0], cfg.title.rect[1],
@@ -334,7 +453,7 @@ _PLAYER = Template("""
   });
   mode.value = cfg.mode;
   sheet.onload = draw;
-  sheet.src = "data:image/png;base64,$sheet";
+  sheet.src = "data:$sheet_mime;base64,$sheet";
   show(0);
 })();
 </script>
@@ -342,7 +461,7 @@ _PLAYER = Template("""
 
 
 class HTMLAnimation(FuncAnimation):
-    """A :py:class:`~matplotlib.animation.FuncAnimation` with a fast HTML player
+    """A :py:class:`~matplotlib.animation.FuncAnimation` with a fast player
 
     Behaves exactly like ``FuncAnimation`` (including ``save`` and
     ``to_html5_video``), but renders to HTML through a self-contained
@@ -365,6 +484,9 @@ class HTMLAnimation(FuncAnimation):
         ``func`` displays in ``image``
     labels : list of str or None
         Per-frame titles. If None, the title is left alone
+    fmt : {'jpg', 'png'}, optional
+        Whether to encode the frames as JPEG or PNG. JPEG is typically an
+        order of magnitude smaller, PNG is lossless
 
     Notes
     -----
@@ -375,10 +497,11 @@ class HTMLAnimation(FuncAnimation):
     """
 
     def __init__(self, fig, func, frames=None, *args, image=None,
-                 frame_data=None, labels=None, **kwargs):
+                 frame_data=None, labels=None, fmt='jpg', **kwargs):
         self._image = image
         self._frame_data = frame_data
         self._labels = labels
+        self._fmt = _check_fmt(fmt)
         self._html = None
         super().__init__(fig, func, frames, *args, **kwargs)
 
@@ -401,21 +524,23 @@ class HTMLAnimation(FuncAnimation):
         top, bottom = int(np.floor(height - bbox.y1)), \
             int(np.ceil(height - bbox.y0))
         rect = [left, top, max(1, right - left), max(1, bottom - top)]
-        sheet, n_cols, (frame_h, frame_w) = _sprite_sheet(
-            self._frame_data, im.norm, im.cmap, (rect[3], rect[2]))
+        sheet = _sprite_sheet(self._frame_data, im.norm, im.cmap,
+                              (rect[3], rect[2]), self._fmt)
         title = None
         if self._labels is not None:
             title = _title_geometry(im.axes.title, width, height, fig.dpi)
         config = {
             'n': int(np.shape(self._frame_data)[-1]),
-            'ncols': n_cols,
-            'fw': frame_w,
-            'fh': frame_h,
+            'ncols': sheet['ncols'],
+            'fw': sheet['fw'],
+            'fh': sheet['fh'],
+            'sw': sheet['sw'],
+            'sh': sheet['sh'],
             'rect': rect,
             # Mirror Matplotlib's 'antialiased' interpolation, which switches
             # to nearest-neighbor once the image is strongly magnified:
-            'smooth': (rect[2] <= MAX_SMOOTH_UPSAMPLE * frame_w
-                       and rect[3] <= MAX_SMOOTH_UPSAMPLE * frame_h),
+            'smooth': (rect[2] <= MAX_SMOOTH_UPSAMPLE * sheet['fw']
+                       and rect[3] <= MAX_SMOOTH_UPSAMPLE * sheet['fh']),
             'interval': float(interval),
             'mode': default_mode,
             'title': title,
@@ -425,7 +550,8 @@ class HTMLAnimation(FuncAnimation):
             uid=f'p2p-anim-{uuid4().hex}', width=width, height=height,
             n_frames=config['n'], last=config['n'] - 1, config=dumps(config),
             bg=base64.b64encode(bg).decode('ascii'),
-            sheet=base64.b64encode(sheet).decode('ascii'))
+            sheet_mime=sheet['mime'],
+            sheet=base64.b64encode(sheet['data']).decode('ascii'))
 
     def to_jshtml(self, fps=None, embed_frames=True, default_mode=None):
         """Generate an HTML representation of the animation

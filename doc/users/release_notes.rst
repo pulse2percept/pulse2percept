@@ -37,8 +37,17 @@ Highlights:
    :py:class:`~pulse2percept.utils.HTMLAnimation` renders the figure once and
    ships all frames as a single color-mapped sprite sheet that is played back
    by a small, self-contained JavaScript player. Animating a 65x97x94 percept
-   now takes 0.24s instead of 25s, and long videos are no longer silently
+   now takes 0.06s instead of 25s, and long videos are no longer silently
    truncated at Matplotlib's 20 MB embed limit
+*  ``play`` gained a ``fmt`` parameter that chooses how the frames are
+   embedded. The new default, ``fmt='jpg'``, halves the size of the resulting
+   page again (a 94-frame percept goes from 3.7 MB to 0.22 MB); pass
+   ``fmt='png'`` if you need the frames to be pixel-exact
+*  ``play`` no longer raises ``IndexError`` on a single-frame percept or
+   video, which has no frame rate of its own. Inferring the frame rate from a
+   non-homogeneous time axis now raises ``NotImplementedError`` with an
+   explanation instead of a bare traceback, via the new
+   :py:func:`~pulse2percept.utils.frame_interval`
 
 v0.9.1 (2026-08-06)
 -------------------

@@ -162,9 +162,30 @@ def test_Percept_play(n_frames):
     npt.assert_equal('p2p-anim' in html, True)
     npt.assert_equal(f'"n": {n_frames}' in html, True)
     # Time is annotated in the title unless turned off:
-    npt.assert_equal(f't = {percept.time[1]:.2f} ms' in html, True)
+    npt.assert_equal(f't = {percept.time[-1]:.2f} ms' in html, True)
     html = percept.play(annotate_time=False).to_jshtml()
-    npt.assert_equal(f't = {percept.time[1]:.2f} ms' in html, False)
+    npt.assert_equal(f't = {percept.time[-1]:.2f} ms' in html, False)
+
+
+def test_Percept_play_single_frame():
+    """A percept with a single time point has no frame rate of its own"""
+    percept = Percept(np.random.rand(4, 4, 1), time=[3.5])
+    html = percept.play().to_jshtml()
+    npt.assert_equal('"n": 1' in html, True)
+    npt.assert_equal('t = 3.50 ms' in html, True)
+    # Without a time axis it is not an animation at all:
+    with pytest.raises(ValueError):
+        Percept(np.random.rand(4, 4, 1)).play()
+
+
+def test_Percept_play_fmt():
+    percept = Percept(np.random.rand(8, 8, 4))
+    npt.assert_equal('data:image/jpeg;base64,' in percept.play().to_jshtml(),
+                     True)
+    npt.assert_equal('data:image/jpeg;base64,' in
+                     percept.play(fmt='png').to_jshtml(), False)
+    with pytest.raises(ValueError):
+        percept.play(fmt='gif')
 
 
 @ pytest.mark.parametrize('dtype', (np.float32, np.uint8))
