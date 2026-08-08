@@ -242,6 +242,13 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             Exponential decay constant along the axon(microns).
         rho: double, optional
             Exponential decay constant away from the axon(microns).
+        min_current_spread: float, optional
+            An electrode is skipped at axon segments where its current spread
+            has decayed below this fraction of its peak. The decay is scaled
+            per electrode by that electrode's ``F_size``. The default (1e-8)
+            is small enough that the skipped term could not have changed the
+            float32 result, so it buys speed rather than costing accuracy.
+            Set to 0 to sum over every electrode.
         eye: {'RE', LE'}, optional
             Eye for which to generate the axon map.
         xrange : (x_min, x_max), optional
@@ -440,6 +447,19 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         streak_effects = np.array(self.streak_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]),
                                   dtype=np.float32).reshape((-1))
         amps = np.array(elec_params[:, 1], dtype=np.float32).reshape((-1))
+        # The kernel rescales each segment's sensitivity by
+        # ``1 / F_streak`` and each phosphene's size by ``F_size``, both in an
+        # exponent, so neither may be zero or negative. The default models
+        # cannot produce that -- ``DefaultStreakModel`` clamps to
+        # ``min_lambda ** 2 / axlambda ** 2`` -- but a custom one could, and
+        # it would otherwise surface as a silent NaN in the percept:
+        for name, effects in (('size_model', size_effects),
+                              ('streak_model', streak_effects)):
+            if np.any(effects <= 0):
+                raise ValueError(f"{type(self).__name__}.{name} returned a "
+                                 f"non-positive scaling factor "
+                                 f"({effects.min()}). Scaling factors must be "
+                                 f"greater than zero.")
         return fast_biphasic_axon_map(
             amps,
             bright_effects,
@@ -450,6 +470,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             self.axon_idx_start.astype(np.uint32),
             self.axon_idx_end.astype(np.uint32),
             self.rho, self.thresh_percept,
+            self._cutoff_r2(self.rho),
             self.n_threads)
 
     def predict_percept(self, implant, t_percept=None):
@@ -579,6 +600,13 @@ class BiphasicAxonMapModel(Model):
             Exponential decay constant along the axon(microns).
         rho: double, optional
             Exponential decay constant away from the axon(microns).
+        min_current_spread: float, optional
+            An electrode is skipped at axon segments where its current spread
+            has decayed below this fraction of its peak. The decay is scaled
+            per electrode by that electrode's ``F_size``. The default (1e-8)
+            is small enough that the skipped term could not have changed the
+            float32 result, so it buys speed rather than costing accuracy.
+            Set to 0 to sum over every electrode.
         eye: {'RE', LE'}, optional
             Eye for which to generate the axon map.
         xrange : (x_min, x_max), optional
