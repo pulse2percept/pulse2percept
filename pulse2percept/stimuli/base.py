@@ -1156,6 +1156,20 @@ class Stimulus(PrettyPrint):
     @_stim.setter
     def _stim(self, stim):
         self._check_stim(stim)
+        # Every Cython kernel in the library takes the data as
+        # ``float32[:, ::1]``, so the container has to hold it C-contiguous.
+        # Not everything that builds a stimulus produces that: selecting
+        # columns, as ``compress`` does, hands back an F-ordered array for a
+        # multi-electrode stimulus. Left alone it would surface much later, as
+        # a "ndarray is not C-contiguous" from whichever kernel happened to
+        # receive it -- including ``fast_compress_space`` on a second
+        # ``compress``. Fixing it here rather than at each call site keeps the
+        # invariant in one place.
+        data = np.ascontiguousarray(stim['data'])
+        if data is not stim['data']:
+            # `copy` hands out objects that share this dict, so replace it
+            # rather than writing through:
+            stim = {**stim, 'data': data}
         # All checks passed, store the data:
         self.__stim = stim
 
