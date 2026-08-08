@@ -24,7 +24,14 @@ def test_VideoStimulus(tmp_path):
     npt.assert_equal(stim.metadata['source'], fname)
     npt.assert_equal(stim.metadata['source_size'], (shape[2], shape[1]))
     npt.assert_almost_equal(stim.time, np.arange(shape[0]) * 1000.0 / fps)
-    npt.assert_equal(stim.electrodes, np.arange(np.prod(shape[1:])))
+    # One electrode per pixel, named after its place in the frame (a letter
+    # for the row, a number for the column). Frames are the time component,
+    # so they do not enter the name:
+    npt.assert_equal(len(stim.electrodes), np.prod(shape[1:]))
+    npt.assert_equal(stim.electrodes[0], 'A1')
+    npt.assert_equal(stim.electrodes[-1], 'AF48')
+    npt.assert_equal(stim.electrodes.index('C12'),
+                     np.ravel_multi_index((2, 11), shape[1:]))
 
     # Resize the video:
     ndarray = np.ones(shape)
@@ -37,7 +44,9 @@ def test_VideoStimulus(tmp_path):
     npt.assert_equal(stim.metadata['source'], fname)
     npt.assert_equal(stim.metadata['source_size'], (shape[2], shape[1]))
     npt.assert_almost_equal(stim.time, np.arange(shape[0]) * 1000 / fps)
-    npt.assert_equal(stim.electrodes, np.arange(np.prod(resize)))
+    npt.assert_equal(len(stim.electrodes), np.prod(resize))
+    npt.assert_equal(stim.electrodes[0], 'A1')
+    npt.assert_equal(stim.electrodes[-1], 'P32')
 
 
 def test_VideoStimulus_invert(tmp_path):
@@ -280,7 +289,8 @@ def test_VideoStimulus_filter(tmp_path):
         filt_stim = stim.filter(filt)
         npt.assert_equal(filt_stim.shape, stim.shape)
         npt.assert_equal(filt_stim.vid_shape, stim.vid_shape)
-        npt.assert_equal(filt_stim.electrodes, stim.electrodes)
+        npt.assert_equal(np.asarray(filt_stim.electrodes),
+                         np.asarray(stim.electrodes))
         npt.assert_equal(filt_stim.time, stim.time)
 
     # Invalid filter name:

@@ -36,7 +36,15 @@ def test_ImageStimulus():
     npt.assert_equal(stim.metadata['source'], fname)
     npt.assert_equal(stim.metadata['source_shape'], shape)
     npt.assert_equal(stim.time, None)
-    npt.assert_equal(stim.electrodes, np.arange(np.prod(shape)))
+    # Every pixel is named after its place in the image: a letter for the row,
+    # a number for the column, and a suffix for the color channel:
+    npt.assert_equal(len(stim.electrodes), np.prod(shape))
+    npt.assert_equal(stim.electrodes[0], 'A1_R')
+    npt.assert_equal(stim.electrodes[3], 'A1_A')
+    npt.assert_equal(stim.electrodes[-1], 'Y37_A')
+    # ... and the name maps back onto that same pixel:
+    npt.assert_equal(stim.electrodes.index('C12_G'),
+                     np.ravel_multi_index((2, 11, 1), shape))
     os.remove(fname)
 
 
@@ -297,7 +305,8 @@ def test_ImageStimulus_filter():
         filt_stim = stim.filter(filt)
         npt.assert_equal(filt_stim.shape, stim.shape)
         npt.assert_equal(filt_stim.img_shape, stim.img_shape)
-        npt.assert_equal(filt_stim.electrodes, stim.electrodes)
+        npt.assert_equal(np.asarray(filt_stim.electrodes),
+                         np.asarray(stim.electrodes))
         npt.assert_equal(filt_stim.time, None)
 
     # Invalid filter name:
