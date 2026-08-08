@@ -557,8 +557,8 @@ class ElectrodeGrid(ElectrodeArray):
             if name_cols.isalpha() and not name_rows.isalpha():
                 names = [clms[j] + rws[i] for i in range(len(rws))
                          for j in range(len(clms))]
-            elif (name_rows.isalpha() and name_cols.isdigit()
-                    and not reverse_rows and not reverse_cols):
+            elif (name_rows.isalpha() and name_cols.isdigit() and
+                    not reverse_rows and not reverse_cols):
                 # The canonical convention: a letter for the row, a number for
                 # the column. This is the same scheme that names the pixels of
                 # an ImageStimulus, so both come from the one implementation -
