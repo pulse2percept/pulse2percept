@@ -1,12 +1,12 @@
 <!-- Choose one of the following prefixes for the title of your PR:
 
-     [ENH] for enhancements
+     [ENH] for enhancements or new functionality
      [FIX] for bug fixes
-     [TST] for new or updated tests
+     [OPT] for performance optimizations
+     [API] for backward-incompatible changes to the public API
+     [TST] for new or updated tests or benchmarks
      [DOC] for new or updated documentation
-     [STY] for stylistic changes
-     [REF] for refactoring existing code
-     [MNT] for packaging/maintenance updates 
+     [MNT] for maintenance, refactoring, packaging, CI, or build changes
 
      If your PR is not yet ready to be merged, click on the dropdown arrow next to the
      "Create pull request" button and choose "Create draft pull request" instead.
@@ -16,25 +16,17 @@
 
 ## Description
 
-Please include a summary of the change and which issue it closes below. Include relevant motivation and context.
+Briefly describe the change, including any relevant motivation or context.
 
 Closes #(issue)
 
-## Type of Change
+## Testing
 
-Please delete options that are not relevant.
+Describe how the change was tested. Include any relevant commands, test cases,
+or manual checks.
 
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation change
+If an automated check is failing and you believe the failure is unrelated to
+this pull request, explain why.
 
-## Checklist
-
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
-
-For detailed information on these and other aspects, see the contribution guidelines: https://pulse2percept.readthedocs.io/en/latest/developers/contributing.html
+For more information, see the
+[contribution guidelines](https://pulse2percept.readthedocs.io/en/latest/developers/contributing.html).
