@@ -391,3 +391,19 @@ def test_GirlPool():
     npt.assert_equal(video.vid_shape, (32, 32, 3, 91))
     npt.assert_almost_equal(video.data.min(), 0.0001, decimal=2)
     npt.assert_almost_equal(video.data.max(), 0.9988, decimal=2)
+
+
+def test_VideoStimulus_data_is_contiguous(tmp_path):
+    """Video data must reach the Stimulus constructor C-contiguous.
+
+    Frames are decoded frame-first and then transposed so that time is the
+    last axis. Taking that transpose lazily leaves the array non-contiguous
+    all the way through the conversion to float, and the constructor then has
+    to copy it at four times the size.
+    """
+    fname = str(tmp_path / 'test.mp4')
+    ndarray = np.random.rand(12, 32, 48)
+    mimwrite(fname, (255 * ndarray).astype(np.uint8), fps=5)
+    for kwargs in ({}, {'as_gray': True}, {'resize': (16, 24)}):
+        stim = VideoStimulus(fname, **kwargs)
+        npt.assert_equal(stim.data.flags['C_CONTIGUOUS'], True)

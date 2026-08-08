@@ -59,7 +59,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
     """
     cdef:
         float32 ca, r1, r2, r3_a, r3, r4a, r4b, r4c
-        float32 t_sim, amp
+        float32 t_sim, amp, zero_pow
         float32[:, ::1] percept
         index_t idx_space, idx_sim, idx_stim, idx_frame
         index_t n_space, n_stim, n_percept, n_sim
@@ -74,6 +74,13 @@ cpdef temporal_fast(const float32[:, ::1] stim,
     n_space = stim.shape[0]
 
     percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
+    # What the power nonlinearity returns once the half-wave rectifier below
+    # has zeroed its argument. That is the overwhelming majority of steps --
+    # more than 99% for a typical pulse train -- and the answer does not
+    # depend on the step or the location, so it is worked out once here.
+    # Note this is not simply zero: `pow(0, beta)` is 1 at `beta == 0` and
+    # infinite for negative `beta`, and both are reproduced by reusing it.
+    zero_pow = c_pow(<float32>0.0, beta)
 
     for idx_space in prange(n_space, schedule='static', nogil=True, num_threads=n_threads):
         # Because the stationary nonlinearity depends on `max_R3`, which is the
@@ -110,8 +117,14 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             r2 = r2 + dt * (ca - r2) / tau2
             # Half-rectification and power nonlinearity:
             # r3 = c_pow(c_fmax(r1 - eps * r2, 0), beta) # SLOW
+            # `powf` is the most expensive call in this loop, and the
+            # rectifier below zeroes its argument on almost every step. Where
+            # it does, the answer is the `zero_pow` computed before the loop:
             r3_a = r1 - eps * r2
-            r3 = c_pow((r3_a if r3_a > 0.0 else 0.0), beta)
+            if r3_a > 0.0:
+                r3 = c_pow(r3_a, beta)
+            else:
+                r3 = zero_pow
             # Slow response (3-stage leaky integrator):
             r4a = r4a + dt * (r3 - r4a) / tau3
             r4b = r4b + dt * (r4a - r4b) / tau3

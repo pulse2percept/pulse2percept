@@ -96,11 +96,15 @@ class VideoStimulus(Stimulus):
             # Filename provided, read the video:
             reader = video_reader(source, format=format)
             vid = np.array([frame for frame in reader])
-            # Move frame index to the last dimension:
+            # Move frame index to the last dimension. Take the copy here,
+            # while the frames are still 8-bit: a transposed view stays
+            # non-contiguous through the conversion to float below, and the
+            # Stimulus constructor would then have to make the same copy at
+            # four times the size.
             if vid.ndim == 4:
-                vid = vid.transpose((1, 2, 3, 0))
+                vid = np.ascontiguousarray(vid.transpose((1, 2, 3, 0)))
             elif vid.ndim == 3:
-                vid = vid.transpose((1, 2, 0))
+                vid = np.ascontiguousarray(vid.transpose((1, 2, 0)))
             # Combine video metadata with user-specified metadata:
             meta = reader.get_meta_data()
             if meta is not None:

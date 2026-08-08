@@ -141,12 +141,12 @@ class ProsthesisSystem(PrettyPrint):
             # Define image coordinate space
             if isinstance(stim, ImageStimulus):
                 img_h, img_w = img.img_shape
-                n_frames = 1
                 data = img.data.reshape(img_h, img_w)  # Ensure 2D format
             elif isinstance(stim, VideoStimulus):
                 img_h, img_w, n_frames = img.vid_shape
                 data = img.data.reshape(img_h, img_w, n_frames)  # 3D format
-            
+
+
             x_min, x_max = np.min(x), np.max(x)
             y_min, y_max = np.min(y), np.max(y)
 
@@ -154,22 +154,16 @@ class ProsthesisSystem(PrettyPrint):
             img_x = np.linspace(x_min, x_max, img_w)
             img_y = np.linspace(y_min, y_max, img_h)
 
-            # If single-frame image, interpolate directly
-            if n_frames == 1:
-                interpolator = RegularGridInterpolator(
-                    (img_y, img_x), data, method='linear', 
-                    bounds_error=False, fill_value=0
-                )
-                pixel_values = interpolator(np.vstack((y, x)).T)
-            else:
-                # Handle multiple frames by interpolating each frame separately
-                pixel_values = np.zeros((len(x), n_frames))
-                for f in range(n_frames):
-                    interpolator = RegularGridInterpolator(
-                        (img_y, img_x), data[..., f], method='linear', 
-                        bounds_error=False, fill_value=0
-                    )
-                    pixel_values[:, f] = interpolator(np.vstack((y, x)).T)
+            # One interpolator covers every frame: the grid is the leading two
+            # axes of `data`, and anything past them -- the frame axis of a
+            # video -- is carried along, so a video comes back as
+            # (n_electrodes, n_frames) from a single call. Building one per
+            # frame instead meant re-deriving the same grid for each of them.
+            interpolator = RegularGridInterpolator(
+                (img_y, img_x), data, method='linear',
+                bounds_error=False, fill_value=0
+            )
+            pixel_values = interpolator(np.vstack((y, x)).T)
 
             return Stimulus(pixel_values, electrodes=self.electrode_names,
                             time=stim.time, metadata=stim.metadata)

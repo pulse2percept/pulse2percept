@@ -907,3 +907,29 @@ def test_Stimulus_rename_electrodes_metadata():
                      ['P1', 'P2'])
     npt.assert_equal(Stimulus(plain, electrodes=['P1', 'P2'])
                      .metadata['electrodes'], {})
+
+
+def test_Stimulus_data_is_contiguous():
+    """The data container must stay C-contiguous.
+
+    Every Cython kernel in the library declares its stimulus argument as
+    ``float32[:, ::1]``. Selecting columns, as ``compress`` does, hands back
+    an F-ordered array for a multi-electrode stimulus, which used to surface
+    much later as a "ndarray is not C-contiguous" from whichever kernel
+    received it.
+    """
+    rng = np.random.default_rng(0)
+    data = (rng.random((3, 5)) - 0.5).astype(np.float32)
+    stim = Stimulus(data, time=np.arange(5, dtype=float) * 2)
+    npt.assert_equal(stim.data.flags['C_CONTIGUOUS'], True)
+
+    stim.compress()
+    npt.assert_equal(stim.data.flags['C_CONTIGUOUS'], True)
+    # ...so compressing an already-compressed stimulus works:
+    stim.compress()
+    npt.assert_equal(stim.data.flags['C_CONTIGUOUS'], True)
+
+    # An F-ordered source is accepted and stored C-contiguous:
+    stim = Stimulus(np.asfortranarray(data), time=np.arange(5, dtype=float))
+    npt.assert_equal(stim.data.flags['C_CONTIGUOUS'], True)
+    npt.assert_almost_equal(stim.data, data)

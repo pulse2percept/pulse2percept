@@ -22,6 +22,62 @@ from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
 import warnings
 
 
+#: Layout of the payload in ``axon_pickle``. Bump this whenever the tuple
+#: written by ``AxonMapSpatial._build`` changes shape or meaning, so that a
+#: cache left over from an older version is regrown instead of misread.
+_AXON_CACHE_VERSION = 2
+
+
+def _is_axon_cache(payload):
+    """Whether an ``axon_pickle`` payload is one this version can read"""
+    return (isinstance(payload, tuple) and len(payload) == 4 and
+            payload[0] == _AXON_CACHE_VERSION)
+
+
+def _flatten_bundles(bundles):
+    """Concatenate a list of bundles, collapsing repeated references
+
+    ``find_closest_axon`` returns one entry per grid point, but those entries
+    are references into a much smaller set of distinct bundles -- a few
+    hundred for several thousand grid points -- and pickling preserves that
+    sharing. Collapsing them keeps the flattened array, and the arc lengths
+    :py:meth:`AxonMapSpatial._calc_axon_sensitivity_flat` accumulates over
+    it, proportional to the number of *distinct* bundles rather than to the
+    number of grid points.
+
+    Bundles that are equal but are separate objects are treated as distinct.
+    That costs a little speed and changes nothing about the result.
+
+    Parameters
+    ----------
+    bundles : list of Nx2 arrays
+        One bundle per point on the grid.
+
+    Returns
+    -------
+    flat : (M, 2) array
+        The distinct bundles, concatenated, in their original dtype.
+    boff : (n_distinct + 1,) array
+        Offsets of each distinct bundle into ``flat``.
+    bundle_id : (len(bundles),) array
+        Which distinct bundle each entry of ``bundles`` refers to.
+    """
+    seen = {}
+    distinct = []
+    bundle_id = np.empty(len(bundles), dtype=np.intp)
+    for pos, bundle in enumerate(bundles):
+        idx = seen.get(id(bundle))
+        if idx is None:
+            idx = seen[id(bundle)] = len(distinct)
+            distinct.append(bundle)
+        bundle_id[pos] = idx
+    lens = np.array([len(bundle) for bundle in distinct], dtype=np.intp)
+    if np.any(lens == 0):
+        raise ValueError("Every bundle must have at least one segment.")
+    flat = np.ascontiguousarray(np.concatenate(distinct))
+    return flat, np.concatenate(([0], np.cumsum(lens))), bundle_id
+
+
 class ScoreboardSpatial(SpatialModel):
     """Scoreboard model of [Beyeler2019]_ (spatial module only)
 
@@ -39,6 +95,12 @@ class ScoreboardSpatial(SpatialModel):
     ----------
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
+    min_current_spread : float, optional
+        An electrode is skipped at grid points where its Gaussian current
+        spread has decayed below this fraction of its peak. The default
+        (1e-8, about 6.1 ``rho`` away) is small enough that the skipped term
+        could not have changed the float32 result, so it buys speed rather
+        than costing accuracy. Set to 0 to sum over every electrode.
     xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). In a right eye, negative x values correspond to the
@@ -104,6 +166,7 @@ class ScoreboardSpatial(SpatialModel):
                                self.grid.ret.y.ravel(),
                                self.rho,
                                self.thresh_percept,
+                               self._cutoff_r2(self.rho),
                                0, 0, # don't set current boundaries
                                self.n_threads)
 
@@ -124,6 +187,12 @@ class ScoreboardModel(Model):
     ----------
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
+    min_current_spread : float, optional
+        An electrode is skipped at grid points where its Gaussian current
+        spread has decayed below this fraction of its peak. The default
+        (1e-8, about 6.1 ``rho`` away) is small enough that the skipped term
+        could not have changed the float32 result, so it buys speed rather
+        than costing accuracy. Set to 0 to sum over every electrode.
     xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). In a right eye, negative x values correspond to the
@@ -191,6 +260,12 @@ class AxonMapSpatial(SpatialModel):
         Exponential decay constant along the axon(microns).
     rho : double, optional
         Exponential decay constant away from the axon(microns).
+    min_current_spread : float, optional
+        An electrode is skipped at axon segments where its Gaussian current
+        spread has decayed below this fraction of its peak. The default
+        (1e-8, about 6.1 ``rho`` away) is small enough that the skipped term
+        could not have changed the float32 result, so it buys speed rather
+        than costing accuracy. Set to 0 to sum over every electrode.
     eye : {'RE', LE'}, optional
         Eye for which to generate the axon map.
     xrange : (x_min, x_max), optional
@@ -442,7 +517,7 @@ class AxonMapSpatial(SpatialModel):
         return bundles
 
     def find_closest_axon(self, bundles, xret=None, yret=None,
-                          return_index=False):
+                          return_index=False, return_segment=False):
         """Finds the closest axon segment for a point on the retina
 
         This function will search a number of nerve fiber bundles (``bundles``)
@@ -453,7 +528,7 @@ class AxonMapSpatial(SpatialModel):
         ----------
         bundles : list of Nx2 arrays
             A list of bundles, where every bundle is an Nx2 array consisting of
-            the x,y coordinates of each axon segment (retinal coords, microns). 
+            the x,y coordinates of each axon segment (retinal coords, microns).
             Note that each bundle will most likely have a different N
         xret, yret : scalar or list of scalars
             The x,y location on the retina (in microns, where the fovea is the
@@ -461,6 +536,11 @@ class AxonMapSpatial(SpatialModel):
         return_index : bool, optional
             If True, the function will also return the index into ``bundles``
             that represents the closest axon
+        return_segment : bool, optional
+            If True, the function will also return the row index, within the
+            closest bundle, of the segment nearest the point. The search
+            already determines this, so asking for it here saves
+            :py:meth:`calc_axon_sensitivity` from working it out again.
 
         Returns
         -------
@@ -471,6 +551,9 @@ class AxonMapSpatial(SpatialModel):
         idx_axon : scalar or list of scalars, optional
             If ``return_index`` is True, also returns the index in ``bundles``
             of the closest axon (or list of closest axons).
+        idx_segment : scalar or list of scalars, optional
+            If ``return_segment`` is True, also returns the row index of the
+            closest segment within that axon.
 
         """
         if len(bundles) <= 0:
@@ -481,26 +564,33 @@ class AxonMapSpatial(SpatialModel):
             yret = self.grid.ret.y
         xret = np.asarray(xret, dtype=np.float32)
         yret = np.asarray(yret, dtype=np.float32)
-        # For every axon segment, store the corresponding axon ID:
-        axon_idx = [[idx] * len(ax) for idx, ax in enumerate(bundles)]
-        axon_idx = [item for sublist in axon_idx for item in sublist]
-        axon_idx = np.array(axon_idx, dtype=np.uint32)
-        # Build a long list of all axon segments - their corresponding axon IDs
-        # is given by `axon_idx` above:
+        # Offsets of each bundle into the concatenation of all of them, which
+        # is what the tree is built over. `searchsorted` on these turns a
+        # segment's index in that flat array back into the bundle it came
+        # from, so there is no need to materialize a bundle ID per segment:
+        boff = np.concatenate(([0], np.cumsum([len(ax) for ax in bundles])))
         flat_bundles = np.concatenate(bundles)
         kdtree = cKDTree(flat_bundles, leafsize=60)
         # Create query list of xy pairs
         query = np.stack((xret.ravel(), yret.ravel()), axis=1)
         # Find index of closest segment
-        _, closest_seg = kdtree.query(query)
+        _, closest_seg = kdtree.query(query, workers=-1)
 
         # Look up the axon ID for every axon segment:
-        closest_idx = axon_idx[closest_seg]
+        closest_idx = (np.searchsorted(boff, closest_seg, side='right') -
+                       1).astype(np.uint32)
+        # ...and where within that bundle the closest segment sits:
+        idx_segment = closest_seg - boff[closest_idx]
         if len(closest_idx) == 1:
             closest_idx = closest_idx[0]
+            idx_segment = idx_segment[0]
             closest_axon = bundles[closest_idx]
         else:
             closest_axon = [bundles[n] for n in closest_idx]
+        if return_index and return_segment:
+            return closest_axon, closest_idx, idx_segment
+        if return_segment:
+            return closest_axon, idx_segment
         if return_index:
             return closest_axon, closest_idx
         return closest_axon
@@ -557,31 +647,115 @@ class AxonMapSpatial(SpatialModel):
             falls below ``min_ax_sensitivity`` are trimmed.
 
         """
+        contrib, starts = self._calc_axon_sensitivity_flat(*_flatten_bundles(
+            bundles))
+        return [contrib[lo:hi] for lo, hi in zip(starts[:-1], starts[1:])]
+
+    def _calc_axon_sensitivity_flat(self, flat, boff, bundle_id, seg=None):
+        """Vectorized core of :py:meth:`calc_axon_sensitivity`
+
+        Computes every axon at once rather than one grid point at a time. Two
+        facts make that possible. An axon is a *contiguous* run of its
+        bundle's segments, running back from the one nearest the soma: the
+        distance walked from the soma only grows as you move away from it, so
+        the segments that survive the ``min_ax_sensitivity`` trim are a
+        prefix of that walk. And the arc length along a bundle is a property
+        of the bundle, not of the grid point, so it can be accumulated once
+        per bundle and reused by every grid point that picked it.
+
+        Parameters
+        ----------
+        flat : (M, 2) array
+            All distinct bundles, concatenated.
+        boff : (n_bundles + 1,) array
+            Offsets of each distinct bundle into ``flat``.
+        bundle_id : (n_points,) array
+            Index of the bundle belonging to each point on ``self.grid``.
+        seg : (n_points,) array, optional
+            Index into ``flat`` of the segment nearest each grid point. The
+            nearest-neighbor search in :py:meth:`find_closest_axon` already
+            knows this, so ``_build`` passes it through rather than pay for
+            the search below a second time. Derived here when not given,
+            which is the case for the public entry point.
+
+        Returns
+        -------
+        contrib : (N, 3) array
+            Every axon's segments, concatenated: x, y, sensitivity.
+        starts : (n_points + 1,) array
+            Offsets of each axon into ``contrib``.
+        """
+        lam = self.axlambda
         xyret = np.column_stack((self.grid.ret.x.ravel(),
                                  self.grid.ret.y.ravel()))
-        # Only include axon segments that are < `max_d2` from the soma. These
-        # axon segments will have `sensitivity` > `self.min_ax_sensitivity`:
-        max_d2 = -2.0 * self.axlambda ** 2 * np.log(self.min_ax_sensitivity)
-        axon_contrib = []
-        for xy, bundle in zip(xyret, bundles):
-            idx = np.argmin((bundle[:, 0] - xy[0]) ** 2 +
-                            (bundle[:, 1] - xy[1]) ** 2)
-            # Cut off the part of the fiber that goes beyond the soma:
-            axon = np.flipud(bundle[0: idx + 1, :])
-            # Add the exact location of the soma:
-            axon = np.concatenate((xy.reshape((1, -1)), axon), axis=0)
-            # For every axon segment, calculate distance from soma by
-            # summing up the individual distances between neighboring axon
-            # segments (by "walking along the axon"):
-            d2 = np.cumsum(np.sqrt(np.diff(axon[:, 0], axis=0) ** 2 +
-                                   np.diff(axon[:, 1], axis=0) ** 2)) ** 2
-            idx_d2 = d2 < max_d2
-            sensitivity = np.exp(-d2[idx_d2] / (2.0 * self.axlambda ** 2))
-            idx_d2 = np.concatenate(([False], idx_d2))
-            contrib = np.column_stack((axon[idx_d2, :], sensitivity))
-            axon_contrib.append(contrib)
+        blens = np.diff(boff)
+        # Bundles arrive as float32. Accumulating arc length over hundreds of
+        # segments in float32 loses more than the coordinates are worth, so
+        # the geometry below runs in float64 and only the result is handed
+        # back at the caller's precision:
+        out_dtype = np.promote_types(flat.dtype, np.float32)
+        flat = flat.astype(np.float64, copy=False)
+        xyret = xyret.astype(np.float64, copy=False)
 
-        return axon_contrib
+        # Arc length from the start of a bundle to each of its segments. Laid
+        # out like `flat`, and reset to zero wherever a new bundle begins:
+        step = np.hypot(*(flat[1:] - flat[:-1]).T)
+        step[boff[1:-1] - 1] = 0.0  # never walk across a seam between bundles
+        arc = np.empty(len(flat))
+        arc[0] = 0.0
+        np.cumsum(step, out=arc[1:])
+        arc -= np.repeat(arc[boff[:-1]], blens)
+
+        base = boff[bundle_id]
+        if seg is None:
+            # Distance from every grid point to every segment of *its*
+            # bundle, as one flat array of (point, segment) pairs:
+            lens = blens[bundle_id]
+            pair_off = np.concatenate(([0], np.cumsum(lens)))
+            within = np.arange(pair_off[-1]) - np.repeat(pair_off[:-1], lens)
+            pairs = np.repeat(base, lens) + within
+            d2 = ((flat[pairs, 0] - np.repeat(xyret[:, 0], lens)) ** 2 +
+                  (flat[pairs, 1] - np.repeat(xyret[:, 1], lens)) ** 2)
+            # The segment closest to the soma, resolving ties towards the
+            # lower index the way ``np.argmin`` does:
+            closest = np.repeat(np.minimum.reduceat(d2, pair_off[:-1]), lens)
+            cand = np.where(d2 <= closest, within, np.iinfo(np.intp).max)
+            seg = base + np.minimum.reduceat(cand, pair_off[:-1])
+        else:
+            seg = np.asarray(seg, dtype=np.intp)
+
+        # Walking out from the soma, segment `k` of the bundle sits at
+        # `d0 + (arc[seg] - arc[k])`. Only include segments closer than
+        # `max_d2`; those are the ones whose sensitivity stays above
+        # `min_ax_sensitivity`:
+        d0 = np.hypot(flat[seg, 0] - xyret[:, 0], flat[seg, 1] - xyret[:, 1])
+        max_d2 = -2.0 * lam ** 2 * np.log(self.min_ax_sensitivity)
+        if max_d2 <= 0:
+            # Not even the soma itself clears the bar, so every axon is empty:
+            n_keep = np.zeros(len(bundle_id), dtype=np.intp)
+        else:
+            # That distance falls as `k` rises, so the segments to keep are a
+            # contiguous run ending at `seg`, and its lower end is one
+            # searchsorted away. `arc` only increases *within* a bundle, so
+            # offset each bundle past the last to make the array monotone
+            # overall and the whole lookup a single vectorized call:
+            span = arc[boff[1:] - 1].max() + 1.0
+            offset = bundle_id * span
+            lo = np.searchsorted(arc + np.repeat(np.arange(len(blens)) * span,
+                                                 blens),
+                                 arc[seg] + d0 - np.sqrt(max_d2) + offset,
+                                 side='right')
+            n_keep = np.maximum(seg - np.maximum(lo, base) + 1, 0)
+
+        starts = np.concatenate(([0], np.cumsum(n_keep)))
+        # Segments run *back* from the one nearest the soma:
+        gather = (np.repeat(seg, n_keep) -
+                  (np.arange(starts[-1]) - np.repeat(starts[:-1], n_keep)))
+        dist = np.repeat(d0 + arc[seg], n_keep) - arc[gather]
+        contrib = np.empty((starts[-1], 3), dtype=out_dtype)
+        contrib[:, :2] = flat[gather]
+        contrib[:, 2] = np.exp(-dist ** 2 / (2.0 * lam ** 2))
+        return contrib, starts
 
     def calc_bundle_tangent(self, xc, yc):
         """Calculates orientation of fiber bundle tangent at (xc, yc)
@@ -698,35 +872,52 @@ class AxonMapSpatial(SpatialModel):
         self._correct_loc_od()
         # Check whether pickle file needs to be rebuilt:
         need_axons = False
+        cached = None
         if self.ignore_pickle:
             need_axons = True
         else:
             # Check if math for Jansonius model has been done before:
             if os.path.isfile(self.axon_pickle):
-                params, axons = pickle.load(open(self.axon_pickle, 'rb'))
+                params, cached = pickle.load(open(self.axon_pickle, 'rb'))
                 for key, value in params.items():
                     if (not hasattr(self, key) or
                             not np.allclose(getattr(self, key), value)):
                         need_axons = True
                         break
+                # A cache written by an older version stores something else
+                # here. Rather than try to read it, grow the bundles again and
+                # overwrite it; the file is derived data, so the only cost is
+                # one slow build:
+                if not _is_axon_cache(cached):
+                    need_axons = True
             else:
                 need_axons = True
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
         if need_axons:
             bundles = self.grow_axon_bundles()
-            axons = self.find_closest_axon(bundles)
-            if type(axons) != list:
-                axons = [axons]
-        # Calculate axon contributions. Axon contribution is a list of
-        # (differently shaped) NumPy arrays, and a list cannot be accessed in
-        # parallel without the gil. Instead we need to concatenate it into a
-        # really long Nx3 array, and pass the start and end indices of each
-        # slice:
-        axon_contrib = self.calc_axon_sensitivity(axons)
-        self.axon_contrib = np.concatenate(axon_contrib).astype(np.float32)
-        len_axons = [a.shape[0] for a in axon_contrib]
-        self.axon_idx_end = np.cumsum(len_axons)
-        self.axon_idx_start = self.axon_idx_end - np.array(len_axons)
+            _, bundle_id, idx_segment = self.find_closest_axon(
+                bundles, return_index=True, return_segment=True)
+            bundle_id = np.atleast_1d(bundle_id).astype(np.intp)
+            idx_segment = np.atleast_1d(idx_segment).astype(np.intp)
+            # Grid points cluster onto a fraction of the bundles that were
+            # grown. Dropping the rest keeps the cache small and the arc
+            # lengths below proportional to what is actually used:
+            used, bundle_id = np.unique(bundle_id, return_inverse=True)
+            bundles = [bundles[idx] for idx in used]
+            bundle_id = np.ravel(bundle_id).astype(np.intp)
+        else:
+            _, bundles, bundle_id, idx_segment = cached
+        # Calculate axon contributions. A list of (differently shaped) NumPy
+        # arrays cannot be accessed in parallel without the gil, so the axons
+        # come back already concatenated into a really long Nx3 array, along
+        # with the start and end indices of each slice:
+        flat, boff, _ = _flatten_bundles(bundles)
+        axon_contrib, starts = self._calc_axon_sensitivity_flat(
+            flat, boff, bundle_id, seg=boff[bundle_id] + idx_segment)
+        self.axon_contrib = np.ascontiguousarray(axon_contrib,
+                                                 dtype=np.float32)
+        self.axon_idx_start = starts[:-1]
+        self.axon_idx_end = starts[1:]
         if need_axons:
             # Pickle axons along with all important parameters:
             params = {'loc_od': self.loc_od,
@@ -734,7 +925,9 @@ class AxonMapSpatial(SpatialModel):
                       'xrange': self.xrange, 'yrange': self.yrange,
                       'xystep': self.xystep, 'n_ax_segments': self.n_ax_segments,
                       'ax_segments_range': self.ax_segments_range}
-            pickle.dump((params, axons), open(self.axon_pickle, 'wb'))
+            pickle.dump((params, (_AXON_CACHE_VERSION, bundles, bundle_id,
+                                  idx_segment)),
+                        open(self.axon_pickle, 'wb'))
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at specific times ``t``"""
@@ -754,6 +947,7 @@ class AxonMapSpatial(SpatialModel):
                              self.axon_idx_end.astype(np.uint32),
                              self.rho,
                              self.thresh_percept,
+                             self._cutoff_r2(self.rho),
                              self.n_threads)
 
     def plot(self, use_dva=False, style='hull', annotate=True, autoscale=True,
@@ -890,6 +1084,12 @@ class AxonMapModel(Model):
         Exponential decay constant along the axon(microns).
     rho : double, optional
         Exponential decay constant away from the axon(microns).
+    min_current_spread : float, optional
+        An electrode is skipped at axon segments where its Gaussian current
+        spread has decayed below this fraction of its peak. The default
+        (1e-8, about 6.1 ``rho`` away) is small enough that the skipped term
+        could not have changed the float32 result, so it buys speed rather
+        than costing accuracy. Set to 0 to sum over every electrode.
     eye : {'RE', LE'}, optional
         Eye for which to generate the axon map.
     xrange : (x_min, x_max), optional

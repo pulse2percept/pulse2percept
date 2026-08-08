@@ -516,13 +516,21 @@ class Stimulus(PrettyPrint):
                     self.metadata = source.metadata
 
         if _electrodes is None:
-            # The source did not name its electrodes, so number them 0..N-1.
-            # Those are unique by construction:
-            _electrodes = np.arange(_data.shape[0])
+            # The source did not name its electrodes, so they are 0..N-1 --
+            # unique by construction. Only build that array if something will
+            # read it: user-supplied `electrodes` replaces it immediately
+            # below, and the sole other reader is the metadata rename further
+            # down, which needs per-electrode metadata to do anything at all.
+            # An image or video stimulus has neither, so skipping this keeps a
+            # million-element arange off the path that builds one.
             _auto_electrodes = True
+            if electrodes is None or self.metadata.get('electrodes'):
+                _electrodes = np.arange(_data.shape[0])
 
         # User can overwrite the names of the electrodes:
         if electrodes is not None:
+            # May still be None, when the block above declined to build it.
+            # The rename below already guards against that.
             _renamed_from = _electrodes
             if isinstance(electrodes, ElectrodeNames):
                 # Names generated from a grid pattern. Flattening one is a
@@ -1148,6 +1156,20 @@ class Stimulus(PrettyPrint):
     @_stim.setter
     def _stim(self, stim):
         self._check_stim(stim)
+        # Every Cython kernel in the library takes the data as
+        # ``float32[:, ::1]``, so the container has to hold it C-contiguous.
+        # Not everything that builds a stimulus produces that: selecting
+        # columns, as ``compress`` does, hands back an F-ordered array for a
+        # multi-electrode stimulus. Left alone it would surface much later, as
+        # a "ndarray is not C-contiguous" from whichever kernel happened to
+        # receive it -- including ``fast_compress_space`` on a second
+        # ``compress``. Fixing it here rather than at each call site keeps the
+        # invariant in one place.
+        data = np.ascontiguousarray(stim['data'])
+        if data is not stim['data']:
+            # `copy` hands out objects that share this dict, so replace it
+            # rather than writing through:
+            stim = {**stim, 'data': data}
         # All checks passed, store the data:
         self.__stim = stim
 

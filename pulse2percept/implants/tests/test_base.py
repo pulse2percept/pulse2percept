@@ -260,3 +260,31 @@ def test_rectangle_implant(ztype, x, y, rot):
     for shape in [(6, 10), (5, 12), (15, 15)]:
         implant = RectangleImplant(shape=shape)
         npt.assert_equal(implant.earray.shape, shape)
+
+
+def test_ProsthesisSystem_reshape_stim_frames_independent():
+    """Downsampling a video must treat each frame on its own.
+
+    ``reshape_stim`` builds one interpolator for the whole video rather than
+    one per frame, so this checks that a frame lands on the electrodes the
+    same way whether it arrives alone or inside a sequence.
+    """
+    rng = np.random.default_rng(3)
+    n_frames = 5
+    vid = rng.random((24, 31, n_frames)).astype(np.float32)
+    implant = ProsthesisSystem(ElectrodeGrid((6, 8), 200))
+
+    implant.stim = VideoStimulus(vid, time=np.arange(n_frames))
+    joint = implant.stim.data
+    npt.assert_equal(joint.shape, (implant.n_electrodes, n_frames))
+
+    for f in range(n_frames):
+        implant.stim = ImageStimulus(vid[..., f])
+        npt.assert_allclose(implant.stim.data[:, 0], joint[:, f], rtol=1e-5,
+                            atol=1e-7)
+
+    # Pixels outside the electrode footprint are filled with zero, not
+    # extrapolated, so an all-zero frame stays all zero:
+    vid[..., 2] = 0
+    implant.stim = VideoStimulus(vid, time=np.arange(n_frames))
+    npt.assert_equal(np.all(implant.stim.data[:, 2] == 0), True)

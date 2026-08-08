@@ -237,6 +237,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'grid_type': 'rectangular',
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
+            # An electrode whose Gaussian current spread at a point has fallen
+            # below this is skipped for that point. The default is small
+            # enough that dropping the term cannot change a float32 result;
+            # see `_cutoff_r2`. Set to 0 to sum over every electrode.
+            'min_current_spread': 1e-8,
             # Visual field map (retinotopy) to be used:
             'vfmap': Curcio1990Map(),
             # Number of gray levels to use in the percept:
@@ -256,6 +261,40 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'n_jobs': None,
         }
         return params
+
+    def _cutoff_r2(self, rho):
+        """Squared distance at which an electrode stops contributing
+
+        Models with a Gaussian current spread ``exp(-r^2 / (2 rho^2))`` spend
+        most of their time on (point, electrode) pairs whose Gaussian has
+        already underflowed the result. This converts ``min_current_spread``
+        into the squared distance at which that happens, for the spatial
+        kernels to compare against.
+
+        The default ``min_current_spread`` of 1e-8 corresponds to a radius of
+        about 6.1 ``rho``. Since the summed brightness is a float32, whose
+        relative resolution is ~1e-7, a term that small cannot change the
+        result -- so the default is an optimization, not an approximation.
+        Raise it to trade accuracy for speed, or set it to 0 to sum over
+        every electrode no matter how distant.
+
+        Parameters
+        ----------
+        rho : float
+            The model's current-spread decay constant (microns).
+
+        Returns
+        -------
+        cutoff_r2 : np.float32
+            Squared distance (microns^2), or ``inf`` if no cutoff applies.
+        """
+        min_spread = self.min_current_spread
+        if min_spread is None or min_spread <= 0:
+            return np.float32(np.inf)
+        if min_spread >= 1:
+            raise ValueError(f"min_current_spread must be smaller than 1 (or "
+                             f"0 to disable the cutoff), not {min_spread}.")
+        return np.float32(-2.0 * rho ** 2 * np.log(min_spread))
 
     def build(self, **build_params):
         """Build the model

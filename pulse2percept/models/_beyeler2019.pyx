@@ -2,6 +2,7 @@ from libc.math cimport(powf as c_pow, expf as c_exp, tanhf as c_tanh,
                        sinf as c_sin, cosf as c_cos, fabsf as c_abs,
                        isnan as c_isnan)
 from cython.parallel import prange
+from cython.parallel cimport threadid
 from cython import cdivision  # for modulo operator
 import numpy as np
 cimport numpy as cnp
@@ -15,6 +16,30 @@ ctypedef Py_ssize_t index_t
 cdef float32 deg2rad = <float32>(3.14159265358979323846 / 180.0)
 
 
+cdef cnp.uint8_t[::1] _active_electrodes(const float32[:, ::1] stim):
+    """Flag the electrodes that carry a nonzero amplitude at any time point.
+
+    The spatial kernels loop over electrodes *outside* the loop over time, so
+    they cannot skip an electrode that happens to be zero at one time point
+    the way a time-innermost loop could. Electrodes that are zero for the
+    whole stimulus can still be skipped, and for a sparse stimulus that is
+    most of them -- hence this one-off pass.
+    """
+    cdef:
+        index_t idx_el, idx_time
+        index_t n_el = stim.shape[0]
+        index_t n_time = stim.shape[1]
+        cnp.uint8_t[::1] active = np.zeros(n_el, dtype=np.uint8)
+
+    with nogil:
+        for idx_el in range(n_el):
+            for idx_time in range(n_time):
+                if c_abs(stim[idx_el, idx_time]) > 0:
+                    active[idx_el] = 1
+                    break
+    return active
+
+
 @cdivision(True)
 cpdef fast_scoreboard(const float32[:, ::1] stim,
                       const float32[::1] xel,
@@ -23,10 +48,18 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
                       const float32[::1] ygrid,
                       float32 rho,
                       float32 thresh_percept,
+                      float32 cutoff_r2,
                       uint32 separate,
                       float32 offset,
                       uint32 n_threads):
     """Fast spatial response of the scoreboard model
+
+    The Gaussian current spread of an electrode at a grid point depends only
+    on the two of them, not on time, so it is computed once per
+    (grid point, electrode) pair and then applied to every time point. The
+    innermost loop is over time, which is the contiguous axis of both ``stim``
+    and the output, and whose iterations are independent -- so it vectorizes
+    without needing relaxed floating-point semantics.
 
     Parameters
     ----------
@@ -44,52 +77,58 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
         constant for the current spread
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
-    n_threads: uint32
-        Number of CPU threads to use during parallelization using OpenMP.
-    separate: uint32 : 
+    cutoff_r2 : float32
+        Squared distance (microns^2) beyond which an electrode is treated as
+        contributing nothing to a grid point. Pass ``inf`` to sum over every
+        electrode. See ``min_current_spread`` on the model for how this is
+        derived.
+    separate: uint32 :
         If nonzero, then points on different side of x=offset than the electrode
         will not contribute to the percept (used for cortical models)
     offset : float32
          Boundary for separation
+    n_threads: uint32
+        Number of CPU threads to use during parallelization using OpenMP.
     """
     cdef:
-        index_t idx_el, idx_time, idx_space, idx_bright
-        index_t n_el, n_time, n_space, n_bright
+        index_t idx_el, idx_time, idx_space
+        index_t n_el, n_time, n_space
         float32[:, ::1] bright
-        float32 px_bright, dist2, gauss, amp
+        float32 xdiff, ydiff, r2, gauss
+        cnp.uint8_t[::1] active
 
     n_el = stim.shape[0]
     n_time = stim.shape[1]
     n_space = len(xgrid)
-    n_bright = n_time * n_space
+    if n_threads < 1:  # `num_threads(0)` is not conforming OpenMP
+        n_threads = 1
 
-    # A flattened array containing n_time x n_space entries:
-    bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
+    bright = np.zeros((n_space, n_time), dtype=np.float32)  # Py overhead
+    active = _active_electrodes(stim)  # Py overhead
 
-    for idx_bright in prange(n_bright, schedule='static', nogil=True, num_threads=n_threads):
-        # For each entry in the output matrix:
-        idx_space = idx_bright % n_space
-        idx_time = idx_bright // n_space
-
+    # Parallel loop over all pixels to be rendered:
+    for idx_space in prange(n_space, schedule='guided', nogil=True,
+                            num_threads=n_threads):
         if c_isnan(xgrid[idx_space]) or c_isnan(ygrid[idx_space]):
-            bright[idx_space, idx_time] = <float32>0.0
             continue
-
-        px_bright = <float32>0.0
         for idx_el in range(n_el):
-            amp = stim[idx_el, idx_time]
-            if c_abs(amp) > 0:
-                if separate != 0:
-                    if ((xel[idx_el] < offset)  !=  
-                        (xgrid[idx_space] < offset)):
-                        continue
-                dist2 = (c_pow(xgrid[idx_space] - xel[idx_el], 2) +
-                         c_pow(ygrid[idx_space] - yel[idx_el], 2))
-                gauss = c_exp(-dist2 / (<float32>2.0 * rho * rho))
-                px_bright = px_bright + amp * gauss
-        if c_abs(px_bright) < thresh_percept:
-            px_bright = <float32>0.0
-        bright[idx_space, idx_time] = px_bright  # Py overhead
+            if active[idx_el] == 0:
+                continue
+            if separate != 0:
+                if ((xel[idx_el] < offset) != (xgrid[idx_space] < offset)):
+                    continue
+            xdiff = xgrid[idx_space] - xel[idx_el]
+            ydiff = ygrid[idx_space] - yel[idx_el]
+            r2 = xdiff * xdiff + ydiff * ydiff
+            if r2 > cutoff_r2:
+                continue
+            gauss = c_exp(-r2 / (<float32>2.0 * rho * rho))
+            for idx_time in range(n_time):
+                bright[idx_space, idx_time] = (bright[idx_space, idx_time] +
+                                               gauss * stim[idx_el, idx_time])
+        for idx_time in range(n_time):
+            if c_abs(bright[idx_space, idx_time]) < thresh_percept:
+                bright[idx_space, idx_time] = <float32>0.0
     return np.asarray(bright)  # Py overhead
 
 
@@ -103,10 +142,14 @@ cpdef fast_scoreboard_3d(const float32[:, ::1] stim,
                       const float32[::1] zgrid,
                       float32 rho,
                       float32 thresh_percept,
+                      float32 cutoff_r2,
                       uint32 separate,
                       float32 offset,
                       uint32 n_threads):
     """Fast spatial response of the scoreboard model
+
+    The three-dimensional counterpart of :func:`fast_scoreboard`; see there
+    for why the loop nest is ordered the way it is.
 
     Parameters
     ----------
@@ -124,53 +167,59 @@ cpdef fast_scoreboard_3d(const float32[:, ::1] stim,
         constant for the current spread
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
-    n_threads: uint32
-        Number of CPU threads to use during parallelization using OpenMP.
-    separate: uint32 : 
+    cutoff_r2 : float32
+        Squared distance (microns^2) beyond which an electrode is treated as
+        contributing nothing to a grid point. Pass ``inf`` to sum over every
+        electrode. See ``min_current_spread`` on the model for how this is
+        derived.
+    separate: uint32 :
         If nonzero, then points on different side of x=offset than the electrode
         will not contribute to the percept (used for cortical models)
     offset : float32
          Boundary for separation
+    n_threads: uint32
+        Number of CPU threads to use during parallelization using OpenMP.
     """
     cdef:
-        index_t idx_el, idx_time, idx_space, idx_bright
-        index_t n_el, n_time, n_space, n_bright
+        index_t idx_el, idx_time, idx_space
+        index_t n_el, n_time, n_space
         float32[:, ::1] bright
-        float32 px_bright, dist2, gauss, amp
+        float32 xdiff, ydiff, zdiff, r2, gauss
+        cnp.uint8_t[::1] active
 
     n_el = stim.shape[0]
     n_time = stim.shape[1]
     n_space = len(xgrid)
-    n_bright = n_time * n_space
+    if n_threads < 1:  # `num_threads(0)` is not conforming OpenMP
+        n_threads = 1
 
-    # A flattened array containing n_time x n_space entries:
-    bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
+    bright = np.zeros((n_space, n_time), dtype=np.float32)  # Py overhead
+    active = _active_electrodes(stim)  # Py overhead
 
-    for idx_bright in prange(n_bright, schedule='static', nogil=True, num_threads=n_threads):
-        # For each entry in the output matrix:
-        idx_space = idx_bright % n_space
-        idx_time = idx_bright // n_space
-
+    # Parallel loop over all pixels to be rendered:
+    for idx_space in prange(n_space, schedule='guided', nogil=True,
+                            num_threads=n_threads):
         if c_isnan(xgrid[idx_space]) or c_isnan(ygrid[idx_space]):
-            bright[idx_space, idx_time] = <float32>0.0
             continue
-
-        px_bright = <float32>0.0
         for idx_el in range(n_el):
-            amp = stim[idx_el, idx_time]
-            if c_abs(amp) > 0:
-                if separate != 0:
-                    if ((xel[idx_el] < offset)  !=  
-                        (xgrid[idx_space] < offset)):
-                        continue
-                dist2 = (c_pow(xgrid[idx_space] - xel[idx_el], 2) +
-                         c_pow(ygrid[idx_space] - yel[idx_el], 2) +
-                         c_pow(zgrid[idx_space] - zel[idx_el], 2))
-                gauss = c_exp(-dist2 / (<float32>2.0 * rho * rho))
-                px_bright = px_bright + amp * gauss
-        if c_abs(px_bright) < thresh_percept:
-            px_bright = <float32>0.0
-        bright[idx_space, idx_time] = px_bright  # Py overhead
+            if active[idx_el] == 0:
+                continue
+            if separate != 0:
+                if ((xel[idx_el] < offset) != (xgrid[idx_space] < offset)):
+                    continue
+            xdiff = xgrid[idx_space] - xel[idx_el]
+            ydiff = ygrid[idx_space] - yel[idx_el]
+            zdiff = zgrid[idx_space] - zel[idx_el]
+            r2 = xdiff * xdiff + ydiff * ydiff + zdiff * zdiff
+            if r2 > cutoff_r2:
+                continue
+            gauss = c_exp(-r2 / (<float32>2.0 * rho * rho))
+            for idx_time in range(n_time):
+                bright[idx_space, idx_time] = (bright[idx_space, idx_time] +
+                                               gauss * stim[idx_el, idx_time])
+        for idx_time in range(n_time):
+            if c_abs(bright[idx_space, idx_time]) < thresh_percept:
+                bright[idx_space, idx_time] = <float32>0.0
     return np.asarray(bright)  # Py overhead
 
 
@@ -207,15 +256,16 @@ cpdef fast_jansonius(float32[::1] rho, float32 phi0, float32 beta_s,
 
 cdef index_t argmin_segment(float32[:, :] flat_bundles, float32 x, float32 y):
     cdef:
-        float32 dist2, min_dist2
+        float32 dist2, min_dist2, xdiff, ydiff
         index_t seg, n_seg
         index_t min_seg
 
     min_dist2 = <float32>1e12
     n_seg = flat_bundles.shape[0]
     for seg in range(n_seg):
-        dist2 = (c_pow(flat_bundles[seg, 0] - x, 2) +
-                 c_pow(flat_bundles[seg, 1] - y, 2))
+        xdiff = flat_bundles[seg, 0] - x
+        ydiff = flat_bundles[seg, 1] - y
+        dist2 = xdiff * xdiff + ydiff * ydiff
         if dist2 < min_dist2:
             min_dist2 = dist2
             min_seg = seg
@@ -246,8 +296,22 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
                     const uint32[::1] idx_end,
                     float32 rho,
                     float32 thresh_percept,
+                    float32 cutoff_r2,
                     uint32 n_threads):
     """Fast spatial response of the axon map model
+
+    The Gaussian falloff from an electrode to an axon segment depends only on
+    the two of them, not on time. The loop nest is therefore ordered
+    pixel -> segment -> electrode -> time, so that the ``exp`` is evaluated
+    once per (segment, electrode) pair and reused across every time point.
+    A time-innermost ordering would evaluate it ``n_time`` times over.
+
+    The innermost loop over time accumulates into independent slots of a
+    scratch buffer, so it vectorizes without relaxed floating-point
+    semantics. Nothing of size ``n_segments x n_electrodes`` or
+    ``n_segments x n_time`` is ever materialized: each thread holds two
+    buffers of ``n_time`` floats, and ``stim`` is small enough to stay in
+    cache while every pixel streams past it.
 
     Parameters
     ----------
@@ -274,69 +338,109 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
         axon contribution (stored/passed in ``axon``).
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
+    cutoff_r2 : float32
+        Squared distance (microns^2) beyond which an electrode is treated as
+        contributing nothing to an axon segment. Pass ``inf`` to sum over
+        every electrode. See ``min_current_spread`` on the model for how this
+        is derived.
     n_threads: uint32
         Number of CPU threads to use during parallelization using OpenMP.
-    
+
     """
     cdef:
-        index_t idx_el, idx_time, idx_space, idx_ax, idx_bright
-        index_t n_el, n_time, n_space, n_ax, n_bright
+        index_t idx_el, idx_time, idx_space, idx_ax, tid, row
+        index_t n_el, n_time, n_space, stride
         float32[:, ::1] bright
-        float32 px_bright, xdiff, ydiff, r2, gauss, sgm_bright, amp
+        float32[:, ::1] scratch
+        float32 xdiff, ydiff, r2, gauss, sens, ax_x, ax_y, sgm
+        cnp.uint8_t[::1] active
 
     n_el = stim.shape[0]
     n_time = stim.shape[1]
     n_space = len(idx_start)
-    n_bright = n_time * n_space
+    # `num_threads(0)` is not conforming OpenMP, and the scratch buffer below
+    # is sized on the assumption that no thread id can reach `n_threads`:
+    if n_threads < 1:
+        n_threads = 1
 
     # A flattened array containing n_space x n_time entries:
     bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
+    active = _active_electrodes(stim)  # Py overhead
 
-    # Parallel loop over all pixels to be rendered:
-    for idx_space in prange(n_space, schedule='static', nogil=True, num_threads=n_threads):
-        # Each frame in `stim` is treated independently, so we can have an
-        # inner loop over all points in time:
+    # Per-thread scratch: row `tid` holds this thread's running per-time-point
+    # segment brightness (first `n_time` entries) and pixel brightness (next
+    # `n_time`). OpenMP may give the team fewer threads than requested but
+    # never more, so `n_threads` rows always suffice. Rows are padded to a
+    # 64-byte boundary so that two threads never share a cache line, which for
+    # a single-frame stimulus they otherwise would. This is the only extra
+    # memory the kernel needs, and allocating it through NumPy means a failure
+    # raises MemoryError here rather than inside a nogil block.
+    stride = ((2 * n_time + 15) // 16) * 16
+    scratch = np.empty((n_threads, stride), dtype=np.float32)
+
+    # Parallel loop over all pixels to be rendered. `guided` rather than
+    # `static`: axons differ several-fold in how many segments they have, and
+    # how many electrodes fall inside `cutoff_r2` varies with where the pixel
+    # sits relative to the array, so equal-sized chunks are not equal-sized
+    # work.
+    for idx_space in prange(n_space, schedule='guided', nogil=True,
+                            num_threads=n_threads):
+        tid = threadid()
+        # Brightness of this pixel over time, built up by taking the strongest
+        # activated axon segment at each time point:
         for idx_time in range(n_time):
-            # Find the brightness value of each pixel (`px_bright`) by finding
-            # the strongest activated axon segment:
-            px_bright = <float32>0.0
-            # Slice `axon_contrib` (but don't assign the slice to a variable).
-            # `idx_start` and `idx_end` serve as indexes into `axon_segments`.
-            # For example, the axon belonging to the neuron sitting at pixel
-            # `idx_space` has segments
-            # `axon_segments[idx_start[idx_space]:idx_end[idx_space]]`:
-            for idx_ax in range(idx_start[idx_space], idx_end[idx_space]):
-                # Calculate the activation of each axon segment by adding up
-                # the contribution of each electrode:
-                sgm_bright = <float32>0.0
-                for idx_el in range(n_el):
-                    amp = stim[idx_el, idx_time]
-                    if c_abs(amp) > 0:
-                        if (c_isnan(axon_segments[idx_ax, 0]) or
-                                c_isnan(axon_segments[idx_ax, 1])):
-                            continue
-                        # Calculate the distance between this axon segment and
-                        # the center of the stimulating electrode:
-                        xdiff = axon_segments[idx_ax, 0] - xel[idx_el]
-                        ydiff = axon_segments[idx_ax, 1] - yel[idx_el]
-                        r2 = xdiff * xdiff + ydiff * ydiff
-                        # Determine the activation level of this axon segment,
-                        # consisting of two things:
-                        # - activation as a function of distance to the
-                        #   stimulating electrode (depends on `rho`):
-                        gauss = c_exp(-r2 / (<float32>2.0 * rho * rho))
-                        # - activation as a function of distance to the cell
-                        #   body (depends on `axlambda`, precalculated during
-                        #   `build` and stored in `axon_segments[idx_ax, 2]`:
-                        sgm_bright = (sgm_bright +
-                                      gauss * axon_segments[idx_ax, 2] * amp)
-                # After summing up the currents from all the electrodes, we
-                # compare the brightness of the segment (`sgm_bright`) to the
-                # previously brightest segment. The brightest segment overall
-                # determines the brightness of the pixel (`px_bright`):
-                if c_abs(sgm_bright) > c_abs(px_bright):
-                    px_bright = sgm_bright
-            if c_abs(px_bright) < thresh_percept:
-                px_bright = <float32>0.0
-            bright[idx_space, idx_time] = px_bright  # Py overhead
+            scratch[tid, n_time + idx_time] = <float32>0.0
+        # `idx_start` and `idx_end` serve as indexes into `axon_segments`.
+        # For example, the axon belonging to the neuron sitting at pixel
+        # `idx_space` has segments
+        # `axon_segments[idx_start[idx_space]:idx_end[idx_space]]`:
+        for idx_ax in range(idx_start[idx_space], idx_end[idx_space]):
+            ax_x = axon_segments[idx_ax, 0]
+            ax_y = axon_segments[idx_ax, 1]
+            # A segment with no location cannot be activated. That is a
+            # property of the segment, so it is checked once here rather than
+            # once per electrode:
+            if c_isnan(ax_x) or c_isnan(ax_y):
+                continue
+            # Activation as a function of distance to the cell body (depends
+            # on `axlambda`, precalculated during `build`):
+            sens = axon_segments[idx_ax, 2]
+            # Activation of this segment over time, by adding up the
+            # contribution of each electrode:
+            for idx_time in range(n_time):
+                scratch[tid, idx_time] = <float32>0.0
+            for idx_el in range(n_el):
+                # An electrode that is zero for the whole stimulus
+                # contributes nothing at any time point:
+                if active[idx_el] == 0:
+                    continue
+                # Calculate the distance between this axon segment and the
+                # center of the stimulating electrode:
+                xdiff = ax_x - xel[idx_el]
+                ydiff = ax_y - yel[idx_el]
+                r2 = xdiff * xdiff + ydiff * ydiff
+                # Too far away for the Gaussian below to resolve:
+                if r2 > cutoff_r2:
+                    continue
+                # Activation as a function of distance to the stimulating
+                # electrode (depends on `rho`). Neither this nor `sens`
+                # depends on time, which is why time is the innermost loop:
+                gauss = sens * c_exp(-r2 / (<float32>2.0 * rho * rho))
+                for idx_time in range(n_time):
+                    scratch[tid, idx_time] = (scratch[tid, idx_time] +
+                                              gauss * stim[idx_el, idx_time])
+            # After summing up the currents from all the electrodes, we
+            # compare the brightness of the segment to the previously
+            # brightest segment. The brightest segment overall determines the
+            # brightness of the pixel:
+            for idx_time in range(n_time):
+                sgm = scratch[tid, idx_time]
+                if c_abs(sgm) > c_abs(scratch[tid, n_time + idx_time]):
+                    scratch[tid, n_time + idx_time] = sgm
+        for idx_time in range(n_time):
+            sgm = scratch[tid, n_time + idx_time]
+            if c_abs(sgm) < thresh_percept:
+                bright[idx_space, idx_time] = <float32>0.0
+            else:
+                bright[idx_space, idx_time] = sgm
     return np.asarray(bright)  # Py overhead

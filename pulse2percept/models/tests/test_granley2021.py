@@ -377,3 +377,86 @@ def test_find_threshold_not_supported(model_cls):
     npt.assert_equal('metadata' in str(excinfo.value), True)
     # predict_percept is unaffected:
     npt.assert_equal(model.predict_percept(implant) is not None, True)
+
+
+def test_BiphasicAxonMapModel_min_current_spread():
+    """The current-spread cutoff must reach this model's kernel too.
+
+    ``min_current_spread`` lives on ``SpatialModel``, so
+    ``BiphasicAxonMapSpatial`` inherits it; this pins that the biphasic
+    kernel actually honours it rather than accepting it and ignoring it.
+    """
+    stim = {e: BiphasicPulseTrain(20, 30, 0.45) for e in ('A2', 'C5', 'F8')}
+    implant = ArgusII(stim=stim)
+    kwargs = {'xrange': (-8, 8), 'yrange': (-8, 8), 'xystep': 0.5,
+              'rho': 200, 'verbose': False}
+
+    exact = BiphasicAxonMapModel(
+        min_current_spread=0, **kwargs).build().predict_percept(implant).data
+    default = BiphasicAxonMapModel(
+        **kwargs).build().predict_percept(implant).data
+    # The default cutoff is below what a float32 sum can resolve:
+    npt.assert_allclose(default, exact, rtol=1e-5,
+                        atol=1e-6 * np.abs(exact).max())
+
+    # A coarse cutoff does change the result, which is how we know it is
+    # wired through rather than silently dropped:
+    coarse = BiphasicAxonMapModel(
+        min_current_spread=0.5, **kwargs).build().predict_percept(implant).data
+    assert np.abs(coarse - exact).max() > 1e-3
+
+
+@pytest.mark.parametrize('attr', ('size_model', 'streak_model'))
+def test_BiphasicAxonMapModel_rejects_nonpositive_effects(attr):
+    """A scaling factor of zero would surface as NaN, so it is rejected.
+
+    Both factors enter the kernel through an exponent, so neither may be
+    zero or negative. The default models cannot produce that, but a custom
+    one could.
+    """
+    model = BiphasicAxonMapModel(xrange=(-4, 4), yrange=(-4, 4), xystep=1,
+                                 verbose=False).build()
+    setattr(model.spatial, attr, lambda freq, amp, pdur: np.zeros_like(amp))
+    implant = ArgusII(stim={'A2': BiphasicPulseTrain(20, 30, 0.45)})
+    with pytest.raises(ValueError, match=attr):
+        model.predict_percept(implant)
+
+    # A positive factor is accepted:
+    setattr(model.spatial, attr, lambda freq, amp, pdur: np.ones_like(amp))
+    npt.assert_equal(model.predict_percept(implant) is not None, True)
+
+
+def test_BiphasicAxonMapModel_reduces_to_AxonMapModel():
+    """With every effect factor at 1, this model *is* the axon map model.
+
+    The biphasic kernel computes
+    ``F_bright * exp(-r^2 / (2 rho^2 F_size)) * sens ** (1 / F_streak)``
+    as a single exponential of summed exponents. Setting all three factors to
+    1 collapses that to ``exp(-r^2 / (2 rho^2)) * sens``, which is exactly
+    what ``AxonMapModel`` computes for a unit-amplitude stimulus -- an
+    independently written kernel, so this pins the fused arithmetic against
+    something that does not share its code.
+    """
+    from pulse2percept.models import AxonMapModel
+
+    kwargs = {'xrange': (-8, 8), 'yrange': (-8, 8), 'xystep': 0.5,
+              'rho': 200, 'axlambda': 800, 'verbose': False}
+    electrodes = ('A2', 'C5', 'F8')
+
+    biphasic = BiphasicAxonMapModel(**kwargs)
+    for attr in ('bright_model', 'size_model', 'streak_model'):
+        setattr(biphasic.spatial, attr,
+                lambda freq, amp, pdur: np.ones_like(np.asarray(amp,
+                                                                dtype=float)))
+    biphasic.build()
+    got = biphasic.predict_percept(ArgusII(
+        stim={e: BiphasicPulseTrain(20, 30, 0.45) for e in electrodes})).data
+
+    plain = AxonMapModel(**kwargs).build()
+    stim = np.zeros(60)
+    names = list(ArgusII().electrode_names)
+    for e in electrodes:
+        stim[names.index(e)] = 1.0
+    want = plain.predict_percept(ArgusII(stim=stim)).data
+
+    npt.assert_allclose(got, want, rtol=1e-5, atol=1e-6 * np.abs(want).max())

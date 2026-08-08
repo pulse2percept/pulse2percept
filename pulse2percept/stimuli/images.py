@@ -6,7 +6,6 @@ from os.path import dirname, join
 import numpy as np
 import warnings
 from math import isclose
-from copy import deepcopy
 import matplotlib.pyplot as plt
 
 from skimage import img_as_float32, img_as_ubyte
@@ -169,8 +168,10 @@ class ImageStimulus(Stimulus):
             in the range [0, 1].
 
         """
-        img = deepcopy(self.data.reshape(self.img_shape))
+        img = self.data.reshape(self.img_shape)
         if len(self.img_shape) > 2:
+            # Leave any alpha channel alone:
+            img = img.copy()
             img[..., :3] = 1.0 - img[..., :3]
         else:
             img = 1.0 - img
@@ -206,8 +207,12 @@ class ImageStimulus(Stimulus):
         """
         img = self.data.reshape(self.img_shape)
         if img.ndim == 3 and img.shape[2] == 4:
-            # Blend the background with black:
-            img = rgba2rgb(img, background=(0, 0, 0))
+            # Blend the background with black. Doing it in one pass rather
+            # than through ``rgba2rgb`` avoids materializing the intermediate
+            # three-channel image, which for a full-resolution photograph is
+            # the bulk of the work. The arithmetic is the same, so the result
+            # is identical:
+            img = np.clip(img[..., :3] * img[..., 3:4], 0.0, 1.0)
         if img.ndim == 3:
             img = rgb2gray(img)
         return ImageStimulus(img, electrodes=electrodes,
