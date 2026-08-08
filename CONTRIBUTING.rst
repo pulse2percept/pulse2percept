@@ -167,14 +167,15 @@ your fork:
 Open a pull request against the ``master`` branch of
 ``pulse2percept/pulse2percept``.
 
-Use one of the following prefixes in the pull-request title:
+Use one or more of the following prefixes in the pull-request title:
 
-* ``[ENH]`` for enhancements
+* ``[ENH]`` for enhancements or new functionality
 * ``[FIX]`` for bug fixes
-* ``[TST]`` for new or updated tests
+* ``[OPT]`` for performance optimizations
+* ``[API]`` for backward-incompatible changes to the public API
+* ``[TST]`` for new or updated tests or benchmarks
 * ``[DOC]`` for new or updated documentation
-* ``[STY]`` for stylistic changes
-* ``[REF]`` for refactoring existing code
+* ``[MNT]`` for maintenance, refactoring, packaging, CI, or build changes
 
 A good pull request:
 
@@ -195,7 +196,6 @@ change.
 Open a draft pull request when the implementation is incomplete or when early
 feedback would be useful. Mark it ready for review only when you believe the
 change is complete.
-
 
 Code style
 ==========
