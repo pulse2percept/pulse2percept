@@ -9,6 +9,7 @@
     pulse_trains
     images
     videos
+    encoders
     psychophysics
 
 .. seealso::
@@ -24,9 +25,11 @@ from .pulse_trains import (PulseTrain, BiphasicPulseTrain,
                            BiphasicTripletTrain, AsymmetricBiphasicPulseTrain)
 from .images import ImageStimulus, LogoBVL, LogoUCSB, SnellenChart
 from .videos import VideoStimulus, BostonTrain, GirlPool
+from .encoders import Encoder, AmplitudeEncoder
 from .psychophysics import BarStimulus, GratingStimulus
 
 __all__ = [
+    'AmplitudeEncoder',
     'AsymmetricBiphasicPulse',
     'AsymmetricBiphasicPulseTrain',
     'BarStimulus',
@@ -35,6 +38,7 @@ __all__ = [
     'BiphasicTripletTrain',
     'BostonTrain',
     'ElectrodeNames',
+    'Encoder',
     'GirlPool',
     'GratingStimulus',
     'ImageStimulus',

@@ -5,7 +5,6 @@
 from os.path import dirname, join
 import numpy as np
 import warnings
-from math import isclose
 import matplotlib.pyplot as plt
 
 from skimage import img_as_float32, img_as_ubyte
@@ -20,7 +19,6 @@ from skimage.feature import canny
 
 from .base import Stimulus
 from .names import ElectrodeNames
-from .pulses import BiphasicPulse
 from ..utils import center_image, shift_image, scale_image, trim_image
 
 
@@ -546,26 +544,38 @@ class ImageStimulus(Stimulus):
             raise ValueError(f"Unknown filter '{filt}'.")
         return self.apply(filt, **kwargs)
 
-    def encode(self, amp_range=(0, 50), pulse=None):
-        """Encode image using amplitude modulation
+    def encode(self, amp_range=(0, 50), freq=20, implant=None, **kwargs):
+        """Encode the image using amplitude modulation
 
-        Encodes the image as a series of pulses, where the gray levels of the
-        image are interpreted as the amplitude of a pulse with values in
-        ``amp_range``.
+        Encodes the image as a train of biphasic pulses, where the gray level
+        of a pixel sets the amplitude of its pulses.
 
-        By default, a single biphasic pulse is used for each pixel, with 0.46ms
-        phase duration, and 500ms total stimulus duration.
+        This is a shorthand for
+        :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`; use that directly
+        for the full set of options.
+
+        .. versionchanged:: 0.9.2
+
+            Gray levels now map onto ``amp_range`` absolutely rather than being
+            stretched to fill it (pass ``stretch=True`` for the old behavior),
+            the image receives a pulse *train* rather than a single pulse, and
+            ``implant`` encodes at electrode rather than pixel resolution.
 
         Parameters
         ----------
-        amp_range : (min_amp, max_amp)
-            Range of amplitude values to use for the encoding. The image's
-            gray levels will be scaled such that the smallest value is mapped
-            onto ``min_amp`` and the largest onto ``max_amp``.
-        pulse : :py:class:`~pulse2percept.stimuli.Stimulus`, optional
-            A valid pulse or pulse train to be used for the encoding.
-            If None given, a :py:class:`~pulse2percept.stimuli.BiphasicPulse`
-            (0.46 ms phase duration, 500 ms total duration) will be used.
+        amp_range : (min_amp, max_amp), optional
+            Range of pulse amplitudes (uA). A gray level of 0 maps onto
+            ``min_amp``, a gray level of 1 onto ``max_amp``.
+        freq : float, optional
+            Pulse train frequency (Hz). The image is treated as a single frame
+            lasting 500 ms unless ``frame_dur`` says otherwise.
+        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+            If given, the image is first sampled at the implant's electrode
+            locations, so that the pulse trains are built at electrode rather
+            than pixel resolution.
+        **kwargs :
+            Additional arguments passed to
+            :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`.
 
         Returns
         -------
@@ -573,28 +583,10 @@ class ImageStimulus(Stimulus):
             Encoded stimulus
 
         """
-        if pulse is None:
-            pulse = BiphasicPulse(1, 0.46, stim_dur=500)
-        else:
-            if not isinstance(pulse, Stimulus):
-                raise TypeError("'pulse' must be a Stimulus object.")
-            if pulse.time is None:
-                raise ValueError("'pulse' must have a time component.")
-        # Make sure the provided pulse has max amp 1:
-        enc_data = pulse.data
-        if not isclose(np.abs(enc_data).max(), 0):
-            enc_data /= np.abs(enc_data).max()
-        # Normalize the range of pixel values:
-        px_data = self.data - self.data.min()
-        if not isclose(np.abs(px_data).max(), 0):
-            px_data /= np.abs(px_data).max()
-        # Amplitude modulation:
-        stim = {}
-        for px, e in zip(px_data.ravel(), self.electrodes):
-            amp = px * (amp_range[1] - amp_range[0]) + amp_range[0]
-            s = Stimulus(amp * enc_data, time=pulse.time, electrodes=e)
-            stim.update({e: s})
-        return Stimulus(stim)
+        # Imported here because `encoders` imports this module:
+        from .encoders import AmplitudeEncoder
+        return AmplitudeEncoder(implant=implant, amp_range=amp_range,
+                                freq=freq, **kwargs).encode(self)
 
     def plot(self, ax=None, **kwargs):
         """Plot the stimulus

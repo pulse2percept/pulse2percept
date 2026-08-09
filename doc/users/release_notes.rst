@@ -9,6 +9,16 @@ v0.9.2 (unreleased)
 
 Highlights:
 
+*  New :py:class:`~pulse2percept.stimuli.Encoder` classes, which translate the
+   gray levels of an image or a video into the electrical stimulus an implant
+   would actually deliver: every frame becomes a train of biphasic pulses that
+   lasts one frame period.
+   :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` maps the gray level of a
+   pixel onto the amplitude of its pulses at a fixed frequency. Passing it an
+   ``implant`` samples the source at the electrode locations *before* building
+   the pulse trains, rather than after: encoding the 94-frame ``BostonTrain``
+   for Argus II now allocates 0.2 MB and takes 50 ms, where encoding it at
+   pixel resolution allocated 308 MB and took 720 ms
 *  Python 3.14 support; the minimum supported Python is now 3.11
 *  NumPy 2 is now required (``numpy>=2,<3``). If you are pinned to NumPy 
    1.x, stay on v0.9.1 -- ``pip`` will select it for you
@@ -49,6 +59,31 @@ Highlights:
    now raises ``NotImplementedError`` with an explanation instead of a bare
    traceback. Both are handled by the new
    :py:func:`~pulse2percept.utils.frame_interval`
+
+API changes:
+
+*  :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` and
+   :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` are now shorthands
+   for :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`, and their behavior
+   changed in four ways:
+
+   -  Gray levels map onto ``amp_range`` **absolutely**: a gray level of 0.5
+      always encodes to the middle of the range. Previously they were stretched
+      to fill it, which made the encoding depend on the content of the source
+      and silently encoded a uniform image as zero amplitude everywhere. Pass
+      ``stretch=True`` for the old behavior.
+   -  Each frame now receives a pulse *train* (new ``freq`` argument,
+      defaulting to 20 Hz) rather than a single pulse.
+   -  The ``pulse`` argument now takes a single pulse to repeat, whose
+      amplitude is normalized away, and is no longer modified in place.
+   -  The new ``implant`` argument encodes at electrode rather than pixel
+      resolution, and is strongly recommended for videos.
+
+*  :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` used to infer a frame
+   duration of ``1000 / dt`` ms from a video whose metadata carried no frame
+   rate, where ``dt`` is the spacing of its time axis in ms. It now uses ``dt``
+   itself, so such a video no longer comes back a factor of ``1000 / dt**2``
+   too long.
 
 v0.9.1 (2026-08-06)
 -------------------
