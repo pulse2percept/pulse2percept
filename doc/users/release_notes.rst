@@ -30,6 +30,25 @@ Highlights:
    :py:class:`~pulse2percept.stimuli.Stimulus` now compares time points with a
    tolerance that scales with their magnitude so that time points stay
    strictly monotonically increasing even after merging two stimuli.
+*  ``Percept.play`` and ``VideoStimulus.play`` are roughly 100x faster and
+   produce much smaller notebooks and doc pages. Instead of re-rendering the
+   whole figure once per frame and embedding every frame as its own PNG (as
+   Matplotlib's ``to_jshtml`` does), the new
+   :py:class:`~pulse2percept.utils.HTMLAnimation` renders the figure once and
+   ships all frames as a single color-mapped sprite sheet that is played back
+   by a small, self-contained JavaScript player. Animating a 65x97x94 percept
+   now takes 0.06s instead of 25s, and long videos are no longer silently
+   truncated at Matplotlib's 20 MB embed limit
+*  ``play`` gained a ``fmt`` parameter that chooses how the frames are
+   embedded. The new default, ``fmt='jpg'``, halves the size of the resulting
+   page again (a 94-frame percept goes from 3.7 MB to 0.22 MB); pass
+   ``fmt='png'`` if you need the frames to be pixel-exact
+*  ``Percept.play``, ``VideoStimulus.play``, and ``Percept.save`` no longer
+   raise ``IndexError`` on a single-frame percept or video, which has no frame
+   rate of its own. Inferring the frame rate from a non-homogeneous time axis
+   now raises ``NotImplementedError`` with an explanation instead of a bare
+   traceback. Both are handled by the new
+   :py:func:`~pulse2percept.utils.frame_interval`
 
 v0.9.1 (2026-08-06)
 -------------------

@@ -157,6 +157,35 @@ def test_Percept_play(n_frames):
     ani = percept.play()
     npt.assert_equal(isinstance(ani, FuncAnimation), True)
     npt.assert_equal(len(list(ani.frame_seq)), n_frames)
+    # The animation renders as a self-contained HTML player:
+    html = ani.to_jshtml()
+    npt.assert_equal('p2p-anim' in html, True)
+    npt.assert_equal(f'"n": {n_frames}' in html, True)
+    # Time is annotated in the title unless turned off:
+    npt.assert_equal(f't = {percept.time[-1]:.2f} ms' in html, True)
+    html = percept.play(annotate_time=False).to_jshtml()
+    npt.assert_equal(f't = {percept.time[-1]:.2f} ms' in html, False)
+
+
+def test_Percept_play_single_frame():
+    """A percept with a single time point has no frame rate of its own"""
+    percept = Percept(np.random.rand(4, 4, 1), time=[3.5])
+    html = percept.play().to_jshtml()
+    npt.assert_equal('"n": 1' in html, True)
+    npt.assert_equal('t = 3.50 ms' in html, True)
+    # Without a time axis it is not an animation at all:
+    with pytest.raises(ValueError):
+        Percept(np.random.rand(4, 4, 1)).play()
+
+
+def test_Percept_play_fmt():
+    percept = Percept(np.random.rand(8, 8, 4))
+    npt.assert_equal('data:image/jpeg;base64,' in percept.play().to_jshtml(),
+                     True)
+    npt.assert_equal('data:image/jpeg;base64,' in
+                     percept.play(fmt='png').to_jshtml(), False)
+    with pytest.raises(ValueError):
+        percept.play(fmt='gif')
 
 
 @ pytest.mark.parametrize('dtype', (np.float32, np.uint8))
@@ -188,3 +217,16 @@ def test_Percept_save(dtype, tmp_path):
         img = img_as_float(imread(fname))
         npt.assert_almost_equal(np.min(img), 0, decimal=3)
         npt.assert_almost_equal(np.max(img), 1.0, decimal=3)
+
+
+def test_Percept_save_single_frame(tmp_path):
+    """A percept with a single time point has no frame rate of its own"""
+    percept = Percept(np.random.rand(16, 16, 1), time=[3.5])
+    for name in ['test.mp4', 'test.avi', 'test.gif']:
+        fname = str(tmp_path / name)
+        percept.save(fname)
+        npt.assert_equal(len(mimread(fname)), 1)
+    # An explicit frame rate is still honored:
+    fname = str(tmp_path / 'fps.mp4')
+    percept.save(fname, fps=12)
+    npt.assert_equal(len(mimread(fname)), 1)
