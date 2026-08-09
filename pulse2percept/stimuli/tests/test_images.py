@@ -5,8 +5,8 @@ import pytest
 
 from skimage.io import imsave
 
-from pulse2percept.stimuli import (ImageStimulus, LogoBVL, LogoUCSB,
-                                   SnellenChart)
+from pulse2percept.stimuli import (AmplitudeEncoder, ImageStimulus, LogoBVL,
+                                   LogoUCSB, SnellenChart)
 
 
 def create_dummy_img(fname, shape, mode, gray=1.0, return_data=False):
@@ -319,20 +319,25 @@ def test_ImageStimulus_filter():
 
 
 def test_ImageStimulus_encode():
-    stim = ImageStimulus(np.random.rand(4, 5))
-
-    # Amplitude encoding in default range:
+    # An image is a single frame lasting 500 ms:
+    stim = ImageStimulus(np.linspace(0, 1, 20).reshape((4, 5)))
     enc = stim.encode()
     npt.assert_almost_equal(enc.time[-1], 500)
-    npt.assert_almost_equal(enc.data.max(axis=1).min(), 0)
-    npt.assert_almost_equal(enc.data.max(axis=1).max(), 50)
+    npt.assert_equal(enc.shape[0], stim.shape[0])
+    # Gray levels map onto the amplitude range absolutely, so the darkest and
+    # brightest pixels of this ramp land on its two ends:
+    npt.assert_almost_equal(np.abs(enc.data).max(axis=1), 50 * stim.data[:, 0],
+                            decimal=4)
 
     # Amplitude encoding in custom range:
     enc = stim.encode(amp_range=(2, 43))
     npt.assert_almost_equal(enc.time[-1], 500)
-    npt.assert_almost_equal(enc.data.max(axis=1).min(), 2)
-    npt.assert_almost_equal(enc.data.max(axis=1).max(), 43)
+    npt.assert_almost_equal(np.abs(enc.data).max(axis=1).min(), 2, decimal=4)
+    npt.assert_almost_equal(np.abs(enc.data).max(axis=1).max(), 43, decimal=4)
 
+    # `encode` is a shorthand for AmplitudeEncoder, and forwards to it:
+    npt.assert_almost_equal(stim.encode().data,
+                            AmplitudeEncoder().encode(stim).data)
     with pytest.raises(TypeError):
         stim.encode(pulse={'invalid': 1})
     with pytest.raises(ValueError):

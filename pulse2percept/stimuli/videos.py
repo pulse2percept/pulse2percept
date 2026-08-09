@@ -3,7 +3,6 @@
    :py:class:`~pulse2percept.stimuli.GirlPool`"""
 from os.path import dirname, join
 import numpy as np
-from math import isclose
 import matplotlib.pyplot as plt
 
 from skimage.color import rgb2gray
@@ -16,10 +15,8 @@ from imageio import get_reader as video_reader
 
 from .base import Stimulus
 from .names import ElectrodeNames
-from .pulses import BiphasicPulse
 from ..utils import (center_image, shift_image, scale_image, trim_image,
-                     unique, frame_interval, HTMLAnimation)
-from ..utils.constants import DT
+                     frame_interval, HTMLAnimation)
 
 
 class VideoStimulus(Stimulus):
@@ -540,27 +537,39 @@ class VideoStimulus(Stimulus):
             raise ValueError(f"Unknown filter '{filt}'.")
         return self.apply(filt, **kwargs)
 
-    def encode(self, amp_range=(0, 50), pulse=None):
-        """Encode image using amplitude modulation
+    def encode(self, amp_range=(0, 50), freq=20, implant=None, **kwargs):
+        """Encode the video using amplitude modulation
 
-        Encodes the image as a series of pulses, where the gray levels of the
-        image are interpreted as the amplitude of a pulse with values in
-        ``amp_range``.
+        Encodes every frame of the video as a train of biphasic pulses, where
+        the gray level of a pixel sets the amplitude of its pulses. Each train
+        lasts one frame period.
 
-        By default, a single biphasic pulse is used for each pixel, with 0.46ms
-        phase duration, and 500ms total stimulus duration.
+        This is a shorthand for
+        :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`; use that directly
+        for the full set of options.
+
+        .. versionchanged:: 0.9.2
+
+            Gray levels now map onto ``amp_range`` absolutely rather than being
+            stretched to fill it (pass ``stretch=True`` for the old behavior),
+            each frame receives a pulse *train* rather than a single pulse, and
+            ``implant`` encodes at electrode rather than pixel resolution.
 
         Parameters
         ----------
-        amp_range : (min_amp, max_amp)
-            Range of amplitude values to use for the encoding. The image's
-            gray levels will be scaled such that the smallest value is mapped
-            onto ``min_amp`` and the largest onto ``max_amp``.
-        pulse : :py:class:`~pulse2percept.stimuli.Stimulus`, optional
-            A valid pulse or pulse train to be used for the encoding.
-            If None given, a :py:class:`~pulse2percept.stimuli.BiphasicPulse`
-            (0.46 ms phase duration, stimulus duration inferred from the movie
-            frame rate) will be used.
+        amp_range : (min_amp, max_amp), optional
+            Range of pulse amplitudes (uA). A gray level of 0 maps onto
+            ``min_amp``, a gray level of 1 onto ``max_amp``.
+        freq : float, optional
+            Pulse train frequency (Hz).
+        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+            If given, the video is first sampled at the implant's electrode
+            locations, so that the pulse trains are built at electrode rather
+            than pixel resolution. Strongly recommended: a video has orders of
+            magnitude more pixels than an implant has electrodes.
+        **kwargs :
+            Additional arguments passed to
+            :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`.
 
         Returns
         -------
@@ -568,50 +577,10 @@ class VideoStimulus(Stimulus):
             Encoded stimulus
 
         """
-        # Set frame rate, either from metadata or inferred from stim.time:
-        try:
-            frame_dur = 1000.0 / self.metadata['fps']
-        except KeyError:
-            t_diff = unique(np.diff(self.time))
-            if len(t_diff) > 1:
-                raise NotImplementedError
-            frame_dur = 1000.0 / t_diff[0]
-        # If no user-defined pulse is given, use a standard one:
-        if pulse is None:
-            pulse = BiphasicPulse(1, 0.46, stim_dur=frame_dur-DT)
-        else:
-            if not isinstance(pulse, Stimulus):
-                raise TypeError('"pulse" must be a Stimulus object.')
-            if pulse.time is None:
-                raise ValueError('"pulse" must have a time component.')
-            if pulse.time[-1] > frame_dur:
-                raise ValueError(f"'pulse.time[-1]={pulse.time[-1]}' exceeds "
-                                 f"frame_dur={frame_dur}.")
-            if isclose(pulse.time[-1], frame_dur):
-                pulse.time[-1] -= DT
-        # Scale the pixel values to the desired amplitude range:
-        vid_data = self.data.copy() - self.data.min()
-        if not isclose(np.abs(vid_data).max(), 0):
-            vid_data /= np.abs(vid_data).max()
-        vid_data = vid_data * (amp_range[1] - amp_range[0]) + amp_range[0]
-        # Normalize pulse data:
-        enc_data = pulse.data.copy()
-        if not isclose(np.abs(enc_data).max(), 0):
-            enc_data /= np.abs(enc_data).max()
-        # Amplitude encoding: Every pixel value serves as an amplitude, so must
-        # be multiplied with the pulse data. This is easily done with an outer
-        # product, then we just need to concatenate all frames in time:
-        vid_data = np.outer(vid_data.ravel(),
-                            enc_data).reshape((self.shape[0], -1))
-        # The time points are given by the pulse data, we just need to shift:
-        vid_time = np.array([pulse.time + s * frame_dur
-                             for s in range(self.shape[1])]).flatten()
-        # Cosmetics: Make sure resulting stimulus has the desired length up to
-        # DT precision:
-        if not isclose(vid_time[-1], self.shape[1] * frame_dur):
-            vid_time[-1] = self.shape[1] * frame_dur
-        return VideoStimulus(vid_data.reshape((*self.vid_shape[:2], -1)),
-                             electrodes=self.electrodes, time=vid_time)
+        # Imported here because `encoders` imports this module:
+        from .encoders import AmplitudeEncoder
+        return AmplitudeEncoder(implant=implant, amp_range=amp_range,
+                                freq=freq, **kwargs).encode(self)
 
     def __iter__(self):
         """Iterate over all frames in self.data"""

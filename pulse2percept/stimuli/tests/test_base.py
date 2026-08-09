@@ -160,6 +160,33 @@ def test_Stimulus():
     assert_warns_msg(UserWarning, Stimulus, None, [[1, 2, 3]], time=[1, 2, 1.9])
 
 
+def test_Stimulus_time_resolution():
+    # Time is stored as float64 while data stays float32. float32 reaches a
+    # resolution of DT at t = 8.4 s, past which two time points a time step
+    # apart are no longer distinguishable:
+    stim = Stimulus(np.ones((2, 3)), time=[0, DT, 2 * DT])
+    npt.assert_equal(stim.time.dtype, np.float64)
+    npt.assert_equal(stim.data.dtype, np.float32)
+    far = 30000.0
+    stim = Stimulus(np.ones((2, 3)), time=[far, far + DT, far + 2 * DT])
+    npt.assert_almost_equal(np.diff(stim.time), DT)
+    # Slicing the time axis does not round it back down either:
+    npt.assert_almost_equal(stim[0, far + DT], 1)
+
+
+def test_Stimulus_nonmonotonic_warning():
+    # The warning names the offending points rather than dumping the whole
+    # time axis, which for a long stimulus ran to megabytes:
+    time = np.arange(1000, dtype=float)
+    time[500] = time[499]
+    with pytest.warns(UserWarning, match='strictly monotonically') as record:
+        Stimulus(np.ones((2, 1000)), time=time)
+    msg = str(record[0].message)
+    npt.assert_equal(len(msg) < 500, True)
+    npt.assert_equal('t[499]' in msg, True)
+    npt.assert_equal('1 of 1000' in msg, True)
+
+
 def test_Stimulus_compress():
     data = np.zeros((2, 7))
     data[0, 0] = 1

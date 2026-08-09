@@ -233,21 +233,56 @@ percept_dilate.plot(ax=ax2)
 # stimuli with a time component).
 #
 # By default, the ``encode`` method will interpret the gray level of a pixel as
-# the current amplitude of a :py:class:`~pulse2percept.stimuli.BiphasicPulse`
-# with 0.46ms phase duration (500ms total stimulus duration). Gray levels in
-# the range [0, 1] will be mapped onto currents in the range [0, 50] uA:
+# the current amplitude of a 20 Hz train of
+# :py:class:`~pulse2percept.stimuli.BiphasicPulse` (0.46 ms phase duration),
+# lasting 500 ms overall. Gray levels in the range [0, 1] are mapped onto
+# currents in the range [0, 50] uA:
 
 implant.stim = logo_dilate.trim().resize(implant.shape).encode()
 
 ##############################################################################
 # We can customize the range of amplitudes to be used by passing a keyword
-# argument; e.g. ``amp_range=(0, 20)`` to use currents in [0, 20] uA.
+# argument; e.g. ``amp_range=(0, 20)`` to use currents in [0, 20] uA, and the
+# pulse rate with ``freq=50``.
 #
-# We can also specify our own pulse / pulse train to be used. First, we need to
-# create the pulse we want to use (use amplitude 1 uA). Then, we need to pass
-# it as an additional keyword argument; e.g.,
-# ``pulse=BiphasicPulseTrain(10, 1, 0.2, stim_dur=200)`` to use a 10Hz
-# biphasic pulse train (0.2ms phase duration, overall duration 200 ms).
+# We can also specify our own pulse shape to be repeated, by passing a keyword
+# argument such as ``pulse=BiphasicPulse(1, 0.2)``. Its amplitude is normalized
+# away, since that is what the encoding sets; only its shape is used.
+#
+# ``encode`` is a shorthand for
+# :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`, which offers the full
+# set of options. In particular, passing it an ``implant`` samples the image at
+# the electrode locations *before* building the pulse trains, which for a video
+# is the difference between a stimulus of a few hundred kilobytes and one of a
+# few hundred megabytes:
+#
+# .. code-block:: python
+#
+#     encoder = p2p.stimuli.AmplitudeEncoder(implant, amp_range=(0, 50))
+#     implant.stim = encoder.encode(p2p.stimuli.BostonTrain())
+#
+# The other way to encode a gray level is as a pulse *rate* at fixed amplitude,
+# which is what :py:class:`~pulse2percept.stimuli.FrequencyEncoder` does. It is
+# considerably more expensive to simulate, because electrodes pulsing at
+# different rates no longer pulse at the same times; ``clock`` (the period of
+# the stimulator's time base) is the lever that keeps that under control:
+#
+# .. code-block:: python
+#
+#     encoder = p2p.stimuli.FrequencyEncoder(implant, freq_range=(0, 300),
+#                                            amp=50, clock=1)
+#     implant.stim = encoder.encode(p2p.stimuli.BostonTrain())
+#
+# A real stimulator usually cannot drive every electrode at once, because the
+# current it can source at any instant is limited. Give the implant a
+# :py:class:`~pulse2percept.implants.Raster` and the electrodes take turns
+# instead, a group at a time, all of them within one frame period:
+#
+# .. code-block:: python
+#
+#     implant.max_current = 1000  # uA, summed over electrodes
+#     implant.raster = p2p.implants.SequentialRaster(6)  # one row at a time
+#     implant.stim = p2p.stimuli.AmplitudeEncoder(implant).encode(video)
 #
 # Using the image as input to a spatiotemporal model
 # ---------------------------------------------------

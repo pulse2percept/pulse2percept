@@ -4,6 +4,7 @@
    :py:class:`~pulse2percept.models.SpatialModel`,
    :py:class:`~pulse2percept.models.TemporalModel`"""
 import sys
+import warnings
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
 import numpy as np
@@ -583,6 +584,15 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
     #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
     n_jobs = _n_jobs_alias()
 
+    #: Sign of the stimulus current that drives brightness in this model: -1 if
+    #: cathodic (negative) current does, +1 if anodic (positive) current does.
+    #: The two conventions are both in use -- ``FadingTemporal`` and
+    #: ``Horsager2009Temporal`` are cathodic-driven, ``Nanduri2012Temporal`` is
+    #: anodic-driven -- and a stimulus of the wrong polarity produces a blank
+    #: percept rather than an error. This is what lets ``predict_percept`` say
+    #: so; nothing else reads it.
+    _drive_sign = -1
+
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
         params = {
@@ -698,9 +708,34 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         else:
             # Calculate the Stimulus at requested time points:
             resp = self._predict_temporal(_stim, t_percept)
+            self._warn_if_blank(_stim, resp)
         return Percept(resp.reshape(_space + [t_percept.size]),
                        space=None, time=t_percept,
                        metadata={'stim': stim})
+
+    def _warn_if_blank(self, stim, resp):
+        """Point out a percept that came out blank for a polarity reason
+
+        A stimulus of the wrong sign is not an error -- the model integrates it
+        and rectifies the result away -- so it otherwise looks exactly like a
+        stimulus that was simply too weak to see. Assigning a grayscale image
+        or video straight to ``implant.stim`` lands here, because gray levels
+        are nonnegative and most temporal models are driven by cathodic
+        current.
+        """
+        if np.any(resp) or not np.any(stim.data):
+            return
+        # Only if *nothing* in the stimulus has the sign the model responds to:
+        if np.any(np.sign(stim.data) == self._drive_sign):
+            return
+        polarity = 'cathodic (negative)' if self._drive_sign < 0 else \
+            'anodic (positive)'
+        warnings.warn(
+            f"{type(self).__name__} produced an all-zero percept: brightness "
+            f"in this model is driven by {polarity} current, and the stimulus "
+            f"has none. Encoding an image or a video with "
+            f"pulse2percept.stimuli.AmplitudeEncoder gives it the right "
+            f"polarity; otherwise negate it.")
 
     def find_threshold(self, stim, bright_th, amp_range=(0, 999), amp_tol=1,
                        bright_tol=0.1, max_iter=100, t_percept=None):

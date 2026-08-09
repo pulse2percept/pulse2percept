@@ -1,4 +1,5 @@
-from pulse2percept.stimuli import VideoStimulus, BostonTrain, GirlPool
+from pulse2percept.stimuli import (AmplitudeEncoder, VideoStimulus,
+                                   BostonTrain, GirlPool)
 from skimage.io import imsave
 from matplotlib.animation import FuncAnimation
 import numpy as np
@@ -309,25 +310,27 @@ def test_VideoStimulus_filter(tmp_path):
 
 
 def test_VideoStimulus_encode():
+    # 6 frames, 1 ms apart, so the encoded stimulus lasts 6 ms. Note that the
+    # frame duration is the time between frames; before v0.9.2 it was taken to
+    # be `1000 / that`, which made this stimulus 6000 ms long:
     stim = VideoStimulus(np.random.rand(4, 5, 6))
-
-    # Amplitude encoding in default range:
-    enc = stim.encode()
-    npt.assert_almost_equal(enc.time[-1], 6000)
-    # The positions we check depends on the encoding of the pulse! First element
-    # is always zero, second and third are negative phase, etc.
-    npt.assert_almost_equal(np.abs(enc.data[:, ::8]).min(), 0)
-    npt.assert_almost_equal(enc.data[:, 1::8].min(), -50)
-    npt.assert_almost_equal(enc.data[:, 4::8].max(), 50)
+    enc = stim.encode(freq=1000)
+    npt.assert_almost_equal(enc.time[-1], 6, decimal=3)
+    npt.assert_equal(enc.shape[0], stim.shape[0])
+    # Gray levels map onto the amplitude range absolutely, so the brightest
+    # pixel of the video reaches the top of the range and the rest fall short
+    # of it in proportion to how dark they are:
+    npt.assert_almost_equal(np.abs(enc.data).max(axis=1),
+                            50 * stim.data.max(axis=1), decimal=4)
 
     # Amplitude encoding in custom range:
-    enc = stim.encode(amp_range=(2, 43))
-    npt.assert_almost_equal(enc.time[-1], 6000)
-    npt.assert_almost_equal(np.abs(enc.data[:, ::8]).min(), 0)
-    npt.assert_almost_equal(enc.data[:, 1::8].min(), -43)
-    npt.assert_almost_equal(enc.data[:, 4::8].max(), 43)
-    npt.assert_almost_equal(enc.data[:, 4::8].min(), 2)
+    enc = stim.encode(amp_range=(2, 43), freq=1000)
+    npt.assert_almost_equal(np.abs(enc.data).max(axis=1),
+                            2 + 41 * stim.data.max(axis=1), decimal=4)
 
+    # `encode` is a shorthand for AmplitudeEncoder, and forwards to it:
+    npt.assert_almost_equal(stim.encode(freq=1000).data,
+                            AmplitudeEncoder(freq=1000).encode(stim).data)
     with pytest.raises(TypeError):
         stim.encode(pulse={'invalid': 1})
     with pytest.raises(ValueError):

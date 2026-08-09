@@ -41,12 +41,12 @@ def _tile_pulse(pulse, shift, n_pulses):
                                   "time axis is currently not supported.")
     # ``append`` offsets copy k by the last time point of copy k-1, so the
     # offsets follow the recurrence last[k] = shifted[-1] + last[k-1], seeded
-    # with last[0] = time[-1]. A float32 cumsum accumulates in exactly the
-    # same order (and therefore rounds identically), which matters because
-    # temporal models resolve stimulus edges on a fixed simulation grid:
-    steps = np.full(n_pulses, shifted[-1], dtype=np.float32)
+    # with last[0] = time[-1]. The cumsum accumulates in exactly the same
+    # order (and therefore rounds identically), which matters because temporal
+    # models resolve stimulus edges on a fixed simulation grid:
+    steps = np.full(n_pulses, shifted[-1], dtype=np.float64)
     steps[0] = time[-1]
-    offsets = np.cumsum(steps, dtype=np.float32)[:-1, np.newaxis]
+    offsets = np.cumsum(steps, dtype=np.float64)[:-1, np.newaxis]
     if isclose(shifted[0], 0, abs_tol=DT):
         # The last time point of one copy coincides with the first time point
         # of the next, so the two are merged into one - but only if they carry
@@ -95,9 +95,13 @@ class PulseTrain(Stimulus):
 
     Notes
     -----
-    *  If the pulse train frequency does not exactly divide ``stim_dur``, the
-       number of pulses will be rounded down. For example, when trying to fit
-       a 11 Hz pulse train into a 100 ms window, there will be 9 pulses.
+    *  Only pulses that fit whole are delivered. If the pulse train frequency
+       does not exactly divide ``stim_dur``, the number of pulses is therefore
+       rounded down: a 30 Hz train in a 33.37 ms window has one pulse, not one
+       and a fraction of a second. A partial pulse would leave the train with a
+       net current.
+    *  A frequency slower than ``1000 / stim_dur`` cannot be realized, since
+       the window still holds one pulse. Pass ``freq=0`` for a silent train.
 
     """
     __slots__ = ('freq', 'pulse_type')
@@ -121,13 +125,19 @@ class PulseTrain(Stimulus):
             if n_pulses > n_max_pulses:
                 raise ValueError(f"stim_dur={stim_dur:.2f} cannot fit more than "
                                  f"{n_max_pulses} pulses.")
+        elif freq <= 0:
+            n_pulses = 0
         else:
-            # `freq` might not perfectly divide `stim_dur`, so we will create
-            # one extra pulse and trim to the right length:
-            n_pulses = int(np.ceil(n_max_pulses))
-        # 0 Hz is allowed:
+            # Only whole pulses: a pulse that cannot finish before `stim_dur`
+            # is over is not delivered at all. Starting one and cutting it
+            # short would leave the train with a net current -- a 30 Hz train
+            # in a 33.37 ms window used to end on half a cathodic phase, and
+            # so was not charge-balanced.
+            n_pulses = int(np.floor((stim_dur - pulse.time[-1]) /
+                                    (1000.0 / freq) + 1e-9)) + 1
+        # 0 Hz is allowed, and so is a pulse too long to fit even once:
         if n_pulses <= 0:
-            time = np.array([0, stim_dur], dtype=np.float32)
+            time = np.array([0, stim_dur], dtype=np.float64)
             data = np.array([[0, 0]], dtype=np.float32)
         else:
             # Window duration is the inverse of pulse train frequency:
@@ -144,6 +154,12 @@ class PulseTrain(Stimulus):
             last_col = [np.interp(stim_dur, time, row) for row in data]
             last_col = np.array(last_col).reshape((-1, 1))
             t_idx = time < stim_dur
+            # The interpolated end point has to stay at least DT away from the
+            # last point it follows, or the time axis is no longer strictly
+            # increasing:
+            kept = np.flatnonzero(t_idx)
+            if kept.size and time[kept[-1]] > stim_dur - DT:
+                t_idx[kept[-1]] = False
             data = np.hstack((data[:, t_idx], last_col))
             time = np.append(time[t_idx], stim_dur)
         elif time[-1] < stim_dur - DT:

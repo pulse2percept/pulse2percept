@@ -9,6 +9,45 @@ v0.9.2 (unreleased)
 
 Highlights:
 
+*  New :py:class:`~pulse2percept.stimuli.Encoder` classes, which translate the
+   gray levels of an image or a video into the electrical stimulus an implant
+   would actually deliver: every frame becomes a train of biphasic pulses that
+   lasts one frame period.
+   :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` maps the gray level of a
+   pixel onto the amplitude of its pulses at a fixed frequency;
+   :py:class:`~pulse2percept.stimuli.FrequencyEncoder` maps it onto how often
+   they come, at a fixed amplitude. Passing either an ``implant`` samples the
+   source at the electrode locations *before* building the pulse trains, rather
+   than after: encoding the 94-frame ``BostonTrain`` for Argus II now allocates
+   0.2 MB and takes 50 ms, where encoding it at pixel resolution allocated
+   308 MB and took 720 ms
+*  Encoders model two properties of real stimulators that also decide how
+   expensive the resulting stimulus is to simulate: ``clock``, the period of
+   the device's time base, onto which pulse periods are rounded; and
+   ``n_levels``, the resolution of its input stage. They matter most for
+   frequency modulation, where electrodes pulsing at different rates otherwise
+   need a time point wherever any of them has a pulse edge -- ``BostonTrain``
+   at frequencies in (0, 300] Hz needs 121,494 time points unquantized, but
+   18,056 on a 1 ms clock
+*  A frame now delivers only pulses it can finish. Previously a pulse train
+   whose period did not divide the frame duration ended with a truncated pulse,
+   which injects net charge; a 30 Hz train on a 29.97 fps video did this on
+   every frame
+*  New :py:class:`~pulse2percept.implants.Raster` classes describe how a
+   stimulator takes turns between electrodes it cannot drive at the same time.
+   :py:class:`~pulse2percept.implants.SequentialRaster` splits electrodes into
+   groups by position -- on the 6x10
+   :py:class:`~pulse2percept.implants.ArgusII` grid, ``SequentialRaster(6)`` is
+   a line raster -- and :py:class:`~pulse2percept.implants.CustomRaster`
+   assigns them by name. An encoder staggers each group's pulses accordingly,
+   taking the raster from its own ``raster`` argument or from the implant's
+*  :py:class:`~pulse2percept.implants.ProsthesisSystem` gained a ``raster``
+   attribute and a ``max_current`` one, the total current the stimulator can
+   source at any instant. When ``max_current`` is set, assigning a stimulus
+   that exceeds it raises, the way ``safe_mode`` does for charge balance.
+   Encoding ``BostonTrain`` for Argus II at 0-50 uA draws 1310 uA at once
+   without a raster and 298 uA with a six-group line raster, at the cost of a
+   time axis roughly ``n_groups`` times longer
 *  Python 3.14 support; the minimum supported Python is now 3.11
 *  NumPy 2 is now required (``numpy>=2,<3``). If you are pinned to NumPy 
    1.x, stay on v0.9.1 -- ``pip`` will select it for you
@@ -49,6 +88,71 @@ Highlights:
    now raises ``NotImplementedError`` with an explanation instead of a bare
    traceback. Both are handled by the new
    :py:func:`~pulse2percept.utils.frame_interval`
+
+Bug fixes:
+
+*  ``Stimulus.time`` is now stored as float64 rather than float32 (the data
+   container stays float32). float32 reaches a resolution of ``DT`` = 1e-3 ms
+   at t = 8.4 s, past which the DT-wide edges of a pulse collapse: a 30 s pulse
+   train lost 952 of its edges outright, and the pulses of a 3 s one were
+   already 2% too narrow. A time axis costs one entry per column where the data
+   costs one per electrode per column, so widening it is nearly free
+*  :py:class:`~pulse2percept.stimuli.PulseTrain` no longer ends on a pulse it
+   cannot finish. It used to round the pulse count *up* and trim to
+   ``stim_dur``, so a train whose frequency did not divide the duration ended
+   mid-phase and was not charge-balanced -- a 30 Hz train in a 33.37 ms window
+   delivered one and a fraction of a second pulse, with a net current of
+   -1.64 uA*ms. The count is now rounded down to whole pulses, and a frequency
+   too slow for the window still yields one pulse rather than none
+*  As a consequence of the two fixes above,
+   :py:attr:`~pulse2percept.stimuli.Stimulus.is_charge_balanced` now reports
+   ``True`` for pulse trains that are in fact balanced. It previously returned
+   ``False`` for any train of more than about five pulses, and hence rejected
+   perfectly good stimuli under ``safe_mode``
+*  :py:class:`~pulse2percept.implants.EnsembleImplant` merged the time axes of
+   its implants with an exact ``np.unique``, so two implants pulsing at the
+   same instant contributed two time points a fraction of a time step apart.
+   It now uses the same tolerance as the
+   :py:class:`~pulse2percept.stimuli.Stimulus` constructor
+*  A temporal model that produces an all-zero percept because the stimulus has
+   the wrong polarity now says so. Brightness is driven by cathodic current in
+   :py:class:`~pulse2percept.models.FadingTemporal` and
+   :py:class:`~pulse2percept.models.Horsager2009Temporal` but by anodic current
+   in :py:class:`~pulse2percept.models.Nanduri2012Temporal`, so assigning a
+   grayscale image or video straight to ``implant.stim`` -- whose gray levels
+   are all nonnegative -- silently returned a blank percept
+*  The "time points must be strictly monotonically increasing" warning now
+   names the offending points instead of printing the entire time axis, which
+   for a long stimulus ran to megabytes of output
+*  :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` no longer normalizes
+   the pulse it was passed in place, and
+   :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` no longer shifts its
+   time axis in place
+
+API changes:
+
+*  :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` and
+   :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` are now shorthands
+   for :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`, and their behavior
+   changed in four ways:
+
+   -  Gray levels map onto ``amp_range`` **absolutely**: a gray level of 0.5
+      always encodes to the middle of the range. Previously they were stretched
+      to fill it, which made the encoding depend on the content of the source
+      and silently encoded a uniform image as zero amplitude everywhere. Pass
+      ``stretch=True`` for the old behavior.
+   -  Each frame now receives a pulse *train* (new ``freq`` argument,
+      defaulting to 20 Hz) rather than a single pulse.
+   -  The ``pulse`` argument now takes a single pulse to repeat, whose
+      amplitude is normalized away, and is no longer modified in place.
+   -  The new ``implant`` argument encodes at electrode rather than pixel
+      resolution, and is strongly recommended for videos.
+
+*  :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` used to infer a frame
+   duration of ``1000 / dt`` ms from a video whose metadata carried no frame
+   rate, where ``dt`` is the spacing of its time axis in ms. It now uses ``dt``
+   itself, so such a video no longer comes back a factor of ``1000 / dt**2``
+   too long.
 
 v0.9.1 (2026-08-06)
 -------------------
