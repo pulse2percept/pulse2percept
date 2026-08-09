@@ -4,8 +4,8 @@
 Release Notes
 =============
 
-v0.9.2 (unreleased)
--------------------
+v0.10.0 Encoders (unreleased)
+-----------------------------
 
 Highlights:
 
