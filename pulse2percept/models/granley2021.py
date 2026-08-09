@@ -7,7 +7,7 @@ from . import AxonMapSpatial, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
 from ..percepts import Percept
-from ..utils import FreezeError, deprecate_parameter
+from ..utils import FreezeError
 from .base import NotBuiltError, BaseModel
 from ._granley2021 import fast_biphasic_axon_map
 
@@ -100,19 +100,9 @@ class DefaultSizeModel(BaseModel):
     a5, a6 : float, optional
         Linear regression coefficients for size vs amplitude (Eq 5)
         F_size = a5*scaled_amp + a6
-    engine : string, optional
-        .. deprecated:: 0.9.1
-
-            Accepted but ignored, and will be removed in version 0.10.0. It
-            used to select between the NumPy and the (now removed) jax
-            backend.
     """
 
-    @deprecate_parameter('engine', deprecated_version='0.9.1',
-                         removed_version='0.10.0',
-                         addendum="It used to select between the NumPy and "
-                                  "the (now removed) jax backend.")
-    def __init__(self, rho, engine=None, **params):
+    def __init__(self, rho, **params):
         super(DefaultSizeModel, self).__init__(**params)
         self.rho = rho
         self.build()
@@ -162,19 +152,9 @@ class DefaultStreakModel(BaseModel):
     a7, a8, a9: float, optional
         Regression coefficients for streak length vs pulse duration (Eq 6)
         F_streak = -a7*pdur^a8 + a9
-    engine : string, optional
-        .. deprecated:: 0.9.1
-
-            Accepted but ignored, and will be removed in version 0.10.0. It
-            used to select between the NumPy and the (now removed) jax
-            backend.
     """
 
-    @deprecate_parameter('engine', deprecated_version='0.9.1',
-                         removed_version='0.10.0',
-                         addendum="It used to select between the NumPy and "
-                                  "the (now removed) jax backend.")
-    def __init__(self, axlambda, engine=None, **params):
+    def __init__(self, axlambda, **params):
         super(DefaultStreakModel, self).__init__(**params)
         self.axlambda = axlambda
         self.build()

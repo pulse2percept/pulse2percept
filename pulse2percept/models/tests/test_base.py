@@ -173,45 +173,25 @@ def test_SpatialModel_predict_percept_deduplicates_frames():
 
 @pytest.mark.parametrize('param, value', [('engine', 'serial'),
                                           ('scheduler', 'dask')])
-def test_SpatialModel_deprecated_params(param, value):
-    # `engine` chose the Cython vs pure-Python axon-growth path (Cython is now
-    # always used) and `scheduler` drove the joblib/dask backends, removed in
-    # 0.9.1. Both are still accepted, but ignored:
-    with pytest.deprecated_call():
-        model = ValidSpatialModel(**{param: value})
-    # Still stored and readable, just unused by anything:
-    npt.assert_equal(getattr(model, param), value)
-    # Naming it later warns as well:
-    with pytest.deprecated_call():
-        model.set_params(**{param: value})
-    # Falling back to the default must stay silent, as must reading the
-    # parameters back out -- the warning is for explicit use only:
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        silent = ValidSpatialModel()
-        repr(silent)
-        silent.set_params(xystep=0.5)
-        copy.deepcopy(silent)
+def test_SpatialModel_removed_params(param, value):
+    # `engine` chose the Cython vs pure-Python axon-growth path and
+    # `scheduler` drove the joblib/dask backends. Both were deprecated in
+    # 0.9.1 and removed in 0.10.0, so they are now unknown parameters:
+    with pytest.raises(AttributeError):
+        ValidSpatialModel(**{param: value})
+    with pytest.raises(AttributeError):
+        ValidSpatialModel().set_params(**{param: value})
 
 
 @pytest.mark.parametrize('param, value', [('engine', 'serial'),
                                           ('scheduler', 'dask')])
-def test_Model_deprecated_params(param, value):
+def test_Model_removed_params(param, value):
     # A Model built from instances never reaches BaseModel.__init__, so this
-    # path needs catching separately, and should warn only once:
-    with pytest.deprecated_call() as record:
-        model = Model(spatial=ValidSpatialModel(), **{param: value})
-    deprecations = [w for w in record
-                    if issubclass(w.category, DeprecationWarning)]
-    npt.assert_equal(len(deprecations), 1)
-    # The warning names the model the user actually constructed:
-    npt.assert_equal('Model' in str(deprecations[0].message), True)
-    npt.assert_equal(getattr(model, param), value)
-    with pytest.deprecated_call():
-        model.set_params({param: value})
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        Model(spatial=ValidSpatialModel())
+    # path needs checking separately:
+    with pytest.raises(AttributeError):
+        Model(spatial=ValidSpatialModel(), **{param: value})
+    with pytest.raises(AttributeError):
+        Model(spatial=ValidSpatialModel()).set_params({param: value})
 
 
 def test_eq_SpatialModel():

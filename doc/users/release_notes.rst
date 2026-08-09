@@ -4,8 +4,8 @@
 Release Notes
 =============
 
-v0.9.2 (unreleased)
--------------------
+v0.10.0 Encoders (unreleased)
+-----------------------------
 
 Highlights:
 
@@ -131,6 +131,13 @@ Bug fixes:
 
 API changes:
 
+*  The parameters deprecated in v0.9.1 have been removed as announced. Passing
+   any of them now raises rather than warning: the ``engine`` and ``scheduler``
+   parameters of every spatial model, the ``engine`` parameter of
+   :py:class:`~pulse2percept.models.granley2021.DefaultSizeModel` and
+   :py:class:`~pulse2percept.models.granley2021.DefaultStreakModel`, and the
+   ``pad`` parameter of
+   :py:meth:`~pulse2percept.models.AxonMapSpatial.calc_axon_sensitivity`
 *  :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` and
    :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` are now shorthands
    for :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`, and their behavior

@@ -11,7 +11,6 @@ from matplotlib.patches import Ellipse
 
 from ..utils.constants import ZORDER
 from ..topography import Watson2014Map
-from ..utils import deprecate_parameter
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
@@ -316,12 +315,6 @@ class AxonMapSpatial(SpatialModel):
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
-    engine : string, optional
-        .. deprecated:: 0.9.1
-
-            Accepted but ignored, and will be removed in version 0.10.0. It
-            chose between the Cython and the pure-Python implementation of the
-            Jansonius axon-growth model; the Cython one is now always used.
     axon_pickle : str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle : bool, optional
@@ -595,11 +588,7 @@ class AxonMapSpatial(SpatialModel):
             return closest_axon, closest_idx
         return closest_axon
 
-    @deprecate_parameter('pad', deprecated_version='0.9.1',
-                         removed_version='0.10.0',
-                         addendum="An unpadded list of Nx3 arrays is always "
-                                  "returned, even for pad=True.")
-    def calc_axon_sensitivity(self, bundles, pad=None):
+    def calc_axon_sensitivity(self, bundles):
         """Calculate the sensitivity of each axon segment to electrical current
 
         This function combines the x,y coordinates of each bundle segment with
@@ -626,14 +615,6 @@ class AxonMapSpatial(SpatialModel):
             A list of bundles, where every bundle is an Nx2 array consisting of
             the x,y coordinates of each axon segment (retinal coords, microns).
             Note that each bundle will most likely have a different N
-        pad : bool, optional
-            .. deprecated:: 0.9.1
-
-                Accepted but ignored, and will be removed in version 0.10.0.
-                ``pad=True`` used to pad all axons to the length of the longest
-                one and return a single (n_points, axon_length, 3) array, which
-                only the (now removed) jax backend consumed. This method now
-                always returns the unpadded list described below.
 
         Returns
         -------
@@ -1140,12 +1121,6 @@ class AxonMapModel(Model):
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
-    engine : string, optional
-        .. deprecated:: 0.9.1
-
-            Accepted but ignored, and will be removed in version 0.10.0. It
-            chose between the Cython and the pure-Python implementation of the
-            Jansonius axon-growth model; the Cython one is now always used.
     axon_pickle : str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle : bool, optional
