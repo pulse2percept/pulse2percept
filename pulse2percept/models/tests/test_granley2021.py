@@ -1,5 +1,4 @@
 import copy
-import warnings
 
 import numpy as np
 import pytest
@@ -168,20 +167,11 @@ def test_effects_models():
 
 @pytest.mark.parametrize('cls, arg', [(DefaultSizeModel, 200),
                                       (DefaultStreakModel, 200)])
-def test_effects_models_deprecated_engine(cls, arg):
+def test_effects_models_removed_engine(cls, arg):
     # 'engine' used to switch between the numpy and the (now removed) jax
-    # backend. It is still accepted, but ignored:
-    with pytest.deprecated_call():
-        deprecated = cls(arg, engine='serial')
-    # Passing it changes nothing about the model's output:
-    npt.assert_almost_equal(deprecated(20, 1, 0.45), cls(arg)(20, 1, 0.45))
-    # Even a value that used to select a different backend is a no-op:
-    with pytest.deprecated_call():
-        cls(arg, engine='jax')
-    # Not passing it does not warn:
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        cls(arg)
+    # backend. Deprecated in 0.9.1, removed in 0.10.0:
+    with pytest.raises(AttributeError):
+        cls(arg, engine='serial')
 
 
 def test_biphasicAxonMapSpatial():

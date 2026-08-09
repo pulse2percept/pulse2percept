@@ -5,7 +5,6 @@ import numpy.testing as npt
 import copy
 import os
 import pickle
-import warnings
 
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
@@ -488,26 +487,15 @@ def test_AxonMapModel_calc_axon_sensitivity():
         npt.assert_allclose(model_ax[:, 2], sensitivity, rtol=1e-6)
 
 
-@ pytest.mark.parametrize('pad', (True, False))
-def test_AxonMapModel_calc_axon_sensitivity_deprecated_pad(pad):
+def test_AxonMapModel_calc_axon_sensitivity_removed_pad():
     # 'pad' used to pad all axons to the length of the longest one for the
-    # (now removed) jax backend. It is still accepted, but ignored:
+    # (now removed) jax backend. Deprecated in 0.9.1, removed in 0.10.0:
     model = AxonMapModel(xystep=2, n_axons=10, xrange=(-20, 20),
                          yrange=(-15, 15), axons_range=(-30, 30))
     model.build()
     axons = model.spatial.find_closest_axon(model.spatial.grow_axon_bundles())
-    with pytest.deprecated_call():
-        deprecated = model.spatial.calc_axon_sensitivity(axons, pad=pad)
-    # Always the unpadded list, even for pad=True:
-    expected = model.spatial.calc_axon_sensitivity(axons)
-    npt.assert_equal(isinstance(deprecated, list), True)
-    npt.assert_equal(len(deprecated), len(expected))
-    for ax_dep, ax_exp in zip(deprecated, expected):
-        npt.assert_almost_equal(ax_dep, ax_exp)
-    # Not passing it does not warn:
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        model.spatial.calc_axon_sensitivity(axons)
+    with pytest.raises(TypeError):
+        model.spatial.calc_axon_sensitivity(axons, pad=True)
 
 
 def test_AxonMapModel_calc_bundle_tangent():

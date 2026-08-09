@@ -15,7 +15,7 @@ from ..stimuli import Stimulus
 from ..percepts import Percept
 from ..topography import Curcio1990Map, Grid2D
 from ..utils import (PrettyPrint, FreezeError, Parametrized, bisect,
-                     deprecate_parameter, warn_deprecated_params)
+                     warn_deprecated_params)
 from ..utils.constants import ZORDER
 
 
@@ -203,22 +203,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
            <topics-models-building-your-own>`
     """
 
-    # Parameters that are still accepted so existing code keeps running, but
-    # that nothing reads any more.
-    _deprecated_params = {
-        'engine': deprecate_parameter(
-            'engine', deprecated_version='0.9.1', removed_version='0.10.0',
-            addendum="It chose between the Cython and the pure-Python "
-                     "implementation of the Jansonius axon-growth model; the "
-                     "Cython one is now always used. Use ``n_threads`` (or "
-                     "its alias ``n_jobs``) to control parallelism."),
-        'scheduler': deprecate_parameter(
-            'scheduler', deprecated_version='0.9.1',
-            removed_version='0.10.0',
-            addendum="It selected the joblib or dask parallel backend, "
-                     "support for which was removed in v0.9.1."),
-    }
-
     #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
     n_jobs = _n_jobs_alias()
 
@@ -249,9 +233,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'n_gray': None,
             # Salt-and-pepper noise on the output:
             'noise': None,
-            # Deprecated in 0.9.1, removed in 0.10.0; see _deprecated_params:
-            'engine': 'cython',
-            'scheduler': 'threading',
             # True: print status messages, 0: silent
             'verbose': True,
             # default to 2d model. 3d models should override this
