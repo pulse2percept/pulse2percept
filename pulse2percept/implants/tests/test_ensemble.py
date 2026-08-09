@@ -6,6 +6,7 @@ from pulse2percept.implants.cortex import Cortivis, Orion
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.models.cortex.base import ScoreboardModel
 from pulse2percept.stimuli import BiphasicPulseTrain
+from pulse2percept.utils.constants import DT
 
 def test_EnsembleImplant():
     # Invalid instantiations:
@@ -140,6 +141,11 @@ def test_merge_stimuli():
     implant2.stim = {e : BiphasicPulseTrain(20, 2, .85) for e in implant2.electrode_names}
     implant = EnsembleImplant([implant1, implant2])
     npt.assert_equal(implant.stim.data.shape, (120, 471))
+    # Two implants that pulse at the same instant get there by accumulating
+    # their own way, so merging their time axes needs a tolerance. An exact
+    # union would keep both copies and leave the merged axis with pairs of
+    # points closer together than a time step:
+    npt.assert_equal(np.all(np.diff(implant.stim.time) > 0.95 * DT), True)
     # make sure that implant.metadata['electrodes'] is also merged
     npt.assert_equal(list(implant.stim.metadata['electrodes'].keys()), implant.electrode_names)
     npt.assert_equal(implant.stim.metadata['electrodes']['0-96'], implant1.stim.metadata['electrodes']['96'])

@@ -262,20 +262,19 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
             gray = gray.reshape((-1, 1))
             frame_dur = (_DEFAULT_FRAME_DUR if self.frame_dur is None
                          else self.frame_dur)
-            frame_time = np.zeros(1, dtype=np.float32)
+            frame_time = np.zeros(1, dtype=np.float64)
         elif self.frame_dur is None:
             # `frame_interval` rejects a time axis whose frames are not all
             # the same length, so the frames tile the source exactly:
             frame_dur = frame_interval(np.asarray(stim.time), fps=fps)
-            frame_time = np.asarray(stim.time, dtype=np.float32)
+            frame_time = np.asarray(stim.time, dtype=np.float64)
         else:
             # An explicit `frame_dur` re-times the source: the frames keep
             # their order and their content, but each one now lasts
             # `frame_dur` ms. Keeping the source's own frame times here would
             # let neighboring frames overlap:
             frame_dur = self.frame_dur
-            frame_time = (np.arange(gray.shape[1], dtype=np.float32) *
-                          np.float32(frame_dur))
+            frame_time = np.arange(gray.shape[1], dtype=np.float64) * frame_dur
         return gray, stim.electrodes, frame_time, frame_dur
 
     @staticmethod
@@ -474,7 +473,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         # and everything between two of them is either a plateau or a gap, both
         # of which linear interpolation reproduces.
         data = np.empty((n_el, n_time), dtype=np.float32)
-        time = np.empty(n_time, dtype=np.float32)
+        time = np.empty(n_time, dtype=np.float64)
         col = 0
         for k, (present, local, ticks) in enumerate(layout):
             wave = np.zeros((present.size, ticks.size), dtype=np.float32)

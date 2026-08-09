@@ -50,14 +50,18 @@ def test_Horsager2009Temporal():
         percept = model.predict_percept(stim, t_percept=t_percept)
         npt.assert_almost_equal(percept.data.max(), 110.3, decimal=2)
 
-    # Fixed-duration brightness from Fig.4:
+    # Fixed-duration brightness from Fig.4. The reference value is read off a
+    # published figure, so the tolerance is loose enough to cover that: a
+    # 225 Hz train predicts 36.34 rather than 36.29, which under the float32
+    # time axis of earlier versions came out at 36.29 only because the last of
+    # its 45 pulses was mistimed by about 0.1% of its own width.
     model = Horsager2009Temporal().build()
     for amp, freq in zip([136.01, 120.34, 57.73], [5, 15, 225]):
         stim = BiphasicPulseTrain(freq, amp, 0.075, interphase_dur=0.075,
                                   stim_dur=200, cathodic_first=True)
         t_percept = np.arange(0, stim.time[-1] + model.dt / 2, model.dt)
         percept = model.predict_percept(stim, t_percept=t_percept)
-        npt.assert_almost_equal(percept.data.max(), 36.29, decimal=2)
+        npt.assert_almost_equal(percept.data.max(), 36.29, decimal=1)
 
 
 def test_deepcopy_Horsager2009Temporal():

@@ -86,7 +86,7 @@ class MonophasicPulse(Stimulus):
             # last time point so that the stimulus is exactly `stim_dur` long:
             time[-1] = stim_dur
         data = np.array(data, dtype=np.float32).reshape((1, -1))
-        time = np.array(time, dtype=np.float32)
+        time = np.array(time, dtype=np.float64)
         super().__init__(data, electrodes=electrode, time=time, compress=False)
         self.cathodic = amp <= 0
 
@@ -190,7 +190,7 @@ class BiphasicPulse(Stimulus):
             # last time point so that the stimulus is exactly `stim_dur` long:
             time[-1] = stim_dur
         data = np.array(data, dtype=np.float32).reshape((1, -1))
-        time = np.array(time, dtype=np.float32)
+        time = np.array(time, dtype=np.float64)
         super().__init__(data, electrodes=electrode, time=time, compress=False)
         self.cathodic_first = cathodic_first
 
@@ -308,7 +308,7 @@ class AsymmetricBiphasicPulse(Stimulus):
             # last time point so that the stimulus is exactly `stim_dur` long:
             time[-1] = stim_dur
         data = np.array(data, dtype=np.float32).reshape((1, -1))
-        time = np.array(time, dtype=np.float32)
+        time = np.array(time, dtype=np.float64)
         super().__init__(data, electrodes=electrode, time=time, compress=False)
         self.cathodic_first = cathodic_first
 

@@ -89,6 +89,46 @@ Highlights:
    traceback. Both are handled by the new
    :py:func:`~pulse2percept.utils.frame_interval`
 
+Bug fixes:
+
+*  ``Stimulus.time`` is now stored as float64 rather than float32 (the data
+   container stays float32). float32 reaches a resolution of ``DT`` = 1e-3 ms
+   at t = 8.4 s, past which the DT-wide edges of a pulse collapse: a 30 s pulse
+   train lost 952 of its edges outright, and the pulses of a 3 s one were
+   already 2% too narrow. A time axis costs one entry per column where the data
+   costs one per electrode per column, so widening it is nearly free
+*  :py:class:`~pulse2percept.stimuli.PulseTrain` no longer ends on a pulse it
+   cannot finish. It used to round the pulse count *up* and trim to
+   ``stim_dur``, so a train whose frequency did not divide the duration ended
+   mid-phase and was not charge-balanced -- a 30 Hz train in a 33.37 ms window
+   delivered one and a fraction of a second pulse, with a net current of
+   -1.64 uA*ms. The count is now rounded down to whole pulses, and a frequency
+   too slow for the window still yields one pulse rather than none
+*  As a consequence of the two fixes above,
+   :py:attr:`~pulse2percept.stimuli.Stimulus.is_charge_balanced` now reports
+   ``True`` for pulse trains that are in fact balanced. It previously returned
+   ``False`` for any train of more than about five pulses, and hence rejected
+   perfectly good stimuli under ``safe_mode``
+*  :py:class:`~pulse2percept.implants.EnsembleImplant` merged the time axes of
+   its implants with an exact ``np.unique``, so two implants pulsing at the
+   same instant contributed two time points a fraction of a time step apart.
+   It now uses the same tolerance as the
+   :py:class:`~pulse2percept.stimuli.Stimulus` constructor
+*  A temporal model that produces an all-zero percept because the stimulus has
+   the wrong polarity now says so. Brightness is driven by cathodic current in
+   :py:class:`~pulse2percept.models.FadingTemporal` and
+   :py:class:`~pulse2percept.models.Horsager2009Temporal` but by anodic current
+   in :py:class:`~pulse2percept.models.Nanduri2012Temporal`, so assigning a
+   grayscale image or video straight to ``implant.stim`` -- whose gray levels
+   are all nonnegative -- silently returned a blank percept
+*  The "time points must be strictly monotonically increasing" warning now
+   names the offending points instead of printing the entire time axis, which
+   for a long stimulus ran to megabytes of output
+*  :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` no longer normalizes
+   the pulse it was passed in place, and
+   :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` no longer shifts its
+   time axis in place
+
 API changes:
 
 *  :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` and

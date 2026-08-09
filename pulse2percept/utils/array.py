@@ -8,9 +8,9 @@ import numpy as np
 
 
 def is_strictly_increasing(arr, tol=1e-6):
-    a = np.ascontiguousarray(arr[:-1], dtype=np.float32)
-    b = np.ascontiguousarray(arr[1:], dtype=np.float32)
-    return fast_is_strictly_increasing(a, b, np.float32(tol))
+    a = np.ascontiguousarray(arr[:-1], dtype=np.float64)
+    b = np.ascontiguousarray(arr[1:], dtype=np.float64)
+    return fast_is_strictly_increasing(a, b, np.float64(tol))
 
 
 def sample(sequence, k=1):

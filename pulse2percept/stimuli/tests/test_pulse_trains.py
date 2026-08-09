@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pytest
 import numpy.testing as npt
@@ -44,6 +46,52 @@ def test_PulseTrain():
         # Empty stim:
         pulse = Stimulus([[0, 0, 0]], time=[0, 0.1, 0.2], compress=True)
         PulseTrain(10, pulse)
+
+
+def test_PulseTrain_whole_pulses():
+    # A train delivers only pulses it can finish. Starting one and cutting it
+    # short at `stim_dur` leaves a net current behind:
+    frame_dur = 1000 / 29.97
+    for freq, expected in [(20, 1), (30, 1), (60, 2), (90, 3)]:
+        pt = BiphasicPulseTrain(freq, 50, 0.46, stim_dur=frame_dur)
+        n_pulses = np.count_nonzero(
+            np.diff((pt.data[0] < 0).astype(int)) > 0)
+        npt.assert_equal(n_pulses, expected)
+        npt.assert_equal(pt.is_charge_balanced, True)
+        npt.assert_almost_equal(pt.time[-1], frame_dur)
+    # The window still holds one pulse even when the frequency asks for less
+    # than one, so that a slow train is not silence:
+    npt.assert_equal(np.count_nonzero(np.diff(
+        (BiphasicPulseTrain(1, 50, 0.46, stim_dur=10).data[0] < 0
+         ).astype(int)) > 0), 1)
+    # 0 Hz is silence, though:
+    npt.assert_almost_equal(BiphasicPulseTrain(0, 50, 0.46, stim_dur=10).data,
+                            0)
+
+
+def test_PulseTrain_time_axis():
+    # Whatever the frequency, the time axis stays strictly increasing. This
+    # used to fail for the rare frequency whose train ended just short of
+    # `stim_dur`, leaving the trimmed end point less than DT past its
+    # predecessor:
+    for freq in np.linspace(1, 300, 500):
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            pt = BiphasicPulseTrain(freq, 1, 0.46, stim_dur=1000 / 29.97 - DT)
+        npt.assert_equal(np.all(np.diff(pt.time) > 0.95 * DT), True)
+
+
+def test_PulseTrain_charge_balance_over_time():
+    # Charge balance has to survive a long train. The time axis is float64
+    # precisely because float32 cannot resolve a DT-wide pulse edge past
+    # t = 8.4 s, which used to leave even a symmetric train unbalanced:
+    for n_pulses in (6, 60, 600, 6000):
+        pt = BiphasicPulseTrain(1000, 50, 0.46, n_pulses=n_pulses,
+                                stim_dur=n_pulses)
+        npt.assert_equal(pt.is_charge_balanced, True)
+    # Every pulse edge is still exactly DT wide at the end of a 20 s train:
+    pt = BiphasicPulseTrain(50, 50, 0.46, stim_dur=20000)
+    npt.assert_almost_equal(np.diff(pt.time).min(), DT)
 
 
 @pytest.mark.parametrize('amp', (-3, 4))

@@ -3,6 +3,7 @@ import numpy as np
 from .base import ProsthesisSystem
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
+from ..stimuli.base import unique_time_points
 
 class EnsembleImplant(ProsthesisSystem):
     
@@ -200,8 +201,12 @@ class EnsembleImplant(ProsthesisSystem):
             valid_times = [t for t in times if t is not None]
             
             if valid_times:
-                # Get the union of all time points
-                new_times = np.unique(np.concatenate(valid_times))
+                # Get the union of all time points. Two implants that pulse at
+                # the same instant get there by accumulating their own way, so
+                # an exact `np.unique` would keep both copies and leave the
+                # merged axis with points closer together than DT:
+                t_sorted, starts_group, _ = unique_time_points(valid_times)
+                new_times = t_sorted[starts_group]
             else:
                 new_times = None  # No time-dependent stimulation
             

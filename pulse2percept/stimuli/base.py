@@ -158,24 +158,22 @@ def _index_of_name(electrodes, name):
 def _same_time_point(t, merge_tolerance):
     """How close two time points have to be to count as the same point
 
-    Time is stored as float32, whose resolution (7.6e-6 ms at t = 100 ms,
-    6.1e-5 ms at t = 1000 ms) is much coarser than ``merge_tolerance``. Two
-    stimuli that sample the very same instant therefore hand us time points
-    that differ by a few ulps - pulse trains build their time axis by
-    accumulating a window duration, so the drift between two frequencies grows
-    with t. Those are far too far apart to merge on an absolute tolerance, yet
-    far closer than the DT that the rest of the code expects to separate two
-    distinct time points, so scale the tolerance with the magnitude of ``t``.
-    The cap keeps the tolerance below DT no matter how large ``t`` gets, so
-    that points which really are a time step apart are never merged.
+    Two stimuli that sample the very same instant hand us time points that
+    differ by a few ulps: pulse trains build their time axis by accumulating a
+    window duration, so the drift between two frequencies grows with t. Those
+    are too far apart to merge on an exact comparison, yet far closer than the
+    DT that the rest of the code expects to separate two distinct time points,
+    so the tolerance scales with the magnitude of ``t``. The cap keeps it below
+    DT no matter how large ``t`` gets, so that points which really are a time
+    step apart are never merged.
 
     Parameters
     ----------
     t : np.ndarray
         The time points whose magnitude sets the tolerance.
     merge_tolerance : float
-        Lower bound on the tolerance, used where float32 is more precise than
-        it (i.e., for small ``t``).
+        Lower bound on the tolerance, used where the accumulated drift is
+        smaller than it (i.e., for small ``t``).
 
     Returns
     -------
@@ -184,7 +182,42 @@ def _same_time_point(t, merge_tolerance):
     """
     return np.minimum(0.5 * DT,
                       np.maximum(merge_tolerance,
-                                 8 * np.spacing(np.abs(t).astype(np.float32))))
+                                 8 * np.spacing(np.abs(t))))
+
+
+def unique_time_points(time, merge_tolerance=1e-6):
+    """Sorted union of several time axes, merging points that coincide
+
+    Two stimuli that sample the same instant rarely agree on it to the last
+    bit, because each accumulated its own way there. An exact ``np.unique``
+    would keep both copies, leaving the merged axis with a pair of points far
+    closer together than the DT that separates two genuinely distinct ones.
+
+    Parameters
+    ----------
+    time : list of 1-D arrays
+        The time axes to merge.
+    merge_tolerance : float, optional
+        Two time points closer together than this (or than the accumulated
+        drift at their magnitude, whichever is coarser) are the same point.
+
+    Returns
+    -------
+    t_sorted : 1-D array
+        The sorted, concatenated time points.
+    starts_group : 1-D bool array
+        Which entries of ``t_sorted`` start a new group, i.e. which of them
+        survive the merge.
+    order : 1-D int array
+        The permutation that sorted the concatenated axes.
+
+    """
+    t_all = np.concatenate(time).astype(np.float64)
+    order = np.argsort(t_all, kind='stable')
+    t_sorted = t_all[order]
+    tol = _same_time_point(t_sorted[:-1], merge_tolerance)
+    starts_group = np.concatenate(([True], np.diff(t_sorted) > tol))
+    return t_sorted, starts_group, order
 
 
 def merge_time_axes(data, time, merge_tolerance=1e-6):
@@ -242,16 +275,12 @@ def merge_time_axes(data, time, merge_tolerance=1e-6):
     # across stimuli. We need a higher tolerance to ensure interpolation is
     # correct.
     lengths = [len(t) for t in time]
-    t_all = np.concatenate(time).astype(np.float64)
-    order = np.argsort(t_all, kind='stable')
-    t_sorted = t_all[order]
-    tol = _same_time_point(t_sorted[:-1], merge_tolerance)
-    starts_group = np.concatenate(([True], np.diff(t_sorted) > tol))
+    t_sorted, starts_group, order = unique_time_points(time, merge_tolerance)
     new_time = t_sorted[starts_group]
     # Snap every time axis onto the merged one, so that interpolating below
     # reproduces each stimulus exactly at its own sample points rather than an
     # ulp before or after them:
-    snapped = np.empty_like(t_all)
+    snapped = np.empty_like(t_sorted)
     snapped[order] = new_time[np.cumsum(starts_group) - 1]
     # Now we need to interpolate the data values at each of these
     # new time points.
@@ -627,7 +656,14 @@ class Stimulus(PrettyPrint):
         self._stim = {
             'data': np.ascontiguousarray(_data, dtype=np.float32),
             'electrodes': _electrodes,
-            'time': _time if _time is None else _time.astype(np.float32),
+            # Time is float64 while data is float32. The asymmetry is
+            # deliberate: a time axis has one entry per column where the data
+            # has one per electrode per column, so widening it costs almost
+            # nothing, and float32 cannot carry a time axis at all. Its
+            # resolution reaches DT=1e-3 ms at t = 8.4 s, past which the
+            # DT-wide edges of a pulse collapse to zero width -- a 30 s pulse
+            # train lost 952 of its edges that way.
+            'time': _time if _time is None else _time.astype(np.float64),
         }
         # Compress the data upon request:
         if compress:
@@ -910,11 +946,11 @@ class Stimulus(PrettyPrint):
                 else:
                     start = self.time[0] if time.start is None else time.start
                     stop = self.time[-1] if time.stop is None else time.stop
-                    time = np.arange(start, stop, time.step, dtype=np.float32)
+                    time = np.arange(start, stop, time.step, dtype=np.float64)
             elif time is not Ellipsis:
                 # Convert to float so time is not mistaken for column index
                 if np.array(time).dtype != bool:
-                    time = np.float32(time)
+                    time = np.float64(time)
         else:
             electrodes = item
             time = None
@@ -1140,9 +1176,18 @@ class Stimulus(PrettyPrint):
                                  f"number of columns in the data array "
                                  f"({data_shape[1]}).")
             if not is_strictly_increasing(stim['time'], tol=0.95*DT):
-                msg = (f"Time points must be strictly monotonically "
-                       f"increasing: {list(stim['time'])}")
-                warnings.warn(msg)
+                # Report the offending points rather than the whole axis: a
+                # long pulse train has hundreds of thousands of time points,
+                # and printing all of them buries the handful that are wrong
+                # under megabytes of output.
+                t = np.asarray(stim['time'])
+                bad = np.flatnonzero(np.diff(t) < 0.95 * DT)
+                shown = ', '.join(f"t[{i}]={t[i]:g} -> t[{i + 1}]={t[i + 1]:g}"
+                                  for i in bad[:5])
+                more = f" (and {bad.size - 5} more)" if bad.size > 5 else ""
+                warnings.warn(f"Time points must be strictly monotonically "
+                              f"increasing, but {bad.size} of {n_time} are "
+                              f"less than DT={DT} apart: {shown}{more}.")
         elif data_shape[0] > 0:
             if data_shape[1] > 1:
                 raise ValueError("Number of columns in the data array must be "

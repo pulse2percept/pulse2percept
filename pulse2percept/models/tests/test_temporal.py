@@ -1,9 +1,10 @@
 import numpy as np
 import copy
+import warnings
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.models import FadingTemporal
+from pulse2percept.models import FadingTemporal, Nanduri2012Temporal
 from pulse2percept.stimuli import Stimulus, MonophasicPulse, BiphasicPulse
 from pulse2percept.percepts import Percept
 from pulse2percept.utils import FreezeError
@@ -148,3 +149,39 @@ def test_FadingTemporal_thread_count_invariant():
         parallel = FadingTemporal(dt=0.05, tau=40, n_threads=n_threads).build(
             ).predict_percept(stim, t_percept=[0, 5, 10, 15]).data
         npt.assert_array_equal(parallel, serial)
+
+
+def test_TemporalModel_blank_percept_warning():
+    # Brightness in FadingTemporal is driven by cathodic (negative) current,
+    # so an all-positive stimulus -- which is what assigning a grayscale image
+    # or video directly to `implant.stim` produces -- integrates away to
+    # nothing. That used to be silent:
+    anodic = Stimulus(np.ones((4, 10)), time=np.arange(10) * 10.0)
+    model = FadingTemporal().build()
+    with pytest.warns(UserWarning, match='all-zero percept'):
+        percept = model.predict_percept(anodic, t_percept=[0, 20, 40])
+    npt.assert_almost_equal(percept.data, 0)
+
+    # Flipping the polarity is what the warning suggests, and it works:
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        cathodic = model.predict_percept(Stimulus(-anodic.data,
+                                                  time=anodic.time),
+                                         t_percept=[0, 20, 40])
+    npt.assert_equal(cathodic.data.max() > 0, True)
+
+    # A stimulus that does contain cathodic current but is simply too weak to
+    # see does not get the polarity warning, because that is not its problem:
+    weak = Stimulus(np.full((4, 10), -1e-12), time=np.arange(10) * 10.0)
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        model.predict_percept(weak, t_percept=[0, 20, 40])
+
+    # Nanduri2012Temporal runs on the opposite convention, so the same anodic
+    # stimulus is the *right* polarity for it:
+    nanduri = Nanduri2012Temporal().build()
+    npt.assert_equal(nanduri._drive_sign, 1)
+    npt.assert_equal(FadingTemporal()._drive_sign, -1)
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        nanduri.predict_percept(anodic, t_percept=[0, 20, 40])

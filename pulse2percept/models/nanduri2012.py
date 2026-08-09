@@ -141,6 +141,10 @@ class Nanduri2012Temporal(TemporalModel):
 
     """
 
+    # Unlike the other temporal models, this one is driven by anodic current;
+    # see ``TemporalModel._drive_sign``:
+    _drive_sign = 1
+
     def get_default_params(self):
         base_params = super(Nanduri2012Temporal, self).get_default_params()
         params = {
