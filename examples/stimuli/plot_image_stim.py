@@ -273,6 +273,17 @@ implant.stim = logo_dilate.trim().resize(implant.shape).encode()
 #                                            amp=50, clock=1)
 #     implant.stim = encoder.encode(p2p.stimuli.BostonTrain())
 #
+# A real stimulator usually cannot drive every electrode at once, because the
+# current it can source at any instant is limited. Give the implant a
+# :py:class:`~pulse2percept.implants.Raster` and the electrodes take turns
+# instead, a group at a time, all of them within one frame period:
+#
+# .. code-block:: python
+#
+#     implant.max_current = 1000  # uA, summed over electrodes
+#     implant.raster = p2p.implants.SequentialRaster(6)  # one row at a time
+#     implant.stim = p2p.stimuli.AmplitudeEncoder(implant).encode(video)
+#
 # Using the image as input to a spatiotemporal model
 # ---------------------------------------------------
 #

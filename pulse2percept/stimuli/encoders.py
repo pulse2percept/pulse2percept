@@ -110,6 +110,11 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         resolution of the device's input stage. Gray levels are rounded onto
         ``n_levels`` values evenly spaced over [0, 1] before being modulated.
         If None, they are taken at full precision.
+    raster : :py:class:`~pulse2percept.implants.Raster`, optional
+        How the stimulator takes turns between electrodes it cannot drive at
+        the same time; electrodes in later raster groups start their pulses
+        later in the frame. If None, the ``implant``'s own raster is used, and
+        failing that every electrode fires at the start of the frame.
     frame_dur : float, optional
         Duration (ms) of a single frame. If None, it is inferred from the
         source's frame rate (or, failing that, from its time axis). A source
@@ -132,11 +137,12 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
 
     """
     __slots__ = ('implant', 'phase_dur', 'interphase_dur', 'cathodic_first',
-                 'pulse', 'clock', 'n_levels', 'frame_dur', 'stretch')
+                 'pulse', 'clock', 'n_levels', 'raster', 'frame_dur',
+                 'stretch')
 
     def __init__(self, implant=None, phase_dur=0.46, interphase_dur=0,
                  cathodic_first=True, pulse=None, clock=None, n_levels=None,
-                 frame_dur=None, stretch=False):
+                 raster=None, frame_dur=None, stretch=False):
         if phase_dur <= DT:
             raise ValueError(f"'phase_dur' must be greater than DT={DT} ms.")
         if interphase_dur < 0:
@@ -165,6 +171,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         self.pulse = pulse
         self.clock = clock
         self.n_levels = n_levels
+        self.raster = raster
         self.frame_dur = frame_dur
         self.stretch = stretch
 
@@ -174,7 +181,8 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
                 'interphase_dur': self.interphase_dur,
                 'cathodic_first': self.cathodic_first, 'pulse': self.pulse,
                 'clock': self.clock, 'n_levels': self.n_levels,
-                'frame_dur': self.frame_dur, 'stretch': self.stretch}
+                'raster': self.raster, 'frame_dur': self.frame_dur,
+                'stretch': self.stretch}
 
     @abstractmethod
     def _modulate(self, gray):
@@ -196,12 +204,12 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def _delays(self, n_electrodes):
+    def _delays(self, electrodes, frame_dur):
         """Per-electrode delay (ms) into the frame window
 
-        All electrodes fire at the start of each frame. Implants that cannot
-        drive every electrode at once stagger them instead, which is what a
-        raster group is; an encoder for such an implant overrides this.
+        By default every electrode fires at the start of each frame. A
+        stimulator that cannot drive them all at once staggers them instead,
+        which is what a :py:class:`~pulse2percept.implants.Raster` describes.
 
         Returns
         -------
@@ -209,7 +217,15 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
             Delay (ms) between the start of a frame and this electrode's first
             pulse.
         """
-        return np.zeros(n_electrodes, dtype=np.float32)
+        # An explicit raster wins over the implant's own, so that a raster can
+        # be tried out without modifying the implant:
+        raster = self.raster
+        if raster is None:
+            raster = getattr(self.implant, 'raster', None)
+        if raster is None:
+            return np.zeros(len(electrodes), dtype=np.float32)
+        return np.asarray(raster.delays(electrodes, frame_dur),
+                          dtype=np.float32)
 
     def _as_frames(self, source):
         """Reduce the source to one gray level per electrode per frame
@@ -348,6 +364,18 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         room = last - delay - pulse_len
         n_pulses = np.where(firing & (room >= 0),
                             room // np.maximum(window, 1) + 1, 0)
+        # An electrode that was asked to fire but has no room left to do so has
+        # been rastered out of its own frame, which would otherwise drop its
+        # stimulus without saying so:
+        silent = firing & (n_pulses == 0)
+        if np.any(silent):
+            worst = np.max(np.broadcast_to(delay, freq.shape)[silent])
+            raise ValueError(
+                f"{np.count_nonzero(silent.any(axis=1))} electrode(s) start "
+                f"their turn as late as {worst * DT:.3f} ms into the frame, "
+                f"leaving no room for a {pulse_len * DT:.3f} ms pulse before "
+                f"it ends. Use fewer raster groups, or a shorter "
+                f"'phase_dur'.")
         # Everything about a schedule is fixed by these three numbers:
         key = np.stack([window.ravel(), n_pulses.ravel(),
                         np.broadcast_to(delay, freq.shape).ravel()], axis=1)
@@ -498,7 +526,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
             steps = self.n_levels - 1
             gray = np.round(gray * steps) / steps
         amp, freq = self._modulate(gray)
-        delay = self._delays(len(electrodes))
+        delay = self._delays(electrodes, frame_dur)
         return self._assemble(amp, freq, delay, electrodes, frame_time,
                               frame_dur)
 

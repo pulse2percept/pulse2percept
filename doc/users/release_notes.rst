@@ -33,6 +33,21 @@ Highlights:
    whose period did not divide the frame duration ended with a truncated pulse,
    which injects net charge; a 30 Hz train on a 29.97 fps video did this on
    every frame
+*  New :py:class:`~pulse2percept.implants.Raster` classes describe how a
+   stimulator takes turns between electrodes it cannot drive at the same time.
+   :py:class:`~pulse2percept.implants.SequentialRaster` splits electrodes into
+   groups by position -- on the 6x10
+   :py:class:`~pulse2percept.implants.ArgusII` grid, ``SequentialRaster(6)`` is
+   a line raster -- and :py:class:`~pulse2percept.implants.CustomRaster`
+   assigns them by name. An encoder staggers each group's pulses accordingly,
+   taking the raster from its own ``raster`` argument or from the implant's
+*  :py:class:`~pulse2percept.implants.ProsthesisSystem` gained a ``raster``
+   attribute and a ``max_current`` one, the total current the stimulator can
+   source at any instant. When ``max_current`` is set, assigning a stimulus
+   that exceeds it raises, the way ``safe_mode`` does for charge balance.
+   Encoding ``BostonTrain`` for Argus II at 0-50 uA draws 1310 uA at once
+   without a raster and 298 uA with a six-group line raster, at the cost of a
+   time axis roughly ``n_groups`` times longer
 *  Python 3.14 support; the minimum supported Python is now 3.11
 *  NumPy 2 is now required (``numpy>=2,<3``). If you are pinned to NumPy 
    1.x, stay on v0.9.1 -- ``pip`` will select it for you

@@ -7,6 +7,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 from .electrodes import Electrode, DiskElectrode
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
+from .rasters import Raster
 from ..stimuli import Stimulus, ImageStimulus, VideoStimulus
 from ..utils import PrettyPrint
 
@@ -38,6 +39,17 @@ class ProsthesisSystem(PrettyPrint):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
+    raster : :py:class:`~pulse2percept.implants.Raster`, optional
+        How the stimulator takes turns between electrodes that it cannot drive
+        at the same time. If None, every electrode may fire at once.
+
+        .. versionadded:: 0.9.2
+    max_current : float, optional
+        The total current (uA) the stimulator can source at any one instant,
+        summed over all electrodes. If given, assigning a stimulus that exceeds
+        it raises. If None, no such check is performed.
+
+        .. versionadded:: 0.9.2
 
     Examples
     --------
@@ -55,25 +67,62 @@ class ProsthesisSystem(PrettyPrint):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('_earray', '_stim', '_eye', 'safe_mode', 'preprocess')
+    __slots__ = ('_earray', '_stim', '_eye', 'safe_mode', 'preprocess',
+                 '_raster', '_max_current')
 
     def __init__(self, earray, stim=None, eye='RE', preprocess=False,
-                 safe_mode=False):
+                 safe_mode=False, raster=None, max_current=None):
         self.earray = earray
         self.eye = eye
         self.safe_mode = safe_mode
         self.preprocess = preprocess
+        self.raster = raster
+        self.max_current = max_current
         self.stim = stim
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = {
-            'earray': self.earray, 'stim': self.stim, 'safe_mode': self.safe_mode, 
+            'earray': self.earray, 'stim': self.stim, 'safe_mode': self.safe_mode,
             'preprocess': self.preprocess
         }
         if hasattr(self, "eye"):
             params['eye'] = self.eye
+        if self.raster is not None:
+            params['raster'] = self.raster
+        if self.max_current is not None:
+            params['max_current'] = self.max_current
         return params
+
+    @property
+    def raster(self):
+        """Raster pattern
+
+        Most implants do not set this in their constructor, so the slot backing
+        it may never have been written to; an unset raster means all electrodes
+        may fire at once.
+        """
+        return getattr(self, '_raster', None)
+
+    @raster.setter
+    def raster(self, raster):
+        """Raster setter (called upon ``self.raster = raster``)"""
+        if raster is not None and not isinstance(raster, Raster):
+            raise TypeError(f"'raster' must be a Raster object, not "
+                            f"{type(raster)}.")
+        self._raster = raster
+
+    @property
+    def max_current(self):
+        """Total instantaneous current (uA) the stimulator can source"""
+        return getattr(self, '_max_current', None)
+
+    @max_current.setter
+    def max_current(self, max_current):
+        """Current limit setter (called upon ``self.max_current = ...``)"""
+        if max_current is not None and max_current <= 0:
+            raise ValueError("'max_current' must be positive.")
+        self._max_current = max_current
 
     @staticmethod
     def _require_charge_balanced(stim):
@@ -81,13 +130,31 @@ class ProsthesisSystem(PrettyPrint):
         if stim.is_charge_balanced is False:
             raise ValueError("Safety check: Stimulus must be charge-balanced.")
 
+    def _require_within_current_limit(self, stim):
+        # What the stimulator has to source at an instant is the sum over every
+        # electrode active at that instant, whatever the sign of each:
+        if stim.data.size == 0:
+            return
+        total = np.abs(stim.data).sum(axis=0)
+        peak = total.max()
+        if peak > self.max_current:
+            worst = int(np.argmax(total))
+            n_active = int(np.count_nonzero(stim.data[:, worst]))
+            raise ValueError(
+                f"Safety check: stimulus draws {peak:.1f} uA at once "
+                f"({n_active} electrodes active), which exceeds "
+                f"max_current={self.max_current:.1f} uA. Give the implant a "
+                f"'raster' so that fewer electrodes fire at the same time, or "
+                f"lower the amplitude.")
+
     def check_stim(self, stim):
         """Quality-check the stimulus
 
         This method is executed every time a new value is assigned to ``stim``.
 
         If ``safe_mode`` is set to True, this function will only allow stimuli
-        that are charge-balanced.
+        that are charge-balanced. If ``max_current`` is set, it will only allow
+        stimuli whose total instantaneous current stays within it.
 
         The user can define their own checks in implants that inherit from
         :py:class:`~pulse2percept.implants.ProsthesisSystem`.
@@ -101,6 +168,8 @@ class ProsthesisSystem(PrettyPrint):
         """
         if self.safe_mode:
             self._require_charge_balanced(stim)
+        if self.max_current is not None:
+            self._require_within_current_limit(stim)
 
     def preprocess_stim(self, stim):
         """Preprocess the stimulus

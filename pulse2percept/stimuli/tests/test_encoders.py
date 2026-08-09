@@ -5,7 +5,7 @@ import numpy.testing as npt
 import pytest
 from scipy.integrate import trapezoid
 
-from pulse2percept.implants import ArgusII
+from pulse2percept.implants import ArgusII, SequentialRaster
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BostonTrain, Encoder, FrequencyEncoder,
                                    ImageStimulus, MonophasicPulse, Stimulus,
@@ -360,36 +360,83 @@ def test_FrequencyEncoder_implant():
     npt.assert_equal(enc.shape[1] < 20000, True)
 
 
-class StaggeredEncoder(AmplitudeEncoder):
-    """Stand-in for a raster-aware encoder, to exercise ``_delays``"""
-
-    def _delays(self, n_electrodes):
-        # Two groups, the second one 5 ms into the frame:
-        return 5.0 * (np.arange(n_electrodes) % 2)
-
-
-def test_Encoder_delays():
+def test_Encoder_raster():
     img = ImageStimulus(np.ones((2, 2)))
-    enc = StaggeredEncoder(freq=100, frame_dur=100).encode(img)
-    # Staggering splits the electrodes across two schedules, which is what a
-    # raster group will do:
+    raster = SequentialRaster(2, interleave=True)
+    enc = AmplitudeEncoder(freq=100, frame_dur=100,
+                           raster=raster).encode(img)
+    # Rastering splits the electrodes across two pulse schedules, offset by
+    # half a frame:
     npt.assert_equal(enc.metadata['encoder']['n_schedules'], 2)
     npt.assert_almost_equal(pulse_onsets(enc, 0)[0], 0, decimal=3)
-    npt.assert_almost_equal(pulse_onsets(enc, 1)[0], 5, decimal=3)
+    npt.assert_almost_equal(pulse_onsets(enc, 1)[0], 50, decimal=3)
     # The delayed group keeps the same period, and gets as many whole pulses
     # as still fit in what is left of the frame:
     npt.assert_almost_equal(np.diff(pulse_onsets(enc, 1)), 10, decimal=3)
     npt.assert_equal(n_pulses_of(enc, 0), 10)
-    npt.assert_equal(n_pulses_of(enc, 1), 10)
-    npt.assert_equal(n_pulses_of(StaggeredEncoder(freq=100, frame_dur=95)
-                                 .encode(img), 1), 9)
+    npt.assert_equal(n_pulses_of(enc, 1), 5)
     # Both groups stay charge-balanced:
     net = trapezoid(enc.data.astype(np.float64),
                     x=enc.time.astype(np.float64))
     npt.assert_almost_equal(net, 0, decimal=3)
     # A clock snaps the delay along with the period:
-    enc = StaggeredEncoder(freq=100, frame_dur=100, clock=3).encode(img)
+    enc = AmplitudeEncoder(freq=100, frame_dur=100, clock=3,
+                           raster=SequentialRaster(
+                               2, interleave=True,
+                               group_dur=5)).encode(img)
     npt.assert_almost_equal(pulse_onsets(enc, 1)[0], 6, decimal=3)
+
+
+def test_Encoder_raster_from_implant():
+    implant = ArgusII()
+    implant.raster = SequentialRaster(6)
+    vid = VideoStimulus(np.ones((6, 10, 2)), metadata={'fps': 30})
+    # The encoder picks up the implant's raster without being told:
+    enc = AmplitudeEncoder(implant, freq=30).encode(vid)
+    npt.assert_equal(enc.metadata['encoder']['n_schedules'], 6)
+    delays = [pulse_onsets(enc, e)[0] for e in (0, 10, 20, 30, 40, 50)]
+    npt.assert_almost_equal(delays, np.arange(6) * 1000 / 30 / 6, decimal=2)
+    # An explicit raster on the encoder wins, so one can be tried out without
+    # modifying the implant:
+    enc = AmplitudeEncoder(implant, freq=30,
+                           raster=SequentialRaster(2)).encode(vid)
+    npt.assert_equal(enc.metadata['encoder']['n_schedules'], 2)
+    # And no raster anywhere means every electrode fires at frame onset:
+    implant.raster = None
+    enc = AmplitudeEncoder(implant, freq=30).encode(vid)
+    npt.assert_equal(enc.metadata['encoder']['n_schedules'], 1)
+
+
+def test_Encoder_raster_current_limit():
+    # 60 electrodes at 50 uA is 3000 uA if they all fire at once, but only
+    # 500 uA if they take turns ten at a time:
+    implant = ArgusII()
+    implant.max_current = 1000
+    vid = VideoStimulus(np.ones((6, 10, 3)), metadata={'fps': 30})
+    with pytest.raises(ValueError, match='raster'):
+        implant.stim = AmplitudeEncoder(implant, amp_range=(50, 50),
+                                        freq=30).encode(vid)
+    implant.raster = SequentialRaster(6)
+    implant.stim = AmplitudeEncoder(implant, amp_range=(50, 50),
+                                    freq=30).encode(vid)
+    npt.assert_almost_equal(np.abs(implant.stim.data).sum(axis=0).max(), 500)
+    # A raster that cannot get through all its groups within a frame is not a
+    # usable schedule:
+    with pytest.raises(ValueError):
+        AmplitudeEncoder(implant, freq=30,
+                         raster=SequentialRaster(6, group_dur=20)).encode(vid)
+    # Neither is one whose groups get a turn too short to pulse in. Sixty
+    # 0.92 ms pulses take 55 ms, which does not fit into a 33 ms frame, so
+    # electrode-at-a-time rastering is impossible here rather than merely
+    # dropping the electrodes that come last:
+    with pytest.raises(ValueError, match='no room'):
+        AmplitudeEncoder(implant, freq=30,
+                         raster=SequentialRaster(60)).encode(vid)
+    # Halving the phase duration makes it fit:
+    enc = AmplitudeEncoder(implant, freq=30, phase_dur=0.2,
+                           raster=SequentialRaster(60)).encode(vid)
+    npt.assert_equal(enc.metadata['encoder']['n_schedules'], 60)
+    npt.assert_almost_equal(np.abs(enc.data).sum(axis=0).max(), 50)
 
 
 def test_Encoder_metadata():

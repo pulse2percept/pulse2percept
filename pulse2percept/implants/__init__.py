@@ -12,6 +12,7 @@ Different prosthetic implants, such as Argus II, Alpha-IMS, BVT-24, PRIMA, Corti
     base
     electrodes
     electrode_arrays
+    rasters
     argus
     alpha
     bvt
@@ -27,6 +28,7 @@ from .base import ProsthesisSystem, RectangleImplant
 from .electrodes import (Electrode, PointSource, DiskElectrode,
                          SquareElectrode, HexElectrode)
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
+from .rasters import Raster, SequentialRaster, CustomRaster
 from .argus import ArgusI, ArgusII
 from .alpha import AlphaIMS, AlphaAMS
 from .bvt import BVT24, BVT44
@@ -43,6 +45,7 @@ __all__ = [
     'BVT24',
     'BVT44',
     'cortex',
+    'CustomRaster',
     'DiskElectrode',
     'Electrode',
     'ElectrodeArray',
@@ -56,7 +59,9 @@ __all__ = [
     'PRIMA55',
     'PRIMA40',
     'ProsthesisSystem',
+    'Raster',
     'RectangleImplant',
+    'SequentialRaster',
     'SquareElectrode',
     'IMIE'
 ]
