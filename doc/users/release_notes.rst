@@ -14,11 +14,25 @@ Highlights:
    would actually deliver: every frame becomes a train of biphasic pulses that
    lasts one frame period.
    :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` maps the gray level of a
-   pixel onto the amplitude of its pulses at a fixed frequency. Passing it an
-   ``implant`` samples the source at the electrode locations *before* building
-   the pulse trains, rather than after: encoding the 94-frame ``BostonTrain``
-   for Argus II now allocates 0.2 MB and takes 50 ms, where encoding it at
-   pixel resolution allocated 308 MB and took 720 ms
+   pixel onto the amplitude of its pulses at a fixed frequency;
+   :py:class:`~pulse2percept.stimuli.FrequencyEncoder` maps it onto how often
+   they come, at a fixed amplitude. Passing either an ``implant`` samples the
+   source at the electrode locations *before* building the pulse trains, rather
+   than after: encoding the 94-frame ``BostonTrain`` for Argus II now allocates
+   0.2 MB and takes 50 ms, where encoding it at pixel resolution allocated
+   308 MB and took 720 ms
+*  Encoders model two properties of real stimulators that also decide how
+   expensive the resulting stimulus is to simulate: ``clock``, the period of
+   the device's time base, onto which pulse periods are rounded; and
+   ``n_levels``, the resolution of its input stage. They matter most for
+   frequency modulation, where electrodes pulsing at different rates otherwise
+   need a time point wherever any of them has a pulse edge -- ``BostonTrain``
+   at frequencies in (0, 300] Hz needs 121,494 time points unquantized, but
+   18,056 on a 1 ms clock
+*  A frame now delivers only pulses it can finish. Previously a pulse train
+   whose period did not divide the frame duration ended with a truncated pulse,
+   which injects net charge; a 30 Hz train on a 29.97 fps video did this on
+   every frame
 *  Python 3.14 support; the minimum supported Python is now 3.11
 *  NumPy 2 is now required (``numpy>=2,<3``). If you are pinned to NumPy 
    1.x, stay on v0.9.1 -- ``pip`` will select it for you

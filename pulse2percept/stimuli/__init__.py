@@ -25,7 +25,7 @@ from .pulse_trains import (PulseTrain, BiphasicPulseTrain,
                            BiphasicTripletTrain, AsymmetricBiphasicPulseTrain)
 from .images import ImageStimulus, LogoBVL, LogoUCSB, SnellenChart
 from .videos import VideoStimulus, BostonTrain, GirlPool
-from .encoders import Encoder, AmplitudeEncoder
+from .encoders import Encoder, AmplitudeEncoder, FrequencyEncoder
 from .psychophysics import BarStimulus, GratingStimulus
 
 __all__ = [
@@ -39,6 +39,7 @@ __all__ = [
     'BostonTrain',
     'ElectrodeNames',
     'Encoder',
+    'FrequencyEncoder',
     'GirlPool',
     'GratingStimulus',
     'ImageStimulus',

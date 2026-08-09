@@ -261,6 +261,18 @@ implant.stim = logo_dilate.trim().resize(implant.shape).encode()
 #     encoder = p2p.stimuli.AmplitudeEncoder(implant, amp_range=(0, 50))
 #     implant.stim = encoder.encode(p2p.stimuli.BostonTrain())
 #
+# The other way to encode a gray level is as a pulse *rate* at fixed amplitude,
+# which is what :py:class:`~pulse2percept.stimuli.FrequencyEncoder` does. It is
+# considerably more expensive to simulate, because electrodes pulsing at
+# different rates no longer pulse at the same times; ``clock`` (the period of
+# the stimulator's time base) is the lever that keeps that under control:
+#
+# .. code-block:: python
+#
+#     encoder = p2p.stimuli.FrequencyEncoder(implant, freq_range=(0, 300),
+#                                            amp=50, clock=1)
+#     implant.stim = encoder.encode(p2p.stimuli.BostonTrain())
+#
 # Using the image as input to a spatiotemporal model
 # ---------------------------------------------------
 #
