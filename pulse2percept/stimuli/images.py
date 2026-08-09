@@ -554,7 +554,7 @@ class ImageStimulus(Stimulus):
         :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`; use that directly
         for the full set of options.
 
-        .. versionchanged:: 0.9.2
+        .. versionchanged:: 0.10.0
 
             Gray levels now map onto ``amp_range`` absolutely rather than being
             stretched to fill it (pass ``stretch=True`` for the old behavior),

@@ -166,14 +166,7 @@ class Parametrized(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
        (enforced via ``Frozen`` and ``FreezeError``)
     *  Value-based equality and deep copying that understand NumPy arrays
 
-    This deliberately stops short of the build/predict workflow that
-    :py:class:`~pulse2percept.models.BaseModel` layers on top, because not
-    every parametrized object is a model. A
-    :py:class:`~pulse2percept.topography.VisualFieldMap`, for example, is
-    handed *to* a model so it knows how to convert between tissue and visual
-    field coordinates; it is never built and never predicts a percept.
-
-    .. versionadded:: 0.9.2
+    .. versionadded:: 0.10.0
 
     """
 

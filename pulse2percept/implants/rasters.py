@@ -22,7 +22,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
 
     Subclasses only implement ``groups``.
 
-    .. versionadded:: 0.9.2
+    .. versionadded:: 0.10.0
 
     Parameters
     ----------
@@ -116,7 +116,7 @@ class SequentialRaster(Raster):
     So on a 6x10 array such as :py:class:`~pulse2percept.implants.ArgusII`,
     ``SequentialRaster(6)`` puts each row in its own group -- a line raster.
 
-    .. versionadded:: 0.9.2
+    .. versionadded:: 0.10.0
 
     Parameters
     ----------
@@ -172,7 +172,7 @@ class SequentialRaster(Raster):
 class CustomRaster(Raster):
     """Assign electrodes to raster groups by name
 
-    .. versionadded:: 0.9.2
+    .. versionadded:: 0.10.0
 
     Parameters
     ----------

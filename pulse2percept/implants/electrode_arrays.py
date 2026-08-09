@@ -347,10 +347,8 @@ class ElectrodeGrid(ElectrodeArray):
         ``names=('C1', '4')`` names the two electrodes 'C1' and '4'. Pass a
         list (``names=['A', '1']``) to name two electrodes 'A' and '1'.
 
-        .. versionchanged:: 0.9.2
-            On a grid with exactly two electrodes, ``('A', '1')`` used to be
-            read as the two electrode names rather than as the naming scheme.
-            ``ElectrodeGrid((1, 2), 20, names=('A', '1'))`` now yields
+        .. versionchanged:: 0.10.0
+            On a grid with exactly two electrodes, ``('A', '1')`` now yields
             'A1', 'A2' (was: 'A', '1'), consistent with every other shape.
     etype : :py:class:`~pulse2percept.implants.Electrode`, optional
         A valid Electrode class. By default,

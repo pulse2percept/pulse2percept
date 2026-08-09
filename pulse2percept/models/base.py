@@ -65,13 +65,10 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
 
     *  Build a model (via ``build``) and flip the ``is_built`` switch
 
-    .. versionchanged:: 0.9.2
+    .. versionchanged:: 0.10.0
 
         Everything other than the build workflow moved to
-        :py:class:`~pulse2percept.utils.Parametrized`, so that objects which
-        are not models -- notably
-        :py:class:`~pulse2percept.topography.VisualFieldMap` -- can share it
-        without inheriting ``build`` and ``is_built``.
+        :py:class:`~pulse2percept.utils.Parametrized`.
 
     """
 

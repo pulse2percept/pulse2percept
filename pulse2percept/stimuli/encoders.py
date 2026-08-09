@@ -57,15 +57,13 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
     1.  Reduce the source to one gray level per electrode per frame. If the
         encoder was given an ``implant``, the source is first sampled at the
         electrode locations, so that everything downstream works at electrode
-        resolution. This matters: a 240x426 movie has 102,240 pixels but Argus
-        II has 60 electrodes, and pulse trains are two orders of magnitude
-        wider than the frames they are built from.
+        resolution.
     2.  Map those gray levels onto pulse train parameters (``_modulate``), then
         assemble the pulse trains (``_assemble``).
 
     Subclasses only implement ``_modulate``; everything else is provided here.
 
-    .. versionadded:: 0.9.2
+    .. versionadded:: 0.10.0
 
     Parameters
     ----------
@@ -96,7 +94,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         on real hardware. If None, they are placed at the full resolution of
         the simulation (``DT`` = 1e-3 ms).
 
-        .. note::
+        .. important::
 
            This is the main lever on how expensive an encoded stimulus is to
            simulate. Electrodes that end up on the same pulse schedule share a
@@ -537,7 +535,7 @@ class AmplitudeEncoder(Encoder):
     gray level of the pixel it sees sets the amplitude of those pulses. This is
     how most retinal prostheses encode a video.
 
-    .. versionadded:: 0.9.2
+    .. versionadded:: 0.10.0
 
     Parameters
     ----------
@@ -630,7 +628,7 @@ class FrequencyEncoder(Encoder):
 
        Start with ``clock=1``, which costs nothing in frequency range.
 
-    .. versionadded:: 0.9.2
+    .. versionadded:: 0.10.0
 
     Parameters
     ----------

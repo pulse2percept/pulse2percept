@@ -43,13 +43,13 @@ class ProsthesisSystem(PrettyPrint):
         How the stimulator takes turns between electrodes that it cannot drive
         at the same time. If None, every electrode may fire at once.
 
-        .. versionadded:: 0.9.2
+        .. versionadded:: 0.10.0
     max_current : float, optional
         The total current (uA) the stimulator can source at any one instant,
         summed over all electrodes. If given, assigning a stimulus that exceeds
         it raises. If None, no such check is performed.
 
-        .. versionadded:: 0.9.2
+        .. versionadded:: 0.10.0
 
     Examples
     --------

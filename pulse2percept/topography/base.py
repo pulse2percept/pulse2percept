@@ -605,13 +605,10 @@ class VisualFieldMap(Parametrized):
     tissue and visual field coordinates. It is not itself a model: there is
     nothing to build and no percept to predict.
 
-    .. versionchanged:: 0.9.2
+    .. versionchanged:: 0.10.0
 
         Derives from :py:class:`~pulse2percept.utils.Parametrized` rather than
-        :py:class:`~pulse2percept.models.BaseModel`. Maps therefore no longer
-        carry ``build``, ``is_built`` or the ``_is_built`` attribute, and
-        ``pulse2percept.topography`` no longer imports from
-        ``pulse2percept.models``.
+        :py:class:`~pulse2percept.models.BaseModel`.
 
     """
 

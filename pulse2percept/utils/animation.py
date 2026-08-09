@@ -70,7 +70,7 @@ SINGLE_FRAME_INTERVAL = 1000.0 / 30
 def frame_interval(time, fps=None, tol=1e-2):
     """Determine the delay between two frames of an animation
 
-    .. versionadded:: 0.9.2
+    .. versionadded:: 0.10.0
 
     Parameters
     ----------
@@ -472,7 +472,7 @@ class HTMLAnimation(FuncAnimation):
     figure are rendered once and all frames are shipped as a single
     color-mapped sprite sheet.
 
-    .. versionadded:: 0.9.2
+    .. versionadded:: 0.10.0
 
     Parameters
     ----------

@@ -68,7 +68,7 @@ class ElectrodeNames:
     ``np.asarray``. That conversion is the one operation whose cost scales
     with the number of electrodes, so it is left to the caller to trigger.
 
-    .. versionadded:: 0.9.2
+    .. versionadded:: 0.10.0
 
     Parameters
     ----------
