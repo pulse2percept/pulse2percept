@@ -11,8 +11,6 @@ Before the Release
    "doc/users/release_notes.rst". You might have to go through all the past PRs
    to make sure all work is adequately represented.
 
-*  Make sure all new contributing authors are listed in the AUTHORS file.
-
 *  Make sure the version number is set correctly in "pulse2percept/pyproject.toml".
    In specific, the ``version`` variable should not contain a ``.dev0`` substring.
 

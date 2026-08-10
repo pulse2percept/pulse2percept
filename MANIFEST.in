@@ -1,5 +1,5 @@
 # Include metadata files
-include AUTHORS LICENSE CONTRIBUTING* CODE_OF_CONDUCT* Makefile* MANIFEST.in setup* README.*
+include LICENSE CONTRIBUTING* CODE_OF_CONDUCT* Makefile* MANIFEST.in setup* README.*
 
 # Include Cython source files
 recursive-include pulse2percept *.pyx *.pxd *.h
