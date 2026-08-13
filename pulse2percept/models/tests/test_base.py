@@ -756,6 +756,44 @@ def test_Model_find_threshold():
         model.find_threshold(Stimulus({'A1': 1}), 20)
 
 
+def test_find_threshold_keeps_encoder_metadata():
+    # `find_threshold` rebuilds the stimulus at each trial amplitude. The
+    # encoder records the video's frame clock in the stimulus metadata, and
+    # that is what decides when `predict_percept` reports a percept -- so a
+    # rebuild that drops it silently evaluates every trial on the 50 Hz
+    # fallback instead of the time base the caller's own `predict_percept`
+    # will use.
+    implant = ArgusI()
+    rng = np.random.default_rng(0)
+    vid = VideoStimulus(rng.random((4, 4, 6)), metadata={'fps': 29.97})
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        implant.stim = AmplitudeEncoder(implant, amp_range=(0, 50),
+                                        freq=60).encode(vid)
+    n_frames = implant.stim.metadata['encoder']['n_frames']
+
+    seen = []
+    model = FadingTemporal(tau=100).build()
+    unwrapped = FadingTemporal.predict_percept
+
+    def spy(self, stim, t_percept=None):
+        percept = unwrapped(self, stim, t_percept=t_percept)
+        seen.append(percept.time.size)
+        return percept
+
+    FadingTemporal.predict_percept = spy
+    try:
+        model.find_threshold(implant.stim, 0.2, max_iter=5)
+        npt.assert_equal(set(seen), {n_frames})
+        seen.clear()
+        # ... and the same through the combined model:
+        Model(temporal=FadingTemporal(tau=100)).build().find_threshold(
+            implant, 0.2, max_iter=5)
+        npt.assert_equal(set(seen), {n_frames})
+    finally:
+        FadingTemporal.predict_percept = unwrapped
+
+
 def test_Model_deepcopy_memo():
     model = Model(spatial=ValidSpatialModel())
 

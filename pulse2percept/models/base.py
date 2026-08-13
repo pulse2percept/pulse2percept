@@ -67,7 +67,56 @@ def _n_jobs_alias():
 _FRAME_SUBSAMPLES = 8
 
 
-def _frame_clock(stim, dt, n_sub=1):
+def _subsample(t_out, dt, n_sub, start=None):
+    """Sample the interval leading up to each output point ``n_sub`` times
+
+    The fallback for a model that cannot summarize an interval inside its own
+    integrator (see ``_FRAME_SUBSAMPLES``): ask it for several instants per
+    interval and keep the largest. Samples are evenly spaced and land exactly
+    on the output point, so the value there is always among them -- the peak of
+    an interval is then never below the instant it ends on, whatever the
+    sampling does.
+
+    Parameters
+    ----------
+    start : float, optional
+        Where the interval summarized by the *first* output point begins (ms).
+        A frame clock puts its output points on frame *ends*, so the first one
+        summarizes an interval reaching back to the start of frame 0. If None,
+        the first output point has no interval and stands for its own instant.
+
+    Returns
+    -------
+    t : array
+        The instants to evaluate at (ms), strictly increasing.
+    idx : array
+        Where each output point's samples begin in ``t``, ready to pass
+        straight to ``np.maximum.reduceat``.
+
+    .. versionadded:: 0.10.0
+
+    """
+    ticks = np.round(np.asarray(t_out, dtype=np.float64) / dt).astype(np.int64)
+    # An interval runs from the previous output point up to and including this
+    # one. Brightness is continuous, so the value carried across the boundary
+    # is a floor on what the next interval reaches:
+    first = ticks[0] if start is None else int(round(float(start) / dt))
+    lo = np.concatenate(([min(first, ticks[0])], ticks[:-1]))
+    parts = []
+    for a, b in zip(lo, ticks):
+        span = int(b - a)
+        if span <= 0:
+            parts.append(np.array([b], dtype=np.int64))
+            continue
+        # An interval cannot be sampled more often than it has `dt` steps:
+        k = min(int(n_sub), span)
+        parts.append(a + np.round(
+            np.arange(1, k + 1) * span / k).astype(np.int64))
+    idx = np.cumsum([0] + [p.size for p in parts[:-1]])
+    return np.concatenate(parts) * dt, idx
+
+
+def _frame_clock(stim, dt):
     """When to sample a percept for the video an encoded stimulus came from
 
     An encoder separates the clock that decides *when the picture changes* from
@@ -76,23 +125,20 @@ def _frame_clock(stim, dt, n_sub=1):
     reporting: one frame in, one frame out. The pulse train's own time points
     are far finer and carry no extra picture.
 
-    Each frame is sampled ``n_sub`` times, evenly spaced and ending exactly on
-    the frame boundary, so that a caller can reduce the samples belonging to a
-    frame down to the one number that frame is worth. Everything is rounded
-    onto the model's ``dt`` grid (a 29.97 fps frame is 33.3667 ms, which is not
-    a multiple of the default dt=0.005 ms). It is the frame *interval* that is
+    A percept point lands on the end of each frame. Everything is rounded onto
+    the model's ``dt`` grid (a 29.97 fps frame is 33.3667 ms, which is not a
+    multiple of the default dt=0.005 ms). It is the frame *interval* that is
     rounded rather than each frame time on its own, so that the percept keeps
     an evenly spaced time axis -- ``play`` and ``save`` infer a frame rate from
     it and refuse a ragged one.
 
     Returns
     -------
-    t : (n_frames * n_sub,) array
-        Sample times (ms), in order. Every ``n_sub``-th one, starting at index
-        ``n_sub - 1``, is the end of a frame.
-    n_sub : int
-        How many samples each frame actually got, which is fewer than asked for
-        if a frame is not that many ``dt`` long.
+    t : (n_frames,) array
+        The time (ms) at which each frame ends.
+    start : float
+        The time (ms) at which the first frame begins, which is where the
+        interval summarized by ``t[0]`` starts.
 
     Returns None for anything that did not come out of an encoder.
 
@@ -110,7 +156,7 @@ def _frame_clock(stim, dt, n_sub=1):
     if not isinstance(enc, dict) and 'stim' in meta:
         # A `Percept` on its way from the spatial model to the temporal one
         # carries the stimulus it came from, and the frame clock with it:
-        return _frame_clock(meta['stim'], dt, n_sub=n_sub)
+        return _frame_clock(meta['stim'], dt)
     if not isinstance(enc, dict):
         return None
     try:
@@ -125,11 +171,8 @@ def _frame_clock(stim, dt, n_sub=1):
     # of `dt` (which `predict_percept` insists on):
     step = max(1, int(round(frame_dur / dt)))
     start = int(round(float(frame_time[0]) / dt))
-    # A frame cannot be sampled more often than it has `dt` steps:
-    n_sub = max(1, min(int(n_sub), step))
-    within = np.round(np.arange(1, n_sub + 1) * step / n_sub).astype(np.int64)
-    base = start + np.arange(frame_time.size, dtype=np.int64) * step
-    return (base[:, np.newaxis] + within[np.newaxis, :]).ravel() * dt, n_sub
+    ends = start + np.arange(1, frame_time.size + 1, dtype=np.int64) * step
+    return ends * dt, start * dt
 
 
 class NotBuiltError(ValueError, AttributeError):
@@ -548,7 +591,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             scale = amp / implant.stim.data.max()
             _implant.stim = Stimulus(scale * implant.stim.data,
                                      electrodes=implant.stim.electrodes,
-                                     time=implant.stim.time)
+                                     time=implant.stim.time,
+                                     metadata=deepcopy(implant.stim.metadata))
             return fnc_predict(_implant).data.max()
 
         return bisect(bright_th, inner_predict,
@@ -639,20 +683,27 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         Sampling time step of the simulation (ms)
     thresh_percept : float, optional
         Below threshold, the percept has brightness zero.
-    reduce : {'peak', 'last'}, optional
+    reduce : {'last', 'peak'}, optional
         How a percept time point summarizes the interval since the previous
         one, when ``predict_percept`` picks the output times itself (that is,
-        when ``t_percept`` is None). ``'peak'`` reports the highest brightness
-        reached over the interval; ``'last'`` reports the brightness at the
+        when ``t_percept`` is None). ``'last'`` reports the brightness at the
         instant the interval ended, which is what every version before 0.10.0
-        did.
+        did and what the published models still default to. ``'peak'`` reports
+        the highest brightness reached over the interval.
 
-        Peak is the default because electrical stimulation is pulsatile: the
-        brightness an interval produces rises and falls within it, so the
+        Peak is worth reaching for because electrical stimulation is pulsatile:
+        the brightness an interval produces rises and falls within it, so the
         closing instant says more about where in the pulse cycle it fell than
         about the interval. Peak rather than mean because what a pulse train
         produces is a flash, and averaging over the gaps that follow would
         scale every interval by its duty cycle instead.
+        :py:class:`~pulse2percept.models.FadingTemporal` defaults to it.
+
+        How exactly it is computed depends on the model. One that sets
+        ``_reduces_intervals`` tracks the peak across every ``dt`` step inside
+        its own integrator, which is exact at any output rate. Any other model
+        is sampled at several instants per interval instead, which cannot catch
+        a transient shorter than the resulting step; see ``_FRAME_SUBSAMPLES``.
 
         Naming ``t_percept`` overrides this: an explicit time point is a
         request for that instant, and is always answered with the brightness
@@ -704,8 +755,11 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
             # How to summarize an output interval when `predict_percept` picks
-            # the output times itself; see `predict_percept`:
-            'reduce': 'peak',
+            # the output times itself; see `predict_percept`. The published
+            # models default to 'last', which is what they have always
+            # reported; a model is free to override it, as `FadingTemporal`
+            # does:
+            'reduce': 'last',
             # True: print status messages, False: silent
             'verbose': True,
             # `n_jobs` is an alias that writes through to `n_threads`, so it
@@ -781,10 +835,10 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
            will automatically be sorted.
 
         *  Naming ``t_percept`` asks for the brightness *at those instants*.
-           Leaving it None asks the model to pick the output times, and it then
-           reports what each interval between them *did* rather than where it
-           happened to end -- the peak brightness reached over the interval, or
-           the closing value if ``reduce='last'``.
+           Leaving it None asks the model to pick the output times, and
+           ``reduce`` then says what each point reports about the interval
+           leading up to it -- the closing instant, or the peak reached over
+           it.
 
            The distinction matters because electrical stimulation is pulsatile.
            A 20 Hz train of 0.46 ms biphasic pulses drives brightness in
@@ -798,8 +852,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
 
         .. versionchanged:: 0.10.0
 
-            Output times chosen by the model summarize their interval instead
-            of sampling its final instant. See ``reduce``.
+            Output times chosen by the model can summarize their interval
+            instead of sampling its final instant. See ``reduce``.
 
         """
         if not self.is_built:
@@ -825,8 +879,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             _space = [len(stim.ydva), len(stim.xdva)]
         _time = stim.time
 
-        n_sub = 1
-        reduce = 'last'
+        reduce, t_out, sub_idx = 'last', None, None
         if t_percept is None:
             # Nobody asked for a particular instant, so the output times are
             # this model's to choose -- and having chosen them it owes a
@@ -841,13 +894,19 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # one percept frame per video frame. Failing that, output at a
             # 50 Hz frame rate, always starting at zero and including the last
             # time point:
-            want = (_FRAME_SUBSAMPLES
-                    if reduce == 'peak' and not self._reduces_intervals else 1)
-            frames = _frame_clock(stim, self.dt, n_sub=want)
+            frames = _frame_clock(stim, self.dt)
             if frames is None:
-                t_percept = np.arange(0, np.maximum(20, _time[-1]) + 1, 20)
+                t_out, first = np.arange(0, np.maximum(20, _time[-1]) + 1,
+                                         20), None
             else:
-                t_percept, n_sub = frames
+                t_out, first = frames
+            t_percept = t_out
+            if reduce == 'peak' and not self._reduces_intervals:
+                # This model can only be asked for instants, so approximate the
+                # peak by asking for several per interval and keeping the
+                # largest:
+                t_percept, sub_idx = _subsample(t_out, self.dt,
+                                                _FRAME_SUBSAMPLES, first)
         # We need to make sure the requested `t_percept` are sorted and
         # multiples of `dt`:
         t_percept = np.sort([t_percept]).flatten()
@@ -870,14 +929,13 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             resp = self._predict_temporal(_stim, t_percept)
             self._warn_if_blank(_stim, resp)
         resp = resp.reshape(_space + [t_percept.size])
-        if n_sub > 1:
-            # The fallback for a model that cannot reduce its own intervals:
-            # sample each frame `n_sub` times and keep the peak. Peak, not
+        if sub_idx is not None:
+            # Collapse each interval's samples down to the largest. Peak, not
             # mean, because what a pulse train produces is a flash, and
-            # averaging it over the gaps that follow would scale every frame by
-            # its duty cycle instead:
-            resp = resp.reshape(_space + [-1, n_sub]).max(axis=-1)
-            t_percept = t_percept[n_sub - 1::n_sub]
+            # averaging it over the gaps that follow would scale every interval
+            # by its duty cycle instead:
+            resp = np.maximum.reduceat(resp, sub_idx, axis=-1)
+            t_percept = t_out
         return Percept(resp, space=None, time=t_percept,
                        metadata={'stim': stim})
 
@@ -944,8 +1002,14 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             raise TypeError(f"'stim' must be a Stimulus, not {type(stim)}.")
 
         def inner_predict(amp, fnc_predict, stim, **kwargs):
+            # Carry the metadata across: it is what tells `predict_percept`
+            # which video the stimulus was encoded from, and hence when to
+            # report a percept. Without it every trial of the search would be
+            # evaluated on a different time base than the caller's own
+            # `predict_percept` will use:
             _stim = Stimulus(amp * stim.data / stim.data.max(),
-                             electrodes=stim.electrodes, time=stim.time)
+                             electrodes=stim.electrodes, time=stim.time,
+                             metadata=deepcopy(stim.metadata))
             return fnc_predict(_stim, **kwargs).data.max()
 
         return bisect(bright_th, inner_predict,
@@ -1307,9 +1371,15 @@ class Model(PrettyPrint):
         def inner_predict(amp, fnc_predict, implant, **kwargs):
             _implant = deepcopy(implant)
             scale = amp / implant.stim.data.max()
+            # Carry the metadata across: it is what tells `predict_percept`
+            # which video the stimulus was encoded from, and hence when to
+            # report a percept. Without it every trial of the search would be
+            # evaluated on a different time base than the caller's own
+            # `predict_percept` will use:
             _implant.stim = Stimulus(scale * implant.stim.data,
                                      electrodes=implant.stim.electrodes,
-                                     time=implant.stim.time)
+                                     time=implant.stim.time,
+                                     metadata=deepcopy(implant.stim.metadata))
             return fnc_predict(_implant, **kwargs).data.max()
 
         return bisect(bright_th, inner_predict,

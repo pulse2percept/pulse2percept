@@ -21,8 +21,9 @@ class FadingTemporal(TemporalModel):
 
     *  Cathodic currents (negative amplitudes) increase perceived brightness
     *  Anodic currents (positive amplitudes) do not, and are ignored
-    *  Brightness is bounded in :math:`[\\theta, \\infty]`, where
-       :math:`\\theta` (``thresh_percept``) is a nonnegative scalar
+    *  Brightness is bounded below by zero. What is reported is then
+       thresholded, so an output value is either 0 or at least
+       :math:`\\theta` (``thresh_percept``, a nonnegative scalar)
 
     .. versionchanged:: 0.10.0
 
@@ -67,6 +68,10 @@ class FadingTemporal(TemporalModel):
         params = {
             # Time constant for the exponential decay:
             'tau': 100,
+            # This model is generic rather than a published fit, so it is free
+            # to report the more useful summary by default. The peak is tracked
+            # inside `fading_fast`, so it costs nothing and is exact:
+            'reduce': 'peak',
         }
         # This is subtle: Rather than calling `params.update(base_params)`, we
         # call `base_params.update(params)`. This will overwrite `base_params`

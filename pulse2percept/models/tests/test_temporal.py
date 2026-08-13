@@ -128,8 +128,9 @@ def test_FadingTemporal_rectifies_the_drive():
     A leaky integrator is linear, so driving it with -A lets the anodic phase
     of a biphasic pulse undo exactly what the cathodic phase did: brightness
     spikes for the length of one phase and returns to zero, leaving a 1.8%
-    duty cycle rather than a phosphene. Half-wave rectifying the drive is what
-    makes the pulse deliver net charge.
+    duty cycle rather than a phosphene. The pulse still delivers zero net
+    charge either way; rectifying is what stops the model's *drive* from
+    cancelling along with it.
     """
     train = BiphasicPulseTrain(20, -50, 0.46, stim_dur=1000)
     model = FadingTemporal(tau=100).build()
@@ -262,6 +263,47 @@ def test_FadingTemporal_reduce():
 
     with pytest.raises(ValueError):
         FadingTemporal(reduce='mean').build().predict_percept(stim)
+
+
+def test_TemporalModel_reduce_fallback():
+    """`reduce='peak'` has to mean something for a model that cannot reduce.
+
+    `FadingTemporal` tracks the peak inside its own integrator, but the
+    published models cannot, so `predict_percept` samples each interval
+    several times over and keeps the largest. That fallback used to be wired
+    only into the encoder frame clock: for an ordinary stimulus the output
+    grid was built by a different branch, no subsampling happened, and
+    `reduce='peak'` silently meant `'last'`.
+    """
+    # No encoder metadata, so this takes the plain 20 ms output grid:
+    stim = BiphasicPulseTrain(20, 50, 0.46, stim_dur=200)
+    npt.assert_equal(Nanduri2012Temporal()._reduces_intervals, False)
+    peak = Nanduri2012Temporal(reduce='peak').build().predict_percept(stim)
+    last = Nanduri2012Temporal(reduce='last').build().predict_percept(stim)
+    npt.assert_almost_equal(peak.time, np.arange(0, 201, 20))
+    npt.assert_almost_equal(peak.time, last.time)
+    npt.assert_equal(np.any(peak.data != last.data), True)
+    # The samples land on the output point too, so the peak of an interval is
+    # never below the instant it ends on:
+    npt.assert_array_less(last.data - 1e-7, peak.data)
+
+    # Sampling is only an approximation of the peak, but it may not overshoot
+    # the true one, which brightness at every single `dt` step gives:
+    model = Nanduri2012Temporal(reduce='peak').build()
+    dense = model.predict_percept(
+        stim, t_percept=np.round(np.arange(0, 181, model.dt), 5)).data.ravel()
+    idx = np.round(peak.time / model.dt).astype(int)
+    true = np.array([dense[max(0, a):b + 1].max()
+                     for a, b in zip(np.r_[0, idx[:-1]], idx)])
+    npt.assert_array_less(peak.data.ravel() - 1e-7, true)
+    npt.assert_allclose(peak.data.ravel(), true, atol=0.01)
+
+    # A published model keeps reporting what it always did unless asked:
+    npt.assert_equal(Nanduri2012Temporal().reduce, 'last')
+    npt.assert_array_equal(
+        Nanduri2012Temporal().build().predict_percept(stim).data, last.data)
+    # The generic model is the one that opts in:
+    npt.assert_equal(FadingTemporal().reduce, 'peak')
 
 
 def test_TemporalModel_blank_percept_warning():

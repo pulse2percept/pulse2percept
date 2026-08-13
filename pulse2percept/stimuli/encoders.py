@@ -76,15 +76,23 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
        pick up. It takes no part in the timing of the pulses themselves.
 
     *  The **pulse clock** belongs to ``freq``. It runs continuously for the
-       whole stimulus rather than restarting at every frame, so a requested
-       frequency is the frequency actually delivered. A pulse takes the
-       modulation parameters of the frame its *onset* falls into, so it is
-       never cut in half by a frame boundary.
+       whole stimulus rather than restarting at every frame, so the frame rate
+       has no say in the rate delivered. A pulse takes the modulation
+       parameters of the frame its *onset* falls into, so it is never cut in
+       half by a frame boundary.
+
+       The rate can still come out below the one requested, but only where the
+       hardware you described cannot express it: ``clock`` and the raster cycle
+       both round a pulse period *up*. Neither ever rounds down, so an
+       electrode is never driven faster, and so never given more charge, than
+       was asked for.
 
     *  The **raster cycle** belongs to the
        :py:class:`~pulse2percept.implants.Raster`, and says which electrodes
-       may pulse when. Pulse periods are whole multiples of it, so electrodes
-       in different raster groups provably never pulse at the same instant.
+       may pulse when, so that no two raster groups are ever active at the same
+       instant. Electrodes on *different* periods would drift into one
+       another's slots, so their periods are pinned to whole multiples of the
+       cycle; electrodes that share a period cannot drift and keep it exactly.
 
     .. versionchanged:: 0.10.0
 
@@ -811,8 +819,11 @@ class AmplitudeEncoder(Encoder):
         ``min_amp`` and a gray level of 1 onto ``max_amp``.
     freq : float, optional
         Pulse train frequency (Hz), the same for every electrode. The pulse
-        clock runs independently of the video, so this is the rate actually
-        delivered whatever the frame rate is.
+        clock runs independently of the video, so the frame rate has no say in
+        the rate delivered. Because every electrode shares this one period, a
+        raster does not quantize it either: the groups keep a fixed offset from
+        one another and cannot drift together. Only ``clock`` can lower it, by
+        rounding the period up to a whole number of cycles.
 
         .. note::
 

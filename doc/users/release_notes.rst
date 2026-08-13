@@ -13,8 +13,11 @@ Highlights:
    videos into electrical stimulation. Amplitude and frequency modulation are
    supported, including stimulator timing, input resolution, and electrode
    multiplexing. Pulse timing is independent of the video frame rate: a frame
-   says when the modulation parameters change, and the requested ``freq`` is
-   the rate actually delivered.
+   says when the modulation parameters change, and no longer restarts the pulse
+   train. What limits the delivered rate is the hardware you describe -- a
+   ``clock`` or a raster cycle can only round a pulse period *up*, never down,
+   so an electrode is never driven faster, and so never given more charge, than
+   was asked for.
 
 *  New :py:class:`~pulse2percept.implants.Raster` classes describe how
    stimulators multiplex electrodes that cannot be driven simultaneously. Each
@@ -38,18 +41,26 @@ API changes:
 
 * :py:class:`~pulse2percept.models.FadingTemporal` is now driven by
   :math:`\max(-A, 0)` rather than :math:`-A`: anodic current no longer reduces
-  brightness, it is ignored. A stimulus that is purely cathodic is unaffected;
-  a charge-balanced one now delivers net charge instead of integrating to
+  brightness, it is ignored. A stimulus that is purely cathodic is unaffected.
+  A charge-balanced pulse still delivers zero net charge, as it must -- what
+  changed is that the model's *drive* is no longer charge-balanced along with
+  it, so such a pulse now produces a response instead of integrating to
   nothing. At 20 Hz and ``tau=100``, brightness between pulses used to fall to
   0.6% of the peak it had just reached (99% ripple) and now holds at 61%.
   Raising ``tau`` used to make the percept dimmer rather than steadier, because
   the peak scales as :math:`1/\tau` while the floor between pulses does not.
 
-* Temporal models gained a ``reduce`` parameter. When
-  ``predict_percept`` picks the output times itself (``t_percept=None``), each
-  point now reports the peak brightness reached over the interval leading up to
+* Temporal models gained a ``reduce`` parameter. When ``predict_percept`` picks
+  the output times itself (``t_percept=None``), ``reduce='peak'`` makes each
+  point report the highest brightness reached over the interval leading up to
   it rather than the brightness at the instant it ends. Naming ``t_percept``
-  still asks for those instants. Pass ``reduce='last'`` for the old reporting.
+  still asks for those instants.
+
+  :py:class:`~pulse2percept.models.FadingTemporal` defaults to ``'peak'`` and
+  tracks it across every ``dt`` step inside its integrator, which is exact at
+  any output rate. The published models keep reporting the closing instant
+  unless asked otherwise; requesting ``'peak'`` from one of those samples each
+  interval eight times and keeps the largest, which is an approximation.
 
   Electrical stimulation is pulsatile, so an instant sampled from a percept is
   usually an instant between pulses, and which pulses a frame catches drifts
@@ -57,8 +68,7 @@ API changes:
   that showed up as groups appearing in the wrong order or not at all: driving
   Argus II with ``SequentialRaster(6)`` at 20 Hz against a 29.97 fps video,
   25 of 94 percept frames came out entirely dark and two of the six rows never
-  appeared at all. :py:class:`~pulse2percept.models.FadingTemporal` tracks the
-  peak inside its integrator, so it is exact at any output rate.
+  appeared at all.
 
 * :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` and
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` now use

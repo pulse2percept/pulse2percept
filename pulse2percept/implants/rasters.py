@@ -31,24 +31,33 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
     Taking turns is described by a repeating **raster cycle** of duration
     ``n_groups * group_dur``. Group *g* owns the slot that starts ``g *
     group_dur`` into every cycle and lasts ``group_dur``, and it may only pulse
-    inside that slot. Two things follow, and an encoder enforces both (see
+    inside that slot. What an encoder has to guarantee is that no two groups
+    are ever active at the same instant, so that the stimulator sources at most
+    one group's worth of current at a time. Two things buy that (see
     :py:class:`~pulse2percept.stimuli.Encoder`):
 
     1.  A pulse has to be short enough to finish inside its own slot.
-    2.  An electrode's pulse period has to be a whole number of raster cycles.
-        It is rounded *up* onto that grid, so multiplexing never drives an
-        electrode faster -- and so never delivers more charge -- than asked.
+    2.  Electrodes on *different* pulse periods would otherwise drift relative
+        to one another until two slots coincided, so their periods are pinned
+        to whole numbers of raster cycles. Pinning rounds the period *up*, so
+        multiplexing never drives an electrode faster -- and so never delivers
+        more charge -- than asked.
 
-    Together they guarantee that no two groups are ever active at the same
-    instant, whatever the modulation, so the stimulator sources at most one
-    group's worth of current at a time.
+        Electrodes that all share one period cannot drift in the first place:
+        their slots stay a fixed distance apart forever. Nothing is quantized
+        in that case and the requested rate is delivered exactly, even when the
+        period is not a whole number of cycles. This is the usual case under
+        amplitude modulation.
 
     The raster cycle belongs to the *stimulation* schedule, not to the video:
-    it is tied to the pulse period, not to the frame rate. Under amplitude
-    modulation every electrode shares one period, so the cycle is exactly that
-    period and each group pulses once per cycle. Under frequency modulation the
-    cycle is set by the fastest electrode, and slower ones pulse every *m*-th
-    cycle.
+    it is tied to the pulse period, not to the frame rate. With no explicit
+    ``group_dur`` the groups divide the shortest pulse period between them, so
+    under amplitude modulation the cycle is exactly that period and each group
+    pulses once per cycle. An explicit ``group_dur`` instead builds the cycle
+    from the slot, which is generally shorter than the period -- six groups of
+    1 ms make a 6 ms cycle whatever rate the electrodes run at. Under frequency
+    modulation the cycle is set by the fastest electrode, and slower ones pulse
+    every *m*-th cycle.
 
     Subclasses only implement ``groups``.
 
