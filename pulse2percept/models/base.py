@@ -48,8 +48,20 @@ def _n_jobs_alias():
                         "names read and write the same value.")
 
 
-def _frame_clock(stim, dt):
-    """The video frame times (ms) an encoded stimulus was built from
+#: How many instants inside each video frame a percept is sampled at before
+#: being reduced to one value for that frame. Electrical stimulation is
+#: pulsatile, so the brightness a frame produces rises and falls within it; a
+#: single instant lands wherever the pulse cycle happens to be and can differ
+#: from its neighbours by two orders of magnitude for no reason a viewer would
+#: recognize. Sampling across the frame and keeping the peak reports what the
+#: frame actually did. Dynamics much faster than ``frame_dur`` divided by this
+#: are still under-reported -- no finite sampling can summarize a transient
+#: shorter than its own step.
+_FRAME_SUBSAMPLES = 8
+
+
+def _frame_clock(stim, dt, n_sub=1):
+    """When to sample a percept for the video an encoded stimulus came from
 
     An encoder separates the clock that decides *when the picture changes* from
     the clock that decides *when the electrodes pulse*, and records the former
@@ -57,14 +69,25 @@ def _frame_clock(stim, dt):
     reporting: one frame in, one frame out. The pulse train's own time points
     are far finer and carry no extra picture.
 
-    Returns the *end* of each frame, so that frame *k* of the percept reflects
-    the stimulation delivered during frame *k* of the video, rounded onto the
-    model's ``dt`` grid (a 29.97 fps frame is 33.3667 ms, which is not a
-    multiple of the default dt=0.005 ms). It is the frame *interval* that is
+    Each frame is sampled ``n_sub`` times, evenly spaced and ending exactly on
+    the frame boundary, so that a caller can reduce the samples belonging to a
+    frame down to the one number that frame is worth. Everything is rounded
+    onto the model's ``dt`` grid (a 29.97 fps frame is 33.3667 ms, which is not
+    a multiple of the default dt=0.005 ms). It is the frame *interval* that is
     rounded rather than each frame time on its own, so that the percept keeps
     an evenly spaced time axis -- ``play`` and ``save`` infer a frame rate from
-    it and refuse a ragged one. Returns None for anything that did not come out
-    of an encoder.
+    it and refuse a ragged one.
+
+    Returns
+    -------
+    t : (n_frames * n_sub,) array
+        Sample times (ms), in order. Every ``n_sub``-th one, starting at index
+        ``n_sub - 1``, is the end of a frame.
+    n_sub : int
+        How many samples each frame actually got, which is fewer than asked for
+        if a frame is not that many ``dt`` long.
+
+    Returns None for anything that did not come out of an encoder.
 
     .. versionadded:: 0.10.0
 
@@ -80,7 +103,7 @@ def _frame_clock(stim, dt):
     if not isinstance(enc, dict) and 'stim' in meta:
         # A `Percept` on its way from the spatial model to the temporal one
         # carries the stimulus it came from, and the frame clock with it:
-        return _frame_clock(meta['stim'], dt)
+        return _frame_clock(meta['stim'], dt, n_sub=n_sub)
     if not isinstance(enc, dict):
         return None
     try:
@@ -95,7 +118,11 @@ def _frame_clock(stim, dt):
     # of `dt` (which `predict_percept` insists on):
     step = max(1, int(round(frame_dur / dt)))
     start = int(round(float(frame_time[0]) / dt))
-    return (start + (np.arange(frame_time.size) + 1) * step) * dt
+    # A frame cannot be sampled more often than it has `dt` steps:
+    n_sub = max(1, min(int(n_sub), step))
+    within = np.round(np.arange(1, n_sub + 1) * step / n_sub).astype(np.int64)
+    base = start + np.arange(frame_time.size, dtype=np.int64) * step
+    return (base[:, np.newaxis] + within[np.newaxis, :]).ravel() * dt, n_sub
 
 
 class NotBuiltError(ValueError, AttributeError):
@@ -720,15 +747,20 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             _space = [len(stim.ydva), len(stim.xdva)]
         _time = stim.time
 
+        n_sub = 1
         if t_percept is None:
             # A stimulus that came out of an encoder knows the frame rate of
             # the video behind it, and that is the rate worth reporting at:
-            # one percept frame per video frame. Failing that, output at a
+            # one percept frame per video frame. Each frame is sampled several
+            # times over and reduced below, since a single instant lands
+            # wherever the pulse cycle happens to be. Failing that, output at a
             # 50 Hz frame rate, always starting at zero and including the last
             # time point:
-            t_percept = _frame_clock(stim, self.dt)
-            if t_percept is None:
+            frames = _frame_clock(stim, self.dt, n_sub=_FRAME_SUBSAMPLES)
+            if frames is None:
                 t_percept = np.arange(0, np.maximum(20, _time[-1]) + 1, 20)
+            else:
+                t_percept, n_sub = frames
         # We need to make sure the requested `t_percept` are sorted and
         # multiples of `dt`:
         t_percept = np.sort([t_percept]).flatten()
@@ -745,8 +777,18 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # Calculate the Stimulus at requested time points:
             resp = self._predict_temporal(_stim, t_percept)
             self._warn_if_blank(_stim, resp)
-        return Percept(resp.reshape(_space + [t_percept.size]),
-                       space=None, time=t_percept,
+        resp = resp.reshape(_space + [t_percept.size])
+        if n_sub > 1:
+            # Reduce each frame's samples to the peak brightness it reached.
+            # That is what a frame of the percept means: electrical stimulation
+            # is pulsatile, so reporting the instant a frame happened to end on
+            # says more about where in the pulse cycle that instant fell than
+            # about the frame. Peak, not mean, because what a pulse train
+            # produces is a flash, and averaging it over the gaps that follow
+            # would scale every frame by its duty cycle instead:
+            resp = resp.reshape(_space + [-1, n_sub]).max(axis=-1)
+            t_percept = t_percept[n_sub - 1::n_sub]
+        return Percept(resp, space=None, time=t_percept,
                        metadata={'stim': stim})
 
     def _warn_if_blank(self, stim, resp):

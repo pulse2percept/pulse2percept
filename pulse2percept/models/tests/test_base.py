@@ -624,6 +624,38 @@ def test_Model_predict_percept_frame_clock(fps):
                             np.arange(0, 101, 20))
 
 
+def test_Model_predict_percept_frame_peak():
+    # Electrical stimulation is pulsatile, so brightness rises and falls within
+    # a video frame. Reporting the single instant a frame happened to end on
+    # says more about where in the pulse cycle that instant fell than about the
+    # frame: at 20 Hz against a 29.97 fps video the period (50 ms) and the
+    # frame (33.37 ms) are incommensurate, so the sampling phase walks through
+    # the cycle and neighbouring frames came out two orders of magnitude apart.
+    implant = ArgusI()
+    vid = VideoStimulus(np.random.rand(4, 4, 16), metadata={'fps': 29.97})
+    implant.stim = AmplitudeEncoder(implant, amp_range=(0, 50),
+                                    freq=20).encode(vid)
+    model = Model(temporal=FadingTemporal(tau=100)).build()
+    peak = model.predict_percept(implant)
+    # Same frames, but sampled only at the instant each one ends:
+    at_end = model.predict_percept(implant, t_percept=peak.time)
+    npt.assert_equal(peak.data.shape, at_end.data.shape)
+    npt.assert_almost_equal(peak.time, at_end.time)
+
+    # The default reports the peak each frame reached, so it is never below the
+    # value at the instant the frame ended, and for most frames it is above it:
+    npt.assert_array_less(at_end.data - 1e-6, peak.data)
+    npt.assert_equal(np.any(peak.data > 1.5 * at_end.data), True)
+    # ... which is what stops the frame-to-frame swing from being an artifact
+    # of the sampling phase rather than a property of the video:
+    swing = lambda d: d.max() / np.median(d)
+    npt.assert_equal(swing(peak.data.max(axis=(0, 1))) <
+                     swing(at_end.data.max(axis=(0, 1))), True)
+    # A percept is still one frame per video frame, on an evenly spaced axis:
+    npt.assert_equal(peak.data.shape[-1], 16)
+    npt.assert_almost_equal(np.diff(peak.time), np.diff(peak.time)[0])
+
+
 def test_Model_predict_percept_correctly_parallelizes():
     # setup and time spatial model with 1 thread
     one_thread_spatial = Model(spatial=ValidSpatialModel(n_threads=1)).build()

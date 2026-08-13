@@ -33,6 +33,14 @@ def _finite(name, value):
         raise ValueError(f"'{name}' must be finite, not {value}.")
 
 
+def _all_equal(a):
+    """Whether every element of ``a`` is the same value
+
+    Empty counts as equal: there is nothing there to differ.
+    """
+    return a.size == 0 or bool(np.all(a == a.flat[0]))
+
+
 def _fps(metadata):
     """Frame rate recorded in a (possibly wrapped) stimulus metadata dict
 
@@ -447,16 +455,28 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
                 group.max(initial=0) >= raster.n_groups):
             raise ValueError(f"'groups' must be in 0..{raster.n_groups - 1}.")
         slot = raster.slot_dur(fastest * DT) / DT
-        if self.clock is not None and raster.group_dur is not None:
-            # An explicit slot is the primitive the cycle is made of, so round
-            # *it* onto the clock and rebuild the cycle from the result. The
-            # other way around -- rounding each offset and the total cycle
-            # independently -- leaves groups with turns of different lengths
-            # and a cycle that is no longer `n_groups` of them:
-            slot = max(1.0, round(slot / (self.clock / DT))) * self.clock / DT
-        # With no explicit slot the groups divide the pulse period, and it is
-        # the period that has to be preserved: keeping the cycle equal to it is
-        # what makes a rastered train run at exactly the requested rate:
+        if self.clock is not None:
+            tick = self.clock / DT
+            if raster.group_dur is not None:
+                # An explicit slot is the primitive the cycle is made of, so
+                # round *it* onto the clock and rebuild the cycle from the
+                # result:
+                slot = max(1.0, round(slot / tick)) * tick
+            else:
+                # Splitting the cycle evenly generally lands the group
+                # boundaries between clock edges, and a stimulator can only
+                # start a pulse on one. Take the largest whole number of clock
+                # cycles that still fits every group into the period (floor):
+                slot = np.floor(slot / tick + 1e-9) * tick
+                if slot < tick:
+                    raise ValueError(
+                        f"A {fastest * DT:.3f} ms pulse period holds only "
+                        f"{int(fastest / tick)} clock cycle(s) of "
+                        f"clock={self.clock:g} ms, which is not enough to give "
+                        f"each of {raster.n_groups} raster groups its own turn. "
+                        f"Use fewer groups, a finer 'clock', or a lower "
+                        f"frequency.")
+        # With no explicit slot the groups divide the pulse period:
         cycle = fastest if raster.group_dur is None else raster.n_groups * slot
         # Check the slot the hardware will actually use, not the one that was
         # asked for: a 5.1 ms slot on a 1 ms clock is a 5 ms slot, and two of
@@ -468,17 +488,15 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
                 f"not fit into the {fastest * DT:.3f} ms pulse period. Shorten "
                 f"'group_dur', use fewer groups, or lower the frequency.")
         offset = group.astype(np.float64) * slot
-        if self.clock is not None:
-            tick = self.clock / DT
-            offset = tick * np.round(offset / tick)
-        # Every group's turn has to be long enough to finish a pulse in. The
-        # gap to the *next* group's turn is what a collision would show up as,
-        # so measure those rather than the nominal slot -- rounding a slot onto
-        # the clock grid can shorten one gap while lengthening another, and two
-        # groups snapping onto the same offset shows up here as a gap of zero.
-        # A pulse also has to clear the next group's slot by a whole tick, since
-        # each onset is rounded onto the DT grid when it is placed:
-        edges = np.append(np.unique(np.round(offset)), np.round(cycle))
+        # Every group's turn has to be long enough to finish a pulse in, and
+        # each pulse has to clear the next group's turn by a whole tick:
+        edges = np.unique(np.round(offset))
+        if edges.size < np.unique(group).size:
+            raise ValueError(
+                f"Two raster groups were given the same {slot * DT:.3f} ms "
+                f"turn, so they would pulse together. Use fewer groups, a "
+                f"finer 'clock', or a lower frequency.")
+        edges = np.append(edges, np.round(cycle))
         gap = float(np.min(np.diff(edges), initial=cycle))
         if gap < pulse_len + 1:
             raise ValueError(
@@ -653,15 +671,11 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         # but it costs no pulses and no time points:
         active = firing & (amp != 0)
         offset, cycle = self._raster_grid(electrodes, period, firing, pulse_len)
-        if cycle is not None:
-            # A period that is a whole number of raster cycles is what keeps
-            # two groups from ever drifting onto the same instant. Round the
-            # period *up* rather than to the nearest cycle: rounding down
-            # delivers more charge than was asked for, and an electrode asking
-            # for 67 Hz against a 10 ms cycle would come back at 100 Hz rather
-            # than 50. The epsilon keeps a period that already is a whole
-            # number of cycles -- every period, under amplitude modulation --
-            # from being pushed up to the next one by binary rounding:
+        if cycle is not None and not _all_equal(period[firing]):
+            # Electrodes on different periods drift relative to one another,
+            # and two groups would eventually land on the same instant. Pinning
+            # every period to a whole number of raster cycles is what stops
+            # that. Round the period *up* rather than to the nearest cycle:
             period[firing] = cycle * np.maximum(
                 1.0, np.ceil(period[firing] / cycle - 1e-9))
 
@@ -719,30 +733,20 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
                           f"instead.")
 
         # One unit-amplitude waveform per schedule, scaled by the amplitude of
-        # whichever frame each pulse belongs to. Sampling a schedule onto the
-        # time axis is exact: its own time points are a subset of that axis,
-        # and everything between two of them is either a plateau or a gap, both
-        # of which linear interpolation reproduces.
+        # whichever frame each pulse belongs to:
         data = np.zeros((n_el, n_time), dtype=np.float32)
         for s, (onset, frame) in enumerate(zip(onsets, frames)):
             rows = np.flatnonzero(sched == s)
             if rows.size == 0 or onset.size == 0:
                 continue
             wave = self._sample(onset, pulse_ticks, pulse_vals, ticks)
-            # Which pulse -- and hence which frame's amplitude -- each time
-            # point belongs to. Points before the first pulse and in the gaps
-            # between pulses carry a zero waveform, so what they pick up here
-            # never reaches the output:
+            # Which pulse each time point belongs to:
             at = np.searchsorted(onset, ticks, side='right') - 1
             np.clip(at, 0, onset.size - 1, out=at)
             data[rows] = amp[rows][:, frame[at]] * wave
         time = ticks * DT
         time[-1] = total
         stim = Stimulus(data, electrodes=electrodes, time=time)
-        # Provenance, not something a model should compute from: the stimulus
-        # is a plain `Stimulus` and every consumer reads its data container.
-        # `frame_time` is what lets a percept be reported on the video's own
-        # clock rather than on the pulse train's:
         stim.metadata['encoder'] = {'kind': type(self).__name__,
                                     'frame_dur': frame_dur,
                                     'n_frames': n_frames,

@@ -591,6 +591,67 @@ def test_FrequencyEncoder_rate_changes_between_frames():
                             [0, 10, 20, 30, 40, 50, 70, 90, 120], decimal=3)
 
 
+def test_Encoder_raster_slots_land_on_the_clock():
+    # A stimulator can only start a pulse on a clock edge, so splitting a
+    # period evenly between the groups has to be resolved onto that grid.
+    # Rounding each group's offset independently could land two of them on the
+    # *same* edge -- six groups sharing a 5 ms period on a 1 ms clock have only
+    # five edges to go round -- and they would then pulse together, which is
+    # the one thing a raster exists to prevent.
+    img = ImageStimulus(np.ones((6, 2)))
+    with pytest.raises(ValueError, match='clock'):
+        AmplitudeEncoder(freq=200, frame_dur=100, clock=1,
+                         raster=SequentialRaster(6)).encode(img)
+    # Given room, every group gets its own whole number of clock cycles, and
+    # the turns come out evenly spaced rather than jittered onto nearby edges:
+    enc = AmplitudeEncoder(freq=20, frame_dur=200, clock=1,
+                           raster=SequentialRaster(6)).encode(img)
+    starts = np.array([pulse_onsets(enc, e)[0] for e in range(0, 12, 2)])
+    npt.assert_almost_equal(starts, np.arange(6) * 8.0, decimal=3)
+    npt.assert_equal(np.unique(starts).size, 6)
+    # The period is untouched: every electrode still runs at the 20 Hz asked
+    # for, and no two groups ever coincide.
+    for e in range(12):
+        npt.assert_almost_equal(np.diff(pulse_onsets(enc, e)), 50, decimal=3)
+    npt.assert_almost_equal(np.abs(enc.data).sum(axis=0).max(), 100)
+
+
+def test_Encoder_raster_short_slot_keeps_the_rate():
+    # A short explicit slot packs the groups into the start of each period.
+    # That must not change the rate: when every electrode is on the same
+    # period -- which is what amplitude modulation always produces -- two
+    # groups a fixed offset apart can never meet, so there is nothing to
+    # quantize away. Pinning the period to the cycle anyway turned a requested
+    # 20 Hz into 18.5 Hz on Argus II with a 1 ms slot.
+    img = ImageStimulus(np.ones((2, 2)))
+    # 10 ms period against a 2 x 1.5 = 3 ms cycle: quantizing would round the
+    # period up to 12 ms (83 Hz):
+    enc = AmplitudeEncoder(freq=100, frame_dur=200,
+                           raster=SequentialRaster(
+                               2, interleave=True,
+                               group_dur=1.5)).encode(img)
+    npt.assert_almost_equal(enc.metadata['encoder']['cycle'], 3)
+    for e, offset in enumerate([0, 1.5, 0, 1.5]):
+        npt.assert_almost_equal(pulse_onsets(enc, e)[0], offset, decimal=3)
+        npt.assert_almost_equal(np.diff(pulse_onsets(enc, e)), 10, decimal=3)
+    # ... and the groups still never pulse at the same instant, which is the
+    # only reason the quantization was there:
+    npt.assert_equal(np.intersect1d(np.round(pulse_onsets(enc, 0), 3),
+                                    np.round(pulse_onsets(enc, 1), 3)).size, 0)
+    npt.assert_almost_equal(np.abs(enc.data).sum(axis=0).max(), 100)
+    # Frequency modulation still has to quantize, because electrodes on
+    # different periods do drift onto each other:
+    fm = FrequencyEncoder(freq_range=(50, 100), amp=10, frame_dur=200,
+                          raster=SequentialRaster(
+                              2, interleave=True,
+                              group_dur=1.5)).encode(
+                                  ImageStimulus(np.array([[1.0, 0.0],
+                                                          [1.0, 0.0]])))
+    for e in range(4):
+        period = np.diff(pulse_onsets(fm, e))
+        npt.assert_allclose(period / 3, np.round(period / 3), atol=1e-3)
+
+
 def test_FrequencyEncoder_rate_changes_with_raster_offset():
     # A raster group's first legal onset can fall several frames into the video
     # when stimulation is slow relative to it, and the phase accumulator has to
