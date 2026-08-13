@@ -154,16 +154,28 @@ class VideoStimulus(Stimulus):
                                             time=time, electrodes=electrodes,
                                             metadata=metadata,
                                             compress=compress)
-        if compress:
-            # Compression drops the time points at which the video does not
-            # change, so the frame count above is no longer the frame count of
-            # the stimulus. ``vid_shape`` has to describe ``self.data``, which
-            # is what every ``data.reshape(vid_shape)`` in this module relies
-            # on. (Compression can also drop all-zero pixels, in which case no
-            # shape describes the data any more; see ``_frames``.)
-            self.vid_shape = (*self.vid_shape[:-1], self.data.shape[-1])
         self.metadata = metadata
         self.rewind()
+
+    def compress(self):
+        """Compress the source data
+
+        Also brings ``vid_shape`` back in line with the compressed data:
+        compression drops the time points at which the video does not change,
+        so the frame count of the source is no longer the frame count of the
+        stimulus. Every ``data.reshape(vid_shape)`` in this module relies on
+        that invariant. (Compression can also drop all-zero pixels, in which
+        case no shape describes the data any more; see ``_frames``.)
+
+        Returns
+        -------
+        compressed : :py:class:`~pulse2percept.stimuli.VideoStimulus`
+        """
+        super().compress()
+        # ``Stimulus.__init__`` calls this method for ``compress=True``, which
+        # is why ``vid_shape`` is set before the constructor runs: one
+        # implementation then covers both that and an explicit ``compress()``.
+        self.vid_shape = (*self.vid_shape[:-1], self.data.shape[-1])
 
     def _frames(self):
         """The stimulus as a dense <rows x columns [x channels] x frames> array

@@ -377,14 +377,20 @@ def test_VideoStimulus_play_compressed():
     frame = np.random.rand(4, 5) * 0.5 + 0.5
     other = np.random.rand(4, 5) * 0.5 + 0.5
     ndarray = np.stack([frame] * 4 + [other] * 4, axis=-1)
-    video = VideoStimulus(ndarray, time=np.arange(8), compress=True)
-    # Four of the eight time points are redundant and have been dropped:
-    npt.assert_equal(video.data.shape[-1], 4)
-    npt.assert_equal(video.vid_shape, (4, 5, 4))
-    # The compressed time axis is no longer homogeneous, hence the explicit fps:
-    html = video.play(fps=10).to_jshtml()
-    npt.assert_equal('"n": 4' in html, True)
-    npt.assert_equal(f't = {video.time[-1]:.2f} ms' in html, True)
+    # Compressing at construction time and compressing afterwards must leave
+    # the stimulus in the same state:
+    eager = VideoStimulus(ndarray, time=np.arange(8), compress=True)
+    lazy = VideoStimulus(ndarray, time=np.arange(8))
+    npt.assert_equal(lazy.vid_shape, (4, 5, 8))
+    lazy.compress()
+    for video in (eager, lazy):
+        # Four of the eight time points are redundant and have been dropped:
+        npt.assert_equal(video.data.shape[-1], 4)
+        npt.assert_equal(video.vid_shape, (4, 5, 4))
+        # The compressed time axis is no longer homogeneous, hence the fps:
+        html = video.play(fps=10).to_jshtml()
+        npt.assert_equal('"n": 4' in html, True)
+        npt.assert_equal(f't = {video.time[-1]:.2f} ms' in html, True)
     # An all-zero pixel is dropped instead, and no shape can describe what is
     # left, so playback fails with an explanation rather than a reshape error:
     sparse = np.zeros((4, 5, 6))
