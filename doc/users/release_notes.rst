@@ -73,8 +73,9 @@ API changes:
   time axis non-monotonic.
 
 * Zero-amplitude electrodes no longer build (and then discard) a full pulse
-  train, and no longer trip the raster's fit check on a stimulus that delivers
-  no current at all.
+  train, so a dark frame costs no pulses and no time points. Whether a raster
+  *fits* remains a property of the device rather than of the content, so an
+  unworkable raster is still reported for a stimulus that happens to be dark.
 
 * Encoders always sample an image or video at the implant's electrode
   locations when an ``implant`` is given. Sampling used to be skipped whenever

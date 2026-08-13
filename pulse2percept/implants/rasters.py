@@ -36,6 +36,8 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
 
     1.  A pulse has to be short enough to finish inside its own slot.
     2.  An electrode's pulse period has to be a whole number of raster cycles.
+        It is rounded *up* onto that grid, so multiplexing never drives an
+        electrode faster -- and so never delivers more charge -- than asked.
 
     Together they guarantee that no two groups are ever active at the same
     instant, whatever the modulation, so the stimulator sources at most one
@@ -66,6 +68,9 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         resolution under frequency modulation: a shorter slot means a shorter
         cycle, and pulse periods are quantized onto that cycle. It cannot be
         shorter than a single pulse.
+
+        An encoder with a ``clock`` rounds the slot onto it and rebuilds the
+        cycle from the result, so every group keeps a turn of the same length.
 
     """
     __slots__ = ('group_dur',)

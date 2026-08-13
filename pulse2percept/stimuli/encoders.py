@@ -423,14 +423,26 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         # whether a raster is a workable schedule is a property of the device,
         # not of how bright today's video happens to be.
         fastest = float(np.min(period[firing]))
-        offset = np.asarray(raster.offsets(electrodes, fastest * DT),
-                            dtype=np.float64) / DT
-        cycle = (fastest if raster.group_dur is None else
-                 raster.n_groups * raster.group_dur / DT)
+        # `raster.offsets` validates that the groups fit into the cycle; the
+        # slot is what the offsets are actually built from:
+        raster.offsets(electrodes, fastest * DT)
+        group = np.asarray(raster.groups(electrodes), dtype=np.float64)
+        slot = raster.slot_dur(fastest * DT) / DT
+        if self.clock is not None and raster.group_dur is not None:
+            # An explicit slot is the primitive the cycle is made of, so round
+            # *it* onto the clock and rebuild the cycle from the result. The
+            # other way around -- rounding each offset and the total cycle
+            # independently -- leaves groups with turns of different lengths
+            # and a cycle that is no longer `n_groups` of them:
+            slot = max(1.0, round(slot / (self.clock / DT))) * self.clock / DT
+        offset = group * slot
+        # With no explicit slot the groups divide the pulse period, and it is
+        # the period that has to be preserved: keeping the cycle equal to it is
+        # what makes a rastered train run at exactly the requested rate:
+        cycle = fastest if raster.group_dur is None else raster.n_groups * slot
         if self.clock is not None:
             tick = self.clock / DT
             offset = tick * np.round(offset / tick)
-            cycle = tick * max(1.0, round(cycle / tick))
         # Every group's turn has to be long enough to finish a pulse in. The
         # gap to the *next* group's turn is what a collision would show up as,
         # so measure those rather than the nominal slot -- rounding a slot onto
@@ -486,32 +498,69 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
             np.clip(frame, 0, n_frames - 1, out=frame)
             keep = active[frame]
             return onset[keep], frame[keep]
-        # Frequency modulation: the period changes from frame to frame, and the
-        # next pulse is scheduled from the previous one rather than from the
-        # frame boundary, so that the pulse clock keeps its phase. `t` stays
-        # unrounded for the same reason the period does -- rounding it here
-        # would let the error accumulate from pulse to pulse:
-        onset, frame, t = [], [], float(start)
-        while t <= last:
-            tick = int(round(t))
-            k = int(np.searchsorted(frame_ticks, tick, side='right')) - 1
-            k = min(max(k, 0), n_frames - 1)
-            if active[k]:
-                onset.append(tick)
-                frame.append(k)
-            if period[k] > 0:
-                # The clock runs even where the amplitude is zero, so a dark
-                # frame does not reset the phase of the frames around it:
-                t += float(period[k])
-            elif k + 1 < n_frames:
-                # Nothing to stay in phase with, so pick the schedule back up
-                # at the next frame -- but on this schedule's own grid, or a
-                # silent stretch would knock every pulse after it off the
-                # stimulator's clock and multiply the time points needed:
-                nxt = float(frame_ticks[k + 1])
-                t = start + grid * np.ceil((nxt - start) / grid)
-            else:
+        # Frequency modulation: the rate is piecewise constant over the video's
+        # frames, so track the *phase* of the pulse clock rather than jumping
+        # straight to the next pulse. Phase advances at 1/period, which changes
+        # the instant a frame boundary goes by; a pulse fires whenever it
+        # reaches 1. Jumping a whole period ahead instead would carry the old
+        # frame's rate across the boundary and miss the new one entirely --
+        # a frame asking for 100 Hz would sit silent because the frame before
+        # it asked for 10 Hz and had already booked the next pulse.
+        onset, frame = [], []
+        # A full phase to begin with, so that a schedule's first pulse lands at
+        # the start of its slot rather than one period into it:
+        phase, k, t = 1.0, 0, float(start)
+        prev = -np.inf
+        while k < n_frames and t <= last:
+            # How far this frame reaches, and how much phase it can supply:
+            edge = float(frame_ticks[k + 1]) if k + 1 < n_frames else np.inf
+            rate = 1.0 / period[k] if period[k] > 0 else 0.0
+            if rate == 0.0:
+                # A stopped clock supplies no phase, so nothing can come due
+                # here however long the frame is. Whatever phase had built up
+                # waits for the frame that starts the clock again:
+                if not np.isfinite(edge):
+                    break
+                t, k = edge, k + 1
+                continue
+            due = phase + (edge - t) * rate
+            if due < 1.0:
+                # The frame runs out before the next pulse comes due, so carry
+                # the phase across the boundary and pick the new rate up there:
+                if not np.isfinite(edge):
+                    break
+                phase, t, k = due, edge, k + 1
+                continue
+            # The pulse comes due inside this frame. Work out where from the
+            # phase alone, and settle which frame it belongs to *before*
+            # snapping it onto a grid -- snapping is a hardware detail, and
+            # deciding the frame from a snapped (and possibly nudged) time can
+            # send the schedule back to a boundary it has already left:
+            cross = t + (1.0 - phase) / rate
+            j = int(np.searchsorted(frame_ticks, round(cross),
+                                    side='right')) - 1
+            j = min(max(j, 0), n_frames - 1)
+            if period[j] <= 0:
+                # The pulse came due right as the clock stopped. Hold it rather
+                # than spending it here: a frame at 0 Hz should not swallow a
+                # pulse, and the frame that starts the clock again should come
+                # up at its full rate rather than a period short.
+                phase, t, k = 1.0, cross, j
+                continue
+            # Round onto the grid this schedule is allowed to use -- the raster
+            # cycle, or the stimulator's clock -- and restart the phase from
+            # where the pulse actually landed, so the error cannot accumulate:
+            tick = int(round(start + grid * np.round((cross - start) / grid)))
+            if tick <= prev:
+                # Never let grid rounding stall or reverse the train:
+                tick = int(round(prev + grid))
+            if tick > last:
                 break
+            if active[j]:
+                onset.append(tick)
+                frame.append(j)
+            prev, phase, t = tick, 0.0, float(tick)
+            k = j
         return (np.asarray(onset, dtype=np.int64).reshape(-1),
                 np.asarray(frame, dtype=np.int64).reshape(-1))
 
@@ -569,9 +618,15 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         offset, cycle = self._raster_grid(electrodes, period, firing, pulse_len)
         if cycle is not None:
             # A period that is a whole number of raster cycles is what keeps
-            # two groups from ever drifting onto the same instant:
+            # two groups from ever drifting onto the same instant. Round the
+            # period *up* rather than to the nearest cycle: rounding down
+            # delivers more charge than was asked for, and an electrode asking
+            # for 67 Hz against a 10 ms cycle would come back at 100 Hz rather
+            # than 50. The epsilon keeps a period that already is a whole
+            # number of cycles -- every period, under amplitude modulation --
+            # from being pushed up to the next one by binary rounding:
             period[firing] = cycle * np.maximum(
-                1.0, np.round(period[firing] / cycle))
+                1.0, np.ceil(period[firing] / cycle - 1e-9))
 
         # Everything about when an electrode pulses is fixed by its slot and by
         # the period/activity it carries through the frames:
@@ -789,11 +844,11 @@ class FrequencyEncoder(Encoder):
        setting                  time points
        =======================  ===========
        (amplitude modulation)           442
-       no quantization              142,704
-       ``clock=1``                   21,519
-       ``clock=2``                   10,886
-       ``n_levels=8``                88,748
-       ``clock=1, n_levels=8``       20,987
+       no quantization              143,760
+       ``clock=1``                   21,561
+       ``clock=2``                   10,893
+       ``n_levels=8``               129,031
+       ``clock=1, n_levels=8``       21,155
        =======================  ===========
 
        Start with ``clock=1``, which costs nothing in frequency range, and
@@ -830,6 +885,12 @@ class FrequencyEncoder(Encoder):
            across many groups asks for a lot of a stimulator -- six groups of
            0.92 ms pulses need 5.5 ms per cycle, or at most 181 Hz -- and
            encoding raises rather than quietly delivering something else.
+
+           Quantizing onto the cycle always rounds the *period* up, so an
+           electrode is never driven faster than it was asked for: against a
+           10 ms cycle, 67 Hz comes back as 50 Hz rather than 100 Hz. Rounding
+           to the nearest cycle instead would deliver up to twice the charge
+           the caller asked for. Shorten ``group_dur`` for a finer grid.
     amp : float, optional
         Pulse amplitude (uA), the same for every electrode.
     phase_dur, interphase_dur, cathodic_first, pulse, clock, n_levels, \

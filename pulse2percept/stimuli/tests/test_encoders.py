@@ -415,15 +415,18 @@ def test_Encoder_raster():
     net = trapezoid(enc.data.astype(np.float64),
                     x=enc.time.astype(np.float64))
     npt.assert_almost_equal(net, 0, decimal=3)
-    # A clock snaps the slot offsets along with the period. A 4.6 ms slot lands
-    # on 5 ms, and the 10 ms period onto the 9 ms cycle the two slots make:
+    # A clock quantizes the *slot*, and the cycle is rebuilt from it, so the
+    # groups keep equal turns. A 4.6 ms slot lands on 5 ms and two of them make
+    # a 10 ms cycle -- which here still holds the requested 100 Hz exactly.
+    # Rounding each offset and the total cycle independently instead would give
+    # a 9 ms cycle made of a 5 ms and a 4 ms turn, and 111 Hz:
     enc = AmplitudeEncoder(freq=100, frame_dur=100, clock=1,
                            raster=SequentialRaster(
                                2, interleave=True,
                                group_dur=4.6)).encode(img)
     npt.assert_almost_equal(pulse_onsets(enc, 1)[0], 5, decimal=3)
-    npt.assert_almost_equal(np.diff(pulse_onsets(enc, 1)), 9, decimal=3)
-    npt.assert_almost_equal(enc.metadata['encoder']['cycle'], 9)
+    npt.assert_almost_equal(np.diff(pulse_onsets(enc, 1)), 10, decimal=3)
+    npt.assert_almost_equal(enc.metadata['encoder']['cycle'], 10)
 
 
 def test_Encoder_raster_frequency_modulation():
@@ -520,6 +523,79 @@ def test_Encoder_freq_is_actual_freq(fps, freq):
                     x=enc.time.astype(np.float64))
     npt.assert_almost_equal(net, 0, decimal=3)
     npt.assert_equal(np.all(np.diff(enc.time) > 0.95 * DT), True)
+
+
+def fm_onsets(grays, fps=20, **kwargs):
+    """Pulse onsets (ms) of a one-pixel video whose gray level changes"""
+    vid = VideoStimulus(np.asarray(grays, dtype=float).reshape(1, 1, -1),
+                        metadata={'fps': fps})
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        enc = FrequencyEncoder(freq_range=(0, 100), amp=10,
+                               **kwargs).encode(vid)
+    return pulse_onsets(enc), enc
+
+
+def test_FrequencyEncoder_rate_changes_between_frames():
+    # The rate is piecewise constant over the video's frames, and the pulse
+    # clock has to pick up a new rate the instant a frame boundary goes by.
+    # Scheduling the next pulse a whole period ahead instead would carry the
+    # old frame's rate straight across the boundary: a frame asking for 100 Hz
+    # sat completely silent because the frame before it asked for 10 Hz and had
+    # already booked the next pulse 100 ms out.
+    # 50 ms frames: 10 Hz, then 100 Hz. Half a cycle is banked by 50 ms, so the
+    # first 100 Hz pulse completes it at 55 ms:
+    onsets, enc = fm_onsets([0.1, 1.0])
+    npt.assert_almost_equal(onsets, [0, 55, 65, 75, 85, 95], decimal=3)
+    # Charge balance is what a pulse cut off by a boundary would break:
+    net = trapezoid(enc.data.astype(np.float64),
+                    x=enc.time.astype(np.float64))
+    npt.assert_almost_equal(net, 0, decimal=3)
+    # The other direction: a fast frame followed by a slow one:
+    npt.assert_almost_equal(fm_onsets([1.0, 0.1])[0],
+                            [0, 10, 20, 30, 40, 50], decimal=3)
+    # Each frame gets the rate it asked for, so the counts follow the video.
+    # Note the 50 -> 100 Hz case: at the boundary the 50 Hz frame has banked
+    # half a period, and the new rate finishes it 5 ms later at 55 ms, not
+    # 20 ms later at 60 ms as the old rate would have:
+    for grays, want in [([1.0, 0.5], [0, 10, 20, 30, 40, 50, 70, 90]),
+                        ([0.5, 1.0], [0, 20, 40, 55, 65, 75, 85, 95])]:
+        npt.assert_almost_equal(fm_onsets(grays)[0], want, decimal=3)
+    # A frame at 0 Hz stops the clock rather than swallowing a pulse, and the
+    # frame that starts it again comes up at its full rate:
+    npt.assert_almost_equal(fm_onsets([1.0, 0.0, 1.0])[0],
+                            [0, 10, 20, 30, 40, 100, 110, 120, 130, 140],
+                            decimal=3)
+    npt.assert_equal(fm_onsets([0.0, 0.0])[0].size, 0)
+    npt.assert_almost_equal(fm_onsets([0.0, 1.0])[0],
+                            [50, 60, 70, 80, 90], decimal=3)
+    # Phase carries through a rate change that lands mid-period: 100, then 50,
+    # then 25 Hz. The 50 Hz frame banks half a period by its end, which the
+    # 25 Hz frame finishes 20 ms into itself:
+    npt.assert_almost_equal(fm_onsets([1.0, 0.5, 0.25])[0],
+                            [0, 10, 20, 30, 40, 50, 70, 90, 120], decimal=3)
+
+
+def test_FrequencyEncoder_raster_never_speeds_up():
+    # Quantizing a period onto the raster cycle rounds it *up*: an electrode
+    # must never come back faster than it was asked for, since that delivers
+    # more charge than the caller requested. Against a 10 ms cycle, 67 Hz
+    # becomes 50 Hz rather than 100 Hz.
+    grays = np.array([1.0, 0.67, 0.4, 0.2])
+    img = ImageStimulus(grays.reshape((2, 2)))
+    enc = FrequencyEncoder(freq_range=(0, 100), amp=10, frame_dur=200,
+                           raster=SequentialRaster(4)).encode(img)
+    cycle = enc.metadata['encoder']['cycle']
+    npt.assert_almost_equal(cycle, 10)
+    for e, gray in enumerate(grays):
+        period = np.diff(pulse_onsets(enc, e))
+        # Whole cycles, and never shorter than the requested period:
+        npt.assert_allclose(period / cycle, np.round(period / cycle),
+                            atol=1e-3)
+        npt.assert_equal(np.all(period >= 1000.0 / (100 * gray) - 1e-3), True)
+    # The fastest electrode still lands exactly on the cycle, so asking for the
+    # top of the range costs nothing:
+    npt.assert_almost_equal(np.diff(pulse_onsets(enc, 0)), 10, decimal=3)
 
 
 def test_Encoder_pulse_offset():
