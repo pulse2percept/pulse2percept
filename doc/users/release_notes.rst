@@ -22,6 +22,12 @@ Highlights:
    multiples of that cycle, so two groups provably never pulse at the same
    instant and the instantaneous current limit holds by construction.
 
+*  Timing constraints only ever go one way: ``clock`` and the raster cycle may
+   *lower* the rate an electrode ends up on, and never raise it. Rounding a
+   period down would deliver more charge than was asked for, so a time base
+   that cannot represent a rate exactly gives back the nearest slower one --
+   with ``clock=1``, a requested 300 Hz is delivered as 250 Hz.
+
 *  A percept is now reported on the frame clock of the video it came from --
    one percept frame per video frame -- rather than at a hardcoded 20 ms or at
    every point of the pulse train.

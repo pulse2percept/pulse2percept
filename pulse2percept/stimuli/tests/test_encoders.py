@@ -427,6 +427,21 @@ def test_Encoder_raster():
     npt.assert_almost_equal(pulse_onsets(enc, 1)[0], 5, decimal=3)
     npt.assert_almost_equal(np.diff(pulse_onsets(enc, 1)), 10, decimal=3)
     npt.assert_almost_equal(enc.metadata['encoder']['cycle'], 10)
+    # Whether the groups fit is decided on the slot the hardware will actually
+    # use. Two 5.1 ms slots do not fit into a 10 ms period, but on a 1 ms clock
+    # they are 5 ms slots, and two of those fit exactly:
+    enc = AmplitudeEncoder(freq=100, frame_dur=100, clock=1,
+                           raster=SequentialRaster(
+                               2, interleave=True,
+                               group_dur=5.1)).encode(img)
+    npt.assert_almost_equal(enc.metadata['encoder']['cycle'], 10)
+    npt.assert_almost_equal(pulse_onsets(enc, 1)[0], 5, decimal=3)
+    # Without a clock to round it there is nothing to round, and it is an error:
+    with pytest.raises(ValueError):
+        AmplitudeEncoder(freq=100, frame_dur=100,
+                         raster=SequentialRaster(
+                             2, interleave=True,
+                             group_dur=5.1)).encode(img)
 
 
 def test_Encoder_raster_frequency_modulation():
@@ -574,6 +589,67 @@ def test_FrequencyEncoder_rate_changes_between_frames():
     # 25 Hz frame finishes 20 ms into itself:
     npt.assert_almost_equal(fm_onsets([1.0, 0.5, 0.25])[0],
                             [0, 10, 20, 30, 40, 50, 70, 90, 120], decimal=3)
+
+
+def test_FrequencyEncoder_rate_changes_with_raster_offset():
+    # A raster group's first legal onset can fall several frames into the video
+    # when stimulation is slow relative to it, and the phase accumulator has to
+    # start counting in the frame that *contains* that onset. Starting at frame
+    # 0 integrated the wrong rates and could even walk the schedule backwards
+    # to an earlier frame boundary.
+    # 20 ms frames; the top of the range is 10 Hz, so the raster cycle is
+    # 100 ms and the second of two groups may only pulse at 50, 150, ... ms:
+    vid = VideoStimulus(np.tile(np.array([0, 1, 0, 0, 0, 0], dtype=float),
+                                (1, 2, 1)).reshape(1, 2, 6),
+                        metadata={'fps': 50})
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        enc = FrequencyEncoder(freq_range=(0, 10), amp=10,
+                               raster=SequentialRaster(2)).encode(vid)
+    npt.assert_almost_equal(enc.metadata['encoder']['cycle'], 100)
+    # Only the 20-40 ms frame asks for stimulation, and neither group has a
+    # legal slot inside it -- group 0's fall on 0 and 100 ms, group 1's on 50
+    # and 150 ms, all of which land in frames asking for 0 Hz. So nothing is
+    # delivered at all. Both groups used to fire at their own slot anyway, on
+    # the strength of a frame that was nowhere near it:
+    for e in range(2):
+        npt.assert_equal(pulse_onsets(enc, e).size, 0)
+    npt.assert_almost_equal(np.abs(enc.data).max(), 0)
+    # Widen the window so each group does get a legal slot, and both fire --
+    # in their own slots, a cycle apart:
+    vid = VideoStimulus(np.tile(np.array([1, 1, 1, 0, 0, 1, 1, 1, 1, 1],
+                                         dtype=float),
+                                (1, 2, 1)).reshape(1, 2, 10),
+                        metadata={'fps': 50})
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        enc = FrequencyEncoder(freq_range=(0, 10), amp=10,
+                               raster=SequentialRaster(2)).encode(vid)
+    npt.assert_almost_equal(pulse_onsets(enc, 0), [0], decimal=3)
+    npt.assert_almost_equal(pulse_onsets(enc, 1), [50], decimal=3)
+    # A pulse is never delivered into a frame that asked for silence:
+    for e in range(2):
+        for t in pulse_onsets(enc, e):
+            npt.assert_equal(vid.data[e, int(t // 20)] > 0, True)
+
+
+def test_Encoder_clock_never_speeds_up():
+    # Same invariant as the raster, for the stimulator's own time base: a
+    # timing constraint may lower the rate an electrode ends up on, never raise
+    # it, since raising it delivers more charge than was asked for. Realizable
+    # periods are whole clock cycles, so a 3.33 ms period on a 1 ms clock
+    # becomes 4 ms (250 Hz), not 3 ms (333 Hz).
+    img = ImageStimulus(np.ones((2, 2)))
+    for clock, freq, want in [(1, 300, 250.0), (2, 300, 250.0),
+                              (3, 300, 1000 / 6), (1, 137, 125.0)]:
+        enc = FrequencyEncoder(freq_range=(freq, freq), amp=10, frame_dur=200,
+                               clock=clock).encode(img)
+        period = np.diff(pulse_onsets(enc))
+        npt.assert_almost_equal(1000.0 / period, want, decimal=3)
+        # Never faster than requested, and on the clock grid:
+        npt.assert_equal(np.all(period >= 1000.0 / freq - 1e-9), True)
+        npt.assert_allclose(period / clock, np.round(period / clock),
+                            atol=1e-6)
 
 
 def test_FrequencyEncoder_raster_never_speeds_up():

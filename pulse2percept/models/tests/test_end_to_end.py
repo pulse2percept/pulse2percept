@@ -189,6 +189,51 @@ def test_endtoend_frequency_modulation():
     npt.assert_array_less(bright / bright[-1], counts / counts[-1] + 1e-6)
 
 
+@pytest.mark.parametrize('order', [[0, 1, 2, 3], [3, 2, 1, 0], [1, 3, 0, 2]])
+def test_endtoend_raster_order(order):
+    # The raster decides *when in the period* each electrode gets its turn, and
+    # nothing else. Reordering the groups should permute the onsets to match
+    # and leave every other thing about the stimulus alone.
+    implant = make_implant()
+    img = ImageStimulus(np.array([[0.25, 0.50], [0.75, 1.00]]))
+    raster = CustomRaster({n: g for n, g in zip(NAMES, order)})
+    stim = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20,
+                            raster=raster, frame_dur=200).encode(img)
+    implant.stim = stim
+
+    # Each electrode starts in the slot its group was given -- 50 ms period
+    # split four ways is 12.5 ms per slot:
+    npt.assert_almost_equal([onsets(stim, e)[0] for e in range(4)],
+                            np.asarray(order) * 12.5, decimal=3)
+    # Everything else is untouched: same amplitudes, same rate, same current
+    # limit, whichever order the groups take their turns in.
+    npt.assert_almost_equal(np.abs(stim.data).max(axis=1),
+                            [12.5, 25.0, 37.5, 50.0], decimal=4)
+    for e in range(4):
+        npt.assert_almost_equal(np.diff(onsets(stim, e)), 50.0, decimal=3)
+    npt.assert_almost_equal(np.abs(stim.data).sum(axis=0).max(), 50.0)
+
+    # And the percept says the same: the electrodes light up one at a time, in
+    # the order the raster puts them in, and each is as bright as its own gray
+    # level regardless of when its turn comes.
+    model = ScoreboardSpatial(xrange=(-4, 4), yrange=(-4, 4), xystep=0.2,
+                              rho=200).build()
+    percept = model.predict_percept(implant)
+    here, _ = at_electrodes(model, implant)
+    env = percept.data.max(axis=-1)
+    bright = np.array([env[here[n]] for n in NAMES])
+    npt.assert_allclose(bright / bright.max(), [0.25, 0.5, 0.75, 1.0],
+                        rtol=1e-3)
+    lit = np.array([[percept.data[here[n]][t] > 1.0 for n in NAMES]
+                    for t in range(percept.data.shape[-1])])
+    npt.assert_equal(lit.sum(axis=1).max(), 1)
+    # Read off the order in which they first light up, and check it is the
+    # order the raster asked for:
+    first = [int(np.argmax(lit[:, i])) for i in range(4)]
+    npt.assert_equal(np.argsort(first).tolist(),
+                     np.argsort(order).tolist())
+
+
 def test_endtoend_raster_is_what_separates_the_groups():
     # The same four electrodes without a raster: every one of them fires at
     # the start of every period, so the stimulator has to source all of it at

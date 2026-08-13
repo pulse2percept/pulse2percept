@@ -129,6 +129,21 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
 
         .. important::
 
+           Every timing constraint here -- the clock, and the raster cycle --
+           may *lower* the rate an electrode ends up on, and none of them may
+           raise it. Rounding a period down would deliver more charge than was
+           asked for, so a time base that cannot represent a rate exactly gives
+           back the nearest slower one it can.
+
+           That makes a coarse clock expensive in frequency, and the more so
+           the faster the train: realizable periods are ``clock``, ``2*clock``,
+           ``3*clock``, ... , so with ``clock=1`` a requested 300 Hz (3.33 ms)
+           is delivered as 250 Hz (4 ms), and with ``clock=3`` as 166.7 Hz.
+           Choose it against the top of your frequency range rather than in the
+           abstract.
+
+        .. important::
+
            This is the main lever on how expensive an encoded stimulus is to
            simulate. Electrodes that end up on the same pulse schedule share a
            time axis, so a coarse clock keeps the number of distinct time
@@ -379,11 +394,15 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         period[firing] = 1000.0 / freq[firing] / DT
         # A clocked stimulator can only realize a period that is a whole number
         # of clock cycles, which is what keeps the number of distinct schedules
-        # (and hence of time points) down:
+        # (and hence of time points) down. Round the period *up*: a timing
+        # constraint may lower the rate an electrode ends up on, never raise it,
+        # since raising it delivers more charge than the caller asked for. A
+        # 3 ms time base genuinely cannot represent 300 Hz without
+        # overstimulating, and says so by giving 166.7 Hz rather than 333 Hz:
         if self.clock is not None:
             tick = self.clock / DT
             period[firing] = tick * np.maximum(
-                1.0, np.round(period[firing] / tick))
+                1.0, np.ceil(period[firing] / tick - 1e-9))
         if np.any(period[firing] < pulse_len):
             too_fast = 1000.0 / (np.min(period[firing]) * DT)
             raise ValueError(f"A pulse (dur={pulse_len * DT:.3f} ms) does not "
@@ -423,10 +442,10 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         # whether a raster is a workable schedule is a property of the device,
         # not of how bright today's video happens to be.
         fastest = float(np.min(period[firing]))
-        # `raster.offsets` validates that the groups fit into the cycle; the
-        # slot is what the offsets are actually built from:
-        raster.offsets(electrodes, fastest * DT)
-        group = np.asarray(raster.groups(electrodes), dtype=np.float64)
+        group = np.asarray(raster.groups(electrodes), dtype=np.int64)
+        if (group.min(initial=0) < 0 or
+                group.max(initial=0) >= raster.n_groups):
+            raise ValueError(f"'groups' must be in 0..{raster.n_groups - 1}.")
         slot = raster.slot_dur(fastest * DT) / DT
         if self.clock is not None and raster.group_dur is not None:
             # An explicit slot is the primitive the cycle is made of, so round
@@ -435,11 +454,20 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
             # independently -- leaves groups with turns of different lengths
             # and a cycle that is no longer `n_groups` of them:
             slot = max(1.0, round(slot / (self.clock / DT))) * self.clock / DT
-        offset = group * slot
         # With no explicit slot the groups divide the pulse period, and it is
         # the period that has to be preserved: keeping the cycle equal to it is
         # what makes a rastered train run at exactly the requested rate:
         cycle = fastest if raster.group_dur is None else raster.n_groups * slot
+        # Check the slot the hardware will actually use, not the one that was
+        # asked for: a 5.1 ms slot on a 1 ms clock is a 5 ms slot, and two of
+        # those do fit into a 10 ms period even though two of 5.1 ms do not.
+        if cycle > fastest * (1 + 1e-9):
+            raise ValueError(
+                f"A raster of {raster.n_groups} groups {slot * DT:.3f} ms "
+                f"apart takes {cycle * DT:.3f} ms to get through, which does "
+                f"not fit into the {fastest * DT:.3f} ms pulse period. Shorten "
+                f"'group_dur', use fewer groups, or lower the frequency.")
+        offset = group.astype(np.float64) * slot
         if self.clock is not None:
             tick = self.clock / DT
             offset = tick * np.round(offset / tick)
@@ -508,8 +536,14 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         # it asked for 10 Hz and had already booked the next pulse.
         onset, frame = [], []
         # A full phase to begin with, so that a schedule's first pulse lands at
-        # the start of its slot rather than one period into it:
-        phase, k, t = 1.0, 0, float(start)
+        # the start of its slot rather than one period into it. Start counting
+        # in the frame that actually contains that slot: a raster group's turn
+        # can fall several frames into the video when stimulation is slow
+        # relative to it, and beginning at frame 0 would integrate the wrong
+        # rates -- and could even walk `t` backwards to an earlier boundary:
+        phase, t = 1.0, float(start)
+        k = int(np.searchsorted(frame_ticks, round(t), side='right')) - 1
+        k = min(max(k, 0), n_frames - 1)
         prev = -np.inf
         while k < n_frames and t <= last:
             # How far this frame reaches, and how much phase it can supply:
@@ -531,31 +565,34 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
                     break
                 phase, t, k = due, edge, k + 1
                 continue
-            # The pulse comes due inside this frame. Work out where from the
-            # phase alone, and settle which frame it belongs to *before*
-            # snapping it onto a grid -- snapping is a hardware detail, and
-            # deciding the frame from a snapped (and possibly nudged) time can
-            # send the schedule back to a boundary it has already left:
+            # The pulse comes due inside this frame. Snap it *forward* onto the
+            # grid this schedule is allowed to use -- the raster cycle, or the
+            # stimulator's clock. Forward rather than to the nearest point,
+            # because a grid is a timing constraint and no timing constraint may
+            # deliver a pulse earlier (and so at a higher rate) than asked for.
+            # Where the period is already a whole number of grid steps, which is
+            # every case except a rate change landing mid-period, this is exact:
             cross = t + (1.0 - phase) / rate
-            j = int(np.searchsorted(frame_ticks, round(cross),
-                                    side='right')) - 1
-            j = min(max(j, 0), n_frames - 1)
-            if period[j] <= 0:
-                # The pulse came due right as the clock stopped. Hold it rather
-                # than spending it here: a frame at 0 Hz should not swallow a
-                # pulse, and the frame that starts the clock again should come
-                # up at its full rate rather than a period short.
-                phase, t, k = 1.0, cross, j
-                continue
-            # Round onto the grid this schedule is allowed to use -- the raster
-            # cycle, or the stimulator's clock -- and restart the phase from
-            # where the pulse actually landed, so the error cannot accumulate:
-            tick = int(round(start + grid * np.round((cross - start) / grid)))
+            tick = int(round(start + grid * np.ceil(
+                (cross - start) / grid - 1e-9)))
             if tick <= prev:
-                # Never let grid rounding stall or reverse the train:
+                # Never let the grid stall or reverse the train:
                 tick = int(round(prev + grid))
             if tick > last:
                 break
+            # Which frame the pulse lands in is decided by where it *actually*
+            # goes, not where it came due: snapping can carry it over a boundary
+            # into a frame that wants something else entirely.
+            j = int(np.searchsorted(frame_ticks, tick, side='right')) - 1
+            j = min(max(j, 0), n_frames - 1)
+            if period[j] <= 0:
+                # The pulse landed in a frame whose clock is stopped. Hold it
+                # rather than spending it there: a frame at 0 Hz should neither
+                # be given a pulse it did not ask for nor swallow one, and the
+                # frame that starts the clock again should come up at its full
+                # rate rather than a period short.
+                phase, t, k = 1.0, float(tick), j
+                continue
             if active[j]:
                 onset.append(tick)
                 frame.append(j)
@@ -844,15 +881,18 @@ class FrequencyEncoder(Encoder):
        setting                  time points
        =======================  ===========
        (amplitude modulation)           442
-       no quantization              143,760
-       ``clock=1``                   21,561
+       no quantization              143,771
+       ``clock=1``                   21,505
        ``clock=2``                   10,893
-       ``n_levels=8``               129,031
-       ``clock=1, n_levels=8``       21,155
+       ``n_levels=8``               127,327
+       ``clock=1, n_levels=8``       20,917
        =======================  ===========
 
-       Start with ``clock=1``, which costs nothing in frequency range, and
-       coarsen it from there.
+       ``clock`` is not free, though: it buys those time points with frequency
+       resolution, and it spends it at the top of the range where the periods
+       are shortest. Against ``freq_range=(0, 300)``, ``clock=1`` delivers the
+       brightest pixels at 250 Hz rather than 300, and ``clock=2`` at 200 Hz.
+       Pick it against the fastest train you actually need.
 
        ``n_levels`` is a much weaker lever here than the numbers above might
        suggest, and only worth reaching for once ``clock`` is set. Because the
