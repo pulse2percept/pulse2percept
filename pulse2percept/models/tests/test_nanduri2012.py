@@ -145,7 +145,11 @@ def test_Nanduri2012Temporal(scale_out):
                                           stim_dur=sdur)
         percept = model.predict_percept(implant.stim, t_percept=t_percept)
         bright_amp.append(percept.data.max())
-    bright_amp_ref = np.array([0.0, 0.00890, 0.0657, 0.1500, 0.1691])
+    # These shifted by under 1.5% in 0.10.0, when the kernel stopped advancing
+    # only one stimulus frame per simulation step: a pulse edge and the sample
+    # after it share a step at this `dt`, so the integrator had been reading a
+    # frame that was already in the past.
+    bright_amp_ref = np.array([0.0, 0.00881, 0.06477, 0.14975, 0.16964])
     npt.assert_almost_equal(bright_amp, scale_out * bright_amp_ref, decimal=3)
 
     bright_freq = []
@@ -156,7 +160,7 @@ def test_Nanduri2012Temporal(scale_out):
                                           stim_dur=sdur)
         percept = model.predict_percept(implant.stim, t_percept=t_percept)
         bright_freq.append(percept.data.max())
-    bright_freq_ref = np.array([0.0, 0.0394, 0.0741, 0.1073, 0.1385])
+    bright_freq_ref = np.array([0.0, 0.03892, 0.07297, 0.10686, 0.13841])
     npt.assert_almost_equal(bright_freq, scale_out * bright_freq_ref,
                             decimal=3)
 

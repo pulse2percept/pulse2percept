@@ -196,10 +196,13 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             # the right frame. Each frame is associated with a time, `t_stim`.
             # We use that frame until `t_sim` advances past it. In other words,
             # we use the `idx_stim`-th frame for all times
-            # t_stim[idx_stim] <= t_sim < t_stim[idx_stim + 1]:
-            if idx_stim + 1 < n_stim:
-                if t_sim >= t_stim[idx_stim + 1]:
-                    idx_stim = idx_stim + 1
+            # t_stim[idx_stim] <= t_sim < t_stim[idx_stim + 1].
+            # `while`, not `if`: more than one stimulus frame can fall inside a
+            # single simulation step -- an encoded pulse puts its edges on the
+            # DT=1e-3 ms grid, finer than `dt` -- and advancing only one of them
+            # per step leaves this reading a frame that is already in the past:
+            while idx_stim + 1 < n_stim and t_sim >= t_stim[idx_stim + 1]:
+                idx_stim = idx_stim + 1
             amp = stim[idx_space, idx_stim]
             # Fast ganglion cell response:
             r1 = r1 + dt * (amp - r1) / tau1  # += in threads is a reduction
@@ -222,17 +225,13 @@ cpdef temporal_fast(const float32[:, ::1] stim,
         r4a = 0.0
         r4b = 0.0
         r4c = 0.0
-        idx_stim = 0
         idx_frame = 0
         # Scaling factor depends on `max_r3` from Step 1:
         scale = asymptote * c_expit((max_r3 - shift) / slope) / max_r3
-        # We have to restart the loop over all simulation time steps from 0:
+        # We have to restart the loop over all simulation time steps from 0.
+        # This step reads `all_r3`, which Step 1 already stored per simulation
+        # step, so it needs no stimulus frame lookup of its own:
         for idx_sim in range(n_sim):
-            t_sim = idx_sim * dt
-            # Access the right stimulus frame (same as above):
-            if idx_stim + 1 < n_stim:
-                if t_sim >= t_stim[idx_stim + 1]:
-                    idx_stim = idx_stim + 1
             # Slow response (3-stage leaky integrator):
             r4a = r4a + dt * (all_r3[idx_space, idx_sim] * scale - r4a) / tau3
             r4b = r4b + dt * (r4a - r4b) / tau3

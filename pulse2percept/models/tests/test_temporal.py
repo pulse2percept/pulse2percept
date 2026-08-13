@@ -40,11 +40,14 @@ def test_FadingTemporal():
         stim = Stimulus(np.ones((1, 100)))
         model.predict_percept(stim, t_percept=[0.2, 0.2])
 
-    # Simple decay for single cathodic pulse:
+    # Simple decay for single cathodic pulse. The pulse carries current from
+    # t=DT to t=1, so sample-and-hold on the dt=5e-3 ms grid drives the
+    # integrator for 0.995 ms rather than a round 1 ms -- which is why this
+    # sits just under the 1-exp(-1) = 0.632 an ideal rectangle would give:
     model = FadingTemporal(tau=1).build()
     stim = MonophasicPulse(-1, 1, stim_dur=10)
     percept = model.predict_percept(stim, np.arange(stim.duration))
-    npt.assert_almost_equal(percept.data.ravel()[:3], [0, 0.633, 0.232],
+    npt.assert_almost_equal(percept.data.ravel()[:3], [0, 0.628, 0.230],
                             decimal=3)
     npt.assert_almost_equal(percept.data.ravel()[-1], 0, decimal=3)
 
@@ -110,7 +113,11 @@ def test_FadingTemporal_matches_reference_integrator():
         bright = np.float32(0.0)
         idx_stim, frame = 0, 0
         for i in range(int(idx_p[-1]) + 1):
-            if idx_stim + 1 < n_stim and np.float32(i) * dt >= t_stim[idx_stim + 1]:
+            # Advance until caught up, not by one frame per step: several
+            # stimulus frames can fall inside one `dt`. See
+            # `test_FadingTemporal_frames_closer_together_than_dt`.
+            while (idx_stim + 1 < n_stim and
+                   np.float32(i) * dt >= t_stim[idx_stim + 1]):
                 idx_stim += 1
             amp = data[s, idx_stim]
             drive = np.float32(max(-amp, 0.0))
@@ -157,11 +164,11 @@ def test_FadingTemporal_rectifies_the_drive():
     npt.assert_equal(np.all(np.diff([steady(f) for f in rates]) > 0), True)
 
     # Rectification only removes the anodic half, so a stimulus that never goes
-    # anodic is unaffected. These are the values this model has always given:
+    # anodic is unaffected by it:
     model = FadingTemporal(tau=1).build()
     percept = model.predict_percept(MonophasicPulse(-1, 1, stim_dur=10),
                                     np.arange(10))
-    npt.assert_almost_equal(percept.data.ravel()[:3], [0, 0.633, 0.232],
+    npt.assert_almost_equal(percept.data.ravel()[:3], [0, 0.628, 0.230],
                             decimal=3)
 
 
@@ -263,6 +270,51 @@ def test_FadingTemporal_reduce():
 
     with pytest.raises(ValueError):
         FadingTemporal(reduce='mean').build().predict_percept(stim)
+
+
+def test_FadingTemporal_frames_closer_together_than_dt():
+    """Several stimulus frames can fall inside one simulation step.
+
+    Encoded pulses put their edges on the DT=1e-3 ms grid while `dt` defaults
+    to 5e-3 ms, so this is the normal case rather than a corner case. A kernel
+    that advances one stimulus frame per simulation step falls behind and
+    integrates current the stimulus no longer carries.
+    """
+    # A 0.1 ms cathodic blip that begins and ends strictly between two
+    # simulation steps. Sample-and-hold at t=0.5 has to read the frame that is
+    # current *then* -- amplitude 0 -- so the blip is never seen at all:
+    t_stim = np.array([0.0, 0.1, 0.2, 0.3, 10.0], dtype=np.float32)
+    data = np.array([[0.0, -100.0, 0.0, 0.0, 0.0]], dtype=np.float32)
+    dt = 0.5
+    idx = np.arange(0, 21, dtype=np.uint32)
+    got = fading_fast(data, t_stim, idx, dt, 100.0, 0.0, 1, 0).ravel()
+    npt.assert_array_equal(got, np.zeros_like(got))
+
+    # More generally, the frame in force at each step is what `searchsorted`
+    # says it is, however many frames went by since the last one:
+    rng = np.random.default_rng(11)
+    n_stim = 40
+    # Frame times far closer together than `dt`, plus a couple of long gaps:
+    gaps = rng.choice([0.001, 0.002, 0.05, 1.3], size=n_stim - 1)
+    t_stim = np.concatenate(([0.0], np.cumsum(gaps))).astype(np.float32)
+    data = ((rng.random((3, n_stim)) - 0.5) * 60).astype(np.float32)
+    tau = 25.0
+    idx = np.arange(0, int(t_stim[-1] / dt) + 1, dtype=np.uint32)
+    got = fading_fast(data, t_stim, idx, dt, tau, 0.0, 1, 0)
+
+    frame = np.searchsorted(t_stim, (idx * dt).astype(np.float32),
+                            side='right') - 1
+    npt.assert_equal(np.any(np.diff(frame) > 1), True)  # the case under test
+    want = np.zeros_like(got)
+    for s in range(data.shape[0]):
+        bright = np.float32(0.0)
+        for i, f in enumerate(frame):
+            drive = np.float32(max(-data[s, f], 0.0))
+            bright = np.float32(bright + np.float32(dt) *
+                                (drive - bright) / np.float32(tau))
+            bright = max(bright, np.float32(0.0))
+            want[s, i] = bright
+    npt.assert_allclose(got, want, rtol=1e-6, atol=1e-7)
 
 
 def test_TemporalModel_reduce_fallback():

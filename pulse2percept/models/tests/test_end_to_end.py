@@ -196,13 +196,18 @@ def test_endtoend_frequency_modulation():
     # are a geometric series that the n-th pulse has summed n terms of. That
     # only holds because the drive is rectified -- with the anodic phase
     # pulling brightness back down, no pulse would leave anything to sum:
+    # The closed form is continuous-time while the model samples the stimulus
+    # and holds it over each `dt` step, so the phase the integrator actually
+    # sees is a fraction of a step shorter than `phase_dur`. That is worth a few
+    # tenths of a percent here, which is far tighter than the structure being
+    # checked -- brightness as a geometric series in the pulse count:
     tau, phase_dur, amp = 100.0, 0.46, 50.0
     period = np.array(period, dtype=np.float64)
     npt.assert_allclose(
         bright,
         amp * (1 - np.exp(-phase_dur / tau)) *
         (1 - np.exp(-counts * period / tau)) / (1 - np.exp(-period / tau)),
-        rtol=1e-3)
+        rtol=1e-2)
 
 
 @pytest.mark.parametrize('order', [[0, 1, 2, 3], [3, 2, 1, 0], [1, 3, 0, 2]])

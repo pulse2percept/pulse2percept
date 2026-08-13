@@ -126,10 +126,18 @@ cpdef fading_fast(const float32[:, ::1] stim,
             # we use the `idx_stim`-th frame for all times
             # t_stim[idx_stim] <= t_sim < t_stim[idx_stim + 1]. Which frame
             # that is does not depend on the location, so it is settled here
-            # rather than inside the loop below:
-            if idx_stim + 1 < n_stim:
-                if t_sim >= t_stim[idx_stim + 1]:
-                    idx_stim = idx_stim + 1
+            # rather than inside the loop below.
+            #
+            # `while`, not `if`: more than one stimulus frame can fall inside a
+            # single simulation step, and skipping only one of them leaves the
+            # integrator reading a frame that is already in the past. Encoded
+            # pulses make that the normal case rather than a corner case --
+            # their edges sit on the DT=1e-3 ms grid while `dt` defaults to
+            # 5e-3 ms, so a pulse edge and the sample after it routinely share
+            # a step. Advancing one frame per step would let a blip that has
+            # already ended drive brightness at a later instant:
+            while idx_stim + 1 < n_stim and t_sim >= t_stim[idx_stim + 1]:
+                idx_stim = idx_stim + 1
             for idx_space in range(hi - lo):
                 amp = stim_t[idx_stim, lo + idx_space]
                 bright = scratch[tid, idx_space]

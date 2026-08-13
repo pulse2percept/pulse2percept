@@ -94,6 +94,24 @@ API changes:
 
 ## Bug fixes
 
+* Temporal models no longer read a stimulus frame that is already in the past.
+  :py:class:`~pulse2percept.models.FadingTemporal`,
+  :py:class:`~pulse2percept.models.Nanduri2012Temporal` and
+  :py:class:`~pulse2percept.models.Horsager2009Temporal` advanced at most one
+  frame per simulation step, but a pulse puts its edges on the ``DT`` = 1e-3 ms
+  grid while ``dt`` defaults to 5e-3 ms, so an edge and the sample after it
+  routinely share a step. The integrator then lagged by a frame, which
+  stretched every pulse phase by about one step and could drive brightness from
+  a pulse that had already ended.
+
+  Reported brightness shifts by a fraction of a percent for phases long
+  relative to ``dt``, and by more for short ones: a 0.075 ms phase against the
+  default ``dt`` was being stretched by 7%. The pinned values in the
+  [Horsager2009]_ and [Nanduri2012]_ tests moved accordingly. The equal-
+  brightness conditions of [Horsager2009]_ Figs. 3 and 4 now agree with each
+  other to within about 3% rather than exactly; the exact agreement had been
+  resting on this bug, and refining ``dt`` does not restore it.
+
 * :py:class:`~pulse2percept.stimuli.PulseTrain` no longer ends on partial,
   unbalanced pulses when its frequency does not divide ``stim_dur``.
 
