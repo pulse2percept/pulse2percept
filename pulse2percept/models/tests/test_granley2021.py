@@ -385,7 +385,9 @@ def test_BiphasicAxonMapModel_min_current_spread():
         min_current_spread=0, **kwargs).build().predict_percept(implant).data
     default = BiphasicAxonMapModel(
         **kwargs).build().predict_percept(implant).data
-    # The default cutoff is below what a float32 sum can resolve:
+    # For three electrodes the default cutoff is not worth thinking about;
+    # see `test_BiphasicAxonMapModel_min_current_spread_error_bound` for the
+    # case where it is:
     npt.assert_allclose(default, exact, rtol=1e-5,
                         atol=1e-6 * np.abs(exact).max())
 
@@ -394,6 +396,36 @@ def test_BiphasicAxonMapModel_min_current_spread():
     coarse = BiphasicAxonMapModel(
         min_current_spread=0.5, **kwargs).build().predict_percept(implant).data
     assert np.abs(coarse - exact).max() > 1e-3
+
+
+@pytest.mark.parametrize('amp', (2.0, 50.0))
+def test_BiphasicAxonMapModel_min_current_spread_error_bound(amp):
+    """The cutoff is an approximation here too, with a bound to match.
+
+    The biphasic kernel tests ``r2`` against the cutoff before scaling the
+    exponential by ``F_bright``, so what it drops at a segment is
+    ``sum_i F_bright_i * exp(...)``. The error is therefore bounded by
+    ``min_current_spread * sum(F_bright)``, which grows with the array size
+    and with however hard the brightness model scales -- not by 1e-8 outright.
+    """
+    min_spread = 1e-8
+    freq, pdur = 20, 0.45
+    implant = ArgusII(stim={e: BiphasicPulseTrain(freq, amp, pdur)
+                            for e in ArgusII().electrode_names})
+    kwargs = {'xrange': (-14, 14), 'yrange': (-10, 10), 'xystep': 0.75,
+              'rho': 200, 'axlambda': 800, 'verbose': False}
+
+    model = BiphasicAxonMapModel(min_current_spread=0, **kwargs).build()
+    exact = model.predict_percept(implant).data
+    default = BiphasicAxonMapModel(
+        min_current_spread=min_spread,
+        **kwargs).build().predict_percept(implant).data
+
+    n_el = len(implant.electrode_names)
+    f_bright = np.asarray(model.spatial.bright_model(
+        np.full(n_el, freq), np.full(n_el, amp), np.full(n_el, pdur)))
+    dropped = min_spread * np.abs(f_bright).sum()
+    assert np.abs(default - exact).max() <= dropped + 1e-6 * np.abs(exact).max()
 
 
 @pytest.mark.parametrize('attr', ('size_model', 'streak_model'))
@@ -414,6 +446,31 @@ def test_BiphasicAxonMapModel_rejects_nonpositive_effects(attr):
     # A positive factor is accepted:
     setattr(model.spatial, attr, lambda freq, amp, pdur: np.ones_like(amp))
     npt.assert_equal(model.predict_percept(implant) is not None, True)
+
+
+@pytest.mark.parametrize('attr', ('bright_model', 'size_model',
+                                  'streak_model'))
+@pytest.mark.parametrize('bad', (np.nan, np.inf, -np.inf))
+def test_BiphasicAxonMapModel_rejects_nonfinite_effects(attr, bad):
+    """A non-finite scaling factor is rejected before it reaches the kernel.
+
+    ``nan <= 0`` is false, so the positivity check above does not catch NaN.
+    Left alone it would flow into the kernel's exponent, and then
+    ``abs(nan) > abs(px_bright)`` is false too -- so the affected segments
+    would drop out of the max and the percept would come back quietly wrong
+    instead of raising. Infinities are no better: they turn the sum into
+    ``inf`` or ``nan`` depending on the signs involved. This covers
+    ``bright_model`` as well, which the positivity check deliberately does
+    not (a zero or negative brightness factor is legitimate).
+    """
+    model = BiphasicAxonMapModel(xrange=(-4, 4), yrange=(-4, 4), xystep=1,
+                                 verbose=False).build()
+    setattr(model.spatial, attr,
+            lambda freq, amp, pdur: np.full_like(np.asarray(amp, dtype=float),
+                                                 bad))
+    implant = ArgusII(stim={'A2': BiphasicPulseTrain(20, 30, 0.45)})
+    with pytest.raises(ValueError, match=attr):
+        model.predict_percept(implant)
 
 
 def test_BiphasicAxonMapModel_reduces_to_AxonMapModel():

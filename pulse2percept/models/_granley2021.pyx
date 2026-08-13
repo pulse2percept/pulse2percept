@@ -39,14 +39,13 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
     summed exponents: the power becomes ``exp(log(sensitivity) / F_streak)``,
     and ``log(sensitivity)`` depends only on the segment, so it is taken once
     per segment instead of once per segment and electrode. That trades a
-    ``powf`` per pair -- the most expensive call in the loop -- for one
+    ``powf`` per pair (i.e., the most expensive call in the loop) for one
     ``logf`` per segment.
 
-    ``F_streak`` is strictly positive: the default streak model clamps it to
-    ``min_lambda ** 2 / axlambda ** 2``, and ``_predict_spatial`` rejects a
-    custom model that returns anything else. Sensitivities are likewise
-    positive, so the logarithm is always defined.
-
+    ``F_streak`` is finite and strictly positive: the default streak model
+    clamps it to ``min_lambda ** 2 / axlambda ** 2``, and ``_predict_spatial``
+    rejects a custom model that returns anything else.
+    
     Parameters
     ----------
     amp_el : 1D float array 
@@ -150,7 +149,7 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
                 xdiff = ax_x - xel[idx_el]
                 ydiff = ax_y - yel[idx_el]
                 r2 = xdiff * xdiff + ydiff * ydiff
-                # Too far away for the exponential below to resolve:
+                # `SpatialModel._cutoff_r2`:
                 if r2 > cutoff_el[idx_el]:
                     continue
                 # Distance to the electrode and distance to the soma both
