@@ -220,9 +220,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
             # An electrode whose Gaussian current spread at a point has fallen
-            # below this is skipped for that point. The default is small
-            # enough that dropping the term cannot change a float32 result;
-            # see `_cutoff_r2`. Set to 0 to sum over every electrode.
+            # below this is skipped for that point:
             'min_current_spread': 1e-8,
             # Visual field map (retinotopy) to be used:
             'vfmap': Curcio1990Map(),
@@ -250,12 +248,17 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         into the squared distance at which that happens, for the spatial
         kernels to compare against.
 
-        The default ``min_current_spread`` of 1e-8 corresponds to a radius of
-        about 6.1 ``rho``. Since the summed brightness is a float32, whose
-        relative resolution is ~1e-7, a term that small cannot change the
-        result -- so the default is an optimization, not an approximation.
-        Raise it to trade accuracy for speed, or set it to 0 to sum over
-        every electrode no matter how distant.
+        .. note::
+
+            The default ``min_current_spread`` of 1e-8 corresponds to a radius
+            of about 6.1 ``rho``. The kernels compare the Gaussian against the
+            cutoff *before* scaling it by the stimulus amplitude and summing
+            over electrodes, so what is dropped at a point is
+            ``sum_i gauss_i * amplitude_i`` over the electrodes outside the
+            cutoff.
+
+            Set it to 0 to sum over every electrode no matter how distant and get
+            the exact result, or raise it to trade more accuracy for speed.
 
         Parameters
         ----------

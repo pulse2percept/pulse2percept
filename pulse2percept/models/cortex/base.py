@@ -29,9 +29,10 @@ class CortexSpatial(SpatialModel):
     min_current_spread : float, optional
         An electrode is skipped at grid points where its Gaussian current
         spread has decayed below this fraction of its peak. The default
-        (1e-8, about 6.1 ``rho`` away) is small enough that the skipped term
-        could not have changed the float32 result, so it buys speed rather
-        than costing accuracy. Set to 0 to sum over every electrode.
+        (1e-8, about 6.1 ``rho`` away) drops the Gaussian *times* the
+        stimulus amplitude, summed over the skipped electrodes, so the error
+        at a point is bounded by ``min_current_spread`` times the summed
+        amplitude across electrodes.
     xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). In a right eye, negative x values correspond to the
@@ -206,9 +207,10 @@ class ScoreboardSpatial(CortexSpatial):
     min_current_spread : float, optional
         An electrode is skipped at grid points where its Gaussian current
         spread has decayed below this fraction of its peak. The default
-        (1e-8, about 6.1 ``rho`` away) is small enough that the skipped term
-        could not have changed the float32 result, so it buys speed rather
-        than costing accuracy. Set to 0 to sum over every electrode.
+        (1e-8, about 6.1 ``rho`` away) drops the Gaussian *times* the
+        stimulus amplitude, summed over the skipped electrodes, so the
+        error at a point is bounded by ``min_current_spread`` times the
+        summed amplitude across electrodes.
     regions : list of str, optional
         The regions to simulate. Options are 'v1', 'v2', or 'v3'. Default:
         ['v1']
@@ -328,9 +330,10 @@ class ScoreboardModel(Model):
     min_current_spread : float, optional
         An electrode is skipped at grid points where its Gaussian current
         spread has decayed below this fraction of its peak. The default
-        (1e-8, about 6.1 ``rho`` away) is small enough that the skipped term
-        could not have changed the float32 result, so it buys speed rather
-        than costing accuracy. Set to 0 to sum over every electrode.
+        (1e-8, about 6.1 ``rho`` away) drops the Gaussian *times* the
+        stimulus amplitude, summed over the skipped electrodes, so the
+        error at a point is bounded by ``min_current_spread`` times the
+        summed amplitude across electrodes.
     regions : list of str, optional
         The regions to simulate. Options are 'v1', 'v2', or 'v3'. Default:
         ['v1']

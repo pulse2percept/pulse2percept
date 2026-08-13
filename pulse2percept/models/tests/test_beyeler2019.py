@@ -456,6 +456,36 @@ def test_AxonMapModel_find_closest_axon():
     npt.assert_equal(closest_idx, 0)
 
 
+@pytest.mark.parametrize('n_threads', (1, 3))
+def test_AxonMapModel_find_closest_axon_respects_n_threads(monkeypatch,
+                                                           n_threads):
+    """The KD-tree query stays inside the model's thread budget.
+
+    ``n_threads``/``n_jobs`` is the one knob this package gives for capping
+    CPU use, and the tree query is part of ``build``. Passing ``workers=-1``
+    here would let ``AxonMapModel(n_threads=1).build()`` fan out over every
+    core anyway.
+    """
+    from pulse2percept.models import beyeler2019
+
+    seen = []
+
+    class RecordingKDTree(beyeler2019.cKDTree):
+        def query(self, *args, **kwargs):
+            seen.append(kwargs.get('workers'))
+            return super().query(*args, **kwargs)
+
+    monkeypatch.setattr(beyeler2019, 'cKDTree', RecordingKDTree)
+    model = AxonMapSpatial(n_threads=n_threads)
+    bundles = [np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float32),
+               np.array([[10.0, 10.0], [11.0, 11.0]], dtype=np.float32)]
+    closest, idx = model.find_closest_axon(bundles, xret=[0.5, 10.5],
+                                           yret=[0.5, 10.5],
+                                           return_index=True)
+    npt.assert_equal(idx, [0, 1])
+    npt.assert_equal(seen, [n_threads])
+
+
 def test_AxonMapModel_calc_axon_sensitivity():
     model = AxonMapModel(xystep=2, n_axons=10,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -579,12 +609,13 @@ def test_AxonMapModel_predict_percept():
 
 @pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
 def test_min_current_spread(ModelClass):
-    """The default current-spread cutoff must not change the percept.
+    """The default current-spread cutoff barely moves a sparse percept.
 
     ``min_current_spread`` drops an electrode's contribution once its
-    Gaussian has decayed past the given fraction of its peak. At the default
-    of 1e-8 the dropped term is below what a float32 sum can resolve, so it
-    is meant to buy speed at no cost to the result.
+    Gaussian has decayed past the given fraction of its peak. This pins the
+    everyday case -- a handful of electrodes at unit amplitude, where the
+    default cutoff is not worth thinking about. See
+    ``test_min_current_spread_error_bound`` for the case where it is.
     """
     stim = np.zeros(60)
     stim[[10, 33, 47]] = [1.0, -0.5, 0.75]
@@ -608,6 +639,41 @@ def test_min_current_spread(ModelClass):
     model = ModelClass(min_current_spread=1, **kwargs).build()
     with pytest.raises(ValueError):
         model.predict_percept(implant)
+
+
+@pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
+@pytest.mark.parametrize('amp', (1.0, 1000.0))
+def test_min_current_spread_error_bound(ModelClass, amp):
+    """The cutoff is an approximation, and stays inside its documented bound.
+
+    The kernels compare the Gaussian against the cutoff *before* scaling it
+    by the stimulus and summing over electrodes, so the quantity dropped at a
+    point is ``sum_i gauss_i * amp_i``, not ``gauss`` alone. Every electrode
+    of the array is driven here so that all 60 individually sub-cutoff terms
+    accumulate -- the adversarial case for a per-electrode cutoff -- and the
+    amplitude is swept because the bound scales with it.
+    """
+    min_spread = 1e-8
+    stim = np.full(60, amp)
+    implant = ArgusII(stim=stim)
+    kwargs = {'xystep': 0.75, 'xrange': (-14, 14), 'yrange': (-10, 10),
+              'rho': 200}
+
+    exact = ModelClass(min_current_spread=0,
+                       **kwargs).build().predict_percept(implant).data
+    default = ModelClass(min_current_spread=min_spread,
+                         **kwargs).build().predict_percept(implant).data
+    # What the docs promise: `min_current_spread` times the summed amplitude,
+    # plus whatever the float32 accumulation itself costs:
+    dropped = min_spread * np.abs(stim).sum()
+    assert np.abs(default - exact).max() <= dropped + 1e-6 * np.abs(exact).max()
+
+    # It is not, however, a no-op. Points that every electrode is far from
+    # come back as exactly zero rather than merely small -- a relative error
+    # of 100% at those points, however small they are in absolute terms:
+    zeroed = (np.abs(exact) > 0) & (default == 0)
+    assert zeroed.any()
+    assert np.abs(exact[zeroed]).max() <= dropped
 
 
 @pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))

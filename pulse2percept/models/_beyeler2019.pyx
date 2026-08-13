@@ -419,7 +419,8 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
                 xdiff = ax_x - xel[idx_el]
                 ydiff = ax_y - yel[idx_el]
                 r2 = xdiff * xdiff + ydiff * ydiff
-                # Too far away for the Gaussian below to resolve:
+                # Past the cutoff radius. Note this drops `gauss * stim`, not
+                # just `gauss`:
                 if r2 > cutoff_r2:
                     continue
                 # Activation as a function of distance to the stimulating

@@ -226,9 +226,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             An electrode is skipped at axon segments where its current spread
             has decayed below this fraction of its peak. The decay is scaled
             per electrode by that electrode's ``F_size``. The default (1e-8)
-            is small enough that the skipped term could not have changed the
-            float32 result, so it buys speed rather than costing accuracy.
-            Set to 0 to sum over every electrode.
+            is a deliberate approximation: what gets dropped is the
+            exponential *times* that electrode's ``F_bright``, summed over
+            the skipped electrodes, so the error at a point is bounded by
+            ``min_current_spread`` times the summed ``F_bright`` across
+            electrodes.
         eye: {'RE', LE'}, optional
             Eye for which to generate the axon map.
         xrange : (x_min, x_max), optional
@@ -427,12 +429,19 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         streak_effects = np.array(self.streak_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]),
                                   dtype=np.float32).reshape((-1))
         amps = np.array(elec_params[:, 1], dtype=np.float32).reshape((-1))
-        # The kernel rescales each segment's sensitivity by
-        # ``1 / F_streak`` and each phosphene's size by ``F_size``, both in an
-        # exponent, so neither may be zero or negative. The default models
-        # cannot produce that -- ``DefaultStreakModel`` clamps to
-        # ``min_lambda ** 2 / axlambda ** 2`` -- but a custom one could, and
-        # it would otherwise surface as a silent NaN in the percept:
+        # A non-finite factor propagates through the kernel's exponent into
+        # the segment brightness, where abs(nan) > abs(px_bright). So we need
+        # to catch it here:
+        for name, effects in (('bright_model', bright_effects),
+                              ('size_model', size_effects),
+                              ('streak_model', streak_effects)):
+            if not np.all(np.isfinite(effects)):
+                raise ValueError(f"{type(self).__name__}.{name} returned a "
+                                 f"non-finite scaling factor. Scaling factors "
+                                 f"must be finite.")
+        # The kernel rescales each segment's sensitivity by 1 / F_streak and
+        # each phosphene's size by F_size, both in an exponent, so neither of
+        # them may be negative:
         for name, effects in (('size_model', size_effects),
                               ('streak_model', streak_effects)):
             if np.any(effects <= 0):
@@ -584,9 +593,14 @@ class BiphasicAxonMapModel(Model):
             An electrode is skipped at axon segments where its current spread
             has decayed below this fraction of its peak. The decay is scaled
             per electrode by that electrode's ``F_size``. The default (1e-8)
-            is small enough that the skipped term could not have changed the
-            float32 result, so it buys speed rather than costing accuracy.
-            Set to 0 to sum over every electrode.
+            is a deliberate approximation: what gets dropped is the
+            exponential *times* that electrode's ``F_bright``, summed over
+            the skipped electrodes, so the error at a point is bounded by
+            ``min_current_spread`` times the summed ``F_bright`` across
+            electrodes. That is negligible for a typical array, but it grows
+            with both array size and brightness scaling, and it can zero out
+            points that are merely dim. Set to 0 to sum over every electrode
+            and get the exact result.
         eye: {'RE', LE'}, optional
             Eye for which to generate the axon map.
         xrange : (x_min, x_max), optional
