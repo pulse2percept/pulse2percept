@@ -157,6 +157,42 @@ class VideoStimulus(Stimulus):
         self.metadata = metadata
         self.rewind()
 
+    def compress(self):
+        """Compress the source data
+
+        Also brings ``vid_shape`` back in line with the compressed data:
+        compression drops the time points at which the video does not change,
+        so the frame count of the source is no longer the frame count of the
+        stimulus. Every ``data.reshape(vid_shape)`` in this module relies on
+        that invariant. (Compression can also drop all-zero pixels, in which
+        case no shape describes the data any more; see ``_frames``.)
+
+        Returns
+        -------
+        compressed : :py:class:`~pulse2percept.stimuli.VideoStimulus`
+        """
+        super().compress()
+        # ``Stimulus.__init__`` calls this method for ``compress=True``, which
+        # is why ``vid_shape`` is set before the constructor runs: one
+        # implementation then covers both that and an explicit ``compress()``.
+        self.vid_shape = (*self.vid_shape[:-1], self.data.shape[-1])
+
+    def _frames(self):
+        """The stimulus as a dense <rows x columns [x channels] x frames> array
+
+        Raises a ``ValueError`` if the video has been compressed in space,
+        which removes all-zero pixels and therefore leaves nothing that can be
+        reshaped back into a frame.
+        """
+        n_px = int(np.prod(self.vid_shape[:-1]))
+        if self.data.shape[0] != n_px:
+            raise ValueError(
+                f"This video was compressed in space: {self.data.shape[0]} of "
+                f"its {n_px} pixels are left, so its frames cannot be "
+                f"reconstructed. Pass 'compress=False' to keep the video "
+                f"dense.")
+        return self.data.reshape(self.vid_shape)
+
     def _pprint_params(self):
         params = super()._pprint_params()
         params.update({'vid_shape': self.vid_shape})
@@ -660,6 +696,9 @@ class VideoStimulus(Stimulus):
 
         if self.time is None:
             raise ValueError("Cannot animate a percept with time=None.")
+        # Raises if the video was compressed in space, in which case there is
+        # no dense frame left to display:
+        frames = self._frames()
 
         # There are several options to animate a percept in Jupyter/IPython
         # (see https://stackoverflow.com/a/46878531). Displaying the animation
@@ -683,8 +722,7 @@ class VideoStimulus(Stimulus):
         return HTMLAnimation(fig, update, data_gen, repeat=repeat,
                              interval=frame_interval(self.time, fps=fps),
                              save_count=len(self.time), image=mat,
-                             labels=labels, fmt=fmt,
-                             frame_data=self.data.reshape(self.vid_shape))
+                             labels=labels, fmt=fmt, frame_data=frames)
 
 
 class BostonTrain(VideoStimulus):

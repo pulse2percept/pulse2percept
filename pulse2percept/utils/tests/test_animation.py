@@ -206,6 +206,34 @@ def test_HTMLAnimation_rgb(fmt):
                                          expected), 24)
 
 
+@pytest.mark.parametrize('fmt', ('png', 'jpg'))
+def test_HTMLAnimation_rgba(fmt):
+    """Four channels are RGBA, not RGB
+
+    ``Image.fromarray(sheet, mode='RGB')`` on an RGBA array does not drop the
+    alpha channel: PIL reads the 4-bytes-per-pixel buffer 3 bytes at a time, so
+    the channels shear across every row and the sheet turns to garbage.
+    """
+    data = np.zeros((6, 8, 4, 5), dtype=np.float32)
+    data[:, :, 0, :] = 1.0     # pure red ...
+    data[:, :, 3, :] = 0.25    # ... at 25% opacity
+    cfg, _, sheet = parse(make_ani(data, fmt=fmt).to_jshtml())
+    npt.assert_equal((cfg['fh'], cfg['fw']), (6, 8))
+    for i in range(5):
+        tile_i = tile(cfg, sheet, i).astype(float)
+        if fmt == 'png':
+            # PNG carries the alpha channel, and the canvas composites it:
+            npt.assert_equal(sheet.mode, 'RGBA')
+            npt.assert_array_less(
+                np.abs(tile_i - [255, 0, 0, 64]).max(axis=-1), 2)
+        else:
+            # JPEG cannot, so the frames are flattened onto the white axes
+            # background, which is what Matplotlib rasterizes as well:
+            npt.assert_equal(sheet.mode, 'RGB')
+            npt.assert_array_less(
+                np.abs(tile_i - [255, 191, 191]).max(axis=-1), 8)
+
+
 @pytest.mark.parametrize('shape', ((65, 97), (30, 40), (16, 16), (13, 11)))
 def test_HTMLAnimation_no_frame_bleed(shape):
     """JPEG blocks must never straddle two frames of the sprite sheet
@@ -236,6 +264,68 @@ def test_HTMLAnimation_labels():
     cfg, _, _ = parse(make_ani(data).to_jshtml())
     npt.assert_equal(cfg['title'], None)
     npt.assert_equal(cfg['labels'], [])
+
+
+def title_ink(label, dpi=100):
+    """The pixels a Matplotlib-rendered axes title actually covers"""
+    rendered = []
+    for text in (label, ''):
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.imshow(np.zeros((4, 4)), cmap='gray')
+        ax.set_title(text)
+        buf = BytesIO()
+        fig.savefig(buf, format='png', dpi=dpi)
+        plt.close(fig)
+        rendered.append(np.asarray(Image.open(buf).convert('L'), dtype=int))
+    rows, cols = np.where(rendered[0] != rendered[1])
+    return rows.min(), rows.max(), cols.min(), cols.max()
+
+
+@pytest.mark.parametrize('label', ('t = 0.00 ms', 't = 123.45 ms', 'gjpqy AWM'))
+def test_HTMLAnimation_title_band_covers_text(label):
+    """The band the player clears must cover a whole line of text
+
+    The player redraws the title on the canvas for every frame, but can only
+    erase what it drew itself. A band that is too short (an empty ``Text`` has
+    a degenerate bounding box, so measuring it directly gives a zero-height
+    band) leaves every title standing, and they pile up into an unreadable
+    smear after a few frames.
+    """
+    cfg, _, _ = parse(make_ani(np.random.rand(4, 4, 3),
+                               labels=[label] * 3).to_jshtml())
+    _, top, _, height = cfg['title']['rect']
+    y0, y1, x0, x1 = title_ink(label)
+    npt.assert_equal(top <= y0 and y1 < top + height, True)
+    # ... and the text must be anchored where Matplotlib would put it:
+    npt.assert_equal(cfg['title']['align'], 'center')
+    npt.assert_array_less(abs((x0 + x1) / 2 - cfg['title']['x']), 2)
+
+
+def test_HTMLAnimation_title_not_in_background():
+    """A title left on the axes must not be baked into the background
+
+    The background is a static ``<img>`` underneath the canvas, so anything
+    rendered into it survives the player's ``clearRect`` and shows through
+    every frame. Two ways to get a title onto the axes before the HTML is
+    built: pass in an axes that already has one, or render the inherited
+    ``FuncAnimation`` first (which leaves the last frame's title behind).
+    """
+    data = np.random.rand(4, 4, 3)
+    labels = ['t = 0.00 ms', 't = 1.00 ms', 't = 2.00 ms']
+    ani = make_ani(data, labels=labels)
+    reference = np.asarray(parse(ani.to_jshtml())[1])
+    for stale in ('t = 999.00 ms', 'A title'):
+        ani = make_ani(data, labels=labels)
+        ani._image.axes.set_title(stale)
+        npt.assert_equal(np.asarray(parse(ani.to_jshtml())[1]), reference)
+        # The caller's title is left the way it was found:
+        npt.assert_equal(ani._image.axes.get_title(), stale)
+    # Without labels the player leaves the title alone, so a title on the axes
+    # belongs in the background:
+    ani = make_ani(data)
+    ani._image.axes.set_title('A title')
+    npt.assert_equal(np.any(np.asarray(parse(ani.to_jshtml())[1]) != reference),
+                     True)
 
 
 def test_HTMLAnimation_playback():

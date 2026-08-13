@@ -24,7 +24,7 @@ from uuid import uuid4
 
 import numpy as np
 from matplotlib.animation import FuncAnimation
-from matplotlib.colors import to_hex
+from matplotlib.colors import to_hex, to_rgba
 from PIL import Image
 
 from .array import unique
@@ -65,6 +65,15 @@ JPEG_MACROBLOCK = 16
 # Frame duration (in ms) to fall back on for single-frame animations, which
 # have no time step of their own:
 SINGLE_FRAME_INTERVAL = 1000.0 / 30
+
+# The title is blank while the animation is built, and an empty ``Text`` has a
+# degenerate bounding box. Its geometry is therefore measured on a probe
+# string, which must carry both an ascender and a descender so that the band
+# the player clears covers a full line of text:
+TITLE_PROBE = 'Ag'
+
+# Pixels of slack added to that band, to catch antialiasing:
+TITLE_MARGIN = 1
 
 
 def frame_interval(time, fps=None, tol=1e-2):
@@ -192,21 +201,25 @@ def _color_lut(cmap):
     return (np.asarray(lut)[:, :3] * 255).astype(np.uint8)
 
 
-def _sprite_sheet(data, norm, cmap, max_shape, fmt):
+def _sprite_sheet(data, norm, cmap, max_shape, fmt, bg_color=(255, 255, 255)):
     """Color-map every frame and pack them all into a single image
 
     Parameters
     ----------
     data : ndarray
-        Either (Y, X, T) scalar data or (Y, X, 3, T) RGB data in [0, 1]
+        Either (Y, X, T) scalar data, (Y, X, 3, T) RGB data, or (Y, X, 4, T)
+        RGBA data in [0, 1]
     norm : matplotlib.colors.Normalize
-        The normalization of the animated image (ignored for RGB data)
+        The normalization of the animated image (ignored for RGB(A) data)
     cmap : matplotlib.colors.Colormap
-        The colormap of the animated image (ignored for RGB data)
+        The colormap of the animated image (ignored for RGB(A) data)
     max_shape : (height, width)
         Frames are downsampled to at most this size
     fmt : {'jpg', 'png'}
         Whether to encode the sheet as (lossy) JPEG or (lossless) PNG
+    bg_color : (r, g, b), optional
+        The 8-bit color that RGBA frames are flattened onto when the sheet
+        cannot carry an alpha channel (i.e., for JPEG)
 
     Returns
     -------
@@ -216,15 +229,25 @@ def _sprite_sheet(data, norm, cmap, max_shape, fmt):
         distance between two frames on the sheet ('sw', 'sh')
     """
     rgb = np.ndim(data) == 4
+    rgba = rgb and np.shape(data)[-2] == 4
     n_frames = np.shape(data)[-1]
     if rgb:
-        # (Y, X, 3, T) -> (T, Y, X, 3), clipped the same way Matplotlib clips
+        # (Y, X, C, T) -> (T, Y, X, C), clipped the same way Matplotlib clips
         # out-of-range RGB values:
         scaled = np.clip(np.asarray(data, dtype=np.float32), 0, 1) * 255
         frames = np.ascontiguousarray(
             scaled.transpose((3, 0, 1, 2)).astype(np.uint8))
     else:
         frames = _quantize(data, norm)
+    if rgba and fmt == 'jpg':
+        # JPEG has no alpha channel, so the frames have to be flattened onto
+        # what they are drawn on top of. This is what Matplotlib rasterizes as
+        # well; the PNG path keeps the alpha and lets the canvas composite it:
+        alpha = frames[..., 3:].astype(np.float32) / 255.0
+        flat = frames[..., :3] * alpha + np.asarray(bg_color, dtype=np.float32)\
+            * (1.0 - alpha)
+        frames = np.ascontiguousarray(np.round(flat).astype(np.uint8))
+        rgba = False
     # JPEG has no palette, so scalar data must carry its colors itself. Gray
     # colormaps stay single-channel; anything else is expanded to RGB:
     if fmt == 'jpg' and not rgb:
@@ -263,7 +286,7 @@ def _sprite_sheet(data, norm, cmap, max_shape, fmt):
         Image.fromarray(sheet, mode='RGB' if sheet.ndim == 3 else 'L').save(
             buf, format='jpeg', quality=JPEG_QUALITY)
     elif rgb:
-        Image.fromarray(sheet, mode='RGB').save(
+        Image.fromarray(sheet, mode='RGBA' if rgba else 'RGB').save(
             buf, format='png', compress_level=PNG_COMPRESS_LEVEL)
     else:
         # Ship the colormap as a PNG palette: this keeps the sheet at one byte
@@ -295,30 +318,56 @@ def _background(fig, im):
     return buf.getvalue(), width, height
 
 
+def _bg_color(ax):
+    """The 8-bit color that the animated image sits on top of
+
+    Only matters for RGBA frames on a JPEG sheet, which cannot carry an alpha
+    channel and therefore have to be flattened onto their background.
+    """
+    axes_rgba = np.asarray(to_rgba(ax.get_facecolor()), dtype=np.float32)
+    # A transparent axes patch lets the figure show through:
+    fig_rgb = np.asarray(to_rgba(ax.figure.get_facecolor()),
+                         dtype=np.float32)[:3]
+    alpha = axes_rgba[3]
+    return tuple((axes_rgba[:3] * alpha + fig_rgb * (1 - alpha)) * 255)
+
+
 def _title_geometry(title, width, height, dpi):
     """Locate the title so that the player can redraw it for every frame
 
     Returns a dict of canvas coordinates/styles, or None if the title cannot be
     measured (e.g., because the figure has not been drawn yet).
 
-    The title is empty at this point, so its bounding box has zero width but
-    the full height of a line of text, which is exactly what we need: the band
-    to clear, and the anchor the text is aligned to.
+    The title is blank at this point so that it does not end up in the static
+    background, and an empty ``Text`` has a degenerate bounding box: it sits on
+    the baseline and has no height at all. Both the anchor the text is aligned
+    to and the line box that has to be cleared before every frame are therefore
+    measured on ``TITLE_PROBE`` instead.
     """
+    text = title.get_text()
     try:
+        title.set_text(TITLE_PROBE)
         bbox = title.get_window_extent()
     except (RuntimeError, ValueError, AttributeError):
         return None
+    finally:
+        title.set_text(text)
     align = title.get_horizontalalignment()
+    if align == 'left':
+        x = bbox.x0
+    elif align == 'right':
+        x = bbox.x1
+    else:
+        align, x = 'center', (bbox.x0 + bbox.x1) / 2
     return {
         # Only the title's own line box is cleared, so a suptitle or anything
         # else on the figure stays untouched. The band spans the entire figure
         # because the text grows to both sides of its anchor:
-        'rect': [0, round(height - bbox.y1), width,
-                 max(1, round(bbox.y1 - bbox.y0))],
-        'x': round(bbox.x1 if align == 'right' else bbox.x0),
+        'rect': [0, round(height - bbox.y1 - TITLE_MARGIN), width,
+                 max(1, round(bbox.y1 - bbox.y0 + 2 * TITLE_MARGIN))],
+        'x': round(x),
         'y': round(height - (bbox.y0 + bbox.y1) / 2),
-        'align': align if align in ('left', 'right') else 'center',
+        'align': align,
         'font': (f'{_weight2css(title.get_fontweight())} '
                  f'{title.get_fontsize() * dpi / 72.0:.1f}px '
                  f'"DejaVu Sans", Verdana, sans-serif'),
@@ -388,6 +437,9 @@ _PLAYER = Template("""
     if (!sheet.complete || !sheet.naturalWidth) { return; }
     var col = frame % cfg.ncols, row = (frame - col) / cfg.ncols;
     ctx.imageSmoothingEnabled = cfg.smooth;
+    // Frames with an alpha channel are composited onto the static background,
+    // so the previous frame has to go first or they stack up:
+    ctx.clearRect(cfg.rect[0], cfg.rect[1], cfg.rect[2], cfg.rect[3]);
     ctx.drawImage(sheet, col * cfg.sw, row * cfg.sh, cfg.fw, cfg.fh,
                   cfg.rect[0], cfg.rect[1], cfg.rect[2], cfg.rect[3]);
     if (cfg.title) {
@@ -482,8 +534,8 @@ class HTMLAnimation(FuncAnimation):
         The image artist that is updated by ``func``. Its position, colormap,
         and normalization determine how the frames are drawn
     frame_data : ndarray
-        Either (Y, X, T) scalar data or (Y, X, 3, T) RGB data, matching what
-        ``func`` displays in ``image``
+        Either (Y, X, T) scalar data, (Y, X, 3, T) RGB data, or (Y, X, 4, T)
+        RGBA data, matching what ``func`` displays in ``image``
     labels : list of str or None
         Per-frame titles. If None, the title is left alone
     fmt : {'jpg', 'png'}, optional
@@ -515,22 +567,38 @@ class HTMLAnimation(FuncAnimation):
             # The image is hidden while the background is rendered, so it will
             # never get a chance to autoscale itself:
             im.norm.autoscale_None(np.asarray(self._frame_data))
-        bg, width, height = _background(fig, im)
-        # ``get_window_extent`` is only meaningful once the figure has been
-        # drawn, which ``_background`` just did. Round the destination rect
-        # outward rather than rounding its size: rounding the size can leave a
-        # row or column of background exposed along the edge of the image,
-        # whereas overshooting by a fraction of a pixel is invisible.
-        bbox = im.get_window_extent()
+        title_artist = im.axes.title
+        old_title = title_artist.get_text()
+        try:
+            if self._labels is not None:
+                # The player draws the title itself, on a canvas that sits on
+                # top of the static background. Clearing the canvas cannot undo
+                # anything baked into that background, so a title left on the
+                # axes (by an earlier draw, or by the caller) would show
+                # through every frame. Blank it while the background is
+                # rendered; this is also what lets ``_title_geometry`` measure
+                # the empty line box it needs:
+                title_artist.set_text('')
+            bg, width, height = _background(fig, im)
+            # ``get_window_extent`` is only meaningful once the figure has been
+            # drawn, which ``_background`` just did. Round the destination rect
+            # outward rather than rounding its size: rounding the size can
+            # leave a row or column of background exposed along the edge of the
+            # image, whereas overshooting by a fraction of a pixel is
+            # invisible.
+            bbox = im.get_window_extent()
+            title = None
+            if self._labels is not None:
+                title = _title_geometry(title_artist, width, height, fig.dpi)
+        finally:
+            title_artist.set_text(old_title)
         left, right = int(np.floor(bbox.x0)), int(np.ceil(bbox.x1))
         top, bottom = int(np.floor(height - bbox.y1)), \
             int(np.ceil(height - bbox.y0))
         rect = [left, top, max(1, right - left), max(1, bottom - top)]
         sheet = _sprite_sheet(self._frame_data, im.norm, im.cmap,
-                              (rect[3], rect[2]), self._fmt)
-        title = None
-        if self._labels is not None:
-            title = _title_geometry(im.axes.title, width, height, fig.dpi)
+                              (rect[3], rect[2]), self._fmt,
+                              bg_color=_bg_color(im.axes))
         config = {
             'n': int(np.shape(self._frame_data)[-1]),
             'ncols': sheet['ncols'],

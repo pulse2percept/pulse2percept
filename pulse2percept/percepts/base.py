@@ -248,7 +248,7 @@ class Percept(Data):
         return ax
 
     def play(self, fps=None, repeat=True, annotate_time=True, ax=None,
-             colorbar=True, fmt='jpg'):
+             colorbar=True, fmt='png'):
         """Animate the percept as HTML with JavaScript
 
         The percept will be played in an interactive player in IPython or
@@ -269,10 +269,13 @@ class Percept(Data):
             A Matplotlib axes object. If None, will create a new Axes object
         colorbar : {True, False}
             Whether to show the colorbar
-        fmt : {'jpg', 'png'}, optional
-            The image format used to embed the frames. 'jpg' keeps notebooks
-            and doc pages an order of magnitude smaller; use 'png' if you need
-            the frames to be pixel-exact.
+        fmt : {'png', 'jpg'}, optional
+            The image format used to embed the frames. A percept is scalar, so
+            'png' ships it as a palettized image of one byte per pixel, which
+            is already compact; 'jpg' roughly halves that again, but a
+            phosphene is exactly the kind of high-contrast blob against black
+            that JPEG rings around. Prefer 'jpg' only if size matters more than
+            pixel-exact frames.
 
             .. versionadded:: 0.10.0
 
