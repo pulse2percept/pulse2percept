@@ -366,6 +366,42 @@ def test_VideoStimulus_play(n_frames):
     npt.assert_equal('p2p-anim' in rgb.play().to_jshtml(), True)
 
 
+def test_VideoStimulus_play_compressed():
+    """Compression changes the number of frames, and 'vid_shape' must follow
+
+    A video whose pixels are all nonzero survives spatial compression intact,
+    but runs of identical frames are still dropped from the time axis. The
+    player is handed a dense (Y, X, T) array, so a stale frame count in
+    'vid_shape' makes that reshape fail.
+    """
+    frame = np.random.rand(4, 5) * 0.5 + 0.5
+    other = np.random.rand(4, 5) * 0.5 + 0.5
+    ndarray = np.stack([frame] * 4 + [other] * 4, axis=-1)
+    video = VideoStimulus(ndarray, time=np.arange(8), compress=True)
+    # Four of the eight time points are redundant and have been dropped:
+    npt.assert_equal(video.data.shape[-1], 4)
+    npt.assert_equal(video.vid_shape, (4, 5, 4))
+    # The compressed time axis is no longer homogeneous, hence the explicit fps:
+    html = video.play(fps=10).to_jshtml()
+    npt.assert_equal('"n": 4' in html, True)
+    npt.assert_equal(f't = {video.time[-1]:.2f} ms' in html, True)
+    # An all-zero pixel is dropped instead, and no shape can describe what is
+    # left, so playback fails with an explanation rather than a reshape error:
+    sparse = np.zeros((4, 5, 6))
+    sparse[1, 1, :] = np.linspace(0, 1, 6)
+    with pytest.raises(ValueError):
+        VideoStimulus(sparse, time=np.arange(6), compress=True).play()
+
+
+def test_VideoStimulus_play_rgba():
+    # A four-channel video is RGBA (see the class docstring), not RGB:
+    ndarray = np.random.rand(4, 5, 4, 3)
+    video = VideoStimulus(ndarray, time=np.arange(3))
+    npt.assert_equal(video.vid_shape, (4, 5, 4, 3))
+    for fmt in ('png', 'jpg'):
+        npt.assert_equal('p2p-anim' in video.play(fmt=fmt).to_jshtml(), True)
+
+
 def test_VideoStimulus_play_fmt():
     video = VideoStimulus(np.random.rand(8, 8, 4))
     npt.assert_equal('data:image/jpeg;base64,' in video.play().to_jshtml(),

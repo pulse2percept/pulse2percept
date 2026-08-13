@@ -180,10 +180,12 @@ def test_Percept_play_single_frame():
 
 def test_Percept_play_fmt():
     percept = Percept(np.random.rand(8, 8, 4))
+    # A percept is scalar, so the lossless default already costs only one byte
+    # per pixel -- and JPEG rings around high-contrast phosphenes:
     npt.assert_equal('data:image/jpeg;base64,' in percept.play().to_jshtml(),
-                     True)
+                     False)
     npt.assert_equal('data:image/jpeg;base64,' in
-                     percept.play(fmt='png').to_jshtml(), False)
+                     percept.play(fmt='jpg').to_jshtml(), True)
     with pytest.raises(ValueError):
         percept.play(fmt='gif')
 

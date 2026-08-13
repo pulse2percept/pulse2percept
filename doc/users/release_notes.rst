@@ -38,8 +38,11 @@ API changes:
 * :py:class:`~pulse2percept.implants.ProsthesisSystem` now exposes ``raster``
   and ``max_current``.
 
-* ``play`` gained a ``fmt`` argument. JPEG is now the default for substantially
-  smaller output; use ``fmt='png'`` for pixel-exact frames.
+* ``play`` gained a ``fmt`` argument.
+  :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` defaults to JPEG, which
+  is substantially smaller and faster to build for color video;
+  :py:meth:`~pulse2percept.percepts.Percept.play` defaults to PNG, which is
+  pixel-exact and nearly as compact for scalar data. Pass ``fmt`` to override.
 
 * Minimum dependency versions were raised for NumPy 2 compatibility. NumPy 1.x
   users should remain on v0.9.1.
@@ -78,6 +81,22 @@ API changes:
 
 * :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` now correctly infers
   frame duration from the time axis when frame-rate metadata is absent.
+
+* :py:attr:`~pulse2percept.stimuli.VideoStimulus.vid_shape` now reports the
+  number of frames the stimulus actually has, rather than the number the source
+  video had before ``compress=True`` dropped the redundant time points. This
+  fixes :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` and every other
+  operation that reshapes ``data`` back into frames. Playing a video that was
+  compressed in *space* raises an explanatory error instead of a reshape error.
+
+* A four-channel :py:class:`~pulse2percept.stimuli.VideoStimulus` is played
+  back as RGBA, as documented: the alpha channel is preserved for ``fmt='png'``
+  and composited onto the axes background for ``fmt='jpg'``, which cannot carry
+  it. Previously the four channels were reinterpreted as RGB, which sheared the
+  color channels across every row.
+
+* The per-frame title in the HTML player no longer piles up on itself or on a
+  title that was already on the axes.
 
 v0.9.1 (2026-08-06)
 -------------------
