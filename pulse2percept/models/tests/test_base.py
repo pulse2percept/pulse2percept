@@ -9,11 +9,12 @@ from matplotlib.axes import Subplot
 import time
 
 from pulse2percept.implants import ArgusI
-from pulse2percept.stimuli import Stimulus
+from pulse2percept.stimuli import AmplitudeEncoder, Stimulus, VideoStimulus
 from pulse2percept.percepts import Percept
-from pulse2percept.models import (BaseModel, Model, NotBuiltError,
+from pulse2percept.models import (BaseModel, FadingTemporal, Model,
+                                  NotBuiltError, ScoreboardSpatial,
                                   SpatialModel, TemporalModel)
-from pulse2percept.utils import FreezeError
+from pulse2percept.utils import FreezeError, frame_interval
 from pulse2percept.topography import Grid2D, Watson2014Map
 
 
@@ -580,6 +581,47 @@ def test_Model_predict_percept():
     with pytest.raises(TypeError):
         # Must pass an implant:
         model.predict_percept(Stimulus(3))
+
+
+@pytest.mark.parametrize('fps', [29.97, 30, 24])
+def test_Model_predict_percept_frame_clock(fps):
+    # A stimulus that came out of an encoder knows the frame rate of the video
+    # behind it, and that is the rate worth reporting a percept at: one percept
+    # frame per video frame. The pulse train's own time points are far finer
+    # and carry no extra picture, and the hardcoded 20 ms default has nothing
+    # to do with the source.
+    implant = ArgusI()
+    vid = VideoStimulus(np.random.rand(4, 4, 6), metadata={'fps': fps})
+    implant.stim = AmplitudeEncoder(implant, amp_range=(0, 50),
+                                    freq=60).encode(vid)
+    model = Model(temporal=ValidTemporalModel()).build()
+    percept = model.predict_percept(implant)
+    npt.assert_equal(percept.data.shape[-1], 6)
+    # Evenly spaced, and on the model's dt grid -- 1000/29.97 ms is neither a
+    # whole number of dt nor, if rounded point by point, evenly spaced:
+    npt.assert_almost_equal(np.diff(percept.time),
+                            np.diff(percept.time)[0])
+    ratio = percept.time / model.temporal.dt
+    npt.assert_allclose(ratio, np.round(ratio), atol=1e-3)
+    # Close enough to the source's own frame rate to animate at it:
+    npt.assert_almost_equal(frame_interval(percept.time), 1000.0 / fps,
+                            decimal=1)
+    # The spatial model hands the temporal one a Percept rather than a
+    # Stimulus, so the frame clock has to survive that hop too. This leg needs
+    # real models: `ValidTemporalModel` returns one row per electrode, not one
+    # per grid point, so it cannot consume a spatial percept.
+    both = Model(spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                           xystep=1),
+                 temporal=FadingTemporal()).build()
+    npt.assert_equal(both.predict_percept(implant).data.shape[-1], 6)
+    # An explicit `t_percept` still wins:
+    npt.assert_equal(
+        model.predict_percept(implant, t_percept=[0, 1, 2]).data.shape[-1], 3)
+    # ... and a stimulus that did not come from an encoder keeps the 20 ms
+    # default it always had:
+    implant.stim = Stimulus(np.ones((16, 2)), time=[0, 100])
+    npt.assert_almost_equal(model.predict_percept(implant).time,
+                            np.arange(0, 101, 20))
 
 
 def test_Model_predict_percept_correctly_parallelizes():

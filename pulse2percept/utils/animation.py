@@ -2,12 +2,6 @@
 
 Fast, dependency-free HTML/JavaScript animations.
 
-Matplotlib's ``FuncAnimation.to_jshtml`` re-renders the *entire* figure (axes,
-ticks, tick labels, colorbar, ...) once per frame and embeds every frame as its
-own base64-encoded PNG. Since only the image data and the title actually change
-from frame to frame, that is a lot of wasted work: the cost per frame is on the
-order of hundreds of milliseconds, and the resulting HTML is tens of megabytes.
-
 :py:class:`HTMLAnimation` renders the static parts of the figure exactly once
 and packs all frames into a single, color-mapped sprite sheet that is blitted
 into a ``<canvas>`` by a small vanilla-JavaScript player. This is typically two
@@ -26,8 +20,6 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import to_hex, to_rgba
 from PIL import Image
-
-from .array import unique
 
 __all__ = ['HTMLAnimation', 'frame_interval']
 
@@ -100,16 +92,22 @@ def frame_interval(time, fps=None, tol=1e-2):
     """
     if fps is not None:
         return 1000.0 / fps
-    interval = unique(np.diff(time), tol=tol)
-    if len(interval) > 1:
-        raise NotImplementedError(
-            f"Cannot infer the frame rate from a non-homogeneous time axis "
-            f"(found {len(interval)} different time steps). Pass 'fps' "
-            f"instead.")
-    if len(interval) == 0:
+    interval = np.diff(np.asarray(time, dtype=np.float64))
+    if interval.size == 0:
         # A single frame has no time step, and there is nothing to advance to,
         # so any interval will do:
         return SINGLE_FRAME_INTERVAL
+    # Compare the steps against each other rather than quantizing each one onto
+    # a grid of `tol`: a step that lands exactly on a grid boundary (33.365 ms
+    # against tol=1e-2, which is what a 29.97 fps percept comes out at) rounds
+    # up or down depending on floating-point noise far below `tol`, and an
+    # evenly spaced axis then looks like two different steps.
+    spread = float(interval.max() - interval.min())
+    if spread > tol:
+        raise NotImplementedError(
+            f"Cannot infer the frame rate from a non-homogeneous time axis "
+            f"(time steps range over {spread:g} ms, more than tol={tol:g}). "
+            f"Pass 'fps' instead.")
     return float(interval[0])
 
 

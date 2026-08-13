@@ -12,10 +12,19 @@ Highlights:
 *  New :py:class:`~pulse2percept.stimuli.Encoder` classes translate images and
    videos into electrical stimulation. Amplitude and frequency modulation are
    supported, including stimulator timing, input resolution, and electrode
-   multiplexing.
+   multiplexing. Pulse timing is independent of the video frame rate: a frame
+   says when the modulation parameters change, and the requested ``freq`` is
+   the rate actually delivered.
 
 *  New :py:class:`~pulse2percept.implants.Raster` classes describe how
-   stimulators multiplex electrodes that cannot be driven simultaneously.
+   stimulators multiplex electrodes that cannot be driven simultaneously. Each
+   raster group gets a slot in a repeating cycle and pulse periods are whole
+   multiples of that cycle, so two groups provably never pulse at the same
+   instant and the instantaneous current limit holds by construction.
+
+*  A percept is now reported on the frame clock of the video it came from --
+   one percept frame per video frame -- rather than at a hardcoded 20 ms or at
+   every point of the pulse train.
 
 * :py:meth:`~pulse2percept.percepts.Percept.play` and
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` are roughly 100x faster
@@ -48,6 +57,41 @@ API changes:
   users should remain on v0.9.1.
 
 ## Bug fixes
+
+* Encoders no longer restart the pulse train at every video frame, which
+  silently changed the pulse rate whenever a frame was not a whole number of
+  pulse periods long (at 29.97 fps, ``freq=50`` delivered 59.94 pulses/s).
+
+* :py:class:`~pulse2percept.implants.Raster` now genuinely multiplexes. It used
+  to stagger only the *first* pulse of each frame, after which every group
+  pulsed at the same times and the instantaneous current limit the raster
+  exists to respect was exceeded.
+
+* Encoders no longer assume a custom ``pulse`` starts at time zero. A pulse
+  whose time axis was shifted was measured by its duration but rendered at its
+  offset, which could push it past the end of its frame and leave the assembled
+  time axis non-monotonic.
+
+* Zero-amplitude electrodes no longer build (and then discard) a full pulse
+  train, and no longer trip the raster's fit check on a stimulus that delivers
+  no current at all.
+
+* Encoders always sample an image or video at the implant's electrode
+  locations when an ``implant`` is given. Sampling used to be skipped whenever
+  the source happened to have as many rows as the implant has electrodes, so a
+  10x6 image -- or any RGB image with a third as many pixels -- was encoded
+  as-is, unconverted to grayscale, but still labeled with electrode names.
+
+* :py:class:`~pulse2percept.stimuli.Encoder` and
+  :py:class:`~pulse2percept.implants.Raster` parameters now reject NaN,
+  infinity, and fractional counts (``n_levels``, group indices) instead of
+  silently truncating them, and
+  :py:class:`~pulse2percept.implants.CustomRaster` rejects an electrode listed
+  in two groups.
+
+* :py:func:`~pulse2percept.utils.frame_interval` no longer reports an evenly
+  spaced time axis as non-homogeneous when the frame interval happens to land
+  on a multiple of half of ``tol`` (33.365 ms at the default tolerance).
 
 * :py:class:`~pulse2percept.stimuli.PulseTrain` no longer ends on partial,
   unbalanced pulses when its frequency does not divide ``stim_dur``.

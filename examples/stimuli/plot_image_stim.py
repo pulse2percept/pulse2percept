@@ -276,7 +276,10 @@ implant.stim = logo_dilate.trim().resize(implant.shape).encode()
 # A real stimulator usually cannot drive every electrode at once, because the
 # current it can source at any instant is limited. Give the implant a
 # :py:class:`~pulse2percept.implants.Raster` and the electrodes take turns
-# instead, a group at a time, all of them within one frame period:
+# instead, a group at a time, all of them within one pulse period. Every group
+# still pulses at the full requested rate; the raster only decides *when*
+# within each period each one fires, so no two groups are ever active at the
+# same instant:
 #
 # .. code-block:: python
 #

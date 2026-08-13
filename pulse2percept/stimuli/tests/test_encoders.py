@@ -69,6 +69,22 @@ def test_Encoder_params():
         FrequencyEncoder(freq_range=(-10, 10))
     with pytest.raises(ValueError):
         FrequencyEncoder(amp=-1)
+    # A fractional level count would quietly become a fractional step size, so
+    # the number of levels you got back would not be the number you asked for:
+    with pytest.raises(ValueError):
+        AmplitudeEncoder(n_levels=2.5)
+    # NaN and infinity slip through every `<` comparison, and would otherwise
+    # surface as something inscrutable much further downstream:
+    for kwargs in [{'freq': np.nan}, {'amp_range': (0, np.nan)},
+                   {'phase_dur': np.nan}, {'interphase_dur': np.inf},
+                   {'frame_dur': np.nan}, {'clock': np.nan},
+                   {'n_levels': np.nan}]:
+        with pytest.raises(ValueError):
+            AmplitudeEncoder(**kwargs)
+    with pytest.raises(ValueError):
+        FrequencyEncoder(amp=np.nan)
+    with pytest.raises(ValueError):
+        FrequencyEncoder(freq_range=(0, np.inf))
     # Encoders pretty-print their parameters:
     npt.assert_equal('amp_range' in str(AmplitudeEncoder()), True)
     npt.assert_equal('freq_range' in str(FrequencyEncoder()), True)
@@ -147,10 +163,16 @@ def test_AmplitudeEncoder_freq():
     enc = AmplitudeEncoder(freq=0).encode(img)
     npt.assert_almost_equal(np.abs(enc.data).max(), 0)
     npt.assert_almost_equal(enc.time[-1], 500)
-    # A frequency below the frame rate cannot be realized, because a frame
-    # cannot hold less than one pulse:
-    with pytest.warns(UserWarning, match='slower than the frame rate'):
-        AmplitudeEncoder(freq=10, frame_dur=20).encode(img)
+    # A frequency below the frame rate is realizable -- the pulse clock does
+    # not care what the frame rate is -- but wasteful: whole frames then go by
+    # without delivering anything, and their gray levels never reach the
+    # electrode:
+    vid = VideoStimulus(np.ones((2, 2, 5)), metadata={'fps': 30})
+    with pytest.warns(UserWarning, match='deliver no pulse'):
+        sparse = AmplitudeEncoder(freq=10).encode(vid)
+    # 5 frames of 33.3 ms is 166.7 ms, which holds two 100 ms periods:
+    npt.assert_equal(n_pulses_of(sparse), 2)
+    npt.assert_almost_equal(np.diff(pulse_onsets(sparse)), 100, decimal=3)
     # A pulse that does not fit into a frame is an error, not a warning:
     with pytest.raises(ValueError):
         AmplitudeEncoder(freq=1000, phase_dur=10).encode(img)
@@ -356,8 +378,10 @@ def test_FrequencyEncoder_implant():
     implant.stim = enc
     npt.assert_equal(implant.stim.shape, enc.shape)
     # The clock is what makes this tractable at all: without one, the same
-    # clip needs more than an order of magnitude more time points:
-    npt.assert_equal(enc.shape[1] < 20000, True)
+    # clip needs several times as many time points:
+    unclocked = FrequencyEncoder(implant, freq_range=(0, 300),
+                                 amp=50).encode(BostonTrain())
+    npt.assert_equal(enc.shape[1] < unclocked.shape[1] / 5, True)
 
 
 def test_Encoder_raster():
@@ -365,26 +389,65 @@ def test_Encoder_raster():
     raster = SequentialRaster(2, interleave=True)
     enc = AmplitudeEncoder(freq=100, frame_dur=100,
                            raster=raster).encode(img)
-    # Rastering splits the electrodes across two pulse schedules, offset by
-    # half a frame:
+    # Rastering splits the electrodes across two pulse schedules. The cycle a
+    # raster has to get through is the pulse *period*, not the frame, so the
+    # two groups are offset by half a period:
     npt.assert_equal(enc.metadata['encoder']['n_schedules'], 2)
-    npt.assert_almost_equal(pulse_onsets(enc, 0)[0], 0, decimal=3)
-    npt.assert_almost_equal(pulse_onsets(enc, 1)[0], 50, decimal=3)
-    # The delayed group keeps the same period, and gets as many whole pulses
-    # as still fit in what is left of the frame:
-    npt.assert_almost_equal(np.diff(pulse_onsets(enc, 1)), 10, decimal=3)
+    npt.assert_almost_equal(enc.metadata['encoder']['cycle'], 10)
+    onsets = [pulse_onsets(enc, e) for e in (0, 1)]
+    npt.assert_almost_equal(onsets[0][0], 0, decimal=3)
+    npt.assert_almost_equal(onsets[1][0], 5, decimal=3)
+    # Both groups keep the full requested rate -- rastering costs no
+    # frequency, it only decides *when* within each period an electrode fires:
+    for group in onsets:
+        npt.assert_almost_equal(np.diff(group), 10, decimal=3)
     npt.assert_equal(n_pulses_of(enc, 0), 10)
-    npt.assert_equal(n_pulses_of(enc, 1), 5)
+    npt.assert_equal(n_pulses_of(enc, 1), 10)
+    # The point of all this: the groups never pulse at the same instant, so
+    # the stimulator only ever sources one group's worth of current. Before,
+    # the groups shared every onset from 50 ms on and this was 100:
+    npt.assert_equal(np.intersect1d(np.round(onsets[0], 3),
+                                    np.round(onsets[1], 3)).size, 0)
+    # Two of the four electrodes are in each group, so the stimulator sources
+    # 2 x 50 uA at a time rather than all 4 x 50 uA:
+    npt.assert_almost_equal(np.abs(enc.data).sum(axis=0).max(), 100)
     # Both groups stay charge-balanced:
     net = trapezoid(enc.data.astype(np.float64),
                     x=enc.time.astype(np.float64))
     npt.assert_almost_equal(net, 0, decimal=3)
-    # A clock snaps the delay along with the period:
-    enc = AmplitudeEncoder(freq=100, frame_dur=100, clock=3,
+    # A clock snaps the slot offsets along with the period. A 4.6 ms slot lands
+    # on 5 ms, and the 10 ms period onto the 9 ms cycle the two slots make:
+    enc = AmplitudeEncoder(freq=100, frame_dur=100, clock=1,
                            raster=SequentialRaster(
                                2, interleave=True,
-                               group_dur=5)).encode(img)
-    npt.assert_almost_equal(pulse_onsets(enc, 1)[0], 6, decimal=3)
+                               group_dur=4.6)).encode(img)
+    npt.assert_almost_equal(pulse_onsets(enc, 1)[0], 5, decimal=3)
+    npt.assert_almost_equal(np.diff(pulse_onsets(enc, 1)), 9, decimal=3)
+    npt.assert_almost_equal(enc.metadata['encoder']['cycle'], 9)
+
+
+def test_Encoder_raster_frequency_modulation():
+    # Under frequency modulation electrodes want different periods, so they
+    # can only be kept apart by quantizing every period onto a common raster
+    # cycle. The fastest electrode pulses once per cycle, slower ones every
+    # m-th cycle, and no two groups ever coincide:
+    img = ImageStimulus(np.linspace(0.25, 1, 16).reshape((4, 4)))
+    enc = FrequencyEncoder(freq_range=(0, 120), amp=10, frame_dur=200,
+                           raster=SequentialRaster(4, interleave=True)).encode(img)
+    cycle = enc.metadata['encoder']['cycle']
+    npt.assert_almost_equal(cycle, 1000 / 120)
+    for e in range(16):
+        # Every period is a whole number of raster cycles, which is what keeps
+        # two groups from drifting onto each other:
+        ratio = np.diff(pulse_onsets(enc, e)) / cycle
+        npt.assert_allclose(ratio, np.round(ratio), atol=1e-3)
+    # Which is the whole point: the current limit holds instant by instant:
+    npt.assert_almost_equal(np.abs(enc.data).sum(axis=0).max(), 4 * 10)
+    # Multiplexing a fast train across many groups asks more of a stimulator
+    # than it can give, and that is an error rather than a silent collision:
+    with pytest.raises(ValueError, match='no room'):
+        FrequencyEncoder(freq_range=(0, 300), amp=10, frame_dur=200,
+                         raster=SequentialRaster(6)).encode(img)
 
 
 def test_Encoder_raster_from_implant():
@@ -437,6 +500,110 @@ def test_Encoder_raster_current_limit():
                            raster=SequentialRaster(60)).encode(vid)
     npt.assert_equal(enc.metadata['encoder']['n_schedules'], 60)
     npt.assert_almost_equal(np.abs(enc.data).sum(axis=0).max(), 50)
+
+
+@pytest.mark.parametrize('fps', [29.97, 30, 24, 59.94])
+@pytest.mark.parametrize('freq', [50, 100])
+def test_Encoder_freq_is_actual_freq(fps, freq):
+    # The pulse clock runs independently of the frame clock, so the requested
+    # frequency is the frequency delivered -- whatever the frame rate is, and
+    # whether or not a frame holds a whole number of periods. Before, each
+    # frame restarted the train at its own t=0, and a 29.97 fps video asked for
+    # 50 Hz came back at 59.94 pulses/s.
+    vid = VideoStimulus(np.ones((2, 2, 20)), metadata={'fps': fps})
+    enc = AmplitudeEncoder(freq=freq).encode(vid)
+    onsets = pulse_onsets(enc)
+    npt.assert_almost_equal(np.diff(onsets), 1000.0 / freq, decimal=3)
+    # Pulses stay whole and charge-balanced even where one straddles a frame
+    # boundary, which is what the frame clock used to prevent:
+    net = trapezoid(enc.data.astype(np.float64),
+                    x=enc.time.astype(np.float64))
+    npt.assert_almost_equal(net, 0, decimal=3)
+    npt.assert_equal(np.all(np.diff(enc.time) > 0.95 * DT), True)
+
+
+def test_Encoder_pulse_offset():
+    # `Stimulus` only requires a time axis to be ordered, not to start at zero.
+    # What an encoder borrows from a supplied pulse is its *shape*, so a pulse
+    # whose time axis is shifted has to encode exactly like an unshifted one.
+    # Before, it was measured as 1.01 ms when deciding whether it fit but
+    # rendered 5 ms late, which could push it clean out of its own frame:
+    shape = np.array([[0, -1, -1, 0]], dtype=float)
+    at_zero = Stimulus(shape, time=[0, 0.01, 1, 1.01])
+    shifted = Stimulus(shape, time=[5, 5.01, 6, 6.01])
+    vid = VideoStimulus(np.ones((1, 2, 3)), metadata={'fps': 50})
+    ref = AmplitudeEncoder(pulse=at_zero, freq=1000 / 6).encode(vid)
+    enc = AmplitudeEncoder(pulse=shifted, freq=1000 / 6).encode(vid)
+    npt.assert_almost_equal(enc.time, ref.time)
+    npt.assert_almost_equal(enc.data, ref.data)
+    # The time axis stays strictly increasing across frames. A late pulse used
+    # to run past the end of its frame and send time backwards at the next one:
+    npt.assert_equal(np.all(np.diff(enc.time) > 0.95 * DT), True)
+    # The caller's pulse is left alone:
+    npt.assert_almost_equal(shifted.time, [5, 5.01, 6, 6.01])
+
+
+def test_Encoder_zero_amp():
+    # An electrode delivering no current has nothing to schedule, so a dark
+    # frame costs no pulses and no time points -- it used to build a full pulse
+    # train and then multiply it by zero:
+    black = ImageStimulus(np.zeros((2, 2)))
+    enc = AmplitudeEncoder(amp_range=(0, 50), freq=100,
+                           frame_dur=100).encode(black)
+    npt.assert_equal(np.all(enc.data == 0), True)
+    npt.assert_equal(enc.shape[1], 2)
+    npt.assert_almost_equal(enc.time[-1], 100)
+    # A dark electrode alongside bright ones costs nothing either, and does not
+    # disturb what the bright ones do:
+    half = ImageStimulus(np.array([[0.0, 1.0], [0.0, 1.0]]))
+    enc = AmplitudeEncoder(amp_range=(0, 50), freq=100,
+                           frame_dur=100).encode(half)
+    npt.assert_equal(np.all(enc.data[[0, 2]] == 0), True)
+    npt.assert_equal(n_pulses_of(enc, 1), 10)
+    # A dark *frame* does not reset the phase of the frames around it: the
+    # pulse clock keeps running even where nothing is delivered. Three 25 ms
+    # frames at 200 Hz, with the middle one black:
+    vid = VideoStimulus(np.array([1.0, 0.0, 1.0]).reshape((1, 1, 3)),
+                        metadata={'fps': 40})
+    enc = AmplitudeEncoder(amp_range=(0, 50), freq=200).encode(vid)
+    onsets = pulse_onsets(enc)
+    # Nothing is delivered during the black frame ...
+    npt.assert_equal(np.any((onsets >= 25) & (onsets < 50)), False)
+    # ... and the train picks back up in phase rather than at the frame edge,
+    # so every onset is still a whole number of 5 ms periods from the first:
+    npt.assert_almost_equal(np.mod(onsets, 5), 0, decimal=3)
+    npt.assert_almost_equal(onsets[[0, -1]], [0, 70], decimal=3)
+    # A raster that a stimulus cannot possibly satisfy is a property of the
+    # device, not of how bright today's video is, so it is reported either way:
+    implant = ArgusII()
+    dark = VideoStimulus(np.zeros((6, 10, 3)), metadata={'fps': 30})
+    with pytest.raises(ValueError, match='no room'):
+        AmplitudeEncoder(implant, freq=30,
+                         raster=SequentialRaster(60)).encode(dark)
+    # ... and a workable one costs a dark video nothing:
+    enc = AmplitudeEncoder(implant, amp_range=(0, 50), freq=30, phase_dur=0.2,
+                           raster=SequentialRaster(60)).encode(dark)
+    npt.assert_equal(np.all(enc.data == 0), True)
+    npt.assert_equal(enc.shape[1], 2)
+
+
+def test_Encoder_implant_reshape():
+    # Passing an implant means "sample the source at the electrode locations".
+    # Row count is not a usable test of whether that already happened: a 10x6
+    # image and an RGB 4x5 image both have exactly as many rows as Argus II has
+    # electrodes, and both used to skip sampling (and, for RGB, `rgb2gray`)
+    # while still being labeled with electrode names.
+    implant = ArgusII()
+    for src in [ImageStimulus(np.random.rand(10, 6)),
+                ImageStimulus(np.random.rand(4, 5, 3)),
+                ImageStimulus(np.random.rand(6, 10)),
+                VideoStimulus(np.random.rand(10, 6, 2))]:
+        npt.assert_equal(src.data.shape[0], implant.n_electrodes)
+        enc = AmplitudeEncoder(implant, amp_range=(0, 50)).encode(src)
+        direct = AmplitudeEncoder(amp_range=(0, 50)).encode(
+            implant.reshape_stim(src))
+        npt.assert_almost_equal(enc.data, direct.data, decimal=4)
+        npt.assert_equal(list(enc.electrodes), list(implant.electrode_names))
 
 
 def test_Encoder_metadata():

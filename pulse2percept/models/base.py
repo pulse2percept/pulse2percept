@@ -48,6 +48,56 @@ def _n_jobs_alias():
                         "names read and write the same value.")
 
 
+def _frame_clock(stim, dt):
+    """The video frame times (ms) an encoded stimulus was built from
+
+    An encoder separates the clock that decides *when the picture changes* from
+    the clock that decides *when the electrodes pulse*, and records the former
+    in the stimulus' metadata. That is the rate at which a percept is worth
+    reporting: one frame in, one frame out. The pulse train's own time points
+    are far finer and carry no extra picture.
+
+    Returns the *end* of each frame, so that frame *k* of the percept reflects
+    the stimulation delivered during frame *k* of the video, rounded onto the
+    model's ``dt`` grid (a 29.97 fps frame is 33.3667 ms, which is not a
+    multiple of the default dt=0.005 ms). It is the frame *interval* that is
+    rounded rather than each frame time on its own, so that the percept keeps
+    an evenly spaced time axis -- ``play`` and ``save`` infer a frame rate from
+    it and refuse a ragged one. Returns None for anything that did not come out
+    of an encoder.
+
+    .. versionadded:: 0.10.0
+
+    """
+    meta = getattr(stim, 'metadata', None)
+    if not isinstance(meta, dict):
+        return None
+    enc = meta.get('encoder')
+    if not isinstance(enc, dict):
+        # `Stimulus` files metadata it does not recognize under 'user':
+        user = meta.get('user')
+        enc = user.get('encoder') if isinstance(user, dict) else None
+    if not isinstance(enc, dict) and 'stim' in meta:
+        # A `Percept` on its way from the spatial model to the temporal one
+        # carries the stimulus it came from, and the frame clock with it:
+        return _frame_clock(meta['stim'], dt)
+    if not isinstance(enc, dict):
+        return None
+    try:
+        frame_time = np.asarray(enc['frame_time'], dtype=np.float64)
+        frame_dur = float(enc['frame_dur'])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if frame_time.size == 0 or not np.isfinite(frame_dur) or frame_dur <= 0:
+        return None
+    # Count in whole `dt` steps rather than rounding each frame time, so that
+    # the spacing comes out exactly even and every point is exactly a multiple
+    # of `dt` (which `predict_percept` insists on):
+    step = max(1, int(round(frame_dur / dt)))
+    start = int(round(float(frame_time[0]) / dt))
+    return (start + (np.arange(frame_time.size) + 1) * step) * dt
+
+
 class NotBuiltError(ValueError, AttributeError):
     """Exception class used to raise if model is used before building
 
@@ -671,9 +721,14 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         _time = stim.time
 
         if t_percept is None:
-            # If no time vector is given, output at 50 Hz frame rate. We always
-            # start at zero and include the last time point:
-            t_percept = np.arange(0, np.maximum(20, _time[-1]) + 1, 20)
+            # A stimulus that came out of an encoder knows the frame rate of
+            # the video behind it, and that is the rate worth reporting at:
+            # one percept frame per video frame. Failing that, output at a
+            # 50 Hz frame rate, always starting at zero and including the last
+            # time point:
+            t_percept = _frame_clock(stim, self.dt)
+            if t_percept is None:
+                t_percept = np.arange(0, np.maximum(20, _time[-1]) + 1, 20)
         # We need to make sure the requested `t_percept` are sorted and
         # multiples of `dt`:
         t_percept = np.sort([t_percept]).flatten()
