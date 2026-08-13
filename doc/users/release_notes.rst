@@ -22,6 +22,12 @@ Highlights:
    multiples of that cycle, so two groups provably never pulse at the same
    instant and the instantaneous current limit holds by construction.
 
+*  :py:class:`~pulse2percept.models.FadingTemporal` now half-wave rectifies its
+   drive, so it can see a charge-balanced pulse. Previously the anodic phase of
+   a biphasic pulse undid exactly what the cathodic phase had done, and a pulse
+   train produced sub-millisecond transients around zero rather than a percept
+   that persisted between pulses.
+
 * :py:meth:`~pulse2percept.percepts.Percept.play` and
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` are roughly 100x faster
   and produce much smaller notebooks and documentation pages.
@@ -29,6 +35,30 @@ Highlights:
 * Python 3.14 is now supported. Python 3.11 and NumPy 2 are now required.
 
 API changes:
+
+* :py:class:`~pulse2percept.models.FadingTemporal` is now driven by
+  :math:`\max(-A, 0)` rather than :math:`-A`: anodic current no longer reduces
+  brightness, it is ignored. A stimulus that is purely cathodic is unaffected;
+  a charge-balanced one now delivers net charge instead of integrating to
+  nothing. At 20 Hz and ``tau=100``, brightness between pulses used to fall to
+  0.6% of the peak it had just reached (99% ripple) and now holds at 61%.
+  Raising ``tau`` used to make the percept dimmer rather than steadier, because
+  the peak scales as :math:`1/\tau` while the floor between pulses does not.
+
+* Temporal models gained a ``reduce`` parameter. When
+  ``predict_percept`` picks the output times itself (``t_percept=None``), each
+  point now reports the peak brightness reached over the interval leading up to
+  it rather than the brightness at the instant it ends. Naming ``t_percept``
+  still asks for those instants. Pass ``reduce='last'`` for the old reporting.
+
+  Electrical stimulation is pulsatile, so an instant sampled from a percept is
+  usually an instant between pulses, and which pulses a frame catches drifts
+  when the frame rate and the pulse rate are incommensurate. Under a raster
+  that showed up as groups appearing in the wrong order or not at all: driving
+  Argus II with ``SequentialRaster(6)`` at 20 Hz against a 29.97 fps video,
+  25 of 94 percept frames came out entirely dark and two of the six rows never
+  appeared at all. :py:class:`~pulse2percept.models.FadingTemporal` tracks the
+  peak inside its integrator, so it is exact at any output rate.
 
 * :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` and
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` now use

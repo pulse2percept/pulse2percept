@@ -632,7 +632,8 @@ def test_Model_predict_percept_frame_peak():
     # frame (33.37 ms) are incommensurate, so the sampling phase walks through
     # the cycle and neighbouring frames came out two orders of magnitude apart.
     implant = ArgusI()
-    vid = VideoStimulus(np.random.rand(4, 4, 16), metadata={'fps': 29.97})
+    rng = np.random.default_rng(0)
+    vid = VideoStimulus(rng.random((4, 4, 16)), metadata={'fps': 29.97})
     implant.stim = AmplitudeEncoder(implant, amp_range=(0, 50),
                                     freq=20).encode(vid)
     model = Model(temporal=FadingTemporal(tau=100)).build()
@@ -645,7 +646,7 @@ def test_Model_predict_percept_frame_peak():
     # The default reports the peak each frame reached, so it is never below the
     # value at the instant the frame ended, and for most frames it is above it:
     npt.assert_array_less(at_end.data - 1e-6, peak.data)
-    npt.assert_equal(np.any(peak.data > 1.5 * at_end.data), True)
+    npt.assert_array_less(0.5, np.mean(peak.data > at_end.data + 1e-7))
     # ... which is what stops the frame-to-frame swing from being an artifact
     # of the sampling phase rather than a property of the video:
     swing = lambda d: d.max() / np.median(d)
@@ -654,6 +655,11 @@ def test_Model_predict_percept_frame_peak():
     # A percept is still one frame per video frame, on an evenly spaced axis:
     npt.assert_equal(peak.data.shape[-1], 16)
     npt.assert_almost_equal(np.diff(peak.time), np.diff(peak.time)[0])
+
+    # `reduce='last'` asks for the closing instant instead, which is what every
+    # version before 0.10.0 reported:
+    last = Model(temporal=FadingTemporal(tau=100, reduce='last')).build()
+    npt.assert_array_equal(last.predict_percept(implant).data, at_end.data)
 
 
 def test_Model_predict_percept_correctly_parallelizes():

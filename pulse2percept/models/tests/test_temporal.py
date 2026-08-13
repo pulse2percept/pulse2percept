@@ -5,7 +5,9 @@ import numpy.testing as npt
 import pytest
 
 from pulse2percept.models import FadingTemporal, Nanduri2012Temporal
-from pulse2percept.stimuli import Stimulus, MonophasicPulse, BiphasicPulse
+from pulse2percept.models._temporal import fading_fast
+from pulse2percept.stimuli import (Stimulus, MonophasicPulse, BiphasicPulse,
+                                   BiphasicPulseTrain)
 from pulse2percept.percepts import Percept
 from pulse2percept.utils import FreezeError
 
@@ -87,12 +89,15 @@ def test_FadingTemporal_matches_reference_integrator():
     ``fading_fast`` runs time in the outer loop and space in the inner one so
     that the inner loop vectorizes. This walks a couple of locations the
     obvious way -- one at a time, stepping forward -- and checks the kernel
-    agrees exactly.
+    agrees exactly. The stimulus straddles zero, so it also pins the half-wave
+    rectification: anodic samples must contribute nothing at all rather than
+    driving brightness down.
     """
     model = FadingTemporal(dt=0.01, tau=50, thresh_percept=0).build()
     n_space, n_stim = 3, 5
     rng = np.random.default_rng(0)
     data = (rng.random((n_space, n_stim)) - 0.5).astype(np.float32)
+    npt.assert_equal(np.any(data > 0) and np.any(data < 0), True)
     t_stim = np.arange(n_stim, dtype=np.float32) * 2.0
     stim = Stimulus(data, time=t_stim)
     t_percept = np.array([0.0, 2.0, 4.0, 8.0])
@@ -108,12 +113,55 @@ def test_FadingTemporal_matches_reference_integrator():
             if idx_stim + 1 < n_stim and np.float32(i) * dt >= t_stim[idx_stim + 1]:
                 idx_stim += 1
             amp = data[s, idx_stim]
-            bright = np.float32(bright + dt * (-amp - bright) / tau)
+            drive = np.float32(max(-amp, 0.0))
+            bright = np.float32(bright + dt * (drive - bright) / tau)
             if bright < 0:
                 bright = np.float32(0.0)
             if i == idx_p[frame]:
                 npt.assert_array_equal(got[s, frame], bright)
                 frame += 1
+
+
+def test_FadingTemporal_rectifies_the_drive():
+    """A charge-balanced pulse train has to produce a percept that persists.
+
+    A leaky integrator is linear, so driving it with -A lets the anodic phase
+    of a biphasic pulse undo exactly what the cathodic phase did: brightness
+    spikes for the length of one phase and returns to zero, leaving a 1.8%
+    duty cycle rather than a phosphene. Half-wave rectifying the drive is what
+    makes the pulse deliver net charge.
+    """
+    train = BiphasicPulseTrain(20, -50, 0.46, stim_dur=1000)
+    model = FadingTemporal(tau=100).build()
+    t = np.round(np.arange(0, 1000, 0.05), 5)
+    bright = model.predict_percept(train, t_percept=t).data.ravel()
+    late = bright[t >= 500]
+    # Brightness holds up between pulses instead of collapsing to zero. The
+    # unrectified model came back to within 0.6% of zero after every pulse:
+    npt.assert_array_less(0.5, late.min() / late.max())
+    # ... and it accumulates over the train rather than repeating one transient:
+    # even at its dimmest the steady state is above what one pulse produces:
+    one_pulse = bright[t < 50].max()
+    npt.assert_array_less(one_pulse, late.min())
+    npt.assert_array_less(2 * one_pulse, late.max())
+
+    # A slower train is dimmer, because it spends longer fading between pulses.
+    # This is the whole basis of frequency modulation, and the unrectified
+    # model could not express it:
+    def steady(freq):
+        stim = BiphasicPulseTrain(freq, -50, 0.46, stim_dur=1000)
+        return model.predict_percept(stim, t_percept=t).data.ravel()[-1]
+
+    rates = [10, 20, 50, 100]
+    npt.assert_equal(np.all(np.diff([steady(f) for f in rates]) > 0), True)
+
+    # Rectification only removes the anodic half, so a stimulus that never goes
+    # anodic is unaffected. These are the values this model has always given:
+    model = FadingTemporal(tau=1).build()
+    percept = model.predict_percept(MonophasicPulse(-1, 1, stim_dur=10),
+                                    np.arange(10))
+    npt.assert_almost_equal(percept.data.ravel()[:3], [0, 0.633, 0.232],
+                            decimal=3)
 
 
 @pytest.mark.parametrize('n_space', (1, 63, 64, 65, 130))
@@ -149,6 +197,71 @@ def test_FadingTemporal_thread_count_invariant():
         parallel = FadingTemporal(dt=0.05, tau=40, n_threads=n_threads).build(
             ).predict_percept(stim, t_percept=[0, 5, 10, 15]).data
         npt.assert_array_equal(parallel, serial)
+
+
+def test_FadingTemporal_peak_is_exact():
+    """The in-kernel peak must equal a dense scan of the same interval.
+
+    Sampling an interval a fixed number of times cannot summarize a transient
+    shorter than its own step, which is why the peak is tracked across every
+    `dt` step instead. That makes it exact however coarse the output rate is,
+    and this pins it against brightness computed at every single step.
+    """
+    rng = np.random.default_rng(3)
+    data = (rng.random((5, 12)) - 0.5).astype(np.float32) * 40
+    t_stim = (np.arange(12) * 4.0).astype(np.float32)
+    dt, tau = 0.05, 20.0
+    # Brightness at every single simulation step:
+    n_sim = int(round(44 / dt)) + 1
+    dense = fading_fast(data, t_stim, np.arange(n_sim, dtype=np.uint32), dt,
+                        tau, 0.0, 1, 0)
+    out = np.array([37, 210, 400, 601, 880], dtype=np.uint32)
+    peak = fading_fast(data, t_stim, out, dt, tau, 0.0, 1, 1)
+    last = fading_fast(data, t_stim, out, dt, tau, 0.0, 1, 0)
+    # The interval a percept point summarizes runs from the previous one up to
+    # and including it -- brightness is continuous, so the value carried across
+    # the boundary is a floor on what the next interval reaches:
+    lo = np.r_[0, out[:-1]]
+    brute = np.stack([dense[:, a:b + 1].max(axis=1)
+                      for a, b in zip(lo, out)], axis=1)
+    npt.assert_array_equal(peak, brute)
+    # Reducing to the closing instant is what the model always did:
+    npt.assert_array_equal(last, dense[:, out])
+    npt.assert_equal(np.all(peak >= last), True)
+    npt.assert_equal(np.any(peak > last), True)
+    # Threads take a block of locations each; the peak must not depend on how
+    # many of them there are:
+    for n_threads in (2, 4, 8):
+        npt.assert_array_equal(
+            fading_fast(np.tile(data, (40, 1)), t_stim, out, dt, tau, 0.0,
+                        n_threads, 1),
+            np.tile(peak, (40, 1)))
+
+
+def test_FadingTemporal_reduce():
+    """`reduce` governs the times the model picks, not the ones you name."""
+    stim = BiphasicPulseTrain(20, -50, 0.46, stim_dur=200)
+    peak_model = FadingTemporal(tau=100).build()
+    npt.assert_equal(peak_model.reduce, 'peak')
+    last_model = FadingTemporal(tau=100, reduce='last').build()
+
+    # Naming `t_percept` asks for those instants, whatever `reduce` says:
+    t = [0, 50, 100, 150]
+    npt.assert_array_equal(peak_model.predict_percept(stim, t_percept=t).data,
+                           last_model.predict_percept(stim, t_percept=t).data)
+
+    # Letting the model pick, `reduce='last'` is the old behaviour exactly:
+    got = last_model.predict_percept(stim)
+    npt.assert_array_equal(
+        got.data, last_model.predict_percept(stim, t_percept=got.time).data)
+    # ... and 'peak' is never below it, because the interval contains its end:
+    peaked = peak_model.predict_percept(stim)
+    npt.assert_almost_equal(peaked.time, got.time)
+    npt.assert_equal(np.all(peaked.data >= got.data), True)
+    npt.assert_equal(np.any(peaked.data > got.data), True)
+
+    with pytest.raises(ValueError):
+        FadingTemporal(reduce='mean').build().predict_percept(stim)
 
 
 def test_TemporalModel_blank_percept_warning():

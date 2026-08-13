@@ -54,9 +54,16 @@ def _n_jobs_alias():
 #: single instant lands wherever the pulse cycle happens to be and can differ
 #: from its neighbours by two orders of magnitude for no reason a viewer would
 #: recognize. Sampling across the frame and keeping the peak reports what the
-#: frame actually did. Dynamics much faster than ``frame_dur`` divided by this
-#: are still under-reported -- no finite sampling can summarize a transient
-#: shorter than its own step.
+#: frame actually did.
+#:
+#: This is the fallback for models whose kernel cannot track the peak itself
+#: (``_reduces_intervals``), and it is only approximate: dynamics much faster
+#: than ``frame_dur`` divided by this are under-reported, because no finite
+#: sampling can summarize a transient shorter than its own step. A 0.92 ms
+#: pulse against a 33.4 ms frame needs 37 samples to be caught reliably; eight
+#: of them catch it about one frame in seven, which is enough for a model whose
+#: output is already smooth on the millisecond scale and not enough for one
+#: whose output is not.
 _FRAME_SUBSAMPLES = 8
 
 
@@ -626,6 +633,36 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
     *  ``_build`` (optional): a way to add one-time computations to the build
        process
 
+    Parameters
+    ----------
+    dt : float, optional
+        Sampling time step of the simulation (ms)
+    thresh_percept : float, optional
+        Below threshold, the percept has brightness zero.
+    reduce : {'peak', 'last'}, optional
+        How a percept time point summarizes the interval since the previous
+        one, when ``predict_percept`` picks the output times itself (that is,
+        when ``t_percept`` is None). ``'peak'`` reports the highest brightness
+        reached over the interval; ``'last'`` reports the brightness at the
+        instant the interval ended, which is what every version before 0.10.0
+        did.
+
+        Peak is the default because electrical stimulation is pulsatile: the
+        brightness an interval produces rises and falls within it, so the
+        closing instant says more about where in the pulse cycle it fell than
+        about the interval. Peak rather than mean because what a pulse train
+        produces is a flash, and averaging over the gaps that follow would
+        scale every interval by its duty cycle instead.
+
+        Naming ``t_percept`` overrides this: an explicit time point is a
+        request for that instant, and is always answered with the brightness
+        there.
+
+        .. versionadded:: 0.10.0
+    n_threads : int, optional
+        Number of CPU threads to use during parallelization using OpenMP.
+        Defaults to max number of user CPU cores.
+
     .. versionadded:: 0.6
 
     .. note ::
@@ -651,6 +688,14 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
     #: so; nothing else reads it.
     _drive_sign = -1
 
+    #: Whether ``_predict_temporal`` accepts a ``reduce`` argument and honors it
+    #: itself, tracking the peak across every ``dt`` step of the interval. That
+    #: is exact and costs one compare per step. Models that leave this False
+    #: fall back to sampling each interval ``_FRAME_SUBSAMPLES`` times, which
+    #: costs memory proportional to the sample count and still misses
+    #: transients shorter than the resulting step.
+    _reduces_intervals = False
+
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
         params = {
@@ -658,6 +703,9 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             'dt': 0.005,
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
+            # How to summarize an output interval when `predict_percept` picks
+            # the output times itself; see `predict_percept`:
+            'reduce': 'peak',
             # True: print status messages, False: silent
             'verbose': True,
             # `n_jobs` is an alias that writes through to `n_threads`, so it
@@ -685,6 +733,14 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         percept: np.ndarray
             A 2D NumPy array (space x time) that specifies the percept at each
             spatial location and time step.
+
+        Notes
+        -----
+        A model that can summarize an interval rather than sample an instant
+        takes a third argument, ``reduce`` ('peak' or 'last'), and sets
+        ``_reduces_intervals = True``. ``predict_percept`` only passes the
+        argument to models that advertise it, so an override with the
+        two-argument signature above keeps working.
         """
         raise NotImplementedError
 
@@ -704,8 +760,9 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             applied to each spatial location in the stimulus/percept.
         t_percept : float or list of floats, optional
             The time points at which to output a percept (ms).
-            If None, the percept will be output once very 20 ms (50 Hz frame
-            rate).
+            If None, the percept will be output once per frame of the video the
+            stimulus was encoded from, or failing that once every 20 ms (50 Hz
+            frame rate).
 
             .. note ::
 
@@ -722,6 +779,27 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         -----
         *  If a list of time points is provided for ``t_percept``, the values
            will automatically be sorted.
+
+        *  Naming ``t_percept`` asks for the brightness *at those instants*.
+           Leaving it None asks the model to pick the output times, and it then
+           reports what each interval between them *did* rather than where it
+           happened to end -- the peak brightness reached over the interval, or
+           the closing value if ``reduce='last'``.
+
+           The distinction matters because electrical stimulation is pulsatile.
+           A 20 Hz train of 0.46 ms biphasic pulses drives brightness in
+           sub-millisecond transients at a 1.8% duty cycle, so an instant
+           sampled from it is almost always an instant between pulses. Worse,
+           the sampling phase walks: against a 29.97 fps video the frame
+           (33.37 ms) and the pulse period (50 ms) are incommensurate, so which
+           electrodes a frame catches drifts from frame to frame. Under a
+           raster, where each group pulses in its own slot, that shows up as
+           groups appearing in the wrong order or not at all.
+
+        .. versionchanged:: 0.10.0
+
+            Output times chosen by the model summarize their interval instead
+            of sampling its final instant. See ``reduce``.
 
         """
         if not self.is_built:
@@ -748,15 +826,24 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         _time = stim.time
 
         n_sub = 1
+        reduce = 'last'
         if t_percept is None:
+            # Nobody asked for a particular instant, so the output times are
+            # this model's to choose -- and having chosen them it owes a
+            # summary of each interval rather than a sample of one instant out
+            # of it. `reduce` says which summary; see the docstring.
+            reduce = self.reduce
+            if reduce not in ('peak', 'last'):
+                raise ValueError(f"'reduce' must be 'peak' or 'last', not "
+                                 f"{self.reduce!r}.")
             # A stimulus that came out of an encoder knows the frame rate of
             # the video behind it, and that is the rate worth reporting at:
-            # one percept frame per video frame. Each frame is sampled several
-            # times over and reduced below, since a single instant lands
-            # wherever the pulse cycle happens to be. Failing that, output at a
+            # one percept frame per video frame. Failing that, output at a
             # 50 Hz frame rate, always starting at zero and including the last
             # time point:
-            frames = _frame_clock(stim, self.dt, n_sub=_FRAME_SUBSAMPLES)
+            want = (_FRAME_SUBSAMPLES
+                    if reduce == 'peak' and not self._reduces_intervals else 1)
+            frames = _frame_clock(stim, self.dt, n_sub=want)
             if frames is None:
                 t_percept = np.arange(0, np.maximum(20, _time[-1]) + 1, 20)
             else:
@@ -773,19 +860,22 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         if _stim.data.size == 0:
             # Stimulus was compressed to zero:
             resp = np.zeros(_space + [t_percept.size], dtype=np.float32)
+        elif self._reduces_intervals:
+            # This model tracks the peak inside its own integrator, which is
+            # exact however coarse the output rate is:
+            resp = self._predict_temporal(_stim, t_percept, reduce)
+            self._warn_if_blank(_stim, resp)
         else:
             # Calculate the Stimulus at requested time points:
             resp = self._predict_temporal(_stim, t_percept)
             self._warn_if_blank(_stim, resp)
         resp = resp.reshape(_space + [t_percept.size])
         if n_sub > 1:
-            # Reduce each frame's samples to the peak brightness it reached.
-            # That is what a frame of the percept means: electrical stimulation
-            # is pulsatile, so reporting the instant a frame happened to end on
-            # says more about where in the pulse cycle that instant fell than
-            # about the frame. Peak, not mean, because what a pulse train
-            # produces is a flash, and averaging it over the gaps that follow
-            # would scale every frame by its duty cycle instead:
+            # The fallback for a model that cannot reduce its own intervals:
+            # sample each frame `n_sub` times and keep the peak. Peak, not
+            # mean, because what a pulse train produces is a flash, and
+            # averaging it over the gaps that follow would scale every frame by
+            # its duty cycle instead:
             resp = resp.reshape(_space + [-1, n_sub]).max(axis=-1)
             t_percept = t_percept[n_sub - 1::n_sub]
         return Percept(resp, space=None, time=t_percept,

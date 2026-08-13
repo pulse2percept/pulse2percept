@@ -7,22 +7,32 @@ from ._temporal import fading_fast
 class FadingTemporal(TemporalModel):
     """A generic temporal model for phosphene fading
 
-    Implements phosphene fading using a leaky integrator:
+    Implements phosphene fading using a leaky integrator driven by the
+    cathodic half of the stimulus:
 
     .. math::
 
-        \\frac{dB}{dt} = -\\frac{A+B}{\\tau}
+        \\frac{dB}{dt} = \\frac{\\max(-A, 0) - B}{\\tau}
 
-    where :math:`A` is the stimulus  amplitude, :math:`B` is the perceived
-    brightness, and :math:`\\tau` is the exponential  decay constant (``tau``).
+    where :math:`A` is the stimulus amplitude, :math:`B` is the perceived
+    brightness, and :math:`\\tau` is the exponential decay constant (``tau``).
 
     The model makes the following assumptions:
 
-    *  Cathodic currents (negative amplitudes) will increase perceived
-       brightness
-    *  Anodic currents (positive amplitudes) will decrease brightness
+    *  Cathodic currents (negative amplitudes) increase perceived brightness
+    *  Anodic currents (positive amplitudes) do not, and are ignored
     *  Brightness is bounded in :math:`[\\theta, \\infty]`, where
        :math:`\\theta` (``thresh_percept``) is a nonnegative scalar
+
+    .. versionchanged:: 0.10.0
+
+        The drive is now half-wave rectified, driven by the cathodic phase.
+        A stimulus that is purely cathodic is unaffected.
+
+    .. note::
+
+        This is the simplest sensical temporal model, not a perceptually
+        validated model of phosphene fading.
 
     Parameters
     ----------
@@ -35,12 +45,22 @@ class FadingTemporal(TemporalModel):
         :math:`\\ln(2) \\tau` milliseconds.
     thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
+    reduce : {'peak', 'last'}, optional
+        How a percept time point summarizes the interval since the previous
+        one, when ``predict_percept`` chooses the output times itself; see
+        :py:class:`~pulse2percept.models.TemporalModel`. This model tracks the
+        peak inside the integrator, so it is exact at any output rate.
     n_threads: int, optional
-            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
+            Number of CPU threads to use during parallelization using OpenMP. 
+            Defaults to max number of user CPU cores.
 
     .. versionadded:: 0.7.1
 
     """
+
+    #: The peak is tracked across every `dt` step inside `fading_fast`, so
+    #: `predict_percept` does not have to subsample the interval itself.
+    _reduces_intervals = True
 
     def get_default_params(self):
         base_params = super(FadingTemporal, self).get_default_params()
@@ -59,7 +79,7 @@ class FadingTemporal(TemporalModel):
         if self.tau < 0:
             raise ValueError('"tau" cannot be negative.')
 
-    def _predict_temporal(self, stim, t_percept):
+    def _predict_temporal(self, stim, t_percept, reduce='last'):
         """Predict the temporal response"""
         # Pass the stimulus as a 2D NumPy array to the fast Cython function:
         stim_data = stim.data.reshape((-1, len(stim.time)))
@@ -74,4 +94,5 @@ class FadingTemporal(TemporalModel):
         # Cython returns a 2D (space x time) NumPy array:
         return fading_fast(stim_data.astype(np.float32),
                            stim.time.astype(np.float32),
-                           idx_percept, self.dt, self.tau, self.thresh_percept, self.n_threads)
+                           idx_percept, self.dt, self.tau, self.thresh_percept,
+                           self.n_threads, 1 if reduce == 'peak' else 0)

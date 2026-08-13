@@ -181,12 +181,28 @@ def test_endtoend_frequency_modulation():
     npt.assert_equal(np.all(np.diff(bright) > 0), True)
     # Brightness tracks the pulse *count* rather than the amplitude, which is
     # what distinguishes frequency modulation from amplitude modulation. It
-    # grows a little slower than the count does, because the model fades
-    # between pulses and a slower train spends longer fading:
+    # grows a little slower than the count does, though: each pulse adds less
+    # the brighter the percept already is, so doubling the rate does not double
+    # the brightness. Normalized against the fastest train, that saturation
+    # puts the slower ones slightly *above* the line the counts would draw:
     counts = np.array([onsets(stim, e).size for e in range(4)],
                       dtype=np.float64)
     npt.assert_allclose(bright / bright[-1], counts / counts[-1], rtol=0.15)
-    npt.assert_array_less(bright / bright[-1], counts / counts[-1] + 1e-6)
+    npt.assert_array_less(counts / counts[-1] - 1e-6, bright / bright[-1])
+    # In closed form, since every pulse here is identical and the percept is
+    # the peak the frame reached: the cathodic phase lifts brightness by
+    # `amp (1 - exp(-phase_dur/tau))` toward `amp`, and what is left of that
+    # lift when the next pulse lands is `exp(-period/tau)` of it, so the peaks
+    # are a geometric series that the n-th pulse has summed n terms of. That
+    # only holds because the drive is rectified -- with the anodic phase
+    # pulling brightness back down, no pulse would leave anything to sum:
+    tau, phase_dur, amp = 100.0, 0.46, 50.0
+    period = np.array(period, dtype=np.float64)
+    npt.assert_allclose(
+        bright,
+        amp * (1 - np.exp(-phase_dur / tau)) *
+        (1 - np.exp(-counts * period / tau)) / (1 - np.exp(-period / tau)),
+        rtol=1e-3)
 
 
 @pytest.mark.parametrize('order', [[0, 1, 2, 3], [3, 2, 1, 0], [1, 3, 0, 2]])
