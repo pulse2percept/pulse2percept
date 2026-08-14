@@ -61,14 +61,21 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         but not a repeating 3 ms schedule, and the 10 ms period is left alone.
 
     The sweep belongs to the *stimulation* schedule, not to the video: it is
-    tied to the pulse period, not to the frame rate. With no explicit
-    ``group_dur`` the groups divide the shortest pulse period between them, so
-    under amplitude modulation the sweep is exactly that period and each group
-    pulses once per sweep. An explicit ``group_dur`` instead builds the sweep
-    from the slot, which is generally much shorter than the period -- six groups
-    of 1 ms sweep in 6 ms whatever rate the electrodes run at. Under frequency
-    modulation the sweep is set by the fastest electrode, and slower ones pulse
-    every *m*-th sweep.
+    tied to the pulse period, not to the frame rate. Two rules settle how long
+    it is and what it costs:
+
+    *  With ``group_dur=None`` the groups divide the *shortest* pulse period
+       between them, so the sweep is exactly that period. Under frequency
+       modulation that means the fastest electrode pulses once per sweep and
+       slower ones every *m*-th sweep.
+    *  With an explicit ``group_dur`` the sweep is ``n_groups * group_dur``
+       whatever rate the electrodes run at -- six groups of 1 ms sweep in 6 ms.
+       It is then generally much shorter than a pulse period, so even the
+       fastest electrode may pulse only every *m*-th sweep.
+
+    Either way, only periods that *differ* from one another are rounded up onto
+    the sweep; a period they all share is delivered exactly, since fixed group
+    offsets cannot drift into one another.
 
     Subclasses only implement ``groups``.
 

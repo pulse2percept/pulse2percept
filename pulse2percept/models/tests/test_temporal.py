@@ -56,11 +56,15 @@ def test_FadingTemporal():
     percept = model.predict_percept(stim, np.arange(stim.duration))
     npt.assert_almost_equal(percept.data, 0)
 
-    # tau has to be positive. Zero is as unusable as a negative value -- the
-    # integrator divides by it -- and used to build happily and hand back nan:
-    for tau in (-1, 0):
+    # tau has to be at least one simulation step. Zero and negatives divide the
+    # integrator by zero; anything under `dt` makes it overshoot its drive by
+    # dt/tau and then oscillate, so at tau=dt/2 brightness alternates between
+    # twice the drive and nothing. All of these used to build happily:
+    for tau in (-1, 0, 0.005 / 2, 0.004):
         with pytest.raises(ValueError):
-            FadingTemporal(tau=tau).build()
+            FadingTemporal(tau=tau, dt=0.005).build()
+    # ... and exactly one step is fine, being the rectifier limit:
+    FadingTemporal(tau=0.005, dt=0.005).build()
 
 
 def test_deepcopy_FadingTemporal():

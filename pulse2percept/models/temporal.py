@@ -44,6 +44,12 @@ class FadingTemporal(TemporalModel):
         Larger values lead to slower decay.
         Brightness should decay to half its peak ("half-life") after
         :math:`\\ln(2) \\tau` milliseconds.
+
+        It cannot be shorter than ``dt``. The integrator steps explicitly, so
+        a time constant of one step already carries brightness all the way to
+        its drive; anything shorter overshoots and oscillates. ``tau`` also
+        sets the *rise*, not just the decay, so raising it does not make a
+        percept persist -- it makes it dimmer, as :math:`1/\\tau`.
     thresh_percept: float, optional
         Below threshold, the percept has brightness zero.
     reduce : {'peak', 'last'}, optional
@@ -85,6 +91,19 @@ class FadingTemporal(TemporalModel):
         # `tau`, so it does not decay infinitely fast, it produces inf/nan.
         if self.tau <= 0:
             raise ValueError(f'"tau" must be positive, not {self.tau}.')
+        # The integrator steps explicitly, so `dt / tau` is the fraction of the
+        # remaining gap it closes per step. Above 1 it overshoots and then
+        # oscillates, and the overshoot is `dt / tau` -- at tau=dt/4 brightness
+        # alternates between four times its drive and zero, which is not a
+        # leaky integrator in any useful sense:
+        if self.tau < self.dt:
+            raise ValueError(
+                f'"tau" must be at least dt={self.dt}, not {self.tau}. A time '
+                f'constant shorter than one simulation step makes the '
+                f'integrator overshoot its drive by dt/tau and oscillate. '
+                f'tau=dt is the fastest meaningful setting: brightness then '
+                f'reaches its drive within one step, which makes the model a '
+                f'half-wave rectifier. Shorten "dt" to go faster than that.')
 
     def _predict_temporal(self, stim, t_percept, reduce='last'):
         """Predict the temporal response"""

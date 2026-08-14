@@ -69,10 +69,11 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
     another:
 
     *  The **frame clock** belongs to the video. It says when the modulation
-       parameters update -- a new frame is a new gray level, and hence a new
-       amplitude or a new frequency. It is also the rate at which a percept is
-       worth reporting, which is why it is recorded in the encoded stimulus'
-       metadata for :py:meth:`~pulse2percept.models.Model.predict_percept` to
+       parameters update; that is, a new frame is a new gray level, and hence
+       a new amplitude or a new frequency. It is also the rate at which a
+       percept is worth reporting, which is why it is recorded in the encoded
+       stimulus' metadata for 
+       :py:meth:`~pulse2percept.models.Model.predict_percept` to
        pick up. It takes no part in the timing of the pulses themselves.
 
     *  The **pulse clock** belongs to ``freq``. It runs continuously for the
@@ -90,15 +91,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
     *  The **raster sweep** belongs to the
        :py:class:`~pulse2percept.implants.Raster`, and says which electrodes
        may pulse when, so that no two raster groups are ever active at the same
-       instant. Electrodes on *different* periods would drift into one
-       another's slots, so their periods are pinned to whole multiples of the
-       sweep; electrodes that share a period cannot drift and keep it exactly.
-
-    .. versionchanged:: 0.10.0
-
-        Pulse timing no longer restarts at every video frame. Before, a frame
-        that was not a whole number of pulse periods long silently changed the
-        pulse rate: at 29.97 fps, ``freq=50`` delivered 59.94 pulses per second.
+       instant.
 
     All encoders share the same two-step structure:
 
@@ -106,8 +99,8 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         encoder was given an ``implant``, the source is first sampled at the
         electrode locations, so that everything downstream works at electrode
         resolution.
-    2.  Map those gray levels onto pulse train parameters (``_modulate``), then
-        assemble the pulse trains (``_assemble``).
+    2.  Map those gray levels onto pulse train parameters (``_modulate``),
+        then assemble the pulse trains (``_assemble``).
 
     Subclasses only implement ``_modulate``; everything else is provided here.
 
@@ -118,18 +111,16 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
         The implant to encode for. Its electrode locations are used to sample
         the source, and its electrode names label the resulting stimulus.
-        If None, every pixel of the source is treated as its own electrode,
-        which is rarely what you want for anything but an already downsampled
-        image.
+        If None, every pixel of the source is treated as its own electrode.
     phase_dur : float, optional
         Duration (ms) of the cathodic/anodic phase of each pulse.
     interphase_dur : float, optional
         Duration (ms) of the gap between the cathodic and anodic phases.
     cathodic_first : bool, optional
-        If True, the cathodic phase of each pulse is delivered first. Retinal
-        ganglion cells are most sensitive to cathodic current, and the temporal
-        models in :py:mod:`pulse2percept.models` treat cathodic current as
-        brightness-increasing, so bright pixels map onto cathodic-first pulses.
+        If True, the cathodic phase of each pulse is delivered first. Most
+        temporal models in :py:mod:`pulse2percept.models` treat cathodic 
+        current as brightness-increasing, so bright pixels map onto 
+        cathodic-first pulses.
     pulse : :py:class:`~pulse2percept.stimuli.Stimulus`, optional
         A single pulse to repeat, in place of the symmetric biphasic pulse
         built from ``phase_dur``, ``interphase_dur`` and ``cathodic_first``
@@ -145,28 +136,18 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
 
         .. important::
 
-           Every timing constraint here -- the clock, and the raster sweep --
-           may *lower* the rate an electrode ends up on, and none of them may
+           Every timing constraint here (the clock, and the raster sweep) may
+           *lower* the rate an electrode ends up on, and none of them may
            raise it. Rounding a period down would deliver more charge than was
            asked for, so a time base that cannot represent a rate exactly gives
            back the nearest slower one it can.
 
-           That makes a coarse clock expensive in frequency, and the more so
-           the faster the train: realizable periods are ``clock``, ``2*clock``,
-           ``3*clock``, ... , so with ``clock=1`` a requested 300 Hz (3.33 ms)
-           is delivered as 250 Hz (4 ms), and with ``clock=3`` as 166.7 Hz.
+           That makes a coarse clock expensive in frequency: realizable periods
+           are ``clock``, ``2*clock``, ``3*clock``, ... , so with ``clock=1`` 
+           a requested 300 Hz (3.33 ms) is delivered as 250 Hz (4 ms), and with
+           ``clock=3`` as 166.7 Hz.
            Choose it against the top of your frequency range rather than in the
            abstract.
-
-        .. important::
-
-           This is the main lever on how expensive an encoded stimulus is to
-           simulate. Electrodes that end up on the same pulse schedule share a
-           time axis, so a coarse clock keeps the number of distinct time
-           points in the stimulus small. It does nothing for amplitude
-           modulation (where every electrode is already on the same schedule)
-           but is decisive for frequency modulation; see
-           :py:class:`~pulse2percept.stimuli.FrequencyEncoder`.
     n_levels : int, optional
         Number of gray levels the encoder can distinguish, mimicking the
         resolution of the device's input stage. Gray levels are rounded onto
@@ -314,9 +295,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
             # perform, done here so that the pulse trains below are built at
             # electrode resolution rather than at pixel resolution. It is also
             # where RGB becomes gray. Row count is not a usable test of whether
-            # a source is already in electrode coordinates -- a 10x6 image and
-            # an RGB 4x5 image both have exactly as many rows as Argus II has
-            # electrodes -- so always reshape:
+            # a source is already in electrode coordinates, so always reshape:
             stim = self.implant.reshape_stim(stim)
         gray = np.clip(np.asarray(stim.data, dtype=np.float32), 0, 1)
         if stim.time is None:
@@ -412,11 +391,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         period[firing] = 1000.0 / freq[firing] / DT
         # A clocked stimulator can only realize a period that is a whole number
         # of clock cycles, which is what keeps the number of distinct schedules
-        # (and hence of time points) down. Round the period *up*: a timing
-        # constraint may lower the rate an electrode ends up on, never raise it,
-        # since raising it delivers more charge than the caller asked for. A
-        # 3 ms time base genuinely cannot represent 300 Hz without
-        # overstimulating, and says so by giving 166.7 Hz rather than 333 Hz:
+        # (and hence of time points) down. Round the period *up*:
         if self.clock is not None:
             tick = self.clock / DT
             period[firing] = tick * np.maximum(
@@ -430,22 +405,22 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         return firing, period
 
     def _raster_grid(self, electrodes, period, firing, pulse_len):
-        """The slot each electrode may pulse in, and the raster cycle
+        """The slot each electrode may pulse in, and the raster sweep
 
-        The cycle a raster has to get through is the shortest pulse period
-        anyone asked for. Under amplitude modulation that is *the* period, so
-        every group gets its turn exactly once per pulse and the requested
-        frequency is delivered exactly. Under frequency modulation it is set by
-        the fastest electrode, and slower ones pulse every m-th cycle.
+        The sweep has to fit inside the shortest pulse period anyone asked for.
+        With no explicit ``group_dur`` it *is* that period, split evenly between
+        the groups; with one, it is ``n_groups * group_dur`` and generally much
+        shorter than the period.
 
         Returns
         -------
         offset : (n_electrodes,) float array
-            How far into a raster cycle (in ticks) each electrode may start a
-            pulse.
+            How far behind group 0 (in ticks) each electrode may start a pulse.
         cycle : float or None
-            The raster cycle in ticks, onto which pulse periods are quantized.
-            None when there is nothing to multiplex.
+            The sweep in ticks. Periods that differ from one another are
+            quantized onto it by ``_assemble``, so that groups cannot drift
+            together; a period they all share is left exactly as asked. None
+            when there is nothing to multiplex.
 
         """
         # An explicit raster wins over the implant's own, so that a raster can
@@ -528,7 +503,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
             The last tick at which a pulse may *begin*.
         grid : float
             The spacing of the onsets this schedule is allowed to use -- the
-            raster cycle, or failing that the stimulator's clock. A schedule
+            raster sweep, or failing that the stimulator's clock. A schedule
             that goes silent has to come back onto it.
 
         Returns
@@ -558,17 +533,11 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         # frames, so track the *phase* of the pulse clock rather than jumping
         # straight to the next pulse. Phase advances at 1/period, which changes
         # the instant a frame boundary goes by; a pulse fires whenever it
-        # reaches 1. Jumping a whole period ahead instead would carry the old
-        # frame's rate across the boundary and miss the new one entirely --
-        # a frame asking for 100 Hz would sit silent because the frame before
-        # it asked for 10 Hz and had already booked the next pulse.
+        # reaches 1.
         onset, frame = [], []
         # A full phase to begin with, so that a schedule's first pulse lands at
         # the start of its slot rather than one period into it. Start counting
-        # in the frame that actually contains that slot: a raster group's turn
-        # can fall several frames into the video when stimulation is slow
-        # relative to it, and beginning at frame 0 would integrate the wrong
-        # rates -- and could even walk `t` backwards to an earlier boundary:
+        # in the frame that actually contains that slot:
         phase, t = 1.0, float(start)
         k = int(np.searchsorted(frame_ticks, round(t), side='right')) - 1
         k = min(max(k, 0), n_frames - 1)
@@ -593,13 +562,11 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
                     break
                 phase, t, k = due, edge, k + 1
                 continue
-            # The pulse comes due inside this frame. Snap it *forward* onto the
-            # grid this schedule is allowed to use -- the raster cycle, or the
-            # stimulator's clock. Forward rather than to the nearest point,
+            # The pulse comes due inside this frame. Snap it forward onto the
+            # grid this schedule is allowed to use (i.e., the raster cycle, or
+            # the stimulator's clock. Forward rather than to the nearest point,
             # because a grid is a timing constraint and no timing constraint may
             # deliver a pulse earlier (and so at a higher rate) than asked for.
-            # Where the period is already a whole number of grid steps, which is
-            # every case except a rate change landing mid-period, this is exact:
             cross = t + (1.0 - phase) / rate
             tick = int(round(start + grid * np.ceil(
                 (cross - start) / grid - 1e-9)))
@@ -608,7 +575,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
                 tick = int(round(prev + grid))
             if tick > last:
                 break
-            # Which frame the pulse lands in is decided by where it *actually*
+            # Which frame the pulse lands in is decided by where it actually
             # goes, not where it came due: snapping can carry it over a boundary
             # into a frame that wants something else entirely.
             j = int(np.searchsorted(frame_ticks, tick, side='right')) - 1
@@ -642,7 +609,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
     def _assemble(self, amp, freq, electrodes, frame_time, frame_dur):
         """Build the pulse trains for every electrode and frame
 
-        Electrodes that pulse at the same *times* share the shape of their
+        Electrodes that pulse at the same times share the shape of their
         waveform; only the amplitude that scales it differs. So rather than
         building one waveform per electrode, this builds one per distinct
         schedule and indexes into them, which is what keeps frequency
@@ -650,10 +617,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         tractable.
 
         The time axis is global rather than per-frame. Pulses live at absolute
-        times and no two frames' pulses coincide, so this costs no more than
-        laying each frame out separately did -- and it lets a pulse straddle a
-        frame boundary, which is what keeps the pulse clock free of the frame
-        clock.
+        times and no two frames' pulses coincide.
         """
         n_el, n_frames = len(electrodes), frame_time.size
         shape = (n_el, n_frames)
@@ -666,7 +630,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         frame_ticks = self._ticks(frame_time)
         total = float(frame_time[-1] + frame_dur)
         # The stimulus lasts exactly as long as the source did. Flooring (with
-        # an epsilon so a duration that *is* a whole number of ticks does not
+        # an epsilon so a duration that is a whole number of ticks does not
         # lose one to binary rounding) leaves at least one tick between the
         # last pulse and the end point that pins the duration:
         end = int(np.floor(total / DT + 1e-9))
@@ -677,7 +641,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
                              f"'phase_dur' or lengthen the source.")
         firing, period = self._periods(freq, pulse_len)
         # An electrode delivering no current has nothing to schedule. Its clock
-        # keeps running (`firing`), so it stays in phase with its neighbors,
+        # keeps running ("firing"), so it stays in phase with its neighbors,
         # but it costs no pulses and no time points:
         active = firing & (amp != 0)
         offset, cycle = self._raster_grid(electrodes, period, firing, pulse_len)
@@ -685,7 +649,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
             # Electrodes on different periods drift relative to one another,
             # and two groups would eventually land on the same instant. Pinning
             # every period to a whole number of raster cycles is what stops
-            # that. Round the period *up* rather than to the nearest cycle:
+            # that. Round the period up rather than to the nearest cycle:
             period[firing] = cycle * np.maximum(
                 1.0, np.ceil(period[firing] / cycle - 1e-9))
 
@@ -804,10 +768,13 @@ class AmplitudeEncoder(Encoder):
     gray level of the pixel it sees sets the amplitude of those pulses. This is
     how most retinal prostheses encode a video.
 
-    Because every electrode shares one pulse period, a raster splits that
-    period evenly between its groups: each group pulses exactly once per period
-    in its own slot, ``freq`` is delivered exactly, and no two groups are ever
-    active at the same instant.
+    Because every electrode shares one pulse period, a raster costs no
+    frequency here: the groups hold fixed offsets from one another and so can
+    never drift together, which means nothing has to be quantized and ``freq``
+    is delivered exactly. With no explicit ``group_dur`` the groups also divide
+    that period evenly, one turn each per pulse; an explicit ``group_dur``
+    packs them into a shorter sweep at the start of every period instead.
+    Either way no two groups are ever active at the same instant.
 
     .. versionadded:: 0.10.0
 
@@ -938,14 +905,22 @@ class FrequencyEncoder(Encoder):
            Realizable frequencies are quantized by ``clock``, and, when a
            raster is in play, onto the raster sweep -- which under frequency
            modulation is the usual case, since the electrodes are by
-           construction on differing rates. The fastest electrode pulses once
-           per sweep and slower ones every m-th sweep, so the realizable rates
-           are ``max_freq / m``.
+           construction on differing rates. Every period becomes a whole number
+           of sweeps, so the realizable rates are ``1000 / (m * sweep)`` Hz.
 
-           Quantizing onto the cycle always rounds the *period* up, so an
+           How coarse that grid is depends on how the sweep was set. With
+           ``group_dur=None`` the sweep is the shortest period asked for, so
+           the fastest electrode keeps its rate and pulses once per sweep while
+           slower ones pulse every *m*-th. With an explicit ``group_dur`` the
+           sweep is ``n_groups * group_dur`` and unrelated to any requested
+           rate, so even the fastest electrode is generally rounded: against a
+           six-group 1 ms sweep, a requested 100 Hz (10 ms) is delivered as
+           83.3 Hz (12 ms, two sweeps).
+
+           Quantizing onto the sweep always rounds the *period* up, so an
            electrode is never driven faster than it was asked for: against a
-           10 ms cycle, 67 Hz comes back as 50 Hz rather than 100 Hz. Rounding
-           to the nearest cycle instead would deliver up to twice the charge
+           10 ms sweep, 67 Hz comes back as 50 Hz rather than 100 Hz. Rounding
+           to the nearest sweep instead would deliver up to twice the charge
            the caller asked for. Shorten ``group_dur`` for a finer grid.
     amp : float, optional
         Pulse amplitude (uA), the same for every electrode.

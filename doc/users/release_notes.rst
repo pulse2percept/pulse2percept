@@ -30,6 +30,10 @@ API changes:
   :math:`\max(-A, 0)` rather than :math:`-A`: anodic current no longer reduces
   brightness, it is ignored. A stimulus that is purely cathodic is unaffected.
 
+* :py:class:`~pulse2percept.models.FadingTemporal` requires ``tau >= dt``. The
+  integrator steps explicitly, so a shorter time constant overshoots its drive
+  by ``dt / tau`` and oscillates instead of decaying.
+
 * Temporal models gained a ``reduce`` parameter. When ``predict_percept`` picks
   the output times itself (``t_percept=None``), ``reduce='peak'`` makes each
   point report the highest brightness reached over the interval leading up to
