@@ -4,6 +4,13 @@ updates:
     directory: /
     schedule:
       interval: daily
+    groups:
+      # The codeql-action sub-actions (init/autobuild/analyze/upload-sarif) are
+      # versioned together and must all run at the same version, otherwise the
+      # Analyze job fails with InconsistentActionVersion
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
 
   - package-ecosystem: pip
     directory: /doc
