@@ -882,7 +882,7 @@ class FrequencyEncoder(Encoder):
     Every electrode emits pulses of the same fixed amplitude, and the gray
     level of the pixel it sees sets how often they come.
 
-    .. note::
+    .. important::
 
        Frequency modulation is far more expensive to simulate than amplitude
        modulation, because electrodes pulsing at different rates do not pulse
@@ -940,10 +940,7 @@ class FrequencyEncoder(Encoder):
            modulation is the usual case, since the electrodes are by
            construction on differing rates. The fastest electrode pulses once
            per sweep and slower ones every m-th sweep, so the realizable rates
-           are ``max_freq / m``. Multiplexing a fast train across many groups
-           asks for a lot of a stimulator -- six groups of 0.92 ms pulses need
-           5.5 ms per sweep, or at most 181 Hz -- and encoding raises rather
-           than quietly delivering something else.
+           are ``max_freq / m``.
 
            Quantizing onto the cycle always rounds the *period* up, so an
            electrode is never driven faster than it was asked for: against a

@@ -12,27 +12,11 @@ Highlights:
 *  New :py:class:`~pulse2percept.stimuli.Encoder` classes translate images and
    videos into electrical stimulation. Amplitude and frequency modulation are
    supported, including stimulator timing, input resolution, and electrode
-   multiplexing. Pulse timing is independent of the video frame rate: a frame
-   says when the modulation parameters change, and no longer restarts the pulse
-   train. What limits the delivered rate is the hardware you describe -- a
-   ``clock``, or a raster with electrodes on differing rates, can only round a
-   pulse period *up*, never down, so an electrode is never driven faster, and so
-   never given more charge, than was asked for.
+   multiplexing.
 
 *  New :py:class:`~pulse2percept.implants.Raster` classes describe how
    stimulators multiplex electrodes that cannot be driven simultaneously. Each
-   group starts its pulse a fixed ``group_dur`` behind the one before it, so two
-   groups provably never pulse at the same instant and the instantaneous current
-   limit holds by construction. Electrodes on *differing* rates drift apart, so
-   there their periods are pinned to whole sweeps to keep the guarantee;
-   electrodes sharing one rate cannot drift and keep their period exactly, which
-   is why rastering costs no frequency under amplitude modulation.
-
-*  :py:class:`~pulse2percept.models.FadingTemporal` now half-wave rectifies its
-   drive, so it can see a charge-balanced pulse. Previously the anodic phase of
-   a biphasic pulse undid exactly what the cathodic phase had done, and a pulse
-   train produced sub-millisecond transients around zero rather than a percept
-   that persisted between pulses.
+   group starts its pulse a fixed ``group_dur`` behind the one before it.
 
 * :py:meth:`~pulse2percept.percepts.Percept.play` and
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` are roughly 100x faster
@@ -45,13 +29,6 @@ API changes:
 * :py:class:`~pulse2percept.models.FadingTemporal` is now driven by
   :math:`\max(-A, 0)` rather than :math:`-A`: anodic current no longer reduces
   brightness, it is ignored. A stimulus that is purely cathodic is unaffected.
-  A charge-balanced pulse still delivers zero net charge, as it must -- what
-  changed is that the model's *drive* is no longer charge-balanced along with
-  it, so such a pulse now produces a response instead of integrating to
-  nothing. At 20 Hz and ``tau=100``, brightness between pulses used to fall to
-  0.6% of the peak it had just reached (99% ripple) and now holds at 61%.
-  Raising ``tau`` used to make the percept dimmer rather than steadier, because
-  the peak scales as :math:`1/\tau` while the floor between pulses does not.
 
 * Temporal models gained a ``reduce`` parameter. When ``predict_percept`` picks
   the output times itself (``t_percept=None``), ``reduce='peak'`` makes each
@@ -59,29 +36,12 @@ API changes:
   it rather than the brightness at the instant it ends. Naming ``t_percept``
   still asks for those instants.
 
-  :py:class:`~pulse2percept.models.FadingTemporal` defaults to ``'peak'`` and
-  tracks it across every ``dt`` step inside its integrator, which is exact at
-  any output rate. The published models keep reporting the closing instant
-  unless asked otherwise; requesting ``'peak'`` from one of those samples each
-  interval eight times and keeps the largest, which is an approximation.
-
-  Electrical stimulation is pulsatile, so an instant sampled from a percept is
-  usually an instant between pulses, and which pulses a frame catches drifts
-  when the frame rate and the pulse rate are incommensurate. Under a raster
-  that showed up as groups appearing in the wrong order or not at all: driving
-  Argus II with ``SequentialRaster(6)`` at 20 Hz against a 29.97 fps video,
-  25 of 94 percept frames came out entirely dark and two of the six rows never
-  appeared at all.
-
 * :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` and
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` now use
   :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`. Most importantly, gray
   levels map to ``amp_range`` absolutely rather than being stretched to fill
   it, and each frame now produces a pulse train rather than a single pulse.
   Pass ``stretch=True`` for the old gray-level mapping.
-
-* Encoders can operate directly at implant resolution and account for electrode
-  multiplexing through the implant's raster.
 
 * :py:class:`~pulse2percept.implants.ProsthesisSystem` now exposes ``raster``
   and ``max_current``.
@@ -96,24 +56,6 @@ API changes:
   users should remain on v0.9.1.
 
 ## Bug fixes
-
-* Temporal models no longer read a stimulus frame that is already in the past.
-  :py:class:`~pulse2percept.models.FadingTemporal`,
-  :py:class:`~pulse2percept.models.Nanduri2012Temporal` and
-  :py:class:`~pulse2percept.models.Horsager2009Temporal` advanced at most one
-  frame per simulation step, but a pulse puts its edges on the ``DT`` = 1e-3 ms
-  grid while ``dt`` defaults to 5e-3 ms, so an edge and the sample after it
-  routinely share a step. The integrator then lagged by a frame, which
-  stretched every pulse phase by about one step and could drive brightness from
-  a pulse that had already ended.
-
-  Reported brightness shifts by a fraction of a percent for phases long
-  relative to ``dt``, and by more for short ones: a 0.075 ms phase against the
-  default ``dt`` was being stretched by 7%. The pinned values in the
-  [Horsager2009]_ and [Nanduri2012]_ tests moved accordingly. The equal-
-  brightness conditions of [Horsager2009]_ Figs. 3 and 4 now agree with each
-  other to within about 3% rather than exactly; the exact agreement had been
-  resting on this bug, and refining ``dt`` does not restore it.
 
 * :py:class:`~pulse2percept.stimuli.PulseTrain` no longer ends on partial,
   unbalanced pulses when its frequency does not divide ``stim_dur``.
@@ -130,9 +72,6 @@ API changes:
   maps are hashable again, and maps of different classes no longer compare
   equal.
 
-* Temporal models now warn when stimulus polarity produces an all-zero percept
-  instead of silently returning a blank result.
-
 * :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` and
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` no longer modify their
   inputs in place.
@@ -141,9 +80,6 @@ API changes:
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play`, and
   :py:meth:`~pulse2percept.percepts.Percept.save` now handle single-frame
   inputs correctly and give a useful error for nonuniform time axes.
-
-* :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` now correctly infers
-  frame duration from the time axis when frame-rate metadata is absent.
 
 * :py:attr:`~pulse2percept.stimuli.VideoStimulus.vid_shape` now reports the
   number of frames the stimulus actually has, rather than the number the source

@@ -570,20 +570,11 @@ class HTMLAnimation(FuncAnimation):
         try:
             if self._labels is not None:
                 # The player draws the title itself, on a canvas that sits on
-                # top of the static background. Clearing the canvas cannot undo
-                # anything baked into that background, so a title left on the
-                # axes (by an earlier draw, or by the caller) would show
-                # through every frame. Blank it while the background is
-                # rendered; this is also what lets ``_title_geometry`` measure
-                # the empty line box it needs:
+                # top of the static background:
                 title_artist.set_text('')
             bg, width, height = _background(fig, im)
             # ``get_window_extent`` is only meaningful once the figure has been
-            # drawn, which ``_background`` just did. Round the destination rect
-            # outward rather than rounding its size: rounding the size can
-            # leave a row or column of background exposed along the edge of the
-            # image, whereas overshooting by a fraction of a pixel is
-            # invisible.
+            # drawn, which ``_background`` just did:
             bbox = im.get_window_extent()
             title = None
             if self._labels is not None:
