@@ -20,11 +20,11 @@ import numpy.testing as npt
 import pytest
 from scipy.integrate import trapezoid
 
-from pulse2percept.implants import (CustomRaster, DiskElectrode, ElectrodeArray,
-                                    ProsthesisSystem)
-from pulse2percept.models import FadingTemporal, ScoreboardSpatial
-from pulse2percept.stimuli import (AmplitudeEncoder, FrequencyEncoder,
-                                   ImageStimulus)
+from pulse2percept.implants import (ArgusII, CustomRaster, DiskElectrode,
+                                    ElectrodeArray, ProsthesisSystem)
+from pulse2percept.models import FadingTemporal, Model, ScoreboardSpatial
+from pulse2percept.stimuli import (AmplitudeEncoder, BostonTrain,
+                                   FrequencyEncoder, ImageStimulus)
 from pulse2percept.utils.constants import DT
 
 # Electrode names in the order `ElectrodeArray` keeps them, and their positions
@@ -276,3 +276,48 @@ def test_endtoend_raster_is_what_separates_the_groups():
     implant.stim = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20,
                                     frame_dur=200).encode(img)
     npt.assert_almost_equal(np.abs(implant.stim.data).sum(axis=0).max(), 50.0)
+
+
+def test_endtoend_slow_train_stays_lit_for_the_whole_video():
+    """A pulse rate well below the frame rate must not extinguish the percept.
+
+    This is the case that crossed every layer at once and that none of the
+    per-layer tests caught. ``BostonTrain`` runs at 29.97 fps (33.365 ms per
+    frame) and a 6 Hz train pulses every 166.67 ms, so the pulse cycle and the
+    percept's own frame grid are incommensurate by 4.995 frames. Reporting a
+    frame by sampling instants out of it therefore walks slowly through the
+    pulse cycle, and once the walk carries every sample off the 0.92 ms window
+    where a pulse actually delivers current it never walks back: the percept
+    used to light up for the first 25 frames and then stay black for the
+    remaining 2.3 seconds.
+
+    Both halves of the fix matter here. A rectified drive is what lets
+    brightness persist between pulses at all, and summarizing each frame by the
+    peak it reached is what stops the report from depending on sampling phase.
+    """
+    implant = ArgusII()
+    with pytest.warns(UserWarning, match='deliver no pulse'):
+        # 6 Hz against 29.97 fps: most frames carry no pulse of their own, and
+        # the encoder says so. That is a property of the stimulus, not a reason
+        # for the percept to go dark:
+        implant.stim = AmplitudeEncoder(implant, amp_range=(0, 50),
+                                        freq=6).encode(BostonTrain())
+    # The encoder schedules pulses across the whole video, not just its start:
+    onset = implant.stim.time[np.any(implant.stim.data < 0, axis=0)]
+    npt.assert_almost_equal(onset.max(), 3000.5, decimal=1)
+
+    model = Model(spatial=ScoreboardSpatial(xrange=(-12, 12), yrange=(-8, 8),
+                                            xystep=1),
+                  temporal=FadingTemporal(tau=100)).build()
+    percept = model.predict_percept(implant)
+    # One percept frame per video frame, covering the whole video:
+    npt.assert_equal(percept.data.shape[-1], 94)
+    npt.assert_array_less(3000, percept.time[-1])
+
+    frame = percept.data.reshape(-1, percept.data.shape[-1]).max(axis=0)
+    # Nothing goes dark, least of all the second half of the video:
+    npt.assert_array_less(0.1 * frame.max(), frame[percept.time > 1000])
+    npt.assert_array_less(0.1 * frame.max(), frame.min())
+    # ... and the swing from frame to frame stays modest, rather than the two
+    # orders of magnitude that sampling an instant out of a pulse train gives:
+    npt.assert_array_less(frame.max() / np.median(frame), 4.0)

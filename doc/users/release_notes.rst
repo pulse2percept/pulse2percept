@@ -15,15 +15,18 @@ Highlights:
    multiplexing. Pulse timing is independent of the video frame rate: a frame
    says when the modulation parameters change, and no longer restarts the pulse
    train. What limits the delivered rate is the hardware you describe -- a
-   ``clock`` or a raster cycle can only round a pulse period *up*, never down,
-   so an electrode is never driven faster, and so never given more charge, than
-   was asked for.
+   ``clock``, or a raster with electrodes on differing rates, can only round a
+   pulse period *up*, never down, so an electrode is never driven faster, and so
+   never given more charge, than was asked for.
 
 *  New :py:class:`~pulse2percept.implants.Raster` classes describe how
    stimulators multiplex electrodes that cannot be driven simultaneously. Each
-   raster group gets a slot in a repeating cycle and pulse periods are whole
-   multiples of that cycle, so two groups provably never pulse at the same
-   instant and the instantaneous current limit holds by construction.
+   group starts its pulse a fixed ``group_dur`` behind the one before it, so two
+   groups provably never pulse at the same instant and the instantaneous current
+   limit holds by construction. Electrodes on *differing* rates drift apart, so
+   there their periods are pinned to whole sweeps to keep the guarantee;
+   electrodes sharing one rate cannot drift and keep their period exactly, which
+   is why rastering costs no frequency under amplitude modulation.
 
 *  :py:class:`~pulse2percept.models.FadingTemporal` now half-wave rectifies its
    drive, so it can see a charge-balanced pulse. Previously the anodic phase of

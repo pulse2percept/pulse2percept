@@ -82,17 +82,17 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
        half by a frame boundary.
 
        The rate can still come out below the one requested, but only where the
-       hardware you described cannot express it: ``clock`` and the raster cycle
-       both round a pulse period *up*. Neither ever rounds down, so an
-       electrode is never driven faster, and so never given more charge, than
-       was asked for.
+       hardware you described cannot express it: ``clock``, and a raster with
+       electrodes on differing rates, both round a pulse period *up*. Neither
+       ever rounds down, so an electrode is never driven faster, and so never
+       given more charge, than was asked for.
 
-    *  The **raster cycle** belongs to the
+    *  The **raster sweep** belongs to the
        :py:class:`~pulse2percept.implants.Raster`, and says which electrodes
        may pulse when, so that no two raster groups are ever active at the same
        instant. Electrodes on *different* periods would drift into one
        another's slots, so their periods are pinned to whole multiples of the
-       cycle; electrodes that share a period cannot drift and keep it exactly.
+       sweep; electrodes that share a period cannot drift and keep it exactly.
 
     .. versionchanged:: 0.10.0
 
@@ -145,7 +145,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
 
         .. important::
 
-           Every timing constraint here -- the clock, and the raster cycle --
+           Every timing constraint here -- the clock, and the raster sweep --
            may *lower* the rate an electrode ends up on, and none of them may
            raise it. Rounding a period down would deliver more charge than was
            asked for, so a time base that cannot represent a rate exactly gives
@@ -174,11 +174,13 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         If None, they are taken at full precision.
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
         How the stimulator takes turns between electrodes it cannot drive at
-        the same time. Each raster group gets its own slot within a repeating
-        raster cycle, and pulse periods are quantized onto that cycle, so no
-        two groups are ever active at once. If None, the ``implant``'s own
-        raster is used, and failing that every electrode fires on the same
-        schedule.
+        the same time. Each group starts its pulse a fixed ``group_dur`` behind
+        the group before it, so no two groups are ever active at once. Where
+        electrodes run at *differing* rates they would drift into one another,
+        so there their periods are pinned to whole sweeps; electrodes sharing
+        one rate cannot drift and keep their period exactly. If None, the
+        ``implant``'s own raster is used, and failing that every electrode
+        fires on the same schedule.
     frame_dur : float, optional
         Duration (ms) of a single frame. If None, it is inferred from the
         source's frame rate (or, failing that, from its time axis). A source
@@ -934,12 +936,14 @@ class FrequencyEncoder(Encoder):
         .. note::
 
            Realizable frequencies are quantized by ``clock``, and, when a
-           raster is in play, onto the raster cycle: the fastest electrode
-           pulses once per cycle and slower ones every m-th cycle, so the
-           realizable rates are ``max_freq / m``. Multiplexing a fast train
-           across many groups asks for a lot of a stimulator -- six groups of
-           0.92 ms pulses need 5.5 ms per cycle, or at most 181 Hz -- and
-           encoding raises rather than quietly delivering something else.
+           raster is in play, onto the raster sweep -- which under frequency
+           modulation is the usual case, since the electrodes are by
+           construction on differing rates. The fastest electrode pulses once
+           per sweep and slower ones every m-th sweep, so the realizable rates
+           are ``max_freq / m``. Multiplexing a fast train across many groups
+           asks for a lot of a stimulator -- six groups of 0.92 ms pulses need
+           5.5 ms per sweep, or at most 181 Hz -- and encoding raises rather
+           than quietly delivering something else.
 
            Quantizing onto the cycle always rounds the *period* up, so an
            electrode is never driven faster than it was asked for: against a

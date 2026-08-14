@@ -56,9 +56,11 @@ def test_FadingTemporal():
     percept = model.predict_percept(stim, np.arange(stim.duration))
     npt.assert_almost_equal(percept.data, 0)
 
-    # tau cannot be negative:
-    with pytest.raises(ValueError):
-        FadingTemporal(tau=-1).build()
+    # tau has to be positive. Zero is as unusable as a negative value -- the
+    # integrator divides by it -- and used to build happily and hand back nan:
+    for tau in (-1, 0):
+        with pytest.raises(ValueError):
+            FadingTemporal(tau=tau).build()
 
 
 def test_deepcopy_FadingTemporal():

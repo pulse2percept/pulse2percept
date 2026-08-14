@@ -81,8 +81,10 @@ class FadingTemporal(TemporalModel):
         return base_params
 
     def _build(self):
-        if self.tau < 0:
-            raise ValueError('"tau" cannot be negative.')
+        # Zero is as unusable as a negative value: the integrator divides by
+        # `tau`, so it does not decay infinitely fast, it produces inf/nan.
+        if self.tau <= 0:
+            raise ValueError(f'"tau" must be positive, not {self.tau}.')
 
     def _predict_temporal(self, stim, t_percept, reduce='last'):
         """Predict the temporal response"""
