@@ -1,10 +1,12 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.implants import (ArgusII, BVT24, CheckerboardRaster,
-                                    CustomRaster, ElectrodeGrid, PRIMA,
-                                    ProsthesisSystem, Raster, SequentialRaster)
+from pulse2percept.implants import (AlphaIMS, ArgusII, BVT24,
+                                    CheckerboardRaster, CustomRaster,
+                                    ElectrodeGrid, PRIMA, ProsthesisSystem,
+                                    Raster, SequentialRaster)
 
 
 def test_Raster_is_abstract():
@@ -192,6 +194,74 @@ def test_CheckerboardRaster_groups():
                      np.arange(5) * 5.0)
     implant.raster = raster
     npt.assert_equal(implant.raster.n_groups, 5)
+
+
+def test_Raster_members():
+    implant = ArgusII()
+    names = implant.electrode_names
+    # `members` is the inverse of `groups`: the electrodes of one group, in
+    # the order they were passed in:
+    raster = SequentialRaster(6)
+    npt.assert_equal(raster.members(names, 0), names[:10])
+    npt.assert_equal(raster.members(names, 5), names[50:])
+    # Names in, names out -- whatever was passed is what comes back, so a
+    # list of indices gives the indices of the group:
+    npt.assert_equal(SequentialRaster(6).members(range(60), 1),
+                     np.arange(10, 20))
+    # Every electrode is in exactly one group, and no group is lost:
+    for r in [SequentialRaster(4), CheckerboardRaster(implant, 4),
+              CustomRaster([names[:20], names[20:]])]:
+        found = np.concatenate([r.members(names, g)
+                                for g in range(r.n_groups)])
+        npt.assert_equal(sorted(found), sorted(names))
+    # A group that does not exist is a mistake, not an empty answer:
+    with pytest.raises(ValueError):
+        raster.members(names, 6)
+    with pytest.raises(ValueError):
+        raster.members(names, -1)
+    with pytest.raises(ValueError):
+        raster.members(names, 1.5)
+    with pytest.raises(ValueError):
+        raster.members(names, np.nan)
+
+
+def test_Raster_plot():
+    implant = ArgusII()
+    raster = CheckerboardRaster(implant, 5)
+    ax = raster.plot(implant)
+    # One patch per electrode, colored by group, and a group index written
+    # into each of them:
+    npt.assert_equal(len(ax.collections[0].get_paths()), 60)
+    npt.assert_equal(len(ax.texts), 60)
+    npt.assert_equal(sorted(t.get_text() for t in ax.texts),
+                     sorted(str(g) for g in raster.groups(
+                         implant.electrode_names)))
+    # Electrodes of one group share a color, and different groups do not:
+    colors = ax.collections[0].get_facecolor()
+    groups = raster.groups(implant.electrode_names)
+    npt.assert_equal(len(np.unique(colors[groups == 0], axis=0)), 1)
+    npt.assert_equal(len(np.unique(colors, axis=0)), 5)
+    plt.close('all')
+
+    # Annotating 1500 electrodes would be unreadable, so it is left off unless
+    # asked for:
+    npt.assert_equal(len(SequentialRaster(2).plot(AlphaIMS()).texts), 0)
+    plt.close('all')
+    npt.assert_equal(
+        len(SequentialRaster(2).plot(implant, annotate=False).texts), 0)
+    plt.close('all')
+
+    # Any raster can be plotted on any implant it covers, grid or not:
+    for r, imp in [(SequentialRaster(3), BVT24()),
+                   (CheckerboardRaster(PRIMA(), 7), PRIMA()),
+                   (CustomRaster({n: 0 for n in ArgusII().electrode_names}),
+                    ArgusII())]:
+        npt.assert_equal(len(r.plot(imp).collections[0].get_paths()),
+                         imp.n_electrodes)
+        plt.close('all')
+    # The array is what the electrodes are read from, so it has to be one:
+    with pytest.raises(TypeError):
+        raster.plot('ArgusII')
 
 
 def test_CustomRaster():

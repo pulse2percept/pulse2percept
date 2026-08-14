@@ -4,10 +4,14 @@
    :py:class:`~pulse2percept.implants.CustomRaster`"""
 from abc import ABCMeta, abstractmethod
 from itertools import permutations
+import matplotlib.pyplot as plt
+from matplotlib.collections import PatchCollection
+from matplotlib.patches import Circle
 import numpy as np
 from scipy.spatial import cKDTree
 
 from ..utils import PrettyPrint
+from ..utils.constants import ZORDER
 
 
 def _finite(name, value):
@@ -138,6 +142,126 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
 
         """
         raise NotImplementedError
+
+    def members(self, electrodes, group):
+        """The electrodes that take their turn together in one group
+
+        The inverse of :py:meth:`groups`, which says what group each electrode
+        is in. This says which electrodes are in a group.
+
+        Parameters
+        ----------
+        electrodes : array_like
+            Electrode names, in the order they appear in the stimulus.
+        group : int
+            Which group to look up, in ``0..n_groups-1``. Groups take their
+            turns in index order, so group 0 is the one that goes first.
+
+        Returns
+        -------
+        members : array
+            The entries of ``electrodes`` belonging to ``group``, in the order
+            they were given: names in, names out.
+
+        Examples
+        --------
+        >>> from pulse2percept.implants import ArgusII, SequentialRaster
+        >>> names = ArgusII().electrode_names
+        >>> SequentialRaster(6).members(names, 0)[:4]
+        array(['A1', 'A2', 'A3', 'A4'], dtype='<U3')
+
+        """
+        group = _whole('group', group)
+        if group < 0 or group >= self.n_groups:
+            raise ValueError(f"'group' must be in 0..{self.n_groups - 1}, not "
+                             f"{group}.")
+        return np.asarray(electrodes)[self.groups(electrodes) == group]
+
+    def plot(self, implant, annotate=None, ax=None, cmap='viridis',
+             autoscale=True):
+        """Plot the electrode array, colored by raster group
+
+        What a raster does is spatial, so the quickest way to tell whether it
+        does what was wanted is to look at it. Colors run in the order the
+        groups take their turns, so the picture shows the schedule as well as
+        the pattern: with
+        :py:class:`~pulse2percept.implants.CheckerboardRaster` a group's
+        electrodes should be scattered over the whole array rather than
+        gathered into a line, and neighboring colors should not lie next to
+        one another in a consistent direction.
+
+        Parameters
+        ----------
+        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+            The implant to draw, or its
+            :py:class:`~pulse2percept.implants.ElectrodeArray`. Its electrodes
+            are the ones the raster is asked about, so this has to be an
+            implant the raster covers.
+        annotate : bool, optional
+            Whether to write the group index into each electrode. If None,
+            they are written whenever there are few enough electrodes
+            (at most 120) for the numbers to be readable.
+        ax : matplotlib.axes.Axes, optional
+            Axes to draw on. If None, uses the current axes.
+        cmap : str, optional
+            Matplotlib colormap the group colors are taken from, evenly
+            spaced. A sequential map is the useful default, since the order
+            the colors run in is the order the groups fire in.
+        autoscale : bool, optional
+            Whether to fit the x/y limits to the implant.
+
+        Returns
+        -------
+        ax : matplotlib.axes.Axes
+            The axes drawn on.
+
+        """
+        earray = getattr(implant, 'earray', implant)
+        names = getattr(earray, 'electrode_names', None)
+        elecs = getattr(earray, 'electrode_objects', None)
+        if names is None or elecs is None:
+            raise TypeError(f"'implant' must be a ProsthesisSystem or an "
+                            f"ElectrodeArray, not {type(implant)}.")
+        names, elecs = list(names), list(elecs)
+        group = np.asarray(self.groups(names), dtype=np.int64)
+        if annotate is None:
+            annotate = len(names) <= 120
+        if ax is None:
+            ax = plt.gca()
+        ax.set_aspect('equal')
+        # One color per group, spread over the colormap. A single group would
+        # otherwise sit at the very end of it:
+        spread = (np.linspace(0, 1, self.n_groups) if self.n_groups > 1
+                  else np.array([0.5]))
+        colors = plt.get_cmap(cmap)(spread)
+        xy = np.array([[e.x, e.y] for e in elecs], dtype=np.float64)
+        # Sized by the array rather than by what each electrode reports, since
+        # neither of the two shapes an implant is usually built from would show
+        # its color: a PointSource is a 5 um dot however far apart they are,
+        # and a HexElectrode is drawn nearly transparent. Just short of half
+        # the closest gap, so that neighbors nearly touch and never overlap:
+        gap = cKDTree(xy).query(xy, k=2)[0][:, 1].min() if len(xy) > 1 else 1.0
+        patches = [Circle(pos, radius=0.38 * gap, fc=colors[g],
+                          ec=(0.3, 0.3, 0.3, 1), lw=0.5)
+                   for pos, g in zip(xy, group)]
+        if annotate:
+            for pos, g in zip(xy, group):
+                # A white backing, since a group index has to stay readable
+                # against both ends of the colormap:
+                ax.text(pos[0], pos[1], str(g), ha='center', va='center',
+                        color='black', size='large',
+                        bbox={'boxstyle': 'square,pad=0.1', 'ec': 'none',
+                              'fc': (1, 1, 1, 0.7)},
+                        zorder=ZORDER['annotate'])
+        ax.add_collection(PatchCollection(patches, match_original=True,
+                                          zorder=ZORDER['foreground']))
+        if autoscale:
+            ax.autoscale(True)
+        if ax.get_xlabel() == "":
+            ax.set_xlabel('x (microns)')
+        if ax.get_ylabel() == "":
+            ax.set_ylabel('y (microns)')
+        return ax
 
     def slot_dur(self, period):
         """Duration (ms) of one group's slot
@@ -534,7 +658,7 @@ class CheckerboardRaster(Raster):
 
     Examples
     --------
-    Five groups of twelve on Argus II, as in Kasowski et al. (2025):
+    Five groups of twelve on Argus II, as in [Kasowski2025]_:
 
     >>> from pulse2percept.implants import ArgusII, CheckerboardRaster
     >>> implant = ArgusII()
@@ -548,12 +672,12 @@ class CheckerboardRaster(Raster):
     >>> round(implant.raster.min_spacing / 575, 3)  # 575 um pitch
     2.236
 
-    References
-    ----------
-    .. [Kasowski2025] J M Kasowski, A Varshney, R Sadeghi, M Beyeler (2025).
-       Simulated prosthetic vision confirms checkerboard as an effective raster
-       pattern for epiretinal implants. *Journal of Neural Engineering*
-       22:046017.
+    The pattern is easiest to check by eye
+    (:py:meth:`~pulse2percept.implants.Raster.plot`), and the electrodes that
+    fire together are :py:meth:`~pulse2percept.implants.Raster.members`:
+
+    >>> implant.raster.members(implant.electrode_names, 0)[:4].tolist()
+    ['A1', 'A6', 'B3', 'B8']
 
     """
     __slots__ = ('_n_groups', '_group_of', '_min_spacing')
