@@ -5,7 +5,7 @@ import numpy.testing as npt
 import pytest
 from scipy.integrate import trapezoid
 
-from pulse2percept.implants import ArgusII, SequentialRaster
+from pulse2percept.implants import ArgusII, CustomRaster, SequentialRaster
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BostonTrain, Encoder, FrequencyEncoder,
                                    ImageStimulus, MonophasicPulse, Stimulus,
@@ -832,3 +832,108 @@ def test_Encoder_metadata():
                               0, 1, 16).reshape((4, 4))))
     npt.assert_equal(fm.metadata['encoder']['kind'], 'FrequencyEncoder')
     npt.assert_equal(fm.metadata['encoder']['n_schedules'], 4)
+
+
+def test_Encoder_degenerate_raster_is_no_raster():
+    """A raster with one group has nothing to multiplex, so it changes nothing.
+
+    This is the limiting case that says a raster only ever *staggers* onsets:
+    with a single group there is nobody to stagger against, and the encoded
+    stimulus has to come out bit-for-bit what it would have been without one.
+    That holds even with an explicit ``group_dur``, which would otherwise set
+    the sweep length.
+    """
+    implant = ArgusII()
+    img = ImageStimulus(np.random.default_rng(0).random((6, 10)))
+    kwargs = dict(amp_range=(0, 50), freq=20, frame_dur=200)
+    plain = AmplitudeEncoder(implant, **kwargs).encode(img)
+    npt.assert_equal(plain.metadata['encoder']['cycle'], None)
+
+    names = list(implant.electrode_names)
+    for raster in (SequentialRaster(1),
+                   SequentialRaster(1, group_dur=3.0),
+                   SequentialRaster(1, interleave=True),
+                   CustomRaster([names]),
+                   CustomRaster({n: 0 for n in names})):
+        npt.assert_equal(raster.n_groups, 1)
+        got = AmplitudeEncoder(implant, raster=raster, **kwargs).encode(img)
+        npt.assert_array_equal(got.data, plain.data)
+        npt.assert_array_equal(got.time, plain.time)
+        npt.assert_equal(got.metadata['encoder']['cycle'], None)
+        # Nothing is staggered, so every electrode still fires together and the
+        # stimulator has to source the whole array at once:
+        npt.assert_almost_equal(np.abs(got.data).sum(axis=0).max(),
+                                np.abs(plain.data).sum(axis=0).max())
+
+
+def test_Encoder_degenerate_ranges():
+    """A modulation range of zero width stops the gray levels mattering."""
+    implant = ArgusII()
+    img = ImageStimulus(np.random.default_rng(1).random((6, 10)))
+    kwargs = dict(frame_dur=200)
+
+    # One amplitude for every gray level is a constant-amplitude train...
+    flat = AmplitudeEncoder(implant, amp_range=(30, 30), freq=20,
+                            **kwargs).encode(img)
+    npt.assert_almost_equal(np.abs(flat.data).max(axis=1), 30.0, decimal=4)
+    # ... and one frequency for every gray level is the very same stimulus,
+    # since frequency modulation at a constant rate *is* amplitude modulation
+    # at a constant amplitude:
+    same = FrequencyEncoder(implant, freq_range=(20, 20), amp=30,
+                            **kwargs).encode(img)
+    npt.assert_array_equal(same.data, flat.data)
+    npt.assert_array_equal(same.time, flat.time)
+    npt.assert_equal(same.metadata['encoder']['n_schedules'], 1)
+
+    # A black image asks for no current at all, at either end of the range:
+    black = ImageStimulus(np.zeros((6, 10)))
+    for enc in (AmplitudeEncoder(implant, amp_range=(0, 50), **kwargs),
+                FrequencyEncoder(implant, freq_range=(0, 200), amp=50,
+                                 **kwargs)):
+        npt.assert_equal(np.any(enc.encode(black).data), False)
+
+
+def test_Encoder_n_levels_converges():
+    """Quantizing onto enough gray levels is the same as not quantizing."""
+    implant = ArgusII()
+    img = ImageStimulus(np.random.default_rng(2).random((6, 10)))
+    kwargs = dict(amp_range=(0, 50), freq=20, frame_dur=200)
+    ref = AmplitudeEncoder(implant, **kwargs).encode(img)
+    err = [np.abs(AmplitudeEncoder(implant, n_levels=n,
+                                   **kwargs).encode(img).data - ref.data).max()
+           for n in (4, 16, 256, 1 << 16)]
+    # Each step of 4x in the level count is a step of ~4x in accuracy, and the
+    # finest is close enough to be irrelevant next to a 50 uA range:
+    npt.assert_equal(np.all(np.diff(err) < 0), True)
+    npt.assert_array_less(err[-1], 1e-2)
+    # Two levels is the coarsest allowed, and it is a black-or-white encoding:
+    two = AmplitudeEncoder(implant, n_levels=2, **kwargs).encode(img)
+    npt.assert_array_equal(np.unique(np.abs(two.data).max(axis=1)), [0.0, 50.0])
+
+
+def test_Encoder_frame_rate_does_not_move_the_pulses():
+    """The pulse clock is independent of the frame clock.
+
+    Re-timing the same frames only changes how long the stimulus lasts and
+    which gray level each pulse picks up. It must not change *when* the pulses
+    come, which is what a frame-synchronous encoder would get wrong: at 29.97
+    fps a frame is not a whole number of 20 Hz periods, so restarting the train
+    every frame would silently deliver a different rate.
+    """
+    implant = ArgusII()
+    vid = VideoStimulus(np.random.default_rng(3).random((6, 10, 4)),
+                        metadata={'fps': 10})
+    onsets = []
+    for frame_dur in (100.0, 50.0, 25.0):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            stim = AmplitudeEncoder(implant, amp_range=(50, 50), freq=20,
+                                    frame_dur=frame_dur).encode(vid)
+        npt.assert_almost_equal(stim.time[-1], 4 * frame_dur)
+        neg = stim.data[0] < 0
+        onsets.append(stim.time[neg & ~np.concatenate(([False], neg[:-1]))])
+    # Every onset the shorter stimulus has, the longer one has at the same time:
+    for short in onsets[1:]:
+        npt.assert_almost_equal(short, onsets[0][:short.size])
+    # ... and the requested 20 Hz is delivered whatever the frame rate:
+    npt.assert_almost_equal(np.diff(onsets[0]), 50.0, decimal=6)

@@ -394,3 +394,79 @@ def test_TemporalModel_blank_percept_warning():
     with warnings.catch_warnings():
         warnings.simplefilter('error')
         nanduri.predict_percept(anodic, t_percept=[0, 20, 40])
+
+
+def test_FadingTemporal_tau_limits():
+    """The two limiting cases of the single time constant.
+
+    `tau` sets how fast brightness chases its drive, and it sets the rise and
+    the decay together -- there is only the one constant. So the limits are not
+    the ones intuition suggests:
+
+    *  `tau` at the simulation step is the *no dynamics* limit. One step is
+       then a full time constant, brightness reaches its drive within a single
+       step, and the model degenerates into a plain half-wave rectifier: the
+       percept is the cathodic part of the stimulus and nothing else.
+    *  `tau` to infinity is *not* the same thing. Brightness never fades, but
+       it never charges either, and the percept vanishes as `1/tau`. A model
+       that holds a percept forever would need the decay decoupled from the
+       rise, which this one cannot express.
+    """
+    dt = 0.005
+    # Edges on the `dt` grid, so sample-and-hold is unambiguous:
+    stim = Stimulus(np.array([[0.0, -50.0, 0.0, 30.0, 0.0]]),
+                    time=[0.0, 1.0, 2.0, 3.0, 4.0])
+    t = np.round(np.arange(0, 4, dt), 5)
+    rectified = np.maximum(-np.asarray(stim.data).ravel(), 0)[
+        np.searchsorted(np.asarray(stim.time), t, side='right') - 1]
+
+    got = FadingTemporal(tau=dt, dt=dt).build().predict_percept(
+        stim, t_percept=t).data.ravel()
+    npt.assert_array_equal(got, rectified)
+    # The anodic half is gone rather than inverted, so this really is a
+    # rectifier and not a pass-through:
+    npt.assert_equal(np.any(np.asarray(stim.data) > 0), True)
+    npt.assert_equal(got.max(), 50.0)
+
+    # Slower than that and brightness lags its drive, so the two part company.
+    # Lagging cuts both ways: brightness never catches the drive while it is on,
+    # and it is still on its way down once the drive has gone:
+    lagged = FadingTemporal(tau=10 * dt, dt=dt).build().predict_percept(
+        stim, t_percept=t).data.ravel()
+    npt.assert_array_less(lagged.max(), rectified.max())
+    npt.assert_equal(np.any(lagged[rectified == 0] > 0), True)
+
+    # The other end: the percept dies away as 1/tau, so `tau` cannot be used to
+    # make a percept persist -- it only makes it dimmer.
+    peaks = []
+    for tau in (1e4, 1e5, 1e6):
+        peaks.append(FadingTemporal(tau=tau).build().predict_percept(
+            stim, t_percept=t).data.max())
+    npt.assert_equal(np.all(np.diff(peaks) < 0), True)
+    npt.assert_allclose(np.multiply(peaks, [1e4, 1e5, 1e6]), 50.0 * 1.0,
+                        rtol=0.05)
+
+
+def test_FadingTemporal_reduce_limits():
+    """`reduce` can only matter where brightness rises and falls."""
+    # Constant cathodic current: brightness climbs toward it and never turns
+    # around, so the peak of every interval is the instant it ends on and the
+    # two settings have nothing to disagree about.
+    rising = Stimulus(np.full((4, 2), -20.0), time=[0.0, 500.0])
+    rising.metadata['encoder'] = {'frame_time': np.arange(10) * 50.0,
+                                  'frame_dur': 50.0, 'n_frames': 10}
+    peak = FadingTemporal(tau=100).build().predict_percept(rising)
+    last = FadingTemporal(tau=100, reduce='last').build().predict_percept(
+        rising)
+    npt.assert_array_equal(peak.data, last.data)
+    npt.assert_array_less(-1e-9, np.diff(peak.data, axis=-1))
+
+    # A pulse train is the case they were built to disagree about:
+    train = BiphasicPulseTrain(20, -50, 0.46, stim_dur=500)
+    train.metadata['encoder'] = {'frame_time': np.arange(10) * 50.0,
+                                 'frame_dur': 50.0, 'n_frames': 10}
+    peak = FadingTemporal(tau=100).build().predict_percept(train)
+    last = FadingTemporal(tau=100, reduce='last').build().predict_percept(
+        train)
+    npt.assert_equal(np.any(peak.data != last.data), True)
+    npt.assert_array_less(last.data - 1e-9, peak.data)
