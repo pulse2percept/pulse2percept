@@ -2,8 +2,9 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.implants import (ArgusII, CustomRaster, ProsthesisSystem,
-                                    Raster, SequentialRaster)
+from pulse2percept.implants import (ArgusII, BVT24, CheckerboardRaster,
+                                    CustomRaster, ElectrodeGrid, PRIMA,
+                                    ProsthesisSystem, Raster, SequentialRaster)
 
 
 def test_Raster_is_abstract():
@@ -66,6 +67,131 @@ def test_Raster_offsets():
     cycle = 1000.0 / 300
     offsets = SequentialRaster(3).offsets(names, cycle)
     npt.assert_almost_equal(np.unique(offsets), np.arange(3) * cycle / 3)
+
+
+def _min_spacing(implant, raster):
+    """Closest two electrodes that the raster ever activates together"""
+    names = implant.electrode_names
+    xy = np.array([[e.x, e.y] for e in implant.earray.electrode_objects])
+    groups = raster.groups(names)
+    closest = np.inf
+    for group in np.unique(groups):
+        pos = xy[groups == group]
+        d = np.linalg.norm(pos[:, None, :] - pos[None, :, :], axis=-1)
+        closest = min(closest, d[~np.eye(len(pos), dtype=bool)].min())
+    return closest
+
+
+def test_CheckerboardRaster():
+    with pytest.raises(ValueError):
+        CheckerboardRaster(ArgusII(), 0)
+    with pytest.raises(ValueError):
+        CheckerboardRaster(ArgusII(), 2.5)
+    with pytest.raises(ValueError):
+        CheckerboardRaster(ArgusII(), np.nan)
+    with pytest.raises(ValueError):
+        CheckerboardRaster(ArgusII(), 2, balance=-0.1)
+    with pytest.raises(ValueError):
+        CheckerboardRaster(ArgusII(), 2, group_dur=-1)
+    # More groups than electrodes is not a raster:
+    with pytest.raises(ValueError):
+        CheckerboardRaster(ArgusII(), 61)
+    with pytest.raises(TypeError):
+        CheckerboardRaster('ArgusII', 2)
+
+    implant = ArgusII()
+    names = implant.electrode_names
+    raster = CheckerboardRaster(implant, 5)
+    npt.assert_equal(raster.n_groups, 5)
+    groups = raster.groups(names)
+    # Every electrode is in exactly one group, and the groups are the same
+    # size -- an oversized group is what the current limit gets set by:
+    npt.assert_equal(np.bincount(groups), np.full(5, 12))
+    # Two groups is the checkerboard the pattern is named after: neighbors
+    # always land in different groups, so nothing closer than the diagonal is
+    # ever active at once:
+    two = CheckerboardRaster(implant, 2)
+    npt.assert_almost_equal(two.min_spacing, 575 * np.sqrt(2), decimal=3)
+    # Five groups do better still, at sqrt(5) pitches -- the knight's move
+    # pattern of Kasowski et al. (2025):
+    npt.assert_almost_equal(raster.min_spacing, 575 * np.sqrt(5), decimal=3)
+    # ... and `min_spacing` is what it says it is:
+    for r in [two, raster, CheckerboardRaster(implant, 4)]:
+        npt.assert_almost_equal(_min_spacing(implant, r), r.min_spacing,
+                                decimal=3)
+    # A line raster leaves neighbors in the same group, which is the whole
+    # point of not using one:
+    npt.assert_equal(_min_spacing(implant, SequentialRaster(6)), 575)
+    npt.assert_equal('min_spacing' in str(raster), True)
+
+    # Groups take turns in an order that doubles back instead of marching
+    # across the array. On a 6x10 grid five groups lie one per column, and
+    # firing them in that order would sweep steadily to the right:
+    order = [np.flatnonzero(groups == g)[0] for g in range(5)]
+    npt.assert_equal(order, [0, 1, 3, 2, 4])
+
+
+def test_CheckerboardRaster_grids():
+    # A hex grid is handled the same way, and its 7-group pattern is the one
+    # that puts every group on a hex lattice of its own, sqrt(7) pitches wide:
+    hexgrid = ProsthesisSystem(ElectrodeGrid((14, 14), 200, type='hex'))
+    raster = CheckerboardRaster(hexgrid, 7)
+    npt.assert_almost_equal(raster.min_spacing, 200 * np.sqrt(7), decimal=3)
+    npt.assert_almost_equal(_min_spacing(hexgrid, raster), raster.min_spacing,
+                            decimal=3)
+    # A hex grid cannot be two-colored the way a square one can, so two groups
+    # buy nothing there and the caller has to notice through `min_spacing`:
+    npt.assert_almost_equal(CheckerboardRaster(hexgrid, 2).min_spacing, 200)
+
+    # Rotating the implant rotates the pattern with it, since the pattern is
+    # read off the electrode positions:
+    upright = ProsthesisSystem(ElectrodeGrid((10, 10), 400))
+    turned = ProsthesisSystem(ElectrodeGrid((10, 10), 400, rot=37))
+    npt.assert_equal(CheckerboardRaster(turned, 5).groups(
+        turned.electrode_names),
+        CheckerboardRaster(upright, 5).groups(upright.electrode_names))
+
+    # Grids with electrodes trimmed off still work. PRIMA's 378 electrodes do
+    # not divide by four, so the groups come out as even as 378 allows:
+    prima = PRIMA()
+    raster = CheckerboardRaster(prima, 4)
+    count = np.bincount(raster.groups(prima.electrode_names))
+    npt.assert_equal(count.sum(), 378)
+    npt.assert_equal(count.max() <= np.ceil(378 / 4) * 1.05, True)
+    npt.assert_almost_equal(raster.min_spacing, 200)
+    # Demanding an exactly even split is allowed, and costs spacing:
+    npt.assert_equal(
+        CheckerboardRaster(prima, 5, balance=0).min_spacing <=
+        CheckerboardRaster(prima, 5, balance=0.5).min_spacing, True)
+
+    # An implant whose electrodes are not on a grid cannot be checkered:
+    with pytest.raises(NotImplementedError):
+        CheckerboardRaster(BVT24(), 2)
+    # Neither can a count that leaves no pattern even enough to be worth
+    # having. PRIMA's trimmed edges are what put 20 groups out of reach, and
+    # allowing bigger groups is what buys it back:
+    with pytest.raises(ValueError):
+        CheckerboardRaster(prima, 20)
+    npt.assert_equal(CheckerboardRaster(prima, 20, balance=0.2).n_groups, 20)
+
+
+def test_CheckerboardRaster_groups():
+    implant = ArgusII()
+    raster = CheckerboardRaster(implant, 5)
+    # The raster only knows the electrodes it was built for. Silently dropping
+    # the others would break the current limit it exists to respect:
+    with pytest.raises(ValueError):
+        raster.groups(['A1', 'not-an-electrode'])
+    # A subset of the stimulus is fine, and keeps the assignment it had:
+    subset = ['F10', 'A1', 'C5']
+    npt.assert_equal(raster.groups(subset),
+                     [raster.groups(implant.electrode_names)[i]
+                      for i in [59, 0, 24]])
+    # It plugs into the schedule like any other raster:
+    npt.assert_equal(np.unique(raster.offsets(implant.electrode_names, 25.0)),
+                     np.arange(5) * 5.0)
+    implant.raster = raster
+    npt.assert_equal(implant.raster.n_groups, 5)
 
 
 def test_CustomRaster():

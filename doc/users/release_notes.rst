@@ -17,6 +17,8 @@ Highlights:
 *  New :py:class:`~pulse2percept.implants.Raster` classes describe how
    stimulators multiplex electrodes that cannot be driven simultaneously. Each
    group starts its pulse a fixed ``group_dur`` behind the one before it.
+   :py:class:`~pulse2percept.implants.CheckerboardRaster` implements the
+   checkerboard pattern of [Kasowski2025]_.
 
 * :py:meth:`~pulse2percept.percepts.Percept.play` and
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` are roughly 100x faster
