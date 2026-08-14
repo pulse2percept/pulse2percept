@@ -15,7 +15,8 @@ Highlights:
    multiplexing.
 
 *  New :py:class:`~pulse2percept.implants.Raster` classes describe how
-   stimulators multiplex electrodes that cannot be driven simultaneously.
+   stimulators multiplex electrodes that cannot be driven simultaneously. Each
+   group starts its pulse a fixed ``group_dur`` behind the one before it.
 
 * :py:meth:`~pulse2percept.percepts.Percept.play` and
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` are roughly 100x faster
@@ -25,15 +26,26 @@ Highlights:
 
 API changes:
 
+* :py:class:`~pulse2percept.models.FadingTemporal` is now driven by
+  :math:`\max(-A, 0)` rather than :math:`-A`: anodic current no longer reduces
+  brightness, it is ignored. A stimulus that is purely cathodic is unaffected.
+
+* :py:class:`~pulse2percept.models.FadingTemporal` requires ``tau >= dt``. The
+  integrator steps explicitly, so a shorter time constant overshoots its drive
+  by ``dt / tau`` and oscillates instead of decaying.
+
+* Temporal models gained a ``reduce`` parameter. When ``predict_percept`` picks
+  the output times itself (``t_percept=None``), ``reduce='peak'`` makes each
+  point report the highest brightness reached over the interval leading up to
+  it rather than the brightness at the instant it ends. Naming ``t_percept``
+  still asks for those instants.
+
 * :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` and
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` now use
   :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`. Most importantly, gray
   levels map to ``amp_range`` absolutely rather than being stretched to fill
   it, and each frame now produces a pulse train rather than a single pulse.
   Pass ``stretch=True`` for the old gray-level mapping.
-
-* Encoders can operate directly at implant resolution and account for electrode
-  multiplexing through the implant's raster.
 
 * :py:class:`~pulse2percept.implants.ProsthesisSystem` now exposes ``raster``
   and ``max_current``.
@@ -64,12 +76,6 @@ API changes:
   maps are hashable again, and maps of different classes no longer compare
   equal.
 
-* Temporal models now warn when stimulus polarity produces an all-zero percept
-  instead of silently returning a blank result.
-
-* Time-axis validation warnings now report only the offending points instead
-  of printing the entire time axis.
-
 * :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` and
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` no longer modify their
   inputs in place.
@@ -78,9 +84,6 @@ API changes:
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play`, and
   :py:meth:`~pulse2percept.percepts.Percept.save` now handle single-frame
   inputs correctly and give a useful error for nonuniform time axes.
-
-* :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` now correctly infers
-  frame duration from the time axis when frame-rate metadata is absent.
 
 * :py:attr:`~pulse2percept.stimuli.VideoStimulus.vid_shape` now reports the
   number of frames the stimulus actually has, rather than the number the source

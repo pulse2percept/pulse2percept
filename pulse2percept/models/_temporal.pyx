@@ -18,6 +18,10 @@ ctypedef Py_ssize_t index_t
 # inner loop compiles down to.
 cdef index_t BLOCK = 64
 
+# How a percept time point summarizes the interval that led up to it.
+cdef uint32 REDUCE_LAST = 0
+cdef uint32 REDUCE_PEAK = 1
+
 
 @cdivision(True)
 cpdef fading_fast(const float32[:, ::1] stim,
@@ -26,19 +30,16 @@ cpdef fading_fast(const float32[:, ::1] stim,
                   float32 dt,
                   float32 tau,
                   float32 thresh_percept,
-                  uint32 n_threads):
+                  uint32 n_threads,
+                  uint32 reduce=REDUCE_LAST):
     """Cython implementation of the generic fading model
 
     The leaky integrator has to be stepped in order, so the loop over time is
-    serial -- but each spatial location integrates independently of every
+    serial. But, each spatial location integrates independently of every
     other. Time is therefore the *outer* loop and space the inner one, which
     leaves the inner loop free of any carried dependency and lets it
     vectorize. Threads take a block of locations each and run the whole time
     loop over it, so the parallel region is still entered only once.
-
-    The arithmetic per step is unchanged, and each location still sees its
-    steps in the same order, so the result is bit-for-bit what the
-    space-outer version produced.
 
     Parameters
     ----------
@@ -55,7 +56,20 @@ cpdef fading_fast(const float32[:, ::1] stim,
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
     n_threads: uint32
-        Number of CPU threads to use during parallelization using OpenMP. Defaults to maximum number of cores on user CPU
+        Number of CPU threads to use during parallelization using OpenMP. 
+        Defaults to maximum number of cores on user CPU
+    reduce : uint32
+        How each percept time point summarizes the interval since the previous
+        one: 0 reports the brightness at that instant, 1 reports the peak
+        brightness reached over the interval.
+
+        Electrical stimulation is pulsatile, so brightness rises and falls
+        within one output interval. Reporting the instant the interval happens
+        to end on samples a signal whose energy lives in sub-millisecond
+        transients, and the sampling phase then walks through the pulse cycle:
+        neighbouring frames come out orders of magnitude apart for no reason a
+        viewer would recognize. The peak is tracked across every ``dt`` step,
+        so it costs one compare per step and is exact at any output rate.
 
     Returns
     -------
@@ -64,10 +78,11 @@ cpdef fading_fast(const float32[:, ::1] stim,
 
     """
     cdef:
-        float32 t_sim, amp, bright
+        float32 t_sim, amp, drive, bright, peak
         float32[:, ::1] percept
         float32[:, ::1] stim_t
         float32[:, ::1] scratch
+        float32[:, ::1] running
         index_t idx_space, idx_sim, idx_stim, idx_frame, idx_block
         index_t n_space, n_stim, n_percept, n_sim, n_blocks, lo, hi, tid
 
@@ -86,6 +101,10 @@ cpdef fading_fast(const float32[:, ::1] stim,
     # Running brightness, one row per thread. Rows are BLOCK floats apart, so
     # no two threads share a cache line.
     scratch = np.empty((n_threads, BLOCK), dtype=np.float32)  # Py overhead
+    # Peak brightness since the last percept time point, laid out the same way.
+    # Allocated even when it is not used, so that the loop below can be written
+    # once:
+    running = np.empty((n_threads, BLOCK), dtype=np.float32)  # Py overhead
 
     for idx_block in prange(n_blocks, schedule='static', nogil=True,
                             num_threads=n_threads):
@@ -96,6 +115,7 @@ cpdef fading_fast(const float32[:, ::1] stim,
             hi = n_space
         for idx_space in range(hi - lo):
             scratch[tid, idx_space] = <float32>0.0
+            running[tid, idx_space] = <float32>0.0
         idx_stim = 0
         idx_frame = 0
         for idx_sim in range(n_sim):
@@ -106,28 +126,53 @@ cpdef fading_fast(const float32[:, ::1] stim,
             # we use the `idx_stim`-th frame for all times
             # t_stim[idx_stim] <= t_sim < t_stim[idx_stim + 1]. Which frame
             # that is does not depend on the location, so it is settled here
-            # rather than inside the loop below:
-            if idx_stim + 1 < n_stim:
-                if t_sim >= t_stim[idx_stim + 1]:
-                    idx_stim = idx_stim + 1
+            # rather than inside the loop below.
+            #
+            # `while`, not `if`: more than one stimulus frame can fall inside a
+            # single simulation step, and skipping only one of them leaves the
+            # integrator reading a frame that is already in the past. Encoded
+            # pulses make that the normal case rather than a corner case --
+            # their edges sit on the DT=1e-3 ms grid while `dt` defaults to
+            # 5e-3 ms, so a pulse edge and the sample after it routinely share
+            # a step. Advancing one frame per step would let a blip that has
+            # already ended drive brightness at a later instant:
+            while idx_stim + 1 < n_stim and t_sim >= t_stim[idx_stim + 1]:
+                idx_stim = idx_stim + 1
             for idx_space in range(hi - lo):
                 amp = stim_t[idx_stim, lo + idx_space]
                 bright = scratch[tid, idx_space]
-                # Invert stimulus polarity and apply leaky integrator:
-                bright = bright + dt * (-amp - bright) / tau
+                # Half-wave rectify: only cathodic (negative) current drives
+                # brightness. Without this the model cannot see a
+                # charge-balanced pulse at all:
+                drive = -amp
+                if drive < 0.0:
+                    drive = 0.0
+                bright = bright + dt * (drive - bright) / tau
                 # Brightness is bounded in [0, \inf[
                 if bright < 0.0:
                     bright = 0.0
                 scratch[tid, idx_space] = bright
+                # One compare per step, and it keeps the peak exact however
+                # coarse the output rate is:
+                if bright > running[tid, idx_space]:
+                    running[tid, idx_space] = bright
             if idx_sim == idx_t_percept[idx_frame]:
                 # `idx_t_percept` stores the time points at which we need to
                 # output a percept. We compare `idx_sim` to `idx_t_percept`
                 # rather than `t_sim` to `t_percept` because there is no good
                 # (fast) way to compare two floating point numbers:
                 for idx_space in range(hi - lo):
-                    bright = scratch[tid, idx_space]
+                    if reduce == REDUCE_PEAK:
+                        bright = running[tid, idx_space]
+                    else:
+                        bright = scratch[tid, idx_space]
                     if c_abs(bright) >= thresh_percept:
                         percept[lo + idx_space, idx_frame] = bright
+                    # Start the next interval's peak from where this one left
+                    # off, not from zero: brightness is continuous, so the
+                    # value carried across the boundary is a floor on what the
+                    # next interval reaches:
+                    running[tid, idx_space] = scratch[tid, idx_space]
                 idx_frame = idx_frame + 1
 
     return np.asarray(percept)  # Py overhead

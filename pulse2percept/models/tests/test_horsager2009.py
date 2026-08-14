@@ -41,27 +41,46 @@ def test_Horsager2009Temporal():
         implant.stim = np.ones((1, 100))
         model.predict_percept(implant.stim, t_percept=[0.2, 0.2])
 
-    # Single-pulse brightness from Fig.3:
+    # Single-pulse brightness from Fig.3. These three (amp, phase_dur) pairs sit
+    # on one threshold curve in the paper, so the model should call them equally
+    # bright. It does so only approximately -- they come out within about 3% of
+    # each other at this `dt`, and the shortest pulse is the one that strays.
+    #
+    # They used to agree to five figures, but that was a numerical accident:
+    # until 0.10.0 the kernel advanced only one stimulus frame per simulation
+    # step, and at dt=5e-3 ms a pulse edge and the sample after it share a step.
+    # That stretched every phase by about one step, which is 7% of a 0.075 ms
+    # phase and 0.1% of a 4 ms one -- inflating exactly the short conditions
+    # that fall short here. Refining `dt` does not bring the agreement back; the
+    # three converge to 101.0, 105.6 and 110.1, so the spread is a property of
+    # the model as implemented, not of the time step.
     model = Horsager2009Temporal().build()
+    bright = []
     for amp, pdur in zip([188.077, 89.74, 10.55], [0.075, 0.15, 4.0]):
         stim = BiphasicPulse(amp, pdur, interphase_dur=pdur, stim_dur=200,
                              cathodic_first=True)
         t_percept = np.arange(0, stim.time[-1] + model.dt / 2, model.dt)
         percept = model.predict_percept(stim, t_percept=t_percept)
-        npt.assert_almost_equal(percept.data.max(), 110.3, decimal=2)
+        bright.append(percept.data.max())
+    npt.assert_allclose(bright, np.mean(bright), rtol=0.03)
+    npt.assert_almost_equal(bright, [107.20, 109.31, 110.13], decimal=2)
 
-    # Fixed-duration brightness from Fig.4. The reference value is read off a
-    # published figure, so the tolerance is loose enough to cover that: a
-    # 225 Hz train predicts 36.34 rather than 36.29, which under the float32
-    # time axis of earlier versions came out at 36.29 only because the last of
-    # its 45 pulses was mistimed by about 0.1% of its own width.
+    # Fixed-duration brightness from Fig.4, which again puts these three
+    # conditions at one threshold. As with Fig.3 above, the model reproduces
+    # that to a few percent rather than exactly, and the agreement was closer
+    # before 0.10.0 only because the kernel was stretching every phase by about
+    # one simulation step. These phases are 0.075 ms, so a 5e-3 ms step is 7% of
+    # one, and the correction moves the three by different amounts.
     model = Horsager2009Temporal().build()
+    bright = []
     for amp, freq in zip([136.01, 120.34, 57.73], [5, 15, 225]):
         stim = BiphasicPulseTrain(freq, amp, 0.075, interphase_dur=0.075,
                                   stim_dur=200, cathodic_first=True)
         t_percept = np.arange(0, stim.time[-1] + model.dt / 2, model.dt)
         percept = model.predict_percept(stim, t_percept=t_percept)
-        npt.assert_almost_equal(percept.data.max(), 36.29, decimal=1)
+        bright.append(percept.data.max())
+    npt.assert_allclose(bright, np.mean(bright), rtol=0.03)
+    npt.assert_almost_equal(bright, [35.27, 36.21, 35.49], decimal=2)
 
 
 def test_deepcopy_Horsager2009Temporal():

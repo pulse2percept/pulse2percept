@@ -7,18 +7,75 @@ import numpy as np
 from ..utils import PrettyPrint
 
 
+def _finite(name, value):
+    """Reject NaN and infinity, which slip through every ``<`` comparison"""
+    if not np.all(np.isfinite(np.asarray(value, dtype=np.float64))):
+        raise ValueError(f"'{name}' must be finite, not {value}.")
+
+
+def _whole(name, value):
+    """Reject a non-integer count or index, which would silently truncate"""
+    _finite(name, value)
+    if int(value) != value:
+        raise ValueError(f"'{name}' must be a whole number, not {value}.")
+    return int(value)
+
+
 class Raster(PrettyPrint, metaclass=ABCMeta):
     """Abstract base class for all raster patterns
 
     A stimulator usually cannot drive every electrode at once, because the
     total current it can source at any instant is limited. Electrodes are
-    therefore split into *raster groups* that take turns: group 0 fires, then
-    group 1 some milliseconds later, and so on, with the whole sequence
-    completing within one frame.
+    therefore split into *raster groups* that take turns.
 
-    An encoder asks a raster how long each electrode has to wait after the
-    start of a frame before it may pulse; see
-    :py:class:`~pulse2percept.stimuli.Encoder`.
+    A raster is a **scheduling constraint, not a hardware state machine**. What
+    it has to deliver is one property: no two groups are ever active at the same
+    instant, so that the stimulator sources at most one group's worth of current
+    however the video is modulated. It is not a switch that cyclically enables
+    group 0, then group 1, then group 0 again forever, and a group's pulses do
+    not have to land at the same phase of a repeating cycle.
+
+    Taking turns is described by a **raster sweep**: group *g* starts its pulse
+    ``g * group_dur`` after group 0 does, so a sweep spans ``n_groups *
+    group_dur``. Two things then keep groups apart for good (see
+    :py:class:`~pulse2percept.stimuli.Encoder`):
+
+    1.  A pulse has to be short enough to finish before the next group's turn
+        begins.
+    2.  Electrodes on *different* pulse periods drift relative to one another,
+        and would eventually collide however they started out. Their periods are
+        therefore pinned to whole numbers of the sweep, which fixes their
+        relative phase. Pinning rounds the period *up*, so multiplexing never
+        drives an electrode faster -- and so never delivers more charge -- than
+        asked.
+
+        Electrodes that share one period cannot drift in the first place: their
+        onsets stay ``group_dur`` apart forever, whatever that period is.
+        Nothing is quantized in that case and the requested rate is delivered
+        exactly, even when the period is not a whole number of sweeps. This is
+        the usual case under amplitude modulation, and it is why rastering costs
+        no frequency there.
+
+        So with two groups 1.5 ms apart on a common 10 ms period, group 0 pulses
+        at 0, 10, 20, ... and group 1 at 1.5, 11.5, 21.5, ... -- collision-free,
+        but not a repeating 3 ms schedule, and the 10 ms period is left alone.
+
+    The sweep belongs to the *stimulation* schedule, not to the video: it is
+    tied to the pulse period, not to the frame rate. Two rules settle how long
+    it is and what it costs:
+
+    *  With ``group_dur=None`` the groups divide the *shortest* pulse period
+       between them, so the sweep is exactly that period. Under frequency
+       modulation that means the fastest electrode pulses once per sweep and
+       slower ones every *m*-th sweep.
+    *  With an explicit ``group_dur`` the sweep is ``n_groups * group_dur``
+       whatever rate the electrodes run at -- six groups of 1 ms sweep in 6 ms.
+       It is then generally much shorter than a pulse period, so even the
+       fastest electrode may pulse only every *m*-th sweep.
+
+    Either way, only periods that *differ* from one another are rounded up onto
+    the sweep; a period they all share is delivered exactly, since fixed group
+    offsets cannot drift into one another.
 
     Subclasses only implement ``groups``.
 
@@ -27,26 +84,29 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
     Parameters
     ----------
     group_dur : float, optional
-        Time (ms) between one group firing and the next. If None, the groups
-        are spread evenly over the frame, so that the sequence takes exactly
-        one frame period to complete.
+        Duration (ms) of a single group's slot, and hence the spacing between
+        one group's turn and the next. If None, the groups are spread evenly
+        over the pulse period, so that a sweep takes exactly one period to
+        complete -- which is what an encoder wants whenever every electrode
+        pulses at the same rate.
 
-        .. note::
+        Setting it explicitly makes the sweep ``n_groups * group_dur``
+        regardless of the pulse period, which is how you buy back frequency
+        resolution under frequency modulation: a shorter slot means a shorter
+        sweep, and the periods that have to be pinned are pinned onto a finer
+        grid. It cannot be shorter than a single pulse.
 
-           Staggering the *onsets* of two groups only keeps them off the same
-           time point if the first group is finished before the second starts.
-           That holds whenever a group pulses at most once per frame, which is
-           what amplitude modulation does. Under frequency modulation an
-           electrode may pulse many times per frame, and pulses from different
-           groups can then land on top of each other. Set ``max_current`` on
-           the implant to find out when they do.
+        An encoder with a ``clock`` rounds the slot onto it and rebuilds the
+        sweep from the result, so every group keeps a turn of the same length.
 
     """
     __slots__ = ('group_dur',)
 
     def __init__(self, group_dur=None):
-        if group_dur is not None and group_dur <= 0:
-            raise ValueError("'group_dur' must be positive.")
+        if group_dur is not None:
+            _finite('group_dur', group_dur)
+            if group_dur <= 0:
+                raise ValueError("'group_dur' must be positive.")
         self.group_dur = group_dur
 
     def _pprint_params(self):
@@ -76,35 +136,57 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def delays(self, electrodes, frame_dur):
-        """How long each electrode waits before pulsing
+    def slot_dur(self, period):
+        """Duration (ms) of one group's slot
+
+        Parameters
+        ----------
+        period : float
+            The pulse period (ms) a sweep has to fit into, so that every group
+            gets its turn before the first one comes round again.
+
+        Returns
+        -------
+        slot_dur : float
+            ``group_dur`` if one was given, else the period split evenly
+            between the groups.
+
+        """
+        if self.group_dur is not None:
+            return float(self.group_dur)
+        return float(period) / self.n_groups
+
+    def offsets(self, electrodes, period):
+        """How far behind group 0 each electrode's slot begins
 
         Parameters
         ----------
         electrodes : array_like
             Electrode names, in the order they appear in the stimulus.
-        frame_dur : float
-            Duration (ms) of a single frame. The whole raster sequence has to
-            complete within it.
+        period : float
+            The pulse period (ms) a sweep has to fit into.
 
         Returns
         -------
-        delay : (n_electrodes,) float array
-            Time (ms) between the start of a frame and this electrode's first
-            pulse.
+        offset : (n_electrodes,) float array
+            Time (ms) between the start of a sweep and the start of this
+            electrode's slot.
 
         """
         group = np.asarray(self.groups(electrodes), dtype=np.int64)
         if group.min(initial=0) < 0 or group.max(initial=0) >= self.n_groups:
             raise ValueError(f"'groups' must be in 0..{self.n_groups - 1}.")
-        dur = (frame_dur / self.n_groups if self.group_dur is None
-               else self.group_dur)
-        if self.n_groups * dur > frame_dur:
+        dur = self.slot_dur(period)
+        # A tick of slack: the period is generally not a round number of ms
+        # (a 300 Hz period is 3.333... ms), so an exact `>` would reject the
+        # even split this class computes itself:
+        if self.n_groups * dur > period * (1 + 1e-9):
             raise ValueError(f"A raster of {self.n_groups} groups "
-                             f"{dur:.3f} ms apart takes "
+                             f"{dur:.3f} ms apart sweeps in "
                              f"{self.n_groups * dur:.3f} ms, which does not "
-                             f"fit into a frame (dur={frame_dur:.3f} ms). "
-                             f"Shorten 'group_dur' or lower the frame rate.")
+                             f"fit into a pulse period of {period:.3f} ms. "
+                             f"Shorten 'group_dur', use fewer groups, or lower "
+                             f"the pulse frequency.")
         return group * dur
 
 
@@ -143,6 +225,7 @@ class SequentialRaster(Raster):
 
     def __init__(self, n_groups, interleave=False, group_dur=None):
         super().__init__(group_dur=group_dur)
+        _finite('n_groups', n_groups)
         if int(n_groups) != n_groups or n_groups < 1:
             raise ValueError(f"'n_groups' must be a positive integer, not "
                              f"{n_groups}.")
@@ -179,16 +262,23 @@ class CustomRaster(Raster):
     groups : list of lists, or dict
         Either a list whose i-th element holds the names of the electrodes in
         group i, or a dict mapping each electrode name onto its group index.
-        Every electrode in the stimulus must be accounted for.
+        Every electrode in the stimulus must be accounted for, and no electrode
+        may appear in two groups.
     group_dur : float, optional
         See :py:class:`~pulse2percept.implants.Raster`.
 
     Examples
     --------
-    Fire the four corners of Argus II before everything else:
+    Fire the four corners of Argus II before everything else. Every other
+    electrode has to be given a group too, or the current limit that the raster
+    exists to respect could be violated without anyone noticing:
 
-    >>> from pulse2percept.implants import CustomRaster
-    >>> raster = CustomRaster([['A1', 'A10', 'F1', 'F10'], ['B5', 'C5']])
+    >>> from pulse2percept.implants import ArgusII, CustomRaster
+    >>> corners = ['A1', 'A10', 'F1', 'F10']
+    >>> rest = [e for e in ArgusII().electrode_names if e not in corners]
+    >>> raster = CustomRaster([corners, rest])
+    >>> raster.n_groups
+    2
 
     """
     __slots__ = ('_group_of', '_n_groups')
@@ -196,7 +286,8 @@ class CustomRaster(Raster):
     def __init__(self, groups, group_dur=None):
         super().__init__(group_dur=group_dur)
         if isinstance(groups, dict):
-            group_of = {str(k): int(v) for k, v in groups.items()}
+            group_of = {str(k): _whole(f'group of {k}', v)
+                        for k, v in groups.items()}
         else:
             group_of = {}
             for idx, names in enumerate(groups):
@@ -204,9 +295,20 @@ class CustomRaster(Raster):
                     raise TypeError(f"Group {idx} must be a list of electrode "
                                     f"names, not the string '{names}'.")
                 for name in names:
-                    group_of[str(name)] = idx
+                    name = str(name)
+                    # Silently letting the last group win would break the very
+                    # guarantee a raster exists to make, since the electrode
+                    # would go on firing in the group it was taken out of:
+                    if name in group_of:
+                        raise ValueError(
+                            f"Electrode '{name}' is in group "
+                            f"{group_of[name]} and group {idx}. Every "
+                            f"electrode belongs to exactly one group.")
+                    group_of[name] = idx
         if not group_of:
             raise ValueError("'groups' cannot be empty.")
+        if min(group_of.values()) < 0:
+            raise ValueError("Group indices cannot be negative.")
         self._group_of = group_of
         self._n_groups = max(group_of.values()) + 1
 

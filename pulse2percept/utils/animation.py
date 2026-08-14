@@ -2,12 +2,6 @@
 
 Fast, dependency-free HTML/JavaScript animations.
 
-Matplotlib's ``FuncAnimation.to_jshtml`` re-renders the *entire* figure (axes,
-ticks, tick labels, colorbar, ...) once per frame and embeds every frame as its
-own base64-encoded PNG. Since only the image data and the title actually change
-from frame to frame, that is a lot of wasted work: the cost per frame is on the
-order of hundreds of milliseconds, and the resulting HTML is tens of megabytes.
-
 :py:class:`HTMLAnimation` renders the static parts of the figure exactly once
 and packs all frames into a single, color-mapped sprite sheet that is blitted
 into a ``<canvas>`` by a small vanilla-JavaScript player. This is typically two
@@ -26,8 +20,6 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import to_hex, to_rgba
 from PIL import Image
-
-from .array import unique
 
 __all__ = ['HTMLAnimation', 'frame_interval']
 
@@ -100,16 +92,22 @@ def frame_interval(time, fps=None, tol=1e-2):
     """
     if fps is not None:
         return 1000.0 / fps
-    interval = unique(np.diff(time), tol=tol)
-    if len(interval) > 1:
-        raise NotImplementedError(
-            f"Cannot infer the frame rate from a non-homogeneous time axis "
-            f"(found {len(interval)} different time steps). Pass 'fps' "
-            f"instead.")
-    if len(interval) == 0:
+    interval = np.diff(np.asarray(time, dtype=np.float64))
+    if interval.size == 0:
         # A single frame has no time step, and there is nothing to advance to,
         # so any interval will do:
         return SINGLE_FRAME_INTERVAL
+    # Compare the steps against each other rather than quantizing each one onto
+    # a grid of `tol`: a step that lands exactly on a grid boundary (33.365 ms
+    # against tol=1e-2, which is what a 29.97 fps percept comes out at) rounds
+    # up or down depending on floating-point noise far below `tol`, and an
+    # evenly spaced axis then looks like two different steps.
+    spread = float(interval.max() - interval.min())
+    if spread > tol:
+        raise NotImplementedError(
+            f"Cannot infer the frame rate from a non-homogeneous time axis "
+            f"(time steps range over {spread:g} ms, more than tol={tol:g}). "
+            f"Pass 'fps' instead.")
     return float(interval[0])
 
 
@@ -572,20 +570,11 @@ class HTMLAnimation(FuncAnimation):
         try:
             if self._labels is not None:
                 # The player draws the title itself, on a canvas that sits on
-                # top of the static background. Clearing the canvas cannot undo
-                # anything baked into that background, so a title left on the
-                # axes (by an earlier draw, or by the caller) would show
-                # through every frame. Blank it while the background is
-                # rendered; this is also what lets ``_title_geometry`` measure
-                # the empty line box it needs:
+                # top of the static background:
                 title_artist.set_text('')
             bg, width, height = _background(fig, im)
             # ``get_window_extent`` is only meaningful once the figure has been
-            # drawn, which ``_background`` just did. Round the destination rect
-            # outward rather than rounding its size: rounding the size can
-            # leave a row or column of background exposed along the edge of the
-            # image, whereas overshooting by a fraction of a pixel is
-            # invisible.
+            # drawn, which ``_background`` just did:
             bbox = im.get_window_extent()
             title = None
             if self._labels is not None:
