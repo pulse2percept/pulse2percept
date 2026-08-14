@@ -391,13 +391,51 @@ def _reduce(w1, w2):
     """
     w1, w2 = np.asarray(w1, dtype=float), np.asarray(w2, dtype=float)
     for _ in range(100):
-        if w1 @ w1 > w2 @ w2:
+        # Compared with room to spare, and rounded off a step short of the
+        # halfway mark, because both decisions are otherwise made on the last
+        # bit of a float: on a square grid the two steps are exactly as long as
+        # each other, and on a hexagonal one they lean on each other by exactly
+        # half a step. Which way an exact comparison then falls is a matter of
+        # how the positions were arrived at, and differs between platforms.
+        if w1 @ w1 > w2 @ w2 * (1 + 1e-9):
             w1, w2 = w2, w1
-        mu = np.round((w2 @ w1) / (w1 @ w1))
+        mu = np.round(np.round((w2 @ w1) / (w1 @ w1), 9))
         if mu == 0:
             break
         w2 = w2 - mu * w1
     return w1, w2
+
+
+def _canonical(vectors, scale):
+    """Two lattice steps picked out of ``vectors`` by a rule, not by position
+
+    A grid has four shortest gaps, or six on a hexagonal one, all exactly as
+    long as each other, and every gap turns up with both signs. Which of them
+    is met first is an accident of how they were collected, so taking the
+    first would let the same implant come out mirrored on one machine and not
+    on another. Instead one of each +/- pair is dropped, and the rest are
+    ordered by length and then by direction, which leaves nothing to chance.
+    """
+    d = np.linalg.norm(vectors, axis=1)
+    tol = 1e-9 * scale
+    flat = np.abs(vectors[:, 1]) <= tol
+    keep = (d > tol) & ((vectors[:, 1] > tol) | (flat & (vectors[:, 0] > 0)))
+    vectors, d = vectors[keep], d[keep]
+    if not len(vectors):
+        raise NotImplementedError(
+            "A checkerboard needs electrodes on a regular grid, and these are "
+            "all in the same place.")
+    vectors = vectors[np.lexsort((-vectors[:, 1], -vectors[:, 0],
+                                  np.round(d / scale, 9)))]
+    u = vectors[0]
+    # The second step has to leave the line the first one traces out:
+    cross = np.abs(u[0] * vectors[:, 1] - u[1] * vectors[:, 0])
+    off_axis = np.flatnonzero(cross > 1e-6 * (u @ u))
+    if len(off_axis) == 0:
+        # Electrodes on a single line: any second step will do, since nothing
+        # is ever placed along it.
+        return u, np.array([-u[1], u[0]])
+    return u, vectors[off_axis[0]]
 
 
 def _combos(w1, w2, reach):
@@ -526,27 +564,13 @@ def _lattice(xy):
     # handful of nearest neighbors is enough to turn them up:
     _, idx = cKDTree(xy).query(xy, k=min(n, 9))
     diff = (xy[idx[:, 1:]] - xy[:, None, :]).reshape(-1, 2)
-    d = np.linalg.norm(diff, axis=1)
-    # Two electrodes in the same spot are no step at all, and would otherwise
-    # be taken for one of zero length:
-    apart = d > 1e-9 * d.max(initial=0.0)
-    if not np.any(apart):
-        raise NotImplementedError(
-            "A checkerboard needs electrodes on a regular grid, and these are "
-            "all in the same place.")
-    diff, d = diff[apart], d[apart]
-    diff = diff[np.argsort(np.round(d / d.max(), 9), kind='stable')]
-    u = diff[0]
-    # The second step has to leave the line the first one traces out:
-    cross = np.abs(u[0] * diff[:, 1] - u[1] * diff[:, 0])
-    off_axis = np.flatnonzero(cross > 1e-6 * (u @ u))
-    if len(off_axis) == 0:
-        # Electrodes on a single line: any second step will do, since nothing
-        # is ever placed along it.
-        v = np.array([-u[1], u[0]])
-    else:
-        v = diff[off_axis[0]]
-    u, v = _reduce(u, v)
+    scale = np.linalg.norm(diff, axis=1).max(initial=0.0)
+    u, v = _canonical(diff, scale)
+    # The gaps that were seen need not be the shortest two the lattice has, so
+    # they are reduced onto those -- and then settled by the rule a second
+    # time, since the reduction is free to hand them back either way round:
+    u, v = _canonical(_combos(*_reduce(u, v), reach=2),
+                      np.linalg.norm(u) or scale)
     basis = np.column_stack([u, v])
     ij = np.linalg.solve(basis, (xy - xy[0]).T).T
     # Negated so that a NaN, which fails every comparison, raises rather than

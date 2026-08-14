@@ -1,12 +1,15 @@
+from copy import deepcopy
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.testing as npt
 import pytest
+from scipy.spatial import cKDTree
 
 from pulse2percept.implants import (AlphaIMS, ArgusII, BVT24,
                                     CheckerboardRaster, CustomRaster,
                                     ElectrodeGrid, PRIMA, ProsthesisSystem,
                                     Raster, SequentialRaster)
+from pulse2percept.implants import rasters
 
 
 def test_Raster_is_abstract():
@@ -148,10 +151,22 @@ def test_CheckerboardRaster_grids():
     # Rotating the implant rotates the pattern with it, since the pattern is
     # read off the electrode positions:
     upright = ProsthesisSystem(ElectrodeGrid((10, 10), 400))
-    turned = ProsthesisSystem(ElectrodeGrid((10, 10), 400, rot=37))
-    npt.assert_equal(CheckerboardRaster(turned, 5).groups(
-        turned.electrode_names),
-        CheckerboardRaster(upright, 5).groups(upright.electrode_names))
+    expected = CheckerboardRaster(upright, 5).groups(upright.electrode_names)
+    for angle in [11, 37, 84]:
+        turned = ProsthesisSystem(ElectrodeGrid((10, 10), 400, rot=angle))
+        npt.assert_equal(
+            CheckerboardRaster(turned, 5).groups(turned.electrode_names),
+            expected)
+    # Past a quarter turn the two grid directions trade places, so the pattern
+    # comes out transposed. It is the same pattern in every way that matters --
+    # which is what is checked here -- just not the same labelling:
+    for angle in [117, 300]:
+        turned = ProsthesisSystem(ElectrodeGrid((10, 10), 400, rot=angle))
+        raster = CheckerboardRaster(turned, 5)
+        npt.assert_almost_equal(raster.min_spacing, 400 * np.sqrt(5),
+                                decimal=3)
+        npt.assert_equal(np.bincount(raster.groups(turned.electrode_names)),
+                         np.full(5, 20))
 
     # Grids with electrodes trimmed off still work. PRIMA's 378 electrodes do
     # not divide by four, so the groups come out as even as 378 allows:
@@ -175,6 +190,52 @@ def test_CheckerboardRaster_grids():
     with pytest.raises(ValueError):
         CheckerboardRaster(prima, 20)
     npt.assert_equal(CheckerboardRaster(prima, 20, balance=0.2).n_groups, 20)
+
+
+def test_CheckerboardRaster_is_reproducible(monkeypatch):
+    # The pattern is built from the gaps between electrodes, and a grid has
+    # four gaps of exactly the same length (six on a hex grid), each of which
+    # turns up with both signs. Nothing about the order they are found in may
+    # reach the answer, or the same implant comes out mirrored on someone
+    # else's machine -- which is what used to happen, since neighbors at equal
+    # distance come back from the tree in a platform-dependent order.
+    class Scrambled(cKDTree):
+        seed = 0
+
+        def query(self, x, k):
+            dist, idx = super().query(x, k)
+            rng = np.random.RandomState(Scrambled.seed)
+            for row_d, row_i in zip(dist, idx):
+                tie = np.round(row_d, 6)
+                for t in np.unique(tie):
+                    at = np.flatnonzero(tie == t)
+                    to = rng.permutation(at)
+                    row_d[at], row_i[at] = row_d[to], row_i[to]
+            return dist, idx
+
+    hexgrid = ProsthesisSystem(ElectrodeGrid((10, 10), 400, type='hex'))
+    for implant in [ArgusII(), hexgrid, PRIMA()]:
+        names = implant.electrode_names
+        expected = CheckerboardRaster(implant, 5).groups(names)
+        for seed in range(4):
+            Scrambled.seed = seed
+            monkeypatch.setattr(rasters, 'cKDTree', Scrambled)
+            npt.assert_equal(CheckerboardRaster(implant, 5).groups(names),
+                             expected)
+            monkeypatch.undo()
+
+    # Nor may the last bit of a float, which is all that separates one
+    # platform's trigonometry from another's:
+    implant = ArgusII()
+    names = implant.electrode_names
+    expected = CheckerboardRaster(implant, 5).groups(names)
+    rng = np.random.RandomState(0)
+    for _ in range(4):
+        nudged = ProsthesisSystem(deepcopy(implant.earray))
+        for elec in nudged.earray.electrode_objects:
+            elec.x *= 1 + rng.uniform(-1, 1) * 1e-13
+            elec.y *= 1 + rng.uniform(-1, 1) * 1e-13
+        npt.assert_equal(CheckerboardRaster(nudged, 5).groups(names), expected)
 
 
 def test_CheckerboardRaster_groups():
