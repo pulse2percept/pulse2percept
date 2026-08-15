@@ -10,10 +10,10 @@ name: Benchmarks
 # regressions worth catching. Same runner, same session is the only way these
 # timings mean anything.
 #
-# Cost is one job of roughly four minutes (i.e., two Cython builds of about 40
-# seconds each, and two benchmark runs of about 25 seconds) running
-# alongside the 12-job Build & Test matrix rather than after it. It adds no
-# wall-clock time to CI.
+# Cost is one job of roughly five minutes (i.e., two Cython builds of about 40
+# seconds each, and two benchmark runs of about 65 seconds) running alongside
+# the 12-job Build & Test matrix rather than after it. A matrix job is of
+# comparable length, so this adds no meaningful wall-clock time to CI.
 
 on:
   pull_request:
@@ -115,10 +115,12 @@ jobs:
           pytest benchmarks/ --benchmark-only \
             --benchmark-json="$RESULTS/head.json"
 
+      # compare.py decides whether this job passes, so we first need to check
+      # its logic before we can trust it. Done here with synthetic data:
+      - name: Test the comparison logic
+        run: pytest benchmarks/test_compare.py -q
+
       # The report goes to the job summary rather than a pull request comment:
-      # commenting needs a writable token, which the pull_request event does
-      # not give a fork, so a comment step would fail exactly on the pull
-      # requests that most need reviewing.
       - name: Compare
         run: |
           python benchmarks/compare.py \

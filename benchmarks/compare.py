@@ -10,21 +10,19 @@ non-zero if anything regressed past its threshold.
 Time and memory are held to deliberately different standards, because they are
 not equally trustworthy measurements.
 
-**Memory is exact.** ``tracemalloc`` counts allocations, so repeated runs of
-unchanged code report peak memory to the byte. A memory change therefore means
-the code changed, and can be gated tightly.
+``tracemalloc`` counts allocations rather than sampling the process, so
+repeated runs of unchanged code report the same peak to the byte. 
+It does not see raw ``malloc`` inside the Cython/OpenMP kernels,
+so the number is a floor on total memory rather than the whole of it.
 
-**Time is not.** The minimum over many rounds still drifts 15-30% between runs
-of unchanged code on the same machine, and a shared CI runner is worse: its
-CPU model varies from job to job. The time threshold is set well outside that
-band on purpose. It is there to catch the disasters and it will not notice a
-genuine 20% regression.
+Processing time may vary depending on runner load, so we set a genuine 20%
+regression threshold, with the goal of catching the disasters instead of
+every tiny change.
 
 Both checks also require an absolute change, not just a ratio. Several
 benchmarks are small enough (a 0.17 ms build, a 0.08 MB prediction) that a
 large ratio there is noise on a number too small to matter. Ratio-only
-breaches are still shown, marked ``(under floor)``, so nothing is hidden --
-they just do not fail the run.
+breaches are still shown, marked ``(under floor)``, so nothing is hidden.
 """
 import argparse
 import json
@@ -81,6 +79,10 @@ def compare(baseline, contender, args):
     Returns ``(rows, added, removed, failed)``. Benchmarks present on only one
     side are reported but never fail the run: adding or removing a scenario is
     a legitimate thing for a pull request to do.
+
+    Having *nothing* in common does fail, though. An empty intersection means
+    the comparison checked no code at all, which a renamed benchmark, a changed
+    parametrization or a collection error can all cause silently.
     """
     rows, failed = [], False
     for name in baseline.keys() & contender.keys():
@@ -106,14 +108,13 @@ def compare(baseline, contender, args):
             'm_ratio': m_ratio, 'm_status': m_status,
         })
     # Anything that actually failed goes first, then everything else by how
-    # much it moved. Without the first key a big ratio on a tiny benchmark 
-    # would outrank the regression the reader is here for.
+    # much it moved.
     rows.sort(key=lambda r: ('regressed' in (r['t_status'], r['m_status']),
                              max(r['t_ratio'] or 0, r['m_ratio'] or 0)),
               reverse=True)
     added = sorted(contender[n]['name'] for n in contender.keys() - baseline)
     removed = sorted(baseline[n]['name'] for n in baseline.keys() - contender)
-    return rows, added, removed, failed
+    return rows, added, removed, failed or not rows
 
 
 def render(rows, added, removed, failed, args):
@@ -123,7 +124,16 @@ def render(rows, added, removed, failed, args):
 
     out = ['## Benchmark comparison', '']
     if not rows:
-        out += ['No benchmarks in common between the two runs.', '']
+        out += [
+            ':warning: **The two runs have no benchmarks in common, so '
+            'nothing was compared.**',
+            '',
+            'This is reported as a failure rather than a pass. Renamed '
+            'benchmarks, a changed parametrization or a collection error can '
+            'all empty the comparison, and a gate that checked nothing must '
+            'not report success.',
+            '',
+        ]
     else:
         out += [
             '| Benchmark | Time base | Time head | &Delta; time '
@@ -152,14 +162,23 @@ def render(rows, added, removed, failed, args):
         f'(min {args.mem_floor_mb:g} MB).',
         '',
     ]
-    if failed:
+    if not rows:
+        pass  # already explained above; do not also claim a regression
+    elif failed:
         out += [
             ':warning: **A benchmark regressed past its threshold.**',
             '',
-            'Memory is measured exactly, so a memory regression is real and '
-            'worth explaining. Time on a shared runner is not: confirm a time '
-            'regression by running `make bench` on a quiet machine before '
-            'treating it as one.',
+            'The allocations tracemalloc sees are highly repeatable, so a '
+            'memory regression is worth explaining rather than re-running. '
+            'Time on a shared runner is not repeatable: confirm a time '
+            'regression with `make bench` on a quiet machine before treating '
+            'it as one.',
+            '',
+            'If the regression is real and you intend to accept it, say so in '
+            'the pull request and merge over the failure. Do not raise the '
+            'thresholds to make it green: once merged, the new cost is the '
+            'baseline every later comparison runs against, so the check '
+            'protects the next pull request exactly as before.',
         ]
     else:
         out.append('No regression past the thresholds above.')

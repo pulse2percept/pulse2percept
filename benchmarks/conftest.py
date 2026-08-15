@@ -15,7 +15,11 @@ try:
     import pytest_benchmark  # noqa: F401
 except ImportError:  # pragma: no cover - depends on the local environment
     HAVE_BENCHMARK = False
-    collect_ignore_glob = ['test_*.py']
+    # Only the modules that need the plugin. test_compare.py exercises the
+    # comparison logic on synthetic data, needs nothing from pytest-benchmark,
+    # and must stay collectable: it is what guards the pull request gate.
+    # A new module of benchmarks belongs in this list.
+    collect_ignore = ['test_predict.py']
 else:
     HAVE_BENCHMARK = True
 
@@ -44,12 +48,21 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip the benchmarks unless they were explicitly asked for."""
+    """Skip the benchmarks unless they were explicitly asked for.
+
+    Only the benchmarks: a test is treated as one when it asks for the
+    ``benchmark`` fixture, which every function in ``test_predict.py`` does and
+    no ordinary test does. Skipping the whole directory instead would take
+    ``test_compare.py`` with it, and the logic that decides whether a pull
+    request passes should run in a plain ``pytest benchmarks/`` too.
+    """
     if config.getoption('benchmark_only', default=False):
         return
     skip = pytest.mark.skip(reason='needs --benchmark-only to run')
     for item in items:
-        if HERE in Path(str(item.fspath)).parents:
+        if HERE not in Path(str(item.fspath)).parents:
+            continue
+        if 'benchmark' in getattr(item, 'fixturenames', ()):
             item.add_marker(skip)
 
 

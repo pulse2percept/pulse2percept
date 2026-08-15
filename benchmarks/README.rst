@@ -77,24 +77,22 @@ It prints a Markdown table and exits non-zero if anything regressed. Time and
 memory are held to different standards, because they are not equally
 trustworthy:
 
-**Memory is exact.** ``tracemalloc`` counts allocations, so repeated runs of
-unchanged code report peak memory to the byte -- measured spread across
-consecutive runs is 0.0% for every benchmark that does not draw with
-matplotlib, and under 1% for the ones that do. A memory change means the code
-changed, so the threshold is tight (1.15x).
+**Memory is highly repeatable.** ``tracemalloc`` counts allocations rather than
+sampling the process, so repeated runs of unchanged code report the same peak
+to the byte.
 
-**Time is not.** The minimum over many rounds still drifts 15-30% between runs
-of unchanged code on one machine. The time threshold is set far outside that
-band (2x) on purpose: it catches disasters -- an accidental quadratic, a cache
-that stopped being hit, a parallel loop that got serialized -- and will not
-notice a genuine 20% regression. Nothing here replaces profiling a suspicious
-change on a quiet machine.
+**Time depends on runner load.** The minimum over many rounds may drift between
+runs of unchanged code, so we set a generous threshold to catch 20% regressions
+instead of every tiny performance change.
 
 Both checks also require an absolute change, not just a ratio, since some
 benchmarks are small enough (a 0.2 ms build, a 0.08 MB prediction) that a large
 ratio is noise on a number nobody notices. Ratio-only breaches are still shown,
 marked ``(under floor)``; they just do not fail the run. All four limits are
 options -- see ``python benchmarks/compare.py --help``.
+
+Because this is the code that decides whether a pull request passes, its
+decision logic is tested in ``test_compare.py`` on synthetic data.
 
 
 On a pull request
@@ -110,17 +108,14 @@ work here: GitHub hands out whatever CPU it has, so a cross-runner comparison
 carries a spread far larger than the regressions worth catching. Measuring both
 sides in one job on one runner is what makes the timings comparable at all.
 
-The cost is a single four-minute job -- two Cython builds of about 40 seconds,
-two benchmark runs of about 25 seconds -- running alongside the 12-job ``Build
-& Test`` matrix instead of after it, so it adds no wall-clock time to CI. Slow
-scenarios stay out; the workflow does not pass ``--runslow``.
+**When the job fails**, read which metric tripped. 
+If the regression turns out to be real and you decide it is worth paying for
+(e.g., because of a more accurate model), say so in the pull request and merge
+over the failure. **Do not raise the thresholds to turn the check green.** 
+Once the change is merged, the new cost *is* the baseline that every later
+comparison runs against.
 
-**When the job fails**, read which metric tripped. A memory regression is
-real: reproduce it locally and explain it. A time regression on a shared runner
-is a hypothesis: confirm it with ``make bench`` on a quiet machine before
-treating it as one. If a change makes a benchmark legitimately slower or
-hungrier -- a more accurate model, say -- adjust the thresholds in the same
-pull request rather than working around the check.
+The job also fails if the two runs share **no** benchmarks at all.
 
 
 What is measured
@@ -198,8 +193,7 @@ automatically and no other file changes. For example, a temporal model:
 
     Scenario(
         id='argus2_axonmap_fading',
-        stimulus=lambda: p2p.stimuli.BiphasicPulseTrain(20, 20, 0.45,
-                                                        stim_dur=200),
+        stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
         implant=lambda stim: p2p.implants.ArgusII(stim=stim),
         model=lambda **kwargs: p2p.models.Model(
             spatial=p2p.models.AxonMapSpatial(xrange=(-12, 12),
@@ -210,18 +204,31 @@ automatically and no other file changes. For example, a temporal model:
 The criterion for a new entry is a **compiled kernel no existing scenario
 reaches**. Every scenario costs run time in every pull request, and a model
 that shares its kernel with one already listed buys none of the regression
-coverage that cost is for.
+coverage that cost is for. A kernel that *no* scenario reaches is the opposite
+problem: it is a kernel this check cannot see regress at all.
 
-Three things to know. Parameters that belong to one sub-model go on the
-sub-model instance, as above: keywords handed to ``Model(...)`` itself reach
-*both* sub-models, and ``Parametrized`` freezes attributes, so anything the
-temporal model does not recognize raises rather than being quietly ignored.
-Match the stimulus to the model -- ``BiphasicAxonMapModel`` reads pulse
+Four things to know.
+
+**Stimulate the whole array.** Handing a bare ``BiphasicPulseTrain`` to an
+implant assigns it to one electrode, not all of them -- ``ArgusII(stim=...)``
+then has a stimulus of shape ``(1, 29)`` rather than ``(60, 29)``. A benchmark
+built that way exercises a sixtieth of the per-electrode work and barely moves
+when that work regresses. Use the ``array_ptrain`` helper, as above.
+
+**Match the stimulus to the model.** ``BiphasicAxonMapModel`` reads pulse
 parameters off each electrode and rejects an image; a temporal model given a
-single-frame stimulus measures nothing temporal. And if the scenario takes more
-than a few seconds per ``predict_percept`` call -- video stimuli in particular,
-which predict one frame per time point -- mark it ``slow=True`` so it stays out
-of the default run:
+single-frame stimulus measures nothing temporal.
+
+**Sub-model parameters go on the sub-model instance**, as above. Keywords
+handed to ``Model(...)`` itself reach *both* sub-models, and ``Parametrized``
+freezes attributes, so anything the temporal model does not recognize raises
+rather than being quietly ignored.
+
+**Set the capability flags.** A temporal-only model's percept has no spatial
+grid, and ``Percept.plot`` raises on one, so such a scenario needs
+``plottable=False``. And if the scenario takes more than a few seconds per
+``predict_percept`` call, mark it ``slow=True`` so it stays out of the default
+run:
 
 .. code-block:: python
 

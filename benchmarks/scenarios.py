@@ -17,17 +17,39 @@ first two correspond to these one-liners::
                                xystep=0.1).build().predict_percept(
         p2p.implants.PRIMA(stim=p2p.stimuli.LogoBVL().invert()))
 
-Between them the scenarios cover every compiled kernel that a percept
-prediction can go through -- ``_beyeler2019``, ``_granley2021``,
-``_nanduri2012`` and the shared ``_temporal`` loop -- so that a change to any
-one of them shows up here. That coverage is the selection criterion: a model
-that shares a kernel with one already listed adds run time without adding
-signal.
+Between them the scenarios reach every compiled kernel a percept prediction can
+go through -- ``_beyeler2019``, ``_granley2021``, ``_nanduri2012``,
+``_horsager2009``, ``_thompson2003`` and the shared ``_temporal`` loop -- so
+that a change to any one of them shows up here. That coverage is the selection
+criterion: a model that shares a kernel with one already listed adds run time
+without adding signal, and a kernel no scenario reaches is a kernel the
+regression check cannot see.
 """
 from dataclasses import dataclass
 from typing import Callable
 
 import pulse2percept as p2p
+
+
+def array_ptrain(implant_cls):
+    """A ``BiphasicPulseTrain`` on *every* electrode of ``implant_cls``.
+
+    Handing a bare ``BiphasicPulseTrain`` to an implant assigns it to a single
+    electrode -- ``ArgusII(stim=BiphasicPulseTrain(...)).stim.shape`` is
+    ``(1, 29)``, not ``(60, 29)``. A benchmark built that way would exercise
+    one sixtieth of the per-electrode work the kernels actually do, and would
+    barely move if that work regressed. Every pulse-train scenario below goes
+    through here instead.
+
+    The throwaway implant is what supplies the electrode names, so the
+    ``stimulus`` benchmark carries about 2 ms of implant construction on top of
+    the 15 ms of building the pulse trains. That is small, and the alternative
+    -- hard-coding the electrode names -- would duplicate the implant.
+    """
+    names = implant_cls().electrode_names
+    return p2p.stimuli.Stimulus(
+        {e: p2p.stimuli.BiphasicPulseTrain(20, 20, 0.45, stim_dur=200)
+         for e in names})
 
 
 @dataclass(frozen=True)
@@ -61,6 +83,12 @@ class Scenario:
         loop calls it several times over, and measuring peak memory calls it
         once more under ``tracemalloc``, so the cost is multiplied by roughly
         an order of magnitude. Slow scenarios run only with ``--runslow``.
+    plottable : bool
+        Whether the resulting percept can be drawn. A temporal-only model has
+        no spatial grid -- its percept comes back with ``xdva`` set to None --
+        and ``Percept.plot`` raises ``TypeError`` on one. That is a limitation
+        of the library rather than of the benchmark, so the plot benchmark is
+        skipped for such scenarios instead of being worked around here.
     """
 
     id: str
@@ -69,6 +97,7 @@ class Scenario:
     model: Callable
     caches_axons: bool = False
     slow: bool = False
+    plottable: bool = True
 
 
 SCENARIOS = [
@@ -90,29 +119,53 @@ SCENARIOS = [
                                                           rho=50, xystep=0.1,
                                                           **kwargs),
     ),
-    # Granley 2021:
+    # Granley 2021. Its stimulus is a pulse train rather than an image because
+    # the model reads amplitude, frequency and pulse duration off each
+    # electrode's BiphasicPulseTrain and rejects anything else.
     Scenario(
         id='argus2_biphasic_ptrain',
-        stimulus=lambda: p2p.stimuli.BiphasicPulseTrain(20, 1, 0.45),
+        stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
         implant=lambda stim: p2p.implants.ArgusII(stim=stim),
         model=lambda **kwargs: p2p.models.BiphasicAxonMapModel(
             xrange=(-12, 12), yrange=(-8, 8), **kwargs),
         caches_axons=True,
     ),
-    # Nanduri 2012: the first scenario with a temporal model
+    # Nanduri 2012: the first scenario with a temporal model, so the first one
+    # whose predict_percept returns more than a single frame. Reaches both
+    # halves of _nanduri2012 (spatial_fast and temporal_fast) and the
+    # spatial -> temporal handoff in Model.
     Scenario(
         id='argus2_nanduri2012_ptrain',
-        stimulus=lambda: p2p.stimuli.BiphasicPulseTrain(20, 20, 0.45,
-                                                        stim_dur=200),
+        stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
         implant=lambda stim: p2p.implants.ArgusII(stim=stim),
         model=lambda **kwargs: p2p.models.Nanduri2012Model(
             xrange=(-4, 4), yrange=(-4, 4), xystep=0.5, **kwargs),
     ),
-    # A composed Model:
+    # Horsager 2009: a temporal-only model, so predict_percept returns one
+    # trace per electrode with no spatial grid at all. The only scenario that
+    # reaches _horsager2009.
+    Scenario(
+        id='argus2_horsager2009_ptrain',
+        stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
+        implant=lambda stim: p2p.implants.ArgusII(stim=stim),
+        model=lambda **kwargs: p2p.models.Horsager2009Model(**kwargs),
+        plottable=False,
+    ),
+    # Thompson 2003: a spatial-only model taking an image, and the only
+    # scenario that reaches _thompson2003.
+    Scenario(
+        id='argus2_thompson2003_logobvl',
+        stimulus=lambda: p2p.stimuli.LogoBVL(),
+        implant=lambda stim: p2p.implants.ArgusII(stim=stim),
+        model=lambda **kwargs: p2p.models.Thompson2003Model(
+            xrange=(-12, 12), yrange=(-8, 8), **kwargs),
+    ),
+    # A composed Model, which is how a user combines a spatial and a temporal
+    # model that were not written as a pair. Reaches the generic _temporal
+    # kernel that FadingTemporal and friends share.
     Scenario(
         id='argus2_scoreboard_fading_ptrain',
-        stimulus=lambda: p2p.stimuli.BiphasicPulseTrain(20, 20, 0.45,
-                                                        stim_dur=200),
+        stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
         implant=lambda stim: p2p.implants.ArgusII(stim=stim),
         model=lambda **kwargs: p2p.models.Model(
             spatial=p2p.models.ScoreboardSpatial(xrange=(-4, 4),
