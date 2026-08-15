@@ -76,6 +76,12 @@ Studies referenced throughout the Documentation:
                    variability in the human retina. *Vision Research* 49(17),
                    2157-63, doi:`10.1016/j.visres.2009.04.029
                    <https://doi.org/10.1016/j.visres.2009.04.029>`_.
+.. [Kasowski2025] JM Kasowski, A Varshney, R Sadeghi, M Beyeler (2025).
+                  Simulated prosthetic vision confirms checkerboard as an 
+                  effective raster pattern for epiretinal implants.
+                  *Journal of Neural Engineering* 22 046017,
+                  doi:`10.1088/1741-2552/adecc4
+                  <https://doi.org/10.1088/1741-2552/adecc4>`_.
 .. [Layton2014] LN Ayton, PJ Blamey, RH Guymer, CD Luu, DAX Nayagam,
                 NC Sinclair, MN Shivdasani, J Yeoh, MF McCombe, RJ Briggs,
                 NL Opie, J Villalobos, PN Dimitrov, M Varsamidis, MA Petoe,
