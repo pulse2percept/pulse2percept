@@ -1,6 +1,8 @@
 from pulse2percept.stimuli import (AmplitudeEncoder, VideoStimulus,
                                    BostonTrain, GirlPool)
+from skimage.color import rgb2gray
 from skimage.io import imsave
+from skimage.transform import resize as vid_resize
 from matplotlib.animation import FuncAnimation
 import numpy as np
 import numpy.testing as npt
@@ -95,6 +97,22 @@ def test_VideoStimulus_resize(tmp_path):
     npt.assert_equal(stim.resize((-1, 24)).vid_shape, (16, 24, 3, 10))
     with pytest.raises(ValueError):
         stim.resize((-1, -1))
+
+
+def test_VideoStimulus_resize_kwargs():
+    """Keyword arguments reach scikit-image (Issue #501)"""
+    # A white square on black. Nearest-neighbor interpolation keeps the video
+    # binary; the default (bilinear, with anti-aliasing on the way down) does
+    # not, which is what makes the two distinguishable:
+    ndarray = np.zeros((8, 8, 3), dtype=np.float32)
+    ndarray[2:6, 2:6] = 1
+    stim = VideoStimulus(ndarray)
+    nearest = stim.resize((4, 4), order=0, anti_aliasing=False)
+    npt.assert_equal(np.isin(nearest.data, [0, 1]).all(), True)
+    npt.assert_equal(np.isin(stim.resize((4, 4)).data, [0, 1]).all(), False)
+    # An unknown keyword argument is scikit-image's to reject, not ours:
+    with pytest.raises(TypeError):
+        stim.resize((4, 4), not_a_skimage_kwarg=0)
 
 
 def test_VideoStimulus_crop(tmp_path):
@@ -222,6 +240,36 @@ def test_VideoStimulus_rotate():
         npt.assert_almost_equal(data[4, 0, i], 0)
 
 
+@pytest.mark.parametrize('shape', [(5, 5, 3), (5, 5, 3, 3)])
+def test_VideoStimulus_rotate_kwargs(shape):
+    """Keyword arguments reach scikit-image (Issue #501)
+
+    A grayscale video is rotated in one pass and a color one frame by frame,
+    so both paths have to forward what they are given.
+    """
+    ndarray = np.zeros(shape, dtype=np.float32)
+    ndarray[2] = 1
+    stim = VideoStimulus(ndarray)
+    # Nearest-neighbor interpolation keeps the bar binary, bilinear does not:
+    npt.assert_equal(np.isin(stim.rotate(45, order=0).data, [0, 1]).all(), True)
+    npt.assert_equal(np.isin(stim.rotate(45, order=1).data, [0, 1]).all(),
+                     False)
+    # 'cval' fills the corners the rotation leaves empty:
+    rot = stim.rotate(45, order=0, cval=0.3)
+    npt.assert_almost_equal(rot.data.reshape(rot.vid_shape)[0, 0], 0.3)
+    # 'resize' grows each frame, so the result is named after its own grid
+    # rather than inheriting names it has no room for:
+    grown = stim.rotate(45, resize=True)
+    npt.assert_equal(grown.vid_shape, (7, 7, *shape[2:]))
+    npt.assert_equal(grown.shape[0], np.prod(grown.vid_shape[:-1]))
+    npt.assert_equal(grown.electrodes[0], 'A1' if len(shape) == 3 else 'A1_R')
+    # Rotating in place keeps every pixel's name, and the time axis is intact:
+    same = stim.rotate(45)
+    npt.assert_equal(same.vid_shape, shape)
+    npt.assert_equal(np.asarray(same.electrodes), np.asarray(stim.electrodes))
+    npt.assert_almost_equal(same.time, stim.time)
+
+
 def test_VideoStimulus_shift():
     # Create a horizontal bar:
     shape = (5, 5, 3)
@@ -347,6 +395,32 @@ def test_VideoStimulus_apply(tmp_path):
 
     applied = stim.apply(lambda x: 0.5 * x)
     npt.assert_almost_equal(applied.data, stim.data * 0.5)
+    # A shape-preserving function keeps every pixel's name:
+    npt.assert_equal(np.asarray(applied.electrodes),
+                     np.asarray(stim.electrodes))
+    npt.assert_equal(applied.vid_shape, stim.vid_shape)
+
+    # A function that changes the resolution is allowed, and the result is
+    # named after its own pixel grid (Issue #500):
+    resized = stim.apply(vid_resize, (16, 24))
+    npt.assert_equal(resized.vid_shape, (16, 24, shape[0]))
+    npt.assert_equal(resized.shape, (16 * 24, shape[0]))
+    npt.assert_equal(resized.electrodes[0], 'A1')
+    npt.assert_equal(resized.electrodes[-1], 'P24')
+    npt.assert_almost_equal(resized.time, stim.time)
+    # Positional and keyword arguments both make it through:
+    npt.assert_equal(stim.apply(vid_resize, (8, 12), order=0).vid_shape,
+                     (8, 12, shape[0]))
+    npt.assert_equal(stim.apply(vid_resize, output_shape=(8, 12)).vid_shape,
+                     (8, 12, shape[0]))
+    # Names can be given explicitly:
+    named = stim.apply(vid_resize, (1, 2), electrodes=['a', 'b'])
+    npt.assert_equal(list(named.electrodes), ['a', 'b'])
+    with pytest.raises(ValueError):
+        stim.apply(vid_resize, (1, 2), electrodes=['a', 'b', 'c'])
+    # Dropping the color channels changes the pixel count too:
+    rgb = VideoStimulus(np.random.rand(6, 8, 3, 4).astype(np.float32))
+    npt.assert_equal(rgb.apply(rgb2gray).vid_shape, (6, 8, 4))
 
 
 @pytest.mark.parametrize('n_frames', (1, 2, 3, 10, 14))

@@ -61,7 +61,7 @@ API changes:
 * Minimum dependency versions were raised for NumPy 2 compatibility. NumPy 1.x
   users should remain on v0.9.1.
 
-## Bug fixes
+Bug fixes:
 
 * :py:class:`~pulse2percept.stimuli.PulseTrain` no longer ends on partial,
   unbalanced pulses when its frequency does not divide ``stim_dur``.
@@ -74,13 +74,11 @@ API changes:
   identical time points using the same tolerance as
   :py:class:`~pulse2percept.stimuli.Stimulus`.
 
-* Visual-field-map equality now handles array-valued attributes correctly,
-  maps are hashable again, and maps of different classes no longer compare
-  equal.
-
-* :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` and
-  :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` no longer modify their
-  inputs in place.
+* Various fixes for :py:class:`~pulse2percept.stimuli.ImageStimulus`:
+  keyword arguments are passed on to scikit-image; inputs are no longer
+  modified in place; :py:meth:`~pulse2percept.stimuli.ImageStimulus.center`
+  honors its ``loc`` argument instead of always centering on the middle of
+  the image.
 
 * :py:meth:`~pulse2percept.percepts.Percept.play`,
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play`, and
@@ -100,8 +98,9 @@ API changes:
   it. Previously the four channels were reinterpreted as RGB, which sheared the
   color channels across every row.
 
-* The per-frame title in the HTML player no longer piles up on itself or on a
-  title that was already on the axes.
+* Visual-field-map equality now handles array-valued attributes correctly,
+  maps are hashable again, and maps of different classes no longer compare
+  equal.
 
 v0.9.1 (2026-08-06)
 -------------------

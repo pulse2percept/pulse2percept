@@ -3,7 +3,9 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
+from skimage.color import rgb2gray
 from skimage.io import imsave
+from skimage.transform import resize as img_resize
 
 from pulse2percept.stimuli import (AmplitudeEncoder, ImageStimulus, LogoBVL,
                                    LogoUCSB, SnellenChart)
@@ -93,6 +95,53 @@ def test_ImageStimulus_resize():
     with pytest.raises(ValueError):
         stim.resize((-1, -1))
     os.remove(fname)
+
+
+def test_ImageStimulus_resize_kwargs():
+    """Keyword arguments reach scikit-image (Issue #501)"""
+    # A white square on black. Nearest-neighbor interpolation keeps the image
+    # binary; the default (bilinear, with anti-aliasing on the way down) does
+    # not, which is what makes the two distinguishable:
+    ndarray = np.zeros((8, 8), dtype=np.float32)
+    ndarray[2:6, 2:6] = 1
+    stim = ImageStimulus(ndarray)
+    nearest = stim.resize((4, 4), order=0, anti_aliasing=False)
+    npt.assert_equal(np.isin(nearest.data, [0, 1]).all(), True)
+    npt.assert_equal(np.isin(stim.resize((4, 4)).data, [0, 1]).all(), False)
+    # An unknown keyword argument is scikit-image's to reject, not ours:
+    with pytest.raises(TypeError):
+        stim.resize((4, 4), not_a_skimage_kwarg=0)
+
+
+def test_ImageStimulus_apply():
+    ndarray = np.random.rand(8, 12).astype(np.float32)
+    stim = ImageStimulus(ndarray)
+    # A shape-preserving function keeps every pixel's name:
+    halved = stim.apply(lambda x: 0.5 * x)
+    npt.assert_almost_equal(halved.data, 0.5 * stim.data)
+    npt.assert_equal(halved.img_shape, (8, 12))
+    npt.assert_equal(np.asarray(halved.electrodes),
+                     np.asarray(stim.electrodes))
+    # A function that changes the resolution is allowed, and the result is
+    # named after its own pixel grid (Issue #500):
+    resized = stim.apply(img_resize, (4, 6))
+    npt.assert_equal(resized.img_shape, (4, 6))
+    npt.assert_equal(resized.shape, (24, 1))
+    npt.assert_equal(resized.electrodes[0], 'A1')
+    npt.assert_equal(resized.electrodes[-1], 'D6')
+    # Positional and keyword arguments both make it through:
+    npt.assert_equal(stim.apply(img_resize, (4, 6), order=0).img_shape, (4, 6))
+    npt.assert_equal(stim.apply(img_resize, output_shape=(4, 6)).img_shape,
+                     (4, 6))
+    # Names can be given explicitly, whether or not the shape changed:
+    named = stim.apply(img_resize, (2, 2), electrodes=['a', 'b', 'c', 'd'])
+    npt.assert_equal(list(named.electrodes), ['a', 'b', 'c', 'd'])
+    with pytest.raises(ValueError):
+        stim.apply(img_resize, (2, 2), electrodes=['a', 'b'])
+    # Dropping the color channels changes the pixel count too:
+    rgb = ImageStimulus(np.random.rand(8, 12, 3).astype(np.float32))
+    npt.assert_equal(rgb.apply(rgb2gray).img_shape, (8, 12))
+
 
 def test_ImageStimulus_crop():
     # test img with color channels
@@ -238,6 +287,36 @@ def test_ImageStimulus_rotate():
     os.remove(fname)
 
 
+def test_ImageStimulus_rotate_kwargs():
+    """Keyword arguments reach scikit-image (Issue #501)"""
+    ndarray = np.zeros((5, 5), dtype=np.float32)
+    ndarray[2, :] = 1
+    stim = ImageStimulus(ndarray)
+    # Nearest-neighbor interpolation keeps the bar binary, bilinear does not:
+    npt.assert_equal(np.isin(stim.rotate(45, order=0).data, [0, 1]).all(), True)
+    npt.assert_equal(np.isin(stim.rotate(45, order=1).data, [0, 1]).all(),
+                     False)
+    # 'cval' fills the corners the rotation leaves empty:
+    corners = ([0, 0, 4, 4], [0, 4, 0, 4])
+    npt.assert_almost_equal(
+        stim.rotate(45, order=0, cval=0.3).data.reshape(5, 5)[corners], 0.3)
+    npt.assert_almost_equal(
+        stim.rotate(45, order=0).data.reshape(5, 5)[corners], 0)
+    # 'resize' grows the canvas, so the result is named after its own grid
+    # rather than inheriting 25 names it has no room for:
+    grown = stim.rotate(45, resize=True)
+    npt.assert_equal(grown.img_shape, (7, 7))
+    npt.assert_equal(grown.shape, (49, 1))
+    npt.assert_equal(grown.electrodes[-1], 'G7')
+    # Rotating in place keeps every pixel's name:
+    same = stim.rotate(45)
+    npt.assert_equal(same.img_shape, (5, 5))
+    npt.assert_equal(np.asarray(same.electrodes), np.asarray(stim.electrodes))
+    # Names can be given explicitly:
+    npt.assert_equal(len(stim.rotate(45, electrodes=np.arange(25)).electrodes),
+                     25)
+
+
 def test_ImageStimulus_shift():
     # Create a horizontal bar:
     fname = 'test.png'
@@ -273,6 +352,11 @@ def test_ImageStimulus_center():
     stim = ImageStimulus(fname)
     npt.assert_almost_equal(stim.data, stim.center().data)
     npt.assert_almost_equal(stim.data, stim.shift(0, 2).center().data)
+    # 'loc' places the CoM somewhere other than the image center:
+    top = stim.center(loc=(2, 0))
+    npt.assert_almost_equal(top.data.reshape(shape)[0, :], 1)
+    npt.assert_almost_equal(top.data.reshape(shape)[1:, :], 0)
+    npt.assert_almost_equal(stim.center(loc=(2, 2)).data, stim.data)
     os.remove(fname)
 
 
