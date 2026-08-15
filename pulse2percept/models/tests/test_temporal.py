@@ -114,6 +114,12 @@ def test_FadingTemporal_matches_reference_integrator():
         n_space, -1)
 
     dt, tau = np.float32(model.dt), np.float32(model.tau)
+    # `dt / tau` once, not `dt * x / tau` per step: the kernel divides in
+    # advance and multiplies in the loop, since a division sits on the
+    # dependency chain of every step. The two forms differ in the last ulp, so
+    # a reference that divides per step no longer matches exactly -- and it is
+    # the exactness that makes this test worth having.
+    dt_tau = np.float32(dt / tau)
     idx_p = np.uint32(np.round(t_percept / model.dt))
     for s in range(n_space):
         bright = np.float32(0.0)
@@ -127,7 +133,7 @@ def test_FadingTemporal_matches_reference_integrator():
                 idx_stim += 1
             amp = data[s, idx_stim]
             drive = np.float32(max(-amp, 0.0))
-            bright = np.float32(bright + dt * (drive - bright) / tau)
+            bright = np.float32(bright + dt_tau * (drive - bright))
             if bright < 0:
                 bright = np.float32(0.0)
             if i == idx_p[frame]:
