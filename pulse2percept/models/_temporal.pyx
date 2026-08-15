@@ -2,6 +2,7 @@ from libc.math cimport(pow as c_pow, exp as c_exp, fabs as c_abs,
                        sqrt as c_sqrt)
 from cython.parallel import prange
 from cython.parallel cimport threadid
+from pulse2percept.utils._fpmode cimport c_denormals_off, c_fpmode_restore
 from cython import cdivision  # modulo, division by zero
 import numpy as np
 cimport numpy as cnp
@@ -78,13 +79,14 @@ cpdef fading_fast(const float32[:, ::1] stim,
 
     """
     cdef:
-        float32 t_sim, amp, drive, bright, peak
+        float32 t_sim, amp, drive, bright, peak, dt_tau
         float32[:, ::1] percept
         float32[:, ::1] stim_t
         float32[:, ::1] scratch
         float32[:, ::1] running
         index_t idx_space, idx_sim, idx_stim, idx_frame, idx_block
         index_t n_space, n_stim, n_percept, n_sim, n_blocks, lo, hi, tid
+        unsigned long long fpmode
 
     n_percept = len(idx_t_percept)  # Py overhead
     n_stim = len(t_stim)  # Py overhead
@@ -94,6 +96,14 @@ cpdef fading_fast(const float32[:, ::1] stim,
         n_threads = 1
 
     percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
+    # The integrator below steps by `dt * (drive - bright) / tau`, and `dt/tau`
+    # is the same number on every step at every location. Written that way it
+    # is still a division per step, because reassociating it is not a
+    # transformation a C compiler may make on its own: the two forms round
+    # differently, and neither `/fp:fast` nor `-ffast-math` is on. Dividing
+    # once here takes ~14 cycles of latency off the dependency chain that the
+    # loop cannot start the next step without:
+    dt_tau = dt / tau
     # One simulation step reads the same stimulus frame for every location, so
     # transpose once and that read becomes a contiguous run:
     stim_t = np.ascontiguousarray(np.asarray(stim).T)  # Py overhead
@@ -108,6 +118,11 @@ cpdef fading_fast(const float32[:, ::1] stim,
 
     for idx_block in prange(n_blocks, schedule='static', nogil=True,
                             num_threads=n_threads):
+        # Brightness decays down through the subnormal range between pulses,
+        # where the arithmetic costs ~100x what it does on normal floats; see
+        # `utils/_fpmode.pxd`. The mode is per-thread, hence set here rather
+        # than around the `prange`:
+        fpmode = c_denormals_off()
         tid = threadid()
         lo = idx_block * BLOCK
         hi = lo + BLOCK
@@ -147,7 +162,7 @@ cpdef fading_fast(const float32[:, ::1] stim,
                 drive = -amp
                 if drive < 0.0:
                     drive = 0.0
-                bright = bright + dt * (drive - bright) / tau
+                bright = bright + dt_tau * (drive - bright)
                 # Brightness is bounded in [0, \inf[
                 if bright < 0.0:
                     bright = 0.0
@@ -174,5 +189,7 @@ cpdef fading_fast(const float32[:, ::1] stim,
                     # next interval reaches:
                     running[tid, idx_space] = scratch[tid, idx_space]
                 idx_frame = idx_frame + 1
+        # Hand the thread back in the floating-point mode it arrived in:
+        c_fpmode_restore(fpmode)
 
     return np.asarray(percept)  # Py overhead

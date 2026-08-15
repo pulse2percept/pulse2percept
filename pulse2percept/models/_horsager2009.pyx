@@ -1,4 +1,5 @@
 from pulse2percept.utils._fast_math cimport c_fmax
+from pulse2percept.utils._fpmode cimport c_denormals_off, c_fpmode_restore
 from libc.math cimport powf as c_pow, fabs as c_abs, sqrtf as c_sqrt
 from cython.parallel import prange
 from cython import cdivision  # modulo, division by zero
@@ -60,9 +61,11 @@ cpdef temporal_fast(const float32[:, ::1] stim,
     cdef:
         float32 ca, r1, r2, r3_a, r3, r4a, r4b, r4c
         float32 t_sim, amp, zero_pow
+        float32 dt_tau1, dt_tau2, dt_tau3
         float32[:, ::1] percept
         index_t idx_space, idx_sim, idx_stim, idx_frame
         index_t n_space, n_stim, n_percept, n_sim
+        unsigned long long fpmode
 
     # Note that eps must be divided by 1000, because the original model was fit
     # with a microsecond time step and now we are running milliseconds:
@@ -81,8 +84,25 @@ cpdef temporal_fast(const float32[:, ::1] stim,
     # Note this is not simply zero: `pow(0, beta)` is 1 at `beta == 0` and
     # infinite for negative `beta`, and both are reproduced by reusing it.
     zero_pow = c_pow(<float32>0.0, beta)
+    # Each leaky integrator below steps by `dt * (drive - state) / tau`, and
+    # `dt / tau` is the same number on every step at every location. Written
+    # that way it is still a division per stage per step, because reassociating
+    # it is not a transformation a C compiler may make on its own: the two
+    # forms round differently, and neither `/fp:fast` nor `-ffast-math` is on.
+    # Five divisions, each ~14 cycles of latency, sit right on the dependency
+    # chain the loop cannot start the next step without. Dividing once here
+    # turns all five into multiplies:
+    dt_tau1 = dt / tau1
+    dt_tau2 = dt / tau2
+    dt_tau3 = dt / tau3
 
     for idx_space in prange(n_space, schedule='static', nogil=True, num_threads=n_threads):
+        # Between pulses the integrators below decay down through the subnormal
+        # range, where the arithmetic costs ~100x what it does on normal
+        # floats. Flushing to zero there is what keeps this loop bound by its
+        # own arithmetic rather than by microcode; see `utils/_fpmode.pxd`. The
+        # mode is per-thread, hence set here rather than around the `prange`:
+        fpmode = c_denormals_off()
         # Because the stationary nonlinearity depends on `max_R3`, which is the
         # largest value of R3 over all time points, we have to process the
         # stimulus in two steps.
@@ -113,11 +133,11 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             # which is required to reproduce e.g. Fig.3 in the paper,
             # indicating that the model was trained on what we know call
             # "anodic" current:
-            r1 = r1 + dt * (-amp - r1) / tau1  # += in threads is a reduction
+            r1 = r1 + dt_tau1 * (-amp - r1)  # += in threads is a reduction
             # Charge accumulation:
             # ca = ca + dt * c_fmax(amp, 0) # SLOW
             ca = ca + dt * (amp if amp > 0.0 else 0.0)
-            r2 = r2 + dt * (ca - r2) / tau2
+            r2 = r2 + dt_tau2 * (ca - r2)
             # Half-rectification and power nonlinearity:
             # r3 = c_pow(c_fmax(r1 - eps * r2, 0), beta) # SLOW
             # `powf` is the most expensive call in this loop, and the
@@ -129,9 +149,9 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             else:
                 r3 = zero_pow
             # Slow response (3-stage leaky integrator):
-            r4a = r4a + dt * (r3 - r4a) / tau3
-            r4b = r4b + dt * (r4a - r4b) / tau3
-            r4c = r4c + dt * (r4b - r4c) / tau3
+            r4a = r4a + dt_tau3 * (r3 - r4a)
+            r4b = r4b + dt_tau3 * (r4a - r4b)
+            r4c = r4c + dt_tau3 * (r4b - r4c)
             if idx_sim == idx_t_percept[idx_frame]:
                 # `idx_t_percept` stores the time points at which we need to
                 # output a percept. We compare `idx_sim` to `idx_t_percept`
@@ -140,5 +160,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
                 if c_abs(r4c) >= thresh_percept:
                     percept[idx_space, idx_frame] = r4c
                 idx_frame = idx_frame + 1
+        # Hand the thread back in the floating-point mode it arrived in:
+        c_fpmode_restore(fpmode)
 
     return np.asarray(percept)  # Py overhead
