@@ -134,16 +134,47 @@ class ImageStimulus(Stimulus):
         params.update({'img_shape': self.img_shape})
         return params
 
-    def apply(self, func, *args, **kwargs):
+    def _names_for(self, img, electrodes):
+        """Electrode names for an image derived from this one
+
+        A pixel keeps its name across an operation that leaves the pixel grid
+        alone, which is what makes 'A1' refer to the same thing before and
+        after. An operation that resamples the grid (a resize, a rotation that
+        grows the canvas) has no such correspondence to preserve, so the result
+        is named afresh rather than inheriting names that no longer describe
+        it.
+        """
+        if electrodes is not None:
+            return electrodes
+        return self.electrodes if np.shape(img) == self.img_shape else None
+
+    def apply(self, func, *args, electrodes=None, **kwargs):
         """Apply a function to the image
+
+        .. versionchanged:: 0.10.0
+
+            ``func`` may now change the shape of the image, and ``electrodes``
+            can name the result.
 
         Parameters
         ----------
         func : function
             The function to apply to the image. Must accept a 2D or 3D image
-            and return an image with the same dimensions
+            and return a 2D or 3D image. The returned image need not have the
+            same shape as the original; see ``electrodes``.
         * args :
             Additional positional arguments passed to the function
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, the original names are carried over whenever ``func`` leaves
+            the shape of the image alone, and the result is named after its
+            place in the new image otherwise (e.g. for
+            ``skimage.transform.resize``). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in the returned image.
         **kwargs :
             Additional keyword arguments passed to the function
 
@@ -153,7 +184,7 @@ class ImageStimulus(Stimulus):
             A copy of the stimulus object with the new image
         """
         img = func(self.data.reshape(self.img_shape), *args, **kwargs)
-        return ImageStimulus(img, electrodes=self.electrodes,
+        return ImageStimulus(img, electrodes=self._names_for(img, electrodes),
                              metadata=self.metadata)
 
     def invert(self):
@@ -216,8 +247,14 @@ class ImageStimulus(Stimulus):
         return ImageStimulus(img, electrodes=electrodes,
                              metadata=self.metadata)
 
-    def resize(self, shape, electrodes=None):
+    def resize(self, shape, electrodes=None, **kwargs):
         """Resize the image
+
+        .. versionchanged:: 0.10.0
+
+            Keyword arguments are passed on to scikit-image.
+
+        .. _skimage.transform.resize: https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.resize
 
         Parameters
         ----------
@@ -232,6 +269,10 @@ class ImageStimulus(Stimulus):
             .. note::
                The number of electrode names provided must match the number of
                pixels in the grayscale image.
+        **kwargs :
+            Additional keyword arguments passed to `skimage.transform.resize`_,
+            such as ``order=0`` for nearest-neighbor interpolation (which keeps
+            a binary image binary).
 
         Returns
         -------
@@ -246,7 +287,8 @@ class ImageStimulus(Stimulus):
             height = int(self.img_shape[0] * width / self.img_shape[1])
         if width < 0:
             width = int(self.img_shape[1] * height / self.img_shape[0])
-        img = img_resize(self.data.reshape(self.img_shape), (height, width))
+        img = img_resize(self.data.reshape(self.img_shape), (height, width),
+                         **kwargs)
 
         return ImageStimulus(img, electrodes=electrodes,
                              metadata=self.metadata)
@@ -419,14 +461,33 @@ class ImageStimulus(Stimulus):
         return ImageStimulus(img, electrodes=self.electrodes,
                              metadata=self.metadata)
 
-    def rotate(self, angle, mode='constant'):
+    def rotate(self, angle, mode='constant', electrodes=None, **kwargs):
         """Rotate the image
+
+        .. versionchanged:: 0.10.0
+
+            Keyword arguments are passed on to scikit-image.
+
+        .. _skimage.transform.rotate: https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.rotate
 
         Parameters
         ----------
         angle : float
             Angle by which to rotate the image (degrees).
             Positive: counter-clockwise, negative: clockwise
+        mode : str, optional
+            How to fill in the corners the rotation leaves empty; see
+            `skimage.transform.rotate`_.
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, each pixel keeps the name it had before the rotation, unless
+            ``resize=True`` grew the canvas, in which case the enlarged image is
+            named after its own pixel grid. See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        **kwargs :
+            Additional keyword arguments passed to `skimage.transform.rotate`_,
+            such as ``order``, ``cval``, or ``resize=True`` to grow the image so
+            that it contains every rotated pixel.
 
         Returns
         -------
@@ -434,9 +495,12 @@ class ImageStimulus(Stimulus):
             A copy of the stimulus object containing the rotated image
 
         """
+        # Rotating in place is the common case, and keeps the pixel names
+        # meaningful; ``resize=True`` is available through kwargs:
+        kwargs.setdefault('resize', False)
         img = img_rotate(self.data.reshape(self.img_shape), angle, mode=mode,
-                         resize=False)
-        return ImageStimulus(img, electrodes=self.electrodes,
+                         **kwargs)
+        return ImageStimulus(img, electrodes=self._names_for(img, electrodes),
                              metadata=self.metadata)
 
     def shift(self, shift_cols, shift_rows):
@@ -481,7 +545,7 @@ class ImageStimulus(Stimulus):
         """
         # Calculate center of mass:
         img = self.data.reshape(self.img_shape)
-        return ImageStimulus(center_image(img, loc=None),
+        return ImageStimulus(center_image(img, loc=loc),
                              electrodes=self.electrodes,
                              metadata=self.metadata)
 

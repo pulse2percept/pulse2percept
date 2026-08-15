@@ -198,31 +198,65 @@ class VideoStimulus(Stimulus):
         params.update({'vid_shape': self.vid_shape})
         return params
 
-    def apply(self, func, *args, **kwargs):
+    def _names_for(self, vid, electrodes):
+        """Electrode names for a video derived from this one
+
+        A pixel keeps its name across an operation that leaves the pixel grid
+        alone, which is what makes 'A1' refer to the same thing before and
+        after. An operation that resamples the grid (a resize, a rotation that
+        grows the canvas) has no such correspondence to preserve, so the result
+        is named afresh rather than inheriting names that no longer describe
+        it. Only the frame layout is compared; the number of frames is the time
+        axis, not an electrode count.
+        """
+        if electrodes is not None:
+            return electrodes
+        same = np.shape(vid)[:-1] == self.vid_shape[:-1]
+        return self.electrodes if same else None
+
+    def apply(self, func, *args, electrodes=None, **kwargs):
         """Apply a function to each frame of the video
+
+        .. versionchanged:: 0.10.0
+
+            ``func`` may now change the shape of a frame, and ``electrodes``
+            can name the result.
 
         Parameters
         ----------
         func : function
             The function to apply to each frame in the video. Must accept a 2D
-            or 3D image and return an image with the same dimensions
+            or 3D image and return a 2D or 3D image. The returned frames need
+            not have the same shape as the originals (but must all have the
+            same shape as each other); see ``electrodes``.
         *args :
             Additional positional arguments passed to the function
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, the original names are carried over whenever ``func`` leaves
+            the shape of a frame alone, and the result is named after its place
+            in the new frame otherwise (e.g. for
+            ``skimage.transform.resize``). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in a returned frame.
         **kwargs :
             Additional keyword arguments passed to the function
 
         Returns
         -------
-        stim : `ImageStimulus`
-            A copy of the stimulus object with the new image
+        stim : `VideoStimulus`
+            A copy of the stimulus object with the new video
         """
         vid = np.array([func(frame.reshape(self.vid_shape[:-1]), *args,
                              **kwargs)
                         for frame in self])
         # Move first axis (frames) to last:
         vid = np.moveaxis(vid, 0, -1)
-        return VideoStimulus(vid, electrodes=self.electrodes, time=self.time,
-                             metadata=self.metadata)
+        return VideoStimulus(vid, electrodes=self._names_for(vid, electrodes),
+                             time=self.time, metadata=self.metadata)
 
     def invert(self):
         """Invert the gray levels of the video
@@ -266,8 +300,14 @@ class VideoStimulus(Stimulus):
         return VideoStimulus(vid, electrodes=electrodes, time=self.time,
                              metadata=self.metadata)
 
-    def resize(self, shape, electrodes=None):
+    def resize(self, shape, electrodes=None, **kwargs):
         """Resize the video
+
+        .. versionchanged:: 0.10.0
+
+            Keyword arguments are passed on to scikit-image.
+
+        .. _skimage.transform.resize: https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.resize
 
         Parameters
         ----------
@@ -284,6 +324,10 @@ class VideoStimulus(Stimulus):
             .. note::
                The number of electrode names provided must match the number of
                pixels in the resized video.
+        **kwargs :
+            Additional keyword arguments passed to `skimage.transform.resize`_,
+            such as ``order=0`` for nearest-neighbor interpolation (which keeps
+            a binary video binary).
 
         Returns
         -------
@@ -299,7 +343,7 @@ class VideoStimulus(Stimulus):
         if width < 0:
             width = int(self.vid_shape[1] * height / self.vid_shape[0])
         vid = vid_resize(self.data.reshape(self.vid_shape),
-                         (height, width, *self.vid_shape[2:]))
+                         (height, width, *self.vid_shape[2:]), **kwargs)
         return VideoStimulus(vid, electrodes=electrodes, time=self.time,
                              metadata=self.metadata)
 
@@ -448,14 +492,33 @@ class VideoStimulus(Stimulus):
         return VideoStimulus(vid, electrodes=electrodes, metadata=self.metadata,
                              time=self.time)
 
-    def rotate(self, angle, mode='constant'):
+    def rotate(self, angle, mode='constant', electrodes=None, **kwargs):
         """Rotate each frame of the video
+
+        .. versionchanged:: 0.10.0
+
+            Keyword arguments are passed on to scikit-image.
+
+        .. _skimage.transform.rotate: https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.rotate
 
         Parameters
         ----------
         angle : float
             Angle by which to rotate each video frame (degrees).
             Positive: counter-clockwise, negative: clockwise
+        mode : str, optional
+            How to fill in the corners the rotation leaves empty; see
+            `skimage.transform.rotate`_.
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, each pixel keeps the name it had before the rotation, unless
+            ``resize=True`` grew the frame, in which case the enlarged video is
+            named after its own pixel grid. See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        **kwargs :
+            Additional keyword arguments passed to `skimage.transform.rotate`_,
+            such as ``order``, ``cval``, or ``resize=True`` to grow each frame
+            so that it contains every rotated pixel.
 
         Returns
         -------
@@ -463,14 +526,20 @@ class VideoStimulus(Stimulus):
             A copy of the stimulus object containing the rotated video
 
         """
+        # Rotating in place is the common case, and keeps the pixel names
+        # meaningful; ``resize=True`` is available through kwargs:
+        kwargs.setdefault('resize', False)
         data = self.data.reshape(self.vid_shape)
         if len(self.vid_shape) == 3:
-            # Grayscale videos can be fed directly into rotate:
-            data = vid_rotate(data, angle, mode=mode, resize=False)
-            return VideoStimulus(data, electrodes=self.electrodes,
+            # A grayscale video can be fed to `rotate` in one go, with its
+            # frames standing in for the color channels it expects:
+            data = vid_rotate(data, angle, mode=mode, **kwargs)
+            return VideoStimulus(data,
+                                 electrodes=self._names_for(data, electrodes),
                                  metadata=self.metadata, time=self.time)
         # Else need to feed in each frame individually:
-        return self.apply(vid_rotate, angle, mode=mode, resize=False)
+        return self.apply(vid_rotate, angle, mode=mode, electrodes=electrodes,
+                          **kwargs)
 
     def shift(self, shift_cols, shift_rows):
         """Shift the image foreground
