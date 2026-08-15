@@ -415,6 +415,10 @@ def _canonical(vectors, scale):
     first would let the same implant come out mirrored on one machine and not
     on another. Instead one of each +/- pair is dropped, and the rest are
     ordered by length and then by direction, which leaves nothing to chance.
+
+    The second step comes back as None when every vector given points the same
+    way, which is for the caller to make sense of: it means the electrodes
+    considered so far are in a line, not that the array is.
     """
     d = np.linalg.norm(vectors, axis=1)
     tol = 1e-9 * scale
@@ -425,17 +429,34 @@ def _canonical(vectors, scale):
         raise NotImplementedError(
             "A checkerboard needs electrodes on a regular grid, and these are "
             "all in the same place.")
+    # Counted in units of the shortest gap, so that the order they come out in
+    # cannot depend on how wide a net was cast to find them:
     vectors = vectors[np.lexsort((-vectors[:, 1], -vectors[:, 0],
-                                  np.round(d / scale, 9)))]
+                                  np.round(d / d.min(), 9)))]
     u = vectors[0]
     # The second step has to leave the line the first one traces out:
     cross = np.abs(u[0] * vectors[:, 1] - u[1] * vectors[:, 0])
     off_axis = np.flatnonzero(cross > 1e-6 * (u @ u))
-    if len(off_axis) == 0:
-        # Electrodes on a single line: any second step will do, since nothing
-        # is ever placed along it.
-        return u, np.array([-u[1], u[0]])
-    return u, vectors[off_axis[0]]
+    return u, (vectors[off_axis[0]] if len(off_axis) else None)
+
+
+def _closest(xy, labels, n_groups):
+    """Distance between the closest two electrodes that ever fire together
+
+    A pattern is judged by the closest pair it actually leaves active at the
+    same time, which is not the shortest step of the lattice it was cut from:
+    the implant is a finite piece of that lattice, and on a small or trimmed
+    one the electrodes that would have been closest need not be there at all.
+    Infinite when no group holds more than one electrode, since then there is
+    no pair to keep apart.
+    """
+    closest = np.inf
+    for g in range(n_groups):
+        pos = xy[labels == g]
+        if len(pos) > 1:
+            closest = min(closest,
+                          float(cKDTree(pos).query(pos, k=2)[0][:, 1].min()))
+    return closest
 
 
 def _combos(w1, w2, reach):
@@ -560,17 +581,30 @@ def _lattice(xy):
     n = len(xy)
     if n < 2:
         return np.zeros((n, 2), dtype=np.int64), np.eye(2)
+    scale = float(np.linalg.norm(xy.max(axis=0) - xy.min(axis=0)))
+    tree = cKDTree(xy)
     # The lattice steps are among the shortest gaps between electrodes, and a
-    # handful of nearest neighbors is enough to turn them up:
-    _, idx = cKDTree(xy).query(xy, k=min(n, 9))
-    diff = (xy[idx[:, 1:]] - xy[:, None, :]).reshape(-1, 2)
-    scale = np.linalg.norm(diff, axis=1).max(initial=0.0)
-    u, v = _canonical(diff, scale)
+    # handful of nearest neighbors usually turns both of them up. Usually, but
+    # not always: rows 1050 um apart with electrodes 100 um along them put
+    # twenty gaps in the near neighborhood of every electrode before the step
+    # to the next row appears. So the net is cast wider until the second step
+    # shows up, and only an array that is a line all the way out has none.
+    k = min(n, 9)
+    while True:
+        _, idx = tree.query(xy, k=k)
+        diff = (xy[idx[:, 1:]] - xy[:, None, :]).reshape(-1, 2)
+        u, v = _canonical(diff, scale)
+        if v is not None or k == n:
+            break
+        k = min(n, 2 * k)
+    if v is None:
+        # Electrodes on a single line: any second step will do, since nothing
+        # is ever placed along it.
+        v = np.array([-u[1], u[0]])
     # The gaps that were seen need not be the shortest two the lattice has, so
     # they are reduced onto those -- and then settled by the rule a second
     # time, since the reduction is free to hand them back either way round:
-    u, v = _canonical(_combos(*_reduce(u, v), reach=2),
-                      np.linalg.norm(u) or scale)
+    u, v = _canonical(_combos(*_reduce(u, v), reach=2), np.linalg.norm(u))
     basis = np.column_stack([u, v])
     ij = np.linalg.solve(basis, (xy - xy[0]).T).T
     # Negated so that a NaN, which fails every comparison, raises rather than
@@ -651,7 +685,12 @@ class CheckerboardRaster(Raster):
     .. note::
 
         Not every ``n_groups`` fits a given grid, and one that does not
-        raises a ``ValueError`` listing counts that do.
+        raises a ``ValueError`` and specifies counts that do.
+
+        Both halves of the pattern are searched for when the raster is built,
+        and the order the groups fire in is settled exactly only up to eight
+        groups; beyond that a heuristic stands in for it, and the search grows
+        with the group count.
         
         It is worth checking :py:attr:`min_spacing` on the ones that do fit,
         because a count can be accepted and still leave neighbors in the same
@@ -675,8 +714,10 @@ class CheckerboardRaster(Raster):
         it, as a fraction of it. The largest group is what sets the current the
         stimulator has to source, so this is the price being paid; what it buys
         is spacing, because the patterns that spread furthest do not always
-        land evenly on a grid whose edges have been trimmed. Pass 0 to insist
-        on an even split and take whatever spacing comes with it.
+        land evenly on a grid whose edges have been trimmed. Pass 0 to add no
+        imbalance beyond the rounding an uneven electrode count forces anyway
+        -- 378 electrodes in 5 groups are 76, 76, 75, 75, 76 at ``balance=0``,
+        never 76 apiece -- and take whatever spacing comes with it.
     group_dur : float, optional
         See :py:class:`~pulse2percept.implants.Raster`.
 
@@ -734,13 +775,21 @@ class CheckerboardRaster(Raster):
         scale = min(np.linalg.norm(u), np.linalg.norm(v))
 
         # Of the splits that are even enough, keep the one whose groups are
-        # spread furthest apart, and of those the most even:
+        # spread furthest apart, and of those the most even. What "furthest
+        # apart" means is the closest pair of electrodes the split actually
+        # leaves firing together: the lattice a split is cut from says how far
+        # apart its sites are, but the implant only holds a finite piece of
+        # that lattice, and on a small or trimmed one the sites that would have
+        # been closest need not be there at all. The lattice spectrum comes in
+        # behind it, to settle ties and keep the pattern regular:
         best = None
         for labels, a, d, k, biggest in _sublattices(ij, n_groups, balance):
             w1, w2 = a * u, k * u + d * v
-            key = (tuple(np.round(_spectrum(w1, w2) / scale, 6)), -biggest)
+            spacing = _closest(xy, labels, n_groups)
+            key = (round(spacing / scale, 6),
+                   tuple(np.round(_spectrum(w1, w2) / scale, 6)), -biggest)
             if best is None or key > best[0]:
-                best = (key, labels, w1, w2)
+                best = (key, labels, w1, w2, spacing)
         if best is None:
             raise ValueError(
                 f"No checkerboard of {n_groups} groups fits these "
@@ -750,8 +799,7 @@ class CheckerboardRaster(Raster):
                 f"{balance:.0%} bigger than an even split. Try "
                 f"{_suggest(ij, n_groups, balance)} groups instead, or raise "
                 f"'balance' to allow groups of unequal size.")
-        labels, w1, w2 = best[1:]
-        self._min_spacing = float(_spectrum(w1, w2, n_terms=1)[0])
+        labels, w1, w2, self._min_spacing = best[1:]
 
         # Fire them in the order that wanders least. `labels` says which
         # pattern an electrode belongs to; the group index it gets is when that
@@ -788,7 +836,10 @@ class CheckerboardRaster(Raster):
 
         How much the checkerboard bought over a line raster, which leaves
         neighboring electrodes in the same group and so would report the
-        electrode pitch.
+        electrode pitch. Measured between electrodes the implant actually has,
+        so a small or trimmed array can come out better spaced than the pattern
+        it was cut from. Infinite when no group holds more than one electrode,
+        since then no two electrodes ever fire together.
         """
         return self._min_spacing
 

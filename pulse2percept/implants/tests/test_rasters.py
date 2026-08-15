@@ -76,12 +76,14 @@ def test_Raster_offsets():
 
 def _min_spacing(implant, raster):
     """Closest two electrodes that the raster ever activates together"""
-    names = implant.electrode_names
-    xy = np.array([[e.x, e.y] for e in implant.earray.electrode_objects])
-    groups = raster.groups(names)
+    earray = getattr(implant, 'earray', implant)
+    xy = np.array([[e.x, e.y] for e in earray.electrode_objects])
+    groups = raster.groups(earray.electrode_names)
     closest = np.inf
     for group in np.unique(groups):
         pos = xy[groups == group]
+        if len(pos) < 2:
+            continue
         d = np.linalg.norm(pos[:, None, :] - pos[None, :, :], axis=-1)
         closest = min(closest, d[~np.eye(len(pos), dtype=bool)].min())
     return closest
@@ -181,6 +183,23 @@ def test_CheckerboardRaster_grids():
         CheckerboardRaster(prima, 5, balance=0).min_spacing <=
         CheckerboardRaster(prima, 5, balance=0.5).min_spacing, True)
 
+    # Rows and columns need not be spaced the same. A grid can be stretched
+    # far enough that an electrode's twenty nearest neighbors are all in its
+    # own row, and the step to the next row still has to be found -- looking
+    # only at the near neighborhood used to miss it and reject the grid:
+    for spacing, n in [((100, 1050), 5), ((100, 1050), 4), ((25, 3000), 5)]:
+        stretched = ElectrodeGrid((3, 20), spacing=spacing)
+        raster = CheckerboardRaster(stretched, n)
+        count = np.bincount(raster.groups(stretched.electrode_names))
+        npt.assert_equal(count, np.full(n, 60 // n))
+        npt.assert_almost_equal(_min_spacing(stretched, raster),
+                                raster.min_spacing, decimal=3)
+    # Electrodes really in a line have no second direction to find, and are
+    # still split into groups spread along it:
+    row = ElectrodeGrid((1, 12), 200)
+    npt.assert_equal(np.bincount(CheckerboardRaster(row, 4).groups(
+        row.electrode_names)), np.full(4, 3))
+
     # An implant whose electrodes are not on a grid cannot be checkered:
     with pytest.raises(NotImplementedError):
         CheckerboardRaster(BVT24(), 2)
@@ -190,6 +209,32 @@ def test_CheckerboardRaster_grids():
     with pytest.raises(ValueError):
         CheckerboardRaster(prima, 20)
     npt.assert_equal(CheckerboardRaster(prima, 20, balance=0.2).n_groups, 20)
+
+
+def test_CheckerboardRaster_min_spacing():
+    # `min_spacing` is measured between electrodes the implant actually has,
+    # not between the sites of the endless lattice the pattern was cut from.
+    # The two agree on an array big enough that the closest sites are all
+    # present, and part company on a small one -- where the finite array is
+    # the better spaced of the two, so reporting the lattice would undersell
+    # it and picking a pattern by it would settle for less:
+    for shape, n_groups in [((2, 6), 6), ((2, 3), 4), ((3, 4), 4), ((4, 4), 8),
+                            ((6, 10), 5), ((5, 5), 5)]:
+        grid = ElectrodeGrid(shape, 100)
+        raster = CheckerboardRaster(grid, n_groups)
+        npt.assert_almost_equal(raster.min_spacing, _min_spacing(grid, raster),
+                                decimal=6)
+    # Two rows of six in six groups is a pair per group, and the pairs can be
+    # put a whole diagonal apart -- ranking by the lattice alone settled for
+    # sqrt(5) here, since the lattice cannot tell that the sites in between
+    # are not on the implant:
+    pairs = ElectrodeGrid((2, 6), 100)
+    npt.assert_almost_equal(CheckerboardRaster(pairs, 6).min_spacing,
+                            100 * np.sqrt(10), decimal=6)
+    # A group of one electrode has no pair to keep apart:
+    singles = ElectrodeGrid((2, 2), 100)
+    npt.assert_equal(np.isinf(CheckerboardRaster(singles, 4).min_spacing),
+                     True)
 
 
 def test_CheckerboardRaster_is_reproducible(monkeypatch):
