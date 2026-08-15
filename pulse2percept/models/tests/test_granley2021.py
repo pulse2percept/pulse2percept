@@ -426,6 +426,67 @@ def test_find_threshold_not_supported(model_cls):
     npt.assert_equal(model.predict_percept(implant) is not None, True)
 
 
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+# Scaling the train itself, and scaling the stimulus the implant made of it -
+# the second is what a user reaches for, and it goes through the per-electrode
+# metadata rather than the train's own:
+@pytest.mark.parametrize('compose', [False, True])
+def test_scaled_pulse_train_changes_percept(model_cls, compose):
+    # This model reads amplitude off the stimulus metadata, so a scaled pulse
+    # train used to deliver twice the current and predict the very same
+    # percept. Scaling now updates the metadata, and has to give what building
+    # the train at that amplitude in the first place gives:
+    model = model_cls(xrange=(-12, 12), yrange=(-8, 8), xystep=1,
+                      n_ax_segments=30).build()
+    implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1, 0.45,
+                                                     stim_dur=100)})
+    single = model.predict_percept(implant).data
+    if compose:
+        implant.stim = implant.stim * 2
+    else:
+        implant.stim = {'C5': BiphasicPulseTrain(20, 1, 0.45,
+                                                 stim_dur=100) * 2}
+    doubled = model.predict_percept(implant).data
+    direct = model.predict_percept(ArgusII(
+        stim={'C5': BiphasicPulseTrain(20, 2, 0.45, stim_dur=100)})).data
+    npt.assert_equal(np.any(single), True)
+    npt.assert_array_almost_equal(doubled, direct)
+    npt.assert_equal(np.allclose(doubled, single), False)
+
+
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+@pytest.mark.parametrize('modify', [lambda s: s + 5, lambda s: s * np.inf,
+                                    lambda s: s.append(s >> 1)])
+def test_modified_pulse_train_rejected(model_cls, modify):
+    # A DC offset, a non-finite factor and an appended second train all leave
+    # something other than a biphasic pulse train. The model must say so rather
+    # than predict from pulse parameters that no longer describe the stimulus:
+    model = model_cls(xrange=(-3, 3), yrange=(-2, 2), xystep=1,
+                      n_ax_segments=30).build()
+    implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1, 0.45,
+                                                     stim_dur=100)})
+    with np.errstate(divide='ignore', invalid='ignore'):
+        implant.stim = modify(implant.stim)
+    with pytest.raises(TypeError):
+        model.predict_percept(implant)
+
+
+def test_pulse_train_amp_sign_does_not_change_percept():
+    # `BiphasicPulse` takes the magnitude of `amp`, so these two trains have
+    # the very same waveform. The model reads `amp` back from the metadata and
+    # is a function of it rather than of its magnitude, so the metadata has to
+    # store the magnitude - otherwise identical stimuli predict differently:
+    model = BiphasicAxonMapModel(xrange=(-12, 12), yrange=(-8, 8), xystep=1,
+                                 n_ax_segments=30).build()
+    pos = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1, 0.45, stim_dur=100)})
+    neg = ArgusII(stim={'C5': BiphasicPulseTrain(20, -1, 0.45, stim_dur=100)})
+    npt.assert_almost_equal(pos.stim.data, neg.stim.data)
+    npt.assert_array_almost_equal(model.predict_percept(pos).data,
+                                  model.predict_percept(neg).data)
+
+
 def test_BiphasicAxonMapModel_min_current_spread():
     """The current-spread cutoff must reach this model's kernel too.
 

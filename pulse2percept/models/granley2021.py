@@ -582,9 +582,11 @@ class BiphasicAxonMapModel(Model):
         amplitude in microamps.
 
         This model interacts with `Stimulus` objects by reading the intended
-        amplitude, frequency, and pulse duration from their metadata.
-        Scaling, shifting, or otherwise manipulating the raw stimulus data
-        will not change the predicted percept.
+        amplitude, frequency, and pulse duration from their metadata, not
+        from the raw stimulus data. The arithmetic operators keep that
+        metadata in sync, so scaling a pulse train (``pt * 2``) or the
+        stimulus assembled from one (``implant.stim * 2``) does change the
+        percept, while editing the data array in place does not.
 
     Parameters
     ----------
@@ -708,9 +710,9 @@ class BiphasicAxonMapModel(Model):
             NOT as raw amplitude in microamps.
 
             The model interacts with `Stimulus` objects by reading the
-            intended amplitude, frequency, and pulse duration from their 
-            metadata. Manipulating the raw stimulus data will not change
-            the predicted percept.
+            intended amplitude, frequency, and pulse duration from their
+            metadata, not from the raw stimulus data. Editing the data
+            array in place will not change the predicted percept.
 
         Parameters
         ----------

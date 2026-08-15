@@ -244,12 +244,55 @@ class BiphasicPulseTrain(Stimulus):
         self.freq = freq
         self.cathodic_first = cathodic_first
 
-        # Store metadata for BiphasicAxonMapModel
+        # Store metadata for BiphasicAxonMapModel. `amp` is stored as a
+        # magnitude, because that is all of it that reaches the data:
+        # `BiphasicPulse` takes `np.abs(amp)` and reads the polarity off
+        # `cathodic_first`. Storing the sign the caller happened to type would
+        # have two identical waveforms predict two different percepts, since
+        # the models are functions of `amp` and not of `abs(amp)`.
         self.metadata = {'freq': freq,
-                         'amp': amp,
+                         'amp': abs(amp),
                          'phase_dur': phase_dur,
                          'delay_dur': delay_dur,
                          'user': metadata}
+
+    @classmethod
+    def _rescale_params(cls, metadata, factor):
+        """Keep the pulse parameters in sync with the data
+
+        :py:class:`~pulse2percept.models.BiphasicAxonMapModel` and
+        :py:class:`~pulse2percept.models.cortex.DynaphosModel` read amplitude,
+        frequency and phase duration off the metadata rather than off the data.
+        An operation that rewrites the data but leaves the metadata behind
+        makes the two disagree: ``pt * 2`` delivers twice the current, and the
+        model would go on predicting the very same percept.
+
+        Scaling is the one operation that leaves a biphasic pulse train a
+        biphasic pulse train, so it scales ``amp`` (a negative factor only
+        swaps the two phases, which does not change the magnitude). Anything
+        else -- a DC offset, an appended second train, a non-finite factor --
+        leaves something that is no longer one biphasic pulse train at one
+        amplitude and frequency, so the pulse parameters are dropped: a model
+        asking for them then rejects the stimulus rather than predicting from
+        numbers that no longer describe it. What the user put in ``metadata``
+        is theirs, and survives either way.
+        """
+        if 'amp' not in metadata:
+            # Parameters an earlier operation has already dropped
+            return metadata
+        if factor is None:
+            return {'user': metadata.get('user')}
+        return dict(metadata, amp=abs(metadata['amp'] * factor))
+
+    def _rescale_metadata(self, factor):
+        """Keep this train's own parameters, and its polarity, in sync"""
+        if factor == 1:
+            return
+        self.metadata = self._rescale_params(self.metadata, factor)
+        if factor is not None and factor < 0:
+            # The two phases swapped places. `BiphasicPulse` reads the polarity
+            # off this flag, so that is where the sign belongs:
+            self.cathodic_first = not self.cathodic_first
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""

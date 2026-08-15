@@ -9,7 +9,8 @@ from matplotlib.axes import Subplot
 import time
 
 from pulse2percept.implants import ArgusI
-from pulse2percept.stimuli import AmplitudeEncoder, Stimulus, VideoStimulus
+from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
+                                   Stimulus, VideoStimulus)
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (BaseModel, FadingTemporal, Model,
                                   NotBuiltError, ScoreboardSpatial,
@@ -170,6 +171,34 @@ def test_SpatialModel_predict_percept_deduplicates_frames():
     npt.assert_almost_equal(percept.time, [0, 1, 2, 3])
     for idx, amp in enumerate([2, 5, 2, 5]):
         npt.assert_almost_equal(percept.data[..., idx], amp)
+
+
+def test_SpatialModel_predict_percept_keeps_metadata():
+    # `_predict_spatial` only ever sees the de-duplicated copy of the stimulus,
+    # and that copy is where BiphasicAxonMapSpatial and DynaphosModel look up
+    # amplitude, frequency and phase duration. The per-electrode metadata has
+    # to survive the trip:
+    seen_metadata = []
+
+    class RecordingSpatialModel(ValidSpatialModel):
+
+        def _predict_spatial(self, earray, stim):
+            seen_metadata.append(stim.metadata)
+            return np.zeros((self.grid.x.size, stim.data.shape[1]),
+                            dtype=np.float32)
+
+    model = RecordingSpatialModel(xystep=2).build()
+    implant = ArgusI(stim={'A1': BiphasicPulseTrain(20, 10, 0.45,
+                                                    stim_dur=20)})
+    model.predict_percept(implant)
+    npt.assert_equal(len(seen_metadata), 1)
+    npt.assert_equal(list(seen_metadata[0]['electrodes'].keys()), ['A1'])
+    npt.assert_equal(seen_metadata[0]['electrodes']['A1']['metadata']['amp'],
+                     10)
+    # ...also when the caller asks for time points of their own:
+    seen_metadata.clear()
+    model.predict_percept(implant, t_percept=[0, 5, 10])
+    npt.assert_equal(list(seen_metadata[0]['electrodes'].keys()), ['A1'])
 
 
 @pytest.mark.parametrize('param, value', [('engine', 'serial'),
