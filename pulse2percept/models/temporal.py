@@ -1,6 +1,7 @@
 """:py:class:`~pulse2percept.models.FadingTemporal`"""
 import numpy as np
 from .base import TemporalModel
+from ..units import ms
 from ._temporal import fading_fast
 
 
@@ -85,6 +86,10 @@ class FadingTemporal(TemporalModel):
         # rather than what the BaseModel dictates:
         base_params.update(params)
         return base_params
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        return {**super().get_param_units(), 'tau': ms}
 
     def _build(self):
         # Zero is as unusable as a negative value: the integrator divides by

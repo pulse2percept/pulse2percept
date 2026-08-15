@@ -5,6 +5,7 @@
 from ..base import Model, SpatialModel
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
+from ...units import um
 from ...utils.constants import ZORDER
 import numpy as np
 
@@ -268,6 +269,12 @@ class ScoreboardSpatial(CortexSpatial):
                     'ndim' : [2, 3]
                  }
         return {**base_params, **params}
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # Cortical coordinates are stored in microns (see `CorticalMap`), and
+        # the current spread is compared against them:
+        return {**super().get_param_units(), 'rho': um}
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""

@@ -9,6 +9,7 @@ from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
+from ..units import dva, um
 from ..utils import deprecated_alias
 from ..utils.constants import ZORDER
 from ..topography import Watson2014Map
@@ -149,6 +150,10 @@ class ScoreboardSpatial(SpatialModel):
         base_params = super(ScoreboardSpatial, self).get_default_params()
         params = {'rho': 100, 'vfmap': Watson2014Map()}
         return {**base_params, **params}
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        return {**super().get_param_units(), 'rho': um}
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
@@ -385,6 +390,14 @@ class AxonMapSpatial(SpatialModel):
             'vfmap': Watson2014Map()
         }
         return {**base_params, **params}
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # `axons_range` is a range of polar angles in degrees rather than a
+        # visual angle, and `ax_segments_range` a radial position in the
+        # Jansonius model's own coordinates, so neither is declared here:
+        return {**super().get_param_units(), 'rho': um, 'lam': um,
+                'loc_od': dva}
 
     def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
         """Grows a single axon bundle based on the model by Jansonius (2009)

@@ -6,6 +6,7 @@ from copy import deepcopy, copy
 from ..base import BaseModel, NotBuiltError
 from ...percepts import Percept
 from ...implants import ProsthesisSystem
+from ...units import dva, Hz, mm, ms, uA
 from ...utils import cart2pol
 from ...utils.constants import ZORDER
 from ...topography import Polimeni2006Map
@@ -141,7 +142,37 @@ class DynaphosModel(BaseModel):
                 'p_dur': 0.170,
             }
             return {**params}
-    
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in
+
+        This model's equations mix units: they take microamps, milliseconds
+        and hertz as input, then convert to seconds and amperes inline (the
+        ``/1000`` and ``1e-6`` terms in ``_predict_percept``). What is
+        declared here is the *input* contract -- the units a caller supplies,
+        which are the ones the docstring documents -- not the units the
+        equations work in internally. Those conversions are left exactly as
+        they are.
+        """
+        return {
+            **super().get_param_units(),
+            'xrange': dva,
+            'yrange': dva,
+            'xystep': dva,
+            'dt': ms,
+            # Decay constants, both divided by 1000 to seconds where they are
+            # used:
+            'tau_act': ms,
+            'tau_trace': ms,
+            'rheobase': uA,
+            'excitability': uA / mm ** 2,
+            'freq': Hz,
+            'p_dur': ms,
+            # `kappa_trace`, `sig_slope`, `a50` and `a_thr` are fitted
+            # constants of the activation cascade, and are left undeclared.
+        }
+
+
     def _build(self):
         pass
                 

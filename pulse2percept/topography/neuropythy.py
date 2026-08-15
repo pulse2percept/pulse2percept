@@ -4,6 +4,7 @@ import os
 from scipy.spatial import cKDTree
 
 from .cortex import CorticalMap
+from ..units import um
 
 class NeuropythyMap(CorticalMap):
 
@@ -63,6 +64,12 @@ class NeuropythyMap(CorticalMap):
             'cort_nn_thresh' : 1000, # 1mm
         }
         return {**super().get_default_params(), **params}
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # A distance between cortical mesh vertices, which are in microns.
+        # `jitter_thresh` is a fraction of the distance to a region boundary:
+        return {**super().get_param_units(), 'cort_nn_thresh': um}
 
     def parse_subject(self, subject):
         import neuropythy as ny

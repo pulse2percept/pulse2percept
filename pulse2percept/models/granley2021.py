@@ -7,6 +7,7 @@ from . import AxonMapSpatial, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
 from ..percepts import Percept
+from ..units import um
 from ..utils import FreezeError, rename_parameter
 from ..utils.base import has_own_attr
 from .base import NotBuiltError, BaseModel
@@ -119,6 +120,12 @@ class DefaultSizeModel(BaseModel):
         }
         return params
 
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # A floor on `rho`, so it is a length like `rho`. a0-a6 are regression
+        # coefficients from the paper and take plain numbers:
+        return {**super().get_param_units(), 'min_rho': um}
+
     def scale_threshold(self, pdur):
         """ 
         Based on eq 3 in paper, this function produces the factor that amplitude
@@ -176,6 +183,11 @@ class DefaultStreakModel(BaseModel):
             'min_lambda': 10,
         }
         return params
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # A floor on `lam`, so it is a length like `lam`:
+        return {**super().get_param_units(), 'min_lambda': um}
 
     def __call__(self, freq, amp, pdur):
         """

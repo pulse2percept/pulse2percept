@@ -14,6 +14,7 @@ from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
 from ..percepts import Percept
 from ..topography import Curcio1990Map, Grid2D
+from ..units import dva, ms, um, uA
 from ..utils import (PrettyPrint, FreezeError, Parametrized, bisect,
                      warn_deprecated_params, rename_deprecated_params)
 from ..utils.constants import ZORDER
@@ -367,6 +368,18 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'n_jobs': None,
         }
         return params
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        return {
+            **super().get_param_units(),
+            # The simulated patch of visual field is specified in degrees of
+            # visual angle; the visual field map turns those into tissue
+            # coordinates when the grid is built:
+            'xrange': dva,
+            'yrange': dva,
+            'xystep': dva,
+        }
 
     def _cutoff_r2(self, rho):
         """Squared distance at which an electrode stops contributing
@@ -776,6 +789,10 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             'n_jobs': None,
         }
         return params
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        return {**super().get_param_units(), 'dt': ms}
 
     @abstractmethod
     def _predict_temporal(self, stim, t_percept):

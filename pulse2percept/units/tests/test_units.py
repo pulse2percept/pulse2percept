@@ -4,9 +4,10 @@ import pytest
 
 from pulse2percept.units import (Dimension, Unit, Quantity,
                                  DimensionMismatchError, as_value,
-                                 dimensionless, DIMENSIONLESS,
+                                 dimensionless,
                                  s, ms, us, ns, Hz, kHz, m, cm, mm, um, nm,
                                  A, mA, uA, nA, V, mV, uV, C, mC, uC, nC, dva)
+from pulse2percept.units.base import TIME
 
 
 def test_Dimension():
@@ -66,6 +67,11 @@ def test_Unit():
     npt.assert_equal((uA * ms).scale, 1e-9)
     npt.assert_equal((um ** 2).scale, 1e-12)
     npt.assert_equal((uA / mm ** 2).scale, 1.0)
+    # Equality is exact (scales are canonical) and consistent with the hash:
+    npt.assert_equal(len({uA * ms, nC}), 1)
+    npt.assert_equal(hash(s ** -1) == hash(Hz), True)
+    npt.assert_equal(Unit(TIME, 1e-3, 'msec') == ms, True)
+    npt.assert_equal(Unit(TIME, 1.5e-3, 'x') == ms, False)
     # Immutable:
     with pytest.raises(AttributeError):
         ms.scale = 1
@@ -73,6 +79,20 @@ def test_Unit():
         Unit('time', 1, 's')
     with pytest.raises(ValueError):
         ms ** 0.5
+    # A unit's scale is how big it is: positive and finite, or it is not a unit
+    for bad_scale in (0, -1, np.nan, np.inf, -np.inf):
+        with pytest.raises(ValueError):
+            Unit(TIME, bad_scale, 'bad')
+
+
+def test_snap_scale():
+    # Unit algebra lands exactly on the predefined units, rather than one ulp
+    # away from them:
+    npt.assert_equal((uA * ms).scale == nC.scale, True)
+    npt.assert_equal((um ** 3).scale == 1e-18, True)
+    npt.assert_equal((mA * s / uA).scale == 1e3, True)
+    # But a scale that is merely near a power of ten is left alone:
+    npt.assert_equal(Unit(TIME, 1.0000001, 'almost').scale, 1.0000001)
 
 
 def test_unit_vocabulary():
@@ -94,7 +114,7 @@ def test_unit_vocabulary():
                              (dva, 1, 'visual angle')]:
         npt.assert_almost_equal(unit.scale, scale)
         npt.assert_equal(unit.dimension.name, dim)
-    npt.assert_equal(dimensionless.dimension, DIMENSIONLESS)
+    npt.assert_equal(dimensionless.dimension, Dimension())
     npt.assert_equal(dimensionless.symbol, '')
 
 
@@ -121,9 +141,17 @@ def test_Quantity():
 
 
 def test_Quantity_conversion():
-    # Equivalent unit choices are numerically identical, not merely close:
+    # Equivalent unit choices convert consistently:
     npt.assert_equal(500 * uA == 0.5 * mA, True)
     npt.assert_equal(1000 * ms == 1 * s, True)
+    # ... including when the conversion cannot be exact in binary floating
+    # point: 0.0041 * 1000 is 4.1000000000000005, not 4.1.
+    npt.assert_equal(0.0041 * mA == 4.1 * uA, True)
+    npt.assert_equal((0.0041 * mA).to_value(uA) == 4.1, False)
+    npt.assert_equal(0.1 * s + 0.05 * s == 150 * ms, True)
+    npt.assert_equal([0.0041, 0.0082] * mA == [4.1, 8.2] * uA, [True, True])
+    # But a difference in the 10th significant digit is a real difference:
+    npt.assert_equal(4.1 * uA == 4.100000001 * uA, False)
     npt.assert_equal((500 * uA).to_value(mA), 0.5)
     npt.assert_equal((0.5 * mA).to_value(uA), 500.0)
     npt.assert_equal((0.02 * s).to_value(ms), 20.0)
@@ -281,6 +309,18 @@ def test_as_value():
         as_value(3 * uA, ms)
     npt.assert_equal("Expected time (ms), got electric current (uA)."
                      in str(excinfo.value), True)
+    # A dimensionless target says so rather than showing an empty symbol:
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        as_value(3 * uA, dimensionless, 'thresh_percept')
+    npt.assert_equal("Parameter 'thresh_percept' is dimensionless, got "
+                     "electric current (uA)." in str(excinfo.value), True)
+    npt.assert_equal(as_value(3 * dimensionless, dimensionless), 3)
+    # A bad target unit is a bug in the calling API, and is caught even when
+    # the value passed is a bare number:
+    with pytest.raises(TypeError):
+        as_value(20, 'ms')
+    with pytest.raises(TypeError):
+        as_value(20 * ms, 'ms')
 
 
 def test_DimensionMismatchError():

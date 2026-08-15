@@ -39,23 +39,47 @@ def _snap_scale(scale):
     """Snap a scale factor to an exact power of ten
 
     Every unit p2p exposes is a decimal multiple of its base unit, so scale
-    factors and conversion ratios are always powers of ten in exact
-    arithmetic. In floating point they are not: ``1e-6 * 1e-3`` is
-    ``1.0000000000000002e-09``, which would make ``1 * uA * ms == 1 * nC``
-    false by one ulp. Snapping restores the exact decimal value, which is what
-    keeps equivalent unit choices numerically identical.
+    factors and conversion ratios are powers of ten in exact arithmetic. In
+    floating point they are not: ``1e-6 * 1e-3`` is ``1.0000000000000002e-09``,
+    which would leave ``uA * ms`` a hair away from ``nC``. Snapping keeps the
+    *units* canonical, so that unit algebra lands on the predefined units
+    exactly rather than approximately.
 
-    Ratios that are not powers of ten are returned unchanged.
+    It does not, and cannot, make every conversion exact: ``0.0041 * 1000`` is
+    ``4.1000000000000005`` no matter how exact the 1000 is. Converted
+    magnitudes agree to floating-point precision, which is why
+    :py:meth:`Quantity.__eq__` compares with a tight relative tolerance rather
+    than bit-for-bit.
+
+    The tolerance is deliberately much tighter than the noise this is meant to
+    remove (a few ulps from multiplying units together), so a scale that is
+    merely *near* a power of ten is left alone.
     """
     if not math.isfinite(scale) or scale <= 0:
         return scale
-    exponent = math.log10(scale)
-    rounded = round(exponent)
-    if abs(exponent - rounded) < 1e-9 and abs(rounded) < 300:
+    rounded = round(math.log10(scale))
+    if abs(rounded) < 300:
         # Build the float from its decimal literal rather than with ``**``, so
         # that the result is the correctly rounded power of ten:
-        return float(f'1e{rounded:d}')
+        candidate = float(f'1e{rounded:d}')
+        if math.isclose(scale, candidate, rel_tol=1e-12, abs_tol=0.0):
+            return candidate
     return scale
+
+
+#: Relative tolerance for comparing quantities. Converting a magnitude between
+#: units is a multiplication, and multiplication rounds: ``0.0041 * mA`` and
+#: ``4.1 * uA`` are the same current but not the same float. This is tight
+#: enough that only rounding noise slips through -- values that differ in the
+#: 12th significant digit are different values, not different spellings.
+_EQ_RTOL = 1e-12
+
+
+def _isclose(a, b):
+    """Compare magnitudes up to floating-point conversion noise"""
+    result = np.isclose(a, b, rtol=_EQ_RTOL, atol=0.0)
+    # Scalars in, scalar out; arrays stay elementwise:
+    return bool(result) if np.ndim(result) == 0 else result
 
 
 class DimensionMismatchError(TypeError):
@@ -71,8 +95,16 @@ class DimensionMismatchError(TypeError):
 
 def _mismatch(expected, got, name=None):
     """Build a :py:class:`DimensionMismatchError` for an API boundary"""
-    exp_str = f'{expected.dimension.name} ({expected})'
     got_str = f'{got.dimension.name} ({got})'
+    if expected.dimension.is_dimensionless and not expected.symbol:
+        # "expects dimensionless ()" reads badly, and a parameter that takes a
+        # plain number is worth saying so about directly:
+        if name is None:
+            return DimensionMismatchError(f"Expected a plain number, got "
+                                          f"{got_str}.")
+        return DimensionMismatchError(f"Parameter '{name}' is dimensionless, "
+                                      f"got {got_str}.")
+    exp_str = f'{expected.dimension.name} ({expected})'
     if name is None:
         return DimensionMismatchError(f"Expected {exp_str}, got {got_str}.")
     return DimensionMismatchError(f"Parameter '{name}' expects {exp_str}, got "
@@ -265,8 +297,15 @@ class Unit(object):
         if not isinstance(dimension, Dimension):
             raise TypeError(f"'dimension' must be a Dimension object, not "
                             f"{type(dimension)}.")
+        scale = float(scale)
+        # A unit is how big something is, so its scale is a positive, finite
+        # number. Anything else makes conversion and hashing meaningless, and
+        # is much easier to diagnose here than three operations later:
+        if not math.isfinite(scale) or scale <= 0:
+            raise ValueError(f"'scale' must be a positive, finite number, not "
+                             f"{scale}.")
         object.__setattr__(self, '_dimension', dimension)
-        object.__setattr__(self, '_scale', _snap_scale(float(scale)))
+        object.__setattr__(self, '_scale', _snap_scale(scale))
         object.__setattr__(self, '_symbol', str(symbol))
 
     def __setattr__(self, name, value):
@@ -323,17 +362,22 @@ class Unit(object):
         return Unit(self.dimension ** exp, self.scale ** exp, symbol)
 
     def __eq__(self, other):
+        # Exact, because `_snap_scale` has already canonicalized the scale:
+        # `uA * ms` and `nC` are the same float, not merely close ones. Two
+        # units are equal if they measure the same thing at the same size,
+        # whatever they are spelled.
         if not isinstance(other, Unit):
             return NotImplemented
         return (self.dimension == other.dimension
-                and math.isclose(self.scale, other.scale, rel_tol=1e-12))
+                and self.scale == other.scale)
 
     def __ne__(self, other):
         result = self.__eq__(other)
         return result if result is NotImplemented else not result
 
     def __hash__(self):
-        return hash((self.dimension, round(math.log10(self.scale), 9)))
+        # Hashes exactly what `__eq__` compares:
+        return hash((self.dimension, self.scale))
 
     def __str__(self):
         return self.symbol
@@ -354,6 +398,10 @@ class Quantity(object):
     For the same reason, ``np.asarray(5 * uA)`` does not silently yield ``5``.
     Removing a unit is something you write down, using
     :py:meth:`~pulse2percept.units.Quantity.to_value`.
+
+    Equivalent unit choices convert consistently up to floating-point
+    precision, and quantities compare accordingly: ``0.0041 * mA == 4.1 * uA``
+    is True even though rescaling the former gives ``4.1000000000000005``.
 
     .. versionadded:: 0.10.0
 
@@ -380,10 +428,14 @@ class Quantity(object):
     __array_priority__ = 1000
     __array_ufunc__ = None
 
-    # Note the absence of ``__array__``, ``__len__``, ``__getitem__``, and
-    # ``__iter__``: any of them would let NumPy quietly turn a Quantity into
-    # an array of bare numbers, which is exactly the silent unit stripping
-    # this class exists to prevent.
+    # There is deliberately no ``__array__``: it would make
+    # ``np.asarray(5 * uA)`` return ``5``, which is exactly the silent unit
+    # stripping this class exists to prevent.
+    #
+    # ``__len__``, ``__getitem__`` and ``__iter__`` are absent for a weaker
+    # reason: nothing needs them yet. They could be added safely -- indexing
+    # would have to return another Quantity, never a bare number, or NumPy
+    # would strip units through the sequence protocol instead.
 
     def __init__(self, magnitude, unit):
         if not isinstance(unit, Unit):
@@ -558,17 +610,20 @@ class Quantity(object):
         return self._compare(other, lambda a, b: a >= b, 'compare')
 
     def __eq__(self, other):
+        # Compared up to floating-point conversion noise: `0.0041 * mA` and
+        # `4.1 * uA` are the same current, but rescaling the first one yields
+        # 4.1000000000000005. See `_EQ_RTOL`.
         if isinstance(other, Unit):
             other = Quantity(1, other)
         if not isinstance(other, Quantity):
             if self.dimension.is_dimensionless:
-                return self.magnitude == other
+                return _isclose(self.magnitude, other)
             # Equality must not raise: a quantity simply is not equal to a
             # bare number of a different dimension.
             return NotImplemented
         if self.dimension != other.dimension:
             return False
-        return self.magnitude == other.to_value(self.unit)
+        return _isclose(self.magnitude, other.to_value(self.unit))
 
     def __ne__(self, other):
         result = self.__eq__(other)
@@ -621,12 +676,38 @@ def as_value(value, unit, name=None):
     20.0
 
     """
+    # Unconditionally, before the bare-value fast path: a bad ``unit`` is a bug
+    # in the calling API, and it must not go unnoticed just because this
+    # particular caller happened to pass a plain number.
+    if not isinstance(unit, Unit):
+        raise TypeError(f"'unit' must be a Unit object, not {type(unit)}.")
     if isinstance(value, Unit):
         # A bare unit is the quantity 1 of that unit, e.g. ``as_value(ms, ms)``:
         value = Quantity(1, value)
     if isinstance(value, Quantity):
         return value.to_value(unit, name=name)
+    if isinstance(value, (list, tuple)) and has_units(value):
+        # A sequence built one element at a time, e.g. `(-15 * dva, 15 * dva)`
+        # for a parameter that takes an (x_min, x_max) pair. Converted
+        # elementwise, keeping the sequence type, so the caller still gets the
+        # tuple it expects:
+        return type(value)(as_value(v, unit, name=name) for v in value)
     return value
+
+
+def has_units(value):
+    """Whether a value carries a physical unit
+
+    True for a :py:class:`~pulse2percept.units.Quantity` or
+    :py:class:`~pulse2percept.units.Unit`, and for a list or tuple containing
+    one. Cheap enough to call before every attribute assignment, which is what
+    :py:class:`~pulse2percept.utils.Parametrized` does.
+    """
+    if isinstance(value, (Quantity, Unit)):
+        return True
+    if isinstance(value, (list, tuple)):
+        return any(isinstance(v, (Quantity, Unit)) for v in value)
+    return False
 
 
 # -----------------------------------------------------------------------------

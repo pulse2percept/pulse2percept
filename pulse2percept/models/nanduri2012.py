@@ -6,6 +6,7 @@ from .base import Model, SpatialModel, TemporalModel
 from ._nanduri2012 import spatial_fast, temporal_fast
 from ..implants import ElectrodeArray, DiskElectrode
 from ..stimuli import Stimulus
+from ..units import ms
 
 
 class Nanduri2012Spatial(SpatialModel):
@@ -166,6 +167,14 @@ class Nanduri2012Temporal(TemporalModel):
             'scale_out': 1.0
         }
         return {**base_params, **params}
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # Only the three time constants have a unit the model commits to; the
+        # sigmoid's asymptote, slope and shift act on brightness, and `eps`
+        # and `scale_out` are fitted scaling terms:
+        return {**super().get_param_units(), 'tau1': ms, 'tau2': ms,
+                'tau3': ms}
 
     def _predict_temporal(self, stim, t_percept):
         """Predict the temporal response"""

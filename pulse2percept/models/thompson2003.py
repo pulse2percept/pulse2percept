@@ -5,6 +5,7 @@ import numpy as np
 import copy
 from ..utils import sample
 from ..topography import Curcio1990Map
+from ..units import um
 from ..models import Model, SpatialModel
 from ._thompson2003 import fast_thompson2003
 
@@ -74,6 +75,11 @@ class Thompson2003Spatial(SpatialModel):
         params = {'radius': None, 'dropout': None,
                   'vfmap': Curcio1990Map()}
         return {**base_params, **params}
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # `dropout` is a count or a fraction of electrodes, not a length:
+        return {**super().get_param_units(), 'radius': um}
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""

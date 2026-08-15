@@ -2,6 +2,7 @@
    :py:class:`~pulse2percept.models.`Horsager2009Temporal` [Horsager2009]_"""
 import numpy as np
 from .base import Model, TemporalModel
+from ..units import ms
 from ._horsager2009 import temporal_fast
 
 
@@ -62,6 +63,13 @@ class Horsager2009Temporal(TemporalModel):
         # rather than what the BaseModel dictates:
         base_params.update(params)
         return base_params
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # The three time constants of the model cascade. `eps` and `beta` are
+        # fitted scaling and exponent terms, and take plain numbers:
+        return {**super().get_param_units(), 'tau1': ms, 'tau2': ms,
+                'tau3': ms}
 
     def _predict_temporal(self, stim, t_percept):
         """Predict the temporal response"""
