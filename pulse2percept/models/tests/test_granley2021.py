@@ -355,19 +355,32 @@ def test_biphasicAxonMapModel():
 @pytest.mark.parametrize('cls', [BiphasicAxonMapSpatial, BiphasicAxonMapModel])
 def test_biphasicAxonMap_deprecated_axlambda(cls):
     # `lam` was called `axlambda` until 0.10.0. The old name still works, and
-    # still reaches the streak model, but warns:
-    msg = "The 'axlambda' parameter of"
+    # still reaches the streak model, but warns. These classes inherit the
+    # alias from `AxonMapSpatial`, so pin the class the message names: it has
+    # to be the one the user is holding, not the one it was declared on.
+    msg = f"The 'axlambda' parameter of {cls.__name__} is deprecated"
     assert_warns_msg(DeprecationWarning, cls, msg, axlambda=400)
     with pytest.warns(DeprecationWarning):
         model = cls(axlambda=400)
     npt.assert_equal(model.lam, 400)
     npt.assert_equal(model.streak_model.lam, 400)
 
-    assert_warns_msg(DeprecationWarning, setattr, msg, model, 'axlambda', 500)
+    # Reached through the descriptor rather than the constructor, the alias
+    # only ever sees the spatial model, even on the composite:
+    spatial_msg = ("The 'axlambda' parameter of BiphasicAxonMapSpatial is "
+                   "deprecated")
+    assert_warns_msg(DeprecationWarning, setattr, spatial_msg, model,
+                     'axlambda', 500)
     npt.assert_equal(model.lam, 500)
     npt.assert_equal(model.streak_model.lam, 500)
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(DeprecationWarning, match="BiphasicAxonMapSpatial"):
         npt.assert_equal(model.axlambda, 500)
+
+    # Supplying both names is an error, whichever order they come in:
+    for params in ({'axlambda': 400, 'lam': 500},
+                   {'lam': 500, 'axlambda': 400}):
+        with pytest.raises(TypeError, match="same parameter"):
+            cls(**params)
 
     # The new name stays silent:
     with warnings.catch_warnings():

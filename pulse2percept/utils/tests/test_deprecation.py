@@ -268,6 +268,32 @@ def test_deprecated_alias():
         npt.assert_equal(obj.new, 3)
 
 
+class MockSubclassAlias(MockClassAlias):
+    pass
+
+
+def test_deprecated_alias_names_runtime_class():
+    # A subclass inherits the alias, but the warning has to name the class the
+    # user is actually holding, not the one the alias was declared on:
+    assert_warns_msg(DeprecationWarning, lambda: MockSubclassAlias().old,
+                     "The 'old' parameter of MockSubclassAlias is deprecated")
+    assert_warns_msg(DeprecationWarning,
+                     lambda: setattr(MockSubclassAlias(), 'old', 1),
+                     "The 'old' parameter of MockSubclassAlias is deprecated")
+
+
+def test_deprecated_alias_blames_caller():
+    # A deprecation warning is only actionable if it points at the line that
+    # used the old name, so check where it lands and not just what it says:
+    obj = MockClassAlias()
+    with pytest.warns(DeprecationWarning) as record:
+        obj.old
+    npt.assert_equal(record[0].filename, __file__)
+    with pytest.warns(DeprecationWarning) as record:
+        obj.old = 1
+    npt.assert_equal(record[0].filename, __file__)
+
+
 def test_deprecated_alias_on_class():
     # Looked up on the class, the alias returns itself rather than warning:
     # that is how the attribute machinery asks whether a name exists at all.
@@ -299,3 +325,19 @@ def test_rename_deprecated_params():
                          params, True)
         npt.assert_equal(rename_deprecated_params('MyModel', params, {}) is
                          params, True)
+
+
+def test_rename_deprecated_params_both_names():
+    specs = MockClassAlias._renamed_params
+    # The two names are the same parameter, so supplying both must raise
+    # rather than let the order they were passed in decide which one wins.
+    # `**kwargs` preserves insertion order, so check it really is symmetric:
+    for params in ({'old': 1, 'new': 2}, {'new': 2, 'old': 1}):
+        with pytest.raises(TypeError, match="same parameter"):
+            rename_deprecated_params('MyModel', params, specs)
+    # And it raises *instead of* warning, not after it, exactly as the
+    # signature-level `rename_parameter` does:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        with pytest.raises(TypeError):
+            rename_deprecated_params('MyModel', {'old': 1, 'new': 2}, specs)

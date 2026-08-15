@@ -373,6 +373,45 @@ def test_AxonMap_deprecated_axlambda(cls):
         npt.assert_equal(model.lam, 500)
 
 
+@pytest.mark.parametrize('cls', [AxonMapSpatial, AxonMapModel])
+def test_AxonMap_axlambda_and_lam_collide(cls):
+    # `axlambda` and `lam` are the same parameter, so supplying both must
+    # raise rather than let the order they were passed in decide the value.
+    # `**kwargs` preserves insertion order, so check both spellings:
+    for params in ({'axlambda': 400, 'lam': 500},
+                   {'lam': 500, 'axlambda': 400}):
+        with pytest.raises(TypeError, match="same parameter"):
+            cls(**params)
+        model = cls(xystep=5)
+        with pytest.raises(TypeError, match="same parameter"):
+            model.build(**params)
+        with pytest.raises(TypeError, match="same parameter"):
+            if cls is AxonMapModel:
+                model.set_params(params)
+            else:
+                model.set_params(**params)
+
+
+@pytest.mark.parametrize('cls', [AxonMapSpatial, AxonMapModel])
+def test_AxonMap_axlambda_warning_blames_caller(cls):
+    # A deprecation warning is only actionable if it points at the line that
+    # used the old name. The alias is reached directly on a spatial model, but
+    # through `Model.__getattr__`/`__setattr__` on a composite one, so the
+    # attribution has to hold for both:
+    model = cls(xystep=5)
+    with pytest.warns(DeprecationWarning) as record:
+        model.axlambda
+    npt.assert_equal(record[0].filename, __file__)
+    with pytest.warns(DeprecationWarning) as record:
+        model.axlambda = 400
+    npt.assert_equal(record[0].filename, __file__)
+    # The constructor reaches it through a chain of `super().__init__` calls
+    # instead, whose depth differs between the two classes:
+    with pytest.warns(DeprecationWarning) as record:
+        cls(axlambda=400)
+    npt.assert_equal(record[0].filename, __file__)
+
+
 # Build the model inside the test, not in the decorator: arguments to
 # `parametrize` are evaluated at import time, so building here would run on
 # every pytest invocation (even `--collect-only`, even when this test is

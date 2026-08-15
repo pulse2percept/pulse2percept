@@ -35,6 +35,50 @@ def _callable_name(func):
     return obj_name
 
 
+def _is_internal_module(name):
+    """Whether a module name belongs to pulse2percept itself
+
+    Test modules are deliberately excluded, so that a warning raised from the
+    test suite is blamed on the test rather than on the machinery underneath
+    it -- which is what lets the tests check where a warning points.
+    """
+    return ((name == 'pulse2percept' or name.startswith('pulse2percept.'))
+            and '.tests.' not in name)
+
+
+def _warn_external(message, category=DeprecationWarning):
+    """Warn, blaming the innermost frame outside pulse2percept
+
+    A deprecation warning is only actionable if it points at the line that
+    used the deprecated name, and no fixed ``stacklevel`` can do that here:
+    the same alias is reached directly (``spatial.lam``), through a composite
+    model's ``__getattr__`` or ``__setattr__``, and through a chain of
+    ``super().__init__`` calls whose depth differs per subclass. So walk out
+    of the package instead, and blame the first frame that is not ours.
+
+    .. seealso::
+
+        Modeled on matplotlib's ``matplotlib._api.warn_external``.
+
+    Parameters
+    ----------
+    message : str
+        The warning message.
+    category : warning class, optional
+        The class of warning to raise.
+
+    """
+    frame = sys._getframe()
+    stacklevel = 1
+    # Stop at the outermost frame even if it is ours, rather than walking off
+    # the top of the stack, which `warnings.warn` would blame on `sys`:
+    while (frame.f_back is not None and
+           _is_internal_module(frame.f_globals.get('__name__', ''))):
+        frame = frame.f_back
+        stacklevel += 1
+    warnings.warn(message, category=category, stacklevel=stacklevel)
+
+
 class deprecated:
     """Decorator to mark deprecated functions and classes with a warning.
 
@@ -394,24 +438,21 @@ class deprecated_alias:
         self.new_name = new_name
         self.deprecated_version = deprecated_version
         self.removed_version = removed_version
-        # Both filled in by ``__set_name__`` when the class body is executed:
+        # Filled in by ``__set_name__`` when the class body is executed:
         self.old_name = None
-        self.owner_name = None
 
     def __set_name__(self, owner, name):
         self.old_name = name
-        self.owner_name = owner.__name__
         # Register on `owner` itself rather than mutate the dict it inherited,
         # which every other class in the hierarchy is looking at too:
         owner._renamed_params = {**getattr(owner, '_renamed_params', {}),
                                  name: self}
 
-    def _get_message(self, obj_name=None):
+    def _get_message(self, obj_name):
         """Builds the message string"""
         clause = _version_clause(self.deprecated_version, self.removed_version)
-        return (f"The '{self.old_name}' parameter of "
-                f"{obj_name or self.owner_name} is deprecated{clause}. "
-                f"Use '{self.new_name}' instead.")
+        return (f"The '{self.old_name}' parameter of {obj_name} is deprecated"
+                f"{clause}. Use '{self.new_name}' instead.")
 
     def __get__(self, obj, objtype=None):
         if obj is None:
@@ -419,14 +460,14 @@ class deprecated_alias:
             # the attribute machinery asks whether the name exists at all.
             # Nothing is being read, so nothing is deprecated yet:
             return self
-        # stacklevel=2 blames the line that touched the attribute:
-        warnings.warn(self._get_message(), category=DeprecationWarning,
-                      stacklevel=2)
+        # Name the class the attribute was reached through, not the one the
+        # alias was declared on: a subclass inherits the alias, and it is the
+        # subclass the user is holding.
+        _warn_external(self._get_message(type(obj).__name__))
         return getattr(obj, self.new_name)
 
     def __set__(self, obj, value):
-        warnings.warn(self._get_message(), category=DeprecationWarning,
-                      stacklevel=2)
+        _warn_external(self._get_message(type(obj).__name__))
         setattr(obj, self.new_name, value)
 
 
@@ -464,7 +505,7 @@ def warn_deprecated_params(obj_name, supplied, specs, stacklevel=3):
                           category=DeprecationWarning, stacklevel=stacklevel)
 
 
-def rename_deprecated_params(obj_name, params, specs, stacklevel=3):
+def rename_deprecated_params(obj_name, params, specs):
     """Rewrite renamed *model* parameters that were supplied by their old name
 
     The counterpart of :py:func:`~pulse2percept.utils.warn_deprecated_params`
@@ -489,10 +530,6 @@ def rename_deprecated_params(obj_name, params, specs, stacklevel=3):
     specs : dict
         Maps a renamed parameter's old name to the
         :py:class:`~pulse2percept.utils.deprecated_alias` describing it.
-    stacklevel : int, optional
-        Passed to ``warnings.warn``. Exact attribution is not possible through
-        a chain of ``super().__init__`` calls of varying depth, so the message
-        names the parameter and the model rather than relying on it.
 
     Returns
     -------
@@ -500,15 +537,29 @@ def rename_deprecated_params(obj_name, params, specs, stacklevel=3):
         ``params`` with every renamed key replaced by its new name. The
         original dict is returned untouched if none of the keys were renamed.
 
+    Raises
+    ------
+    TypeError
+        If both names of the same parameter were supplied. Which one won
+        would otherwise come down to the order they were passed in.
+
     """
     if not any(name in specs for name in params):
         return params
+    # Check every collision up front, so that an invalid call raises rather
+    # than warning about a value it is about to reject. Iterating `specs`
+    # rather than `params` keeps the error deterministic when more than one
+    # parameter was renamed:
+    for old_name, spec in specs.items():
+        if old_name in params and spec.new_name in params:
+            raise TypeError(f"{obj_name} got both '{old_name}' and "
+                            f"'{spec.new_name}', which are the same "
+                            f"parameter. Pass only '{spec.new_name}'.")
     renamed = {}
     for name, val in params.items():
         spec = specs.get(name)
         if spec is not None:
-            warnings.warn(spec._get_message(obj_name),
-                          category=DeprecationWarning, stacklevel=stacklevel)
+            _warn_external(spec._get_message(obj_name))
             name = spec.new_name
         renamed[name] = val
     return renamed
