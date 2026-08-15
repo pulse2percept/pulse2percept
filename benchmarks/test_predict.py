@@ -115,7 +115,7 @@ def test_end_to_end(benchmark, scenario, make_model, peak_memory, n_threads):
 
 
 @pytest.mark.benchmark(group='plot')
-def test_plot(benchmark, percept, peak_memory):
+def test_plot(benchmark, scenario, percept, peak_memory):
     """Drawing the percept.
 
     Mostly a matplotlib measurement rather than a pulse2percept one, kept in
@@ -124,6 +124,10 @@ def test_plot(benchmark, percept, peak_memory):
     accumulate hundreds of them, and clearing inside the timed section would
     charge the teardown to the plot.
     """
+    if not scenario.plottable:
+        pytest.skip(f'{scenario.id} has a temporal-only model, whose percept '
+                    f'has no spatial grid for Percept.plot to draw')
+
     fig, ax = plt.subplots()
     try:
         def setup():
