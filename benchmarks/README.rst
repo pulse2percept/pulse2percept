@@ -9,8 +9,11 @@ stimulus, an implant and a phosphene model. It tracks **execution time** and
 **peak memory** for the reference pipelines in ``scenarios.py``, broken down by
 pipeline stage.
 
-These are benchmarks, not tests. They assert nothing and cannot fail on a
-regression; they produce numbers you compare against numbers from another run.
+A benchmark on its own asserts nothing -- it produces a number, and a number
+means something only next to another number. ``compare.py`` supplies the other
+number, and the ``Benchmarks`` workflow runs the pair on every pull request:
+the base branch and the branch, measured on the same runner minutes apart, with
+a regression past the thresholds failing the job. See `Comparing two runs`_.
 
 
 Running
@@ -53,6 +56,71 @@ Useful invocations:
     pytest benchmarks/ --benchmark-only --benchmark-compare=0001
 
 Saved runs land in ``.benchmarks/`` as JSON, including the memory numbers.
+
+
+Comparing two runs
+==================
+
+``pytest-benchmark``'s own ``--benchmark-compare`` reports on time only, and
+knows nothing about the memory recorded in ``extra_info``. ``compare.py`` reads
+two ``--benchmark-json`` files and reports on both:
+
+.. code-block:: bash
+
+    git checkout master
+    pytest benchmarks/ --benchmark-only --benchmark-json=base.json
+    git checkout my-branch
+    pytest benchmarks/ --benchmark-only --benchmark-json=head.json
+    python benchmarks/compare.py base.json head.json
+
+It prints a Markdown table and exits non-zero if anything regressed. Time and
+memory are held to different standards, because they are not equally
+trustworthy:
+
+**Memory is exact.** ``tracemalloc`` counts allocations, so repeated runs of
+unchanged code report peak memory to the byte -- measured spread across
+consecutive runs is 0.0% for every benchmark that does not draw with
+matplotlib, and under 1% for the ones that do. A memory change means the code
+changed, so the threshold is tight (1.15x).
+
+**Time is not.** The minimum over many rounds still drifts 15-30% between runs
+of unchanged code on one machine. The time threshold is set far outside that
+band (2x) on purpose: it catches disasters -- an accidental quadratic, a cache
+that stopped being hit, a parallel loop that got serialized -- and will not
+notice a genuine 20% regression. Nothing here replaces profiling a suspicious
+change on a quiet machine.
+
+Both checks also require an absolute change, not just a ratio, since some
+benchmarks are small enough (a 0.2 ms build, a 0.08 MB prediction) that a large
+ratio is noise on a number nobody notices. Ratio-only breaches are still shown,
+marked ``(under floor)``; they just do not fail the run. All four limits are
+options -- see ``python benchmarks/compare.py --help``.
+
+
+On a pull request
+=================
+
+``.github/workflows/benchmarks.yml`` runs the above automatically: it builds
+and benchmarks the base commit, then the pull request, then compares. The table
+lands in the run's job summary, and both JSON files are uploaded as artifacts.
+
+It builds the package twice, and that is deliberate. Storing numbers from an
+earlier run and comparing against them later is the obvious design and does not
+work here: GitHub hands out whatever CPU it has, so a cross-runner comparison
+carries a spread far larger than the regressions worth catching. Measuring both
+sides in one job on one runner is what makes the timings comparable at all.
+
+The cost is a single four-minute job -- two Cython builds of about 40 seconds,
+two benchmark runs of about 25 seconds -- running alongside the 12-job ``Build
+& Test`` matrix instead of after it, so it adds no wall-clock time to CI. Slow
+scenarios stay out; the workflow does not pass ``--runslow``.
+
+**When the job fails**, read which metric tripped. A memory regression is
+real: reproduce it locally and explain it. A time regression on a shared runner
+is a hypothesis: confirm it with ``make bench`` on a quiet machine before
+treating it as one. If a change makes a benchmark legitimately slower or
+hungrier -- a more accurate model, say -- adjust the thresholds in the same
+pull request rather than working around the check.
 
 
 What is measured
@@ -112,8 +180,11 @@ but it does not see raw ``malloc`` inside the Cython/OpenMP kernels. It was
 chosen over RSS sampling because it is deterministic, needs no extra dependency,
 and works on Windows -- which rules out ``pytest-memray``.
 
-**Run on a quiet machine.** Shared CI runners are too noisy for these numbers to
-mean much, which is why nothing here gates a pull request.
+**Run on a quiet machine.** An absolute timing off a shared CI runner means
+very little. The pull request check works around that by measuring both sides
+on the same runner and gating only on large ratios, but any number you intend
+to quote, or any regression you intend to act on, should come from a quiet
+machine.
 
 
 Adding a scenario
@@ -127,19 +198,30 @@ automatically and no other file changes. For example, a temporal model:
 
     Scenario(
         id='argus2_axonmap_fading',
-        stimulus=lambda: p2p.stimuli.LogoBVL(),
+        stimulus=lambda: p2p.stimuli.BiphasicPulseTrain(20, 20, 0.45,
+                                                        stim_dur=200),
         implant=lambda stim: p2p.implants.ArgusII(stim=stim),
         model=lambda **kwargs: p2p.models.Model(
-            spatial=p2p.models.AxonMapSpatial,
-            temporal=p2p.models.FadingTemporal, **kwargs),
+            spatial=p2p.models.AxonMapSpatial(xrange=(-12, 12),
+                                              yrange=(-8, 8)),
+            temporal=p2p.models.FadingTemporal(), **kwargs),
     )
 
-Two things to know. ``Model(...)`` routes unknown keywords to its sub-models, so
-check that whatever you pass is accepted: ``Parametrized`` freezes attributes,
-so a keyword the model does not know raises ``FreezeError`` instead of being
-quietly ignored. And if the scenario takes more than a few seconds per
-``predict_percept`` call -- video stimuli in particular, which predict one frame
-per time point -- mark it ``slow=True`` so it stays out of the default run:
+The criterion for a new entry is a **compiled kernel no existing scenario
+reaches**. Every scenario costs run time in every pull request, and a model
+that shares its kernel with one already listed buys none of the regression
+coverage that cost is for.
+
+Three things to know. Parameters that belong to one sub-model go on the
+sub-model instance, as above: keywords handed to ``Model(...)`` itself reach
+*both* sub-models, and ``Parametrized`` freezes attributes, so anything the
+temporal model does not recognize raises rather than being quietly ignored.
+Match the stimulus to the model -- ``BiphasicAxonMapModel`` reads pulse
+parameters off each electrode and rejects an image; a temporal model given a
+single-frame stimulus measures nothing temporal. And if the scenario takes more
+than a few seconds per ``predict_percept`` call -- video stimuli in particular,
+which predict one frame per time point -- mark it ``slow=True`` so it stays out
+of the default run:
 
 .. code-block:: python
 
@@ -157,8 +239,15 @@ something people actually run before opening a pull request.
 Scope
 =====
 
-Deliberately not included: no CI job, no regression gate, no historical
-tracking. If per-commit history over time becomes the goal, that is the point to
-consider `asv <https://asv.readthedocs.io/>`_, which is built for it. It was not
-chosen here because it builds an isolated environment per commit, which is heavy
-for a Cython/OpenMP project and awkward on Windows.
+Deliberately not included: **no historical tracking**. Each pull request is
+compared against its own base and nothing is stored, so the suite can say "this
+branch is slower than master" but not "the library got slower over the last six
+months". Answering the second question well means a per-commit series, and that
+is the point to consider `asv <https://asv.readthedocs.io/>`_, which is built
+for it. It was not chosen here because it builds an isolated environment per
+commit, which is heavy for a Cython/OpenMP project and awkward on Windows.
+
+The pull request check also posts no comment. Commenting needs a token with
+write access, which the ``pull_request`` event does not give a fork, so a
+comment step would fail on exactly the pull requests that most need review. The
+report goes to the job summary instead, which every run has.

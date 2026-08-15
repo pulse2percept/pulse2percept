@@ -1,0 +1,129 @@
+name: Benchmarks
+
+# Measures the pull request against its base branch and fails if a benchmark
+# regressed past the thresholds in benchmarks/compare.py.
+#
+# Both sides are measured in this one job, on this one runner, minutes apart.
+# That is the whole reason the job builds the package twice. Comparing against
+# numbers stored from an earlier run on a different runner does not work here:
+# GitHub hands out whatever CPU it has, and the resulting spread swamps the
+# regressions worth catching. Same runner, same session is the only way these
+# timings mean anything.
+#
+# Cost is one job of roughly four minutes (i.e., two Cython builds of about 40
+# seconds each, and two benchmark runs of about 25 seconds) running
+# alongside the 12-job Build & Test matrix rather than after it. It adds no
+# wall-clock time to CI.
+
+on:
+  pull_request:
+    branches: ["**"]
+    # Documentation cannot regress a benchmark, and doc-only pull requests are
+    # common here. Note that a path filter means this workflow reports no
+    # status at all on such a pull request, so do not make it a required
+    # check without removing this.
+    paths-ignore:
+      - 'doc/**'
+      - 'examples/**'
+      - '**/*.rst'
+      - '**/*.md'
+
+permissions:
+  contents: read
+
+# A new push supersedes the run in flight; benchmarking an outdated commit
+# helps nobody.
+concurrency:
+  group: benchmarks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: Compare against base
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      # Results live outside the working tree so that `git clean` between the
+      # two builds cannot delete them.
+      RESULTS: ${{ runner.temp }}/benchmarks
+      # The benchmark suite already pins the models to one thread. This pins
+      # everything underneath them -- NumPy's BLAS in particular -- so the two
+      # halves of the comparison cannot differ by thread count.
+      OMP_NUM_THREADS: 1
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+
+      # Full history: the base commit has to be checked out and built below.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
+
+      - name: Upgrade pip and bootstrap build tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "setuptools>=64" wheel "Cython>=3.0.8" "numpy>=2,<3"
+
+      # actions/checkout leaves a detached HEAD at the merge commit, so record
+      # it now: it is what we return to after measuring the base.
+      - name: Record the commits under comparison
+        run: |
+          mkdir -p "$RESULTS"
+          echo "HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "BASE_SHA=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_ENV"
+
+      # `git clean -xfd` before each install removes the previous commit's
+      # compiled extensions and build/ tree. Without it setuptools can decide
+      # a stale object file is still current and quietly benchmark the wrong
+      # code.
+      - name: Benchmark the base branch
+        run: |
+          git checkout --force --detach "$BASE_SHA"
+          git clean -xfd
+          python -m pip install -e ".[benchmark]" --no-build-isolation
+          pytest benchmarks/ --benchmark-only \
+            --benchmark-json="$RESULTS/base.json"
+
+      - name: Benchmark this pull request
+        run: |
+          git checkout --force --detach "$HEAD_SHA"
+          git clean -xfd
+          python -m pip install -e ".[benchmark]" --no-build-isolation
+          pytest benchmarks/ --benchmark-only \
+            --benchmark-json="$RESULTS/head.json"
+
+      # The report goes to the job summary rather than a pull request comment:
+      # commenting needs a writable token, which the pull_request event does
+      # not give a fork, so a comment step would fail exactly on the pull
+      # requests that most need reviewing.
+      - name: Compare
+        run: |
+          python benchmarks/compare.py \
+            "$RESULTS/base.json" "$RESULTS/head.json" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: benchmark-results
+          path: ${{ env.RESULTS }}
+          if-no-files-found: warn

@@ -6,9 +6,9 @@ benchmark functions in ``test_predict.py`` are written once and parametrized
 over :data:`SCENARIOS`, so adding a case means adding an entry here and
 nothing else.
 
-The two scenarios below are the reference workloads for the library's main
-purpose -- predicting a percept from a stimulus, an implant and a phosphene
-model -- and correspond to these one-liners::
+The scenarios below are the reference workloads for the library's main purpose
+-- predicting a percept from a stimulus, an implant and a phosphene model. The
+first two correspond to these one-liners::
 
     p2p.models.AxonMapModel(yrange=(-8, 8), xrange=(-12, 12)).build(
         ).predict_percept(p2p.implants.ArgusII(stim=p2p.stimuli.LogoBVL()))
@@ -16,6 +16,13 @@ model -- and correspond to these one-liners::
     p2p.models.ScoreboardModel(yrange=(-4, 4), xrange=(-4, 4), rho=50,
                                xystep=0.1).build().predict_percept(
         p2p.implants.PRIMA(stim=p2p.stimuli.LogoBVL().invert()))
+
+Between them the scenarios cover every compiled kernel that a percept
+prediction can go through -- ``_beyeler2019``, ``_granley2021``,
+``_nanduri2012`` and the shared ``_temporal`` loop -- so that a change to any
+one of them shows up here. That coverage is the selection criterion: a model
+that shares a kernel with one already listed adds run time without adding
+signal.
 """
 from dataclasses import dataclass
 from typing import Callable
@@ -82,6 +89,35 @@ SCENARIOS = [
                                                           yrange=(-4, 4),
                                                           rho=50, xystep=0.1,
                                                           **kwargs),
+    ),
+    # Granley 2021:
+    Scenario(
+        id='argus2_biphasic_ptrain',
+        stimulus=lambda: p2p.stimuli.BiphasicPulseTrain(20, 1, 0.45),
+        implant=lambda stim: p2p.implants.ArgusII(stim=stim),
+        model=lambda **kwargs: p2p.models.BiphasicAxonMapModel(
+            xrange=(-12, 12), yrange=(-8, 8), **kwargs),
+        caches_axons=True,
+    ),
+    # Nanduri 2012: the first scenario with a temporal model
+    Scenario(
+        id='argus2_nanduri2012_ptrain',
+        stimulus=lambda: p2p.stimuli.BiphasicPulseTrain(20, 20, 0.45,
+                                                        stim_dur=200),
+        implant=lambda stim: p2p.implants.ArgusII(stim=stim),
+        model=lambda **kwargs: p2p.models.Nanduri2012Model(
+            xrange=(-4, 4), yrange=(-4, 4), xystep=0.5, **kwargs),
+    ),
+    # A composed Model:
+    Scenario(
+        id='argus2_scoreboard_fading_ptrain',
+        stimulus=lambda: p2p.stimuli.BiphasicPulseTrain(20, 20, 0.45,
+                                                        stim_dur=200),
+        implant=lambda stim: p2p.implants.ArgusII(stim=stim),
+        model=lambda **kwargs: p2p.models.Model(
+            spatial=p2p.models.ScoreboardSpatial(xrange=(-4, 4),
+                                                 yrange=(-4, 4), xystep=0.5),
+            temporal=p2p.models.FadingTemporal(), **kwargs),
     ),
     # A 94-frame video: the spatial model runs once per frame, so a single
     # predict_percept takes roughly a minute where the image scenarios above
