@@ -541,8 +541,14 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 uniq_time = stim.time[t_unique]
                 if len(uniq_time) == 1:
                     uniq_time = None
-                stim_unique = Stimulus(stim[:, stim.time[t_unique]], 
-                                       electrodes=stim.electrodes, time=uniq_time)
+                # Carry the metadata across: `_predict_spatial` is where
+                # BiphasicAxonMapSpatial and DynaphosModel look up amplitude,
+                # frequency and phase duration, and they only ever see this
+                # de-duplicated copy:
+                stim_unique = Stimulus(stim[:, stim.time[t_unique]],
+                                       electrodes=stim.electrodes,
+                                       time=uniq_time,
+                                       metadata=stim.metadata)
                 resp_unique = self._predict_spatial(implant.earray, stim_unique)
                 # reconstruct original time points, making sure to preserve C ordering
                 resp = resp_unique[..., inverse].copy(order='C')

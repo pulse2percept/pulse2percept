@@ -59,6 +59,14 @@ API changes:
   it, and each frame now produces a pulse train rather than a single pulse.
   Pass ``stretch=True`` for the old gray-level mapping.
 
+* Scaling a :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` now scales
+  the ``amp`` recorded in its metadata, so ``pt * 2`` predicts the percept of a
+  train built at twice the amplitude rather than the original one. Adding a DC
+  offset (``pt + 5``) drops the pulse parameters instead, since the result is
+  no longer a biphasic pulse train;
+  :py:class:`~pulse2percept.models.BiphasicAxonMapModel` then rejects it
+  (:issue:`435`).
+
 * :py:class:`~pulse2percept.implants.ProsthesisSystem` now exposes ``raster``
   and ``max_current``.
 
@@ -107,6 +115,11 @@ Bug fixes:
   and composited onto the axes background for ``fmt='jpg'``, which cannot carry
   it. Previously the four channels were reinterpreted as RGB, which sheared the
   color channels across every row.
+
+* Stimulus metadata now survives ``predict_percept``. Spatial models are handed
+  a copy of the stimulus with duplicate frames collapsed, and that copy used to
+  be built without any metadata, so models that read pulse parameters from it
+  saw none (:issue:`545`).
 
 * Visual-field-map equality now handles array-valued attributes correctly,
   maps are hashable again, and maps of different classes no longer compare

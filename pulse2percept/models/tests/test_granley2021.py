@@ -426,6 +426,38 @@ def test_find_threshold_not_supported(model_cls):
     npt.assert_equal(model.predict_percept(implant) is not None, True)
 
 
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+def test_scaled_pulse_train_changes_percept(model_cls):
+    # This model reads amplitude off the stimulus metadata, so a scaled pulse
+    # train used to deliver twice the current and predict the very same
+    # percept. Scaling now updates the metadata, and has to give what building
+    # the train at that amplitude in the first place gives:
+    model = model_cls(xrange=(-12, 12), yrange=(-8, 8), xystep=1,
+                      n_ax_segments=30).build()
+    pt = BiphasicPulseTrain(20, 1, 0.45, stim_dur=100)
+    single = model.predict_percept(ArgusII(stim={'C5': pt})).data
+    doubled = model.predict_percept(ArgusII(stim={'C5': pt * 2})).data
+    direct = model.predict_percept(ArgusII(
+        stim={'C5': BiphasicPulseTrain(20, 2, 0.45, stim_dur=100)})).data
+    npt.assert_equal(np.any(single), True)
+    npt.assert_array_almost_equal(doubled, direct)
+    npt.assert_equal(np.allclose(doubled, single), False)
+
+
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+def test_offset_pulse_train_rejected(model_cls):
+    # A DC offset makes it something other than a biphasic pulse train, and
+    # the model must say so rather than predict from pulse parameters that no
+    # longer describe the stimulus:
+    model = model_cls(xrange=(-3, 3), yrange=(-2, 2), xystep=1,
+                      n_ax_segments=30).build()
+    pt = BiphasicPulseTrain(20, 1, 0.45, stim_dur=100)
+    with pytest.raises(TypeError):
+        model.predict_percept(ArgusII(stim={'C5': pt + 5}))
+
+
 def test_BiphasicAxonMapModel_min_current_spread():
     """The current-spread cutoff must reach this model's kernel too.
 

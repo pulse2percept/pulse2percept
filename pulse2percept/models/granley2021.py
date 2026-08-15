@@ -582,9 +582,11 @@ class BiphasicAxonMapModel(Model):
         amplitude in microamps.
 
         This model interacts with `Stimulus` objects by reading the intended
-        amplitude, frequency, and pulse duration from their metadata.
-        Scaling, shifting, or otherwise manipulating the raw stimulus data
-        will not change the predicted percept.
+        amplitude, frequency, and pulse duration from their metadata, not
+        from the raw stimulus data. Scaling a
+        :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` (``pt * 2``)
+        updates that metadata and does change the percept; editing the data
+        array in place does not.
 
     Parameters
     ----------
@@ -708,9 +710,9 @@ class BiphasicAxonMapModel(Model):
             NOT as raw amplitude in microamps.
 
             The model interacts with `Stimulus` objects by reading the
-            intended amplitude, frequency, and pulse duration from their 
-            metadata. Manipulating the raw stimulus data will not change
-            the predicted percept.
+            intended amplitude, frequency, and pulse duration from their
+            metadata, not from the raw stimulus data. Editing the data
+            array in place will not change the predicted percept.
 
         Parameters
         ----------

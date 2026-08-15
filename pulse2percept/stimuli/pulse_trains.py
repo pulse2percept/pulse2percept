@@ -2,6 +2,7 @@
    :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`, 
    :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`"""
 import numpy as np
+import operator as ops
 from math import isclose
 
 # DT: Sampling time step (ms); defines the duration of the signal edge
@@ -250,6 +251,58 @@ class BiphasicPulseTrain(Stimulus):
                          'phase_dur': phase_dur,
                          'delay_dur': delay_dur,
                          'user': metadata}
+
+    def _apply_operator(self, a, op, b, field='data'):
+        """Keep the pulse parameters in sync with the operators
+
+        Models like
+        :py:class:`~pulse2percept.models.BiphasicAxonMapModel` and
+        :py:class:`~pulse2percept.models.cortex.DynaphosModel` read amplitude,
+        frequency and phase duration off the metadata rather than off the data.
+        An operator that rewrites the data but leaves the metadata behind makes
+        the two disagree: ``pt * 2`` delivers twice the current, and the model
+        would go on predicting the very same percept.
+
+        Scaling is the one operation that leaves a biphasic pulse train a
+        biphasic pulse train, so it updates ``amp``. Shifting in time moves the
+        whole train, but every pulse in it keeps its amplitude, frequency and
+        duration. Anything else adds a DC offset, which is neither biphasic nor
+        charge-balanced: the pulse parameters are dropped, so that a model
+        asking for them rejects the stimulus rather than predicting from
+        numbers that no longer describe it.
+        """
+        stim = super()._apply_operator(a, op, b, field=field)
+        if field == 'time' or 'amp' not in stim.metadata:
+            # A shift in time, or a train whose parameters an earlier operator
+            # has already dropped:
+            return stim
+        # `super()` has established that exactly one of the operands is a
+        # scalar; the other one is `self.data`:
+        scalar = b if np.ndim(a) else a
+        if op is ops.mul:
+            # Multiplication is commutative, so the operand order is moot:
+            factor = scalar
+        elif op is ops.truediv:
+            # `Stimulus` has no `__rtruediv__`, so this is always data/scalar.
+            # Dividing the data by zero fills it with inf rather than raising,
+            # so the amplitude has to follow suit:
+            with np.errstate(divide='ignore', invalid='ignore'):
+                factor = np.divide(1.0, scalar)
+        elif scalar == 0:
+            # `pt + 0` and `pt - 0` change nothing, `0 - pt` flips the polarity:
+            factor = -1 if np.ndim(b) else 1
+        else:
+            factor = None
+        if factor is None:
+            stim.metadata = {'user': stim.metadata.get('user')}
+            return stim
+        # The sign of `amp` carries no information (`BiphasicPulse` takes its
+        # magnitude and reads the polarity off `cathodic_first`), so a negative
+        # factor flips the flag instead of the amplitude:
+        stim.metadata['amp'] = stim.metadata['amp'] * abs(factor)
+        if factor < 0:
+            stim.cathodic_first = not stim.cathodic_first
+        return stim
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""

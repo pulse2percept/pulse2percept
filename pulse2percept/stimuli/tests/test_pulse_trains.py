@@ -287,6 +287,73 @@ def test_metadata():
                      ['C3']['metadata']['user'], 'userdataC3')
 
 
+@pytest.mark.parametrize('scale', [2, 0.5, 1, 0])
+def test_BiphasicPulseTrain_metadata_scaling(scale):
+    # BiphasicAxonMapModel reads amp/freq/phase_dur off the metadata rather
+    # than off the data, so scaling the data has to scale `amp` with it.
+    # Otherwise `pt * 2` delivers twice the current and predicts the very same
+    # percept:
+    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
+    scaled = pt * scale
+    npt.assert_almost_equal(scaled.metadata['amp'], 10 * scale)
+    npt.assert_almost_equal(scaled.data, scale * pt.data)
+    # Same data and same metadata as the pulse train built that way directly:
+    direct = BiphasicPulseTrain(20, 10 * scale, 0.45, stim_dur=100)
+    npt.assert_almost_equal(scaled.data, direct.data)
+    npt.assert_equal(scaled.metadata, direct.metadata)
+    # Every route to a scaled train agrees, and none of them touches the
+    # original:
+    npt.assert_almost_equal((scale * pt).metadata['amp'], 10 * scale)
+    if scale != 0:
+        npt.assert_almost_equal((pt / (1 / scale)).metadata['amp'], 10 * scale)
+    npt.assert_equal(pt.metadata['amp'], 10)
+    # The other pulse parameters are untouched:
+    for key in ('freq', 'phase_dur', 'delay_dur', 'user'):
+        npt.assert_equal(scaled.metadata[key], pt.metadata[key])
+
+
+def test_BiphasicPulseTrain_metadata_polarity():
+    # `BiphasicPulse` takes the magnitude of `amp` and reads the polarity off
+    # `cathodic_first`, so a negative factor belongs on the flag:
+    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
+    for flipped in (-pt, pt * -1, 0 - pt):
+        npt.assert_almost_equal(flipped.data, -pt.data)
+        npt.assert_equal(flipped.metadata['amp'], 10)
+        npt.assert_equal(flipped.cathodic_first, not pt.cathodic_first)
+    # And flipping twice comes back to where it started:
+    npt.assert_equal((-(-pt)).cathodic_first, pt.cathodic_first)
+    # The sign the user passed in is carried along, not overwritten:
+    npt.assert_equal((BiphasicPulseTrain(20, -10, 0.45,
+                                         stim_dur=100) * 2).metadata['amp'],
+                     -20)
+
+
+@pytest.mark.parametrize('modify', [lambda pt: pt + 5, lambda pt: pt - 5,
+                                    lambda pt: 5 - pt, lambda pt: 5 + pt,
+                                    lambda pt: (pt + 5) * 2])
+def test_BiphasicPulseTrain_metadata_invalidated(modify):
+    # A DC offset is neither biphasic nor charge-balanced. Keeping the pulse
+    # parameters would have BiphasicAxonMapModel predict from numbers that no
+    # longer describe the stimulus, so they are dropped instead - the model
+    # rejects a stimulus whose parameters it cannot find:
+    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100, metadata='userdata')
+    modified = modify(pt)
+    for key in ('amp', 'freq', 'phase_dur', 'delay_dur'):
+        npt.assert_equal(key in modified.metadata, False)
+    # The user's own metadata is theirs, and survives:
+    npt.assert_equal(modified.metadata['user'], 'userdata')
+    npt.assert_equal(pt.metadata['amp'], 10)
+
+
+def test_BiphasicPulseTrain_metadata_shift():
+    # A shift moves the whole train, but every pulse in it keeps its
+    # amplitude, frequency and duration:
+    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
+    for shifted in (pt >> 5, pt << 5, pt + 0, pt - 0):
+        npt.assert_equal(shifted.metadata, pt.metadata)
+    npt.assert_almost_equal((pt >> 5).time, pt.time + 5)
+
+
 @pytest.mark.parametrize('freq, phase_dur, interphase_dur',
                          [(20, 0.45, 0), (100, 0.45, 0.2), (13, 0.1, 0),
                           (225, 0.075, 0.075), (2000, 0.1, 0)])

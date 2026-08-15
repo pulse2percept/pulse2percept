@@ -738,16 +738,20 @@ def test_Stimulus_shallow_copy():
     # mutable with the original, even though the data container is no longer
     # deep-copied first.
     stim = BiphasicPulseTrain(20, 20, 0.45, stim_dur=100)
-    for derive in (lambda s: s * 2, lambda s: s + 1, lambda s: -s,
-                   lambda s: s >> 1.0, lambda s: s.append(s >> 1.0)):
+    # Negating the train flips its polarity, which `BiphasicPulseTrain` records
+    # on `cathodic_first`; every other derivation leaves the flag alone:
+    for derive, flips in ((lambda s: s * 2, False), (lambda s: s + 1, False),
+                          (lambda s: -s, True), (lambda s: s >> 1.0, False),
+                          (lambda s: s.append(s >> 1.0), False)):
         copied = derive(stim)
         # Same class and extra attributes:
         npt.assert_equal(type(copied), type(stim))
         npt.assert_equal(copied.freq, stim.freq)
-        npt.assert_equal(copied.cathodic_first, stim.cathodic_first)
+        npt.assert_equal(copied.cathodic_first, stim.cathodic_first != flips)
         npt.assert_equal(copied.is_compressed, stim.is_compressed)
-        # Metadata is equal but independent:
-        npt.assert_equal(copied.metadata, stim.metadata)
+        # Metadata is independent. Its contents need not be identical: the
+        # operators keep the pulse parameters in sync with the data (see
+        # test_pulse_trains.py):
         npt.assert_equal(copied.metadata is stim.metadata, False)
         copied.metadata['user'] = 'changed'
         npt.assert_equal(stim.metadata['user'], None)
