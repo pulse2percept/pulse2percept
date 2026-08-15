@@ -1,11 +1,13 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
+from scipy.spatial import cKDTree
+from types import SimpleNamespace
 from pulse2percept.models.cortex import ScoreboardModel
 from pulse2percept.models import ScoreboardModel as BeyelerScoreboard
 from pulse2percept.implants.cortex import Neuralink
 from pulse2percept.implants import EnsembleImplant
-from pulse2percept.topography import NeuropythyMap
+from pulse2percept.topography import CorticalMap, NeuropythyMap
 import time
 import os
 
@@ -60,6 +62,93 @@ def test_load_fsaverage_or_skip_swallows_any_error():
             npt.assert_equal(type(err).__name__ in str(excinfo.value), True)
         finally:
             mod.NeuropythyMap = orig
+
+
+class ToyNeuropythyMap(NeuropythyMap):
+    """A NeuropythyMap whose cortical mesh is a row of ``n`` vertices.
+
+    ``cortex_to_dva`` only reads the k-d tree and the mesh lookup tables, so
+    filling those in with a toy mesh exercises all of its bookkeeping (output
+    shape, NaN handling, exact hits) with hand-checkable numbers and without a
+    subject download. Vertex ``i`` sits at ``(i, 0, 0)`` mm on the cortex and
+    maps to ``(i, -i)`` dva; vertices are 1 mm apart, which is exactly
+    ``cort_nn_thresh``.
+    """
+
+    def __init__(self, n=6):
+        # NeuropythyMap.__init__ needs neuropythy and a subject, so go
+        # straight to the parameter defaults it would have set:
+        CorticalMap.__init__(self)
+        self.cortex_tree = cKDTree(np.stack([np.arange(n, dtype=float),
+                                             np.zeros(n), np.zeros(n)], axis=-1))
+        self.addr_idxs = {'addr': np.arange(n),
+                          'region': np.array(['v1'] * n),
+                          'hemi': np.zeros(n, dtype=int)}
+        mesh = SimpleNamespace(coordinates=np.stack([np.arange(n, dtype=float),
+                                                     -np.arange(n, dtype=float)]))
+        self.region_meshes = {'v1': (mesh, mesh)}
+
+
+def test_cortex_to_dva_shape_and_nans():
+    """Every input point must get its own output slot (Issue #774)."""
+    nmap = ToyNeuropythyMap()
+    # Vertex i is at i mm == i * 1000 um, and maps to (i, -i) dva:
+    xc = np.array([0., 1000., 2000.])
+    xdva, ydva = nmap.cortex_to_dva(xc, np.zeros(3), np.zeros(3))
+    npt.assert_almost_equal(xdva, [0, 1, 2])
+    npt.assert_almost_equal(ydva, [0, -1, -2])
+
+    # A NaN input must not shift the points after it into its slot:
+    xc = np.array([0., np.nan, 2000.])
+    xdva, ydva = nmap.cortex_to_dva(xc, np.zeros(3), np.zeros(3))
+    npt.assert_equal(xdva.shape, (3,))
+    npt.assert_almost_equal(xdva, [0, np.nan, 2])
+    npt.assert_almost_equal(ydva, [0, np.nan, -2])
+    # A NaN in any one of the three coordinates is enough:
+    for coords in ([np.zeros(2), np.array([np.nan, 0.]), np.zeros(2)],
+                   [np.zeros(2), np.zeros(2), np.array([np.nan, 0.])]):
+        xdva, ydva = nmap.cortex_to_dva(*coords)
+        npt.assert_almost_equal(xdva, [np.nan, 0])
+        npt.assert_almost_equal(ydva, [np.nan, 0])
+
+    # The output has the shape of the input, whatever that shape is:
+    for shape in [(), (1,), (4,), (2, 3), (2, 3, 4)]:
+        zeros = np.zeros(shape)
+        xdva, ydva = nmap.cortex_to_dva(zeros, zeros, zeros)
+        npt.assert_equal(xdva.shape, shape)
+        npt.assert_equal(ydva.shape, shape)
+        # ... including when every point is NaN, which must still return two
+        # arrays rather than a single stacked one:
+        nans = np.full(shape, np.nan)
+        xdva, ydva = nmap.cortex_to_dva(nans, nans, nans)
+        npt.assert_equal(xdva.shape, shape)
+        npt.assert_equal(np.all(np.isnan(xdva)), True)
+        npt.assert_equal(np.all(np.isnan(ydva)), True)
+
+    with pytest.raises(ValueError):
+        nmap.cortex_to_dva(np.zeros(3), np.zeros(2), np.zeros(3))
+
+
+def test_cortex_to_dva_exact_vertex():
+    """A point sitting exactly on a mesh vertex must not divide by zero."""
+    nmap = ToyNeuropythyMap()
+    verts = nmap.cortex_tree.data * 1000  # mm -> um
+    with np.errstate(divide='raise', invalid='raise'):
+        xdva, ydva = nmap.cortex_to_dva(verts[:, 0], verts[:, 1], verts[:, 2])
+    # Each vertex maps to its own dva coordinate, not to a blend with its
+    # neighbors and not to NaN:
+    npt.assert_almost_equal(xdva, np.arange(len(verts)))
+    npt.assert_almost_equal(ydva, -np.arange(len(verts)))
+
+    # Halfway between two vertices, both weigh the same:
+    xdva, ydva = nmap.cortex_to_dva(np.array([2500.]), np.zeros(1), np.zeros(1))
+    npt.assert_almost_equal(xdva, [2.5])
+    npt.assert_almost_equal(ydva, [-2.5])
+
+    # Beyond cort_nn_thresh of every vertex, there is nothing to average:
+    xdva, ydva = nmap.cortex_to_dva(np.array([-2000.]), np.zeros(1), np.zeros(1))
+    npt.assert_almost_equal(xdva, [np.nan])
+    npt.assert_almost_equal(ydva, [np.nan])
 
 
 # use pytest.mark.slow because all neuropythy tests
@@ -289,11 +378,13 @@ def test_cortex_to_dva(regions, neuropythy_available):
     npt.assert_equal(list(nmap.region_meshes.keys()), regions)
     
     if 'v1' in regions:
-        # should work with all shapes
-        npt.assert_equal(nmap.v1_to_dva(0, 0, 0)[0], np.array([np.nan]))
-        nmap.v1_to_dva([100, 200, 300], [100, 200, 300], [100, 200, 300])
-        nmap.v1_to_dva(np.eye(3), np.eye(3), np.eye(3))       
-        
+        # should work with all shapes, and keep them
+        npt.assert_equal(np.isnan(nmap.v1_to_dva(0, 0, 0)[0]), True)
+        npt.assert_equal(nmap.v1_to_dva([100, 200, 300], [100, 200, 300],
+                                        [100, 200, 300])[0].shape, (3,))
+        npt.assert_equal(nmap.v1_to_dva(np.eye(3), np.eye(3), np.eye(3))[0].shape,
+                         (3, 3))
+
         x = np.array([-10035.355, -13315.073,  12075.739, 13630.971])
         y = np.array([ -96637.12, -102852.29,   -95358.4,  -101546.41])
         z = np.array([-10769.129, -3861.491, -7168.826, 924.938])
@@ -304,6 +395,27 @@ def test_cortex_to_dva(regions, neuropythy_available):
         npt.assert_equal(y.shape, (4,))
         npt.assert_almost_equal(xdva, np.array([1, 1, -1, -1]), decimal=1)
         npt.assert_almost_equal(ydva, np.array([1, -1,  1, -1]), decimal=1)
+
+        # A NaN point keeps its own slot rather than dropping out and
+        # shifting the points after it up (Issue #774):
+        xnan, ynan, znan = x.copy(), y.copy(), z.copy()
+        xnan[1], ynan[1], znan[1] = np.nan, np.nan, np.nan
+        xdva, ydva = nmap.v1_to_dva(xnan, ynan, znan)
+        npt.assert_equal(xdva.shape, (4,))
+        npt.assert_almost_equal(xdva, np.array([1, np.nan, -1, -1]), decimal=1)
+        npt.assert_almost_equal(ydva, np.array([1, np.nan, 1, -1]), decimal=1)
+        # ... and the same points laid out as a 2D grid come back as one:
+        xdva, ydva = nmap.v1_to_dva(*[np.stack([c, c]) for c in (x, y, z)])
+        npt.assert_equal(xdva.shape, (2, 4))
+        npt.assert_almost_equal(xdva, np.stack([[1, 1, -1, -1]] * 2), decimal=1)
+        npt.assert_almost_equal(ydva, np.stack([[1, -1, 1, -1]] * 2), decimal=1)
+
+        # Points that land exactly on a mesh vertex have zero distance to it,
+        # which used to divide by zero (Issue #774). They map to that vertex:
+        verts = nmap.cortex_tree.data * 1000  # mm -> um
+        xdva, ydva = nmap.v1_to_dva(verts[:, 0], verts[:, 1], verts[:, 2])
+        npt.assert_equal(np.any(np.isnan(xdva)), False)
+        npt.assert_equal(np.any(np.isnan(ydva)), False)
 
         x = np.arange(-10, -1, .1)
         y = np.arange(-10, -1, .1)
@@ -333,9 +445,11 @@ def test_cortex_to_dva(regions, neuropythy_available):
 
 
     if 'v2' in regions:
-        npt.assert_equal(nmap.v2_to_dva(0, 0, 0)[0], np.array([np.nan]))
-        nmap.v2_to_dva([100, 200, 300], [100, 200, 300], [100, 200, 300])
-        nmap.v2_to_dva(np.eye(3), np.eye(3), np.eye(3))     
+        npt.assert_equal(np.isnan(nmap.v2_to_dva(0, 0, 0)[0]), True)
+        npt.assert_equal(nmap.v2_to_dva([100, 200, 300], [100, 200, 300],
+                                        [100, 200, 300])[0].shape, (3,))
+        npt.assert_equal(nmap.v2_to_dva(np.eye(3), np.eye(3), np.eye(3))[0].shape,
+                         (3, 3))
 
 
         x = np.array([-11731.504, -20458.03,  22283.799] )
@@ -356,9 +470,11 @@ def test_cortex_to_dva(regions, neuropythy_available):
 
     
     if 'v3' in regions:
-        npt.assert_equal(nmap.v3_to_dva(0, 0, 0)[0], np.array([np.nan]))
-        nmap.v3_to_dva([100, 200, 300], [100, 200, 300], [100, 200, 300])
-        nmap.v3_to_dva(np.eye(3), np.eye(3), np.eye(3))
+        npt.assert_equal(np.isnan(nmap.v3_to_dva(0, 0, 0)[0]), True)
+        npt.assert_equal(nmap.v3_to_dva([100, 200, 300], [100, 200, 300],
+                                        [100, 200, 300])[0].shape, (3,))
+        npt.assert_equal(nmap.v3_to_dva(np.eye(3), np.eye(3), np.eye(3))[0].shape,
+                         (3, 3))
 
 
         x = np.array([-23812.113, -23514.828,  28547.275])
