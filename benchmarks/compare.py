@@ -15,9 +15,9 @@ repeated runs of unchanged code report the same peak to the byte.
 It does not see raw ``malloc`` inside the Cython/OpenMP kernels,
 so the number is a floor on total memory rather than the whole of it.
 
-Processing time may vary depending on runner load, so we set a genuine 20%
-regression threshold, with the goal of catching the disasters instead of
-every tiny change.
+Processing time may vary depending on runner load, so we set a so we set a
+generous 2x threshold to catch major regressions instead of every small
+performance change.
 
 Both checks also require an absolute change, not just a ratio. Several
 benchmarks are small enough (a 0.17 ms build, a 0.08 MB prediction) that a

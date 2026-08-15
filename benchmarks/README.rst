@@ -82,8 +82,8 @@ sampling the process, so repeated runs of unchanged code report the same peak
 to the byte.
 
 **Time depends on runner load.** The minimum over many rounds may drift between
-runs of unchanged code, so we set a generous threshold to catch 20% regressions
-instead of every tiny performance change.
+runs of unchanged code, so we set a generous 2x threshold to catch major
+regressions instead of every small performance change.
 
 Both checks also require an absolute change, not just a ratio, since some
 benchmarks are small enough (a 0.2 ms build, a 0.08 MB prediction) that a large
