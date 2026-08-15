@@ -2,6 +2,9 @@ import warnings
 import numpy.testing as npt
 import pytest
 from pulse2percept.utils.deprecation import (deprecated, deprecate_parameter,
+                                             deprecated_alias,
+                                             rename_parameter,
+                                             rename_deprecated_params,
                                              is_deprecated)
 from pulse2percept.utils.testing import assert_warns_msg
 
@@ -163,3 +166,136 @@ def test_deprecate_parameter_unknown_param():
     # decorator's signature binding:
     with pytest.raises(TypeError):
         mock_func_old_param()
+
+
+@rename_parameter('old', 'new', deprecated_version=0.1, removed_version=0.2)
+def mock_func_renamed_param(a, new=3):
+    return a + new
+
+
+class MockClassRenamedParam:
+
+    @rename_parameter('old', 'new', deprecated_version=0.1,
+                      removed_version=0.2)
+    def __init__(self, new):
+        self.new = new
+
+
+def test_rename_parameter():
+    # The old name warns, and names the replacement:
+    assert_warns_msg(DeprecationWarning, mock_func_renamed_param,
+                     "The 'old' parameter of mock_func_renamed_param is "
+                     "deprecated since version 0.1, and will be removed in "
+                     "version 0.2. Use 'new' instead.", 1, old=10)
+    # But unlike a deprecated parameter, its value is *kept*:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        npt.assert_equal(mock_func_renamed_param(1, old=10), 11)
+    # The new name behaves identically, and does not warn:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        npt.assert_equal(mock_func_renamed_param(1, new=10), 11)
+        npt.assert_equal(mock_func_renamed_param(1), 4)
+    # Docstring and name survive the wrapping, and the callable itself is not
+    # deprecated:
+    npt.assert_equal(mock_func_renamed_param.__name__,
+                     'mock_func_renamed_param')
+    npt.assert_equal(is_deprecated(mock_func_renamed_param), False)
+
+
+def test_rename_parameter_method():
+    # On a constructor, the warning names the class, not `__init__`:
+    assert_warns_msg(DeprecationWarning, MockClassRenamedParam,
+                     "parameter of MockClassRenamedParam is deprecated",
+                     old=10)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        npt.assert_equal(MockClassRenamedParam(old=10).new, 10)
+
+
+def test_rename_parameter_both_names():
+    # The two names are the same parameter, so passing both is an error
+    # rather than a silent choice between them:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        with pytest.raises(TypeError):
+            mock_func_renamed_param(1, old=10, new=20)
+
+
+def test_rename_parameter_unknown_param():
+    # The new name has to exist...
+    with pytest.raises(ValueError):
+        @rename_parameter('old', 'nonexistent')
+        def func(a, b=2):
+            return a
+
+    # ...and the old one must be gone from the signature, which catches the
+    # rename never having been made:
+    with pytest.raises(ValueError):
+        @rename_parameter('b', 'a')
+        def func(a, b=2):
+            return a
+
+
+class MockClassAlias:
+
+    old = deprecated_alias('new', deprecated_version=0.1, removed_version=0.2)
+
+    def __init__(self):
+        self.new = 42
+
+
+def test_deprecated_alias():
+    obj = MockClassAlias()
+    # Reading through the alias warns, but returns the current value:
+    assert_warns_msg(DeprecationWarning, lambda: obj.old,
+                     "The 'old' parameter of MockClassAlias is deprecated "
+                     "since version 0.1, and will be removed in version 0.2. "
+                     "Use 'new' instead.")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        npt.assert_equal(obj.old, 42)
+        # Writing through it warns too, and writes the new name:
+        obj.old = 7
+    npt.assert_equal(obj.new, 7)
+    assert_warns_msg(DeprecationWarning,
+                     lambda: setattr(obj, 'old', 9), "Use 'new' instead")
+    npt.assert_equal(obj.new, 9)
+    # The new name stays silent:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        obj.new = 3
+        npt.assert_equal(obj.new, 3)
+
+
+def test_deprecated_alias_on_class():
+    # Looked up on the class, the alias returns itself rather than warning:
+    # that is how the attribute machinery asks whether a name exists at all.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        npt.assert_equal(isinstance(MockClassAlias.old, deprecated_alias),
+                         True)
+        npt.assert_equal(hasattr(MockClassAlias, 'old'), True)
+    # And it registered itself, so that `**params` constructors can find it:
+    npt.assert_equal(MockClassAlias._renamed_params['old'].new_name, 'new')
+
+
+def test_rename_deprecated_params():
+    specs = MockClassAlias._renamed_params
+    # A renamed name is warned about, under the name the caller used, and
+    # rewritten:
+    assert_warns_msg(DeprecationWarning, rename_deprecated_params,
+                     "The 'old' parameter of MyModel is deprecated",
+                     'MyModel', {'old': 1}, specs)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        npt.assert_equal(rename_deprecated_params('MyModel', {'old': 1},
+                                                  specs), {'new': 1})
+    # Everything else is passed straight through, untouched and unwarned:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        params = {'other': 1}
+        npt.assert_equal(rename_deprecated_params('MyModel', params, specs) is
+                         params, True)
+        npt.assert_equal(rename_deprecated_params('MyModel', params, {}) is
+                         params, True)

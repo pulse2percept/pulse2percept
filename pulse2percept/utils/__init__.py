@@ -25,8 +25,9 @@ from .images import center_image, scale_image, shift_image, trim_image
 from .convolution import center_vector, conv
 from .optimize import bisect
 from .stats import r2_score, circ_r2_score
-from .deprecation import (deprecated, deprecate_parameter,
-                          warn_deprecated_params)
+from .deprecation import (deprecated, deprecate_parameter, deprecated_alias,
+                          rename_parameter, warn_deprecated_params,
+                          rename_deprecated_params)
 from .three_dim import parse_3d_orient
 
 __all__ = [
@@ -42,6 +43,7 @@ __all__ = [
     'delta_angle',
     'deprecate_parameter',
     'deprecated',
+    'deprecated_alias',
     'frame_interval',
     'FreezeError',
     'Frozen',
@@ -54,6 +56,8 @@ __all__ = [
     'PrettyPrint',
     'r2_score',
     'radial_mask',
+    'rename_deprecated_params',
+    'rename_parameter',
     'sample',
     'scale_image',
     'shift_image',

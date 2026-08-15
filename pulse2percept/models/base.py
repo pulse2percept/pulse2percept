@@ -15,7 +15,7 @@ from ..stimuli import Stimulus
 from ..percepts import Percept
 from ..topography import Curcio1990Map, Grid2D
 from ..utils import (PrettyPrint, FreezeError, Parametrized, bisect,
-                     warn_deprecated_params)
+                     warn_deprecated_params, rename_deprecated_params)
 from ..utils.constants import ZORDER
 
 
@@ -1247,9 +1247,12 @@ class Model(PrettyPrint):
         # here too. Collect both sides first so a parameter deprecated on the
         # spatial *and* temporal model only warns once.
         specs = {}
+        renamed = {}
         for model in (self.spatial, self.temporal):
             specs.update(getattr(model, '_deprecated_params', {}))
+            renamed.update(getattr(model, '_renamed_params', {}))
         warn_deprecated_params(type(self).__name__, params, specs)
+        params = rename_deprecated_params(type(self).__name__, params, renamed)
         for key, val in params.items():
             setattr(self, key, val)
 

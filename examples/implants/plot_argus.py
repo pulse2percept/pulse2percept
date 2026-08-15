@@ -58,10 +58,10 @@ fig.tight_layout()
 #
 # To simulate the vision provided by Argus II, we first need to set up a new
 # axon map model. We can specify phosphene size (``rho``) and elongation
-# (``axlambda``) as well as the visual field we would like to simulate (given
+# (``lam``) as well as the visual field we would like to simulate (given
 # in degrees of visual angle):
 
-model = p2p.models.AxonMapModel(rho=400, axlambda=200,
+model = p2p.models.AxonMapModel(rho=400, lam=200,
                                 xrange=(-12, 12), yrange=(-8, 8))
 model.build()
 
@@ -96,9 +96,9 @@ model.predict_percept(implant).play()
 # arc-like.
 #
 # To increase the arc length of individual phosphenes, we can choose a larger
-# ``axlambda`` value:
+# ``lam`` value:
 
-model.axlambda = 600
+model.lam = 600
 model.build()
 model.predict_percept(implant).play()
 
@@ -108,7 +108,7 @@ model.predict_percept(implant).play()
 # very different to them:
 
 model.rho = 100
-model.axlambda = 1000
+model.lam = 1000
 model.build()
 model.predict_percept(implant).play()
 
@@ -127,14 +127,14 @@ p2p.stimuli.GirlPool().play()
 
 implant = p2p.implants.ArgusII(stim=p2p.stimuli.GirlPool())
 model.rho = 400
-model.axlambda = 200
+model.lam = 200
 model.build()
 model.predict_percept(implant).play()
 
 ###############################################################################
 # Here is the same video with longer phosphenes:
 
-model.axlambda = 600
+model.lam = 600
 model.build()
 model.predict_percept(implant).play()
 
@@ -142,7 +142,7 @@ model.predict_percept(implant).play()
 # Here is the same video with thin and long phosphenes:
 
 model.rho = 100
-model.axlambda = 1000
+model.lam = 1000
 model.build()
 model.predict_percept(implant).play()
 

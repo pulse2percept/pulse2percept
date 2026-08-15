@@ -48,7 +48,7 @@ import numpy as np
 from pulse2percept.implants import ArgusII
 from pulse2percept.models import BiphasicAxonMapModel
 from pulse2percept.stimuli import BiphasicPulseTrain
-model = BiphasicAxonMapModel(rho=200, axlambda=800)
+model = BiphasicAxonMapModel(rho=200, lam=800)
 
 ##############################################################################
 # Parameters you don't specify will take on default values. You can inspect
@@ -57,7 +57,7 @@ model = BiphasicAxonMapModel(rho=200, axlambda=800)
 print(model)
 
 ##############################################################################
-# The most important parameters are ``rho`` and ``axlambda``, which control the 
+# The most important parameters are ``rho`` and ``lam``, which control the 
 # radial and axonal current spread, respectively. The parameters ``a0``-``a9`` are 
 # coefficients for the size, streak, and bright models, which will be discussed
 # later in this example.
@@ -200,7 +200,7 @@ print(model.size_model.a5)
 # scaling can easily be disabled by setting ``a0`` to 0 and ``a1`` to 1. If we increase 
 # pulse duration like we did previously, we will now see that only streak length decreases, 
 # and we no longer have to change amplitude to account for change in threshold
-model = BiphasicAxonMapModel(rho=200, axlambda=800)
+model = BiphasicAxonMapModel(rho=200, lam=800)
 model.a0 = 0
 model.a1 = 1
 model.build()
@@ -229,7 +229,7 @@ plt.show()
 # will probably be enough. However, the effect models are completely modular, and 
 # can be replaced by any python callable with the parameters frequency, amplitude, 
 # and pulse duration. For example, we can easily change the model to no longer scale size
-model = BiphasicAxonMapModel(rho=200, axlambda=800)
+model = BiphasicAxonMapModel(rho=200, lam=800)
 def size_modulation(freq, amp, pdur):
     return 1
 model.size_model = size_modulation

@@ -16,7 +16,7 @@ from collections import OrderedDict as ODict
 from functools import wraps
 from string import ascii_uppercase
 
-from .deprecation import warn_deprecated_params
+from .deprecation import warn_deprecated_params, rename_deprecated_params
 
 
 class PrettyPrint(object, metaclass=abc.ABCMeta):
@@ -116,6 +116,24 @@ class FreezeError(AttributeError):
     """
 
 
+def has_own_attr(obj, name):
+    """Whether ``obj`` has an attribute ``name``, without running its getter
+
+    ``hasattr`` *invokes* a property or other descriptor just to answer the
+    question, which for a :py:class:`~pulse2percept.utils.deprecated_alias`
+    means a spurious deprecation warning every time an attribute is merely
+    probed. Looking the name up on the type instead settles the same question
+    without ever reading the instance's value.
+
+    Note that this does not consult ``__getattr__``, so it answers "does the
+    object own this attribute", not the broader "can this attribute be read".
+
+    .. versionadded:: 0.10.0
+
+    """
+    return name in getattr(obj, '__dict__', {}) or hasattr(type(obj), name)
+
+
 def freeze_class(set):
     """Freezes a class
     Raise an error when trying to set an undeclared name, or when calling from
@@ -124,7 +142,10 @@ def freeze_class(set):
     """
 
     def set_attr(self, name, value):
-        if hasattr(self, name):
+        # The cheap check comes first so that assigning to an attribute never
+        # *reads* it (see ``has_own_attr``); `hasattr` then covers the names
+        # that only a ``__getattr__`` knows about:
+        if has_own_attr(self, name) or hasattr(self, name):
             # If attribute already exists, simply set it
             set(self, name, value)
             return
@@ -175,6 +196,12 @@ class Parametrized(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
     # override this (see ``SpatialModel``).
     _deprecated_params = {}
 
+    # Parameters that were renamed, and are still accepted under their old
+    # name. Maps the old name to the ``deprecated_alias`` that forwards it; an
+    # alias registers itself here when it is assigned in a subclass's body
+    # (see ``AxonMapSpatial``).
+    _renamed_params = {}
+
     def __init__(self, **params):
         """Parametrized constructor
 
@@ -191,6 +218,8 @@ class Parametrized(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         # applying a default must stay silent.
         warn_deprecated_params(type(self).__name__, params,
                                self._deprecated_params)
+        params = rename_deprecated_params(type(self).__name__, params,
+                                          self._renamed_params)
         # Then overwrite any arguments also given in `params`:
         for key, val in params.items():
             if key in defaults:
@@ -209,6 +238,8 @@ class Parametrized(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         """Set the parameters of this object"""
         warn_deprecated_params(type(self).__name__, params,
                                self._deprecated_params)
+        params = rename_deprecated_params(type(self).__name__, params,
+                                          self._renamed_params)
         for key, value in params.items():
             setattr(self, key, value)
 

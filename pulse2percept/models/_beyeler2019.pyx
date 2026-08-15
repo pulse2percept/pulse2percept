@@ -403,7 +403,7 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
             if c_isnan(ax_x) or c_isnan(ax_y):
                 continue
             # Activation as a function of distance to the cell body (depends
-            # on `axlambda`, precalculated during `build`):
+            # on `lam`, precalculated during `build`):
             sens = axon_segments[idx_ax, 2]
             # Activation of this segment over time, by adding up the
             # contribution of each electrode:

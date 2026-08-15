@@ -28,6 +28,16 @@ Highlights:
 
 API changes:
 
+* The ``axlambda`` parameter of the axon map models
+  (:py:class:`~pulse2percept.models.AxonMapModel`,
+  :py:class:`~pulse2percept.models.AxonMapSpatial`,
+  :py:class:`~pulse2percept.models.BiphasicAxonMapModel`,
+  :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial`, and
+  :py:class:`~pulse2percept.models.granley2021.DefaultStreakModel`) was
+  renamed to ``lam``, which sits better next to ``rho``. The old name still
+  works everywhere the new one does, but raises a ``DeprecationWarning`` and
+  will be removed in v0.11.0.
+
 * :py:class:`~pulse2percept.models.FadingTemporal` is now driven by
   :math:`\max(-A, 0)` rather than :math:`-A`: anodic current no longer reduces
   brightness, it is ignored. A stimulus that is purely cathodic is unaffected.
