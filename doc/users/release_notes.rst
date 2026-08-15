@@ -28,15 +28,10 @@ Highlights:
 
 API changes:
 
-* The ``axlambda`` parameter of the axon map models
-  (:py:class:`~pulse2percept.models.AxonMapModel`,
-  :py:class:`~pulse2percept.models.AxonMapSpatial`,
-  :py:class:`~pulse2percept.models.BiphasicAxonMapModel`,
-  :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial`, and
-  :py:class:`~pulse2percept.models.granley2021.DefaultStreakModel`) was
-  renamed to ``lam``, which sits better next to ``rho``. The old name still
-  works everywhere the new one does, but raises a ``DeprecationWarning`` and
-  will be removed in v0.11.0.
+* The ``axlambda`` parameter of the axon map models was renamed to ``lam``,
+  which sits better next to ``rho``. The old name still works everywhere the
+  new one does, but raises a ``DeprecationWarning`` and will be removed in
+  v0.11.0.
 
 * :py:class:`~pulse2percept.models.FadingTemporal` is now driven by
   :math:`\max(-A, 0)` rather than :math:`-A`: anodic current no longer reduces
@@ -59,13 +54,8 @@ API changes:
   it, and each frame now produces a pulse train rather than a single pulse.
   Pass ``stretch=True`` for the old gray-level mapping.
 
-* Scaling a :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` now scales
-  the ``amp`` recorded in its metadata, so ``pt * 2`` predicts the percept of a
-  train built at twice the amplitude rather than the original one. Adding a DC
-  offset (``pt + 5``) drops the pulse parameters instead, since the result is
-  no longer a biphasic pulse train;
-  :py:class:`~pulse2percept.models.BiphasicAxonMapModel` then rejects it
-  (:issue:`435`).
+* :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` now records ``amp`` in
+  its metadata as a magnitude.
 
 * :py:class:`~pulse2percept.implants.ProsthesisSystem` now exposes ``raster``
   and ``max_current``.
@@ -116,10 +106,7 @@ Bug fixes:
   it. Previously the four channels were reinterpreted as RGB, which sheared the
   color channels across every row.
 
-* Stimulus metadata now survives ``predict_percept``. Spatial models are handed
-  a copy of the stimulus with duplicate frames collapsed, and that copy used to
-  be built without any metadata, so models that read pulse parameters from it
-  saw none (:issue:`545`).
+* Stimulus metadata now survives ``predict_percept`` and other transformations.
 
 * Visual-field-map equality now handles array-valued attributes correctly,
   maps are hashable again, and maps of different classes no longer compare

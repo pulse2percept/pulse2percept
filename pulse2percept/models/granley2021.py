@@ -583,10 +583,10 @@ class BiphasicAxonMapModel(Model):
 
         This model interacts with `Stimulus` objects by reading the intended
         amplitude, frequency, and pulse duration from their metadata, not
-        from the raw stimulus data. Scaling a
-        :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` (``pt * 2``)
-        updates that metadata and does change the percept; editing the data
-        array in place does not.
+        from the raw stimulus data. The arithmetic operators keep that
+        metadata in sync, so scaling a pulse train (``pt * 2``) or the
+        stimulus assembled from one (``implant.stim * 2``) does change the
+        percept, while editing the data array in place does not.
 
     Parameters
     ----------

@@ -749,8 +749,9 @@ def test_Stimulus_shallow_copy():
         npt.assert_equal(copied.freq, stim.freq)
         npt.assert_equal(copied.cathodic_first, stim.cathodic_first != flips)
         npt.assert_equal(copied.is_compressed, stim.is_compressed)
-        # Metadata is independent. Its contents need not be identical: the
-        # operators keep the pulse parameters in sync with the data (see
+        # Metadata is independent. Its contents need not be identical: both
+        # `append` and the operators keep the pulse parameters in sync with the
+        # data, dropping them where they no longer describe it (see
         # test_pulse_trains.py):
         npt.assert_equal(copied.metadata is stim.metadata, False)
         copied.metadata['user'] = 'changed'

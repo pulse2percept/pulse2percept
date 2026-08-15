@@ -294,6 +294,44 @@ def merge_time_axes(data, time, merge_tolerance=1e-6):
     return new_data, [new_time]
 
 
+def _scale_factor(a, op, b, field):
+    """The factor by which an arithmetic operator scales the stimulus data
+
+    Returns 1 for an operator that leaves every amplitude where it is (a shift
+    in time, or adding zero), the factor for one that scales them all by the
+    same number, and None for one that does neither: a DC offset moves the
+    waveform rather than resizing it, and no factor describes that.
+
+    Stimulus types that record the parameters of their waveform in their
+    metadata read this to keep those parameters in sync with the data. See
+    :py:meth:`~pulse2percept.stimuli.Stimulus._rescale_metadata`.
+    """
+    if field == 'time':
+        # Shifting in time moves the whole stimulus, but every amplitude in it
+        # stays what it was:
+        return 1.0
+    # `_apply_operator` has established that exactly one of the operands is a
+    # scalar; the other one is the data:
+    scalar = b if np.ndim(a) else a
+    if op is ops.mul:
+        # Multiplication is commutative, so the operand order is moot:
+        factor = scalar
+    elif op is ops.truediv:
+        # `Stimulus` has no `__rtruediv__`, so this is always data/scalar.
+        # Dividing the data by zero fills it with inf rather than raising, so
+        # the factor must not raise either -- it comes out non-finite below:
+        with np.errstate(divide='ignore', invalid='ignore'):
+            factor = np.divide(1.0, scalar)
+    elif scalar == 0:
+        # `stim + 0` and `stim - 0` change nothing; `0 - stim` flips the sign:
+        factor = -1.0 if np.ndim(b) else 1.0
+    else:
+        return None
+    # `stim * np.inf`, `stim * np.nan` and `stim / 0` leave a waveform of
+    # infinities and NaNs, which is not a scaled version of anything:
+    return factor if np.isfinite(factor) else None
+
+
 class Stimulus(PrettyPrint):
     """Stimulus
 
@@ -686,6 +724,67 @@ class Stimulus(PrettyPrint):
         stim.metadata = deepcopy(self.metadata)
         return stim
 
+    @classmethod
+    def _rescale_params(cls, metadata, factor):
+        """Rewrite waveform parameters for a waveform scaled by ``factor``
+
+        Some stimulus types describe their waveform with parameters that a
+        model reads back instead of measuring the data itself: a
+        :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` records
+        amplitude, frequency and phase duration, and
+        :py:class:`~pulse2percept.models.BiphasicAxonMapModel` predicts from
+        those rather than from ``data``. Such a type overrides this method, so
+        that an operation on the data carries its parameters along.
+
+        Returns the metadata a stimulus of this class would carry after its
+        data was multiplied by ``factor``, or -- for ``factor=None`` -- after
+        an operation that leaves it no longer describable by those parameters
+        at all. A plain ``Stimulus`` has no such parameters, so there is
+        nothing to keep in sync.
+
+        Parameters
+        ----------
+        metadata : dict
+            The metadata of a stimulus of this class. Never modified in place.
+        factor : float or None
+            The factor the data was scaled by, or None if the operation was
+            not a scaling (see ``_scale_factor``).
+
+        Returns
+        -------
+        metadata : dict
+        """
+        return metadata
+
+    def _rescale_metadata(self, factor):
+        """Keep the metadata in sync with data that was scaled by ``factor``
+
+        Called on the *copy* returned by ``append`` and by the arithmetic
+        operators, once its data container has been replaced. That copy owns
+        its metadata outright (``_shallow_copy`` deep-copies it), so this is
+        free to rewrite it in place.
+
+        A stimulus assembled from a collection carries the metadata of each
+        source under ``metadata['electrodes']``, filed by electrode name and
+        tagged with the class it came from. Dispatch to that class, which is
+        the one that knows what its own parameters mean -- otherwise
+        ``implant.stim * 2`` would scale the data and go on advertising the
+        amplitude the pulse trains were built with.
+        """
+        if factor == 1:
+            # Nothing about the waveform changed
+            return
+        elec_meta = self.metadata.get('electrodes')
+        if not elec_meta:
+            return
+        for entry in elec_meta.values():
+            if not isinstance(entry, dict):
+                continue
+            src, meta = entry.get('type'), entry.get('metadata')
+            if isinstance(meta, dict) and isinstance(src, type) and \
+                    issubclass(src, Stimulus):
+                entry['metadata'] = src._rescale_params(meta, factor)
+
     def compress(self):
         """Compress the source data
 
@@ -764,6 +863,11 @@ class Stimulus(PrettyPrint):
         stim._stim = {'data': data,
                       'electrodes': self.electrodes,
                       'time': time}
+        # Concatenating two waveforms in time is not a rescaling of either, so
+        # any parameters describing the first one no longer describe the
+        # result -- a pulse train appended to another is not one pulse train
+        # at one amplitude and frequency, whatever its type still says:
+        stim._rescale_metadata(None)
         return stim
 
     def remove(self, electrodes):
@@ -1110,6 +1214,10 @@ class Stimulus(PrettyPrint):
         stim._stim = {'data': op(a, b) if field == 'data' else stim.data.copy(),
                       'electrodes': stim.electrodes.copy(),
                       'time': time}
+        # Parameters that describe the waveform (a pulse train's amplitude,
+        # say) have to follow the data, or a model reading them back predicts
+        # from a stimulus that is no longer the one it was handed:
+        stim._rescale_metadata(_scale_factor(a, op, b, field))
         return stim
 
     def __add__(self, scalar):
