@@ -43,7 +43,7 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
     ``logf`` per segment.
 
     ``F_streak`` is finite and strictly positive: the default streak model
-    clamps it to ``min_lambda ** 2 / axlambda ** 2``, and ``_predict_spatial``
+    clamps it to ``min_lambda ** 2 / lam ** 2``, and ``_predict_spatial``
     rejects a custom model that returns anything else.
     
     Parameters

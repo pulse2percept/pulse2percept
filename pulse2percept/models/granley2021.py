@@ -7,7 +7,8 @@ from . import AxonMapSpatial, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
 from ..percepts import Percept
-from ..utils import FreezeError
+from ..utils import FreezeError, rename_parameter
+from ..utils.base import has_own_attr
 from .base import NotBuiltError, BaseModel
 from ._granley2021 import fast_biphasic_axon_map
 
@@ -147,16 +148,23 @@ class DefaultStreakModel(BaseModel):
 
     Parameters:
     ------------
-    axlambda :  float32
-        Axlambda parameter of BiphasicAxonMapModel (axonal decay rate)
+    lam :  float32
+        ``lam`` parameter of BiphasicAxonMapModel (axonal decay rate)
+
+        .. versionchanged:: 0.10.0
+
+            Renamed from ``axlambda``. The old name still works as a keyword
+            argument, but is deprecated and will be removed in v0.11.0.
     a7, a8, a9: float, optional
         Regression coefficients for streak length vs pulse duration (Eq 6)
         F_streak = -a7*pdur^a8 + a9
     """
 
-    def __init__(self, axlambda, **params):
+    @rename_parameter('axlambda', 'lam', deprecated_version='0.10.0',
+                      removed_version='0.11.0')
+    def __init__(self, lam, **params):
         super(DefaultStreakModel, self).__init__(**params)
-        self.axlambda = axlambda
+        self.lam = lam
         self.build()
 
     def get_default_params(self):
@@ -175,7 +183,7 @@ class DefaultStreakModel(BaseModel):
         Outputs value for each electrode that lambda should be scaled by (F_streak)
         Must support batching (freq, amp, pdur may be arrays)
         """
-        min_f_streak = self.min_lambda**2 / self.axlambda ** 2
+        min_f_streak = self.min_lambda**2 / self.lam ** 2
         F_streak = self.a9 - self.a7 * pdur ** self.a8
         return np.maximum(F_streak, min_f_streak)
 
@@ -218,8 +226,14 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
         Options:
         --------
-        axlambda: double, optional
+        lam: double, optional
             Exponential decay constant along the axon(microns).
+
+            .. versionchanged:: 0.10.0
+
+                Renamed from ``axlambda``, which reads poorly next to ``rho``.
+                The old name still works, but is deprecated and will be
+                removed in v0.11.0.
         rho: double, optional
             Exponential decay constant away from the axon(microns).
         min_current_spread: float, optional
@@ -300,11 +314,14 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         if self.size_model is None:
             self.size_model = DefaultSizeModel(self.rho)
         if self.streak_model is None:
-            self.streak_model = DefaultStreakModel(self.axlambda)
+            self.streak_model = DefaultStreakModel(self.lam)
         for key, val in params.items():
             if key in ['bright_model', 'size_model', 'streak_model']:
                 continue
-            setattr(self, key, val)
+            # `super().__init__` has already warned about any deprecated name
+            # among these, so set the current one rather than warn twice:
+            spec = self._renamed_params.get(key)
+            setattr(self, spec.new_name if spec else key, val)
 
     def __getattr__(self, attr):
         # Called when normal get attribute fails
@@ -337,14 +354,16 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         etc
         """
         found = False
-        # try to set it ourselves, but can't use get_attr
-        try:
-            self.__getattribute__(name)
+        # Try to set it ourselves, but can't use get_attr. Probe the type
+        # rather than read the attribute, so that a `deprecated_alias` does
+        # not warn just for being asked whether it exists:
+        if has_own_attr(self, name):
             # if we get here, we have the attribute, not (neccesarily) an effects model
-            super().__setattr__(name, value)
-            found = True
-        except AttributeError:
-            pass
+            try:
+                super().__setattr__(name, value)
+                found = True
+            except AttributeError:
+                pass
         # Check whether the attribute is a part of any
         # bright/size/streak model
         if name not in ['bright_model', 'size_model', 'streak_model', 'is_built', '_is_built']:
@@ -585,8 +604,14 @@ class BiphasicAxonMapModel(Model):
 
         Options:
         ^^^^^^^^
-        axlambda: double, optional
+        lam: double, optional
             Exponential decay constant along the axon(microns).
+
+            .. versionchanged:: 0.10.0
+
+                Renamed from ``axlambda``, which reads poorly next to ``rho``.
+                The old name still works, but is deprecated and will be
+                removed in v0.11.0.
         rho: double, optional
             Exponential decay constant away from the axon(microns).
         min_current_spread: float, optional

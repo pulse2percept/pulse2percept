@@ -1,4 +1,5 @@
 import copy
+import warnings
 
 import numpy as np
 import pytest
@@ -12,6 +13,7 @@ from pulse2percept.models import BiphasicAxonMapModel, BiphasicAxonMapSpatial, \
 from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
 from pulse2percept.utils.base import FreezeError
+from pulse2percept.utils.testing import assert_warns_msg
 
 # Building an axon map writes a cache to a relative path; keep it in a
 # temporary directory instead of wherever pytest was started from:
@@ -63,7 +65,7 @@ def test_deepcopy_DefaultStreakModel():
 
 
 def test_eq_DefaultStreakModel():
-    model = DefaultStreakModel(axlambda=200)
+    model = DefaultStreakModel(lam=200)
 
     # Assert not equal for differing classes
     npt.assert_equal(model == DefaultSizeModel, False)
@@ -80,7 +82,7 @@ def test_eq_DefaultStreakModel():
     npt.assert_equal(model == copied, True)
 
     # Assert different models do not equal each other
-    differing_model = DefaultStreakModel(axlambda=300)
+    differing_model = DefaultStreakModel(lam=300)
     npt.assert_equal(model != differing_model, True)
 
 
@@ -133,7 +135,7 @@ def test_deepcopy_BiphasicAxonMapModel():
     npt.assert_equal(original.__dict__, copied.__dict__)
 
     # Assert changing copied doesn't change original
-    copied.spatial.axlambda = 200
+    copied.spatial.lam = 200
     npt.assert_equal(original.spatial != copied.spatial, True)
 
 def test_effects_models():
@@ -177,7 +179,7 @@ def test_effects_models_removed_engine(cls, arg):
 def test_biphasicAxonMapSpatial():
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
-        BiphasicAxonMapSpatial(axlambda=9).build()
+        BiphasicAxonMapSpatial(lam=9).build()
 
     model = BiphasicAxonMapModel(xystep=2).build()
     # Only accepts biphasic pulse trains with no delay dur
@@ -234,7 +236,7 @@ def test_biphasicAxonMapSpatial():
     npt.assert_equal(np.any(percept.data[:, :, 1:]), False)
 
     # Test that default models give expected values
-    model = BiphasicAxonMapSpatial(rho=400, axlambda=600,
+    model = BiphasicAxonMapSpatial(rho=400, lam=600,
                                    xystep=1, xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     implant = ArgusII()
@@ -248,7 +250,7 @@ def test_biphasicAxonMapSpatial():
 
 
 def test_biphasicAxonMapModel():
-    set_params = {'xystep': 2, 'rho': 432, 'axlambda': 20,
+    set_params = {'xystep': 2, 'rho': 432, 'lam': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
                   'loc_od': (5, 6)}
@@ -270,11 +272,11 @@ def test_biphasicAxonMapModel():
     # If the spatial model and an effects model have a parameter with the
     # Same name, both need to be changed
     model.rho = 350
-    model.axlambda = 450
+    model.lam = 450
     npt.assert_equal(model.spatial.size_model.rho, 350)
-    npt.assert_equal(model.spatial.streak_model.axlambda, 450)
+    npt.assert_equal(model.spatial.streak_model.lam, 450)
     npt.assert_equal(model.rho, 350)
-    npt.assert_equal(model.axlambda, 450)
+    npt.assert_equal(model.lam, 450)
 
     # Effect model parameters can be passed even in constructor
     model = BiphasicAxonMapModel(a0=5, rho=432)
@@ -347,7 +349,62 @@ def test_biphasicAxonMapModel():
 
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
-        BiphasicAxonMapModel(axlambda=9).build()
+        BiphasicAxonMapModel(lam=9).build()
+
+
+@pytest.mark.parametrize('cls', [BiphasicAxonMapSpatial, BiphasicAxonMapModel])
+def test_biphasicAxonMap_deprecated_axlambda(cls):
+    # `lam` was called `axlambda` until 0.10.0. The old name still works, and
+    # still reaches the streak model, but warns. These classes inherit the
+    # alias from `AxonMapSpatial`, so pin the class the message names: it has
+    # to be the one the user is holding, not the one it was declared on.
+    msg = f"The 'axlambda' parameter of {cls.__name__} is deprecated"
+    assert_warns_msg(DeprecationWarning, cls, msg, axlambda=400)
+    with pytest.warns(DeprecationWarning):
+        model = cls(axlambda=400)
+    npt.assert_equal(model.lam, 400)
+    npt.assert_equal(model.streak_model.lam, 400)
+
+    # Reached through the descriptor rather than the constructor, the alias
+    # only ever sees the spatial model, even on the composite:
+    spatial_msg = ("The 'axlambda' parameter of BiphasicAxonMapSpatial is "
+                   "deprecated")
+    assert_warns_msg(DeprecationWarning, setattr, spatial_msg, model,
+                     'axlambda', 500)
+    npt.assert_equal(model.lam, 500)
+    npt.assert_equal(model.streak_model.lam, 500)
+    with pytest.warns(DeprecationWarning, match="BiphasicAxonMapSpatial"):
+        npt.assert_equal(model.axlambda, 500)
+
+    # Supplying both names is an error, whichever order they come in:
+    for params in ({'axlambda': 400, 'lam': 500},
+                   {'lam': 500, 'axlambda': 400}):
+        with pytest.raises(TypeError, match="same parameter"):
+            cls(**params)
+
+    # The new name stays silent:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        model = cls(lam=400)
+        model.lam = 500
+        npt.assert_equal(model.lam, 500)
+        npt.assert_equal(model.streak_model.lam, 500)
+
+
+def test_DefaultStreakModel_deprecated_axlambda():
+    # The streak model takes `lam` in its signature, so the old name is only
+    # forwarded as a keyword argument:
+    assert_warns_msg(DeprecationWarning, DefaultStreakModel,
+                     "The 'axlambda' parameter of DefaultStreakModel is "
+                     "deprecated since version 0.10.0, and will be removed in "
+                     "version 0.11.0. Use 'lam' instead.", axlambda=200)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        npt.assert_equal(DefaultStreakModel(axlambda=200).lam, 200)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        npt.assert_equal(DefaultStreakModel(lam=200).lam, 200)
+        npt.assert_equal(DefaultStreakModel(200).lam, 200)
 
 
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
@@ -413,7 +470,7 @@ def test_BiphasicAxonMapModel_min_current_spread_error_bound(amp):
     implant = ArgusII(stim={e: BiphasicPulseTrain(freq, amp, pdur)
                             for e in ArgusII().electrode_names})
     kwargs = {'xrange': (-14, 14), 'yrange': (-10, 10), 'xystep': 0.75,
-              'rho': 200, 'axlambda': 800, 'verbose': False}
+              'rho': 200, 'lam': 800, 'verbose': False}
 
     model = BiphasicAxonMapModel(min_current_spread=0, **kwargs).build()
     exact = model.predict_percept(implant).data
@@ -487,7 +544,7 @@ def test_BiphasicAxonMapModel_reduces_to_AxonMapModel():
     from pulse2percept.models import AxonMapModel
 
     kwargs = {'xrange': (-8, 8), 'yrange': (-8, 8), 'xystep': 0.5,
-              'rho': 200, 'axlambda': 800, 'verbose': False}
+              'rho': 200, 'lam': 800, 'verbose': False}
     electrodes = ('A2', 'C5', 'F8')
 
     biphasic = BiphasicAxonMapModel(**kwargs)

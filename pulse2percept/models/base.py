@@ -15,7 +15,7 @@ from ..stimuli import Stimulus
 from ..percepts import Percept
 from ..topography import Curcio1990Map, Grid2D
 from ..utils import (PrettyPrint, FreezeError, Parametrized, bisect,
-                     warn_deprecated_params)
+                     warn_deprecated_params, rename_deprecated_params)
 from ..utils.constants import ZORDER
 
 
@@ -236,8 +236,10 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
             Example: ``model.build(param1=val)``
 
         """
-        for key, val in build_params.items():
-            setattr(self, key, val)
+        # Via `set_params`, not a bare `setattr` loop, so that a deprecated or
+        # renamed parameter is handled here exactly as it is in the
+        # constructor:
+        self.set_params(**build_params)
         self._build()
         self.is_built = True
         return self
@@ -426,8 +428,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             Example: ``model.build(param1=val)``
 
         """
-        for key, val in build_params.items():
-            setattr(self, key, val)
+        # See `BaseModel.build`:
+        self.set_params(**build_params)
         if self.vfmap.ndim not in self.ndim:
             raise ValueError(f"Model expects one of {self.ndim} dimensions, but "
                              f"visual field map has {self.vfmap.ndim} dimensions.")
@@ -1247,9 +1249,12 @@ class Model(PrettyPrint):
         # here too. Collect both sides first so a parameter deprecated on the
         # spatial *and* temporal model only warns once.
         specs = {}
+        renamed = {}
         for model in (self.spatial, self.temporal):
             specs.update(getattr(model, '_deprecated_params', {}))
+            renamed.update(getattr(model, '_renamed_params', {}))
         warn_deprecated_params(type(self).__name__, params, specs)
+        params = rename_deprecated_params(type(self).__name__, params, renamed)
         for key, val in params.items():
             setattr(self, key, val)
 

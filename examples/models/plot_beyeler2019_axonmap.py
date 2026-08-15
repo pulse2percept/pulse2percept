@@ -38,7 +38,7 @@ Creating the model
 The first step is to instantiate the
 :py:class:`~pulse2percept.models.AxonMapModel` class by calling its
 constructor method.
-The two most important parameters to set are ``rho`` and ``axlambda`` from
+The two most important parameters to set are ``rho`` and ``lam`` from
 the equation above (here set to 150 micrometers and 500 micrometers,
 respectively):
 
@@ -48,7 +48,7 @@ respectively):
 import numpy as np
 from pulse2percept.implants import ArgusII
 from pulse2percept.models import AxonMapModel
-model = AxonMapModel(rho=150, axlambda=500)
+model = AxonMapModel(rho=150, lam=500)
 
 ##############################################################################
 # Parameters you don't specify will take on default values. You can inspect
@@ -102,7 +102,7 @@ model.build()
 #     having to rebuild (which takes time).
 #
 #     However, if you change important model parameters outside the constructor
-#     (e.g., by directly setting ``model.axlambda = 100``), you will have to
+#     (e.g., by directly setting ``model.lam = 100``), you will have to
 #     call ``model.build()`` again for your changes to take effect.
 #
 # Assigning a stimulus
@@ -193,7 +193,7 @@ ax.set_title('Predicted percept')
 # However, you may have to increase the number of axons and number of segments
 # per axon to get a smooth percept out:
 
-model = AxonMapModel(rho=200, axlambda=10, n_axons=3000, n_ax_segments=3000)
+model = AxonMapModel(rho=200, lam=10, n_axons=3000, n_ax_segments=3000)
 model.build()
 percept = model.predict_percept(implant)
 ax = percept.plot()

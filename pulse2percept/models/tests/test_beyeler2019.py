@@ -5,6 +5,7 @@ import numpy.testing as npt
 import copy
 import os
 import pickle
+import warnings
 
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
@@ -190,7 +191,7 @@ def test_ScoreboardModel_predict_percept():
 
 
 def test_AxonMapSpatial():
-    # AxonMapSpatial automatically sets `rho`, `axlambda`:
+    # AxonMapSpatial automatically sets `rho`, `lam`:
     model = AxonMapSpatial(xystep=5)
 
     # User can set `rho`:
@@ -220,10 +221,10 @@ def test_AxonMapSpatial():
 
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
-        AxonMapSpatial(axlambda=9).build()
+        AxonMapSpatial(lam=9).build()
 
     # Multiple frames are processed independently:
-    model = AxonMapSpatial(rho=200, axlambda=100, xystep=5,
+    model = AxonMapSpatial(rho=200, lam=100, xystep=5,
                            xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 0], 'B3': [0, 2]}))
@@ -289,7 +290,7 @@ def test_AxonMapSpatial_plot():
 
 
 def test_AxonMapModel():
-    set_params = {'xystep': 2, 'rho': 432, 'axlambda': 20,
+    set_params = {'xystep': 2, 'rho': 432, 'lam': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
                   'loc_od': (5, 6)}
@@ -331,7 +332,85 @@ def test_AxonMapModel():
 
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
-        AxonMapModel(axlambda=9).build()
+        AxonMapModel(lam=9).build()
+
+
+@pytest.mark.parametrize('cls', [AxonMapSpatial, AxonMapModel])
+def test_AxonMap_deprecated_axlambda(cls):
+    # `lam` was called `axlambda` until 0.10.0. The old name still works,
+    # everywhere the new one does, but warns:
+    msg = "The 'axlambda' parameter of"
+    assert_warns_msg(DeprecationWarning, cls, msg, axlambda=400)
+    with pytest.warns(DeprecationWarning):
+        model = cls(axlambda=400)
+    npt.assert_equal(model.lam, 400)
+
+    # Setting and getting the attribute:
+    assert_warns_msg(DeprecationWarning, setattr, msg, model, 'axlambda', 500)
+    npt.assert_equal(model.lam, 500)
+    with pytest.warns(DeprecationWarning):
+        npt.assert_equal(model.axlambda, 500)
+
+    # And `set_params` and `build`. `Model.set_params` takes a dict, whereas
+    # `SpatialModel.set_params` takes keyword arguments:
+    if cls is AxonMapModel:
+        set_params = lambda: model.set_params({'axlambda': 600})
+    else:
+        set_params = lambda: model.set_params(axlambda=600)
+    assert_warns_msg(DeprecationWarning, set_params, msg)
+    npt.assert_equal(model.lam, 600)
+    # `build` reads the axon cache, which raises a ResourceWarning of its own,
+    # so this one cannot insist on a single warning:
+    with pytest.warns(DeprecationWarning, match="'axlambda' parameter"):
+        model.build(axlambda=700)
+    npt.assert_equal(model.lam, 700)
+
+    # The new name stays silent:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        model = cls(lam=400)
+        model.lam = 500
+        npt.assert_equal(model.lam, 500)
+
+
+@pytest.mark.parametrize('cls', [AxonMapSpatial, AxonMapModel])
+def test_AxonMap_axlambda_and_lam_collide(cls):
+    # `axlambda` and `lam` are the same parameter, so supplying both must
+    # raise rather than let the order they were passed in decide the value.
+    # `**kwargs` preserves insertion order, so check both spellings:
+    for params in ({'axlambda': 400, 'lam': 500},
+                   {'lam': 500, 'axlambda': 400}):
+        with pytest.raises(TypeError, match="same parameter"):
+            cls(**params)
+        model = cls(xystep=5)
+        with pytest.raises(TypeError, match="same parameter"):
+            model.build(**params)
+        with pytest.raises(TypeError, match="same parameter"):
+            if cls is AxonMapModel:
+                model.set_params(params)
+            else:
+                model.set_params(**params)
+
+
+@pytest.mark.parametrize('cls', [AxonMapSpatial, AxonMapModel])
+def test_AxonMap_axlambda_warning_blames_caller(cls):
+    # A deprecation warning is only actionable if it points at the line that
+    # used the old name. The alias is reached directly on a spatial model, but
+    # through `Model.__getattr__`/`__setattr__` on a composite one, so the
+    # attribution has to hold for both:
+    model = cls(xystep=5)
+    with pytest.warns(DeprecationWarning) as record:
+        model.axlambda
+    npt.assert_equal(record[0].filename, __file__)
+    with pytest.warns(DeprecationWarning) as record:
+        model.axlambda = 400
+    npt.assert_equal(record[0].filename, __file__)
+    # The constructor reaches it through a chain of `super().__init__` calls
+    # instead, whose depth differs between the two classes:
+    with pytest.warns(DeprecationWarning) as record:
+        cls(axlambda=400)
+    npt.assert_equal(record[0].filename, __file__)
+
 
 # Build the model inside the test, not in the decorator: arguments to
 # `parametrize` are evaluated at import time, so building here would run on
@@ -503,14 +582,14 @@ def test_AxonMapModel_calc_axon_sensitivity():
     # precision costs about as much accuracy as the whole comparison has to
     # spare. Building it here in float32 left roughly a 1.2x margin against
     # the tolerance, which held on some platforms and not on others.
-    max_d2 = -2.0 * model.axlambda ** 2 * np.log(model.min_ax_sensitivity)
+    max_d2 = -2.0 * model.lam ** 2 * np.log(model.min_ax_sensitivity)
     for model_ax, xy in zip(axon_contrib, xyret):
         axon = np.insert(model_ax, 0, list(xy) + [0],
                          axis=0).astype(np.float64)
         d2 = np.cumsum(np.sqrt(np.diff(axon[:, 0], axis=0) ** 2 +
                                np.diff(axon[:, 1], axis=0) ** 2))**2
         idx_d2 = d2 < max_d2
-        sensitivity = np.exp(-d2[idx_d2] / (2.0 * model.spatial.axlambda ** 2))
+        sensitivity = np.exp(-d2[idx_d2] / (2.0 * model.spatial.lam ** 2))
         # A relative bound, unlike `assert_almost_equal`'s absolute one: the
         # sensitivities span [min_ax_sensitivity, 1], and float32 resolves
         # them to ~1.2e-7 relative wherever they sit in that range.
@@ -559,7 +638,7 @@ def test_AxonMapModel_calc_bundle_tangent_fast():
 
 
 def test_AxonMapModel_predict_percept():
-    model = AxonMapModel(xystep=0.55, axlambda=100, rho=100,
+    model = AxonMapModel(xystep=0.55, lam=100, rho=100,
                          thresh_percept=0,
                          xrange=(-20, 20), yrange=(-15, 15),
                          n_axons=500)
@@ -583,7 +662,7 @@ def test_AxonMapModel_predict_percept():
     npt.assert_almost_equal(np.sum(percept.data[39:, :, 0]), 0)
 
     # Full Argus II with small lambda: 60 bright spots
-    model = AxonMapModel(xystep=1, rho=100, axlambda=40,
+    model = AxonMapModel(xystep=1, rho=100, lam=40,
                          xrange=(-20, 20), yrange=(-15, 15), n_axons=500)
     model.build()
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
@@ -593,7 +672,7 @@ def test_AxonMapModel_predict_percept():
     npt.assert_equal(np.sum(percept.data > 0.275), 56)
 
     # Model gives same outcome as Spatial:
-    spatial = AxonMapSpatial(xystep=1, rho=100, axlambda=40,
+    spatial = AxonMapSpatial(xystep=1, rho=100, lam=40,
                              xrange=(-20, 20), yrange=(-15, 15), n_axons=500)
     spatial.build()
     spatial_percept = spatial.predict_percept(ArgusII(stim=np.ones(60)))

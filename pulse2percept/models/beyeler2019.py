@@ -9,6 +9,7 @@ from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
+from ..utils import deprecated_alias
 from ..utils.constants import ZORDER
 from ..topography import Watson2014Map
 from ..implants import ProsthesisSystem, ElectrodeArray
@@ -257,8 +258,14 @@ class AxonMapSpatial(SpatialModel):
 
     Parameters
     ----------
-    axlambda : double, optional
+    lam : double, optional
         Exponential decay constant along the axon(microns).
+
+        .. versionchanged:: 0.10.0
+
+            Renamed from ``axlambda``, which reads poorly next to ``rho``. The
+            old name still works, but is deprecated and will be removed in
+            v0.11.0.
     rho : double, optional
         Exponential decay constant away from the axon(microns).
     min_current_spread : float, optional
@@ -331,7 +338,7 @@ class AxonMapSpatial(SpatialModel):
 
     .. important ::
         If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.axlambda = 100``), you will have to call
+        by directly setting ``model.lam = 100``), you will have to call
         ``model.build()`` again for your changes to take effect.
 
     Notes
@@ -339,6 +346,11 @@ class AxonMapSpatial(SpatialModel):
     *  The axon map is not very accurate when the upper bound of
        `ax_segments_range` is greater than 90 deg.
     """
+
+    #: ``lam`` used to be called ``axlambda``. The old name still reads and
+    #: writes ``lam``, with a ``DeprecationWarning``:
+    axlambda = deprecated_alias('lam', deprecated_version='0.10.0',
+                                removed_version='0.11.0')
 
     def __init__(self, **params):
         super(AxonMapSpatial, self).__init__(**params)
@@ -352,7 +364,7 @@ class AxonMapSpatial(SpatialModel):
             # Left or right eye:
             'eye': 'RE',
             'rho': 200,
-            'axlambda': 500,
+            'lam': 500,
             # Set the (x,y) location of the optic disc:
             'loc_od': (15.5, 1.5),
             'n_axons': 1000,
@@ -596,7 +608,7 @@ class AxonMapSpatial(SpatialModel):
 
         This function combines the x,y coordinates of each bundle segment with
         a sensitivity value that depends on the distance of the segment to the
-        cell body and ``self.axlambda``.
+        cell body and ``self.lam``.
 
         The number of ``bundles`` must equal the number of points on
         `self.grid``. The function will then assume that the i-th bundle passes
@@ -607,8 +619,8 @@ class AxonMapSpatial(SpatialModel):
         with the i-th location of the grid.
 
         After that, each axon segment gets a sensitivity value that depends
-        on the distance of the segment to the soma (with decay rate 
-        ``self.axlambda``). This is typically done during the build process, so
+        on the distance of the segment to the soma (with decay rate
+        ``self.lam``). This is typically done during the build process, so
         that the only work left to do during run time is to multiply the
         sensitivity value with the current applied to each segment.
 
@@ -626,7 +638,7 @@ class AxonMapSpatial(SpatialModel):
             Nx3 array, where the first two columns contain the retinal
             coordinates of each axon segment (microns), and the third column
             contains the sensitivity of the segment to electrical current.
-            The latter depends on ``self.axlambda``. Note that each axon will
+            The latter depends on ``self.lam``. Note that each axon will
             most likely have a different N, since segments whose sensitivity
             falls below ``min_ax_sensitivity`` are trimmed.
 
@@ -669,7 +681,7 @@ class AxonMapSpatial(SpatialModel):
         starts : (n_points + 1,) array
             Offsets of each axon into ``contrib``.
         """
-        lam = self.axlambda
+        lam = self.lam
         xyret = np.column_stack((self.grid.ret.x.ravel(),
                                  self.grid.ret.y.ravel()))
         blens = np.diff(boff)
@@ -849,8 +861,8 @@ class AxonMapSpatial(SpatialModel):
             raise ValueError(err_str)
 
     def _build(self):
-        if self.axlambda < 10:
-            raise ValueError('"axlambda" < 10 is not supported by this model. '
+        if self.lam < 10:
+            raise ValueError('"lam" < 10 is not supported by this model. '
                              'Consider using ScoreboardModel instead.')
         # In a left eye, the OD must have a negative x coordinate:
         self._correct_loc_od()
@@ -1064,8 +1076,14 @@ class AxonMapModel(Model):
 
     Parameters
     ----------
-    axlambda : double, optional
+    lam : double, optional
         Exponential decay constant along the axon(microns).
+
+        .. versionchanged:: 0.10.0
+
+            Renamed from ``axlambda``, which reads poorly next to ``rho``. The
+            old name still works, but is deprecated and will be removed in
+            v0.11.0.
     rho : double, optional
         Exponential decay constant away from the axon(microns).
     min_current_spread : float, optional
@@ -1138,7 +1156,7 @@ class AxonMapModel(Model):
 
     .. important ::
         If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.axlambda = 100``), you will have to call
+        by directly setting ``model.lam = 100``), you will have to call
         ``model.build()`` again for your changes to take effect.
 
     Notes
