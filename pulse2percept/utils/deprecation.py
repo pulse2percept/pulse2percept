@@ -51,10 +51,10 @@ def _warn_external(message, category=DeprecationWarning):
 
     A deprecation warning is only actionable if it points at the line that
     used the deprecated name, and no fixed ``stacklevel`` can do that here:
-    the same alias is reached directly (``spatial.lam``), through a composite
-    model's ``__getattr__`` or ``__setattr__``, and through a chain of
-    ``super().__init__`` calls whose depth differs per subclass. So walk out
-    of the package instead, and blame the first frame that is not ours.
+    the same alias is reached directly (``spatial.axlambda``), through a
+    composite model's ``__getattr__`` or ``__setattr__``, and through a chain
+    of ``super().__init__`` calls whose depth differs per subclass. So walk
+    out of the package instead, and blame the first frame that is not ours.
 
     .. seealso::
 

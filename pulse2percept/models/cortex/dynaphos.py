@@ -163,8 +163,8 @@ class DynaphosModel(BaseModel):
         """
         # import at runtime to avoid circular import
         from ...topography import Grid2D
-        for key, val in build_params.items():
-            setattr(self, key, val)
+        # See `BaseModel.build`:
+        self.set_params(**build_params)
         # check that freq/pdur fit
         window_dur = 1000.0 / self.freq
         if self.p_dur*2 > window_dur:
