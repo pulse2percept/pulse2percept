@@ -98,9 +98,9 @@ def test_FadingTemporal_matches_reference_integrator():
     ``fading_fast`` runs time in the outer loop and space in the inner one so
     that the inner loop vectorizes. This walks a couple of locations the
     obvious way -- one at a time, stepping forward -- and checks the kernel
-    agrees exactly. The stimulus straddles zero, so it also pins the half-wave
-    rectification: anodic samples must contribute nothing at all rather than
-    driving brightness down.
+    agrees to within a few ulps. The stimulus straddles zero, so it also pins
+    the half-wave rectification: anodic samples must contribute nothing at all
+    rather than driving brightness down.
     """
     model = FadingTemporal(dt=0.01, tau=50, thresh_percept=0).build()
     n_space, n_stim = 3, 5
@@ -116,9 +116,7 @@ def test_FadingTemporal_matches_reference_integrator():
     dt, tau = np.float32(model.dt), np.float32(model.tau)
     # `dt / tau` once, not `dt * x / tau` per step: the kernel divides in
     # advance and multiplies in the loop, since a division sits on the
-    # dependency chain of every step. The two forms differ in the last ulp, so
-    # a reference that divides per step no longer matches exactly -- and it is
-    # the exactness that makes this test worth having.
+    # dependency chain of every step.
     dt_tau = np.float32(dt / tau)
     idx_p = np.uint32(np.round(t_percept / model.dt))
     for s in range(n_space):
@@ -137,7 +135,17 @@ def test_FadingTemporal_matches_reference_integrator():
             if bright < 0:
                 bright = np.float32(0.0)
             if i == idx_p[frame]:
-                npt.assert_array_equal(got[s, frame], bright)
+                # Close, not equal. `bright + dt_tau * x` is a multiply feeding
+                # an add, which a C compiler may contract into a single fused
+                # multiply-add -- one rounding instead of two. Clang does so by
+                # default wherever FMA is in the baseline instruction set, so
+                # the kernel takes one legal rounding on Apple Silicon and the
+                # other under MSVC on x86-64, and NumPy here always takes the
+                # unfused one. What this test is for is the recurrence, the
+                # frame advance and the rectification; which of two correctly
+                # rounded results the host CPU produces is not something the
+                # library gets to promise.
+                npt.assert_allclose(got[s, frame], bright, rtol=1e-6)
                 frame += 1
 
 
