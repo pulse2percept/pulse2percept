@@ -112,6 +112,16 @@ Bug fixes:
   maps are hashable again, and maps of different classes no longer compare
   equal.
 
+* :py:meth:`~pulse2percept.topography.NeuropythyMap.cortex_to_dva` (and the
+  ``v1_to_dva``, ``v2_to_dva``, ``v3_to_dva`` methods that call it) now returns
+  coordinates with the same shape as its input. Previously NaN inputs were
+  dropped rather than mapped to NaN outputs, which silently shifted every point
+  after them into the wrong slot, and multidimensional inputs came back
+  flattened. Cortical points that land exactly on a mesh vertex now map to that
+  vertex instead of dividing by zero and returning NaN. The docstrings said the
+  cortical coordinates were in mm; they are in um, as the code always
+  assumed.
+
 v0.9.1 (2026-08-06)
 -------------------
 

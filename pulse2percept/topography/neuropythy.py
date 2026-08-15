@@ -308,34 +308,52 @@ class NeuropythyMap(CorticalMap):
         Parameters
         ----------
         xc, yc, zc : float or array_like
-            The x, y, and z-coordinate(s) of the cortex point(s) to look up (in mm).
-        
+            The x, y, and z-coordinate(s) of the cortex point(s) to look up (in um).
+
         Returns
         -------
         x, y : array_like
             The x and y-coordinate(s) of the visual field point(s) (in dva).
+            Both have the same shape as the input. Points that cannot be
+            mapped are NaN: either because the input was NaN, or because no
+            mesh vertex lies within ``cort_nn_thresh`` of them.
         """
         xc = np.array(xc, dtype='float32')
         yc = np.array(yc, dtype='float32')
         zc = np.array(zc, dtype='float32')
         if np.shape(xc) != np.shape(yc) or np.shape(xc) != np.shape(zc):
             raise ValueError("x, y, and z must have the same shape")
+        # The output has the shape of the input, and stays NaN wherever the
+        # point cannot be mapped:
+        out = np.full((*np.shape(xc), 2), np.nan)
         id_nan = np.isnan(xc) | np.isnan(yc) | np.isnan(zc)
-        query = np.stack([np.ravel(xc[~id_nan]), np.ravel(yc[~id_nan]), np.ravel(zc[~id_nan])], axis=-1) / 1000 # convert to mm
+        # Boolean indexing flattens, so the query is always (npoints, 3):
+        query = np.stack([xc[~id_nan], yc[~id_nan], zc[~id_nan]], axis=-1) / 1000 # convert to mm
         if np.size(query) == 0:
-            return np.ones((*np.shape(xc), 2)) * np.nan
+            return out[..., 0], out[..., 1]
         dist, idx = self.cortex_tree.query(query, k=5)#, distance_upper_bound=self.cort_nn_thresh / 1000)
-        idx_nan = np.all(dist > self.cort_nn_thresh / 1000, axis=-1)
-        dist[dist > self.cort_nn_thresh / 1000] = 999999999 # make high so it doesn't contribute to geometric mean
-        neighbors = np.array([[self.region_meshes[self.addr_idxs['region'][i]][self.addr_idxs['hemi'][i]].coordinates[:, self.addr_idxs['addr'][i]] 
-                               for i in nb_pts] 
+        too_far = dist > self.cort_nn_thresh / 1000
+        neighbors = np.array([[self.region_meshes[self.addr_idxs['region'][i]][self.addr_idxs['hemi'][i]].coordinates[:, self.addr_idxs['addr'][i]]
+                               for i in nb_pts]
                               for nb_pts in idx])
-        # use geometric mean based on distance
-        pts = np.sum(neighbors * 1/dist[..., None], axis=1) / np.sum(1/dist, axis=1)[:, None]
-        pts[idx_nan] = [np.nan, np.nan]
-        out = np.ones((*np.shape(xc), 2)) * np.nan
+        # Weight each neighbor by 1/distance, ignoring the ones that are too
+        # far away:
+        weights = np.zeros_like(dist)
+        np.divide(1, dist, out=weights, where=~too_far & (dist > 0))
+        # A query point that landed exactly on a mesh vertex is at zero
+        # distance, which would divide by zero. Give those vertices all of the
+        # weight instead, so the point maps to the vertex itself:
+        exact = dist == 0
+        id_exact = np.any(exact, axis=-1)
+        weights[id_exact] = exact[id_exact]
+        # Points with no neighbor within cort_nn_thresh have no weight at all
+        # to average over, and stay NaN:
+        id_ok = ~np.all(too_far, axis=-1)
+        pts = np.full((len(query), 2), np.nan)
+        pts[id_ok] = (np.sum(neighbors[id_ok] * weights[id_ok, :, None], axis=1) /
+                      np.sum(weights[id_ok], axis=1)[:, None])
         out[~id_nan] = pts
-        return pts[:, 0], pts[:, 1]
+        return out[..., 0], out[..., 1]
     
 
     def v1_to_dva(self, xv1, yv1, zv1):
@@ -348,7 +366,7 @@ class NeuropythyMap(CorticalMap):
         Parameters
         ----------
         xv1, yv1, zv1 : float or array_like
-            The x, y, and z-coordinate(s) of the v1 point(s) to look up (in mm).
+            The x, y, and z-coordinate(s) of the v1 point(s) to look up (in um).
 
         Returns
         -------
@@ -367,7 +385,7 @@ class NeuropythyMap(CorticalMap):
         Parameters
         ----------
         xv2, yv2, zv2 : float or array_like
-            The x, y, and z-coordinate(s) of the v2 point(s) to look up (in mm).
+            The x, y, and z-coordinate(s) of the v2 point(s) to look up (in um).
 
         Returns
         -------
@@ -386,7 +404,7 @@ class NeuropythyMap(CorticalMap):
         Parameters
         ----------
         xv3, yv3, zv3 : float or array_like
-            The x, y, and z-coordinate(s) of the v3 point(s) to look up (in mm).
+            The x, y, and z-coordinate(s) of the v3 point(s) to look up (in um).
 
         Returns
         -------
