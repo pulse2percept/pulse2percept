@@ -47,12 +47,8 @@ jobs:
         shell: bash
 
     env:
-      # Results live outside the working tree so that `git clean` between the
-      # two builds cannot delete them.
-      RESULTS: ${{ runner.temp }}/benchmarks
       # The benchmark suite already pins the models to one thread. This pins
-      # everything underneath them -- NumPy's BLAS in particular -- so the two
-      # halves of the comparison cannot differ by thread count.
+      # everything underneath them
       OMP_NUM_THREADS: 1
 
     steps:
@@ -84,9 +80,18 @@ jobs:
 
       # actions/checkout leaves a detached HEAD at the merge commit, so record
       # it now: it is what we return to after measuring the base.
+      #
+      # $RUNNER_TEMP is a plain shell variable that every step gets, unlike the
+      # `runner` expression context, which job-level `env` cannot reach.
+      # Results live there rather than in the working tree so that the
+      # `git clean` between the two builds cannot delete them. Exporting
+      # RESULTS through $GITHUB_ENV makes it available to the later steps (via
+      # ${{ env.RESULTS }}) but not to this one, which is why the mkdir spells 
+      # the path out.
       - name: Record the commits under comparison
         run: |
-          mkdir -p "$RESULTS"
+          mkdir -p "$RUNNER_TEMP/benchmarks"
+          echo "RESULTS=$RUNNER_TEMP/benchmarks" >> "$GITHUB_ENV"
           echo "HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           echo "BASE_SHA=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_ENV"
 
