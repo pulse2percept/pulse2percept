@@ -42,8 +42,8 @@ def _is_internal_module(name):
     test suite is blamed on the test rather than on the machinery underneath
     it -- which is what lets the tests check where a warning points.
     """
-    return ((name == 'pulse2percept' or name.startswith('pulse2percept.'))
-            and '.tests.' not in name)
+    return ((name == 'pulse2percept' or name.startswith('pulse2percept.')) and
+            '.tests.' not in name)
 
 
 def _warn_external(message, category=DeprecationWarning):
