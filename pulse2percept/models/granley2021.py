@@ -272,10 +272,17 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             A tuple indicating the range of y values to simulate (in degrees of
             visual angle). Negative y values correspond to the superior retina,
             and positive y values to the inferior retina.
-        xystep : int, double, tuple
+        step : int, double, tuple
             Step size for the range of (x,y) values to simulate (in degrees of
             visual angle). For example, to create a grid with x values [0, 0.5, 1]
-            use ``x_range=(0, 1)`` and ``xystep=0.5``.
+            use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
+            and y axes different step sizes.
+
+            .. versionchanged:: 0.10.0
+
+                Renamed from ``xystep``, which suggested that one step size
+                applies to both axes. The old name still works, but is
+                deprecated and will be removed in v0.11.0.
         grid_type : {'rectangular', 'hexagonal'}
             Whether to simulate points on a rectangular or hexagonal grid
         vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -665,10 +672,17 @@ class BiphasicAxonMapModel(Model):
             A tuple indicating the range of y values to simulate (in degrees of
             visual angle). Negative y values correspond to the superior retina,
             and positive y values to the inferior retina.
-        xystep : int, double, tuple
+        step : int, double, tuple
             Step size for the range of (x,y) values to simulate (in degrees of
             visual angle). For example, to create a grid with x values [0, 0.5, 1]
-            use ``x_range=(0, 1)`` and ``xystep=0.5``.
+            use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
+            and y axes different step sizes.
+
+            .. versionchanged:: 0.10.0
+
+                Renamed from ``xystep``, which suggested that one step size
+                applies to both axes. The old name still works, but is
+                deprecated and will be removed in v0.11.0.
         grid_type : {'rectangular', 'hexagonal'}
             Whether to simulate points on a rectangular or hexagonal grid
         vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional

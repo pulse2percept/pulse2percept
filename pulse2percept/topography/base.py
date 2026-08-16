@@ -37,9 +37,10 @@ def _rectangular_mesh(x_range, y_range, step):
     x_range, y_range : (min, max)
         The range each axis spans, end points included.
     step : float or (x_step, y_step)
-        Spacing along each axis. A zero-width range gets a single point
-        whatever the step, since ``linspace(0, 0, num=5)`` would otherwise
-        return five copies of it.
+        Target spacing along each axis. Both end points are included, so the
+        spacing actually laid down is the one nearest ``step`` that reaches
+        them. A zero-width range gets a single point whatever the step, since
+        ``linspace(0, 0, num=5)`` would otherwise return five copies of it.
 
     Returns
     -------
@@ -178,6 +179,12 @@ class Grid2D(PrettyPrint):
     step : int, double, tuple
         Step size (dva). If int or double, the same step will apply to both x
         and y ranges. If a tuple, it is interpreted as (x_step, y_step).
+
+        This is a *target* spacing rather than an exact one: both end points
+        of a range are always included, so a range that is not a whole
+        multiple of ``step`` is sampled at the nearest spacing that reaches
+        both. ``Grid2D((0, 1), (0, 0), step=0.3)`` gives four points spaced
+        0.333 apart, not three spaced 0.3 with the last one short.
     grid_type : {'rectangular', 'hexagonal'}
         The grid type
 
@@ -188,7 +195,7 @@ class Grid2D(PrettyPrint):
        (number of y coordinates) x (number of x coordinates).
     *  If a range is zero, the step size is irrelevant.
     *  ``x_range``, ``y_range`` and ``step`` may be given as plain numbers of
-       degrees or as unitful quantities (e.g. ``xystep=0.5 * dva``), and are
+       degrees or as unitful quantities (e.g. ``step=0.5 * dva``), and are
        stored as plain numbers. See :py:mod:`pulse2percept.units`.
 
     .. versionchanged:: 0.10.0

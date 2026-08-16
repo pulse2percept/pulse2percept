@@ -15,7 +15,7 @@ first two correspond to these one-liners::
             p2p.implants.ArgusII(stim=p2p.stimuli.LogoBVL())))
 
     p2p.models.ScoreboardModel(yrange=(-4, 4), xrange=(-4, 4), rho=50,
-                               xystep=0.1).build().predict_percept(as_current(
+                               step=0.1).build().predict_percept(as_current(
         p2p.implants.PRIMA(stim=p2p.stimuli.LogoBVL().invert())))
 
 The :func:`as_current` wrapper is a benchmark-only detail; see its docstring
@@ -164,7 +164,7 @@ SCENARIOS = [
         implant=lambda stim: as_current(p2p.implants.PRIMA(stim=stim)),
         model=lambda **kwargs: p2p.models.ScoreboardModel(xrange=(-4, 4),
                                                           yrange=(-4, 4),
-                                                          rho=50, xystep=0.1,
+                                                          rho=50, step=0.1,
                                                           **kwargs),
     ),
     # Granley 2021. Its stimulus is a pulse train rather than an image because
@@ -187,7 +187,7 @@ SCENARIOS = [
         stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
         implant=lambda stim: p2p.implants.ArgusII(stim=stim),
         model=lambda **kwargs: p2p.models.Nanduri2012Model(
-            xrange=(-4, 4), yrange=(-4, 4), xystep=0.5, **kwargs),
+            xrange=(-4, 4), yrange=(-4, 4), step=0.5, **kwargs),
     ),
     # Horsager 2009: a temporal-only model, so predict_percept returns one
     # trace per electrode with no spatial grid at all. The only scenario that
@@ -217,7 +217,7 @@ SCENARIOS = [
         implant=lambda stim: p2p.implants.ArgusII(stim=stim),
         model=lambda **kwargs: p2p.models.Model(
             spatial=p2p.models.ScoreboardSpatial(xrange=(-4, 4),
-                                                 yrange=(-4, 4), xystep=0.5),
+                                                 yrange=(-4, 4), step=0.5),
             temporal=p2p.models.FadingTemporal(), **kwargs),
     ),
     # A 94-frame video: the spatial model runs once per frame, so a single

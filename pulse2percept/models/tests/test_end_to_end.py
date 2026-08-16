@@ -97,7 +97,7 @@ def test_endtoend_amplitude_modulation():
     npt.assert_almost_equal(net, 0, decimal=4)
 
     # --- what the model made of it --------------------------------------
-    model = ScoreboardSpatial(xrange=(-4, 4), yrange=(-4, 4), xystep=0.2,
+    model = ScoreboardSpatial(xrange=(-4, 4), yrange=(-4, 4), step=0.2,
                               rho=200).build()
     percept = model.predict_percept(implant)
     here, middle = at_electrodes(model, implant)
@@ -237,7 +237,7 @@ def test_endtoend_raster_order(order):
     # And the percept says the same: the electrodes light up one at a time, in
     # the order the raster puts them in, and each is as bright as its own gray
     # level regardless of when its turn comes.
-    model = ScoreboardSpatial(xrange=(-4, 4), yrange=(-4, 4), xystep=0.2,
+    model = ScoreboardSpatial(xrange=(-4, 4), yrange=(-4, 4), step=0.2,
                               rho=200).build()
     percept = model.predict_percept(implant)
     here, _ = at_electrodes(model, implant)
@@ -307,7 +307,7 @@ def test_endtoend_slow_train_stays_lit_for_the_whole_video():
     npt.assert_almost_equal(onset.max(), 3000.5, decimal=1)
 
     model = Model(spatial=ScoreboardSpatial(xrange=(-12, 12), yrange=(-8, 8),
-                                            xystep=1),
+                                            step=1),
                   temporal=FadingTemporal(tau=100)).build()
     percept = model.predict_percept(implant)
     # One percept frame per video frame, covering the whole video:

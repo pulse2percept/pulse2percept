@@ -7,7 +7,7 @@ from ..base import BaseModel, NotBuiltError, _require_stim_dimension
 from ...percepts import Percept
 from ...implants import ProsthesisSystem
 from ...units import A, Quantity, as_value, dva, Hz, mm, ms, uA
-from ...utils import cart2pol
+from ...utils import cart2pol, deprecated_alias
 from ...utils.constants import MS_PER_S, UM_PER_MM, ZORDER
 from ...topography import Polimeni2006Map
 
@@ -62,10 +62,17 @@ class DynaphosModel(BaseModel):
     yrange : (y_min, y_max), optional
         A tuple indicating the range of y values to simulate (in degrees of
         visual angle).
-    xystep : int, double, tuple, optional
+    step : int, double, tuple, optional
         Step size for the range of (x,y) values to simulate (in degrees of
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
-        use ``x_range=(0, 1)`` and ``xystep=0.5``.
+        use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
+        and y axes different step sizes.
+
+        .. versionchanged:: 0.10.0
+
+            Renamed from ``xystep``, which suggested that one step size
+            applies to both axes. The old name still works, but is
+            deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid.
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -90,10 +97,17 @@ class DynaphosModel(BaseModel):
         by directly setting ``model.xrange = (-10, 10)``), you will have to call
         ``model.build()`` again for your changes to take effect.
     """
+    #: ``step`` used to be called ``xystep``. The old name still reads and
+    #: writes ``step``, with a ``DeprecationWarning``. Declared here rather
+    #: than inherited: this model derives from ``BaseModel``, not
+    #: ``SpatialModel``, and lays out its own grid.
+    xystep = deprecated_alias('step', deprecated_version='0.10.0',
+                              removed_version='0.11.0')
+
     @property
     def regions(self):
         return self._regions
-    
+
     @regions.setter
     def regions(self, regions):
         
@@ -113,7 +127,7 @@ class DynaphosModel(BaseModel):
             params = {
                 'xrange': (-5, 5),  # dva
                 'yrange': (-5, 5),  # dva
-                'xystep': 0.25,  # dva
+                'step': 0.25,  # dva
                 'grid_type': 'rectangular',
                 # Use [Polemeni2006]_ visual field map with parameters specified in the paper
                 'vfmap': Polimeni2006Map(a=0.75,k=17.3,b=120,alpha1=0.95),
@@ -164,7 +178,7 @@ class DynaphosModel(BaseModel):
             **super().get_param_units(),
             'xrange': dva,
             'yrange': dva,
-            'xystep': dva,
+            'step': dva,
             'dt': ms,
             # Decay constants, both converted to seconds where they are used:
             'tau_act': ms,
@@ -209,7 +223,7 @@ class DynaphosModel(BaseModel):
                             f"pulse train window (dur={window_dur:.2f} "
                             f"ms)")
         # Build the spatial grid:
-        self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
+        self.grid = Grid2D(self.xrange, self.yrange, step=self.step,
                            grid_type=self.grid_type)
         self.grid.build(self.vfmap)
         self._build()

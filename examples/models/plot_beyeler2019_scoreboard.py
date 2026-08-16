@@ -40,9 +40,13 @@ The first step is to instantiate the
 constructor method.
 
 The model simulates a patch of the visual field specified by ``xrange`` and
-``yrange`` (in degrees of visual angle), sampled at a step size of ``xystep``.
-The grid that is created from these parameters is equivalent to calling NumPy's
-``linspace(xrange[0], xrange[1], num=xystep)``.
+``yrange`` (in degrees of visual angle), sampled at a step size of ``step``.
+``step`` is a *target* spacing: both end points of the range are always
+included, so the x axis of the grid is NumPy's
+``linspace(*xrange, num=round(np.ptp(xrange) / step) + 1)``. When the range is
+not a whole multiple of ``step``, the actual spacing differs slightly --
+``xrange=(0, 1)`` with ``step=0.3`` gives four points spaced 0.333 apart.
+Pass a tuple ``(x_step, y_step)`` to sample the two axes differently.
 
 By default, this patch is quite large, spanning 30deg x 30deg.
 Because PRIMA is rather small, we want to reduce the window size to 6deg x 6deg
@@ -52,7 +56,7 @@ and sample it at 0.05deg resolution:
 # sphinx_gallery_thumbnail_number = 2
 
 from pulse2percept.models import ScoreboardModel
-model = ScoreboardModel(xrange=(-3, 3), yrange=(-3, 3), xystep=0.05)
+model = ScoreboardModel(xrange=(-3, 3), yrange=(-3, 3), step=0.05)
 
 ##############################################################################
 # Parameters you don't specify will take on default values. You can inspect
@@ -67,7 +71,7 @@ print(model)
 #   specified as a range of x and y coordinates (in degrees of visual angle,
 #   or dva). For example, we are currently sampling x values between -20 dva
 #   and +20dva, and y values between -15 dva and +15 dva.
-# * ``xystep``: The resolution (in dva) at which to sample the visual field.
+# * ``step``: The resolution (in dva) at which to sample the visual field.
 #   For example, we are currently sampling at 0.25 dva in both x and y
 #   direction.
 # * ``thresh_percept``: You can also define a brightness threshold, below which
@@ -118,7 +122,7 @@ implant.plot()
 ##############################################################################
 # The gray window indicates the extent of the grid that was created during
 # ``model.build()`` using the values specified by ``xrange``, ``yrange``, and
-# ``xystep``. As we can see, the window well-covers the implant that we want
+# ``step``. As we can see, the window well-covers the implant that we want
 # to simulate.
 #
 # The easiest way to assign a stimulus to the implant is to pass a NumPy array

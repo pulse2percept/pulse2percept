@@ -2,6 +2,7 @@ import numpy.testing as npt
 import pytest
 import numpy as np
 import copy
+import warnings
 import matplotlib.pyplot as plt
 
 from pulse2percept.models.cortex import DynaphosModel
@@ -12,9 +13,10 @@ from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
                                  ms, s, uA, um)
+from pulse2percept.utils.testing import assert_warns_msg
 
 def test_DynaphosModel():
-    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1).build()
+    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), step=0.1).build()
 
     npt.assert_equal(model.regions, ['v1'])
     npt.assert_equal(model.vfmap.regions, ['v1'])
@@ -39,7 +41,7 @@ def test_DynaphosModel():
 
 def test_predict_spatial():
     # test that no current can spread between hemispheres
-    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), xystep=0.5).build()
+    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), step=0.5).build()
     implant = Orion(x = 15000)
     implant.stim = {e:BiphasicPulseTrain(freq=300,amp=2000,phase_dur=0.17) for e in implant.electrode_names}
     # Check brightest frame of percept
@@ -49,7 +51,7 @@ def test_predict_spatial():
     npt.assert_equal(np.all(percept[:, :half] != 0), True)
 
 def test_temporal_predict():
-    model = DynaphosModel(xystep=0.1).build()
+    model = DynaphosModel(step=0.1).build()
     # User can set params
     model.dt = 40
     npt.assert_equal(model.dt, 40)
@@ -126,7 +128,7 @@ def test_DynaphosModel_units():
     23.900000000000002 after the multiplication, which is why this compares
     with a tolerance rather than for equality.
     """
-    kwargs = dict(xrange=(-3, 3), yrange=(-3, 3), xystep=0.5)
+    kwargs = dict(xrange=(-3, 3), yrange=(-3, 3), step=0.5)
     bare = DynaphosModel(rheobase=23.9, **kwargs).build()
     unitful = DynaphosModel(rheobase=0.0239 * mA, **kwargs).build()
     npt.assert_allclose(unitful.rheobase, 23.9, rtol=1e-12)
@@ -144,7 +146,7 @@ def test_DynaphosModel_units():
 
 def test_DynaphosModel_t_percept_units():
     """This model overrides `predict_percept`, so it normalizes for itself"""
-    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), xystep=1).build()
+    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), step=1).build()
     implant = Cortivis(stim={'11': BiphasicPulseTrain(20, 50, 0.45,
                                                       stim_dur=100)})
     bare = model.predict_percept(implant, t_percept=[0, 20, 40])
@@ -166,7 +168,7 @@ def test_DynaphosModel_default_frame_clock_stops_at_the_stimulus():
     """
     stim = BiphasicPulseTrain(20, 50, 0.1, stim_dur=10)
     implant = Cortivis(stim={'11': stim})
-    kwargs = dict(xrange=(-2, 2), yrange=(-2, 2), xystep=1)
+    kwargs = dict(xrange=(-2, 2), yrange=(-2, 2), step=1)
 
     # Coarser than a millisecond, which is the case the literal was written
     # for, and still the same clock it always produced:
@@ -181,3 +183,37 @@ def test_DynaphosModel_default_frame_clock_stops_at_the_stimulus():
     npt.assert_equal(percept.time[-1] <= implant.stim.time[-1], True)
     # The endpoint is included, not dropped:
     npt.assert_allclose(percept.time[-1], implant.stim.time[-1], rtol=1e-12)
+
+
+def test_DynaphosModel_deprecated_xystep():
+    # `step` was called `xystep` until 0.10.0. Dynaphos derives from
+    # `BaseModel` rather than `SpatialModel` and lays out its own grid, so it
+    # declares the alias itself and has to be checked separately:
+    msg = "The 'xystep' parameter of DynaphosModel is deprecated"
+    assert_warns_msg(DeprecationWarning, DynaphosModel, msg, xystep=1)
+    with pytest.warns(DeprecationWarning):
+        model = DynaphosModel(xrange=(-2, 2), yrange=(-2, 2), xystep=1)
+    npt.assert_almost_equal(model.step, 1)
+
+    assert_warns_msg(DeprecationWarning, setattr, msg, model, 'xystep', 2)
+    npt.assert_almost_equal(model.step, 2)
+    with pytest.warns(DeprecationWarning):
+        npt.assert_almost_equal(model.xystep, 2)
+
+    assert_warns_msg(DeprecationWarning, model.set_params, msg, xystep=1)
+    npt.assert_almost_equal(model.step, 1)
+    assert_warns_msg(DeprecationWarning, model.build, msg, xystep=0.5)
+    npt.assert_almost_equal(model.step, 0.5)
+    npt.assert_almost_equal(np.unique(np.diff(model.grid.x[0, :]))[0], 0.5)
+
+    # Both names are the same parameter, so supplying both must raise:
+    for params in ({'xystep': 1, 'step': 2}, {'step': 2, 'xystep': 1}):
+        with pytest.raises(TypeError, match="same parameter"):
+            DynaphosModel(**params)
+
+    # The new name stays silent:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        model = DynaphosModel(step=1)
+        model.step = 2
+        npt.assert_almost_equal(model.step, 2)

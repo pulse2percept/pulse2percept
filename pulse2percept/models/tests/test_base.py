@@ -12,13 +12,14 @@ from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    ImageStimulus, Stimulus, VideoStimulus)
 from pulse2percept.percepts import Percept
-from pulse2percept.models import (BaseModel, FadingTemporal, Model,
-                                  NotBuiltError, ScoreboardSpatial,
+from pulse2percept.models import (AxonMapSpatial, BaseModel, FadingTemporal,
+                                  Model, NotBuiltError, ScoreboardSpatial,
                                   SpatialModel, TemporalModel)
 from pulse2percept.units import (DimensionMismatchError, Quantity,
                                  dimensionless, dva, mA, mm, ms, s, uA, um,
                                  us)
 from pulse2percept.utils import FreezeError, frame_interval
+from pulse2percept.utils.testing import assert_warns_msg
 from pulse2percept.topography import Grid2D, Watson2014Map
 
 
@@ -84,10 +85,10 @@ def test_SpatialModel():
     npt.assert_equal(isinstance(model.grid.ret.x, np.ndarray), True)
 
     # Can overwrite default values:
-    model = ValidSpatialModel(xystep=1.234)
-    npt.assert_almost_equal(model.xystep, 1.234)
-    model.build(xystep=2.345)
-    npt.assert_almost_equal(model.xystep, 2.345)
+    model = ValidSpatialModel(step=1.234)
+    npt.assert_almost_equal(model.step, 1.234)
+    model.build(step=2.345)
+    npt.assert_almost_equal(model.step, 2.345)
 
     # Cannot add more attributes:
     with pytest.raises(AttributeError):
@@ -136,7 +137,7 @@ def test_SpatialModel_predict_percept_time_order():
             # so the caller can tell which frame ended up where:
             return np.tile(stim.data[0], (self.grid.x.size, 1))
 
-    model = RecordingSpatialModel(xystep=2).build()
+    model = RecordingSpatialModel(step=2).build()
     # Amplitudes chosen so that sorting the frames by value shuffles them with
     # respect to time (sorted: 1, 2, 3 -> frames 1, 2, 0):
     implant = ArgusI(stim={'A1': [3, 1, 2]})
@@ -165,7 +166,7 @@ def test_SpatialModel_predict_percept_deduplicates_frames():
             n_calls.append(stim.data.shape[1])
             return np.tile(stim.data[0], (self.grid.x.size, 1))
 
-    model = CountingSpatialModel(xystep=2).build()
+    model = CountingSpatialModel(step=2).build()
     # Four time points, but only two distinct frames:
     implant = ArgusI(stim={'A1': [2, 5, 2, 5]})
     percept = model.predict_percept(implant)
@@ -190,7 +191,7 @@ def test_SpatialModel_predict_percept_keeps_metadata():
             return np.zeros((self.grid.x.size, stim.data.shape[1]),
                             dtype=np.float32)
 
-    model = RecordingSpatialModel(xystep=2).build()
+    model = RecordingSpatialModel(step=2).build()
     implant = ArgusI(stim={'A1': BiphasicPulseTrain(20, 10, 0.45,
                                                     stim_dur=20)})
     model.predict_percept(implant)
@@ -214,6 +215,148 @@ def test_SpatialModel_removed_params(param, value):
         ValidSpatialModel(**{param: value})
     with pytest.raises(AttributeError):
         ValidSpatialModel().set_params(**{param: value})
+
+
+@pytest.mark.parametrize('composite', [False, True])
+def test_SpatialModel_deprecated_xystep(composite):
+    # `step` was called `xystep` until 0.10.0. The old name still works
+    # everywhere the new one does, but warns:
+    def make(**params):
+        if composite:
+            return Model(spatial=ValidSpatialModel(), **params)
+        return ValidSpatialModel(**params)
+
+    msg = "The 'xystep' parameter of"
+    assert_warns_msg(DeprecationWarning, make, msg, xystep=2)
+    with pytest.warns(DeprecationWarning):
+        model = make(xystep=2)
+    npt.assert_almost_equal(model.step, 2)
+
+    # Setting and getting the attribute:
+    assert_warns_msg(DeprecationWarning, setattr, msg, model, 'xystep', 3)
+    npt.assert_almost_equal(model.step, 3)
+    with pytest.warns(DeprecationWarning):
+        npt.assert_almost_equal(model.xystep, 3)
+
+    # And `set_params` and `build`. `Model.set_params` takes a dict, whereas
+    # `SpatialModel.set_params` takes keyword arguments:
+    if composite:
+        set_params = lambda: model.set_params({'xystep': 4})
+    else:
+        set_params = lambda: model.set_params(xystep=4)
+    assert_warns_msg(DeprecationWarning, set_params, msg)
+    npt.assert_almost_equal(model.step, 4)
+    assert_warns_msg(DeprecationWarning, model.build, msg, xystep=5)
+    npt.assert_almost_equal(model.step, 5)
+    # The grid really was laid out at the value the old name carried:
+    npt.assert_almost_equal(np.unique(np.diff(model.grid.x[0, :]))[0], 5)
+
+    # The old name is still a per-axis step, which is the whole reason it
+    # reads poorly:
+    with pytest.warns(DeprecationWarning):
+        model = make(xystep=(2, 4))
+    npt.assert_almost_equal(model.step, (2, 4))
+
+    # The new name stays silent:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        model = make(step=2)
+        model.step = 3
+        npt.assert_almost_equal(model.step, 3)
+        model.build(step=4)
+        npt.assert_almost_equal(model.step, 4)
+
+
+@pytest.mark.parametrize('old, new', [('xystep', 'step'), ('axlambda', 'lam')])
+def test_Model_renamed_param_warns_once_for_a_class(old, new):
+    """A sub-model passed as a class is still only one use of the old name
+
+    `Model` accepts a class where it documents an instance, and then builds it
+    from the same ``params`` dict that `set_params` receives. Both of those
+    rewrite renamed parameters, so the old name reaches the machinery twice
+    even though the caller wrote it once.
+    """
+    for spatial in (AxonMapSpatial, AxonMapSpatial()):
+        with pytest.warns(DeprecationWarning) as record:
+            model = Model(spatial=spatial, **{old: 400})
+        deprecations = [w for w in record
+                        if issubclass(w.category, DeprecationWarning)]
+        npt.assert_equal(len(deprecations), 1)
+        # The message names the model the caller actually constructed, and
+        # points at the line that named the old parameter:
+        npt.assert_equal(f"The '{old}' parameter of Model is deprecated"
+                         in str(deprecations[0].message), True)
+        npt.assert_equal(deprecations[0].filename, __file__)
+        npt.assert_almost_equal(getattr(model, new), 400)
+
+        # Both names are still the same parameter through this path:
+        with pytest.raises(TypeError, match="same parameter"):
+            Model(spatial=spatial, **{old: 400, new: 500})
+
+        # ...and the new name stays silent:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            npt.assert_almost_equal(
+                getattr(Model(spatial=spatial, **{new: 500}), new), 500)
+
+
+@pytest.mark.parametrize('composite', [False, True])
+def test_SpatialModel_xystep_and_step_collide(composite):
+    # `xystep` and `step` are the same parameter, so supplying both must raise
+    # rather than let the order they were passed in decide the value.
+    # `**kwargs` preserves insertion order, so check both spellings:
+    for params in ({'xystep': 2, 'step': 3}, {'step': 3, 'xystep': 2}):
+        with pytest.raises(TypeError, match="same parameter"):
+            if composite:
+                Model(spatial=ValidSpatialModel(), **params)
+            else:
+                ValidSpatialModel(**params)
+        model = (Model(spatial=ValidSpatialModel()) if composite
+                 else ValidSpatialModel())
+        with pytest.raises(TypeError, match="same parameter"):
+            model.build(**params)
+        with pytest.raises(TypeError, match="same parameter"):
+            if composite:
+                model.set_params(params)
+            else:
+                model.set_params(**params)
+
+
+@pytest.mark.parametrize('composite', [False, True])
+def test_SpatialModel_xystep_warning_blames_caller(composite):
+    # A deprecation warning is only actionable if it points at the line that
+    # used the old name. The alias is reached directly on a spatial model, but
+    # through `Model.__getattr__`/`__setattr__` on a composite one:
+    model = (Model(spatial=ValidSpatialModel()) if composite
+             else ValidSpatialModel())
+    with pytest.warns(DeprecationWarning) as record:
+        model.xystep
+    npt.assert_equal(record[0].filename, __file__)
+    with pytest.warns(DeprecationWarning) as record:
+        model.xystep = 2
+    npt.assert_equal(record[0].filename, __file__)
+    # The constructor reaches it through a chain of `super().__init__` calls
+    # instead, whose depth differs between the two classes:
+    with pytest.warns(DeprecationWarning) as record:
+        if composite:
+            Model(spatial=ValidSpatialModel(), xystep=2)
+        else:
+            ValidSpatialModel(xystep=2)
+    npt.assert_equal(record[0].filename, __file__)
+
+
+def test_SpatialModel_xystep_units():
+    # The old name forwards to `step`, so it is normalized the same way:
+    with pytest.warns(DeprecationWarning):
+        model = ValidSpatialModel(xystep=0.5 * dva)
+    npt.assert_almost_equal(model.step, 0.5)
+    npt.assert_equal(isinstance(model.step, Quantity), False)
+    with pytest.warns(DeprecationWarning):
+        model.xystep = 1 * dva
+    npt.assert_almost_equal(model.step, 1)
+    with pytest.raises(DimensionMismatchError):
+        with pytest.warns(DeprecationWarning):
+            ValidSpatialModel(xystep=1 * um)
 
 
 @pytest.mark.parametrize('param, value', [('engine', 'serial'),
@@ -332,20 +475,20 @@ def test_Model_units():
 def test_SpatialModel_units():
     # A range can be given as a quantity wrapping a pair...
     model = ScoreboardSpatial(xrange=(-5, 5) * dva, yrange=(-4, 4) * dva,
-                              xystep=1 * dva)
+                              step=1 * dva)
     npt.assert_almost_equal(model.xrange, [-5, 5])
     npt.assert_almost_equal(model.yrange, [-4, 4])
-    npt.assert_almost_equal(model.xystep, 1)
+    npt.assert_almost_equal(model.step, 1)
     # ... or as a pair of quantities, which keeps the tuple it was given:
     model = ScoreboardSpatial(xrange=(-5 * dva, 5 * dva))
     npt.assert_equal(model.xrange, (-5, 5))
     # Either way it grids identically to the bare-number spelling:
-    bare = ScoreboardSpatial(xrange=(-5, 5), yrange=(-5, 5), xystep=1).build()
+    bare = ScoreboardSpatial(xrange=(-5, 5), yrange=(-5, 5), step=1).build()
     for unitful in (ScoreboardSpatial(xrange=(-5, 5) * dva,
-                                      yrange=(-5, 5) * dva, xystep=1 * dva),
+                                      yrange=(-5, 5) * dva, step=1 * dva),
                     ScoreboardSpatial(xrange=(-5 * dva, 5 * dva),
                                       yrange=(-5 * dva, 5 * dva),
-                                      xystep=1 * dva)):
+                                      step=1 * dva)):
         unitful.build()
         npt.assert_almost_equal(bare.grid.x, unitful.grid.x)
         npt.assert_almost_equal(bare.grid.y, unitful.grid.y)
@@ -526,11 +669,11 @@ def test_Model():
     model = Model(spatial=ValidSpatialModel())
     npt.assert_equal(model.has_space, True)
     npt.assert_equal(model.has_time, False)
-    npt.assert_almost_equal(model.xystep, 0.25)
-    npt.assert_almost_equal(model.spatial.xystep, 0.25)
-    model.xystep = 2
-    npt.assert_almost_equal(model.xystep, 2)
-    npt.assert_almost_equal(model.spatial.xystep, 2)
+    npt.assert_almost_equal(model.step, 0.25)
+    npt.assert_almost_equal(model.spatial.step, 0.25)
+    model.step = 2
+    npt.assert_almost_equal(model.step, 2)
+    npt.assert_almost_equal(model.spatial.step, 2)
     # Cannot add more attributes:
     with pytest.raises(AttributeError):
         model.a
@@ -556,14 +699,14 @@ def test_Model():
     model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
     npt.assert_equal(model.has_space, True)
     npt.assert_equal(model.has_time, True)
-    npt.assert_almost_equal(model.xystep, 0.25)
-    npt.assert_almost_equal(model.spatial.xystep, 0.25)
+    npt.assert_almost_equal(model.step, 0.25)
+    npt.assert_almost_equal(model.spatial.step, 0.25)
     npt.assert_almost_equal(model.dt, 5e-3)
     npt.assert_almost_equal(model.temporal.dt, 5e-3)
     # Setting a new spatial parameter:
-    model.xystep = 2
-    npt.assert_almost_equal(model.xystep, 2)
-    npt.assert_almost_equal(model.spatial.xystep, 2)
+    model.step = 2
+    npt.assert_almost_equal(model.step, 2)
+    npt.assert_almost_equal(model.spatial.step, 2)
     # Setting a new temporal parameter:
     model.dt = 1
     npt.assert_almost_equal(model.dt, 1)
@@ -583,9 +726,9 @@ def test_Model():
 def test_Model_set_params():
     # SpatialModel, but no TemporalModel:
     model = Model(spatial=ValidSpatialModel())
-    model.set_params({'xystep': 2.33})
-    npt.assert_almost_equal(model.xystep, 2.33)
-    npt.assert_almost_equal(model.spatial.xystep, 2.33)
+    model.set_params({'step': 2.33})
+    npt.assert_almost_equal(model.step, 2.33)
+    npt.assert_almost_equal(model.spatial.step, 2.33)
 
     # TemporalModel, but no SpatialModel:
     model = Model(temporal=ValidTemporalModel())
@@ -596,10 +739,10 @@ def test_Model_set_params():
     # SpatialModel and TemporalModel:
     model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
     # Setting both using the convenience function:
-    model.set_params({'xystep': 5, 'dt': 2.33})
-    npt.assert_almost_equal(model.xystep, 5)
-    npt.assert_almost_equal(model.spatial.xystep, 5)
-    npt.assert_equal(hasattr(model.temporal, 'xystep'), False)
+    model.set_params({'step': 5, 'dt': 2.33})
+    npt.assert_almost_equal(model.step, 5)
+    npt.assert_almost_equal(model.spatial.step, 5)
+    npt.assert_equal(hasattr(model.temporal, 'step'), False)
     npt.assert_almost_equal(model.dt, 2.33)
     npt.assert_almost_equal(model.temporal.dt, 2.33)
     npt.assert_equal(hasattr(model.spatial, 'dt'), False)
@@ -699,7 +842,7 @@ def test_Model_predict_percept_frame_clock(fps):
     # real models: `ValidTemporalModel` returns one row per electrode, not one
     # per grid point, so it cannot consume a spatial percept.
     both = Model(spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
-                                           xystep=1),
+                                           step=1),
                  temporal=FadingTemporal()).build()
     npt.assert_equal(both.predict_percept(implant).data.shape[-1], 6)
     # An explicit `t_percept` still wins:
@@ -810,7 +953,7 @@ class ScalingTemporalModel(ValidTemporalModel):
 
 
 def test_SpatialModel_find_threshold():
-    model = ScalingSpatialModel(xystep=5).build()
+    model = ScalingSpatialModel(step=5).build()
     implant = ArgusI(stim={'A1': 1})
 
     # Brightness equals amplitude, so the threshold is the target brightness:
@@ -834,7 +977,7 @@ def test_TemporalModel_find_threshold():
 
 
 def test_Model_find_threshold():
-    model = Model(spatial=ScalingSpatialModel(xystep=5)).build()
+    model = Model(spatial=ScalingSpatialModel(step=5)).build()
     implant = ArgusI(stim={'A1': 1})
 
     npt.assert_almost_equal(model.find_threshold(implant, 20), 20, decimal=0)
@@ -928,7 +1071,7 @@ def test_Model_pprint_params():
     npt.assert_equal('spatial' in params, True)
     npt.assert_equal('temporal' in params, True)
     # Parameters of the sub-models are pulled up:
-    npt.assert_equal('xystep' in params, True)
+    npt.assert_equal('step' in params, True)
     npt.assert_equal('dt' in params, True)
     npt.assert_equal(isinstance(str(both), str), True)
 
@@ -948,24 +1091,24 @@ def test_Model_deepcopy_preserves_submodels_and_params():
     # Model parameters are forwarded to the sub-models, so they live in
     # `spatial`/`temporal` rather than in `Model.__dict__`. Rebuilding the
     # copy from the constructor alone would silently reset them to defaults:
-    model = Model(spatial=ValidSpatialModel(xystep=5, thresh_percept=0.5))
+    model = Model(spatial=ValidSpatialModel(step=5, thresh_percept=0.5))
     copied = copy.deepcopy(model)
-    npt.assert_almost_equal(copied.xystep, 5)
+    npt.assert_almost_equal(copied.step, 5)
     npt.assert_almost_equal(copied.thresh_percept, 0.5)
     npt.assert_equal(copied == model, True)
 
     # The copy is independent of the original:
-    copied.xystep = 3
-    npt.assert_almost_equal(model.xystep, 5)
+    copied.step = 3
+    npt.assert_almost_equal(model.step, 5)
 
     # A built model stays built:
-    built = Model(spatial=ValidSpatialModel(xystep=5)).build()
+    built = Model(spatial=ValidSpatialModel(step=5)).build()
     npt.assert_equal(copy.deepcopy(built).is_built, True)
 
 
 def test_model_unit_contract():
     """Every model states the units its numerical implementation works in"""
-    spatial = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2), xystep=1)
+    spatial = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2), step=1)
     temporal = FadingTemporal()
     for model in (spatial, temporal, Model(spatial=spatial),
                   Model(spatial=spatial, temporal=temporal)):
@@ -987,7 +1130,7 @@ def test_model_electrode_coords_follow_the_stimulus():
     coordinates up by name rather than taking the array as it stands.
     """
     implant = ArgusII()
-    model = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2), xystep=1)
+    model = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2), step=1)
     # A subset, in an order that is not the array's:
     stim = Stimulus({'F10': 1, 'A1': 2, 'C5': 3})
     x, y, z = model._electrode_coords(implant.earray, stim)
@@ -1011,10 +1154,10 @@ def test_model_t_percept_units():
     """`t_percept` is a time, spelled however the caller likes"""
     implant = ArgusII(stim=BiphasicPulseTrain(20, 50, 0.45, stim_dur=100))
     spatial = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
-                                xystep=1).build()
+                                step=1).build()
     temporal = FadingTemporal().build()
     composite = Model(spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
-                                                xystep=1),
+                                                step=1),
                       temporal=FadingTemporal()).build()
     for model, stim in [(spatial, implant), (temporal, implant.stim),
                         (composite, implant)]:
@@ -1036,9 +1179,9 @@ def test_model_find_threshold_units():
     implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 20, 0.45,
                                                      stim_dur=100)})
     spatial = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
-                                xystep=1).build()
+                                step=1).build()
     composite = Model(spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
-                                                xystep=1)).build()
+                                                step=1)).build()
     for model in (spatial, composite):
         bare = model.find_threshold(implant, 0.1, amp_range=(0, 200),
                                     amp_tol=1)
@@ -1072,10 +1215,10 @@ def test_model_requires_a_current_stimulus():
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     spatial = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
-                                xystep=1).build()
+                                step=1).build()
     temporal = FadingTemporal().build()
     composite = Model(spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
-                                                xystep=1),
+                                                step=1),
                       temporal=FadingTemporal()).build()
     # `implant.stim = img` stays legal (see `check_stim`), and it is the model
     # that refuses to read it:
@@ -1149,8 +1292,8 @@ def test_model_units_are_a_numerical_contract():
                     electrodes=['A1'], time=np.arange(10, dtype=float))
     implant = ArgusII(stim=ramp)
     canonical = RecordingSpatial(xrange=(-2, 2), yrange=(-2, 2),
-                                 xystep=1).build()
-    milli = MilliSpatial(xrange=(-2, 2), yrange=(-2, 2), xystep=1).build()
+                                 step=1).build()
+    milli = MilliSpatial(xrange=(-2, 2), yrange=(-2, 2), step=1).build()
     canonical.predict_percept(implant)
     milli.predict_percept(implant)
     a, m = canonical.seen, milli.seen
@@ -1228,7 +1371,7 @@ def test_percept_time_crosses_model_boundary():
     ramp = Stimulus(np.arange(21, dtype=float).reshape((1, -1)),
                     electrodes=['A1'], time=np.arange(21, dtype=float))
     implant = ArgusII(stim=ramp)
-    spatial = SecondSpatial(xrange=(-2, 2), yrange=(-2, 2), xystep=1).build()
+    spatial = SecondSpatial(xrange=(-2, 2), yrange=(-2, 2), step=1).build()
     temporal = MilliTemporal().build()
     npt.assert_equal(spatial.time_unit, s)
     npt.assert_equal(temporal.time_unit, ms)
@@ -1255,7 +1398,7 @@ def test_percept_time_crosses_model_boundary():
 
     # The same crossing through a composite, which is where it really happens:
     model = Model(spatial=SecondSpatial(xrange=(-2, 2), yrange=(-2, 2),
-                                        xystep=1),
+                                        step=1),
                   temporal=MilliTemporal()).build()
     # A composite reports the unit of the stage that reads `t_percept` and
     # writes the percept, which is the temporal model:

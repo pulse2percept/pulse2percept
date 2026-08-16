@@ -14,7 +14,7 @@ from pulse2percept.utils import FreezeError
 
 def test_Nanduri2012Spatial():
     # Nanduri2012Spatial automatically sets `atten_a`:
-    model = Nanduri2012Spatial(xystep=5)
+    model = Nanduri2012Spatial(step=5)
 
     # User can set `atten_a`:
     model.atten_a = 12345
@@ -44,7 +44,7 @@ def test_Nanduri2012Spatial():
         model.predict_percept(implant)
 
     # Multiple frames are processed independently:
-    model = Nanduri2012Spatial(atten_a=14000, xystep=5,
+    model = Nanduri2012Spatial(atten_a=14000, step=5,
                                xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 2]}))
@@ -180,7 +180,7 @@ def test_deepcopy_Nanduri2012Temporal():
     npt.assert_equal(original != copied, True)
 
 def test_Nanduri2012Model():
-    model = Nanduri2012Model(xystep=5)
+    model = Nanduri2012Model(step=5)
     npt.assert_equal(hasattr(model, 'has_time'), True)
     npt.assert_equal(model.has_time, True)
 
@@ -283,7 +283,7 @@ def test_Nanduri2012Model_predict_percept():
                      (1, 1, 2))
 
     # Brightness vs. size (use values from Nanduri paper):
-    model = Nanduri2012Model(xystep=0.5, xrange=(-4, 4), yrange=(-4, 4))
+    model = Nanduri2012Model(step=0.5, xrange=(-4, 4), yrange=(-4, 4))
     model.build()
     implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
     amp_th = 30

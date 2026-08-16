@@ -172,7 +172,7 @@ logo_dilate.save('dilated_logo.png')
 # choose an implant:
 
 # Simulate only what we need (14x14 deg sampled at 0.1 deg):
-model = p2p.models.ScoreboardModel(xrange=(-7, 7), yrange=(-7, 7), xystep=0.1)
+model = p2p.models.ScoreboardModel(xrange=(-7, 7), yrange=(-7, 7), step=0.1)
 model.build()
 
 from pulse2percept.implants import AlphaAMS
@@ -317,7 +317,7 @@ model = p2p.models.Model(spatial=p2p.models.ScoreboardSpatial,
 #    temporal model (names ending in **Temporal**).
 #
 # To make the model focus on the same visual field as above, we set ``xrange``,
-# ``yrange``, and choose a proper ``xystep``.
+# ``yrange``, and choose a proper ``step``.
 #
 # The ``rho`` parameter of the scoreboard model controls how much blur we get
 # in the resulting percept. The value of this parameter should be set
@@ -325,7 +325,7 @@ model = p2p.models.Model(spatial=p2p.models.ScoreboardSpatial,
 # implant user.
 # For the purpose of this tutorial, we will set it to 50um:
 
-model.build(xrange=(-7, 7), yrange=(-7, 7), xystep=0.1, rho=50)
+model.build(xrange=(-7, 7), yrange=(-7, 7), step=0.1, rho=50)
 
 ##############################################################################
 # The predicted percept will now be a movie, where the spatial response (i.e.,

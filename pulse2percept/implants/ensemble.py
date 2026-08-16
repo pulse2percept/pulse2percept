@@ -5,6 +5,7 @@ from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
 from ..stimuli.base import _describe_unit, unique_time_points
 from ..units import DimensionMismatchError, as_value, dva, um
+from ..utils import rename_parameter
 
 class EnsembleImplant(ProsthesisSystem):
     
@@ -12,29 +13,37 @@ class EnsembleImplant(ProsthesisSystem):
     __slots__ = ('_implants', '_earray', '_stim', 'safe_mode', 'preprocess')
 
     @classmethod
-    def from_cortical_map(cls, implant_type, vfmap, locs=None, xrange=None, yrange=None, xystep=None, 
+    @rename_parameter('xystep', 'step', deprecated_version='0.10.0',
+                      removed_version='0.11.0')
+    def from_cortical_map(cls, implant_type, vfmap, locs=None, xrange=None, yrange=None, step=None,
                         region='v1'):
         """
         Create an ensemble implant from a cortical visual field map.
 
         The implant will be created by creating an implant of type `implant_type`
-        for each visual field location specified either by locs or by xrange, yrange, 
-        and xystep. Each implant will be centered at the given location.
+        for each visual field location specified either by locs or by xrange, yrange,
+        and step. Each implant will be centered at the given location.
 
         Parameters
         ----------
         vfmap : p2p.topography.CorticalMap
             Visual field map to create implant from.
         implant_type : type
-            Type of implant to create for the ensemble. Must subclass 
+            Type of implant to create for the ensemble. Must subclass
             p2p.implants.ProsthesisSystem
         locs : np.ndarray with shape (n, 2), optional
-            Array of visual field locations to create implants at (dva). 
-            Not needed if using xrange, yrange, and xystep.
+            Array of visual field locations to create implants at (dva).
+            Not needed if using xrange, yrange, and step.
         xrange, yrange: tuple of floats, optional
             Range of x and y coordinates (dva) to create implants at.
-        xystep : float, optional
+        step : float or (x_step, y_step), optional
             Spacing (dva) between implant centers.
+
+            .. versionchanged:: 0.10.0
+
+                Renamed from ``xystep``, which suggested that one step size
+                applies to both axes. The old name still works as a keyword
+                argument, but is deprecated and will be removed in v0.11.0.
         region : str, optional
             Region of cortex to create implant in.
 
@@ -62,18 +71,18 @@ class EnsembleImplant(ProsthesisSystem):
         locs = as_value(locs, dva, 'locs')
         xrange = as_value(xrange, dva, 'xrange')
         yrange = as_value(yrange, dva, 'yrange')
-        xystep = as_value(xystep, dva, 'xystep')
+        step = as_value(step, dva, 'step')
 
         if locs is None:
             if xrange is None:
                 xrange = (-3, 3)
             if yrange is None:
                 yrange = (-3, 3)
-            if xystep is None:
-                xystep = 1
-            
+            if step is None:
+                step = 1
+
             # make a grid of points
-            grid = Grid2D(xrange, yrange, xystep)
+            grid = Grid2D(xrange, yrange, step)
             xlocs = grid.x.flatten()
             ylocs = grid.y.flatten()
         else:
@@ -86,7 +95,9 @@ class EnsembleImplant(ProsthesisSystem):
 
 
     @classmethod
-    def from_coords(cls, implant_type, locs=None, xrange=None, yrange=None, xystep=None):
+    @rename_parameter('xystep', 'step', deprecated_version='0.10.0',
+                      removed_version='0.11.0')
+    def from_coords(cls, implant_type, locs=None, xrange=None, yrange=None, step=None):
         """
         Create an ensemble implant using physical (cortical or retinal) coordinates.
 
@@ -96,18 +107,24 @@ class EnsembleImplant(ProsthesisSystem):
             The type of implant to create for the ensemble.
         locs : np.ndarray with shape (n, 2), optional
             Array of physical locations (um) to create implants at. Not
-            needed if using xrange, yrange, and xystep.
+            needed if using xrange, yrange, and step.
         xrange, yrange: tuple of floats, optional
             Range of x and y coordinates (um) to create implants at. Required
-            (together with ``xystep``) if ``locs`` is not given.
-        xystep : float, optional
+            (together with ``step``) if ``locs`` is not given.
+        step : float or (x_step, y_step), optional
             Spacing (um) between implant centers.
+
+            .. versionchanged:: 0.10.0
+
+                Renamed from ``xystep``, which suggested that one step size
+                applies to both axes. The old name still works as a keyword
+                argument, but is deprecated and will be removed in v0.11.0.
 
         Raises
         ------
         ValueError
             If neither ``locs`` nor all three of ``xrange``, ``yrange`` and
-            ``xystep`` are given.
+            ``step`` are given.
 
         Notes
         -----
@@ -132,7 +149,7 @@ class EnsembleImplant(ProsthesisSystem):
         locs = as_value(locs, um, 'locs')
         xrange = as_value(xrange, um, 'xrange')
         yrange = as_value(yrange, um, 'yrange')
-        xystep = as_value(xystep, um, 'xystep')
+        step = as_value(step, um, 'step')
 
         if locs is None:
             # There are two ways to say where the implants go, and no default
@@ -141,18 +158,18 @@ class EnsembleImplant(ProsthesisSystem):
             # uses would put every implant inside a 6 um square here.
             missing = [name for name, value in [('xrange', xrange),
                                                 ('yrange', yrange),
-                                                ('xystep', xystep)]
+                                                ('step', step)]
                        if value is None]
             if missing:
                 raise ValueError(
                     f"Pass either 'locs' or all of 'xrange', 'yrange' and "
-                    f"'xystep' (missing: {', '.join(missing)}). Coordinates "
+                    f"'step' (missing: {', '.join(missing)}). Coordinates "
                     f"are physical, in microns.")
 
             # Laid out directly rather than through a `Grid2D`, which is a
             # grid of *visual field* coordinates and would read these microns
             # as degrees:
-            (xgrid, ygrid), _, _ = _rectangular_mesh(xrange, yrange, xystep)
+            (xgrid, ygrid), _, _ = _rectangular_mesh(xrange, yrange, step)
             xlocs = xgrid.flatten()
             ylocs = ygrid.flatten()
         else:

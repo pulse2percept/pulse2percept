@@ -11,7 +11,7 @@ from ..electrodes import Electrode
 from ..electrode_arrays import ElectrodeArray
 from ..base import ProsthesisSystem
 from ...units import as_value, dva, um
-from ...utils import parse_3d_orient
+from ...utils import parse_3d_orient, rename_parameter
 
 
 class EllipsoidElectrode(Electrode):
@@ -262,15 +262,17 @@ class LinearEdgeThread(NeuralinkThread):
 class Neuralink(EnsembleImplant):
 
     @classmethod
-    def from_neuropythy(cls, vfmap, locs=None, xrange=None, yrange=None, xystep=None, 
+    @rename_parameter('xystep', 'step', deprecated_version='0.10.0',
+                      removed_version='0.11.0')
+    def from_neuropythy(cls, vfmap, locs=None, xrange=None, yrange=None, step=None,
                         rand_insertion_angle=None, region='v1', Thread=LinearEdgeThread):
         """
         Create a Neuralink implant [Musk2019]_ from a neuropythy visual field map.
 
         The implant will be created by creating a NeuralinkThread for each
-        visual field location specified either by locs or by xrange, yrange, 
-        and xystep. Each thread will be inserted perpendicular to the 
-        cortical surface at the corresponding location in cortex, with 
+        visual field location specified either by locs or by xrange, yrange,
+        and step. Each thread will be inserted perpendicular to the
+        cortical surface at the corresponding location in cortex, with
         up to rand_insertion_angle degrees of azimuthal rotation.
 
         Parameters
@@ -279,11 +281,17 @@ class Neuralink(EnsembleImplant):
             Visual field map to create implant from.
         locs : np.ndarray with shape (n, 2), optional
             Array of visual field locations (dva) to create threads at. Not
-            needed if using xrange, yrange, and xystep.
+            needed if using xrange, yrange, and step.
         xrange, yrange: tuple of floats, optional
             Range of x and y coordinates (dva) to create threads at.
-        xystep : float, optional
+        step : float or (x_step, y_step), optional
             Spacing (dva) between threads.
+
+            .. versionchanged:: 0.10.0
+
+                Renamed from ``xystep``, which suggested that one step size
+                applies to both axes. The old name still works as a keyword
+                argument, but is deprecated and will be removed in v0.11.0.
         rand_insertion_angle : float, optional
             If not none, insert threads at a random offset from perpendicular,
             with a maximum azimuthal rotation of rand_insertion_angle degrees.
@@ -319,18 +327,18 @@ class Neuralink(EnsembleImplant):
         locs = as_value(locs, dva, 'locs')
         xrange = as_value(xrange, dva, 'xrange')
         yrange = as_value(yrange, dva, 'yrange')
-        xystep = as_value(xystep, dva, 'xystep')
+        step = as_value(step, dva, 'step')
 
         if locs is None:
             if xrange is None:
                 xrange = (-3, 3)
             if yrange is None:
                 yrange = (-3, 3)
-            if xystep is None:
-                xystep = 1
-            
+            if step is None:
+                step = 1
+
             # make a grid of points
-            grid = Grid2D(xrange, yrange, xystep)
+            grid = Grid2D(xrange, yrange, step)
             xlocs = grid.x.flatten()
             ylocs = grid.y.flatten()
         else:
@@ -379,8 +387,10 @@ class Neuralink(EnsembleImplant):
         return cls(threads)
     
     @classmethod
-    def from_cortical_map(cls, implant_type, vfmap, locs=None, xrange=None, 
-                          yrange=None, xystep=None, region='v1'):
+    @rename_parameter('xystep', 'step', deprecated_version='0.10.0',
+                      removed_version='0.11.0')
+    def from_cortical_map(cls, implant_type, vfmap, locs=None, xrange=None,
+                          yrange=None, step=None, region='v1'):
         """
         Override of parent class from cortical map method.
         Uses from_neuropythy instead of from_cortical_map if the provided
@@ -394,11 +404,17 @@ class Neuralink(EnsembleImplant):
             Cortical map to create implant from.
         locs : np.ndarray with shape (n, 2), optional
             Array of visual field locations to create threads at. Not
-            needed if using xrange, yrange, and xystep.
+            needed if using xrange, yrange, and step.
         xrange, yrange: tuple of floats, optional
             Range of x and y coordinates to create threads at.
-        xystep : float, optional
+        step : float or (x_step, y_step), optional
             Spacing between threads.
+
+            .. versionchanged:: 0.10.0
+
+                Renamed from ``xystep``, which suggested that one step size
+                applies to both axes. The old name still works as a keyword
+                argument, but is deprecated and will be removed in v0.11.0.
         region : str, optional
             Region of cortex to create implant in.
 
@@ -411,10 +427,10 @@ class Neuralink(EnsembleImplant):
             raise TypeError("implant_type must be a subclass of NeuralinkThread")
         from ...topography import NeuropythyMap
         if not isinstance(vfmap, NeuropythyMap):
-            return super().from_cortical_map(implant_type, vfmap, locs=locs, xrange=xrange, 
-                                             yrange=yrange, xystep=xystep, region=region)
-        return cls.from_neuropythy(vfmap, locs=locs, xrange=xrange, yrange=yrange, 
-                                    xystep=xystep, region=region, Thread=implant_type)
+            return super().from_cortical_map(implant_type, vfmap, locs=locs, xrange=xrange,
+                                             yrange=yrange, step=step, region=region)
+        return cls.from_neuropythy(vfmap, locs=locs, xrange=xrange, yrange=yrange,
+                                    step=step, region=region, Thread=implant_type)
 
     
 

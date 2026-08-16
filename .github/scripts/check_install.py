@@ -167,7 +167,7 @@ def check_model_builds() -> list[str]:
         from pulse2percept.implants import ArgusII
         from pulse2percept.models import ScoreboardModel
 
-        model = ScoreboardModel(xrange=(-4, 4), yrange=(-4, 4), xystep=1).build()
+        model = ScoreboardModel(xrange=(-4, 4), yrange=(-4, 4), step=1).build()
         implant = ArgusII()
         implant.stim = {e: 1 for e in ("A1", "F10")}
         percept = model.predict_percept(implant)

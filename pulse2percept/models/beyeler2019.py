@@ -24,9 +24,10 @@ import warnings
 
 
 #: Layout of the payload in ``axon_pickle``. Bump this whenever the tuple
-#: written by ``AxonMapSpatial._build`` changes shape or meaning, so that a
-#: cache left over from an older version is regrown instead of misread.
-_AXON_CACHE_VERSION = 2
+#: written by ``AxonMapSpatial._build``, or the parameter dict alongside it,
+#: changes shape or meaning, so that a cache left over from an older version
+#: is regrown instead of misread.
+_AXON_CACHE_VERSION = 3
 
 
 def _is_axon_cache(payload):
@@ -112,10 +113,17 @@ class ScoreboardSpatial(SpatialModel):
         A tuple indicating the range of y values to simulate (in degrees of
         visual angle). Negative y values correspond to the superior retina,
         and positive y values to the inferior retina.
-    xystep : int, double, tuple, optional
+    step : int, double, tuple, optional
         Step size for the range of (x,y) values to simulate (in degrees of
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
-        use ``xrange=(0, 1)`` and ``xystep=0.5``.
+        use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
+        and y axes different step sizes.
+
+        .. versionchanged:: 0.10.0
+
+            Renamed from ``xystep``, which suggested that one step size
+            applies to both axes. The old name still works, but is
+            deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -206,10 +214,17 @@ class ScoreboardModel(Model):
         A tuple indicating the range of y values to simulate (in degrees of
         visual angle). Negative y values correspond to the superior retina,
         and positive y values to the inferior retina.
-    xystep : int, double, tuple, optional
+    step : int, double, tuple, optional
         Step size for the range of (x,y) values to simulate (in degrees of
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
-        use ``xrange=(0, 1)`` and ``xystep=0.5``.
+        use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
+        and y axes different step sizes.
+
+        .. versionchanged:: 0.10.0
+
+            Renamed from ``xystep``, which suggested that one step size
+            applies to both axes. The old name still works, but is
+            deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -288,10 +303,17 @@ class AxonMapSpatial(SpatialModel):
         A tuple indicating the range of y values to simulate (in degrees of
         visual angle). Negative y values correspond to the superior retina,
         and positive y values to the inferior retina.
-    xystep : int or double or tuple, optional
+    step : int or double or tuple, optional
         Step size for the range of (x,y) values to simulate (in degrees of
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
-        use ``xrange=(0, 1)`` and ``xystep=0.5``.
+        use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
+        and y axes different step sizes.
+
+        .. versionchanged:: 0.10.0
+
+            Renamed from ``xystep``, which suggested that one step size
+            applies to both axes. The old name still works, but is
+            deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -885,17 +907,21 @@ class AxonMapSpatial(SpatialModel):
             # Check if math for Jansonius model has been done before:
             if os.path.isfile(self.axon_pickle):
                 params, cached = pickle.load(open(self.axon_pickle, 'rb'))
-                for key, value in params.items():
-                    if (not hasattr(self, key) or
-                            not np.allclose(getattr(self, key), value)):
-                        need_axons = True
-                        break
                 # A cache written by an older version stores something else
                 # here. Rather than try to read it, grow the bundles again and
                 # overwrite it; the file is derived data, so the only cost is
-                # one slow build:
+                # one slow build. Settle this *before* looking at `params`,
+                # whose keys are versioned too -- an old cache names the grid
+                # step `xystep`, and probing that here would warn the user
+                # about a name they never used:
                 if not _is_axon_cache(cached):
                     need_axons = True
+                else:
+                    for key, value in params.items():
+                        if (not hasattr(self, key) or
+                                not np.allclose(getattr(self, key), value)):
+                            need_axons = True
+                            break
             else:
                 need_axons = True
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
@@ -929,7 +955,7 @@ class AxonMapSpatial(SpatialModel):
             params = {'loc_od': self.loc_od,
                       'n_axons': self.n_axons, 'axons_range': self.axons_range,
                       'xrange': self.xrange, 'yrange': self.yrange,
-                      'xystep': self.xystep, 'n_ax_segments': self.n_ax_segments,
+                      'step': self.step, 'n_ax_segments': self.n_ax_segments,
                       'ax_segments_range': self.ax_segments_range}
             pickle.dump((params, (_AXON_CACHE_VERSION, bundles, bundle_id,
                                   idx_segment)),
@@ -1113,10 +1139,17 @@ class AxonMapModel(Model):
         A tuple indicating the range of y values to simulate (in degrees of
         visual angle). Negative y values correspond to the superior retina,
         and positive y values to the inferior retina.
-    xystep : int or double or tuple, optional
+    step : int or double or tuple, optional
         Step size for the range of (x,y) values to simulate (in degrees of
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
-        use ``xrange=(0, 1)`` and ``xystep=0.5``.
+        use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
+        and y axes different step sizes.
+
+        .. versionchanged:: 0.10.0
+
+            Renamed from ``xystep``, which suggested that one step size
+            applies to both axes. The old name still works, but is
+            deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
