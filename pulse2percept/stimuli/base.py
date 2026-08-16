@@ -1701,7 +1701,23 @@ class Stimulus(PrettyPrint):
         net current is smaller than 10 pico Amps.
         For the whole stimulus to be charge-balanced, every electrode must be
         charge-balanced as well.
+
+        Returns None if the stimulus is not a current at all: the gray levels
+        of an :py:class:`~pulse2percept.stimuli.ImageStimulus` integrate to a
+        number like any others, but that number is not a charge and asking
+        whether it is zero answers nothing. Note that this is "not applicable",
+        not "unbalanced" -- it is
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.safe_mode` that
+        turns the question into an error, since a safety system genuinely
+        cannot do its job on a stimulus that is not electrical.
+
+        .. versionchanged:: 0.10.0
+            Returns None for a stimulus that is not measured in units of
+            current (was: integrated the values anyway).
+
         """
+        if self.unit.dimension != uA.dimension:
+            return None
         if self.time is None:
             return np.allclose(self.data, 0, atol=MIN_AMP)
         return np.allclose(trapezoid(self.data, x=self.time), 0, atol=MIN_AMP)

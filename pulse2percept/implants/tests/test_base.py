@@ -4,8 +4,8 @@ import pytest
 import numpy.testing as npt
 from pulse2percept import implants
 from pulse2percept.implants import cortex
-from pulse2percept.units import (DimensionMismatchError, dva, mm, ms,
-                                 uA, um)
+from pulse2percept.units import (DimensionMismatchError, Quantity,
+                                 dimensionless, dva, mA, mm, ms, nA, uA, um)
 from matplotlib.patches import Circle
 import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
@@ -14,6 +14,9 @@ from pulse2percept.implants import (PointSource, ElectrodeArray, ElectrodeGrid,
                                     ProsthesisSystem, RectangleImplant,
                                     PhotovoltaicPixel)
 from pulse2percept.stimuli import Stimulus, ImageStimulus, VideoStimulus, LogoBVL
+from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
+                                   MonophasicPulse)
+from pulse2percept.implants import (ArgusII, DiskElectrode)
 from pulse2percept.models import ScoreboardModel
 
 
@@ -369,3 +372,107 @@ def test_implant_dimension_errors():
         implants.RectangleImplant(spacing=2 * dva)
     with pytest.raises(DimensionMismatchError):
         implants.RectangleImplant(r=10 * uA)
+
+
+def test_ProsthesisSystem_max_current_units():
+    """`max_current` is a current, stored as a plain number of microamps"""
+    earray = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
+    for value in (100, 100 * uA, 0.1 * mA, 100000 * nA):
+        implant = ProsthesisSystem(earray, max_current=value)
+        npt.assert_allclose(implant.max_current, 100, rtol=1e-12)
+        npt.assert_equal(isinstance(implant.max_current, Quantity), False)
+    # An awkward conversion is no different:
+    npt.assert_allclose(
+        ProsthesisSystem(earray, max_current=0.0417 * mA).max_current, 41.7,
+        rtol=1e-12)
+    # None means no limit, and is left alone:
+    npt.assert_equal(ProsthesisSystem(earray).max_current, None)
+    # Assigning later goes through the same setter:
+    implant = ProsthesisSystem(earray)
+    implant.max_current = 0.1 * mA
+    npt.assert_allclose(implant.max_current, 100, rtol=1e-12)
+    with pytest.raises(DimensionMismatchError):
+        ProsthesisSystem(earray, max_current=5 * ms)
+    with pytest.raises(DimensionMismatchError):
+        implant.max_current = 5 * dva
+    with pytest.raises(ValueError):
+        ProsthesisSystem(earray, max_current=-1 * uA)
+
+
+def test_ProsthesisSystem_safety_checks_are_electrical():
+    """Electrical safety may only be asked about an electrical stimulus"""
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    vid = VideoStimulus(np.ones((6, 10, 3)) * 0.5, time=[0, 20, 40])
+
+    # No electrical policy requested, so no electrical question is asked and a
+    # picture may still be assigned. This is what keeps preprocessing
+    # workflows, which turn images into current, working:
+    implant = ArgusII(preprocess=False, safe_mode=False)
+    implant.stim = img
+    npt.assert_equal(implant.stim.unit, dimensionless)
+    implant.stim = vid
+    npt.assert_equal(implant.stim.unit, dimensionless)
+
+    # `safe_mode` is a claim about electricity, and cannot be made about a
+    # picture -- it must not integrate gray levels and pronounce them safe:
+    implant = ArgusII(preprocess=False, safe_mode=True)
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        implant.stim = img
+    npt.assert_equal("Safety check 'safe_mode'" in str(excinfo.value), True)
+    npt.assert_equal('dimensionless' in str(excinfo.value), True)
+
+    # ... and so is `max_current`:
+    implant = ArgusII(preprocess=False, safe_mode=False)
+    implant.max_current = 100 * uA
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        implant.stim = img
+    npt.assert_equal("Safety check 'max_current'" in str(excinfo.value), True)
+    # Including an empty one: the guard sits before the empty-data fast path,
+    # since an empty picture is just as much the wrong kind of thing.
+    empty = Stimulus(np.zeros((60, 0)),
+                     electrodes=ArgusII().electrode_names)._inherit_units(img)
+    with pytest.raises(DimensionMismatchError):
+        implant.check_stim(empty)
+    # An empty *electrical* stimulus is fine, as before:
+    implant.check_stim(Stimulus(np.zeros((60, 0)),
+                                electrodes=ArgusII().electrode_names))
+
+
+def test_ProsthesisSystem_preprocess_crosses_the_boundary():
+    """Preprocessing may turn a picture into current before safety sees it"""
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    encoder = AmplitudeEncoder(ArgusII(), amp_range=(0, 20), freq=20)
+    implant = ArgusII(safe_mode=True, preprocess=lambda x: encoder.encode(x))
+    implant.max_current = 100 * mA
+    implant.stim = img
+    npt.assert_equal(implant.stim.unit, uA)
+    npt.assert_equal(implant.stim.is_charge_balanced, True)
+    # The same chain, assigned already-encoded, and this time with a limit
+    # tight enough to matter:
+    implant = ArgusII(preprocess=False, safe_mode=True)
+    implant.max_current = 100 * uA
+    with pytest.raises(ValueError) as excinfo:
+        implant.stim = encoder.encode(img)
+    npt.assert_equal('exceeds max_current' in str(excinfo.value), True)
+    implant.max_current = 2 * mA
+    implant.stim = encoder.encode(img)
+    npt.assert_equal(implant.stim.unit, uA)
+
+
+def test_ProsthesisSystem_historical_stimuli_unchanged():
+    """A bare stimulus is electrical by contract, and is checked as before"""
+    implant = ArgusII(preprocess=False, safe_mode=True)
+    implant.stim = {'A1': BiphasicPulse(50, 0.45)}
+    npt.assert_equal(implant.stim.unit, uA)
+    with pytest.raises(ValueError) as excinfo:
+        implant.stim = {'A1': MonophasicPulse(50, 0.45)}
+    npt.assert_equal('charge-balanced' in str(excinfo.value), True)
+    # A plain number is microamps, and the limit is read the same way:
+    implant = ArgusII(preprocess=False)
+    implant.max_current = 60
+    with pytest.raises(ValueError) as excinfo:
+        implant.stim = {name: 2 for name in ArgusII().electrode_names}
+    npt.assert_equal('draws 120.0 uA at once' in str(excinfo.value), True)
+    implant.max_current = 0.2 * mA
+    implant.stim = {name: 2 for name in ArgusII().electrode_names}
+    npt.assert_equal(implant.stim.unit, uA)

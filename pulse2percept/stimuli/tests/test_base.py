@@ -12,7 +12,8 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
 from pulse2percept.stimuli import Stimulus
-from pulse2percept.stimuli import BiphasicPulseTrain
+from pulse2percept.stimuli import (BiphasicPulse, BiphasicPulseTrain,
+                                   MonophasicPulse)
 from pulse2percept.stimuli import ImageStimulus
 from pulse2percept.stimuli import VideoStimulus
 from pulse2percept.stimuli.base import _interp_rows, merge_time_axes
@@ -1243,3 +1244,28 @@ def test_Stimulus_time_slice():
     for call in (lambda: stim[:, 1:4], lambda: stim.plot(time=slice(1, 4))):
         with pytest.raises(ValueError):
             call()
+
+
+def test_Stimulus_is_charge_balanced_needs_a_current():
+    """Gray levels integrate to a number, but that number is not a charge"""
+    # Not applicable, which is not the same as unbalanced:
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    vid = VideoStimulus(np.ones((2, 2, 3)) * 0.5, time=[0, 20, 40])
+    for stim in (img, vid, Stimulus(img), Stimulus(vid)):
+        npt.assert_equal(stim.is_charge_balanced, None)
+    # A dimensionless stimulus whose values happen to sum to zero is still not
+    # "balanced" -- there is nothing there to balance:
+    zeros = Stimulus(VideoStimulus(np.zeros((1, 1, 3)), time=[0, 1, 2]))
+    npt.assert_equal(zeros.unit, dimensionless)
+    npt.assert_equal(zeros.is_charge_balanced, None)
+    # Electrical stimuli answer exactly as they always have:
+    npt.assert_equal(BiphasicPulse(50, 0.45).is_charge_balanced, True)
+    npt.assert_equal(MonophasicPulse(50, 0.45).is_charge_balanced, False)
+    npt.assert_equal(BiphasicPulseTrain(20, 50, 0.45).is_charge_balanced, True)
+    npt.assert_equal(Stimulus([0]).is_charge_balanced, True)
+    npt.assert_equal(Stimulus([1]).is_charge_balanced, False)
+    npt.assert_equal((50 * uA * 0 + Stimulus([0])).is_charge_balanced, True)
+    # Pretty-printing evaluates the property, so it must not raise on a
+    # picture:
+    for stim in (img, vid):
+        npt.assert_equal('is_charge_balanced' in str(stim), True)
