@@ -24,6 +24,13 @@ Highlights:
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` are roughly 100x faster
   and produce much smaller notebooks and documentation pages.
 
+*  New :py:mod:`~pulse2percept.units` module. Arguments at pulse2percept's
+   public API boundaries may now be given as physical quantities
+   (``50 * uA``, ``450 * us``, ``15 * mm``, ``2 * dva``), which are
+   dimension-checked and converted to the unit the code expects. Bare numbers
+   keep working and keep their documented meaning everywhere, and are never
+   warned about. See :ref:`Physical Units <topics-units>`.
+
 * Python 3.14 is now supported. Python 3.11 and NumPy 2 are now required.
 
 API changes:
@@ -66,6 +73,38 @@ API changes:
   :py:meth:`~pulse2percept.percepts.Percept.play` defaults to PNG, which is
   pixel-exact and nearly as compact for scalar data. Pass ``fmt`` to override.
 
+* Objects now record what their numbers mean:
+  :py:attr:`~pulse2percept.stimuli.Stimulus.unit`,
+  :py:attr:`~pulse2percept.stimuli.Stimulus.time_unit`,
+  :py:meth:`~pulse2percept.stimuli.Stimulus.values`,
+  :py:meth:`~pulse2percept.stimuli.Stimulus.times`,
+  :py:meth:`~pulse2percept.implants.ElectrodeArray.coordinates`,
+  :py:attr:`~pulse2percept.percepts.Percept.time_unit`,
+  :py:meth:`~pulse2percept.percepts.Percept.times`, and
+  :py:meth:`~pulse2percept.utils.Parametrized.get_param_units`. Models declare
+  ``stimulus_unit``, ``space_unit`` and ``time_unit``; visual field maps
+  declare ``visual_unit`` and ``tissue_unit``. Storage is unchanged: these
+  report the unit, they do not convert what is stored.
+
+* ``predict_percept`` now raises ``DimensionMismatchError`` when the stimulus
+  is not the physical quantity the model reads. Assigning an
+  :py:class:`~pulse2percept.stimuli.ImageStimulus` or
+  :py:class:`~pulse2percept.stimuli.VideoStimulus` straight to ``implant.stim``
+  previously had its gray levels silently treated as microamps. Encode it with
+  :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` or
+  :py:class:`~pulse2percept.stimuli.FrequencyEncoder` first, or give the
+  implant a ``preprocess`` function that does. The same check guards the
+  ``safe_mode`` and ``max_current`` safety checks.
+
+* :py:attr:`~pulse2percept.stimuli.Stimulus.is_charge_balanced` returns None
+  for a stimulus that is not a current, rather than answering a question that
+  does not apply to it.
+
+* :py:meth:`~pulse2percept.implants.EnsembleImplant.from_coords` requires
+  ``xrange``, ``yrange`` and ``xystep`` together when ``locs`` is not given.
+  They previously defaulted to a visual-field range, which placed implants at
+  coordinates that were never meant to be microns.
+
 * Minimum dependency versions were raised for NumPy 2 compatibility. NumPy 1.x
   users should remain on v0.9.1.
 
@@ -107,6 +146,13 @@ Bug fixes:
   color channels across every row.
 
 * Stimulus metadata now survives ``predict_percept`` and other transformations.
+
+* When a temporal model picks its own output times, the last one no longer
+  falls after the end of the stimulus. The end of the range was nudged by one
+  millisecond to make it inclusive, which added a frame wherever the frame
+  interval did not divide that millisecond -- most visibly in
+  :py:class:`~pulse2percept.models.cortex.DynaphosModel` with ``dt`` finer than
+  1 ms.
 
 * Visual-field-map equality now handles array-valued attributes correctly,
   maps are hashable again, and maps of different classes no longer compare

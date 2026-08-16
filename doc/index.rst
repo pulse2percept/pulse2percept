@@ -17,6 +17,7 @@
    topics/cortical
    topics/stimuli
    topics/models
+   topics/units
    topics/datasets
 
 .. toctree::
