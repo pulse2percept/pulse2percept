@@ -3,7 +3,8 @@ import numpy as np
 from .base import ProsthesisSystem
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
-from ..stimuli.base import unique_time_points
+from ..stimuli.base import _describe_unit, unique_time_points
+from ..units import DimensionMismatchError
 
 class EnsembleImplant(ProsthesisSystem):
     
@@ -256,9 +257,19 @@ class EnsembleImplant(ProsthesisSystem):
                               metadata=metadata)
             # The merge concatenates raw data arrays, so the result would
             # otherwise fall back to the default (current) reading of them.
-            # Only adopt a unit the implants agree on; a mix of, say, image
-            # intensities and currents has no common one to adopt:
+            # An implant with no stimulus contributes zeros and no
+            # interpretation of them, so only the ones that have a stimulus
+            # decide what the merged numbers mean -- and they have to agree,
+            # because a mix of image intensities and currents has no common
+            # reading to fall back on:
             present = [s for s in stims if s is not None]
-            if len({(s.unit, s.time_unit) for s in present}) == 1:
+            units = {(s.unit, s.time_unit) for s in present}
+            if len(units) > 1:
+                names = ', '.join(sorted({_describe_unit(s.unit)
+                                          for s in present}))
+                raise DimensionMismatchError(
+                    f"Cannot merge stimuli measured in different units "
+                    f"({names}). Convert them to a common unit first.")
+            if present:
                 merged._inherit_units(present[0])
             self.stim = merged

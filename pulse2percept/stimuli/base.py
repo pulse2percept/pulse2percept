@@ -297,6 +297,17 @@ def merge_time_axes(data, time, merge_tolerance=1e-6):
     return new_data, [new_time]
 
 
+def _describe_unit(unit):
+    """Name a unit the way an error message wants to read
+
+    A dimensionless unit has no symbol to show, so saying "dimensionless ()"
+    is worse than saying nothing at all.
+    """
+    if unit.dimension.is_dimensionless:
+        return 'dimensionless units'
+    return f'{unit.dimension.name} ({unit})'
+
+
 def _stimulus_sources(source):
     """The Stimulus objects a source is built from, if any
 
@@ -526,7 +537,7 @@ class Stimulus(PrettyPrint):
         for attr, expected in (('unit', unit), ('time_unit', time_unit)):
             found = {getattr(s, attr) for s in sources}
             if len(found) > 1:
-                names = ', '.join(sorted(str(u.dimension.name) for u in found))
+                names = ', '.join(sorted(_describe_unit(u) for u in found))
                 raise DimensionMismatchError(
                     f"Cannot build one {type(self).__name__} out of stimuli "
                     f"with different units ({names}). Convert them to a "
@@ -932,6 +943,20 @@ class Stimulus(PrettyPrint):
         if not isinstance(other, Stimulus):
             raise TypeError(f"Other object must be a Stimulus, not "
                             f"{type(other)}.")
+        # The result is a copy of `self` with `other`'s data concatenated onto
+        # its own, so it would carry `self`'s unit over numbers that never
+        # meant that. Two stimuli can only be laid end to end if they measure
+        # the same thing:
+        if self.unit != other.unit:
+            raise DimensionMismatchError(
+                f"Cannot append a stimulus measured in "
+                f"{_describe_unit(other.unit)} to one measured in "
+                f"{_describe_unit(self.unit)}.")
+        if self.time_unit != other.time_unit:
+            raise DimensionMismatchError(
+                f"Cannot append a stimulus whose time is measured in "
+                f"{_describe_unit(other.time_unit)} to one whose time is "
+                f"measured in {_describe_unit(self.time_unit)}.")
         if self.time is None or other.time is None:
             raise ValueError("Cannot append another stimulus if time=None.")
         if not _names_equal(self.electrodes, other.electrodes):
@@ -1053,6 +1078,11 @@ class Stimulus(PrettyPrint):
             # Ask for a slice instead of `self.time` to avoid interpolation,
             # which can be time-consuming for an uncompressed stimulus:
             time = slice(None)
+        # A range or a list of time points may be given as quantities. A slice
+        # is left alone: there it selects columns by position, and a position
+        # is not a duration.
+        if not isinstance(time, slice):
+            time = self._as_time(time)
         if isinstance(time, tuple):
             # Return a range of time points:
             t_idx = (self.time > time[0]) & (self.time < time[1])
@@ -1106,11 +1136,21 @@ class Stimulus(PrettyPrint):
             ax.set_ylabel(electrode)
         # Show x-ticks only on last subplot:
         axes[-1].set_xticks(np.linspace(t_vals[0], t_vals[-1], num=5))
-        # Labels are common to all subplots:
+        # Labels are common to all subplots. What the y axis shows depends on
+        # what the stimulus is made of: an image or video stimulus holds gray
+        # levels, and calling those an amplitude in microamps is simply wrong.
+        if self.unit.dimension.is_dimensionless:
+            ylabel = 'Value'
+        elif self.unit == uA:
+            # Spelled the way Matplotlib renders it:
+            ylabel = r'Amplitude ($\mu$A)'
+        else:
+            ylabel = f'Amplitude ({self.unit})'
         axes[-1].figure.subplots_adjust(bottom=0.2)
-        axes[-1].figure.text(0.5, 0, 'Time (ms)', va='top', ha='center')
-        axes[-1].figure.text(0, 0.5, r'Amplitude ($\mu$A)', va='center',
-                             ha='center', rotation='vertical')
+        axes[-1].figure.text(0.5, 0, f'Time ({self.time_unit})', va='top',
+                             ha='center')
+        axes[-1].figure.text(0, 0.5, ylabel, va='center', ha='center',
+                             rotation='vertical')
         if len(axes) == 1:
             return axes[0]
         return axes
@@ -1144,10 +1184,19 @@ class Stimulus(PrettyPrint):
                         raise ValueError("You must provide a step size when "
                                          "slicing the time axis.")
                 else:
-                    start = self.time[0] if time.start is None else time.start
-                    stop = self.time[-1] if time.stop is None else time.stop
-                    time = np.arange(start, stop, time.step, dtype=np.float64)
+                    # Each endpoint is a point in time and the step a duration,
+                    # so any of the three may be given as a quantity:
+                    start = self._as_time(time.start)
+                    stop = self._as_time(time.stop)
+                    step = self._as_time(time.step)
+                    start = self.time[0] if start is None else start
+                    stop = self.time[-1] if stop is None else stop
+                    time = np.arange(start, stop, step, dtype=np.float64)
             elif time is not Ellipsis:
+                # A requested time point (or a list of them) may be unitful;
+                # after this it is an ordinary number, which is what the
+                # indexing and interpolation below have always worked on:
+                time = self._as_time(time)
                 # Convert to float so time is not mistaken for column index
                 if np.array(time).dtype != bool:
                     time = np.float64(time)

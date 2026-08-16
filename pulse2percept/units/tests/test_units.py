@@ -1,3 +1,6 @@
+import pickle
+from copy import copy, deepcopy
+
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -336,3 +339,42 @@ def test_DimensionMismatchError():
     npt.assert_equal(issubclass(DimensionMismatchError, TypeError), True)
     with pytest.raises(TypeError):
         as_value(3 * uA, ms)
+
+
+def test_units_copy_and_pickle():
+    # A Dimension and a Unit are immutable value objects: copying one hands
+    # back the very same object, which is also what keeps a deep-copied
+    # stimulus from allocating units.
+    for obj in (Dimension(current=1), uA, uA / mm ** 2, dimensionless):
+        npt.assert_equal(copy(obj) is obj, True)
+        npt.assert_equal(deepcopy(obj) is obj, True)
+    # A Quantity does have something to copy, because its magnitude may be a
+    # mutable array:
+    q = np.array([1.0, 2.0]) * uA
+    for copied in (copy(q), deepcopy(q)):
+        npt.assert_equal(copied == q, [True, True])
+        npt.assert_equal(copied.unit, uA)
+    copied = deepcopy(q)
+    copied.magnitude[0] = 99
+    npt.assert_almost_equal(q.magnitude, [1.0, 2.0])
+    # `copy` shares the magnitude, as a shallow copy should:
+    copied = copy(q)
+    copied.magnitude[0] = 99
+    npt.assert_almost_equal(q.magnitude, [99.0, 2.0])
+    # All three survive a pickle round trip. They define __slots__ and refuse
+    # ordinary attribute assignment, so this only works because they say how
+    # to restore themselves:
+    for obj in (Dimension(current=1, length=-2), ms, uA * ms, dimensionless):
+        restored = pickle.loads(pickle.dumps(obj))
+        npt.assert_equal(restored, obj)
+        npt.assert_equal(hash(restored), hash(obj))
+    for obj in (5 * uA, [1, 2] * ms, 0.5 * uA / mm ** 2):
+        restored = pickle.loads(pickle.dumps(obj))
+        npt.assert_equal(np.all(restored == obj), True)
+        npt.assert_equal(restored.unit, obj.unit)
+    # A Unit restored from a pickle is still usable in unit algebra and in
+    # conversions, i.e. its dimension came back intact:
+    restored = pickle.loads(pickle.dumps(mA))
+    npt.assert_almost_equal((1 * restored).to_value(uA), 1000)
+    npt.assert_equal(restored * s, mC)
+    npt.assert_equal(restored * ms, uC)

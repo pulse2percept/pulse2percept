@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from pulse2percept.stimuli import Stimulus
 from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.stimuli import ImageStimulus
+from pulse2percept.stimuli import VideoStimulus
 from pulse2percept.stimuli.base import _interp_rows, merge_time_axes
 from pulse2percept.units import (DimensionMismatchError, Quantity,
                                  dimensionless, mA, ms, uA, us)
@@ -1139,3 +1140,67 @@ def test_Stimulus_arithmetic_units():
         stim >> 5 * uA
     with pytest.raises(DimensionMismatchError):
         ImageStimulus(np.ones((2, 2))) + 5 * uA
+
+
+def test_Stimulus_append_units():
+    # `append` copies `self` and concatenates `other`'s data onto its own, so
+    # without a check the result would label another stimulus' numbers with
+    # this one's unit.
+    elec = Stimulus(np.ones((1, 3)), time=[0, 1, 2])
+    dimless = Stimulus(VideoStimulus(np.ones((1, 1, 3)), time=[0, 1, 2]))
+    npt.assert_equal(elec.unit, uA)
+    npt.assert_equal(dimless.unit, dimensionless)
+    with pytest.raises(DimensionMismatchError):
+        elec.append(dimless)
+    with pytest.raises(DimensionMismatchError):
+        dimless.append(elec)
+    # Two stimuli that do agree still append, and keep the unit:
+    combined = elec.append(elec >> 3)
+    npt.assert_equal(combined.unit, uA)
+    npt.assert_equal(combined.time_unit, ms)
+    npt.assert_equal(dimless.append(dimless >> 3).unit, dimensionless)
+
+
+def test_Stimulus_getitem_units():
+    stim = Stimulus(np.arange(10, dtype=float).reshape((1, -1)),
+                    time=np.arange(10, dtype=float))
+    # A requested time point can be given in any unit of time:
+    npt.assert_almost_equal(stim[:, 3.45], stim[:, 3.45 * ms])
+    npt.assert_almost_equal(stim[:, 3.45], stim[:, 0.00345 * sec])
+    # As can a list of them...
+    npt.assert_almost_equal(stim[:, [1, 2]], stim[:, [1, 2] * ms])
+    npt.assert_almost_equal(stim[:, [1, 2]], stim[:, [1 * ms, 2 * ms]])
+    # ...and the endpoints and step of a slice:
+    npt.assert_almost_equal(stim[:, 1:3:1],
+                            stim[:, 0.001 * sec:0.003 * sec:1 * ms])
+    npt.assert_almost_equal(stim[:, 1:3:1], stim[:, 1 * ms:3 * ms:1000 * us])
+    # Interpolation still happens where it always did:
+    npt.assert_almost_equal(stim[:, 3.45 * ms], 3.45, decimal=5)
+    # The other indexing forms are untouched:
+    npt.assert_almost_equal(stim[:, stim.time < 2].ravel(), [0, 1])
+    npt.assert_equal(stim[:, ...].shape, (1, 10))
+    # A current is not a point in time:
+    with pytest.raises(DimensionMismatchError):
+        stim[:, 3 * uA]
+    with pytest.raises(DimensionMismatchError):
+        stim[:, [1, 2] * uA]
+    with pytest.raises(DimensionMismatchError):
+        stim[:, 1 * uA:3 * uA:1 * uA]
+
+
+def test_Stimulus_plot_units():
+    stim = Stimulus(np.arange(10, dtype=float).reshape((1, -1)),
+                    time=np.arange(10, dtype=float))
+    # A range or a list of time points may be unitful:
+    npt.assert_equal(isinstance(stim.plot(time=(1 * ms, 3 * ms)), Subplot),
+                     True)
+    npt.assert_equal(isinstance(stim.plot(time=[1, 2] * ms), Subplot), True)
+    with pytest.raises(DimensionMismatchError):
+        stim.plot(time=(1 * uA, 3 * uA))
+    # The y axis says what the stimulus is actually made of:
+    npt.assert_equal(stim.plot().figure.texts[-1].get_text(),
+                     r'Amplitude ($\mu$A)')
+    npt.assert_equal(stim.plot().figure.texts[-2].get_text(), 'Time (ms)')
+    dimless = Stimulus(VideoStimulus(np.ones((1, 1, 3)), time=[0, 1, 2]))
+    npt.assert_equal(dimless.plot().figure.texts[-1].get_text(), 'Value')
+    plt.close('all')
