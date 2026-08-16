@@ -403,6 +403,7 @@ class DynaphosModel(BaseModel):
             resp = self._predict_percept(implant.earray, stim, t_percept)
         return Percept(resp.reshape(list(self.grid.x.shape) + [t_percept.size]),
                        space=self.grid, time=t_percept,
+                       time_unit=self.time_unit,
                        metadata={'stim': stim}, n_gray=self.n_gray, noise=self.noise)
 
     def plot(self, use_dva=False, style=None, autoscale=True, ax=None,

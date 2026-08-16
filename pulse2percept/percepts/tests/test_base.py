@@ -1,7 +1,9 @@
 from pulse2percept.topography import Grid2D
 from pulse2percept.percepts import Percept
+from pulse2percept.units import DimensionMismatchError, ms, s, um, us
 from skimage.io import imread
 from skimage import img_as_float
+import imageio
 from imageio import mimread
 from matplotlib.animation import FuncAnimation
 from matplotlib.axes import Subplot
@@ -232,3 +234,98 @@ def test_Percept_save_single_frame(tmp_path):
     fname = str(tmp_path / 'fps.mp4')
     percept.save(fname, fps=12)
     npt.assert_equal(len(mimread(fname)), 1)
+
+
+def test_Percept_units():
+    """A percept's time axis knows what unit it is written in
+
+    .. versionadded:: 0.10.0
+    """
+    data = np.zeros((3, 3, 2))
+    # Milliseconds unless told otherwise, and a bare time axis keeps the
+    # meaning it has always had:
+    percept = Percept(data, time=[0, 10])
+    npt.assert_equal(percept.time_unit, ms)
+    npt.assert_almost_equal(percept.time, [0, 10])
+
+    # A unitful time axis is normalized *into* the percept's unit rather than
+    # changing it. Deterministic, and the same rule as everywhere else in p2p:
+    percept = Percept(data, time=[0, 0.01] * s)
+    npt.assert_equal(percept.time_unit, ms)
+    npt.assert_allclose(percept.time, [0, 10], rtol=1e-12)
+    # ... including a sequence built one element at a time:
+    npt.assert_allclose(Percept(data, time=[0 * ms, 10000 * us]).time,
+                        [0, 10], rtol=1e-12)
+
+    # Storing in another unit is the caller's choice -- a model passes its own
+    # `time_unit` -- and then bare numbers mean *that* unit:
+    percept = Percept(data, time=[0, 0.01], time_unit=s)
+    npt.assert_equal(percept.time_unit, s)
+    npt.assert_allclose(percept.time, [0, 0.01], rtol=1e-12)
+    npt.assert_allclose(percept.times(ms), [0, 10], rtol=1e-12)
+    # `times()` with no unit hands back the stored array, unconverted:
+    npt.assert_allclose(percept.times(), [0, 0.01], rtol=0, atol=0)
+    npt.assert_equal(percept.time_quantity.unit, s)
+    npt.assert_allclose(percept.time_quantity.to_value(ms), [0, 10],
+                        rtol=1e-12)
+    # A quantity handed to a percept that stores seconds lands in seconds:
+    npt.assert_allclose(Percept(data, time=[0, 10] * ms, time_unit=s).time,
+                        [0, 0.01], rtol=1e-12)
+
+    # Nothing to express in any unit without a time axis:
+    spatial = Percept(np.zeros((3, 3, 1)))
+    npt.assert_equal(spatial.time, None)
+    npt.assert_equal(spatial.times(s), None)
+    npt.assert_equal(spatial.time_quantity, None)
+    npt.assert_equal(spatial.time_unit, ms)
+
+    # `data` is perceived brightness in arbitrary units, so it has no unit of
+    # its own and gains none here:
+    npt.assert_equal(hasattr(percept, 'unit'), False)
+
+    # `time_unit` has to be a unit, and a unit of time:
+    with pytest.raises(TypeError):
+        Percept(data, time=[0, 10], time_unit='ms')
+    with pytest.raises(DimensionMismatchError):
+        Percept(data, time=[0, 10], time_unit=um)
+    # ... and so does `time` itself:
+    with pytest.raises(DimensionMismatchError):
+        Percept(data, time=[0, 10] * um)
+
+
+def test_Percept_animates_in_wall_clock_time(tmp_path, monkeypatch):
+    """The label is in the percept's unit, the frame rate is in real time
+
+    Two percepts describing the same 50 Hz sequence play at the same speed
+    whether they were written down in milliseconds or in seconds.
+    """
+    data = np.random.rand(4, 4, 3)
+    milli = Percept(data, time=[0, 20, 40])
+    second = Percept(data, time=[0, 0.02, 0.04], time_unit=s)
+
+    # `play`: same delay between frames...
+    milli_ani, second_ani = milli.play(), second.play()
+    npt.assert_almost_equal(milli_ani._interval, second_ani._interval)
+    npt.assert_almost_equal(milli_ani._interval, 20)
+    # ... but each labelled in its own unit:
+    npt.assert_equal('t = 40.00 ms' in milli_ani.to_jshtml(), True)
+    npt.assert_equal('t = 0.04 s' in second_ani.to_jshtml(), True)
+    # An explicit `fps` still wins over both:
+    fixed = second.play(fps=50)
+    npt.assert_almost_equal(fixed._interval, 20)
+
+    # `save`: same frame rate, so the movies run for the same length of time.
+    seen = []
+    monkeypatch.setattr(imageio, 'mimwrite',
+                        lambda fname, data, **kwargs: seen.append(kwargs))
+    for percept in (milli, second):
+        percept.save(str(tmp_path / 'test.mp4'))
+    npt.assert_equal(len(seen), 2)
+    npt.assert_almost_equal(seen[0]['fps'], 50)
+    npt.assert_almost_equal(seen[1]['fps'], 50)
+
+    # A percept whose time axis is in seconds is not a ragged one: the
+    # non-homogeneity tolerance is in milliseconds too.
+    ragged = Percept(data, time=[0, 0.02, 0.05], time_unit=s)
+    with pytest.raises(NotImplementedError):
+        ragged.play()

@@ -303,9 +303,15 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
 
         The time counterpart of :py:meth:`_stim_values`. A stimulus stores
         milliseconds; a model that declared some other ``time_unit`` gets its
-        own. A Percept has no unit to convert from and is passed through.
+        own.
+
+        A :py:class:`~pulse2percept.percepts.Percept` is converted the same
+        way. Its *values* are brightness and stay exactly as they are, but its
+        time axis is a physical quantity like any other, and this is the
+        boundary a spatial model's output crosses on its way into a temporal
+        model: the two need not count in the same unit.
         """
-        if not isinstance(stim, Stimulus):
+        if not isinstance(stim, (Stimulus, Percept)):
             return stim.time
         return stim.times(self.time_unit)
 
@@ -316,7 +322,7 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         stimulus (which counts in *its* unit) and to label the percept. This
         is the one conversion that goes the other way.
         """
-        if t is None or not isinstance(stim, Stimulus) \
+        if t is None or not isinstance(stim, (Stimulus, Percept)) \
                 or stim.time_unit == self.time_unit:
             return t
         return Quantity(t, self.time_unit).to_value(stim.time_unit)
@@ -708,6 +714,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 resp = self._predict_spatial(implant.earray, stim)
         return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
                        space=self.grid, time=t_percept,
+                       time_unit=self.time_unit,
                        metadata={'stim': stim}, n_gray=self.n_gray, noise=self.noise)
 
     def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
@@ -1077,8 +1084,15 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # time point:
             frames = _frame_clock(stim, self.dt, unit=self.time_unit)
             if frames is None:
-                t_out, first = np.arange(0, np.maximum(20, _time[-1]) + 1,
-                                         20), None
+                # One frame every 20 ms is a 50 Hz frame rate no matter what
+                # this model counts in, so the interval is converted rather
+                # than written down as the number 20. The `+ frame_dur / 20`
+                # is `arange`'s half-open end: it includes `_time[-1]` when
+                # that lands exactly on a frame boundary, and is small enough
+                # never to add one:
+                frame_dur = as_value(20 * ms, self.time_unit)
+                stop = np.maximum(frame_dur, _time[-1]) + frame_dur / 20
+                t_out, first = np.arange(0, stop, frame_dur), None
             else:
                 t_out, first = frames
             t_percept = t_out
@@ -1118,7 +1132,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             resp = np.maximum.reduceat(resp, sub_idx, axis=-1)
             t_percept = t_out
         return Percept(resp, space=None, time=t_percept,
-                       metadata={'stim': stim})
+                       time_unit=self.time_unit, metadata={'stim': stim})
 
     def _warn_if_blank(self, stim, resp):
         """Point out a percept that came out blank for a polarity reason
@@ -1247,18 +1261,53 @@ class Model(PrettyPrint):
 
     """
 
-    # Stated here rather than forwarded to the components, for two reasons: a
+    # A composite reports the units of whichever component actually consumes
+    # the quantity, because those are the units its own arguments are read in
+    # and its own percept is written in. Spelled out here rather than left to
+    # `__getattr__`, which answers with a *dict* when both components have the
+    # attribute; and each one falls back on the canonical default, because a
     # Model with neither component still has to be able to normalize its
-    # arguments, and `__getattr__` answers with a *dict* when both components
-    # have the attribute. They are the same constants either way; see
-    # `BaseModel`.
+    # arguments. See `BaseModel` for what the three of them mean.
 
-    #: The unit stimulus values are expressed in
-    stimulus_unit = uA
-    #: The unit spatial coordinates are expressed in
-    space_unit = um
-    #: The unit time is expressed in
-    time_unit = ms
+    @property
+    def stimulus_unit(self):
+        """The unit stimulus values are expressed in
+
+        The stimulus goes to the spatial model if there is one, and straight
+        to the temporal model otherwise.
+        """
+        if self.has_space:
+            return self.spatial.stimulus_unit
+        if self.has_time:
+            return self.temporal.stimulus_unit
+        return BaseModel.stimulus_unit
+
+    @property
+    def space_unit(self):
+        """The unit spatial coordinates are expressed in
+
+        The temporal model never sees a coordinate.
+        """
+        if self.has_space:
+            return self.spatial.space_unit
+        return BaseModel.space_unit
+
+    @property
+    def time_unit(self):
+        """The unit time is expressed in
+
+        ``t_percept`` is read in, and the resulting
+        :py:class:`~pulse2percept.percepts.Percept` is written in, the unit of
+        the last stage of the pipeline: the temporal model if there is one,
+        the spatial model otherwise. The two need not agree -- a spatial model
+        counting in seconds hands its percept to a temporal model counting in
+        milliseconds and the time axis is converted on the way across.
+        """
+        if self.has_time:
+            return self.temporal.time_unit
+        if self.has_space:
+            return self.spatial.time_unit
+        return BaseModel.time_unit
 
     def __init__(self, spatial=None, temporal=None, **params):
         # Set the spatial model:

@@ -1192,3 +1192,142 @@ def test_model_units_are_a_numerical_contract():
     with pytest.raises(DimensionMismatchError):
         milli.predict_percept(ArgusII(preprocess=False, stim=ImageStimulus(
             np.linspace(0, 1, 16).reshape((4, 4)))))
+
+
+class SecondSpatial(RecordingSpatial):
+    """A spatial model that labels its percept in seconds"""
+    time_unit = s
+
+
+class MilliTemporal(TemporalModel):
+    """A temporal model that reports what crossed the numerical boundary
+
+    Milliseconds, which is the default and what every model p2p ships uses.
+    Named for what it is so that the pairing with ``SecondSpatial`` reads.
+    """
+    time_unit = ms
+
+    def get_default_params(self):
+        return {**super().get_default_params(), 'seen': None}
+
+    def _predict_temporal(self, stim, t_percept):
+        self.seen = {'values': self._stim_values(stim),
+                     'time': self._stim_times(stim)}
+        n_space = int(np.prod(stim.data.shape[:-1]))
+        return np.zeros((n_space, len(t_percept)), dtype=np.float32)
+
+
+def test_percept_time_crosses_model_boundary():
+    """A percept's time axis carries the unit it was written in
+
+    Before this, a percept's time was bare numbers whose meaning was implied
+    by whichever model happened to produce them -- so a spatial model counting
+    in seconds handed a temporal model counting in milliseconds a time axis a
+    thousand times too long, and neither of them could tell.
+    """
+    ramp = Stimulus(np.arange(21, dtype=float).reshape((1, -1)),
+                    electrodes=['A1'], time=np.arange(21, dtype=float))
+    implant = ArgusII(stim=ramp)
+    spatial = SecondSpatial(xrange=(-2, 2), yrange=(-2, 2), xystep=1).build()
+    temporal = MilliTemporal().build()
+    npt.assert_equal(spatial.time_unit, s)
+    npt.assert_equal(temporal.time_unit, ms)
+
+    # The spatial model labels its percept in its own unit, and `t_percept`
+    # was read in that unit too:
+    percept = spatial.predict_percept(implant, t_percept=[0, .005, .010])
+    npt.assert_equal(percept.time_unit, s)
+    npt.assert_allclose(percept.time, [0, .005, .010], rtol=1e-12)
+    npt.assert_allclose(percept.times(ms), [0, 5, 10], rtol=1e-12)
+    # `times()` with no unit is the stored array itself, unconverted:
+    npt.assert_allclose(percept.times(), percept.time, rtol=0, atol=0)
+    npt.assert_equal(percept.time_quantity.unit, s)
+    npt.assert_allclose(percept.time_quantity.to_value(ms), [0, 5, 10],
+                        rtol=1e-12)
+
+    # ... and the temporal model reads that percept in *its* unit. This is the
+    # crossing: the kernel sees milliseconds, not the seconds it was labelled
+    # with.
+    temporal.predict_percept(percept, t_percept=[0, 5, 10])
+    npt.assert_allclose(temporal.seen['time'], [0, 5, 10], rtol=1e-12)
+    # Brightness has no unit and is handed over exactly as it stands:
+    npt.assert_allclose(temporal.seen['values'], percept.data, rtol=0, atol=0)
+
+    # The same crossing through a composite, which is where it really happens:
+    model = Model(spatial=SecondSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                        xystep=1),
+                  temporal=MilliTemporal()).build()
+    # A composite reports the unit of the stage that reads `t_percept` and
+    # writes the percept, which is the temporal model:
+    npt.assert_equal(model.time_unit, ms)
+    npt.assert_equal(model.spatial.time_unit, s)
+    out = model.predict_percept(implant, t_percept=[0, 5, 10])
+    npt.assert_equal(out.time_unit, ms)
+    npt.assert_allclose(out.time, [0, 5, 10], rtol=1e-12)
+    # The spatial model ran at every stimulus time point, in seconds, and the
+    # temporal model got those same instants back in milliseconds:
+    npt.assert_allclose(model.temporal.seen['time'], implant.stim.time,
+                        rtol=1e-12)
+    # Spelling `t_percept` unitfully changes nothing:
+    npt.assert_allclose(
+        model.predict_percept(implant, t_percept=[0 * ms, 5 * ms,
+                                                  10 * ms]).time,
+        [0, 5, 10], rtol=1e-12)
+    npt.assert_allclose(
+        model.predict_percept(implant, t_percept=[0, .005 * s,
+                                                  .010 * s]).time,
+        [0, 5, 10], rtol=1e-12)
+
+
+def test_Model_units_follow_their_component():
+    """A composite's declared units are the ones its numbers are really in"""
+    # Neither component: the canonical defaults, so that a bare Model can
+    # still normalize its arguments.
+    npt.assert_equal((Model().stimulus_unit, Model().space_unit,
+                      Model().time_unit), (uA, um, ms))
+    # One component: its own.
+    space_only = Model(spatial=MilliSpatial())
+    npt.assert_equal(space_only.stimulus_unit, mA)
+    npt.assert_equal(space_only.space_unit, mm)
+    npt.assert_equal(space_only.time_unit, s)
+    time_only = Model(temporal=MilliTemporal())
+    npt.assert_equal(time_only.stimulus_unit, uA)
+    npt.assert_equal(time_only.time_unit, ms)
+    # Both, disagreeing: the stimulus goes into the spatial model and the
+    # percept comes out of the temporal one, so they are read off different
+    # components rather than merged into the dict `__getattr__` would return.
+    both = Model(spatial=MilliSpatial(), temporal=MilliTemporal())
+    npt.assert_equal(both.stimulus_unit, mA)
+    npt.assert_equal(both.space_unit, mm)
+    npt.assert_equal(both.time_unit, ms)
+
+
+def test_TemporalModel_default_frame_rate_is_50Hz():
+    """The fallback output rate is a rate, not the number 20
+
+    With no `t_percept` and no encoder frame clock to follow, a temporal model
+    reports at 50 Hz. That is 20 ms, which used to be written down as the
+    number 20 -- one frame every 20 *seconds* for a model counting in seconds.
+    """
+    # Cathodic, so that the stub kernel's all-zero output is not mistaken for
+    # a polarity problem and warned about:
+    stim = Stimulus(-np.ones((1, 3)), electrodes=['A1'], time=[0, 50, 100])
+    milli = MilliTemporal().build()
+    npt.assert_allclose(milli.predict_percept(stim).time,
+                        [0, 20, 40, 60, 80, 100], rtol=1e-12)
+
+    class SecondTemporal(MilliTemporal):
+        time_unit = s
+
+        def get_default_params(self):
+            # dt in seconds too, so that `t_percept` still lands on its grid:
+            return {**super().get_default_params(), 'dt': 5e-6}
+
+    second = SecondTemporal().build()
+    percept = second.predict_percept(stim)
+    npt.assert_equal(percept.time_unit, s)
+    npt.assert_allclose(percept.time, [0, .02, .04, .06, .08, .10], rtol=1e-9)
+    # Same instants, same number of frames -- the rate is the same physical
+    # rate however the model counts:
+    npt.assert_allclose(percept.times(ms), milli.predict_percept(stim).time,
+                        rtol=1e-9)

@@ -567,6 +567,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             resp[:, :, 0] = self._predict_spatial(
                 implant.earray, stim).reshape(self.grid.x.shape)
         return Percept(resp, space=self.grid, time=t_percept,
+                       time_unit=self.time_unit,
                        metadata={'stim': stim.metadata})
 
     def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
