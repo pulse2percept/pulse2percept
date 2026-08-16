@@ -83,15 +83,29 @@ class EnsembleImplant(ProsthesisSystem):
             Array of physical locations (um) to create implants at. Not
             needed if using xrange, yrange, and xystep.
         xrange, yrange: tuple of floats, optional
-            Range of x and y coordinates (um) to create implants at.
+            Range of x and y coordinates (um) to create implants at. Required
+            (together with ``xystep``) if ``locs`` is not given.
         xystep : float, optional
             Spacing (um) between implant centers.
+
+        Raises
+        ------
+        ValueError
+            If neither ``locs`` nor all three of ``xrange``, ``yrange`` and
+            ``xystep`` are given.
 
         Notes
         -----
         *  Lengths may be given as plain numbers of microns or as unitful
            quantities (e.g. ``xrange=(-1 * mm, 1 * mm)``). See
            :py:mod:`pulse2percept.units`.
+
+        .. versionchanged:: 0.10.0
+            The grid arguments no longer have defaults. They used to fall back
+            on ``(-3, 3)`` and ``1``, which are the degrees of visual angle
+            :py:meth:`from_cortical_map` works in; here they are microns, so
+            the default laid every implant out inside a 6 um square.
+
         """
         from ..topography import Grid2D
 
@@ -106,13 +120,20 @@ class EnsembleImplant(ProsthesisSystem):
         xystep = as_value(xystep, um, 'xystep')
 
         if locs is None:
-            if xrange is None:
-                xrange = (-3, 3)
-            if yrange is None:
-                yrange = (-3, 3)
-            if xystep is None:
-                xystep = 1
-            
+            # There are two ways to say where the implants go, and no default
+            # for the second one: a physical grid has no universal extent the
+            # way a visual field does, and the dva defaults `from_cortical_map`
+            # uses would put every implant inside a 6 um square here.
+            missing = [name for name, value in [('xrange', xrange),
+                                                ('yrange', yrange),
+                                                ('xystep', xystep)]
+                       if value is None]
+            if missing:
+                raise ValueError(
+                    f"Pass either 'locs' or all of 'xrange', 'yrange' and "
+                    f"'xystep' (missing: {', '.join(missing)}). Coordinates "
+                    f"are physical, in microns.")
+
             # make a grid of points
             grid = Grid2D(xrange, yrange, xystep)
             xlocs = grid.x.flatten()

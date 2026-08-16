@@ -187,3 +187,24 @@ def test_EnsembleImplant_from_coords_units():
     with pytest.raises(DimensionMismatchError):
         EnsembleImplant.from_coords(Cortivis, xrange=(0, 1 * ms),
                                     yrange=(0, 0), xystep=1)
+
+
+def test_EnsembleImplant_from_coords_needs_a_specification():
+    """Locations or a complete grid, but never a guessed physical default
+
+    There is no universal physical equivalent of the ``(-3, 3)`` dva that
+    `from_cortical_map` defaults to: how far a degree reaches depends on the
+    visual field map.
+    """
+    with pytest.raises(ValueError):
+        EnsembleImplant.from_coords(Cortivis)
+    # A partial grid is not a grid:
+    with pytest.raises(ValueError) as excinfo:
+        EnsembleImplant.from_coords(Cortivis, xrange=(-1 * mm, 1 * mm),
+                                    xystep=500 * um)
+    npt.assert_equal('yrange' in str(excinfo.value), True)
+    for kwargs in ({'yrange': (0, 0), 'xystep': 1000},
+                   {'xrange': (0, 0), 'xystep': 1000},
+                   {'xrange': (0, 0), 'yrange': (0, 0)}):
+        with pytest.raises(ValueError):
+            EnsembleImplant.from_coords(Cortivis, **kwargs)
