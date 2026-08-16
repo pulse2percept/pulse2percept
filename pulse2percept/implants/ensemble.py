@@ -4,7 +4,7 @@ from .base import ProsthesisSystem
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
 from ..stimuli.base import _describe_unit, unique_time_points
-from ..units import DimensionMismatchError, as_value, um
+from ..units import DimensionMismatchError, as_value, dva, um
 
 class EnsembleImplant(ProsthesisSystem):
     
@@ -34,7 +34,7 @@ class EnsembleImplant(ProsthesisSystem):
         xrange, yrange: tuple of floats, optional
             Range of x and y coordinates (dva) to create implants at.
         xystep : float, optional
-            Spacing between implant centers. 
+            Spacing (dva) between implant centers.
         region : str, optional
             Region of cortex to create implant in.
 
@@ -42,12 +42,27 @@ class EnsembleImplant(ProsthesisSystem):
         -------
         ensemble : p2p.implants.EnsembleImplant
             Ensemble implant created from the cortical visual field map.
+
+        Notes
+        -----
+        *  These are visual field coordinates, so they may be given as plain
+           numbers of degrees or as unitful quantities (e.g.
+           ``xrange=(-3 * dva, 3 * dva)``). Contrast
+           :py:meth:`from_coords`, which places implants by their physical
+           position in microns. See :py:mod:`pulse2percept.units`.
         """
         from ..topography import CorticalMap, Grid2D
         if not isinstance(vfmap, CorticalMap):
             raise TypeError("vfmap must be a p2p.topography.CorticalMap")
         if not issubclass(implant_type, ProsthesisSystem):
             raise TypeError("implant_type must be a sub-type of ProsthesisSystem")
+
+        # Where in the *visual field* the implants go; `vfmap` turns that into
+        # a physical location further down:
+        locs = as_value(locs, dva, 'locs')
+        xrange = as_value(xrange, dva, 'xrange')
+        yrange = as_value(yrange, dva, 'yrange')
+        xystep = as_value(xystep, dva, 'xystep')
 
         if locs is None:
             if xrange is None:
@@ -107,7 +122,7 @@ class EnsembleImplant(ProsthesisSystem):
             the default laid every implant out inside a 6 um square.
 
         """
-        from ..topography import Grid2D
+        from ..topography.base import _rectangular_mesh
 
         if not issubclass(implant_type, ProsthesisSystem):
             raise TypeError("implant_type must be a sub-type of ProsthesisSystem")
@@ -134,10 +149,12 @@ class EnsembleImplant(ProsthesisSystem):
                     f"'xystep' (missing: {', '.join(missing)}). Coordinates "
                     f"are physical, in microns.")
 
-            # make a grid of points
-            grid = Grid2D(xrange, yrange, xystep)
-            xlocs = grid.x.flatten()
-            ylocs = grid.y.flatten()
+            # Laid out directly rather than through a `Grid2D`, which is a
+            # grid of *visual field* coordinates and would read these microns
+            # as degrees:
+            (xgrid, ygrid), _, _ = _rectangular_mesh(xrange, yrange, xystep)
+            xlocs = xgrid.flatten()
+            ylocs = ygrid.flatten()
         else:
             xlocs = locs[:, 0]
             ylocs = locs[:, 1]

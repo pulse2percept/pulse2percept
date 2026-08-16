@@ -138,10 +138,10 @@ def _frame_clock(stim, dt, unit=ms):
     Returns
     -------
     t : (n_frames,) array
-        The time (ms) at which each frame ends.
+        The time at which each frame ends, expressed in ``unit``.
     start : float
-        The time (ms) at which the first frame begins, which is where the
-        interval summarized by ``t[0]`` starts.
+        The time (in ``unit``) at which the first frame begins, which is where
+        the interval summarized by ``t[0]`` starts.
 
     Returns None for anything that did not come out of an encoder.
 

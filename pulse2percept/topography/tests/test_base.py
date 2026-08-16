@@ -10,6 +10,9 @@ from pulse2percept.topography import (VisualFieldMap, RetinalMap,
                                  Watson2014Map, Watson2014DisplaceMap,
                                  Curcio1990Map)
 from pulse2percept.utils import Parametrized
+from pulse2percept.topography.base import _rectangular_mesh
+from pulse2percept.units import (DimensionMismatchError, Quantity, dva, mm,
+                                 ms, um)
 
 @pytest.mark.parametrize('x_range', [(0, 0), (-3, 3), (4, -2), (1, -1)])
 @pytest.mark.parametrize('y_range', [(0, 0), (0, 7), (-3, 3), (2, -2)])
@@ -399,3 +402,86 @@ def test_VisualFieldMap_subclasses_do_not_compare_equal():
     npt.assert_equal(Watson2014DisplaceMap() == Watson2014Map(), False)
     npt.assert_equal(Watson2014Map() == Watson2014DisplaceMap(), False)
     npt.assert_equal(Watson2014Map() == Watson2014Map(), True)
+
+
+def test_Grid2D_units():
+    """A Grid2D is a grid of visual field coordinates, measured in dva"""
+    bare = Grid2D((-3, 3), (-3, 3), 0.5)
+    unitful = Grid2D((-3 * dva, 3 * dva), (-3 * dva, 3 * dva), 0.5 * dva)
+    npt.assert_allclose(unitful.x, bare.x, rtol=1e-12)
+    npt.assert_allclose(unitful.y, bare.y, rtol=1e-12)
+    npt.assert_equal(unitful.visual_unit, dva)
+    # Stored as plain numbers, so the repr is unchanged:
+    for value in (unitful.step, *unitful.x_range, *unitful.y_range):
+        npt.assert_equal(isinstance(value, Quantity), False)
+    npt.assert_almost_equal(unitful.step, 0.5)
+    # A per-axis step, too:
+    npt.assert_allclose(Grid2D((-3, 3), (-3, 3), (1 * dva, 0.5 * dva)).x,
+                        Grid2D((-3, 3), (-3, 3), (1, 0.5)).x, rtol=1e-12)
+    # A length is not a visual angle: how far a degree reaches on tissue is
+    # what a visual field map is for, and is not a unit conversion.
+    for kwargs in ({'x_range': (-3 * mm, 3 * mm)}, {'y_range': (-3, 3 * um)},
+                   {'step': 1 * um}, {'step': 1 * ms}):
+        with pytest.raises(DimensionMismatchError):
+            Grid2D(**{'x_range': (-3, 3), 'y_range': (-3, 3), **kwargs})
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        Grid2D((-3, 3), (-3, 3), 1 * um)
+    npt.assert_equal("Parameter 'step' expects visual angle (dva), got length"
+                     in str(excinfo.value), True)
+    # Building keeps everything numeric on the other side:
+    unitful.build(Curcio1990Map())
+    bare.build(Curcio1990Map())
+    npt.assert_equal(isinstance(unitful.ret.x, np.ndarray), True)
+    npt.assert_allclose(unitful.ret.x, bare.ret.x, rtol=1e-12)
+
+
+def test_rectangular_mesh_is_unitless():
+    """The mesh generator spaces numbers; what they mean is the caller's
+
+    `Grid2D` reads them as degrees; `EnsembleImplant.from_coords` reads the
+    same numbers as microns. Keeping the ambiguity out of the generator is why
+    the two do not share a class.
+    """
+    (x, y), xflat, yflat = _rectangular_mesh((-3, 3), (-3, 3), 1)
+    npt.assert_equal(x.shape, (7, 7))
+    npt.assert_almost_equal(xflat, np.arange(-3, 4))
+    # y runs from the top down, following image convention:
+    npt.assert_almost_equal(y[0, 0], 3)
+    npt.assert_almost_equal(y[-1, 0], -3)
+    # It agrees with the grid built on top of it:
+    grid = Grid2D((-3, 3), (-3, 3), 1)
+    npt.assert_almost_equal(x, grid.x)
+    npt.assert_almost_equal(y, grid.y)
+    # A zero-width range is one point, whatever the step:
+    (x0, _), _, _ = _rectangular_mesh((2, 2), (-1, 1), 0.5)
+    npt.assert_equal(x0.shape, (5, 1))
+    # It takes plain numbers only -- a unit would have to mean something:
+    with pytest.raises(TypeError):
+        _rectangular_mesh(3, (-3, 3), 1)
+
+
+def test_VisualFieldMap_unit_contract():
+    """Every map declares the two sides it converts between"""
+    for cls in (Curcio1990Map, Watson2014Map, Watson2014DisplaceMap,
+                Polimeni2006Map):
+        vfmap = cls()
+        npt.assert_equal(vfmap.visual_unit, dva)
+        npt.assert_equal(vfmap.tissue_unit, um)
+
+    # A map written outside p2p gets the same boundary, without its author
+    # having to do anything: the wrapping is by method name.
+    class DoubleMap(RetinalMap):
+        def dva_to_ret(self, x, y):
+            return 2.0 * np.asarray(x), 2.0 * np.asarray(y)
+
+        def ret_to_dva(self, x, y):
+            return np.asarray(x) / 2.0, np.asarray(y) / 2.0
+
+    vfmap = DoubleMap()
+    npt.assert_allclose(vfmap.dva_to_ret(3 * dva, 1 * dva), [6, 2], rtol=1e-12)
+    npt.assert_allclose(vfmap.ret_to_dva(0.006 * mm, 2 * um), [3, 1],
+                        rtol=1e-12)
+    with pytest.raises(DimensionMismatchError):
+        vfmap.dva_to_ret(3 * um, 1)
+    with pytest.raises(DimensionMismatchError):
+        vfmap.ret_to_dva(3 * dva, 1)

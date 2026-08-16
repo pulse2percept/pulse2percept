@@ -10,7 +10,7 @@ from ..ensemble import EnsembleImplant
 from ..electrodes import Electrode
 from ..electrode_arrays import ElectrodeArray
 from ..base import ProsthesisSystem
-from ...units import as_value, um
+from ...units import as_value, dva, um
 from ...utils import parse_3d_orient
 
 
@@ -278,15 +278,17 @@ class Neuralink(EnsembleImplant):
         vfmap : p2p.topography.NeuropythyMap
             Visual field map to create implant from.
         locs : np.ndarray with shape (n, 2), optional
-            Array of visual field locations to create threads at. Not
+            Array of visual field locations (dva) to create threads at. Not
             needed if using xrange, yrange, and xystep.
         xrange, yrange: tuple of floats, optional
-            Range of x and y coordinates to create threads at.
+            Range of x and y coordinates (dva) to create threads at.
         xystep : float, optional
-            Spacing between threads. 
+            Spacing (dva) between threads.
         rand_insertion_angle : float, optional
             If not none, insert threads at a random offset from perpendicular,
             with a maximum azimuthal rotation of rand_insertion_angle degrees.
+            A plain rotation in degrees, not a unitful quantity: ``dva``
+            measures visual angle, which is a different thing.
         region : str, optional
             Region of cortex to create implant in.
         Thread : NeuralinkThread, optional
@@ -297,12 +299,28 @@ class Neuralink(EnsembleImplant):
         -------
         Neuralink : p2p.implants.Neuralink
             Neuralink ensemble implant created from the visual field map.
+
+        Notes
+        -----
+        *  Thread locations are visual field coordinates, so they may be given
+           as plain numbers of degrees or as unitful quantities (e.g.
+           ``xrange=(-3 * dva, 3 * dva)``). The thread geometry itself is in
+           microns; see
+           :py:class:`~pulse2percept.implants.cortex.LinearEdgeThread`. See
+           :py:mod:`pulse2percept.units`.
         """
         # import at runtime to avoid circular imports
         from ...topography import NeuropythyMap, Grid2D
         if not isinstance(vfmap, NeuropythyMap):
             raise TypeError("vfmap must be a p2p.topography.NeuropythyMap")
-        
+
+        # Where in the *visual field* each thread goes; `vfmap` turns that
+        # into a place on the cortical surface below:
+        locs = as_value(locs, dva, 'locs')
+        xrange = as_value(xrange, dva, 'xrange')
+        yrange = as_value(yrange, dva, 'yrange')
+        xystep = as_value(xystep, dva, 'xystep')
+
         if locs is None:
             if xrange is None:
                 xrange = (-3, 3)

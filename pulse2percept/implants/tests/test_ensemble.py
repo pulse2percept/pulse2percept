@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.testing as npt
 from pulse2percept.units import DimensionMismatchError, mm, ms, um
+from pulse2percept.units import dva
 import pytest
 from pulse2percept.implants import (EnsembleImplant, PointSource, ProsthesisSystem)
 from pulse2percept.implants.cortex import Cortivis, Orion
@@ -208,3 +209,58 @@ def test_EnsembleImplant_from_coords_needs_a_specification():
                    {'xrange': (0, 0), 'yrange': (0, 0)}):
         with pytest.raises(ValueError):
             EnsembleImplant.from_coords(Cortivis, **kwargs)
+
+
+def test_EnsembleImplant_from_cortical_map_units():
+    """`from_cortical_map` places implants by visual field location (dva)"""
+    bare = EnsembleImplant.from_cortical_map(
+        Cortivis, Polimeni2006Map(), xrange=(-2, 2), yrange=(0, 0), xystep=2)
+    unitful = EnsembleImplant.from_cortical_map(
+        Cortivis, Polimeni2006Map(), xrange=(-2 * dva, 2 * dva),
+        yrange=(0 * dva, 0 * dva), xystep=2 * dva)
+    npt.assert_allclose(unitful.earray.coordinates(),
+                        bare.earray.coordinates(), rtol=1e-12)
+    # Locations, too:
+    locs = np.array([[-2.0, 0.0], [2.0, 0.0]])
+    npt.assert_allclose(
+        EnsembleImplant.from_cortical_map(Cortivis, Polimeni2006Map(),
+                                          locs=locs * dva
+                                          ).earray.coordinates(),
+        EnsembleImplant.from_cortical_map(Cortivis, Polimeni2006Map(),
+                                          locs=locs).earray.coordinates(),
+        rtol=1e-12)
+    # These are degrees, not microns: the whole point of the map is that the
+    # two are not interchangeable.
+    for kwargs in ({'xrange': (-2 * mm, 2 * mm)}, {'xystep': 2 * um},
+                   {'locs': locs * um}):
+        with pytest.raises(DimensionMismatchError):
+            EnsembleImplant.from_cortical_map(
+                Cortivis, Polimeni2006Map(),
+                **{'xrange': (-2, 2), 'yrange': (0, 0), 'xystep': 2, **kwargs})
+
+
+def test_EnsembleImplant_from_coords_is_physical():
+    """`from_coords` lays out its own micron mesh, not a visual field one
+
+    The two factories take the same argument names and mean different things
+    by them, which is why `from_coords` no longer borrows a `Grid2D`: a
+    `Grid2D` reads its ranges as degrees.
+    """
+    # A range and the equivalent explicit locations must agree:
+    ranged = EnsembleImplant.from_coords(Cortivis, xrange=(-10000, 10000),
+                                         yrange=(0, 0), xystep=10000)
+    listed = EnsembleImplant.from_coords(
+        Cortivis, locs=np.array([[-10000., 0.], [0., 0.], [10000., 0.]]))
+    npt.assert_equal(len(ranged.implants), 3)
+    npt.assert_allclose(ranged.earray.coordinates(),
+                        listed.earray.coordinates(), rtol=1e-12)
+    # A micron range is fine here and a dva one is not -- the mirror image of
+    # `from_cortical_map`:
+    npt.assert_allclose(
+        EnsembleImplant.from_coords(Cortivis, xrange=(-10 * mm, 10 * mm),
+                                    yrange=(0, 0),
+                                    xystep=10000 * um).earray.coordinates(),
+        ranged.earray.coordinates(), rtol=1e-12)
+    with pytest.raises(DimensionMismatchError):
+        EnsembleImplant.from_coords(Cortivis, xrange=(-2 * dva, 2 * dva),
+                                    yrange=(0, 0), xystep=1)
