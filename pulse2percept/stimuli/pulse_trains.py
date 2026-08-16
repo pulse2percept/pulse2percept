@@ -104,8 +104,11 @@ class PulseTrain(Stimulus):
     *  A frequency slower than ``1000 / stim_dur`` cannot be realized, since
        the window still holds one pulse. Pass ``freq=0`` for a silent train.
     *  Arguments may be given as plain numbers in the units documented above,
-       or as unitful quantities (e.g. ``0.05 * mA``, ``450 * us``), which are
+       or as unitful quantities (e.g. ``0.02 * kHz``, ``1 * s``), which are
        converted to those units. See :py:mod:`pulse2percept.units`.
+    *  The train is measured in whatever ``pulse`` was measured in: tiling an
+       electrical pulse gives a train in microamps, and tiling a dimensionless
+       one gives a dimensionless train.
 
     """
     __slots__ = ('freq', 'pulse_type')
@@ -176,6 +179,11 @@ class PulseTrain(Stimulus):
             time = np.append(time, stim_dur)
         super().__init__(data, time=time, electrodes=electrode, metadata=None,
                          compress=False)
+        # This class tiles whatever pulse it is handed, and the tiled numbers
+        # mean whatever that pulse's did -- including the zeros of a silent
+        # train. Without this the result would fall back to the default
+        # (current) reading of them:
+        self._inherit_units(pulse)
         self.freq = freq
         self.pulse_type = pulse.__class__.__name__
         self.metadata = {'user': metadata}

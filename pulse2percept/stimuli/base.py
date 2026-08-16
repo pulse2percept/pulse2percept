@@ -1078,11 +1078,9 @@ class Stimulus(PrettyPrint):
             # Ask for a slice instead of `self.time` to avoid interpolation,
             # which can be time-consuming for an uncompressed stimulus:
             time = slice(None)
-        # A range or a list of time points may be given as quantities. A slice
-        # is left alone: there it selects columns by position, and a position
-        # is not a duration.
-        if not isinstance(time, slice):
-            time = self._as_time(time)
+        # A range, a list of time points, or the endpoints and step of a slice
+        # may all be given as quantities:
+        time = self._as_time(time)
         if isinstance(time, tuple):
             # Return a range of time points:
             t_idx = (self.time > time[0]) & (self.time < time[1])
@@ -1093,8 +1091,19 @@ class Stimulus(PrettyPrint):
             # Return list of exact time points:
             t_idx = time
             t_vals = time
-        elif isinstance(time, slice) or time == Ellipsis:
-            # Return a slice of time points:
+        elif isinstance(time, slice):
+            # A stepped slice is a time range, and `__getitem__` will
+            # interpolate onto it. Resolve it to those time points here as
+            # well, or the curve would be drawn against the time points that
+            # happen to sit at those column *indices* instead:
+            t_vals = self._slice_times(time)
+            if t_vals is None:
+                # Every stored sample, taken by position:
+                t_idx = time
+                t_vals = self.time[time]
+            else:
+                t_idx = t_vals
+        elif time == Ellipsis:
             t_idx = time
             t_vals = self.time[t_idx]
         else:
@@ -1176,22 +1185,11 @@ class Stimulus(PrettyPrint):
             electrodes = item[0]
             time = item[1]
             if isinstance(time, slice):
-                if not time.step:
-                    # We can't interpolate if we don't know the step size, so
-                    # the only allowed option is slice(None, None, None), which
-                    # is the same as ':'
-                    if time.start or time.stop:
-                        raise ValueError("You must provide a step size when "
-                                         "slicing the time axis.")
-                else:
-                    # Each endpoint is a point in time and the step a duration,
-                    # so any of the three may be given as a quantity:
-                    start = self._as_time(time.start)
-                    stop = self._as_time(time.stop)
-                    step = self._as_time(time.step)
-                    start = self.time[0] if start is None else start
-                    stop = self.time[-1] if stop is None else stop
-                    time = np.arange(start, stop, step, dtype=np.float64)
+                sliced = self._slice_times(time)
+                if sliced is not None:
+                    time = sliced
+                # Otherwise the slice stays what it is, and NumPy takes the
+                # columns it names below.
             elif time is not Ellipsis:
                 # A requested time point (or a list of them) may be unitful;
                 # after this it is an ordinary number, which is what the
@@ -1393,6 +1391,35 @@ class Stimulus(PrettyPrint):
     def _as_time(self, scalar):
         """Normalize an operand that shifts the stimulus in time"""
         return as_value(scalar, self.time_unit)
+
+    def _slice_times(self, time):
+        """The time points a slice of the time axis asks for
+
+        Slicing the time axis asks for a time *range*, not for a range of
+        column indices: ``stim[:, 0:10:0.5]`` is the stimulus every 0.5 ms
+        from 0 to 10 ms. All three of ``start``, ``stop`` and ``step`` are
+        therefore times, and may be given as quantities.
+
+        A slice without a step has no such reading -- there is nothing to
+        interpolate onto -- and stands for the stored samples themselves.
+        Returns None in that case, so the caller can keep taking the cheap
+        positional path. Everything that slices the time axis goes through
+        here, so that a plot and the data it plots cannot disagree about what
+        a slice meant.
+        """
+        if not time.step:
+            # We can't interpolate if we don't know the step size, so the only
+            # allowed option is slice(None, None, None), i.e. ':'
+            if time.start or time.stop:
+                raise ValueError("You must provide a step size when slicing "
+                                 "the time axis.")
+            return None
+        start = self._as_time(time.start)
+        stop = self._as_time(time.stop)
+        step = self._as_time(time.step)
+        start = self.time[0] if start is None else start
+        stop = self.time[-1] if stop is None else stop
+        return np.arange(start, stop, step, dtype=np.float64)
 
     def __add__(self, scalar):
         """Add a scalar to every data point in the stimulus"""

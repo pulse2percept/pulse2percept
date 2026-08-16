@@ -1204,3 +1204,42 @@ def test_Stimulus_plot_units():
     dimless = Stimulus(VideoStimulus(np.ones((1, 1, 3)), time=[0, 1, 2]))
     npt.assert_equal(dimless.plot().figure.texts[-1].get_text(), 'Value')
     plt.close('all')
+
+
+def test_Stimulus_time_slice():
+    """A slice of the time axis means the same thing everywhere
+
+    Slicing the time axis asks for a time *range*, which `__getitem__`
+    interpolates onto. `plot` has to resolve it the same way, or the curve
+    would be drawn against whatever time points happen to sit at those column
+    indices.
+    """
+    # A ramp whose value equals its time, so a wrong x axis is visible:
+    stim = Stimulus(np.arange(10, dtype=float).reshape((1, -1)),
+                    time=np.arange(10, dtype=float))
+    expected = np.arange(1, 4, 0.5)
+    npt.assert_almost_equal(stim[:, 1:4:0.5].ravel(), expected)
+    ax = stim.plot(time=slice(1, 4, 0.5))
+    x, y = ax.lines[0].get_data()
+    npt.assert_almost_equal(x, expected)
+    npt.assert_almost_equal(y, expected)
+    plt.close('all')
+    # The endpoints and the step may be quantities, in both APIs:
+    npt.assert_almost_equal(stim[:, 1 * ms:4 * ms:0.5 * ms].ravel(), expected)
+    npt.assert_almost_equal(
+        stim[:, 0.001 * sec:0.004 * sec:500 * us].ravel(), expected)
+    ax = stim.plot(time=slice(1 * ms, 4 * ms, 0.5 * ms))
+    npt.assert_almost_equal(ax.lines[0].get_data()[0], expected)
+    plt.close('all')
+    with pytest.raises(DimensionMismatchError):
+        stim.plot(time=slice(1 * uA, 4 * uA, 1 * uA))
+    # A slice without a step is the stored samples themselves, taken by
+    # position -- the one reading that needs no interpolation:
+    ax = stim.plot(time=slice(None))
+    npt.assert_almost_equal(ax.lines[0].get_data()[0], stim.time)
+    npt.assert_almost_equal(stim[:, :].ravel(), stim.data.ravel())
+    plt.close('all')
+    # And a partial slice with no step is refused identically by both:
+    for call in (lambda: stim[:, 1:4], lambda: stim.plot(time=slice(1, 4))):
+        with pytest.raises(ValueError):
+            call()

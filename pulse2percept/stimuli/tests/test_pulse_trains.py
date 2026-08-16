@@ -5,6 +5,8 @@ import pytest
 import numpy.testing as npt
 from scipy.integrate import trapezoid
 
+from pulse2percept.stimuli import VideoStimulus
+from pulse2percept.units import dimensionless
 from pulse2percept.stimuli import (Stimulus, PulseTrain, BiphasicPulse,
                                    BiphasicPulseTrain,
                                    BiphasicTripletTrain,
@@ -663,3 +665,32 @@ def test_pulse_train_metadata_units():
                                 Quantity), False)
     # And scaling still rewrites the amplitude it advertises:
     npt.assert_almost_equal((train * 2).metadata['amp'], 100)
+
+
+def test_PulseTrain_unit_provenance():
+    """A generic PulseTrain is measured in whatever it tiled"""
+    electrical = PulseTrain(20, BiphasicPulse(50, 0.45), stim_dur=200)
+    npt.assert_equal(electrical.unit, uA)
+    npt.assert_equal(electrical.time_unit, ms)
+    # A dimensionless temporal stimulus stays dimensionless: tiling gray
+    # levels does not turn them into a current.
+    source = Stimulus(VideoStimulus(np.ones((1, 1, 5)),
+                                    time=[0, 1, 2, 3, 4]))
+    npt.assert_equal(source.unit, dimensionless)
+    train = PulseTrain(20, source, stim_dur=200)
+    npt.assert_equal(train.unit, dimensionless)
+    npt.assert_equal(train.time_unit, ms)
+    # A silent train is all zeros, but the zeros still mean whatever the
+    # source pulse measured:
+    for pulse, unit in [(BiphasicPulse(50, 0.45), uA), (source, dimensionless)]:
+        silent = PulseTrain(0, pulse, stim_dur=200)
+        npt.assert_almost_equal(silent.data, 0)
+        npt.assert_equal(silent.unit, unit)
+        npt.assert_equal(silent.time_unit, ms)
+    # The specialized trains build their own electrical pulses, so they are
+    # microamps whatever happens:
+    for train in (BiphasicPulseTrain(20, 50, 0.45, stim_dur=200),
+                  BiphasicTripletTrain(20, 50, 0.45, stim_dur=200),
+                  AsymmetricBiphasicPulseTrain(20, -40, 10, 1, 4,
+                                               stim_dur=200)):
+        npt.assert_equal(train.unit, uA)
