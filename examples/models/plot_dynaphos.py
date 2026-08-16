@@ -45,7 +45,7 @@ print(model)
 #   specified as a range of x and y coordinates (in degrees of visual angle,
 #   or dva). For example, we are currently sampling x values between -20 dva
 #   and +20dva, and y values between -15 dva and +15 dva.
-# * ``xystep``: The resolution (in dva) at which to sample the visual field.
+# * ``step``: The resolution (in dva) at which to sample the visual field.
 #   For example, we are currently sampling at 0.25 dva in both x and y
 #   direction.
 # * ``dt``: The time-step of the model in ms. This determines the frame-rate of the
@@ -71,7 +71,7 @@ print(model)
 # To change parameter values, either pass them directly to the constructor
 # above or set them by hand, like this:
 
-model.xystep = 0.05
+model.step = 0.05
 
 ##############################################################################
 # Then build the model. This is a necessary step before you can actually use
@@ -88,7 +88,7 @@ model.build()
 #     having to rebuild (which takes time).
 #
 #     However, if you change important model parameters outside the constructor
-#     (e.g., by directly setting ``model.xystep = 0.25``), you will have to
+#     (e.g., by directly setting ``model.step = 0.25``), you will have to
 #     call ``model.build()`` again for your changes to take effect.
 #
 # Assigning a stimulus

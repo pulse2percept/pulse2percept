@@ -1,4 +1,5 @@
 from string import ascii_uppercase
+import warnings
 
 import numpy.testing as npt
 from pulse2percept.units import (DimensionMismatchError, Quantity, dva,
@@ -13,6 +14,7 @@ from pulse2percept.implants.cortex import (EllipsoidElectrode, LinearEdgeThread,
                                            NeuralinkThread, Neuralink, Cortivis)
 from pulse2percept.topography import Grid2D, NeuropythyMap, Polimeni2006Map
 from pulse2percept.topography.cortex import CorticalMap
+from pulse2percept.utils.testing import assert_warns_msg
 
 
 class StubNeuropythyMap(NeuropythyMap):
@@ -458,7 +460,7 @@ def test_Neuralink_from_neuropythy_default_grid():
 
 def test_Neuralink_from_neuropythy_grid_args():
     nlink = Neuralink.from_neuropythy(StubNeuropythyMap(), xrange=(-1, 1),
-                                      yrange=(0, 2), xystep=1)
+                                      yrange=(0, 2), step=1)
     grid = Grid2D((-1, 1), (0, 2), 1)
     locs = np.stack([grid.x.flatten(), grid.y.flatten()], axis=1)
     points, _ = stub_map_expected(locs)
@@ -550,7 +552,7 @@ def test_Neuralink_from_cortical_map_non_neuropythy():
     vfmap = Polimeni2006Map()
     nlink = Neuralink.from_cortical_map(LinearEdgeThread, vfmap,
                                         xrange=(-1, 1), yrange=(0, 0),
-                                        xystep=1)
+                                        step=1)
     npt.assert_equal(isinstance(nlink, Neuralink), True)
     xc, yc = vfmap.dva_to_v1(np.array([-1., 0., 1.]), np.array([0., 0., 0.]))
     npt.assert_equal(len(nlink.implants), 3)
@@ -596,3 +598,35 @@ def test_LinearEdgeThread_units():
             LinearEdgeThread(**kwargs)
     with pytest.raises(DimensionMismatchError):
         EllipsoidElectrode(rx=1 * ms)
+
+
+@pytest.mark.parametrize('factory, vfmap', [
+    ('from_neuropythy', None),
+    ('from_cortical_map', Polimeni2006Map()),
+])
+def test_Neuralink_deprecated_xystep(factory, vfmap):
+    # `step` was called `xystep` until 0.10.0. Both `Neuralink` factories
+    # take it as an ordinary signature argument, so the old name is forwarded:
+    if factory == 'from_neuropythy':
+        args = (StubNeuropythyMap(),)
+    else:
+        args = (LinearEdgeThread, vfmap)
+    build = getattr(Neuralink, factory)
+    kwargs = {'xrange': (-1, 1), 'yrange': (0, 0)}
+
+    msg = f"The 'xystep' parameter of Neuralink.{factory} is deprecated"
+    assert_warns_msg(DeprecationWarning, build, msg, *args, xystep=1, **kwargs)
+    with pytest.warns(DeprecationWarning):
+        old = build(*args, xystep=1, **kwargs)
+    new = build(*args, step=1, **kwargs)
+    npt.assert_almost_equal([[t.x, t.y, t.z] for t in old.implants.values()],
+                            [[t.x, t.y, t.z] for t in new.implants.values()])
+
+    # Both names are the same parameter, so supplying both must raise:
+    with pytest.raises(TypeError, match="same parameter"):
+        build(*args, xystep=1, step=1, **kwargs)
+
+    # The new name stays silent:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        build(*args, step=1, **kwargs)

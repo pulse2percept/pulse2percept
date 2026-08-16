@@ -27,7 +27,7 @@ pytestmark = pytest.mark.usefixtures('axon_cache_in_tmp')
 
 def test_ScoreboardSpatial():
     # ScoreboardSpatial automatically sets `rho`:
-    model = ScoreboardSpatial(xystep=5)
+    model = ScoreboardSpatial(step=5)
 
     # User can set `rho`:
     model.rho = 123
@@ -54,7 +54,7 @@ def test_ScoreboardSpatial():
     npt.assert_almost_equal(percept.data, 0)
 
     # Multiple frames are processed independently:
-    model = ScoreboardSpatial(rho=200, xystep=5,
+    model = ScoreboardSpatial(rho=200, step=5,
                               xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 0], 'B3': [0, 2]}))
@@ -91,7 +91,7 @@ def test_deepcopy_ScoreboardSpatial():
 
 def test_ScoreboardModel():
     # ScoreboardModel automatically sets `rho`:
-    model = ScoreboardModel(xystep=5)
+    model = ScoreboardModel(step=5)
     npt.assert_equal(model.has_space, True)
     npt.assert_equal(model.has_time, False)
     npt.assert_equal(hasattr(model.spatial, 'rho'), True)
@@ -119,7 +119,7 @@ def test_ScoreboardModel():
     npt.assert_almost_equal(model.predict_percept(implant).data, 0)
 
     # Multiple frames are processed independently:
-    model = ScoreboardModel(rho=200, xystep=5,
+    model = ScoreboardModel(rho=200, step=5,
                             xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 2]}))
@@ -154,7 +154,7 @@ def test_deepcopy_ScoreboardModel():
 
 
 def test_ScoreboardModel_predict_percept():
-    model = ScoreboardModel(xystep=0.55, rho=100, thresh_percept=0,
+    model = ScoreboardModel(step=0.55, rho=100, thresh_percept=0,
                             xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     # Single-electrode stim:
@@ -170,14 +170,14 @@ def test_ScoreboardModel_predict_percept():
     npt.assert_almost_equal(percept.data[33, 46, 0], np.max(percept.data))
 
     # Full Argus II: 60 bright spots
-    model = ScoreboardModel(xystep=0.55, rho=100)
+    model = ScoreboardModel(step=0.55, rho=100)
     model.build()
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     npt.assert_equal(np.sum(np.isclose(percept.data, 0.8, rtol=0.1, atol=0.1)),
                      88)
 
     # Model gives same outcome as Spatial:
-    spatial = ScoreboardSpatial(xystep=1, rho=100)
+    spatial = ScoreboardSpatial(step=1, rho=100)
     spatial.build()
     spatial_percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     npt.assert_almost_equal(percept.data, spatial_percept.data)
@@ -192,7 +192,7 @@ def test_ScoreboardModel_predict_percept():
 
 def test_AxonMapSpatial():
     # AxonMapSpatial automatically sets `rho`, `lam`:
-    model = AxonMapSpatial(xystep=5)
+    model = AxonMapSpatial(step=5)
 
     # User can set `rho`:
     model.rho = 123
@@ -224,7 +224,7 @@ def test_AxonMapSpatial():
         AxonMapSpatial(lam=9).build()
 
     # Multiple frames are processed independently:
-    model = AxonMapSpatial(rho=200, lam=100, xystep=5,
+    model = AxonMapSpatial(rho=200, lam=100, step=5,
                            xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept(ArgusI(stim={'A1': [1, 0], 'B3': [0, 2]}))
@@ -290,7 +290,7 @@ def test_AxonMapSpatial_plot():
 
 
 def test_AxonMapModel():
-    set_params = {'xystep': 2, 'rho': 432, 'lam': 20,
+    set_params = {'step': 2, 'rho': 432, 'lam': 20,
                   'n_axons': 9, 'n_ax_segments': 50,
                   'xrange': (-30, 30), 'yrange': (-20, 20),
                   'loc_od': (5, 6)}
@@ -328,7 +328,7 @@ def test_AxonMapModel():
     with pytest.raises(ValueError):
         AxonMapModel(eye='invalid').build()
     with pytest.raises(ValueError):
-        AxonMapModel(xystep=5).build(eye='invalid')
+        AxonMapModel(step=5).build(eye='invalid')
 
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
@@ -382,7 +382,7 @@ def test_AxonMap_axlambda_and_lam_collide(cls):
                    {'lam': 500, 'axlambda': 400}):
         with pytest.raises(TypeError, match="same parameter"):
             cls(**params)
-        model = cls(xystep=5)
+        model = cls(step=5)
         with pytest.raises(TypeError, match="same parameter"):
             model.build(**params)
         with pytest.raises(TypeError, match="same parameter"):
@@ -398,7 +398,7 @@ def test_AxonMap_axlambda_warning_blames_caller(cls):
     # used the old name. The alias is reached directly on a spatial model, but
     # through `Model.__getattr__`/`__setattr__` on a composite one, so the
     # attribution has to hold for both:
-    model = cls(xystep=5)
+    model = cls(step=5)
     with pytest.warns(DeprecationWarning) as record:
         model.axlambda
     npt.assert_equal(record[0].filename, __file__)
@@ -447,7 +447,7 @@ def test_deepcopy_AxonMapModel(build):
 def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
     # With `rho` starting at 0, all axons should originate in the optic disc
     # center
-    model = AxonMapModel(loc_od=loc_od, xystep=2,
+    model = AxonMapModel(loc_od=loc_od, step=2,
                          ax_segments_range=(0, 45),
                          n_ax_segments=100)
     for phi0 in [-135.0, 66.0, 128.0]:
@@ -457,7 +457,7 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
 
     # These axons should all end at the meridian
     for phi0 in [110.0, 135.0, 160.0]:
-        model = AxonMapModel(loc_od=(15, 2), xystep=2,
+        model = AxonMapModel(loc_od=(15, 2), step=2,
                              n_ax_segments=801,
                              ax_segments_range=(0, 45))
         ax_pos = model.spatial._jansonius2009(sign * phi0)
@@ -466,28 +466,28 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
     # `phi0` must be within [-180, 180]
     for phi0 in [-200.0, 181.0]:
         with pytest.raises(ValueError):
-            failed = AxonMapModel(xystep=2)
+            failed = AxonMapModel(step=2)
             failed.spatial._jansonius2009(phi0)
 
     # `n_rho` must be >= 1
     for n_rho in [-1, 0]:
         with pytest.raises(ValueError):
-            model = AxonMapModel(n_ax_segments=n_rho, xystep=2)
+            model = AxonMapModel(n_ax_segments=n_rho, step=2)
             model.spatial._jansonius2009(0.0)
 
     # `ax_segments_range` must have min <= max
     for lorho in [-200.0, 90.0]:
         with pytest.raises(ValueError):
-            model = AxonMapModel(ax_segments_range=(lorho, 45), xystep=2)
+            model = AxonMapModel(ax_segments_range=(lorho, 45), step=2)
             model.spatial._jansonius2009(0)
     for hirho in [-200.0, 40.0]:
         with pytest.raises(ValueError):
-            model = AxonMapModel(ax_segments_range=(45, hirho), xystep=2)
+            model = AxonMapModel(ax_segments_range=(45, hirho), step=2)
             model.spatial._jansonius2009(0)
 
     # A single axon fiber with `phi0`=0 should return a single pixel location
     # that corresponds to the optic disc
-        model = AxonMapModel(loc_od=loc_od, xystep=2, eye=eye,
+        model = AxonMapModel(loc_od=loc_od, step=2, eye=eye,
                              ax_segments_range=(0, 0),
                              n_ax_segments=1)
         single_fiber = model.spatial._jansonius2009(0)
@@ -497,7 +497,7 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
 
 def test_AxonMapModel_grow_axon_bundles():
     for n_axons in [1, 2, 3, 5, 10]:
-        model = AxonMapModel(xystep=2, n_axons=n_axons,
+        model = AxonMapModel(step=2, n_axons=n_axons,
                              axons_range=(-20, 20), xrange=(-20, 20),
                              yrange=(-15, 15))
         bundles = model.spatial.grow_axon_bundles()
@@ -505,7 +505,7 @@ def test_AxonMapModel_grow_axon_bundles():
 
 
 def test_AxonMapModel_find_closest_axon():
-    model = AxonMapModel(xystep=1, n_axons=5,
+    model = AxonMapModel(step=1, n_axons=5,
                          xrange=(-20, 20), yrange=(-15, 15),
                          axons_range=(-45, 45))
     model.build()
@@ -566,7 +566,7 @@ def test_AxonMapModel_find_closest_axon_respects_n_threads(monkeypatch,
 
 
 def test_AxonMapModel_calc_axon_sensitivity():
-    model = AxonMapModel(xystep=2, n_axons=10,
+    model = AxonMapModel(step=2, n_axons=10,
                          xrange=(-20, 20), yrange=(-15, 15),
                          axons_range=(-30, 30))
     model.build()
@@ -599,7 +599,7 @@ def test_AxonMapModel_calc_axon_sensitivity():
 def test_AxonMapModel_calc_axon_sensitivity_removed_pad():
     # 'pad' used to pad all axons to the length of the longest one for the
     # (now removed) jax backend. Deprecated in 0.9.1, removed in 0.10.0:
-    model = AxonMapModel(xystep=2, n_axons=10, xrange=(-20, 20),
+    model = AxonMapModel(step=2, n_axons=10, xrange=(-20, 20),
                          yrange=(-15, 15), axons_range=(-30, 30))
     model.build()
     axons = model.spatial.find_closest_axon(model.spatial.grow_axon_bundles())
@@ -608,7 +608,7 @@ def test_AxonMapModel_calc_axon_sensitivity_removed_pad():
 
 
 def test_AxonMapModel_calc_bundle_tangent():
-    model = AxonMapModel(xystep=5, n_axons=500,
+    model = AxonMapModel(step=5, n_axons=500,
                          xrange=(-20, 20), yrange=(-15, 15),
                          n_ax_segments=500, axons_range=(-180, 180),
                          ax_segments_range=(3, 50))
@@ -623,7 +623,7 @@ def test_AxonMapModel_calc_bundle_tangent():
 
 
 def test_AxonMapModel_calc_bundle_tangent_fast():
-    model = AxonMapModel(xystep=5, n_axons=500,
+    model = AxonMapModel(step=5, n_axons=500,
                          xrange=(-20, 20), yrange=(-15, 15),
                          n_ax_segments=500, axons_range=(-180, 180),
                          ax_segments_range=(3, 50))
@@ -638,7 +638,7 @@ def test_AxonMapModel_calc_bundle_tangent_fast():
 
 
 def test_AxonMapModel_predict_percept():
-    model = AxonMapModel(xystep=0.55, lam=100, rho=100,
+    model = AxonMapModel(step=0.55, lam=100, rho=100,
                          thresh_percept=0,
                          xrange=(-20, 20), yrange=(-15, 15),
                          n_axons=500)
@@ -662,7 +662,7 @@ def test_AxonMapModel_predict_percept():
     npt.assert_almost_equal(np.sum(percept.data[39:, :, 0]), 0)
 
     # Full Argus II with small lambda: 60 bright spots
-    model = AxonMapModel(xystep=1, rho=100, lam=40,
+    model = AxonMapModel(step=1, rho=100, lam=40,
                          xrange=(-20, 20), yrange=(-15, 15), n_axons=500)
     model.build()
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
@@ -672,7 +672,7 @@ def test_AxonMapModel_predict_percept():
     npt.assert_equal(np.sum(percept.data > 0.275), 56)
 
     # Model gives same outcome as Spatial:
-    spatial = AxonMapSpatial(xystep=1, rho=100, lam=40,
+    spatial = AxonMapSpatial(step=1, rho=100, lam=40,
                              xrange=(-20, 20), yrange=(-15, 15), n_axons=500)
     spatial.build()
     spatial_percept = spatial.predict_percept(ArgusII(stim=np.ones(60)))
@@ -699,7 +699,7 @@ def test_min_current_spread(ModelClass):
     stim = np.zeros(60)
     stim[[10, 33, 47]] = [1.0, -0.5, 0.75]
     implant = ArgusII(stim=stim)
-    kwargs = {'xystep': 0.75, 'xrange': (-12, 12), 'yrange': (-8, 8),
+    kwargs = {'step': 0.75, 'xrange': (-12, 12), 'yrange': (-8, 8),
               'rho': 200}
 
     exact = ModelClass(min_current_spread=0,
@@ -735,7 +735,7 @@ def test_min_current_spread_error_bound(ModelClass, amp):
     min_spread = 1e-8
     stim = np.full(60, amp)
     implant = ArgusII(stim=stim)
-    kwargs = {'xystep': 0.75, 'xrange': (-14, 14), 'yrange': (-10, 10),
+    kwargs = {'step': 0.75, 'xrange': (-14, 14), 'yrange': (-10, 10),
               'rho': 200}
 
     exact = ModelClass(min_current_spread=0,
@@ -765,7 +765,7 @@ def test_predict_percept_frames_are_independent(ModelClass):
     """
     rng = np.random.default_rng(42)
     data = rng.normal(size=(60, 4)).astype(np.float32)
-    model = ModelClass(xystep=1, xrange=(-10, 10), yrange=(-8, 8),
+    model = ModelClass(step=1, xrange=(-10, 10), yrange=(-8, 8),
                        rho=200).build()
 
     joint = model.predict_percept(
@@ -785,7 +785,7 @@ def test_predict_percept_all_zero_stim(ModelClass):
     The kernels skip electrodes that are zero for the whole stimulus, so the
     case where *every* electrode is skipped is worth pinning down.
     """
-    model = ModelClass(xystep=1, xrange=(-10, 10), yrange=(-8, 8)).build()
+    model = ModelClass(step=1, xrange=(-10, 10), yrange=(-8, 8)).build()
     percept = model.predict_percept(ArgusII(stim=np.zeros(60)))
     npt.assert_equal(np.all(percept.data == 0), True)
 
@@ -802,7 +802,7 @@ def test_predict_percept_thread_count_invariant(ModelClass):
     stim = np.zeros(60)
     stim[[5, 22, 51]] = [1.0, 0.6, -0.3]
     implant = ArgusII(stim=stim)
-    kwargs = {'xystep': 1, 'xrange': (-10, 10), 'yrange': (-8, 8),
+    kwargs = {'step': 1, 'xrange': (-10, 10), 'yrange': (-8, 8),
               'rho': 200}
 
     serial = ModelClass(n_threads=1,
@@ -815,7 +815,7 @@ def test_predict_percept_thread_count_invariant(ModelClass):
 
 def test_AxonMapModel_find_closest_axon_return_segment():
     """``return_segment`` reports where in the axon the closest point is."""
-    model = AxonMapModel(xystep=2, n_axons=20, xrange=(-12, 12),
+    model = AxonMapModel(step=2, n_axons=20, xrange=(-12, 12),
                          yrange=(-12, 12), axons_range=(-45, 45))
     model.build()
     spatial = model.spatial
@@ -849,7 +849,7 @@ def test_AxonMapModel_find_closest_axon_return_segment():
 
 def test_AxonMapModel_calc_axon_sensitivity_empty_bundle():
     """A bundle with no segments is rejected rather than silently skipped."""
-    model = AxonMapModel(xystep=4, n_axons=5, xrange=(-8, 8), yrange=(-8, 8))
+    model = AxonMapModel(step=4, n_axons=5, xrange=(-8, 8), yrange=(-8, 8))
     model.build()
     n_points = model.spatial.grid.ret.x.size
     bundles = [np.zeros((0, 2), dtype=np.float32)] * n_points
@@ -862,7 +862,7 @@ def test_AxonMapModel_build_cache_roundtrip(tmp_path):
     pickle_file = str(tmp_path / 'axons.pickle')
 
     def build(ignore_pickle):
-        return AxonMapModel(xystep=1, xrange=(-8, 8), yrange=(-8, 8),
+        return AxonMapModel(step=1, xrange=(-8, 8), yrange=(-8, 8),
                             n_axons=200, axon_pickle=pickle_file,
                             ignore_pickle=ignore_pickle).build().spatial
 
@@ -883,4 +883,39 @@ def test_AxonMapModel_build_cache_roundtrip(tmp_path):
     # ...and the file is left in the current format:
     with open(pickle_file, 'rb') as f:
         _, payload = pickle.load(f)
+    npt.assert_equal(payload[0], _AXON_CACHE_VERSION)
+
+
+def test_AxonMapModel_build_rejects_pre_step_cache(tmp_path):
+    """A cache naming the grid step `xystep` is regrown, and stays quiet
+
+    The parameter dict is versioned along with the payload, so a cache written
+    before the rename is discarded outright. Reading it instead would probe
+    `self.xystep` -- a deprecated name the caller never used -- and warn about
+    it on every build, since the stale entry validates and the file is
+    therefore never rewritten.
+    """
+    pickle_file = str(tmp_path / 'axons.pickle')
+
+    def build(ignore_pickle=False):
+        return AxonMapModel(step=1, xrange=(-8, 8), yrange=(-8, 8),
+                            n_axons=200, axon_pickle=pickle_file,
+                            ignore_pickle=ignore_pickle).build().spatial
+
+    cold = build(ignore_pickle=True)
+    with open(pickle_file, 'rb') as f:
+        params, payload = pickle.load(f)
+    # Rewrite it the way v0.9.1 would have:
+    params['xystep'] = params.pop('step')
+    with open(pickle_file, 'wb') as f:
+        pickle.dump((params, (2, *payload[1:])), f)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        warm = build()
+    npt.assert_array_equal(warm.axon_contrib, cold.axon_contrib)
+    # The stale file was replaced, so the next build is a cache hit:
+    with open(pickle_file, 'rb') as f:
+        params, payload = pickle.load(f)
+    npt.assert_equal('xystep' in params, False)
     npt.assert_equal(payload[0], _AXON_CACHE_VERSION)

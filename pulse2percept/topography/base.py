@@ -188,7 +188,7 @@ class Grid2D(PrettyPrint):
        (number of y coordinates) x (number of x coordinates).
     *  If a range is zero, the step size is irrelevant.
     *  ``x_range``, ``y_range`` and ``step`` may be given as plain numbers of
-       degrees or as unitful quantities (e.g. ``xystep=0.5 * dva``), and are
+       degrees or as unitful quantities (e.g. ``step=0.5 * dva``), and are
        stored as plain numbers. See :py:mod:`pulse2percept.units`.
 
     .. versionchanged:: 0.10.0

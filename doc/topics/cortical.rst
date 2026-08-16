@@ -206,8 +206,8 @@ a Neuralink implant with multiple threads using the NeuropythyMap as follows:
     from pulse2percept.topography import NeuropythyMap
     from pulse2percept.models.cortex import ScoreboardModel
     map = NeuropythyMap('fsaverage', regions=['v1'])
-    model = ScoreboardModel(vfmap=map, xrange=(-4, 0), yrange=(-4, 4), xystep=.25).build()
-    neuralink = Neuralink.from_neuropythy(map, xrange=model.xrange, yrange=model.yrange, xystep=1, rand_insertion_angle=0)
+    model = ScoreboardModel(vfmap=map, xrange=(-4, 0), yrange=(-4, 4), step=.25).build()
+    neuralink = Neuralink.from_neuropythy(map, xrange=model.xrange, yrange=model.yrange, step=1, rand_insertion_angle=0)
     fig = plt.figure(figsize=(10, 5))
     ax1 = fig.add_subplot(121, projection='3d')
     neuralink.plot3D(ax=ax1)

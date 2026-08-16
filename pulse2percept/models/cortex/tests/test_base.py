@@ -20,7 +20,7 @@ from pulse2percept.topography import Watson2014Map
 def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     # ScoreboardSpatial automatically sets `regions`
     vfmap = Polimeni2006Map(k=15, a=.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
-    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, vfmap=vfmap).build()
+    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), step=0.1, vfmap=vfmap).build()
     npt.assert_equal(model.regions, regions)
     npt.assert_equal(model.vfmap.regions, regions)
 
@@ -35,7 +35,7 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
 
     # Converting ret <=> dva
     vfmap = Polimeni2006Map(k=15, a=0.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
-    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=1, vfmap=vfmap).build()
+    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), step=1, vfmap=vfmap).build()
     npt.assert_equal(isinstance(model.vfmap, Polimeni2006Map), True)
     if jitter_boundary:
         npt.assert_equal(np.isnan(model.vfmap.dva_to_v1([0], [0])), False)
@@ -67,7 +67,7 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     [['v1'], ['v2'], ['v3'], ['v1', 'v2'], ['v2', 'v3'], ['v1', 'v3'], ['v1', 'v2', 'v3']])
 def test_predict_spatial(ModelClass, regions):
     # test that no current can spread between hemispheres
-    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.5, rho=100000, regions=regions).build()
+    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), step=0.5, rho=100000, regions=regions).build()
     implant = Orion(x = 15000)
     implant.stim = {e:5 for e in implant.electrode_names}
     percept = model.predict_percept(implant)
@@ -77,7 +77,7 @@ def test_predict_spatial(ModelClass, regions):
 
     # implant only in v1, shouldnt change with v2/v3
     vfmap = Polimeni2006Map(k=15, a=0.5, b=90)
-    model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), xystep=0.1, rho=400, vfmap=vfmap).build()
+    model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), step=0.1, rho=400, vfmap=vfmap).build()
     elecs = [79, 49, 19, 80, 50, 20, 90, 61, 31, 2, 72, 42, 12, 83, 53, 23, 93, 64, 34, 5, 75, 45, 15, 86, 56, 26, 96, 67, 37, 8, 68, 38]
     implant = Cortivis(x=30000, y=0, rot=0, stim={str(i) : [1, 0] for i in elecs})
     percept = model.predict_percept(implant)
@@ -94,7 +94,7 @@ def test_predict_spatial(ModelClass, regions):
     if 'v1' in regions:
         # make sure cortical representation is flipped
         vfmap = Polimeni2006Map(k=15, a=0.5, b=90)
-        model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), xystep=0.1, rho=400, vfmap=vfmap).build()
+        model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), step=0.1, rho=400, vfmap=vfmap).build()
         implant = Orion(x=30000, y=0, rot=0, stim={'40' : 1,  '94' :5})
         percept = model.predict_percept(implant)
         half = model.grid.shape[0] // 2
@@ -105,9 +105,9 @@ def test_predict_spatial(ModelClass, regions):
 @pytest.mark.parametrize('regions', [['v1', 'v2'], ['v1', 'v3'], ['v2', 'v3']])
 def test_predict_spatial_regionsum(ModelClass,regions):
     print(regions)
-    model1 = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, rho=10000, regions=regions[0]).build()
-    model2 = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, rho=10000, regions=regions[1]).build()
-    model_both = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, rho=10000, regions=regions).build()
+    model1 = ModelClass(xrange=(-3, 3), yrange=(-3, 3), step=0.1, rho=10000, regions=regions[0]).build()
+    model2 = ModelClass(xrange=(-3, 3), yrange=(-3, 3), step=0.1, rho=10000, regions=regions[1]).build()
+    model_both = ModelClass(xrange=(-3, 3), yrange=(-3, 3), step=0.1, rho=10000, regions=regions).build()
 
     implant = Orion(x = 10000, y=10000)
     implant.stim = {e : 1 for e in implant.electrode_names}
@@ -125,8 +125,8 @@ def test_eq_beyeler(ModelClass, stimval):
     
 
     vfmap = Watson2014Map()
-    cortex = ModelClass(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, rho=200 * stimval, regions=['ret'], vfmap=vfmap).build()
-    retina = BeyelerScoreboard(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1, rho=200 * stimval).build()
+    cortex = ModelClass(xrange=(-3, 3), yrange=(-3, 3), step=0.1, rho=200 * stimval, regions=['ret'], vfmap=vfmap).build()
+    retina = BeyelerScoreboard(xrange=(-3, 3), yrange=(-3, 3), step=0.1, rho=200 * stimval).build()
 
     implant = ArgusII()
     implant.stim = {e : 3 for e in implant.electrode_names[::stimval+1]}
@@ -176,7 +176,7 @@ def test_plot(ModelClass):
 def test_poli_nlink():
     # make sure that the polimeni map and neuralink work togther with scoreboard
     # since this is an odd combo of 2d map and 3d implant
-    model = ScoreboardModel(rho=800, xystep=.5).build()
+    model = ScoreboardModel(rho=800, step=.5).build()
     npt.assert_equal(model.grid.v1.z is None, True)
     npt.assert_equal(model.grid.v1.x is None, False)
     implant = LinearEdgeThread(x=20000,)

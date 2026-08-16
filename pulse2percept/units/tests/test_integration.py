@@ -160,7 +160,7 @@ def test_every_spelling_builds_the_same_object():
     # that the comparisons below have something in them:
     implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 41.7, 0.45,
                                                      stim_dur=100)})
-    grid = dict(xrange=(-8, 8), yrange=(-8, 8), xystep=2)
+    grid = dict(xrange=(-8, 8), yrange=(-8, 8), step=2)
     _same(lambda r: ScoreboardSpatial(rho=r, **grid).build(), length, lengths,
           lambda m: m.predict_percept(implant).data, 'ScoreboardSpatial.rho')
     _same(lambda lam: AxonMapSpatial(lam=lam, rho=575, n_axons=100,
@@ -173,12 +173,12 @@ def test_every_spelling_builds_the_same_object():
           lambda g: g.x, 'Grid2D.x_range')
     _same(lambda a: ScoreboardSpatial(rho=575, xrange=(-4 * a, 4 * a),
                                       yrange=(-4 * a, 4 * a),
-                                      xystep=a).build(), angle, angles,
+                                      step=a).build(), angle, angles,
           lambda m: m.predict_percept(implant).data,
           'ScoreboardSpatial.xrange')
     _same(lambda a: EnsembleImplant.from_cortical_map(
         Cortivis, Polimeni2006Map(), xrange=(-a, a), yrange=(-a, a),
-        xystep=2 * a), angle, angles,
+        step=2 * a), angle, angles,
         lambda e: np.array([[el.x, el.y]
                             for el in e.earray.electrode_objects]),
         'EnsembleImplant.from_cortical_map')
@@ -191,7 +191,7 @@ def test_every_spelling_builds_the_same_object():
     unitful = Model(spatial=ScoreboardSpatial(rho=0.575 * mm,
                                               xrange=(-8 * dva, 8 * dva),
                                               yrange=(-8 * dva, 8 * dva),
-                                              xystep=2 * dva),
+                                              step=2 * dva),
                     temporal=FadingTemporal(tau=0.02 * s)).build()
     imp_bare = ArgusII(x=575, stim={'C5': BiphasicPulseTrain(
         20, 41.7, 0.45, stim_dur=100)})
@@ -216,7 +216,7 @@ def test_the_whole_rejection_matrix():
     """
     img = ImageStimulus(np.linspace(0, 1, 36).reshape((6, 6)))
     current = Stimulus({'A1': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)})
-    model = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2), xystep=1).build()
+    model = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2), step=1).build()
 
     # dimensionless -> model: gray levels are not small currents.
     with pytest.raises(DimensionMismatchError):

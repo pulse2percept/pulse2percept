@@ -18,7 +18,8 @@ from ..topography import Curcio1990Map, Grid2D
 from ..units import (DimensionMismatchError, Quantity, as_value, dva, ms, um,
                      uA)
 from ..utils import (PrettyPrint, FreezeError, Parametrized, bisect,
-                     warn_deprecated_params, rename_deprecated_params)
+                     deprecated_alias, warn_deprecated_params,
+                     rename_deprecated_params)
 from ..utils.constants import ZORDER
 
 
@@ -471,6 +472,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
     n_jobs = _n_jobs_alias()
 
+    #: ``step`` used to be called ``xystep``. The old name still reads and
+    #: writes ``step``, with a ``DeprecationWarning``:
+    xystep = deprecated_alias('step', deprecated_version='0.10.0',
+                              removed_version='0.11.0')
+
     def __init__(self, **params):
         super().__init__(**params)
         self.grid = None
@@ -483,7 +489,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # size):
             'xrange': (-15, 15),  # dva
             'yrange': (-15, 15),  # dva
-            'xystep': 0.25,  # dva
+            'step': 0.25,  # dva
             'grid_type': 'rectangular',
             # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
@@ -516,7 +522,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # coordinates when the grid is built:
             'xrange': dva,
             'yrange': dva,
-            'xystep': dva,
+            'step': dva,
         }
 
     def _cutoff_r2(self, rho):
@@ -584,7 +590,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         if self.vfmap.ndim not in self.ndim:
             raise ValueError(f"Model expects one of {self.ndim} dimensions, but "
                              f"visual field map has {self.vfmap.ndim} dimensions.")
-        self.grid = Grid2D(self.xrange, self.yrange, step=self.xystep,
+        self.grid = Grid2D(self.xrange, self.yrange, step=self.step,
                            grid_type=self.grid_type)
         self.grid.build(self.vfmap)
         self._build()

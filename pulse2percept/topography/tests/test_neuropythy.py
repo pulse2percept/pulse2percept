@@ -292,7 +292,7 @@ def test_Neuralink_from_neuropythy(neuropythy_available):
     npt.assert_almost_equal(nlink.implants['B'].direction, orient2, decimal=4)
 
     nmap.jitter_boundary=True
-    nlink = Neuralink.from_neuropythy(nmap, xrange=[-5, 5], yrange=(-3, 3), xystep=1)
+    nlink = Neuralink.from_neuropythy(nmap, xrange=[-5, 5], yrange=(-3, 3), step=1)
     npt.assert_equal(len(nlink.implants), 77)
     # thank god for chatgpt
     npt.assert_equal(list(nlink.implants.keys()), ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
@@ -334,7 +334,7 @@ def test_ndim_mixup(neuropythy_available):
 @pytest.mark.slow
 def test_neuropythy_scoreboard(neuropythy_available):
     nmap = NeuropythyMap('fsaverage')
-    model = ScoreboardModel(rho=800, xystep=.25, vfmap=nmap).build()
+    model = ScoreboardModel(rho=800, step=.25, vfmap=nmap).build()
     implant = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3))
     implant.stim = {e : 1 for e in implant.electrode_names}
     percept = model.predict_percept(implant)
@@ -342,7 +342,7 @@ def test_neuropythy_scoreboard(neuropythy_available):
     npt.assert_almost_equal(np.max(percept.data), 27.3698, decimal=3)
 
     nmap = NeuropythyMap('fsaverage', regions=['v2'])
-    model = ScoreboardModel(rho=800, xystep=.25, vfmap=nmap).build()
+    model = ScoreboardModel(rho=800, step=.25, vfmap=nmap).build()
     implant = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v2')
     implant.stim = {e : 1 for e in implant.electrode_names}
     percept = model.predict_percept(implant)
@@ -351,7 +351,7 @@ def test_neuropythy_scoreboard(neuropythy_available):
 
     # mega implant
     nmap = NeuropythyMap('fsaverage', regions=['v1', 'v2', 'v3'])
-    model = ScoreboardModel(rho=800, xystep=.25, vfmap=nmap).build()
+    model = ScoreboardModel(rho=800, step=.25, vfmap=nmap).build()
     i1 = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v1')
     i2 = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v2')
     i3 = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v3')
