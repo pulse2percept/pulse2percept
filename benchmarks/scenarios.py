@@ -11,11 +11,15 @@ The scenarios below are the reference workloads for the library's main purpose
 first two correspond to these one-liners::
 
     p2p.models.AxonMapModel(yrange=(-8, 8), xrange=(-12, 12)).build(
-        ).predict_percept(p2p.implants.ArgusII(stim=p2p.stimuli.LogoBVL()))
+        ).predict_percept(as_current(
+            p2p.implants.ArgusII(stim=p2p.stimuli.LogoBVL())))
 
     p2p.models.ScoreboardModel(yrange=(-4, 4), xrange=(-4, 4), rho=50,
-                               xystep=0.1).build().predict_percept(
-        p2p.implants.PRIMA(stim=p2p.stimuli.LogoBVL().invert()))
+                               xystep=0.1).build().predict_percept(as_current(
+        p2p.implants.PRIMA(stim=p2p.stimuli.LogoBVL().invert())))
+
+The :func:`as_current` wrapper is a benchmark-only detail; see its docstring
+for why these workloads do not go through an encoder the way user code should.
 
 Between them the scenarios reach every compiled kernel a percept prediction can
 go through -- ``_beyeler2019``, ``_granley2021``, ``_nanduri2012``,
@@ -50,6 +54,50 @@ def array_ptrain(implant_cls):
     return p2p.stimuli.Stimulus(
         {e: p2p.stimuli.BiphasicPulseTrain(20, 20, 0.45, stim_dur=200)
          for e in names})
+
+
+#: Microamps that a gray level of 1.0 stands for in :func:`as_current`.
+#:
+#: One, so that the amplitudes are numerically what an image assigned straight
+#: to an implant used to produce, and these benchmarks stay comparable across
+#: the release that made the reinterpretation explicit. Nothing here depends on
+#: the value -- the kernels below do the same arithmetic on any amplitude --
+#: so raise it if a scenario ever needs a clinically plausible one.
+GRAY_LEVEL_UA = 1.0
+
+
+def as_current(implant, amp_max=GRAY_LEVEL_UA):
+    """Reinterpret an implant's gray levels as a static current, in microamps.
+
+    An image is dimensionless, and ``predict_percept`` refuses one: gray levels
+    are not small currents. Turning one into current is an encoder's job (see
+    :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`), and that is what a
+    user should write.
+
+    A benchmark wants something else. An encoder gives every electrode a pulse
+    train, which is a far larger and quite differently shaped workload than the
+    single static frame these scenarios have always measured -- and measuring
+    something else is how a performance suite loses its history. So the
+    reinterpretation the library used to perform silently is spelled out here
+    instead, on the amplitudes the implant has already resampled onto its
+    electrodes. What the kernels see does not change: the same electrodes, the
+    same number of columns, the same numbers in them.
+    """
+    stim = implant.stim
+    data = stim.data * amp_max
+    if stim.time is None:
+        # A *flat* sequence means N electrodes stimulated once each with no
+        # time component, which is what an image assigned to an implant
+        # produces. Handing over the (N, 1) array instead would give it a time
+        # axis of [0], and a spatial model takes a different path through
+        # `predict_percept` for a stimulus that has one -- so the benchmark
+        # would quietly start measuring something else.
+        data = data.ravel()
+        implant.stim = p2p.stimuli.Stimulus(data, electrodes=stim.electrodes)
+    else:
+        implant.stim = p2p.stimuli.Stimulus(data, electrodes=stim.electrodes,
+                                            time=stim.time)
+    return implant
 
 
 @dataclass(frozen=True)
@@ -104,7 +152,7 @@ SCENARIOS = [
     Scenario(
         id='argus2_axonmap_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL(),
-        implant=lambda stim: p2p.implants.ArgusII(stim=stim),
+        implant=lambda stim: as_current(p2p.implants.ArgusII(stim=stim)),
         model=lambda **kwargs: p2p.models.AxonMapModel(xrange=(-12, 12),
                                                        yrange=(-8, 8),
                                                        **kwargs),
@@ -113,7 +161,7 @@ SCENARIOS = [
     Scenario(
         id='prima_scoreboard_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL().invert(),
-        implant=lambda stim: p2p.implants.PRIMA(stim=stim),
+        implant=lambda stim: as_current(p2p.implants.PRIMA(stim=stim)),
         model=lambda **kwargs: p2p.models.ScoreboardModel(xrange=(-4, 4),
                                                           yrange=(-4, 4),
                                                           rho=50, xystep=0.1,
@@ -156,7 +204,7 @@ SCENARIOS = [
     Scenario(
         id='argus2_thompson2003_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL(),
-        implant=lambda stim: p2p.implants.ArgusII(stim=stim),
+        implant=lambda stim: as_current(p2p.implants.ArgusII(stim=stim)),
         model=lambda **kwargs: p2p.models.Thompson2003Model(
             xrange=(-12, 12), yrange=(-8, 8), **kwargs),
     ),
@@ -178,7 +226,7 @@ SCENARIOS = [
     Scenario(
         id='argus2_axonmap_bostontrain',
         stimulus=lambda: p2p.stimuli.BostonTrain().rgb2gray(),
-        implant=lambda stim: p2p.implants.ArgusII(stim=stim),
+        implant=lambda stim: as_current(p2p.implants.ArgusII(stim=stim)),
         model=lambda **kwargs: p2p.models.AxonMapModel(xrange=(-12, 12),
                                                        yrange=(-8, 8),
                                                        **kwargs),

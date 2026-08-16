@@ -402,13 +402,16 @@ class DynaphosModel(BaseModel):
             stim.compress()
         if t_percept is None:
             # If no time vector is given, output at the frame rate determined
-            # by self.dt. We start at zero and never report beyond the end of
-            # the stimulus; if the end lands exactly on the sampling grid it
-            # is included. `nextafter` is what makes `arange`'s half-open end
+            # by self.dt. We start at zero and stop at the last `dt` boundary
+            # the stimulus reaches, including its end when that lands exactly
+            # on one; `nextafter` is what makes `arange`'s half-open end
             # behave that way. The `+ 1` it replaces was one *millisecond* of
             # slack, which overshot the end of the stimulus whenever `dt` was
             # finer than that, and would not have survived a model counting in
-            # anything but milliseconds.
+            # anything but milliseconds. The floor at `dt` is the one case
+            # that still reports past the end: a stimulus shorter than a
+            # single step gets that step anyway, so that there is a percept to
+            # look at. Name `t_percept` to ask for other instants.
             end = np.maximum(self.dt, self._stim_times(stim)[-1])
             t_percept = np.arange(0, np.nextafter(end, np.inf), self.dt)
         t_percept = np.sort([t_percept]).flatten()

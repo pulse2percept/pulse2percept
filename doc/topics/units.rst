@@ -9,7 +9,7 @@ Physical Units
 Many numbers in pulse2percept stand for physical quantities: a current, a
 duration, a distance on the retina, or a position in the visual field. The
 :py:mod:`~pulse2percept.units` module lets you say which, so that the library
-can check you meant it:
+can make sure you meant it:
 
 .. code-block:: python
 
@@ -20,24 +20,32 @@ can check you meant it:
     pulse = BiphasicPulse(0.05 * mA, 450 * us)  # exactly the same pulse
 
 Both lines mean the same thing and produce the same numbers. **Units are
-optional.** Existing code that passes bare numbers keeps working and keeps its
-documented meaning, and pulse2percept never warns about it.
+optional.** Bare numbers remain valid and are interpreted in the documented
+canonical unit. Supplying units adds dimensional checking and automatic
+conversion.
 
-What units buy you is that a mistake of *kind* becomes an error instead of a
-result:
+.. code-block:: python
+
+    # To import a few units:
+    from pulse2percept.units import ms, uA
+    pulse = BiphasicPulse(50 * uA, 0.45 * ms)
+
+    # To import many units:
+    import pulse2percept.units as u
+    pulse = BiphasicPulse(50 * u.uA, 0.45 * u.ms)
+
+pulse2percept does not check magnitudes (e.g., ``450 * ms`` where you meant
+``450 * us``), but it will alert you when you passed the wrong units:
 
 .. doctest::
+    :options: +IGNORE_EXCEPTION_DETAIL
 
     >>> from pulse2percept.stimuli import BiphasicPulse
     >>> from pulse2percept.units import ms, uA
     >>> BiphasicPulse(0.45 * ms, 50 * uA)  # arguments swapped
-    ... # doctest: +IGNORE_EXCEPTION_DETAIL
     Traceback (most recent call last):
       ...
     DimensionMismatchError: Parameter 'amp' expects electric current (uA), got time (ms).
-
-They do not check magnitudes: ``450 * ms`` where you meant ``450 * us`` is
-still a valid duration, and pulse2percept will happily build it.
 
 What bare numbers mean
 ----------------------
@@ -47,10 +55,10 @@ a unitful value is converted into it:
 
 =============================  =====================================
 Quantity                       A bare number means
------------------------------  -------------------------------------
-stimulus current               microamps (µA)
+=============================  =====================================
+stimulus current               microamps (µA) [#f1]_
 stimulus and percept time      milliseconds (ms) [#f1]_
-electrode and tissue geometry  microns (µm)
+electrode and tissue geometry  microns (µm) [#f1]_
 visual field coordinates       degrees of visual angle (dva)
 frequency                      hertz (Hz)
 image and video intensity      dimensionless
@@ -123,13 +131,10 @@ reinterpreted:
       ...
     DimensionMismatchError: Parameter 'x' expects length (um), got visual angle (dva).
 
-Two of these boundaries are worth stating outright, because they are the ones
-that look like unit conversions and are not.
-
 **Visual angle is not a length.** ``dva`` has its own dimension. There is no
 factor that turns degrees of visual angle into microns of tissue, because the
-relationship is not a constant: it depends on where in the visual field you
-are, and on which map of the visual system you believe. That is what a
+relationship is (usually) not a constant: it depends on where in the visual
+field you are, and on which retinotopic map you believe in. That is what a
 :py:class:`~pulse2percept.topography.VisualFieldMap` is for:
 
 .. code-block:: python
@@ -201,8 +206,10 @@ A model declares the units its numerical implementation works in:
         space_unit = um
         time_unit = ms
 
-These are not decoration. Ask for what you consume, and the conversion happens
-for you:
+These are not decoration, but required to make sure physical units stay out
+of the computationally heavy code sections (e.g., Cython/Torch kernel).
+Each model has private methods to convert from physical units to the raw
+numbers a kernel expects:
 
 .. code-block:: python
 

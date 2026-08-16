@@ -1010,12 +1010,18 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             :py:mod:`pulse2percept.units`.
             If None, the percept will be output once per frame of the video the
             stimulus was encoded from, or failing that once every 20 ms (50 Hz
-            frame rate).
+            frame rate), starting at zero and stopping at the last frame
+            boundary the stimulus reaches.
 
             .. note ::
 
-                If your stimulus is shorter than 20 ms, you should specify
-                the desired time points manually.
+                A stimulus shorter than a single frame still gets one frame,
+                whose time point therefore falls after the end of the
+                stimulus. That is the only case in which the output runs past
+                the stimulus, and it is what makes a brief pulse visible at
+                all: reporting it only at t=0 would describe it before it had
+                had any effect. Name ``t_percept`` to be reported at
+                particular instants instead.
 
         Returns
         -------
@@ -1089,17 +1095,26 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # A stimulus that came out of an encoder knows the frame rate of
             # the video behind it, and that is the rate worth reporting at:
             # one percept frame per video frame. Failing that, output at a
-            # 50 Hz frame rate, starting at zero and never reporting beyond
-            # the end of the stimulus:
+            # 50 Hz frame rate, starting at zero and stopping at the last
+            # frame boundary the stimulus reaches:
             frames = _frame_clock(stim, self.dt, unit=self.time_unit)
             if frames is None:
                 # One frame every 20 ms is a 50 Hz frame rate no matter what
                 # this model counts in, so the interval is converted rather
                 # than written down as the number 20. `nextafter` is what
-                # makes `arange`'s half-open end include the end of the
-                # stimulus when it lands exactly on a frame boundary, and stop
-                # short of it otherwise -- without inventing a unit of time to
-                # add to it:
+                # makes `arange`'s half-open end include a stimulus that ends
+                # exactly on a frame boundary and stop short of one that does
+                # not, without inventing a unit of time to add to it.
+                #
+                # The floor at `frame_dur` is the one case where the output
+                # does run past the end of the stimulus, and it is deliberate:
+                # a stimulus shorter than a single frame would otherwise be
+                # reported only at t=0, before it had had any effect at all.
+                # Brightness outlives the stimulus that caused it, so the one
+                # frame containing it is what is worth reporting; ask for
+                # something else by naming `t_percept`. Unlike the millisecond
+                # of slack this replaced, a frame means the same thing in any
+                # `time_unit`.
                 frame_dur = as_value(20 * ms, self.time_unit)
                 end = np.maximum(frame_dur, _time[-1])
                 t_out = np.arange(0, np.nextafter(end, np.inf), frame_dur)

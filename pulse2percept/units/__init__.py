@@ -1,14 +1,19 @@
 """Physical units.
 
-A deliberately small unit system, inspired by Brian2, that lets p2p's public
-API accept unitful values::
+A deliberately small unit system, inspired by
+`Brian2 <https://brian2.readthedocs.io/en/stable/user/units.html>`_, that lets
+p2p's public API accept unitful values::
 
-    from pulse2percept.units import uA, mA, ms, um, mm
+    import pulse2percept.units as u
 
-    pulse = BiphasicPulse(50 * uA, 0.45 * ms)
-    implant = Orion(x=15 * mm)
+    pulse = BiphasicPulse(50 * u.uA, 0.45 * u.ms)
+    implant = Orion(x=15 * u.mm)
 
-Three rules describe the whole feature:
+For just a few units, importing them directly is also convenient::
+
+    from pulse2percept.units import uA, ms
+
+Three rules describe the whole system:
 
 1. Bare numbers keep working, and keep their documented meaning. p2p never
    warns about them.
@@ -19,11 +24,26 @@ Three rules describe the whole feature:
    kernels and NumPy arrays never see a
    :py:class:`~pulse2percept.units.Quantity`.
 
+Available units
+---------------
+
+================  ==========================
+Quantity          Units
+================  ==========================
+time              ``s``, ``ms``, ``us``, ``ns``
+frequency         ``Hz``, ``kHz``
+length            ``m``, ``cm``, ``mm``, ``um``, ``nm``
+current           ``A``, ``mA``, ``uA``, ``nA``
+voltage           ``V``, ``mV``, ``uV``
+charge            ``C``, ``mC``, ``uC``, ``nC``
+visual angle      ``dva``
+dimensionless     ``dimensionless``
+================  ==========================
+
 .. autosummary::
     :toctree: _api
 
     base
-
 """
 from .base import (Dimension, Unit, Quantity, DimensionMismatchError, as_value,
                    dimensionless,

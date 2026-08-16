@@ -1340,3 +1340,21 @@ def test_TemporalModel_default_frame_rate_is_50Hz():
     late = milli.predict_percept(ragged)
     npt.assert_allclose(late.time, [0, 20, 40, 60, 80, 100], rtol=1e-12)
     npt.assert_equal(late.time[-1] <= ragged.time[-1], True)
+
+    # The one exception, and it is deliberate: a stimulus shorter than a
+    # single frame still gets one, so its time point does fall after the end
+    # of the stimulus. Reporting a 10 ms pulse only at t=0 would describe it
+    # before it had had any effect, and brightness outlives the stimulus that
+    # caused it -- so the frame containing it is what is worth reporting.
+    for dur in (5, 10, 20):
+        brief = Stimulus(-np.ones((1, 3)), electrodes=['A1'],
+                         time=[0, dur / 2, dur])
+        percept = FadingTemporal().build().predict_percept(brief)
+        npt.assert_allclose(percept.time, [0, 20], rtol=1e-12)
+        # ... and the extra frame is not an empty one:
+        npt.assert_equal(percept.data.ravel()[-1] > 0.1, True)
+    # The floor is one *frame*, not one unit of anything, so it means the same
+    # thing to a model counting in seconds:
+    brief = Stimulus(-np.ones((1, 3)), electrodes=['A1'], time=[0, 5, 10])
+    npt.assert_allclose(SecondTemporal().build().predict_percept(brief).time,
+                        [0, 0.02], rtol=1e-9)
