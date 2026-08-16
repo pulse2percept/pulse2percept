@@ -74,7 +74,8 @@ class Horsager2009Temporal(TemporalModel):
     def _predict_temporal(self, stim, t_percept):
         """Predict the temporal response"""
         # Pass the stimulus as a 2D NumPy array to the fast Cython function:
-        stim_data = stim.data.reshape((-1, len(stim.time)))
+        time = self._stim_times(stim)
+        stim_data = self._stim_values(stim).reshape((-1, len(time)))
         # Calculate at which simulation time steps we need to output a percept.
         # This is basically t_percept/self.dt, but we need to beware of
         # floating point rounding errors! 29.999 will be rounded down to 29 by
@@ -85,7 +86,7 @@ class Horsager2009Temporal(TemporalModel):
                              f"of `dt`={self.dt:.2e}")
         # Cython returns a 2D (space x time) NumPy array:
         return temporal_fast(stim_data.astype(np.float32),
-                             stim.time.astype(np.float32),
+                             time.astype(np.float32),
                              idx_percept,
                              self.dt, self.tau1, self.tau2, self.tau3,
                              self.eps, self.beta, self.thresh_percept, self.n_threads)

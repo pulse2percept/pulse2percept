@@ -3,6 +3,7 @@
 from matplotlib.colors import Normalize
 import numpy as np
 from collections import OrderedDict
+from collections.abc import Iterable
 from matplotlib.collections import PatchCollection
 import matplotlib.pyplot as plt
 from skimage.transform import SimilarityTransform
@@ -13,6 +14,28 @@ from ..stimuli.names import ElectrodeNames
 from ..units import DimensionMismatchError, Quantity, Unit, as_value, um
 from ..utils import PrettyPrint, bijective26_name
 from ..utils.constants import ZORDER
+
+
+def _is_electrode_collection(selector):
+    """Whether an electrode selector names several electrodes or just one
+
+    Three things are one electrode however sequence-like they look: a name, a
+    ``(row, col)`` pair on an
+    :py:class:`~pulse2percept.implants.ElectrodeGrid`, and an index. Anything
+    else that can be iterated is a collection -- a list, an array, or the
+    :py:class:`~pulse2percept.stimuli.ElectrodeNames` a stimulus reports.
+
+    The tuple carve-out is what makes ``grid[0, 0]`` and
+    ``grid.coordinates(electrodes=(0, 0))`` mean the same thing, and the
+    string carve-out keeps ``'A1'`` from being read as the electrodes 'A' and
+    '1'.
+    """
+    if isinstance(selector, (str, bytes, tuple)):
+        return False
+    if isinstance(selector, np.ndarray):
+        # A 0-d array holds one item and cannot be iterated:
+        return selector.ndim > 0
+    return isinstance(selector, Iterable)
 
 
 class ElectrodeArray(PrettyPrint):
@@ -95,10 +118,15 @@ class ElectrodeArray(PrettyPrint):
         unit : :py:class:`~pulse2percept.units.Unit`, optional
             Length unit to express the coordinates in. If None, they are
             returned as they are stored (microns).
-        electrodes : array_like, optional
-            Which electrodes to return, named or indexed as for
-            ``earray[...]``, and in the order wanted. If None, every electrode
-            in the array, in array order.
+        electrodes : optional
+            Which electrodes to return. Three things name a single electrode,
+            looked up as ``earray[...]`` looks one up: a name, an index into
+            the flattened array, and a ``(row, col)`` pair on an
+            :py:class:`~pulse2percept.implants.ElectrodeGrid`. Anything else
+            iterable -- a list, an array, or the
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames` a stimulus
+            reports -- is a collection, taken in the order given. If None,
+            every electrode in the array, in array order.
 
             A model passes ``stim.electrodes`` here: a stimulus need not name
             every electrode of the implant, and need not name them in array
@@ -107,10 +135,13 @@ class ElectrodeArray(PrettyPrint):
         Returns
         -------
         coords : (n_electrodes, 3) np.ndarray
-            One ``[x, y, z]`` row per electrode. An ordinary NumPy array,
-            never a :py:class:`~pulse2percept.units.Quantity`: this is the
-            boundary a numerical implementation should take the geometry
-            across.
+            One ``[x, y, z]`` row per electrode -- always two-dimensional, so
+            a single-electrode selection comes back as ``(1, 3)``. (For one
+            electrode's position as a flat triple, see
+            :py:meth:`~pulse2percept.implants.Electrode.coordinates`.) An
+            ordinary NumPy array, never a
+            :py:class:`~pulse2percept.units.Quantity`: this is the boundary a
+            numerical implementation should take the geometry across.
 
         Examples
         --------
@@ -126,11 +157,17 @@ class ElectrodeArray(PrettyPrint):
         if electrodes is None:
             elecs = self.electrode_objects
         else:
-            elecs = [self[name] for name in electrodes]
-            # `__getitem__` answers None for a name the array does not have,
-            # which would otherwise surface as an AttributeError three frames
-            # deep in a model:
-            missing = [str(name) for name, e in zip(electrodes, elecs)
+            if _is_electrode_collection(electrodes):
+                names = list(electrodes)
+                elecs = [self[name] for name in names]
+            else:
+                # A name, an index, or a grid's `(row, col)` pair: one
+                # electrode, looked up the way `earray[...]` looks one up.
+                names, elecs = [electrodes], [self[electrodes]]
+            # `__getitem__` answers None for an electrode the array does not
+            # have, which would otherwise surface as an AttributeError three
+            # frames deep in a model:
+            missing = [str(name) for name, e in zip(names, elecs)
                        if e is None]
             if missing:
                 raise ValueError(f"Electrode(s) {missing[:10]} are not in "

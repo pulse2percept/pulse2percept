@@ -1110,3 +1110,85 @@ def test_model_requires_a_current_stimulus():
     # spatial model hands a temporal one:
     percept = spatial.predict_percept(bare)
     npt.assert_equal(temporal.predict_percept(percept) is None, False)
+
+
+class RecordingSpatial(SpatialModel):
+    """A spatial model that reports what crossed the numerical boundary"""
+    stimulus_unit = uA
+    space_unit = um
+
+    def get_default_params(self):
+        return {**super().get_default_params(), 'seen': None}
+
+    def _predict_spatial(self, earray, stim):
+        x, y, z = self._electrode_coords(earray, stim)
+        self.seen = {'amp': self._stim_values(stim),
+                     'time': self._stim_times(stim), 'x': x, 'y': y, 'z': z}
+        return np.zeros((self.grid.x.size, stim.data.shape[1]),
+                        dtype=np.float32)
+
+
+class MilliSpatial(RecordingSpatial):
+    """The same model, declaring milli-units instead"""
+    stimulus_unit = mA
+    space_unit = mm
+    time_unit = s
+
+
+def test_model_units_are_a_numerical_contract():
+    """Declaring a unit has to deliver numbers in it, not just document one
+
+    Every model p2p ships works in uA/um/ms and every conversion below is the
+    identity for them, which is the point: the helpers are the boundary, so a
+    model that declares something else gets something else instead of
+    silently receiving microamps and being off by a thousand.
+    """
+    # A ramp, so that a time point picked out of it has an exact expected
+    # value and neighbouring columns never coincide:
+    ramp = Stimulus(np.arange(10, dtype=float).reshape((1, -1)),
+                    electrodes=['A1'], time=np.arange(10, dtype=float))
+    implant = ArgusII(stim=ramp)
+    canonical = RecordingSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                 xystep=1).build()
+    milli = MilliSpatial(xrange=(-2, 2), yrange=(-2, 2), xystep=1).build()
+    canonical.predict_percept(implant)
+    milli.predict_percept(implant)
+    a, m = canonical.seen, milli.seen
+
+    # Stimulus values: uA in, mA out
+    npt.assert_allclose(m['amp'], a['amp'] / 1000, rtol=1e-6)
+    npt.assert_allclose(a['amp'].max(), 9, rtol=1e-6)
+    npt.assert_allclose(m['amp'].max(), 0.009, rtol=1e-6)
+    # Coordinates: um in, mm out
+    for axis in ('x', 'y', 'z'):
+        npt.assert_allclose(m[axis], a[axis] / 1000, rtol=1e-6)
+    npt.assert_allclose(a['x'][0], implant['A1'].x, rtol=1e-6)
+    npt.assert_allclose(m['x'][0], implant['A1'].x / 1000, rtol=1e-6)
+    # Time: ms in, s out
+    npt.assert_allclose(m['time'], a['time'] / 1000, rtol=1e-12)
+    npt.assert_allclose(a['time'], implant.stim.time, rtol=0, atol=0)
+    # ... and the canonical model really is the zero-conversion path:
+    npt.assert_allclose(a['amp'], implant.stim.data, rtol=0, atol=0)
+
+    # `t_percept` is read in the model's own unit, and converted back to the
+    # stimulus' unit to index it, so 0.005 s and 5 ms pick the same sample:
+    milli.predict_percept(implant, t_percept=[0.0, 0.005])
+    canonical.predict_percept(implant, t_percept=[0.0, 5.0])
+    # rtol at float32 precision: `Stimulus.data` is float32, so 0.005 mA is
+    # only good to about seven digits however exact the conversion was.
+    npt.assert_allclose(canonical.seen['amp'], [[0, 5]], rtol=1e-6)
+    npt.assert_allclose(milli.seen['amp'], [[0, 0.005]], rtol=1e-6)
+    # The percept is labelled in the model's unit, not in milliseconds:
+    npt.assert_allclose(
+        milli.predict_percept(implant, t_percept=[0.0, 0.005]).time,
+        [0.0, 0.005], rtol=1e-12)
+    # A quantity is normalized into that unit too:
+    npt.assert_allclose(
+        milli.predict_percept(implant, t_percept=[0 * ms, 5 * ms]).time,
+        [0.0, 0.005], rtol=1e-12)
+
+    # The dimension guard reads the declared unit: mA and uA are the same
+    # dimension, so an ordinary stimulus is fine and a picture is not.
+    with pytest.raises(DimensionMismatchError):
+        milli.predict_percept(ArgusII(preprocess=False, stim=ImageStimulus(
+            np.linspace(0, 1, 16).reshape((4, 4)))))

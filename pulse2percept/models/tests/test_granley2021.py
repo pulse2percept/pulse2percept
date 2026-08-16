@@ -7,13 +7,14 @@ import numpy.testing as npt
 
 from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
-from pulse2percept.stimuli import Stimulus, BiphasicPulseTrain
+from pulse2percept.stimuli import (BiphasicPulseTrain, ImageStimulus,
+                                   MonophasicPulse, Stimulus)
 from pulse2percept.models import BiphasicAxonMapModel, BiphasicAxonMapSpatial, \
     AxonMapSpatial
 from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
-from pulse2percept.units import (DimensionMismatchError, Quantity, mm, ms, uA,
-                                 um)
+from pulse2percept.units import (DimensionMismatchError, Quantity, mm, ms, s,
+                                 uA, um)
 from pulse2percept.utils.base import FreezeError
 from pulse2percept.utils.testing import assert_warns_msg
 
@@ -653,3 +654,43 @@ def test_BiphasicAxonMapModel_reduces_to_AxonMapModel():
     want = plain.predict_percept(ArgusII(stim=stim)).data
 
     npt.assert_allclose(got, want, rtol=1e-5, atol=1e-6 * np.abs(want).max())
+
+
+def test_BiphasicAxonMap_t_percept_units():
+    """This model overrides `predict_percept`, so it normalizes for itself"""
+    implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 1, 0.45,
+                                                     stim_dur=100)})
+    for model in (BiphasicAxonMapSpatial(xystep=2).build(),
+                  BiphasicAxonMapModel(xystep=2).build()):
+        # A single time point is one time point, not something with a `len`:
+        npt.assert_equal(model.predict_percept(implant,
+                                               t_percept=20).data.shape[-1], 1)
+        bare = model.predict_percept(implant, t_percept=[0, 20])
+        for spelling in ([0, 20] * ms, np.array([0, 0.02]) * s, 20 * ms):
+            unitful = model.predict_percept(implant, t_percept=spelling)
+            npt.assert_allclose(unitful.data.max(), bare.data.max(),
+                                rtol=1e-12)
+        with pytest.raises(DimensionMismatchError):
+            model.predict_percept(implant, t_percept=[0, 20] * uA)
+
+
+def test_BiphasicAxonMap_dimension_before_waveform():
+    """A picture is not an unsuitable pulse train, it is not a current at all
+
+    The dimensional contract is the outermost one, so a dimensionless stimulus
+    reports that rather than the model's own "must be BiphasicPulseTrains"
+    complaint, which is about a stimulus it never had.
+    """
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    implant = ArgusII(preprocess=False, stim=img)
+    for model in (BiphasicAxonMapSpatial(xystep=2).build(),
+                  BiphasicAxonMapModel(xystep=2).build()):
+        with pytest.raises(DimensionMismatchError) as excinfo:
+            model.predict_percept(implant)
+        npt.assert_equal('AmplitudeEncoder' in str(excinfo.value), True)
+    # A current-valued stimulus of the wrong waveform still gets the
+    # model-specific message:
+    with pytest.raises(TypeError) as excinfo:
+        BiphasicAxonMapSpatial(xystep=2).build().predict_percept(
+            ArgusII(stim={'A1': MonophasicPulse(-1, 0.45, stim_dur=100)}))
+    npt.assert_equal('BiphasicPulseTrain' in str(excinfo.value), True)

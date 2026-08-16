@@ -6,7 +6,7 @@ from collections import OrderedDict
 from pulse2percept.implants import (DiskElectrode, PointSource,
                                     ElectrodeArray, ElectrodeGrid)
 from pulse2percept.implants import ArgusII
-from pulse2percept.stimuli import ElectrodeNames
+from pulse2percept.stimuli import ElectrodeNames, Stimulus
 from pulse2percept.units import (DimensionMismatchError, Quantity, cm, dva,
                                  mm, ms, uA, um)
 
@@ -553,3 +553,38 @@ def test_ElectrodeArray_coordinates_subset():
     # Repeats are allowed: nothing here says an electrode may appear once.
     npt.assert_almost_equal(earray.coordinates(electrodes=['A1', 'A1']),
                             earray.coordinates(electrodes=['A1', 'A1']))
+
+
+def test_ElectrodeArray_coordinates_selector():
+    """A selector means the same thing here as it does in `earray[...]`"""
+    implant = ArgusII()
+    earray = implant.earray
+    grid = ElectrodeGrid((3, 3), 20)
+    # Only a list or an array stands for several electrodes. A name, an index,
+    # or a grid's (row, col) pair stands for one, and comes back as one row:
+    for selector, expected in [('A1', implant['A1']), (0, implant['A1'])]:
+        coords = earray.coordinates(electrodes=selector)
+        npt.assert_equal(coords.shape, (1, 3))
+        npt.assert_almost_equal(coords[0], expected.coordinates())
+    npt.assert_equal(grid.coordinates(electrodes=(0, 0)).shape, (1, 3))
+    npt.assert_almost_equal(grid.coordinates(electrodes=(0, 0))[0],
+                            grid[0, 0].coordinates())
+    # A one-character name is a name, not two electrodes:
+    single = ElectrodeArray({'7': DiskElectrode(1, 2, 3, 4)})
+    npt.assert_almost_equal(single.coordinates(electrodes='7'), [[1, 2, 3]])
+    # Whatever else can be iterated is a collection -- including the
+    # `ElectrodeNames` a stimulus reports, which is what models pass:
+    npt.assert_equal(
+        grid.coordinates(electrodes=ElectrodeNames((3, 3))).shape, (9, 3))
+    npt.assert_almost_equal(
+        grid.coordinates(electrodes=Stimulus(np.ones(9)).electrodes),
+        grid.coordinates())
+    # Lists and arrays are collections, and an empty one keeps the shape:
+    npt.assert_equal(grid.coordinates(electrodes=['A1', 'C3']).shape, (2, 3))
+    npt.assert_equal(
+        grid.coordinates(electrodes=np.array(['A1', 'C3'])).shape, (2, 3))
+    npt.assert_equal(grid.coordinates(electrodes=[]).shape, (0, 3))
+    # Anything the array does not have says so, however it was spelled:
+    for selector in ('Z99', ('A1', 'B2')):
+        with pytest.raises(ValueError):
+            grid.coordinates(electrodes=selector)

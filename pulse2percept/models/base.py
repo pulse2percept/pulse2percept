@@ -15,7 +15,8 @@ from ..stimuli import Stimulus
 from ..stimuli.base import _describe_unit
 from ..percepts import Percept
 from ..topography import Curcio1990Map, Grid2D
-from ..units import DimensionMismatchError, as_value, dva, ms, um, uA
+from ..units import (DimensionMismatchError, Quantity, as_value, dva, ms, um,
+                     uA)
 from ..utils import (PrettyPrint, FreezeError, Parametrized, bisect,
                      warn_deprecated_params, rename_deprecated_params)
 from ..utils.constants import ZORDER
@@ -118,7 +119,7 @@ def _subsample(t_out, dt, n_sub, start=None):
     return np.concatenate(parts) * dt, idx
 
 
-def _frame_clock(stim, dt):
+def _frame_clock(stim, dt, unit=ms):
     """When to sample a percept for the video an encoded stimulus came from
 
     An encoder separates the clock that decides *when the picture changes* from
@@ -158,7 +159,7 @@ def _frame_clock(stim, dt):
     if not isinstance(enc, dict) and 'stim' in meta:
         # A `Percept` on its way from the spatial model to the temporal one
         # carries the stimulus it came from, and the frame clock with it:
-        return _frame_clock(meta['stim'], dt)
+        return _frame_clock(meta['stim'], dt, unit=unit)
     if not isinstance(enc, dict):
         return None
     try:
@@ -168,6 +169,13 @@ def _frame_clock(stim, dt):
         return None
     if frame_time.size == 0 or not np.isfinite(frame_dur) or frame_dur <= 0:
         return None
+    # An encoder records its frame clock in milliseconds (see
+    # `pulse2percept.stimuli.Encoder`), and what comes back has to be in the
+    # calling model's own time unit, since that is what it compares `dt` and
+    # `t_percept` in. A no-op for every model p2p ships:
+    if unit != ms:
+        frame_time = Quantity(frame_time, ms).to_value(unit)
+        frame_dur = Quantity(frame_dur, ms).to_value(unit)
     # Count in whole `dt` steps rather than rounding each frame time, so that
     # the spacing comes out exactly even and every point is exactly a multiple
     # of `dt` (which `predict_percept` insists on):
@@ -266,6 +274,52 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
     def _build(self):
         """Customize the building process by implementing this method"""
         pass
+
+    def _stim_values(self, stim):
+        """The stimulus values a kernel consumes, in ``stimulus_unit``
+
+        One half of the numerical boundary (``_electrode_coords`` and
+        ``_stim_times`` are the others). A model's implementation asks for
+        what it consumes, so that declaring a different ``stimulus_unit``
+        actually delivers different numbers rather than silently leaving the
+        kernel to remember a factor of a thousand.
+
+        For every model p2p ships this is the identity: ``stimulus_unit`` is
+        microamps and :py:class:`~pulse2percept.stimuli.Stimulus`
+        canonicalizes to microamps, so ``values`` hands back the stored array
+        without touching it.
+
+        A :py:class:`~pulse2percept.percepts.Percept` is passed through: a
+        temporal model is applied to one as readily as to a stimulus, and
+        brightness is model output rather than a physical quantity.
+        """
+        if not isinstance(stim, Stimulus):
+            return stim.data
+        _require_stim_dimension(self, stim)
+        return stim.values(self.stimulus_unit)
+
+    def _stim_times(self, stim):
+        """The stimulus time axis a kernel consumes, in ``time_unit``
+
+        The time counterpart of :py:meth:`_stim_values`. A stimulus stores
+        milliseconds; a model that declared some other ``time_unit`` gets its
+        own. A Percept has no unit to convert from and is passed through.
+        """
+        if not isinstance(stim, Stimulus):
+            return stim.time
+        return stim.times(self.time_unit)
+
+    def _to_stim_time(self, t, stim):
+        """Express a model-side time in the stimulus' own unit
+
+        ``t_percept`` arrives in ``time_unit`` and is used both to index the
+        stimulus (which counts in *its* unit) and to label the percept. This
+        is the one conversion that goes the other way.
+        """
+        if t is None or not isinstance(stim, Stimulus) \
+                or stim.time_unit == self.time_unit:
+            return t
+        return Quantity(t, self.time_unit).to_value(stim.time_unit)
 
     def _electrode_coords(self, earray, stim):
         """Where the electrodes a stimulus names are, ready for a kernel
@@ -598,7 +652,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         if not stim.is_compressed:
             stim.compress()
         if t_percept is None:
-            t_percept = stim.time
+            # In `time_unit`, like everything else on this side of the
+            # boundary; `_to_stim_time` converts back where the stimulus is
+            # indexed by it below:
+            t_percept = self._stim_times(stim)
         n_time = 1 if t_percept is None else np.array([t_percept]).size
         if stim.data.size == 0:
             # Stimulus was compressed to zero:
@@ -609,9 +666,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 # Save electrode parameters
                 # np.asarray: indexing a single-electrode stimulus returns a
                 # scalar, which has no `reshape`:
-                stim = Stimulus(np.asarray(stim[:, t_percept]).reshape((-1,
-                                                                       n_time)),
-                                electrodes=stim.electrodes, time=t_percept,
+                at = self._to_stim_time(t_percept, stim)
+                stim = Stimulus(np.asarray(stim[:, at]).reshape((-1, n_time)),
+                                electrodes=stim.electrodes, time=at,
                                 metadata=stim.metadata)._inherit_units(stim)
                 # find unique stimulus points
                 _, t_unique, inverse = np.unique(stim.data.T, axis=0,
@@ -886,7 +943,9 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
 
     def get_param_units(self):
         """Return a dict of the units that parameters are stored in"""
-        return {**super().get_param_units(), 'dt': ms}
+        # `dt` is the simulation step, so it counts in whatever the model
+        # counts time in -- milliseconds for every model p2p ships:
+        return {**super().get_param_units(), 'dt': self.time_unit}
 
     @abstractmethod
     def _predict_temporal(self, stim, t_percept):
@@ -998,7 +1057,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             _space = [len(stim.electrodes), 1]
         elif isinstance(stim, Percept):
             _space = [len(stim.ydva), len(stim.xdva)]
-        _time = stim.time
+        # In `time_unit`: `_frame_clock`, `dt` and `t_percept` all count in it
+        _time = self._stim_times(stim)
 
         reduce, t_out, sub_idx = 'last', None, None
         if t_percept is None:
@@ -1015,7 +1075,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # one percept frame per video frame. Failing that, output at a
             # 50 Hz frame rate, always starting at zero and including the last
             # time point:
-            frames = _frame_clock(stim, self.dt)
+            frames = _frame_clock(stim, self.dt, unit=self.time_unit)
             if frames is None:
                 t_out, first = np.arange(0, np.maximum(20, _time[-1]) + 1,
                                          20), None

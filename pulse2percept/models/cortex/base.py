@@ -279,6 +279,7 @@ class ScoreboardSpatial(CortexSpatial):
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
         x_el, y_el, z_el = self._electrode_coords(earray, stim)
+        amp = self._stim_values(stim)
 
         # whether to allow current to spread between hemispheres
         separate = 0
@@ -289,7 +290,7 @@ class ScoreboardSpatial(CortexSpatial):
         cutoff_r2 = self._cutoff_r2(self.rho)
         if self.vfmap.ndim == 3:
             return np.sum([
-                fast_scoreboard_3d(stim.data, x_el, y_el, z_el,
+                fast_scoreboard_3d(amp, x_el, y_el, z_el,
                                 self.grid[region].x.ravel(),
                                 self.grid[region].y.ravel(),
                                 self.grid[region].z.ravel(),
@@ -300,7 +301,7 @@ class ScoreboardSpatial(CortexSpatial):
             axis = 0)
         elif self.vfmap.ndim == 2:
             return np.sum([
-                fast_scoreboard(stim.data, x_el, y_el,
+                fast_scoreboard(amp, x_el, y_el,
                                 self.grid[region].x.ravel(), self.grid[region].y.ravel(),
                                 self.rho, self.thresh_percept, cutoff_r2,
                                 separate, boundary,

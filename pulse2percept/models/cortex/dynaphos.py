@@ -6,7 +6,7 @@ from copy import deepcopy, copy
 from ..base import BaseModel, NotBuiltError, _require_stim_dimension
 from ...percepts import Percept
 from ...implants import ProsthesisSystem
-from ...units import dva, Hz, mm, ms, uA
+from ...units import as_value, dva, Hz, mm, ms, uA
 from ...utils import cart2pol
 from ...utils.constants import ZORDER
 from ...topography import Polimeni2006Map
@@ -281,7 +281,11 @@ class DynaphosModel(BaseModel):
         bright = np.zeros((n_space,n_time), dtype=np.float32)
 
         n_percept = len(idx_percept)
-        n_stim = len(stim.time)
+        # Across the numerical boundary: microamps and milliseconds for
+        # this model, whatever the stimulus happens to store:
+        stim_data = self._stim_values(stim)
+        stim_time = self._stim_times(stim)
+        n_stim = len(stim_time)
         n_sim = idx_percept[n_percept - 1] + 1 # no negative indices
         stim_idx = 0
         frame_idx = 0
@@ -289,14 +293,14 @@ class DynaphosModel(BaseModel):
             t_sim = sim_idx * self.dt
             # get highest amp value over the frame
             # but only reset amp to 0 if stimulus is updated at all during the frame
-            if stim_idx + 1 < n_stim and t_sim >= stim.time[stim_idx + 1]:
+            if stim_idx + 1 < n_stim and t_sim >= stim_time[stim_idx + 1]:
                 amp = np.zeros(len(x_el))
             # or stimulus has ended but we still want to predict
-            if t_sim > stim.time[-1]:
+            if t_sim > stim_time[-1]:
                 amp = np.zeros(len(x_el))
-            while stim_idx + 1 < n_stim and t_sim >= stim.time[stim_idx + 1]:
+            while stim_idx + 1 < n_stim and t_sim >= stim_time[stim_idx + 1]:
                 stim_idx += 1
-                amp = np.maximum(amp, stim.data[:,stim_idx])
+                amp = np.maximum(amp, stim_data[:,stim_idx])
             # Ieff = max(0, (Istim - I0 - Q) * f * Pw) (uA)
             Ieff = np.maximum(0, (amp - I0 - Q) * freq * (p_dur / 1000))
             # update memory trace (uA)
@@ -326,7 +330,7 @@ class DynaphosModel(BaseModel):
                 # output a percept. We compare `idx_sim` to `idx_t_percept`
                 # rather than `t_sim` to `t_percept` because there is no good
                 # (fast) way to compare two floating point numbers:
-                for el_idx in range(stim.data.shape[0]):
+                for el_idx in range(stim_data.shape[0]):
                     gauss = np.zeros(self.grid['dva'].x.shape)
                     if A[el_idx] >= self.a_thr:
                         gauss = create_gaussian(phosphene_locations['v1'][0][el_idx], 
@@ -361,6 +365,7 @@ class DynaphosModel(BaseModel):
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError(f"'implant' must be a ProsthesisSystem object, "
                             f"not {type(implant)}.")
+        t_percept = as_value(t_percept, self.time_unit, 't_percept')
         if implant.stim is None:
             # Nothing to see here:
             return None
@@ -380,7 +385,9 @@ class DynaphosModel(BaseModel):
         if t_percept is None:
             # If no time vector is given, output at frame rate determined by self.dt. We always
             # start at zero and include the last time point:
-            t_percept = np.arange(0, np.maximum(self.dt, stim.time[-1]) + 1, self.dt)
+            t_percept = np.arange(
+                0, np.maximum(self.dt, self._stim_times(stim)[-1]) + 1,
+                self.dt)
         t_percept = np.sort([t_percept]).flatten()
         remainder = np.mod(t_percept, self.dt) / self.dt
         atol = 1e-3

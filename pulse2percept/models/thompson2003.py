@@ -100,7 +100,7 @@ class Thompson2003Spatial(SpatialModel):
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
         x_el, y_el, _ = self._electrode_coords(earray, stim)
-        return fast_thompson2003(stim.data, x_el, y_el,
+        return fast_thompson2003(self._stim_values(stim), x_el, y_el,
                                  self.grid.ret.x.ravel(),
                                  self.grid.ret.y.ravel(),
                                  dropout.astype(np.uint8),

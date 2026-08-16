@@ -11,7 +11,7 @@ from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
-                                 ms, uA, um)
+                                 ms, s, uA, um)
 
 def test_DynaphosModel():
     model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1).build()
@@ -140,3 +140,17 @@ def test_DynaphosModel_units():
                      (uA, um, ms))
     with pytest.raises(DimensionMismatchError):
         DynaphosModel(rheobase=5 * ms)
+
+
+def test_DynaphosModel_t_percept_units():
+    """This model overrides `predict_percept`, so it normalizes for itself"""
+    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), xystep=1).build()
+    implant = Cortivis(stim={'11': BiphasicPulseTrain(20, 50, 0.45,
+                                                      stim_dur=100)})
+    bare = model.predict_percept(implant, t_percept=[0, 20, 40])
+    for spelling in ([0, 20, 40] * ms, np.array([0, .02, .04]) * s):
+        unitful = model.predict_percept(implant, t_percept=spelling)
+        npt.assert_allclose(unitful.data, bare.data, rtol=1e-12)
+        npt.assert_allclose(unitful.time, [0, 20, 40], rtol=1e-12)
+    with pytest.raises(DimensionMismatchError):
+        model.predict_percept(implant, t_percept=[0, 20] * uA)
