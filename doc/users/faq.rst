@@ -1,12 +1,16 @@
 .. _users-faq:
 
-========================
-How pulse2percept Works
-========================
+==========================
+Frequently Asked Questions
+==========================
 
 New to pulse2percept? This page gives a quick overview of the main concepts,
 objects, and modeling choices. For complete examples, see the
 :doc:`Example Gallery <../examples/index>`.
+
+.. contents:: On this page
+   :local:
+   :depth: 1
 
 .. note::
 
@@ -22,13 +26,12 @@ Getting started
 What can I do with pulse2percept?
 ---------------------------------
 
-pulse2percept (p2p) is a simulation framework for visual neuroprostheses.
+pulse2percept is a simulation framework for visual neuroprostheses.
 
 You can use it to describe an implant and its electrical stimulation, predict
-the resulting neural response or visual percept using published computational
-models, explore how model and implant parameters affect those predictions, and
-develop encoding strategies that turn images or videos into electrical
-stimulation.
+the resulting neural response or visual percept using computational models,
+explore how model and implant parameters affect those predictions, and develop
+encoding strategies that turn images or videos into electrical stimulation.
 
 A typical workflow looks roughly like this::
 
@@ -47,16 +50,19 @@ A typical workflow looks roughly like this::
          v
       Percept
 
-You do not need every stage for every simulation. For example, if you already
-know which electrodes you want to stimulate and with what current, you can
-construct the stimulus directly and do not need an encoder.
+.. note::
+
+    You do not need every stage for every simulation. If you already know
+    which electrodes you want to stimulate and with what current, for example,
+    you can construct the stimulus directly and do not need an encoder.
 
 
 What is the simplest simulation I can run?
 -------------------------------------------
 
-The :py:class:`~pulse2percept.models.ScoreboardModel` is a good place to start.
-It assumes that each stimulated electrode produces a localized blob of light.
+The :py:class:`~pulse2percept.models.ScoreboardModel` is a good place to start
+for retinal stimulation. It assumes that each stimulated electrode produces a
+localized blob of light.
 
 For example, stimulate electrode A8 of an Argus II implant with 30 microamps
 and predict the resulting percept:
@@ -83,9 +89,19 @@ electrical stimulation. You can also write the unit explicitly:
 
     implant = ArgusII(stim={'A8': 30 * uA})
 
-The Scoreboard model is useful for learning the pulse2percept API and as a
-simple baseline. It is not automatically the most appropriate scientific model
-for a particular experiment or patient.
+Or, as a one-liner:
+
+.. code-block:: python
+
+    ScoreboardModel().build().predict_percept(ArgusII(stim={'A8': 30})).plot()
+
+.. important::
+
+    The Scoreboard model is the simplest retinal spatial model, not
+    automatically the best model for your scientific question. Use it to learn
+    the workflow or when its assumptions are appropriate. If you are modeling
+    cortical stimulation, start with a model from
+    :py:mod:`pulse2percept.models.cortex` instead.
 
 
 How do I look at a predicted percept?
@@ -115,40 +131,18 @@ A :py:class:`~pulse2percept.percepts.Percept` is also a data object. Its
 want to perform your own analysis or visualization.
 
 
-What is the difference between the Scoreboard and Axon Map models?
-------------------------------------------------------------------
-
-The :py:class:`~pulse2percept.models.ScoreboardModel` assumes that stimulation
-produces a localized blob around each electrode. Contributions from multiple
-electrodes simply combine across the retinal surface.
-
-The :py:class:`~pulse2percept.models.AxonMapModel` additionally accounts for
-activation of retinal ganglion cell axons. An electrode may therefore activate
-cell bodies near the electrode as well as axons passing underneath it. Because
-those axons follow nerve fiber bundle trajectories toward the optic disc, the
-predicted percept can become elongated or ``streaky``.
-
-In short:
-
-* Use the **Scoreboard model** when localized electrode-centered activation is
-  the appropriate abstraction, or when you want a simple baseline.
-* Use the **Axon Map model** when the effects of retinal ganglion cell axons on
-  phosphene shape matter.
-
-The Axon Map model is more biologically detailed, but that does not mean it is
-automatically better for every scientific question.
-
-
 Which model should I use?
 -------------------------
 
-Start with two questions:
+Start with two questions.
 
 **1. Are you modeling retinal or cortical stimulation?**
 
 Retinal and cortical prostheses stimulate different parts of the visual system
 and require different models. Choose a model designed for the site of
-stimulation you are studying.
+stimulation you are studying. Retinal models live in
+:py:mod:`pulse2percept.models`; cortical models live in
+:py:mod:`pulse2percept.models.cortex`.
 
 **2. Do you need to model space, time, or both?**
 
@@ -159,31 +153,28 @@ A **temporal model** predicts how the response evolves over time.
 
 A **spatiotemporal model** does both.
 
-If you only care about the spatial pattern produced by a static stimulation
-pattern, a spatial model may be sufficient. If your question depends on pulse
+If you only care about the spatial pattern produced by a stimulation pattern,
+a spatial model may be sufficient. If your question depends on pulse
 frequency, pulse timing, fading, persistence, or other dynamics, you need a
 temporal component as well.
 
-Once you have made those choices, consider what biological mechanisms the
-model needs to capture.
-
-For retinal stimulation, for example:
+Once you have made those choices, consider which biological mechanisms the
+model needs to capture. For retinal stimulation, for example:
 
 * :py:class:`~pulse2percept.models.ScoreboardModel` assumes localized,
   electrode-centered activation and provides a useful simple baseline.
 * :py:class:`~pulse2percept.models.AxonMapModel` additionally models activation
   of retinal ganglion cell axons and can therefore predict elongated
   phosphenes.
-* Other retinal models capture temporal or spatiotemporal effects of electrical
-  stimulation.
+* Other retinal models capture temporal or spatiotemporal effects of
+  electrical stimulation.
 
-Cortical models make different assumptions appropriate to stimulation of
-visual cortex.
+.. important::
 
-Choose the simplest model that captures the phenomenon relevant to your
-question. A more complicated model is not automatically a more accurate one:
-every additional mechanism introduces assumptions and parameters that must
-themselves be justified.
+    Choose the simplest model that captures the phenomenon relevant to your
+    question. A more complicated model is not automatically a more accurate
+    one: every additional mechanism introduces assumptions and parameters that
+    must themselves be justified.
 
 See :ref:`Computational Models <topics-models>` for the available models and
 the publications on which they are based.
@@ -194,14 +185,14 @@ Can I just use the default model parameters?
 
 For learning the API or reproducing an example, yes.
 
-For scientific conclusions, **model parameters should be treated as scientific
-assumptions, not generic software settings**.
+For scientific conclusions, model parameters should be treated as scientific
+assumptions, not generic software settings.
 
 For example, the Axon Map model has two particularly important parameters:
 
 ``rho``
     Controls how quickly sensitivity falls off with distance away from an
-    axon. It strongly affects phosphene width.
+    axon. Larger values generally produce wider phosphenes.
 
 ``lam``
     Controls how quickly sensitivity falls off along the axon. Larger values
@@ -211,6 +202,9 @@ The current software defaults for
 :py:class:`~pulse2percept.models.AxonMapModel` are ``rho=200`` microns and
 ``lam=500`` microns. These values make the model usable out of the box; they
 should not be interpreted as universal values for every implant user.
+In fact, every real prosthesis user has their onw ``rho`` and ``lam`` values
+that best represent how "streaky" or "blobby" their vision appears
+[Beyeler2019]_.
 
 Likewise, the :py:class:`~pulse2percept.models.ScoreboardModel` has a ``rho``
 parameter controlling the spatial extent of its electrode-centered blobs. Its
@@ -218,9 +212,9 @@ meaning is related to ``rho`` in the Axon Map model, but the two models make
 different assumptions about how activation spreads through the retina.
 
 If your conclusions depend on phosphene size, elongation, or another
-model-dependent property, you should fit the relevant parameters to data when
-possible, use published values appropriate to your population, or explicitly
-justify the values you chose.
+model-dependent property, fit the relevant parameters to data when possible,
+use published values appropriate to your population, or explicitly justify
+the values you chose.
 
 Other parameters can matter just as much. For example, optic-disc location and
 retinotopic mapping affect the nerve fiber trajectories used by the Axon Map
@@ -262,9 +256,7 @@ How do I change the spatial resolution or field of view?
 --------------------------------------------------------
 
 Spatial models evaluate the predicted response on a grid in visual-field
-coordinates.
-
-Three parameters control that grid:
+coordinates. Three parameters control that grid:
 
 ``xrange``
     Horizontal extent of the simulated visual field, in degrees of visual
@@ -293,16 +285,23 @@ For example:
 This simulates a 30 x 20 degree region of visual space on a grid sampled every
 0.25 degrees.
 
-``step`` changes the **numerical resolution of the simulation**, not the
-physical resolution of the implant or the biological size of a phosphene.
+.. important::
+
+    ``step`` controls the **numerical resolution of the simulation**. It
+    does not change the physical resolution of the implant, the number of
+    electrodes, or the biological size of a phosphene.
+
 Likewise, ``xrange`` and ``yrange`` determine which part of visual space is
 computed; they do not change the implant itself.
 
 A smaller ``step`` can make plots look smoother and improve numerical
-sampling, but it does not add biological detail that is absent from the model.
+sampling, but it cannot add biological detail that is absent from the model.
+Halving ``step`` in both dimensions also produces roughly four times as many
+grid points, so unnecessarily fine grids can become expensive.
 
 Because the simulation grid is created during ``build()``, call ``build()``
 again after changing ``xrange``, ``yrange``, or ``step``.
+
 
 Core concepts
 =============
@@ -347,8 +346,11 @@ For example, ``30 microamps on electrode A8`` is a stimulus. A small bright
 phosphene at a particular location in the visual field is a percept predicted
 from that stimulus.
 
-Keeping these two concepts separate is important: changing the model can change
-the predicted percept without changing the stimulus at all.
+.. note::
+
+    Changing the model can change the predicted percept without changing the
+    stimulus at all. The stimulus is an input to the forward model; the
+    percept is its prediction.
 
 
 Do I need an Encoder?
@@ -367,27 +369,40 @@ If you already know the electrical stimulation you want to simulate, construct
 a :py:class:`~pulse2percept.stimuli.Stimulus` directly or assign stimulation
 to the implant. No encoder is required.
 
-An encoder therefore answers a different question from a model:
+.. important::
 
-* An **encoder** asks: *What stimulation should the device deliver?*
-* A **model** asks: *What response or percept will that stimulation produce?*
+    An **encoder** asks: *What stimulation should the device deliver?*
+
+    A **model** asks: *What response or percept will that stimulation produce?*
 
 
-What is the difference between a spatial and a temporal model?
---------------------------------------------------------------
+Can I combine spatial and temporal models?
+------------------------------------------
 
-A :py:class:`~pulse2percept.models.SpatialModel` describes *where* stimulation
-produces activity or perceived brightness.
+Yes. A :py:class:`~pulse2percept.models.Model` can contain a spatial component,
+a temporal component, or both.
 
-A :py:class:`~pulse2percept.models.TemporalModel` describes how that response
-evolves *over time*.
+For example:
 
-A :py:class:`~pulse2percept.models.Model` can contain either or both. Spatial
-and temporal components can also be combined to construct new models.
+.. code-block:: python
 
-For example, the Scoreboard and Axon Map models are spatial models: they
-primarily determine phosphene shape and location. Temporal models are needed
-when questions involve pulse timing, fading, persistence, or other dynamics.
+    from pulse2percept.models import Model, ScoreboardSpatial, FadingTemporal
+
+    model = Model(
+        spatial=ScoreboardSpatial(),
+        temporal=FadingTemporal(),
+    )
+    model.build()
+
+The class names reflect this distinction:
+
+* Classes ending in ``Model`` are stand-alone models that provide the usual
+  high-level interface.
+* Classes ending in ``Spatial`` implement a spatial model component.
+* Classes ending in ``Temporal`` implement a temporal model component.
+
+This lets you mix and match compatible components when the scientific question
+calls for a combination that is not already provided as a stand-alone model.
 
 See :ref:`Computational Models <topics-models>` for details.
 
@@ -412,8 +427,10 @@ The usual workflow is therefore:
     percept1 = model.predict_percept(implant1)
     percept2 = model.predict_percept(implant2)
 
-If you later change a parameter that affects the precomputed model, call
-``build()`` again.
+.. note::
+
+    If you later change a parameter that affects a precomputed model quantity
+    or the simulation grid, call ``build()`` again before making predictions.
 
 
 Implants and stimulation
@@ -476,28 +493,37 @@ For example:
 
     from pulse2percept.implants import ArgusII
     from pulse2percept.stimuli import AmplitudeEncoder, BostonTrain
+    from pulse2percept.units import uA, Hz
 
     implant = ArgusII()
 
-    encoder = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20)
+    encoder = AmplitudeEncoder(implant, amp_range=(0, 50 * uA), freq=20 * Hz)
     implant.stim = encoder.encode(BostonTrain())
 
 The resulting ``implant.stim`` is electrical stimulation and can be passed to
 a computational model in the usual way.
 
+.. note::
+
+    An image or video is not itself what a visual prosthesis delivers. The
+    encoder defines how visual information is converted into a pattern of
+    electrical stimulation.
+
 
 Coordinates, units, and interpretation
 ======================================
 
-How are retinal coordinates mapped to visual field coordinates?
-----------------------------------------------------------------
+How are retinal/cortical coordinates mapped to visual field coordinates?
+------------------------------------------------------------------------
 
-Retinal location and perceived visual-field location are not the same
-coordinate system.
+Retinal/cortical location and perceived visual-field location are not the
+same coordinate system.
 
-Stimulation of the inferior retina produces a percept in the upper visual
-field, while stimulation of the superior retina produces a percept in the
-lower visual field.
+For example, stimulation of the inferior retina produces a percept in the
+upper visual field, while stimulation of the superior retina produces a
+percept in the lower visual field.
+A disproportionate amount of cortical surface is dedicated to encoding
+the fovea.
 
 pulse2percept uses
 :py:class:`~pulse2percept.topography.VisualFieldMap` objects to convert between
@@ -511,9 +537,11 @@ For retinal models, available mappings include
 You can also implement your own
 :py:class:`~pulse2percept.topography.VisualFieldMap`.
 
-Be especially careful when comparing implant coordinates in microns or
-millimeters with percept coordinates in degrees of visual angle. They are
-different physical quantities, not interchangeable coordinate conventions.
+.. warning::
+
+    Implant coordinates in microns or millimeters and percept coordinates in
+    degrees of visual angle are different physical quantities. Do not treat
+    them as interchangeable coordinate conventions.
 
 
 What units does pulse2percept use?
@@ -548,8 +576,11 @@ You can make units explicit:
 Compatible quantities are automatically converted to the units expected by the
 API. For example, ``50 * uA`` and ``0.05 * mA`` describe the same current.
 
-Using explicit units is particularly helpful when mixing electrode geometry,
-visual-field coordinates, or code from different experimental conventions.
+.. note::
+
+    Explicit units are especially helpful when mixing electrode geometry,
+    visual-field coordinates, or code from different experimental
+    conventions. Bare numbers remain supported for backwards compatibility.
 
 See :py:mod:`pulse2percept.units` for details.
 
@@ -566,8 +597,10 @@ The important question is therefore not only "what is the brightness value?"
 but also "what quantity does this particular model predict, and how was it
 calibrated?"
 
-Do not assume that numerical brightness values from different models are
-directly comparable unless the models explicitly define them that way.
+.. warning::
+
+    Do not assume that numerical brightness values from different models are
+    directly comparable unless the models explicitly define them that way.
 
 
 Does a predicted percept show exactly what an implant user would see?
@@ -584,9 +617,11 @@ prosthesis users, but substantial differences can exist across subjects and
 electrodes. Subject-specific model parameters can therefore be important when
 the goal is to predict an individual user's percepts.
 
-Simulated percepts are useful for testing hypotheses, comparing stimulation
-strategies, and studying the consequences of a model. They should not be
-interpreted as literal ground truth about what every implant user sees.
+.. important::
+
+    Simulated percepts are useful for testing hypotheses, comparing stimulation
+    strategies, and studying the consequences of a model. They should not be
+    interpreted as literal ground truth about what every implant user sees.
 
 
 Troubleshooting and next steps
@@ -604,6 +639,8 @@ A useful progression is:
    :py:class:`~pulse2percept.models.ScoreboardModel` and
    :py:class:`~pulse2percept.models.AxonMapModel`.
 #. Change ``rho`` and ``lam`` deliberately and inspect their effects.
+#. Change ``step`` and the simulated field of view so you understand the
+   difference between numerical sampling and model behavior.
 #. Move to a temporal or spatiotemporal model if your scientific question
    depends on stimulation dynamics.
 #. Use an encoder when you are ready to turn images or videos into pulse
