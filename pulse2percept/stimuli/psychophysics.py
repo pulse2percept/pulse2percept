@@ -4,6 +4,7 @@
 import numpy as np
 
 from .videos import VideoStimulus
+from ..units import as_value, ms
 from ..utils import radial_mask
 
 
@@ -69,6 +70,9 @@ class GratingStimulus(VideoStimulus):
     def __init__(self, shape, direction=0, spatial_freq=0.1,
                  temporal_freq=0.001, phase=0, contrast=1, time=None,
                  mask=None, electrodes=None, metadata=None):
+        # `time` is a point (or an end point) in time, so it may be given as
+        # a quantity; everything below works on plain milliseconds:
+        time = as_value(time, ms, 'time')
         direction = np.deg2rad(direction)
         phase = np.deg2rad(phase)
         height, width = shape
@@ -174,6 +178,8 @@ class BarStimulus(VideoStimulus):
     def __init__(self, shape, direction=0, speed=0.1, bar_width=1,
                  edge_width=3, px_btw_bars=None, start_pos=0, contrast=1,
                  time=None, mask=None, electrodes=None, metadata=None):
+        # See `GratingStimulus.__init__`:
+        time = as_value(time, ms, 'time')
         height, width = shape
         if px_btw_bars is None:
             px_btw_bars = width

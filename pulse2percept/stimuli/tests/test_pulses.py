@@ -6,6 +6,9 @@ from scipy.integrate import trapezoid
 from pulse2percept.stimuli import (AsymmetricBiphasicPulse, BiphasicPulse,
                                    MonophasicPulse, Stimulus)
 from pulse2percept.utils.constants import DT
+from pulse2percept.units import (DimensionMismatchError, mA, ms, uA,
+                                 us)
+from pulse2percept.units import s as sec
 
 DECIMAL = int(-np.log10(DT))
 
@@ -290,3 +293,48 @@ def test_pulse_append(amp, phase_dur):
     mono = MonophasicPulse(amp, phase_dur)
     bi = BiphasicPulse(amp, phase_dur)
     npt.assert_equal(mono.append(-mono) == bi, True)
+
+
+def test_pulse_units():
+    """Equivalent unit choices must produce numerically identical pulses"""
+    # The headline case from the spec:
+    npt.assert_equal(BiphasicPulse(50, 0.45) == BiphasicPulse(0.05 * mA,
+                                                              450 * us), True)
+    pairs = [
+        (MonophasicPulse(-20, 1, delay_dur=2, stim_dur=10),
+         MonophasicPulse(-0.02 * mA, 1000 * us, delay_dur=0.002 * sec,
+                         stim_dur=0.01 * sec)),
+        (BiphasicPulse(50, 0.45, interphase_dur=0.2, delay_dur=1,
+                       stim_dur=20),
+         BiphasicPulse(0.05 * mA, 450 * us, interphase_dur=200 * us,
+                       delay_dur=1 * ms, stim_dur=0.02 * sec)),
+        (AsymmetricBiphasicPulse(-40, 10, 1, 4, interphase_dur=1, delay_dur=2,
+                                 stim_dur=15),
+         AsymmetricBiphasicPulse(-0.04 * mA, 0.01 * mA, 1 * ms, 4000 * us,
+                                 interphase_dur=1 * ms, delay_dur=0.002 * sec,
+                                 stim_dur=15 * ms)),
+    ]
+    for bare, unitful in pairs:
+        # Not merely close: the same arrays, bit for bit.
+        npt.assert_array_equal(bare.data, unitful.data)
+        npt.assert_array_equal(bare.time, unitful.time)
+        npt.assert_equal(bare.data.dtype, np.float32)
+        npt.assert_equal(unitful.data.dtype, np.float32)
+        npt.assert_equal(bare == unitful, True)
+        npt.assert_equal(unitful.unit, uA)
+        npt.assert_equal(unitful.time_unit, ms)
+    # A quantity of the wrong dimension is caught, and names the argument:
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        BiphasicPulse(10 * ms, 0.45 * ms)
+    npt.assert_equal("Parameter 'amp' expects electric current (uA), got time"
+                     in str(excinfo.value), True)
+    with pytest.raises(DimensionMismatchError):
+        BiphasicPulse(50 * uA, 0.45 * uA)
+    with pytest.raises(DimensionMismatchError):
+        MonophasicPulse(20, 1, delay_dur=2 * uA)
+    with pytest.raises(DimensionMismatchError):
+        MonophasicPulse(20, 1, stim_dur=10 * uA)
+    with pytest.raises(DimensionMismatchError):
+        AsymmetricBiphasicPulse(-40 * ms, 10, 1, 4)
+    with pytest.raises(DimensionMismatchError):
+        AsymmetricBiphasicPulse(-40, 10, 1, 4, interphase_dur=1 * uA)

@@ -6,6 +6,7 @@ import numpy as np
 # DT: Sampling time step (ms); defines the duration of the signal edge
 # transitions:
 from .base import Stimulus
+from ..units import as_value, ms, uA
 from ..utils.constants import DT
 
 
@@ -39,6 +40,9 @@ class MonophasicPulse(Stimulus):
     *  A regular monophasic pulse is not considered "charge-balanced". However,
        if ``amp`` is small enough, the pulse can be considered
        "charge-balanced" if its net current is smaller than 10 picoamps.
+    *  Arguments may be given as plain numbers in the units documented above,
+       or as unitful quantities (e.g. ``0.05 * mA``, ``450 * us``), which are
+       converted to those units. See :py:mod:`pulse2percept.units`.
 
     Examples
     --------
@@ -53,6 +57,12 @@ class MonophasicPulse(Stimulus):
 
     def __init__(self, amp, phase_dur, delay_dur=0, stim_dur=None,
                  electrode=None):
+        # Strip the units first; everything below is plain numbers in uA and
+        # ms, exactly as it has always been:
+        amp = as_value(amp, uA, 'amp')
+        phase_dur = as_value(phase_dur, ms, 'phase_dur')
+        delay_dur = as_value(delay_dur, ms, 'delay_dur')
+        stim_dur = as_value(stim_dur, ms, 'stim_dur')
         if phase_dur <= DT:
             raise ValueError(f"'phase_dur' must be greater than DT={DT}ms.")
         if delay_dur < 0:
@@ -133,6 +143,9 @@ class BiphasicPulse(Stimulus):
     *  The order of the two phases is given by the ``cathodic_first`` flag.
     *  A biphasic pulse created with this class will always be considered
        "charge-balanced".
+    *  Arguments may be given as plain numbers in the units documented above,
+       or as unitful quantities (e.g. ``0.05 * mA``, ``450 * us``), which are
+       converted to those units. See :py:mod:`pulse2percept.units`.
 
     Examples
     --------
@@ -147,6 +160,12 @@ class BiphasicPulse(Stimulus):
 
     def __init__(self, amp, phase_dur, interphase_dur=0, delay_dur=0,
                  stim_dur=None, cathodic_first=True, electrode=None):
+        # See `MonophasicPulse.__init__`:
+        amp = as_value(amp, uA, 'amp')
+        phase_dur = as_value(phase_dur, ms, 'phase_dur')
+        interphase_dur = as_value(interphase_dur, ms, 'interphase_dur')
+        delay_dur = as_value(delay_dur, ms, 'delay_dur')
+        stim_dur = as_value(stim_dur, ms, 'stim_dur')
         if phase_dur <= DT:
             raise ValueError(f"'phase_dur' must be greater than DT={DT}ms.")
         if interphase_dur < 0:
@@ -241,6 +260,9 @@ class AsymmetricBiphasicPulse(Stimulus):
        ``cathodic_first`` flag.
     *  A pulse will be considered "charge-balanced" if its net current is
        smaller than 10 picoamps.
+    *  Arguments may be given as plain numbers in the units documented above,
+       or as unitful quantities (e.g. ``0.05 * mA``, ``450 * us``), which are
+       converted to those units. See :py:mod:`pulse2percept.units`.
 
     Examples
     --------
@@ -258,6 +280,14 @@ class AsymmetricBiphasicPulse(Stimulus):
     def __init__(self, amp1, amp2, phase_dur1, phase_dur2, interphase_dur=0,
                  delay_dur=0, stim_dur=None, cathodic_first=True,
                  electrode=None):
+        # See `MonophasicPulse.__init__`:
+        amp1 = as_value(amp1, uA, 'amp1')
+        amp2 = as_value(amp2, uA, 'amp2')
+        phase_dur1 = as_value(phase_dur1, ms, 'phase_dur1')
+        phase_dur2 = as_value(phase_dur2, ms, 'phase_dur2')
+        interphase_dur = as_value(interphase_dur, ms, 'interphase_dur')
+        delay_dur = as_value(delay_dur, ms, 'delay_dur')
+        stim_dur = as_value(stim_dur, ms, 'stim_dur')
         if phase_dur1 <= 0:
             raise ValueError("'phase_dur1' must be greater than 0.")
         if phase_dur2 <= 0:

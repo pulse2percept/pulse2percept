@@ -11,6 +11,9 @@ from pulse2percept.stimuli import (Stimulus, PulseTrain, BiphasicPulse,
                                    AsymmetricBiphasicPulseTrain)
 from pulse2percept.stimuli.pulse_trains import _tile_pulse
 from pulse2percept.utils.constants import DT
+from pulse2percept.units import (DimensionMismatchError, Hz, Quantity,
+                                 kHz, mA, ms, uA, us)
+from pulse2percept.units import s as sec
 
 
 def test_PulseTrain():
@@ -594,3 +597,69 @@ def test_PulseTrain_electrode_name(cls, args, kwargs):
     stim = Stimulus(cls(*args, stim_dur=100, electrode='A1', **kwargs))
     npt.assert_equal(stim.electrodes, ['A1'])
     npt.assert_equal('A1' in stim.metadata['electrodes'], True)
+
+
+def test_pulse_train_units():
+    """Equivalent unit choices must produce numerically identical trains"""
+    pairs = [
+        (BiphasicPulseTrain(20, 50, 0.45, interphase_dur=0.2, delay_dur=1,
+                            stim_dur=200),
+         BiphasicPulseTrain(0.02 * kHz, 0.05 * mA, 450 * us,
+                            interphase_dur=200 * us, delay_dur=1 * ms,
+                            stim_dur=0.2 * sec)),
+        (AsymmetricBiphasicPulseTrain(20, -40, 10, 1, 4, stim_dur=200),
+         AsymmetricBiphasicPulseTrain(20 * Hz, -0.04 * mA, 10 * uA, 1 * ms,
+                                      4000 * us, stim_dur=0.2 * sec)),
+        (BiphasicTripletTrain(20, 50, 0.45, interpulse_dur=1, stim_dur=200),
+         BiphasicTripletTrain(0.02 * kHz, 0.05 * mA, 450 * us,
+                              interpulse_dur=1000 * us, stim_dur=0.2 * sec)),
+    ]
+    for bare, unitful in pairs:
+        npt.assert_array_equal(bare.data, unitful.data)
+        npt.assert_array_equal(bare.time, unitful.time)
+        npt.assert_equal(bare == unitful, True)
+        npt.assert_equal(unitful.unit, uA)
+        npt.assert_equal(unitful.time_unit, ms)
+    # A generic PulseTrain takes its frequency and duration the same way:
+    pulse = BiphasicPulse(50, 0.45)
+    bare = PulseTrain(20, pulse, stim_dur=200)
+    unitful = PulseTrain(0.02 * kHz, pulse, stim_dur=0.2 * sec)
+    npt.assert_array_equal(bare.data, unitful.data)
+    npt.assert_array_equal(bare.time, unitful.time)
+    # Dimensional errors:
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        BiphasicPulseTrain(20 * ms, 50, 0.45)
+    npt.assert_equal("Parameter 'freq' expects frequency (Hz), got time"
+                     in str(excinfo.value), True)
+    with pytest.raises(DimensionMismatchError):
+        BiphasicPulseTrain(20, 50, 0.45, stim_dur=1 * uA)
+    with pytest.raises(DimensionMismatchError):
+        BiphasicTripletTrain(20, 50, 0.45, interpulse_dur=1 * uA)
+    with pytest.raises(DimensionMismatchError):
+        PulseTrain(20 * uA, pulse)
+
+
+def test_pulse_train_metadata_units():
+    """Metadata keeps storing plain numbers in its historical units
+
+    BiphasicAxonMapModel and DynaphosModel read amplitude, frequency and phase
+    duration back off the metadata and feed them straight into their
+    equations, so a Quantity landing there would break them.
+    """
+    train = BiphasicPulseTrain(0.02 * kHz, 0.05 * mA, 450 * us,
+                               delay_dur=100 * us, stim_dur=0.2 * sec)
+    npt.assert_almost_equal(train.metadata['freq'], 20)
+    npt.assert_almost_equal(train.metadata['amp'], 50)
+    npt.assert_almost_equal(train.metadata['phase_dur'], 0.45)
+    npt.assert_almost_equal(train.metadata['delay_dur'], 0.1)
+    for key in ('freq', 'amp', 'phase_dur', 'delay_dur'):
+        npt.assert_equal(isinstance(train.metadata[key], Quantity), False)
+        npt.assert_equal(np.isscalar(train.metadata[key]), True)
+    # The same goes for the attributes a model or a plot might read:
+    npt.assert_equal(isinstance(train.freq, Quantity), False)
+    npt.assert_almost_equal(train.freq, 20)
+    npt.assert_equal(isinstance(PulseTrain(0.02 * kHz,
+                                           BiphasicPulse(50, 0.45)).freq,
+                                Quantity), False)
+    # And scaling still rewrites the amplitude it advertises:
+    npt.assert_almost_equal((train * 2).metadata['amp'], 100)
