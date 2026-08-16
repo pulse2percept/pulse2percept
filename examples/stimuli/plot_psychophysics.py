@@ -111,9 +111,14 @@ model = AxonMapModel()
 model.build()
 
 implant = ArgusII()
-implant.stim = GratingStimulus((25,25), temporal_freq=0.1)
+grating = GratingStimulus((25,25), temporal_freq=0.1)
+# A model reads current, so the video is encoded first. Its frames are 20 ms
+# apart, so the pulse rate has to be at least 50 Hz for every frame to get a
+# pulse; asking for a percept at the video's own frame times then gives one
+# percept frame per video frame:
+implant.stim = grating.encode(implant=implant, freq=50)
 
-percept = model.predict_percept(implant)
+percept = model.predict_percept(implant, t_percept=grating.time)
 percept.play()
 
 #####################################################################################
@@ -138,7 +143,12 @@ model = AxonMapModel()
 model.build()
 
 implant = ArgusII()
-implant.stim = GratingStimulus((25,25), temporal_freq=0.1).invert()
+grating = GratingStimulus((25,25), temporal_freq=0.1).invert()
+# A model reads current, so the video is encoded first. Its frames are 20 ms
+# apart, so the pulse rate has to be at least 50 Hz for every frame to get a
+# pulse; asking for a percept at the video's own frame times then gives one
+# percept frame per video frame:
+implant.stim = grating.encode(implant=implant, freq=50)
 
-percept = model.predict_percept(implant)
+percept = model.predict_percept(implant, t_percept=grating.time)
 percept.play()

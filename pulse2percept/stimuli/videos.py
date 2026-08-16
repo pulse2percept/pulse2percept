@@ -14,9 +14,11 @@ from skimage import img_as_float32
 from imageio import get_reader as video_reader
 
 from .base import Stimulus
+from ..units import dimensionless
 from .names import ElectrodeNames
 from ..utils import (center_image, shift_image, scale_image, trim_image,
                      frame_interval, HTMLAnimation)
+from ..utils.constants import MS_PER_S
 
 
 class VideoStimulus(Stimulus):
@@ -82,6 +84,10 @@ class VideoStimulus(Stimulus):
     """
     __slots__ = ('vid_shape', '_next_frame')
 
+    #: Pixel intensities are gray levels in [0, 1], not currents; see
+    #: :py:class:`~pulse2percept.stimuli.ImageStimulus`.
+    _default_unit = dimensionless
+
     def __init__(self, source, format=None, resize=None, as_gray=False,
                  electrodes=None, time=None, metadata=None, compress=False):
         if metadata is None:
@@ -107,8 +113,9 @@ class VideoStimulus(Stimulus):
                 metadata.update(meta)
             metadata['source'] = source
             metadata['source_shape'] = vid.shape
-            # Infer the time points from the video frame rate:
-            time = np.arange(vid.shape[-1]) * 1000.0 / meta['fps']
+            # Infer the time points from the video frame rate. `fps` counts
+            # frames per second and a stimulus counts milliseconds:
+            time = np.arange(vid.shape[-1]) * MS_PER_S / meta['fps']
         elif isinstance(source, VideoStimulus):
             vid = source.data.reshape(source.vid_shape)
             metadata.update(source.metadata)
@@ -120,7 +127,7 @@ class VideoStimulus(Stimulus):
             vid = source
             if time is None and 'fps' in metadata:
                 # Infer the time points from the video frame rate:
-                time = np.arange(vid.shape[-1]) * 1000.0 / metadata['fps']
+                time = np.arange(vid.shape[-1]) * MS_PER_S / metadata['fps']
         else:
             raise TypeError(f"Source must be a filename, a 3D NumPy array or "
                             f"another VideoStimulus, not {type(source)}.")

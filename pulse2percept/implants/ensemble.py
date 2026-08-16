@@ -3,7 +3,8 @@ import numpy as np
 from .base import ProsthesisSystem
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
-from ..stimuli.base import unique_time_points
+from ..stimuli.base import _describe_unit, unique_time_points
+from ..units import DimensionMismatchError, as_value, dva, um
 
 class EnsembleImplant(ProsthesisSystem):
     
@@ -33,7 +34,7 @@ class EnsembleImplant(ProsthesisSystem):
         xrange, yrange: tuple of floats, optional
             Range of x and y coordinates (dva) to create implants at.
         xystep : float, optional
-            Spacing between implant centers. 
+            Spacing (dva) between implant centers.
         region : str, optional
             Region of cortex to create implant in.
 
@@ -41,12 +42,27 @@ class EnsembleImplant(ProsthesisSystem):
         -------
         ensemble : p2p.implants.EnsembleImplant
             Ensemble implant created from the cortical visual field map.
+
+        Notes
+        -----
+        *  These are visual field coordinates, so they may be given as plain
+           numbers of degrees or as unitful quantities (e.g.
+           ``xrange=(-3 * dva, 3 * dva)``). Contrast
+           :py:meth:`from_coords`, which places implants by their physical
+           position in microns. See :py:mod:`pulse2percept.units`.
         """
         from ..topography import CorticalMap, Grid2D
         if not isinstance(vfmap, CorticalMap):
             raise TypeError("vfmap must be a p2p.topography.CorticalMap")
         if not issubclass(implant_type, ProsthesisSystem):
             raise TypeError("implant_type must be a sub-type of ProsthesisSystem")
+
+        # Where in the *visual field* the implants go; `vfmap` turns that into
+        # a physical location further down:
+        locs = as_value(locs, dva, 'locs')
+        xrange = as_value(xrange, dva, 'xrange')
+        yrange = as_value(yrange, dva, 'yrange')
+        xystep = as_value(xystep, dva, 'xystep')
 
         if locs is None:
             if xrange is None:
@@ -82,27 +98,63 @@ class EnsembleImplant(ProsthesisSystem):
             Array of physical locations (um) to create implants at. Not
             needed if using xrange, yrange, and xystep.
         xrange, yrange: tuple of floats, optional
-            Range of x and y coordinates to create implants at.
+            Range of x and y coordinates (um) to create implants at. Required
+            (together with ``xystep``) if ``locs`` is not given.
         xystep : float, optional
-            Spacing between implant centers. 
+            Spacing (um) between implant centers.
+
+        Raises
+        ------
+        ValueError
+            If neither ``locs`` nor all three of ``xrange``, ``yrange`` and
+            ``xystep`` are given.
+
+        Notes
+        -----
+        *  Lengths may be given as plain numbers of microns or as unitful
+           quantities (e.g. ``xrange=(-1 * mm, 1 * mm)``). See
+           :py:mod:`pulse2percept.units`.
+
+        .. versionchanged:: 0.10.0
+            The grid arguments no longer have defaults. They used to fall back
+            on ``(-3, 3)`` and ``1``, which are the degrees of visual angle
+            :py:meth:`from_cortical_map` works in; here they are microns, so
+            the default laid every implant out inside a 6 um square.
+
         """
-        from ..topography import Grid2D
+        from ..topography.base import _rectangular_mesh
 
         if not issubclass(implant_type, ProsthesisSystem):
             raise TypeError("implant_type must be a sub-type of ProsthesisSystem")
-        
+
+        # Physical coordinates, unlike the dva ranges `from_cortical_map`
+        # takes:
+        locs = as_value(locs, um, 'locs')
+        xrange = as_value(xrange, um, 'xrange')
+        yrange = as_value(yrange, um, 'yrange')
+        xystep = as_value(xystep, um, 'xystep')
+
         if locs is None:
-            if xrange is None:
-                xrange = (-3, 3)
-            if yrange is None:
-                yrange = (-3, 3)
-            if xystep is None:
-                xystep = 1
-            
-            # make a grid of points
-            grid = Grid2D(xrange, yrange, xystep)
-            xlocs = grid.x.flatten()
-            ylocs = grid.y.flatten()
+            # There are two ways to say where the implants go, and no default
+            # for the second one: a physical grid has no universal extent the
+            # way a visual field does, and the dva defaults `from_cortical_map`
+            # uses would put every implant inside a 6 um square here.
+            missing = [name for name, value in [('xrange', xrange),
+                                                ('yrange', yrange),
+                                                ('xystep', xystep)]
+                       if value is None]
+            if missing:
+                raise ValueError(
+                    f"Pass either 'locs' or all of 'xrange', 'yrange' and "
+                    f"'xystep' (missing: {', '.join(missing)}). Coordinates "
+                    f"are physical, in microns.")
+
+            # Laid out directly rather than through a `Grid2D`, which is a
+            # grid of *visual field* coordinates and would read these microns
+            # as degrees:
+            (xgrid, ygrid), _, _ = _rectangular_mesh(xrange, yrange, xystep)
+            xlocs = xgrid.flatten()
+            ylocs = ygrid.flatten()
         else:
             xlocs = locs[:, 0]
             ylocs = locs[:, 1]
@@ -251,4 +303,24 @@ class EnsembleImplant(ProsthesisSystem):
             # Combine all new_stims into a final array (stack along a new axis if needed)
             # runtime import to avoid circular import
             from ..stimuli import Stimulus
-            self.stim = Stimulus(np.concatenate(new_stims), time=new_times, electrodes=self.electrode_names, metadata=metadata)
+            merged = Stimulus(np.concatenate(new_stims), time=new_times,
+                              electrodes=self.electrode_names,
+                              metadata=metadata)
+            # The merge concatenates raw data arrays, so the result would
+            # otherwise fall back to the default (current) reading of them.
+            # An implant with no stimulus contributes zeros and no
+            # interpretation of them, so only the ones that have a stimulus
+            # decide what the merged numbers mean -- and they have to agree,
+            # because a mix of image intensities and currents has no common
+            # reading to fall back on:
+            present = [s for s in stims if s is not None]
+            units = {(s.unit, s.time_unit) for s in present}
+            if len(units) > 1:
+                names = ', '.join(sorted({_describe_unit(s.unit)
+                                          for s in present}))
+                raise DimensionMismatchError(
+                    f"Cannot merge stimuli measured in different units "
+                    f"({names}). Convert them to a common unit first.")
+            if present:
+                merged._inherit_units(present[0])
+            self.stim = merged

@@ -1,6 +1,9 @@
 """:py:class:`~pulse2percept.stimuli.Stimulus`, 
    :py:class:`~pulse2percept.stimuli.ImageStimulus`"""
 import warnings
+from ..units import (DimensionMismatchError, Quantity, Unit, as_value,
+                     dimensionless, ms, uA)
+from ..units.base import has_units
 from ..utils import PrettyPrint, is_strictly_increasing
 from ..utils.constants import DT, MIN_AMP
 from ._base import fast_compress_space, fast_compress_time
@@ -294,6 +297,56 @@ def merge_time_axes(data, time, merge_tolerance=1e-6):
     return new_data, [new_time]
 
 
+def _describe_unit(unit):
+    """Name a unit the way an error message wants to read
+
+    A dimensionless unit has no symbol to show, so saying "dimensionless ()"
+    is worse than saying nothing at all.
+    """
+    if unit.dimension.is_dimensionless:
+        return 'dimensionless units'
+    return f'{unit.dimension.name} ({unit})'
+
+
+def _stimulus_sources(source):
+    """The Stimulus objects a source is built from, if any
+
+    A source is either one stimulus, a collection of them, or something with
+    no unit of its own (a scalar, an array, a filename).
+    """
+    if isinstance(source, Stimulus):
+        return [source]
+    if isinstance(source, dict):
+        return [s for s in source.values() if isinstance(s, Stimulus)]
+    if isinstance(source, (list, tuple)):
+        return [s for s in source if isinstance(s, Stimulus)]
+    return []
+
+
+def _strip_units(source, unit):
+    """Convert a source's quantities into plain numbers expressed in ``unit``
+
+    Runs before the source-dispatch machinery in ``Stimulus._factory``, which
+    reads dicts, lists, tuples and arrays element by element. A
+    :py:class:`~pulse2percept.units.Quantity` deliberately has no sequence
+    protocol, so it cannot be read that way -- and normalizing here means the
+    dispatch, the interpolation and the compression below all keep seeing
+    ordinary numbers, exactly as they always have.
+
+    Anything without a unit is returned untouched, including the container it
+    came in.
+    """
+    if isinstance(source, (Quantity, Unit)):
+        return as_value(source, unit, 'source')
+    if isinstance(source, dict):
+        if any(has_units(v) for v in source.values()):
+            return {k: _strip_units(v, unit) for k, v in source.items()}
+    elif isinstance(source, (list, tuple)):
+        if any(has_units(v) for v in source):
+            return type(source)(_strip_units(v, unit) for v in source)
+    return source
+
+
 def _scale_factor(a, op, b, field):
     """The factor by which an arithmetic operator scales the stimulus data
 
@@ -440,7 +493,17 @@ class Stimulus(PrettyPrint):
 
     """
     # Frozen class: Only the following class attributes are allowed
-    __slots__ = ('metadata', '_is_compressed', '__stim')
+    __slots__ = ('metadata', '_is_compressed', '__stim', '_unit', '_time_unit')
+
+    #: The unit ``data`` is stored in. Electrical stimuli are microamps, which
+    #: is what every model, pulse and safety check in the library assumes; a
+    #: subclass whose data is not a current (an image's gray levels, say)
+    #: overrides this. A stimulus built from another stimulus inherits its
+    #: unit instead, so a copy of an image stimulus does not become a current.
+    _default_unit = uA
+
+    #: The unit ``time`` is stored in.
+    _default_time_unit = ms
 
     def __init__(self, source, electrodes=None, time=None, metadata=None,
                  compress=False):
@@ -450,8 +513,52 @@ class Stimulus(PrettyPrint):
             self.metadata = {'electrodes': {}, 'user': metadata}
         # Flag will be flipped in the compress method:
         self._is_compressed = False
+        # Settle what the numbers below mean before reading any of them, then
+        # convert every quantity into that unit. From here on the source is
+        # ordinary numbers, which is all `_factory` has ever had to handle:
+        self._unit, self._time_unit = self._resolve_units(source)
+        source = _strip_units(source, self._unit)
+        time = as_value(time, self._time_unit, 'time')
         # Extract the data and coordinates (electrodes, time) from the source:
         self._factory(source, electrodes, time, compress)
+
+    def _resolve_units(self, source):
+        """Determine the units this stimulus stores its data and time in
+
+        A stimulus built from other stimuli speaks their unit; anything else
+        speaks this class's default. Sources that disagree are an error rather
+        than a silent choice of one of them: an image stimulus and a pulse
+        train in the same collection have no common interpretation.
+        """
+        unit, time_unit = self._default_unit, self._default_time_unit
+        sources = _stimulus_sources(source)
+        if not sources:
+            return unit, time_unit
+        for attr, expected in (('unit', unit), ('time_unit', time_unit)):
+            found = {getattr(s, attr) for s in sources}
+            if len(found) > 1:
+                names = ', '.join(sorted(_describe_unit(u) for u in found))
+                raise DimensionMismatchError(
+                    f"Cannot build one {type(self).__name__} out of stimuli "
+                    f"with different units ({names}). Convert them to a "
+                    f"common unit first.")
+            if attr == 'unit':
+                unit = found.pop()
+            else:
+                time_unit = found.pop()
+        return unit, time_unit
+
+    def _inherit_units(self, other):
+        """Adopt the units of another stimulus
+
+        For the handful of places that rebuild a stimulus out of raw arrays
+        (resampling it onto an implant's electrodes, evaluating it at
+        particular time points) and would otherwise fall back to the class
+        default. Returns ``self`` so it can be chained onto a constructor.
+        """
+        self._unit = other.unit
+        self._time_unit = other.time_unit
+        return self
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -836,6 +943,20 @@ class Stimulus(PrettyPrint):
         if not isinstance(other, Stimulus):
             raise TypeError(f"Other object must be a Stimulus, not "
                             f"{type(other)}.")
+        # The result is a copy of `self` with `other`'s data concatenated onto
+        # its own, so it would carry `self`'s unit over numbers that never
+        # meant that. Two stimuli can only be laid end to end if they measure
+        # the same thing:
+        if self.unit != other.unit:
+            raise DimensionMismatchError(
+                f"Cannot append a stimulus measured in "
+                f"{_describe_unit(other.unit)} to one measured in "
+                f"{_describe_unit(self.unit)}.")
+        if self.time_unit != other.time_unit:
+            raise DimensionMismatchError(
+                f"Cannot append a stimulus whose time is measured in "
+                f"{_describe_unit(other.time_unit)} to one whose time is "
+                f"measured in {_describe_unit(self.time_unit)}.")
         if self.time is None or other.time is None:
             raise ValueError("Cannot append another stimulus if time=None.")
         if not _names_equal(self.electrodes, other.electrodes):
@@ -957,6 +1078,9 @@ class Stimulus(PrettyPrint):
             # Ask for a slice instead of `self.time` to avoid interpolation,
             # which can be time-consuming for an uncompressed stimulus:
             time = slice(None)
+        # A range, a list of time points, or the endpoints and step of a slice
+        # may all be given as quantities:
+        time = self._as_time(time)
         if isinstance(time, tuple):
             # Return a range of time points:
             t_idx = (self.time > time[0]) & (self.time < time[1])
@@ -967,8 +1091,19 @@ class Stimulus(PrettyPrint):
             # Return list of exact time points:
             t_idx = time
             t_vals = time
-        elif isinstance(time, slice) or time == Ellipsis:
-            # Return a slice of time points:
+        elif isinstance(time, slice):
+            # A stepped slice is a time range, and `__getitem__` will
+            # interpolate onto it. Resolve it to those time points here as
+            # well, or the curve would be drawn against the time points that
+            # happen to sit at those column *indices* instead:
+            t_vals = self._slice_times(time)
+            if t_vals is None:
+                # Every stored sample, taken by position:
+                t_idx = time
+                t_vals = self.time[time]
+            else:
+                t_idx = t_vals
+        elif time == Ellipsis:
             t_idx = time
             t_vals = self.time[t_idx]
         else:
@@ -1010,11 +1145,21 @@ class Stimulus(PrettyPrint):
             ax.set_ylabel(electrode)
         # Show x-ticks only on last subplot:
         axes[-1].set_xticks(np.linspace(t_vals[0], t_vals[-1], num=5))
-        # Labels are common to all subplots:
+        # Labels are common to all subplots. What the y axis shows depends on
+        # what the stimulus is made of: an image or video stimulus holds gray
+        # levels, and calling those an amplitude in microamps is simply wrong.
+        if self.unit.dimension.is_dimensionless:
+            ylabel = 'Value'
+        elif self.unit == uA:
+            # Spelled the way Matplotlib renders it:
+            ylabel = r'Amplitude ($\mu$A)'
+        else:
+            ylabel = f'Amplitude ({self.unit})'
         axes[-1].figure.subplots_adjust(bottom=0.2)
-        axes[-1].figure.text(0.5, 0, 'Time (ms)', va='top', ha='center')
-        axes[-1].figure.text(0, 0.5, r'Amplitude ($\mu$A)', va='center',
-                             ha='center', rotation='vertical')
+        axes[-1].figure.text(0.5, 0, f'Time ({self.time_unit})', va='top',
+                             ha='center')
+        axes[-1].figure.text(0, 0.5, ylabel, va='center', ha='center',
+                             rotation='vertical')
         if len(axes) == 1:
             return axes[0]
         return axes
@@ -1040,18 +1185,16 @@ class Stimulus(PrettyPrint):
             electrodes = item[0]
             time = item[1]
             if isinstance(time, slice):
-                if not time.step:
-                    # We can't interpolate if we don't know the step size, so
-                    # the only allowed option is slice(None, None, None), which
-                    # is the same as ':'
-                    if time.start or time.stop:
-                        raise ValueError("You must provide a step size when "
-                                         "slicing the time axis.")
-                else:
-                    start = self.time[0] if time.start is None else time.start
-                    stop = self.time[-1] if time.stop is None else time.stop
-                    time = np.arange(start, stop, time.step, dtype=np.float64)
+                sliced = self._slice_times(time)
+                if sliced is not None:
+                    time = sliced
+                # Otherwise the slice stays what it is, and NumPy takes the
+                # columns it names below.
             elif time is not Ellipsis:
+                # A requested time point (or a list of them) may be unitful;
+                # after this it is an ordinary number, which is what the
+                # indexing and interpolation below have always worked on:
+                time = self._as_time(time)
                 # Convert to float so time is not mistaken for column index
                 if np.array(time).dtype != bool:
                     time = np.float64(time)
@@ -1144,6 +1287,10 @@ class Stimulus(PrettyPrint):
         """
         if not isinstance(other, Stimulus):
             return False
+        # Two stimuli that hold the same numbers in different units are not
+        # the same stimulus: 500 uA of current is not 500 gray levels.
+        if self.unit != other.unit or self.time_unit != other.time_unit:
+            return False
         if self.time is None:
             if other.time is not None:
                 return False
@@ -1220,9 +1367,64 @@ class Stimulus(PrettyPrint):
         stim._rescale_metadata(_scale_factor(a, op, b, field))
         return stim
 
+    def _as_amplitude(self, scalar):
+        """Normalize an operand that is added to or subtracted from the data
+
+        Adding to the data means adding an amplitude, so a quantity has to be
+        one: ``stim + 0.5 * mA`` is 500 uA more current everywhere, and
+        ``stim + 5 * ms`` is nothing at all. A bare number is taken to be in
+        the stimulus' own unit, as it always was.
+        """
+        return as_value(scalar, self.unit)
+
+    def _as_factor(self, scalar):
+        """Normalize an operand that scales the data
+
+        Deliberately narrower than
+        :py:meth:`~pulse2percept.stimuli.Stimulus._as_amplitude`: a scale
+        factor is a plain number. Letting ``stim * ms`` through would turn a
+        stimulus into a charge, and a stimulus is a stimulus rather than a
+        general physical array.
+        """
+        return as_value(scalar, dimensionless)
+
+    def _as_time(self, scalar):
+        """Normalize an operand that shifts the stimulus in time"""
+        return as_value(scalar, self.time_unit)
+
+    def _slice_times(self, time):
+        """The time points a slice of the time axis asks for
+
+        Slicing the time axis asks for a time *range*, not for a range of
+        column indices: ``stim[:, 0:10:0.5]`` is the stimulus every 0.5 ms
+        from 0 to 10 ms. All three of ``start``, ``stop`` and ``step`` are
+        therefore times, and may be given as quantities.
+
+        A slice without a step has no such reading -- there is nothing to
+        interpolate onto -- and stands for the stored samples themselves.
+        Returns None in that case, so the caller can keep taking the cheap
+        positional path. Everything that slices the time axis goes through
+        here, so that a plot and the data it plots cannot disagree about what
+        a slice meant.
+        """
+        if not time.step:
+            # We can't interpolate if we don't know the step size, so the only
+            # allowed option is slice(None, None, None), i.e. ':'
+            if time.start or time.stop:
+                raise ValueError("You must provide a step size when slicing "
+                                 "the time axis.")
+            return None
+        start = self._as_time(time.start)
+        stop = self._as_time(time.stop)
+        step = self._as_time(time.step)
+        start = self.time[0] if start is None else start
+        stop = self.time[-1] if stop is None else stop
+        return np.arange(start, stop, step, dtype=np.float64)
+
     def __add__(self, scalar):
         """Add a scalar to every data point in the stimulus"""
-        return self._apply_operator(self.data, ops.add, scalar)
+        return self._apply_operator(self.data, ops.add,
+                                    self._as_amplitude(scalar))
 
     def __radd__(self, scalar):
         """Add a scalar to every data point in the stimulus"""
@@ -1230,15 +1432,18 @@ class Stimulus(PrettyPrint):
 
     def __sub__(self, scalar):
         """Subtract a scalar from every data point in the stimulus"""
-        return self._apply_operator(self.data, ops.sub, scalar)
+        return self._apply_operator(self.data, ops.sub,
+                                    self._as_amplitude(scalar))
 
     def __rsub__(self, scalar):
         """Subtract every data point in the stimulus from a scalar"""
-        return self._apply_operator(scalar, ops.sub, self.data)
+        return self._apply_operator(self._as_amplitude(scalar), ops.sub,
+                                    self.data)
 
     def __mul__(self, scalar):
         """Multiply every data point in the stimulus with a scalar"""
-        return self._apply_operator(self.data, ops.mul, scalar)
+        return self._apply_operator(self.data, ops.mul,
+                                    self._as_factor(scalar))
 
     def __rmul__(self, scalar):
         """Multiply every data point in the stimulus with a scalar"""
@@ -1246,7 +1451,8 @@ class Stimulus(PrettyPrint):
 
     def __truediv__(self, scalar):
         """Divide every data point in the stimulus by a scalar"""
-        return self._apply_operator(self.data, ops.truediv, scalar)
+        return self._apply_operator(self.data, ops.truediv,
+                                    self._as_factor(scalar))
 
     def __neg__(self):
         """Flip the sign of every data point in the stimulus"""
@@ -1256,11 +1462,12 @@ class Stimulus(PrettyPrint):
         """Shift every time point in the stimulus some ms into the future"""
         if self.time is None:
             raise ValueError("Cannot shift a stimulus in time if time=None.")
-        return self._apply_operator(self.time, ops.add, scalar, field='time')
+        return self._apply_operator(self.time, ops.add,
+                                    self._as_time(scalar), field='time')
 
     def __lshift__(self, scalar):
         """Shift every time point in the stimulus some ms into the past"""
-        return self.__rshift__(-scalar)
+        return self.__rshift__(-self._as_time(scalar))
 
     def _check_stim(self, stim):
         # Check stimulus data for consistency:
@@ -1340,6 +1547,117 @@ class Stimulus(PrettyPrint):
         return self.data.shape
 
     @property
+    def unit(self):
+        """The unit ``data`` is expressed in
+
+        Microamps for an electrical stimulus, dimensionless for the gray
+        levels of an :py:class:`~pulse2percept.stimuli.ImageStimulus` or
+        :py:class:`~pulse2percept.stimuli.VideoStimulus`.
+
+        Read-only. The canonical storage unit is fixed so that models, safety
+        checks and Cython kernels can rely on it; ask for another unit with
+        :py:meth:`~pulse2percept.stimuli.Stimulus.values`.
+
+        .. versionadded:: 0.10.0
+
+        """
+        return self._unit
+
+    @property
+    def time_unit(self):
+        """The unit ``time`` is expressed in (milliseconds)
+
+        .. versionadded:: 0.10.0
+
+        """
+        return self._time_unit
+
+    @property
+    def quantity(self):
+        """The stimulus data, with its unit attached
+
+        .. versionadded:: 0.10.0
+
+        Examples
+        --------
+        >>> from pulse2percept.stimuli import Stimulus
+        >>> from pulse2percept.units import uA
+        >>> Stimulus([500, 1000] * uA).quantity
+        [[ 500.]
+         [1000.]] uA
+
+        """
+        return Quantity(self.data, self.unit)
+
+    @property
+    def time_quantity(self):
+        """The stimulus time axis with its unit attached, or None
+
+        .. versionadded:: 0.10.0
+
+        """
+        if self.time is None:
+            return None
+        return Quantity(self.time, self.time_unit)
+
+    def values(self, unit=None):
+        """The stimulus data, expressed in ``unit``
+
+        .. versionadded:: 0.10.0
+
+        Parameters
+        ----------
+        unit : :py:class:`~pulse2percept.units.Unit`, optional
+            The unit to express the data in. Must be compatible with
+            :py:attr:`~pulse2percept.stimuli.Stimulus.unit`. If None, the
+            stimulus' own unit is used and ``data`` is returned as it is
+            stored.
+
+        Returns
+        -------
+        values : np.ndarray
+            An ordinary NumPy array, never a
+            :py:class:`~pulse2percept.units.Quantity`. This is the boundary a
+            numerical implementation should take its data across.
+
+        Examples
+        --------
+        >>> from pulse2percept.stimuli import Stimulus
+        >>> from pulse2percept.units import uA, mA
+        >>> Stimulus([500, 1000] * uA).values(mA)
+        array([[0.5],
+               [1. ]], dtype=float32)
+
+        """
+        if unit is None:
+            return self.data
+        return self.quantity.to_value(unit)
+
+    def times(self, unit=None):
+        """The stimulus time axis, expressed in ``unit``
+
+        .. versionadded:: 0.10.0
+
+        Parameters
+        ----------
+        unit : :py:class:`~pulse2percept.units.Unit`, optional
+            The unit to express the time axis in. If None, ``time`` is
+            returned as it is stored (milliseconds).
+
+        Returns
+        -------
+        times : np.ndarray or None
+            An ordinary NumPy array, or None if the stimulus has no time
+            component.
+
+        """
+        if self.time is None:
+            return None
+        if unit is None:
+            return self.time
+        return self.time_quantity.to_value(unit)
+
+    @property
     def electrodes(self):
         """Electrode names
         A list of electrode names, corresponding to the rows in the data
@@ -1383,7 +1701,23 @@ class Stimulus(PrettyPrint):
         net current is smaller than 10 pico Amps.
         For the whole stimulus to be charge-balanced, every electrode must be
         charge-balanced as well.
+
+        Returns None if the stimulus is not a current at all: the gray levels
+        of an :py:class:`~pulse2percept.stimuli.ImageStimulus` integrate to a
+        number like any others, but that number is not a charge and asking
+        whether it is zero answers nothing. Note that this is "not applicable",
+        not "unbalanced" -- it is
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.safe_mode` that
+        turns the question into an error, since a safety system genuinely
+        cannot do its job on a stimulus that is not electrical.
+
+        .. versionchanged:: 0.10.0
+            Returns None for a stimulus that is not measured in units of
+            current (was: integrated the values anyway).
+
         """
+        if self.unit.dimension != uA.dimension:
+            return None
         if self.time is None:
             return np.allclose(self.data, 0, atol=MIN_AMP)
         return np.allclose(trapezoid(self.data, x=self.time), 0, atol=MIN_AMP)

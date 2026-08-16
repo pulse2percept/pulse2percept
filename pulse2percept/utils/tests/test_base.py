@@ -4,8 +4,11 @@ import pytest
 import numpy.testing as npt
 from scipy.integrate import trapezoid
 
-from pulse2percept.utils import (Frozen, FreezeError, PrettyPrint, Data,
-                                 bijective26_name, cached, gamma)
+from pulse2percept.units import (DimensionMismatchError, dimensionless, dva,
+                                 mA, ms, s, uA, um)
+from pulse2percept.utils import (Frozen, FreezeError, Parametrized,
+                                 PrettyPrint, Data, bijective26_name, cached,
+                                 gamma)
 
 
 class PrettyPrinter(PrettyPrint):
@@ -45,6 +48,53 @@ def test_Frozen():
     # But not outside constructor:
     with pytest.raises(FreezeError):
         frozen_child.c = 3
+
+
+class ParametrizedChild(Parametrized):
+
+    def get_default_params(self):
+        return {'tau': 100, 'radius': 5, 'thresh': 0, 'name': 'x'}
+
+    def get_param_units(self):
+        return {**super().get_param_units(), 'tau': ms, 'radius': um}
+
+
+def test_Parametrized_units():
+    # A parameter that declares a unit accepts any equivalent spelling, and
+    # stores the same plain number either way:
+    for tau in (100, 100 * ms, 0.1 * s):
+        obj = ParametrizedChild(tau=tau)
+        npt.assert_almost_equal(obj.tau, 100)
+        npt.assert_equal(isinstance(obj.tau, (int, float)), True)
+    npt.assert_almost_equal(ParametrizedChild(radius=0.5 * um).radius, 0.5)
+    # Every assignment path converts, not just the constructor:
+    obj = ParametrizedChild()
+    obj.set_params(tau=0.25 * s)
+    npt.assert_almost_equal(obj.tau, 250)
+    obj.tau = 0.5 * s
+    npt.assert_almost_equal(obj.tau, 500)
+    # A parameter with the wrong dimension is caught, and named:
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        ParametrizedChild(tau=5 * uA)
+    npt.assert_equal("Parameter 'tau' expects time (ms), got electric current"
+                     in str(excinfo.value), True)
+    with pytest.raises(DimensionMismatchError):
+        ParametrizedChild(radius=5 * dva)
+    with pytest.raises(DimensionMismatchError):
+        ParametrizedChild().set_params(tau=5 * mA)
+    # A parameter that declares no unit is dimensionless: a plain number, or a
+    # quantity that is explicitly dimensionless, but not a current.
+    npt.assert_almost_equal(ParametrizedChild(thresh=0.5).thresh, 0.5)
+    npt.assert_almost_equal(
+        ParametrizedChild(thresh=0.5 * dimensionless).thresh, 0.5)
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        ParametrizedChild(thresh=5 * uA)
+    npt.assert_equal("Parameter 'thresh' is dimensionless, got electric "
+                     "current (uA)." in str(excinfo.value), True)
+    # Whatever happens, a Quantity never ends up stored in a parameter:
+    for obj in (ParametrizedChild(tau=1 * s), ParametrizedChild(radius=1 * um)):
+        for value in obj._pprint_params().values():
+            npt.assert_equal(hasattr(value, 'to_value'), False)
 
 
 def test_Data():

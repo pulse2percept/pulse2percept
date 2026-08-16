@@ -5,7 +5,8 @@
 from ..base import Model, SpatialModel
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
-from ...utils.constants import ZORDER
+from ...units import um
+from ...utils.constants import UM_PER_MM, ZORDER
 import numpy as np
 
 class CortexSpatial(SpatialModel):
@@ -164,8 +165,9 @@ class CortexSpatial(SpatialModel):
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')
         else:
-            ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
-            ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
+            # Cortical coordinates are stored in microns, plotted in mm:
+            ax.set_xticklabels(np.array(ax.get_xticks()) / UM_PER_MM)
+            ax.set_yticklabels(np.array(ax.get_yticks()) / UM_PER_MM)
             ax.set_xlabel('x (mm)')
             ax.set_ylabel('y (mm)')
         return ax
@@ -175,9 +177,9 @@ class CortexSpatial(SpatialModel):
             self.build()
         ax = self.grid.plot3D(style=style, ax=ax, **kwargs)
         # this is only ever for cortex right now so this is safe
-        ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
-        ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
-        ax.set_zticklabels(np.array(ax.get_zticks()) / 1000)
+        ax.set_xticklabels(np.array(ax.get_xticks()) / UM_PER_MM)
+        ax.set_yticklabels(np.array(ax.get_yticks()) / UM_PER_MM)
+        ax.set_zticklabels(np.array(ax.get_zticks()) / UM_PER_MM)
         ax.set_xlabel('x (mm)')
         ax.set_ylabel('y (mm)')
         ax.set_zlabel('z (mm)')
@@ -269,14 +271,16 @@ class ScoreboardSpatial(CortexSpatial):
                  }
         return {**base_params, **params}
 
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # Cortical coordinates are stored in microns (see `CorticalMap`), and
+        # the current spread is compared against them:
+        return {**super().get_param_units(), 'rho': um}
+
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
-        x_el = np.array([earray[e].x for e in stim.electrodes],
-                                        dtype=np.float32)
-        y_el = np.array([earray[e].y for e in stim.electrodes],
-                                        dtype=np.float32)
-        z_el = np.array([earray[e].z for e in stim.electrodes],
-                                        dtype=np.float32)
+        x_el, y_el, z_el = self._electrode_coords(earray, stim)
+        amp = self._stim_values(stim)
 
         # whether to allow current to spread between hemispheres
         separate = 0
@@ -287,7 +291,7 @@ class ScoreboardSpatial(CortexSpatial):
         cutoff_r2 = self._cutoff_r2(self.rho)
         if self.vfmap.ndim == 3:
             return np.sum([
-                fast_scoreboard_3d(stim.data, x_el, y_el, z_el,
+                fast_scoreboard_3d(amp, x_el, y_el, z_el,
                                 self.grid[region].x.ravel(),
                                 self.grid[region].y.ravel(),
                                 self.grid[region].z.ravel(),
@@ -298,7 +302,7 @@ class ScoreboardSpatial(CortexSpatial):
             axis = 0)
         elif self.vfmap.ndim == 2:
             return np.sum([
-                fast_scoreboard(stim.data, x_el, y_el,
+                fast_scoreboard(amp, x_el, y_el,
                                 self.grid[region].x.ravel(), self.grid[region].y.ravel(),
                                 self.rho, self.thresh_percept, cutoff_r2,
                                 separate, boundary,

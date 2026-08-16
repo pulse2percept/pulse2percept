@@ -41,6 +41,7 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx.ext.extlinks",
     "sphinx.ext.mathjax",
+    "sphinx.ext.doctest",
 ]
 
 autosummary_generate = True

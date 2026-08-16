@@ -12,9 +12,16 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
 from pulse2percept.stimuli import Stimulus
-from pulse2percept.stimuli import BiphasicPulseTrain
+from pulse2percept.stimuli import (BiphasicPulse, BiphasicPulseTrain,
+                                   MonophasicPulse)
 from pulse2percept.stimuli import ImageStimulus
+from pulse2percept.stimuli import VideoStimulus
 from pulse2percept.stimuli.base import _interp_rows, merge_time_axes
+from pulse2percept.units import (DimensionMismatchError, Quantity,
+                                 dimensionless, mA, ms, uA, us)
+# `s` is a loop variable elsewhere in this module, so import the unit
+# under a name that cannot be shadowed by one:
+from pulse2percept.units import s as sec
 from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
 
@@ -965,3 +972,300 @@ def test_Stimulus_data_is_contiguous():
     stim = Stimulus(np.asfortranarray(data), time=np.arange(5, dtype=float))
     npt.assert_equal(stim.data.flags['C_CONTIGUOUS'], True)
     npt.assert_almost_equal(stim.data, data)
+
+
+def test_Stimulus_units():
+    # An electrical stimulus is stored in uA and ms, whatever it was given in:
+    stim = Stimulus([500, 1000] * uA)
+    npt.assert_equal(stim.unit, uA)
+    npt.assert_equal(stim.time_unit, ms)
+    npt.assert_almost_equal(stim.data.ravel(), [500, 1000])
+    npt.assert_equal(stim.data.dtype, np.float32)
+    # Every source form accepts quantities, and they all agree:
+    npt.assert_almost_equal(Stimulus(5 * uA).data.ravel(), [5])
+    for source in ([5, 10] * uA, np.array([5, 10]) * uA, [5 * uA, 10 * uA],
+                   [0.005 * mA, 0.01 * mA], np.array([5, 10])):
+        npt.assert_almost_equal(Stimulus(source).data.ravel(), [5, 10])
+    npt.assert_almost_equal(
+        Stimulus({'A1': 5 * uA, 'A2': 0.01 * mA}).data.ravel(), [5, 10])
+    npt.assert_equal(list(Stimulus({'A1': 5 * uA}).electrodes), ['A1'])
+    # Nested quantities are one electrode over time, as nested lists are:
+    stim = Stimulus([[1, 2, 3] * uA, [4, 5, 6] * uA])
+    npt.assert_equal(stim.shape, (2, 3))
+    npt.assert_almost_equal(stim.data, [[1, 2, 3], [4, 5, 6]])
+    # A time axis can be given as a quantity too:
+    for time in ([0, 20] * ms, (0 * ms, 0.02 * sec), [0, 20]):
+        npt.assert_almost_equal(
+            Stimulus(np.ones((2, 2)), time=time).time, [0, 20])
+    # Dimensional errors are caught at the boundary:
+    with pytest.raises(DimensionMismatchError):
+        Stimulus([5, 10] * ms)
+    with pytest.raises(DimensionMismatchError):
+        Stimulus({'A1': 5 * uA, 'A2': 3 * ms})
+    with pytest.raises(DimensionMismatchError):
+        Stimulus(np.ones((2, 2)), time=[0, 20] * uA)
+
+
+def test_Stimulus_unit_views():
+    stim = Stimulus([[500, 1000]] * uA, time=[0, 20] * ms)
+    # The stored containers are untouched, plain numbers on a Cython-ready
+    # array:
+    npt.assert_equal(isinstance(stim.data, np.ndarray), True)
+    npt.assert_equal(stim.data.dtype, np.float32)
+    npt.assert_equal(isinstance(stim.time, np.ndarray), True)
+    # The unitful views:
+    npt.assert_equal(isinstance(stim.quantity, Quantity), True)
+    npt.assert_equal(stim.quantity.unit, uA)
+    npt.assert_almost_equal(stim.quantity.magnitude, stim.data)
+    npt.assert_equal(stim.time_quantity.unit, ms)
+    npt.assert_almost_equal(stim.time_quantity.magnitude, [0, 20])
+    npt.assert_equal(stim.quantity == [[0.5, 1.0]] * mA, [[True, True]])
+    # The converted numeric views are ordinary arrays, never quantities:
+    for values in (stim.values(), stim.values(uA), stim.values(mA),
+                   stim.times(), stim.times(sec)):
+        npt.assert_equal(isinstance(values, np.ndarray), True)
+        npt.assert_equal(values.dtype != object, True)
+    npt.assert_almost_equal(stim.values(mA).ravel(), [0.5, 1.0])
+    npt.assert_almost_equal(stim.values(uA).ravel(), [500, 1000])
+    npt.assert_almost_equal(stim.times(sec), [0, 0.02])
+    # Asking for the stored unit hands back the stored array itself, and the
+    # data stays float32 through a conversion:
+    npt.assert_equal(stim.values() is stim.data, True)
+    npt.assert_equal(stim.values(mA).dtype, np.float32)
+    # A stimulus with no time component has no time views:
+    npt.assert_equal(Stimulus([1, 2]).time_quantity, None)
+    npt.assert_equal(Stimulus([1, 2]).times(sec), None)
+    # And a unit of the wrong dimension is refused:
+    with pytest.raises(DimensionMismatchError):
+        stim.values(ms)
+    with pytest.raises(DimensionMismatchError):
+        stim.times(uA)
+
+
+def test_Stimulus_units_are_read_only():
+    # The canonical storage unit is a contract, not a setting: models, safety
+    # checks and Cython kernels all rely on uA/ms.
+    stim = Stimulus([1, 2])
+    with pytest.raises(AttributeError):
+        stim.unit = mA
+    with pytest.raises(AttributeError):
+        stim.time_unit = sec
+
+
+def test_Stimulus_dimensionless():
+    # Image and video pixels are gray levels, not currents:
+    img = ImageStimulus(np.ones((3, 3)))
+    npt.assert_equal(img.unit, dimensionless)
+    npt.assert_equal(img.unit != uA, True)
+    # A copy of one is still made of gray levels:
+    npt.assert_equal(Stimulus(img).unit, dimensionless)
+    npt.assert_equal(deepcopy(img).unit, dimensionless)
+    # But a bare Stimulus keeps its historical electrical reading:
+    npt.assert_equal(Stimulus(np.ones((3, 3))).unit, uA)
+    # Gray levels cannot be converted to a current without an encoder:
+    with pytest.raises(DimensionMismatchError):
+        img.values(uA)
+    # ... and the encoder output is electrical:
+    npt.assert_equal(img.encode().unit, uA)
+    npt.assert_equal(img.encode().time_unit, ms)
+    # Two stimuli holding the same numbers in different units are not equal:
+    npt.assert_equal(Stimulus(np.ones((3, 3)).ravel()) == img, False)
+
+
+def test_Stimulus_units_preserved():
+    """Every operation that returns a stimulus must carry its units along"""
+    elec = Stimulus(np.ones((2, 3)), time=[0, 1, 2])
+    img = ImageStimulus(np.ones((3, 3)))
+    for stim, unit in [(elec, uA), (img, dimensionless)]:
+        produced = {
+            'deepcopy': deepcopy(stim),
+            'copy': stim._shallow_copy(),
+            'from stimulus': Stimulus(stim),
+            'multiply': stim * 2,
+            'divide': stim / 2,
+            'negate': -stim,
+            'add': stim + 1,
+            'subtract': stim - 1,
+            'rsub': 1 - stim,
+        }
+        if stim.time is not None:
+            produced['append'] = stim.append(stim >> 5)
+            produced['shift'] = stim >> 20
+            produced['shift back'] = stim << 1
+        for name, result in produced.items():
+            npt.assert_equal((name, result.unit), (name, unit))
+            npt.assert_equal((name, result.time_unit), (name, ms))
+        # compress and remove rewrite the data container in place:
+        for name, method, args in [('compress', 'compress', ()),
+                                   ('remove', 'remove', (0,))]:
+            mutated = deepcopy(stim)
+            getattr(mutated, method)(*args)
+            npt.assert_equal((name, mutated.unit), (name, unit))
+            npt.assert_equal((name, mutated.time_unit), (name, ms))
+    # A collection inherits the unit its members agree on:
+    npt.assert_equal(Stimulus([BiphasicPulseTrain(20, 10, 0.45)]).unit, uA)
+    npt.assert_equal(
+        Stimulus({'A1': ImageStimulus(np.ones((1, 1)))}).unit, dimensionless)
+    # ... and refuses to guess when they disagree:
+    with pytest.raises(DimensionMismatchError):
+        Stimulus([ImageStimulus(np.ones((1, 1))),
+                  BiphasicPulseTrain(20, 10, 0.45)])
+
+
+def test_Stimulus_arithmetic_units():
+    stim = Stimulus(np.ones((2, 3)) * 100, time=[0, 1, 2])
+    # Adding an amplitude: a bare number means the stimulus own unit, and a
+    # quantity is converted into it.
+    npt.assert_almost_equal((stim + 500).data, (stim + 0.5 * mA).data)
+    npt.assert_almost_equal((stim - 500).data, (stim - 0.5 * mA).data)
+    npt.assert_almost_equal((500 - stim).data, (0.5 * mA - stim).data)
+    npt.assert_almost_equal((stim + 0.5 * mA).data, 600 * np.ones((2, 3)))
+    # Scaling: a plain number, or an explicitly dimensionless quantity.
+    npt.assert_almost_equal((stim * 2).data, (stim * (2 * dimensionless)).data)
+    npt.assert_almost_equal((stim / 2).data, 50 * np.ones((2, 3)))
+    # Shifting in time:
+    npt.assert_almost_equal((stim >> 20).time, (stim >> 0.02 * sec).time)
+    npt.assert_almost_equal((stim << 1).time, (stim << 1000 * us).time)
+    # A stimulus stays a stimulus: multiplying by a unit would make it a
+    # charge, and that is not something this class represents.
+    with pytest.raises(DimensionMismatchError):
+        stim * ms
+    with pytest.raises(DimensionMismatchError):
+        stim * (2 * ms)
+    with pytest.raises(DimensionMismatchError):
+        stim / (2 * ms)
+    # Nor can a time be added to a current, or a current to gray levels:
+    with pytest.raises(DimensionMismatchError):
+        stim + 5 * ms
+    with pytest.raises(DimensionMismatchError):
+        stim >> 5 * uA
+    with pytest.raises(DimensionMismatchError):
+        ImageStimulus(np.ones((2, 2))) + 5 * uA
+
+
+def test_Stimulus_append_units():
+    # `append` copies `self` and concatenates `other`'s data onto its own, so
+    # without a check the result would label another stimulus' numbers with
+    # this one's unit.
+    elec = Stimulus(np.ones((1, 3)), time=[0, 1, 2])
+    dimless = Stimulus(VideoStimulus(np.ones((1, 1, 3)), time=[0, 1, 2]))
+    npt.assert_equal(elec.unit, uA)
+    npt.assert_equal(dimless.unit, dimensionless)
+    with pytest.raises(DimensionMismatchError):
+        elec.append(dimless)
+    with pytest.raises(DimensionMismatchError):
+        dimless.append(elec)
+    # Two stimuli that do agree still append, and keep the unit:
+    combined = elec.append(elec >> 3)
+    npt.assert_equal(combined.unit, uA)
+    npt.assert_equal(combined.time_unit, ms)
+    npt.assert_equal(dimless.append(dimless >> 3).unit, dimensionless)
+
+
+def test_Stimulus_getitem_units():
+    stim = Stimulus(np.arange(10, dtype=float).reshape((1, -1)),
+                    time=np.arange(10, dtype=float))
+    # A requested time point can be given in any unit of time:
+    npt.assert_almost_equal(stim[:, 3.45], stim[:, 3.45 * ms])
+    npt.assert_almost_equal(stim[:, 3.45], stim[:, 0.00345 * sec])
+    # As can a list of them...
+    npt.assert_almost_equal(stim[:, [1, 2]], stim[:, [1, 2] * ms])
+    npt.assert_almost_equal(stim[:, [1, 2]], stim[:, [1 * ms, 2 * ms]])
+    # ...and the endpoints and step of a slice:
+    npt.assert_almost_equal(stim[:, 1:3:1],
+                            stim[:, 0.001 * sec:0.003 * sec:1 * ms])
+    npt.assert_almost_equal(stim[:, 1:3:1], stim[:, 1 * ms:3 * ms:1000 * us])
+    # Interpolation still happens where it always did:
+    npt.assert_almost_equal(stim[:, 3.45 * ms], 3.45, decimal=5)
+    # The other indexing forms are untouched:
+    npt.assert_almost_equal(stim[:, stim.time < 2].ravel(), [0, 1])
+    npt.assert_equal(stim[:, ...].shape, (1, 10))
+    # A current is not a point in time:
+    with pytest.raises(DimensionMismatchError):
+        stim[:, 3 * uA]
+    with pytest.raises(DimensionMismatchError):
+        stim[:, [1, 2] * uA]
+    with pytest.raises(DimensionMismatchError):
+        stim[:, 1 * uA:3 * uA:1 * uA]
+
+
+def test_Stimulus_plot_units():
+    stim = Stimulus(np.arange(10, dtype=float).reshape((1, -1)),
+                    time=np.arange(10, dtype=float))
+    # A range or a list of time points may be unitful:
+    npt.assert_equal(isinstance(stim.plot(time=(1 * ms, 3 * ms)), Subplot),
+                     True)
+    npt.assert_equal(isinstance(stim.plot(time=[1, 2] * ms), Subplot), True)
+    with pytest.raises(DimensionMismatchError):
+        stim.plot(time=(1 * uA, 3 * uA))
+    # The y axis says what the stimulus is actually made of:
+    npt.assert_equal(stim.plot().figure.texts[-1].get_text(),
+                     r'Amplitude ($\mu$A)')
+    npt.assert_equal(stim.plot().figure.texts[-2].get_text(), 'Time (ms)')
+    dimless = Stimulus(VideoStimulus(np.ones((1, 1, 3)), time=[0, 1, 2]))
+    npt.assert_equal(dimless.plot().figure.texts[-1].get_text(), 'Value')
+    plt.close('all')
+
+
+def test_Stimulus_time_slice():
+    """A slice of the time axis means the same thing everywhere
+
+    Slicing the time axis asks for a time *range*, which `__getitem__`
+    interpolates onto. `plot` has to resolve it the same way, or the curve
+    would be drawn against whatever time points happen to sit at those column
+    indices.
+    """
+    # A ramp whose value equals its time, so a wrong x axis is visible:
+    stim = Stimulus(np.arange(10, dtype=float).reshape((1, -1)),
+                    time=np.arange(10, dtype=float))
+    expected = np.arange(1, 4, 0.5)
+    npt.assert_almost_equal(stim[:, 1:4:0.5].ravel(), expected)
+    ax = stim.plot(time=slice(1, 4, 0.5))
+    x, y = ax.lines[0].get_data()
+    npt.assert_almost_equal(x, expected)
+    npt.assert_almost_equal(y, expected)
+    plt.close('all')
+    # The endpoints and the step may be quantities, in both APIs:
+    npt.assert_almost_equal(stim[:, 1 * ms:4 * ms:0.5 * ms].ravel(), expected)
+    npt.assert_almost_equal(
+        stim[:, 0.001 * sec:0.004 * sec:500 * us].ravel(), expected)
+    ax = stim.plot(time=slice(1 * ms, 4 * ms, 0.5 * ms))
+    npt.assert_almost_equal(ax.lines[0].get_data()[0], expected)
+    plt.close('all')
+    with pytest.raises(DimensionMismatchError):
+        stim.plot(time=slice(1 * uA, 4 * uA, 1 * uA))
+    # A slice without a step is the stored samples themselves, taken by
+    # position -- the one reading that needs no interpolation:
+    ax = stim.plot(time=slice(None))
+    npt.assert_almost_equal(ax.lines[0].get_data()[0], stim.time)
+    npt.assert_almost_equal(stim[:, :].ravel(), stim.data.ravel())
+    plt.close('all')
+    # And a partial slice with no step is refused identically by both:
+    for call in (lambda: stim[:, 1:4], lambda: stim.plot(time=slice(1, 4))):
+        with pytest.raises(ValueError):
+            call()
+
+
+def test_Stimulus_is_charge_balanced_needs_a_current():
+    """Gray levels integrate to a number, but that number is not a charge"""
+    # Not applicable, which is not the same as unbalanced:
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    vid = VideoStimulus(np.ones((2, 2, 3)) * 0.5, time=[0, 20, 40])
+    for stim in (img, vid, Stimulus(img), Stimulus(vid)):
+        npt.assert_equal(stim.is_charge_balanced, None)
+    # A dimensionless stimulus whose values happen to sum to zero is still not
+    # "balanced" -- there is nothing there to balance:
+    zeros = Stimulus(VideoStimulus(np.zeros((1, 1, 3)), time=[0, 1, 2]))
+    npt.assert_equal(zeros.unit, dimensionless)
+    npt.assert_equal(zeros.is_charge_balanced, None)
+    # Electrical stimuli answer exactly as they always have:
+    npt.assert_equal(BiphasicPulse(50, 0.45).is_charge_balanced, True)
+    npt.assert_equal(MonophasicPulse(50, 0.45).is_charge_balanced, False)
+    npt.assert_equal(BiphasicPulseTrain(20, 50, 0.45).is_charge_balanced, True)
+    npt.assert_equal(Stimulus([0]).is_charge_balanced, True)
+    npt.assert_equal(Stimulus([1]).is_charge_balanced, False)
+    npt.assert_equal((50 * uA * 0 + Stimulus([0])).is_charge_balanced, True)
+    # Pretty-printing evaluates the property, so it must not raise on a
+    # picture:
+    for stim in (img, vid):
+        npt.assert_equal('is_charge_balanced' in str(stim), True)

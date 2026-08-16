@@ -10,6 +10,7 @@ from ..ensemble import EnsembleImplant
 from ..electrodes import Electrode
 from ..electrode_arrays import ElectrodeArray
 from ..base import ProsthesisSystem
+from ...units import as_value, dva, um
 from ...utils import parse_3d_orient
 
 
@@ -25,9 +26,11 @@ class EllipsoidElectrode(Electrode):
         Parameters
         ----------
         x, y, z : float
-            Coordinates of the electrode.
+            Coordinates (um) of the electrode.
         rx, ry, rz : float
-            Radii of the ellipsoid along the x, y, and z axes.
+            Radii (um) of the ellipsoid along the x, y, and z axes.
+            Lengths may be given as unitful quantities (e.g. ``7 * um``); see
+            :py:mod:`pulse2percept.units`.
         orient : np.ndarray with shape (3) or (3, 3)
             Orientation of the thread in 3D space. 
             orient defaults to positive z direction
@@ -43,6 +46,11 @@ class EllipsoidElectrode(Electrode):
               point in the direction after being rotated by this matrix)
         """
         super().__init__(x, y, z, name=name, activated=activated)
+        # The three radii are plotted and swept over below, so they are
+        # normalized here; the location is handled by Electrode:
+        rx = as_value(rx, um, 'rx')
+        ry = as_value(ry, um, 'ry')
+        rz = as_value(rz, um, 'rz')
         self.rx = rx
         self.ry = ry
         self.rz = rz
@@ -127,8 +135,8 @@ class LinearEdgeThread(NeuralinkThread):
         Parameters
         ----------
         x, y, z : float
-            Coordinates of the thread insertion point on the surface of the cortex.
-            z is optional and defaults to 0.
+            Coordinates (um) of the thread insertion point on the surface of
+            the cortex. z is optional and defaults to 0.
         orient : np.ndarray with shape (3) or (3, 3) 
             Orientation of the thread in 3D space. 
 
@@ -143,19 +151,34 @@ class LinearEdgeThread(NeuralinkThread):
               point in the direction after being rotated by this matrix)
 
         r : float
-            Radius of the thread.
+            Radius (um) of the thread.
         n_elecs : int
             Number of electrodes along the thread.
         spacing : float
-            Spacing between electrodes along the thread.
+            Spacing (um) between electrodes along the thread.
         insertion_depth : float
-            Distance into cortex where electrodes start. Thread is assumed
+            Distance (um) into cortex where electrodes start. Thread is assumed
             to end at insertion_depth + n_elecs*spacing
         electrode : Electrode
             Electrode class to use for the individual electrodes.
             Must accept x, y, z, and orient parameters, and contain a plot_patch
             and plot_kwargs if dim=2 or a plot_3d method if dim=3.
+
+        Notes
+        -----
+        *  Lengths may be given as plain numbers of microns or as unitful
+           quantities (e.g. ``spacing=50 * um``, ``insertion_depth=1 * mm``).
+           See :py:mod:`pulse2percept.units`.
         """
+        # This thread computes its own electrode positions -- it walks down
+        # the insertion direction in steps of `spacing` -- so every length it
+        # is given is normalized before any of that arithmetic:
+        x = as_value(x, um, 'x')
+        y = as_value(y, um, 'y')
+        z = as_value(z, um, 'z')
+        r = as_value(r, um, 'r')
+        spacing = as_value(spacing, um, 'spacing')
+        insertion_depth = as_value(insertion_depth, um, 'insertion_depth')
         self.x, self.y, self.z = x, y, z
         self.loc = np.array([x, y, z])
         self.r = r
@@ -255,15 +278,17 @@ class Neuralink(EnsembleImplant):
         vfmap : p2p.topography.NeuropythyMap
             Visual field map to create implant from.
         locs : np.ndarray with shape (n, 2), optional
-            Array of visual field locations to create threads at. Not
+            Array of visual field locations (dva) to create threads at. Not
             needed if using xrange, yrange, and xystep.
         xrange, yrange: tuple of floats, optional
-            Range of x and y coordinates to create threads at.
+            Range of x and y coordinates (dva) to create threads at.
         xystep : float, optional
-            Spacing between threads. 
+            Spacing (dva) between threads.
         rand_insertion_angle : float, optional
             If not none, insert threads at a random offset from perpendicular,
             with a maximum azimuthal rotation of rand_insertion_angle degrees.
+            A plain rotation in degrees, not a unitful quantity: ``dva``
+            measures visual angle, which is a different thing.
         region : str, optional
             Region of cortex to create implant in.
         Thread : NeuralinkThread, optional
@@ -274,12 +299,28 @@ class Neuralink(EnsembleImplant):
         -------
         Neuralink : p2p.implants.Neuralink
             Neuralink ensemble implant created from the visual field map.
+
+        Notes
+        -----
+        *  Thread locations are visual field coordinates, so they may be given
+           as plain numbers of degrees or as unitful quantities (e.g.
+           ``xrange=(-3 * dva, 3 * dva)``). The thread geometry itself is in
+           microns; see
+           :py:class:`~pulse2percept.implants.cortex.LinearEdgeThread`. See
+           :py:mod:`pulse2percept.units`.
         """
         # import at runtime to avoid circular imports
         from ...topography import NeuropythyMap, Grid2D
         if not isinstance(vfmap, NeuropythyMap):
             raise TypeError("vfmap must be a p2p.topography.NeuropythyMap")
-        
+
+        # Where in the *visual field* each thread goes; `vfmap` turns that
+        # into a place on the cortical surface below:
+        locs = as_value(locs, dva, 'locs')
+        xrange = as_value(xrange, dva, 'xrange')
+        yrange = as_value(yrange, dva, 'yrange')
+        xystep = as_value(xystep, dva, 'xystep')
+
         if locs is None:
             if xrange is None:
                 xrange = (-3, 3)

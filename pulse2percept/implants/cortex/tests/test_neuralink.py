@@ -1,6 +1,8 @@
 from string import ascii_uppercase
 
 import numpy.testing as npt
+from pulse2percept.units import (DimensionMismatchError, Quantity, dva,
+                                 mm, ms, uA, um)
 import numpy as np
 import pytest
 import matplotlib.pyplot as plt
@@ -572,3 +574,25 @@ def test_Neuralink_from_cortical_map_neuropythy():
                             points)
     npt.assert_almost_equal([t.direction for t in nlink.implants.values()],
                             directions)
+
+
+def test_LinearEdgeThread_units():
+    """A thread walks down its own insertion direction, so it normalizes too"""
+    bare = LinearEdgeThread(1000., -500., 0., r=5., n_elecs=8, spacing=50.,
+                            insertion_depth=100.)
+    unitful = LinearEdgeThread(1 * mm, -0.5 * mm, 0 * um, r=5 * um, n_elecs=8,
+                               spacing=0.05 * mm, insertion_depth=0.1 * mm)
+    npt.assert_allclose(unitful.earray.coordinates(),
+                        bare.earray.coordinates(), rtol=1e-12)
+    for attr in ('x', 'y', 'z', 'r', 'spacing', 'insertion_depth'):
+        npt.assert_equal(isinstance(getattr(unitful, attr), Quantity), False)
+    npt.assert_allclose(unitful.thread_length, bare.thread_length, rtol=1e-12)
+    # The electrode's own radii, too:
+    elec = EllipsoidElectrode(rx=0.007 * mm, ry=7 * um, rz=0.012 * mm)
+    npt.assert_allclose([elec.rx, elec.ry, elec.rz], [7, 7, 12], rtol=1e-12)
+    for kwargs in ({'x': 5 * ms}, {'r': 10 * uA}, {'spacing': 1 * ms},
+                   {'insertion_depth': 2 * dva}):
+        with pytest.raises(DimensionMismatchError):
+            LinearEdgeThread(**kwargs)
+    with pytest.raises(DimensionMismatchError):
+        EllipsoidElectrode(rx=1 * ms)

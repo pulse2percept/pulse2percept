@@ -10,6 +10,7 @@ import logging
 from skimage import img_as_ubyte
 from skimage.transform import resize
 
+from ..units import DimensionMismatchError, Quantity, Unit, as_value, ms
 from ..utils import Data, HTMLAnimation, frame_interval, sample
 from ..utils.constants import VIDEO_BLOCK_SIZE
 
@@ -29,7 +30,9 @@ class Percept(Data):
     space : :py:class:`~pulse2percept.topography.Grid2D`, optional
         A grid object specifying the (x,y) coordinates in space
     time : 1D array, optional
-        A list of time points
+        A list of time points, expressed in ``time_unit``. May be given as a
+        unitful quantity (e.g. ``[0, 0.01] * s``), which is converted into
+        ``time_unit`` rather than changing it.
     metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.
     n_gray : int, optional
@@ -41,12 +44,51 @@ class Percept(Data):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
+    time_unit : :py:class:`~pulse2percept.units.Unit`, optional
+        The unit ``time`` is stored in. Bare numbers passed as ``time`` are
+        assumed to already be expressed in this unit; unitful ones are
+        converted into it. A model-created percept records the model's own
+        :py:attr:`~pulse2percept.models.BaseModel.time_unit` here, which is
+        what lets its time axis cross into another model correctly.
+
+        .. versionadded:: 0.10.0
+
+    Notes
+    -----
+    .. versionchanged:: 0.10.0
+
+        The time axis is unit-aware (see ``time_unit`` above). ``data`` is
+        not: a percept is perceived brightness in arbitrary units, which is
+        model output rather than a physical quantity.
+
+    Examples
+    --------
+    A time axis given in seconds is stored in the percept's own unit, so
+    these two are the same percept:
+
+    >>> import numpy as np
+    >>> from pulse2percept.percepts import Percept
+    >>> from pulse2percept.units import s
+    >>> data = np.zeros((3, 3, 2))
+    >>> Percept(data, time=[0.0, 10.0]).time
+    array([ 0., 10.])
+    >>> Percept(data, time=[0, 0.01] * s).time
+    array([ 0., 10.])
+
     """
 
     def __init__(self, data, space=None, time=None, metadata=None, n_gray=None,
-                 noise=None):
+                 noise=None, time_unit=ms):
         # import at runtime to avoid circular import
         from ..topography import Grid2D
+        if not isinstance(time_unit, Unit):
+            raise TypeError(f"'time_unit' must be a Unit object, not "
+                            f"{type(time_unit)}.")
+        if time_unit.dimension != ms.dimension:
+            raise DimensionMismatchError(
+                f"'time_unit' must be a unit of time (e.g. ms, s), not "
+                f"{time_unit.dimension.name} ({time_unit}).")
+        self._time_unit = time_unit
         data = deepcopy(data)
         xdva = None
         ydva = None
@@ -78,6 +120,7 @@ class Percept(Data):
                 xi, yi = np.unravel_index(idx_noise[n_noise//2:n_noise],
                                           data.shape[:2])
                 data[xi, yi, t] = vmax
+        time = as_value(time, self._time_unit, 'time')
         if time is not None:
             time = np.array([time]).flatten()
         self._internal = {
@@ -88,6 +131,64 @@ class Percept(Data):
 
     def __get_item__(self, key):
         return self.data[key]
+
+    @property
+    def time_unit(self):
+        """The unit ``time`` is expressed in
+
+        Milliseconds unless the percept was built with a different
+        ``time_unit``. Read-only: the stored numbers mean what they meant when
+        they were written down. Ask for another unit with
+        :py:meth:`~pulse2percept.percepts.Percept.times`.
+
+        .. versionadded:: 0.10.0
+
+        """
+        return self._time_unit
+
+    @property
+    def time_quantity(self):
+        """The time axis with its unit attached, or None
+
+        .. versionadded:: 0.10.0
+
+        """
+        if self.time is None:
+            return None
+        return Quantity(self.time, self.time_unit)
+
+    def times(self, unit=None):
+        """The time axis, expressed in ``unit``
+
+        .. versionadded:: 0.10.0
+
+        Parameters
+        ----------
+        unit : :py:class:`~pulse2percept.units.Unit`, optional
+            The unit to express the time axis in. If None, ``time`` is
+            returned as it is stored.
+
+        Returns
+        -------
+        times : np.ndarray or None
+            An ordinary NumPy array, never a
+            :py:class:`~pulse2percept.units.Quantity`, or None if the percept
+            has no time component.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from pulse2percept.percepts import Percept
+        >>> from pulse2percept.units import s
+        >>> Percept(np.zeros((3, 3, 2)), time=[0, 20.0]).times(s)
+        array([0.  , 0.02])
+
+        """
+        if self.time is None:
+            return None
+        if unit is None:
+            return self.time
+        return self.time_quantity.to_value(unit)
 
     def argmax(self, axis=None):
         """Return the indices of the maximum values along an axis
@@ -201,7 +302,7 @@ class Percept(Data):
         if self.xdva is None and self.ydva is None and self.time is not None:
             # Special case of a purely temporal percept:
             ax.plot(self.time, self.data.squeeze(), linewidth=2, **kwargs)
-            ax.set_xlabel('time ms)')
+            ax.set_xlabel(f'time ({self.time_unit})')
             ax.set_ylabel('Perceived brightness (a.u.)')
             return ax
 
@@ -263,8 +364,9 @@ class Percept(Data):
             Whether the animation should repeat when the sequence of frames is
             completed.
         annotate_time : bool, optional
-            If True, the time of the frame will be shown as t = X ms in the
-            title of the panel.
+            If True, the time of the frame will be shown as t = X in the title
+            of the panel, in the percept's
+            :py:attr:`~pulse2percept.percepts.Percept.time_unit`.
         ax : matplotlib.axes.AxesSubplot, optional
             A Matplotlib axes object. If None, will create a new Axes object
         colorbar : {True, False}
@@ -298,7 +400,8 @@ class Percept(Data):
         """
         def update(data):
             if annotate_time:
-                mat.axes.set_title(f't = {self.time[self._next_frame - 1]:.2f} ms')
+                t = self.time[self._next_frame - 1]
+                mat.axes.set_title(f't = {t:.2f} {self.time_unit}')
             mat.set_data(data)
             return mat
 
@@ -338,9 +441,13 @@ class Percept(Data):
         # that it can render the HTML player without going through Matplotlib:
         labels = None
         if annotate_time:
-            labels = [f't = {t:.2f} ms' for t in self.time]
+            labels = [f't = {t:.2f} {self.time_unit}' for t in self.time]
+        # The label is in the percept's unit, but the delay between two frames
+        # is wall-clock time and `frame_interval` counts it in milliseconds:
+        # a percept at [0, 20, 40] ms and one at [0, .02, .04] s play at the
+        # same real speed.
         return HTMLAnimation(fig, update, data_gen, repeat=repeat,
-                             interval=frame_interval(self.time, fps=fps),
+                             interval=frame_interval(self.times(ms), fps=fps),
                              save_count=len(self.time), image=mat,
                              frame_data=self.data, labels=labels, fmt=fmt)
 
@@ -403,7 +510,10 @@ class Percept(Data):
             # With time component, store as a movie. A single-frame percept
             # has no frame rate of its own, but can still be written out:
             if fps is None:
-                fps = 1000.0 / frame_interval(self.time, tol=1e-6)
+                # In milliseconds, whatever the percept counts in: frames per
+                # second is a wall-clock rate, not a number in the percept's
+                # own unit.
+                fps = 1000.0 / frame_interval(self.times(ms), tol=1e-6)
             # Note, for most codecs, the image dimensions must be divisible by
             # 16 the default for the VIDEO_BLOCK_SIZE is 16. Check if image is
             # divisible, if not have ffmpeg upsize to nearest size and warn

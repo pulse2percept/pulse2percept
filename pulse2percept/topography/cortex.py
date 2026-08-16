@@ -5,7 +5,9 @@ import numpy as np
 from abc import abstractmethod
 
 from .base import VisualFieldMap
+from ..units import dva, mm, um
 from ..utils import pol2cart, cart2pol
+from ..utils.constants import UM_PER_MM
 import matplotlib.pyplot as plt
 
 
@@ -54,6 +56,12 @@ class CorticalMap(VisualFieldMap):
         }
         return {**super().get_default_params(),**params}
 
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # Cortical coordinates are stored in microns, and the offset shifts
+        # one hemisphere's x coordinates:
+        return {**super().get_param_units(), 'left_offset': um}
+
     @abstractmethod
     def dva_to_v1(self, x, y):
         """Convert degrees visual angle (dva) to V1 coordinates (um)"""
@@ -97,6 +105,14 @@ class Polimeni2006Map(CorticalMap):
             'jitter_boundary' : True,
         }
         return {**base_params, **params}
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # The Schwartz log map is written in millimeters of cortex and
+        # degrees of eccentricity, and its output is scaled to microns at the
+        # end of `dva_to_v1` and friends. `alpha1`-`alpha3` are the shear
+        # factors of the three regions, which are ratios:
+        return {**super().get_param_units(), 'k': mm, 'a': dva, 'b': dva}
 
     def _invert_left_pol(self, theta, radius, inverted = None):
         """
@@ -300,8 +316,10 @@ class Polimeni2006Map(CorticalMap):
             ax.plot(x[i, :], y[i, :], 'red', linewidth=1)
         
 
-        ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
-        ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
+        # Coordinates are stored in microns, but a cortical map is worth
+        # reading in millimeters:
+        ax.set_xticklabels(np.array(ax.get_xticks()) / UM_PER_MM)
+        ax.set_yticklabels(np.array(ax.get_yticks()) / UM_PER_MM)
         ax.set_xlabel('x (mm)')
         ax.set_ylabel('y (mm)')
         ax.legend()

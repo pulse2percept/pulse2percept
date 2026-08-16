@@ -9,6 +9,8 @@ from .electrodes import Electrode, DiskElectrode
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from .rasters import Raster
 from ..stimuli import Stimulus, ImageStimulus, VideoStimulus
+from ..stimuli.base import _describe_unit
+from ..units import DimensionMismatchError, as_value, uA, um
 from ..utils import PrettyPrint
 
 
@@ -39,6 +41,8 @@ class ProsthesisSystem(PrettyPrint):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
+        Safety is an electrical property, so this also requires the stimulus
+        to be measured in units of current.
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
         How the stimulator takes turns between electrodes that it cannot drive
         at the same time. If None, every electrode may fire at once.
@@ -48,6 +52,9 @@ class ProsthesisSystem(PrettyPrint):
         The total current (uA) the stimulator can source at any one instant,
         summed over all electrodes. If given, assigning a stimulus that exceeds
         it raises. If None, no such check is performed.
+
+        May be given as a plain number of microamps or as a unitful quantity
+        (e.g. ``0.1 * mA``); see :py:mod:`pulse2percept.units`.
 
         .. versionadded:: 0.10.0
 
@@ -120,17 +127,41 @@ class ProsthesisSystem(PrettyPrint):
     @max_current.setter
     def max_current(self, max_current):
         """Current limit setter (called upon ``self.max_current = ...``)"""
+        max_current = as_value(max_current, uA, 'max_current')
         if max_current is not None and max_current <= 0:
             raise ValueError("'max_current' must be positive.")
         self._max_current = max_current
 
     @staticmethod
-    def _require_charge_balanced(stim):
-        # Stimuli without a time component return None, others return True/False
+    def _require_current_stim(stim, check):
+        """Refuse to run an electrical safety check on something that isn't
+
+        Called by each check rather than by ``check_stim``, because an implant
+        with no current limit and no safe mode is not asking an electrical
+        question at all, and a dimensionless stimulus is free to pass through
+        it on its way to a preprocessing step.
+        """
+        if stim.unit.dimension != uA.dimension:
+            raise DimensionMismatchError(
+                f"Safety check '{check}' needs an electrical stimulus to "
+                f"check, and this one is measured in "
+                f"{_describe_unit(stim.unit)}. Encode it into current first "
+                f"(see pulse2percept.stimuli.Encoder), or give the implant a "
+                f"'preprocess' function that does.")
+
+    @classmethod
+    def _require_charge_balanced(cls, stim):
+        cls._require_current_stim(stim, 'safe_mode')
+        # `is False` rather than `not`: the property answers None when the
+        # question does not apply, which the guard above has already ruled out
+        # here but which must never be read as "unbalanced".
         if stim.is_charge_balanced is False:
             raise ValueError("Safety check: Stimulus must be charge-balanced.")
 
     def _require_within_current_limit(self, stim):
+        # Before the empty-data fast path: an empty dimensionless stimulus is
+        # just as much the wrong kind of thing as a full one.
+        self._require_current_stim(stim, 'max_current')
         # What the stimulator has to source at an instant is the sum over every
         # electrode active at that instant, whatever the sign of each:
         if stim.data.size == 0:
@@ -156,6 +187,14 @@ class ProsthesisSystem(PrettyPrint):
         that are charge-balanced. If ``max_current`` is set, it will only allow
         stimuli whose total instantaneous current stays within it.
 
+        Both are questions about electricity, and neither can be answered about
+        a stimulus that is not a current, so each raises a
+        :py:class:`~pulse2percept.units.DimensionMismatchError` on one. An
+        implant that asks for neither does not run either check, which is why a
+        dimensionless stimulus may still be assigned to one -- ``preprocess``
+        has already had its chance to turn it into current, and if it did not,
+        no safety claim is being made about it either.
+
         The user can define their own checks in implants that inherit from
         :py:class:`~pulse2percept.implants.ProsthesisSystem`.
 
@@ -165,6 +204,18 @@ class ProsthesisSystem(PrettyPrint):
             A valid source type for the
             :py:class:`~pulse2percept.stimuli.Stimulus` object (e.g., scalar,
             NumPy array, pulse train).
+
+        Raises
+        ------
+        DimensionMismatchError
+            If an electrical check was requested and ``stim`` is not measured
+            in units of current.
+
+        .. versionchanged:: 0.10.0
+            The electrical checks verify that the stimulus really is
+            electrical, instead of reading whatever numbers it holds as
+            microamps.
+
         """
         if self.safe_mode:
             self._require_charge_balanced(stim)
@@ -203,9 +254,9 @@ class ProsthesisSystem(PrettyPrint):
             # Convert to grayscale:
             img = stim.rgb2gray()
 
-            # Extract electrode coordinates
-            x = np.array([e.x for e in self.electrode_objects])
-            y = np.array([e.y for e in self.electrode_objects])
+            # Extract electrode coordinates, in the same units the image grid
+            # below is laid out in:
+            x, y = self.earray.coordinates(um)[:, :2].T
 
             # Define image coordinate space
             if isinstance(stim, ImageStimulus):
@@ -234,8 +285,9 @@ class ProsthesisSystem(PrettyPrint):
             )
             pixel_values = interpolator(np.vstack((y, x)).T)
 
-            return Stimulus(pixel_values, electrodes=self.electrode_names,
-                            time=stim.time, metadata=stim.metadata)
+            return Stimulus(
+                pixel_values, electrodes=self.electrode_names,
+                time=stim.time, metadata=stim.metadata)._inherit_units(stim)
         
         else:
             raise ValueError(
@@ -462,15 +514,15 @@ class RectangleImplant(ProsthesisSystem):
     Parameters
     ----------
     x, y, z : float, optional
-        The x, y, z coordinates of the center of the implant
+        The x, y, z coordinates (um) of the center of the implant
     rot : float, optional
         The rotation of the implant in degrees
     shape : tuple, optional
         The number of rows and columns in the implant
     r : float, optional
-        The radius of the implant
+        The electrode radius (um)
     spacing : float, optional
-        The distance between electrodes in the implant
+        The distance (um) between electrodes in the implant
     eye : str, optional
         The eye in which the implant is implanted
     stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
@@ -479,6 +531,12 @@ class RectangleImplant(ProsthesisSystem):
         Whether to preprocess the stimulus
     safe_mode : bool, optional
         Whether to enforce charge balance
+
+    Notes
+    -----
+    *  Lengths may be given as plain numbers of microns or as unitful
+       quantities (e.g. ``spacing=0.4 * mm``). See
+       :py:mod:`pulse2percept.units`.
 
     """
     def __init__(self, x=0, y=0, z=0, rot=0, shape=(15, 15), r=150./2, spacing=400., eye='RE', stim=None,

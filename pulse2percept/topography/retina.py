@@ -8,6 +8,7 @@ from abc import abstractmethod
 import scipy.stats as spst
 
 from .base import VisualFieldMap
+from ..units import Quantity, mm, um
 from ..utils.geometry import cart2pol, pol2cart
 
 
@@ -78,7 +79,10 @@ class Watson2014Map(RetinalMap):
         """
         phi_um, r_um = cart2pol(x_um, y_um)
         sign = np.sign(r_um)
-        r_mm = 1e-3 * np.abs(r_um)
+        # Eq. A6 is fitted in millimeters; `tissue_unit` is microns. One
+        # conversion per call, on the whole array at once, and the polynomial
+        # below stays plain floats:
+        r_mm = Quantity(np.abs(r_um), um).to_value(mm)
         r_deg = 3.556 * r_mm + 0.05993 * r_mm ** 2 - 0.007358 * r_mm ** 3
         r_deg += 3.027e-4 * r_mm ** 4
         r_deg *= sign
@@ -115,7 +119,8 @@ class Watson2014Map(RetinalMap):
         sign = np.sign(r_deg)
         r_deg = np.abs(r_deg)
         r_mm = 0.268 * r_deg + 3.427e-4 * r_deg ** 2 - 8.3309e-6 * r_deg ** 3
-        r_um = 1e3 * r_mm * sign
+        # Eq. A5 gives millimeters; `tissue_unit` is microns:
+        r_um = Quantity(r_mm, mm).to_value(um) * sign
 
         # flip y axis
         phi_deg *= -1

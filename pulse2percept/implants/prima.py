@@ -14,6 +14,7 @@ from collections.abc import Sequence
 from .base import ProsthesisSystem
 from .electrodes import HexElectrode
 from .electrode_arrays import ElectrodeGrid
+from ..units import as_value, um
 
 
 class PhotovoltaicPixel(HexElectrode):
@@ -31,13 +32,18 @@ class PhotovoltaicPixel(HexElectrode):
         Positive ``z`` values move the electrode away from the retina into the
         vitreous humor (sometimes called electrode-retina distance).
     r : double
-        Disk radius in the x,y plane
+        Disk radius (um) in the x,y plane
     a : double
-        Length of line drawn from the center of the hexagon to the midpoint of
-        one of its sides.
+        Length (um) of line drawn from the center of the hexagon to the
+        midpoint of one of its sides.
     activated : bool
         To deactivate, set to ``False``. Deactivated electrodes cannot receive
         stimuli.
+
+    Notes
+    -----
+    *  Lengths may be given as plain numbers of microns or as unitful
+       quantities (e.g. ``14 * um``). See :py:mod:`pulse2percept.units`.
 
     """
     # Frozen class: User cannot add more class attributes
@@ -46,6 +52,7 @@ class PhotovoltaicPixel(HexElectrode):
     def __init__(self, x, y, z, r, a, name=None, activated=True):
         super(PhotovoltaicPixel, self).__init__(x, y, z, a, name=name,
                                                 activated=activated)
+        r = as_value(r, um, 'r')
         if isinstance(r, (Sequence, np.ndarray)):
             raise TypeError("Radius of the active electrode must be a scalar.")
         if r <= 0:
@@ -95,7 +102,7 @@ class PRIMA(ProsthesisSystem):
     Parameters
     ----------
     x/y/z : double
-        3D location of the center of the electrode array.
+        3D location (um) of the center of the electrode array.
         The coordinate system is centered over the fovea.
         Positive ``x`` values move the electrode into the nasal retina.
         Positive ``y`` values move the electrode into the superior retina.
@@ -103,6 +110,8 @@ class PRIMA(ProsthesisSystem):
         vitreous humor (sometimes called electrode-retina distance).
         ``z`` can either be a list with 378 entries or a scalar that is applied
         to all electrodes.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
     rot : float, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
@@ -136,6 +145,11 @@ class PRIMA(ProsthesisSystem):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
+
+        # Normalized here rather than in ElectrodeGrid, because a
+        # per-electrode list of heights never reaches the grid at all -- it is
+        # written onto the electrodes further down:
+        z = as_value(z, um, 'z')
 
         # The user might provide a list of z values for each of the
         # 378 resulting electrodes, not for the 22x19 initial ones.
@@ -194,7 +208,7 @@ class PRIMA75(ProsthesisSystem):
     Parameters
     ----------
     x/y/z : double
-        3D location of the center of the electrode array.
+        3D location (um) of the center of the electrode array.
         The coordinate system is centered over the fovea.
         Positive ``x`` values move the electrode into the nasal retina.
         Positive ``y`` values move the electrode into the superior retina.
@@ -202,6 +216,8 @@ class PRIMA75(ProsthesisSystem):
         vitreous humor (sometimes called electrode-retina distance).
         ``z`` can either be a list with 142 entries or a scalar that is applied
         to all electrodes.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
     rot : float, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
@@ -230,6 +246,11 @@ class PRIMA75(ProsthesisSystem):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
+
+        # Normalized here rather than in ElectrodeGrid, because a
+        # per-electrode list of heights never reaches the grid at all -- it is
+        # written onto the electrodes further down:
+        z = as_value(z, um, 'z')
 
         # The user might provide a list of z values for each of the
         # 378 resulting electrodes, not for the 22x19 initial ones.
@@ -296,7 +317,7 @@ class PRIMA55(ProsthesisSystem):
     Parameters
     ----------
     x/y/z : double
-        3D location of the center of the electrode array.
+        3D location (um) of the center of the electrode array.
         The coordinate system is centered over the fovea.
         Positive ``x`` values move the electrode into the nasal retina.
         Positive ``y`` values move the electrode into the superior retina.
@@ -304,6 +325,8 @@ class PRIMA55(ProsthesisSystem):
         vitreous humor (sometimes called electrode-retina distance).
         ``z`` can either be a list with 378 entries or a scalar that is applied
         to all electrodes.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
     rot : float, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
@@ -332,6 +355,11 @@ class PRIMA55(ProsthesisSystem):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
+
+        # Normalized here rather than in ElectrodeGrid, because a
+        # per-electrode list of heights never reaches the grid at all -- it is
+        # written onto the electrodes further down:
+        z = as_value(z, um, 'z')
 
         # The user might provide a list of z values for each of the
         # 378 resulting electrodes, not for the 22x19 initial ones.
@@ -403,7 +431,7 @@ class PRIMA40(ProsthesisSystem):
     Parameters
     ----------
     x/y/z : double
-        3D location of the center of the electrode array.
+        3D location (um) of the center of the electrode array.
         The coordinate system is centered over the fovea.
         Positive ``x`` values move the electrode into the nasal retina.
         Positive ``y`` values move the electrode into the superior retina.
@@ -411,6 +439,8 @@ class PRIMA40(ProsthesisSystem):
         vitreous humor (sometimes called electrode-retina distance).
         ``z`` can either be a list with 532 entries or a scalar that is applied
         to all electrodes.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
     rot : float, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
@@ -439,6 +469,11 @@ class PRIMA40(ProsthesisSystem):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
+
+        # Normalized here rather than in ElectrodeGrid, because a
+        # per-electrode list of heights never reaches the grid at all -- it is
+        # written onto the electrodes further down:
+        z = as_value(z, um, 'z')
 
         # The user might provide a list of z values for each of the
         # 378 resulting electrodes, not for the 22x19 initial ones.

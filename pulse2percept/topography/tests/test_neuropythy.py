@@ -8,6 +8,7 @@ from pulse2percept.models import ScoreboardModel as BeyelerScoreboard
 from pulse2percept.implants.cortex import Neuralink
 from pulse2percept.implants import EnsembleImplant
 from pulse2percept.topography import CorticalMap, NeuropythyMap
+from pulse2percept.units import (DimensionMismatchError, dva, mm, um)
 import time
 import os
 
@@ -495,5 +496,23 @@ def test_cortex_to_dva(regions, neuropythy_available):
         npt.assert_allclose(y, y2, rtol=.05, atol=0.1)
 
 
-
-    
+def test_NeuropythyMap_units():
+    """The FreeSurfer map converts between the same two sides as any other"""
+    vfmap = load_fsaverage_or_skip()
+    npt.assert_equal(vfmap.visual_unit, dva)
+    npt.assert_equal(vfmap.tissue_unit, um)
+    x, y = np.array([1.0, 3.0]), np.array([1.0, -2.0])
+    bare = vfmap.dva_to_v1(x, y)
+    npt.assert_allclose(vfmap.dva_to_v1(x * dva, y * dva), bare, rtol=1e-12)
+    # `surface=` is not a coordinate and travels through untouched:
+    npt.assert_allclose(vfmap.dva_to_v1(x * dva, y * dva, surface='pial'),
+                        vfmap.dva_to_v1(x, y, surface='pial'), rtol=1e-12)
+    # Back again, with the three coordinates spelled differently:
+    xc, yc, zc = bare
+    npt.assert_allclose(
+        vfmap.v1_to_dva((xc / 1000) * mm, yc * um, (zc / 1000) * mm),
+        vfmap.v1_to_dva(xc, yc, zc), rtol=1e-6)
+    with pytest.raises(DimensionMismatchError):
+        vfmap.dva_to_v1(x * um, y)
+    with pytest.raises(DimensionMismatchError):
+        vfmap.v1_to_dva(xc * dva, yc, zc)

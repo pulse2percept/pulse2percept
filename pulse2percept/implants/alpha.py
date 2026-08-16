@@ -6,6 +6,7 @@ from collections import OrderedDict
 from .base import ProsthesisSystem
 from .electrodes import SquareElectrode, DiskElectrode
 from .electrode_arrays import ElectrodeGrid
+from ..units import as_value, um
 
 
 class AlphaIMS(ProsthesisSystem):
@@ -34,7 +35,7 @@ class AlphaIMS(ProsthesisSystem):
     Parameters
     ----------
     x/y/z : double
-        3D location of the center of the electrode array.
+        3D location (um) of the center of the electrode array.
         The coordinate system is centered over the fovea.
         Positive ``x`` values move the electrode into the nasal retina.
         Positive ``y`` values move the electrode into the superior retina.
@@ -42,6 +43,8 @@ class AlphaIMS(ProsthesisSystem):
         vitreous humor (sometimes called electrode-retina distance).
         ``z`` can either be a list with 1500 entries or a scalar that is applied
         to all electrodes.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
     rot : float
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
@@ -88,6 +91,11 @@ class AlphaIMS(ProsthesisSystem):
         self.shape = (39, 39)
         elec_width = 50.0  # um
         e_spacing = 72.0  # um
+
+        # Normalized here rather than in ElectrodeGrid, because a per-electrode
+        # list of heights never reaches the grid at all -- it is written onto
+        # the electrodes further down:
+        z = as_value(z, um, 'z')
 
         # The user might provide a list of z values for each of the
         # 378 resulting electrodes, not for the 22x19 initial ones.
@@ -172,7 +180,7 @@ class AlphaAMS(ProsthesisSystem):
     Parameters
     ----------
     x/y/z : double
-        3D location of the center of the electrode array.
+        3D location (um) of the center of the electrode array.
         The coordinate system is centered over the fovea.
         Positive ``x`` values move the electrode into the nasal retina.
         Positive ``y`` values move the electrode into the superior retina.
@@ -180,6 +188,8 @@ class AlphaAMS(ProsthesisSystem):
         vitreous humor (sometimes called electrode-retina distance).
         ``z`` can either be a list with 1600 entries or a scalar that is applied
         to all electrodes.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
     rot : float
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate

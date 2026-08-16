@@ -9,8 +9,9 @@ from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
+from ..units import dva, um
 from ..utils import deprecated_alias
-from ..utils.constants import ZORDER
+from ..utils.constants import UM_PER_MM, ZORDER
 from ..topography import Watson2014Map
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
@@ -150,6 +151,10 @@ class ScoreboardSpatial(SpatialModel):
         params = {'rho': 100, 'vfmap': Watson2014Map()}
         return {**base_params, **params}
 
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        return {**super().get_param_units(), 'rho': um}
+
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
         if not np.allclose([e.z for e in earray.electrode_objects], 0):
@@ -158,11 +163,8 @@ class ScoreboardSpatial(SpatialModel):
             warnings.warn(msg)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        return fast_scoreboard(stim.data,
-                               np.array([earray[e].x for e in stim.electrodes],
-                                        dtype=np.float32),
-                               np.array([earray[e].y for e in stim.electrodes],
-                                        dtype=np.float32),
+        x_el, y_el, _ = self._electrode_coords(earray, stim)
+        return fast_scoreboard(self._stim_values(stim), x_el, y_el,
                                self.grid.ret.x.ravel(),
                                self.grid.ret.y.ravel(),
                                self.rho,
@@ -385,6 +387,14 @@ class AxonMapSpatial(SpatialModel):
             'vfmap': Watson2014Map()
         }
         return {**base_params, **params}
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # `axons_range` is a range of polar angles in degrees rather than a
+        # visual angle, and `ax_segments_range` a radial position in the
+        # Jansonius model's own coordinates, so neither is declared here:
+        return {**super().get_param_units(), 'rho': um, 'lam': um,
+                'loc_od': dva}
 
     def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
         """Grows a single axon bundle based on the model by Jansonius (2009)
@@ -933,11 +943,8 @@ class AxonMapSpatial(SpatialModel):
             warnings.warn(msg)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        return fast_axon_map(stim.data,
-                             np.array([earray[e].x for e in stim.electrodes],
-                                      dtype=np.float32),
-                             np.array([earray[e].y for e in stim.electrodes],
-                                      dtype=np.float32),
+        x_el, y_el, _ = self._electrode_coords(earray, stim)
+        return fast_axon_map(self._stim_values(stim), x_el, y_el,
                              self.axon_contrib,
                              self.axon_idx_start.astype(np.uint32),
                              self.axon_idx_end.astype(np.uint32),
@@ -1009,12 +1016,14 @@ class AxonMapSpatial(SpatialModel):
             units = 'microns'
             # Make sure we're filling the simulated area, rounded up/down,
             # but no smaller than (-5000, 5000):
+            # Rounded to whole millimeters, which is what the ticks below are
+            # spaced by:
             xmin, ymin = self.vfmap.dva_to_ret(self.xrange[0], self.yrange[0])
-            xmin = min(np.floor(xmin / 1000) * 1000, -5000)
-            ymin = min(np.floor(ymin / 1000) * 1000, -5000)
+            xmin = min(np.floor(xmin / UM_PER_MM) * UM_PER_MM, -5000)
+            ymin = min(np.floor(ymin / UM_PER_MM) * UM_PER_MM, -5000)
             xmax, ymax = self.vfmap.dva_to_ret(self.xrange[1], self.yrange[1])
-            xmax = max(np.ceil(xmax / 1000) * 1000, 5000)
-            ymax = max(np.ceil(ymax / 1000) * 1000, 5000)
+            xmax = max(np.ceil(xmax / UM_PER_MM) * UM_PER_MM, 5000)
+            ymax = max(np.ceil(ymax / UM_PER_MM) * UM_PER_MM, 5000)
             od_xy = self.vfmap.dva_to_ret(*self.loc_od)
             od_w = 1770
             od_h = 1880

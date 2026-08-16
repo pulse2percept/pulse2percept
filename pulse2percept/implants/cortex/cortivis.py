@@ -4,6 +4,7 @@ import numpy as np
 from ..base import ProsthesisSystem
 from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
+from ...units import as_value, um
 
 class Cortivis(ProsthesisSystem):
     """Create a Cortivis array
@@ -23,9 +24,11 @@ class Cortivis(ProsthesisSystem):
     Parameters
     ----------
     x/y/z : double
-        3D location of the center of the electrode array.
+        3D location (um) of the center of the electrode array.
         ``z`` can either be a list with 35 entries or a scalar that is applied
         to all electrodes.
+        May be given as unitful quantities (e.g. ``Cortivis(x=20 * mm)``); see
+        :py:mod:`pulse2percept.units`.
     rot : float
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
@@ -63,6 +66,8 @@ class Cortivis(ProsthesisSystem):
     # depth of shanks: 1.5mm
     def __init__(self, x=20000, y=-5000, z=0, rot=0, stim=None,
                  preprocess=False, safe_mode=False):
+        # Inspected and offset here, before the grid ever sees it:
+        z = as_value(z, um, 'z')
         if not np.isclose(z, 0):
             raise NotImplementedError
         self.preprocess = preprocess

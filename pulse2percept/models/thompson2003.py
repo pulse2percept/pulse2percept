@@ -5,6 +5,7 @@ import numpy as np
 import copy
 from ..utils import sample
 from ..topography import Curcio1990Map
+from ..units import um
 from ..models import Model, SpatialModel
 from ._thompson2003 import fast_thompson2003
 
@@ -75,6 +76,11 @@ class Thompson2003Spatial(SpatialModel):
                   'vfmap': Curcio1990Map()}
         return {**base_params, **params}
 
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # `dropout` is a count or a fraction of electrodes, not a length:
+        return {**super().get_param_units(), 'radius': um}
+
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
         if not np.allclose([e.z for e in earray.electrode_objects], 0):
@@ -93,11 +99,8 @@ class Thompson2003Spatial(SpatialModel):
                         t] = 255
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        return fast_thompson2003(stim.data,
-                                 np.array([earray[e].x for e in stim.electrodes],
-                                          dtype=np.float32),
-                                 np.array([earray[e].y for e in stim.electrodes],
-                                          dtype=np.float32),
+        x_el, y_el, _ = self._electrode_coords(earray, stim)
+        return fast_thompson2003(self._stim_values(stim), x_el, y_el,
                                  self.grid.ret.x.ravel(),
                                  self.grid.ret.y.ravel(),
                                  dropout.astype(np.uint8),

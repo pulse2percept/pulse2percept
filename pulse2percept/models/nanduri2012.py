@@ -6,6 +6,7 @@ from .base import Model, SpatialModel, TemporalModel
 from ._nanduri2012 import spatial_fast, temporal_fast
 from ..implants import ElectrodeArray, DiskElectrode
 from ..stimuli import Stimulus
+from ..units import ms
 
 
 class Nanduri2012Spatial(SpatialModel):
@@ -71,15 +72,13 @@ class Nanduri2012Spatial(SpatialModel):
         """Predicts the brightness at spatial locations"""
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        return spatial_fast(stim.data,
-                            np.array([earray[e].x for e in stim.electrodes],
-                                     dtype=np.float32),
-                            np.array([earray[e].y for e in stim.electrodes],
-                                     dtype=np.float32),
-                            np.array([earray[e].z for e in stim.electrodes],
-                                     dtype=np.float32),
-                            np.array([earray[e].r for e in stim.electrodes],
-                                     dtype=np.float32),
+        x_el, y_el, z_el = self._electrode_coords(earray, stim)
+        # The disk radius is a size rather than a coordinate, so it is read
+        # directly. `predict_percept` has already refused anything but disks:
+        r_el = np.ascontiguousarray([earray[e].r for e in stim.electrodes],
+                                    dtype=np.float32)
+        return spatial_fast(self._stim_values(stim), x_el, y_el, z_el,
+                            r_el,
                             self.grid.ret.x.ravel(),
                             self.grid.ret.y.ravel(),
                             self.atten_a,
@@ -167,10 +166,19 @@ class Nanduri2012Temporal(TemporalModel):
         }
         return {**base_params, **params}
 
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # Only the three time constants have a unit the model commits to; the
+        # sigmoid's asymptote, slope and shift act on brightness, and `eps`
+        # and `scale_out` are fitted scaling terms:
+        return {**super().get_param_units(), 'tau1': ms, 'tau2': ms,
+                'tau3': ms}
+
     def _predict_temporal(self, stim, t_percept):
         """Predict the temporal response"""
         # Pass the stimulus as a 2D NumPy array to the fast Cython function:
-        stim_data = stim.data.reshape((-1, len(stim.time)))
+        time = self._stim_times(stim)
+        stim_data = self._stim_values(stim).reshape((-1, len(time)))
         # Calculate at which simulation time steps we need to output a percept.
         # This is basically t_percept/self.dt, but we need to beware of
         # floating point rounding errors! 29.999 will be rounded down to 29 by
@@ -181,7 +189,7 @@ class Nanduri2012Temporal(TemporalModel):
                              f"of `dt`={self.dt:.2e}")
         # Cython returns a 2D (space x time) NumPy array:
         return temporal_fast(stim_data.astype(np.float32),
-                             stim.time.astype(np.float32),
+                             time.astype(np.float32),
                              idx_percept,
                              self.dt, self.tau1, self.tau2, self.tau3,
                              self.asymptote, self.shift, self.slope, self.eps,

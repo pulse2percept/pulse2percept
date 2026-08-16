@@ -3,7 +3,10 @@
 """
 
 import numpy as np
+import re
 from abc import ABCMeta, abstractmethod
+from functools import wraps
+from inspect import signature
 from scipy.spatial import ConvexHull
 # Using or importing the ABCs from 'collections' instead of from
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
@@ -14,8 +17,98 @@ from matplotlib.collections import PatchCollection
 import matplotlib as mpl
 from copy import copy, deepcopy
 
+from ..units import as_value, dva, um
+from ..units.base import has_units
 from ..utils.base import PrettyPrint, Parametrized
 from ..utils.constants import ZORDER
+
+
+def _rectangular_mesh(x_range, y_range, step):
+    """Lay a rectangular mesh of coordinates over a range
+
+    The mesh generator behind :py:class:`Grid2D`, kept separate from it
+    because a grid of coordinates is not by itself a grid of *visual field*
+    coordinates: :py:meth:`~pulse2percept.implants.EnsembleImplant.from_coords`
+    lays implants out on a physical one, in microns. What unit the numbers are
+    in is the caller's to state; this only spaces them.
+
+    Parameters
+    ----------
+    x_range, y_range : (min, max)
+        The range each axis spans, end points included.
+    step : float or (x_step, y_step)
+        Spacing along each axis. A zero-width range gets a single point
+        whatever the step, since ``linspace(0, 0, num=5)`` would otherwise
+        return five copies of it.
+
+    Returns
+    -------
+    x, y : np.ndarray
+        The mesh, in Cartesian (``indexing='xy'``) order with y running from
+        the top down, so that iterating it follows image convention.
+
+    .. versionadded:: 0.10.0
+
+    """
+    if not isinstance(x_range, (tuple, list, np.ndarray)):
+        raise TypeError((f"x_range must be a tuple, list or NumPy array, "
+                         f"not {type(x_range)}."))
+    if not isinstance(y_range, (tuple, list, np.ndarray)):
+        raise TypeError((f"y_range must be a tuple, list or NumPy array, "
+                         f"not {type(y_range)}."))
+    if len(x_range) != 2 or len(y_range) != 2:
+        raise ValueError("x_range and y_range must have 2 elements.")
+    if isinstance(step, (tuple, list, np.ndarray)):
+        if len(step) != 2:
+            raise ValueError(f"If 'step' is a tuple, it must provide "
+                             f"two values (x_step, y_step), not "
+                             f"{len(step)}.")
+        x_step, y_step = step[0], step[1]
+    else:
+        x_step = y_step = step
+
+    def axis(vrange, vstep):
+        # `np.diff` returns a 1-element array, so pull out the scalar: NumPy
+        # does not allow converting an array with ndim > 0 to a Python scalar.
+        diff = np.abs(np.diff(vrange)).item()
+        num = int(np.round(diff / vstep) + 1) if diff != 0 else 1
+        return np.linspace(*vrange, num=num, dtype=np.float32)
+
+    xflat, yflat = axis(x_range, x_step), axis(y_range, y_step)
+    # Flip the y axis so that it increases from bottom to top:
+    return np.meshgrid(xflat, yflat[::-1], indexing='xy'), xflat, yflat
+
+
+#: Which arguments of a coordinate transform are coordinates. Everything a
+#: visual field map takes that is named x/y/z something -- ``x``, ``ydva``,
+#: ``x_um``, ``zv1`` -- and nothing that is named ``coords``, ``region``,
+#: ``hemi`` or ``surface``.
+_COORD_ARG = re.compile(r'^[xyz]($|[0-9_a-z])')
+
+
+def _unit_aware_transform(func, unit_attr):
+    """Wrap a coordinate transform so its inputs may carry units
+
+    Applied automatically to every ``dva_to_*`` and ``*_to_dva`` method of a
+    :py:class:`VisualFieldMap` subclass; see ``__init_subclass__``. The wrapped
+    function still receives, and still returns, ordinary numbers -- this is a
+    boundary, not a change of representation.
+    """
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if not (any(has_units(a) for a in args) or
+                any(has_units(v) for v in kwargs.values())):
+            # The overwhelmingly common case, and the one every internal
+            # caller takes: nothing to convert, so nothing is touched.
+            return func(self, *args, **kwargs)
+        unit = getattr(self, unit_attr)
+        bound = signature(func).bind(self, *args, **kwargs)
+        for name, value in bound.arguments.items():
+            if _COORD_ARG.match(name):
+                bound.arguments[name] = as_value(value, unit, name)
+        return func(*bound.args, **bound.kwargs)
+    wrapper._p2p_unit_aware = True
+    return wrapper
 
 
 class CoordinateGrid:
@@ -61,24 +154,30 @@ class CoordinateGrid:
             return f"CoordinateGrid(x={self.x}, y={self.y})"
 
 class Grid2D(PrettyPrint):
-    """2D spatial grid
+    """2D grid of visual field coordinates
 
     This class generates and stores 2D mesh grids of coordinates across
-    different regions (visual field, retina, cortex). The grid is uniform 
-    in visual field, and transformed with a retinotopic mapping to 
+    different regions (visual field, retina, cortex). The grid is uniform
+    in visual field, and transformed with a retinotopic mapping to
     obtain the grid in other regions.
+
+    Its own coordinates are therefore **degrees of visual angle**: they are
+    what :py:meth:`build` hands to a visual field map, and what ``grid.x`` and
+    ``grid.y`` report. A grid of *physical* coordinates is a different thing
+    and is not this class; see
+    :py:func:`~pulse2percept.topography.base._rectangular_mesh`.
 
     .. versionadded:: 0.6
 
     Parameters
     ----------
     x_range : (x_min, x_max)
-        A tuple indicating the range of x values (includes end points)
+        A tuple indicating the range of x values in dva (includes end points)
     y_range : tuple, (y_min, y_max)
-        A tuple indicating the range of y values (includes end points)
+        A tuple indicating the range of y values in dva (includes end points)
     step : int, double, tuple
-        Step size. If int or double, the same step will apply to both x and
-        y ranges. If a tuple, it is interpreted as (x_step, y_step).
+        Step size (dva). If int or double, the same step will apply to both x
+        and y ranges. If a tuple, it is interpreted as (x_step, y_step).
     grid_type : {'rectangular', 'hexagonal'}
         The grid type
 
@@ -88,6 +187,13 @@ class Grid2D(PrettyPrint):
        ``meshgrid`` function). This implies that the grid's shape will be
        (number of y coordinates) x (number of x coordinates).
     *  If a range is zero, the step size is irrelevant.
+    *  ``x_range``, ``y_range`` and ``step`` may be given as plain numbers of
+       degrees or as unitful quantities (e.g. ``xystep=0.5 * dva``), and are
+       stored as plain numbers. See :py:mod:`pulse2percept.units`.
+
+    .. versionchanged:: 0.10.0
+        The visual field contract is explicit: the three range arguments are
+        degrees of visual angle, and a quantity in any other dimension raises.
 
     Examples
     --------
@@ -159,7 +265,18 @@ class Grid2D(PrettyPrint):
     def y(self, value):
         self._grid['dva'] = CoordinateGrid(self.x, value)
 
+    #: The unit this grid's own coordinates are in. A grid is uniform in the
+    #: visual field, and a visual field map turns it into tissue coordinates.
+    visual_unit = dva
+
     def __init__(self, x_range, y_range, step=1, grid_type='rectangular'):
+        # A grid of *visual field* coordinates, so its extent is measured in
+        # degrees of visual angle. How far a degree reaches on the retina or
+        # the cortex is what a visual field map is for, and is not a unit
+        # conversion:
+        x_range = as_value(x_range, self.visual_unit, 'x_range')
+        y_range = as_value(y_range, self.visual_unit, 'y_range')
+        step = as_value(step, self.visual_unit, 'step')
         self.x_range = x_range
         self.y_range = y_range
         self.step = step
@@ -189,37 +306,9 @@ class Grid2D(PrettyPrint):
 
     def _make_rectangular_grid(self, x_range, y_range, step):
         """Creates a rectangular grid"""
-        if not isinstance(x_range, (tuple, list, np.ndarray)):
-            raise TypeError((f"x_range must be a tuple, list or NumPy array, "
-                             f"not {type(x_range)}."))
-        if not isinstance(y_range, (tuple, list, np.ndarray)):
-            raise TypeError((f"y_range must be a tuple, list or NumPy array, "
-                             f"not {type(y_range)}."))
-        if len(x_range) != 2 or len(y_range) != 2:
-            raise ValueError("x_range and y_range must have 2 elements.")
-        if isinstance(step, (tuple, list, np.ndarray)):
-            if len(step) != 2:
-                raise ValueError(f"If 'step' is a tuple, it must provide "
-                                 f"two values (x_step, y_step), not "
-                                 f"{len(step)}.")
-            x_step = step[0]
-            y_step = step[1]
-        else:
-            x_step = y_step = step
-        # Build the grid from `x_range`, `y_range`. If the range is 0, make
-        # sure that the number of steps is 1, because linspace(0, 0, num=5)
-        # will return a 1x5 array:
-        # `np.diff` returns a 1-element array, so pull out the scalar: NumPy
-        # does not allow converting an array with ndim > 0 to a Python scalar.
-        xdiff = np.abs(np.diff(x_range)).item()
-        nx = int(np.round(xdiff / x_step) + 1) if xdiff != 0 else 1
-        self._xflat = np.linspace(*x_range, num=nx, dtype=np.float32)
-        ydiff = np.abs(np.diff(y_range)).item()
-        ny = int(np.round(ydiff / y_step) + 1) if ydiff != 0 else 1
-        self._yflat = np.linspace(*y_range, num=ny, dtype=np.float32)
-        # Create the grid, flip y axis so that it increases from bottom to top:
-        self._grid['dva'] = CoordinateGrid(
-            *np.meshgrid(self._xflat, self._yflat[::-1], indexing='xy'))
+        mesh, self._xflat, self._yflat = _rectangular_mesh(x_range, y_range,
+                                                           step)
+        self._grid['dva'] = CoordinateGrid(*mesh)
         self.shape = self.x.shape
         self.size = self.x.size
         self.reset()
@@ -610,10 +699,48 @@ class VisualFieldMap(Parametrized):
         Derives from :py:class:`~pulse2percept.utils.Parametrized` rather than
         :py:class:`~pulse2percept.models.BaseModel`.
 
+    .. versionchanged:: 0.10.0
+
+        Coordinates handed to a ``dva_to_*`` or ``*_to_dva`` method may carry
+        units; see ``visual_unit`` and ``tissue_unit``.
+
     """
 
     # If the map is split into left and right hemispheres.
     split_map = False
+
+    # The two sides a visual field map converts between. A map is the one
+    # thing in p2p that turns one into the other, and it is a coordinate
+    # transformation rather than a unit conversion: `dva` is its own dimension
+    # precisely because how far a degree reaches on tissue is what the map is
+    # for.
+
+    #: The unit of the visual field side of the map
+    visual_unit = dva
+    #: The unit of the tissue side of the map
+    tissue_unit = um
+
+    def __init_subclass__(cls, **kwargs):
+        """Make every coordinate transform a unit-aware boundary
+
+        A transform's name says which side it takes: ``dva_to_v1`` takes
+        visual field coordinates, ``v1_to_dva`` takes tissue coordinates. That
+        is enough to normalize them in one place instead of at the top of
+        twenty methods, and it covers a map written outside p2p without its
+        author having to know about any of this.
+
+        Only arguments named for a coordinate are touched (see
+        ``_COORD_ARG``), so ``coords='cart'``, ``region='v1'``, ``hemi`` and
+        ``surface`` travel through untouched.
+        """
+        super().__init_subclass__(**kwargs)
+        for name, attr in list(vars(cls).items()):
+            if not callable(attr) or getattr(attr, '_p2p_unit_aware', False):
+                continue
+            if name.startswith('dva_to_'):
+                setattr(cls, name, _unit_aware_transform(attr, 'visual_unit'))
+            elif name.endswith('_to_dva') and name != 'to_dva':
+                setattr(cls, name, _unit_aware_transform(attr, 'tissue_unit'))
 
     @abstractmethod
     def from_dva(self):

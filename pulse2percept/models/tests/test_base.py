@@ -8,13 +8,16 @@ import numpy.testing as npt
 from matplotlib.axes import Subplot
 import time
 
-from pulse2percept.implants import ArgusI
+from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
-                                   Stimulus, VideoStimulus)
+                                   ImageStimulus, Stimulus, VideoStimulus)
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (BaseModel, FadingTemporal, Model,
                                   NotBuiltError, ScoreboardSpatial,
                                   SpatialModel, TemporalModel)
+from pulse2percept.units import (DimensionMismatchError, Quantity,
+                                 dimensionless, dva, mA, mm, ms, s, uA, um,
+                                 us)
 from pulse2percept.utils import FreezeError, frame_interval
 from pulse2percept.topography import Grid2D, Watson2014Map
 
@@ -295,6 +298,62 @@ class ValidTemporalModel(TemporalModel):
         if not self.is_built:
             raise NotBuiltError
         return np.zeros((stim.data.shape[0], len(t_percept)), dtype=np.float32)
+
+
+def test_Model_units():
+    # A composite Model forwards parameters to its sub-models through its own
+    # `__setattr__`, which never routes through `Parametrized.set_params`.
+    # That is the path the `freeze_class` normalization hook exists for, so
+    # every way of reaching a sub-model parameter is pinned here.
+    model = Model(temporal=FadingTemporal())
+    model.tau = 0.1 * s
+    npt.assert_almost_equal(model.temporal.tau, 100)
+    npt.assert_equal(isinstance(model.temporal.tau, float), True)
+    model.build(tau=0.2 * s)
+    npt.assert_almost_equal(model.temporal.tau, 200)
+    model.set_params({'tau': 300 * ms})
+    npt.assert_almost_equal(model.temporal.tau, 300)
+    # Straight to the sub-model, bypassing the composite entirely:
+    model.temporal.tau = 0.4 * s
+    npt.assert_almost_equal(model.temporal.tau, 400)
+    # A dimension mismatch is not swallowed by the spatial/temporal probing:
+    with pytest.raises(DimensionMismatchError):
+        model.tau = 5 * uA
+    with pytest.raises(DimensionMismatchError):
+        Model(temporal=FadingTemporal()).build(dt=5 * um)
+    # Both halves of a spatial+temporal model normalize independently:
+    model = Model(spatial=ScoreboardSpatial(), temporal=FadingTemporal())
+    model.set_params({'rho': 0.3 * mm, 'tau': 0.15 * s, 'dt': 0.01 * ms})
+    npt.assert_almost_equal(model.spatial.rho, 300)
+    npt.assert_almost_equal(model.temporal.tau, 150)
+    npt.assert_almost_equal(model.temporal.dt, 0.01)
+
+
+def test_SpatialModel_units():
+    # A range can be given as a quantity wrapping a pair...
+    model = ScoreboardSpatial(xrange=(-5, 5) * dva, yrange=(-4, 4) * dva,
+                              xystep=1 * dva)
+    npt.assert_almost_equal(model.xrange, [-5, 5])
+    npt.assert_almost_equal(model.yrange, [-4, 4])
+    npt.assert_almost_equal(model.xystep, 1)
+    # ... or as a pair of quantities, which keeps the tuple it was given:
+    model = ScoreboardSpatial(xrange=(-5 * dva, 5 * dva))
+    npt.assert_equal(model.xrange, (-5, 5))
+    # Either way it grids identically to the bare-number spelling:
+    bare = ScoreboardSpatial(xrange=(-5, 5), yrange=(-5, 5), xystep=1).build()
+    for unitful in (ScoreboardSpatial(xrange=(-5, 5) * dva,
+                                      yrange=(-5, 5) * dva, xystep=1 * dva),
+                    ScoreboardSpatial(xrange=(-5 * dva, 5 * dva),
+                                      yrange=(-5 * dva, 5 * dva),
+                                      xystep=1 * dva)):
+        unitful.build()
+        npt.assert_almost_equal(bare.grid.x, unitful.grid.x)
+        npt.assert_almost_equal(bare.grid.y, unitful.grid.y)
+    # A range in the wrong dimension is caught elementwise too:
+    with pytest.raises(DimensionMismatchError):
+        ScoreboardSpatial(xrange=(-5 * um, 5 * um))
+    with pytest.raises(DimensionMismatchError):
+        ScoreboardSpatial(xrange=(-5, 5) * um)
 
 
 def test_TemporalModel():
@@ -902,3 +961,400 @@ def test_Model_deepcopy_preserves_submodels_and_params():
     # A built model stays built:
     built = Model(spatial=ValidSpatialModel(xystep=5)).build()
     npt.assert_equal(copy.deepcopy(built).is_built, True)
+
+
+def test_model_unit_contract():
+    """Every model states the units its numerical implementation works in"""
+    spatial = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2), xystep=1)
+    temporal = FadingTemporal()
+    for model in (spatial, temporal, Model(spatial=spatial),
+                  Model(spatial=spatial, temporal=temporal)):
+        npt.assert_equal(model.stimulus_unit, uA)
+        npt.assert_equal(model.time_unit, ms)
+    npt.assert_equal(spatial.space_unit, um)
+    # A composite states them itself: forwarding would answer with a dict when
+    # both components have them, and with nothing at all when it has neither.
+    npt.assert_equal(Model().time_unit, ms)
+    npt.assert_equal(Model().stimulus_unit, uA)
+    npt.assert_equal(Model().space_unit, um)
+
+
+def test_model_electrode_coords_follow_the_stimulus():
+    """Coordinates come back per row of the stimulus, not per electrode
+
+    A stimulus need not name every electrode of the implant, and a dict
+    stimulus need not name them in array order, so the model looks the
+    coordinates up by name rather than taking the array as it stands.
+    """
+    implant = ArgusII()
+    model = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2), xystep=1)
+    # A subset, in an order that is not the array's:
+    stim = Stimulus({'F10': 1, 'A1': 2, 'C5': 3})
+    x, y, z = model._electrode_coords(implant.earray, stim)
+    npt.assert_equal(len(x), len(stim.electrodes))
+    npt.assert_almost_equal(x, [implant[e].x for e in stim.electrodes])
+    npt.assert_almost_equal(y, [implant[e].y for e in stim.electrodes])
+    npt.assert_almost_equal(z, [implant[e].z for e in stim.electrodes])
+    # Contiguous float32, which is what the Cython kernels take:
+    for arr in (x, y, z):
+        npt.assert_equal(arr.dtype, np.float32)
+        npt.assert_equal(arr.flags['C_CONTIGUOUS'], True)
+    # End to end: a one-electrode stimulus lights up the same place whether it
+    # is the only row or one of several.
+    model.build()
+    only = model.predict_percept(ArgusII(stim={'F10': 3}))
+    among = model.predict_percept(ArgusII(stim={'F10': 3, 'A1': 0, 'C5': 0}))
+    npt.assert_almost_equal(only.data, among.data)
+
+
+def test_model_t_percept_units():
+    """`t_percept` is a time, spelled however the caller likes"""
+    implant = ArgusII(stim=BiphasicPulseTrain(20, 50, 0.45, stim_dur=100))
+    spatial = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                xystep=1).build()
+    temporal = FadingTemporal().build()
+    composite = Model(spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                                xystep=1),
+                      temporal=FadingTemporal()).build()
+    for model, stim in [(spatial, implant), (temporal, implant.stim),
+                        (composite, implant)]:
+        bare = model.predict_percept(stim, t_percept=[0, 20, 40])
+        for spelling in ([0, 20, 40] * ms, np.array([0, .02, .04]) * s,
+                         [0 * ms, 20000 * us, 0.04 * s]):
+            unitful = model.predict_percept(stim, t_percept=spelling)
+            npt.assert_allclose(unitful.data, bare.data, rtol=1e-12)
+            npt.assert_allclose(unitful.time, [0, 20, 40], rtol=1e-12)
+        with pytest.raises(DimensionMismatchError):
+            model.predict_percept(stim, t_percept=[0, 20] * uA)
+    # A single unitful time point, not just a list:
+    single = spatial.predict_percept(implant, t_percept=0.02 * s)
+    npt.assert_allclose(single.time, [20], rtol=1e-12)
+
+
+def test_model_find_threshold_units():
+    """Amplitudes are currents; brightness is not a physical quantity"""
+    implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 20, 0.45,
+                                                     stim_dur=100)})
+    spatial = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                xystep=1).build()
+    composite = Model(spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                                xystep=1)).build()
+    for model in (spatial, composite):
+        bare = model.find_threshold(implant, 0.1, amp_range=(0, 200),
+                                    amp_tol=1)
+        unitful = model.find_threshold(implant, 0.1,
+                                       amp_range=(0, 0.2 * mA), amp_tol=1 * uA)
+        npt.assert_allclose(unitful, bare, rtol=1e-12)
+        # The answer is a plain number of microamps:
+        npt.assert_equal(isinstance(unitful, Quantity), False)
+        with pytest.raises(DimensionMismatchError):
+            model.find_threshold(implant, 0.1, amp_range=(0, 5 * ms))
+        with pytest.raises(DimensionMismatchError):
+            model.find_threshold(implant, 0.1, amp_tol=1 * dva)
+    # ... and on a temporal model, where `t_percept` joins them:
+    temporal = FadingTemporal().build()
+    stim = BiphasicPulseTrain(20, 20, 0.45, stim_dur=100)
+    npt.assert_allclose(
+        temporal.find_threshold(stim, 0.01, amp_range=(0, 0.2 * mA),
+                                amp_tol=1 * uA, t_percept=[0, 50] * ms),
+        temporal.find_threshold(stim, 0.01, amp_range=(0, 200), amp_tol=1,
+                                t_percept=[0, 50]), rtol=1e-12)
+
+
+def test_model_requires_a_current_stimulus():
+    """A model reads current, so a picture has to be encoded first
+
+    Rejecting on *dimension*, not on unit: an amplitude spelled ``0.05 * mA``
+    is already 50 uA by the time a model sees it, because `Stimulus`
+    canonicalizes when it is built. Gray levels are a different quantity
+    altogether, and reading them as microamps is the silent reinterpretation
+    `stimulus_unit` exists to declare away.
+    """
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    spatial = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                xystep=1).build()
+    temporal = FadingTemporal().build()
+    composite = Model(spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                                xystep=1),
+                      temporal=FadingTemporal()).build()
+    # `implant.stim = img` stays legal (see `check_stim`), and it is the model
+    # that refuses to read it:
+    implant = ArgusII(preprocess=False, stim=img)
+    npt.assert_equal(implant.stim.unit, dimensionless)
+    for model in (spatial, composite):
+        with pytest.raises(DimensionMismatchError) as excinfo:
+            model.predict_percept(implant)
+        npt.assert_equal('AmplitudeEncoder' in str(excinfo.value), True)
+        npt.assert_equal('dimensionless' in str(excinfo.value), True)
+    with pytest.raises(DimensionMismatchError):
+        temporal.predict_percept(implant.stim)
+
+    # Encoded, it goes through:
+    encoded = AmplitudeEncoder(ArgusII(), amp_range=(0, 50)).encode(img)
+    npt.assert_equal(encoded.unit, uA)
+    for model in (spatial, composite):
+        npt.assert_equal(model.predict_percept(ArgusII(stim=encoded)) is None,
+                         False)
+
+    # A current spelled in another unit is converted, not refused. `Stimulus`
+    # has already done the converting, which is the point:
+    npt.assert_equal(Stimulus([0.05 * mA]).unit, uA)
+    npt.assert_allclose(Stimulus([0.05 * mA]).data, 50, rtol=1e-12)
+    bare = ArgusII(stim={'A1': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)})
+    unitful = ArgusII(stim={'A1': BiphasicPulseTrain(20, 0.05 * mA, 0.45,
+                                                     stim_dur=100)})
+    npt.assert_allclose(spatial.predict_percept(unitful).data,
+                        spatial.predict_percept(bare).data, rtol=1e-12)
+
+    # A Percept is brightness, not current, and is not checked -- it is what a
+    # spatial model hands a temporal one:
+    percept = spatial.predict_percept(bare)
+    npt.assert_equal(temporal.predict_percept(percept) is None, False)
+
+
+class RecordingSpatial(SpatialModel):
+    """A spatial model that reports what crossed the numerical boundary"""
+    stimulus_unit = uA
+    space_unit = um
+
+    def get_default_params(self):
+        return {**super().get_default_params(), 'seen': None}
+
+    def _predict_spatial(self, earray, stim):
+        x, y, z = self._electrode_coords(earray, stim)
+        self.seen = {'amp': self._stim_values(stim),
+                     'time': self._stim_times(stim), 'x': x, 'y': y, 'z': z}
+        return np.zeros((self.grid.x.size, stim.data.shape[1]),
+                        dtype=np.float32)
+
+
+class MilliSpatial(RecordingSpatial):
+    """The same model, declaring milli-units instead"""
+    stimulus_unit = mA
+    space_unit = mm
+    time_unit = s
+
+
+def test_model_units_are_a_numerical_contract():
+    """Declaring a unit has to deliver numbers in it, not just document one
+
+    Every model p2p ships works in uA/um/ms and every conversion below is the
+    identity for them, which is the point: the helpers are the boundary, so a
+    model that declares something else gets something else instead of
+    silently receiving microamps and being off by a thousand.
+    """
+    # A ramp, so that a time point picked out of it has an exact expected
+    # value and neighbouring columns never coincide:
+    ramp = Stimulus(np.arange(10, dtype=float).reshape((1, -1)),
+                    electrodes=['A1'], time=np.arange(10, dtype=float))
+    implant = ArgusII(stim=ramp)
+    canonical = RecordingSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                 xystep=1).build()
+    milli = MilliSpatial(xrange=(-2, 2), yrange=(-2, 2), xystep=1).build()
+    canonical.predict_percept(implant)
+    milli.predict_percept(implant)
+    a, m = canonical.seen, milli.seen
+
+    # Stimulus values: uA in, mA out
+    npt.assert_allclose(m['amp'], a['amp'] / 1000, rtol=1e-6)
+    npt.assert_allclose(a['amp'].max(), 9, rtol=1e-6)
+    npt.assert_allclose(m['amp'].max(), 0.009, rtol=1e-6)
+    # Coordinates: um in, mm out
+    for axis in ('x', 'y', 'z'):
+        npt.assert_allclose(m[axis], a[axis] / 1000, rtol=1e-6)
+    npt.assert_allclose(a['x'][0], implant['A1'].x, rtol=1e-6)
+    npt.assert_allclose(m['x'][0], implant['A1'].x / 1000, rtol=1e-6)
+    # Time: ms in, s out
+    npt.assert_allclose(m['time'], a['time'] / 1000, rtol=1e-12)
+    npt.assert_allclose(a['time'], implant.stim.time, rtol=0, atol=0)
+    # ... and the canonical model really is the zero-conversion path:
+    npt.assert_allclose(a['amp'], implant.stim.data, rtol=0, atol=0)
+
+    # `t_percept` is read in the model's own unit, and converted back to the
+    # stimulus' unit to index it, so 0.005 s and 5 ms pick the same sample:
+    milli.predict_percept(implant, t_percept=[0.0, 0.005])
+    canonical.predict_percept(implant, t_percept=[0.0, 5.0])
+    # rtol at float32 precision: `Stimulus.data` is float32, so 0.005 mA is
+    # only good to about seven digits however exact the conversion was.
+    npt.assert_allclose(canonical.seen['amp'], [[0, 5]], rtol=1e-6)
+    npt.assert_allclose(milli.seen['amp'], [[0, 0.005]], rtol=1e-6)
+    # The percept is labelled in the model's unit, not in milliseconds:
+    npt.assert_allclose(
+        milli.predict_percept(implant, t_percept=[0.0, 0.005]).time,
+        [0.0, 0.005], rtol=1e-12)
+    # A quantity is normalized into that unit too:
+    npt.assert_allclose(
+        milli.predict_percept(implant, t_percept=[0 * ms, 5 * ms]).time,
+        [0.0, 0.005], rtol=1e-12)
+
+    # The dimension guard reads the declared unit: mA and uA are the same
+    # dimension, so an ordinary stimulus is fine and a picture is not.
+    with pytest.raises(DimensionMismatchError):
+        milli.predict_percept(ArgusII(preprocess=False, stim=ImageStimulus(
+            np.linspace(0, 1, 16).reshape((4, 4)))))
+
+
+class SecondSpatial(RecordingSpatial):
+    """A spatial model that labels its percept in seconds"""
+    time_unit = s
+
+
+class MilliTemporal(TemporalModel):
+    """A temporal model that reports what crossed the numerical boundary
+
+    Milliseconds, which is the default and what every model p2p ships uses.
+    Named for what it is so that the pairing with ``SecondSpatial`` reads.
+    """
+    time_unit = ms
+
+    def get_default_params(self):
+        return {**super().get_default_params(), 'seen': None}
+
+    def _predict_temporal(self, stim, t_percept):
+        self.seen = {'values': self._stim_values(stim),
+                     'time': self._stim_times(stim)}
+        n_space = int(np.prod(stim.data.shape[:-1]))
+        return np.zeros((n_space, len(t_percept)), dtype=np.float32)
+
+
+def test_percept_time_crosses_model_boundary():
+    """A percept's time axis carries the unit it was written in
+
+    Before this, a percept's time was bare numbers whose meaning was implied
+    by whichever model happened to produce them -- so a spatial model counting
+    in seconds handed a temporal model counting in milliseconds a time axis a
+    thousand times too long, and neither of them could tell.
+    """
+    ramp = Stimulus(np.arange(21, dtype=float).reshape((1, -1)),
+                    electrodes=['A1'], time=np.arange(21, dtype=float))
+    implant = ArgusII(stim=ramp)
+    spatial = SecondSpatial(xrange=(-2, 2), yrange=(-2, 2), xystep=1).build()
+    temporal = MilliTemporal().build()
+    npt.assert_equal(spatial.time_unit, s)
+    npt.assert_equal(temporal.time_unit, ms)
+
+    # The spatial model labels its percept in its own unit, and `t_percept`
+    # was read in that unit too:
+    percept = spatial.predict_percept(implant, t_percept=[0, .005, .010])
+    npt.assert_equal(percept.time_unit, s)
+    npt.assert_allclose(percept.time, [0, .005, .010], rtol=1e-12)
+    npt.assert_allclose(percept.times(ms), [0, 5, 10], rtol=1e-12)
+    # `times()` with no unit is the stored array itself, unconverted:
+    npt.assert_allclose(percept.times(), percept.time, rtol=0, atol=0)
+    npt.assert_equal(percept.time_quantity.unit, s)
+    npt.assert_allclose(percept.time_quantity.to_value(ms), [0, 5, 10],
+                        rtol=1e-12)
+
+    # ... and the temporal model reads that percept in *its* unit. This is the
+    # crossing: the kernel sees milliseconds, not the seconds it was labelled
+    # with.
+    temporal.predict_percept(percept, t_percept=[0, 5, 10])
+    npt.assert_allclose(temporal.seen['time'], [0, 5, 10], rtol=1e-12)
+    # Brightness has no unit and is handed over exactly as it stands:
+    npt.assert_allclose(temporal.seen['values'], percept.data, rtol=0, atol=0)
+
+    # The same crossing through a composite, which is where it really happens:
+    model = Model(spatial=SecondSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                        xystep=1),
+                  temporal=MilliTemporal()).build()
+    # A composite reports the unit of the stage that reads `t_percept` and
+    # writes the percept, which is the temporal model:
+    npt.assert_equal(model.time_unit, ms)
+    npt.assert_equal(model.spatial.time_unit, s)
+    out = model.predict_percept(implant, t_percept=[0, 5, 10])
+    npt.assert_equal(out.time_unit, ms)
+    npt.assert_allclose(out.time, [0, 5, 10], rtol=1e-12)
+    # The spatial model ran at every stimulus time point, in seconds, and the
+    # temporal model got those same instants back in milliseconds:
+    npt.assert_allclose(model.temporal.seen['time'], implant.stim.time,
+                        rtol=1e-12)
+    # Spelling `t_percept` unitfully changes nothing:
+    npt.assert_allclose(
+        model.predict_percept(implant, t_percept=[0 * ms, 5 * ms,
+                                                  10 * ms]).time,
+        [0, 5, 10], rtol=1e-12)
+    npt.assert_allclose(
+        model.predict_percept(implant, t_percept=[0, .005 * s,
+                                                  .010 * s]).time,
+        [0, 5, 10], rtol=1e-12)
+
+
+def test_Model_units_follow_their_component():
+    """A composite's declared units are the ones its numbers are really in"""
+    # Neither component: the canonical defaults, so that a bare Model can
+    # still normalize its arguments.
+    npt.assert_equal((Model().stimulus_unit, Model().space_unit,
+                      Model().time_unit), (uA, um, ms))
+    # One component: its own.
+    space_only = Model(spatial=MilliSpatial())
+    npt.assert_equal(space_only.stimulus_unit, mA)
+    npt.assert_equal(space_only.space_unit, mm)
+    npt.assert_equal(space_only.time_unit, s)
+    time_only = Model(temporal=MilliTemporal())
+    npt.assert_equal(time_only.stimulus_unit, uA)
+    npt.assert_equal(time_only.time_unit, ms)
+    # Both, disagreeing: the stimulus goes into the spatial model and the
+    # percept comes out of the temporal one, so they are read off different
+    # components rather than merged into the dict `__getattr__` would return.
+    both = Model(spatial=MilliSpatial(), temporal=MilliTemporal())
+    npt.assert_equal(both.stimulus_unit, mA)
+    npt.assert_equal(both.space_unit, mm)
+    npt.assert_equal(both.time_unit, ms)
+
+
+def test_TemporalModel_default_frame_rate_is_50Hz():
+    """The fallback output rate is a rate, not the number 20
+
+    With no `t_percept` and no encoder frame clock to follow, a temporal model
+    reports at 50 Hz. That is 20 ms, which used to be written down as the
+    number 20 -- one frame every 20 *seconds* for a model counting in seconds.
+    """
+    # Cathodic, so that the stub kernel's all-zero output is not mistaken for
+    # a polarity problem and warned about:
+    stim = Stimulus(-np.ones((1, 3)), electrodes=['A1'], time=[0, 50, 100])
+    milli = MilliTemporal().build()
+    npt.assert_allclose(milli.predict_percept(stim).time,
+                        [0, 20, 40, 60, 80, 100], rtol=1e-12)
+
+    class SecondTemporal(MilliTemporal):
+        time_unit = s
+
+        def get_default_params(self):
+            # dt in seconds too, so that `t_percept` still lands on its grid:
+            return {**super().get_default_params(), 'dt': 5e-6}
+
+    second = SecondTemporal().build()
+    percept = second.predict_percept(stim)
+    npt.assert_equal(percept.time_unit, s)
+    npt.assert_allclose(percept.time, [0, .02, .04, .06, .08, .10], rtol=1e-9)
+    # Same instants, same number of frames -- the rate is the same physical
+    # rate however the model counts:
+    npt.assert_allclose(percept.times(ms), milli.predict_percept(stim).time,
+                        rtol=1e-9)
+
+    # The clock also stops at the stimulus rather than past it. `arange`'s
+    # half-open end used to be nudged by the literal 1 -- a whole millisecond,
+    # enough to add a frame after the stimulus was over:
+    ragged = Stimulus(-np.ones((1, 3)), electrodes=['A1'],
+                      time=[0, 60, 119.5])
+    late = milli.predict_percept(ragged)
+    npt.assert_allclose(late.time, [0, 20, 40, 60, 80, 100], rtol=1e-12)
+    npt.assert_equal(late.time[-1] <= ragged.time[-1], True)
+
+    # The one exception, and it is deliberate: a stimulus shorter than a
+    # single frame still gets one, so its time point does fall after the end
+    # of the stimulus. Reporting a 10 ms pulse only at t=0 would describe it
+    # before it had had any effect, and brightness outlives the stimulus that
+    # caused it -- so the frame containing it is what is worth reporting.
+    for dur in (5, 10, 20):
+        brief = Stimulus(-np.ones((1, 3)), electrodes=['A1'],
+                         time=[0, dur / 2, dur])
+        percept = FadingTemporal().build().predict_percept(brief)
+        npt.assert_allclose(percept.time, [0, 20], rtol=1e-12)
+        # ... and the extra frame is not an empty one:
+        npt.assert_equal(percept.data.ravel()[-1] > 0.1, True)
+    # The floor is one *frame*, not one unit of anything, so it means the same
+    # thing to a model counting in seconds:
+    brief = Stimulus(-np.ones((1, 3)), electrodes=['A1'], time=[0, 5, 10])
+    npt.assert_allclose(SecondTemporal().build().predict_percept(brief).time,
+                        [0, 0.02], rtol=1e-9)

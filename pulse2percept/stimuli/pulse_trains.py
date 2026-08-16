@@ -8,7 +8,8 @@ from math import isclose
 # transitions:
 from .base import Stimulus
 from .pulses import BiphasicPulse, AsymmetricBiphasicPulse, MonophasicPulse
-from ..utils.constants import DT
+from ..units import Hz, as_value, ms, uA
+from ..utils.constants import DT, MS_PER_S
 
 
 def _tile_pulse(pulse, shift, n_pulses):
@@ -102,12 +103,22 @@ class PulseTrain(Stimulus):
        net current.
     *  A frequency slower than ``1000 / stim_dur`` cannot be realized, since
        the window still holds one pulse. Pass ``freq=0`` for a silent train.
+    *  Arguments may be given as plain numbers in the units documented above,
+       or as unitful quantities (e.g. ``0.02 * kHz``, ``1 * s``), which are
+       converted to those units. See :py:mod:`pulse2percept.units`.
+    *  The train is measured in whatever ``pulse`` was measured in: tiling an
+       electrical pulse gives a train in microamps, and tiling a dimensionless
+       one gives a dimensionless train.
 
     """
     __slots__ = ('freq', 'pulse_type')
 
     def __init__(self, freq, pulse, n_pulses=None, stim_dur=1000.0,
                  electrode=None, metadata=None):
+        # Strip the units first; everything below is plain numbers in Hz and
+        # ms, exactly as it has always been:
+        freq = as_value(freq, Hz, 'freq')
+        stim_dur = as_value(stim_dur, ms, 'stim_dur')
         if not isinstance(pulse, Stimulus):
             raise TypeError(f"'pulse' must be a Stimulus object, not "
                             f"{type(pulse)}.")
@@ -117,8 +128,10 @@ class PulseTrain(Stimulus):
         if pulse.time is None:
             raise ValueError("'pulse' does not have a time component.")
 
-        # How many pulses fit into stim dur:
-        n_max_pulses = freq * stim_dur / 1000.0
+        # How many pulses fit into stim dur. `freq` counts cycles per second
+        # and `stim_dur` counts milliseconds, so this is the one place the two
+        # clocks have to be reconciled:
+        n_max_pulses = freq * stim_dur / MS_PER_S
         # The requested number of pulses cannot be greater than max pulses:
         if n_pulses is not None:
             n_pulses = int(n_pulses)
@@ -134,14 +147,14 @@ class PulseTrain(Stimulus):
             # in a 33.37 ms window used to end on half a cathodic phase, and
             # so was not charge-balanced.
             n_pulses = int(np.floor((stim_dur - pulse.time[-1]) /
-                                    (1000.0 / freq) + 1e-9)) + 1
+                                    (MS_PER_S / freq) + 1e-9)) + 1
         # 0 Hz is allowed, and so is a pulse too long to fit even once:
         if n_pulses <= 0:
             time = np.array([0, stim_dur], dtype=np.float64)
             data = np.array([[0, 0]], dtype=np.float32)
         else:
-            # Window duration is the inverse of pulse train frequency:
-            window_dur = 1000.0 / freq
+            # Window duration (ms) is the inverse of pulse train frequency:
+            window_dur = MS_PER_S / freq
             if pulse.time[-1] > window_dur:
                 raise ValueError(f"Pulse (dur={pulse.time[-1]:.2f} ms) does not fit into "
                                  f"pulse train window (dur={window_dur:.2f} "
@@ -168,6 +181,11 @@ class PulseTrain(Stimulus):
             time = np.append(time, stim_dur)
         super().__init__(data, time=time, electrodes=electrode, metadata=None,
                          compress=False)
+        # This class tiles whatever pulse it is handed, and the tiled numbers
+        # mean whatever that pulse's did -- including the zeros of a silent
+        # train. Without this the result would fall back to the default
+        # (current) reading of them:
+        self._inherit_units(pulse)
         self.freq = freq
         self.pulse_type = pulse.__class__.__name__
         self.metadata = {'user': metadata}
@@ -225,6 +243,9 @@ class BiphasicPulseTrain(Stimulus):
        ``cathodic_first`` flag.
     *  A pulse train will be considered "charge-balanced" if its net current is
        smaller than 10 picoamps.
+    *  Arguments may be given as plain numbers in the units documented above,
+       or as unitful quantities (e.g. ``0.05 * mA``, ``450 * us``), which are
+       converted to those units. See :py:mod:`pulse2percept.units`.
 
     """
     __slots__ = ('freq', 'cathodic_first')
@@ -232,6 +253,15 @@ class BiphasicPulseTrain(Stimulus):
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
                  n_pulses=None, stim_dur=1000.0, cathodic_first=True,
                  electrode=None, metadata=None):
+        # See `PulseTrain.__init__`. Normalizing here rather than leaving it to
+        # `BiphasicPulse` is what keeps the metadata below in the units a model
+        # reading it back expects:
+        freq = as_value(freq, Hz, 'freq')
+        amp = as_value(amp, uA, 'amp')
+        phase_dur = as_value(phase_dur, ms, 'phase_dur')
+        interphase_dur = as_value(interphase_dur, ms, 'interphase_dur')
+        delay_dur = as_value(delay_dur, ms, 'delay_dur')
+        stim_dur = as_value(stim_dur, ms, 'stim_dur')
         # Create the individual pulse:
         pulse = BiphasicPulse(amp, phase_dur, delay_dur=delay_dur,
                               interphase_dur=interphase_dur,
@@ -342,12 +372,27 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
     metadata : dict
         A dictionary of meta-data
 
+    Notes
+    -----
+    *  Arguments may be given as plain numbers in the units documented above,
+       or as unitful quantities (e.g. ``0.05 * mA``, ``450 * us``), which are
+       converted to those units. See :py:mod:`pulse2percept.units`.
+
     """
     __slots__ = ('freq', 'cathodic_first')
 
     def __init__(self, freq, amp1, amp2, phase_dur1, phase_dur2,
                  interphase_dur=0, delay_dur=0, n_pulses=None, stim_dur=1000.0,
                  cathodic_first=True, electrode=None, metadata=None):
+        # See `PulseTrain.__init__`:
+        freq = as_value(freq, Hz, 'freq')
+        amp1 = as_value(amp1, uA, 'amp1')
+        amp2 = as_value(amp2, uA, 'amp2')
+        phase_dur1 = as_value(phase_dur1, ms, 'phase_dur1')
+        phase_dur2 = as_value(phase_dur2, ms, 'phase_dur2')
+        interphase_dur = as_value(interphase_dur, ms, 'interphase_dur')
+        delay_dur = as_value(delay_dur, ms, 'delay_dur')
+        stim_dur = as_value(stim_dur, ms, 'stim_dur')
         # Create the individual pulse:
         pulse = AsymmetricBiphasicPulse(amp1, amp2, phase_dur1, phase_dur2,
                                         delay_dur=delay_dur,
@@ -418,6 +463,9 @@ class BiphasicTripletTrain(Stimulus):
        ``cathodic_first`` flag.
     *  A pulse train will be considered "charge-balanced" if its net current is
        smaller than 10 picoamps.
+    *  Arguments may be given as plain numbers in the units documented above,
+       or as unitful quantities (e.g. ``0.05 * mA``, ``450 * us``), which are
+       converted to those units. See :py:mod:`pulse2percept.units`.
 
     """
     __slots__ = ('freq', 'cathodic_first')
@@ -425,6 +473,14 @@ class BiphasicTripletTrain(Stimulus):
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, interpulse_dur=0,
                  delay_dur=0, n_pulses=None, stim_dur=1000.0, cathodic_first=True,
                  electrode=None, metadata=None):
+        # See `PulseTrain.__init__`:
+        freq = as_value(freq, Hz, 'freq')
+        amp = as_value(amp, uA, 'amp')
+        phase_dur = as_value(phase_dur, ms, 'phase_dur')
+        interphase_dur = as_value(interphase_dur, ms, 'interphase_dur')
+        interpulse_dur = as_value(interpulse_dur, ms, 'interpulse_dur')
+        delay_dur = as_value(delay_dur, ms, 'delay_dur')
+        stim_dur = as_value(stim_dur, ms, 'stim_dur')
         # Create the pulse:
         pulse = BiphasicPulse(amp, phase_dur, interphase_dur=interphase_dur,
                               delay_dur=delay_dur,

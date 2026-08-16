@@ -2,6 +2,10 @@ import numpy as np
 import collections as coll
 import pytest
 import numpy.testing as npt
+from pulse2percept import implants
+from pulse2percept.implants import cortex
+from pulse2percept.units import (DimensionMismatchError, Quantity,
+                                 dimensionless, dva, mA, mm, ms, nA, uA, um)
 from matplotlib.patches import Circle
 import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
@@ -10,6 +14,9 @@ from pulse2percept.implants import (PointSource, ElectrodeArray, ElectrodeGrid,
                                     ProsthesisSystem, RectangleImplant,
                                     PhotovoltaicPixel)
 from pulse2percept.stimuli import Stimulus, ImageStimulus, VideoStimulus, LogoBVL
+from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
+                                   MonophasicPulse)
+from pulse2percept.implants import (ArgusII, DiskElectrode)
 from pulse2percept.models import ScoreboardModel
 
 
@@ -159,10 +166,14 @@ def test_ProsthesisSystem_reshape_stim(rot, gtype, n_frames):
     npt.assert_equal(implant.stim.time, 2 * np.arange(3 * n_frames))
 
     # Verify that a horizontal stimulus will always appear horizontally, even if
-    # the device is rotated:
+    # the device is rotated. What is under test is where `reshape_stim` puts
+    # the pixels, so the sampled gray levels are handed to the model as an
+    # ordinary electrical stimulus rather than encoded -- a model reads
+    # current, and the one-uA-per-gray-level reading has to be written down:
     data = np.zeros((50, 50))
     data[20:-20, 10:-10] = 1
-    implant.stim = ImageStimulus(data)
+    sampled = implant.reshape_stim(ImageStimulus(data))
+    implant.stim = Stimulus(sampled.data, electrodes=sampled.electrodes)
     model = ScoreboardModel(xrange=(-1, 1), yrange=(-1, 1), rho=30, xystep=0.02)
     model.build()
     percept = label(model.predict_percept(implant).data.squeeze().T > 0.2)
@@ -288,3 +299,184 @@ def test_ProsthesisSystem_reshape_stim_frames_independent():
     vid[..., 2] = 0
     implant.stim = VideoStimulus(vid, time=np.arange(n_frames))
     npt.assert_equal(np.all(implant.stim.data[:, 2] == 0), True)
+
+
+def test_implant_geometry_units():
+    """Every implant places itself the same way, however its x/y/z is spelled
+
+    Some device constructors inspect or adjust the geometry themselves before
+    handing it to an ElectrodeGrid (Orion checks `z`, PRIMA writes a
+    per-electrode `z` list onto the electrodes afterwards), so it is not enough
+    to normalize inside the grid.
+    """
+    cases = [
+        (implants.ArgusI, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 100 * um},
+         {'x': 1000, 'y': -500, 'z': 100}),
+        (implants.ArgusII, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 100 * um},
+         {'x': 1000, 'y': -500, 'z': 100}),
+        (implants.AlphaIMS, {'x': 0.2 * mm, 'z': -0.1 * mm},
+         {'x': 200, 'z': -100}),
+        (implants.AlphaAMS, {'x': 0.2 * mm, 'z': -0.1 * mm},
+         {'x': 200, 'z': -100}),
+        (implants.PRIMA, {'z': -0.1 * mm}, {'z': -100}),
+        (implants.PRIMA75, {'z': -0.1 * mm}, {'z': -100}),
+        (implants.PRIMA55, {'z': -0.1 * mm}, {'z': -100}),
+        (implants.PRIMA40, {'z': -0.1 * mm}, {'z': -100}),
+        (implants.BVT24, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 50 * um},
+         {'x': 1000, 'y': -500, 'z': 50}),
+        (implants.BVT44, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 50 * um},
+         {'x': 1000, 'y': -500, 'z': 50}),
+        (implants.IMIE, {'x': 1 * mm, 'z': 100 * um}, {'x': 1000, 'z': 100}),
+        (implants.RectangleImplant,
+         {'x': 1 * mm, 'spacing': 0.4 * mm, 'r': 75 * um},
+         {'x': 1000, 'spacing': 400., 'r': 75.}),
+        (cortex.Orion, {'x': 15 * mm}, {'x': 15000}),
+        (cortex.Cortivis, {'x': 20 * mm, 'y': -5 * mm}, {'x': 20000,
+                                                         'y': -5000}),
+        (cortex.ICVP, {'x': 15 * mm}, {'x': 15000}),
+    ]
+    for cls, unitful, bare in cases:
+        coords = cls(**unitful).earray.coordinates()
+        npt.assert_allclose(coords, cls(**bare).earray.coordinates(),
+                            rtol=1e-12, err_msg=cls.__name__)
+        # Plain numbers all the way down, whatever went in:
+        npt.assert_equal(coords.dtype, np.float64)
+    # Orion is the documented default: 15 mm to the right of the fovea:
+    npt.assert_allclose(cortex.Orion(x=15 * mm).earray.coordinates(),
+                        cortex.Orion().earray.coordinates(), rtol=1e-12)
+    # A conversion that does not land on a round number is no different:
+    npt.assert_allclose(
+        implants.ArgusII(x=0.8625 * mm, z=0.0417 * mm).earray.coordinates(),
+        implants.ArgusII(x=862.5, z=41.7).earray.coordinates(), rtol=1e-12)
+
+
+def test_implant_per_electrode_z_units():
+    """A per-electrode list of heights never reaches ElectrodeGrid"""
+    for cls, n in [(implants.PRIMA, 378), (implants.PRIMA75, 142),
+                   (implants.AlphaIMS, 1500)]:
+        heights = np.linspace(-150, -50, n)
+        unitful = cls(z=[h * um for h in heights])
+        npt.assert_allclose(unitful.earray.coordinates(),
+                            cls(z=list(heights)).earray.coordinates(),
+                            rtol=1e-12, err_msg=cls.__name__)
+        npt.assert_allclose(unitful.earray.coordinates()[:, 2], heights,
+                            rtol=1e-12)
+
+
+def test_implant_dimension_errors():
+    for cls in (implants.ArgusII, implants.PRIMA, implants.BVT24,
+                cortex.Orion, cortex.Cortivis, cortex.ICVP):
+        with pytest.raises(DimensionMismatchError):
+            cls(x=5 * ms)
+        with pytest.raises(DimensionMismatchError):
+            cls(z=10 * uA)
+        with pytest.raises(DimensionMismatchError):
+            cls(rot=5 * dva)
+    with pytest.raises(DimensionMismatchError):
+        implants.RectangleImplant(spacing=2 * dva)
+    with pytest.raises(DimensionMismatchError):
+        implants.RectangleImplant(r=10 * uA)
+
+
+def test_ProsthesisSystem_max_current_units():
+    """`max_current` is a current, stored as a plain number of microamps"""
+    earray = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
+    for value in (100, 100 * uA, 0.1 * mA, 100000 * nA):
+        implant = ProsthesisSystem(earray, max_current=value)
+        npt.assert_allclose(implant.max_current, 100, rtol=1e-12)
+        npt.assert_equal(isinstance(implant.max_current, Quantity), False)
+    # An awkward conversion is no different:
+    npt.assert_allclose(
+        ProsthesisSystem(earray, max_current=0.0417 * mA).max_current, 41.7,
+        rtol=1e-12)
+    # None means no limit, and is left alone:
+    npt.assert_equal(ProsthesisSystem(earray).max_current, None)
+    # Assigning later goes through the same setter:
+    implant = ProsthesisSystem(earray)
+    implant.max_current = 0.1 * mA
+    npt.assert_allclose(implant.max_current, 100, rtol=1e-12)
+    with pytest.raises(DimensionMismatchError):
+        ProsthesisSystem(earray, max_current=5 * ms)
+    with pytest.raises(DimensionMismatchError):
+        implant.max_current = 5 * dva
+    with pytest.raises(ValueError):
+        ProsthesisSystem(earray, max_current=-1 * uA)
+
+
+def test_ProsthesisSystem_safety_checks_are_electrical():
+    """Electrical safety may only be asked about an electrical stimulus"""
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    vid = VideoStimulus(np.ones((6, 10, 3)) * 0.5, time=[0, 20, 40])
+
+    # No electrical policy requested, so no electrical question is asked and a
+    # picture may still be assigned. This is what keeps preprocessing
+    # workflows, which turn images into current, working:
+    implant = ArgusII(preprocess=False, safe_mode=False)
+    implant.stim = img
+    npt.assert_equal(implant.stim.unit, dimensionless)
+    implant.stim = vid
+    npt.assert_equal(implant.stim.unit, dimensionless)
+
+    # `safe_mode` is a claim about electricity, and cannot be made about a
+    # picture -- it must not integrate gray levels and pronounce them safe:
+    implant = ArgusII(preprocess=False, safe_mode=True)
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        implant.stim = img
+    npt.assert_equal("Safety check 'safe_mode'" in str(excinfo.value), True)
+    npt.assert_equal('dimensionless' in str(excinfo.value), True)
+
+    # ... and so is `max_current`:
+    implant = ArgusII(preprocess=False, safe_mode=False)
+    implant.max_current = 100 * uA
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        implant.stim = img
+    npt.assert_equal("Safety check 'max_current'" in str(excinfo.value), True)
+    # Including an empty one: the guard sits before the empty-data fast path,
+    # since an empty picture is just as much the wrong kind of thing.
+    empty = Stimulus(np.zeros((60, 0)),
+                     electrodes=ArgusII().electrode_names)._inherit_units(img)
+    with pytest.raises(DimensionMismatchError):
+        implant.check_stim(empty)
+    # An empty *electrical* stimulus is fine, as before:
+    implant.check_stim(Stimulus(np.zeros((60, 0)),
+                                electrodes=ArgusII().electrode_names))
+
+
+def test_ProsthesisSystem_preprocess_crosses_the_boundary():
+    """Preprocessing may turn a picture into current before safety sees it"""
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    encoder = AmplitudeEncoder(ArgusII(), amp_range=(0, 20), freq=20)
+    implant = ArgusII(safe_mode=True, preprocess=lambda x: encoder.encode(x))
+    implant.max_current = 100 * mA
+    implant.stim = img
+    npt.assert_equal(implant.stim.unit, uA)
+    npt.assert_equal(implant.stim.is_charge_balanced, True)
+    # The same chain, assigned already-encoded, and this time with a limit
+    # tight enough to matter:
+    implant = ArgusII(preprocess=False, safe_mode=True)
+    implant.max_current = 100 * uA
+    with pytest.raises(ValueError) as excinfo:
+        implant.stim = encoder.encode(img)
+    npt.assert_equal('exceeds max_current' in str(excinfo.value), True)
+    implant.max_current = 2 * mA
+    implant.stim = encoder.encode(img)
+    npt.assert_equal(implant.stim.unit, uA)
+
+
+def test_ProsthesisSystem_historical_stimuli_unchanged():
+    """A bare stimulus is electrical by contract, and is checked as before"""
+    implant = ArgusII(preprocess=False, safe_mode=True)
+    implant.stim = {'A1': BiphasicPulse(50, 0.45)}
+    npt.assert_equal(implant.stim.unit, uA)
+    with pytest.raises(ValueError) as excinfo:
+        implant.stim = {'A1': MonophasicPulse(50, 0.45)}
+    npt.assert_equal('charge-balanced' in str(excinfo.value), True)
+    # A plain number is microamps, and the limit is read the same way:
+    implant = ArgusII(preprocess=False)
+    implant.max_current = 60
+    with pytest.raises(ValueError) as excinfo:
+        implant.stim = {name: 2 for name in ArgusII().electrode_names}
+    npt.assert_equal('draws 120.0 uA at once' in str(excinfo.value), True)
+    implant.max_current = 0.2 * mA
+    implant.stim = {name: 2 for name in ArgusII().electrode_names}
+    npt.assert_equal(implant.stim.unit, uA)

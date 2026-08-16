@@ -219,6 +219,13 @@ when that work regresses. Use the ``array_ptrain`` helper, as above.
 parameters off each electrode and rejects an image; a temporal model given a
 single-frame stimulus measures nothing temporal.
 
+**An image is not a stimulus.** Gray levels are dimensionless and
+``predict_percept`` refuses them; user code turns an image into current with
+an ``Encoder``. A benchmark that did the same would measure a pulse train per
+electrode rather than the single static frame the image scenarios exist for,
+so they call the ``as_current`` helper instead, which says out loud what the
+library used to assume silently. Its docstring has the reasoning.
+
 **Sub-model parameters go on the sub-model instance**, as above. Keywords
 handed to ``Model(...)`` itself reach *both* sub-models, and ``Parametrized``
 freezes attributes, so anything the temporal model does not recognize raises

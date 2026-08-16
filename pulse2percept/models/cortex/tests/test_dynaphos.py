@@ -10,6 +10,8 @@ from pulse2percept.implants.cortex import Cortivis, Orion
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import BiphasicPulseTrain
+from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
+                                 ms, s, uA, um)
 
 def test_DynaphosModel():
     model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1).build()
@@ -115,3 +117,67 @@ def test_dynaphos_plot():
     m.build()
     m.plot()
     plt.close()
+
+
+def test_DynaphosModel_units():
+    """A unitful parameter lands on the same percept as the bare one
+
+    `rheobase` is a current in microamps, and 0.0239 mA is 23.9 uA -- but
+    23.900000000000002 after the multiplication, which is why this compares
+    with a tolerance rather than for equality.
+    """
+    kwargs = dict(xrange=(-3, 3), yrange=(-3, 3), xystep=0.5)
+    bare = DynaphosModel(rheobase=23.9, **kwargs).build()
+    unitful = DynaphosModel(rheobase=0.0239 * mA, **kwargs).build()
+    npt.assert_allclose(unitful.rheobase, 23.9, rtol=1e-12)
+    npt.assert_equal(isinstance(unitful.rheobase, Quantity), False)
+    implant = Cortivis(stim={'11': BiphasicPulseTrain(20, 50, 0.45,
+                                                      stim_dur=100)})
+    npt.assert_allclose(unitful.predict_percept(implant).data,
+                        bare.predict_percept(implant).data, rtol=1e-6)
+    # The model states what its numbers mean:
+    npt.assert_equal((bare.stimulus_unit, bare.space_unit, bare.time_unit),
+                     (uA, um, ms))
+    with pytest.raises(DimensionMismatchError):
+        DynaphosModel(rheobase=5 * ms)
+
+
+def test_DynaphosModel_t_percept_units():
+    """This model overrides `predict_percept`, so it normalizes for itself"""
+    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), xystep=1).build()
+    implant = Cortivis(stim={'11': BiphasicPulseTrain(20, 50, 0.45,
+                                                      stim_dur=100)})
+    bare = model.predict_percept(implant, t_percept=[0, 20, 40])
+    for spelling in ([0, 20, 40] * ms, np.array([0, .02, .04]) * s):
+        unitful = model.predict_percept(implant, t_percept=spelling)
+        npt.assert_allclose(unitful.data, bare.data, rtol=1e-12)
+        npt.assert_allclose(unitful.time, [0, 20, 40], rtol=1e-12)
+    with pytest.raises(DimensionMismatchError):
+        model.predict_percept(implant, t_percept=[0, 20] * uA)
+
+
+def test_DynaphosModel_default_frame_clock_stops_at_the_stimulus():
+    """The default output clock does not run past the end of the stimulus
+
+    `arange`'s half-open end used to be nudged by the literal 1, which meant
+    one *millisecond*: with a `dt` finer than that it emitted frames after the
+    stimulus was over, and for a model counting in anything but milliseconds
+    it would have been meaningless.
+    """
+    stim = BiphasicPulseTrain(20, 50, 0.1, stim_dur=10)
+    implant = Cortivis(stim={'11': stim})
+    kwargs = dict(xrange=(-2, 2), yrange=(-2, 2), xystep=1)
+
+    # Coarser than a millisecond, which is the case the literal was written
+    # for, and still the same clock it always produced:
+    model = DynaphosModel(dt=2, **kwargs).build()
+    npt.assert_allclose(model.predict_percept(implant).time,
+                        np.arange(0, 11, 2), rtol=1e-12)
+
+    # Finer than a millisecond, which is where it overshot:
+    model = DynaphosModel(dt=0.5, **kwargs).build()
+    percept = model.predict_percept(implant)
+    npt.assert_allclose(percept.time, np.arange(0, 10.25, 0.5), rtol=1e-12)
+    npt.assert_equal(percept.time[-1] <= implant.stim.time[-1], True)
+    # The endpoint is included, not dropped:
+    npt.assert_allclose(percept.time[-1], implant.stim.time[-1], rtol=1e-12)

@@ -19,6 +19,7 @@ from skimage.feature import canny
 
 from .base import Stimulus
 from .names import ElectrodeNames
+from ..units import dimensionless
 from ..utils import center_image, shift_image, scale_image, trim_image
 
 
@@ -71,6 +72,11 @@ class ImageStimulus(Stimulus):
 
     """
     __slots__ = ('img_shape',)
+
+    #: Pixel intensities are gray levels in [0, 1], not currents. An encoder
+    #: is what turns them into stimulation; see
+    #: :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`.
+    _default_unit = dimensionless
 
     def __init__(self, source, resize=None, as_gray=False,
                  electrodes=None, metadata=None, compress=False):

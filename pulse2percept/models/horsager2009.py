@@ -2,6 +2,7 @@
    :py:class:`~pulse2percept.models.`Horsager2009Temporal` [Horsager2009]_"""
 import numpy as np
 from .base import Model, TemporalModel
+from ..units import ms
 from ._horsager2009 import temporal_fast
 
 
@@ -63,10 +64,18 @@ class Horsager2009Temporal(TemporalModel):
         base_params.update(params)
         return base_params
 
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # The three time constants of the model cascade. `eps` and `beta` are
+        # fitted scaling and exponent terms, and take plain numbers:
+        return {**super().get_param_units(), 'tau1': ms, 'tau2': ms,
+                'tau3': ms}
+
     def _predict_temporal(self, stim, t_percept):
         """Predict the temporal response"""
         # Pass the stimulus as a 2D NumPy array to the fast Cython function:
-        stim_data = stim.data.reshape((-1, len(stim.time)))
+        time = self._stim_times(stim)
+        stim_data = self._stim_values(stim).reshape((-1, len(time)))
         # Calculate at which simulation time steps we need to output a percept.
         # This is basically t_percept/self.dt, but we need to beware of
         # floating point rounding errors! 29.999 will be rounded down to 29 by
@@ -77,7 +86,7 @@ class Horsager2009Temporal(TemporalModel):
                              f"of `dt`={self.dt:.2e}")
         # Cython returns a 2D (space x time) NumPy array:
         return temporal_fast(stim_data.astype(np.float32),
-                             stim.time.astype(np.float32),
+                             time.astype(np.float32),
                              idx_percept,
                              self.dt, self.tau1, self.tau2, self.tau3,
                              self.eps, self.beta, self.thresh_percept, self.n_threads)

@@ -1,7 +1,11 @@
 import numpy as np
 import numpy.testing as npt
+import pytest
 
 from pulse2percept.stimuli import GratingStimulus, BarStimulus
+from pulse2percept.units import (DimensionMismatchError, dimensionless,
+                                 ms, uA)
+from pulse2percept.units import s as sec
 
 
 def test_GratingStimulus():
@@ -65,3 +69,21 @@ def test_BarStimulus():
         npt.assert_almost_equal(bar.data[:2, :].ravel(), 0.5, decimal=2)
         npt.assert_almost_equal(bar.data[3:5, :].ravel(), 0.5, decimal=2)
         npt.assert_almost_equal(bar.data[-2:, :].ravel(), 0.5, decimal=2)
+
+
+def test_psychophysics_time_units():
+    # `time` is a duration, so it may be given as one:
+    for cls, kwargs in [(GratingStimulus, {}), (BarStimulus, {})]:
+        bare = cls((4, 4), time=100, **kwargs)
+        unitful = cls((4, 4), time=0.1 * sec, **kwargs)
+        npt.assert_array_equal(bare.data, unitful.data)
+        npt.assert_array_equal(bare.time, unitful.time)
+        # An explicit list of time points works too:
+        listed = cls((4, 4), time=[0, 20, 40] * ms, **kwargs)
+        npt.assert_almost_equal(listed.time, [0, 20, 40])
+        # These are visual stimuli: their pixels are gray levels, but their
+        # time is still physical.
+        npt.assert_equal(unitful.unit, dimensionless)
+        npt.assert_equal(unitful.time_unit, ms)
+        with pytest.raises(DimensionMismatchError):
+            cls((4, 4), time=5 * uA, **kwargs)

@@ -107,8 +107,10 @@ video.resize((40, 40)).rotate(10).invert().filter('median').play()
 # frame of the video matches the number of electrodes in the implant:
 
 implant = p2p.implants.ArgusII()
-# Assign the resized video to the implant:
-implant.stim = video.resize(implant.shape)
+# Assign the resized video to the implant, encoded into current: a model reads
+# current, and `encode` is what says how much of it a gray level stands for
+# (here 0-50 uA, as a 30 Hz pulse train that keeps up with the frame rate).
+implant.stim = video.resize(implant.shape).encode(freq=30)
 
 ##############################################################################
 # Then you can feed the video directly into any of the available models
@@ -117,7 +119,8 @@ implant.stim = video.resize(implant.shape)
 
 model = p2p.models.AxonMapModel()
 model.build()
-percept = model.predict_percept(implant)
+# One percept frame per video frame:
+percept = model.predict_percept(implant, t_percept=video.time)
 percept.play()
 
 ##############################################################################

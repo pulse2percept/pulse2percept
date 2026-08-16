@@ -7,9 +7,10 @@ from . import AxonMapSpatial, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
 from ..percepts import Percept
+from ..units import as_value, um
 from ..utils import FreezeError, rename_parameter
 from ..utils.base import has_own_attr
-from .base import NotBuiltError, BaseModel
+from .base import NotBuiltError, BaseModel, _require_stim_dimension
 from ._granley2021 import fast_biphasic_axon_map
 
 # `find_threshold` bisects on a scaled copy of the stimulus *data*. This model
@@ -119,6 +120,14 @@ class DefaultSizeModel(BaseModel):
         }
         return params
 
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # `rho` is a constructor argument rather than a default parameter, but
+        # it is still an attribute this object normalizes, and declaring it
+        # here is what makes `DefaultSizeModel(0.2 * mm)` work. a0-a6 are
+        # regression coefficients from the paper and take plain numbers:
+        return {**super().get_param_units(), 'rho': um, 'min_rho': um}
+
     def scale_threshold(self, pdur):
         """ 
         Based on eq 3 in paper, this function produces the factor that amplitude
@@ -176,6 +185,13 @@ class DefaultStreakModel(BaseModel):
             'min_lambda': 10,
         }
         return params
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        # `lam` is a constructor argument rather than a default parameter; see
+        # `DefaultSizeModel.get_param_units`. `min_lambda` is a floor on it,
+        # so it is a length too:
+        return {**super().get_param_units(), 'lam': um, 'min_lambda': um}
 
     def __call__(self, freq, amp, pdur):
         """
@@ -422,8 +438,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             raise TypeError(
                 "Stim must be of type Stimulus but it is " + str(type(stim)))
         elec_params = []
-        x = []
-        y = []
+        active = []
         try:
             for e in stim.electrodes:
                 amp = stim.metadata['electrodes'][str(e)]['metadata']['amp']
@@ -432,14 +447,16 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 freq = stim.metadata['electrodes'][str(e)]['metadata']['freq']
                 pdur = stim.metadata['electrodes'][str(e)]['metadata']['phase_dur']
                 elec_params.append([freq, amp, pdur])
-                x.append(earray[e].x)
-                y.append(earray[e].y)
+                active.append(e)
         except KeyError:
             raise TypeError(f"All stimuli must be BiphasicPulseTrains with no " +
                             f"delay dur")
         elec_params = np.array(elec_params, dtype=np.float32)
-        x = np.array(x, dtype=np.float32)
-        y = np.array(y, dtype=np.float32)
+        # Only the electrodes that are actually driven, in the order they were
+        # collected above:
+        xyz = earray.coordinates(self.space_unit, electrodes=active)
+        x = np.ascontiguousarray(xyz[:, 0], dtype=np.float32)
+        y = np.ascontiguousarray(xyz[:, 1], dtype=np.float32)
 
         bright_effects = np.array(self.bright_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]),
                                   dtype=np.float32).reshape((-1))
@@ -492,8 +509,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             A valid prosthesis system. A stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
         t_percept: float or list of floats, optional
-            The time points at which to output a percept (ms).
+            The time points at which to output a percept (ms). This
+            model's numerical contract is fixed to milliseconds.
             If None, ``implant.stim.time`` is used.
+            May be given as a unitful quantity (e.g. ``[0, 20] * ms``);
+            see :py:mod:`pulse2percept.units`.
 
         Returns
         -------
@@ -501,6 +521,21 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             A Percept object whose ``data`` container has dimensions Y x X x 1.
             Will return None if ``implant.stim`` is None.
         """
+        if not self.is_built:
+            raise NotBuiltError("Yout must call ``build`` first.")
+        if not isinstance(implant, ProsthesisSystem):
+            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
+                            f"not {type(implant)}.")
+        if implant.eye != self.eye:
+            raise ValueError(f"The implant is in {implant.eye} but the model "
+                             f"was built for {self.eye}.")
+        if implant.stim is None:
+            return None
+        # What physical quantity the stimulus is comes before what waveform
+        # it is: a picture is not an unsuitable pulse train, it is not a
+        # current at all, and saying so is more use than asking it for pulse
+        # metadata it was never going to have.
+        _require_stim_dimension(self, implant.stim)
         # Make sure stimulus is a BiphasicPulseTrain:
         if not isinstance(implant.stim, BiphasicPulseTrain):
             # Could still be a stimulus where each electrode has a biphasic pulse train
@@ -517,22 +552,12 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             except KeyError:
                 raise TypeError(f"All stimuli must be BiphasicPulseTrains with no " +
                                 f"delay dur")
-        if isinstance(implant, ProsthesisSystem):
-            if implant.eye != self.eye:
-                raise ValueError(f"The implant is in {implant.eye} but the model was "
-                                 f"built for {self.eye}.")
-        if not self.is_built:
-            raise NotBuiltError("Yout must call ``build`` first.")
-        if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
-                            f"not {type(implant)}.")
-        if implant.stim is None:
-            return None
+        t_percept = as_value(t_percept, self.time_unit, 't_percept')
         stim = implant.stim
-        if t_percept is None:
-            n_time = 1
-        else:
-            n_time = len(t_percept)
+        # `np.array([t]).size` rather than `len(t)`, so that the documented
+        # scalar spelling `t_percept=20` counts as one time point instead
+        # of raising -- the same idiom `SpatialModel.predict_percept` uses:
+        n_time = 1 if t_percept is None else np.array([t_percept]).size
         if not np.any(stim.data):
             # Stimulus is 0
             resp = np.zeros(list(self.grid.x.shape) + [n_time],
@@ -545,6 +570,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             resp[:, :, 0] = self._predict_spatial(
                 implant.earray, stim).reshape(self.grid.x.shape)
         return Percept(resp, space=self.grid, time=t_percept,
+                       time_unit=self.time_unit,
                        metadata={'stim': stim.metadata})
 
     def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
@@ -720,8 +746,11 @@ class BiphasicAxonMapModel(Model):
             A valid prosthesis system. A stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
         t_percept: float or list of floats, optional
-            The time points at which to output a percept (ms).
+            The time points at which to output a percept (ms). This
+            model's numerical contract is fixed to milliseconds.
             If None, ``implant.stim.time`` is used.
+            May be given as a unitful quantity (e.g. ``[0, 20] * ms``);
+            see :py:mod:`pulse2percept.units`.
 
         Returns
         -------
@@ -737,6 +766,7 @@ class BiphasicAxonMapModel(Model):
         if implant.stim is None or (not self.has_space and not self.has_time):
             # Nothing to see here:
             return None
+        _require_stim_dimension(self, implant.stim)
         resp = self.spatial.predict_percept(implant, t_percept=t_percept)
         return resp
 

@@ -5,6 +5,8 @@ from matplotlib.patches import Circle, Rectangle, RegularPolygon
 
 from pulse2percept.implants import (Electrode, DiskElectrode, PointSource,
                                     SquareElectrode, HexElectrode)
+from pulse2percept.units import (DimensionMismatchError, Quantity, dva, mm,
+                                 ms, uA, um)
 
 
 class ValidElectrode(Electrode):
@@ -139,3 +141,68 @@ def test_HexElectrode():
     npt.assert_equal(len(ax.texts), 0)
     npt.assert_equal(len(ax.patches), 1)
     npt.assert_equal(isinstance(ax.patches[0], RegularPolygon), True)
+
+
+def test_Electrode_units():
+    """Equivalent spellings of a position must give the same electrode"""
+    bare = DiskElectrode(1000, 0, 100, 200)
+    unitful = DiskElectrode(1 * mm, 0 * mm, 0.1 * mm, 0.2 * mm)
+    for attr in ('x', 'y', 'z', 'r'):
+        npt.assert_allclose(getattr(unitful, attr), getattr(bare, attr),
+                            rtol=1e-12)
+        # Electrodes store plain numbers, whatever they were given:
+        npt.assert_equal(isinstance(getattr(unitful, attr), Quantity), False)
+    # Including conversions that do not land on a round number:
+    awkward = DiskElectrode(0.0417 * mm, -8.3 * um, 0, 0.0083 * mm)
+    npt.assert_allclose([awkward.x, awkward.y, awkward.r], [41.7, -8.3, 8.3],
+                        rtol=1e-12)
+    # Every electrode type takes a unitful size:
+    npt.assert_allclose(SquareElectrode(0, 0, 0, 0.05 * mm).a, 50, rtol=1e-12)
+    npt.assert_allclose(HexElectrode(0, 0, 0, 0.05 * mm).a, 50, rtol=1e-12)
+    npt.assert_allclose(PointSource(1 * mm, 0, 0).x, 1000, rtol=1e-12)
+    # A quantity wrapping an array is refused for the same reason a bare array
+    # is, rather than being stored as one:
+    with pytest.raises(TypeError):
+        DiskElectrode(np.arange(3) * um, 0, 0, 100)
+    with pytest.raises(TypeError):
+        DiskElectrode(0, 0, 0, np.arange(1, 4) * um)
+
+
+def test_Electrode_dimension_errors():
+    for kwargs in ({'x': 5 * ms}, {'y': 5 * ms}, {'z': 5 * uA},
+                   {'r': 10 * uA}):
+        with pytest.raises(DimensionMismatchError):
+            DiskElectrode(**{'x': 0, 'y': 0, 'z': 0, 'r': 100, **kwargs})
+    for etype in (SquareElectrode, HexElectrode):
+        with pytest.raises(DimensionMismatchError):
+            etype(0, 0, 0, 2 * dva)
+    # The message names the offending argument:
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        DiskElectrode(0, 0, 0, 10 * uA)
+    npt.assert_equal("Parameter 'r' expects length (um), got electric current"
+                     in str(excinfo.value), True)
+
+
+def test_Electrode_coordinates():
+    elec = DiskElectrode(1000, 0, 100, 200)
+    npt.assert_almost_equal(elec.coordinates(), [1000, 0, 100])
+    npt.assert_allclose(elec.coordinates(mm), [1, 0, 0.1], rtol=1e-12)
+    npt.assert_equal(elec.coordinate_unit, um)
+    npt.assert_equal(isinstance(elec.coordinates(mm), np.ndarray), True)
+    with pytest.raises(DimensionMismatchError):
+        elec.coordinates(ms)
+
+
+def test_electric_potential_units():
+    """The point a potential is evaluated at is a position like any other"""
+    disk = DiskElectrode(0, 0, 0, 100)
+    npt.assert_allclose(disk.electric_potential(0.2 * mm, 0, 10 * um, 1),
+                        disk.electric_potential(200, 0, 10, 1), rtol=1e-12)
+    point = PointSource(0, 0, 0)
+    npt.assert_allclose(point.electric_potential(0.2 * mm, 0, 0.01 * mm, 1, 1),
+                        point.electric_potential(200, 0, 10, 1, 1), rtol=1e-12)
+    for elec, args in [(disk, (1,)), (point, (1, 1))]:
+        with pytest.raises(DimensionMismatchError):
+            elec.electric_potential(1 * ms, 0, 0, *args)
+        with pytest.raises(DimensionMismatchError):
+            elec.electric_potential(0, 1 * uA, 0, *args)
