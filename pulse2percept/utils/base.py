@@ -17,7 +17,9 @@ from functools import wraps
 from string import ascii_uppercase
 
 from .deprecation import warn_deprecated_params, rename_deprecated_params
-from ..units import as_value, dimensionless, has_units
+from ..units import as_value, dimensionless
+# Plumbing for the parameter hook below, not part of the public unit API:
+from ..units.base import has_units
 
 
 class PrettyPrint(object, metaclass=abc.ABCMeta):
@@ -307,6 +309,12 @@ class Parametrized(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         dimension the implementation does not actually commit to. Declaring a
         unit is a statement about what the equations assume, so a parameter
         should only appear here when that is documented or unambiguous.
+
+        This dict is not restricted to the names in ``get_default_params``: it
+        describes every physical attribute this object normalizes. A
+        constructor argument assigned straight to ``self`` --
+        :py:class:`~pulse2percept.models.granley2021.DefaultSizeModel` takes
+        ``rho`` that way -- belongs here too, and is converted like any other.
 
         Subclasses extend rather than replace it::
 

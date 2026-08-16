@@ -12,6 +12,8 @@ from pulse2percept.models import BiphasicAxonMapModel, BiphasicAxonMapSpatial, \
     AxonMapSpatial
 from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
+from pulse2percept.units import (DimensionMismatchError, Quantity, mm, ms, uA,
+                                 um)
 from pulse2percept.utils.base import FreezeError
 from pulse2percept.utils.testing import assert_warns_msg
 
@@ -165,6 +167,32 @@ def test_effects_models():
     model = DefaultStreakModel(200, **model_coeffs)
     npt.assert_equal(hasattr(model, 'a0'), False)
     npt.assert_equal(hasattr(model, 'a9'), True)
+
+
+def test_effects_models_units():
+    # `rho` and `lam` are constructor arguments rather than entries in
+    # `get_default_params`, but they are still lengths, and are still
+    # normalized before being stored:
+    size = DefaultSizeModel(0.2 * mm, min_rho=20 * um)
+    npt.assert_almost_equal(size.rho, 200)
+    npt.assert_almost_equal(size.min_rho, 20)
+    streak = DefaultStreakModel(0.5 * mm, min_lambda=20 * um)
+    npt.assert_almost_equal(streak.lam, 500)
+    npt.assert_almost_equal(streak.min_lambda, 20)
+    # Plain numbers, not quantities, so the equations can use them:
+    for value in (size.rho, size.min_rho, streak.lam, streak.min_lambda):
+        npt.assert_equal(isinstance(value, Quantity), False)
+        npt.assert_equal(isinstance(value, (int, float)), True)
+    # Both spellings give the same scaling factor:
+    npt.assert_almost_equal(DefaultSizeModel(0.2 * mm)(20, 1, 0.45),
+                            DefaultSizeModel(200)(20, 1, 0.45))
+    npt.assert_almost_equal(DefaultStreakModel(0.5 * mm)(20, 1, 0.45),
+                            DefaultStreakModel(500)(20, 1, 0.45))
+    # And a current is not a length:
+    with pytest.raises(DimensionMismatchError):
+        DefaultSizeModel(200 * uA)
+    with pytest.raises(DimensionMismatchError):
+        DefaultStreakModel(500 * ms)
 
 
 @pytest.mark.parametrize('cls, arg', [(DefaultSizeModel, 200),

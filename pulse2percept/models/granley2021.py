@@ -122,9 +122,11 @@ class DefaultSizeModel(BaseModel):
 
     def get_param_units(self):
         """Return a dict of the units that parameters are stored in"""
-        # A floor on `rho`, so it is a length like `rho`. a0-a6 are regression
-        # coefficients from the paper and take plain numbers:
-        return {**super().get_param_units(), 'min_rho': um}
+        # `rho` is a constructor argument rather than a default parameter, but
+        # it is still an attribute this object normalizes, and declaring it
+        # here is what makes `DefaultSizeModel(0.2 * mm)` work. a0-a6 are
+        # regression coefficients from the paper and take plain numbers:
+        return {**super().get_param_units(), 'rho': um, 'min_rho': um}
 
     def scale_threshold(self, pdur):
         """ 
@@ -186,8 +188,10 @@ class DefaultStreakModel(BaseModel):
 
     def get_param_units(self):
         """Return a dict of the units that parameters are stored in"""
-        # A floor on `lam`, so it is a length like `lam`:
-        return {**super().get_param_units(), 'min_lambda': um}
+        # `lam` is a constructor argument rather than a default parameter; see
+        # `DefaultSizeModel.get_param_units`. `min_lambda` is a floor on it,
+        # so it is a length too:
+        return {**super().get_param_units(), 'lam': um, 'min_lambda': um}
 
     def __call__(self, freq, amp, pdur):
         """

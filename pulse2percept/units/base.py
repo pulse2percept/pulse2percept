@@ -76,8 +76,16 @@ _EQ_RTOL = 1e-12
 
 
 def _isclose(a, b):
-    """Compare magnitudes up to floating-point conversion noise"""
-    result = np.isclose(a, b, rtol=_EQ_RTOL, atol=0.0)
+    """Compare magnitudes up to floating-point conversion noise
+
+    Returns ``NotImplemented`` if the two are not comparable as numbers at
+    all, so that ``5 * dimensionless == 'foo'`` answers the question with
+    False rather than raising: equality is asked, not asserted.
+    """
+    try:
+        result = np.isclose(a, b, rtol=_EQ_RTOL, atol=0.0)
+    except (TypeError, ValueError):
+        return NotImplemented
     # Scalars in, scalar out; arrays stay elementwise:
     return bool(result) if np.ndim(result) == 0 else result
 

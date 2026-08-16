@@ -222,6 +222,14 @@ def test_Quantity_comparison():
     npt.assert_equal(500 * uA == 500 * ms, False)
     npt.assert_equal(500 * uA == 500, False)
     npt.assert_equal(500 * uA == 'foo', False)
+    # Including when the quantity is dimensionless, and the comparison would
+    # otherwise be handed straight to np.isclose:
+    npt.assert_equal(5 * dimensionless == 'foo', False)
+    for nothing in (None,):
+        npt.assert_equal(500 * uA == nothing, False)
+        npt.assert_equal(5 * dimensionless == nothing, False)
+    npt.assert_equal(5 * dimensionless != 'foo', True)
+    npt.assert_equal(5 * dimensionless == 5, True)
     # Ordering, on the other hand, is meaningless across dimensions:
     with pytest.raises(DimensionMismatchError):
         (5 * uA) < (2 * ms)

@@ -26,7 +26,7 @@ Three rules describe the whole feature:
 
 """
 from .base import (Dimension, Unit, Quantity, DimensionMismatchError, as_value,
-                   has_units, dimensionless,
+                   dimensionless,
                    # time
                    s, ms, us, ns,
                    # frequency
@@ -47,7 +47,6 @@ __all__ = [
     'Dimension',
     'DimensionMismatchError',
     'dimensionless',
-    'has_units',
     'Quantity',
     'Unit',
     's', 'ms', 'us', 'ns',

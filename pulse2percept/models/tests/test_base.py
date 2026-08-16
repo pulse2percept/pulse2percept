@@ -15,6 +15,7 @@ from pulse2percept.percepts import Percept
 from pulse2percept.models import (BaseModel, FadingTemporal, Model,
                                   NotBuiltError, ScoreboardSpatial,
                                   SpatialModel, TemporalModel)
+from pulse2percept.units import DimensionMismatchError, dva, mm, ms, s, uA, um
 from pulse2percept.utils import FreezeError, frame_interval
 from pulse2percept.topography import Grid2D, Watson2014Map
 
@@ -295,6 +296,62 @@ class ValidTemporalModel(TemporalModel):
         if not self.is_built:
             raise NotBuiltError
         return np.zeros((stim.data.shape[0], len(t_percept)), dtype=np.float32)
+
+
+def test_Model_units():
+    # A composite Model forwards parameters to its sub-models through its own
+    # `__setattr__`, which never routes through `Parametrized.set_params`.
+    # That is the path the `freeze_class` normalization hook exists for, so
+    # every way of reaching a sub-model parameter is pinned here.
+    model = Model(temporal=FadingTemporal())
+    model.tau = 0.1 * s
+    npt.assert_almost_equal(model.temporal.tau, 100)
+    npt.assert_equal(isinstance(model.temporal.tau, float), True)
+    model.build(tau=0.2 * s)
+    npt.assert_almost_equal(model.temporal.tau, 200)
+    model.set_params({'tau': 300 * ms})
+    npt.assert_almost_equal(model.temporal.tau, 300)
+    # Straight to the sub-model, bypassing the composite entirely:
+    model.temporal.tau = 0.4 * s
+    npt.assert_almost_equal(model.temporal.tau, 400)
+    # A dimension mismatch is not swallowed by the spatial/temporal probing:
+    with pytest.raises(DimensionMismatchError):
+        model.tau = 5 * uA
+    with pytest.raises(DimensionMismatchError):
+        Model(temporal=FadingTemporal()).build(dt=5 * um)
+    # Both halves of a spatial+temporal model normalize independently:
+    model = Model(spatial=ScoreboardSpatial(), temporal=FadingTemporal())
+    model.set_params({'rho': 0.3 * mm, 'tau': 0.15 * s, 'dt': 0.01 * ms})
+    npt.assert_almost_equal(model.spatial.rho, 300)
+    npt.assert_almost_equal(model.temporal.tau, 150)
+    npt.assert_almost_equal(model.temporal.dt, 0.01)
+
+
+def test_SpatialModel_units():
+    # A range can be given as a quantity wrapping a pair...
+    model = ScoreboardSpatial(xrange=(-5, 5) * dva, yrange=(-4, 4) * dva,
+                              xystep=1 * dva)
+    npt.assert_almost_equal(model.xrange, [-5, 5])
+    npt.assert_almost_equal(model.yrange, [-4, 4])
+    npt.assert_almost_equal(model.xystep, 1)
+    # ... or as a pair of quantities, which keeps the tuple it was given:
+    model = ScoreboardSpatial(xrange=(-5 * dva, 5 * dva))
+    npt.assert_equal(model.xrange, (-5, 5))
+    # Either way it grids identically to the bare-number spelling:
+    bare = ScoreboardSpatial(xrange=(-5, 5), yrange=(-5, 5), xystep=1).build()
+    for unitful in (ScoreboardSpatial(xrange=(-5, 5) * dva,
+                                      yrange=(-5, 5) * dva, xystep=1 * dva),
+                    ScoreboardSpatial(xrange=(-5 * dva, 5 * dva),
+                                      yrange=(-5 * dva, 5 * dva),
+                                      xystep=1 * dva)):
+        unitful.build()
+        npt.assert_almost_equal(bare.grid.x, unitful.grid.x)
+        npt.assert_almost_equal(bare.grid.y, unitful.grid.y)
+    # A range in the wrong dimension is caught elementwise too:
+    with pytest.raises(DimensionMismatchError):
+        ScoreboardSpatial(xrange=(-5 * um, 5 * um))
+    with pytest.raises(DimensionMismatchError):
+        ScoreboardSpatial(xrange=(-5, 5) * um)
 
 
 def test_TemporalModel():

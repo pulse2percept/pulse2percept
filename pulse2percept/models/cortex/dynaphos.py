@@ -274,7 +274,7 @@ class DynaphosModel(BaseModel):
         D = np.zeros(len(x_el))
         # holds sigma for gaussian phosphene generation
         sigma = np.zeros(len(x_el))
-        # constant for trace decay (seconds)
+        # constant for trace decay (ms; divided by 1000 where it is used)
         tau_trace = self.tau_trace
         # input effect for trace
         kappa_trace = self.kappa_trace
