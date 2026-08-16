@@ -80,8 +80,8 @@ class ElectrodeArray(PrettyPrint):
         return {'electrodes': self.electrodes,
                 'n_electrodes': self.n_electrodes}
 
-    def coordinates(self, unit=None):
-        """Positions of every electrode in the array
+    def coordinates(self, unit=None, electrodes=None):
+        """Positions of the electrodes in the array
 
         The one place to ask an implant where its electrodes are. Code that
         needs the coordinates in a particular unit says so here, instead of
@@ -95,14 +95,22 @@ class ElectrodeArray(PrettyPrint):
         unit : :py:class:`~pulse2percept.units.Unit`, optional
             Length unit to express the coordinates in. If None, they are
             returned as they are stored (microns).
+        electrodes : array_like, optional
+            Which electrodes to return, named or indexed as for
+            ``earray[...]``, and in the order wanted. If None, every electrode
+            in the array, in array order.
+
+            A model passes ``stim.electrodes`` here: a stimulus need not name
+            every electrode of the implant, and need not name them in array
+            order, so the coordinates it wants are a reordered subset.
 
         Returns
         -------
         coords : (n_electrodes, 3) np.ndarray
-            One ``[x, y, z]`` row per electrode, in the order the electrodes
-            appear in the array. An ordinary NumPy array, never a
-            :py:class:`~pulse2percept.units.Quantity`: this is the boundary a
-            numerical implementation should take the geometry across.
+            One ``[x, y, z]`` row per electrode. An ordinary NumPy array,
+            never a :py:class:`~pulse2percept.units.Quantity`: this is the
+            boundary a numerical implementation should take the geometry
+            across.
 
         Examples
         --------
@@ -110,9 +118,24 @@ class ElectrodeArray(PrettyPrint):
         >>> from pulse2percept.units import mm
         >>> ArgusII().earray.coordinates(mm)[0]
         array([-2.5875, -1.4375,  0.    ])
+        >>> ArgusII().earray.coordinates(electrodes=['F10', 'A1'])
+        array([[ 2587.5,  1437.5,     0. ],
+               [-2587.5, -1437.5,     0. ]])
 
         """
-        xyz = np.array([[e.x, e.y, e.z] for e in self.electrode_objects],
+        if electrodes is None:
+            elecs = self.electrode_objects
+        else:
+            elecs = [self[name] for name in electrodes]
+            # `__getitem__` answers None for a name the array does not have,
+            # which would otherwise surface as an AttributeError three frames
+            # deep in a model:
+            missing = [str(name) for name, e in zip(electrodes, elecs)
+                       if e is None]
+            if missing:
+                raise ValueError(f"Electrode(s) {missing[:10]} are not in "
+                                 f"this array.")
+        xyz = np.array([[e.x, e.y, e.z] for e in elecs],
                        dtype=float).reshape((-1, 3))
         if unit is None:
             return xyz

@@ -94,7 +94,11 @@ for ax, transform in zip(axes, transforms):
 # For this purpose, let us create an :py:class:`~pulse2percept.models.AlphaAMS`
 # device on the fovea and feed it a suitable stimulus:
 
-implant = p2p.implants.AlphaAMS(stim=p2p.stimuli.LogoUCSB())
+# The image has to be encoded into current before a model can read it: gray
+# levels are not microamps, and `encode` is the step that says how much
+# current each one stands for.
+implant = p2p.implants.AlphaAMS()
+implant.stim = p2p.stimuli.LogoUCSB().encode(implant=implant)
 implant.stim
 
 ###############################################################################

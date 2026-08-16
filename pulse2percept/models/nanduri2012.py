@@ -72,15 +72,12 @@ class Nanduri2012Spatial(SpatialModel):
         """Predicts the brightness at spatial locations"""
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        return spatial_fast(stim.data,
-                            np.array([earray[e].x for e in stim.electrodes],
-                                     dtype=np.float32),
-                            np.array([earray[e].y for e in stim.electrodes],
-                                     dtype=np.float32),
-                            np.array([earray[e].z for e in stim.electrodes],
-                                     dtype=np.float32),
-                            np.array([earray[e].r for e in stim.electrodes],
-                                     dtype=np.float32),
+        x_el, y_el, z_el = self._electrode_coords(earray, stim)
+        # The disk radius is a size rather than a coordinate, so it is read
+        # directly. `predict_percept` has already refused anything but disks:
+        r_el = np.ascontiguousarray([earray[e].r for e in stim.electrodes],
+                                    dtype=np.float32)
+        return spatial_fast(stim.data, x_el, y_el, z_el, r_el,
                             self.grid.ret.x.ravel(),
                             self.grid.ret.y.ravel(),
                             self.atten_a,

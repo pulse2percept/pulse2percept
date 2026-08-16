@@ -163,11 +163,8 @@ class ScoreboardSpatial(SpatialModel):
             warnings.warn(msg)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        return fast_scoreboard(stim.data,
-                               np.array([earray[e].x for e in stim.electrodes],
-                                        dtype=np.float32),
-                               np.array([earray[e].y for e in stim.electrodes],
-                                        dtype=np.float32),
+        x_el, y_el, _ = self._electrode_coords(earray, stim)
+        return fast_scoreboard(stim.data, x_el, y_el,
                                self.grid.ret.x.ravel(),
                                self.grid.ret.y.ravel(),
                                self.rho,
@@ -946,11 +943,8 @@ class AxonMapSpatial(SpatialModel):
             warnings.warn(msg)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
-        return fast_axon_map(stim.data,
-                             np.array([earray[e].x for e in stim.electrodes],
-                                      dtype=np.float32),
-                             np.array([earray[e].y for e in stim.electrodes],
-                                      dtype=np.float32),
+        x_el, y_el, _ = self._electrode_coords(earray, stim)
+        return fast_axon_map(stim.data, x_el, y_el,
                              self.axon_contrib,
                              self.axon_idx_start.astype(np.uint32),
                              self.axon_idx_end.astype(np.uint32),

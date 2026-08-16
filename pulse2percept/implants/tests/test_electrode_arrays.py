@@ -5,6 +5,7 @@ from collections import OrderedDict
 
 from pulse2percept.implants import (DiskElectrode, PointSource,
                                     ElectrodeArray, ElectrodeGrid)
+from pulse2percept.implants import ArgusII
 from pulse2percept.stimuli import ElectrodeNames
 from pulse2percept.units import (DimensionMismatchError, Quantity, cm, dva,
                                  mm, ms, uA, um)
@@ -526,3 +527,29 @@ def test_ElectrodeGrid_dimension_errors():
     rad = np.deg2rad(5)
     npt.assert_allclose(ElectrodeGrid((2, 2), 400, rot=5)['A1'].x,
                         -200 * np.cos(rad) + 200 * np.sin(rad), rtol=1e-12)
+
+
+def test_ElectrodeArray_coordinates_subset():
+    """`electrodes=` selects and reorders, which is what a stimulus needs"""
+    implant = ArgusII()
+    earray = implant.earray
+    names = ['F10', 'A1', 'C5']
+    coords = earray.coordinates(electrodes=names)
+    npt.assert_equal(coords.shape, (3, 3))
+    npt.assert_almost_equal(coords[:, 0], [implant[e].x for e in names])
+    npt.assert_almost_equal(coords[:, 1], [implant[e].y for e in names])
+    # Order follows the request, not the array:
+    npt.assert_almost_equal(earray.coordinates(electrodes=['A1', 'F10']),
+                            earray.coordinates(electrodes=['F10', 'A1'])[::-1])
+    # Converted the same way as the full array:
+    npt.assert_allclose(earray.coordinates(mm, electrodes=names),
+                        earray.coordinates(electrodes=names) / 1000,
+                        rtol=1e-12)
+    # An electrode the array does not have says so, rather than surfacing as
+    # an AttributeError somewhere downstream:
+    with pytest.raises(ValueError) as excinfo:
+        earray.coordinates(electrodes=['A1', 'Z99'])
+    npt.assert_equal('Z99' in str(excinfo.value), True)
+    # Repeats are allowed: nothing here says an electrode may appear once.
+    npt.assert_almost_equal(earray.coordinates(electrodes=['A1', 'A1']),
+                            earray.coordinates(electrodes=['A1', 'A1']))

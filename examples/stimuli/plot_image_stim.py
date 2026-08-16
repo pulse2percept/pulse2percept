@@ -184,13 +184,24 @@ implant.plot()
 
 ##############################################################################
 # Since :py:class:`~pulse2percept.implants.AlphaAMS` is a 2D electrode grid,
-# all we need to do is downscale the image to the size of the grid:
+# all we need to do is downscale the image to the size of the grid, and then
+# *encode* it:
 
-implant.stim = logo_gray.resize(implant.shape)
+implant.stim = logo_gray.resize(implant.shape).encode()
 
 ##############################################################################
-# This way, the pixels of the image will be assigned to the electrodes in
+# The downscaling assigns the pixels of the image to the electrodes in
 # row-by-row order (i.e., we don't need to specify the actual electrode names).
+#
+# The encoding is what turns those pixels into stimulation. A gray level is
+# not a current, and a model reads current, so something has to say how much
+# current a gray level stands for --
+# :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` is that something. By
+# default it maps gray levels in [0, 1] onto a 20 Hz train of
+# :py:class:`~pulse2percept.stimuli.BiphasicPulse` with amplitudes in
+# [0, 50] uA; the section below shows how to change that. Handing the model an
+# un-encoded image raises a
+# :py:class:`~pulse2percept.units.DimensionMismatchError`.
 #
 # .. note ::
 #
@@ -208,15 +219,16 @@ percept_gray = model.predict_percept(implant)
 ##############################################################################
 # .. note ::
 #
-#     Because neither :py:class:`~pulse2percept.stimuli.ImageStimulus` nor
-#     :py:class:`~pulse2percept.models.ScoreboardModel` can handle time, the
-#     resulting percept will consist of a single image/frame.
+#     :py:class:`~pulse2percept.models.ScoreboardModel` has no temporal
+#     component, so it reports the instantaneous brightness of each frame of
+#     the pulse train. :py:meth:`~pulse2percept.percepts.Percept.plot` shows
+#     the brightest of them.
 #
 # To see what difference our image preprocessing makes on the quality of the
 # resulting percept, we can re-run the model on ``logo_dilate`` and plot the
 # two percepts side-by-side:
 
-implant.stim = logo_dilate.trim().resize(implant.shape)
+implant.stim = logo_dilate.trim().resize(implant.shape).encode()
 percept_dilate = model.predict_percept(implant)
 
 fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(10, 4))
@@ -224,19 +236,17 @@ percept_gray.plot(ax=ax1)
 percept_dilate.plot(ax=ax2)
 
 ##############################################################################
-# Converting the image to a series of electrical pulses
-# -----------------------------------------------------
+# Customizing the encoding
+# ------------------------
 #
-# :py:class:`~pulse2percept.stimuli.ImageStimulus` has an
-# :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` method
-# to convert an image into a series of pulse trains (i.e., into electrical
+# The :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` method used above
+# converts an image into a series of pulse trains (i.e., into electrical
 # stimuli with a time component).
 #
-# By default, the ``encode`` method will interpret the gray level of a pixel as
-# the current amplitude of a 20 Hz train of
-# :py:class:`~pulse2percept.stimuli.BiphasicPulse` (0.46 ms phase duration),
-# lasting 500 ms overall. Gray levels in the range [0, 1] are mapped onto
-# currents in the range [0, 50] uA:
+# By default, it interprets the gray level of a pixel as the current amplitude
+# of a 20 Hz train of :py:class:`~pulse2percept.stimuli.BiphasicPulse`
+# (0.46 ms phase duration), lasting 500 ms overall. Gray levels in the range
+# [0, 1] are mapped onto currents in the range [0, 50] uA:
 
 implant.stim = logo_dilate.trim().resize(implant.shape).encode()
 

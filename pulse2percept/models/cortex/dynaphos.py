@@ -3,7 +3,7 @@ import numpy as np
 import warnings
 from copy import deepcopy, copy
 
-from ..base import BaseModel, NotBuiltError
+from ..base import BaseModel, NotBuiltError, _require_stim_dimension
 from ...percepts import Percept
 from ...implants import ProsthesisSystem
 from ...units import dva, Hz, mm, ms, uA
@@ -212,10 +212,7 @@ class DynaphosModel(BaseModel):
                     
     def _predict_percept(self, earray, stim, t_percept):
         """Predicts the brightness at spatial locations over time"""
-        x_el = np.array([earray[e].x for e in stim.electrodes],
-                                        dtype=np.float32)
-        y_el = np.array([earray[e].y for e in stim.electrodes],
-                                            dtype=np.float32)
+        x_el, y_el, _ = self._electrode_coords(earray, stim)
         # whether to allow current to spread between hemispheres
         separate = 0
         boundary = 0
@@ -367,6 +364,7 @@ class DynaphosModel(BaseModel):
         if implant.stim is None:
             # Nothing to see here:
             return None
+        _require_stim_dimension(self, implant.stim)
         if implant.stim.time is None and t_percept is not None:
             raise ValueError(f"Cannot calculate spatial response at times "
                              f"t_percept={t_percept} because stimulus does not "

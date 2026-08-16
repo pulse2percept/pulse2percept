@@ -166,10 +166,14 @@ def test_ProsthesisSystem_reshape_stim(rot, gtype, n_frames):
     npt.assert_equal(implant.stim.time, 2 * np.arange(3 * n_frames))
 
     # Verify that a horizontal stimulus will always appear horizontally, even if
-    # the device is rotated:
+    # the device is rotated. What is under test is where `reshape_stim` puts
+    # the pixels, so the sampled gray levels are handed to the model as an
+    # ordinary electrical stimulus rather than encoded -- a model reads
+    # current, and the one-uA-per-gray-level reading has to be written down:
     data = np.zeros((50, 50))
     data[20:-20, 10:-10] = 1
-    implant.stim = ImageStimulus(data)
+    sampled = implant.reshape_stim(ImageStimulus(data))
+    implant.stim = Stimulus(sampled.data, electrodes=sampled.electrodes)
     model = ScoreboardModel(xrange=(-1, 1), yrange=(-1, 1), rho=30, xystep=0.02)
     model.build()
     percept = label(model.predict_percept(implant).data.squeeze().T > 0.2)

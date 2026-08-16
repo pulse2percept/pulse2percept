@@ -10,6 +10,8 @@ from pulse2percept.implants.cortex import Cortivis, Orion
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import BiphasicPulseTrain
+from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
+                                 ms, uA, um)
 
 def test_DynaphosModel():
     model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), xystep=0.1).build()
@@ -115,3 +117,26 @@ def test_dynaphos_plot():
     m.build()
     m.plot()
     plt.close()
+
+
+def test_DynaphosModel_units():
+    """A unitful parameter lands on the same percept as the bare one
+
+    `rheobase` is a current in microamps, and 0.0239 mA is 23.9 uA -- but
+    23.900000000000002 after the multiplication, which is why this compares
+    with a tolerance rather than for equality.
+    """
+    kwargs = dict(xrange=(-3, 3), yrange=(-3, 3), xystep=0.5)
+    bare = DynaphosModel(rheobase=23.9, **kwargs).build()
+    unitful = DynaphosModel(rheobase=0.0239 * mA, **kwargs).build()
+    npt.assert_allclose(unitful.rheobase, 23.9, rtol=1e-12)
+    npt.assert_equal(isinstance(unitful.rheobase, Quantity), False)
+    implant = Cortivis(stim={'11': BiphasicPulseTrain(20, 50, 0.45,
+                                                      stim_dur=100)})
+    npt.assert_allclose(unitful.predict_percept(implant).data,
+                        bare.predict_percept(implant).data, rtol=1e-6)
+    # The model states what its numbers mean:
+    npt.assert_equal((bare.stimulus_unit, bare.space_unit, bare.time_unit),
+                     (uA, um, ms))
+    with pytest.raises(DimensionMismatchError):
+        DynaphosModel(rheobase=5 * ms)

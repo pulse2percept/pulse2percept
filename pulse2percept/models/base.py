@@ -12,9 +12,10 @@ import multiprocessing
 
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
+from ..stimuli.base import _describe_unit
 from ..percepts import Percept
 from ..topography import Curcio1990Map, Grid2D
-from ..units import dva, ms, um, uA
+from ..units import DimensionMismatchError, as_value, dva, ms, um, uA
 from ..utils import (PrettyPrint, FreezeError, Parametrized, bisect,
                      warn_deprecated_params, rename_deprecated_params)
 from ..utils.constants import ZORDER
@@ -176,6 +177,38 @@ def _frame_clock(stim, dt):
     return ends * dt, start * dt
 
 
+def _require_stim_dimension(model, stim):
+    """Refuse a stimulus that is not the physical quantity a model reads
+
+    Only the *dimension* has to match; a stimulus in a compatible unit is
+    converted rather than refused. In practice there is nothing left for a
+    model to convert, because :py:class:`~pulse2percept.stimuli.Stimulus`
+    canonicalizes to microamps when it is built -- an amplitude given as
+    ``0.05 * mA`` is already 50 by the time any model sees it.
+
+    The dimension is another matter, and is the model's to insist on. Gray
+    levels are not small currents, so a model that multiplied them by a
+    Gaussian current spread and called the result brightness would be doing
+    exactly the silent reinterpretation ``stimulus_unit`` exists to declare
+    away. A picture becomes a stimulus by being encoded (see
+    :py:class:`~pulse2percept.stimuli.Encoder`), which is where the gray
+    levels are given a current to stand for.
+
+    A :py:class:`~pulse2percept.percepts.Percept` is not checked: it is
+    brightness, the output of a spatial model, and carries no unit.
+    """
+    if not isinstance(stim, Stimulus):
+        return
+    if stim.unit.dimension == model.stimulus_unit.dimension:
+        return
+    raise DimensionMismatchError(
+        f"{type(model).__name__} reads its stimulus as "
+        f"{_describe_unit(model.stimulus_unit)}, and this one is measured in "
+        f"{_describe_unit(stim.unit)}. Encode it with "
+        f"pulse2percept.stimuli.AmplitudeEncoder or FrequencyEncoder, which "
+        f"is what says how much current a gray level stands for.")
+
+
 class NotBuiltError(ValueError, AttributeError):
     """Exception class used to raise if model is used before building
 
@@ -200,6 +233,24 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
 
     """
 
+    # The units a model's numerical implementation works in. p2p converts a
+    # unitful argument to these at the API boundary and hands the kernels
+    # ordinary numbers, so these are a statement about what the numbers *are*,
+    # not a setting to change: a model that wanted different ones would have to
+    # be written against them throughout. A model uses whichever apply to it --
+    # a purely temporal model has no use for `space_unit`.
+    #
+    # Their purpose is to spare a model's internals from knowing where the
+    # canonical units are fixed. `earray.coordinates(self.space_unit)` says
+    # what it needs; `[e.x for e in ...]` merely happens to be right.
+
+    #: The unit stimulus values are expressed in
+    stimulus_unit = uA
+    #: The unit spatial coordinates are expressed in
+    space_unit = um
+    #: The unit time is expressed in
+    time_unit = ms
+
     def __init__(self, **params):
         """BaseModel constructor
 
@@ -215,6 +266,33 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
     def _build(self):
         """Customize the building process by implementing this method"""
         pass
+
+    def _electrode_coords(self, earray, stim):
+        """Where the electrodes a stimulus names are, ready for a kernel
+
+        Returns one contiguous float32 array per axis, expressed in
+        ``space_unit``, which is what the Cython kernels take.
+
+        Asks for ``stim.electrodes`` rather than for the array as it stands,
+        because a stimulus need not name every electrode of the implant and
+        need not name them in array order: what the kernel needs is one
+        coordinate per *row of the stimulus*.
+
+        Parameters
+        ----------
+        earray : :py:class:`~pulse2percept.implants.ElectrodeArray`
+            The electrode array to look the coordinates up in.
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
+            The stimulus whose electrodes to look up.
+
+        Returns
+        -------
+        x, y, z : (n_electrodes,) np.ndarray of np.float32
+
+        """
+        xyz = earray.coordinates(self.space_unit, electrodes=stim.electrodes)
+        return tuple(np.ascontiguousarray(xyz[:, i], dtype=np.float32)
+                     for i in range(3))
 
     def build(self, **build_params):
         """Build the model
@@ -490,6 +568,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         t_percept: float or list of floats, optional
             The time points at which to output a percept (ms).
             If None, ``implant.stim.time`` is used.
+            May be given as a unitful quantity (e.g. ``[0, 20] * ms``); see
+            :py:mod:`pulse2percept.units`.
 
         Returns
         -------
@@ -503,9 +583,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError(f"'implant' must be a ProsthesisSystem object, "
                             f"not {type(implant)}.")
+        t_percept = as_value(t_percept, self.time_unit, 't_percept')
         if implant.stim is None:
             # Nothing to see here:
             return None
+        _require_stim_dimension(self, implant.stim)
         if implant.stim.time is None and t_percept is not None:
             raise ValueError(f"Cannot calculate spatial response at times "
                              f"t_percept={t_percept} because stimulus does not "
@@ -589,7 +671,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             Range of amplitudes to search (uA).
         amp_tol : float, optional
             Search will stop if candidate range of amplitudes is within
-            ``amp_tol``
+            ``amp_tol`` (uA)
         bright_tol : float, optional
             Search will stop if model brightness is within ``bright_tol`` of
             ``bright_th``
@@ -602,10 +684,21 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             Threshold current (uA), estimated so that the output of
             ``model.predict_percept(stim(amp_th))`` is within ``bright_tol`` of
             ``bright_th``.
+
+        Notes
+        -----
+        *  ``amp_range`` and ``amp_tol`` may be given as unitful quantities
+           (e.g. ``amp_range=(0, 1 * mA)``); the answer comes back as a plain
+           number of microamps. ``bright_th`` and ``bright_tol`` are model
+           output, which is not a physical quantity and carries no unit. See
+           :py:mod:`pulse2percept.units`.
+
         """
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError(f"'implant' must be a ProsthesisSystem, not "
                             f"{type(implant)}.")
+        amp_range = as_value(amp_range, self.stimulus_unit, 'amp_range')
+        amp_tol = as_value(amp_tol, self.stimulus_unit, 'amp_tol')
 
         def inner_predict(amp, fnc_predict, implant):
             _implant = deepcopy(implant)
@@ -890,6 +983,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         if not isinstance(stim, (Stimulus, Percept)):
             raise TypeError(f"'stim' must be a Stimulus or Percept object, "
                             f"not {type(stim)}.")
+        t_percept = as_value(t_percept, self.time_unit, 't_percept')
+        _require_stim_dimension(self, stim)
         if stim.time is None:
             raise ValueError("Cannot calculate temporal response, because "
                              "stimulus/percept does not have a time "
@@ -1007,7 +1102,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             Range of amplitudes to search (uA).
         amp_tol : float, optional
             Search will stop if candidate range of amplitudes is within
-            ``amp_tol``
+            ``amp_tol`` (uA)
         bright_tol : float, optional
             Search will stop if model brightness is within ``bright_tol`` of
             ``bright_th``
@@ -1023,9 +1118,21 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             Threshold current (uA), estimated so that the output of
             ``model.predict_percept(stim(amp_th))`` is within ``bright_tol`` of
             ``bright_th``.
+
+        Notes
+        -----
+        *  ``amp_range``, ``amp_tol`` and ``t_percept`` may be given as unitful
+           quantities; the answer comes back as a plain number of microamps.
+           ``bright_th`` and ``bright_tol`` are model output, which is not a
+           physical quantity and carries no unit. See
+           :py:mod:`pulse2percept.units`.
+
         """
         if not isinstance(stim, Stimulus):
             raise TypeError(f"'stim' must be a Stimulus, not {type(stim)}.")
+        amp_range = as_value(amp_range, self.stimulus_unit, 'amp_range')
+        amp_tol = as_value(amp_tol, self.stimulus_unit, 'amp_tol')
+        t_percept = as_value(t_percept, self.time_unit, 't_percept')
 
         def inner_predict(amp, fnc_predict, stim, **kwargs):
             # Carry the metadata across: it is what tells `predict_percept`
@@ -1079,6 +1186,19 @@ class Model(PrettyPrint):
         either the spatial model, the temporal model, or both.
 
     """
+
+    # Stated here rather than forwarded to the components, for two reasons: a
+    # Model with neither component still has to be able to normalize its
+    # arguments, and `__getattr__` answers with a *dict* when both components
+    # have the attribute. They are the same constants either way; see
+    # `BaseModel`.
+
+    #: The unit stimulus values are expressed in
+    stimulus_unit = uA
+    #: The unit spatial coordinates are expressed in
+    space_unit = um
+    #: The unit time is expressed in
+    time_unit = ms
 
     def __init__(self, spatial=None, temporal=None, **params):
         # Set the spatial model:
@@ -1336,9 +1456,13 @@ class Model(PrettyPrint):
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError(f"'implant' must be a ProsthesisSystem object, not "
                             f"{type(implant)}.")
+        # The sub-models normalize too; doing it here as well keeps the error
+        # message below reading in plain milliseconds:
+        t_percept = as_value(t_percept, self.time_unit, 't_percept')
         if implant.stim is None or (not self.has_space and not self.has_time):
             # Nothing to see here:
             return None
+        _require_stim_dimension(self, implant.stim)
         if implant.stim.time is None and t_percept is not None:
             raise ValueError(f"Cannot calculate temporal response at times "
                              f"t_percept={t_percept}, because stimulus/percept does not "
@@ -1393,10 +1517,22 @@ class Model(PrettyPrint):
             Threshold current (uA), estimated so that the output of
             ``model.predict_percept(stim(amp_th))`` is within ``bright_tol`` of
             ``bright_th``.
+
+        Notes
+        -----
+        *  ``amp_range``, ``amp_tol`` and ``t_percept`` may be given as unitful
+           quantities; the answer comes back as a plain number of microamps.
+           ``bright_th`` and ``bright_tol`` are model output, which is not a
+           physical quantity and carries no unit. See
+           :py:mod:`pulse2percept.units`.
+
         """
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError(f"'implant' must be a ProsthesisSystem, not "
                             f"{type(implant)}.")
+        amp_range = as_value(amp_range, self.stimulus_unit, 'amp_range')
+        amp_tol = as_value(amp_tol, self.stimulus_unit, 'amp_tol')
+        t_percept = as_value(t_percept, self.time_unit, 't_percept')
 
         def inner_predict(amp, fnc_predict, implant, **kwargs):
             _implant = deepcopy(implant)

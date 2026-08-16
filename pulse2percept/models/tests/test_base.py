@@ -8,14 +8,16 @@ import numpy.testing as npt
 from matplotlib.axes import Subplot
 import time
 
-from pulse2percept.implants import ArgusI
+from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
-                                   Stimulus, VideoStimulus)
+                                   ImageStimulus, Stimulus, VideoStimulus)
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (BaseModel, FadingTemporal, Model,
                                   NotBuiltError, ScoreboardSpatial,
                                   SpatialModel, TemporalModel)
-from pulse2percept.units import DimensionMismatchError, dva, mm, ms, s, uA, um
+from pulse2percept.units import (DimensionMismatchError, Quantity,
+                                 dimensionless, dva, mA, mm, ms, s, uA, um,
+                                 us)
 from pulse2percept.utils import FreezeError, frame_interval
 from pulse2percept.topography import Grid2D, Watson2014Map
 
@@ -959,3 +961,152 @@ def test_Model_deepcopy_preserves_submodels_and_params():
     # A built model stays built:
     built = Model(spatial=ValidSpatialModel(xystep=5)).build()
     npt.assert_equal(copy.deepcopy(built).is_built, True)
+
+
+def test_model_unit_contract():
+    """Every model states the units its numerical implementation works in"""
+    spatial = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2), xystep=1)
+    temporal = FadingTemporal()
+    for model in (spatial, temporal, Model(spatial=spatial),
+                  Model(spatial=spatial, temporal=temporal)):
+        npt.assert_equal(model.stimulus_unit, uA)
+        npt.assert_equal(model.time_unit, ms)
+    npt.assert_equal(spatial.space_unit, um)
+    # A composite states them itself: forwarding would answer with a dict when
+    # both components have them, and with nothing at all when it has neither.
+    npt.assert_equal(Model().time_unit, ms)
+    npt.assert_equal(Model().stimulus_unit, uA)
+    npt.assert_equal(Model().space_unit, um)
+
+
+def test_model_electrode_coords_follow_the_stimulus():
+    """Coordinates come back per row of the stimulus, not per electrode
+
+    A stimulus need not name every electrode of the implant, and a dict
+    stimulus need not name them in array order, so the model looks the
+    coordinates up by name rather than taking the array as it stands.
+    """
+    implant = ArgusII()
+    model = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2), xystep=1)
+    # A subset, in an order that is not the array's:
+    stim = Stimulus({'F10': 1, 'A1': 2, 'C5': 3})
+    x, y, z = model._electrode_coords(implant.earray, stim)
+    npt.assert_equal(len(x), len(stim.electrodes))
+    npt.assert_almost_equal(x, [implant[e].x for e in stim.electrodes])
+    npt.assert_almost_equal(y, [implant[e].y for e in stim.electrodes])
+    npt.assert_almost_equal(z, [implant[e].z for e in stim.electrodes])
+    # Contiguous float32, which is what the Cython kernels take:
+    for arr in (x, y, z):
+        npt.assert_equal(arr.dtype, np.float32)
+        npt.assert_equal(arr.flags['C_CONTIGUOUS'], True)
+    # End to end: a one-electrode stimulus lights up the same place whether it
+    # is the only row or one of several.
+    model.build()
+    only = model.predict_percept(ArgusII(stim={'F10': 3}))
+    among = model.predict_percept(ArgusII(stim={'F10': 3, 'A1': 0, 'C5': 0}))
+    npt.assert_almost_equal(only.data, among.data)
+
+
+def test_model_t_percept_units():
+    """`t_percept` is a time, spelled however the caller likes"""
+    implant = ArgusII(stim=BiphasicPulseTrain(20, 50, 0.45, stim_dur=100))
+    spatial = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                xystep=1).build()
+    temporal = FadingTemporal().build()
+    composite = Model(spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                                xystep=1),
+                      temporal=FadingTemporal()).build()
+    for model, stim in [(spatial, implant), (temporal, implant.stim),
+                        (composite, implant)]:
+        bare = model.predict_percept(stim, t_percept=[0, 20, 40])
+        for spelling in ([0, 20, 40] * ms, np.array([0, .02, .04]) * s,
+                         [0 * ms, 20000 * us, 0.04 * s]):
+            unitful = model.predict_percept(stim, t_percept=spelling)
+            npt.assert_allclose(unitful.data, bare.data, rtol=1e-12)
+            npt.assert_allclose(unitful.time, [0, 20, 40], rtol=1e-12)
+        with pytest.raises(DimensionMismatchError):
+            model.predict_percept(stim, t_percept=[0, 20] * uA)
+    # A single unitful time point, not just a list:
+    single = spatial.predict_percept(implant, t_percept=0.02 * s)
+    npt.assert_allclose(single.time, [20], rtol=1e-12)
+
+
+def test_model_find_threshold_units():
+    """Amplitudes are currents; brightness is not a physical quantity"""
+    implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 20, 0.45,
+                                                     stim_dur=100)})
+    spatial = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                xystep=1).build()
+    composite = Model(spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                                xystep=1)).build()
+    for model in (spatial, composite):
+        bare = model.find_threshold(implant, 0.1, amp_range=(0, 200),
+                                    amp_tol=1)
+        unitful = model.find_threshold(implant, 0.1,
+                                       amp_range=(0, 0.2 * mA), amp_tol=1 * uA)
+        npt.assert_allclose(unitful, bare, rtol=1e-12)
+        # The answer is a plain number of microamps:
+        npt.assert_equal(isinstance(unitful, Quantity), False)
+        with pytest.raises(DimensionMismatchError):
+            model.find_threshold(implant, 0.1, amp_range=(0, 5 * ms))
+        with pytest.raises(DimensionMismatchError):
+            model.find_threshold(implant, 0.1, amp_tol=1 * dva)
+    # ... and on a temporal model, where `t_percept` joins them:
+    temporal = FadingTemporal().build()
+    stim = BiphasicPulseTrain(20, 20, 0.45, stim_dur=100)
+    npt.assert_allclose(
+        temporal.find_threshold(stim, 0.01, amp_range=(0, 0.2 * mA),
+                                amp_tol=1 * uA, t_percept=[0, 50] * ms),
+        temporal.find_threshold(stim, 0.01, amp_range=(0, 200), amp_tol=1,
+                                t_percept=[0, 50]), rtol=1e-12)
+
+
+def test_model_requires_a_current_stimulus():
+    """A model reads current, so a picture has to be encoded first
+
+    Rejecting on *dimension*, not on unit: an amplitude spelled ``0.05 * mA``
+    is already 50 uA by the time a model sees it, because `Stimulus`
+    canonicalizes when it is built. Gray levels are a different quantity
+    altogether, and reading them as microamps is the silent reinterpretation
+    `stimulus_unit` exists to declare away.
+    """
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    spatial = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                xystep=1).build()
+    temporal = FadingTemporal().build()
+    composite = Model(spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                                xystep=1),
+                      temporal=FadingTemporal()).build()
+    # `implant.stim = img` stays legal (see `check_stim`), and it is the model
+    # that refuses to read it:
+    implant = ArgusII(preprocess=False, stim=img)
+    npt.assert_equal(implant.stim.unit, dimensionless)
+    for model in (spatial, composite):
+        with pytest.raises(DimensionMismatchError) as excinfo:
+            model.predict_percept(implant)
+        npt.assert_equal('AmplitudeEncoder' in str(excinfo.value), True)
+        npt.assert_equal('dimensionless' in str(excinfo.value), True)
+    with pytest.raises(DimensionMismatchError):
+        temporal.predict_percept(implant.stim)
+
+    # Encoded, it goes through:
+    encoded = AmplitudeEncoder(ArgusII(), amp_range=(0, 50)).encode(img)
+    npt.assert_equal(encoded.unit, uA)
+    for model in (spatial, composite):
+        npt.assert_equal(model.predict_percept(ArgusII(stim=encoded)) is None,
+                         False)
+
+    # A current spelled in another unit is converted, not refused. `Stimulus`
+    # has already done the converting, which is the point:
+    npt.assert_equal(Stimulus([0.05 * mA]).unit, uA)
+    npt.assert_allclose(Stimulus([0.05 * mA]).data, 50, rtol=1e-12)
+    bare = ArgusII(stim={'A1': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)})
+    unitful = ArgusII(stim={'A1': BiphasicPulseTrain(20, 0.05 * mA, 0.45,
+                                                     stim_dur=100)})
+    npt.assert_allclose(spatial.predict_percept(unitful).data,
+                        spatial.predict_percept(bare).data, rtol=1e-12)
+
+    # A Percept is brightness, not current, and is not checked -- it is what a
+    # spatial model hands a temporal one:
+    percept = spatial.predict_percept(bare)
+    npt.assert_equal(temporal.predict_percept(percept) is None, False)

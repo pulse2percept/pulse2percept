@@ -52,8 +52,19 @@ fig.tight_layout()
 # Finally, the model can also be applied to
 # :py:class:`~pulse2percept.stimuli.VideoStimulus` objects, where every frame
 # of the video will be encoded with circular phosphenes and a given dropout
-# rate:
+# rate.
+#
+# A video is a sequence of gray levels, and a model reads current, so the
+# video has to be encoded first: that is the step that says how much current
+# a gray level stands for (here 0-50 uA, sampled at the implant's electrodes).
+# See :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`.
+#
+# The pulse rate has to keep up with the frame rate, or some frames go by
+# without a pulse and are never seen; this video runs at 29.97 fps, so 30 Hz
+# it is. Asking for a percept at the video's own frame times then gives one
+# percept frame per video frame:
 
-implant.stim = p2p.stimuli.BostonTrain()
+video = p2p.stimuli.BostonTrain()
+implant.stim = video.encode(implant=implant, freq=30)
 model.build(dropout=0.2)
-model.predict_percept(implant).play()
+model.predict_percept(implant, t_percept=video.time).play()

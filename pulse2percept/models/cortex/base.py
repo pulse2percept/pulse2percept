@@ -278,12 +278,7 @@ class ScoreboardSpatial(CortexSpatial):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
-        x_el = np.array([earray[e].x for e in stim.electrodes],
-                                        dtype=np.float32)
-        y_el = np.array([earray[e].y for e in stim.electrodes],
-                                        dtype=np.float32)
-        z_el = np.array([earray[e].z for e in stim.electrodes],
-                                        dtype=np.float32)
+        x_el, y_el, z_el = self._electrode_coords(earray, stim)
 
         # whether to allow current to spread between hemispheres
         separate = 0
