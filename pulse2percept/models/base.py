@@ -1089,16 +1089,17 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # A stimulus that came out of an encoder knows the frame rate of
             # the video behind it, and that is the rate worth reporting at:
             # one percept frame per video frame. Failing that, output at a
-            # 50 Hz frame rate, always starting at zero and including the last
-            # time point:
+            # 50 Hz frame rate, starting at zero and never reporting beyond
+            # the end of the stimulus:
             frames = _frame_clock(stim, self.dt, unit=self.time_unit)
             if frames is None:
                 # One frame every 20 ms is a 50 Hz frame rate no matter what
                 # this model counts in, so the interval is converted rather
-                # than written down as the number 20. `nextafter` makes
-                # `arange`'s half-open end inclusive of a last time point that
-                # lands exactly on a frame boundary, without inventing a unit
-                # of time to add to it:
+                # than written down as the number 20. `nextafter` is what
+                # makes `arange`'s half-open end include the end of the
+                # stimulus when it lands exactly on a frame boundary, and stop
+                # short of it otherwise -- without inventing a unit of time to
+                # add to it:
                 frame_dur = as_value(20 * ms, self.time_unit)
                 end = np.maximum(frame_dur, _time[-1])
                 t_out = np.arange(0, np.nextafter(end, np.inf), frame_dur)

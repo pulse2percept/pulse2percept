@@ -6,8 +6,8 @@ Physical Units
 
 .. versionadded:: 0.10.0
 
-Every number in pulse2percept stands for a physical quantity: a current, a
-duration, a distance on the retina, a position in the visual field. The
+Many numbers in pulse2percept stand for physical quantities: a current, a
+duration, a distance on the retina, or a position in the visual field. The
 :py:mod:`~pulse2percept.units` module lets you say which, so that the library
 can check you meant it:
 

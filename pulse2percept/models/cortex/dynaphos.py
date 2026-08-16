@@ -401,13 +401,14 @@ class DynaphosModel(BaseModel):
         if not stim.is_compressed:
             stim.compress()
         if t_percept is None:
-            # If no time vector is given, output at frame rate determined by
-            # self.dt. We always start at zero and include the last time
-            # point. `nextafter` is what makes `arange`'s half-open end
-            # inclusive of a point that lands exactly on it; the `+ 1` this
-            # replaces was one *millisecond* of slack, which overshot the end
-            # of the stimulus whenever `dt` was finer than that and would not
-            # have survived a model counting in anything but milliseconds.
+            # If no time vector is given, output at the frame rate determined
+            # by self.dt. We start at zero and never report beyond the end of
+            # the stimulus; if the end lands exactly on the sampling grid it
+            # is included. `nextafter` is what makes `arange`'s half-open end
+            # behave that way. The `+ 1` it replaces was one *millisecond* of
+            # slack, which overshot the end of the stimulus whenever `dt` was
+            # finer than that, and would not have survived a model counting in
+            # anything but milliseconds.
             end = np.maximum(self.dt, self._stim_times(stim)[-1])
             t_percept = np.arange(0, np.nextafter(end, np.inf), self.dt)
         t_percept = np.sort([t_percept]).flatten()
