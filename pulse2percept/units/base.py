@@ -376,8 +376,8 @@ class Unit(object):
         # whatever they are spelled.
         if not isinstance(other, Unit):
             return NotImplemented
-        return (self.dimension == other.dimension
-                and self.scale == other.scale)
+        return (self.dimension == other.dimension and
+                self.scale == other.scale)
 
     def __ne__(self, other):
         result = self.__eq__(other)
