@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.testing as npt
+from pulse2percept.units import DimensionMismatchError, mm, ms, um
 import pytest
 from pulse2percept.implants import (EnsembleImplant, PointSource, ProsthesisSystem)
 from pulse2percept.implants.cortex import Cortivis, Orion
@@ -161,3 +162,28 @@ def test_merge_stimuli():
                                Orion(x=-35000, stim=np.ones(60)*2)], stim=np.ones(120)*3)
     npt.assert_equal(implant.stim.data.shape, (120, 1))
     npt.assert_equal(implant.stim.data, 3)
+
+
+def test_EnsembleImplant_from_coords_units():
+    """`from_coords` takes physical coordinates, so they may be unitful"""
+    locs = np.array([[0., 0.], [10000., -5000.]])
+    bare = EnsembleImplant.from_coords(Cortivis, locs=locs)
+    unitful = EnsembleImplant.from_coords(Cortivis,
+                                          locs=locs / 1000 * mm)
+    npt.assert_allclose(unitful.earray.coordinates(),
+                        bare.earray.coordinates(), rtol=1e-12)
+    # ... and so may the range form:
+    ranged = EnsembleImplant.from_coords(Cortivis,
+                                         xrange=(-10 * mm, 10 * mm),
+                                         yrange=(0, 0), xystep=10000 * um)
+    npt.assert_allclose(
+        ranged.earray.coordinates(),
+        EnsembleImplant.from_coords(Cortivis, xrange=(-10000, 10000),
+                                    yrange=(0, 0),
+                                    xystep=10000).earray.coordinates(),
+        rtol=1e-12)
+    with pytest.raises(DimensionMismatchError):
+        EnsembleImplant.from_coords(Cortivis, locs=locs * ms)
+    with pytest.raises(DimensionMismatchError):
+        EnsembleImplant.from_coords(Cortivis, xrange=(0, 1 * ms),
+                                    yrange=(0, 0), xystep=1)

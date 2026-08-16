@@ -10,7 +10,7 @@ from matplotlib.patches import Circle
 import numpy as np
 from scipy.spatial import cKDTree
 
-from ..units import as_value, ms
+from ..units import as_value, ms, um
 from ..utils import PrettyPrint
 from ..utils.constants import ZORDER
 
@@ -227,11 +227,11 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         """
         earray = getattr(implant, 'earray', implant)
         names = getattr(earray, 'electrode_names', None)
-        elecs = getattr(earray, 'electrode_objects', None)
-        if names is None or elecs is None:
+        coords = getattr(earray, 'coordinates', None)
+        if names is None or coords is None:
             raise TypeError(f"'implant' must be a ProsthesisSystem or an "
                             f"ElectrodeArray, not {type(implant)}.")
-        names, elecs = list(names), list(elecs)
+        names = list(names)
         group = np.asarray(self.groups(names), dtype=np.int64)
         if annotate is None:
             annotate = len(names) <= 120
@@ -243,7 +243,9 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         spread = (np.linspace(0, 1, self.n_groups) if self.n_groups > 1
                   else np.array([0.5]))
         colors = plt.get_cmap(cmap)(spread)
-        xy = np.array([[e.x, e.y] for e in elecs], dtype=np.float64)
+        # Microns, which is what the axis labels below say and what the patch
+        # radii are sized in:
+        xy = coords(um)[:, :2]
         # Sized by the array rather than by what each electrode reports, since
         # neither of the two shapes an implant is usually built from would show
         # its color: a PointSource is a 5 um dot however far apart they are,
@@ -772,12 +774,13 @@ class CheckerboardRaster(Raster):
         # Duck-typed rather than imported, since `base` imports this module:
         earray = getattr(implant, 'earray', implant)
         names = getattr(earray, 'electrode_names', None)
-        elecs = getattr(earray, 'electrode_objects', None)
-        if names is None or elecs is None:
+        coords = getattr(earray, 'coordinates', None)
+        if names is None or coords is None:
             raise TypeError(f"'implant' must be a ProsthesisSystem or an "
                             f"ElectrodeArray, not {type(implant)}.")
         names = list(names)
-        xy = np.array([[e.x, e.y] for e in elecs], dtype=np.float64)
+        # Microns, which is what `min_spacing` reports the answer in:
+        xy = coords(um)[:, :2]
         if len(xy) < n_groups:
             raise ValueError(f"{len(xy)} electrode(s) cannot be split into "
                              f"{n_groups} groups.")

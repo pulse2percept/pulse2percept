@@ -10,6 +10,7 @@ from copy import deepcopy
 
 from .electrodes import Electrode, PointSource, DiskElectrode
 from ..stimuli.names import ElectrodeNames
+from ..units import DimensionMismatchError, Quantity, Unit, as_value, um
 from ..utils import PrettyPrint, bijective26_name
 from ..utils.constants import ZORDER
 
@@ -56,6 +57,10 @@ class ElectrodeArray(PrettyPrint):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_electrodes',)
 
+    #: The unit electrode coordinates are stored in, i.e. what the plain
+    #: numbers returned by :py:meth:`coordinates` mean by default.
+    coordinate_unit = um
+
     def __init__(self, electrodes):
         self._electrodes = OrderedDict()
         if isinstance(electrodes, dict):
@@ -74,6 +79,44 @@ class ElectrodeArray(PrettyPrint):
         """Return dict of class attributes to pretty-print"""
         return {'electrodes': self.electrodes,
                 'n_electrodes': self.n_electrodes}
+
+    def coordinates(self, unit=None):
+        """Positions of every electrode in the array
+
+        The one place to ask an implant where its electrodes are. Code that
+        needs the coordinates in a particular unit says so here, instead of
+        reading ``electrode.x`` and knowing that electrodes happen to store
+        microns.
+
+        .. versionadded:: 0.10.0
+
+        Parameters
+        ----------
+        unit : :py:class:`~pulse2percept.units.Unit`, optional
+            Length unit to express the coordinates in. If None, they are
+            returned as they are stored (microns).
+
+        Returns
+        -------
+        coords : (n_electrodes, 3) np.ndarray
+            One ``[x, y, z]`` row per electrode, in the order the electrodes
+            appear in the array. An ordinary NumPy array, never a
+            :py:class:`~pulse2percept.units.Quantity`: this is the boundary a
+            numerical implementation should take the geometry across.
+
+        Examples
+        --------
+        >>> from pulse2percept.implants import ArgusII
+        >>> from pulse2percept.units import mm
+        >>> ArgusII().earray.coordinates(mm)[0]
+        array([-2.5875, -1.4375,  0.    ])
+
+        """
+        xyz = np.array([[e.x, e.y, e.z] for e in self.electrode_objects],
+                       dtype=float).reshape((-1, 3))
+        if unit is None:
+            return xyz
+        return Quantity(xyz, self.coordinate_unit).to_value(unit)
 
     def add_electrode(self, name, electrode):
         """Add an electrode to the array
@@ -263,6 +306,23 @@ class ElectrodeArray(PrettyPrint):
         return list(self.electrodes.values())
 
 
+def _require_plain_angle(rot):
+    """Refuse a unitful rotation
+
+    ``rot`` is an ordinary rotation of the array in degrees. ``dva`` is the one
+    angle p2p has a unit for, and it means something else entirely: degrees of
+    *visual* angle, converted to a position on the retina or cortex by a visual
+    field map. Without this, a unitful ``rot`` reaches ``np.deg2rad`` and comes
+    back as "operand 'Quantity' does not support ufuncs".
+    """
+    if isinstance(rot, (Quantity, Unit)):
+        raise DimensionMismatchError(
+            f"'rot' is a plain rotation of the array in degrees, not a "
+            f"unitful quantity ({rot}). Note that 'dva' is a unit of visual "
+            f"angle, which is a different thing.")
+    return rot
+
+
 def _get_alphabetic_names(n_electrodes):
     """Create alphabetic electrode names: A-Z, AA-AZ, BA-BZ, etc. """
     return [bijective26_name(i) for i in range(n_electrodes)]
@@ -316,7 +376,7 @@ class ElectrodeGrid(ElectrodeArray):
         In a hex grid, 'horizontal' orientation will shift every other row
         to the right, whereas 'vertical' will shift every other column up.
     x/y/z : double
-        3D location of the center of the grid.
+        3D location (um) of the center of the grid.
         The coordinate system is centered over the fovea.
         Positive ``x`` values move the electrode into the nasal retina.
         Positive ``y`` values move the electrode into the superior retina.
@@ -324,7 +384,8 @@ class ElectrodeGrid(ElectrodeArray):
         vitreous humor (sometimes called electrode-retina distance).
     rot : double, optional
         Rotation of the grid in degrees (positive angle: counter-clockwise
-        rotation on the retinal surface)
+        rotation on the retinal surface). A plain angle, not a unitful one:
+        ``dva`` means visual angle, which is a different thing.
     names: (name_rows, name_cols), each of which either 'A' or '1'
         Naming convention for rows and columns, respectively.
         If 'A', rows or columns will be labeled alphabetically: A-Z, AA-AZ,
@@ -358,6 +419,14 @@ class ElectrodeGrid(ElectrodeArray):
         :py:class:`~pulse2percept.implants.Electrode` constructor, such as
         radius ``r`` for :py:class:`~pulse2percept.implants.DiskElectrode`.
         See examples below.
+
+    Notes
+    -----
+    *  ``spacing``, ``x``, ``y``, ``z`` and ``r`` may be given as plain
+       numbers of microns or as unitful quantities, and may be mixed freely:
+       ``spacing=(0.5 * mm, 600 * um)`` and ``z=[0 * um, 0.1 * mm, ...]`` both
+       work. Any other electrode keyword is normalized by the electrode class
+       it is passed to. See :py:mod:`pulse2percept.units`.
 
     Examples
     --------
@@ -453,6 +522,20 @@ class ElectrodeGrid(ElectrodeArray):
                 raise ValueError(f"'names' must either have two entries for "
                                  f"rows/columns or {np.prod(shape)} entries, not "
                                  f"{len(names)}")
+        # Normalized before anything is built with them: `_make_grid` lays out
+        # the pitch from `spacing`, translates by (x, y), broadcasts `z` and
+        # `r` over the electrodes, and stores `spacing` on the grid itself.
+        # Every other electrode keyword travels through **kwargs untouched and
+        # is normalized by the electrode class it belongs to. `rot` is
+        # deliberately not among them: it is a plain angle in degrees, and
+        # `dva` is a unit of *visual* angle, which is a different thing.
+        spacing = as_value(spacing, um, 'spacing')
+        x = as_value(x, um, 'x')
+        y = as_value(y, um, 'y')
+        z = as_value(z, um, 'z')
+        if 'r' in kwargs:
+            kwargs['r'] = as_value(kwargs['r'], um, 'r')
+        _require_plain_angle(rot)
         self.shape = shape
         self.type = type
         self.spacing = spacing

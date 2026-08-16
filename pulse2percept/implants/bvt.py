@@ -5,7 +5,9 @@ from skimage.transform import SimilarityTransform
 
 from .base import ProsthesisSystem
 from .electrodes import DiskElectrode
-from .electrode_arrays import ElectrodeArray, ElectrodeGrid
+from .electrode_arrays import (ElectrodeArray, ElectrodeGrid,
+                               _require_plain_angle)
+from ..units import as_value, um
 
 
 class BVT24(ProsthesisSystem):
@@ -43,7 +45,7 @@ class BVT24(ProsthesisSystem):
     Parameters
     ----------
     x/y/z : double
-        3D location of the center of the electrode array.
+        3D location (um) of the center of the electrode array.
         The coordinate system is centered over the fovea.
         Positive ``x`` values move the electrode into the nasal retina.
         Positive ``y`` values move the electrode into the superior retina.
@@ -51,6 +53,8 @@ class BVT24(ProsthesisSystem):
         vitreous humor (sometimes called electrode-retina distance).
         ``z`` can either be a list with 35 entries or a scalar that is applied
         to all electrodes.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
     rot : float
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
@@ -75,6 +79,12 @@ class BVT24(ProsthesisSystem):
         self.safe_mode = safe_mode
         self.earray = ElectrodeArray([])
         n_elecs = 35
+        # This implant lays out its own electrodes rather than handing the
+        # geometry to an ElectrodeGrid, so it normalizes for itself:
+        x = as_value(x, um, 'x')
+        y = as_value(y, um, 'y')
+        z = as_value(z, um, 'z')
+        _require_plain_angle(rot)
 
         # the positions of the electrodes 1-20, 21a-21m, R1-R2
         x_arr = np.array([1275.0, 850.0, 1275.0, 850.0, 1275.0,
@@ -159,7 +169,7 @@ class BVT44(ProsthesisSystem):
     Parameters
     ----------
     x/y/z : double
-        3D location of the center of the electrode array.
+        3D location (um) of the center of the electrode array.
         The coordinate system is centered over the fovea.
         Positive ``x`` values move the electrode into the nasal retina.
         Positive ``y`` values move the electrode into the superior retina.
@@ -167,6 +177,8 @@ class BVT44(ProsthesisSystem):
         vitreous humor (sometimes called electrode-retina distance).
         ``z`` can either be a list with 35 entries or a scalar that is applied
         to all electrodes.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
     rot : float
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
@@ -190,6 +202,12 @@ class BVT44(ProsthesisSystem):
         self.safe_mode = safe_mode
         self.earray = ElectrodeArray([])
         n_elecs = 46
+        # Placed by hand, like BVT24, once the hex grid has supplied the
+        # in-array positions:
+        x = as_value(x, um, 'x')
+        y = as_value(y, um, 'y')
+        z = as_value(z, um, 'z')
+        _require_plain_angle(rot)
 
         # The 44 stimulating electrodes are arranged in a hex grid; two return
         # electrodes are added as well:

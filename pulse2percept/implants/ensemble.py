@@ -4,7 +4,7 @@ from .base import ProsthesisSystem
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
 from ..stimuli.base import _describe_unit, unique_time_points
-from ..units import DimensionMismatchError
+from ..units import DimensionMismatchError, as_value, um
 
 class EnsembleImplant(ProsthesisSystem):
     
@@ -83,15 +83,28 @@ class EnsembleImplant(ProsthesisSystem):
             Array of physical locations (um) to create implants at. Not
             needed if using xrange, yrange, and xystep.
         xrange, yrange: tuple of floats, optional
-            Range of x and y coordinates to create implants at.
+            Range of x and y coordinates (um) to create implants at.
         xystep : float, optional
-            Spacing between implant centers. 
+            Spacing (um) between implant centers.
+
+        Notes
+        -----
+        *  Lengths may be given as plain numbers of microns or as unitful
+           quantities (e.g. ``xrange=(-1 * mm, 1 * mm)``). See
+           :py:mod:`pulse2percept.units`.
         """
         from ..topography import Grid2D
 
         if not issubclass(implant_type, ProsthesisSystem):
             raise TypeError("implant_type must be a sub-type of ProsthesisSystem")
-        
+
+        # Physical coordinates, unlike the dva ranges `from_cortical_map`
+        # takes:
+        locs = as_value(locs, um, 'locs')
+        xrange = as_value(xrange, um, 'xrange')
+        yrange = as_value(yrange, um, 'yrange')
+        xystep = as_value(xystep, um, 'xystep')
+
         if locs is None:
             if xrange is None:
                 xrange = (-3, 3)

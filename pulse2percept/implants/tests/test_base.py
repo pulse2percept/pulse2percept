@@ -2,6 +2,10 @@ import numpy as np
 import collections as coll
 import pytest
 import numpy.testing as npt
+from pulse2percept import implants
+from pulse2percept.implants import cortex
+from pulse2percept.units import (DimensionMismatchError, dva, mm, ms,
+                                 uA, um)
 from matplotlib.patches import Circle
 import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
@@ -288,3 +292,80 @@ def test_ProsthesisSystem_reshape_stim_frames_independent():
     vid[..., 2] = 0
     implant.stim = VideoStimulus(vid, time=np.arange(n_frames))
     npt.assert_equal(np.all(implant.stim.data[:, 2] == 0), True)
+
+
+def test_implant_geometry_units():
+    """Every implant places itself the same way, however its x/y/z is spelled
+
+    Some device constructors inspect or adjust the geometry themselves before
+    handing it to an ElectrodeGrid (Orion checks `z`, PRIMA writes a
+    per-electrode `z` list onto the electrodes afterwards), so it is not enough
+    to normalize inside the grid.
+    """
+    cases = [
+        (implants.ArgusI, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 100 * um},
+         {'x': 1000, 'y': -500, 'z': 100}),
+        (implants.ArgusII, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 100 * um},
+         {'x': 1000, 'y': -500, 'z': 100}),
+        (implants.AlphaIMS, {'x': 0.2 * mm, 'z': -0.1 * mm},
+         {'x': 200, 'z': -100}),
+        (implants.AlphaAMS, {'x': 0.2 * mm, 'z': -0.1 * mm},
+         {'x': 200, 'z': -100}),
+        (implants.PRIMA, {'z': -0.1 * mm}, {'z': -100}),
+        (implants.PRIMA75, {'z': -0.1 * mm}, {'z': -100}),
+        (implants.PRIMA55, {'z': -0.1 * mm}, {'z': -100}),
+        (implants.PRIMA40, {'z': -0.1 * mm}, {'z': -100}),
+        (implants.BVT24, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 50 * um},
+         {'x': 1000, 'y': -500, 'z': 50}),
+        (implants.BVT44, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 50 * um},
+         {'x': 1000, 'y': -500, 'z': 50}),
+        (implants.IMIE, {'x': 1 * mm, 'z': 100 * um}, {'x': 1000, 'z': 100}),
+        (implants.RectangleImplant,
+         {'x': 1 * mm, 'spacing': 0.4 * mm, 'r': 75 * um},
+         {'x': 1000, 'spacing': 400., 'r': 75.}),
+        (cortex.Orion, {'x': 15 * mm}, {'x': 15000}),
+        (cortex.Cortivis, {'x': 20 * mm, 'y': -5 * mm}, {'x': 20000,
+                                                         'y': -5000}),
+        (cortex.ICVP, {'x': 15 * mm}, {'x': 15000}),
+    ]
+    for cls, unitful, bare in cases:
+        coords = cls(**unitful).earray.coordinates()
+        npt.assert_allclose(coords, cls(**bare).earray.coordinates(),
+                            rtol=1e-12, err_msg=cls.__name__)
+        # Plain numbers all the way down, whatever went in:
+        npt.assert_equal(coords.dtype, np.float64)
+    # Orion is the documented default: 15 mm to the right of the fovea:
+    npt.assert_allclose(cortex.Orion(x=15 * mm).earray.coordinates(),
+                        cortex.Orion().earray.coordinates(), rtol=1e-12)
+    # A conversion that does not land on a round number is no different:
+    npt.assert_allclose(
+        implants.ArgusII(x=0.8625 * mm, z=0.0417 * mm).earray.coordinates(),
+        implants.ArgusII(x=862.5, z=41.7).earray.coordinates(), rtol=1e-12)
+
+
+def test_implant_per_electrode_z_units():
+    """A per-electrode list of heights never reaches ElectrodeGrid"""
+    for cls, n in [(implants.PRIMA, 378), (implants.PRIMA75, 142),
+                   (implants.AlphaIMS, 1500)]:
+        heights = np.linspace(-150, -50, n)
+        unitful = cls(z=[h * um for h in heights])
+        npt.assert_allclose(unitful.earray.coordinates(),
+                            cls(z=list(heights)).earray.coordinates(),
+                            rtol=1e-12, err_msg=cls.__name__)
+        npt.assert_allclose(unitful.earray.coordinates()[:, 2], heights,
+                            rtol=1e-12)
+
+
+def test_implant_dimension_errors():
+    for cls in (implants.ArgusII, implants.PRIMA, implants.BVT24,
+                cortex.Orion, cortex.Cortivis, cortex.ICVP):
+        with pytest.raises(DimensionMismatchError):
+            cls(x=5 * ms)
+        with pytest.raises(DimensionMismatchError):
+            cls(z=10 * uA)
+        with pytest.raises(DimensionMismatchError):
+            cls(rot=5 * dva)
+    with pytest.raises(DimensionMismatchError):
+        implants.RectangleImplant(spacing=2 * dva)
+    with pytest.raises(DimensionMismatchError):
+        implants.RectangleImplant(r=10 * uA)

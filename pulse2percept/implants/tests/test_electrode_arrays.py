@@ -6,6 +6,8 @@ from collections import OrderedDict
 from pulse2percept.implants import (DiskElectrode, PointSource,
                                     ElectrodeArray, ElectrodeGrid)
 from pulse2percept.stimuli import ElectrodeNames
+from pulse2percept.units import (DimensionMismatchError, Quantity, cm, dva,
+                                 mm, ms, uA, um)
 
 
 def test_ElectrodeArray():
@@ -458,3 +460,69 @@ def test_ElectrodeGrid_naming_schemes():
     npt.assert_equal(ElectrodeGrid((2, 1), 20,
                                    names=np.array(['x', 'y'])).electrode_names,
                      ['x', 'y'])
+
+
+def test_ElectrodeArray_coordinates():
+    earray = ElectrodeArray([DiskElectrode(1000, -500, 100, 50),
+                             DiskElectrode(0, 0, 0, 50)])
+    npt.assert_equal(earray.coordinate_unit, um)
+    npt.assert_almost_equal(earray.coordinates(),
+                            [[1000, -500, 100], [0, 0, 0]])
+    npt.assert_allclose(earray.coordinates(mm), [[1, -0.5, 0.1], [0, 0, 0]],
+                        rtol=1e-12)
+    # Ordinary arrays, in electrode order, never quantities:
+    npt.assert_equal(isinstance(earray.coordinates(mm), np.ndarray), True)
+    npt.assert_equal(earray.coordinates().shape, (2, 3))
+    # An empty array still has the right shape, so callers can index into it:
+    npt.assert_equal(ElectrodeArray([]).coordinates().shape, (0, 3))
+    with pytest.raises(DimensionMismatchError):
+        earray.coordinates(ms)
+
+
+def test_ElectrodeGrid_units():
+    """Every spatial argument may be unitful, and they may be mixed"""
+    bare = ElectrodeGrid((2, 3), 575.0, x=1200.0, y=-100.0,
+                         z=[100., 200., 300., 400., 500., 600.], r=112.5,
+                         etype=DiskElectrode)
+    unitful = ElectrodeGrid((2, 3), 0.575 * mm, x=1.2 * mm, y=-100 * um,
+                            z=[100 * um, 0.2 * mm, 300 * um, 0.4 * mm,
+                               500 * um, 0.06 * cm],
+                            r=112.5 * um, etype=DiskElectrode)
+    npt.assert_allclose(unitful.coordinates(), bare.coordinates(), rtol=1e-12)
+    npt.assert_allclose([e.r for e in unitful.electrode_objects],
+                        [e.r for e in bare.electrode_objects], rtol=1e-12)
+    # The grid stores plain numbers, so its repr is unchanged:
+    npt.assert_almost_equal(unitful.spacing, 575.0)
+    npt.assert_equal(isinstance(unitful.spacing, Quantity), False)
+    # x and y spacing may be spelled differently from each other:
+    split = ElectrodeGrid((2, 2), (0.5 * mm, 600 * um))
+    npt.assert_allclose(split.coordinates(),
+                        ElectrodeGrid((2, 2), (500., 600.)).coordinates(),
+                        rtol=1e-12)
+    # A per-electrode radius, too:
+    radii = ElectrodeGrid((1, 2), 100, r=[10 * um, 0.02 * mm],
+                          etype=DiskElectrode)
+    npt.assert_allclose([e.r for e in radii.electrode_objects], [10, 20],
+                        rtol=1e-12)
+    # An awkward conversion still lands where the bare spelling does:
+    npt.assert_allclose(ElectrodeGrid((1, 2), 0.0417 * mm).coordinates(),
+                        ElectrodeGrid((1, 2), 41.7).coordinates(), rtol=1e-12)
+
+
+def test_ElectrodeGrid_dimension_errors():
+    for kwargs in ({'spacing': 2 * dva}, {'spacing': 400 * ms},
+                   {'x': 5 * ms}, {'y': 5 * ms}, {'z': 5 * uA},
+                   {'z': [1 * um, 2 * ms, 3 * um, 4 * um]}):
+        with pytest.raises(DimensionMismatchError):
+            ElectrodeGrid(**{'shape': (2, 2), 'spacing': 400, **kwargs})
+    with pytest.raises(DimensionMismatchError):
+        ElectrodeGrid((2, 2), 400, r=10 * uA, etype=DiskElectrode)
+    # A rotation is a plain angle in degrees. `dva` is visual angle, which is
+    # not the same thing, so it is refused rather than quietly reinterpreted:
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        ElectrodeGrid((2, 2), 400, rot=5 * dva)
+    npt.assert_equal("'rot' is a plain rotation" in str(excinfo.value), True)
+    # A bare `rot` still means degrees, exactly as it always has:
+    rad = np.deg2rad(5)
+    npt.assert_allclose(ElectrodeGrid((2, 2), 400, rot=5)['A1'].x,
+                        -200 * np.cos(rad) + 200 * np.sin(rad), rtol=1e-12)

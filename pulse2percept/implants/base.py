@@ -9,6 +9,7 @@ from .electrodes import Electrode, DiskElectrode
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from .rasters import Raster
 from ..stimuli import Stimulus, ImageStimulus, VideoStimulus
+from ..units import um
 from ..utils import PrettyPrint
 
 
@@ -203,9 +204,9 @@ class ProsthesisSystem(PrettyPrint):
             # Convert to grayscale:
             img = stim.rgb2gray()
 
-            # Extract electrode coordinates
-            x = np.array([e.x for e in self.electrode_objects])
-            y = np.array([e.y for e in self.electrode_objects])
+            # Extract electrode coordinates, in the same units the image grid
+            # below is laid out in:
+            x, y = self.earray.coordinates(um)[:, :2].T
 
             # Define image coordinate space
             if isinstance(stim, ImageStimulus):
@@ -463,15 +464,15 @@ class RectangleImplant(ProsthesisSystem):
     Parameters
     ----------
     x, y, z : float, optional
-        The x, y, z coordinates of the center of the implant
+        The x, y, z coordinates (um) of the center of the implant
     rot : float, optional
         The rotation of the implant in degrees
     shape : tuple, optional
         The number of rows and columns in the implant
     r : float, optional
-        The radius of the implant
+        The electrode radius (um)
     spacing : float, optional
-        The distance between electrodes in the implant
+        The distance (um) between electrodes in the implant
     eye : str, optional
         The eye in which the implant is implanted
     stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
@@ -480,6 +481,12 @@ class RectangleImplant(ProsthesisSystem):
         Whether to preprocess the stimulus
     safe_mode : bool, optional
         Whether to enforce charge balance
+
+    Notes
+    -----
+    *  Lengths may be given as plain numbers of microns or as unitful
+       quantities (e.g. ``spacing=0.4 * mm``). See
+       :py:mod:`pulse2percept.units`.
 
     """
     def __init__(self, x=0, y=0, z=0, rot=0, shape=(15, 15), r=150./2, spacing=400., eye='RE', stim=None,

@@ -4,6 +4,7 @@ import numpy as np
 from ..base import ProsthesisSystem
 from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
+from ...units import as_value, um
 
 
 class ICVP(ProsthesisSystem):
@@ -26,9 +27,11 @@ class ICVP(ProsthesisSystem):
     Parameters
     ----------
     x/y/z : double
-        3D location of the center of the electrode array.
+        3D location (um) of the center of the electrode array.
         ``z`` can either be a list with 35 entries or a scalar that is applied
         to all electrodes.
+        May be given as unitful quantities (e.g. ``ICVP(x=15 * mm)``); see
+        :py:mod:`pulse2percept.units`.
     rot : float
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
@@ -73,6 +76,8 @@ class ICVP(ProsthesisSystem):
 
     def __init__(self, x=15000, y=0, z=0, rot=0, stim=None,
                  preprocess=False, safe_mode=False):
+        # Inspected, broadcast and offset here, before the grid ever sees it:
+        z = as_value(z, um, 'z')
         if not np.isclose(z, 0):
             raise NotImplementedError
         self.preprocess = preprocess

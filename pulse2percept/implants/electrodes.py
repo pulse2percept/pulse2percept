@@ -14,6 +14,7 @@ from abc import ABCMeta, abstractmethod
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
 from collections.abc import Sequence
 
+from ..units import Quantity, as_value, um
 from ..utils import PrettyPrint
 from ..utils.constants import ZORDER
 
@@ -26,22 +27,41 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
     Parameters
     ----------
     x/y/z : double
-        3D location of the electrode.
+        3D location of the electrode (um).
         The coordinate system is centered over the fovea.
         Positive ``x`` values move the electrode into the right visual field.
         Positive ``y`` values move the electrode into the left visual field.
-        Positive ``z`` values move the electrode either into the cortex or 
+        Positive ``z`` values move the electrode either into the cortex or
         into the vitreos humor.
     name : str, optional
         Electrode name
     activated : bool
         To deactivate, set to ``False``. Deactivated electrodes cannot receive
         stimuli.
+
+    Notes
+    -----
+    *  Coordinates may be given as plain numbers of microns or as unitful
+       quantities (e.g. ``1.2 * mm``), which are converted to microns. See
+       :py:mod:`pulse2percept.units`. Electrodes always *store* plain numbers
+       in microns: :py:attr:`x`, :py:attr:`y` and :py:attr:`z` are ordinary
+       floats, and so is everything downstream of them.
     """
     __slots__ = ('x', 'y', 'z', 'name', 'activated', 'plot_patch',
                  'plot_kwargs', 'plot_deactivated_kwargs')
 
+    #: The unit electrode coordinates are stored in. Electrodes hold plain
+    #: numbers, which is what every kernel downstream of them expects; this
+    #: says what those numbers mean.
+    coordinate_unit = um
+
     def __init__(self, x, y, z, name=None, activated=True):
+        # Normalized before the checks below rather than after, so that a
+        # quantity wrapping an array (``np.arange(3) * um``) is refused for the
+        # same reason a bare array is, instead of being stored as one:
+        x = as_value(x, um, 'x')
+        y = as_value(y, um, 'y')
+        z = as_value(z, um, 'z')
         if isinstance(x, (Sequence, np.ndarray)):
             raise TypeError(f"x must be a scalar, not {type(x)}.")
         if isinstance(y, (Sequence, np.ndarray)):
@@ -65,6 +85,36 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
         """Return dict of class attributes to pretty-print"""
         return {'x': self.x, 'y': self.y, 'z': self.z, 'name': self.name,
                 'activated': self.activated}
+
+    def coordinates(self, unit=None):
+        """3D position of the electrode
+
+        .. versionadded:: 0.10.0
+
+        Parameters
+        ----------
+        unit : :py:class:`~pulse2percept.units.Unit`, optional
+            Length unit to express the position in. If None, the position is
+            returned as it is stored (microns).
+
+        Returns
+        -------
+        coords : (3,) np.ndarray
+            An ordinary NumPy array ``[x, y, z]``, never a
+            :py:class:`~pulse2percept.units.Quantity`.
+
+        Examples
+        --------
+        >>> from pulse2percept.implants import DiskElectrode
+        >>> from pulse2percept.units import mm
+        >>> DiskElectrode(1000, 0, 100, 200).coordinates(mm)
+        array([1. , 0. , 0.1])
+
+        """
+        xyz = np.array([self.x, self.y, self.z], dtype=float)
+        if unit is None:
+            return xyz
+        return Quantity(xyz, self.coordinate_unit).to_value(unit)
 
     @abstractmethod
     def electric_potential(self, x, y, z, *args, **kwargs):
@@ -149,7 +199,8 @@ class PointSource(Electrode):
         Parameters
         ----------
         x/y/z : double
-            3D location at which to evaluate the electric potential
+            3D location (um) at which to evaluate the electric potential.
+            May be given as a unitful quantity, e.g. ``0.2 * mm``.
         amp : double
             amplitude of the constant current pulse
         sigma : double
@@ -173,6 +224,12 @@ class PointSource(Electrode):
         point at which the voltage is being computed.
 
         """
+        # ``amp`` and ``sigma`` are deliberately left alone: current density
+        # and resistivity are dimensions p2p has not defined, and inventing
+        # them here to check two arguments would be worse than not checking.
+        x = as_value(x, um, 'x')
+        y = as_value(y, um, 'y')
+        z = as_value(z, um, 'z')
         r = np.sqrt((x - self.x) ** 2 + (y - self.y) ** 2 + (z - self.z) ** 2)
         if isclose(r, 0):
             return sigma * amp
@@ -192,12 +249,18 @@ class DiskElectrode(Electrode):
         Positive ``z`` values move the electrode away from the retina into the
         vitreous humor (sometimes called electrode-retina distance).
     r : double
-        Disk radius in the x,y plane
+        Disk radius (um) in the x,y plane
     name : str, optional
         Electrode name
     activated : bool
         To deactivate, set to ``False``. Deactivated electrodes cannot receive
         stimuli.
+
+    Notes
+    -----
+    *  Lengths may be given as plain numbers of microns or as unitful
+       quantities (e.g. ``DiskElectrode(1 * mm, 0, 0.1 * mm, 200 * um)``). See
+       :py:mod:`pulse2percept.units`.
 
     """
     # Frozen class: User cannot add more class attributes
@@ -205,6 +268,7 @@ class DiskElectrode(Electrode):
 
     def __init__(self, x, y, z, r, name=None, activated=True):
         super(DiskElectrode, self).__init__(x, y, z, name, activated=activated)
+        r = as_value(r, um, 'r')
         if isinstance(r, (Sequence, np.ndarray)):
             raise TypeError("Electrode radius must be a scalar.")
         if r <= 0:
@@ -230,7 +294,8 @@ class DiskElectrode(Electrode):
         Parameters
         ----------
         x/y/z : double
-            3D location at which to evaluate the electric potential
+            3D location (um) at which to evaluate the electric potential.
+            May be given as a unitful quantity, e.g. ``0.2 * mm``.
         v0 : double
             The quasi-static disk potential relative to a ground electrode at
             infinity
@@ -254,6 +319,11 @@ class DiskElectrode(Electrode):
         and :math:`a` is the disk radius.
 
         """
+        # Only the location is normalized here; ``v0`` is an electrical
+        # quantity, not a geometric one:
+        x = as_value(x, um, 'x')
+        y = as_value(y, um, 'y')
+        z = as_value(z, um, 'z')
         radial_dist = np.sqrt((x - self.x) ** 2 + (y - self.y) ** 2)
         axial_dist = z - self.z
         if isclose(axial_dist, 0):
@@ -287,12 +357,17 @@ class SquareElectrode(Electrode):
         Positive ``z`` values move the electrode away from the retina into the
         vitreous humor (sometimes called electrode-retina distance).
     a : double
-        Side length of the square
+        Side length (um) of the square
     name : str, optional
         Electrode name
     activated : bool
         To deactivate, set to ``False``. Deactivated electrodes cannot receive
         stimuli.
+
+    Notes
+    -----
+    *  Lengths may be given as plain numbers of microns or as unitful
+       quantities (e.g. ``50 * um``). See :py:mod:`pulse2percept.units`.
 
     """
     # Frozen class: User cannot add more class attributes
@@ -301,6 +376,7 @@ class SquareElectrode(Electrode):
     def __init__(self, x, y, z, a, name=None, activated=True):
         super(SquareElectrode, self).__init__(x, y, z, name=name,
                                               activated=activated)
+        a = as_value(a, um, 'a')
         if isinstance(a, (Sequence, np.ndarray)):
             raise TypeError("Side length must be a scalar.")
         if a <= 0:
@@ -341,13 +417,18 @@ class HexElectrode(Electrode):
         Positive ``z`` values move the electrode away from the retina into the
         vitreous humor (sometimes called electrode-retina distance).
     a : double
-        Length of line drawn from the center of the hexagon to the midpoint of
-        one of its sides.
+        Length (um) of line drawn from the center of the hexagon to the
+        midpoint of one of its sides.
     name : str, optional
         Electrode name
     activated : bool
         To deactivate, set to ``False``. Deactivated electrodes cannot receive
         stimuli.
+
+    Notes
+    -----
+    *  Lengths may be given as plain numbers of microns or as unitful
+       quantities (e.g. ``50 * um``). See :py:mod:`pulse2percept.units`.
 
     """
     # Frozen class: User cannot add more class attributes
@@ -356,6 +437,7 @@ class HexElectrode(Electrode):
     def __init__(self, x, y, z, a, name=None, activated=True):
         super(HexElectrode, self).__init__(x, y, z, name=name,
                                            activated=activated)
+        a = as_value(a, um, 'a')
         if isinstance(a, (Sequence, np.ndarray)):
             raise TypeError("Apothem of the hexagon must be a scalar.")
         if a <= 0:
