@@ -38,10 +38,12 @@ API changes:
 * :py:class:`~pulse2percept.models.FadingTemporal` is now driven by
   :math:`\max(-A, 0)` rather than :math:`-A`: anodic current no longer reduces
   brightness, it is ignored. A stimulus that is purely cathodic is unaffected.
+  In addition, ``FadingTemporal`` now enforces ``tau >= dt``.
 
-* Model parameter ``xystep`` was renamed to ``step``, and ``axlambda`` was
-  renamed to ``lam``. The old names still work everywhere the new one do,
-  but raise a ``DeprecationWarning`` and will be removed in v0.11.0.
+* The grid-spacing parameter ``xystep`` was renamed to ``step`` across spatial
+  models and implant-grid factory methods. The old name remains supported with 
+  a ``DeprecationWarning`` and will be removed in v0.11.0. The axon-map
+  parameter ``axlambda`` was similarly renamed to ``lam``.
 
 * Temporal models gained a ``reduce`` parameter. When ``predict_percept`` picks
   the output times itself (``t_percept=None``), ``reduce='peak'`` makes each

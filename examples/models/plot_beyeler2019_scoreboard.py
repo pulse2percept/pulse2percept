@@ -41,8 +41,11 @@ constructor method.
 
 The model simulates a patch of the visual field specified by ``xrange`` and
 ``yrange`` (in degrees of visual angle), sampled at a step size of ``step``.
-``step`` is the spacing between neighboring grid points, so the x axis of the
-grid is NumPy's ``linspace(*xrange, num=round(np.ptp(xrange) / step) + 1)``.
+``step`` is a *target* spacing: both end points of the range are always
+included, so the x axis of the grid is NumPy's
+``linspace(*xrange, num=round(np.ptp(xrange) / step) + 1)``. When the range is
+not a whole multiple of ``step``, the actual spacing differs slightly --
+``xrange=(0, 1)`` with ``step=0.3`` gives four points spaced 0.333 apart.
 Pass a tuple ``(x_step, y_step)`` to sample the two axes differently.
 
 By default, this patch is quite large, spanning 30deg x 30deg.

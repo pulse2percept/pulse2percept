@@ -12,8 +12,8 @@ from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    ImageStimulus, Stimulus, VideoStimulus)
 from pulse2percept.percepts import Percept
-from pulse2percept.models import (BaseModel, FadingTemporal, Model,
-                                  NotBuiltError, ScoreboardSpatial,
+from pulse2percept.models import (AxonMapSpatial, BaseModel, FadingTemporal,
+                                  Model, NotBuiltError, ScoreboardSpatial,
                                   SpatialModel, TemporalModel)
 from pulse2percept.units import (DimensionMismatchError, Quantity,
                                  dimensionless, dva, mA, mm, ms, s, uA, um,
@@ -265,6 +265,39 @@ def test_SpatialModel_deprecated_xystep(composite):
         npt.assert_almost_equal(model.step, 3)
         model.build(step=4)
         npt.assert_almost_equal(model.step, 4)
+
+
+@pytest.mark.parametrize('old, new', [('xystep', 'step'), ('axlambda', 'lam')])
+def test_Model_renamed_param_warns_once_for_a_class(old, new):
+    """A sub-model passed as a class is still only one use of the old name
+
+    `Model` accepts a class where it documents an instance, and then builds it
+    from the same ``params`` dict that `set_params` receives. Both of those
+    rewrite renamed parameters, so the old name reaches the machinery twice
+    even though the caller wrote it once.
+    """
+    for spatial in (AxonMapSpatial, AxonMapSpatial()):
+        with pytest.warns(DeprecationWarning) as record:
+            model = Model(spatial=spatial, **{old: 400})
+        deprecations = [w for w in record
+                        if issubclass(w.category, DeprecationWarning)]
+        npt.assert_equal(len(deprecations), 1)
+        # The message names the model the caller actually constructed, and
+        # points at the line that named the old parameter:
+        npt.assert_equal(f"The '{old}' parameter of Model is deprecated"
+                         in str(deprecations[0].message), True)
+        npt.assert_equal(deprecations[0].filename, __file__)
+        npt.assert_almost_equal(getattr(model, new), 400)
+
+        # Both names are still the same parameter through this path:
+        with pytest.raises(TypeError, match="same parameter"):
+            Model(spatial=spatial, **{old: 400, new: 500})
+
+        # ...and the new name stays silent:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            npt.assert_almost_equal(
+                getattr(Model(spatial=spatial, **{new: 500}), new), 500)
 
 
 @pytest.mark.parametrize('composite', [False, True])

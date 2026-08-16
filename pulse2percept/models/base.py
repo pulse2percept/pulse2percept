@@ -1348,6 +1348,16 @@ class Model(PrettyPrint):
         return BaseModel.time_unit
 
     def __init__(self, spatial=None, temporal=None, **params):
+        # A sub-model passed as a *class* is constructed from `params` below,
+        # and `set_params` then hands the same dict to the resulting instance.
+        # Both paths rewrite renamed parameters, so an old name reaching this
+        # constructor would otherwise be warned about twice. Settle it once,
+        # up front, and let the two paths downstream see only the new name:
+        for model in (spatial, temporal):
+            if isinstance(model, type):
+                params = rename_deprecated_params(
+                    type(self).__name__, params,
+                    getattr(model, '_renamed_params', {}))
         # Set the spatial model:
         if spatial is not None and not isinstance(spatial, SpatialModel):
             if issubclass(spatial, SpatialModel):
