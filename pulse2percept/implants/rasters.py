@@ -10,6 +10,7 @@ from matplotlib.patches import Circle
 import numpy as np
 from scipy.spatial import cKDTree
 
+from ..units import as_value, ms
 from ..utils import PrettyPrint
 from ..utils.constants import ZORDER
 
@@ -106,10 +107,18 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         An encoder with a ``clock`` rounds the slot onto it and rebuilds the
         sweep from the result, so every group keeps a turn of the same length.
 
+        May be given as a plain number of milliseconds or as a unitful
+        quantity (e.g. ``1000 * us``); the same goes for the ``period``
+        argument of :py:meth:`slot_dur` and :py:meth:`offsets`. See
+        :py:mod:`pulse2percept.units`.
+
     """
     __slots__ = ('group_dur',)
 
     def __init__(self, group_dur=None):
+        # A slot is a duration, and it is combined with pulse periods, the
+        # encoder's clock and DT -- all in ms -- further down:
+        group_dur = as_value(group_dur, ms, 'group_dur')
         if group_dur is not None:
             _finite('group_dur', group_dur)
             if group_dur <= 0:
@@ -279,6 +288,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
             between the groups.
 
         """
+        period = as_value(period, ms, 'period')
         if self.group_dur is not None:
             return float(self.group_dur)
         return float(period) / self.n_groups
@@ -300,6 +310,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
             electrode's slot.
 
         """
+        period = as_value(period, ms, 'period')
         group = np.asarray(self.groups(electrodes), dtype=np.int64)
         if group.min(initial=0) < 0 or group.max(initial=0) >= self.n_groups:
             raise ValueError(f"'groups' must be in 0..{self.n_groups - 1}.")

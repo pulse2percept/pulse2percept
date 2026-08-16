@@ -9,6 +9,8 @@ from .base import Stimulus
 from .images import ImageStimulus
 from .pulses import BiphasicPulse
 from .videos import VideoStimulus
+from ..units import (DimensionMismatchError, Hz, as_value, dimensionless, ms,
+                     uA)
 from ..utils import PrettyPrint, frame_interval
 from ..utils.constants import DT
 
@@ -182,6 +184,16 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
            A uniform image has no range to stretch, and encodes to a stimulus
            of zero amplitude everywhere.
 
+    Notes
+    -----
+    *  Arguments may be given as plain numbers in the units documented above,
+       or as unitful quantities (e.g. ``0.05 * mA``, ``460 * us``,
+       ``0.02 * kHz``), which are converted to those units. See
+       :py:mod:`pulse2percept.units`.
+    *  ``pulse`` is the exception: only its shape is borrowed and its
+       amplitude is normalized away, so what that amplitude was measured in
+       does not matter. A dimensionless waveform is a perfectly good template.
+
     """
     __slots__ = ('implant', 'phase_dur', 'interphase_dur', 'cathodic_first',
                  'pulse', 'clock', 'n_levels', 'raster', 'frame_dur',
@@ -190,6 +202,15 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
     def __init__(self, implant=None, phase_dur=0.46, interphase_dur=0,
                  cathodic_first=True, pulse=None, clock=None, n_levels=None,
                  raster=None, frame_dur=None, stretch=False):
+        # Strip the units first; every schedule computed below is in plain
+        # milliseconds, as it has always been. `pulse` is deliberately not
+        # checked: only its shape is borrowed, and its amplitude is normalized
+        # away in `_unit_pulse`, so what that amplitude was measured in does
+        # not enter the encoding.
+        phase_dur = as_value(phase_dur, ms, 'phase_dur')
+        interphase_dur = as_value(interphase_dur, ms, 'interphase_dur')
+        clock = as_value(clock, ms, 'clock')
+        frame_dur = as_value(frame_dur, ms, 'frame_dur')
         _finite('phase_dur', phase_dur)
         if phase_dur <= DT:
             raise ValueError(f"'phase_dur' must be greater than DT={DT} ms.")
@@ -284,6 +305,16 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         if not isinstance(source, Stimulus):
             raise TypeError(f"'source' must be a Stimulus object, not "
                             f"{type(source)}.")
+        # This is where a picture becomes stimulation, so what goes in has to
+        # be a picture. An electrical stimulus read as gray levels would have
+        # its microamps clipped to [0, 1] below and silently re-modulated into
+        # a different current entirely:
+        if not source.unit.dimension.is_dimensionless:
+            raise DimensionMismatchError(
+                f"An encoder turns gray levels into stimulation, so its "
+                f"source must be dimensionless, not "
+                f"{source.unit.dimension.name} ({source.unit}). Pass an "
+                f"ImageStimulus or a VideoStimulus.")
         # Read the frame rate off the *source*: sampling at electrode locations
         # does not necessarily carry it along.
         fps = _fps(source.metadata)
@@ -297,7 +328,10 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
             # where RGB becomes gray. Row count is not a usable test of whether
             # a source is already in electrode coordinates, so always reshape:
             stim = self.implant.reshape_stim(stim)
-        gray = np.clip(np.asarray(stim.data, dtype=np.float32), 0, 1)
+        # `values` rather than `data`, to say out loud that these are the
+        # dimensionless numbers the modulation below is a function of:
+        gray = np.clip(np.asarray(stim.values(dimensionless),
+                                  dtype=np.float32), 0, 1)
         if stim.time is None:
             # A single frame, which has no duration of its own:
             gray = gray.reshape((-1, 1))
@@ -738,12 +772,23 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         source : :py:class:`~pulse2percept.stimuli.Stimulus`
             The image or video to encode. Gray levels are expected in [0, 1],
             which is what :py:class:`~pulse2percept.stimuli.ImageStimulus` and
-            :py:class:`~pulse2percept.stimuli.VideoStimulus` produce.
+            :py:class:`~pulse2percept.stimuli.VideoStimulus` produce. It must
+            be dimensionless: this method is the boundary at which a picture
+            becomes stimulation, so an electrical stimulus is not a valid
+            source for it.
 
         Returns
         -------
         stim : :py:class:`~pulse2percept.stimuli.Stimulus`
             The encoded stimulus, ready to assign to ``implant.stim``.
+            Its amplitudes are in microamps and its time axis in
+            milliseconds, whatever units the encoder's own parameters were
+            given in.
+
+        Raises
+        ------
+        :py:class:`~pulse2percept.units.DimensionMismatchError`
+            If ``source`` is not dimensionless.
 
         """
         gray, electrodes, frame_time, frame_dur = self._as_frames(source)
@@ -803,6 +848,13 @@ class AmplitudeEncoder(Encoder):
     phase_dur, interphase_dur, cathodic_first, frame_dur, stretch
         See :py:class:`~pulse2percept.stimuli.Encoder`.
 
+    Notes
+    -----
+    *  Arguments may be given as plain numbers in the units documented above,
+       or as unitful quantities (e.g. ``0.05 * mA``, ``460 * us``,
+       ``0.02 * kHz``), which are converted to those units. See
+       :py:mod:`pulse2percept.units`.
+
     Examples
     --------
     Encode a movie for Argus II, mapping gray levels onto 0-50 uA at 20 Hz:
@@ -817,6 +869,10 @@ class AmplitudeEncoder(Encoder):
 
     def __init__(self, implant=None, amp_range=(0, 50), freq=20, **kwargs):
         super().__init__(implant=implant, **kwargs)
+        # See `Encoder.__init__`. `amp_range` is converted element by element,
+        # so its two endpoints may be given in different units:
+        amp_range = as_value(amp_range, uA, 'amp_range')
+        freq = as_value(freq, Hz, 'freq')
         if np.size(amp_range) != 2:
             raise ValueError(f"'amp_range' must be a (min_amp, max_amp) "
                              f"tuple, not {amp_range}.")
@@ -928,6 +984,13 @@ class FrequencyEncoder(Encoder):
 frame_dur, stretch
         See :py:class:`~pulse2percept.stimuli.Encoder`.
 
+    Notes
+    -----
+    *  Arguments may be given as plain numbers in the units documented above,
+       or as unitful quantities (e.g. ``0.05 * mA``, ``460 * us``,
+       ``0.02 * kHz``), which are converted to those units. See
+       :py:mod:`pulse2percept.units`.
+
     Examples
     --------
     Encode a movie for Argus II at 50 uA, mapping gray levels onto 0-300 Hz on
@@ -944,6 +1007,9 @@ frame_dur, stretch
 
     def __init__(self, implant=None, freq_range=(0, 300), amp=50, **kwargs):
         super().__init__(implant=implant, **kwargs)
+        # See `Encoder.__init__`:
+        freq_range = as_value(freq_range, Hz, 'freq_range')
+        amp = as_value(amp, uA, 'amp')
         if np.size(freq_range) != 2:
             raise ValueError(f"'freq_range' must be a (min_freq, max_freq) "
                              f"tuple, not {freq_range}.")

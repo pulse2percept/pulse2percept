@@ -7,11 +7,14 @@ from scipy.integrate import trapezoid
 
 from pulse2percept.implants import ArgusII, CustomRaster, SequentialRaster
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
-                                   BostonTrain, Encoder, FrequencyEncoder,
-                                   ImageStimulus, MonophasicPulse, Stimulus,
-                                   VideoStimulus)
+                                   BiphasicPulseTrain, BostonTrain, Encoder,
+                                   FrequencyEncoder, ImageStimulus,
+                                   MonophasicPulse, Stimulus, VideoStimulus)
 from pulse2percept.stimuli import encoders
 from pulse2percept.utils.constants import DT
+from pulse2percept.units import (DimensionMismatchError, Hz, Quantity,
+                                 dimensionless, kHz, mA, ms, uA, us)
+from pulse2percept.units import s as sec
 
 
 def n_pulses_of(stim, electrode=0, peak=None):
@@ -937,3 +940,111 @@ def test_Encoder_frame_rate_does_not_move_the_pulses():
         npt.assert_almost_equal(short, onsets[0][:short.size])
     # ... and the requested 20 Hz is delivered whatever the frame rate:
     npt.assert_almost_equal(np.diff(onsets[0]), 50.0, decimal=6)
+
+
+def test_AmplitudeEncoder_units():
+    """Mixed unit spellings must encode to numerically identical stimuli"""
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    bare = AmplitudeEncoder(amp_range=(50, 100), freq=20, phase_dur=0.46,
+                            interphase_dur=0.1, clock=1, frame_dur=50)
+    unitful = AmplitudeEncoder(amp_range=(50 * uA, 0.1 * mA), freq=0.02 * kHz,
+                               phase_dur=460 * us, interphase_dur=0.1 * ms,
+                               clock=1000 * us, frame_dur=0.05 * sec)
+    # The encoder stores plain numbers in its historical units:
+    npt.assert_almost_equal(np.asarray(unitful.amp_range), [50, 100])
+    npt.assert_almost_equal(unitful.freq, 20)
+    npt.assert_almost_equal(unitful.phase_dur, 0.46)
+    npt.assert_almost_equal(unitful.interphase_dur, 0.1)
+    npt.assert_almost_equal(unitful.clock, 1)
+    npt.assert_almost_equal(unitful.frame_dur, 50)
+    for value in (*unitful.amp_range, unitful.freq, unitful.phase_dur,
+                  unitful.interphase_dur, unitful.clock, unitful.frame_dur):
+        npt.assert_equal(isinstance(value, Quantity), False)
+    # ... and encodes identically either way:
+    out_bare, out_unitful = bare.encode(img), unitful.encode(img)
+    npt.assert_array_equal(out_bare.data, out_unitful.data)
+    npt.assert_array_equal(out_bare.time, out_unitful.time)
+    # The output is electrical, whatever the inputs were spelled in:
+    npt.assert_equal(out_unitful.unit, uA)
+    npt.assert_equal(out_unitful.time_unit, ms)
+    npt.assert_equal(out_unitful.data.dtype, np.float32)
+
+
+def test_FrequencyEncoder_units():
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    bare = FrequencyEncoder(freq_range=(20, 300), amp=50, clock=1)
+    unitful = FrequencyEncoder(freq_range=(20 * Hz, 0.3 * kHz), amp=0.05 * mA,
+                               clock=1000 * us)
+    npt.assert_almost_equal(np.asarray(unitful.freq_range), [20, 300])
+    npt.assert_almost_equal(unitful.amp, 50)
+    for value in (*unitful.freq_range, unitful.amp):
+        npt.assert_equal(isinstance(value, Quantity), False)
+    out_bare, out_unitful = bare.encode(img), unitful.encode(img)
+    npt.assert_array_equal(out_bare.data, out_unitful.data)
+    npt.assert_array_equal(out_bare.time, out_unitful.time)
+    npt.assert_equal(out_unitful.unit, uA)
+    npt.assert_equal(out_unitful.time_unit, ms)
+
+
+def test_encoder_dimension_errors():
+    for kwargs in ({'amp_range': (0, 50 * ms)}, {'amp_range': (0 * ms, 50)},
+                   {'freq': 20 * ms}, {'phase_dur': 0.46 * uA},
+                   {'interphase_dur': 0.1 * uA}, {'clock': 1 * uA},
+                   {'frame_dur': 50 * uA}):
+        with pytest.raises(DimensionMismatchError):
+            AmplitudeEncoder(**kwargs)
+    for kwargs in ({'freq_range': (0, 300 * ms)}, {'amp': 50 * Hz}):
+        with pytest.raises(DimensionMismatchError):
+            FrequencyEncoder(**kwargs)
+    # The message names the offending argument:
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        AmplitudeEncoder(freq=20 * ms)
+    npt.assert_equal("Parameter 'freq' expects frequency (Hz), got time"
+                     in str(excinfo.value), True)
+
+
+def test_encoder_source_must_be_dimensionless():
+    """An encoder is where gray levels become current, not the other way"""
+    enc = AmplitudeEncoder(amp_range=(0, 50))
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    vid = VideoStimulus(np.ones((2, 2, 3)) * 0.5, time=[0, 20, 40])
+    # Pictures, yes:
+    for source in (img, vid):
+        npt.assert_equal(enc.encode(source).unit, uA)
+    # Sampled at an implant's electrodes, still a picture:
+    implant = ArgusII()
+    sampled = implant.reshape_stim(img)
+    npt.assert_equal(sampled.unit, dimensionless)
+    npt.assert_equal(enc.encode(sampled).unit, uA)
+    # ... and the implant path inside the encoder gives the same answer:
+    npt.assert_equal(AmplitudeEncoder(implant,
+                                      amp_range=(0, 50)).encode(img).unit, uA)
+    # An electrical stimulus, no: `Stimulus([0.5])` is half a microamp, and
+    # reading it as a gray level would clip and re-modulate it silently.
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        enc.encode(Stimulus([0.5]))
+    npt.assert_equal("must be dimensionless" in str(excinfo.value), True)
+    for source in (Stimulus([0.5]), BiphasicPulseTrain(20, 50, 0.45),
+                   Stimulus(np.ones((2, 2)), time=[0, 1])):
+        with pytest.raises(DimensionMismatchError):
+            enc.encode(source)
+
+
+def test_encoder_pulse_template_unit_agnostic():
+    """A custom ``pulse`` template only lends its shape, not its unit"""
+    img = ImageStimulus(np.linspace(0, 1, 4).reshape((2, 2)))
+    shape = np.array([[0, 1, 1, 0, -1, -1, 0]], dtype=float)
+    time = [0, 0.1, 0.4, 0.5, 0.6, 0.9, 1.0]
+    electrical = Stimulus(shape * 37.0, time=time)
+    dimless = Stimulus(VideoStimulus(shape.reshape((1, 1, -1)), time=time))
+    npt.assert_equal(electrical.unit, uA)
+    npt.assert_equal(dimless.unit, dimensionless)
+    # Both templates are accepted, and both give the same encoding: the
+    # amplitude is normalized away, so only the shape survives.
+    outs = [AmplitudeEncoder(pulse=p, amp_range=(0, 50)).encode(img)
+            for p in (electrical, dimless)]
+    npt.assert_array_equal(outs[0].data, outs[1].data)
+    npt.assert_array_equal(outs[0].time, outs[1].time)
+    for out in outs:
+        npt.assert_equal(out.unit, uA)
+        npt.assert_almost_equal(np.abs(out.data).max(), 50)

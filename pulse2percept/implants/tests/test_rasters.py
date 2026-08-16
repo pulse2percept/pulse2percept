@@ -10,6 +10,9 @@ from pulse2percept.implants import (AlphaIMS, ArgusII, BVT24,
                                     ElectrodeGrid, PRIMA, ProsthesisSystem,
                                     Raster, SequentialRaster)
 from pulse2percept.implants import rasters
+from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
+                                 uA, us)
+from pulse2percept.units import s as sec
 
 
 def test_Raster_is_abstract():
@@ -447,3 +450,41 @@ def test_ProsthesisSystem_max_current():
     # An empty stimulus has nothing to check:
     implant.stim = None
     npt.assert_equal(implant.stim, None)
+
+
+def test_Raster_units():
+    names = ArgusII().electrode_names
+    bare = SequentialRaster(6, group_dur=1)
+    unitful = SequentialRaster(6, group_dur=1000 * us)
+    npt.assert_almost_equal(unitful.group_dur, 1)
+    npt.assert_equal(isinstance(unitful.group_dur, Quantity), False)
+    # `period` is a duration too, in both methods that take one:
+    npt.assert_almost_equal(bare.slot_dur(10), unitful.slot_dur(0.01 * sec))
+    npt.assert_array_equal(bare.offsets(names, 10),
+                           unitful.offsets(names, 0.01 * sec))
+    # An even split has no group_dur of its own, and still takes a unitful
+    # period:
+    even = SequentialRaster(6)
+    npt.assert_almost_equal(even.slot_dur(12), even.slot_dur(0.012 * sec))
+    npt.assert_array_equal(even.offsets(names, 12),
+                           even.offsets(names, 0.012 * sec))
+    with pytest.raises(DimensionMismatchError):
+        SequentialRaster(6, group_dur=1 * uA)
+    with pytest.raises(DimensionMismatchError):
+        bare.slot_dur(10 * uA)
+    with pytest.raises(DimensionMismatchError):
+        bare.offsets(names, 10 * uA)
+
+
+def test_Raster_units_end_to_end():
+    """A rastered encoding is the same whichever way its timings are spelled"""
+    from pulse2percept.stimuli import AmplitudeEncoder, ImageStimulus
+    implant = ArgusII()
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    bare = AmplitudeEncoder(implant, amp_range=(0, 50),
+                            raster=SequentialRaster(6, group_dur=1))
+    unitful = AmplitudeEncoder(implant, amp_range=(0, 0.05 * mA),
+                               raster=SequentialRaster(6,
+                                                       group_dur=1000 * us))
+    npt.assert_array_equal(bare.encode(img).data, unitful.encode(img).data)
+    npt.assert_array_equal(bare.encode(img).time, unitful.encode(img).time)
