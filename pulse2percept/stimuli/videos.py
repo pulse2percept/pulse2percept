@@ -14,6 +14,7 @@ from skimage import img_as_float32
 from imageio import get_reader as video_reader
 
 from .base import Stimulus
+from ..units import dimensionless
 from .names import ElectrodeNames
 from ..utils import (center_image, shift_image, scale_image, trim_image,
                      frame_interval, HTMLAnimation)
@@ -81,6 +82,10 @@ class VideoStimulus(Stimulus):
 
     """
     __slots__ = ('vid_shape', '_next_frame')
+
+    #: Pixel intensities are gray levels in [0, 1], not currents; see
+    #: :py:class:`~pulse2percept.stimuli.ImageStimulus`.
+    _default_unit = dimensionless
 
     def __init__(self, source, format=None, resize=None, as_gray=False,
                  electrodes=None, time=None, metadata=None, compress=False):

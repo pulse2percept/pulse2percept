@@ -234,8 +234,9 @@ class ProsthesisSystem(PrettyPrint):
             )
             pixel_values = interpolator(np.vstack((y, x)).T)
 
-            return Stimulus(pixel_values, electrodes=self.electrode_names,
-                            time=stim.time, metadata=stim.metadata)
+            return Stimulus(
+                pixel_values, electrodes=self.electrode_names,
+                time=stim.time, metadata=stim.metadata)._inherit_units(stim)
         
         else:
             raise ValueError(

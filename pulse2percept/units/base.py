@@ -4,6 +4,7 @@
    :py:class:`~pulse2percept.units.DimensionMismatchError`,
    :py:func:`~pulse2percept.units.as_value`"""
 import math
+from copy import deepcopy
 import numpy as np
 
 # Primitive dimensions. This is deliberately *not* the seven-dimensional SI
@@ -224,6 +225,26 @@ class Dimension(object):
     def __hash__(self):
         return hash(self._exponents)
 
+    # An immutable value object has nothing to copy: sharing one is
+    # indistinguishable from duplicating it, and a stimulus or model that gets
+    # deep-copied on every prediction should not be allocating dimensions
+    # along the way.
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memodict=None):
+        return self
+
+    # `copy` and `pickle` restore an object's state by assigning to it, which
+    # ``__setattr__`` refuses to allow. Go around it the way the object's own
+    # constructor does:
+    def __getstate__(self):
+        return {'_exponents': self._exponents}
+
+    def __setstate__(self, state):
+        for key, value in state.items():
+            object.__setattr__(self, key, value)
+
     def __str__(self):
         return self.name
 
@@ -386,6 +407,23 @@ class Unit(object):
     def __hash__(self):
         # Hashes exactly what `__eq__` compares:
         return hash((self.dimension, self.scale))
+
+    # Immutable, so a copy is the object itself; see `Dimension.__copy__`.
+    # This matters here: every stimulus carries two units, and the model
+    # pipeline deep-copies stimuli constantly.
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memodict=None):
+        return self
+
+    def __getstate__(self):
+        return {'_dimension': self._dimension, '_scale': self._scale,
+                '_symbol': self._symbol}
+
+    def __setstate__(self, state):
+        for key, value in state.items():
+            object.__setattr__(self, key, value)
 
     def __str__(self):
         return self.symbol
@@ -642,6 +680,21 @@ class Quantity(object):
 
     # Quantities wrap mutable magnitudes, so they are not hashable:
     __hash__ = None
+
+    def __copy__(self):
+        return Quantity(self.magnitude, self.unit)
+
+    def __deepcopy__(self, memodict=None):
+        # Unlike a Dimension or a Unit, the magnitude may be a mutable array,
+        # so this one really does have something to copy:
+        return Quantity(deepcopy(self.magnitude, memodict), self.unit)
+
+    def __getstate__(self):
+        return {'_magnitude': self._magnitude, '_unit': self._unit}
+
+    def __setstate__(self, state):
+        for key, value in state.items():
+            object.__setattr__(self, key, value)
 
     def __str__(self):
         if not self.unit.symbol:

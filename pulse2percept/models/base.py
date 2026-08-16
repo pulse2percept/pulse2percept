@@ -530,7 +530,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 stim = Stimulus(np.asarray(stim[:, t_percept]).reshape((-1,
                                                                        n_time)),
                                 electrodes=stim.electrodes, time=t_percept,
-                                metadata=stim.metadata)
+                                metadata=stim.metadata)._inherit_units(stim)
                 # find unique stimulus points
                 _, t_unique, inverse = np.unique(stim.data.T, axis=0,
                                                  return_index=True,
@@ -558,10 +558,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 # BiphasicAxonMapSpatial and DynaphosModel look up amplitude,
                 # frequency and phase duration, and they only ever see this
                 # de-duplicated copy:
-                stim_unique = Stimulus(stim[:, stim.time[t_unique]],
-                                       electrodes=stim.electrodes,
-                                       time=uniq_time,
-                                       metadata=stim.metadata)
+                stim_unique = Stimulus(
+                    stim[:, stim.time[t_unique]], electrodes=stim.electrodes,
+                    time=uniq_time,
+                    metadata=stim.metadata)._inherit_units(stim)
                 resp_unique = self._predict_spatial(implant.earray, stim_unique)
                 # reconstruct original time points, making sure to preserve C ordering
                 resp = resp_unique[..., inverse].copy(order='C')
@@ -610,10 +610,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         def inner_predict(amp, fnc_predict, implant):
             _implant = deepcopy(implant)
             scale = amp / implant.stim.data.max()
-            _implant.stim = Stimulus(scale * implant.stim.data,
-                                     electrodes=implant.stim.electrodes,
-                                     time=implant.stim.time,
-                                     metadata=deepcopy(implant.stim.metadata))
+            _implant.stim = Stimulus(
+                scale * implant.stim.data,
+                electrodes=implant.stim.electrodes, time=implant.stim.time,
+                metadata=deepcopy(implant.stim.metadata)
+            )._inherit_units(implant.stim)
             return fnc_predict(_implant).data.max()
 
         return bisect(bright_th, inner_predict,
@@ -1032,9 +1033,10 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # report a percept. Without it every trial of the search would be
             # evaluated on a different time base than the caller's own
             # `predict_percept` will use:
-            _stim = Stimulus(amp * stim.data / stim.data.max(),
-                             electrodes=stim.electrodes, time=stim.time,
-                             metadata=deepcopy(stim.metadata))
+            _stim = Stimulus(
+                amp * stim.data / stim.data.max(), electrodes=stim.electrodes,
+                time=stim.time,
+                metadata=deepcopy(stim.metadata))._inherit_units(stim)
             return fnc_predict(_stim, **kwargs).data.max()
 
         return bisect(bright_th, inner_predict,
@@ -1404,10 +1406,11 @@ class Model(PrettyPrint):
             # report a percept. Without it every trial of the search would be
             # evaluated on a different time base than the caller's own
             # `predict_percept` will use:
-            _implant.stim = Stimulus(scale * implant.stim.data,
-                                     electrodes=implant.stim.electrodes,
-                                     time=implant.stim.time,
-                                     metadata=deepcopy(implant.stim.metadata))
+            _implant.stim = Stimulus(
+                scale * implant.stim.data,
+                electrodes=implant.stim.electrodes, time=implant.stim.time,
+                metadata=deepcopy(implant.stim.metadata)
+            )._inherit_units(implant.stim)
             return fnc_predict(_implant, **kwargs).data.max()
 
         return bisect(bright_th, inner_predict,

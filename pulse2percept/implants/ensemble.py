@@ -251,4 +251,14 @@ class EnsembleImplant(ProsthesisSystem):
             # Combine all new_stims into a final array (stack along a new axis if needed)
             # runtime import to avoid circular import
             from ..stimuli import Stimulus
-            self.stim = Stimulus(np.concatenate(new_stims), time=new_times, electrodes=self.electrode_names, metadata=metadata)
+            merged = Stimulus(np.concatenate(new_stims), time=new_times,
+                              electrodes=self.electrode_names,
+                              metadata=metadata)
+            # The merge concatenates raw data arrays, so the result would
+            # otherwise fall back to the default (current) reading of them.
+            # Only adopt a unit the implants agree on; a mix of, say, image
+            # intensities and currents has no common one to adopt:
+            present = [s for s in stims if s is not None]
+            if len({(s.unit, s.time_unit) for s in present}) == 1:
+                merged._inherit_units(present[0])
+            self.stim = merged
