@@ -7,6 +7,7 @@ from abc import abstractmethod
 from .base import VisualFieldMap
 from ..units import dva, mm, um
 from ..utils import pol2cart, cart2pol
+from ..utils.constants import UM_PER_MM
 import matplotlib.pyplot as plt
 
 
@@ -315,8 +316,10 @@ class Polimeni2006Map(CorticalMap):
             ax.plot(x[i, :], y[i, :], 'red', linewidth=1)
         
 
-        ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
-        ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
+        # Coordinates are stored in microns, but a cortical map is worth
+        # reading in millimeters:
+        ax.set_xticklabels(np.array(ax.get_xticks()) / UM_PER_MM)
+        ax.set_yticklabels(np.array(ax.get_yticks()) / UM_PER_MM)
         ax.set_xlabel('x (mm)')
         ax.set_ylabel('y (mm)')
         ax.legend()

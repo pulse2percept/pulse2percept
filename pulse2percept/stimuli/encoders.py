@@ -12,7 +12,7 @@ from .videos import VideoStimulus
 from ..units import (DimensionMismatchError, Hz, as_value, dimensionless, ms,
                      uA)
 from ..utils import PrettyPrint, frame_interval
-from ..utils.constants import DT
+from ..utils.constants import DT, MS_PER_S
 
 # Encoding a source that still has one row per *pixel* rather than one per
 # electrode produces a data container this many elements large before anyone
@@ -422,7 +422,8 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         """
         firing = freq > 0
         period = np.zeros(freq.shape, dtype=np.float64)
-        period[firing] = 1000.0 / freq[firing] / DT
+        # Hz to a period in ms, and ms to ticks of the DT grid:
+        period[firing] = MS_PER_S / freq[firing] / DT
         # A clocked stimulator can only realize a period that is a whole number
         # of clock cycles, which is what keeps the number of distinct schedules
         # (and hence of time points) down. Round the period *up*:
@@ -431,7 +432,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
             period[firing] = tick * np.maximum(
                 1.0, np.ceil(period[firing] / tick - 1e-9))
         if np.any(period[firing] < pulse_len):
-            too_fast = 1000.0 / (np.min(period[firing]) * DT)
+            too_fast = MS_PER_S / (np.min(period[firing]) * DT)
             raise ValueError(f"A pulse (dur={pulse_len * DT:.3f} ms) does not "
                              f"fit into the pulse train window of a "
                              f"{too_fast:.1f} Hz train. Shorten 'phase_dur' "
@@ -715,11 +716,11 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
             hit[f] = True
         missed = np.count_nonzero(~hit & active.any(axis=0))
         if missed:
+            fps = MS_PER_S / frame_dur
             warnings.warn(f"{missed} of {n_frames} frames deliver no pulse at "
                           f"all, because the pulse period is longer than a "
-                          f"frame ({1000.0 / frame_dur:.2f} fps). Their gray "
-                          f"levels are never sampled; raise the frequency to "
-                          f"see them.")
+                          f"frame ({fps:.2f} fps). Their gray levels are "
+                          f"never sampled; raise the frequency to see them.")
 
         ticks = np.unique(np.concatenate(
             [np.array([0, end], dtype=np.int64)] +

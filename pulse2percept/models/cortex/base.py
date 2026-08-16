@@ -6,7 +6,7 @@ from ..base import Model, SpatialModel
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
 from ...units import um
-from ...utils.constants import ZORDER
+from ...utils.constants import UM_PER_MM, ZORDER
 import numpy as np
 
 class CortexSpatial(SpatialModel):
@@ -165,8 +165,9 @@ class CortexSpatial(SpatialModel):
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')
         else:
-            ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
-            ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
+            # Cortical coordinates are stored in microns, plotted in mm:
+            ax.set_xticklabels(np.array(ax.get_xticks()) / UM_PER_MM)
+            ax.set_yticklabels(np.array(ax.get_yticks()) / UM_PER_MM)
             ax.set_xlabel('x (mm)')
             ax.set_ylabel('y (mm)')
         return ax
@@ -176,9 +177,9 @@ class CortexSpatial(SpatialModel):
             self.build()
         ax = self.grid.plot3D(style=style, ax=ax, **kwargs)
         # this is only ever for cortex right now so this is safe
-        ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
-        ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
-        ax.set_zticklabels(np.array(ax.get_zticks()) / 1000)
+        ax.set_xticklabels(np.array(ax.get_xticks()) / UM_PER_MM)
+        ax.set_yticklabels(np.array(ax.get_yticks()) / UM_PER_MM)
+        ax.set_zticklabels(np.array(ax.get_zticks()) / UM_PER_MM)
         ax.set_xlabel('x (mm)')
         ax.set_ylabel('y (mm)')
         ax.set_zlabel('z (mm)')

@@ -626,7 +626,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             A valid prosthesis system. A stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
         t_percept: float or list of floats, optional
-            The time points at which to output a percept (ms).
+            The time points at which to output a percept, counted in this
+            model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
+            (milliseconds, for every model p2p ships).
             If None, ``implant.stim.time`` is used.
             May be given as a unitful quantity (e.g. ``[0, 20] * ms``); see
             :py:mod:`pulse2percept.units`.
@@ -634,7 +636,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         Returns
         -------
         percept: :py:class:`~pulse2percept.models.Percept`
-            A Percept object whose ``data`` container has dimensions Y x X x T.
+            A Percept object whose ``data`` container has dimensions Y x X x T,
+            and whose time axis is labelled in ``time_unit``.
             Will return None if ``implant.stim`` is None.
 
         """
@@ -732,10 +735,12 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         bright_th : float
             Model output (brightness) that's considered "at threshold".
         amp_range : (amp_lo, amp_hi), optional
-            Range of amplitudes to search (uA).
+            Range of amplitudes to search, counted in this model's
+            :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`
+            (microamps, for every model p2p ships).
         amp_tol : float, optional
             Search will stop if candidate range of amplitudes is within
-            ``amp_tol`` (uA)
+            ``amp_tol``, in ``stimulus_unit``
         bright_tol : float, optional
             Search will stop if model brightness is within ``bright_tol`` of
             ``bright_th``
@@ -745,9 +750,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         Returns
         -------
         amp_th : float
-            Threshold current (uA), estimated so that the output of
-            ``model.predict_percept(stim(amp_th))`` is within ``bright_tol`` of
-            ``bright_th``.
+            Threshold current, in ``stimulus_unit``, estimated so that the
+            output of ``model.predict_percept(stim(amp_th))`` is within
+            ``bright_tol`` of ``bright_th``.
 
         Notes
         -----
@@ -998,7 +1003,11 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             Either a Stimulus or a Percept object. The temporal model will be
             applied to each spatial location in the stimulus/percept.
         t_percept : float or list of floats, optional
-            The time points at which to output a percept (ms).
+            The time points at which to output a percept, counted in this
+            model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
+            (milliseconds, for every model p2p ships). May be given as a
+            unitful quantity (e.g. ``[0, 20] * ms``); see
+            :py:mod:`pulse2percept.units`.
             If None, the percept will be output once per frame of the video the
             stimulus was encoded from, or failing that once every 20 ms (50 Hz
             frame rate).
@@ -1086,13 +1095,14 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             if frames is None:
                 # One frame every 20 ms is a 50 Hz frame rate no matter what
                 # this model counts in, so the interval is converted rather
-                # than written down as the number 20. The `+ frame_dur / 20`
-                # is `arange`'s half-open end: it includes `_time[-1]` when
-                # that lands exactly on a frame boundary, and is small enough
-                # never to add one:
+                # than written down as the number 20. `nextafter` makes
+                # `arange`'s half-open end inclusive of a last time point that
+                # lands exactly on a frame boundary, without inventing a unit
+                # of time to add to it:
                 frame_dur = as_value(20 * ms, self.time_unit)
-                stop = np.maximum(frame_dur, _time[-1]) + frame_dur / 20
-                t_out, first = np.arange(0, stop, frame_dur), None
+                end = np.maximum(frame_dur, _time[-1])
+                t_out = np.arange(0, np.nextafter(end, np.inf), frame_dur)
+                first = None
             else:
                 t_out, first = frames
             t_percept = t_out
@@ -1173,25 +1183,31 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         bright_th : float
             Model output (brightness) that's considered "at threshold".
         amp_range : (amp_lo, amp_hi), optional
-            Range of amplitudes to search (uA).
+            Range of amplitudes to search, counted in this model's
+            :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`
+            (microamps, for every model p2p ships).
         amp_tol : float, optional
             Search will stop if candidate range of amplitudes is within
-            ``amp_tol`` (uA)
+            ``amp_tol``, in ``stimulus_unit``
         bright_tol : float, optional
             Search will stop if model brightness is within ``bright_tol`` of
             ``bright_th``
         max_iter : int, optional
             Search will stop after ``max_iter`` iterations
         t_percept: float or list of floats, optional
-            The time points at which to output a percept (ms).
+            The time points at which to output a percept, counted in this
+            model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
+            (milliseconds, for every model p2p ships).
             If None, ``implant.stim.time`` is used.
+            May be given as a unitful quantity (e.g. ``[0, 20] * ms``); see
+            :py:mod:`pulse2percept.units`.
 
         Returns
         -------
         amp_th : float
-            Threshold current (uA), estimated so that the output of
-            ``model.predict_percept(stim(amp_th))`` is within ``bright_tol`` of
-            ``bright_th``.
+            Threshold current, in ``stimulus_unit``, estimated so that the
+            output of ``model.predict_percept(stim(amp_th))`` is within
+            ``bright_tol`` of ``bright_th``.
 
         Notes
         -----
@@ -1551,8 +1567,12 @@ class Model(PrettyPrint):
             A valid prosthesis system. A stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
         t_percept: float or list of floats, optional
-            The time points at which to output a percept (ms).
+            The time points at which to output a percept, counted in this
+            model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
+            (milliseconds, for every model p2p ships).
             If None, ``implant.stim.time`` is used.
+            May be given as a unitful quantity (e.g. ``[0, 20] * ms``); see
+            :py:mod:`pulse2percept.units`.
 
         Returns
         -------
@@ -1607,7 +1627,9 @@ class Model(PrettyPrint):
         bright_th : float
             Model output (brightness) that's considered "at threshold".
         amp_range : (amp_lo, amp_hi), optional
-            Range of amplitudes to search (uA).
+            Range of amplitudes to search, counted in this model's
+            :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`
+            (microamps, for every model p2p ships).
         amp_tol : float, optional
             Search will stop if candidate range of amplitudes is within
             ``amp_tol``
@@ -1617,15 +1639,19 @@ class Model(PrettyPrint):
         max_iter : int, optional
             Search will stop after ``max_iter`` iterations
         t_percept: float or list of floats, optional
-            The time points at which to output a percept (ms).
+            The time points at which to output a percept, counted in this
+            model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
+            (milliseconds, for every model p2p ships).
             If None, ``implant.stim.time`` is used.
+            May be given as a unitful quantity (e.g. ``[0, 20] * ms``); see
+            :py:mod:`pulse2percept.units`.
 
         Returns
         -------
         amp_th : float
-            Threshold current (uA), estimated so that the output of
-            ``model.predict_percept(stim(amp_th))`` is within ``bright_tol`` of
-            ``bright_th``.
+            Threshold current, in ``stimulus_unit``, estimated so that the
+            output of ``model.predict_percept(stim(amp_th))`` is within
+            ``bright_tol`` of ``bright_th``.
 
         Notes
         -----

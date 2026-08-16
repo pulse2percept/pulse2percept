@@ -9,7 +9,7 @@ from math import isclose
 from .base import Stimulus
 from .pulses import BiphasicPulse, AsymmetricBiphasicPulse, MonophasicPulse
 from ..units import Hz, as_value, ms, uA
-from ..utils.constants import DT
+from ..utils.constants import DT, MS_PER_S
 
 
 def _tile_pulse(pulse, shift, n_pulses):
@@ -128,8 +128,10 @@ class PulseTrain(Stimulus):
         if pulse.time is None:
             raise ValueError("'pulse' does not have a time component.")
 
-        # How many pulses fit into stim dur:
-        n_max_pulses = freq * stim_dur / 1000.0
+        # How many pulses fit into stim dur. `freq` counts cycles per second
+        # and `stim_dur` counts milliseconds, so this is the one place the two
+        # clocks have to be reconciled:
+        n_max_pulses = freq * stim_dur / MS_PER_S
         # The requested number of pulses cannot be greater than max pulses:
         if n_pulses is not None:
             n_pulses = int(n_pulses)
@@ -145,14 +147,14 @@ class PulseTrain(Stimulus):
             # in a 33.37 ms window used to end on half a cathodic phase, and
             # so was not charge-balanced.
             n_pulses = int(np.floor((stim_dur - pulse.time[-1]) /
-                                    (1000.0 / freq) + 1e-9)) + 1
+                                    (MS_PER_S / freq) + 1e-9)) + 1
         # 0 Hz is allowed, and so is a pulse too long to fit even once:
         if n_pulses <= 0:
             time = np.array([0, stim_dur], dtype=np.float64)
             data = np.array([[0, 0]], dtype=np.float32)
         else:
-            # Window duration is the inverse of pulse train frequency:
-            window_dur = 1000.0 / freq
+            # Window duration (ms) is the inverse of pulse train frequency:
+            window_dur = MS_PER_S / freq
             if pulse.time[-1] > window_dur:
                 raise ValueError(f"Pulse (dur={pulse.time[-1]:.2f} ms) does not fit into "
                                  f"pulse train window (dur={window_dur:.2f} "

@@ -18,6 +18,7 @@ from ..units import dimensionless
 from .names import ElectrodeNames
 from ..utils import (center_image, shift_image, scale_image, trim_image,
                      frame_interval, HTMLAnimation)
+from ..utils.constants import MS_PER_S
 
 
 class VideoStimulus(Stimulus):
@@ -112,8 +113,9 @@ class VideoStimulus(Stimulus):
                 metadata.update(meta)
             metadata['source'] = source
             metadata['source_shape'] = vid.shape
-            # Infer the time points from the video frame rate:
-            time = np.arange(vid.shape[-1]) * 1000.0 / meta['fps']
+            # Infer the time points from the video frame rate. `fps` counts
+            # frames per second and a stimulus counts milliseconds:
+            time = np.arange(vid.shape[-1]) * MS_PER_S / meta['fps']
         elif isinstance(source, VideoStimulus):
             vid = source.data.reshape(source.vid_shape)
             metadata.update(source.metadata)
@@ -125,7 +127,7 @@ class VideoStimulus(Stimulus):
             vid = source
             if time is None and 'fps' in metadata:
                 # Infer the time points from the video frame rate:
-                time = np.arange(vid.shape[-1]) * 1000.0 / metadata['fps']
+                time = np.arange(vid.shape[-1]) * MS_PER_S / metadata['fps']
         else:
             raise TypeError(f"Source must be a filename, a 3D NumPy array or "
                             f"another VideoStimulus, not {type(source)}.")

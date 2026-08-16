@@ -6,6 +6,7 @@ from .. import ProsthesisSystem
 from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
 from ...units import as_value, um
+from ...utils.constants import UM_PER_MM
 
 
 class Orion(ProsthesisSystem):
@@ -72,7 +73,8 @@ class Orion(ProsthesisSystem):
         self.preprocess = preprocess
         self.safe_mode = safe_mode
         self.shape = (10, 7)
-        spacing = (4200, np.sqrt(3**2-2.1**2)*1000)
+        # The row offset is published in millimeters; coordinates are microns:
+        spacing = (4200, np.sqrt(3**2-2.1**2) * UM_PER_MM)
         self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, rot=rot,
                                     names=('A', '-1'), type='hex', r=1000,
                                     etype=DiskElectrode)

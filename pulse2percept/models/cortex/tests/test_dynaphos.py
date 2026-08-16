@@ -154,3 +154,30 @@ def test_DynaphosModel_t_percept_units():
         npt.assert_allclose(unitful.time, [0, 20, 40], rtol=1e-12)
     with pytest.raises(DimensionMismatchError):
         model.predict_percept(implant, t_percept=[0, 20] * uA)
+
+
+def test_DynaphosModel_default_frame_clock_stops_at_the_stimulus():
+    """The default output clock does not run past the end of the stimulus
+
+    `arange`'s half-open end used to be nudged by the literal 1, which meant
+    one *millisecond*: with a `dt` finer than that it emitted frames after the
+    stimulus was over, and for a model counting in anything but milliseconds
+    it would have been meaningless.
+    """
+    stim = BiphasicPulseTrain(20, 50, 0.1, stim_dur=10)
+    implant = Cortivis(stim={'11': stim})
+    kwargs = dict(xrange=(-2, 2), yrange=(-2, 2), xystep=1)
+
+    # Coarser than a millisecond, which is the case the literal was written
+    # for, and still the same clock it always produced:
+    model = DynaphosModel(dt=2, **kwargs).build()
+    npt.assert_allclose(model.predict_percept(implant).time,
+                        np.arange(0, 11, 2), rtol=1e-12)
+
+    # Finer than a millisecond, which is where it overshot:
+    model = DynaphosModel(dt=0.5, **kwargs).build()
+    percept = model.predict_percept(implant)
+    npt.assert_allclose(percept.time, np.arange(0, 10.25, 0.5), rtol=1e-12)
+    npt.assert_equal(percept.time[-1] <= implant.stim.time[-1], True)
+    # The endpoint is included, not dropped:
+    npt.assert_allclose(percept.time[-1], implant.stim.time[-1], rtol=1e-12)

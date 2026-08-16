@@ -11,7 +11,7 @@ from matplotlib.patches import Ellipse
 
 from ..units import dva, um
 from ..utils import deprecated_alias
-from ..utils.constants import ZORDER
+from ..utils.constants import UM_PER_MM, ZORDER
 from ..topography import Watson2014Map
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
@@ -1016,12 +1016,14 @@ class AxonMapSpatial(SpatialModel):
             units = 'microns'
             # Make sure we're filling the simulated area, rounded up/down,
             # but no smaller than (-5000, 5000):
+            # Rounded to whole millimeters, which is what the ticks below are
+            # spaced by:
             xmin, ymin = self.vfmap.dva_to_ret(self.xrange[0], self.yrange[0])
-            xmin = min(np.floor(xmin / 1000) * 1000, -5000)
-            ymin = min(np.floor(ymin / 1000) * 1000, -5000)
+            xmin = min(np.floor(xmin / UM_PER_MM) * UM_PER_MM, -5000)
+            ymin = min(np.floor(ymin / UM_PER_MM) * UM_PER_MM, -5000)
             xmax, ymax = self.vfmap.dva_to_ret(self.xrange[1], self.yrange[1])
-            xmax = max(np.ceil(xmax / 1000) * 1000, 5000)
-            ymax = max(np.ceil(ymax / 1000) * 1000, 5000)
+            xmax = max(np.ceil(xmax / UM_PER_MM) * UM_PER_MM, 5000)
+            ymax = max(np.ceil(ymax / UM_PER_MM) * UM_PER_MM, 5000)
             od_xy = self.vfmap.dva_to_ret(*self.loc_od)
             od_w = 1770
             od_h = 1880

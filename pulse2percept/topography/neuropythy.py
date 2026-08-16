@@ -5,6 +5,7 @@ from scipy.spatial import cKDTree
 
 from .cortex import CorticalMap
 from ..units import um
+from ..utils.constants import UM_PER_MM
 
 class NeuropythyMap(CorticalMap):
 
@@ -197,7 +198,8 @@ class NeuropythyMap(CorticalMap):
             surf_pts = surf.unaddress(addr)
             # Fix the nans and return.
             surf_pts[:, iinan] = np.nan
-            return np.array(surf_pts * 1000, dtype='float32')
+            # FreeSurfer surfaces are in millimeters; `tissue_unit` is microns:
+            return np.array(surf_pts * UM_PER_MM, dtype='float32')
         
 
     def dva_to_v1(self, x, y, surface='midgray'):
@@ -334,12 +336,16 @@ class NeuropythyMap(CorticalMap):
         # point cannot be mapped:
         out = np.full((*np.shape(xc), 2), np.nan)
         id_nan = np.isnan(xc) | np.isnan(yc) | np.isnan(zc)
-        # Boolean indexing flattens, so the query is always (npoints, 3):
-        query = np.stack([xc[~id_nan], yc[~id_nan], zc[~id_nan]], axis=-1) / 1000 # convert to mm
+        # Boolean indexing flattens, so the query is always (npoints, 3). The
+        # tree is built on the FreeSurfer mesh, which is in millimeters, while
+        # the coordinates coming in are in microns:
+        query = np.stack([xc[~id_nan], yc[~id_nan], zc[~id_nan]],
+                         axis=-1) / UM_PER_MM
         if np.size(query) == 0:
             return out[..., 0], out[..., 1]
-        dist, idx = self.cortex_tree.query(query, k=5)#, distance_upper_bound=self.cort_nn_thresh / 1000)
-        too_far = dist > self.cort_nn_thresh / 1000
+        dist, idx = self.cortex_tree.query(query, k=5)
+        # , distance_upper_bound=self.cort_nn_thresh / UM_PER_MM)
+        too_far = dist > self.cort_nn_thresh / UM_PER_MM
         neighbors = np.array([[self.region_meshes[self.addr_idxs['region'][i]][self.addr_idxs['hemi'][i]].coordinates[:, self.addr_idxs['addr'][i]]
                                for i in nb_pts]
                               for nb_pts in idx])

@@ -509,8 +509,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             A valid prosthesis system. A stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
         t_percept: float or list of floats, optional
-            The time points at which to output a percept (ms).
+            The time points at which to output a percept (ms). This
+            model's numerical contract is fixed to milliseconds.
             If None, ``implant.stim.time`` is used.
+            May be given as a unitful quantity (e.g. ``[0, 20] * ms``);
+            see :py:mod:`pulse2percept.units`.
 
         Returns
         -------
@@ -743,8 +746,11 @@ class BiphasicAxonMapModel(Model):
             A valid prosthesis system. A stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
         t_percept: float or list of floats, optional
-            The time points at which to output a percept (ms).
+            The time points at which to output a percept (ms). This
+            model's numerical contract is fixed to milliseconds.
             If None, ``implant.stim.time`` is used.
+            May be given as a unitful quantity (e.g. ``[0, 20] * ms``);
+            see :py:mod:`pulse2percept.units`.
 
         Returns
         -------

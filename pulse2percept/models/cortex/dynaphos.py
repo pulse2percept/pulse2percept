@@ -6,10 +6,17 @@ from copy import deepcopy, copy
 from ..base import BaseModel, NotBuiltError, _require_stim_dimension
 from ...percepts import Percept
 from ...implants import ProsthesisSystem
-from ...units import as_value, dva, Hz, mm, ms, uA
+from ...units import A, Quantity, as_value, dva, Hz, mm, ms, uA
 from ...utils import cart2pol
-from ...utils.constants import ZORDER
+from ...utils.constants import MS_PER_S, UM_PER_MM, ZORDER
 from ...topography import Polimeni2006Map
+
+#: Amperes in a microamp (1e-6). The activation cascade below is the published
+#: one, which is written in SI units, while a p2p stimulus is in microamps.
+#: Spelled out here at module scope because ``A`` names the activation array
+#: inside ``_predict_percept``.
+_A_PER_UA = Quantity(1, uA).to_value(A)
+
 
 class DynaphosModel(BaseModel):
     """Adaptation of the Dynaphos model from [vanderGrinten2023]_
@@ -147,12 +154,11 @@ class DynaphosModel(BaseModel):
         """Return a dict of the units that parameters are stored in
 
         This model's equations mix units: they take microamps, milliseconds
-        and hertz as input, then convert to seconds and amperes inline (the
-        ``/1000`` and ``1e-6`` terms in ``_predict_percept``). What is
-        declared here is the *input* contract -- the units a caller supplies,
-        which are the ones the docstring documents -- not the units the
-        equations work in internally. Those conversions are left exactly as
-        they are.
+        and hertz as input, and the published cascade they implement is
+        written in SI (seconds and amperes). What is declared here is the
+        *input* contract -- the units a caller supplies, which are the ones
+        the docstring documents. ``_predict_percept`` converts them to SI once
+        before its loop; see the conversion block there.
         """
         return {
             **super().get_param_units(),
@@ -160,8 +166,7 @@ class DynaphosModel(BaseModel):
             'yrange': dva,
             'xystep': dva,
             'dt': ms,
-            # Decay constants, both divided by 1000 to seconds where they are
-            # used:
+            # Decay constants, both converted to seconds where they are used:
             'tau_act': ms,
             'tau_trace': ms,
             'rheobase': uA,
@@ -196,8 +201,9 @@ class DynaphosModel(BaseModel):
         from ...topography import Grid2D
         # See `BaseModel.build`:
         self.set_params(**build_params)
-        # check that freq/pdur fit
-        window_dur = 1000.0 / self.freq
+        # check that freq/pdur fit. `freq` counts cycles per second, and every
+        # duration in this model is in milliseconds:
+        window_dur = MS_PER_S / self.freq
         if self.p_dur*2 > window_dur:
             raise ValueError(f"Pulse (dur={self.p_dur*2:.2f} ms) does not fit into "
                             f"pulse train window (dur={window_dur:.2f} "
@@ -271,7 +277,7 @@ class DynaphosModel(BaseModel):
         D = np.zeros(len(x_el))
         # holds sigma for gaussian phosphene generation
         sigma = np.zeros(len(x_el))
-        # constant for trace decay (ms; divided by 1000 where it is used)
+        # constant for trace decay (ms; converted to seconds below)
         tau_trace = self.tau_trace
         # input effect for trace
         kappa_trace = self.kappa_trace
@@ -289,6 +295,15 @@ class DynaphosModel(BaseModel):
         n_sim = idx_percept[n_percept - 1] + 1 # no negative indices
         stim_idx = 0
         frame_idx = 0
+        # The cascade below is the published one, which is written in SI
+        # units, while this model is handed milliseconds and microamps.
+        # Convert the durations once, here, so that the loop is plain floats
+        # and no factor of a thousand is left implicit inside it (see
+        # `_A_PER_UA` for the current):
+        p_dur_s = p_dur / MS_PER_S
+        tau_trace_s = tau_trace / MS_PER_S
+        tau_act_s = self.tau_act / MS_PER_S
+        dt_s = self.dt / MS_PER_S
         for sim_idx in range(n_sim):
             t_sim = sim_idx * self.dt
             # get highest amp value over the frame
@@ -302,16 +317,16 @@ class DynaphosModel(BaseModel):
                 stim_idx += 1
                 amp = np.maximum(amp, stim_data[:,stim_idx])
             # Ieff = max(0, (Istim - I0 - Q) * f * Pw) (uA)
-            Ieff = np.maximum(0, (amp - I0 - Q) * freq * (p_dur / 1000))
+            Ieff = np.maximum(0, (amp - I0 - Q) * freq * p_dur_s)
             # update memory trace (uA)
-            Q = Q + ((-Q / (tau_trace / 1000)) + Ieff * kappa_trace) * (self.dt / 1000)
+            Q = Q + ((-Q / tau_trace_s) + Ieff * kappa_trace) * dt_s
             # update phosphene size
             D = 2 * np.sqrt(amp / K) # mm
             P = (D / M) # dva
             # calculate sigma for gaussian (only update sigma if amplitude > 0)
             sigma = np.where(amp > 0, np.clip(P / 2, 1e-22, None), sigma) 
-            # get activation (convert Ieff from uA to A)
-            A = A + ((-A / (self.tau_act / 1000)) + Ieff * 1e-6) * (self.dt / 1000)
+            # get activation (Ieff converted from uA to A)
+            A = A + ((-A / tau_act_s) + Ieff * _A_PER_UA) * dt_s
             # get brightness
             brightness = np.divide(1, 1 + np.exp(-self.sig_slope * (A - self.a50)))
             # create gaussian blobs & add to frame
@@ -350,8 +365,11 @@ class DynaphosModel(BaseModel):
             A valid prosthesis system. A stimulus can be passed via
             :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
         t_percept: float or list of floats, optional
-            The time points at which to output a percept (ms).
+            The time points at which to output a percept (ms). This
+            model's numerical contract is fixed to milliseconds.
             If None, ``implant.stim.time`` is used.
+            May be given as a unitful quantity (e.g. ``[0, 20] * ms``);
+            see :py:mod:`pulse2percept.units`.
 
         Returns
         -------
@@ -383,11 +401,15 @@ class DynaphosModel(BaseModel):
         if not stim.is_compressed:
             stim.compress()
         if t_percept is None:
-            # If no time vector is given, output at frame rate determined by self.dt. We always
-            # start at zero and include the last time point:
-            t_percept = np.arange(
-                0, np.maximum(self.dt, self._stim_times(stim)[-1]) + 1,
-                self.dt)
+            # If no time vector is given, output at frame rate determined by
+            # self.dt. We always start at zero and include the last time
+            # point. `nextafter` is what makes `arange`'s half-open end
+            # inclusive of a point that lands exactly on it; the `+ 1` this
+            # replaces was one *millisecond* of slack, which overshot the end
+            # of the stimulus whenever `dt` was finer than that and would not
+            # have survived a model counting in anything but milliseconds.
+            end = np.maximum(self.dt, self._stim_times(stim)[-1])
+            t_percept = np.arange(0, np.nextafter(end, np.inf), self.dt)
         t_percept = np.sort([t_percept]).flatten()
         remainder = np.mod(t_percept, self.dt) / self.dt
         atol = 1e-3
@@ -448,8 +470,9 @@ class DynaphosModel(BaseModel):
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')
         else:
-            ax.set_xticklabels(np.array(ax.get_xticks()) / 1000)
-            ax.set_yticklabels(np.array(ax.get_yticks()) / 1000)
+            # Cortical coordinates are stored in microns, plotted in mm:
+            ax.set_xticklabels(np.array(ax.get_xticks()) / UM_PER_MM)
+            ax.set_yticklabels(np.array(ax.get_yticks()) / UM_PER_MM)
             ax.set_xlabel('x (mm)')
             ax.set_ylabel('y (mm)')
         return ax
