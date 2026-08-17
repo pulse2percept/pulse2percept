@@ -1,7 +1,6 @@
 """:py:class:`~pulse2percept.utils.deprecated`,
    :py:class:`~pulse2percept.utils.deprecate_parameter`,
    :py:class:`~pulse2percept.utils.deprecated_alias`,
-   :py:class:`~pulse2percept.utils.deprecated_names`,
    :py:class:`~pulse2percept.utils.rename_parameter`,
    :py:class:`~pulse2percept.utils.is_deprecated`"""
 
@@ -78,81 +77,6 @@ def _warn_external(message, category=DeprecationWarning):
         frame = frame.f_back
         stacklevel += 1
     warnings.warn(message, category=category, stacklevel=stacklevel)
-
-
-def deprecated_names(namespace, aliases, deprecated_version=None,
-                     removed_version=None):
-    """Build a module-level ``__getattr__`` that serves renamed objects
-
-    Use this to keep the *old* name of a public class or function importable
-    after it has been renamed. Assign the result to ``__getattr__`` in the
-    module that owns the object (and in any package that re-exports it)::
-
-        class StimulusEncoder:
-            ...
-
-        __getattr__ = deprecated_names(globals(),
-                                       {'Encoder': 'StimulusEncoder'},
-                                       deprecated_version='0.10.0',
-                                       removed_version='0.11.0')
-
-    Reading ``module.Encoder``, or importing it, then raises a
-    ``DeprecationWarning`` and hands back
-    :py:class:`~pulse2percept.stimuli.StimulusEncoder` **itself** rather than a
-    subclass of it (see PEP 562). That distinction is the reason to prefer this
-    over ``class Encoder(StimulusEncoder)``: the two names stay the same
-    object, so ``issubclass(AmplitudeEncoder, Encoder)``, ``isinstance`` and
-    ``type(obj) is Encoder`` all keep answering what they answered before the
-    rename.
-
-    A module-level ``__getattr__`` is only consulted for names that are *not*
-    in the module's namespace, so the deprecated name must not also be
-    imported or defined there. It may still be listed in ``__all__``, which is
-    what keeps ``from module import *`` working (with a warning) during the
-    deprecation window.
-
-    .. versionadded:: 0.10.0
-
-    .. note::
-
-        Renaming a *parameter* is a different job; see
-        :py:class:`~pulse2percept.utils.rename_parameter` and
-        :py:class:`~pulse2percept.utils.deprecated_alias`.
-
-    Parameters
-    ----------
-    namespace : dict
-        The module's own ``globals()``, which is where the new names are
-        looked up when a deprecated one is read.
-    aliases : dict
-        Maps each deprecated name to the name that replaces it.
-    deprecated_version : float or str
-        The package version in which the old name was first marked as
-        deprecated.
-    removed_version : float or str
-        The package version in which the old name will stop working.
-
-    Returns
-    -------
-    __getattr__ : callable
-        The module-level attribute hook to assign to ``__getattr__``.
-
-    """
-    clause = _version_clause(deprecated_version, removed_version)
-
-    def __getattr__(name):
-        new_name = aliases.get(name)
-        if new_name is None:
-            # Not ours: answer the way an ordinary module would, so that a
-            # typo still reads as a typo:
-            raise AttributeError(f"module "
-                                 f"{namespace.get('__name__')!r} has no "
-                                 f"attribute {name!r}")
-        _warn_external(f"{name} is deprecated{clause}. Use {new_name} "
-                       f"instead.")
-        return namespace[new_name]
-
-    return __getattr__
 
 
 class deprecated:

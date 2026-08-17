@@ -188,10 +188,19 @@ may name that patch by the piece of retina it lands on, and the model's own
     >>> model.xrange  # 280 um to the degree
     (-10.0, 10.0)
 
+Each range is converted along its corresponding retinal meridian: ``xrange``
+through ``ret_to_dva(x, 0)`` and ``yrange`` through ``ret_to_dva(0, y)``. The
+resulting grid is still rectangular and uniformly sampled in dva, exactly as
+if you had typed those degrees yourself. Under a nonlinear map such as
+:py:class:`~pulse2percept.topography.Watson2014Map` it is therefore not the
+image of a retinal rectangle: naming retinal lengths says how far to simulate,
+it does not make the grid uniform in retinal space.
+
+For the same reason ``step`` has no such spelling -- a grid spaced evenly on
+the retina is a different grid, not a different spelling of this one -- and
+neither has a cortical model, where a length is not shorthand for anything.
 The range is resolved once, when it is assigned, so a map installed afterwards
-does not reinterpret it. ``step`` has no such spelling: a grid spaced evenly on
-the retina is a different grid, not a different spelling of this one. Neither
-has a cortical model, where a length is not shorthand for anything.
+does not reinterpret it.
 
 **A frequency, for a frame rate.** ``fps`` counts frames per second, so it
 takes hertz as readily as a bare number: ``percept.play(fps=30)``,

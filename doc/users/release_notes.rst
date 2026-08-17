@@ -100,11 +100,6 @@ API changes:
   video first. Preprocessing still runs before the check, so an implant whose
   ``preprocess`` turns pictures into current is unaffected.
 
-* The abstract encoder base class ``Encoder`` was renamed to
-  :py:class:`~pulse2percept.stimuli.StimulusEncoder`. The old name still
-  resolves, to the same class object, with a ``DeprecationWarning``, and will
-  be removed in v0.11.0.
-
 * ``fps`` arguments (:py:meth:`~pulse2percept.percepts.Percept.play`,
   :py:meth:`~pulse2percept.percepts.Percept.save`,
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play`,
@@ -113,8 +108,9 @@ API changes:
 
 * ``xrange`` and ``yrange`` on a retinal spatial model accept a physical
   extent (``xrange=(-4 * mm, 4 * mm)``), which the model's ``vfmap`` resolves
-  into the visual field range that piece of retina covers. The range is stored
-  in degrees of visual angle, exactly as before. This is shorthand for a
+  into the visual field range that piece of retina covers, each range along
+  its own retinal meridian. The range is stored in degrees of visual angle and
+  the grid stays uniform in dva, exactly as before. This is shorthand for a
   visual field extent rather than a unit conversion, so it is not offered for
   ``step`` and not offered on cortical models.
 

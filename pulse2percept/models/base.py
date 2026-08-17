@@ -509,11 +509,14 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
           On a retinal model they may also be given as a physical extent
           (e.g. ``xrange=(-4 * mm, 4 * mm)``), which the model's ``vfmap``
           resolves into the visual field range that piece of retina covers.
-          The range is stored in dva either way, so changing ``vfmap``
-          afterwards does not reinterpret it. This is shorthand, not a unit
-          conversion: ``step`` has no such spelling, since a grid spaced
-          evenly on the retina is a different grid from one spaced evenly in
-          the visual field.
+          Each range is converted along its own retinal meridian, and the grid
+          that results is rectangular and uniformly sampled in dva exactly as
+          it always was -- under a nonlinear map it is therefore not the image
+          of a retinal rectangle. The range is stored in dva either way, so
+          changing ``vfmap`` afterwards does not reinterpret it. This is
+          shorthand, not a unit conversion: ``step`` has no such spelling,
+          since a grid spaced evenly on the retina is a different grid from
+          one spaced evenly in the visual field.
 
     .. seealso ::
 
@@ -569,6 +572,14 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         what is stored afterwards is an ordinary pair of dva. Changing
         ``vfmap`` later therefore does not reinterpret a range that has already
         been resolved -- the same rule an implant's coordinates follow.
+
+        Each range is converted along its own retinal meridian: ``xrange``
+        through ``ret_to_dva(x, 0)`` and ``yrange`` through
+        ``ret_to_dva(0, y)``. The grid built from the result is rectangular and
+        uniformly sampled in dva, exactly as it is for a range given in degrees,
+        so under a nonlinear map it is not the image of a retinal rectangle.
+        Naming retinal lengths says how far to simulate; it does not change what
+        the grid is uniform in.
 
         This is deliberately not a unit conversion, and
         :py:class:`~pulse2percept.units.Quantity` will not do it: how far a

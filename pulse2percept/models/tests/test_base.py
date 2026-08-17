@@ -12,10 +12,10 @@ from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    ImageStimulus, Stimulus, VideoStimulus)
 from pulse2percept.percepts import Percept
-from pulse2percept.models import (AxonMapSpatial, BaseModel, FadingTemporal,
-                                  Model, NotBuiltError, ScoreboardModel,
-                                  ScoreboardSpatial, SpatialModel,
-                                  TemporalModel)
+from pulse2percept.models import (AxonMapModel, AxonMapSpatial, BaseModel,
+                                  FadingTemporal, Model, NotBuiltError,
+                                  ScoreboardModel, ScoreboardSpatial,
+                                  SpatialModel, TemporalModel)
 from pulse2percept.models.cortex import (ScoreboardSpatial as
                                          CortexScoreboardSpatial)
 from pulse2percept.units import (DimensionMismatchError, Quantity,
@@ -564,6 +564,38 @@ def test_SpatialModel_retinal_range():
     # It must be a pair, whatever the units:
     with pytest.raises(ValueError):
         ScoreboardSpatial(xrange=2.8 * mm, vfmap=Curcio1990Map())
+
+
+def test_SpatialModel_retinal_range_nonlinear_map():
+    """The motivating case: an axon map model sized in millimeters
+
+    Every other test here uses ``Curcio1990Map``, where the transform is a
+    single factor and so cannot tell a real conversion apart from a lucky one.
+    ``AxonMapModel`` defaults to ``Watson2014Map``, whose inverse is a quartic
+    polynomial in the eccentricity, so this pins the answer to the map rather
+    than to a scale factor. No ``build``: growing axon bundles is expensive
+    and has nothing to do with what the range came out as.
+    """
+    model = AxonMapModel(xrange=(-4 * mm, 4 * mm), yrange=(-2 * mm, 2 * mm))
+    npt.assert_equal(isinstance(model.vfmap, Watson2014Map), True)
+    # Each range is resolved along its own meridian, which is what makes the
+    # two answers independent of one another:
+    watson = Watson2014Map()
+    npt.assert_allclose(model.xrange,
+                        (watson.ret_to_dva(-4000, 0)[0],
+                         watson.ret_to_dva(4000, 0)[0]), rtol=1e-12)
+    # The retinal y axis points the other way, so the pair comes back sorted
+    # rather than in the order the eccentricities were given:
+    npt.assert_allclose(model.yrange,
+                        sorted((watson.ret_to_dva(0, -2000)[1],
+                                watson.ret_to_dva(0, 2000)[1])), rtol=1e-12)
+    # And the map really is consulted: a linear 280 um/dva reading would put
+    # the edge of the x range half a degree away from where Watson does.
+    npt.assert_equal(abs(model.xrange[1] - 4000 / 280.0) > 0.4, True)
+    # The spatial model alone answers identically, and is what the composite
+    # forwarded to:
+    npt.assert_allclose(AxonMapSpatial(xrange=(-4 * mm, 4 * mm)).xrange,
+                        model.xrange, rtol=1e-12)
 
 
 def test_SpatialModel_retinal_range_needs_a_retinal_map():

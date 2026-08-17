@@ -10,7 +10,7 @@ from .pulses import BiphasicPulse
 from .videos import VideoStimulus
 from ..units import (DimensionMismatchError, Hz, as_value, dimensionless, ms,
                      uA)
-from ..utils import PrettyPrint, deprecated_names, frame_interval
+from ..utils import PrettyPrint, frame_interval
 # Every warning below is about the *caller's* choice of source, frequency, or
 # implant, so it has to point at their line rather than at this file:
 from ..utils.deprecation import _warn_external
@@ -1040,11 +1040,3 @@ frame_dur, stretch
         """Gray level in [0, 1] -> frequency in ``freq_range``"""
         freq_lo, freq_hi = self.freq_range
         return self.amp, freq_lo + gray * (freq_hi - freq_lo)
-
-
-#: ``StimulusEncoder`` was called ``Encoder`` in 0.10.0. The old name still
-#: resolves -- to the very same class object, so that ``isinstance`` and
-#: ``issubclass`` keep answering what they always did -- and warns:
-__getattr__ = deprecated_names(globals(), {'Encoder': 'StimulusEncoder'},
-                               deprecated_version='0.10.0',
-                               removed_version='0.11.0')

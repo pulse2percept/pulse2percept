@@ -1,4 +1,3 @@
-import importlib
 import warnings
 
 import numpy as np
@@ -33,45 +32,6 @@ def n_pulses_of(stim, electrode=0, peak=None):
 def test_StimulusEncoder_is_abstract():
     with pytest.raises(TypeError):
         StimulusEncoder()
-
-
-def test_StimulusEncoder_deprecated_name():
-    """``Encoder`` still resolves, to the very same class object
-
-    The old name is served by a module-level ``__getattr__`` rather than by a
-    subclass, so it is not merely compatible but identical: every
-    ``isinstance`` and ``issubclass`` check written against it keeps answering
-    what it answered before the rename.
-    """
-    for module in ('pulse2percept.stimuli', 'pulse2percept.stimuli.encoders'):
-        with pytest.warns(DeprecationWarning, match='StimulusEncoder'):
-            Encoder = getattr(importlib.import_module(module), 'Encoder')
-        npt.assert_equal(Encoder is StimulusEncoder, True)
-        npt.assert_equal(issubclass(AmplitudeEncoder, Encoder), True)
-        npt.assert_equal(issubclass(FrequencyEncoder, Encoder), True)
-        npt.assert_equal(isinstance(AmplitudeEncoder(), Encoder), True)
-
-    with pytest.warns(DeprecationWarning) as record:
-        from pulse2percept.stimuli import Encoder
-    npt.assert_equal('0.11.0' in str(record[0].message), True)
-    # The warning blames the line that used the deprecated name, not the
-    # module that serves it:
-    npt.assert_equal(record[0].filename, __file__)
-
-    # A user-defined subclass through the old name is a subclass of the new
-    # one, and works:
-    class MyEncoder(Encoder):
-        def _modulate(self, gray):
-            return 10 + 30 * gray, 20
-
-    npt.assert_equal(issubclass(MyEncoder, StimulusEncoder), True)
-    stim = MyEncoder(frame_dur=100).encode(
-        ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4))))
-    npt.assert_almost_equal(np.abs(stim.data).max(), 40)
-
-    # A name that was never ours is still an ordinary AttributeError:
-    with pytest.raises(AttributeError):
-        encoders.NotAThing
 
 
 def test_StimulusEncoder_warnings_point_at_the_caller(monkeypatch):
