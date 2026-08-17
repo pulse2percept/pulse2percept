@@ -19,7 +19,7 @@ The model can be loaded as follows (using 10% dropout rate):
 import matplotlib.pyplot as plt
 import numpy as np
 import pulse2percept as p2p
-model = p2p.models.Thompson2003Model(xystep=0.2, dropout=0.1)
+model = p2p.models.Thompson2003Model(step=0.2, dropout=0.1)
 model.build()
 
 ###############################################################################

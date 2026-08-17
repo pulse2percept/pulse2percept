@@ -87,7 +87,7 @@ Lets use all three regions and plot the result (note it can get a little messy):
 .. code-block:: python
 
     nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1', 'v2', 'v3'])
-    model = p2p.models.cortex.ScoreboardModel(xrange=(-20, 20), yrange=(-20, 20), xystep=0.5,
+    model = p2p.models.cortex.ScoreboardModel(xrange=(-20, 20), yrange=(-20, 20), step=0.5,
                                               vfmap=nmap, regions=['v1', 'v2', 'v3'])
     fig = plt.figure(figsize=(10, 4))
     ax1 = fig.add_subplot(121, projection='3d')
@@ -119,9 +119,9 @@ Lets place a Neuralink implant across the right hemisphere of the cortex:
 .. code-block:: python
 
     nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'])
-    model = p2p.models.cortex.ScoreboardModel(vfmap=nmap, xrange=(-4, 0), yrange=(-4, 4), xystep=.25).build()
+    model = p2p.models.cortex.ScoreboardModel(vfmap=nmap, xrange=(-4, 0), yrange=(-4, 4), step=.25).build()
     nlink = p2p.implants.cortex.Neuralink.from_neuropythy(
-        nmap, xrange=model.xrange, yrange=model.yrange, xystep=1, rand_insertion_angle=0
+        nmap, xrange=model.xrange, yrange=model.yrange, step=1, rand_insertion_angle=0
     )
     print(len(nlink.implants), " total threads")
 
@@ -140,9 +140,9 @@ electrode on each thread, using the scoreboard model:
 
     nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'], jitter_boundary=True)
     model = p2p.models.cortex.ScoreboardModel(rho=800, xrange=(-15, 15), yrange=(-15, 15),
-                                              xystep=.25, vfmap=nmap).build()
+                                              step=.25, vfmap=nmap).build()
     nlink = p2p.implants.cortex.Neuralink.from_neuropythy(
-        nmap, xrange=model.xrange, yrange=model.yrange, xystep=3, rand_insertion_angle=0
+        nmap, xrange=model.xrange, yrange=model.yrange, step=3, rand_insertion_angle=0
     )
     nlink.stim = {e: 1 for e in [i for i in nlink.electrode_names if i[-1] == '1']}
     percept = model.predict_percept(nlink)

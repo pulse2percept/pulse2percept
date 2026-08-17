@@ -63,7 +63,7 @@ print(model)
 #   specified as a range of x and y coordinates (in degrees of visual angle,
 #   or dva). For example, we are currently sampling x values between -20 dva
 #   and +20dva, and y values between -15 dva and +15 dva.
-# * ``xystep``: The resolution (in dva) at which to sample the visual field.
+# * ``step``: The resolution (in dva) at which to sample the visual field.
 #   For example, we are currently sampling at 0.25 dva in both x and y
 #   direction.
 # * ``loc_od_x``, ``loc_od_y``: the location of the center of the optic disc

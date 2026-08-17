@@ -220,7 +220,7 @@ fig.tight_layout()
 # specified in degrees of visual angle (dva). They are sampled at ``xydva``
 # dva:
 
-model = Nanduri2012Model(xystep=0.5, xrange=(-4, 4), yrange=(-4, 4))
+model = Nanduri2012Model(step=0.5, xrange=(-4, 4), yrange=(-4, 4))
 model.build()
 
 ###############################################################################

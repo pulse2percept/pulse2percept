@@ -35,18 +35,15 @@ Highlights:
 
 API changes:
 
-* The ``axlambda`` parameter of the axon map models was renamed to ``lam``,
-  which sits better next to ``rho``. The old name still works everywhere the
-  new one does, but raises a ``DeprecationWarning`` and will be removed in
-  v0.11.0.
-
 * :py:class:`~pulse2percept.models.FadingTemporal` is now driven by
   :math:`\max(-A, 0)` rather than :math:`-A`: anodic current no longer reduces
   brightness, it is ignored. A stimulus that is purely cathodic is unaffected.
+  In addition, ``FadingTemporal`` now enforces ``tau >= dt``.
 
-* :py:class:`~pulse2percept.models.FadingTemporal` requires ``tau >= dt``. The
-  integrator steps explicitly, so a shorter time constant overshoots its drive
-  by ``dt / tau`` and oscillates instead of decaying.
+* The grid-spacing parameter ``xystep`` was renamed to ``step`` across spatial
+  models and implant-grid factory methods. The old name remains supported with 
+  a ``DeprecationWarning`` and will be removed in v0.11.0. The axon-map
+  parameter ``axlambda`` was similarly renamed to ``lam``.
 
 * Temporal models gained a ``reduce`` parameter. When ``predict_percept`` picks
   the output times itself (``t_percept=None``), ``reduce='peak'`` makes each
@@ -101,7 +98,7 @@ API changes:
   does not apply to it.
 
 * :py:meth:`~pulse2percept.implants.EnsembleImplant.from_coords` requires
-  ``xrange``, ``yrange`` and ``xystep`` together when ``locs`` is not given.
+  ``xrange``, ``yrange`` and ``step`` together when ``locs`` is not given.
   They previously defaulted to a visual-field range, which placed implants at
   coordinates that were never meant to be microns.
 

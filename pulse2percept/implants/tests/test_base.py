@@ -174,7 +174,7 @@ def test_ProsthesisSystem_reshape_stim(rot, gtype, n_frames):
     data[20:-20, 10:-10] = 1
     sampled = implant.reshape_stim(ImageStimulus(data))
     implant.stim = Stimulus(sampled.data, electrodes=sampled.electrodes)
-    model = ScoreboardModel(xrange=(-1, 1), yrange=(-1, 1), rho=30, xystep=0.02)
+    model = ScoreboardModel(xrange=(-1, 1), yrange=(-1, 1), rho=30, step=0.02)
     model.build()
     percept = label(model.predict_percept(implant).data.squeeze().T > 0.2)
     npt.assert_almost_equal(regionprops(percept)[0].orientation, 0, decimal=1)
