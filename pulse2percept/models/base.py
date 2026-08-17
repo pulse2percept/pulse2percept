@@ -253,6 +253,77 @@ def _require_stim_dimension(model, stim):
         f"is what says how much current a gray level stands for.")
 
 
+def _spatial_input(implant):
+    """The stimulus a model with no temporal component reads off an implant
+
+    A pulse train is a description of *when* current flows, and a raster is a
+    description of which electrodes are allowed to flow at the same time. Both
+    are facts about time, and a model with no temporal component has no
+    machinery to express either: handed the delivered train, it reports the
+    stimulus one instant at a time, so an encoded image comes out as a
+    sequence of raster slots rather than as the image.
+
+    So where the encoder left the modulation behind the delivered train (see
+    :py:attr:`~pulse2percept.implants.ProsthesisSystem.spatial_stim`), that is
+    what a spatial model reads: one amplitude per electrode per frame of the
+    source, which is exactly as much of the stimulus as such a model can say
+    anything about. Everything else -- a stimulus assigned as current, an
+    implant with no encoder -- has only the one description of itself, and it
+    is used unchanged.
+    """
+    spatial = getattr(implant, 'spatial_stim', None)
+    return implant.stim if spatial is None else spatial
+
+
+def _rescale(stim, scale):
+    """A copy of ``stim`` with every amplitude multiplied by ``scale``
+
+    The metadata is carried across: it is what tells ``predict_percept`` which
+    video the stimulus was encoded from, and hence when to report a percept.
+    Without it every trial of a ``find_threshold`` search would be evaluated
+    on a different time base than the caller's own ``predict_percept`` uses.
+    """
+    return Stimulus(scale * stim.data, electrodes=stim.electrodes,
+                    time=stim.time,
+                    metadata=deepcopy(stim.metadata))._inherit_units(stim)
+
+
+def _rescaled_implant(implant, amp):
+    """A copy of ``implant`` whose stimulus peaks at ``amp``
+
+    What ``find_threshold`` varies from trial to trial. *Both* descriptions of
+    the stimulus are scaled, because which one a model reads depends on
+    whether it has a temporal component (see :py:func:`_spatial_input`), and a
+    search run on one description would not be a search for the threshold of
+    what the caller's own ``predict_percept`` reports.
+    """
+    trial = deepcopy(implant)
+    scale = amp / implant.stim.data.max()
+    trial.stim = _rescale(implant.stim, scale)
+    if implant.spatial_stim is not None:
+        # After the assignment above, which clears it -- an ordinary stimulus
+        # assigned to an implant has no modulation behind it:
+        trial._spatial_stim = _rescale(implant.spatial_stim, scale)
+    return trial
+
+
+def _delivered(implant):
+    """The same implant, made to hand a spatial model the pulse train
+
+    The other side of :py:func:`_spatial_input`. A spatial model that feeds a
+    temporal one is the case where the pulses are exactly what has to get
+    through, since integrating them is what the temporal model is for. A
+    shallow copy is enough to say so: nothing but the stimulus attribute
+    differs, and neither the electrode array nor the stimulus itself is
+    duplicated.
+    """
+    if getattr(implant, 'spatial_stim', None) is None:
+        return implant
+    stand_in = copy(implant)
+    stand_in._spatial_stim = None
+    return stand_in
+
+
 class NotBuiltError(ValueError, AttributeError):
     """Exception class used to raise if model is used before building
 
@@ -782,6 +853,28 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             Don't override this method if you are creating your own model.
             Customize ``_predict_spatial`` instead.
 
+        .. note::
+
+            **A spatial model reads modulation frames, not pulses.** Where the
+            implant's stimulus came from an encoder, what is read is
+            :py:attr:`~pulse2percept.implants.ProsthesisSystem.spatial_stim`
+            -- one amplitude per electrode per frame of the source video --
+            rather than the pulse train in
+            :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim`.
+
+            A pulse train says *when* current flows, and a raster says which
+            electrodes are allowed to flow together. Both are facts about
+            time, and a model with no temporal component can express neither:
+            handed the train, it would report the stimulus one instant at a
+            time, so an encoded image would come back as a sequence of raster
+            slots instead of as the image. So an image gives one percept
+            frame, and a video one percept frame per video frame.
+
+            A model that *does* have a temporal component is the opposite
+            case, and :py:class:`~pulse2percept.models.Model` hands its
+            spatial stage the delivered pulse train: integrating those pulses
+            is exactly what the temporal stage is for.
+
         Parameters
         ----------
         implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
@@ -791,7 +884,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             The time points at which to output a percept, counted in this
             model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
             (milliseconds, for every model p2p ships).
-            If None, ``implant.stim.time`` is used.
+            If None, the time points of the stimulus being read are used --
+            the frame times, for an encoded stimulus.
             May be given as a unitful quantity (e.g. ``[0, 20] * ms``); see
             :py:mod:`pulse2percept.units`.
 
@@ -812,13 +906,19 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         if implant.stim is None:
             # Nothing to see here:
             return None
-        _require_stim_dimension(self, implant.stim)
-        if implant.stim.time is None and t_percept is not None:
+        source = _spatial_input(implant)
+        _require_stim_dimension(self, source)
+        if source.time is None and t_percept is not None:
+            # A single-frame source (an image) modulates the electrodes to one
+            # steady thing, so there are no times to ask about even though the
+            # pulse train delivering it does have a time axis:
+            what = ("the modulation behind this stimulus"
+                    if source is not implant.stim else "stimulus")
             raise ValueError(f"Cannot calculate spatial response at times "
-                             f"t_percept={t_percept} because stimulus does not "
+                             f"t_percept={t_percept} because {what} does not "
                              f"have a time component.")
         # Make sure we don't change the user's Stimulus object:
-        stim = deepcopy(implant.stim)
+        stim = deepcopy(source)
         # Make sure to operate on the compressed stim:
         if not stim.is_compressed:
             stim.compress()
@@ -932,14 +1032,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         amp_tol = as_value(amp_tol, self.stimulus_unit, 'amp_tol')
 
         def inner_predict(amp, fnc_predict, implant):
-            _implant = deepcopy(implant)
-            scale = amp / implant.stim.data.max()
-            _implant.stim = Stimulus(
-                scale * implant.stim.data,
-                electrodes=implant.stim.electrodes, time=implant.stim.time,
-                metadata=deepcopy(implant.stim.metadata)
-            )._inherit_units(implant.stim)
-            return fnc_predict(_implant).data.max()
+            return fnc_predict(_rescaled_implant(implant, amp)).data.max()
 
         return bisect(bright_th, inner_predict,
                       args=[self.predict_percept, implant],
@@ -1403,15 +1496,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
 
         def inner_predict(amp, fnc_predict, stim, **kwargs):
-            # Carry the metadata across: it is what tells `predict_percept`
-            # which video the stimulus was encoded from, and hence when to
-            # report a percept. Without it every trial of the search would be
-            # evaluated on a different time base than the caller's own
-            # `predict_percept` will use:
-            _stim = Stimulus(
-                amp * stim.data / stim.data.max(), electrodes=stim.electrodes,
-                time=stim.time,
-                metadata=deepcopy(stim.metadata))._inherit_units(stim)
+            _stim = _rescale(stim, amp / stim.data.max())
             return fnc_predict(_stim, **kwargs).data.max()
 
         return bisect(bright_th, inner_predict,
@@ -1790,8 +1875,12 @@ class Model(PrettyPrint):
 
         if self.has_space and self.has_time:
             # Need to calculate the spatial response at all stimulus points
-            # (i.e., whenever the stimulus changes):
-            resp = self.spatial.predict_percept(implant, t_percept=None)
+            # (i.e., whenever the stimulus changes). Of the delivered pulse
+            # train, not of the modulation behind it: the pulses are what the
+            # temporal model integrates, and dropping them here would leave it
+            # nothing to do (see `_delivered`).
+            resp = self.spatial.predict_percept(_delivered(implant),
+                                                t_percept=None)
             if implant.stim.time is not None:
                 # Then pass that to the temporal model, which will output at
                 # all `t_percept` time steps:
@@ -1861,19 +1950,8 @@ class Model(PrettyPrint):
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
 
         def inner_predict(amp, fnc_predict, implant, **kwargs):
-            _implant = deepcopy(implant)
-            scale = amp / implant.stim.data.max()
-            # Carry the metadata across: it is what tells `predict_percept`
-            # which video the stimulus was encoded from, and hence when to
-            # report a percept. Without it every trial of the search would be
-            # evaluated on a different time base than the caller's own
-            # `predict_percept` will use:
-            _implant.stim = Stimulus(
-                scale * implant.stim.data,
-                electrodes=implant.stim.electrodes, time=implant.stim.time,
-                metadata=deepcopy(implant.stim.metadata)
-            )._inherit_units(implant.stim)
-            return fnc_predict(_implant, **kwargs).data.max()
+            return fnc_predict(_rescaled_implant(implant, amp),
+                               **kwargs).data.max()
 
         return bisect(bright_th, inner_predict,
                       args=[self.predict_percept, implant],

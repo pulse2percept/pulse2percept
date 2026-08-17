@@ -19,6 +19,17 @@ Highlights:
        percept = p2p.models.AxonMapModel().build().predict_percept(implant)
        percept.play()
 
+*  Spatial models read modulation frames; temporal models read electrical
+   events. An encoded stimulus has two descriptions of itself -- the pulse
+   train the device delivers (``implant.stim``) and the modulation the encoder
+   asked for (:py:attr:`~pulse2percept.implants.ProsthesisSystem.spatial_stim`,
+   one amplitude per electrode per frame, with no waveform, pulse clock or
+   raster in it). A model with no temporal component reads the latter, since a
+   pulse train is a statement about time that it has no way to express;
+   otherwise an encoded image would come back as a sequence of raster slots.
+   :py:meth:`~pulse2percept.stimuli.StimulusEncoder.encode_spatial` produces it
+   on its own.
+
 *  New :py:class:`~pulse2percept.implants.Raster` classes describe how
    stimulators multiplex electrodes that cannot be driven simultaneously. Each
    group starts its pulse a fixed ``group_dur`` behind the one before it.

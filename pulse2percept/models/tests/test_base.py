@@ -10,7 +10,8 @@ import time
 
 from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
-                                   ImageStimulus, Stimulus, VideoStimulus)
+                                   BostonTrain, ImageStimulus, LogoBVL,
+                                   Stimulus, VideoStimulus)
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (AxonMapModel, AxonMapSpatial, BaseModel,
                                   FadingTemporal, Model, NotBuiltError,
@@ -1635,3 +1636,96 @@ def test_TemporalModel_default_frame_rate_is_50Hz():
     brief = Stimulus(-np.ones((1, 3)), electrodes=['A1'], time=[0, 5, 10])
     npt.assert_allclose(SecondTemporal().build().predict_percept(brief).time,
                         [0, 0.02], rtol=1e-9)
+
+
+def test_spatial_model_reads_modulation_not_pulses():
+    """Spatial models see modulation frames; temporal models see pulses.
+
+    A pulse train says *when* current flows and a raster says which electrodes
+    may flow together. Both are facts about time, and a model with no temporal
+    component has no way to express either: handed the delivered train, it
+    reports the stimulus one instant at a time, so an encoded image comes back
+    as a sequence of raster slots rather than as the image. Argus II rasters
+    six groups by default, which is exactly the case that showed it.
+    """
+    logo = LogoBVL()
+    implant = ArgusII(stim=logo)
+    spatial = ScoreboardSpatial(xrange=(-12, 12), yrange=(-8, 8),
+                                step=1).build()
+
+    # One frame in, one frame out -- not one per pulse edge:
+    percept = spatial.predict_percept(implant)
+    npt.assert_equal(implant.stim.time.size > 50, True)
+    npt.assert_equal(percept.data.shape[-1], 1)
+    # ... and every electrode the image lights is lit in it, rather than the
+    # one raster group that happened to be firing at the sampled instant:
+    lit = implant.spatial_stim.data.ravel() > 0
+    npt.assert_equal(lit.sum() > 10, True)
+    groups = implant.raster.groups(implant.electrode_names)
+    # No instant of the delivered train ever holds more than one group, so
+    # anything above one is more than a raster slot's worth of picture:
+    npt.assert_equal(len(np.unique(groups[lit])) > 1, True)
+    for column in implant.stim.data.T:
+        npt.assert_equal(np.unique(groups[column != 0]).size <= 1, True)
+    # Which is what the percept says too: it is the same picture the
+    # modulation asked for, run through the model.
+    direct = spatial.predict_percept(
+        ArgusII(encoder=None, stim=implant.spatial_stim))
+    npt.assert_almost_equal(percept.data, direct.data)
+
+    # A video reports one percept frame per *video* frame:
+    with pytest.warns(UserWarning, match='deliver no pulse'):
+        implant = ArgusII(stim=BostonTrain())
+    npt.assert_equal(spatial.predict_percept(implant).data.shape[-1], 94)
+
+    # A model with a temporal component is the opposite case: the pulses are
+    # what it integrates, so it has to see them, and the spatial stage it is
+    # built on must not quietly swap them out.
+    seen = []
+
+    class Recording(ScoreboardSpatial):
+        def _predict_spatial(self, earray, stim):
+            # A pulse train has cathodic phases in it; modulation amplitudes
+            # are never negative. So the sign says which one arrived:
+            seen.append(float(stim.data.min()))
+            return super()._predict_spatial(earray, stim)
+
+    implant = ArgusII(stim=logo)
+    both = Model(spatial=Recording(xrange=(-12, 12), yrange=(-8, 8), step=1),
+                 temporal=FadingTemporal(tau=100)).build()
+    both.predict_percept(implant)
+    npt.assert_array_less(seen[-1], 0)
+    # ... and the implant it was handed is untouched by that:
+    npt.assert_equal(implant.spatial_stim is None, False)
+    # Spatial-only, the same model class reads the modulation instead:
+    seen.clear()
+    Recording(xrange=(-12, 12), yrange=(-8, 8),
+              step=1).build().predict_percept(implant)
+    npt.assert_array_less(-1e-12, seen[-1])
+
+    # Nothing changes for a stimulus that was assigned as current: there is no
+    # modulation behind it, so there is nothing to prefer.
+    plain = ArgusII(stim={'A1': BiphasicPulseTrain(20, 50, 0.45,
+                                                   stim_dur=100)})
+    npt.assert_equal(plain.spatial_stim, None)
+    npt.assert_equal(
+        spatial.predict_percept(plain).data.shape[-1],
+        plain.stim.time.size)
+
+
+def test_find_threshold_scales_both_representations():
+    # `find_threshold` varies the amplitude between trials. A spatial model
+    # reads the modulation, so a search that scaled only the pulse train would
+    # evaluate every trial on the unscaled picture and never move.
+    implant = ArgusII(stim=LogoBVL())
+    model = ScoreboardModel(xrange=(-12, 12), yrange=(-8, 8), step=1).build()
+    amp_th = model.find_threshold(implant, 50, amp_range=(0, 500),
+                                  amp_tol=0.5)
+    npt.assert_equal(0 < amp_th < 500, True)
+    # The answer is a threshold of what `predict_percept` reports, which is
+    # only true if both descriptions were scaled together:
+    scaled = ArgusII(encoder=None, stim=Stimulus(
+        implant.spatial_stim.data * amp_th / implant.stim.data.max(),
+        electrodes=implant.spatial_stim.electrodes))
+    npt.assert_allclose(model.predict_percept(scaled).data.max(), 50,
+                        rtol=0.05)

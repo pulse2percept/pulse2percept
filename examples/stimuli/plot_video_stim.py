@@ -119,8 +119,9 @@ implant.stim = video
 
 model = p2p.models.AxonMapModel()
 model.build()
-# One percept frame per video frame:
-percept = model.predict_percept(implant, t_percept=video.time)
+# One percept frame per video frame: a spatial model reads the modulation the
+# encoder asked for, not the pulse train realizing it.
+percept = model.predict_percept(implant)
 percept.play()
 
 ##############################################################################

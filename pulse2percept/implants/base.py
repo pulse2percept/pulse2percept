@@ -94,8 +94,8 @@ class ProsthesisSystem(PrettyPrint):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('_earray', '_stim', '_eye', 'safe_mode', 'preprocess',
-                 '_encoder', '_raster', '_max_current')
+    __slots__ = ('_earray', '_stim', '_spatial_stim', '_eye', 'safe_mode',
+                 'preprocess', '_encoder', '_raster', '_max_current')
 
     #: The physical quantity this system delivers, mirroring
     #: :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`. An electrical
@@ -426,6 +426,10 @@ class ProsthesisSystem(PrettyPrint):
         self.earray.deactivate(electrodes)
         if self.stim is not None:
             self.stim.remove(electrodes)
+        # An electrode switched off delivers nothing, whichever of the two
+        # representations of the stimulus is being read:
+        if self.spatial_stim is not None:
+            self.spatial_stim.remove(electrodes)
 
     @property
     def earray(self):
@@ -500,12 +504,53 @@ class ProsthesisSystem(PrettyPrint):
         >>> implant.stim.unit
         uA
 
+        See Also
+        --------
+        spatial_stim : the modulation behind an encoded stimulus, without the
+                       pulse train.
+
         """
         return self._stim
+
+    @property
+    def spatial_stim(self):
+        """The modulation behind an encoded stimulus, if there is one
+
+        When a picture is assigned to
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim`, the encoder
+        produces two descriptions of the same thing (see
+        :py:class:`~pulse2percept.stimuli.StimulusEncoder`):
+
+        *  ``stim`` is what the device *delivers* -- biphasic pulses on a pulse
+           clock, with the raster deciding which electrodes may fire when.
+        *  ``spatial_stim`` is what the encoder *asked for* -- one amplitude
+           per electrode per frame of the source, with no waveform, no pulse
+           clock and no raster in it.
+
+        Both are in microamps and both cover the same electrodes. Which one a
+        model reads is decided by whether it has a temporal component: a model
+        that integrates over time needs the pulses, and a model that does not
+        cannot express them, so it reads these modulation frames instead (see
+        :py:meth:`~pulse2percept.models.SpatialModel.predict_percept`).
+
+        None whenever ``stim`` was not produced by this implant's encoder --
+        an electrical stimulus assigned directly is already the only
+        description there is of itself.
+
+        .. versionadded:: 0.10.0
+
+        """
+        return getattr(self, '_spatial_stim', None)
 
     @stim.setter
     def stim(self, data):
         """Stimulus setter (called upon ``self.stim = data``)"""
+        # Whatever is being assigned, the modulation behind the *previous*
+        # stimulus is not a description of it. Cleared here and rebuilt below
+        # only where this implant's own encoder produced it, so that it can
+        # never be left describing the picture before last:
+        self._spatial_stim = None
+        spatial = None
         # if stim is empty or None
         if data is None:
             self._stim = None
@@ -534,11 +579,13 @@ class ProsthesisSystem(PrettyPrint):
             # where it becomes stimulation. Preprocessing goes first and may
             # have done the job already (a `preprocess` that encodes is exactly
             # as valid as an `encoder`), in which case there is nothing
-            # dimensionless left to encode:
+            # dimensionless left to encode. Both halves of the encoding are
+            # kept: what the device delivers, and the modulation it was asked
+            # for (see `spatial_stim`).
             if (self.encoder is not None and
                     stim.unit.dimension.is_dimensionless and
                     stim.unit.dimension != self.stimulus_unit.dimension):
-                stim = self.encoder.encode(stim, implant=self)
+                spatial, stim = self.encoder._encode_both(stim, implant=self)
 
             # If the stim is larger than the number of electrodes, most commonly
             # we're dealing with an image or video stim. In this case, we might
@@ -559,12 +606,17 @@ class ProsthesisSystem(PrettyPrint):
                     raise ValueError(f'Electrode "{electrode}" not found in '
                                      f'implant.')
             # Remove deactivated electrodes from the stimulus:
-            stim.remove([name for (name, e) in self.electrodes.items()
-                         if not e.activated and name in stim.electrodes])
-            # Perform safety checks, etc.:
+            off = [name for (name, e) in self.electrodes.items()
+                   if not e.activated and name in stim.electrodes]
+            stim.remove(off)
+            if spatial is not None:
+                spatial.remove(off)
+            # Perform safety checks, etc. These are all questions about what
+            # gets delivered, so they are asked of the pulse train:
             self.check_stim(stim)
             # Store stimulus:
             self._stim = deepcopy(stim)
+            self._spatial_stim = None if spatial is None else deepcopy(spatial)
 
     @property
     def eye(self):
