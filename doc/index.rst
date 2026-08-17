@@ -14,9 +14,10 @@
    :hidden:
 
    topics/implants
-   topics/cortical
    topics/stimuli
    topics/models
+   topics/encoders
+   topics/rasters
    topics/units
    topics/datasets
 

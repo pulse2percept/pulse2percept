@@ -4,293 +4,251 @@
 Visual Prostheses
 =================
 
-Objects in the :py:mod:`~pulse2percept.implants` module are organized into the
-following categories:
+An implant in pulse2percept describes **where stimulation is delivered**:
+the electrodes, their geometry, their location, and the stimulus assigned to
+them. It does not by itself predict what someone sees.
 
-*  :ref:`Electrodes <topics-implants-electrode>` are objects whose behavior
-   is dictated by the :py:class:`~pulse2percept.implants.Electrode` base class.
+That separation is important:
 
-*  :ref:`Electrode arrays <topics-implants-electrode-array>` are
-   collections of :py:class:`~pulse2percept.implants.Electrode` objects whose
-   behavior is dictated by the
-   :py:class:`~pulse2percept.implants.ElectrodeArray` class.
+::
 
-*  :ref:`Prosthesis systems <topics-implants-prosthesis-system>` (aka
-   'implants', aka 'bionic eye') are comprised of an
-   :py:class:`~pulse2percept.implants.ElectrodeArray` object and (optionally) a
-   :py:class:`~pulse2percept.stimuli.Stimulus` object. Their behavior is
-   dictated by the :py:class:`~pulse2percept.implants.ProsthesisSystem` base
-   class.
+    image / video -> Encoder -> electrical Stimulus -> implant -> model -> Percept
+                                                    geometry    physiology
 
-.. _topics-implants-prosthesis-system:
+The implant says where the stimulation goes. The
+:ref:`percept model <topics-models>` says how that stimulation is transformed
+into a visual percept.
 
-Prosthesis systems
+Choosing an implant and model
+-----------------------------
+
+The best model depends first on **where the implant stimulates**. A useful
+starting point is:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Implant location
+     - Good starting model
+     - Why
+   * - Epiretinal
+     - :py:class:`~pulse2percept.models.AxonMapModel`
+     - Epiretinal stimulation can activate retinal ganglion-cell axons,
+       producing elongated percepts that follow nerve fiber bundles.
+   * - Subretinal
+     - :py:class:`~pulse2percept.models.ScoreboardModel`
+     - A local "one electrode, one blob" model is a useful first approximation
+       when axonal activation is not the main effect of interest.
+   * - Suprachoroidal
+     - :py:class:`~pulse2percept.models.ScoreboardModel`
+     - pulse2percept does not currently provide a dedicated suprachoroidal
+       phosphene model, so the scoreboard model is a simple geometry-first
+       baseline.
+   * - Cortical
+     - :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
+     - Cortical stimulation is mapped through cortical retinotopy rather than
+       the retinal nerve fiber layer.
+
+These are **starting points, not compatibility rules**. For example,
+:py:class:`~pulse2percept.models.ScoreboardModel` is also a useful baseline for
+an epiretinal implant when axonal streaking is not part of the question. More
+detailed retinal models should be chosen because their physiological
+assumptions match the experiment, not simply because they are more complex.
+
+A minimal example
+-----------------
+
+For an epiretinal implant such as Argus II, a typical simulation looks like:
+
+.. code-block:: python
+
+    import pulse2percept as p2p
+
+    implant = p2p.implants.ArgusII()
+
+    encoder = p2p.stimuli.AmplitudeEncoder(
+        implant, amp_range=(0, 50), freq=20
+    )
+    implant.stim = encoder.encode(p2p.stimuli.BostonTrain())
+
+    model = p2p.models.AxonMapModel().build()
+    percept = model.predict_percept(implant)
+
+    percept.play()
+
+Changing the implant changes the electrode geometry. Changing the model changes
+the assumptions about how stimulation becomes vision.
+
+Available implants
 ------------------
 
-pulse2percept provides the following prosthesis systems (aka *'implants', 'bionic eyes', 'neuroprostheses'*):
+pulse2percept includes software representations of several published visual
+prostheses:
 
-===========  ==============  ==================  =================================
-**Implant**  **Location**    **Num Electrodes**  **Manufacturer**
------------  --------------  ------------------  ---------------------------------
-`ArgusI`     epiretinal      16                  Second Sight Medical Products Inc
-`ArgusII`    epiretinal      60                  Second Sight Medical Products Inc
-`IMIE`       epiretinal      256                 IntelliMicro Medical Co., Ltd
-`AlphaIMS`   subretinal      1500                Retina Implant AG
-`AlphaAMS`   subretinal      1600                Retina Implant AG
-`PRIMA`      subretinal      378                 Pixium Vision SA
-`PRIMA75`    subretinal      142                 Pixium Vision SA
-`PRIMA55`    subretinal      273(?)              Pixium Vision SA
-`PRIMA40`    subretinal      532(?)              Pixium Vision SA
-`BVT24`      suprachoroidal  24                  Bionic Vision Technologies
-`BVT44`      suprachoroidal  44                  Bionic Vision Technologies
-`Orion`      cortical        60                  Cortigent Inc
-`Cortivis`   cortical        96                  Biomedical Technologies
-`ICVP`       cortical        16                  Sigenics Inc
-`Neuralink`  cortical        32 / thread         Neuralink Corp
-===========  ==============  ==================  =================================
+.. list-table::
+   :header-rows: 1
 
-Stimuli can be assigned to the various electrodes in the electrode array,
-who will deliver them to the retina
-(see :ref:`Electrical Stimuli <topics-stimuli>`).
-A mathematical model is then used to compute the neural stimulus response and
-predict the resulting visual percept
-(see :ref:`Computational Models <topics-models>`).
+   * - Implant
+     - Location
+     - Suggested starting model
+   * - :py:class:`~pulse2percept.implants.ArgusI`
+     - Epiretinal
+     - :py:class:`~pulse2percept.models.AxonMapModel`
+   * - :py:class:`~pulse2percept.implants.ArgusII`
+     - Epiretinal
+     - :py:class:`~pulse2percept.models.AxonMapModel`
+   * - :py:class:`~pulse2percept.implants.IMIE`
+     - Epiretinal
+     - :py:class:`~pulse2percept.models.AxonMapModel`
+   * - :py:class:`~pulse2percept.implants.AlphaIMS`
+     - Subretinal
+     - :py:class:`~pulse2percept.models.ScoreboardModel`
+   * - :py:class:`~pulse2percept.implants.AlphaAMS`
+     - Subretinal
+     - :py:class:`~pulse2percept.models.ScoreboardModel`
+   * - :py:class:`~pulse2percept.implants.PRIMA`
+     - Subretinal
+     - :py:class:`~pulse2percept.models.ScoreboardModel`
+   * - :py:class:`~pulse2percept.implants.PRIMA75`
+     - Subretinal
+     - :py:class:`~pulse2percept.models.ScoreboardModel`
+   * - :py:class:`~pulse2percept.implants.PRIMA55`
+     - Subretinal
+     - :py:class:`~pulse2percept.models.ScoreboardModel`
+   * - :py:class:`~pulse2percept.implants.PRIMA40`
+     - Subretinal
+     - :py:class:`~pulse2percept.models.ScoreboardModel`
+   * - :py:class:`~pulse2percept.implants.BVT24`
+     - Suprachoroidal
+     - :py:class:`~pulse2percept.models.ScoreboardModel`
+   * - :py:class:`~pulse2percept.implants.BVT44`
+     - Suprachoroidal
+     - :py:class:`~pulse2percept.models.ScoreboardModel`
+   * - :py:class:`~pulse2percept.implants.cortex.Orion`
+     - Cortical
+     - :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
+   * - :py:class:`~pulse2percept.implants.cortex.Cortivis`
+     - Cortical
+     - :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
+   * - :py:class:`~pulse2percept.implants.cortex.ICVP`
+     - Cortical
+     - :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
+   * - :py:class:`~pulse2percept.implants.cortex.Neuralink`
+     - Cortical
+     - :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
 
-Understanding the coordinate system (Retina)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+These classes are **research software representations based on published
+descriptions**, not manufacturer-validated device simulators. Some geometries
+necessarily rely on assumptions where complete device specifications are not
+public; the API documentation for each class records those details.
 
-The easiest way to understand the coordinate system is to look at the
-organization of the optic fiber layer:
+What an implant contains
+------------------------
 
-.. ipython:: python
+Every visual prosthesis derives from
+:py:class:`~pulse2percept.implants.ProsthesisSystem`. The pieces you will use
+most often are:
 
-    from pulse2percept.models import AxonMapModel
-    @savefig axonmap.png align=center
-    AxonMapModel(eye='RE').plot()
+``earray``
+    The :py:class:`~pulse2percept.implants.ElectrodeArray` containing the
+    electrodes and their locations.
 
-Here you can see that:
+``stim``
+    The electrical :py:class:`~pulse2percept.stimuli.Stimulus` currently
+    assigned to the implant.
 
-*  the coordinate system is centered on the fovea
-*  in a right eye, positive :math:`x` values correspond to the nasal retina
-*  in a right eye, positive :math:`y` values correspond to the superior retina
+``eye``
+    The implanted eye for retinal systems.
 
-Positive :math:`z` values move an electrode away from the retina into the
-vitreous humor (:math:`z` is sometimes called electrode-retina distance).
-Analogously, negative :math:`z` values move an electrode through the different
-retinal layers towards the outer retina.
+``raster``
+    An optional :py:class:`~pulse2percept.implants.Raster` describing which
+    electrodes may stimulate at the same time.
 
-Understanding the ProsthesisSystem class
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Electrodes can be accessed by name or index:
 
-The :py:class:`~pulse2percept.implants.ProsthesisSystem` base class provides
-a template for all prosthesis systems. It is comprised of:
+.. code-block:: python
 
-*  :py:class:`~pulse2percept.implants.ElectrodeArray`: as mentioned above,
-*  :py:class:`~pulse2percept.stimuli.Stimulus`: as mentioned above,
-*  :py:class:`~pulse2percept.implants.ProsthesisSystem.check_stim`: a method
-   that quality-checks the stimulus. By default this method does nothing,
-   but its behavior might depend on the actual system, such as
-   :py:class:`~pulse2percept.implants.ArgusII` or
-   :py:class:`~pulse2percept.implants.AlphaIMS`,
-*  :py:attr:`~pulse2percept.implants.ProsthesisSystem.eye`: a string
-   indicating whether the system is implanted in the left or right eye,
-*  a means to access and iterate over electrodes in the array.
+    implant = p2p.implants.ArgusII()
 
-Accessing electrodes
-^^^^^^^^^^^^^^^^^^^^
-
-You can access individual electrodes in a prosthesis system either by integer
-index or by electrode name. For example, the first electrode in
-:py:class:`~pulse2percept.implants.AlphaAMS` can be accessed as follows:
-
-.. ipython:: python
-
-    from pulse2percept.implants import AlphaAMS
-    implant = AlphaAMS()
-    # Access by index:
-    implant[0]
-
-    # Access by name:
     implant['A1']
+    implant[0]
+    implant.electrode_names
+    implant.earray.coordinates()
 
-The simplest way to iterate over all electrodes is to pretend that the
-prosthesis system is a Python dictionary:
-
-.. ipython:: python
-
-    from pulse2percept.implants import ArgusI
-    for name, electrode in ArgusI().electrodes.items():
-        print(name, electrode)
-
-
-Creating your own prosthesis system
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-You can quickly create a prosthesis system from an
-:py:class:`~pulse2percept.implants.ElectrodeArray` (or even a single
-:py:class:`~pulse2percept.implants.Electrode`) by wrapping it in a
-:py:class:`~pulse2percept.implants.ProsthesisSystem` container:
-
-.. ipython:: python
-
-    from pulse2percept.implants import ElectrodeGrid, ProsthesisSystem
-    ProsthesisSystem(earray=ElectrodeGrid((10, 10), 200))
-
-To create a more advanced prosthesis system, you will need to subclass the base
-class:
+The easiest way to understand an implant geometry is often simply to plot it:
 
 .. code-block:: python
 
-    import numpy as np
+    implant.plot(annotate=True)
+
+Coordinate systems
+------------------
+
+Retinal implants use a coordinate system centered on the fovea. Distances are
+stored in microns:
+
+* positive ``x`` points toward the nasal retina;
+* positive ``y`` points toward the superior retina;
+* positive ``z`` moves away from the retina and into the vitreous.
+
+The ``eye`` parameter handles the corresponding left- versus right-eye
+geometry where needed.
+
+Cortical implants live in physical cortical coordinates instead. A cortical
+model combines those electrode locations with a
+:py:class:`~pulse2percept.topography.VisualFieldMap` to determine where
+stimulation falls in the visual field. That is why cortical implants use the
+models in :py:mod:`pulse2percept.models.cortex`, rather than retinal models
+such as the Axon Map Model.
+
+Building your own implant
+-------------------------
+
+For a custom array, you usually do not need a new implant class. An
+:py:class:`~pulse2percept.implants.ElectrodeGrid` can be wrapped directly in a
+:py:class:`~pulse2percept.implants.ProsthesisSystem`:
+
+.. code-block:: python
+
     from pulse2percept.implants import ElectrodeGrid, ProsthesisSystem
 
-    class MyFovealElectrodeGrid(ProsthesisSystem):
-        """An ElectrodeGrid implant centered over the fovea"""
+    earray = ElectrodeGrid(
+        shape=(10, 10),
+        spacing=500,
+        r=100,
+    )
+    implant = ProsthesisSystem(earray=earray)
 
-        def __init__(self, stim=None, eye='RE'):
-            self.earray = ElectrodeGrid((3, 3), x=0, y=0, z=0, rot=0,
-                                        r=100, spacing=500,
-                                        names=('A', '1'))
-            self.stim = stim
-            self.eye = eye
+For irregular arrays, build an
+:py:class:`~pulse2percept.implants.ElectrodeArray` from individual electrode
+objects. :py:class:`~pulse2percept.implants.EnsembleImplant` can combine
+multiple implants into one system.
 
-        def check_stim(self, stim):
-            """Make sure the stimulus is charge-balanced"""
-            if stim.time is not None:
-                for s in stim:
-                    assert np.isclose(np.sum(s), 0)
- 
-.. .. minigallery:: pulse2percept.implants.ProsthesisSystem
-..     :add-heading: Examples using ``ProsthesisSystem``
-..     :heading-level: ~
+The implant geometry and percept model remain separate, so a custom implant can
+be paired with whichever model best matches the stimulation target and the
+scientific question.
 
-.. _topics-implants-electrode-array:
+Rastering
+---------
 
-Electrode arrays
-----------------
+Some stimulators cannot drive every electrode simultaneously. Raster strategies
+split an array into groups that take turns:
 
-**Electrode arrays** are collections of
-:py:class:`~pulse2percept.implants.Electrode` objects whose behavior is
-dictated by the :py:class:`~pulse2percept.implants.ElectrodeArray` base class.
+.. code-block:: python
+
+    implant.raster = p2p.implants.CheckerboardRaster(
+        implant, n_groups=5
+    )
+
+The encoder uses that schedule when constructing the electrical stimulus. See
+:ref:`topics-rasters` for the details.
 
 .. seealso::
 
-    *  :py:class:`~pulse2percept.implants.ElectrodeGrid`
-
-Understanding the ElectrodeArray class
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The :py:class:`~pulse2percept.implants.ElectrodeArray` base provides:
-
-*  :py:attr:`~pulse2percept.implants.ElectrodeArray.electrodes`: an ordered
-   dictionary of electrode objects (meaning it will remember the order in
-   which electrodes were added),
-*  :py:attr:`~pulse2percept.implants.ElectrodeArray.n_electrodes`: a property
-   returning the number of electrodes in the array.
-*  :py:meth:`~pulse2percept.implants.ElectrodeArray.add_electrode`: a method
-   to add a single electrode to the collection,
-*  :py:meth:`~pulse2percept.implants.ElectrodeArray.add_electrodes`: a method
-   to add a multiple electrodes to the collection at once,
-*  a way to access a single electrode either by index or by name,
-*  a way to iterate over all electrodes in the array.
-
-Accessing electrodes
-^^^^^^^^^^^^^^^^^^^^
-
-You can access individual electrodes in an electrode array either by integer
-index or by electrode name. The syntax is exactly the same as for the
-prosthesis system.
-
-Creating your own electrode array
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-You can create your own electrode array by starting with an empty
-:py:class:`~pulse2percept.implants.ElectrodeArray`, and adding the desired
-electrodes one by one:
-
-.. ipython:: python
-
-    from pulse2percept.implants import DiskElectrode, ElectrodeArray
-    earray = ElectrodeArray([])
-    earray.add_electrode(0, DiskElectrode(0, 0, 0, 50))
-    earray.add_electrode(1, DiskElectrode(100, 100, 0, 150))
-    earray
-
-To create a more advanced electrode array, you will need to subclass the base
-class. In the constructor, make sure to initialize ``self.electrodes`` with an
-ordered dictionary (``OrderedDict``):
-
-.. code-block:: python
-
-    from collections import OrderedDict
-    from pulse2percept.implants import ElectrodeArray
-
-    class MyElectrodeArray(ElectrodeArray):
-        """Array with a single disk electrode"""
-
-        def __init__(self, name):
-            self.electrodes = OrderedDict()
-            self.add_electrode(name, DiskElectrode(0, 0, 0, 100))
-
-.. .. minigallery:: pulse2percept.implants.ElectrodeArray
-..     :add-heading: Examples using ``ElectrodeArray``
-..     :heading-level: ~
-
-.. _topics-implants-electrode:
-
-Electrodes
-----------
-
-**Electrodes** are objects whose behavior is dictated by the
-:py:class:`~pulse2percept.implants.Electrode` base class.
-They are located at a particular 3D location and provide a method to calculate
-the electric potential at arbitrary 3D locations.
-
-.. seealso::
-
-   *  :py:class:`~pulse2percept.implants.PointSource`
-   *  :py:class:`~pulse2percept.implants.DiskElectrode`
-   *  :py:class:`~pulse2percept.implants.SquareElectrode`
-   *  :py:class:`~pulse2percept.implants.HexElectrode`
-
-Understanding the Electrode class
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The base class provides:
-
-*  the 3D coordinates of the center of the electrode.
-
-In addition, a custom electrode object must implement:
-
-*  a method called
-   :py:meth:`~pulse2percept.implants.Electrode.electric_potential` that
-   returns the electric potential at a point (x, y, z).
-
-Creating your own electrode
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-To create a new electrode type, you will need to subclass the base class.
-Make sure to specify an ``electric_potential`` method for your class:
-
-.. code-block:: python
-
-    from pulse2percept.implants import Electrode
-
-    class MyElectrode(Electrode):
-        """Named electrode with electric potential 0 everywhere"""
-
-        def __init__(self, x, y, z, name):
-            # Note: If you don't plan on adding any new variables, you can
-            # omit the constructor entirely. In that case, your object will
-            # inherit the constructor of the base class.
-            self.x = x
-            self.y = y
-            self.z = z
-            self.name = name
-
-        def electric_potential(self, x, y, z):
-            return 0.0
-
-.. .. minigallery:: pulse2percept.implants.Electrode
-..     :add-heading: Examples using ``Electrode``
-..     :heading-level: ~
+    * :py:mod:`pulse2percept.implants` for the implant API
+    * :py:mod:`pulse2percept.implants.cortex` for cortical implant classes
+    * :ref:`Stimulus Encoders <topics-encoders>`
+    * :ref:`Raster Strategies <topics-rasters>`
+    * :ref:`Electrical Stimuli <topics-stimuli>`
+    * :ref:`Computational Models <topics-models>`
+    * :ref:`Physical Units <topics-units>`
