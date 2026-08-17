@@ -27,12 +27,18 @@ _BASE_LABELS = {
     'visual_angle': 'visual angle',
 }
 
-# Names for the handful of derived dimensions that have one:
+# Names for the handful of derived dimensions that have one. A dimension earns
+# an entry here when p2p actually talks about it -- these names are what error
+# messages say, and "expected charge density, got time * electric current /
+# length^2" is the difference between a diagnostic and a puzzle. Power and
+# energy are deliberately absent: the algebra derives them from voltage and
+# current already, but no p2p API takes them yet.
 _DERIVED_LABELS = {
     (0, 0, 0, 0, 0): 'dimensionless',
     (-1, 0, 0, 0, 0): 'frequency',
     (1, 0, 1, 0, 0): 'charge',
     (0, -2, 1, 0, 0): 'current density',
+    (1, -2, 1, 0, 0): 'charge density',
 }
 
 
@@ -255,6 +261,11 @@ class Dimension(object):
 #: The dimension of a plain number
 DIMENSIONLESS = Dimension()
 
+#: Canonical display symbols, keyed by the ``(dimension, scale)`` pair that
+#: :py:meth:`Unit.__eq__` compares. Filled in at the bottom of this module,
+#: once the predefined units exist.
+_CANONICAL_SYMBOLS = {}
+
 
 def _symbol_mul(a, b):
     """Compose the symbol of a product of two units"""
@@ -288,6 +299,12 @@ class Unit(object):
     exponentiating units produces another unit, so derived units such as
     ``uA / mm ** 2`` need not be predefined.
 
+    A composed unit that is exactly a predefined one is displayed as that unit,
+    since ``uA * ms`` and ``nC`` are the same unit rather than convertible
+    ones. This is a spelling choice applied at display time; it never rescales
+    a magnitude, so a composed unit that is *not* exactly a predefined one
+    keeps its composed symbol. Use :py:meth:`Quantity.to` to change scale.
+
     Units are immutable. p2p does not maintain a unit registry, parse unit
     strings, or generate SI prefixes automatically: the vocabulary exported by
     :py:mod:`pulse2percept.units` is the whole of it.
@@ -312,6 +329,10 @@ class Unit(object):
     uA/mm^2
     >>> 50 * uA
     50 uA
+    >>> uA * ms
+    nC
+    >>> uA * ms / mm ** 2
+    uA*ms/mm^2
 
     """
     __slots__ = ('_dimension', '_scale', '_symbol')
@@ -352,8 +373,27 @@ class Unit(object):
 
     @property
     def symbol(self):
-        """Short symbol used for display"""
+        """Short symbol this unit was built with, e.g. ``'uA*ms'``"""
         return self._symbol
+
+    @property
+    def _display_symbol(self):
+        """The symbol to print, preferring a predefined unit's spelling
+
+        A composed unit that lands *exactly* on a predefined one is printed as
+        that unit: ``uA * ms`` prints as ``nC`` because the two are the same
+        unit, not merely convertible ones. `_snap_scale` has already made their
+        scales the same float, so this is a dict hit on the pair that
+        :py:meth:`__eq__` and :py:meth:`__hash__` already agree on.
+
+        It is a spelling choice and nothing more. It never touches a magnitude
+        and never picks a different scale, so ``uA * ms / um ** 2`` keeps its
+        composed symbol: no predefined unit is that size, and printing it as
+        ``uC/mm^2`` would mean silently rescaling 0.00225 to 2.25. Choosing a
+        different scale is what :py:meth:`Quantity.to` is for.
+        """
+        return _CANONICAL_SYMBOLS.get((self._dimension, self._scale),
+                                      self._symbol)
 
     def __mul__(self, other):
         if isinstance(other, Unit):
@@ -426,10 +466,10 @@ class Unit(object):
             object.__setattr__(self, key, value)
 
     def __str__(self):
-        return self.symbol
+        return self._display_symbol
 
     def __repr__(self):
-        return self.symbol if self.symbol else 'dimensionless'
+        return self._display_symbol if self._display_symbol else 'dimensionless'
 
 
 class Quantity(object):
@@ -567,12 +607,20 @@ class Quantity(object):
                 f"Cannot {verb} {self.unit.dimension.name} ({self.unit}) and "
                 f"{other.unit.dimension.name} ({other.unit}).")
 
+    # A bare number combined with a dimensionless quantity is a quantity in the
+    # canonical `dimensionless` unit -- not "the magnitude in whatever compound
+    # dimensionless unit this one happens to carry". The distinction is invisible
+    # for `dimensionless` itself (scale 1) and decisive for anything composed:
+    # a duty cycle of ``0.45 * ms * 50 * Hz`` is 0.0225, though its ms*Hz
+    # magnitude reads 22.5. So these branches rescale before they touch a
+    # number, and hand back a result in `dimensionless`.
     def __add__(self, other):
         if isinstance(other, Unit):
             other = Quantity(1, other)
         if not isinstance(other, Quantity):
             if self.dimension.is_dimensionless:
-                return Quantity(self.magnitude + other, self.unit)
+                return Quantity(self.to_value(dimensionless) + other,
+                                dimensionless)
             return NotImplemented
         self._check_compatible(other, 'add')
         return Quantity(self.magnitude + other.to_value(self.unit), self.unit)
@@ -585,7 +633,8 @@ class Quantity(object):
             other = Quantity(1, other)
         if not isinstance(other, Quantity):
             if self.dimension.is_dimensionless:
-                return Quantity(self.magnitude - other, self.unit)
+                return Quantity(self.to_value(dimensionless) - other,
+                                dimensionless)
             return NotImplemented
         self._check_compatible(other, 'subtract')
         return Quantity(self.magnitude - other.to_value(self.unit), self.unit)
@@ -636,7 +685,7 @@ class Quantity(object):
             other = Quantity(1, other)
         if not isinstance(other, Quantity):
             if self.dimension.is_dimensionless:
-                return op(self.magnitude, other)
+                return op(self.to_value(dimensionless), other)
             raise DimensionMismatchError(
                 f"Cannot {verb} {self.unit.dimension.name} ({self.unit}) and "
                 f"a plain number. Multiply the number by a unit first.")
@@ -663,7 +712,7 @@ class Quantity(object):
             other = Quantity(1, other)
         if not isinstance(other, Quantity):
             if self.dimension.is_dimensionless:
-                return _isclose(self.magnitude, other)
+                return _isclose(self.to_value(dimensionless), other)
             # Equality must not raise: a quantity simply is not equal to a
             # bare number of a different dimension.
             return NotImplemented
@@ -697,9 +746,10 @@ class Quantity(object):
             object.__setattr__(self, key, value)
 
     def __str__(self):
-        if not self.unit.symbol:
+        symbol = self.unit._display_symbol
+        if not symbol:
             return f'{self.magnitude}'
-        return f'{self.magnitude} {self.unit.symbol}'
+        return f'{self.magnitude} {symbol}'
 
     def __repr__(self):
         return self.__str__()
@@ -845,3 +895,31 @@ nC = Unit(CHARGE, 1e-9, 'nC')
 #: Degree of visual angle. Not an ordinary angle: converting dva to a distance
 #: on the retina or cortex requires a visual field map, not a scale factor.
 dva = Unit(VISUAL_ANGLE, 1, 'dva')
+
+
+# The canonical spelling of each predefined unit, for `Unit._display_symbol`.
+# Written out here rather than harvested from this module's namespace: should
+# two units ever share a (dimension, scale) -- an alias such as ``sec`` for
+# ``s`` -- the one listed here is the one that wins, and that ought to be a
+# decision rather than an accident of declaration order. An alias simply does
+# not go in this tuple; listing both is a mistake, so it raises rather than
+# letting declaration order pick a winner.
+_CANONICAL_UNITS = (dimensionless,
+                    s, ms, us, ns,
+                    Hz, kHz,
+                    m, cm, mm, um, nm,
+                    A, mA, uA, nA,
+                    V, mV, uV,
+                    C, mC, uC, nC,
+                    dva)
+
+for _unit in _CANONICAL_UNITS:
+    _key = (_unit.dimension, _unit.scale)
+    if _key in _CANONICAL_SYMBOLS:
+        raise RuntimeError(
+            f"Two canonical units claim {_unit.dimension.name} at scale "
+            f"{_unit.scale:g}: '{_CANONICAL_SYMBOLS[_key]}' and "
+            f"'{_unit.symbol}'. Only one spelling can be canonical: drop the "
+            f"alias from _CANONICAL_UNITS.")
+    _CANONICAL_SYMBOLS[_key] = _unit.symbol
+del _unit, _key
