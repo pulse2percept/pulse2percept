@@ -46,7 +46,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
     Taking turns is described by a **raster sweep**: group *g* starts its pulse
     ``g * group_dur`` after group 0 does, so a sweep spans ``n_groups *
     group_dur``. Two things then keep groups apart for good (see
-    :py:class:`~pulse2percept.stimuli.Encoder`):
+    :py:class:`~pulse2percept.stimuli.StimulusEncoder`):
 
     1.  A pulse has to be short enough to finish before the next group's turn
         begins.

@@ -5,7 +5,7 @@
 from ..base import Model, SpatialModel
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
-from ...units import um
+from ...units import DimensionMismatchError, um
 from ...utils.constants import UM_PER_MM, ZORDER
 import numpy as np
 
@@ -109,6 +109,22 @@ class CortexSpatial(SpatialModel):
 
         if not isinstance(self.regions, list):
             self.regions = [self.regions]
+
+    def _retinal_range_to_dva(self, name, value):
+        """A cortical model has no retinal extent for a length to stand for
+
+        :py:class:`~pulse2percept.models.SpatialModel` decides this from the
+        map that is installed at the time of assignment, which here is not yet
+        the cortical one: this constructor puts that in place only *after*
+        ``super().__init__`` has applied the parameters. Refusing here rather
+        than there keeps a length from being read as a retinal extent in the
+        window in between.
+        """
+        raise DimensionMismatchError(
+            f"'{name}' is a visual field extent, measured in degrees of "
+            f"visual angle. A physical length is shorthand for one only on a "
+            f"retinal map, and {type(self).__name__} is cortical. Specify "
+            f"'{name}' in dva instead.")
 
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""

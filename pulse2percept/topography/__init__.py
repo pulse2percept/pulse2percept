@@ -20,7 +20,7 @@ __all__ = [
     'CorticalMap',
     'Curcio1990Map',
     'Grid2D',
-    'RetinalMap'
+    'RetinalMap',
     'VisualFieldMap',
     'Watson2014DisplaceMap',
     'Watson2014Map',

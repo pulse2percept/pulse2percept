@@ -9,10 +9,10 @@ v0.10.0 Encoders (unreleased)
 
 Highlights:
 
-*  New :py:class:`~pulse2percept.stimuli.Encoder` classes translate images and
-   videos into electrical stimulation. Amplitude and frequency modulation are
-   supported, including stimulator timing, input resolution, and electrode
-   multiplexing.
+*  New :py:class:`~pulse2percept.stimuli.StimulusEncoder` classes translate
+   images and videos into electrical stimulation. Amplitude and frequency
+   modulation are supported, including stimulator timing, input resolution,
+   and electrode multiplexing.
 
 *  New :py:class:`~pulse2percept.implants.Raster` classes describe how
    stimulators multiplex electrodes that cannot be driven simultaneously. Each
@@ -92,6 +92,34 @@ API changes:
   :py:class:`~pulse2percept.stimuli.FrequencyEncoder` first, or give the
   implant a ``preprocess`` function that does. The same check guards the
   ``safe_mode`` and ``max_current`` safety checks.
+
+* :py:class:`~pulse2percept.implants.ProsthesisSystem` now declares
+  ``stimulus_unit`` (microamps) and refuses a stimulus of another dimension
+  as it is assigned, rather than letting it through to fail in the model.
+  ``ArgusII(stim=BostonTrain())`` therefore raises immediately; encode the
+  video first. Preprocessing still runs before the check, so an implant whose
+  ``preprocess`` turns pictures into current is unaffected.
+
+* The abstract encoder base class ``Encoder`` was renamed to
+  :py:class:`~pulse2percept.stimuli.StimulusEncoder`. The old name still
+  resolves, to the same class object, with a ``DeprecationWarning``, and will
+  be removed in v0.11.0.
+
+* ``fps`` arguments (:py:meth:`~pulse2percept.percepts.Percept.play`,
+  :py:meth:`~pulse2percept.percepts.Percept.save`,
+  :py:meth:`~pulse2percept.stimuli.VideoStimulus.play`,
+  :py:func:`~pulse2percept.utils.frame_interval`) accept a frequency
+  quantity (``30 * Hz``, ``0.03 * kHz``) as well as a plain number of hertz.
+
+* ``xrange`` and ``yrange`` on a retinal spatial model accept a physical
+  extent (``xrange=(-4 * mm, 4 * mm)``), which the model's ``vfmap`` resolves
+  into the visual field range that piece of retina covers. The range is stored
+  in degrees of visual angle, exactly as before. This is shorthand for a
+  visual field extent rather than a unit conversion, so it is not offered for
+  ``step`` and not offered on cortical models.
+
+* Warnings raised while encoding (missed frames, large time axes, large
+  allocations) now point at the calling line rather than at ``encoders.py``.
 
 * :py:attr:`~pulse2percept.stimuli.Stimulus.is_charge_balanced` returns None
   for a stimulus that is not a current, rather than answering a question that

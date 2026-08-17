@@ -13,14 +13,19 @@ from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    ImageStimulus, Stimulus, VideoStimulus)
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (AxonMapSpatial, BaseModel, FadingTemporal,
-                                  Model, NotBuiltError, ScoreboardSpatial,
-                                  SpatialModel, TemporalModel)
+                                  Model, NotBuiltError, ScoreboardModel,
+                                  ScoreboardSpatial, SpatialModel,
+                                  TemporalModel)
+from pulse2percept.models.cortex import (ScoreboardSpatial as
+                                         CortexScoreboardSpatial)
 from pulse2percept.units import (DimensionMismatchError, Quantity,
                                  dimensionless, dva, mA, mm, ms, s, uA, um,
                                  us)
 from pulse2percept.utils import FreezeError, frame_interval
 from pulse2percept.utils.testing import assert_warns_msg
-from pulse2percept.topography import Grid2D, Watson2014Map
+from pulse2percept.topography import (Curcio1990Map, Grid2D,
+                                      Polimeni2006Map, RetinalMap,
+                                      Watson2014Map)
 
 
 class ValidBaseModel(BaseModel):
@@ -492,11 +497,94 @@ def test_SpatialModel_units():
         unitful.build()
         npt.assert_almost_equal(bare.grid.x, unitful.grid.x)
         npt.assert_almost_equal(bare.grid.y, unitful.grid.y)
-    # A range in the wrong dimension is caught elementwise too:
+    # A range in the wrong dimension is caught elementwise too. A *length* is
+    # the one exception, and means something specific; see
+    # `test_SpatialModel_retinal_range`:
     with pytest.raises(DimensionMismatchError):
-        ScoreboardSpatial(xrange=(-5 * um, 5 * um))
+        ScoreboardSpatial(xrange=(-5 * ms, 5 * ms))
     with pytest.raises(DimensionMismatchError):
-        ScoreboardSpatial(xrange=(-5, 5) * um)
+        ScoreboardSpatial(xrange=(-5, 5) * uA)
+    # The grid spacing takes dva and nothing else: a grid spaced evenly on the
+    # retina is a different grid, not a different spelling of this one.
+    with pytest.raises(DimensionMismatchError):
+        ScoreboardSpatial(step=100 * um)
+    with pytest.raises(DimensionMismatchError):
+        ScoreboardSpatial(xystep=100 * um)
+
+
+def test_SpatialModel_retinal_range():
+    """A retinal extent is shorthand for the visual field range it covers"""
+    # Curcio1990Map puts 280 um to the degree, so 2.8 mm is 10 dva:
+    model = ScoreboardSpatial(xrange=(-2.8 * mm, 2.8 * mm),
+                              yrange=(-1.4 * mm, 1.4 * mm),
+                              vfmap=Curcio1990Map(), step=1)
+    npt.assert_allclose(model.xrange, (-10, 10), rtol=1e-12)
+    npt.assert_allclose(model.yrange, (-5, 5), rtol=1e-12)
+    # What is stored is plain dva, not a quantity, and it grids exactly like
+    # the dva spelling does:
+    for value in (model.xrange, model.yrange):
+        npt.assert_equal(isinstance(value, Quantity), False)
+    bare = ScoreboardSpatial(xrange=(-10, 10), yrange=(-5, 5),
+                             vfmap=Curcio1990Map(), step=1).build()
+    npt.assert_almost_equal(bare.grid.x, model.build().grid.x)
+    npt.assert_almost_equal(bare.grid.y, model.grid.y)
+    # Which map is installed decides the answer, so the user's map has to be
+    # applied first however the parameters were ordered:
+    for order in ({'xrange': (-2.8 * mm, 2.8 * mm), 'vfmap': Curcio1990Map()},
+                  {'vfmap': Curcio1990Map(), 'xrange': (-2.8 * mm, 2.8 * mm)}):
+        npt.assert_allclose(ScoreboardSpatial(step=1, **order).xrange,
+                            (-10, 10), rtol=1e-12)
+        npt.assert_allclose(ScoreboardModel(step=1, **order).xrange,
+                            (-10, 10), rtol=1e-12)
+        npt.assert_allclose(
+            ScoreboardSpatial(step=1).build(**order).xrange, (-10, 10),
+            rtol=1e-12)
+        npt.assert_allclose(
+            ScoreboardModel(step=1).build(**order).xrange, (-10, 10),
+            rtol=1e-12)
+    # A quantity wrapping a pair says the same thing:
+    npt.assert_allclose(
+        ScoreboardSpatial(xrange=(-2.8, 2.8) * mm, vfmap=Curcio1990Map(),
+                          step=1).xrange, (-10, 10), rtol=1e-12)
+    # The retinal y axis points the other way, so the pair comes back sorted
+    # rather than reversed:
+    yrange = ScoreboardSpatial(yrange=(1.4 * mm, -1.4 * mm),
+                               vfmap=Curcio1990Map(), step=1).yrange
+    npt.assert_allclose(yrange, (-5, 5), rtol=1e-12)
+    # Resolved once, at assignment: a later map does not reinterpret it.
+    model = ScoreboardSpatial(xrange=(-2.8 * mm, 2.8 * mm),
+                              vfmap=Curcio1990Map(), step=1)
+    model.vfmap = Watson2014Map()
+    npt.assert_allclose(model.xrange, (-10, 10), rtol=1e-12)
+    # Direct assignment is sequential, and uses the map in place at the time:
+    model = ScoreboardSpatial(step=1)
+    model.vfmap = Curcio1990Map()
+    model.xrange = (-2.8 * mm, 2.8 * mm)
+    npt.assert_allclose(model.xrange, (-10, 10), rtol=1e-12)
+    # It must be a pair, whatever the units:
+    with pytest.raises(ValueError):
+        ScoreboardSpatial(xrange=2.8 * mm, vfmap=Curcio1990Map())
+
+
+def test_SpatialModel_retinal_range_needs_a_retinal_map():
+    """Only a retinal map can say what visual field an extent covers"""
+    # A cortical map is not one, whether it was passed explicitly ...
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        ScoreboardSpatial(xrange=(-2 * mm, 2 * mm), vfmap=Polimeni2006Map())
+    npt.assert_equal('in dva instead' in str(excinfo.value), True)
+    # ... or is the model's own default, which a cortical model installs only
+    # after its parameters have been applied:
+    with pytest.raises(DimensionMismatchError):
+        CortexScoreboardSpatial(yrange=(-2 * mm, 2 * mm))
+
+    # A retinal map without an inverse cannot answer either, and says so:
+    class NoInverse(RetinalMap):
+        def dva_to_ret(self, xdva, ydva):
+            return 280.0 * xdva, -280.0 * ydva
+
+    with pytest.raises(NotImplementedError) as excinfo:
+        ScoreboardSpatial(xrange=(-2 * mm, 2 * mm), vfmap=NoInverse())
+    npt.assert_equal('in dva instead' in str(excinfo.value), True)
 
 
 def test_TemporalModel():
@@ -1220,9 +1308,17 @@ def test_model_requires_a_current_stimulus():
     composite = Model(spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
                                                 step=1),
                       temporal=FadingTemporal()).build()
-    # `implant.stim = img` stays legal (see `check_stim`), and it is the model
-    # that refuses to read it:
-    implant = ArgusII(preprocess=False, stim=img)
+    # `implant.stim = img` is refused by the implant itself (see
+    # `ProsthesisSystem.stimulus_unit`), so the model-side guard is reached
+    # through an implant that claims to deliver something else. Both are
+    # needed: the implant one catches the assignment that was actually wrong,
+    # and this one is what no model may be talked out of.
+    class Projector(ArgusII):
+        stimulus_unit = dimensionless
+
+    with pytest.raises(DimensionMismatchError):
+        ArgusII(preprocess=False, stim=img)
+    implant = Projector(preprocess=False, stim=img)
     npt.assert_equal(implant.stim.unit, dimensionless)
     for model in (spatial, composite):
         with pytest.raises(DimensionMismatchError) as excinfo:

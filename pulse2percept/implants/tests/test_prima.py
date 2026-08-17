@@ -235,6 +235,8 @@ def test_PRIMA40(ztype, x, y, rot):
 
 def test_PRIMA40_reshape_stim():
     # Smoke test a high-res hex implant with an ImageStimulus, where the
-    # old approach runs out of memory easily
-    PRIMA40(stim=LogoBVL())
+    # old approach runs out of memory easily. A picture is not a stimulus an
+    # implant can deliver, so the sampling is exercised where an encoder
+    # reaches it:
+    PRIMA40().reshape_stim(LogoBVL())
     

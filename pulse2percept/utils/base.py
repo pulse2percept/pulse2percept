@@ -150,7 +150,8 @@ def freeze_class(set, normalize=None):
     normalize : callable, optional
         ``normalize(self, name, value)``, called before the assignment when
         ``value`` carries a physical unit, and returning the value to store.
-        See ``_normalize_param``.
+        See ``_normalize_param``, which dispatches to the object's own
+        ``_normalize_param_value``.
 
         This is a parameter rather than a wrapper around ``set_attr`` on
         purpose: both this function and
@@ -201,25 +202,14 @@ class Frozen(object):
 
 
 def _normalize_param(obj, name, value):
-    """Convert a unitful value into the unit its parameter is stored in
+    """Hand a unitful value to the object's own normalization hook
 
-    Model equations operate on ordinary numbers, so a
-    :py:class:`~pulse2percept.units.Quantity` must never survive into a
-    parameter. Which unit a parameter is stored in is declared by
-    ``get_param_units``; a parameter that declares none takes a plain number,
-    and saying so is more useful than storing an object the equations cannot
-    use.
-
-    Attributes that are not user-settable parameters at all are left alone: it
-    is the parameter contract this enforces, not a rule about what a
-    ``Parametrized`` object may hold.
+    Kept as a module-level function because ``freeze_class`` takes the
+    normalizer as an argument rather than looking it up on the class; see
+    :py:meth:`~pulse2percept.utils.Parametrized._normalize_param_value` for
+    what actually happens to the value, and for how a subclass extends it.
     """
-    units = obj.get_param_units()
-    if name in units:
-        return as_value(value, units[name], name=name)
-    if name in obj.get_default_params():
-        return as_value(value, dimensionless, name=name)
-    return value
+    return obj._normalize_param_value(name, value)
 
 
 class Parametrized(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
@@ -286,6 +276,61 @@ class Parametrized(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
     def get_default_params(self):
         """Return a dict of user-settable parameters"""
         raise NotImplementedError
+
+    def _normalize_param_value(self, name, value):
+        """Convert a unitful value into the unit its parameter is stored in
+
+        Called on the way into every attribute assignment whose value carries
+        a physical unit -- from the constructor, ``set_params``, ``build``, a
+        direct assignment, or a composite
+        :py:class:`~pulse2percept.models.Model` forwarding one to its
+        sub-models -- and returns the value to store.
+
+        Model equations operate on ordinary numbers, so a
+        :py:class:`~pulse2percept.units.Quantity` must never survive into a
+        parameter. Which unit a parameter is stored in is declared by
+        ``get_param_units``; a parameter that declares none takes a plain
+        number, and saying so is more useful than storing an object the
+        equations cannot use.
+
+        Attributes that are not user-settable parameters at all are left
+        alone: it is the parameter contract this enforces, not a rule about
+        what a ``Parametrized`` object may hold.
+
+        This is the extension point for a parameter whose unit is not the
+        whole story. ``SpatialModel`` overrides it so that a retinal *length*
+        assigned to ``xrange``/``yrange`` is resolved through the model's
+        visual field map into the degrees of visual angle the parameter is
+        actually stored in -- a conversion that needs the object, not just the
+        unit, and so cannot live in ``get_param_units``. An override handles
+        the names it knows about and defers the rest::
+
+            def _normalize_param_value(self, name, value):
+                if name == 'mine' and ...:
+                    return ...
+                return super()._normalize_param_value(name, value)
+
+        .. versionadded:: 0.10.0
+
+        Parameters
+        ----------
+        name : str
+            Name of the attribute being assigned.
+        value : Quantity, Unit, or sequence of them
+            The value being assigned. Only unitful values reach this method.
+
+        Returns
+        -------
+        value : float, np.ndarray, or tuple
+            The plain numerical value to store.
+
+        """
+        units = self.get_param_units()
+        if name in units:
+            return as_value(value, units[name], name=name)
+        if name in self.get_default_params():
+            return as_value(value, dimensionless, name=name)
+        return value
 
     def get_param_units(self):
         """Return a dict of the units that parameters are stored in

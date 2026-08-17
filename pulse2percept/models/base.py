@@ -14,9 +14,9 @@ from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
 from ..stimuli.base import _describe_unit
 from ..percepts import Percept
-from ..topography import Curcio1990Map, Grid2D
-from ..units import (DimensionMismatchError, Quantity, as_value, dva, ms, um,
-                     uA)
+from ..topography import Curcio1990Map, Grid2D, RetinalMap
+from ..units import (DimensionMismatchError, Quantity, Unit, as_value, dva, ms,
+                     um, uA)
 from ..utils import (PrettyPrint, FreezeError, Parametrized, bisect,
                      deprecated_alias, warn_deprecated_params,
                      rename_deprecated_params)
@@ -171,9 +171,9 @@ def _frame_clock(stim, dt, unit=ms):
     if frame_time.size == 0 or not np.isfinite(frame_dur) or frame_dur <= 0:
         return None
     # An encoder records its frame clock in milliseconds (see
-    # `pulse2percept.stimuli.Encoder`), and what comes back has to be in the
-    # calling model's own time unit, since that is what it compares `dt` and
-    # `t_percept` in. A no-op for every model p2p ships:
+    # `pulse2percept.stimuli.StimulusEncoder`), and what comes back has to be
+    # in the calling model's own time unit, since that is what it compares
+    # `dt` and `t_percept` in. A no-op for every model p2p ships:
     if unit != ms:
         frame_time = Quantity(frame_time, ms).to_value(unit)
         frame_dur = Quantity(frame_dur, ms).to_value(unit)
@@ -184,6 +184,41 @@ def _frame_clock(stim, dt, unit=ms):
     start = int(round(float(frame_time[0]) / dt))
     ends = start + np.arange(1, frame_time.size + 1, dtype=np.int64) * step
     return ends * dt, start * dt
+
+
+def _vfmap_first(params):
+    """Order parameters so that ``vfmap`` is applied before the others
+
+    A retinal extent assigned to ``xrange``/``yrange`` is resolved through the
+    model's visual field map at assignment time (see
+    :py:meth:`SpatialModel._retinal_range_to_dva`), so which map is installed
+    when that happens decides what the range comes out as. Parameters are
+    otherwise applied in the order they were given, and
+
+    .. code-block:: python
+
+        AxonMapModel(xrange=(-2.8 * mm, 2.8 * mm), vfmap=Curcio1990Map())
+
+    has to use the map the caller asked for rather than whichever one was
+    already there. Only ``vfmap`` is moved; everything else keeps its order,
+    so nothing else becomes order-sensitive.
+    """
+    if 'vfmap' not in params:
+        return params
+    return {'vfmap': params['vfmap'],
+            **{key: val for key, val in params.items() if key != 'vfmap'}}
+
+
+def _length_valued(value):
+    """Whether a value, or either half of a pair, is a physical length
+
+    What tells a retinal extent apart from a visual one is the *dimension* of
+    what was passed, not the unit: ``mm``, ``um`` and ``m`` are all the same
+    shorthand, and a bare number is no shorthand at all.
+    """
+    values = value if isinstance(value, (list, tuple)) else [value]
+    return any(isinstance(v, (Quantity, Unit)) and v.dimension == um.dimension
+               for v in values)
 
 
 def _require_stim_dimension(model, stim):
@@ -200,8 +235,8 @@ def _require_stim_dimension(model, stim):
     Gaussian current spread and called the result brightness would be doing
     exactly the silent reinterpretation ``stimulus_unit`` exists to declare
     away. A picture becomes a stimulus by being encoded (see
-    :py:class:`~pulse2percept.stimuli.Encoder`), which is where the gray
-    levels are given a current to stand for.
+    :py:class:`~pulse2percept.stimuli.StimulusEncoder`), which is where the
+    gray levels are given a current to stand for.
 
     A :py:class:`~pulse2percept.percepts.Percept` is not checked: it is
     brightness, the output of a spatial model, and carries no unit.
@@ -463,6 +498,23 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         You will not be able to add more parameters outside the constructor;
         e.g., ``model.newparam = 1`` will lead to a ``FreezeError``.
 
+    Notes
+    -----
+    *  ``xrange`` and ``yrange`` say which patch of the **visual field** to
+       simulate, in degrees of visual angle, and may be given as plain numbers
+       or as unitful quantities (e.g. ``xrange=(-12 * dva, 12 * dva)``).
+
+       .. versionchanged:: 0.10.0
+
+          On a retinal model they may also be given as a physical extent
+          (e.g. ``xrange=(-4 * mm, 4 * mm)``), which the model's ``vfmap``
+          resolves into the visual field range that piece of retina covers.
+          The range is stored in dva either way, so changing ``vfmap``
+          afterwards does not reinterpret it. This is shorthand, not a unit
+          conversion: ``step`` has no such spelling, since a grid spaced
+          evenly on the retina is a different grid from one spaced evenly in
+          the visual field.
+
     .. seealso ::
 
         *  `Basic Concepts > Computational Models > Building your own model
@@ -478,8 +530,96 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                               removed_version='0.11.0')
 
     def __init__(self, **params):
-        super().__init__(**params)
+        # `vfmap` first: `xrange`/`yrange` may be given as a retinal extent,
+        # which is resolved through the map as it is assigned. See
+        # `_vfmap_first`.
+        super().__init__(**_vfmap_first(params))
         self.grid = None
+
+    def set_params(self, **params):
+        """Set the parameters of this model
+
+        ``vfmap`` is applied before the other parameters, so that a retinal
+        extent given for ``xrange``/``yrange`` in the same call is resolved
+        through the map the caller asked for. See ``_vfmap_first``.
+        """
+        super().set_params(**_vfmap_first(params))
+
+    def _normalize_param_value(self, name, value):
+        """Convert a unitful parameter into the unit it is stored in
+
+        Extends the generic conversion (see
+        :py:meth:`~pulse2percept.utils.Parametrized._normalize_param_value`)
+        with the one parameter whose unit is not the whole story: a *physical*
+        ``xrange``/``yrange`` is shorthand for the visual field range that
+        extent covers, which only the model's visual field map can say.
+        Everything else, ``step`` included, is converted as usual.
+        """
+        if name in ('xrange', 'yrange') and _length_valued(value):
+            return self._retinal_range_to_dva(name, value)
+        return super()._normalize_param_value(name, value)
+
+    def _retinal_range_to_dva(self, name, value):
+        """Resolve a retinal extent into the visual field range it spans
+
+        The model simulates a patch of the *visual field*, sampled uniformly in
+        degrees of visual angle, and that is what ``xrange``/``yrange`` are and
+        stay. Giving them in microns says which patch by naming the piece of
+        retina it lands on; the map turns that into degrees here, once, and
+        what is stored afterwards is an ordinary pair of dva. Changing
+        ``vfmap`` later therefore does not reinterpret a range that has already
+        been resolved -- the same rule an implant's coordinates follow.
+
+        This is deliberately not a unit conversion, and
+        :py:class:`~pulse2percept.units.Quantity` will not do it: how far a
+        degree reaches on tissue is what a visual field map is for. It is also
+        deliberately not offered for ``step``, since a grid spaced evenly on
+        the retina is not the same grid as one spaced evenly in the visual
+        field, and only the latter is what :py:class:`Grid2D` builds.
+
+        Parameters
+        ----------
+        name : {'xrange', 'yrange'}
+            Which of the two ranges is being assigned.
+        value : (min, max)
+            The extent, as a pair of lengths.
+
+        Returns
+        -------
+        (min_dva, max_dva) : tuple of float
+            The same extent in degrees of visual angle, in increasing order.
+
+        """
+        vfmap = getattr(self, 'vfmap', None)
+        if not isinstance(vfmap, RetinalMap):
+            raise DimensionMismatchError(
+                f"'{name}' is a visual field extent, measured in degrees of "
+                f"visual angle. A physical length is shorthand for one only "
+                f"on a retinal map, and this model's vfmap is a "
+                f"{type(vfmap).__name__}. Specify '{name}' in dva instead.")
+        # In the unit the map's tissue side is measured in, which is what its
+        # inverse transform below expects:
+        extent = np.asarray(as_value(value, vfmap.tissue_unit, name),
+                            dtype=np.float64).ravel()
+        if extent.size != 2:
+            raise ValueError(f"'{name}' must be a (min, max) pair, not "
+                             f"{value}.")
+        lo, hi = extent
+        try:
+            if name == 'xrange':
+                lo_dva, _ = vfmap.ret_to_dva(lo, 0)
+                hi_dva, _ = vfmap.ret_to_dva(hi, 0)
+            else:
+                _, lo_dva = vfmap.ret_to_dva(0, lo)
+                _, hi_dva = vfmap.ret_to_dva(0, hi)
+        except NotImplementedError:
+            raise NotImplementedError(
+                f"This visual field map ({type(vfmap).__name__}) cannot infer "
+                f"a visual field range from retinal distance. Specify "
+                f"'{name}' in dva instead.") from None
+        # Sorted, because the retinal y axis points the opposite way from the
+        # visual field's, so the two end points can come back swapped:
+        return tuple(sorted((float(lo_dva), float(hi_dva))))
 
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
@@ -514,7 +654,12 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         return params
 
     def get_param_units(self):
-        """Return a dict of the units that parameters are stored in"""
+        """Return a dict of the units that parameters are stored in
+
+        ``xrange`` and ``yrange`` additionally accept a retinal extent, which
+        is not a unit conversion and so does not appear here; see
+        ``_retinal_range_to_dva``.
+        """
         return {
             **super().get_param_units(),
             # The simulated patch of visual field is specified in degrees of
@@ -1557,7 +1702,10 @@ class Model(PrettyPrint):
             renamed.update(getattr(model, '_renamed_params', {}))
         warn_deprecated_params(type(self).__name__, params, specs)
         params = rename_deprecated_params(type(self).__name__, params, renamed)
-        for key, val in params.items():
+        # Each parameter is forwarded to the sub-models one at a time, so the
+        # order they are applied in is decided here rather than by
+        # `SpatialModel.set_params`. See `_vfmap_first`:
+        for key, val in _vfmap_first(params).items():
             setattr(self, key, val)
 
     def build(self, **build_params):

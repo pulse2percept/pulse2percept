@@ -31,7 +31,14 @@ class ProsthesisSystem(PrettyPrint):
         The electrode array used to deliver electrical stimuli to the retina.
     stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
         A valid source type for the :py:class:`~pulse2percept.stimuli.Stimulus`
-        object (e.g., scalar, NumPy array, pulse train).
+        object (e.g., scalar, NumPy array, pulse train). It must be electrical
+        (see
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`);
+        encode an image or a video first.
+
+        .. versionchanged:: 0.10.0
+            A stimulus that is not a current is refused here, instead of at
+            the point where a model tries to read it.
     eye : 'LE' or 'RE'
         A string indicating whether the system is implanted in the left ('LE')
         or right eye ('RE')
@@ -76,6 +83,16 @@ class ProsthesisSystem(PrettyPrint):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_earray', '_stim', '_eye', 'safe_mode', 'preprocess',
                  '_raster', '_max_current')
+
+    #: The physical quantity this system delivers, mirroring
+    #: :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`. An electrical
+    #: prosthesis delivers current, so a stimulus that is not a current is not
+    #: a stimulus it can deliver, and is refused when it is assigned rather
+    #: than when a model eventually tries to read it. Only the *dimension* has
+    #: to match: `Stimulus` has already converted an amplitude given as
+    #: ``0.05 * mA`` into 50 uA by the time it gets here. A device that
+    #: delivered something else (light, say) would override this.
+    stimulus_unit = uA
 
     def __init__(self, earray, stim=None, eye='RE', preprocess=False,
                  safe_mode=False, raster=None, max_current=None):
@@ -132,22 +149,46 @@ class ProsthesisSystem(PrettyPrint):
             raise ValueError("'max_current' must be positive.")
         self._max_current = max_current
 
+    def _require_deliverable_stim(self, stim):
+        """Refuse a stimulus this system cannot physically deliver
+
+        The implant's half of the boundary that
+        :py:func:`~pulse2percept.models.base._require_stim_dimension` guards on
+        the model's side. Both are needed: a model must not read gray levels as
+        microamps whatever produced them, and an implant that accepted a
+        picture would only fail once a model got hold of it, several steps
+        away from the assignment that was actually wrong.
+
+        Checked on the *final* stimulus, after ``preprocess`` and after any
+        reshaping onto the electrode grid, so that a preprocessing step that
+        turns an image into current is exactly as valid as encoding it first.
+        """
+        if stim.unit.dimension == self.stimulus_unit.dimension:
+            return
+        raise DimensionMismatchError(
+            f"{type(self).__name__} delivers "
+            f"{_describe_unit(self.stimulus_unit)}, but this stimulus is "
+            f"measured in {_describe_unit(stim.unit)}. Encode image or video "
+            f"input with pulse2percept.stimuli.AmplitudeEncoder or "
+            f"FrequencyEncoder before assigning it to the implant, or give "
+            f"the implant a 'preprocess' function that does.")
+
     @staticmethod
     def _require_current_stim(stim, check):
         """Refuse to run an electrical safety check on something that isn't
 
-        Called by each check rather than by ``check_stim``, because an implant
-        with no current limit and no safe mode is not asking an electrical
-        question at all, and a dimensionless stimulus is free to pass through
-        it on its way to a preprocessing step.
+        Called by each check rather than by ``check_stim``, because a safety
+        check is a claim about electricity and each one has to say so for
+        itself: ``check_stim`` is public, and is called directly by tests and
+        by subclasses on stimuli that never went through the setter.
         """
         if stim.unit.dimension != uA.dimension:
             raise DimensionMismatchError(
                 f"Safety check '{check}' needs an electrical stimulus to "
                 f"check, and this one is measured in "
                 f"{_describe_unit(stim.unit)}. Encode it into current first "
-                f"(see pulse2percept.stimuli.Encoder), or give the implant a "
-                f"'preprocess' function that does.")
+                f"(see pulse2percept.stimuli.StimulusEncoder), or give the "
+                f"implant a 'preprocess' function that does.")
 
     @classmethod
     def _require_charge_balanced(cls, stim):
@@ -189,11 +230,12 @@ class ProsthesisSystem(PrettyPrint):
 
         Both are questions about electricity, and neither can be answered about
         a stimulus that is not a current, so each raises a
-        :py:class:`~pulse2percept.units.DimensionMismatchError` on one. An
-        implant that asks for neither does not run either check, which is why a
-        dimensionless stimulus may still be assigned to one -- ``preprocess``
-        has already had its chance to turn it into current, and if it did not,
-        no safety claim is being made about it either.
+        :py:class:`~pulse2percept.units.DimensionMismatchError` on one. In the
+        ordinary flow this cannot happen: assigning to
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim` has already
+        checked the stimulus against
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`.
+        ``check_stim`` is public, though, and may be handed anything.
 
         The user can define their own checks in implants that inherit from
         :py:class:`~pulse2percept.implants.ProsthesisSystem`.
@@ -369,6 +411,19 @@ class ProsthesisSystem(PrettyPrint):
            Unless when using dictionary notation, the number of stimuli must
            equal the number of electrodes in ``earray``.
 
+        The stimulus must be one the implant can deliver; for an electrical
+        prosthesis that means a current (see
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`).
+        Assigning an image or a video raises a
+        :py:class:`~pulse2percept.units.DimensionMismatchError`, because there
+        is no principled default mapping from a gray level to an amplitude or
+        a frequency: say which you want with an
+        :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` or a
+        :py:class:`~pulse2percept.stimuli.FrequencyEncoder`.
+
+        .. versionchanged:: 0.10.0
+            A non-electrical stimulus is refused on assignment.
+
         Examples
         --------
         Send a biphasic pulse (30uA, 0.45ms phase duration) to an implant made
@@ -419,6 +474,12 @@ class ProsthesisSystem(PrettyPrint):
             # want to try and reshape the stimulus to fit the array:
             if len(stim.electrodes) > self.n_electrodes:
                 stim = self.reshape_stim(stim)
+
+            # Whatever came in is now a Stimulus laid out on this implant's
+            # electrodes. Whether it is a stimulus the implant can *deliver*
+            # is the next question, and it is asked before anything else looks
+            # at the numbers:
+            self._require_deliverable_stim(stim)
 
             # Make sure all electrode names are valid:
             for electrode in stim.electrodes:

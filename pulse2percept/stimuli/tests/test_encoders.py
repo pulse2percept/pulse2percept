@@ -1,3 +1,4 @@
+import importlib
 import warnings
 
 import numpy as np
@@ -7,9 +8,10 @@ from scipy.integrate import trapezoid
 
 from pulse2percept.implants import ArgusII, CustomRaster, SequentialRaster
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
-                                   BiphasicPulseTrain, BostonTrain, Encoder,
+                                   BiphasicPulseTrain, BostonTrain,
                                    FrequencyEncoder, ImageStimulus,
-                                   MonophasicPulse, Stimulus, VideoStimulus)
+                                   MonophasicPulse, Stimulus, StimulusEncoder,
+                                   VideoStimulus)
 from pulse2percept.stimuli import encoders
 from pulse2percept.utils.constants import DT
 from pulse2percept.units import (DimensionMismatchError, Hz, Quantity,
@@ -28,12 +30,79 @@ def n_pulses_of(stim, electrode=0, peak=None):
     return np.count_nonzero(np.diff(firing.astype(int)) > 0) // 2
 
 
-def test_Encoder_is_abstract():
+def test_StimulusEncoder_is_abstract():
     with pytest.raises(TypeError):
-        Encoder()
+        StimulusEncoder()
 
 
-def test_Encoder_source():
+def test_StimulusEncoder_deprecated_name():
+    """``Encoder`` still resolves, to the very same class object
+
+    The old name is served by a module-level ``__getattr__`` rather than by a
+    subclass, so it is not merely compatible but identical: every
+    ``isinstance`` and ``issubclass`` check written against it keeps answering
+    what it answered before the rename.
+    """
+    for module in ('pulse2percept.stimuli', 'pulse2percept.stimuli.encoders'):
+        with pytest.warns(DeprecationWarning, match='StimulusEncoder'):
+            Encoder = getattr(importlib.import_module(module), 'Encoder')
+        npt.assert_equal(Encoder is StimulusEncoder, True)
+        npt.assert_equal(issubclass(AmplitudeEncoder, Encoder), True)
+        npt.assert_equal(issubclass(FrequencyEncoder, Encoder), True)
+        npt.assert_equal(isinstance(AmplitudeEncoder(), Encoder), True)
+
+    with pytest.warns(DeprecationWarning) as record:
+        from pulse2percept.stimuli import Encoder
+    npt.assert_equal('0.11.0' in str(record[0].message), True)
+    # The warning blames the line that used the deprecated name, not the
+    # module that serves it:
+    npt.assert_equal(record[0].filename, __file__)
+
+    # A user-defined subclass through the old name is a subclass of the new
+    # one, and works:
+    class MyEncoder(Encoder):
+        def _modulate(self, gray):
+            return 10 + 30 * gray, 20
+
+    npt.assert_equal(issubclass(MyEncoder, StimulusEncoder), True)
+    stim = MyEncoder(frame_dur=100).encode(
+        ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4))))
+    npt.assert_almost_equal(np.abs(stim.data).max(), 40)
+
+    # A name that was never ours is still an ordinary AttributeError:
+    with pytest.raises(AttributeError):
+        encoders.NotAThing
+
+
+def test_StimulusEncoder_warnings_point_at_the_caller(monkeypatch):
+    """A warning is only actionable if it names the line that caused it
+
+    All three of these are about the caller's own choice of source, frequency
+    or implant, so blaming ``encoders.py`` (which is what a bare
+    ``warnings.warn`` does) puts an unhelpful line of p2p's internals in front
+    of them.
+    """
+    monkeypatch.setattr(encoders, '_BIG_STIM', 100)
+    monkeypatch.setattr(encoders, '_BIG_TIME', 100)
+    vid = VideoStimulus(np.random.rand(8, 8, 4), time=[0, 100, 200, 300])
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        AmplitudeEncoder(freq=1000).encode(vid)
+    npt.assert_equal(len(caught) > 0, True)
+    for warning in caught:
+        npt.assert_equal(warning.category, UserWarning)
+        npt.assert_equal(warning.filename, __file__)
+
+    # ... including the one about frames that never get a pulse:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        AmplitudeEncoder(ArgusII(), freq=2).encode(vid)
+    npt.assert_equal([w.filename for w in caught], [__file__] * len(caught))
+    npt.assert_equal(any('deliver no pulse' in str(w.message)
+                         for w in caught), True)
+
+
+def test_StimulusEncoder_source():
     enc = AmplitudeEncoder()
     with pytest.raises(TypeError):
         enc.encode(np.random.rand(4, 5))
@@ -41,7 +110,7 @@ def test_Encoder_source():
         enc.encode('not-a-stimulus')
 
 
-def test_Encoder_params():
+def test_StimulusEncoder_params():
     with pytest.raises(ValueError):
         AmplitudeEncoder(phase_dur=DT / 2)
     with pytest.raises(ValueError):
@@ -329,7 +398,7 @@ def test_FrequencyEncoder_whole_pulses():
     npt.assert_equal(n_pulses_of(am), whole_pulses(60, frame_dur))
 
 
-def test_Encoder_clock():
+def test_StimulusEncoder_clock():
     # A clock rounds the pulse period onto a whole number of cycles, so
     # frequencies that differ by less than that collapse onto one schedule:
     img = ImageStimulus(np.linspace(0.5, 1, 16).reshape((4, 4)))
@@ -351,7 +420,7 @@ def test_Encoder_clock():
         FrequencyEncoder(clock=DT / 10)
 
 
-def test_Encoder_n_levels():
+def test_StimulusEncoder_n_levels():
     # Quantizing the gray levels quantizes whatever they are modulated onto:
     img = ImageStimulus(np.linspace(0, 1, 64).reshape((8, 8)))
     am = AmplitudeEncoder(amp_range=(0, 50), n_levels=4).encode(img)
@@ -365,7 +434,7 @@ def test_Encoder_n_levels():
     npt.assert_equal(fm4.shape[1] < fm.shape[1], True)
 
 
-def test_Encoder_big_time_warning(monkeypatch):
+def test_StimulusEncoder_big_time_warning(monkeypatch):
     monkeypatch.setattr(encoders, '_BIG_TIME', 100)
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     with pytest.warns(UserWarning, match='time points'):
@@ -387,7 +456,7 @@ def test_FrequencyEncoder_implant():
     npt.assert_equal(enc.shape[1] < unclocked.shape[1] / 5, True)
 
 
-def test_Encoder_raster():
+def test_StimulusEncoder_raster():
     img = ImageStimulus(np.ones((2, 2)))
     raster = SequentialRaster(2, interleave=True)
     enc = AmplitudeEncoder(freq=100, frame_dur=100,
@@ -447,7 +516,7 @@ def test_Encoder_raster():
                              group_dur=5.1)).encode(img)
 
 
-def test_Encoder_raster_frequency_modulation():
+def test_StimulusEncoder_raster_frequency_modulation():
     # Under frequency modulation electrodes want different periods, so they
     # can only be kept apart by quantizing every period onto a common raster
     # cycle. The fastest electrode pulses once per cycle, slower ones every
@@ -471,7 +540,7 @@ def test_Encoder_raster_frequency_modulation():
                          raster=SequentialRaster(6)).encode(img)
 
 
-def test_Encoder_raster_from_implant():
+def test_StimulusEncoder_raster_from_implant():
     implant = ArgusII()
     implant.raster = SequentialRaster(6)
     vid = VideoStimulus(np.ones((6, 10, 2)), metadata={'fps': 30})
@@ -491,7 +560,7 @@ def test_Encoder_raster_from_implant():
     npt.assert_equal(enc.metadata['encoder']['n_schedules'], 1)
 
 
-def test_Encoder_raster_current_limit():
+def test_StimulusEncoder_raster_current_limit():
     # 60 electrodes at 50 uA is 3000 uA if they all fire at once, but only
     # 500 uA if they take turns ten at a time:
     implant = ArgusII()
@@ -525,7 +594,7 @@ def test_Encoder_raster_current_limit():
 
 @pytest.mark.parametrize('fps', [29.97, 30, 24, 59.94])
 @pytest.mark.parametrize('freq', [50, 100])
-def test_Encoder_freq_is_actual_freq(fps, freq):
+def test_StimulusEncoder_freq_is_actual_freq(fps, freq):
     # The pulse clock runs independently of the frame clock, so the requested
     # frequency is the frequency delivered -- whatever the frame rate is, and
     # whether or not a frame holds a whole number of periods. Before, each
@@ -594,7 +663,7 @@ def test_FrequencyEncoder_rate_changes_between_frames():
                             [0, 10, 20, 30, 40, 50, 70, 90, 120], decimal=3)
 
 
-def test_Encoder_raster_slots_land_on_the_clock():
+def test_StimulusEncoder_raster_slots_land_on_the_clock():
     # A stimulator can only start a pulse on a clock edge, so splitting a
     # period evenly between the groups has to be resolved onto that grid.
     # Rounding each group's offset independently could land two of them on the
@@ -619,7 +688,7 @@ def test_Encoder_raster_slots_land_on_the_clock():
     npt.assert_almost_equal(np.abs(enc.data).sum(axis=0).max(), 100)
 
 
-def test_Encoder_raster_short_slot_keeps_the_rate():
+def test_StimulusEncoder_raster_short_slot_keeps_the_rate():
     # A short explicit slot packs the groups into the start of each period.
     # That must not change the rate: when every electrode is on the same
     # period -- which is what amplitude modulation always produces -- two
@@ -697,7 +766,7 @@ def test_FrequencyEncoder_rate_changes_with_raster_offset():
             npt.assert_equal(vid.data[e, int(t // 20)] > 0, True)
 
 
-def test_Encoder_clock_never_speeds_up():
+def test_StimulusEncoder_clock_never_speeds_up():
     # Same invariant as the raster, for the stimulator's own time base: a
     # timing constraint may lower the rate an electrode ends up on, never raise
     # it, since raising it delivers more charge than was asked for. Realizable
@@ -738,7 +807,7 @@ def test_FrequencyEncoder_raster_never_speeds_up():
     npt.assert_almost_equal(np.diff(pulse_onsets(enc, 0)), 10, decimal=3)
 
 
-def test_Encoder_pulse_offset():
+def test_StimulusEncoder_pulse_offset():
     # `Stimulus` only requires a time axis to be ordered, not to start at zero.
     # What an encoder borrows from a supplied pulse is its *shape*, so a pulse
     # whose time axis is shifted has to encode exactly like an unshifted one.
@@ -759,7 +828,7 @@ def test_Encoder_pulse_offset():
     npt.assert_almost_equal(shifted.time, [5, 5.01, 6, 6.01])
 
 
-def test_Encoder_zero_amp():
+def test_StimulusEncoder_zero_amp():
     # An electrode delivering no current has nothing to schedule, so a dark
     # frame costs no pulses and no time points -- it used to build a full pulse
     # train and then multiply it by zero:
@@ -803,7 +872,7 @@ def test_Encoder_zero_amp():
     npt.assert_equal(enc.shape[1], 2)
 
 
-def test_Encoder_implant_reshape():
+def test_StimulusEncoder_implant_reshape():
     # Passing an implant means "sample the source at the electrode locations".
     # Row count is not a usable test of whether that already happened: a 10x6
     # image and an RGB 4x5 image both have exactly as many rows as Argus II has
@@ -822,7 +891,7 @@ def test_Encoder_implant_reshape():
         npt.assert_equal(list(enc.electrodes), list(implant.electrode_names))
 
 
-def test_Encoder_metadata():
+def test_StimulusEncoder_metadata():
     enc = AmplitudeEncoder(freq=50).encode(ImageStimulus(np.ones((2, 2))))
     npt.assert_equal(enc.metadata['encoder']['kind'], 'AmplitudeEncoder')
     npt.assert_almost_equal(enc.metadata['encoder']['frame_dur'], 500)
@@ -837,7 +906,7 @@ def test_Encoder_metadata():
     npt.assert_equal(fm.metadata['encoder']['n_schedules'], 4)
 
 
-def test_Encoder_degenerate_raster_is_no_raster():
+def test_StimulusEncoder_degenerate_raster_is_no_raster():
     """A raster with one group has nothing to multiplex, so it changes nothing.
 
     This is the limiting case that says a raster only ever *staggers* onsets:
@@ -869,7 +938,7 @@ def test_Encoder_degenerate_raster_is_no_raster():
                                 np.abs(plain.data).sum(axis=0).max())
 
 
-def test_Encoder_degenerate_ranges():
+def test_StimulusEncoder_degenerate_ranges():
     """A modulation range of zero width stops the gray levels mattering."""
     implant = ArgusII()
     img = ImageStimulus(np.random.default_rng(1).random((6, 10)))
@@ -896,7 +965,7 @@ def test_Encoder_degenerate_ranges():
         npt.assert_equal(np.any(enc.encode(black).data), False)
 
 
-def test_Encoder_n_levels_converges():
+def test_StimulusEncoder_n_levels_converges():
     """Quantizing onto enough gray levels is the same as not quantizing."""
     implant = ArgusII()
     img = ImageStimulus(np.random.default_rng(2).random((6, 10)))
@@ -914,7 +983,7 @@ def test_Encoder_n_levels_converges():
     npt.assert_array_equal(np.unique(np.abs(two.data).max(axis=1)), [0.0, 50.0])
 
 
-def test_Encoder_frame_rate_does_not_move_the_pulses():
+def test_StimulusEncoder_frame_rate_does_not_move_the_pulses():
     """The pulse clock is independent of the frame clock.
 
     Re-timing the same frames only changes how long the stimulus lasts and

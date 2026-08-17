@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from PIL import Image
 
+from pulse2percept.units import (DimensionMismatchError, Hz, dva, kHz, ms, uA)
 from pulse2percept.utils import HTMLAnimation, frame_interval
 from pulse2percept.utils.animation import (MAX_SPRITE_PX,
                                            SINGLE_FRAME_INTERVAL,
@@ -116,6 +117,18 @@ def test_frame_interval():
     npt.assert_almost_equal(frame_interval([0, 10, 20.005], tol=1), 10)
     with pytest.raises(NotImplementedError):
         frame_interval([0, 10, 20.005], tol=1e-6)
+
+
+def test_frame_interval_fps_units():
+    """A frame rate is a frequency, however it is spelled"""
+    bare = frame_interval([0, 10, 20], fps=25)
+    for spelling in (25 * Hz, 0.025 * kHz):
+        npt.assert_allclose(frame_interval([0, 10, 20], fps=spelling), bare,
+                            rtol=1e-12)
+    # ... and nothing else is a frame rate:
+    for wrong in (30 * ms, 30 * uA, 30 * dva):
+        with pytest.raises(DimensionMismatchError):
+            frame_interval([0, 10, 20], fps=wrong)
 
 
 @pytest.mark.parametrize('n_frames', (1, 2, 5, 17))

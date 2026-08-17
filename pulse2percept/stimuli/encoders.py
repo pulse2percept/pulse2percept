@@ -1,8 +1,7 @@
-""":py:class:`~pulse2percept.stimuli.Encoder`,
+""":py:class:`~pulse2percept.stimuli.StimulusEncoder`,
    :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`,
    :py:class:`~pulse2percept.stimuli.FrequencyEncoder`"""
 from abc import ABCMeta, abstractmethod
-import warnings
 import numpy as np
 
 from .base import Stimulus
@@ -11,7 +10,10 @@ from .pulses import BiphasicPulse
 from .videos import VideoStimulus
 from ..units import (DimensionMismatchError, Hz, as_value, dimensionless, ms,
                      uA)
-from ..utils import PrettyPrint, frame_interval
+from ..utils import PrettyPrint, deprecated_names, frame_interval
+# Every warning below is about the *caller's* choice of source, frequency, or
+# implant, so it has to point at their line rather than at this file:
+from ..utils.deprecation import _warn_external
 from ..utils.constants import DT, MS_PER_S
 
 # Encoding a source that still has one row per *pixel* rather than one per
@@ -59,7 +61,7 @@ def _fps(metadata):
     return user.get('fps') if isinstance(user, dict) else None
 
 
-class Encoder(PrettyPrint, metaclass=ABCMeta):
+class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
     """Abstract base class for all stimulus encoders
 
     An encoder translates the gray levels of an image or a video into the
@@ -717,10 +719,11 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         missed = np.count_nonzero(~hit & active.any(axis=0))
         if missed:
             fps = MS_PER_S / frame_dur
-            warnings.warn(f"{missed} of {n_frames} frames deliver no pulse at "
-                          f"all, because the pulse period is longer than a "
-                          f"frame ({fps:.2f} fps). Their gray levels are "
-                          f"never sampled; raise the frequency to see them.")
+            _warn_external(
+                f"{missed} of {n_frames} frames deliver no pulse at all, "
+                f"because the pulse period is longer than a frame "
+                f"({fps:.2f} fps). Their gray levels are never sampled; "
+                f"raise the frequency to see them.", category=UserWarning)
 
         ticks = np.unique(np.concatenate(
             [np.array([0, end], dtype=np.int64)] +
@@ -728,18 +731,20 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
              for o in onsets if o.size]))
         n_time = ticks.size
         if n_time > _BIG_TIME:
-            warnings.warn(f"This stimulus has {n_time} time points, which "
-                          f"every model downstream will pay for. Coarsening "
-                          f"'clock' is the lever that helps most, since it "
-                          f"confines every pulse onset to the same grid; a "
-                          f"'raster' does the same. 'n_levels' helps far less "
-                          f"on its own, because two electrodes on the same "
-                          f"gray level still pulse at different times.")
+            _warn_external(
+                f"This stimulus has {n_time} time points, which every model "
+                f"downstream will pay for. Coarsening 'clock' is the lever "
+                f"that helps most, since it confines every pulse onset to the "
+                f"same grid; a 'raster' does the same. 'n_levels' helps far "
+                f"less on its own, because two electrodes on the same gray "
+                f"level still pulse at different times.",
+                category=UserWarning)
         if n_el * n_time > _BIG_STIM and self.implant is None:
-            warnings.warn(f"Encoding {n_el} electrodes x {n_time} time points "
-                          f"will allocate {n_el * n_time * 4 / 1e9:.1f} GB. "
-                          f"Pass 'implant' to encode at electrode resolution "
-                          f"instead.")
+            _warn_external(
+                f"Encoding {n_el} electrodes x {n_time} time points will "
+                f"allocate {n_el * n_time * 4 / 1e9:.1f} GB. Pass 'implant' "
+                f"to encode at electrode resolution instead.",
+                category=UserWarning)
 
         # One unit-amplitude waveform per schedule, scaled by the amplitude of
         # whichever frame each pulse belongs to:
@@ -807,7 +812,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         return self._assemble(amp, freq, electrodes, frame_time, frame_dur)
 
 
-class AmplitudeEncoder(Encoder):
+class AmplitudeEncoder(StimulusEncoder):
     """Encode gray levels as pulse amplitudes
 
     Every electrode emits a pulse train of the same fixed frequency, and the
@@ -828,7 +833,7 @@ class AmplitudeEncoder(Encoder):
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
         The implant to encode for; see
-        :py:class:`~pulse2percept.stimuli.Encoder`.
+        :py:class:`~pulse2percept.stimuli.StimulusEncoder`.
     amp_range : (min_amp, max_amp), optional
         Range of pulse amplitudes (uA). A gray level of 0 maps onto
         ``min_amp`` and a gray level of 1 onto ``max_amp``.
@@ -847,7 +852,7 @@ class AmplitudeEncoder(Encoder):
            delivered. Encoding warns when this happens.
 
     phase_dur, interphase_dur, cathodic_first, frame_dur, stretch
-        See :py:class:`~pulse2percept.stimuli.Encoder`.
+        See :py:class:`~pulse2percept.stimuli.StimulusEncoder`.
 
     Notes
     -----
@@ -870,8 +875,8 @@ class AmplitudeEncoder(Encoder):
 
     def __init__(self, implant=None, amp_range=(0, 50), freq=20, **kwargs):
         super().__init__(implant=implant, **kwargs)
-        # See `Encoder.__init__`. `amp_range` is converted element by element,
-        # so its two endpoints may be given in different units:
+        # See `StimulusEncoder.__init__`. `amp_range` is converted element by
+        # element, so its two endpoints may be given in different units:
         amp_range = as_value(amp_range, uA, 'amp_range')
         freq = as_value(freq, Hz, 'freq')
         if np.size(amp_range) != 2:
@@ -900,7 +905,7 @@ class AmplitudeEncoder(Encoder):
         return amp_lo + gray * (amp_hi - amp_lo), self.freq
 
 
-class FrequencyEncoder(Encoder):
+class FrequencyEncoder(StimulusEncoder):
     """Encode gray levels as pulse train frequencies
 
     Every electrode emits pulses of the same fixed amplitude, and the gray
@@ -951,7 +956,7 @@ class FrequencyEncoder(Encoder):
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
         The implant to encode for; see
-        :py:class:`~pulse2percept.stimuli.Encoder`.
+        :py:class:`~pulse2percept.stimuli.StimulusEncoder`.
     freq_range : (min_freq, max_freq), optional
         Range of pulse train frequencies (Hz). A gray level of 0 maps onto
         ``min_freq`` and a gray level of 1 onto ``max_freq``. A frequency of 0
@@ -983,7 +988,7 @@ class FrequencyEncoder(Encoder):
         Pulse amplitude (uA), the same for every electrode.
     phase_dur, interphase_dur, cathodic_first, pulse, clock, n_levels, \
 frame_dur, stretch
-        See :py:class:`~pulse2percept.stimuli.Encoder`.
+        See :py:class:`~pulse2percept.stimuli.StimulusEncoder`.
 
     Notes
     -----
@@ -1008,7 +1013,7 @@ frame_dur, stretch
 
     def __init__(self, implant=None, freq_range=(0, 300), amp=50, **kwargs):
         super().__init__(implant=implant, **kwargs)
-        # See `Encoder.__init__`:
+        # See `StimulusEncoder.__init__`:
         freq_range = as_value(freq_range, Hz, 'freq_range')
         amp = as_value(amp, uA, 'amp')
         if np.size(freq_range) != 2:
@@ -1035,3 +1040,11 @@ frame_dur, stretch
         """Gray level in [0, 1] -> frequency in ``freq_range``"""
         freq_lo, freq_hi = self.freq_range
         return self.amp, freq_lo + gray * (freq_hi - freq_lo)
+
+
+#: ``StimulusEncoder`` was called ``Encoder`` in 0.10.0. The old name still
+#: resolves -- to the very same class object, so that ``isinstance`` and
+#: ``issubclass`` keep answering what they always did -- and warns:
+__getattr__ = deprecated_names(globals(), {'Encoder': 'StimulusEncoder'},
+                               deprecated_version='0.10.0',
+                               removed_version='0.11.0')

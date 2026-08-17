@@ -17,13 +17,16 @@ from pulse2percept.implants import (ArgusII, DiskElectrode, ElectrodeGrid,
 from pulse2percept.implants.cortex import Cortivis
 from pulse2percept.models import (AxonMapSpatial, FadingTemporal, Model,
                                   ScoreboardSpatial)
+from pulse2percept.models.cortex import (ScoreboardSpatial as
+                                         CortexScoreboardSpatial)
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, ImageStimulus,
                                    Stimulus)
 from pulse2percept.topography import Grid2D, Polimeni2006Map, Watson2014Map
 from pulse2percept.units import (DimensionMismatchError, Quantity, Unit, cm,
-                                 dva, mA, mm, ms, nA, s, uA, um, us)
+                                 dimensionless, dva, mA, mm, ms, nA, s, uA, um,
+                                 us)
 
 # The same physical quantity, spelled every awkward way the unit system
 # allows. Each row is (bare, [equivalent unitful spellings]).
@@ -218,9 +221,19 @@ def test_the_whole_rejection_matrix():
     current = Stimulus({'A1': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)})
     model = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2), step=1).build()
 
-    # dimensionless -> model: gray levels are not small currents.
+    # dimensionless -> implant: an implant delivers current, so a picture is
+    # refused where it is assigned rather than where it is eventually read.
     with pytest.raises(DimensionMismatchError):
-        model.predict_percept(ArgusII(preprocess=False, stim=img))
+        ArgusII(preprocess=False, stim=img)
+
+    # dimensionless -> model: gray levels are not small currents. The implant
+    # above is the outer boundary; this is the one behind it, so it is reached
+    # through an implant that claims to deliver something else.
+    class Projector(ArgusII):
+        stimulus_unit = dimensionless
+
+    with pytest.raises(DimensionMismatchError):
+        model.predict_percept(Projector(preprocess=False, stim=img))
 
     # current -> encoder: an encoder is what *makes* current out of pictures.
     with pytest.raises(DimensionMismatchError):
@@ -238,9 +251,14 @@ def test_the_whole_rejection_matrix():
     with pytest.raises(DimensionMismatchError):
         Grid2D((-2 * mm, 2 * mm), (-2, 2))
     with pytest.raises(DimensionMismatchError):
-        ScoreboardSpatial(xrange=(-2 * mm, 2 * mm))
-    with pytest.raises(DimensionMismatchError):
         Watson2014Map().dva_to_ret(575 * um, 575 * um)
+    # A retinal model does resolve a physical `xrange` through its own map
+    # (see `SpatialModel._retinal_range_to_dva`), but that is shorthand for a
+    # visual field extent, not a conversion, and it is offered nowhere else:
+    with pytest.raises(DimensionMismatchError):
+        ScoreboardSpatial(step=100 * um)
+    with pytest.raises(DimensionMismatchError):
+        CortexScoreboardSpatial(xrange=(-2 * mm, 2 * mm))
 
     # current -> time, and time -> current.
     with pytest.raises(DimensionMismatchError):

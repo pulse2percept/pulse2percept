@@ -10,7 +10,7 @@ import logging
 from skimage import img_as_ubyte
 from skimage.transform import resize
 
-from ..units import DimensionMismatchError, Quantity, Unit, as_value, ms
+from ..units import DimensionMismatchError, Hz, Quantity, Unit, as_value, ms
 from ..utils import Data, HTMLAnimation, frame_interval, sample
 from ..utils.constants import VIDEO_BLOCK_SIZE
 
@@ -359,7 +359,9 @@ class Percept(Data):
         ----------
         fps : float or None
             If None, uses the percept's time axis. Not supported for
-            non-homogeneous time axis.
+            non-homogeneous time axis. May be given as a plain number of hertz
+            or as a unitful frequency (e.g. ``30 * Hz``, ``0.03 * kHz``); see
+            :py:mod:`pulse2percept.units`.
         repeat : bool, optional
             Whether the animation should repeat when the sequence of frames is
             completed.
@@ -470,7 +472,9 @@ class Percept(Data):
             inferred accordingly.
         fps : float or None
             If None, uses the percept's time axis. Not supported for
-            non-homogeneous time axis.
+            non-homogeneous time axis. May be given as a plain number of hertz
+            or as a unitful frequency (e.g. ``30 * Hz``, ``0.03 * kHz``); see
+            :py:mod:`pulse2percept.units`.
 
         Notes
         -----
@@ -478,6 +482,10 @@ class Percept(Data):
             of 16 to ensure compatibility with most codecs and players.
 
         """
+        # This path hands `fps` to imageio rather than to `frame_interval`, so
+        # it is its own boundary: a frame rate is a frequency, and imageio
+        # takes a plain number of hertz.
+        fps = as_value(fps, Hz, 'fps')
         data = self.data - self.data.min()
         if not isclose(np.max(data), 0):
             data = data / np.max(data)

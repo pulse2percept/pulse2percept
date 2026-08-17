@@ -3,6 +3,7 @@ import numpy.testing as npt
 import pytest
 from pulse2percept.utils.deprecation import (deprecated, deprecate_parameter,
                                              deprecated_alias,
+                                             deprecated_names,
                                              rename_parameter,
                                              rename_deprecated_params,
                                              is_deprecated)
@@ -341,3 +342,31 @@ def test_rename_deprecated_params_both_names():
         warnings.simplefilter("error", DeprecationWarning)
         with pytest.raises(TypeError):
             rename_deprecated_params('MyModel', {'old': 1, 'new': 2}, specs)
+
+
+class NewName:
+    """Stand-in for a class that used to be called something else"""
+
+
+#: What a module assigns to serve the old name (see `deprecated_names`):
+__getattr__ = deprecated_names(globals(), {'OldName': 'NewName'},
+                               deprecated_version='0.10.0',
+                               removed_version='0.11.0')
+
+
+def test_deprecated_names():
+    # The old name warns, and answers with the very same object -- not a
+    # subclass of it, which is what would quietly change `issubclass`:
+    assert_warns_msg(DeprecationWarning, __getattr__,
+                     "OldName is deprecated since version 0.10.0, and will be "
+                     "removed in version 0.11.0. Use NewName instead.",
+                     'OldName')
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        npt.assert_equal(__getattr__('OldName') is NewName, True)
+    # A name that was never deprecated is an ordinary AttributeError, so a
+    # typo still reads as a typo:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        with pytest.raises(AttributeError):
+            __getattr__('NeverExisted')
