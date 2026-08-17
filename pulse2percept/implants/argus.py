@@ -6,6 +6,14 @@ from collections import OrderedDict
 from .base import ProsthesisSystem
 from .electrodes import DiskElectrode
 from .electrode_arrays import ElectrodeGrid
+from .rasters import SequentialRaster
+from ..stimuli import AmplitudeEncoder
+from ..units import Hz, ms
+
+# Distinguishes "the caller said nothing", which gets the device's own default,
+# from an explicit None, which switches the feature off. A plain None default
+# could not tell the two apart:
+_DEVICE_DEFAULT = object()
 
 
 class ArgusI(ProsthesisSystem):
@@ -209,6 +217,21 @@ class ArgusII(ProsthesisSystem):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
+    encoder : :py:class:`~pulse2percept.stimuli.StimulusEncoder`, optional
+        How the device turns a picture into stimulation. Defaults to a fresh
+        :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` at 6 Hz, which is
+        the rate Argus II runs its video at. Pass ``encoder=None`` to switch
+        automatic encoding off, so that an image or a video assigned to
+        ``stim`` is refused rather than encoded.
+
+        .. versionadded:: 0.10.0
+    raster : :py:class:`~pulse2percept.implants.Raster`, optional
+        How the stimulator takes turns between electrodes. Defaults to a fresh
+        :py:class:`~pulse2percept.implants.SequentialRaster` of six groups
+        2 ms apart, i.e. one row of ten electrodes at a time. Pass
+        ``raster=None`` to drive every electrode at once.
+
+        .. versionadded:: 0.10.0
 
     Examples
     --------
@@ -217,8 +240,9 @@ class ArgusII(ProsthesisSystem):
 
     >>> from pulse2percept.implants import ArgusII
     >>> ArgusII(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
-    ArgusII(earray=ElectrodeGrid, eye='RE', preprocess=True,
-            safe_mode=False, shape=(6, 10), stim=None)
+    ArgusII(earray=ElectrodeGrid, encoder=AmplitudeEncoder, eye='RE',
+            preprocess=True, raster=SequentialRaster, safe_mode=False,
+            shape=(6, 10), stim=None)
 
     Get access to electrode 'E7', either by name or by row/column index:
 
@@ -230,12 +254,20 @@ class ArgusII(ProsthesisSystem):
     DiskElectrode(activated=True, name='E7', r=112.5, x=862.5,
                   y=862.5, z=100.0)
 
+    Because the device brings its own encoder, a picture can be assigned
+    straight to ``stim`` and comes back as current:
+
+    >>> from pulse2percept.stimuli import LogoBVL
+    >>> ArgusII(stim=LogoBVL()).stim.unit
+    uA
+
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
-                 preprocess=True, safe_mode=False):
+                 preprocess=True, safe_mode=False, encoder=_DEVICE_DEFAULT,
+                 raster=_DEVICE_DEFAULT):
         self.safe_mode = safe_mode
         self.preprocess = preprocess
         self.shape = (6, 10)
@@ -245,8 +277,17 @@ class ArgusII(ProsthesisSystem):
         self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, r=r,
                                     rot=rot, names=names, etype=DiskElectrode)
 
+        # Built per instance rather than shared between them: a raster binds to
+        # the implant it schedules, and an encoder is a mutable object the
+        # caller may go on to tweak.
+        self.encoder = (AmplitudeEncoder(freq=6 * Hz)
+                        if encoder is _DEVICE_DEFAULT else encoder)
+        self.raster = (SequentialRaster(6, group_dur=2 * ms)
+                       if raster is _DEVICE_DEFAULT else raster)
+
         # Beware of race condition: Stim must be set last, because it requires
-        # indexing into self.electrodes:
+        # indexing into self.electrodes -- and, for a picture, the encoder and
+        # raster set just above:
         self.stim = stim
 
         # Set left/right eye:

@@ -691,8 +691,8 @@ class VideoStimulus(Stimulus):
         """
         # Imported here because `encoders` imports this module:
         from .encoders import AmplitudeEncoder
-        return AmplitudeEncoder(implant=implant, amp_range=amp_range,
-                                freq=freq, **kwargs).encode(self)
+        return AmplitudeEncoder(amp_range=amp_range, freq=freq,
+                                **kwargs).encode(self, implant=implant)
 
     def __iter__(self):
         """Iterate over all frames in self.data"""

@@ -943,8 +943,8 @@ def test_Model_predict_percept_frame_clock(fps):
     # to do with the source.
     implant = ArgusI()
     vid = VideoStimulus(np.random.rand(4, 4, 6), metadata={'fps': fps})
-    implant.stim = AmplitudeEncoder(implant, amp_range=(0, 50),
-                                    freq=60).encode(vid)
+    implant.stim = AmplitudeEncoder(amp_range=(0, 50), freq=60).encode(
+        vid, implant=implant)
     model = Model(temporal=ValidTemporalModel()).build()
     percept = model.predict_percept(implant)
     npt.assert_equal(percept.data.shape[-1], 6)
@@ -985,8 +985,8 @@ def test_Model_predict_percept_frame_peak():
     implant = ArgusI()
     rng = np.random.default_rng(0)
     vid = VideoStimulus(rng.random((4, 4, 16)), metadata={'fps': 29.97})
-    implant.stim = AmplitudeEncoder(implant, amp_range=(0, 50),
-                                    freq=20).encode(vid)
+    implant.stim = AmplitudeEncoder(amp_range=(0, 50), freq=20).encode(
+        vid, implant=implant)
     model = Model(temporal=FadingTemporal(tau=100)).build()
     peak = model.predict_percept(implant)
     # Same frames, but sampled only at the instant each one ends:
@@ -1119,8 +1119,8 @@ def test_find_threshold_keeps_encoder_metadata():
     vid = VideoStimulus(rng.random((4, 4, 6)), metadata={'fps': 29.97})
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        implant.stim = AmplitudeEncoder(implant, amp_range=(0, 50),
-                                        freq=60).encode(vid)
+        implant.stim = AmplitudeEncoder(amp_range=(0, 50), freq=60).encode(
+            vid, implant=implant)
     n_frames = implant.stim.metadata['encoder']['n_frames']
 
     seen = []
@@ -1340,16 +1340,16 @@ def test_model_requires_a_current_stimulus():
     composite = Model(spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
                                                 step=1),
                       temporal=FadingTemporal()).build()
-    # `implant.stim = img` is refused by the implant itself (see
-    # `ProsthesisSystem.stimulus_unit`), so the model-side guard is reached
-    # through an implant that claims to deliver something else. Both are
-    # needed: the implant one catches the assignment that was actually wrong,
-    # and this one is what no model may be talked out of.
+    # `implant.stim = img` is either encoded by the implant or refused by it
+    # (see `ProsthesisSystem.stimulus_unit`), so the model-side guard is
+    # reached through an implant that claims to deliver something else. Both
+    # are needed: the implant one catches the assignment that was actually
+    # wrong, and this one is what no model may be talked out of.
     class Projector(ArgusII):
         stimulus_unit = dimensionless
 
     with pytest.raises(DimensionMismatchError):
-        ArgusII(preprocess=False, stim=img)
+        ArgusII(preprocess=False, encoder=None, stim=img)
     implant = Projector(preprocess=False, stim=img)
     npt.assert_equal(implant.stim.unit, dimensionless)
     for model in (spatial, composite):
@@ -1361,7 +1361,8 @@ def test_model_requires_a_current_stimulus():
         temporal.predict_percept(implant.stim)
 
     # Encoded, it goes through:
-    encoded = AmplitudeEncoder(ArgusII(), amp_range=(0, 50)).encode(img)
+    encoded = AmplitudeEncoder(amp_range=(0, 50)).encode(
+        img, implant=ArgusII(raster=None))
     npt.assert_equal(encoded.unit, uA)
     for model in (spatial, composite):
         npt.assert_equal(model.predict_percept(ArgusII(stim=encoded)) is None,
@@ -1459,9 +1460,14 @@ def test_model_units_are_a_numerical_contract():
         [0.0, 0.005], rtol=1e-12)
 
     # The dimension guard reads the declared unit: mA and uA are the same
-    # dimension, so an ordinary stimulus is fine and a picture is not.
+    # dimension, so an ordinary stimulus is fine and a picture is not. An
+    # implant with an encoder never carries one, so this needs an implant that
+    # claims to deliver gray levels:
+    class Projector(ArgusII):
+        stimulus_unit = dimensionless
+
     with pytest.raises(DimensionMismatchError):
-        milli.predict_percept(ArgusII(preprocess=False, stim=ImageStimulus(
+        milli.predict_percept(Projector(preprocess=False, stim=ImageStimulus(
             np.linspace(0, 1, 16).reshape((4, 4)))))
 
 

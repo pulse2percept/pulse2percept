@@ -37,7 +37,7 @@ A typical workflow looks roughly like this::
 
     image / video
          |
-         |  optional StimulusEncoder
+         |  optional StimulusEncoder (usually the implant's own)
          v
       Stimulus
          |
@@ -356,18 +356,25 @@ from that stimulus.
 Do I need a StimulusEncoder?
 ----------------------------
 
-No.
+Only if you are assigning image or video content to an implant that does not
+already have one.
 
-Use a :py:class:`~pulse2percept.stimuli.StimulusEncoder` when you want to
-translate image or video content into electrical stimulation. For example,
+A :py:class:`~pulse2percept.stimuli.StimulusEncoder` translates image or video
+content into electrical stimulation. For example,
 :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` maps image intensity onto
 pulse amplitude, whereas
 :py:class:`~pulse2percept.stimuli.FrequencyEncoder` maps it onto pulse
 frequency.
 
+Devices whose video processing is known carry an encoder of their own, in
+which case ``implant.stim = image`` encodes for you.
+:py:class:`~pulse2percept.implants.ArgusII` is one of them. Assign a different
+encoder to ``implant.encoder`` to say how the encoding should be done, or
+``None`` to switch it off.
+
 If you already know the electrical stimulation you want to simulate, construct
 a :py:class:`~pulse2percept.stimuli.Stimulus` directly or assign stimulation
-to the implant. No encoder is required.
+to the implant. An electrical stimulus never goes through the encoder.
 
 .. important::
 
@@ -492,16 +499,25 @@ For example:
 .. code-block:: python
 
     from pulse2percept.implants import ArgusII
-    from pulse2percept.stimuli import AmplitudeEncoder, BostonTrain
+    from pulse2percept.stimuli import BostonTrain
+
+    implant = ArgusII(stim=BostonTrain())
+
+:py:class:`~pulse2percept.implants.ArgusII` comes with an encoder of its own,
+so the video is encoded on assignment. To say how, give the implant a
+different one:
+
+.. code-block:: python
+
+    from pulse2percept.stimuli import AmplitudeEncoder
     from pulse2percept.units import uA, Hz
 
-    implant = ArgusII()
+    implant = ArgusII(encoder=AmplitudeEncoder(amp_range=(0, 50 * uA),
+                                               freq=20 * Hz))
+    implant.stim = BostonTrain()
 
-    encoder = AmplitudeEncoder(implant, amp_range=(0, 50 * uA), freq=20 * Hz)
-    implant.stim = encoder.encode(BostonTrain())
-
-The resulting ``implant.stim`` is electrical stimulation and can be passed to
-a computational model in the usual way.
+Either way the resulting ``implant.stim`` is electrical stimulation and can be
+passed to a computational model in the usual way.
 
 .. note::
 

@@ -99,18 +99,18 @@ video.resize((40, 40)).rotate(10).invert().filter('median').play()
 #
 # :py:class:`~pulse2percept.stimuli.VideoStimulus` can be used in
 # combination with any :py:meth:`~pulse2percept.implants.ProsthesisSystem`.
-# To make this work, the stimulus needs to have the same number of pixels as
-# the implant has electrodes.
+# What an implant delivers is current, though, not gray levels, so the video
+# has to be encoded first: sampled at the electrode locations, and turned into
+# a pulse train whose amplitude says how bright each pixel was.
 #
-# In most cases, the implant contains a rectangular grid of electrodes, so
-# we just have to resize the video first so that the number of pixels in each
-# frame of the video matches the number of electrodes in the implant:
+# An implant that knows how its device does this carries a
+# :py:class:`~pulse2percept.stimuli.StimulusEncoder` of its own, and encodes
+# whatever video is assigned to it. Here we replace Argus II's own 6 Hz encoder
+# with a 30 Hz one, so that every frame of this 30 fps video gets a pulse:
 
-implant = p2p.implants.ArgusII()
-# Assign the resized video to the implant, encoded into current: a model reads
-# current, and `encode` is what says how much of it a gray level stands for
-# (here 0-50 uA, as a 30 Hz pulse train that keeps up with the frame rate).
-implant.stim = video.resize(implant.shape).encode(freq=30)
+implant = p2p.implants.ArgusII(
+    encoder=p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50), freq=30))
+implant.stim = video
 
 ##############################################################################
 # Then you can feed the video directly into any of the available models

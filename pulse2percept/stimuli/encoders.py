@@ -99,12 +99,20 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
 
     All encoders share the same two-step structure:
 
-    1.  Reduce the source to one gray level per electrode per frame. If the
-        encoder was given an ``implant``, the source is first sampled at the
-        electrode locations, so that everything downstream works at electrode
-        resolution.
+    1.  Reduce the source to one gray level per electrode per frame. If
+        :py:meth:`encode` was given an ``implant``, the source is first sampled
+        at the electrode locations, so that everything downstream works at
+        electrode resolution.
     2.  Map those gray levels onto pulse train parameters (``_modulate``),
         then assemble the pulse trains (``_assemble``).
+
+    An encoder describes a *modulation scheme*, not a device: it holds no
+    implant of its own, and the implant it encodes for is named at
+    :py:meth:`encode` time (or, more usually, by assigning the encoder to
+    :py:attr:`~pulse2percept.implants.ProsthesisSystem.encoder` and letting the
+    implant do it). Everything about the device -- which electrodes there are,
+    where they sit, and how they take turns -- therefore comes from that one
+    implant, including the :py:class:`~pulse2percept.implants.Raster`.
 
     Subclasses only implement ``_modulate``; everything else is provided here.
 
@@ -112,10 +120,6 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        The implant to encode for. Its electrode locations are used to sample
-        the source, and its electrode names label the resulting stimulus.
-        If None, every pixel of the source is treated as its own electrode.
     phase_dur : float, optional
         Duration (ms) of the cathodic/anodic phase of each pulse.
     interphase_dur : float, optional
@@ -157,15 +161,6 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         resolution of the device's input stage. Gray levels are rounded onto
         ``n_levels`` values evenly spaced over [0, 1] before being modulated.
         If None, they are taken at full precision.
-    raster : :py:class:`~pulse2percept.implants.Raster`, optional
-        How the stimulator takes turns between electrodes it cannot drive at
-        the same time. Each group starts its pulse a fixed ``group_dur`` behind
-        the group before it, so no two groups are ever active at once. Where
-        electrodes run at *differing* rates they would drift into one another,
-        so there their periods are pinned to whole sweeps; electrodes sharing
-        one rate cannot drift and keep their period exactly. If None, the
-        ``implant``'s own raster is used, and failing that every electrode
-        fires on the same schedule.
     frame_dur : float, optional
         Duration (ms) of a single frame. If None, it is inferred from the
         source's frame rate (or, failing that, from its time axis). A source
@@ -197,13 +192,12 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
        does not matter. A dimensionless waveform is a perfectly good template.
 
     """
-    __slots__ = ('implant', 'phase_dur', 'interphase_dur', 'cathodic_first',
-                 'pulse', 'clock', 'n_levels', 'raster', 'frame_dur',
-                 'stretch')
+    __slots__ = ('phase_dur', 'interphase_dur', 'cathodic_first', 'pulse',
+                 'clock', 'n_levels', 'frame_dur', 'stretch')
 
-    def __init__(self, implant=None, phase_dur=0.46, interphase_dur=0,
+    def __init__(self, phase_dur=0.46, interphase_dur=0,
                  cathodic_first=True, pulse=None, clock=None, n_levels=None,
-                 raster=None, frame_dur=None, stretch=False):
+                 frame_dur=None, stretch=False):
         # Strip the units first; every schedule computed below is in plain
         # milliseconds, as it has always been. `pulse` is deliberately not
         # checked: only its shape is borrowed, and its amplitude is normalized
@@ -248,25 +242,22 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
             _finite('frame_dur', frame_dur)
             if frame_dur <= 0:
                 raise ValueError("'frame_dur' must be positive.")
-        self.implant = implant
         self.phase_dur = phase_dur
         self.interphase_dur = interphase_dur
         self.cathodic_first = cathodic_first
         self.pulse = pulse
         self.clock = clock
         self.n_levels = n_levels
-        self.raster = raster
         self.frame_dur = frame_dur
         self.stretch = stretch
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        return {'implant': self.implant, 'phase_dur': self.phase_dur,
+        return {'phase_dur': self.phase_dur,
                 'interphase_dur': self.interphase_dur,
                 'cathodic_first': self.cathodic_first, 'pulse': self.pulse,
                 'clock': self.clock, 'n_levels': self.n_levels,
-                'raster': self.raster, 'frame_dur': self.frame_dur,
-                'stretch': self.stretch}
+                'frame_dur': self.frame_dur, 'stretch': self.stretch}
 
     @abstractmethod
     def _modulate(self, gray):
@@ -288,7 +279,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def _as_frames(self, source):
+    def _as_frames(self, source, implant=None):
         """Reduce the source to one gray level per electrode per frame
 
         Returns
@@ -321,7 +312,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         # does not necessarily carry it along.
         fps = _fps(source.metadata)
         stim = source
-        if (self.implant is not None and
+        if (implant is not None and
                 isinstance(stim, (ImageStimulus, VideoStimulus))):
             # Sample the source at the electrode locations. This is the same
             # step that assigning an image or a video to `implant.stim` would
@@ -329,7 +320,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
             # electrode resolution rather than at pixel resolution. It is also
             # where RGB becomes gray. Row count is not a usable test of whether
             # a source is already in electrode coordinates, so always reshape:
-            stim = self.implant.reshape_stim(stim)
+            stim = implant.reshape_stim(stim)
         # `values` rather than `data`, to say out loud that these are the
         # dimensionless numbers the modulation below is a function of:
         gray = np.clip(np.asarray(stim.values(dimensionless),
@@ -441,7 +432,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
                              f"or lower the frequency.")
         return firing, period
 
-    def _raster_grid(self, electrodes, period, firing, pulse_len):
+    def _raster_grid(self, electrodes, period, firing, pulse_len, raster):
         """The slot each electrode may pulse in, and the raster sweep
 
         The sweep has to fit inside the shortest pulse period anyone asked for.
@@ -460,11 +451,6 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
             when there is nothing to multiplex.
 
         """
-        # An explicit raster wins over the implant's own, so that a raster can
-        # be tried out without modifying the implant:
-        raster = self.raster
-        if raster is None:
-            raster = getattr(self.implant, 'raster', None)
         zero = np.zeros(len(electrodes), dtype=np.float64)
         if raster is None or raster.n_groups < 2 or not np.any(firing):
             return zero, None
@@ -643,7 +629,8 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         t, keep = np.unique(t, return_index=True)
         return np.interp(ticks, t, v[keep])
 
-    def _assemble(self, amp, freq, electrodes, frame_time, frame_dur):
+    def _assemble(self, amp, freq, electrodes, frame_time, frame_dur,
+                  implant=None):
         """Build the pulse trains for every electrode and frame
 
         Electrodes that pulse at the same times share the shape of their
@@ -681,7 +668,10 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         # keeps running ("firing"), so it stays in phase with its neighbors,
         # but it costs no pulses and no time points:
         active = firing & (amp != 0)
-        offset, cycle = self._raster_grid(electrodes, period, firing, pulse_len)
+        # The implant is the one source of truth for how the device schedules
+        # its electrodes:
+        offset, cycle = self._raster_grid(electrodes, period, firing, pulse_len,
+                                          getattr(implant, 'raster', None))
         if cycle is not None and not _all_equal(period[firing]):
             # Electrodes on different periods drift relative to one another,
             # and two groups would eventually land on the same instant. Pinning
@@ -739,7 +729,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
                 f"less on its own, because two electrodes on the same gray "
                 f"level still pulse at different times.",
                 category=UserWarning)
-        if n_el * n_time > _BIG_STIM and self.implant is None:
+        if n_el * n_time > _BIG_STIM and implant is None:
             _warn_external(
                 f"Encoding {n_el} electrodes x {n_time} time points will "
                 f"allocate {n_el * n_time * 4 / 1e9:.1f} GB. Pass 'implant' "
@@ -770,7 +760,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
                                     'n_schedules': len(uniq)}
         return stim
 
-    def encode(self, source):
+    def encode(self, source, implant=None):
         """Encode an image or a video as a train of electrical pulses
 
         Parameters
@@ -782,6 +772,19 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
             be dimensionless: this method is the boundary at which a picture
             becomes stimulation, so an electrical stimulus is not a valid
             source for it.
+        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+            The implant to encode for. Its electrode locations are used to
+            sample the source, its electrode names label the resulting
+            stimulus, and its
+            :py:attr:`~pulse2percept.implants.ProsthesisSystem.raster` decides
+            which electrodes may pulse when. If None, every pixel of the source
+            is treated as its own electrode and every electrode fires on the
+            same schedule.
+
+            .. versionchanged:: 0.10.0
+                The implant is named here rather than owned by the encoder, so
+                that one encoder can be used for several implants and so that
+                the implant is the only place device scheduling is described.
 
         Returns
         -------
@@ -797,7 +800,8 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
             If ``source`` is not dimensionless.
 
         """
-        gray, electrodes, frame_time, frame_dur = self._as_frames(source)
+        gray, electrodes, frame_time, frame_dur = self._as_frames(source,
+                                                                 implant)
         if self.stretch:
             gray = gray - gray.min()
             peak = gray.max()
@@ -809,7 +813,8 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
             steps = self.n_levels - 1
             gray = np.round(gray * steps) / steps
         amp, freq = self._modulate(gray)
-        return self._assemble(amp, freq, electrodes, frame_time, frame_dur)
+        return self._assemble(amp, freq, electrodes, frame_time, frame_dur,
+                              implant)
 
 
 class AmplitudeEncoder(StimulusEncoder):
@@ -831,9 +836,6 @@ class AmplitudeEncoder(StimulusEncoder):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        The implant to encode for; see
-        :py:class:`~pulse2percept.stimuli.StimulusEncoder`.
     amp_range : (min_amp, max_amp), optional
         Range of pulse amplitudes (uA). A gray level of 0 maps onto
         ``min_amp`` and a gray level of 1 onto ``max_amp``.
@@ -867,14 +869,19 @@ class AmplitudeEncoder(StimulusEncoder):
 
     >>> import pulse2percept as p2p
     >>> implant = p2p.implants.ArgusII()
-    >>> encoder = p2p.stimuli.AmplitudeEncoder(implant, amp_range=(0, 50))
-    >>> implant.stim = encoder.encode(p2p.stimuli.BostonTrain())
+    >>> implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
+    >>> implant.stim = p2p.stimuli.BostonTrain()
+
+    The same thing spelled out, for an implant that is not to keep the encoder:
+
+    >>> encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
+    >>> stim = encoder.encode(p2p.stimuli.BostonTrain(), implant=implant)
 
     """
     __slots__ = ('amp_range', 'freq')
 
-    def __init__(self, implant=None, amp_range=(0, 50), freq=20, **kwargs):
-        super().__init__(implant=implant, **kwargs)
+    def __init__(self, amp_range=(0, 50), freq=20, **kwargs):
+        super().__init__(**kwargs)
         # See `StimulusEncoder.__init__`. `amp_range` is converted element by
         # element, so its two endpoints may be given in different units:
         amp_range = as_value(amp_range, uA, 'amp_range')
@@ -954,9 +961,6 @@ class FrequencyEncoder(StimulusEncoder):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        The implant to encode for; see
-        :py:class:`~pulse2percept.stimuli.StimulusEncoder`.
     freq_range : (min_freq, max_freq), optional
         Range of pulse train frequencies (Hz). A gray level of 0 maps onto
         ``min_freq`` and a gray level of 1 onto ``max_freq``. A frequency of 0
@@ -1000,19 +1004,21 @@ frame_dur, stretch
     Examples
     --------
     Encode a movie for Argus II at 50 uA, mapping gray levels onto 0-300 Hz on
-    a 1 ms stimulator clock:
+    a 1 ms stimulator clock. A 300 Hz period is 3.3 ms, which Argus II's own
+    six-group 2 ms raster sweep does not fit into, so this device drives every
+    electrode at once:
 
     >>> import pulse2percept as p2p
-    >>> implant = p2p.implants.ArgusII()
-    >>> encoder = p2p.stimuli.FrequencyEncoder(implant, freq_range=(0, 300),
-    ...                                        amp=50, clock=1)
-    >>> implant.stim = encoder.encode(p2p.stimuli.BostonTrain())
+    >>> implant = p2p.implants.ArgusII(raster=None)
+    >>> implant.encoder = p2p.stimuli.FrequencyEncoder(freq_range=(0, 300),
+    ...                                                amp=50, clock=1)
+    >>> implant.stim = p2p.stimuli.BostonTrain()
 
     """
     __slots__ = ('freq_range', 'amp')
 
-    def __init__(self, implant=None, freq_range=(0, 300), amp=50, **kwargs):
-        super().__init__(implant=implant, **kwargs)
+    def __init__(self, freq_range=(0, 300), amp=50, **kwargs):
+        super().__init__(**kwargs)
         # See `StimulusEncoder.__init__`:
         freq_range = as_value(freq_range, Hz, 'freq_range')
         amp = as_value(amp, uA, 'amp')

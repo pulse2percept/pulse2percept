@@ -261,15 +261,18 @@ implant.stim = logo_dilate.trim().resize(implant.shape).encode()
 #
 # ``encode`` is a shorthand for
 # :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`, which offers the full
-# set of options. In particular, passing it an ``implant`` samples the image at
-# the electrode locations *before* building the pulse trains, which for a video
-# is the difference between a stimulus of a few hundred kilobytes and one of a
-# few hundred megabytes:
+# set of options. Give one to an implant and the implant encodes whatever
+# picture is assigned to it -- sampling it at the electrode locations *before*
+# building the pulse trains, which for a video is the difference between a
+# stimulus of a few hundred kilobytes and one of a few hundred megabytes:
 #
 # .. code-block:: python
 #
-#     encoder = p2p.stimuli.AmplitudeEncoder(implant, amp_range=(0, 50))
-#     implant.stim = encoder.encode(p2p.stimuli.BostonTrain())
+#     implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
+#     implant.stim = p2p.stimuli.BostonTrain()
+#
+# :py:class:`~pulse2percept.implants.ArgusII` brings one along already, so
+# ``p2p.implants.ArgusII(stim=p2p.stimuli.BostonTrain())`` is the whole setup.
 #
 # The other way to encode a gray level is as a pulse *rate* at fixed amplitude,
 # which is what :py:class:`~pulse2percept.stimuli.FrequencyEncoder` does. It is
@@ -279,9 +282,9 @@ implant.stim = logo_dilate.trim().resize(implant.shape).encode()
 #
 # .. code-block:: python
 #
-#     encoder = p2p.stimuli.FrequencyEncoder(implant, freq_range=(0, 300),
-#                                            amp=50, clock=1)
-#     implant.stim = encoder.encode(p2p.stimuli.BostonTrain())
+#     implant.encoder = p2p.stimuli.FrequencyEncoder(freq_range=(0, 300),
+#                                                    amp=50, clock=1)
+#     implant.stim = p2p.stimuli.BostonTrain()
 #
 # A real stimulator usually cannot drive every electrode at once, because the
 # current it can source at any instant is limited. Give the implant a
@@ -295,7 +298,19 @@ implant.stim = logo_dilate.trim().resize(implant.shape).encode()
 #
 #     implant.max_current = 1000  # uA, summed over electrodes
 #     implant.raster = p2p.implants.SequentialRaster(6)  # one row at a time
-#     implant.stim = p2p.stimuli.AmplitudeEncoder(implant).encode(video)
+#     implant.stim = video
+#
+# The raster belongs to the implant, and is the only place the schedule is
+# described: assigning one binds it to that implant, so
+# :py:class:`~pulse2percept.implants.CheckerboardRaster` can work its pattern
+# out from where the electrodes actually are, and
+# :py:meth:`~pulse2percept.implants.Raster.plot` can draw it without being
+# told what to draw:
+#
+# .. code-block:: python
+#
+#     implant.raster = p2p.implants.CheckerboardRaster(5)
+#     implant.raster.plot()
 #
 # Using the image as input to a spatiotemporal model
 # ---------------------------------------------------

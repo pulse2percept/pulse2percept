@@ -128,8 +128,9 @@ def test_every_spelling_builds_the_same_object():
           'Stimulus', rtol=1e-6)
     _same(lambda a: ProsthesisSystem(ArgusII().earray, max_current=a),
           amp, amps, lambda p: p.max_current, 'ProsthesisSystem.max_current')
-    _same(lambda a: AmplitudeEncoder(ArgusII(), amp_range=(0, a), freq=20)
-          .encode(ImageStimulus(np.linspace(0, 1, 36).reshape((6, 6)))),
+    _same(lambda a: AmplitudeEncoder(amp_range=(0, a), freq=20).encode(
+              ImageStimulus(np.linspace(0, 1, 36).reshape((6, 6))),
+              implant=ArgusII()),
           amp, amps, lambda s: s.data, 'AmplitudeEncoder.amp_range',
           rtol=1e-6)
 
@@ -223,8 +224,10 @@ def test_the_whole_rejection_matrix():
 
     # dimensionless -> implant: an implant delivers current, so a picture is
     # refused where it is assigned rather than where it is eventually read.
+    # (Argus II ships with an encoder, which would otherwise turn the picture
+    # into the current the implant does deliver.)
     with pytest.raises(DimensionMismatchError):
-        ArgusII(preprocess=False, stim=img)
+        ArgusII(preprocess=False, encoder=None, stim=img)
 
     # dimensionless -> model: gray levels are not small currents. The implant
     # above is the outer boundary; this is the one behind it, so it is reached
@@ -237,7 +240,7 @@ def test_the_whole_rejection_matrix():
 
     # current -> encoder: an encoder is what *makes* current out of pictures.
     with pytest.raises(DimensionMismatchError):
-        AmplitudeEncoder(ArgusII(), amp_range=(0, 50)).encode(current)
+        AmplitudeEncoder(amp_range=(0, 50)).encode(current, implant=ArgusII())
 
     # visual angle -> physical coordinate: retinotopy is a map, not a factor.
     with pytest.raises(DimensionMismatchError):

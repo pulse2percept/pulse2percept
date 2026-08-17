@@ -145,9 +145,10 @@ field you are, and on which retinotopic map you believe in. That is what a
     x_um, y_um = Watson2014Map().dva_to_ret(2 * dva, 3 * dva)
 
 **Gray levels are not small currents.** An image or a video is dimensionless,
-and a model that stimulates tissue will refuse one, as will an electrical
-implant. A :py:class:`~pulse2percept.stimuli.StimulusEncoder` is what says how
-much current a gray level stands for:
+and a model that stimulates tissue will refuse one. A
+:py:class:`~pulse2percept.stimuli.StimulusEncoder` is what says how much
+current a gray level stands for, and an implant that has one encodes on
+assignment:
 
 .. code-block:: python
 
@@ -156,14 +157,16 @@ much current a gray level stands for:
     from pulse2percept.models import ScoreboardModel
 
     img = ImageStimulus('path-to-image.png')
-    stim = AmplitudeEncoder(ArgusII(), amp_range=(0, 50)).encode(img)
+
+    implant = ArgusII(encoder=AmplitudeEncoder(amp_range=(0, 50)))
+    implant.stim = img            # encoded here, and now measured in uA
 
     model = ScoreboardModel().build()
-    percept = model.predict_percept(ArgusII(stim=stim))
+    percept = model.predict_percept(implant)
 
-Assigning the image itself raises, rather than reading its gray levels as
-microamps. There is no default answer to *how much* current a gray level
-stands for, and choosing one is what an encoder is for.
+Assigning the image to an implant *without* an encoder raises, rather than
+reading its gray levels as microamps. There is no default answer to *how much*
+current a gray level stands for, and choosing one is what an encoder is for.
 
 Shorthands that are not conversions
 -----------------------------------
