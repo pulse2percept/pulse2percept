@@ -6,13 +6,11 @@ Visual Prostheses
 
 An implant in pulse2percept describes **where stimulation is delivered**:
 the electrodes, their geometry, their location, and the stimulus assigned to
-them. It does not by itself predict what someone sees.
-
-That separation is important:
+them. It fits into the modeling pipeline as follows:
 
 ::
 
-    image / video -> Encoder -> electrical Stimulus -> implant -> model -> Percept
+    image / video -> Encoder -> electrical Stimulus -> IMPLANT -> model -> Percept
                                                     geometry    physiology
 
 The implant says where the stimulation goes. The
@@ -64,20 +62,14 @@ For an epiretinal implant such as Argus II, a typical simulation looks like:
 
     import pulse2percept as p2p
 
-    implant = p2p.implants.ArgusII()
-
-    encoder = p2p.stimuli.AmplitudeEncoder(
-        implant, amp_range=(0, 50), freq=20
-    )
-    implant.stim = encoder.encode(p2p.stimuli.BostonTrain())
-
+    implant = p2p.implants.ArgusII(stim={'A1': 50)
     model = p2p.models.AxonMapModel().build()
     percept = model.predict_percept(implant)
 
-    percept.play()
+    percept.plot()
 
 Changing the implant changes the electrode geometry. Changing the model changes
-the assumptions about how stimulation becomes vision.
+the assumptions about how pulses become percepts.
 
 Available implants
 ------------------
