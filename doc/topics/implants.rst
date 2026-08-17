@@ -6,12 +6,11 @@ Visual Prostheses
 
 An implant in pulse2percept describes **where stimulation is delivered**:
 the electrodes, their geometry, their location, and the stimulus assigned to
-them. It fits into the modeling pipeline as follows:
+them. It fits into the modeling pipeline like so:
 
 ::
 
-    image / video -> Encoder -> electrical Stimulus -> IMPLANT -> model -> Percept
-                                                    geometry    physiology
+    electrical Stimulus -> implant -> model -> Percept
 
 The implant says where the stimulation goes. The
 :ref:`percept model <topics-models>` says how that stimulation is transformed
@@ -62,70 +61,289 @@ For an epiretinal implant such as Argus II, a typical simulation looks like:
 
     import pulse2percept as p2p
 
-    implant = p2p.implants.ArgusII(stim={'A1': 50)
+    implant = p2p.implants.ArgusII()
+
+    encoder = p2p.stimuli.AmplitudeEncoder(
+        implant, amp_range=(0, 50), freq=20
+    )
+    implant.stim = encoder.encode(p2p.stimuli.BostonTrain())
+
     model = p2p.models.AxonMapModel().build()
     percept = model.predict_percept(implant)
 
-    percept.plot()
+    percept.play()
 
 Changing the implant changes the electrode geometry. Changing the model changes
-the assumptions about how pulses become percepts.
+the assumptions about how stimulation becomes vision.
 
 Available implants
 ------------------
 
 pulse2percept includes software representations of several published visual
-prostheses:
+prostheses. The table below emphasizes **array geometry** and **which model to
+start with**, rather than device manufacturer.
 
 .. list-table::
    :header-rows: 1
+   :widths: 18 22 18 42
 
    * - Implant
+     - Array
      - Location
      - Suggested starting model
+
    * - :py:class:`~pulse2percept.implants.ArgusI`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.ArgusI().plot(annotate=False)
+          plt.axis("off")
+
      - Epiretinal
      - :py:class:`~pulse2percept.models.AxonMapModel`
+
    * - :py:class:`~pulse2percept.implants.ArgusII`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.ArgusII().plot(annotate=False)
+          plt.axis("off")
+
      - Epiretinal
      - :py:class:`~pulse2percept.models.AxonMapModel`
+
    * - :py:class:`~pulse2percept.implants.IMIE`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.IMIE().plot(annotate=False)
+          plt.axis("off")
+
      - Epiretinal
      - :py:class:`~pulse2percept.models.AxonMapModel`
+
    * - :py:class:`~pulse2percept.implants.AlphaIMS`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.AlphaIMS().plot(annotate=False)
+          plt.axis("off")
+
      - Subretinal
      - :py:class:`~pulse2percept.models.ScoreboardModel`
+
    * - :py:class:`~pulse2percept.implants.AlphaAMS`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.AlphaAMS().plot(annotate=False)
+          plt.axis("off")
+
      - Subretinal
      - :py:class:`~pulse2percept.models.ScoreboardModel`
+
    * - :py:class:`~pulse2percept.implants.PRIMA`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.PRIMA().plot(annotate=False)
+          plt.axis("off")
+
      - Subretinal
      - :py:class:`~pulse2percept.models.ScoreboardModel`
+
    * - :py:class:`~pulse2percept.implants.PRIMA75`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.PRIMA75().plot(annotate=False)
+          plt.axis("off")
+
      - Subretinal
      - :py:class:`~pulse2percept.models.ScoreboardModel`
+
    * - :py:class:`~pulse2percept.implants.PRIMA55`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.PRIMA55().plot(annotate=False)
+          plt.axis("off")
+
      - Subretinal
      - :py:class:`~pulse2percept.models.ScoreboardModel`
+
    * - :py:class:`~pulse2percept.implants.PRIMA40`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.PRIMA40().plot(annotate=False)
+          plt.axis("off")
+
      - Subretinal
      - :py:class:`~pulse2percept.models.ScoreboardModel`
+
    * - :py:class:`~pulse2percept.implants.BVT24`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.BVT24().plot(annotate=False)
+          plt.axis("off")
+
      - Suprachoroidal
      - :py:class:`~pulse2percept.models.ScoreboardModel`
+
    * - :py:class:`~pulse2percept.implants.BVT44`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.BVT44().plot(annotate=False)
+          plt.axis("off")
+
      - Suprachoroidal
      - :py:class:`~pulse2percept.models.ScoreboardModel`
+
    * - :py:class:`~pulse2percept.implants.cortex.Orion`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.cortex.Orion().plot(annotate=False)
+          plt.axis("off")
+
      - Cortical
      - :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
+
    * - :py:class:`~pulse2percept.implants.cortex.Cortivis`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.cortex.Cortivis().plot(annotate=False)
+          plt.axis("off")
+
      - Cortical
      - :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
+
    * - :py:class:`~pulse2percept.implants.cortex.ICVP`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.cortex.ICVP().plot(annotate=False)
+          plt.axis("off")
+
      - Cortical
      - :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
+
    * - :py:class:`~pulse2percept.implants.cortex.Neuralink`
+     -
+       .. plot::
+          :width: 110px
+          :align: center
+          :include-source: false
+          :show-source-link: false
+          :caption:
+
+          import matplotlib.pyplot as plt
+          import pulse2percept as p2p
+          p2p.implants.cortex.Neuralink().plot(annotate=False)
+          plt.axis("off")
+
      - Cortical
      - :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
 
