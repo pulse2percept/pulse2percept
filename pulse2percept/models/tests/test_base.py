@@ -1659,7 +1659,7 @@ def test_spatial_model_reads_modulation_not_pulses():
     npt.assert_equal(percept.data.shape[-1], 1)
     # ... and every electrode the image lights is lit in it, rather than the
     # one raster group that happened to be firing at the sampled instant:
-    lit = implant.spatial_stim.data.ravel() > 0
+    lit = implant._spatial_stim.data.ravel() > 0
     npt.assert_equal(lit.sum() > 10, True)
     groups = implant.raster.groups(implant.electrode_names)
     # No instant of the delivered train ever holds more than one group, so
@@ -1670,7 +1670,7 @@ def test_spatial_model_reads_modulation_not_pulses():
     # Which is what the percept says too: it is the same picture the
     # modulation asked for, run through the model.
     direct = spatial.predict_percept(
-        ArgusII(encoder=None, stim=implant.spatial_stim))
+        ArgusII(encoder=None, stim=implant._spatial_stim))
     npt.assert_almost_equal(percept.data, direct.data)
 
     # A video reports one percept frame per *video* frame:
@@ -1696,7 +1696,7 @@ def test_spatial_model_reads_modulation_not_pulses():
     both.predict_percept(implant)
     npt.assert_array_less(seen[-1], 0)
     # ... and the implant it was handed is untouched by that:
-    npt.assert_equal(implant.spatial_stim is None, False)
+    npt.assert_equal(implant._spatial_stim is None, False)
     # Spatial-only, the same model class reads the modulation instead:
     seen.clear()
     Recording(xrange=(-12, 12), yrange=(-8, 8),
@@ -1707,7 +1707,7 @@ def test_spatial_model_reads_modulation_not_pulses():
     # modulation behind it, so there is nothing to prefer.
     plain = ArgusII(stim={'A1': BiphasicPulseTrain(20, 50, 0.45,
                                                    stim_dur=100)})
-    npt.assert_equal(plain.spatial_stim, None)
+    npt.assert_equal(plain._spatial_stim, None)
     npt.assert_equal(
         spatial.predict_percept(plain).data.shape[-1],
         plain.stim.time.size)
@@ -1725,7 +1725,7 @@ def test_find_threshold_scales_both_representations():
     # The answer is a threshold of what `predict_percept` reports, which is
     # only true if both descriptions were scaled together:
     scaled = ArgusII(encoder=None, stim=Stimulus(
-        implant.spatial_stim.data * amp_th / implant.stim.data.max(),
-        electrodes=implant.spatial_stim.electrodes))
+        implant._spatial_stim.data * amp_th / implant.stim.data.max(),
+        electrodes=implant._spatial_stim.electrodes))
     npt.assert_allclose(model.predict_percept(scaled).data.max(), 50,
                         rtol=0.05)

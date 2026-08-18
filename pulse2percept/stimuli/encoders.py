@@ -104,16 +104,16 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         frame -- sampled at the electrode locations, if :py:meth:`encode` was
         given an ``implant`` -- and map those gray levels onto the amplitude
         and frequency each electrode is to run at (``_modulate``). Nothing
-        here is time-resolved. :py:meth:`encode_spatial` stops at this point.
+        here is time-resolved.
     2.  **Realization.** Turn those parameters into an actual train of pulses
         (``_assemble``), which is where the pulse shape, the pulse clock and
-        the raster come in. :py:meth:`encode` runs both steps.
+        the raster come in.
 
-    The split is not an implementation detail: what the two halves produce are
-    two different things a reader may want. A model with a temporal component
-    integrates pulses and must have the train; one without a temporal
-    component has no way to express a pulse train at all, and reads the
-    modulation instead.
+    :py:meth:`encode` runs both steps and hands back the train. The seam is
+    not only an implementation detail, though: a model with no temporal
+    component has no way to express a pulse train, and reads what came out of
+    the first step instead (see
+    :py:meth:`~pulse2percept.models.SpatialModel.predict_percept`).
 
     An encoder describes a *modulation scheme*, not a device: it holds no
     implant of its own, and the implant it encodes for is named at
@@ -761,7 +761,6 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         time[-1] = total
         stim = Stimulus(data, electrodes=electrodes, time=time)
         stim.metadata['encoder'] = {'kind': type(self).__name__,
-                                    'modulation': False,
                                     'frame_dur': frame_dur,
                                     'n_frames': n_frames,
                                     'frame_time': frame_time,
@@ -812,13 +811,13 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         zero frequency reads as zero amplitude here however high an amplitude
         it was handed. Past that, rate does not survive into this
         representation: what a rate means is a fact about time, and a reader
-        with no clock of its own has no way to express it. It is recorded in
-        the metadata for readers that do.
+        with no clock of its own has no way to express it. So frequency
+        modulation collapses to on/off here, which is the least misleading
+        thing it can do.
         """
         shape = (len(electrodes), frame_time.size)
         amp = np.broadcast_to(np.asarray(amp, dtype=np.float32), shape)
-        freq = np.ascontiguousarray(
-            np.broadcast_to(np.asarray(freq, dtype=np.float64), shape))
+        freq = np.broadcast_to(np.asarray(freq, dtype=np.float64), shape)
         data = np.where(freq > 0, amp, np.float32(0)).astype(np.float32)
         # A source with a single frame has no time axis of its own, and gets
         # none here either: what it asks for is one steady thing, and saying so
@@ -831,61 +830,21 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         else:
             stim = Stimulus(data.ravel(), electrodes=electrodes)
         stim.metadata['encoder'] = {'kind': type(self).__name__,
-                                    'modulation': True,
                                     'frame_dur': frame_dur,
                                     'n_frames': int(frame_time.size),
-                                    'frame_time': frame_time,
-                                    'freq': freq}
+                                    'frame_time': frame_time}
         return stim
 
     def _encode_both(self, source, implant=None):
-        """Both representations of one source, sharing the modulation step
+        """Both descriptions of one source, sharing the modulation step
 
-        What an implant wants when a picture is assigned to it: sampling the
-        source at the electrodes is the expensive half of encoding, and doing
-        it once for :py:meth:`encode` and again for :py:meth:`encode_spatial`
-        would be paying for it twice.
+        What an implant needs when a picture is assigned to it: the modulation
+        the source asks for and the pulse train realizing it. Sampling the
+        source at the electrodes is the expensive half of encoding, so the two
+        are built from one pass over it rather than two.
         """
         mod = self._modulation(source, implant)
         return self._as_spatial(*mod), self._assemble(*mod, implant=implant)
-
-    def encode_spatial(self, source, implant=None):
-        """Encode an image or a video as the modulation it asks each electrode
-        for
-
-        The *spatial* half of :py:meth:`encode`: one amplitude per electrode
-        per frame of the source, and no pulse train. Nothing that belongs to
-        the device's timing is in it -- no pulse shape, no pulse clock, no
-        raster -- because none of those can be read by anything that has no
-        clock of its own.
-
-        This is what a purely spatial model consumes (see
-        :py:meth:`~pulse2percept.models.SpatialModel.predict_percept`). Handing
-        such a model the delivered pulse train instead would have it report the
-        stimulus one raster slot at a time, which is a picture of the schedule
-        rather than of the image.
-
-        Parameters
-        ----------
-        source : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The image or video to encode; see :py:meth:`encode`.
-        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-            The implant to encode for; see :py:meth:`encode`. Its raster plays
-            no part here, since a raster is a fact about time.
-
-        Returns
-        -------
-        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-            One row per electrode and one column per frame, in microamps. A
-            single-frame source (an image) comes back without a time axis. The
-            per-electrode pulse frequency is recorded under
-            ``metadata['encoder']['freq']``, for readers that can express a
-            rate.
-
-        .. versionadded:: 0.10.0
-
-        """
-        return self._as_spatial(*self._modulation(source, implant))
 
     def encode(self, source, implant=None):
         """Encode an image or a video as a train of electrical pulses
@@ -925,11 +884,6 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         ------
         :py:class:`~pulse2percept.units.DimensionMismatchError`
             If ``source`` is not dimensionless.
-
-        See Also
-        --------
-        encode_spatial : the same source as the modulation it asks for, with
-                         none of the device's timing in it.
 
         """
         return self._assemble(*self._modulation(source, implant),

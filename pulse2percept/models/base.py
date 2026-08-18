@@ -263,15 +263,14 @@ def _spatial_input(implant):
     stimulus one instant at a time, so an encoded image comes out as a
     sequence of raster slots rather than as the image.
 
-    So where the encoder left the modulation behind the delivered train (see
-    :py:attr:`~pulse2percept.implants.ProsthesisSystem.spatial_stim`), that is
-    what a spatial model reads: one amplitude per electrode per frame of the
-    source, which is exactly as much of the stimulus as such a model can say
-    anything about. Everything else -- a stimulus assigned as current, an
-    implant with no encoder -- has only the one description of itself, and it
-    is used unchanged.
+    So where the implant's encoder left the modulation behind the delivered
+    train (``_spatial_stim``), that is what a spatial model reads: one
+    amplitude per electrode per frame of the source, which is exactly as much
+    of the stimulus as such a model can say anything about. Everything else --
+    a stimulus assigned as current, an implant with no encoder -- has only the
+    one description of itself, and it is used unchanged.
     """
-    spatial = getattr(implant, 'spatial_stim', None)
+    spatial = getattr(implant, '_spatial_stim', None)
     return implant.stim if spatial is None else spatial
 
 
@@ -299,11 +298,12 @@ def _rescaled_implant(implant, amp):
     """
     trial = deepcopy(implant)
     scale = amp / implant.stim.data.max()
+    modulation = getattr(implant, '_spatial_stim', None)
     trial.stim = _rescale(implant.stim, scale)
-    if implant.spatial_stim is not None:
+    if modulation is not None:
         # After the assignment above, which clears it -- an ordinary stimulus
         # assigned to an implant has no modulation behind it:
-        trial._spatial_stim = _rescale(implant.spatial_stim, scale)
+        trial._spatial_stim = _rescale(modulation, scale)
     return trial
 
 
@@ -317,7 +317,7 @@ def _delivered(implant):
     differs, and neither the electrode array nor the stimulus itself is
     duplicated.
     """
-    if getattr(implant, 'spatial_stim', None) is None:
+    if getattr(implant, '_spatial_stim', None) is None:
         return implant
     stand_in = copy(implant)
     stand_in._spatial_stim = None
@@ -855,12 +855,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
         .. note::
 
-            **A spatial model reads modulation frames, not pulses.** Where the
-            implant's stimulus came from an encoder, what is read is
-            :py:attr:`~pulse2percept.implants.ProsthesisSystem.spatial_stim`
-            -- one amplitude per electrode per frame of the source video --
-            rather than the pulse train in
-            :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim`.
+            **This method reads modulation frames, not pulses.** Where
+            ``implant.stim`` was produced by the implant's own
+            :py:class:`~pulse2percept.stimuli.StimulusEncoder`, what is read
+            is one amplitude per electrode per frame of the source video,
+            rather than the pulse train delivering it.
 
             A pulse train says *when* current flows, and a raster says which
             electrodes are allowed to flow together. Both are facts about
@@ -870,10 +869,14 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             slots instead of as the image. So an image gives one percept
             frame, and a video one percept frame per video frame.
 
-            A model that *does* have a temporal component is the opposite
-            case, and :py:class:`~pulse2percept.models.Model` hands its
-            spatial stage the delivered pulse train: integrating those pulses
-            is exactly what the temporal stage is for.
+            :py:class:`~pulse2percept.models.Model` hands its spatial stage
+            the delivered pulse train instead whenever it also has a temporal
+            stage, since integrating those pulses is what that stage is for.
+            Models that replace ``predict_percept`` outright rather than
+            customizing ``_predict_spatial`` --
+            :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` and
+            :py:class:`~pulse2percept.models.cortex.DynaphosModel` -- read
+            ``implant.stim`` directly and are unaffected by any of this.
 
         Parameters
         ----------

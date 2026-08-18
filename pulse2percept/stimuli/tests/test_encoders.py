@@ -872,14 +872,16 @@ def test_StimulusEncoder_implant_reshape():
         npt.assert_equal(list(enc.electrodes), list(implant.electrode_names))
 
 
-def test_StimulusEncoder_encode_spatial():
+def test_StimulusEncoder_encode_both():
     """The modulation half of encoding, with none of the device's timing in it
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     implant = pixel_implant((4, 4), SequentialRaster(4, interleave=True))
     enc = AmplitudeEncoder(amp_range=(0, 50), freq=100, frame_dur=100)
-    spatial = enc.encode_spatial(img, implant=implant)
-    delivered = enc.encode(img, implant=implant)
+    spatial, delivered = enc._encode_both(img, implant=implant)
+    # The delivered half is exactly what `encode` gives on its own:
+    npt.assert_array_equal(delivered.data, enc.encode(img,
+                                                      implant=implant).data)
 
     # One row per electrode, one column per frame of the source -- and an
     # image is one frame, so there is no time axis at all:
@@ -899,8 +901,7 @@ def test_StimulusEncoder_encode_spatial():
     # The delivered train has 4 raster groups and hundreds of time points.
     npt.assert_equal(delivered.time.size > 100, True)
     npt.assert_equal('cycle' in spatial.metadata['encoder'], False)
-    npt.assert_equal(spatial.metadata['encoder']['modulation'], True)
-    npt.assert_equal(delivered.metadata['encoder']['modulation'], False)
+    npt.assert_equal('n_schedules' in spatial.metadata['encoder'], False)
     # The frame clock is a fact about the source, so it does survive:
     for key in ('kind', 'frame_dur', 'n_frames'):
         npt.assert_equal(spatial.metadata['encoder'][key],
@@ -911,35 +912,32 @@ def test_StimulusEncoder_encode_spatial():
     # `encode`):
     vid = VideoStimulus(np.random.default_rng(0).random((4, 4, 5)),
                         metadata={'fps': 20})
-    spatial = enc.encode_spatial(vid, implant=implant)
+    spatial = enc._encode_both(vid, implant=implant)[0]
     npt.assert_equal(spatial.shape, (16, 5))
     npt.assert_almost_equal(spatial.time, np.arange(5) * 100.0)
 
     # Encoding for no implant at all works the same way, at pixel resolution:
-    bare = enc.encode_spatial(img)
+    bare = enc._encode_both(img)[0]
     npt.assert_equal(bare.shape, (16, 1))
     npt.assert_almost_equal(bare.data.ravel(), np.linspace(0, 1, 16) * 50,
                             decimal=4)
     # ... and a source that is not a picture is refused here too:
     with pytest.raises(DimensionMismatchError):
-        enc.encode_spatial(Stimulus([0.5]))
+        enc._encode_both(Stimulus([0.5]))
 
 
-def test_FrequencyEncoder_encode_spatial():
+def test_FrequencyEncoder_encode_both():
     """A spatial reading of rate coding says what it can and no more"""
     grays = np.array([[0.0, 0.5], [0.75, 1.0]])
     img = ImageStimulus(grays)
     enc = FrequencyEncoder(freq_range=(0, 200), amp=30, frame_dur=100)
-    spatial = enc.encode_spatial(img)
+    spatial, delivered = enc._encode_both(img)
     # Every electrode that pulses at all pulses at the same amplitude, which
-    # is all a reader with no clock can be told. An electrode at 0 Hz never
-    # pulses, so it delivers no current -- that much is not about time:
+    # is all a reader with no clock can be told, so rate collapses to on/off.
+    # An electrode at 0 Hz never pulses, so it delivers no current -- that
+    # much is not about time:
     npt.assert_almost_equal(spatial.data.ravel(), [0, 30, 30, 30], decimal=4)
-    # The rate is recorded for readers that can express it:
-    npt.assert_almost_equal(spatial.metadata['encoder']['freq'].ravel(),
-                            grays.ravel() * 200, decimal=4)
     # The delivered train is where rate becomes visible, as pulse count:
-    delivered = enc.encode(img)
     counts = [n_pulses_of(delivered, e, peak=30) for e in range(4)]
     npt.assert_equal(counts[0], 0)
     npt.assert_equal(np.all(np.diff(counts) > 0), True)

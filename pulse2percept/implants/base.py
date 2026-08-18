@@ -427,9 +427,9 @@ class ProsthesisSystem(PrettyPrint):
         if self.stim is not None:
             self.stim.remove(electrodes)
         # An electrode switched off delivers nothing, whichever of the two
-        # representations of the stimulus is being read:
-        if self.spatial_stim is not None:
-            self.spatial_stim.remove(electrodes)
+        # descriptions of the stimulus is being read:
+        if getattr(self, '_spatial_stim', None) is not None:
+            self._spatial_stim.remove(electrodes)
 
     @property
     def earray(self):
@@ -504,51 +504,21 @@ class ProsthesisSystem(PrettyPrint):
         >>> implant.stim.unit
         uA
 
-        See Also
-        --------
-        spatial_stim : the modulation behind an encoded stimulus, without the
-                       pulse train.
-
         """
         return self._stim
-
-    @property
-    def spatial_stim(self):
-        """The modulation behind an encoded stimulus, if there is one
-
-        When a picture is assigned to
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim`, the encoder
-        produces two descriptions of the same thing (see
-        :py:class:`~pulse2percept.stimuli.StimulusEncoder`):
-
-        *  ``stim`` is what the device *delivers* -- biphasic pulses on a pulse
-           clock, with the raster deciding which electrodes may fire when.
-        *  ``spatial_stim`` is what the encoder *asked for* -- one amplitude
-           per electrode per frame of the source, with no waveform, no pulse
-           clock and no raster in it.
-
-        Both are in microamps and both cover the same electrodes. Which one a
-        model reads is decided by whether it has a temporal component: a model
-        that integrates over time needs the pulses, and a model that does not
-        cannot express them, so it reads these modulation frames instead (see
-        :py:meth:`~pulse2percept.models.SpatialModel.predict_percept`).
-
-        None whenever ``stim`` was not produced by this implant's encoder --
-        an electrical stimulus assigned directly is already the only
-        description there is of itself.
-
-        .. versionadded:: 0.10.0
-
-        """
-        return getattr(self, '_spatial_stim', None)
 
     @stim.setter
     def stim(self, data):
         """Stimulus setter (called upon ``self.stim = data``)"""
-        # Whatever is being assigned, the modulation behind the *previous*
-        # stimulus is not a description of it. Cleared here and rebuilt below
-        # only where this implant's own encoder produced it, so that it can
-        # never be left describing the picture before last:
+        # `_spatial_stim` is the other description of an encoded stimulus: the
+        # modulation the encoder asked for, one amplitude per electrode per
+        # frame of the source, with no waveform, pulse clock or raster in it.
+        # `stim` stays the pulse train the device delivers; this is what a
+        # reader with no clock of its own can make sense of, and it is read by
+        # `pulse2percept.models.SpatialModel.predict_percept`. Cleared on every
+        # path through this setter and rebuilt below only where this implant's
+        # own encoder produced it, so that it can never be left describing the
+        # picture before last:
         self._spatial_stim = None
         spatial = None
         # if stim is empty or None
@@ -581,7 +551,7 @@ class ProsthesisSystem(PrettyPrint):
             # as valid as an `encoder`), in which case there is nothing
             # dimensionless left to encode. Both halves of the encoding are
             # kept: what the device delivers, and the modulation it was asked
-            # for (see `spatial_stim`).
+            # for (see `_spatial_stim` above).
             if (self.encoder is not None and
                     stim.unit.dimension.is_dimensionless and
                     stim.unit.dimension != self.stimulus_unit.dimension):
