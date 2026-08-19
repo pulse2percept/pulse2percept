@@ -396,12 +396,7 @@ def pulse_train_percept(n_pulses=3, period=1000.0 / 6):
 
 @pytest.mark.parametrize('fps', (15, 30, 60))
 def test_Percept_play_fps_is_display_rate(fps):
-    """`fps` buys frames, not speed: the time axis owns the duration
-
-    Regression test: `fps` used to be handed to the player as the delay
-    between two frames, so asking for a higher frame rate played the same
-    frames faster instead of sampling them more finely.
-    """
+    """Changing fps resamples without changing playback duration."""
     # One second of percept, sampled at 100 Hz:
     percept = Percept(np.random.rand(4, 4, 100), time=np.arange(0, 1000, 10))
     cfg = player(percept.play(fps=fps))
@@ -417,7 +412,7 @@ def test_Percept_play_fps_is_display_rate(fps):
 
 
 def test_Percept_play_zero_order_hold():
-    """A display frame shows the most recent percept frame, unblended"""
+    """Display resampling uses zero-order hold"""
     data = np.zeros((2, 2, 4))
     data[..., :] = [0.0, 0.25, 0.5, 1.0]
     # 40 ms of percept: four frames of 10 ms each.
@@ -444,11 +439,7 @@ def test_Percept_play_zero_order_hold():
 
 
 def test_Percept_play_irregular_time():
-    """An irregular time axis plays with its own unequal time steps
-
-    Regression test: a pulse train's time axis used to be rejected outright,
-    because the player could only be given a single frame delay.
-    """
+    """Irregular percept times produce unequal frame durations."""
     period = 1000.0 / 6
     percept = pulse_train_percept(n_pulses=3, period=period)
     cfg = player(percept.play())
@@ -467,7 +458,7 @@ def test_Percept_play_irregular_time():
 
 
 def test_Percept_play_irregular_time_fps():
-    """The same irregular percept, on a regular display clock"""
+    """Irregular percepts can be resampled onto a regular clock."""
     percept = pulse_train_percept(n_pulses=3, period=1000.0 / 6)
     step = 1000.0 / 60
     cfg = player(percept.play(fps=60))
@@ -481,11 +472,7 @@ def test_Percept_play_irregular_time_fps():
 
 
 def test_Percept_play_brief_events_are_missed():
-    """A pulse between two display samples is dropped, not pooled
-
-    Sampling faster is the fix; smearing the pulse across the frames around it
-    would put brightness on the screen at a time the model never computed it.
-    """
+    """Events between display samples are not interpolated."""
     percept = pulse_train_percept()
     brightest = percept.data.max()
     # At its own rate, every pulse is on screen:
@@ -502,12 +489,7 @@ def test_Percept_play_brief_events_are_missed():
 
 
 def test_Percept_save_fps_resamples(tmp_path, monkeypatch):
-    """Changing the export rate changes the frame count, not the duration
-
-    Regression test: `fps` used to be passed straight to the writer while
-    every percept frame was written out, so a higher rate produced a shorter
-    movie of the same frames.
-    """
+    """Export fps changes frame count, not movie duration."""
     seen = []
     monkeypatch.setattr(imageio, 'mimwrite',
                         lambda fname, data, **kwargs: seen.append((data,
@@ -523,8 +505,8 @@ def test_Percept_save_fps_resamples(tmp_path, monkeypatch):
         # Frame count over frame rate is one second of movie, every time:
         npt.assert_almost_equal(len(data) / kwargs['fps'], 1.0, decimal=6)
 
-    # An irregular percept is written out the same way. Its last time point
-    # ends it, so the movie does not run past the pulse train it shows:
+    # An irregular percept is written out the same way. Its final frame uses
+    # the same preceding-interval display convention as play():
     seen.clear()
     percept = pulse_train_percept(n_pulses=3, period=1000.0 / 6)
     duration = (percept.time[-1] - percept.time[0] + 0.45) / 1000.0
@@ -534,13 +516,7 @@ def test_Percept_save_fps_resamples(tmp_path, monkeypatch):
 
 
 def test_Percept_play_keeps_the_last_frame():
-    """The last time point of an irregular percept is model output
-
-    `TemporalModel.predict_percept(t_percept=[0, 20, 50])` asks for brightness
-    at those three instants, so the frame at 50 ms is a percept like any
-    other, not an endpoint that ends the animation. Giving it no duration
-    would drop it from playback entirely.
-    """
+    """Hold the final frame for the preceding interval."""
     data = np.zeros((2, 2, 3))
     data[..., :] = [0.0, 0.5, 1.0]
     percept = Percept(data, time=[0, 20, 50])
@@ -563,7 +539,7 @@ def test_Percept_play_keeps_the_last_frame():
 
 
 def test_Percept_play_rejects_unordered_time(tmp_path):
-    """A percept whose time axis backtracks cannot be laid out on a clock"""
+    """Playback requires strictly increasing time points."""
     percept = Percept(np.random.rand(2, 2, 3), time=[0, 30, 10])
     for fps in (None, 30):
         with pytest.raises(ValueError):

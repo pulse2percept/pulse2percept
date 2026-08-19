@@ -130,85 +130,36 @@ _FrameTimeline = namedtuple('_FrameTimeline', ['indices', 'times',
 
 
 def _frame_timeline(time, fps=None):
-    """Lay the frames of an animation out on a display clock
-
-    ``time`` owns the timing: an animation whose time axis spans three seconds
-    takes three seconds to play, whatever ``fps`` says (to within one display
-    frame, see below). ``fps`` only decides how often that timeline is sampled
-    for display.
+    """Lay animation frames out on a display timeline.
 
     Parameters
     ----------
     time : array_like
-        The time points of the animation (in ms), strictly increasing. May be
-        non-homogeneous (e.g., the short phases and long gaps of a pulse
-        train).
+        Frame times in ms. Must be finite and strictly increasing.
     fps : float or None
-        The rate at which the timeline is sampled for display. If None, every
-        frame is shown for as long as ``time`` says it lasts, and the
-        animation lasts exactly as long as the timeline does. Otherwise the
-        timeline is resampled onto a regular clock of ``1000 / fps`` ms with a
-        zero-order hold: each display frame shows the most recent frame that
-        was due, and the duration is kept to within one display frame (a fixed
-        frame rate cannot express an arbitrary duration exactly).
-
-        May be given as a plain number of hertz or as a unitful frequency
-        (e.g. ``0.03 * kHz``); see :py:mod:`pulse2percept.units`.
+        Display sampling rate in Hz. If None, show every frame using the
+        timing in ``time``. Otherwise resample onto a regular display clock
+        using zero-order hold.
 
     Returns
     -------
     timeline : _FrameTimeline
-        A named tuple of ``indices`` (which frame of ``time`` to show),
-        ``times`` (when each displayed frame comes up, in ms), and
-        ``intervals`` (how long each displayed frame stays up, in ms).
+        Display-frame indices, times, and durations in ms.
 
     Notes
     -----
-    *  ``time`` says when each frame comes up, not when the last one goes
-       away, and an irregular axis carries no hint either way: a percept's
-       time points are the instants a model was evaluated at, which need not
-       end at the end of anything. The last frame is therefore held for as
-       long as the interval in front of it. That is exact for a homogeneous
-       axis -- ``n`` frames of ``dt`` take ``n * dt``, which is what a video
-       means by ``n`` frames -- and a display convention everywhere else, but
-       never zero: a frame nobody can see is not a frame. A single frame has
-       no interval at all and falls back on ``SINGLE_FRAME_INTERVAL``.
-    *  Frames are never interpolated, pooled, or otherwise mixed: an event
-       that falls between two display samples is simply missed, exactly as it
-       would be on a display of that frame rate. Sample faster if that matters.
-
-    Examples
-    --------
-    Playing an animation at its own rate shows every frame for its own time
-    step, the last one included:
-
-    >>> _frame_timeline([0, 10, 20]).indices
-    array([0, 1, 2])
-    >>> _frame_timeline([0, 10, 20]).intervals
-    array([10., 10., 10.])
-    >>> _frame_timeline([0, 10, 30]).intervals
-    array([10., 20., 20.])
-
-    Halving the display rate halves the number of frames, not the duration:
-
-    >>> _frame_timeline([0, 10, 20, 30], fps=50).indices
-    array([0, 2])
-
+    The duration of the final frame is not encoded by ``time``. It is held
+    for the preceding interval, or ``SINGLE_FRAME_INTERVAL`` for one frame.
+    Fixed-rate resampling preserves duration to within one display frame.
     """
     fps = as_value(fps, Hz, 'fps')
-    # A copy: the timeline is handed out, and the caller's time axis is not
-    # ours to modify:
     time = np.array(time, dtype=np.float64).ravel()
     if time.size == 0:
         raise ValueError("'time' must have at least one time point.")
     intervals = np.diff(time)
     if not np.all(np.isfinite(time)) or np.any(intervals <= 0):
-        # A frame cannot come up before the one in front of it, and the
-        # `searchsorted` below would quietly pick the wrong frames for an axis
-        # that is not sorted:
         raise ValueError("'time' must be finite and strictly increasing.")
-    # `time` says when a frame comes up, not when the last one goes away, so
-    # the last frame is held for the interval in front of it (see the notes):
+    # Hold the final frame for the preceding interval:
     intervals = np.append(intervals, intervals[-1] if intervals.size
                           else SINGLE_FRAME_INTERVAL)
     if fps is None:
@@ -216,14 +167,10 @@ def _frame_timeline(time, fps=None):
     if fps <= 0:
         raise ValueError(f"'fps' must be greater than zero, not {fps}.")
     step = 1000.0 / fps
-    # As close to the same wall-clock duration as a whole number of display
-    # frames gets. Rounded rather than rounded up, so that an axis which fits
-    # the display clock exactly cannot pick up a spurious extra frame from
-    # floating-point noise:
+    # Choose the nearest whole number of display frames.
     n_frames = max(1, int(np.floor(intervals.sum() / step + 0.5)))
     times = time[0] + np.arange(n_frames) * step
-    # Zero-order hold: show whichever frame was most recently due. Values are
-    # never blended, so a brief event between two samples is missed:
+    # Zero-order hold:
     indices = np.clip(np.searchsorted(time, times, side='right') - 1, 0,
                       time.size - 1)
     return _FrameTimeline(indices, times, np.full(n_frames, step))
@@ -588,17 +535,12 @@ _PLAYER = Template("""
     if (mode.value === "once" && frame === cfg.n - 1) { show(0); }
     playing = true;
     toggle.innerHTML = "&#10074;&#10074;";
-    // The wall-clock time at which the frame on screen is up:
+    // Deadline for the current frame:
     due = performance.now() + cfg.intervals[frame];
     tick();
   }
 
-  // Frames are scheduled against the wall clock rather than one timeout after
-  // the next, so the animation lasts as long as its time axis says it does. A
-  // timeout that fires late catches up by stepping over every frame whose
-  // turn has already passed: a 0.45 ms pulse phase that no browser can
-  // resolve is missed, exactly as it would be at a low frame rate, instead of
-  // stretching everything after it.
+  // Schedule against wall-clock deadlines and skip overdue frames:
   function tick() {
     timer = setTimeout(function () {
       timer = null;
@@ -610,15 +552,14 @@ _PLAYER = Template("""
         due += cfg.intervals[frame];
         if (due > performance.now()) { break; }
       }
-      // A tab that was in the background can be further behind than a whole
-      // pass through the frames, which there is no catching up on:
+      // Reset after a long stall:
       due = Math.max(due, performance.now());
       show(frame);
       if (playing) { tick(); }
     }, Math.max(0, due - performance.now()));
   }
 
-  // The frame after this one, or null at the end of the run
+  // Next frame, or null at the end:
   function step() {
     var next = frame + dir;
     if (next > cfg.n - 1 || next < 0) {
@@ -799,12 +740,10 @@ class HTMLAnimation(FuncAnimation):
         Parameters
         ----------
         fps : float or None
-            Frames per second. If None, every frame is shown for as long as
-            the animation's own timing says it lasts. Otherwise all frames are
-            shown for ``1000 / fps`` ms, which changes how fast the animation
-            plays; resample the frames themselves to keep its duration. May be
-            given as a unitful frequency (e.g. ``30 * Hz``); see
-            :py:mod:`pulse2percept.units`.
+            Display sampling rate in Hz. If None, show every percept frame using
+            its recorded timing. Otherwise resample onto a regular display clock
+            using zero-order hold. Playback duration is preserved to within one
+            display frame. May also be given as a unitful frequency.
         embed_frames : bool
             Unused; frames are always embedded.
         default_mode : {'loop', 'once', 'reflect'} or None
