@@ -87,11 +87,12 @@ API changes:
   :py:class:`~pulse2percept.implants.SequentialRaster` of six groups 2 ms
   apart; pass ``encoder=None`` or ``raster=None`` to switch either off.
 
-* ``play`` gained a ``fmt`` argument.
-  :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` defaults to JPEG, which
-  is substantially smaller and faster to build for color video;
-  :py:meth:`~pulse2percept.percepts.Percept.play` defaults to PNG, which is
-  pixel-exact and nearly as compact for scalar data. Pass ``fmt`` to override.
+* ``play`` gained a ``fmt`` argument (defaulting to JPEG for playing video
+  stimuli and PNG for image stimuli), now supports nonuniform
+  time axes, and plays percepts according to their recorded timing.
+  ``fps`` now controls the display/export sampling rate without changing 
+  playback speed. Saving a percept with a nonuniform time axis still
+  requires an explicit ``fps``.
 
 * Objects now record what their numbers mean:
   :py:attr:`~pulse2percept.stimuli.Stimulus.unit`,
@@ -180,9 +181,6 @@ Bug fixes:
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play`, and
   :py:meth:`~pulse2percept.percepts.Percept.save` now handle single-frame
   inputs correctly and give a useful error for nonuniform time axes.
-
-* ``fps`` no longer changes how fast a percept plays or how long its movie
-  runs; relying on :py:func:`~pulse2percept.utils.frame_timeline` instead.
 
 * :py:attr:`~pulse2percept.stimuli.VideoStimulus.vid_shape` now reports the
   number of frames the stimulus actually has, rather than the number the source
