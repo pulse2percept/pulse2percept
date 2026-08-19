@@ -12,7 +12,8 @@ from matplotlib.animation import FuncAnimation
 from PIL import Image
 
 from pulse2percept.units import (DimensionMismatchError, Hz, dva, kHz, ms, uA)
-from pulse2percept.utils import HTMLAnimation, frame_interval
+from pulse2percept.utils import (HTMLAnimation, frame_interval,
+                                 frame_timeline)
 from pulse2percept.utils.animation import (MAX_SPRITE_PX,
                                            SINGLE_FRAME_INTERVAL,
                                            _sprite_grid, _frame_shape,
@@ -20,7 +21,7 @@ from pulse2percept.utils.animation import (MAX_SPRITE_PX,
 
 
 def make_ani(data, labels=None, interval=25.0, repeat=True, colorbar=False,
-             fmt='png'):
+             fmt='png', intervals=None):
     """Set up an HTMLAnimation the same way ``Percept.play`` does"""
     fig, ax = plt.subplots(figsize=(8, 5))
     frame0 = np.zeros(data.shape[:-1])
@@ -28,10 +29,12 @@ def make_ani(data, labels=None, interval=25.0, repeat=True, colorbar=False,
     if colorbar:
         fig.colorbar(mat)
     plt.close(fig)
+    # Either a single delay for all frames, or one delay per frame:
+    timing = ({'interval': interval} if intervals is None
+              else {'intervals': intervals})
     return HTMLAnimation(fig, lambda d: mat, iter(range(data.shape[-1])),
-                         interval=interval, save_count=data.shape[-1],
-                         repeat=repeat, image=mat, frame_data=data,
-                         labels=labels, fmt=fmt)
+                         save_count=data.shape[-1], repeat=repeat, image=mat,
+                         frame_data=data, labels=labels, fmt=fmt, **timing)
 
 
 def parse(html):
@@ -129,6 +132,63 @@ def test_frame_interval_fps_units():
     for wrong in (30 * ms, 30 * uA, 30 * dva):
         with pytest.raises(DimensionMismatchError):
             frame_interval([0, 10, 20], fps=wrong)
+
+
+def test_frame_timeline():
+    """`fps` decides how often the timeline is sampled, not how fast it runs"""
+    # At its own rate, every frame is shown for its own time step. The last
+    # one has no time step of its own and repeats the one before it:
+    timeline = frame_timeline([0, 10, 20, 30])
+    npt.assert_equal(timeline.indices, [0, 1, 2, 3])
+    npt.assert_almost_equal(timeline.times, [0, 10, 20, 30])
+    npt.assert_almost_equal(timeline.intervals, [10, 10, 10, 10])
+    # A single frame has no time step at all:
+    timeline = frame_timeline([7.5])
+    npt.assert_equal(timeline.indices, [0])
+    npt.assert_almost_equal(timeline.intervals, [SINGLE_FRAME_INTERVAL])
+    # An irregular axis keeps its own unequal time steps:
+    timeline = frame_timeline([0, 0.45, 0.55, 166.67])
+    npt.assert_almost_equal(timeline.intervals, [0.45, 0.1, 166.12, 166.12],
+                            decimal=6)
+
+    # 40 ms of animation stays 40 ms of animation, whatever the display rate:
+    for fps, n_frames in [(25, 1), (50, 2), (100, 4), (200, 8)]:
+        timeline = frame_timeline([0, 10, 20, 30], fps=fps)
+        npt.assert_equal(timeline.indices.size, n_frames)
+        npt.assert_almost_equal(timeline.intervals, [1000.0 / fps] * n_frames)
+        npt.assert_almost_equal(timeline.intervals.sum(), 40, decimal=6)
+    # Zero-order hold: each display frame repeats the most recent one that was
+    # due, and frames in between are dropped rather than blended in:
+    npt.assert_equal(frame_timeline([0, 10, 20, 30], fps=200).indices,
+                     [0, 0, 1, 1, 2, 2, 3, 3])
+    npt.assert_equal(frame_timeline([0, 10, 20, 30], fps=50).indices, [0, 2])
+    # An irregular axis resamples the same way. The frame that is only up
+    # between 0.45 and 0.55 ms falls between two display samples and is never
+    # shown, which is what a 30 fps display would do:
+    npt.assert_equal(frame_timeline([0, 0.45, 0.55, 166.67], fps=30).indices,
+                     [0, 2, 2, 2, 2, 2, 3, 3, 3, 3])
+
+    # A frame rate is a frequency, however it is spelled ...
+    for spelling in (25 * Hz, 0.025 * kHz):
+        npt.assert_equal(frame_timeline([0, 10, 20], fps=spelling).indices,
+                         frame_timeline([0, 10, 20], fps=25).indices)
+    # ... and nothing else is one:
+    for wrong in (30 * ms, 30 * uA, 30 * dva):
+        with pytest.raises(DimensionMismatchError):
+            frame_timeline([0, 10, 20], fps=wrong)
+    for wrong in (0, -30):
+        with pytest.raises(ValueError):
+            frame_timeline([0, 10, 20], fps=wrong)
+    with pytest.raises(ValueError):
+        frame_timeline([])
+
+
+def test_frame_timeline_does_not_mutate():
+    """The timeline is handed out, so it cannot alias the caller's axis"""
+    time = np.array([0.0, 10.0, 30.0])
+    timeline = frame_timeline(time)
+    timeline.times[0] = 999
+    npt.assert_almost_equal(time, [0, 10, 30])
 
 
 @pytest.mark.parametrize('n_frames', (1, 2, 5, 17))
@@ -353,6 +413,29 @@ def test_HTMLAnimation_playback():
     cfg, _, _ = parse(ani.to_jshtml(fps=10, default_mode='reflect'))
     npt.assert_almost_equal(cfg['interval'], 100.0)
     npt.assert_equal(cfg['mode'], 'reflect')
+
+
+def test_HTMLAnimation_per_frame_intervals():
+    """Frames of unequal duration are what an irregular time axis needs"""
+    data = np.random.rand(4, 4, 3)
+    intervals = [0.45, 165.67, 0.45]
+    cfg, _, _ = parse(make_ani(data, intervals=intervals).to_jshtml())
+    npt.assert_almost_equal(cfg['intervals'], intervals)
+    # Matplotlib only knows a single frame delay, which is all its own
+    # machinery (`save`, `to_html5_video`) can express:
+    ani = make_ani(data, intervals=intervals)
+    npt.assert_almost_equal(ani._interval, np.mean(intervals))
+    # A constant delay is still the default:
+    cfg, _, _ = parse(make_ani(data, interval=40.0).to_jshtml())
+    npt.assert_almost_equal(cfg['intervals'], [40.0] * 3)
+    # An explicit `fps` overrides the animation's own timing, as it does in
+    # Matplotlib -- it does not resample the frames:
+    cfg, _, _ = parse(make_ani(data, intervals=intervals).to_jshtml(fps=10))
+    npt.assert_almost_equal(cfg['intervals'], [100.0] * 3)
+    npt.assert_equal(cfg['n'], 3)
+    # There must be exactly one delay per frame:
+    with pytest.raises(ValueError):
+        make_ani(data, intervals=[10, 20])
 
 
 def test_HTMLAnimation_smoothing():

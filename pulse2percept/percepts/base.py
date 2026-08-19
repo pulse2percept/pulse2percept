@@ -11,7 +11,8 @@ from skimage import img_as_ubyte
 from skimage.transform import resize
 
 from ..units import DimensionMismatchError, Hz, Quantity, Unit, as_value, ms
-from ..utils import Data, HTMLAnimation, frame_interval, sample
+from ..utils import (Data, HTMLAnimation, frame_interval, frame_timeline,
+                     sample)
 from ..utils.constants import VIDEO_BLOCK_SIZE
 
 
@@ -358,9 +359,20 @@ class Percept(Data):
         Parameters
         ----------
         fps : float or None
-            If None, uses the percept's time axis. Not supported for
-            non-homogeneous time axis. May be given as a plain number of hertz
-            or as a unitful frequency (e.g. ``30 * Hz``, ``0.03 * kHz``); see
+            The rate at which the percept is sampled for display. The percept
+            plays for as long as its
+            :py:attr:`~pulse2percept.percepts.Percept.time` axis says it
+            lasts, whatever ``fps`` is: a three-second percept takes three
+            seconds to play at 15, 30, or 60 fps.
+
+            If None, every frame is shown for its own time step, however
+            irregular the time axis is. Otherwise the percept is resampled
+            onto a regular display clock with a zero-order hold: each display
+            frame shows the most recent frame that was due, and brief events
+            in between two samples are missed rather than smeared out.
+
+            May be given as a plain number of hertz or as a unitful frequency
+            (e.g. ``30 * Hz``, ``0.03 * kHz``); see
             :py:mod:`pulse2percept.units`.
         repeat : bool, optional
             Whether the animation should repeat when the sequence of frames is
@@ -399,27 +411,35 @@ class Percept(Data):
             roughly two orders of magnitude faster than Matplotlib's
             ``to_jshtml`` and produces much smaller notebooks and doc pages.
 
+            ``fps`` no longer changes how fast the percept plays; the time
+            axis owns that. A non-homogeneous time axis (e.g., the short
+            phases and long gaps of a pulse train) is now played back as it
+            is, rather than rejected. Browsers do not schedule timeouts more
+            finely than a few milliseconds, so time steps shorter than that
+            are stretched.
+
         """
-        def update(data):
-            if annotate_time:
-                t = self.time[self._next_frame - 1]
-                mat.axes.set_title(f't = {t:.2f} {self.time_unit}')
-            mat.set_data(data)
-            return mat
-
-        def data_gen():
-            try:
-                self.rewind()
-                # Advance to the next frame:
-                while True:
-                    yield next(self)
-            except StopIteration:
-                # End of the sequence, exit:
-                pass
-
         if self.time is None:
             raise ValueError("Cannot animate a percept with time=None. Use "
                              "percept.plot() instead.")
+        # How long a frame stays up is wall-clock time, counted in
+        # milliseconds whatever the percept counts in: a percept at
+        # [0, 20, 40] ms and one at [0, .02, .04] s play at the same real
+        # speed. Only the labels below are in the percept's own unit.
+        timeline = frame_timeline(self.times(ms), fps=fps)
+        idx = timeline.indices
+
+        def update(i):
+            if annotate_time:
+                t = self.time[idx[i]]
+                mat.axes.set_title(f't = {t:.2f} {self.time_unit}')
+            mat.set_data(self.data[..., idx[i]])
+            return mat
+
+        def data_gen():
+            # Which frame to show at each tick of the display clock. With
+            # `fps=None` that is simply every frame, in order:
+            yield from range(idx.size)
 
         # There are several options to animate a percept in Jupyter/IPython
         # (see https://stackoverflow.com/a/46878531). Displaying the animation
@@ -430,8 +450,8 @@ class Percept(Data):
             fig, ax = plt.subplots(figsize=(8, 5))
         else:
             fig = ax.figure
-        # Rewind the percept and show an empty frame:
-        self.rewind()
+        # Show an empty frame. The color scale spans the whole percept, so
+        # that it does not shift with the display rate:
         mat = ax.imshow(np.zeros_like(self.data[..., 0]), cmap='gray',
                         vmin=0, vmax=self.data.max())
         if colorbar:
@@ -443,15 +463,14 @@ class Percept(Data):
         # that it can render the HTML player without going through Matplotlib:
         labels = None
         if annotate_time:
-            labels = [f't = {t:.2f} {self.time_unit}' for t in self.time]
-        # The label is in the percept's unit, but the delay between two frames
-        # is wall-clock time and `frame_interval` counts it in milliseconds:
-        # a percept at [0, 20, 40] ms and one at [0, .02, .04] s play at the
-        # same real speed.
+            # A held frame keeps the time stamp of the frame it holds: that is
+            # when the data it shows was computed.
+            labels = [f't = {t:.2f} {self.time_unit}' for t in self.time[idx]]
         return HTMLAnimation(fig, update, data_gen, repeat=repeat,
-                             interval=frame_interval(self.times(ms), fps=fps),
-                             save_count=len(self.time), image=mat,
-                             frame_data=self.data, labels=labels, fmt=fmt)
+                             intervals=timeline.intervals,
+                             save_count=idx.size, image=mat,
+                             frame_data=self.data[..., idx], labels=labels,
+                             fmt=fmt)
 
     def save(self, fname, shape=None, fps=None):
         """Save the percept as an MP4 or GIF
@@ -471,9 +490,20 @@ class Percept(Data):
             If shape is None, width will be set to 320px and height will be
             inferred accordingly.
         fps : float or None
-            If None, uses the percept's time axis. Not supported for
-            non-homogeneous time axis. May be given as a plain number of hertz
-            or as a unitful frequency (e.g. ``30 * Hz``, ``0.03 * kHz``); see
+            The rate at which the percept is sampled for the movie. The movie
+            runs for as long as the percept's
+            :py:attr:`~pulse2percept.percepts.Percept.time` axis says it
+            lasts, whatever ``fps`` is: a higher rate buys more frames, not a
+            longer movie.
+
+            If None, every frame of the percept is written out at the rate its
+            time axis implies, which a movie file can only express if that
+            axis is homogeneous. Otherwise the percept is resampled onto a
+            regular clock with a zero-order hold, exactly as in
+            :py:meth:`~pulse2percept.percepts.Percept.play`.
+
+            May be given as a plain number of hertz or as a unitful frequency
+            (e.g. ``30 * Hz``, ``0.03 * kHz``); see
             :py:mod:`pulse2percept.units`.
 
         Notes
@@ -481,9 +511,14 @@ class Percept(Data):
         *  ``shape`` will be adjusted so that width and height are multiples
             of 16 to ensure compatibility with most codecs and players.
 
+        .. versionchanged:: 0.10.0
+
+            ``fps`` no longer changes how long the movie runs; the time axis
+            owns that.
+
         """
-        # This path hands `fps` to imageio rather than to `frame_interval`, so
-        # it is its own boundary: a frame rate is a frequency, and imageio
+        # This path hands `fps` to imageio rather than to `frame_timeline`, so
+        # it is its own boundary too: a frame rate is a frequency, and imageio
         # takes a plain number of hertz.
         fps = as_value(fps, Hz, 'fps')
         data = self.data - self.data.min()
@@ -518,10 +553,17 @@ class Percept(Data):
             # With time component, store as a movie. A single-frame percept
             # has no frame rate of its own, but can still be written out:
             if fps is None:
-                # In milliseconds, whatever the percept counts in: frames per
+                # A movie file runs at one fixed rate, so there is nothing to
+                # write a ragged time axis to; `frame_interval` says so. In
+                # milliseconds, whatever the percept counts in: frames per
                 # second is a wall-clock rate, not a number in the percept's
                 # own unit.
                 fps = 1000.0 / frame_interval(self.times(ms), tol=1e-6)
+            else:
+                # Same display clock as `play`: resampling changes the number
+                # of frames, not how long the movie runs.
+                timeline = frame_timeline(self.times(ms), fps=fps)
+                data = data[..., timeline.indices]
             # Note, for most codecs, the image dimensions must be divisible by
             # 16 the default for the VIDEO_BLOCK_SIZE is 16. Check if image is
             # divisible, if not have ffmpeg upsize to nearest size and warn

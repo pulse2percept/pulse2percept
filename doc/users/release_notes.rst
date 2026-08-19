@@ -181,6 +181,9 @@ Bug fixes:
   :py:meth:`~pulse2percept.percepts.Percept.save` now handle single-frame
   inputs correctly and give a useful error for nonuniform time axes.
 
+* ``fps`` no longer changes how fast a percept plays or how long its movie
+  runs; relying on :py:func:`~pulse2percept.utils.frame_timeline` instead.
+
 * :py:attr:`~pulse2percept.stimuli.VideoStimulus.vid_shape` now reports the
   number of frames the stimulus actually has, rather than the number the source
   video had before ``compress=True`` dropped the redundant time points. This
