@@ -167,7 +167,12 @@ def check_model_builds() -> list[str]:
         from pulse2percept.implants import ArgusII
         from pulse2percept.models import ScoreboardModel
 
-        model = ScoreboardModel(xrange=(-4, 4), yrange=(-4, 4), step=1).build()
+        # This runs against released versions too, and 0.10.0 renamed the
+        # grid spacing parameter `xystep` -> `step`. Ask the installed model
+        # which spelling it takes rather than assuming the current one.
+        spacing = "step" if hasattr(ScoreboardModel(), "step") else "xystep"
+        model = ScoreboardModel(xrange=(-4, 4), yrange=(-4, 4),
+                                **{spacing: 1}).build()
         implant = ArgusII()
         implant.stim = {e: 1 for e in ("A1", "F10")}
         percept = model.predict_percept(implant)

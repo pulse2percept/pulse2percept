@@ -10,7 +10,8 @@ from pulse2percept.units import (Dimension, Unit, Quantity,
                                  dimensionless,
                                  s, ms, us, ns, Hz, kHz, m, cm, mm, um, nm,
                                  A, mA, uA, nA, V, mV, uV, C, mC, uC, nC, dva)
-from pulse2percept.units.base import TIME
+from pulse2percept.units.base import (TIME, _CANONICAL_SYMBOLS,
+                                      _CANONICAL_UNITS)
 
 
 def test_Dimension():
@@ -35,6 +36,8 @@ def test_Dimension():
     npt.assert_equal(Dimension(time=-1).name, 'frequency')
     npt.assert_equal(Dimension(current=1, time=1).name, 'charge')
     npt.assert_equal(Dimension(current=1, length=-2).name, 'current density')
+    npt.assert_equal(Dimension(current=1, time=1, length=-2).name,
+                     'charge density')
     npt.assert_equal(Dimension().name, 'dimensionless')
     npt.assert_equal(Dimension(voltage=1, time=2).name, 'time^2 * voltage')
     # Immutable:
@@ -54,7 +57,7 @@ def test_Unit():
     npt.assert_equal(ms.scale, 1e-3)
     npt.assert_equal(ms.symbol, 'ms')
     npt.assert_equal(str(uA / mm ** 2), 'uA/mm^2')
-    npt.assert_equal(str(uA * ms), 'uA*ms')
+    npt.assert_equal(str(uA * ms), 'nC')  # exactly nC; see test_canonical_display
     npt.assert_equal(str(mm ** 2), 'mm^2')
     npt.assert_equal(str(ms / (uA * ms)), 'ms/(uA*ms)')
     # Unit algebra produces units, not quantities:
@@ -86,6 +89,48 @@ def test_Unit():
     for bad_scale in (0, -1, np.nan, np.inf, -np.inf):
         with pytest.raises(ValueError):
             Unit(TIME, bad_scale, 'bad')
+
+
+def test_canonical_display():
+    # A composed unit that is EXACTLY a predefined one is spelled that way,
+    # because it is that unit and not merely convertible to it:
+    npt.assert_equal(str(uA * ms), 'nC')
+    npt.assert_equal(repr(uA * ms), 'nC')
+    npt.assert_equal(str(200 * uA * 0.45 * ms), '90.0 nC')
+    npt.assert_equal(repr(1 / ms), '1 kHz')
+    npt.assert_equal(str(mA * s), 'mC')
+    npt.assert_equal(str(s ** -1), 'Hz')
+    npt.assert_equal(str(1 * ms / ms), '1')  # dimensionless has no symbol
+    # ... and the magnitude is never touched, so a composed unit that is not
+    # exactly a predefined one keeps its composed spelling rather than being
+    # rescaled into one. `.to()` is the only thing that changes scale.
+    # Canonicalization happens at display time, so the pieces a compound symbol
+    # is built from are the ones it was composed from, not their canonical
+    # spellings: uA*ms/um^2, not nC/um^2.
+    charge_density = (200 * uA * 0.45 * ms) / (200 * um) ** 2
+    npt.assert_equal(str(charge_density), '0.00225 uA*ms/um^2')
+    npt.assert_equal(str(charge_density.to(uC / mm ** 2)), '2.25 uC/mm^2')
+    npt.assert_equal(str(uA / mm ** 2), 'uA/mm^2')
+    npt.assert_equal(str(uA * ms / mm ** 2), 'uA*ms/mm^2')
+    # The lookup is on the same (dimension, scale) pair that __eq__ compares,
+    # so display agrees with equality:
+    for composed, predefined in [(uA * ms, nC), (s ** -1, Hz), (mA * s, mC),
+                                 (ms ** -1, kHz), (A / A, dimensionless)]:
+        npt.assert_equal(composed == predefined, True)
+        npt.assert_equal(str(composed), str(predefined))
+    # `symbol` still reports how the unit was built; only display is canonical:
+    npt.assert_equal((uA * ms).symbol, 'uA*ms')
+    # An alias is not canonical unless it is listed as such:
+    npt.assert_equal(str(Unit(TIME, 1e-3, 'msec')), 'ms')
+
+
+def test_canonical_units_are_unambiguous():
+    # Each canonical unit claims a distinct (dimension, scale), so no predefined
+    # unit's spelling is decided by declaration order:
+    npt.assert_equal(len(_CANONICAL_SYMBOLS), len(_CANONICAL_UNITS))
+    for unit in _CANONICAL_UNITS:
+        npt.assert_equal(_CANONICAL_SYMBOLS[(unit.dimension, unit.scale)],
+                         unit.symbol)
 
 
 def test_snap_scale():
@@ -238,6 +283,44 @@ def test_Quantity_comparison():
         (5 * uA) < (2 * ms)
     with pytest.raises(DimensionMismatchError):
         (5 * uA) < 2
+
+
+def test_dimensionless_compound_units():
+    # A bare number combined with a dimensionless quantity means a quantity in
+    # the canonical `dimensionless` unit -- NOT the magnitude in whatever
+    # compound dimensionless unit the quantity happens to carry. The two differ
+    # for every compound whose scale is not 1, which is most of them, and
+    # `5 * dimensionless` is exactly the case that hides the difference.
+    duty = 0.45 * ms * 50 * Hz  # a duty cycle: 0.0225, spelled 22.5 ms*Hz
+    npt.assert_equal(duty.magnitude, 22.5)
+    npt.assert_equal(duty.to_value(dimensionless), 0.0225)
+    npt.assert_equal(duty == 0.0225, True)
+    npt.assert_equal(duty == 22.5, False)
+    npt.assert_equal(duty < 0.05, True)
+    npt.assert_equal(duty > 1.0, False)
+    npt.assert_equal(duty <= 0.0225, True)
+    npt.assert_equal(duty >= 0.0225, True)
+    npt.assert_equal(duty != 0.0225, False)
+    npt.assert_equal(duty + 1 == 1.0225, True)
+    npt.assert_equal(1 + duty == 1.0225, True)
+    npt.assert_equal(duty - 1 == -0.9775, True)
+    npt.assert_equal(1 - duty == 0.9775, True)  # __rsub__ takes its own path
+    ratio = (1 * s) / ms
+    npt.assert_equal(ratio.magnitude, 1)
+    npt.assert_equal(ratio == 1000, True)
+    npt.assert_equal(ratio > 999, True)
+    npt.assert_equal(ratio < 1001, True)
+    npt.assert_equal(ratio + 1 == 1001, True)
+    npt.assert_equal(1 + ratio == 1001, True)
+    npt.assert_equal(ratio - 1 == 999, True)
+    npt.assert_equal(1 - ratio == -999, True)
+    # The result of mixing in a bare number is in `dimensionless`, so it does
+    # not silently inherit a compound spelling:
+    npt.assert_equal((duty + 1).unit, dimensionless)
+    npt.assert_equal((1 - duty).unit, dimensionless)
+    # Quantity-to-quantity comparison already converted, and still does:
+    npt.assert_equal(duty == 0.0225 * dimensionless, True)
+    npt.assert_equal(ratio == 1000 * dimensionless, True)
 
 
 def test_Quantity_arrays():

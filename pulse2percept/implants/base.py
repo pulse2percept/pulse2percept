@@ -8,7 +8,7 @@ from scipy.interpolate import RegularGridInterpolator
 from .electrodes import Electrode, DiskElectrode
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from .rasters import Raster
-from ..stimuli import Stimulus, ImageStimulus, VideoStimulus
+from ..stimuli import Stimulus, ImageStimulus, StimulusEncoder, VideoStimulus
 from ..stimuli.base import _describe_unit
 from ..units import DimensionMismatchError, as_value, uA, um
 from ..utils import PrettyPrint
@@ -31,7 +31,15 @@ class ProsthesisSystem(PrettyPrint):
         The electrode array used to deliver electrical stimuli to the retina.
     stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
         A valid source type for the :py:class:`~pulse2percept.stimuli.Stimulus`
-        object (e.g., scalar, NumPy array, pulse train).
+        object (e.g., scalar, NumPy array, pulse train). It must be electrical
+        (see
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`), or
+        an image or a video that the implant's ``encoder`` turns into one.
+
+        .. versionchanged:: 0.10.0
+            A stimulus that is neither a current nor something the implant's
+            ``encoder`` can turn into one is refused here, instead of at the
+            point where a model tries to read it.
     eye : 'LE' or 'RE'
         A string indicating whether the system is implanted in the left ('LE')
         or right eye ('RE')
@@ -43,9 +51,21 @@ class ProsthesisSystem(PrettyPrint):
         If safe mode is enabled, only charge-balanced stimuli are allowed.
         Safety is an electrical property, so this also requires the stimulus
         to be measured in units of current.
+    encoder : :py:class:`~pulse2percept.stimuli.StimulusEncoder`, optional
+        How the device turns a picture into stimulation. If given, assigning an
+        image or a video to
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim` encodes it
+        first, so that ``implant.stim`` always ends up electrical. If None,
+        such a stimulus is refused, since there is no principled default
+        mapping from a gray level to an amplitude or a frequency.
+
+        .. versionadded:: 0.10.0
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
         How the stimulator takes turns between electrodes that it cannot drive
-        at the same time. If None, every electrode may fire at once.
+        at the same time. If None, every electrode may fire at once. Assigning
+        one binds it to this implant (see
+        :py:meth:`~pulse2percept.implants.Raster.bind`), and it is the raster
+        the ``encoder`` schedules against.
 
         .. versionadded:: 0.10.0
     max_current : float, optional
@@ -74,17 +94,31 @@ class ProsthesisSystem(PrettyPrint):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('_earray', '_stim', '_eye', 'safe_mode', 'preprocess',
-                 '_raster', '_max_current')
+    __slots__ = ('_earray', '_stim', '_spatial_stim', '_eye', 'safe_mode',
+                 'preprocess', '_encoder', '_raster', '_max_current')
+
+    #: The physical quantity this system delivers, mirroring
+    #: :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`. An electrical
+    #: prosthesis delivers current, so a stimulus that is not a current is not
+    #: a stimulus it can deliver, and is refused when it is assigned rather
+    #: than when a model eventually tries to read it. Only the *dimension* has
+    #: to match: `Stimulus` has already converted an amplitude given as
+    #: ``0.05 * mA`` into 50 uA by the time it gets here. A device that
+    #: delivered something else (light, say) would override this.
+    stimulus_unit = uA
 
     def __init__(self, earray, stim=None, eye='RE', preprocess=False,
-                 safe_mode=False, raster=None, max_current=None):
+                 safe_mode=False, encoder=None, raster=None, max_current=None):
         self.earray = earray
         self.eye = eye
         self.safe_mode = safe_mode
         self.preprocess = preprocess
+        self.encoder = encoder
         self.raster = raster
         self.max_current = max_current
+        # Beware of race condition: the stimulus goes last, because assigning
+        # it may have to encode a picture, which needs the encoder, the raster
+        # and the electrode array to be in place already.
         self.stim = stim
 
     def _pprint_params(self):
@@ -95,11 +129,33 @@ class ProsthesisSystem(PrettyPrint):
         }
         if hasattr(self, "eye"):
             params['eye'] = self.eye
+        if self.encoder is not None:
+            params['encoder'] = self.encoder
         if self.raster is not None:
             params['raster'] = self.raster
         if self.max_current is not None:
             params['max_current'] = self.max_current
         return params
+
+    @property
+    def encoder(self):
+        """Stimulus encoder
+
+        How this device turns a picture into stimulation. Most implants do not
+        set one in their constructor, so the slot backing it may never have
+        been written to; no encoder means an image or a video assigned to
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim` is refused
+        rather than silently given a modulation scheme nobody chose.
+        """
+        return getattr(self, '_encoder', None)
+
+    @encoder.setter
+    def encoder(self, encoder):
+        """Encoder setter (called upon ``self.encoder = encoder``)"""
+        if encoder is not None and not isinstance(encoder, StimulusEncoder):
+            raise TypeError(f"'encoder' must be a StimulusEncoder object, not "
+                            f"{type(encoder)}.")
+        self._encoder = encoder
 
     @property
     def raster(self):
@@ -108,15 +164,26 @@ class ProsthesisSystem(PrettyPrint):
         Most implants do not set this in their constructor, so the slot backing
         it may never have been written to; an unset raster means all electrodes
         may fire at once.
+
+        Assigning a raster binds it to this implant (see
+        :py:meth:`~pulse2percept.implants.Raster.bind`), which is what lets a
+        geometry-dependent pattern such as
+        :py:class:`~pulse2percept.implants.CheckerboardRaster` work itself out
+        and what lets :py:meth:`~pulse2percept.implants.Raster.plot` be called
+        without an argument.
         """
         return getattr(self, '_raster', None)
 
     @raster.setter
     def raster(self, raster):
         """Raster setter (called upon ``self.raster = raster``)"""
-        if raster is not None and not isinstance(raster, Raster):
-            raise TypeError(f"'raster' must be a Raster object, not "
-                            f"{type(raster)}.")
+        if raster is not None:
+            if not isinstance(raster, Raster):
+                raise TypeError(f"'raster' must be a Raster object, not "
+                                f"{type(raster)}.")
+            # Before the slot is written to, so that a raster that cannot be
+            # laid out on this array leaves the implant as it was:
+            raster.bind(self)
         self._raster = raster
 
     @property
@@ -132,22 +199,47 @@ class ProsthesisSystem(PrettyPrint):
             raise ValueError("'max_current' must be positive.")
         self._max_current = max_current
 
+    def _require_deliverable_stim(self, stim):
+        """Refuse a stimulus this system cannot physically deliver
+
+        The implant's half of the boundary that
+        :py:func:`~pulse2percept.models.base._require_stim_dimension` guards on
+        the model's side. Both are needed: a model must not read gray levels as
+        microamps whatever produced them, and an implant that accepted a
+        picture would only fail once a model got hold of it, several steps
+        away from the assignment that was actually wrong.
+
+        Checked on the *final* stimulus, after ``preprocess`` and after any
+        reshaping onto the electrode grid, so that a preprocessing step that
+        turns an image into current is exactly as valid as encoding it first.
+        """
+        if stim.unit.dimension == self.stimulus_unit.dimension:
+            return
+        raise DimensionMismatchError(
+            f"{type(self).__name__} delivers "
+            f"{_describe_unit(self.stimulus_unit)}, but this stimulus is "
+            f"measured in {_describe_unit(stim.unit)}. Give the implant an "
+            f"'encoder' (pulse2percept.stimuli.AmplitudeEncoder or "
+            f"FrequencyEncoder) so that image or video input is encoded on "
+            f"assignment, encode it yourself first, or give the implant a "
+            f"'preprocess' function that does.")
+
     @staticmethod
     def _require_current_stim(stim, check):
         """Refuse to run an electrical safety check on something that isn't
 
-        Called by each check rather than by ``check_stim``, because an implant
-        with no current limit and no safe mode is not asking an electrical
-        question at all, and a dimensionless stimulus is free to pass through
-        it on its way to a preprocessing step.
+        Called by each check rather than by ``check_stim``, because a safety
+        check is a claim about electricity and each one has to say so for
+        itself: ``check_stim`` is public, and is called directly by tests and
+        by subclasses on stimuli that never went through the setter.
         """
         if stim.unit.dimension != uA.dimension:
             raise DimensionMismatchError(
                 f"Safety check '{check}' needs an electrical stimulus to "
                 f"check, and this one is measured in "
                 f"{_describe_unit(stim.unit)}. Encode it into current first "
-                f"(see pulse2percept.stimuli.Encoder), or give the implant a "
-                f"'preprocess' function that does.")
+                f"(see pulse2percept.stimuli.StimulusEncoder), or give the "
+                f"implant a 'preprocess' function that does.")
 
     @classmethod
     def _require_charge_balanced(cls, stim):
@@ -189,11 +281,12 @@ class ProsthesisSystem(PrettyPrint):
 
         Both are questions about electricity, and neither can be answered about
         a stimulus that is not a current, so each raises a
-        :py:class:`~pulse2percept.units.DimensionMismatchError` on one. An
-        implant that asks for neither does not run either check, which is why a
-        dimensionless stimulus may still be assigned to one -- ``preprocess``
-        has already had its chance to turn it into current, and if it did not,
-        no safety claim is being made about it either.
+        :py:class:`~pulse2percept.units.DimensionMismatchError` on one. In the
+        ordinary flow this cannot happen: assigning to
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim` has already
+        checked the stimulus against
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`.
+        ``check_stim`` is public, though, and may be handed anything.
 
         The user can define their own checks in implants that inherit from
         :py:class:`~pulse2percept.implants.ProsthesisSystem`.
@@ -333,6 +426,10 @@ class ProsthesisSystem(PrettyPrint):
         self.earray.deactivate(electrodes)
         if self.stim is not None:
             self.stim.remove(electrodes)
+        # An electrode switched off delivers nothing, whichever of the two
+        # descriptions of the stimulus is being read:
+        if getattr(self, '_spatial_stim', None) is not None:
+            self._spatial_stim.remove(electrodes)
 
     @property
     def earray(self):
@@ -369,6 +466,22 @@ class ProsthesisSystem(PrettyPrint):
            Unless when using dictionary notation, the number of stimuli must
            equal the number of electrodes in ``earray``.
 
+        What is stored is always something the implant can deliver; for an
+        electrical prosthesis that means a current (see
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`).
+        An image or a video is not that, so it is run through the implant's
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.encoder` on the way
+        in. Without an encoder there is no principled default mapping from a
+        gray level to an amplitude or a frequency, so assigning one raises a
+        :py:class:`~pulse2percept.units.DimensionMismatchError`: say which you
+        want with an
+        :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` or a
+        :py:class:`~pulse2percept.stimuli.FrequencyEncoder`.
+
+        .. versionchanged:: 0.10.0
+            A non-electrical stimulus is encoded on assignment if the implant
+            has an encoder, and refused otherwise.
+
         Examples
         --------
         Send a biphasic pulse (30uA, 0.45ms phase duration) to an implant made
@@ -384,12 +497,30 @@ class ProsthesisSystem(PrettyPrint):
         >>> from pulse2percept.implants import ArgusII
         >>> implant = ArgusII(stim={'B7': 13})
 
+        Argus II comes with an encoder, so an image can be assigned directly:
+
+        >>> from pulse2percept.stimuli import LogoBVL
+        >>> implant = ArgusII(stim=LogoBVL())
+        >>> implant.stim.unit
+        uA
+
         """
         return self._stim
 
     @stim.setter
     def stim(self, data):
         """Stimulus setter (called upon ``self.stim = data``)"""
+        # `_spatial_stim` is the other description of an encoded stimulus: the
+        # modulation the encoder asked for, one amplitude per electrode per
+        # frame of the source, with no waveform, pulse clock or raster in it.
+        # `stim` stays the pulse train the device delivers; this is what a
+        # reader with no clock of its own can make sense of, and it is read by
+        # `pulse2percept.models.SpatialModel.predict_percept`. Cleared on every
+        # path through this setter and rebuilt below only where this implant's
+        # own encoder produced it, so that it can never be left describing the
+        # picture before last:
+        self._spatial_stim = None
+        spatial = None
         # if stim is empty or None
         if data is None:
             self._stim = None
@@ -414,11 +545,29 @@ class ProsthesisSystem(PrettyPrint):
                 # Use electrode names as stimulus coordinates:
                 stim = Stimulus(data, electrodes=self.electrode_names)
 
+            # A picture is not something an implant can deliver, so this is
+            # where it becomes stimulation. Preprocessing goes first and may
+            # have done the job already (a `preprocess` that encodes is exactly
+            # as valid as an `encoder`), in which case there is nothing
+            # dimensionless left to encode. Both halves of the encoding are
+            # kept: what the device delivers, and the modulation it was asked
+            # for (see `_spatial_stim` above).
+            if (self.encoder is not None and
+                    stim.unit.dimension.is_dimensionless and
+                    stim.unit.dimension != self.stimulus_unit.dimension):
+                spatial, stim = self.encoder._encode_both(stim, implant=self)
+
             # If the stim is larger than the number of electrodes, most commonly
             # we're dealing with an image or video stim. In this case, we might
             # want to try and reshape the stimulus to fit the array:
             if len(stim.electrodes) > self.n_electrodes:
                 stim = self.reshape_stim(stim)
+
+            # Whatever came in is now a Stimulus laid out on this implant's
+            # electrodes. Whether it is a stimulus the implant can *deliver*
+            # is the next question, and it is asked before anything else looks
+            # at the numbers:
+            self._require_deliverable_stim(stim)
 
             # Make sure all electrode names are valid:
             for electrode in stim.electrodes:
@@ -427,12 +576,17 @@ class ProsthesisSystem(PrettyPrint):
                     raise ValueError(f'Electrode "{electrode}" not found in '
                                      f'implant.')
             # Remove deactivated electrodes from the stimulus:
-            stim.remove([name for (name, e) in self.electrodes.items()
-                         if not e.activated and name in stim.electrodes])
-            # Perform safety checks, etc.:
+            off = [name for (name, e) in self.electrodes.items()
+                   if not e.activated and name in stim.electrodes]
+            stim.remove(off)
+            if spatial is not None:
+                spatial.remove(off)
+            # Perform safety checks, etc. These are all questions about what
+            # gets delivered, so they are asked of the pulse train:
             self.check_stim(stim)
             # Store stimulus:
             self._stim = deepcopy(stim)
+            self._spatial_stim = None if spatial is None else deepcopy(spatial)
 
     @property
     def eye(self):

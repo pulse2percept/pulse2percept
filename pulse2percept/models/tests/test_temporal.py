@@ -472,7 +472,7 @@ def test_FadingTemporal_reduce_limits():
     # two settings have nothing to disagree about.
     rising = Stimulus(np.full((4, 2), -20.0), time=[0.0, 500.0])
     rising.metadata['encoder'] = {'frame_time': np.arange(10) * 50.0,
-                                  'frame_dur': 50.0, 'n_frames': 10}
+                                  'frame_dur': 50.0}
     peak = FadingTemporal(tau=100).build().predict_percept(rising)
     last = FadingTemporal(tau=100, reduce='last').build().predict_percept(
         rising)
@@ -482,7 +482,7 @@ def test_FadingTemporal_reduce_limits():
     # A pulse train is the case they were built to disagree about:
     train = BiphasicPulseTrain(20, -50, 0.46, stim_dur=500)
     train.metadata['encoder'] = {'frame_time': np.arange(10) * 50.0,
-                                 'frame_dur': 50.0, 'n_frames': 10}
+                                 'frame_dur': 50.0}
     peak = FadingTemporal(tau=100).build().predict_percept(train)
     last = FadingTemporal(tau=100, reduce='last').build().predict_percept(
         train)

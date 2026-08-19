@@ -145,9 +145,10 @@ field you are, and on which retinotopic map you believe in. That is what a
     x_um, y_um = Watson2014Map().dva_to_ret(2 * dva, 3 * dva)
 
 **Gray levels are not small currents.** An image or a video is dimensionless,
-and a model that stimulates tissue will refuse one. An
-:py:class:`~pulse2percept.stimuli.Encoder` is what says how much current a
-gray level stands for:
+and a model that stimulates tissue will refuse one. A
+:py:class:`~pulse2percept.stimuli.StimulusEncoder` is what says how much
+current a gray level stands for, and an implant that has one encodes on
+assignment:
 
 .. code-block:: python
 
@@ -156,10 +157,58 @@ gray level stands for:
     from pulse2percept.models import ScoreboardModel
 
     img = ImageStimulus('path-to-image.png')
-    stim = AmplitudeEncoder(ArgusII(), amp_range=(0, 50)).encode(img)
+
+    implant = ArgusII(encoder=AmplitudeEncoder(amp_range=(0, 50)))
+    implant.stim = img            # encoded here, and now measured in uA
 
     model = ScoreboardModel().build()
-    percept = model.predict_percept(ArgusII(stim=stim))
+    percept = model.predict_percept(implant)
+
+Assigning the image to an implant *without* an encoder raises, rather than
+reading its gray levels as microamps. There is no default answer to *how much*
+current a gray level stands for, and choosing one is what an encoder is for.
+
+Shorthands that are not conversions
+-----------------------------------
+
+A few arguments accept a quantity of a dimension they do not store, because
+there is exactly one thing it can mean there. These are shorthands resolved at
+the boundary, not conversions: what is stored afterwards is the ordinary
+number it always was.
+
+**A retinal extent, for a visual field range.** A spatial model simulates a
+patch of the visual field, sampled uniformly in dva. On a retinal model you
+may name that patch by the piece of retina it lands on, and the model's own
+:py:class:`~pulse2percept.topography.VisualFieldMap` resolves it:
+
+.. doctest::
+
+    >>> from pulse2percept.models import ScoreboardModel
+    >>> from pulse2percept.topography import Curcio1990Map
+    >>> from pulse2percept.units import mm
+    >>> model = ScoreboardModel(xrange=(-2.8 * mm, 2.8 * mm),
+    ...                         vfmap=Curcio1990Map())
+    >>> model.xrange  # 280 um to the degree
+    (-10.0, 10.0)
+
+Each range is converted along its corresponding retinal meridian: ``xrange``
+through ``ret_to_dva(x, 0)`` and ``yrange`` through ``ret_to_dva(0, y)``. The
+resulting grid is still rectangular and uniformly sampled in dva, exactly as
+if you had typed those degrees yourself. Under a nonlinear map such as
+:py:class:`~pulse2percept.topography.Watson2014Map` it is therefore not the
+image of a retinal rectangle: naming retinal lengths says how far to simulate,
+it does not make the grid uniform in retinal space.
+
+For the same reason ``step`` has no such spelling -- a grid spaced evenly on
+the retina is a different grid, not a different spelling of this one -- and
+neither has a cortical model, where a length is not shorthand for anything.
+The range is resolved once, when it is assigned, so a map installed afterwards
+does not reinterpret it.
+
+**A frequency, for a frame rate.** ``fps`` counts frames per second, so it
+takes hertz as readily as a bare number: ``percept.play(fps=30)``,
+``percept.play(fps=30 * Hz)`` and ``percept.play(fps=0.03 * kHz)`` are the same
+call, and ``percept.play(fps=30 * ms)`` raises.
 
 Asking what an object's numbers mean
 ------------------------------------

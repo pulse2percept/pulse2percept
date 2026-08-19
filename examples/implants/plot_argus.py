@@ -84,12 +84,18 @@ p2p.stimuli.BostonTrain().play()
 # After feeding the resulting stimulus through the axon map model, we get a
 # pretty good idea of what this video would look like to an Argus II patient:
 
-# The video is encoded into current first -- a model reads microamps, not gray
-# levels -- at a pulse rate that keeps up with the frame rate:
+# Argus II knows how it encodes video -- gray level onto pulse amplitude at
+# 6 Hz, six rows of electrodes taking turns -- so assigning the video is all it
+# takes. What ends up in ``implant.stim`` is current, which is what a model
+# reads, and the percept comes back at one frame per video frame.
+#
+# The encoder warns that most frames of this 30 fps clip carry no pulse of
+# their own: 6 Hz is the rate the real device runs at, and it is slower than
+# the video. Pass ``encoder=p2p.stimuli.AmplitudeEncoder(freq=30)`` to deliver
+# every frame instead.
 video = p2p.stimuli.BostonTrain()
-implant = p2p.implants.ArgusII()
-implant.stim = video.encode(implant=implant, freq=30)
-model.predict_percept(implant, t_percept=video.time).play()
+implant = p2p.implants.ArgusII(stim=video)
+model.predict_percept(implant).play()
 
 ###############################################################################
 # The above simulation is basically equivalent to the scoreboard model, because
@@ -104,7 +110,7 @@ model.predict_percept(implant, t_percept=video.time).play()
 
 model.lam = 600
 model.build()
-model.predict_percept(implant, t_percept=video.time).play()
+model.predict_percept(implant).play()
 
 ###############################################################################
 # On the other hand, some retinal implant recipients (e.g., 51-009) report
@@ -114,7 +120,7 @@ model.predict_percept(implant, t_percept=video.time).play()
 model.rho = 100
 model.lam = 1000
 model.build()
-model.predict_percept(implant, t_percept=video.time).play()
+model.predict_percept(implant).play()
 
 
 ###############################################################################
@@ -130,19 +136,18 @@ p2p.stimuli.GirlPool().play()
 # then feed it through the axon map model:
 
 video = p2p.stimuli.GirlPool()
-implant = p2p.implants.ArgusII()
-implant.stim = video.encode(implant=implant, freq=30)
+implant = p2p.implants.ArgusII(stim=video)
 model.rho = 400
 model.lam = 200
 model.build()
-model.predict_percept(implant, t_percept=video.time).play()
+model.predict_percept(implant).play()
 
 ###############################################################################
 # Here is the same video with longer phosphenes:
 
 model.lam = 600
 model.build()
-model.predict_percept(implant, t_percept=video.time).play()
+model.predict_percept(implant).play()
 
 ###############################################################################
 # Here is the same video with thin and long phosphenes:
@@ -150,7 +155,7 @@ model.predict_percept(implant, t_percept=video.time).play()
 model.rho = 100
 model.lam = 1000
 model.build()
-model.predict_percept(implant, t_percept=video.time).play()
+model.predict_percept(implant).play()
 
 ###############################################################################
 # In reality, the vision provided by Argus II may be even worse for several

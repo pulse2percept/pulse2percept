@@ -21,6 +21,8 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.colors import to_hex, to_rgba
 from PIL import Image
 
+from ..units import Hz, as_value
+
 __all__ = ['HTMLAnimation', 'frame_interval']
 
 # Frames are packed into a single sprite sheet. Browsers put a cap on the size
@@ -80,6 +82,9 @@ def frame_interval(time, fps=None, tol=1e-2):
     fps : float or None
         Frames per second. If None, the interval is inferred from ``time``,
         which is not supported for a non-homogeneous time axis.
+
+        May be given as a plain number of hertz or as a unitful frequency
+        (e.g. ``0.03 * kHz``); see :py:mod:`pulse2percept.units`.
     tol : float, optional
         Tolerance within which two time steps count as equal
 
@@ -90,6 +95,11 @@ def frame_interval(time, fps=None, tol=1e-2):
         time step of its own and falls back on ``SINGLE_FRAME_INTERVAL``.
 
     """
+    # Every ``play`` in p2p ends up here for its frame timing, so this is the
+    # one place a frame rate has to be turned into a plain number of hertz. A
+    # rate is a frequency, so `30 * Hz` and `0.03 * kHz` are the same argument
+    # as `30`, and `30 * ms` is not an argument at all:
+    fps = as_value(fps, Hz, 'fps')
     if fps is not None:
         return 1000.0 / fps
     interval = np.diff(np.asarray(time, dtype=np.float64))
@@ -618,13 +628,18 @@ class HTMLAnimation(FuncAnimation):
         Parameters
         ----------
         fps : float or None
-            Frames per second. If None, uses the animation's interval.
+            Frames per second. If None, uses the animation's interval. May be
+            given as a unitful frequency (e.g. ``30 * Hz``); see
+            :py:mod:`pulse2percept.units`.
         embed_frames : bool
             Unused; frames are always embedded.
         default_mode : {'loop', 'once', 'reflect'} or None
             What the animation should do once it has played through. If None,
             uses 'loop' or 'once', depending on ``repeat``.
         """
+        # Before the fallback below: Matplotlib takes a plain number of hertz,
+        # so a quantity has to be converted whichever player renders it.
+        fps = as_value(fps, Hz, 'fps')
         if self._image is None or self._frame_data is None:
             # Nothing to accelerate, fall back on Matplotlib:
             return super().to_jshtml(fps=fps, embed_frames=embed_frames,

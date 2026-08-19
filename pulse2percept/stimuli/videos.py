@@ -691,8 +691,8 @@ class VideoStimulus(Stimulus):
         """
         # Imported here because `encoders` imports this module:
         from .encoders import AmplitudeEncoder
-        return AmplitudeEncoder(implant=implant, amp_range=amp_range,
-                                freq=freq, **kwargs).encode(self)
+        return AmplitudeEncoder(amp_range=amp_range, freq=freq,
+                                **kwargs).encode(self, implant=implant)
 
     def __iter__(self):
         """Iterate over all frames in self.data"""
@@ -722,7 +722,9 @@ class VideoStimulus(Stimulus):
         ----------
         fps : float or None
             If None, uses the video's time axis. Not supported for
-            non-homogeneous time axis.
+            non-homogeneous time axis. May be given as a plain number of hertz
+            or as a unitful frequency (e.g. ``30 * Hz``, ``0.03 * kHz``); see
+            :py:mod:`pulse2percept.units`.
         repeat : bool, optional
             Whether the animation should repeat when the sequence of frames is
             completed.

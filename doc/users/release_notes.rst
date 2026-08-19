@@ -9,10 +9,26 @@ v0.10.0 Encoders (unreleased)
 
 Highlights:
 
-*  New :py:class:`~pulse2percept.stimuli.Encoder` classes translate images and
-   videos into electrical stimulation. Amplitude and frequency modulation are
-   supported, including stimulator timing, input resolution, and electrode
-   multiplexing.
+*  New :py:class:`~pulse2percept.stimuli.StimulusEncoder` classes translate
+   images and videos into electrical stimulation. Amplitude and frequency
+   modulation are supported, including stimulator timing, input resolution,
+   and electrode multiplexing. An implant carries its own encoder, so
+   ``implant.stim = image`` encodes on assignment::
+
+       implant = p2p.implants.ArgusII(stim=p2p.stimuli.BostonTrain())
+       percept = p2p.models.AxonMapModel().build().predict_percept(implant)
+       percept.play()
+
+*  Spatial models read modulation frames; temporal models read electrical
+   events. An implant that encodes a picture keeps two descriptions of it: the
+   pulse train the device delivers (``implant.stim``) and the modulation the
+   encoder asked for -- one amplitude per electrode per frame, with no
+   waveform, pulse clock or raster in it. A model with no temporal component
+   reads the latter, since a pulse train is a statement about time that it has
+   no way to express; otherwise an encoded image would come back as a sequence
+   of raster slots rather than as the image. So
+   :py:meth:`~pulse2percept.models.SpatialModel.predict_percept` reports one
+   percept frame per video frame, and one frame for an image.
 
 *  New :py:class:`~pulse2percept.implants.Raster` classes describe how
    stimulators multiplex electrodes that cannot be driven simultaneously. Each
@@ -61,8 +77,15 @@ API changes:
 * :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` now records ``amp`` in
   its metadata as a magnitude.
 
-* :py:class:`~pulse2percept.implants.ProsthesisSystem` now exposes ``raster``
-  and ``max_current``.
+* :py:class:`~pulse2percept.implants.ProsthesisSystem` now exposes ``encoder``,
+  ``raster`` and ``max_current``. A raster is bound to the implant it is
+  assigned to (:py:meth:`~pulse2percept.implants.Raster.bind`), so
+  ``CheckerboardRaster`` works its pattern out from that implant's electrode
+  geometry and ``implant.raster.plot()`` needs no argument.
+  :py:class:`~pulse2percept.implants.ArgusII` defaults to an
+  :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` at 6 Hz and a
+  :py:class:`~pulse2percept.implants.SequentialRaster` of six groups 2 ms
+  apart; pass ``encoder=None`` or ``raster=None`` to switch either off.
 
 * ``play`` gained a ``fmt`` argument.
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` defaults to JPEG, which
@@ -87,11 +110,40 @@ API changes:
   is not the physical quantity the model reads. Assigning an
   :py:class:`~pulse2percept.stimuli.ImageStimulus` or
   :py:class:`~pulse2percept.stimuli.VideoStimulus` straight to ``implant.stim``
-  previously had its gray levels silently treated as microamps. Encode it with
-  :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` or
-  :py:class:`~pulse2percept.stimuli.FrequencyEncoder` first, or give the
-  implant a ``preprocess`` function that does. The same check guards the
-  ``safe_mode`` and ``max_current`` safety checks.
+  previously had its gray levels silently treated as microamps. The same check
+  guards the ``safe_mode`` and ``max_current`` safety checks.
+
+* :py:class:`~pulse2percept.implants.ProsthesisSystem` now declares
+  ``stimulus_unit`` (microamps) and never stores a stimulus of another
+  dimension. A picture assigned to an implant that has an ``encoder`` is
+  encoded on the way in; one assigned to an implant without an encoder raises,
+  rather than letting it through to fail in the model. Preprocessing still runs
+  first, so an implant whose ``preprocess`` turns pictures into current is
+  unaffected, and its output is not encoded a second time.
+
+* A :py:class:`~pulse2percept.stimuli.StimulusEncoder` no longer holds an
+  implant or a raster of its own. The implant is named where the encoding
+  happens -- ``encoder.encode(source, implant=implant)`` -- and the raster
+  comes from that implant, so device scheduling is described in exactly one
+  place. :py:class:`~pulse2percept.implants.CheckerboardRaster` likewise takes
+  ``n_groups`` alone and learns its geometry when it is bound.
+
+* ``fps`` arguments (:py:meth:`~pulse2percept.percepts.Percept.play`,
+  :py:meth:`~pulse2percept.percepts.Percept.save`,
+  :py:meth:`~pulse2percept.stimuli.VideoStimulus.play`,
+  :py:func:`~pulse2percept.utils.frame_interval`) accept a frequency
+  quantity (``30 * Hz``, ``0.03 * kHz``) as well as a plain number of hertz.
+
+* ``xrange`` and ``yrange`` on a retinal spatial model accept a physical
+  extent (``xrange=(-4 * mm, 4 * mm)``), which the model's ``vfmap`` resolves
+  into the visual field range that piece of retina covers, each range along
+  its own retinal meridian. The range is stored in degrees of visual angle and
+  the grid stays uniform in dva, exactly as before. This is shorthand for a
+  visual field extent rather than a unit conversion, so it is not offered for
+  ``step`` and not offered on cortical models.
+
+* Warnings raised while encoding (missed frames, large time axes, large
+  allocations) now point at the calling line rather than at ``encoders.py``.
 
 * :py:attr:`~pulse2percept.stimuli.Stimulus.is_charge_balanced` returns None
   for a stimulus that is not a current, rather than answering a question that

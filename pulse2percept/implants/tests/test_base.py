@@ -13,9 +13,10 @@ from skimage.measure import label, regionprops
 from pulse2percept.implants import (PointSource, ElectrodeArray, ElectrodeGrid,
                                     ProsthesisSystem, RectangleImplant,
                                     PhotovoltaicPixel)
-from pulse2percept.stimuli import Stimulus, ImageStimulus, VideoStimulus, LogoBVL
+from pulse2percept.stimuli import (Stimulus, ImageStimulus, VideoStimulus,
+                                   BostonTrain, LogoBVL)
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
-                                   MonophasicPulse)
+                                   FrequencyEncoder, MonophasicPulse)
 from pulse2percept.implants import (ArgusII, DiskElectrode)
 from pulse2percept.models import ScoreboardModel
 
@@ -154,16 +155,20 @@ def test_ProsthesisSystem_stim():
 @pytest.mark.parametrize('n_frames', (1, 3, 4))
 def test_ProsthesisSystem_reshape_stim(rot, gtype, n_frames):
     implant = ProsthesisSystem(ElectrodeGrid((10, 10), 30, rot=rot, type=gtype))
-    # Smoke test the automatic reshaping:
+    # Smoke test the reshaping. It is called on the way to `implant.stim`, but
+    # a picture is not a stimulus an implant can deliver, so it is exercised
+    # directly here (which is also how an encoder reaches it):
     n_px = 21
-    implant.stim = ImageStimulus(np.ones((n_px, n_px, n_frames)).squeeze())
-    npt.assert_equal(implant.stim.data.shape, (implant.n_electrodes, 1))
-    npt.assert_equal(implant.stim.time, None)
-    implant.stim = VideoStimulus(np.ones((n_px, n_px, 3 * n_frames)),
-                                 time=2 * np.arange(3 * n_frames))
-    npt.assert_equal(implant.stim.data.shape,
+    reshaped = implant.reshape_stim(
+        ImageStimulus(np.ones((n_px, n_px, n_frames)).squeeze()))
+    npt.assert_equal(reshaped.data.shape, (implant.n_electrodes, 1))
+    npt.assert_equal(reshaped.time, None)
+    reshaped = implant.reshape_stim(
+        VideoStimulus(np.ones((n_px, n_px, 3 * n_frames)),
+                      time=2 * np.arange(3 * n_frames)))
+    npt.assert_equal(reshaped.data.shape,
                      (implant.n_electrodes, 3 * n_frames))
-    npt.assert_equal(implant.stim.time, 2 * np.arange(3 * n_frames))
+    npt.assert_equal(reshaped.time, 2 * np.arange(3 * n_frames))
 
     # Verify that a horizontal stimulus will always appear horizontally, even if
     # the device is rotated. What is under test is where `reshape_stim` puts
@@ -181,7 +186,7 @@ def test_ProsthesisSystem_reshape_stim(rot, gtype, n_frames):
 
     # Smoke test a large hex grid (old code results in MemoryError):
     implant = PhotovoltaicArray(r=2, spacing=40, rot=rot)
-    implant.stim = LogoBVL()
+    implant.reshape_stim(LogoBVL())
 
 
 def test_ProsthesisSystem_deactivate():
@@ -285,20 +290,21 @@ def test_ProsthesisSystem_reshape_stim_frames_independent():
     vid = rng.random((24, 31, n_frames)).astype(np.float32)
     implant = ProsthesisSystem(ElectrodeGrid((6, 8), 200))
 
-    implant.stim = VideoStimulus(vid, time=np.arange(n_frames))
-    joint = implant.stim.data
+    joint = implant.reshape_stim(VideoStimulus(vid,
+                                               time=np.arange(n_frames))).data
     npt.assert_equal(joint.shape, (implant.n_electrodes, n_frames))
 
     for f in range(n_frames):
-        implant.stim = ImageStimulus(vid[..., f])
-        npt.assert_allclose(implant.stim.data[:, 0], joint[:, f], rtol=1e-5,
+        single = implant.reshape_stim(ImageStimulus(vid[..., f]))
+        npt.assert_allclose(single.data[:, 0], joint[:, f], rtol=1e-5,
                             atol=1e-7)
 
     # Pixels outside the electrode footprint are filled with zero, not
     # extrapolated, so an all-zero frame stays all zero:
     vid[..., 2] = 0
-    implant.stim = VideoStimulus(vid, time=np.arange(n_frames))
-    npt.assert_equal(np.all(implant.stim.data[:, 2] == 0), True)
+    sampled = implant.reshape_stim(VideoStimulus(vid,
+                                                 time=np.arange(n_frames)))
+    npt.assert_equal(np.all(sampled.data[:, 2] == 0), True)
 
 
 def test_implant_geometry_units():
@@ -404,24 +410,21 @@ def test_ProsthesisSystem_max_current_units():
 
 
 def test_ProsthesisSystem_safety_checks_are_electrical():
-    """Electrical safety may only be asked about an electrical stimulus"""
-    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
-    vid = VideoStimulus(np.ones((6, 10, 3)) * 0.5, time=[0, 20, 40])
+    """Electrical safety may only be asked about an electrical stimulus
 
-    # No electrical policy requested, so no electrical question is asked and a
-    # picture may still be assigned. This is what keeps preprocessing
-    # workflows, which turn images into current, working:
-    implant = ArgusII(preprocess=False, safe_mode=False)
-    implant.stim = img
-    npt.assert_equal(implant.stim.unit, dimensionless)
-    implant.stim = vid
-    npt.assert_equal(implant.stim.unit, dimensionless)
+    In the ordinary flow the setter has already refused anything that is not a
+    current (see ``test_ProsthesisSystem_requires_an_electrical_stimulus``), so
+    these guards are reached by calling ``check_stim`` directly -- which is
+    public, and which a subclass may call on a stimulus of its own making.
+    """
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    sampled = ArgusII().reshape_stim(img)
 
     # `safe_mode` is a claim about electricity, and cannot be made about a
     # picture -- it must not integrate gray levels and pronounce them safe:
     implant = ArgusII(preprocess=False, safe_mode=True)
     with pytest.raises(DimensionMismatchError) as excinfo:
-        implant.stim = img
+        implant.check_stim(sampled)
     npt.assert_equal("Safety check 'safe_mode'" in str(excinfo.value), True)
     npt.assert_equal('dimensionless' in str(excinfo.value), True)
 
@@ -429,7 +432,7 @@ def test_ProsthesisSystem_safety_checks_are_electrical():
     implant = ArgusII(preprocess=False, safe_mode=False)
     implant.max_current = 100 * uA
     with pytest.raises(DimensionMismatchError) as excinfo:
-        implant.stim = img
+        implant.check_stim(sampled)
     npt.assert_equal("Safety check 'max_current'" in str(excinfo.value), True)
     # Including an empty one: the guard sits before the empty-data fast path,
     # since an empty picture is just as much the wrong kind of thing.
@@ -442,24 +445,185 @@ def test_ProsthesisSystem_safety_checks_are_electrical():
                                 electrodes=ArgusII().electrode_names))
 
 
-def test_ProsthesisSystem_preprocess_crosses_the_boundary():
-    """Preprocessing may turn a picture into current before safety sees it"""
+def test_ProsthesisSystem_requires_an_electrical_stimulus():
+    """An implant delivers current, so a picture it cannot encode is refused
+
+    Not when a model eventually reads it: the assignment is the line that was
+    wrong, and without an encoder there is no principled default mapping from a
+    gray level onto an amplitude or a frequency for the implant to apply on the
+    user's behalf.
+    """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
-    encoder = AmplitudeEncoder(ArgusII(), amp_range=(0, 20), freq=20)
-    implant = ArgusII(safe_mode=True, preprocess=lambda x: encoder.encode(x))
+    npt.assert_equal(ProsthesisSystem.stimulus_unit, uA)
+
+    for source in (img, VideoStimulus(np.ones((6, 10, 3)) * 0.5,
+                                      time=[0, 20, 40]), BostonTrain()):
+        with pytest.raises(DimensionMismatchError) as excinfo:
+            ArgusII(encoder=None, stim=source)
+        npt.assert_equal('encoder' in str(excinfo.value), True)
+        npt.assert_equal('dimensionless' in str(excinfo.value), True)
+        implant = ArgusII(encoder=None)
+        with pytest.raises(DimensionMismatchError):
+            implant.stim = source
+        # Nothing was stored, so the implant is left as it was:
+        npt.assert_equal(implant.stim, None)
+        # A generic system has no encoder either:
+        with pytest.raises(DimensionMismatchError):
+            ProsthesisSystem(ArgusII().earray, stim=source)
+
+    # Encoded, the very same picture goes through:
+    implant = ArgusII(encoder=None)
+    implant.stim = AmplitudeEncoder(amp_range=(0, 50)).encode(img,
+                                                              implant=implant)
+    npt.assert_equal(implant.stim.unit, uA)
+
+    # ... and so does everything that was electrical all along:
+    for source in ({'A1': 20}, np.ones(60),
+                   {'A1': BiphasicPulse(0.02 * mA, 0.45, stim_dur=50)}):
+        implant = ArgusII(stim=source)
+        npt.assert_equal(implant.stim.unit, uA)
+    for source in (20, BiphasicPulse(20, 0.45, stim_dur=50)):
+        single = ProsthesisSystem(DiskElectrode(0, 0, 0, 100), stim=source)
+        npt.assert_equal(single.stim.unit, uA)
+
+    # A subclass may declare that it delivers something else, in which case a
+    # picture is already what it delivers and the encoder stays out of it:
+    class Projector(ArgusII):
+        stimulus_unit = dimensionless
+
+    npt.assert_equal(Projector(stim=img).stim.unit, dimensionless)
+
+
+def test_ProsthesisSystem_encoder():
+    """A picture assigned to an implant with an encoder is encoded on the way in
+    """
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    implant = ProsthesisSystem(ArgusII().earray)
+    npt.assert_equal(implant.encoder, None)
+    with pytest.raises(TypeError):
+        implant.encoder = 'amplitude'
+    with pytest.raises(TypeError):
+        ProsthesisSystem(ArgusII().earray, encoder=ArgusII())
+
+    # Giving it one is all it takes:
+    implant.encoder = AmplitudeEncoder(amp_range=(0, 50), freq=20)
+    npt.assert_equal('encoder' in str(implant), True)
+    implant.stim = img
+    npt.assert_equal(implant.stim.unit, uA)
+    npt.assert_equal(implant.stim.shape[0], implant.n_electrodes)
+    npt.assert_almost_equal(np.abs(implant.stim.data).max(), 50)
+    # What it stored is exactly what encoding it by hand gives:
+    by_hand = implant.encoder.encode(img, implant=implant)
+    npt.assert_almost_equal(implant.stim.data, by_hand.data)
+    npt.assert_almost_equal(implant.stim.time, by_hand.time)
+
+    # A custom encoder is honored, and its parameters reach the stimulus:
+    implant.encoder = AmplitudeEncoder(amp_range=(10, 30), freq=50,
+                                       frame_dur=100)
+    implant.stim = img
+    npt.assert_almost_equal(np.abs(implant.stim.data).max(), 30)
+    npt.assert_almost_equal(implant.stim.time[-1], 100)
+    implant.encoder = FrequencyEncoder(freq_range=(0, 100), amp=42,
+                                       frame_dur=100)
+    implant.stim = img
+    npt.assert_almost_equal(np.abs(implant.stim.data).max(), 42)
+
+    # An electrical stimulus bypasses the encoder entirely, whatever is
+    # installed -- there is nothing left to encode:
+    implant.encoder = AmplitudeEncoder(amp_range=(0, 50))
+    for source in ({'A1': 20}, np.ones(60),
+                   BiphasicPulse(20, 0.45, stim_dur=50)):
+        implant.stim = source
+        npt.assert_equal(implant.stim.unit, uA)
+        npt.assert_equal('encoder' in implant.stim.metadata, False)
+
+    # The encoder sees the implant it is installed on, so it samples at that
+    # implant's electrodes and schedules against that implant's raster. An
+    # amplitude range that starts above zero keeps every electrode active, so
+    # the schedules are the raster groups and nothing else:
+    implant.encoder = AmplitudeEncoder(amp_range=(10, 50))
+    implant.raster = implants.SequentialRaster(6)
+    implant.stim = img
+    delays = [implant.stim.time[np.argmax(implant.stim.data[e] < 0)]
+              for e in (0, 10, 20, 30, 40, 50)]
+    npt.assert_almost_equal(delays, np.arange(6) * 50 / 6, decimal=2)
+    npt.assert_equal(len(np.unique(np.abs(implant.stim.data) > 0, axis=0)), 6)
+
+
+def test_ProsthesisSystem_spatial_stim():
+    """An encoded stimulus keeps the modulation it was asked for, not just the
+    pulse train it was realized as
+    """
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    implant = ArgusII(stim=img)
+    # `stim` is still the delivered pulse train -- that invariant is what makes
+    # the safety checks and the temporal models meaningful:
+    npt.assert_equal(implant.stim.time.size > 1, True)
+    # ... and beside it sits what the encoder actually asked each electrode
+    # for: one column, no waveform, no raster.
+    npt.assert_equal(implant._spatial_stim.shape, (60, 1))
+    npt.assert_equal(implant._spatial_stim.time, None)
+    npt.assert_equal(implant._spatial_stim.unit, uA)
+    npt.assert_almost_equal(np.abs(implant.stim.data).max(axis=1),
+                            implant._spatial_stim.data.ravel(), decimal=4)
+
+    # A video keeps one column per video frame:
+    vid = VideoStimulus(np.random.default_rng(0).random((6, 10, 4)),
+                        metadata={'fps': 20})
+    with pytest.warns(UserWarning, match='deliver no pulse'):
+        # 6 Hz against 20 fps; irrelevant here, but it is not the modulation
+        # that goes short of frames, only the train delivering it:
+        implant.stim = vid
+    npt.assert_equal(implant._spatial_stim.shape, (60, 4))
+    npt.assert_almost_equal(implant._spatial_stim.time, np.arange(4) * 50.0)
+
+    # Anything that did not come out of this implant's encoder has only the
+    # one description of itself, and assigning it clears the stale one:
+    for source in ({'A1': 20}, np.ones(60), None,
+                   AmplitudeEncoder(amp_range=(0, 50)).encode(img)):
+        implant.stim = source
+        npt.assert_equal(implant._spatial_stim, None)
+    # ... including an implant that never had an encoder:
+    npt.assert_equal(ArgusII(stim={'A1': 20})._spatial_stim, None)
+    npt.assert_equal(ProsthesisSystem(ArgusII().earray)._spatial_stim, None)
+
+    # Switching an electrode off reaches both descriptions, or a model reading
+    # one of them would go on stimulating through a dead electrode:
+    implant = ArgusII(stim=img)
+    implant.deactivate(['A1', 'B2'])
+    npt.assert_equal(implant.stim.shape[0], 58)
+    npt.assert_equal(implant._spatial_stim.shape[0], 58)
+    npt.assert_equal('A1' in implant._spatial_stim.electrodes, False)
+
+
+def test_ProsthesisSystem_preprocess_crosses_the_boundary():
+    """Preprocessing may turn a picture into current before the encoder sees it
+    """
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    encoder = AmplitudeEncoder(amp_range=(0, 20), freq=20)
+    bare = ArgusII(encoder=None, raster=None)
+    implant = ArgusII(safe_mode=True, encoder=None, raster=None,
+                      preprocess=lambda x: encoder.encode(x, implant=bare))
     implant.max_current = 100 * mA
     implant.stim = img
     npt.assert_equal(implant.stim.unit, uA)
     npt.assert_equal(implant.stim.is_charge_balanced, True)
+    # Preprocessing that already crossed the boundary leaves the encoder with
+    # nothing to do, so an installed one does not encode twice:
+    encoded = encoder.encode(img, implant=bare)
+    twice = ArgusII(raster=None,
+                    preprocess=lambda x: encoder.encode(x, implant=bare))
+    twice.stim = img
+    npt.assert_almost_equal(twice.stim.data, encoded.data)
     # The same chain, assigned already-encoded, and this time with a limit
     # tight enough to matter:
     implant = ArgusII(preprocess=False, safe_mode=True)
     implant.max_current = 100 * uA
     with pytest.raises(ValueError) as excinfo:
-        implant.stim = encoder.encode(img)
+        implant.stim = encoded
     npt.assert_equal('exceeds max_current' in str(excinfo.value), True)
     implant.max_current = 2 * mA
-    implant.stim = encoder.encode(img)
+    implant.stim = encoded
     npt.assert_equal(implant.stim.unit, uA)
 
 

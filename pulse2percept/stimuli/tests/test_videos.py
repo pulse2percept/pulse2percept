@@ -1,9 +1,11 @@
 from pulse2percept.stimuli import (AmplitudeEncoder, VideoStimulus,
                                    BostonTrain, GirlPool)
+from pulse2percept.units import DimensionMismatchError, Hz, kHz, ms, uA
 from skimage.color import rgb2gray
 from skimage.io import imsave
 from skimage.transform import resize as vid_resize
 from matplotlib.animation import FuncAnimation
+import re
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -438,6 +440,26 @@ def test_VideoStimulus_play(n_frames):
     # Color videos are played back in color:
     rgb = VideoStimulus(np.random.rand(2, 4, 3, n_frames))
     npt.assert_equal('p2p-anim' in rgb.play().to_jshtml(), True)
+
+
+def test_VideoStimulus_play_fps_units():
+    """A frame rate is a frequency, however it is spelled
+
+    .. versionadded:: 0.10.0
+    """
+    video = VideoStimulus(np.random.rand(2, 4, 5))
+
+    def interval(fps):
+        """The frame delay (ms) the HTML player was configured with"""
+        html = video.play(fps=fps).to_jshtml()
+        return float(re.search(r'"interval": ([0-9.]+)', html).group(1))
+
+    npt.assert_almost_equal(interval(30), 1000 / 30, decimal=6)
+    for spelling in (30 * Hz, 0.03 * kHz):
+        npt.assert_almost_equal(interval(spelling), interval(30), decimal=12)
+    for wrong in (30 * ms, 30 * uA):
+        with pytest.raises(DimensionMismatchError):
+            video.play(fps=wrong)
 
 
 def test_VideoStimulus_play_compressed():

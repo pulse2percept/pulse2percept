@@ -29,6 +29,20 @@ def _whole(name, value):
     return int(value)
 
 
+def _electrode_array(implant):
+    """The electrode array of a prosthesis system, or the array itself
+
+    Duck-typed rather than imported, since ``implants.base`` imports this
+    module.
+    """
+    earray = getattr(implant, 'earray', implant)
+    if (getattr(earray, 'electrode_names', None) is None or
+            getattr(earray, 'coordinates', None) is None):
+        raise TypeError(f"'implant' must be a ProsthesisSystem or an "
+                        f"ElectrodeArray, not {type(implant)}.")
+    return earray
+
+
 class Raster(PrettyPrint, metaclass=ABCMeta):
     """Abstract base class for all raster patterns
 
@@ -46,7 +60,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
     Taking turns is described by a **raster sweep**: group *g* starts its pulse
     ``g * group_dur`` after group 0 does, so a sweep spans ``n_groups *
     group_dur``. Two things then keep groups apart for good (see
-    :py:class:`~pulse2percept.stimuli.Encoder`):
+    :py:class:`~pulse2percept.stimuli.StimulusEncoder`):
 
     1.  A pulse has to be short enough to finish before the next group's turn
         begins.
@@ -85,7 +99,20 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
     the sweep; a period they all share is delivered exactly, since fixed group
     offsets cannot drift into one another.
 
-    Subclasses only implement ``groups``.
+    A raster is *bound* to the implant it schedules. Assigning it to
+    :py:attr:`~pulse2percept.implants.ProsthesisSystem.raster` binds it, which
+    is what lets a subclass whose pattern depends on where the electrodes are
+    (:py:class:`~pulse2percept.implants.CheckerboardRaster`) work the geometry
+    out, and what lets :py:meth:`plot` draw the array without being handed it
+    again:
+
+    .. code::
+
+        implant.raster = CheckerboardRaster(5)
+        implant.raster.plot()
+
+    Subclasses only implement ``groups``, and override ``bind`` if their
+    pattern depends on the implant.
 
     .. versionadded:: 0.10.0
 
@@ -113,7 +140,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         :py:mod:`pulse2percept.units`.
 
     """
-    __slots__ = ('group_dur',)
+    __slots__ = ('group_dur', '_implant')
 
     def __init__(self, group_dur=None):
         # A slot is a duration, and it is combined with pulse periods, the
@@ -124,10 +151,64 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
             if group_dur <= 0:
                 raise ValueError("'group_dur' must be positive.")
         self.group_dur = group_dur
+        self._implant = None
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
+        # Deliberately without the implant: a ProsthesisSystem pretty-prints
+        # its raster, so naming it back here would recurse.
         return {'group_dur': self.group_dur, 'n_groups': self.n_groups}
+
+    @property
+    def implant(self):
+        """The implant this raster is bound to, or None
+
+        Set by assigning the raster to
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.raster` (see
+        :py:meth:`bind`).
+        """
+        return getattr(self, '_implant', None)
+
+    def bind(self, implant):
+        """Bind the raster to an implant
+
+        A raster describes how one particular device takes turns between its
+        electrodes, so it is bound to that device rather than handed to every
+        method that needs it. This is called for you when the raster is
+        assigned to
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.raster`.
+
+        Binding is also where a pattern that depends on the electrode geometry
+        is worked out, so a subclass that has such a pattern overrides this and
+        recomputes. Rebinding therefore always recomputes: the same raster
+        object assigned to a second implant describes *that* implant.
+
+        Parameters
+        ----------
+        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+            The implant to bind to, or its
+            :py:class:`~pulse2percept.implants.ElectrodeArray`.
+
+        Returns
+        -------
+        self : :py:class:`~pulse2percept.implants.Raster`
+            The raster, so that ``CheckerboardRaster(5).bind(implant)`` reads
+            as one expression.
+
+        """
+        _electrode_array(implant)
+        self._implant = implant
+        return self
+
+    def _bound(self, implant=None):
+        """The implant to answer a question about, bound or given"""
+        implant = self.implant if implant is None else implant
+        if implant is None:
+            raise ValueError(
+                f"This {type(self).__name__} is not bound to an implant. "
+                f"Assign it to 'implant.raster' first, or pass the implant "
+                f"explicitly.")
+        return _electrode_array(implant)
 
     @property
     @abstractmethod
@@ -186,7 +267,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
                              f"{group}.")
         return np.asarray(electrodes)[self.groups(electrodes) == group]
 
-    def plot(self, implant, annotate=None, ax=None, cmap='viridis',
+    def plot(self, implant=None, annotate=None, ax=None, cmap='viridis',
              autoscale=True):
         """Plot the electrode array, colored by raster group
 
@@ -201,11 +282,12 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
 
         Parameters
         ----------
-        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
             The implant to draw, or its
             :py:class:`~pulse2percept.implants.ElectrodeArray`. Its electrodes
             are the ones the raster is asked about, so this has to be an
-            implant the raster covers.
+            implant the raster covers. If None, the implant the raster is
+            bound to is drawn (see :py:meth:`bind`).
         annotate : bool, optional
             Whether to write the group index into each electrode. If None,
             they are written whenever there are few enough electrodes
@@ -225,13 +307,8 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
             The axes drawn on.
 
         """
-        earray = getattr(implant, 'earray', implant)
-        names = getattr(earray, 'electrode_names', None)
-        coords = getattr(earray, 'coordinates', None)
-        if names is None or coords is None:
-            raise TypeError(f"'implant' must be a ProsthesisSystem or an "
-                            f"ElectrodeArray, not {type(implant)}.")
-        names = list(names)
+        earray = self._bound(implant)
+        names = list(earray.electrode_names)
         group = np.asarray(self.groups(names), dtype=np.int64)
         if annotate is None:
             annotate = len(names) <= 120
@@ -245,7 +322,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         colors = plt.get_cmap(cmap)(spread)
         # Microns, which is what the axis labels below say and what the patch
         # radii are sized in:
-        xy = coords(um)[:, :2]
+        xy = earray.coordinates(um)[:, :2]
         # Sized by the array rather than by what each electrode reports, since
         # neither of the two shapes an implant is usually built from would show
         # its color: a PointSource is a 5 um dot however far apart they are,
@@ -695,16 +772,25 @@ class CheckerboardRaster(Raster):
     electrodes actually are. Arrays whose electrodes do not lie on a grid at
     all raise ``NotImplementedError``.
 
+    The pattern depends on where the electrodes are, so it is worked out when
+    the raster is **bound** to an implant -- which assigning it to
+    :py:attr:`~pulse2percept.implants.ProsthesisSystem.raster` does. Until
+    then the raster knows how many groups it will have but not which electrode
+    goes in which, and :py:meth:`groups`, :py:attr:`min_spacing` and
+    :py:meth:`~pulse2percept.implants.Raster.plot` all raise. Binding it to a
+    second implant recomputes the pattern for that one.
+
     .. note::
 
         Not every ``n_groups`` fits a given grid, and one that does not
-        raises a ``ValueError`` and specifies counts that do.
+        raises a ``ValueError`` (naming counts that do) when the raster is
+        bound.
 
-        Both halves of the pattern are searched for when the raster is built,
-        and the order the groups fire in is settled exactly only up to eight
-        groups; beyond that a heuristic stands in for it, and the search grows
-        with the group count.
-        
+        Both halves of the pattern are searched for at binding time, and the
+        order the groups fire in is settled exactly only up to eight groups;
+        beyond that a heuristic stands in for it, and the search grows with the
+        group count.
+
         It is worth checking :py:attr:`min_spacing` on the ones that do fit,
         because a count can be accepted and still leave neighbors in the same
         group. The standard example is two groups on a hex grid, which
@@ -715,11 +801,6 @@ class CheckerboardRaster(Raster):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The implant to build the pattern for, or its
-        :py:class:`~pulse2percept.implants.ElectrodeArray`. The electrodes have
-        to lie on a grid, and their names are how the raster recognizes them
-        later, so this has to be the implant the stimulus will be applied to.
     n_groups : int
         Number of groups to split the electrodes into.
     balance : float, optional
@@ -740,7 +821,7 @@ class CheckerboardRaster(Raster):
 
     >>> from pulse2percept.implants import ArgusII, CheckerboardRaster
     >>> implant = ArgusII()
-    >>> implant.raster = CheckerboardRaster(implant, 5)
+    >>> implant.raster = CheckerboardRaster(5)
     >>> implant.raster.n_groups
     5
 
@@ -758,29 +839,36 @@ class CheckerboardRaster(Raster):
     ['A1', 'A6', 'B3', 'B8']
 
     """
-    __slots__ = ('_n_groups', '_group_of', '_min_spacing')
+    __slots__ = ('_n_groups', '_balance', '_group_of', '_min_spacing')
 
-    def __init__(self, implant, n_groups, balance=0.05, group_dur=None):
+    def __init__(self, n_groups, balance=0.05, group_dur=None):
         super().__init__(group_dur=group_dur)
         _finite('n_groups', n_groups)
         if int(n_groups) != n_groups or n_groups < 1:
             raise ValueError(f"'n_groups' must be a positive integer, not "
                              f"{n_groups}.")
-        n_groups = int(n_groups)
         _finite('balance', balance)
         if balance < 0:
             raise ValueError(f"'balance' cannot be negative, not {balance}.")
-        # A ProsthesisSystem carries the array; anything else has to be one.
-        # Duck-typed rather than imported, since `base` imports this module:
-        earray = getattr(implant, 'earray', implant)
-        names = getattr(earray, 'electrode_names', None)
-        coords = getattr(earray, 'coordinates', None)
-        if names is None or coords is None:
-            raise TypeError(f"'implant' must be a ProsthesisSystem or an "
-                            f"ElectrodeArray, not {type(implant)}.")
-        names = list(names)
+        self._n_groups = int(n_groups)
+        self._balance = balance
+        # Which electrode goes in which group is a fact about a particular
+        # array, and is worked out in `bind`:
+        self._group_of = None
+        self._min_spacing = None
+
+    def bind(self, implant):
+        """Work the checkerboard out for this implant's electrode grid
+
+        See :py:meth:`~pulse2percept.implants.Raster.bind`. Called for you
+        when the raster is assigned to
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.raster`.
+        """
+        earray = _electrode_array(implant)
+        names = list(earray.electrode_names)
+        n_groups, balance = self._n_groups, self._balance
         # Microns, which is what `min_spacing` reports the answer in:
-        xy = coords(um)[:, :2]
+        xy = earray.coordinates(um)[:, :2]
         if len(xy) < n_groups:
             raise ValueError(f"{len(xy)} electrode(s) cannot be split into "
                              f"{n_groups} groups.")
@@ -813,7 +901,7 @@ class CheckerboardRaster(Raster):
                 f"{balance:.0%} bigger than an even split. Try "
                 f"{_suggest(ij, n_groups, balance)} groups instead, or raise "
                 f"'balance' to allow groups of unequal size.")
-        labels, w1, w2, self._min_spacing = best[1:]
+        labels, w1, w2, min_spacing = best[1:]
 
         # Fire them in the order that wanders least. `labels` says which
         # pattern an electrode belongs to; the group index it gets is when that
@@ -829,14 +917,19 @@ class CheckerboardRaster(Raster):
         slot = np.empty(n_groups, dtype=np.int64)
         slot[_firing_order(jump, scale)] = np.arange(n_groups)
 
-        self._n_groups = n_groups
+        # Only once the pattern is known, so that a raster that could not be
+        # laid out on this array keeps whatever it was bound to before:
+        super().bind(implant)
+        self._min_spacing = min_spacing
         self._group_of = {str(name): int(slot[label])
                           for name, label in zip(names, labels)}
+        return self
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         params = super()._pprint_params()
-        params.update({'min_spacing': self.min_spacing})
+        params.update({'balance': self._balance,
+                       'min_spacing': self.min_spacing})
         return params
 
     @property
@@ -853,20 +946,27 @@ class CheckerboardRaster(Raster):
         electrode pitch. Measured between electrodes the implant actually has,
         so a small or trimmed array can come out better spaced than the pattern
         it was cut from. Infinite when no group holds more than one electrode,
-        since then no two electrodes ever fire together.
+        since then no two electrodes ever fire together. None until the raster
+        is bound to an implant, since there is no grid to measure yet.
         """
         return self._min_spacing
 
     def groups(self, electrodes):
         """Assign each electrode to a raster group"""
+        if self._group_of is None:
+            raise ValueError(
+                "This CheckerboardRaster is not bound to an implant, so it "
+                "does not know where the electrodes are. Assign it to "
+                "'implant.raster' first.")
         try:
             return np.array([self._group_of[str(e)] for e in electrodes])
         except KeyError:
             missing = sorted({str(e) for e in electrodes} -
                              set(self._group_of))
             raise ValueError(f"Electrode(s) {missing[:10]} are not on the "
-                             f"grid this raster was built for. Build it from "
-                             f"the implant the stimulus is applied to.")
+                             f"grid this raster was bound to. Assign the "
+                             f"raster to the implant the stimulus is applied "
+                             f"to.")
 
 
 class CustomRaster(Raster):

@@ -13,8 +13,8 @@ from pulse2percept.models import BiphasicAxonMapModel, BiphasicAxonMapSpatial, \
     AxonMapSpatial
 from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
-from pulse2percept.units import (DimensionMismatchError, Quantity, mm, ms, s,
-                                 uA, um)
+from pulse2percept.units import (DimensionMismatchError, Quantity,
+                                 dimensionless, mm, ms, s, uA, um)
 from pulse2percept.utils.base import FreezeError
 from pulse2percept.utils.testing import assert_warns_msg
 
@@ -682,7 +682,14 @@ def test_BiphasicAxonMap_dimension_before_waveform():
     complaint, which is about a stimulus it never had.
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
-    implant = ArgusII(preprocess=False, stim=img)
+
+    # An ordinary implant refuses the picture outright (see
+    # `ProsthesisSystem.stimulus_unit`); one that delivers something else is
+    # what carries it as far as the model:
+    class Projector(ArgusII):
+        stimulus_unit = dimensionless
+
+    implant = Projector(preprocess=False, stim=img)
     for model in (BiphasicAxonMapSpatial(step=2).build(),
                   BiphasicAxonMapModel(step=2).build()):
         with pytest.raises(DimensionMismatchError) as excinfo:

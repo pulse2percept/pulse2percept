@@ -1,6 +1,7 @@
 from pulse2percept.topography import Grid2D
 from pulse2percept.percepts import Percept
-from pulse2percept.units import DimensionMismatchError, ms, s, um, us
+from pulse2percept.units import (DimensionMismatchError, Hz, kHz, ms, s, uA,
+                                 um, us)
 from skimage.io import imread
 from skimage import img_as_float
 import imageio
@@ -9,6 +10,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 import os
+import re
 import numpy as np
 import pytest
 import numpy.testing as npt
@@ -234,6 +236,39 @@ def test_Percept_save_single_frame(tmp_path):
     fname = str(tmp_path / 'fps.mp4')
     percept.save(fname, fps=12)
     npt.assert_equal(len(mimread(fname)), 1)
+
+
+def test_Percept_fps_units(tmp_path):
+    """A frame rate is a frequency, however it is spelled
+
+    .. versionadded:: 0.10.0
+    """
+    percept = Percept(np.random.rand(8, 8, 4))
+
+    def interval(**kwargs):
+        """The frame delay (ms) the HTML player was configured with"""
+        html = percept.play(**kwargs).to_jshtml()
+        return float(re.search(r'"interval": ([0-9.]+)', html).group(1))
+
+    # 33.33 ms, which is what 30 frames per second asks for:
+    npt.assert_almost_equal(interval(fps=30), 1000 / 30, decimal=6)
+    for spelling in (30 * Hz, 0.03 * kHz):
+        npt.assert_almost_equal(interval(fps=spelling), interval(fps=30),
+                                decimal=12)
+
+    # ... and the same on the way out to a file:
+    fname = str(tmp_path / 'fps.mp4')
+    percept.save(fname, fps=30 * Hz)
+    npt.assert_equal(len(mimread(fname)), 4)
+    percept.save(fname, fps=0.03 * kHz)
+    npt.assert_equal(len(mimread(fname)), 4)
+
+    # Nothing else is a frame rate:
+    for wrong in (30 * ms, 30 * uA):
+        with pytest.raises(DimensionMismatchError):
+            percept.play(fps=wrong)
+        with pytest.raises(DimensionMismatchError):
+            percept.save(fname, fps=wrong)
 
 
 def test_Percept_units():

@@ -3,6 +3,10 @@ import pytest
 import numpy.testing as npt
 
 from pulse2percept import implants
+from pulse2percept.implants import SequentialRaster
+from pulse2percept.models import AxonMapModel
+from pulse2percept.stimuli import AmplitudeEncoder, BostonTrain, LogoBVL
+from pulse2percept.units import DimensionMismatchError, uA
 
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))
@@ -186,3 +190,95 @@ def test_ArgusII(ztype, x, y, rot):
     argus = implants.ArgusII(stim=np.ones(60))
     npt.assert_equal(argus.stim.shape, (60, 1))
     npt.assert_almost_equal(argus.stim.data, 1)
+
+
+def test_ArgusII_defaults():
+    """Argus II brings its own encoder and raster, and each instance a fresh one
+    """
+    argus = implants.ArgusII()
+    # 6 Hz amplitude modulation, which is the rate the device runs video at:
+    npt.assert_equal(isinstance(argus.encoder, AmplitudeEncoder), True)
+    npt.assert_almost_equal(argus.encoder.freq, 6)
+    # Six sequential groups (one row of ten electrodes each), 2 ms apart:
+    npt.assert_equal(isinstance(argus.raster, SequentialRaster), True)
+    npt.assert_equal(argus.raster.n_groups, 6)
+    npt.assert_almost_equal(argus.raster.group_dur, 2)
+    npt.assert_equal(argus.raster.groups(argus.electrode_names),
+                     np.repeat(np.arange(6), 10))
+    # The raster is bound to the implant that owns it, so it plots itself:
+    npt.assert_equal(argus.raster.implant is argus, True)
+
+    # Each instance gets its own, so tweaking one implant's does not reach
+    # every other Argus II in the session:
+    other = implants.ArgusII()
+    npt.assert_equal(other.encoder is argus.encoder, False)
+    npt.assert_equal(other.raster is argus.raster, False)
+    other.encoder.freq = 20
+    npt.assert_almost_equal(argus.encoder.freq, 6)
+
+    # An explicit None switches each feature off, and is told apart from the
+    # argument simply not being given:
+    npt.assert_equal(implants.ArgusII(encoder=None).encoder, None)
+    npt.assert_equal(implants.ArgusII(raster=None).raster, None)
+    npt.assert_equal(implants.ArgusII(raster=None).encoder is None, False)
+    # ... and switching the raster off really does stop the multiplexing: every
+    # electrode then fires on the same schedule, at the same instant.
+    unrastered = implants.ArgusII(raster=None, stim=LogoBVL())
+    npt.assert_equal(unrastered.stim.metadata['encoder']['cycle'], None)
+    # There is an instant at which every electrode is at its own peak, so the
+    # stimulator has to source the whole array at once:
+    npt.assert_almost_equal(np.abs(unrastered.stim.data).sum(axis=0).max(),
+                            np.abs(unrastered.stim.data).max(axis=1).sum(),
+                            decimal=3)
+    rastered = implants.ArgusII(stim=LogoBVL())
+    npt.assert_array_less(np.abs(rastered.stim.data).sum(axis=0).max(),
+                          np.abs(unrastered.stim.data).sum(axis=0).max())
+    # ... and either can be replaced outright:
+    custom = implants.ArgusII(encoder=AmplitudeEncoder(freq=20),
+                              raster=SequentialRaster(3))
+    npt.assert_almost_equal(custom.encoder.freq, 20)
+    npt.assert_equal(custom.raster.n_groups, 3)
+    with pytest.raises(TypeError):
+        implants.ArgusII(encoder='amplitude')
+    with pytest.raises(TypeError):
+        implants.ArgusII(raster='line')
+
+
+def test_ArgusII_encodes_pictures_on_assignment():
+    """The device's own defaults are what make `ArgusII(stim=picture)` work"""
+    argus = implants.ArgusII(stim=LogoBVL())
+    npt.assert_equal(argus.stim.unit, uA)
+    npt.assert_equal(argus.stim.shape[0], argus.n_electrodes)
+    npt.assert_equal(list(argus.stim.electrodes), list(argus.electrode_names))
+    # 6 Hz over the 500 ms an image is treated as lasting is three pulses:
+    npt.assert_almost_equal(argus.stim.time[-1], 500)
+    npt.assert_almost_equal(np.abs(argus.stim.data).max(), 50, decimal=4)
+    # The raster is in there too: six groups, each 2 ms behind the one before:
+    npt.assert_almost_equal(argus.stim.metadata['encoder']['cycle'], 12)
+    # ... which is what a raster is for: at no instant is more than one group
+    # of electrodes drawing current.
+    groups = argus.raster.groups(argus.stim.electrodes)
+    for column in argus.stim.data.T:
+        npt.assert_equal(np.unique(groups[column != 0]).size <= 1, True)
+
+    # A video keeps its own frame clock, which is what a model reports at:
+    with pytest.warns(UserWarning, match='deliver no pulse'):
+        # 6 Hz against 29.97 fps: most frames carry no pulse of their own
+        argus = implants.ArgusII(stim=BostonTrain())
+    npt.assert_equal(argus.stim.unit, uA)
+    meta = argus.stim.metadata['encoder']
+    npt.assert_equal(meta['frame_time'].size, 94)
+    npt.assert_almost_equal(meta['frame_dur'], 1000 / 29.97, decimal=3)
+
+    # Without an encoder the very same picture is refused, since there is no
+    # default mapping from a gray level onto an amplitude:
+    with pytest.raises(DimensionMismatchError):
+        implants.ArgusII(encoder=None, stim=LogoBVL())
+
+    # And the whole point of it: a picture goes straight into a model, with no
+    # encoding step for the caller to spell out.
+    model = AxonMapModel(xrange=(-4, 4), yrange=(-3, 3), step=1, rho=200,
+                         lam=100).build()
+    percept = model.predict_percept(implants.ArgusII(stim=LogoBVL()))
+    npt.assert_equal(percept.data.shape[:2], model.grid.x.shape)
+    npt.assert_equal(np.any(percept.data > 0), True)
