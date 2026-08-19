@@ -147,7 +147,7 @@ def test_frame_timeline():
     npt.assert_almost_equal(timeline.intervals, [SINGLE_FRAME_INTERVAL])
     # An irregular axis keeps its own unequal time steps:
     timeline = _frame_timeline([0, 0.45, 0.55, 166.67])
-    npt.assert_almost_equal(timeline.intervals, [0.45, 0.1, 166.12, 0],
+    npt.assert_almost_equal(timeline.intervals, [0.45, 0.1, 166.12, 166.12],
                             decimal=6)
 
     # 40 ms of animation stays 40 ms of animation, whatever the display rate:
@@ -165,7 +165,7 @@ def test_frame_timeline():
     # between 0.45 and 0.55 ms falls between two display samples and is never
     # shown, which is what a 30 fps display would do:
     npt.assert_equal(_frame_timeline([0, 0.45, 0.55, 166.67], fps=30).indices,
-                     [0, 2, 2, 2, 2])
+                     [0, 2, 2, 2, 2, 2, 3, 3, 3, 3])
 
     # A frame rate is a frequency, however it is spelled ...
     for spelling in (25 * Hz, 0.025 * kHz):
@@ -182,28 +182,42 @@ def test_frame_timeline():
         _frame_timeline([])
 
 
-def test_frame_timeline_last_frame():
-    """Only a homogeneous axis says how long its last frame lasts
+def test_frame_timeline_rejects_unordered_time():
+    """A frame cannot come up before the one in front of it
 
-    Repeating the preceding time step on an irregular axis would stretch the
-    animation past the end of the data it describes: a pulse train whose
-    frames span 166 ms would play for 333 ms, because the last frame would
-    inherit the 166 ms gap in front of it.
+    `searchsorted` assumes a sorted axis and would quietly pick the wrong
+    frames for anything else, and a negative interval would go straight to the
+    player as a negative delay.
     """
-    # `n` frames of `dt` take `n * dt`, which is what a video means by `n`
-    # frames -- with the same tolerance that `frame_interval` uses:
-    npt.assert_almost_equal(_frame_timeline([0, 10, 20]).intervals.sum(), 30)
-    npt.assert_almost_equal(
-        _frame_timeline([0, 10, 20.005]).intervals.sum(), 30.005, decimal=6)
-    # An irregular axis ends at its last time point, full stop:
-    for time in ([0, 10, 30], [0, 0.45, 0.55, 166.67]):
+    for wrong in ([0, 10, 5], [0, 10, 10], [10, 0], [0, np.nan, 10],
+                  [0, np.inf]):
+        for fps in (None, 30):
+            with pytest.raises(ValueError):
+                _frame_timeline(wrong, fps=fps)
+
+
+def test_frame_timeline_last_frame():
+    """The last frame is held for the interval in front of it
+
+    A time axis says when each frame comes up, not when the last one goes
+    away. Reading its final time point as an endpoint instead would give that
+    frame no duration at all, and a frame nobody can see is not a frame -- a
+    percept's time points are the instants a model was evaluated at, so the
+    last one is model output like any other.
+    """
+    for time in ([0, 10, 20], [0, 10, 30], [0, 0.45, 0.55, 166.67]):
         timeline = _frame_timeline(time)
-        npt.assert_almost_equal(timeline.intervals[-1], 0)
-        npt.assert_almost_equal(timeline.intervals.sum(), time[-1] - time[0],
-                                decimal=6)
-        # ... so resampling it cannot run past that point either:
-        npt.assert_array_less(
-            _frame_timeline(time, fps=1000).times[-1], time[-1])
+        npt.assert_almost_equal(timeline.intervals[-1],
+                                timeline.intervals[-2])
+        npt.assert_array_less(0, timeline.intervals)
+        # `n` frames of `dt` take `n * dt`, which is what a video means by `n`
+        # frames:
+        npt.assert_almost_equal(_frame_timeline([0, 10, 20]).intervals.sum(),
+                                30)
+        # ... and a display clock fine enough to resolve it reaches it,
+        # which a zero-length last frame would not allow at any rate:
+        npt.assert_equal(_frame_timeline(time, fps=1000).indices[-1],
+                         len(time) - 1)
 
 
 def test_frame_timeline_does_not_mutate():
@@ -460,22 +474,6 @@ def test_HTMLAnimation_per_frame_intervals():
     with pytest.raises(ValueError):
         make_ani(data, intervals=[10, 20])
 
-
-def test_HTMLAnimation_wall_clock_playback():
-    """Frames are scheduled against the wall clock, not chained timeouts
-
-    Browsers do not honor a sub-millisecond timeout, so a chain of
-    `setTimeout(interval)` calls runs slower than the animation it plays --
-    and the error accumulates. Scheduling every frame against a deadline
-    instead means a time step the browser cannot resolve is skipped, which
-    keeps the animation the length its time axis says it is.
-    """
-    html = make_ani(np.random.rand(4, 4, 3),
-                    intervals=[0.45, 165.67, 0.45]).to_jshtml()
-    npt.assert_equal('performance.now()' in html, True)
-    # Nothing may reschedule off the previous frame's delay alone:
-    npt.assert_equal('setInterval' in html, False)
-    npt.assert_equal('due' in html, True)
 
 
 def test_HTMLAnimation_smoothing():

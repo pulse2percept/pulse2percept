@@ -129,31 +129,31 @@ _FrameTimeline = namedtuple('_FrameTimeline', ['indices', 'times',
                                                'intervals'])
 
 
-def _frame_timeline(time, fps=None, tol=1e-2):
+def _frame_timeline(time, fps=None):
     """Lay the frames of an animation out on a display clock
 
-    ``time`` owns the timing: an animation that spans three seconds takes
-    three seconds to play, whatever ``fps`` says. ``fps`` only decides how
-    often that timeline is sampled for display.
+    ``time`` owns the timing: an animation whose time axis spans three seconds
+    takes three seconds to play, whatever ``fps`` says (to within one display
+    frame, see below). ``fps`` only decides how often that timeline is sampled
+    for display.
 
     Parameters
     ----------
     time : array_like
-        The time points of the animation (in ms), in increasing order. May be
+        The time points of the animation (in ms), strictly increasing. May be
         non-homogeneous (e.g., the short phases and long gaps of a pulse
         train).
     fps : float or None
         The rate at which the timeline is sampled for display. If None, every
-        frame is shown for as long as ``time`` says it lasts. Otherwise the
+        frame is shown for as long as ``time`` says it lasts, and the
+        animation lasts exactly as long as the timeline does. Otherwise the
         timeline is resampled onto a regular clock of ``1000 / fps`` ms with a
         zero-order hold: each display frame shows the most recent frame that
-        was due. Either way, the animation lasts the same wall-clock time.
+        was due, and the duration is kept to within one display frame (a fixed
+        frame rate cannot express an arbitrary duration exactly).
 
         May be given as a plain number of hertz or as a unitful frequency
         (e.g. ``0.03 * kHz``); see :py:mod:`pulse2percept.units`.
-    tol : float, optional
-        Tolerance within which two time steps count as equal, which is what
-        decides how long the last frame lasts (see the notes)
 
     Returns
     -------
@@ -164,14 +164,15 @@ def _frame_timeline(time, fps=None, tol=1e-2):
 
     Notes
     -----
-    *  Nothing in ``time`` says when the last frame ends, and only a
-       homogeneous axis gives a basis for guessing: there, the last frame
-       lasts one more time step, so that ``n`` frames of ``dt`` take
-       ``n * dt``, which is what a video means by ``n`` frames. On an
-       irregular axis the last timestamp *is* the end of the timeline (p2p's
-       encoders append exactly such an endpoint to pin the source duration),
-       so nothing is extrapolated past it. A single frame has no time step at
-       all and falls back on ``SINGLE_FRAME_INTERVAL``.
+    *  ``time`` says when each frame comes up, not when the last one goes
+       away, and an irregular axis carries no hint either way: a percept's
+       time points are the instants a model was evaluated at, which need not
+       end at the end of anything. The last frame is therefore held for as
+       long as the interval in front of it. That is exact for a homogeneous
+       axis -- ``n`` frames of ``dt`` take ``n * dt``, which is what a video
+       means by ``n`` frames -- and a display convention everywhere else, but
+       never zero: a frame nobody can see is not a frame. A single frame has
+       no interval at all and falls back on ``SINGLE_FRAME_INTERVAL``.
     *  Frames are never interpolated, pooled, or otherwise mixed: an event
        that falls between two display samples is simply missed, exactly as it
        would be on a display of that frame rate. Sample faster if that matters.
@@ -179,17 +180,14 @@ def _frame_timeline(time, fps=None, tol=1e-2):
     Examples
     --------
     Playing an animation at its own rate shows every frame for its own time
-    step, and a homogeneous axis ends one time step after its last frame:
+    step, the last one included:
 
     >>> _frame_timeline([0, 10, 20]).indices
     array([0, 1, 2])
     >>> _frame_timeline([0, 10, 20]).intervals
     array([10., 10., 10.])
-
-    An irregular axis ends where it says it ends:
-
     >>> _frame_timeline([0, 10, 30]).intervals
-    array([10., 20.,  0.])
+    array([10., 20., 20.])
 
     Halving the display rate halves the number of frames, not the duration:
 
@@ -203,23 +201,25 @@ def _frame_timeline(time, fps=None, tol=1e-2):
     time = np.array(time, dtype=np.float64).ravel()
     if time.size == 0:
         raise ValueError("'time' must have at least one time point.")
-    try:
-        # A homogeneous axis (or a single frame) says how long its last frame
-        # lasts, and `frame_interval` is what decides that it is homogeneous:
-        last = frame_interval(time, tol=tol)
-    except NotImplementedError:
-        # An irregular axis gives no basis for extrapolating past its final
-        # timestamp: that timestamp is where the timeline ends.
-        last = 0.0
-    intervals = np.append(np.diff(time), last)
+    intervals = np.diff(time)
+    if not np.all(np.isfinite(time)) or np.any(intervals <= 0):
+        # A frame cannot come up before the one in front of it, and the
+        # `searchsorted` below would quietly pick the wrong frames for an axis
+        # that is not sorted:
+        raise ValueError("'time' must be finite and strictly increasing.")
+    # `time` says when a frame comes up, not when the last one goes away, so
+    # the last frame is held for the interval in front of it (see the notes):
+    intervals = np.append(intervals, intervals[-1] if intervals.size
+                          else SINGLE_FRAME_INTERVAL)
     if fps is None:
         return _FrameTimeline(np.arange(time.size), time, intervals)
     if fps <= 0:
         raise ValueError(f"'fps' must be greater than zero, not {fps}.")
     step = 1000.0 / fps
-    # Same wall-clock duration, sampled at the display rate. Rounded rather
-    # than rounded up, so that an axis which fits the display clock exactly
-    # cannot pick up a spurious extra frame from floating-point noise:
+    # As close to the same wall-clock duration as a whole number of display
+    # frames gets. Rounded rather than rounded up, so that an axis which fits
+    # the display clock exactly cannot pick up a spurious extra frame from
+    # floating-point noise:
     n_frames = max(1, int(np.floor(intervals.sum() / step + 0.5)))
     times = time[0] + np.arange(n_frames) * step
     # Zero-order hold: show whichever frame was most recently due. Values are
@@ -604,7 +604,8 @@ _PLAYER = Template("""
       timer = null;
       for (var steps = 0; steps < cfg.n; steps++) {
         var next = step();
-        if (next === null) { pause(); return; }
+        // The end of the run, with whatever we caught up to still to draw:
+        if (next === null) { pause(); show(frame); return; }
         frame = next;
         due += cfg.intervals[frame];
         if (due > performance.now()) { break; }

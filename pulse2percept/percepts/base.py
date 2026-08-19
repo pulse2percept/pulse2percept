@@ -362,14 +362,16 @@ class Percept(Data):
             The rate at which the percept is sampled for display. The percept
             plays for as long as its
             :py:attr:`~pulse2percept.percepts.Percept.time` axis says it
-            lasts, whatever ``fps`` is: a three-second percept takes three
-            seconds to play at 15, 30, or 60 fps.
+            lasts: a three-second percept takes three seconds to play at 15,
+            30, or 60 fps, give or take the odd display frame.
 
             If None, every frame is shown for its own time step, however
             irregular the time axis is. Otherwise the percept is resampled
             onto a regular display clock with a zero-order hold: each display
             frame shows the most recent frame that was due, and brief events
-            in between two samples are missed rather than smeared out.
+            in between two samples are missed rather than smeared out. A whole
+            number of display frames rarely adds up to the percept's duration
+            exactly, so that duration is kept to within one of them.
 
             May be given as a plain number of hertz or as a unitful frequency
             (e.g. ``30 * Hz``, ``0.03 * kHz``); see
@@ -412,13 +414,14 @@ class Percept(Data):
             ``to_jshtml`` and produces much smaller notebooks and doc pages.
 
             ``fps`` no longer changes how fast the percept plays; the time
-            axis owns that. A non-homogeneous time axis (e.g., the short
-            phases and long gaps of a pulse train) is now played back as it
-            is, rather than rejected. Browsers do not schedule timeouts more
-            finely than a few milliseconds, so a time step shorter than that
-            is skipped rather than stretched -- the same rule as a low
-            ``fps``, and for the same reason: a display that cannot resolve a
-            brief event should miss it, not distort time.
+            axis owns that, to within one display frame. A non-homogeneous
+            time axis (e.g., the short phases and long gaps of a pulse
+            train) is now played back as it is, rather than rejected.
+            Browsers do not schedule timeouts more finely than a few
+            milliseconds, so a time step shorter than that is skipped
+            rather than stretched -- the same rule as a low ``fps``, and
+            for the same reason: a display that cannot resolve a brief
+            event should miss it, not distort time.
 
         """
         if self.time is None:
@@ -492,11 +495,13 @@ class Percept(Data):
             If shape is None, width will be set to 320px and height will be
             inferred accordingly.
         fps : float or None
-            The rate at which the percept is sampled for the movie. The movie
-            runs for as long as the percept's
+            The rate at which the percept is sampled for the movie. A higher
+            rate buys more frames, not a longer movie: the movie runs for as
+            long as the percept's
             :py:attr:`~pulse2percept.percepts.Percept.time` axis says it
-            lasts, whatever ``fps`` is: a higher rate buys more frames, not a
-            longer movie.
+            lasts, to within one frame of the requested rate (a movie file
+            runs at a fixed frame rate, which cannot express an arbitrary
+            duration exactly).
 
             If None, every frame of the percept is written out at the rate its
             time axis implies, which a movie file can only express if that
@@ -516,7 +521,7 @@ class Percept(Data):
         .. versionchanged:: 0.10.0
 
             ``fps`` no longer changes how long the movie runs; the time axis
-            owns that.
+            owns that, to within one frame.
 
         """
         # This path hands `fps` to imageio rather than to `frame_timeline`, so

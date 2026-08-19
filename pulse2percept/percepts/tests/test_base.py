@@ -371,7 +371,7 @@ def test_Percept_animates_in_wall_clock_time(tmp_path, monkeypatch):
     # irregular axis plays at the speed it was recorded at, and that speed is
     # counted in milliseconds.
     ragged = Percept(data, time=[0, 0.02, 0.05], time_unit=s)
-    npt.assert_almost_equal(player(ragged.play())['intervals'], [20, 30, 0])
+    npt.assert_almost_equal(player(ragged.play())['intervals'], [20, 30, 30])
     # A movie file runs at a single frame rate, so this one needs an `fps`:
     with pytest.raises(NotImplementedError):
         ragged.save(str(tmp_path / 'ragged.mp4'))
@@ -455,14 +455,15 @@ def test_Percept_play_irregular_time():
     # Every frame is kept ...
     npt.assert_equal(cfg['n'], percept.time.size)
     # ... each shown for as long as the axis says, 165 ms gaps included. The
-    # last time point ends the timeline, so nothing is invented past it:
+    # last frame is held for the interval in front of it, so it is seen:
     pulse = [0.45, 0.1, 0.45]
     steps = pulse + [period - 1.0]
-    npt.assert_almost_equal(cfg['intervals'], steps * 2 + pulse + [0.0],
+    npt.assert_almost_equal(cfg['intervals'], steps * 2 + pulse + [0.45],
                             decimal=6)
-    # ... which adds up to exactly the wall-clock time the percept covers:
+    # ... which adds up to the wall-clock time the percept covers:
     npt.assert_almost_equal(np.sum(cfg['intervals']),
-                            percept.time[-1] - percept.time[0], decimal=6)
+                            percept.time[-1] - percept.time[0] + 0.45,
+                            decimal=6)
 
 
 def test_Percept_play_irregular_time_fps():
@@ -475,7 +476,7 @@ def test_Percept_play_irregular_time_fps():
     npt.assert_equal(cfg['n'], 20)
     npt.assert_almost_equal(cfg['intervals'], [step] * 20)
     # ... covering the percept's own duration, to within one display frame:
-    duration = percept.time[-1] - percept.time[0]
+    duration = percept.time[-1] - percept.time[0] + 0.45
     npt.assert_array_less(abs(np.sum(cfg['intervals']) - duration), step)
 
 
@@ -526,10 +527,49 @@ def test_Percept_save_fps_resamples(tmp_path, monkeypatch):
     # ends it, so the movie does not run past the pulse train it shows:
     seen.clear()
     percept = pulse_train_percept(n_pulses=3, period=1000.0 / 6)
-    duration = (percept.time[-1] - percept.time[0]) / 1000.0
+    duration = (percept.time[-1] - percept.time[0] + 0.45) / 1000.0
     percept.save(str(tmp_path / 'pulses.mp4'), fps=30)
     npt.assert_equal(len(seen[0][0]), 10)
     npt.assert_array_less(abs(len(seen[0][0]) / 30.0 - duration), 1 / 30.0)
+
+
+def test_Percept_play_keeps_the_last_frame():
+    """The last time point of an irregular percept is model output
+
+    `TemporalModel.predict_percept(t_percept=[0, 20, 50])` asks for brightness
+    at those three instants, so the frame at 50 ms is a percept like any
+    other, not an endpoint that ends the animation. Giving it no duration
+    would drop it from playback entirely.
+    """
+    data = np.zeros((2, 2, 3))
+    data[..., :] = [0.0, 0.5, 1.0]
+    percept = Percept(data, time=[0, 20, 50])
+    cfg = player(percept.play())
+    npt.assert_equal(cfg['n'], 3)
+    npt.assert_equal(cfg['labels'][-1], 't = 50.00 ms')
+    # The last frame is on screen for as long as the interval in front of it:
+    npt.assert_almost_equal(cfg['intervals'], [20, 30, 30])
+    npt.assert_almost_equal(percept.play()._frame_data[0, 0], [0, 0.5, 1.0])
+    # ... and a display clock fine enough to resolve it reaches it, which a
+    # zero-length last frame would not allow at any rate:
+    for fps in (40, 100, 1000):
+        frames = percept.play(fps=fps)._frame_data[0, 0]
+        npt.assert_almost_equal(frames[-1], 1.0)
+        npt.assert_equal(player(percept.play(fps=fps))['labels'][-1],
+                         't = 50.00 ms')
+    # A clock too coarse to resolve it misses it, like any other frame: at
+    # 25 fps the 80 ms percept is sampled at 0 and 40 ms only.
+    npt.assert_almost_equal(percept.play(fps=25)._frame_data[0, 0], [0, 0.5])
+
+
+def test_Percept_play_rejects_unordered_time(tmp_path):
+    """A percept whose time axis backtracks cannot be laid out on a clock"""
+    percept = Percept(np.random.rand(2, 2, 3), time=[0, 30, 10])
+    for fps in (None, 30):
+        with pytest.raises(ValueError):
+            percept.play(fps=fps)
+    with pytest.raises(ValueError):
+        percept.save(str(tmp_path / 'test.mp4'), fps=30)
 
 
 def test_Percept_play_save_do_not_mutate(tmp_path):
