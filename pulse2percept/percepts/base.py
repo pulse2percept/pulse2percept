@@ -11,8 +11,8 @@ from skimage import img_as_ubyte
 from skimage.transform import resize
 
 from ..units import DimensionMismatchError, Hz, Quantity, Unit, as_value, ms
-from ..utils import (Data, HTMLAnimation, frame_interval, frame_timeline,
-                     sample)
+from ..utils import Data, HTMLAnimation, frame_interval, sample
+from ..utils.animation import _frame_timeline
 from ..utils.constants import VIDEO_BLOCK_SIZE
 
 
@@ -415,8 +415,10 @@ class Percept(Data):
             axis owns that. A non-homogeneous time axis (e.g., the short
             phases and long gaps of a pulse train) is now played back as it
             is, rather than rejected. Browsers do not schedule timeouts more
-            finely than a few milliseconds, so time steps shorter than that
-            are stretched.
+            finely than a few milliseconds, so a time step shorter than that
+            is skipped rather than stretched -- the same rule as a low
+            ``fps``, and for the same reason: a display that cannot resolve a
+            brief event should miss it, not distort time.
 
         """
         if self.time is None:
@@ -426,7 +428,7 @@ class Percept(Data):
         # milliseconds whatever the percept counts in: a percept at
         # [0, 20, 40] ms and one at [0, .02, .04] s play at the same real
         # speed. Only the labels below are in the percept's own unit.
-        timeline = frame_timeline(self.times(ms), fps=fps)
+        timeline = _frame_timeline(self.times(ms), fps=fps)
         idx = timeline.indices
 
         def update(i):
@@ -562,7 +564,7 @@ class Percept(Data):
             else:
                 # Same display clock as `play`: resampling changes the number
                 # of frames, not how long the movie runs.
-                timeline = frame_timeline(self.times(ms), fps=fps)
+                timeline = _frame_timeline(self.times(ms), fps=fps)
                 data = data[..., timeline.indices]
             # Note, for most codecs, the image dimensions must be divisible by
             # 16 the default for the VIDEO_BLOCK_SIZE is 16. Check if image is

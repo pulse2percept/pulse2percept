@@ -18,8 +18,7 @@
 """
 from .base import (PrettyPrint, FreezeError, Frozen, Parametrized, Data,
                    bijective26_name, cached, gamma)
-from .animation import (FrameTimeline, HTMLAnimation, frame_interval,
-                        frame_timeline)
+from .animation import HTMLAnimation, frame_interval
 from .geometry import (cart2pol, pol2cart, delta_angle)
 from .array import is_strictly_increasing, radial_mask, sample, unique
 from .images import center_image, scale_image, shift_image, trim_image
@@ -46,8 +45,6 @@ __all__ = [
     'deprecated',
     'deprecated_alias',
     'frame_interval',
-    'frame_timeline',
-    'FrameTimeline',
     'FreezeError',
     'Frozen',
     'gamma',

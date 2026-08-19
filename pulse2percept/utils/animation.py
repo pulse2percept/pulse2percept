@@ -24,8 +24,7 @@ from PIL import Image
 
 from ..units import Hz, as_value
 
-__all__ = ['HTMLAnimation', 'FrameTimeline', 'frame_interval',
-           'frame_timeline']
+__all__ = ['HTMLAnimation', 'frame_interval']
 
 # Frames are packed into a single sprite sheet. Browsers put a cap on the size
 # of an image they are willing to decode; 8192px per side is safe everywhere,
@@ -126,13 +125,12 @@ def frame_interval(time, fps=None, tol=1e-2):
 #: The frames of an animation, laid out on a display clock: which frame of the
 #: source data to show (``indices``), when it comes up (``times``, in ms), and
 #: how long it stays up (``intervals``, in ms).
-FrameTimeline = namedtuple('FrameTimeline', ['indices', 'times', 'intervals'])
+_FrameTimeline = namedtuple('_FrameTimeline', ['indices', 'times',
+                                               'intervals'])
 
 
-def frame_timeline(time, fps=None):
+def _frame_timeline(time, fps=None, tol=1e-2):
     """Lay the frames of an animation out on a display clock
-
-    .. versionadded:: 0.10.0
 
     ``time`` owns the timing: an animation that spans three seconds takes
     three seconds to play, whatever ``fps`` says. ``fps`` only decides how
@@ -153,36 +151,49 @@ def frame_timeline(time, fps=None):
 
         May be given as a plain number of hertz or as a unitful frequency
         (e.g. ``0.03 * kHz``); see :py:mod:`pulse2percept.units`.
+    tol : float, optional
+        Tolerance within which two time steps count as equal, which is what
+        decides how long the last frame lasts (see the notes)
 
     Returns
     -------
-    timeline : FrameTimeline
+    timeline : _FrameTimeline
         A named tuple of ``indices`` (which frame of ``time`` to show),
         ``times`` (when each displayed frame comes up, in ms), and
         ``intervals`` (how long each displayed frame stays up, in ms).
 
     Notes
     -----
-    *  The last frame's duration does not follow from ``time`` alone (there is
-       no timestamp after it to end it), so it is held for as long as the
-       frame before it. A single-frame animation falls back on
-       ``SINGLE_FRAME_INTERVAL``.
+    *  Nothing in ``time`` says when the last frame ends, and only a
+       homogeneous axis gives a basis for guessing: there, the last frame
+       lasts one more time step, so that ``n`` frames of ``dt`` take
+       ``n * dt``, which is what a video means by ``n`` frames. On an
+       irregular axis the last timestamp *is* the end of the timeline (p2p's
+       encoders append exactly such an endpoint to pin the source duration),
+       so nothing is extrapolated past it. A single frame has no time step at
+       all and falls back on ``SINGLE_FRAME_INTERVAL``.
     *  Frames are never interpolated, pooled, or otherwise mixed: an event
        that falls between two display samples is simply missed, exactly as it
        would be on a display of that frame rate. Sample faster if that matters.
 
     Examples
     --------
-    Playing a percept at its own rate shows every frame for its own time step:
+    Playing an animation at its own rate shows every frame for its own time
+    step, and a homogeneous axis ends one time step after its last frame:
 
-    >>> frame_timeline([0, 10, 30]).indices
+    >>> _frame_timeline([0, 10, 20]).indices
     array([0, 1, 2])
-    >>> frame_timeline([0, 10, 30]).intervals
-    array([10., 20., 20.])
+    >>> _frame_timeline([0, 10, 20]).intervals
+    array([10., 10., 10.])
+
+    An irregular axis ends where it says it ends:
+
+    >>> _frame_timeline([0, 10, 30]).intervals
+    array([10., 20.,  0.])
 
     Halving the display rate halves the number of frames, not the duration:
 
-    >>> frame_timeline([0, 10, 20, 30], fps=50).indices
+    >>> _frame_timeline([0, 10, 20, 30], fps=50).indices
     array([0, 2])
 
     """
@@ -192,14 +203,17 @@ def frame_timeline(time, fps=None):
     time = np.array(time, dtype=np.float64).ravel()
     if time.size == 0:
         raise ValueError("'time' must have at least one time point.")
-    intervals = np.diff(time)
-    # The last frame has no timestamp after it, so it is held for as long as
-    # the one before it. That is also what makes a homogeneous axis last
-    # exactly `n_frames` time steps:
-    intervals = np.append(intervals, intervals[-1] if intervals.size
-                          else SINGLE_FRAME_INTERVAL)
+    try:
+        # A homogeneous axis (or a single frame) says how long its last frame
+        # lasts, and `frame_interval` is what decides that it is homogeneous:
+        last = frame_interval(time, tol=tol)
+    except NotImplementedError:
+        # An irregular axis gives no basis for extrapolating past its final
+        # timestamp: that timestamp is where the timeline ends.
+        last = 0.0
+    intervals = np.append(np.diff(time), last)
     if fps is None:
-        return FrameTimeline(np.arange(time.size), time, intervals)
+        return _FrameTimeline(np.arange(time.size), time, intervals)
     if fps <= 0:
         raise ValueError(f"'fps' must be greater than zero, not {fps}.")
     step = 1000.0 / fps
@@ -212,7 +226,7 @@ def frame_timeline(time, fps=None):
     # never blended, so a brief event between two samples is missed:
     indices = np.clip(np.searchsorted(time, times, side='right') - 1, 0,
                       time.size - 1)
-    return FrameTimeline(indices, times, np.full(n_frames, step))
+    return _FrameTimeline(indices, times, np.full(n_frames, step))
 
 
 def _weight2css(weight):
@@ -533,7 +547,8 @@ _PLAYER = Template("""
   var counter = root.querySelector(".p2p-count");
   var mode = root.querySelector(".p2p-mode");
   var toggle = root.querySelector(".p2p-toggle");
-  var frame = 0, dir = 1, timer = null, playing = false, sheet = new Image();
+  var frame = 0, dir = 1, timer = null, playing = false, due = 0;
+  var sheet = new Image();
 
   function draw() {
     if (!sheet.complete || !sheet.naturalWidth) { return; }
@@ -573,22 +588,37 @@ _PLAYER = Template("""
     if (mode.value === "once" && frame === cfg.n - 1) { show(0); }
     playing = true;
     toggle.innerHTML = "&#10074;&#10074;";
+    // The wall-clock time at which the frame on screen is up:
+    due = performance.now() + cfg.intervals[frame];
     tick();
   }
 
-  // Every frame is shown for its own time step, so a percept with an
-  // irregular time axis (say, a pulse train) plays at the speed it was
-  // recorded at. Browsers clamp timeouts to a few milliseconds, so time steps
-  // shorter than that are stretched:
+  // Frames are scheduled against the wall clock rather than one timeout after
+  // the next, so the animation lasts as long as its time axis says it does. A
+  // timeout that fires late catches up by stepping over every frame whose
+  // turn has already passed: a 0.45 ms pulse phase that no browser can
+  // resolve is missed, exactly as it would be at a low frame rate, instead of
+  // stretching everything after it.
   function tick() {
     timer = setTimeout(function () {
       timer = null;
-      advance();
+      for (var steps = 0; steps < cfg.n; steps++) {
+        var next = step();
+        if (next === null) { pause(); return; }
+        frame = next;
+        due += cfg.intervals[frame];
+        if (due > performance.now()) { break; }
+      }
+      // A tab that was in the background can be further behind than a whole
+      // pass through the frames, which there is no catching up on:
+      due = Math.max(due, performance.now());
+      show(frame);
       if (playing) { tick(); }
-    }, Math.max(1, cfg.intervals[frame]));
+    }, Math.max(0, due - performance.now()));
   }
 
-  function advance() {
+  // The frame after this one, or null at the end of the run
+  function step() {
     var next = frame + dir;
     if (next > cfg.n - 1 || next < 0) {
       if (mode.value === "loop") {
@@ -597,11 +627,10 @@ _PLAYER = Template("""
         dir = -dir;
         next = frame + dir;
       } else {
-        pause();
-        return;
+        return null;
       }
     }
-    show(next);
+    return next;
   }
 
   root.querySelectorAll("[data-p2p-go]").forEach(function (btn) {
@@ -660,8 +689,7 @@ class HTMLAnimation(FuncAnimation):
     intervals : array_like or None, optional
         How long each frame stays up (in ms), one value per frame. If None,
         every frame is shown for ``interval`` ms. Frames of unequal duration
-        are what lets an animation follow an irregular time axis; see
-        :py:func:`~pulse2percept.utils.frame_timeline`.
+        are what lets an animation follow an irregular time axis.
 
         .. versionadded:: 0.10.0
 
@@ -773,10 +801,9 @@ class HTMLAnimation(FuncAnimation):
             Frames per second. If None, every frame is shown for as long as
             the animation's own timing says it lasts. Otherwise all frames are
             shown for ``1000 / fps`` ms, which changes how fast the animation
-            plays; resample the frames themselves (see
-            :py:func:`~pulse2percept.utils.frame_timeline`) to keep its
-            duration. May be given as a unitful frequency (e.g. ``30 * Hz``);
-            see :py:mod:`pulse2percept.units`.
+            plays; resample the frames themselves to keep its duration. May be
+            given as a unitful frequency (e.g. ``30 * Hz``); see
+            :py:mod:`pulse2percept.units`.
         embed_frames : bool
             Unused; frames are always embedded.
         default_mode : {'loop', 'once', 'reflect'} or None
