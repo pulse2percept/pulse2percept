@@ -254,9 +254,7 @@ def test_ArgusII_encodes_pictures_on_assignment():
     npt.assert_almost_equal(argus.stim.time[-1], 500)
     npt.assert_almost_equal(np.abs(argus.stim.data).max(), 50, decimal=4)
     # The raster is in there too: six groups, each 2 ms behind the one before:
-    meta = argus.stim.metadata['encoder']
-    npt.assert_equal(meta['kind'], 'AmplitudeEncoder')
-    npt.assert_almost_equal(meta['cycle'], 12)
+    npt.assert_almost_equal(argus.stim.metadata['encoder']['cycle'], 12)
     # ... which is what a raster is for: at no instant is more than one group
     # of electrodes drawing current.
     groups = argus.raster.groups(argus.stim.electrodes)
@@ -269,7 +267,7 @@ def test_ArgusII_encodes_pictures_on_assignment():
         argus = implants.ArgusII(stim=BostonTrain())
     npt.assert_equal(argus.stim.unit, uA)
     meta = argus.stim.metadata['encoder']
-    npt.assert_equal(meta['n_frames'], 94)
+    npt.assert_equal(meta['frame_time'].size, 94)
     npt.assert_almost_equal(meta['frame_dur'], 1000 / 29.97, decimal=3)
 
     # Without an encoder the very same picture is refused, since there is no

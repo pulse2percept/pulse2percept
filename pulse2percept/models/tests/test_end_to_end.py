@@ -262,7 +262,9 @@ def test_endtoend_raster_is_what_separates_the_groups():
     implant = make_implant()
     plain = AmplitudeEncoder(amp_range=(0, 50), freq=20,
                              frame_dur=200).encode(img, implant=implant)
-    npt.assert_equal(plain.metadata['encoder']['n_schedules'], 1)
+    # Every electrode fires at the same times, so the stimulator has to
+    # source all of them at once:
+    npt.assert_equal(len(np.unique(np.abs(plain.data) > 0, axis=0)), 1)
     npt.assert_almost_equal(np.abs(plain.data).sum(axis=0).max(), 125.0)
 
     implant.max_current = 60

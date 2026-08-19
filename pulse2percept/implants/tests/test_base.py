@@ -523,14 +523,10 @@ def test_ProsthesisSystem_encoder():
     implant.stim = img
     npt.assert_almost_equal(np.abs(implant.stim.data).max(), 30)
     npt.assert_almost_equal(implant.stim.time[-1], 100)
-    npt.assert_equal(implant.stim.metadata['encoder']['kind'],
-                     'AmplitudeEncoder')
     implant.encoder = FrequencyEncoder(freq_range=(0, 100), amp=42,
                                        frame_dur=100)
     implant.stim = img
     npt.assert_almost_equal(np.abs(implant.stim.data).max(), 42)
-    npt.assert_equal(implant.stim.metadata['encoder']['kind'],
-                     'FrequencyEncoder')
 
     # An electrical stimulus bypasses the encoder entirely, whatever is
     # installed -- there is nothing left to encode:
@@ -548,10 +544,10 @@ def test_ProsthesisSystem_encoder():
     implant.encoder = AmplitudeEncoder(amp_range=(10, 50))
     implant.raster = implants.SequentialRaster(6)
     implant.stim = img
-    npt.assert_equal(implant.stim.metadata['encoder']['n_schedules'], 6)
     delays = [implant.stim.time[np.argmax(implant.stim.data[e] < 0)]
               for e in (0, 10, 20, 30, 40, 50)]
     npt.assert_almost_equal(delays, np.arange(6) * 50 / 6, decimal=2)
+    npt.assert_equal(len(np.unique(np.abs(implant.stim.data) > 0, axis=0)), 6)
 
 
 def test_ProsthesisSystem_spatial_stim():

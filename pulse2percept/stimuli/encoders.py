@@ -760,13 +760,13 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         time = ticks * DT
         time[-1] = total
         stim = Stimulus(data, electrodes=electrodes, time=time)
-        stim.metadata['encoder'] = {'kind': type(self).__name__,
+        # The frame clock, which is what decides when a percept is worth
+        # reporting (see `pulse2percept.models.base._frame_clock`), and the
+        # raster sweep the schedule was actually realized on:
+        stim.metadata['encoder'] = {'frame_time': frame_time,
                                     'frame_dur': frame_dur,
-                                    'n_frames': n_frames,
-                                    'frame_time': frame_time,
                                     'cycle': None if cycle is None else
-                                    cycle * DT,
-                                    'n_schedules': len(uniq)}
+                                    cycle * DT}
         return stim
 
     def _modulation(self, source, implant=None):
@@ -829,10 +829,10 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
             stim = Stimulus(data, electrodes=electrodes, time=frame_time)
         else:
             stim = Stimulus(data.ravel(), electrodes=electrodes)
-        stim.metadata['encoder'] = {'kind': type(self).__name__,
-                                    'frame_dur': frame_dur,
-                                    'n_frames': int(frame_time.size),
-                                    'frame_time': frame_time}
+        # The frame clock and nothing else: there is no schedule here to
+        # record, which is the whole point of this representation.
+        stim.metadata['encoder'] = {'frame_time': frame_time,
+                                    'frame_dur': frame_dur}
         return stim
 
     def _encode_both(self, source, implant=None):

@@ -1122,7 +1122,7 @@ def test_find_threshold_keeps_encoder_metadata():
         warnings.simplefilter('ignore')
         implant.stim = AmplitudeEncoder(amp_range=(0, 50), freq=60).encode(
             vid, implant=implant)
-    n_frames = implant.stim.metadata['encoder']['n_frames']
+    n_frames = implant.stim.metadata['encoder']['frame_time'].size
 
     seen = []
     model = FadingTemporal(tau=100).build()
