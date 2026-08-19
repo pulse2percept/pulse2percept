@@ -11,6 +11,7 @@ The sheet is encoded as JPEG by default, which roughly halves it again; pass
 ``fmt='png'`` if you need the frames to be pixel-exact.
 """
 import base64
+from collections import namedtuple
 from io import BytesIO
 from json import dumps
 from string import Template
@@ -119,6 +120,60 @@ def frame_interval(time, fps=None, tol=1e-2):
             f"(time steps range over {spread:g} ms, more than tol={tol:g}). "
             f"Pass 'fps' instead.")
     return float(interval[0])
+
+
+#: The frames of an animation, laid out on a display clock: which frame of the
+#: source data to show (``indices``), when it comes up (``times``, in ms), and
+#: how long it stays up (``intervals``, in ms).
+_FrameTimeline = namedtuple('_FrameTimeline', ['indices', 'times',
+                                               'intervals'])
+
+
+def _frame_timeline(time, fps=None):
+    """Lay animation frames out on a display timeline.
+
+    Parameters
+    ----------
+    time : array_like
+        Frame times in ms. Must be finite and strictly increasing.
+    fps : float or None
+        Display sampling rate in Hz. If None, show every frame using the
+        timing in ``time``. Otherwise resample onto a regular display clock
+        using zero-order hold.
+
+    Returns
+    -------
+    timeline : _FrameTimeline
+        Display-frame indices, times, and durations in ms.
+
+    Notes
+    -----
+    The duration of the final frame is not encoded by ``time``. It is held
+    for the preceding interval, or ``SINGLE_FRAME_INTERVAL`` for one frame.
+    Fixed-rate resampling preserves duration to within one display frame.
+    """
+    fps = as_value(fps, Hz, 'fps')
+    time = np.array(time, dtype=np.float64).ravel()
+    if time.size == 0:
+        raise ValueError("'time' must have at least one time point.")
+    intervals = np.diff(time)
+    if not np.all(np.isfinite(time)) or np.any(intervals <= 0):
+        raise ValueError("'time' must be finite and strictly increasing.")
+    # Hold the final frame for the preceding interval:
+    intervals = np.append(intervals, intervals[-1] if intervals.size
+                          else SINGLE_FRAME_INTERVAL)
+    if fps is None:
+        return _FrameTimeline(np.arange(time.size), time, intervals)
+    if fps <= 0:
+        raise ValueError(f"'fps' must be greater than zero, not {fps}.")
+    step = 1000.0 / fps
+    # Choose the nearest whole number of display frames.
+    n_frames = max(1, int(np.floor(intervals.sum() / step + 0.5)))
+    times = time[0] + np.arange(n_frames) * step
+    # Zero-order hold:
+    indices = np.clip(np.searchsorted(time, times, side='right') - 1, 0,
+                      time.size - 1)
+    return _FrameTimeline(indices, times, np.full(n_frames, step))
 
 
 def _weight2css(weight):
@@ -439,7 +494,8 @@ _PLAYER = Template("""
   var counter = root.querySelector(".p2p-count");
   var mode = root.querySelector(".p2p-mode");
   var toggle = root.querySelector(".p2p-toggle");
-  var frame = 0, dir = 1, timer = null, sheet = new Image();
+  var frame = 0, dir = 1, timer = null, playing = false, due = 0;
+  var sheet = new Image();
 
   function draw() {
     if (!sheet.complete || !sheet.naturalWidth) { return; }
@@ -469,18 +525,42 @@ _PLAYER = Template("""
   }
 
   function pause() {
-    if (timer !== null) { clearInterval(timer); timer = null; }
+    if (timer !== null) { clearTimeout(timer); timer = null; }
+    playing = false;
     toggle.innerHTML = "&#9654;";
   }
 
   function play() {
-    if (timer !== null) { return; }
+    if (playing) { return; }
     if (mode.value === "once" && frame === cfg.n - 1) { show(0); }
+    playing = true;
     toggle.innerHTML = "&#10074;&#10074;";
-    timer = setInterval(advance, Math.max(1, cfg.interval));
+    // Deadline for the current frame:
+    due = performance.now() + cfg.intervals[frame];
+    tick();
   }
 
-  function advance() {
+  // Schedule against wall-clock deadlines and skip overdue frames:
+  function tick() {
+    timer = setTimeout(function () {
+      timer = null;
+      for (var steps = 0; steps < cfg.n; steps++) {
+        var next = step();
+        // The end of the run, with whatever we caught up to still to draw:
+        if (next === null) { pause(); show(frame); return; }
+        frame = next;
+        due += cfg.intervals[frame];
+        if (due > performance.now()) { break; }
+      }
+      // Reset after a long stall:
+      due = Math.max(due, performance.now());
+      show(frame);
+      if (playing) { tick(); }
+    }, Math.max(0, due - performance.now()));
+  }
+
+  // Next frame, or null at the end:
+  function step() {
     var next = frame + dir;
     if (next > cfg.n - 1 || next < 0) {
       if (mode.value === "loop") {
@@ -489,11 +569,10 @@ _PLAYER = Template("""
         dir = -dir;
         next = frame + dir;
       } else {
-        pause();
-        return;
+        return null;
       }
     }
-    show(next);
+    return next;
   }
 
   root.querySelectorAll("[data-p2p-go]").forEach(function (btn) {
@@ -506,7 +585,7 @@ _PLAYER = Template("""
     });
   });
   toggle.addEventListener("click", function () {
-    if (timer === null) { play(); } else { pause(); }
+    if (playing) { pause(); } else { play(); }
   });
   slider.addEventListener("input", function () {
     pause();
@@ -549,6 +628,12 @@ class HTMLAnimation(FuncAnimation):
     fmt : {'jpg', 'png'}, optional
         Whether to encode the frames as JPEG or PNG. JPEG is typically an
         order of magnitude smaller, PNG is lossless
+    intervals : array_like or None, optional
+        How long each frame stays up (in ms), one value per frame. If None,
+        every frame is shown for ``interval`` ms. Frames of unequal duration
+        are what lets an animation follow an irregular time axis.
+
+        .. versionadded:: 0.10.0
 
     Notes
     -----
@@ -559,15 +644,39 @@ class HTMLAnimation(FuncAnimation):
     """
 
     def __init__(self, fig, func, frames=None, *args, image=None,
-                 frame_data=None, labels=None, fmt='jpg', **kwargs):
+                 frame_data=None, labels=None, fmt='jpg', intervals=None,
+                 **kwargs):
         self._image = image
         self._frame_data = frame_data
         self._labels = labels
         self._fmt = _check_fmt(fmt)
         self._html = None
+        if intervals is not None:
+            intervals = np.array(intervals, dtype=np.float64).ravel()
+            n_frames = (None if frame_data is None
+                        else np.shape(frame_data)[-1])
+            if n_frames is not None and intervals.size != n_frames:
+                raise ValueError(f"'intervals' must have one value per "
+                                 f"frame ({n_frames}), not "
+                                 f"{intervals.size}.")
+            # Matplotlib has a single frame delay, which is all the inherited
+            # machinery (``save``, ``to_html5_video``) can express. The mean
+            # keeps a movie the same length as the animation it came from:
+            kwargs.setdefault('interval', float(intervals.mean()))
+        self._intervals = intervals
         super().__init__(fig, func, frames, *args, **kwargs)
 
-    def _build_html(self, interval, default_mode):
+    def _display_intervals(self, fps, n_frames):
+        """How long each frame stays up (in ms), one value per frame"""
+        if fps is not None:
+            # An explicit frame rate overrides the animation's own timing,
+            # which is what Matplotlib's ``to_jshtml(fps=...)`` means:
+            return np.full(n_frames, 1000.0 / fps)
+        if self._intervals is not None:
+            return self._intervals
+        return np.full(n_frames, float(self._interval))
+
+    def _build_html(self, intervals, default_mode):
         """Assemble the self-contained HTML player"""
         fig = self._fig
         im = self._image
@@ -610,7 +719,10 @@ class HTMLAnimation(FuncAnimation):
             # to nearest-neighbor once the image is strongly magnified:
             'smooth': (rect[2] <= MAX_SMOOTH_UPSAMPLE * sheet['fw'] and
                        rect[3] <= MAX_SMOOTH_UPSAMPLE * sheet['fh']),
-            'interval': float(interval),
+            # The player advances frame by frame, so it needs every delay;
+            # the scalar is kept for whoever reads the config:
+            'interval': float(np.mean(intervals)),
+            'intervals': [float(i) for i in intervals],
             'mode': default_mode,
             'title': title,
             'labels': self._labels if title is not None else [],
@@ -628,9 +740,10 @@ class HTMLAnimation(FuncAnimation):
         Parameters
         ----------
         fps : float or None
-            Frames per second. If None, uses the animation's interval. May be
-            given as a unitful frequency (e.g. ``30 * Hz``); see
-            :py:mod:`pulse2percept.units`.
+            Display sampling rate in Hz. If None, show every percept frame using
+            its recorded timing. Otherwise resample onto a regular display clock
+            using zero-order hold. Playback duration is preserved to within one
+            display frame. May also be given as a unitful frequency.
         embed_frames : bool
             Unused; frames are always embedded.
         default_mode : {'loop', 'once', 'reflect'} or None
@@ -646,14 +759,15 @@ class HTMLAnimation(FuncAnimation):
                                      default_mode=default_mode)
         if default_mode is None:
             default_mode = 'loop' if self._repeat else 'once'
-        interval = self._interval if fps is None else 1000.0 / fps
+        intervals = self._display_intervals(
+            fps, int(np.shape(self._frame_data)[-1]))
         # We are rendering the animation ourselves, so silence Matplotlib's
         # "Animation was deleted without rendering anything" warning:
         self._draw_was_started = True
         # Rendering the sprite sheet is the expensive part, so only do it once:
-        if self._html is None or self._html[0] != (interval, default_mode):
-            self._html = ((interval, default_mode),
-                          self._build_html(interval, default_mode))
+        key = (tuple(intervals), default_mode)
+        if self._html is None or self._html[0] != key:
+            self._html = (key, self._build_html(intervals, default_mode))
         return self._html[1]
 
     def _repr_html_(self):
