@@ -3,12 +3,33 @@
 """
 import numpy as np
 from abc import abstractmethod
+from functools import wraps
 
 from .base import VisualFieldMap
 from ..units import dva, mm, um
 from ..utils import pol2cart, cart2pol
 from ..utils.constants import UM_PER_MM
 import matplotlib.pyplot as plt
+
+
+def _elementwise(dtype):
+    """Make a coordinate transform elementwise over scalars and arrays alike
+
+    The transforms below index with boolean masks and divide in place, neither
+    of which a scalar (or a 0-d, or an integer, array) supports. Coordinates
+    therefore enter as float arrays of at least one dimension; a call made
+    with two scalars gets scalars back.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(self, x, y):
+            # np.array copies, so the caller's arrays are never written to:
+            x, y = np.array(x, dtype=dtype), np.array(y, dtype=dtype)
+            scalar = x.ndim == 0 and y.ndim == 0
+            x, y = func(self, np.atleast_1d(x), np.atleast_1d(y))
+            return (x[0], y[0]) if scalar else (x, y)
+        return wrapper
+    return decorator
 
 
 class CorticalMap(VisualFieldMap):
@@ -159,9 +180,8 @@ class Polimeni2006Map(CorticalMap):
         x[idx_nan], y[idx_nan] = np.nan, np.nan
         return x, y
 
+    @_elementwise('float32')
     def dva_to_v1(self, x, y):
-        x = np.array(x, dtype='float32')
-        y = np.array(y, dtype='float32')
         if self.jitter_boundary:
             # remove and discontinuities across x axis
             # shift to the same side as existing points
@@ -178,9 +198,8 @@ class Polimeni2006Map(CorticalMap):
         yV1 *= 1000
         return self._invert_left_cart(xV1, yV1, ~inverted)[:2]
 
+    @_elementwise('float32')
     def dva_to_v2(self, x, y):
-        x = np.array(x, dtype='float32')
-        y = np.array(y, dtype='float32')
         if self.jitter_boundary:
             # remove and discontinuities across x and y axis
             # shift to the same side as existing points
@@ -200,9 +219,8 @@ class Polimeni2006Map(CorticalMap):
         yV2 *= 1000
         return self._invert_left_cart(xV2, yV2, ~inverted)[:2]
 
+    @_elementwise('float32')
     def dva_to_v3(self, x, y):
-        x = np.array(x, dtype='float32')
-        y = np.array(y, dtype='float32')
         if self.jitter_boundary:
             # remove and discontinuities across x and y axis
             # shift to the same side as existing points
@@ -222,9 +240,8 @@ class Polimeni2006Map(CorticalMap):
         yV3 *= 1000
         return self._invert_left_cart(xV3, yV3, ~inverted)[:2]
 
+    @_elementwise('float64')
     def v1_to_dva(self, x, y):
-        x = np.array(x)
-        y = np.array(y)
         x, y, inverted = self._invert_left_cart(x, y, boundary=self.left_offset/2)
         x /= 1000
         y /= 1000
@@ -238,9 +255,8 @@ class Polimeni2006Map(CorticalMap):
         theta = thetav1 / self.alpha1
         return pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
 
+    @_elementwise('float64')
     def v2_to_dva(self, x, y):
-        x = np.array(x)
-        y = np.array(y)
         x, y, inverted = self._invert_left_cart(x, y, boundary=self.left_offset/2)
         x /= 1000
         y /= 1000
@@ -257,9 +273,8 @@ class Polimeni2006Map(CorticalMap):
         theta = (thetav2 - (np.sign(y) * (phi1 + phi2))) / self.alpha2
         return pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
 
+    @_elementwise('float64')
     def v3_to_dva(self, x, y):
-        x = np.array(x)
-        y = np.array(y)
         x, y, inverted = self._invert_left_cart(x, y, boundary=self.left_offset/2)
         x /= 1000
         y /= 1000

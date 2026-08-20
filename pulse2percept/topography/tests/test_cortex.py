@@ -198,3 +198,22 @@ def test_cortical_map_units():
             to_tissue(xdva * um, ydva)
         with pytest.raises(DimensionMismatchError):
             to_visual(x_um * dva, y_um)
+
+
+def test_polimeni_scalars():
+    """A scalar coordinate transforms like a one-element array"""
+    map = Polimeni2006Map(regions=['v1', 'v2', 'v3'])
+    for region in ('v1', 'v2', 'v3'):
+        to_tissue = getattr(map, f'dva_to_{region}')
+        to_visual = getattr(map, f'{region}_to_dva')
+        x_um, y_um = to_tissue(5, -2)
+        npt.assert_equal(np.isscalar(x_um) or np.ndim(x_um) == 0, True)
+        npt.assert_almost_equal([x_um, y_um], np.ravel(to_tissue([5.], [-2.])),
+                                err_msg=region)
+        # Integers must survive the inverse, too (it divides in place):
+        back = to_visual(int(x_um), int(y_um))
+        npt.assert_almost_equal(back, np.ravel(to_visual([float(x_um)],
+                                                         [float(y_um)])), 3,
+                                err_msg=region)
+        # Points outside the mapped eccentricity are NaN, not an error:
+        npt.assert_equal(np.isnan(to_tissue(100, 0)), True)
