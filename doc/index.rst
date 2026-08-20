@@ -41,7 +41,7 @@
    developers/releases
 
 .. include:: ../README.rst
-   :end-before: .. intro-begin
+   :end-before: .. badges-end
 
 |
 

@@ -19,6 +19,8 @@
 
 |doi| |license| |pypi| |build| |forks| |stars|
 
+.. badges-end
+
 ====================================================================
 pulse2percept: A Python-based simulation framework for bionic vision
 ====================================================================
@@ -77,17 +79,19 @@ To install the `stable release`_ of p2p, run:
 ``pip`` installs NumPy and the other dependencies for you, and will only select
 a release that supports the Python version you are running (see
 `Compatibility and Building from Source
-<https://pulse2percept.readthedocs.io/en/stable/install.html#install-compatibility>`_).
+<https://pulse2percept.readthedocs.io/en/stable/install.html#install-compatibility>`__).
 
 We publish prebuilt wheels on PyPI for 64-bit Linux (``manylinux``, x86-64),
 macOS 11 and later (both Apple silicon and Intel), and 64-bit Windows. These
 wheels are not tied to a particular distribution or OS release beyond those
-minimums. You can find the full documentation
-`here <https://pulse2percept.readthedocs.io/en/stable>`_.
+minimums.
 
 .. _stable release: https://pulse2percept.readthedocs.io/en/stable/index.html
 
 .. quickstart-end
+
+You can find the full documentation
+`here <https://pulse2percept.readthedocs.io/en/stable>`_.
 
 Compatibility and Building from Source
 --------------------------------------
