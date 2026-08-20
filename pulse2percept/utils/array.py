@@ -4,6 +4,7 @@
    :py:class:`~pulse2percept.utils.radial_mask`"""
 
 from ._fast_array import fast_is_strictly_increasing
+from ..units import as_value
 import numpy as np
 
 
@@ -95,3 +96,114 @@ def radial_mask(shape, mask='gauss', sd=3):
         raise ValueError(f'Unknown mask "{mask}". Choose either "circle" or '
                          f'"gauss".')
     return intensity
+
+
+def _interp_rows(x, xp, fp):
+    """Linearly interpolate every row of ``fp`` at the time points ``x``
+
+    Vectorized equivalent of ``[np.interp(x, xp, row) for row in fp]``, which
+    is otherwise a Python-level loop over (potentially many thousands of)
+    electrodes.
+
+    The arithmetic is deliberately carried out in double precision and in the
+    same order as ``np.interp``'s C loop, because temporal models resolve
+    stimulus edges on a fixed simulation grid.
+
+    Parameters
+    ----------
+    x : 1-D array
+        Time points at which to interpolate.
+    xp : 1-D array
+        The stimulus time axis.
+    fp : 2-D array
+        The stimulus data, one row per electrode.
+
+    Returns
+    -------
+    data : 2-D array
+        Interpolated data, of shape ``(len(fp), len(x))``.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    xp = np.asarray(xp, dtype=np.float64)
+    fp = np.asarray(fp)
+    # np.interp's C loop is hard to beat per element; what the vectorized path
+    # saves is one Python-level call per electrode:
+    if (fp.shape[0] < 32 or x.size > 256 or xp.size < 2 or
+            not np.all(np.diff(xp) > 0)):
+        return np.array([np.interp(x, xp, row)
+                         for row in fp]).reshape((-1, x.size))
+    # Bracket index j such that xp[j] <= x < xp[j+1], as np.interp does. Note
+    # that `j`, `x0` and `x1` are all 1-D (one entry per requested time point):
+    j = np.clip(np.searchsorted(xp, x, side='right') - 1, 0, xp.size - 2)
+    x0, x1 = xp[j], xp[j + 1]
+    # Gather first and widen afterwards: upcasting all of `fp` would touch the
+    # whole (potentially large) data container instead of just two columns
+    # per requested time point:
+    y0 = fp[:, j].astype(np.float64)
+    y1 = fp[:, j + 1].astype(np.float64)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        out = (y1 - y0) / (x1 - x0)     # slope; reused in place below
+        out *= x - x0
+        out += y0
+        # np.interp retries from the right end of the interval if that gave a
+        # NaN (which happens for infinite slopes), then gives up:
+        nan = np.isnan(out)
+        if nan.any():
+            slope = (y1 - y0) / (x1 - x0)
+            out = np.where(nan, slope * (x - x1) + y1, out)
+            out = np.where(np.isnan(out) & (y0 == y1), y0, out)
+    # The remaining corrections all select whole columns, so build the masks
+    # on the 1-D time axis and write in place rather than allocating another
+    # full-size array per correction:
+    exact = x == x0
+    if exact.any():
+        # Exact hits on a knot return the stored value verbatim:
+        out[:, exact] = y0[:, exact]
+    # Beyond the end points, the value of the closest end point is returned:
+    below = x <= xp[0]
+    if below.any():
+        out[:, below] = fp[:, :1]
+    above = x >= xp[-1]
+    if above.any():
+        out[:, above] = fp[:, -1:]
+    undefined = np.isnan(x)
+    if undefined.any():
+        out[:, undefined] = x[undefined]
+    return out
+
+
+def _slice_times(sl, time, time_unit):
+    """The time points a slice of a time axis asks for
+
+    Slicing a time axis asks for a time *range*, not for a range of column
+    indices: ``stim[:, 0:10:0.5]`` is the stimulus every 0.5 ms from 0 to
+    10 ms. All three of ``start``, ``stop`` and ``step`` are therefore times,
+    and may be given as quantities.
+
+    Parameters
+    ----------
+    sl : slice
+        The slice to resolve.
+    time : 1-D array
+        The stored time axis, in ``time_unit``.
+    time_unit : :py:class:`~pulse2percept.units.Unit`
+        The unit the slice endpoints are read in.
+
+    Returns
+    -------
+    times : 1-D array or None
+        The requested time points, or None for a stepless slice.
+    """
+    if not sl.step:
+        # We can't interpolate if we don't know the step size, so the only
+        # allowed option is slice(None, None, None), i.e. ':'
+        if sl.start or sl.stop:
+            raise ValueError("You must provide a step size when slicing the "
+                             "time axis.")
+        return None
+    start = as_value(sl.start, time_unit, 'time')
+    stop = as_value(sl.stop, time_unit, 'time')
+    step = as_value(sl.step, time_unit, 'time')
+    start = time[0] if start is None else start
+    stop = time[-1] if stop is None else stop
+    return np.arange(start, stop, step, dtype=np.float64)
