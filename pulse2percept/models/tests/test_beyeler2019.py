@@ -933,8 +933,6 @@ def _straddling_pair(coord):
 
 @pytest.mark.parametrize('ModelClass', [AxonMapSpatial, AxonMapModel])
 def test_AxonMapSpatial_meridian_blend(ModelClass):
-    # The axon map is cut along the horizontal raphe, so this blends across
-    # y=0 -- and only there, and only along y.
     def make(**params):
         # Offset by half a step so the nearest rows straddle the raphe.
         return ModelClass(xrange=(-6, 6), yrange=(-6.125, 5.875), step=0.25,
@@ -945,8 +943,6 @@ def test_AxonMapSpatial_meridian_blend(ModelClass):
     plain = make(meridian_blend=0)
     unblended = plain.predict_percept(implant).data
 
-    # The model blends out of the box, so this exercises the default rather
-    # than passing a width of its own:
     width = 1
     blended_model = make()
     npt.assert_equal(blended_model.meridian_blend, width)
@@ -955,9 +951,7 @@ def test_AxonMapSpatial_meridian_blend(ModelClass):
     npt.assert_equal(blended.dtype, unblended.dtype)
 
     y, x = plain.grid.y[:, 0], plain.grid.x[0, :]
-    # The raphe is where the two halves of the axon map meet, and the step
-    # across it is what the blend is for. Percept rows are ordered by the
-    # grid's y, so the seam is the pair of rows straddling y=0:
+    # The raphe is where the two halves of the axon map meet:
     seam = _straddling_pair(y)
 
     def jump(data):
@@ -966,11 +960,7 @@ def test_AxonMapSpatial_meridian_blend(ModelClass):
     npt.assert_array_less(0, jump(unblended))
     npt.assert_array_less(jump(blended), jump(unblended))
 
-    # It is the *horizontal* meridian this model blends across, so the change
-    # is a band in y and not one in x. Which rows and columns moved:
-    # Count a row or column as having moved if it moved by at least a
-    # thousandth of the largest change anywhere, so the bound below is about
-    # where the blend acts rather than about float noise:
+    # Blend across horizontal meridian:
     delta = np.abs(blended - unblended)
     moved = delta.max() * 1e-3
     rows = delta.max(axis=(1, 2)) > moved
@@ -979,8 +969,7 @@ def test_AxonMapSpatial_meridian_blend(ModelClass):
     # Every row that moved is within a few widths of the raphe, so the far
     # field is untouched...
     npt.assert_array_less(np.abs(y[rows]).max(), 4 * width)
-    # ...while columns moved right across the grid, including far from x=0,
-    # which a blend across the vertical meridian would have left alone:
+    # ...while columns moved right across the grid:
     npt.assert_array_less(4 * width, np.abs(x[cols]).max())
 
 

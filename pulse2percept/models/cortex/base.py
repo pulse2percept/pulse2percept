@@ -302,7 +302,7 @@ class ScoreboardSpatial(CortexSpatial):
                     # radial current spread
                     'rho': 200,  
                     'ndim' : [2, 3],
-                    'meridian_blend' : 0.05
+                    'meridian_blend' : 0.1
                  }
         return {**base_params, **params}
 

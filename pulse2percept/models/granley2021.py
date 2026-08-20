@@ -428,7 +428,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Callable model used to modulate percept streak length with amplitude,
             # frequency, and pulse duration
             'streak_model': None,
-            'blend_meridian': 1,
         }
         return {**base_params, **params}
 
