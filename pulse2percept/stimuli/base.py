@@ -997,8 +997,10 @@ class Stimulus(PrettyPrint):
 
         Notes
         -----
-        Padding never truncates the stimulus. Existing negative time points are
-        preserved.
+        An endpoint can only be added next to a data point that is already
+        zero: the data is interpolated between time points, so a zero next to
+        a nonzero endpoint would be a ramp rather than padding. Padding never
+        truncates the stimulus. Existing negative time points are preserved.
         """
         if self.time is None:
             raise ValueError("Cannot pad a stimulus in time if time=None.")
@@ -1009,13 +1011,34 @@ class Stimulus(PrettyPrint):
             )
         data = self.data
         time = self.time
+        pad_left = time[0] > 0
+        pad_right = duration > time[-1]
+        # The data is interpolated between the stored time points, so a zero
+        # next to a nonzero endpoint is a ramp into that endpoint rather than
+        # padding around it. Inventing the DT-wide transition edge that would
+        # make it padding is more than this method should do, so refuse: the
+        # stimuli one pads in practice already start and end at zero. "Zero"
+        # here is exactly zero -- an electrode is either driven or it is not.
+        if pad_left and np.any(data[:, 0] != 0):
+            raise ValueError(f"Cannot pad before a nonzero stimulus endpoint "
+                             f"(t={time[0]}).")
+        if pad_right and np.any(data[:, -1] != 0):
+            raise ValueError(f"Cannot pad after a nonzero stimulus endpoint "
+                             f"(t={time[-1]}).")
         zeros = np.zeros((data.shape[0], 1), dtype=data.dtype)
-        if time[0] > 0:
+        if pad_left:
             data = np.hstack((zeros, data))
             time = np.hstack(([0], time))
-        if duration > time[-1]:
+        if pad_right:
             data = np.hstack((data, zeros))
             time = np.hstack((time, [duration]))
+        if not pad_left and not pad_right:
+            # Nothing was added, so nothing was allocated: copy explicitly, or
+            # the returned stimulus would write through to `self`. (`hstack`
+            # allocates, and the `_stim` setter only copies the data when it
+            # has to make it contiguous.)
+            data = data.copy()
+            time = time.copy()
         stim = self._shallow_copy()
         stim._stim = {'data': data,
                       'electrodes': self.electrodes.copy(),

@@ -244,18 +244,23 @@ Shifting and padding a stimulus
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 :py:meth:`~pulse2percept.stimuli.Stimulus.shift` moves a stimulus along the
-time axis, and :py:meth:`~pulse2percept.stimuli.Stimulus.pad` embeds it in a
-window that starts at ``t=0`` and ends at a time you choose.
+time axis, and :py:meth:`~pulse2percept.stimuli.Stimulus.pad` adds
+zero-valued endpoints at ``t=0`` and ``t=duration`` as needed.
 Note that ``pad`` takes the time the padded stimulus should *end* at, not an
 amount of time to add:
 
 .. ipython:: python
 
-    # A pulse that starts 3 ms in, in a 10 ms window:
-    stim = Stimulus([[-20, 20]], time=[0, 1]).shift(3).pad(10)
+    # A pulse that starts 3 ms in, ending at 10 ms:
+    stim = BiphasicPulse(-20, 1).shift(3).pad(10)
     stim.time
 
     stim.data
+
+Because a stimulus is interpolated between its time points, an endpoint can
+only be added next to a data point that is already zero (as it is for all
+built-in pulses and pulse trains); otherwise ``pad`` raises a ``ValueError``
+rather than adding a ramp.
 
 Shifts may be negative, which moves the stimulus into the past
 (``stim.shift(-3)``).

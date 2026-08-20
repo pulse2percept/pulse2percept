@@ -55,7 +55,7 @@ API changes:
 
 * New :py:meth:`~pulse2percept.stimuli.Stimulus.shift` and
   :py:meth:`~pulse2percept.stimuli.Stimulus.pad` translate a stimulus in time
-  and embed it in a ``[0, duration]`` window.
+  and add zero-valued endpoints at ``t=0`` and ``t=duration`` as needed.
 
 * :py:meth:`~pulse2percept.percepts.Percept.play` and
   :py:meth:`~pulse2percept.percepts.Percept.save` gained ``vmin`` and
