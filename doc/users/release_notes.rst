@@ -10,42 +10,26 @@ v0.10.0 Encoders (unreleased)
 Highlights:
 
 *  New :py:class:`~pulse2percept.stimuli.StimulusEncoder` classes translate
-   images and videos into electrical stimulation. Amplitude and frequency
-   modulation are supported, including stimulator timing, input resolution,
-   and electrode multiplexing. An implant carries its own encoder, so
-   ``implant.stim = image`` encodes on assignment::
-
-       implant = p2p.implants.ArgusII(stim=p2p.stimuli.BostonTrain())
-       percept = p2p.models.AxonMapModel().build().predict_percept(implant)
-       percept.play()
-
-*  Spatial models read modulation frames; temporal models read electrical
-   events. An implant that encodes a picture keeps two descriptions of it: the
-   pulse train the device delivers (``implant.stim``) and the modulation the
-   encoder asked for -- one amplitude per electrode per frame, with no
-   waveform, pulse clock or raster in it. A model with no temporal component
-   reads the latter, since a pulse train is a statement about time that it has
-   no way to express; otherwise an encoded image would come back as a sequence
-   of raster slots rather than as the image. So
-   :py:meth:`~pulse2percept.models.SpatialModel.predict_percept` reports one
-   percept frame per video frame, and one frame for an image.
+   images and videos into electrical stimulation using amplitude or frequency
+   modulation.
 
 *  New :py:class:`~pulse2percept.implants.Raster` classes describe how
-   stimulators multiplex electrodes that cannot be driven simultaneously. Each
-   group starts its pulse a fixed ``group_dur`` behind the one before it.
+   stimulators multiplex electrodes that cannot be driven simultaneously.
    :py:class:`~pulse2percept.implants.CheckerboardRaster` implements the
-   checkerboard pattern of [Kasowski2025]_.
+   checkerboard pattern of [Kasowski2025]_ in a generalized form.
+
+*  New :py:mod:`~pulse2percept.units` module support using physical quantities
+   (``50 * uA``, ``450 * us``, ``15 * mm``, ``2 * dva``), which are
+   dimension-checked and converted to the unit the code expects. Bare numbers
+   keep working and keep their documented meaning everywhere.
+   See :ref:`Physical Units <topics-units>`.
 
 * :py:meth:`~pulse2percept.percepts.Percept.play` and
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` are roughly 100x faster
   and produce much smaller notebooks and documentation pages.
 
-*  New :py:mod:`~pulse2percept.units` module. Arguments at pulse2percept's
-   public API boundaries may now be given as physical quantities
-   (``50 * uA``, ``450 * us``, ``15 * mm``, ``2 * dva``), which are
-   dimension-checked and converted to the unit the code expects. Bare numbers
-   keep working and keep their documented meaning everywhere, and are never
-   warned about. See :ref:`Physical Units <topics-units>`.
+* New :py:meth:`~pulse2percept.percepts.Percept.load` reads a percept back
+  from an image, GIF, or movie file.
 
 * Python 3.14 is now supported. Python 3.11 and NumPy 2 are now required.
 
@@ -57,57 +41,23 @@ API changes:
   In addition, ``FadingTemporal`` now enforces ``tau >= dt``.
 
 * The grid-spacing parameter ``xystep`` was renamed to ``step`` across spatial
-  models and implant-grid factory methods. The old name remains supported with 
-  a ``DeprecationWarning`` and will be removed in v0.11.0. The axon-map
-  parameter ``axlambda`` was similarly renamed to ``lam``.
+  models and implant-grid factory methods. The axon-map parameter ``axlambda``
+  was similarly renamed to ``lam``.
 
 * Temporal models gained a ``reduce`` parameter. When ``predict_percept`` picks
   the output times itself (``t_percept=None``), ``reduce='peak'`` makes each
   point report the highest brightness reached over the interval leading up to
-  it rather than the brightness at the instant it ends. Naming ``t_percept``
-  still asks for those instants.
-
-* :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` and
-  :py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` now use
-  :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`. Most importantly, gray
-  levels map to ``amp_range`` absolutely rather than being stretched to fill
-  it, and each frame now produces a pulse train rather than a single pulse.
-  Pass ``stretch=True`` for the old gray-level mapping.
-
-* :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` now records ``amp`` in
-  its metadata as a magnitude.
+  it rather than the brightness at the instant it ends.
 
 * :py:class:`~pulse2percept.implants.ProsthesisSystem` now exposes ``encoder``,
   ``raster`` and ``max_current``. A raster is bound to the implant it is
-  assigned to (:py:meth:`~pulse2percept.implants.Raster.bind`), so
-  ``CheckerboardRaster`` works its pattern out from that implant's electrode
-  geometry and ``implant.raster.plot()`` needs no argument.
-  :py:class:`~pulse2percept.implants.ArgusII` defaults to an
-  :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` at 6 Hz and a
-  :py:class:`~pulse2percept.implants.SequentialRaster` of six groups 2 ms
-  apart; pass ``encoder=None`` or ``raster=None`` to switch either off.
+  assigned to (:py:meth:`~pulse2percept.implants.Raster.bind`).
 
-* ``play`` gained a ``fmt`` argument (defaulting to JPEG in
+* :py:meth:`~pulse2percept.percepts.Percept.play` and
+  :py:meth:`~pulse2percept.percepts.Percept.save` gained ``vmin`` and
+  ``vmax``. ``play`` also gained a ``fmt`` argument (defaulting to JPEG in
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` and PNG in
-  :py:meth:`~pulse2percept.percepts.Percept.play`), now supports nonuniform
-  time axes, and plays percepts according to their recorded timing.
-  ``fps`` now controls the display/export sampling rate without changing
-  playback speed: a percept keeps its wall-clock duration, to within one
-  frame of the requested rate. Saving a percept with a nonuniform time axis
-  still requires an explicit ``fps``.
-
-* Objects now record what their numbers mean:
-  :py:attr:`~pulse2percept.stimuli.Stimulus.unit`,
-  :py:attr:`~pulse2percept.stimuli.Stimulus.time_unit`,
-  :py:meth:`~pulse2percept.stimuli.Stimulus.values`,
-  :py:meth:`~pulse2percept.stimuli.Stimulus.times`,
-  :py:meth:`~pulse2percept.implants.ElectrodeArray.coordinates`,
-  :py:attr:`~pulse2percept.percepts.Percept.time_unit`,
-  :py:meth:`~pulse2percept.percepts.Percept.times`, and
-  :py:meth:`~pulse2percept.utils.Parametrized.get_param_units`. Models declare
-  ``stimulus_unit``, ``space_unit`` and ``time_unit``; visual field maps
-  declare ``visual_unit`` and ``tissue_unit``. Storage is unchanged: these
-  report the unit, they do not convert what is stored.
+  :py:meth:`~pulse2percept.percepts.Percept.play`).
 
 * ``predict_percept`` now raises ``DimensionMismatchError`` when the stimulus
   is not the physical quantity the model reads. Assigning an
@@ -116,62 +66,16 @@ API changes:
   previously had its gray levels silently treated as microamps. The same check
   guards the ``safe_mode`` and ``max_current`` safety checks.
 
-* :py:class:`~pulse2percept.implants.ProsthesisSystem` now declares
-  ``stimulus_unit`` (microamps) and never stores a stimulus of another
-  dimension. A picture assigned to an implant that has an ``encoder`` is
-  encoded on the way in; one assigned to an implant without an encoder raises,
-  rather than letting it through to fail in the model. Preprocessing still runs
-  first, so an implant whose ``preprocess`` turns pictures into current is
-  unaffected, and its output is not encoded a second time.
-
-* A :py:class:`~pulse2percept.stimuli.StimulusEncoder` no longer holds an
-  implant or a raster of its own. The implant is named where the encoding
-  happens -- ``encoder.encode(source, implant=implant)`` -- and the raster
-  comes from that implant, so device scheduling is described in exactly one
-  place. :py:class:`~pulse2percept.implants.CheckerboardRaster` likewise takes
-  ``n_groups`` alone and learns its geometry when it is bound.
-
-* ``fps`` arguments (:py:meth:`~pulse2percept.percepts.Percept.play`,
-  :py:meth:`~pulse2percept.percepts.Percept.save`,
-  :py:meth:`~pulse2percept.stimuli.VideoStimulus.play`,
-  :py:func:`~pulse2percept.utils.frame_interval`) accept a frequency
-  quantity (``30 * Hz``, ``0.03 * kHz``) as well as a plain number of hertz.
-
-* ``xrange`` and ``yrange`` on a retinal spatial model accept a physical
-  extent (``xrange=(-4 * mm, 4 * mm)``), which the model's ``vfmap`` resolves
-  into the visual field range that piece of retina covers, each range along
-  its own retinal meridian. The range is stored in degrees of visual angle and
-  the grid stays uniform in dva, exactly as before. This is shorthand for a
-  visual field extent rather than a unit conversion, so it is not offered for
-  ``step`` and not offered on cortical models.
-
-* Warnings raised while encoding (missed frames, large time axes, large
-  allocations) now point at the calling line rather than at ``encoders.py``.
-
-* :py:attr:`~pulse2percept.stimuli.Stimulus.is_charge_balanced` returns None
-  for a stimulus that is not a current, rather than answering a question that
-  does not apply to it.
-
-* :py:meth:`~pulse2percept.implants.EnsembleImplant.from_coords` requires
-  ``xrange``, ``yrange`` and ``step`` together when ``locs`` is not given.
-  They previously defaulted to a visual-field range, which placed implants at
-  coordinates that were never meant to be microns.
-
 * Minimum dependency versions were raised for NumPy 2 compatibility. NumPy 1.x
   users should remain on v0.9.1.
 
 Bug fixes:
 
-* :py:class:`~pulse2percept.stimuli.PulseTrain` no longer ends on partial,
-  unbalanced pulses when its frequency does not divide ``stim_dur``.
-
 * Stimulus time axes now use float64 precision, fixing false
   :py:attr:`~pulse2percept.stimuli.Stimulus.is_charge_balanced` failures for
   longer pulse trains and improving frequency-modulation accuracy.
 
-* :py:class:`~pulse2percept.implants.EnsembleImplant` now merges nearly
-  identical time points using the same tolerance as
-  :py:class:`~pulse2percept.stimuli.Stimulus`.
+* Stimulus metadata now survives ``predict_percept`` and other transformations.
 
 * Various fixes for :py:class:`~pulse2percept.stimuli.ImageStimulus`:
   keyword arguments are passed on to scikit-image; inputs are no longer
@@ -184,27 +88,9 @@ Bug fixes:
   :py:meth:`~pulse2percept.percepts.Percept.save` now handle single-frame
   inputs correctly and give a useful error for nonuniform time axes.
 
-* :py:attr:`~pulse2percept.stimuli.VideoStimulus.vid_shape` now reports the
-  number of frames the stimulus actually has, rather than the number the source
-  video had before ``compress=True`` dropped the redundant time points. This
-  fixes :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` and every other
-  operation that reshapes ``data`` back into frames. Playing a video that was
-  compressed in *space* raises an explanatory error instead of a reshape error.
-
-* A four-channel :py:class:`~pulse2percept.stimuli.VideoStimulus` is played
-  back as RGBA, as documented: the alpha channel is preserved for ``fmt='png'``
-  and composited onto the axes background for ``fmt='jpg'``, which cannot carry
-  it. Previously the four channels were reinterpreted as RGB, which sheared the
-  color channels across every row.
-
-* Stimulus metadata now survives ``predict_percept`` and other transformations.
-
-* When a temporal model picks its own output times, the last one no longer
-  falls after the end of the stimulus. The end of the range was nudged by one
-  millisecond to make it inclusive, which added a frame wherever the frame
-  interval did not divide that millisecond -- most visibly in
-  :py:class:`~pulse2percept.models.cortex.DynaphosModel` with ``dt`` finer than
-  1 ms.
+* :py:class:`~pulse2percept.implants.EnsembleImplant` now merges nearly
+  identical time points using the same tolerance as
+  :py:class:`~pulse2percept.stimuli.Stimulus`.
 
 * Visual-field-map equality now handles array-valued attributes correctly,
   maps are hashable again, and maps of different classes no longer compare
@@ -212,13 +98,10 @@ Bug fixes:
 
 * :py:meth:`~pulse2percept.topography.NeuropythyMap.cortex_to_dva` (and the
   ``v1_to_dva``, ``v2_to_dva``, ``v3_to_dva`` methods that call it) now returns
-  coordinates with the same shape as its input. Previously NaN inputs were
-  dropped rather than mapped to NaN outputs, which silently shifted every point
-  after them into the wrong slot, and multidimensional inputs came back
-  flattened. Cortical points that land exactly on a mesh vertex now map to that
-  vertex instead of dividing by zero and returning NaN. The docstrings said the
-  cortical coordinates were in mm; they are in um, as the code always
-  assumed.
+  coordinates with the same shape as its input. Cortical points that land
+  exactly on a mesh vertex now map to that vertex instead of dividing by zero
+  and returning NaN. The docstrings said the cortical coordinates were in mm;
+  they are in um, as the code always assumed.
 
 v0.9.1 (2026-08-06)
 -------------------

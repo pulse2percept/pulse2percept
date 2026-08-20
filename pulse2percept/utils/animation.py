@@ -616,7 +616,7 @@ class HTMLAnimation(FuncAnimation):
     Parameters
     ----------
     fig, func, frames, *args, **kwargs :
-        Passed to :py:class:`~matplotlib.animation.FuncAnimation`
+        Passed to :py:class:`~matplotlib.animation.FuncAnimatgition`
     image : matplotlib.image.AxesImage
         The image artist that is updated by ``func``. Its position, colormap,
         and normalization determine how the frames are drawn
@@ -629,9 +629,8 @@ class HTMLAnimation(FuncAnimation):
         Whether to encode the frames as JPEG or PNG. JPEG is typically an
         order of magnitude smaller, PNG is lossless
     intervals : array_like or None, optional
-        How long each frame stays up (in ms), one value per frame. If None,
-        every frame is shown for ``interval`` ms. Frames of unequal duration
-        are what lets an animation follow an irregular time axis.
+        Duration of each frame in ms. If None, use ``interval`` for every
+        frame.
 
         .. versionadded:: 0.10.0
 

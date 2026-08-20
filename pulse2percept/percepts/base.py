@@ -1,19 +1,137 @@
 """:py:class:`~pulse2percept.percepts.Percept`"""
 import numpy as np
+import os
+import re
+import warnings
 from copy import deepcopy
 import matplotlib.pyplot as plt
 from matplotlib.axes import Subplot
-from math import isclose
 from scipy.cluster.vq import kmeans2
 import imageio
+import imageio.v3 as iio
 import logging
-from skimage import img_as_ubyte
+from skimage import img_as_float32, img_as_ubyte
+from skimage.color import rgb2gray, rgba2rgb
 from skimage.transform import resize
 
 from ..units import DimensionMismatchError, Hz, Quantity, Unit, as_value, ms
 from ..utils import Data, HTMLAnimation, frame_interval, sample
 from ..utils.animation import _frame_timeline
+from ..utils.array import _interp_rows, _slice_times
 from ..utils.constants import VIDEO_BLOCK_SIZE
+
+# A number as it may appear in a brightness-range tag:
+_NUM = r'[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?'
+
+# The brightness range a percept was saved with, as it appears both in media
+# metadata and in a file name ('foo__p2p_vmin=0.0_vmax=20.0.png'). The
+# ``__p2p_`` prefix is what keeps metadata and file names written by other
+# tools from being read as pulse2percept information.
+_P2P_RANGE_RE = re.compile(rf'__p2p_(?:vmin=(?P<vmin>{_NUM}))?_?'
+                           rf'(?:vmax=(?P<vmax>{_NUM}))?')
+
+
+def _range_tag(vmin, vmax):
+    """The namespaced tag that records a brightness range"""
+    return f'__p2p_vmin={float(vmin)!r}_vmax={float(vmax)!r}'
+
+
+def _parse_range_tag(text):
+    """The (vmin, vmax) a namespaced tag records, either one None if absent"""
+    if not isinstance(text, str):
+        return None, None
+    match = _P2P_RANGE_RE.search(text)
+    if match is None:
+        return None, None
+    return tuple(None if val is None else float(val)
+                 for val in match.group('vmin', 'vmax'))
+
+
+def _media_metadata(fname):
+    """Whatever metadata imageio can read off a media file
+
+    Pillow carries the text chunks and comments that
+    :py:meth:`~pulse2percept.percepts.Percept.save` writes, but cannot open a
+    video; FFMPEG can, and reports the frame rate. Whichever opens the file
+    wins, so this yields at most one dictionary per backend that can read it.
+    """
+    for kwargs in ({'plugin': 'pillow'}, {}):
+        try:
+            yield dict(iio.immeta(fname, **kwargs))
+        except Exception:
+            # Any backend may decline any file; the caller falls back on the
+            # next one, and ultimately on knowing nothing about the file:
+            continue
+
+
+def _media_range(fname):
+    """The (vmin, vmax) a media file records in its own metadata"""
+    for meta in _media_metadata(fname):
+        for key, value in meta.items():
+            if str(key).lower() != 'comment':
+                continue
+            if isinstance(value, bytes):
+                value = value.decode('utf-8', 'replace')
+            vmin, vmax = _parse_range_tag(value)
+            if vmin is not None or vmax is not None:
+                return vmin, vmax
+    return None, None
+
+
+def _media_fps(fname):
+    """The frame rate (in Hz) a media file records, or None"""
+    for meta in _media_metadata(fname):
+        if meta.get('fps'):
+            return float(meta['fps'])
+        if 'fps' not in meta and meta.get('duration'):
+            # Pillow counts milliseconds per frame rather than frames per
+            # second. FFMPEG's 'duration' is the length of the whole movie
+            # instead, so only a backend that reports no 'fps' at all gets
+            # read this way:
+            return 1000.0 / float(meta['duration'])
+    return None
+
+
+def _metadata_kwargs(fname, tag):
+    """Writer arguments that record ``tag`` in the file's own metadata
+
+    Only for the containers whose writer already has a comment field to put it
+    in. A percept saved in any other format can still carry its range in the
+    file name, which is the caller's to choose.
+    """
+    ext = os.path.splitext(os.fspath(fname))[1].lower()
+    if ext == '.png':
+        try:
+            from PIL.PngImagePlugin import PngInfo
+        except ImportError:
+            return {}
+        info = PngInfo()
+        info.add_text('Comment', tag)
+        return {'pnginfo': info}
+    if ext == '.gif':
+        return {'comment': tag.encode('utf-8')}
+    return {}
+
+
+def _check_clim(vmin, vmax):
+    """Reject a brightness range that cannot be mapped onto a color scale"""
+    if not np.all(np.isfinite([vmin, vmax])) or vmax < vmin:
+        raise ValueError(f"'vmin' ({vmin}) and 'vmax' ({vmax}) must be finite "
+                         f"with 'vmin' <= 'vmax'.")
+
+
+def _resolve_clim(data, vmin, vmax, auto_vmin):
+    """Fill omitted display limits in from the whole percept
+
+    Resolving against all of ``data`` rather than against the frames a display
+    or export clock happens to sample is what keeps the brightness scale
+    independent of ``fps``.
+    """
+    vmin = auto_vmin if vmin is None else vmin
+    vmax = np.max(data) if vmax is None else vmax
+    vmin, vmax = float(vmin), float(vmax)
+    _check_clim(vmin, vmax)
+    return vmin, vmax
 
 
 class Percept(Data):
@@ -56,6 +174,21 @@ class Percept(Data):
 
     Notes
     -----
+    Space is indexed the NumPy way, but a number that reaches the time axis is
+    a *time*, not a frame number, and is linearly interpolated between the two
+    frames on either side of it:
+
+    *  ``percept[0, 1]``: the time series of pixel (0, 1)
+    *  ``percept[..., 12.5]``: the frame at t=12.5, interpolated
+    *  ``percept[..., 0.02 * s]``: that same frame in another unit
+    *  ``percept[..., [0, 10]]``, ``percept[..., 0:50:10]``: several frames
+    *  ``percept[..., percept.time < 20]``: the stored frames before t=20
+
+    The ``fps`` of :py:meth:`~pulse2percept.percepts.Percept.play` and
+    :py:meth:`~pulse2percept.percepts.Percept.save` is a rendering clock
+    rather than an interpolation: it chooses which stored frame to show when,
+    and never invents one in between.
+
     .. versionchanged:: 0.10.0
 
         The time axis is unit-aware (see ``time_unit`` above). ``data`` is
@@ -75,6 +208,12 @@ class Percept(Data):
     array([ 0., 10.])
     >>> Percept(data, time=[0, 0.01] * s).time
     array([ 0., 10.])
+
+    Read the percept halfway between its two frames:
+
+    >>> Percept(np.dstack([np.zeros((3, 3)), np.ones((3, 3))]),
+    ...         time=[0.0, 10.0])[0, 0, 5.0]
+    0.5
 
     """
 
@@ -130,8 +269,79 @@ class Percept(Data):
             'metadata': metadata
         }
 
-    def __get_item__(self, key):
-        return self.data[key]
+    def __getitem__(self, item):
+        """Return percept data, interpolated in time where necessary
+
+        Space is indexed the NumPy way, but -- as in
+        :py:class:`~pulse2percept.stimuli.Stimulus` -- a number that reaches
+        the time axis is a *time*, not a frame index, and is linearly
+        interpolated between the two frames on either side of it. Bare numbers
+        are read in the percept's
+        :py:attr:`~pulse2percept.percepts.Percept.time_unit`; unitful ones are
+        converted into it.
+
+        *  ``percept[0, 1]``: the time series of pixel (0, 1)
+        *  ``percept[..., 12.5]``: the frame at t=12.5, interpolated
+        *  ``percept[..., 20 * ms]``, ``percept[..., 0.02 * s]``: that same
+           frame, asked for in another unit
+        *  ``percept[:, :, [0, 10]]``: the frames at t=0 and t=10
+        *  ``percept[..., 0:50:10]``: every 10 time units from t=0 to t=50
+        *  ``percept[..., percept.time < 20]``: the stored frames before t=20
+        *  ``percept[0, 1, 12.5]``: one interpolated pixel, as a scalar
+
+        With ``time=None`` there is no time axis to name, and indexing is
+        ordinary NumPy indexing throughout.
+
+        Returns a NumPy array or a scalar, never a new
+        :py:class:`~pulse2percept.percepts.Percept`.
+
+        .. versionadded:: 0.10.0
+
+        """
+        # STEP 1: DOES THE INDEX REACH THE TIME AXIS?
+        # ``percept[0, 1]`` asks for the time series of a pixel, so only an
+        # index that reaches the last axis can be naming a time point:
+        space, time = item, None
+        if self.time is not None and isinstance(item, tuple) and len(item) > 1:
+            head = item[:-1]
+            if (any(idx is Ellipsis for idx in head)
+                    or len(head) == self.data.ndim - 1):
+                space, time = head, item[-1]
+        # STEP 2: AVOID CONFUSING TIME POINTS WITH FRAME INDICES
+        if isinstance(time, slice):
+            sliced = _slice_times(time, self.time, self.time_unit)
+            if sliced is not None:
+                time = sliced
+            # Otherwise the slice stays what it is, and NumPy takes the frames
+            # it names below.
+        elif time is not None and time is not Ellipsis:
+            # A requested time point (or a list of them) may be unitful; after
+            # this it is an ordinary number:
+            time = as_value(time, self.time_unit, 'time')
+            # Convert to float so time is not mistaken for a frame index (a
+            # boolean mask selects stored frames and must stay boolean):
+            if np.asarray(time).dtype != bool:
+                time = np.float64(time)
+        # STEP 3: NUMPY HANDLES MOST INDEXING AND SLICING
+        try:
+            return self.data[space if time is None else (*space, time)]
+        except IndexError:
+            # An IndexError must still be thrown unless the index named a time
+            # point, in which case NumPy refused a float and we interpolate:
+            if time is None:
+                raise
+        # STEP 4: INTERPOLATE TIME
+        frames = self.data[space]
+        time = np.array([time], dtype=np.float64).ravel()
+        # ``_interp_rows`` works on rows; a percept has one time series per
+        # pixel rather than per electrode, so flatten space and put it back:
+        data = _interp_rows(time, self.time,
+                            frames.reshape((-1, len(self.time))))
+        data = data.astype(np.float32).reshape(frames.shape[:-1] + time.shape)
+        if data.size == 1:
+            # Return a single element as a scalar:
+            return data.ravel()[0].item()
+        return data
 
     @property
     def time_unit(self):
@@ -350,7 +560,7 @@ class Percept(Data):
         return ax
 
     def play(self, fps=None, repeat=True, annotate_time=True, ax=None,
-             colorbar=True, fmt='png'):
+             colorbar=True, fmt='png', vmin=None, vmax=None):
         """Animate the percept as HTML with JavaScript
 
         The percept will be played in an interactive player in IPython or
@@ -379,6 +589,15 @@ class Percept(Data):
             size matters more than pixel-exact frames.
 
             .. versionadded:: 0.10.0
+        vmin, vmax : float, optional
+            The brightness range the color scale spans, in the percept's own
+            arbitrary units. Omitted limits are resolved from the whole
+            percept (0 and its brightest pixel), never from the frames the
+            display clock happens to sample, so ``fps`` cannot change how
+            bright the percept looks. Pass both to put two percepts on a
+            common scale.
+
+            .. versionadded:: 0.10.0
 
         Returns
         -------
@@ -395,7 +614,11 @@ class Percept(Data):
             figure once and ships all frames as a single sprite sheet.
 
             ``fps`` now controls display sampling rather than playback speed, and
-            nonuniform time axes are supported.
+            nonuniform time axes are supported. It is a display clock, not an
+            interpolation: use ``percept[..., t]`` to read the percept at a
+            time point that was not recorded.
+
+            ``vmin`` and ``vmax`` were added.
         """
         if self.time is None:
             raise ValueError("Cannot animate a percept with time=None. Use "
@@ -425,8 +648,9 @@ class Percept(Data):
             fig = ax.figure
         # Show an empty frame. The color scale spans the whole percept, so
         # that it does not shift with the display rate:
+        vmin, vmax = _resolve_clim(self.data, vmin, vmax, auto_vmin=0)
         mat = ax.imshow(np.zeros_like(self.data[..., 0]), cmap='gray',
-                        vmin=0, vmax=self.data.max())
+                        vmin=vmin, vmax=vmax)
         if colorbar:
             cbar = fig.colorbar(mat)
             cbar.ax.set_ylabel('Phosphene brightness (a.u.)', rotation=-90,
@@ -443,7 +667,7 @@ class Percept(Data):
                              frame_data=self.data[..., idx], labels=labels,
                              fmt=fmt)
 
-    def save(self, fname, shape=None, fps=None):
+    def save(self, fname, shape=None, fps=None, vmin=None, vmax=None):
         """Save the percept as an MP4 or GIF
 
         Parameters
@@ -465,25 +689,52 @@ class Percept(Data):
             which requires a homogeneous time axis. Otherwise resample using
             zero-order hold. Movie duration is preserved to within one frame.
             May also be given as a unitful frequency.
+        vmin, vmax : float, optional
+            The brightness range that is mapped onto the file's gray levels,
+            in the percept's own arbitrary units. Values outside it are
+            clipped. Omitted limits are resolved from the whole percept (its
+            darkest and brightest pixel), never from the frames the export
+            clock happens to sample, so ``fps`` cannot change how bright the
+            movie looks. Pass both to put two percepts on a common scale;
+            leaving both out normalizes this percept alone and warns.
+
+            .. versionadded:: 0.10.0
 
         Notes
         -----
         *  ``shape`` will be adjusted so that width and height are multiples
             of 16 to ensure compatibility with most codecs and players.
+        *  PNG and GIF files record the range in their own metadata, so that
+            :py:meth:`~pulse2percept.percepts.Percept.load` can undo the
+            scaling. Other containers have nowhere to put it; naming the file
+            ``'foo__p2p_vmin=0.0_vmax=20.0.mp4'`` tells ``load`` the same
+            thing.
 
         .. versionchanged:: 0.10.0
 
             ``fps`` now changes the export sampling rate rather than movie
-            duration.
+            duration. ``vmin`` and ``vmax`` were added.
 
         """
         # This path hands `fps` to imageio rather than to `frame_timeline`, so
         # it is its own boundary too: a frame rate is a frequency, and imageio
         # takes a plain number of hertz.
         fps = as_value(fps, Hz, 'fps')
-        data = self.data - self.data.min()
-        if not isclose(np.max(data), 0):
-            data = data / np.max(data)
+        if vmin is None and vmax is None:
+            warnings.warn("Normalizing the percept to its own brightness "
+                          "range, so percepts saved separately do not share a "
+                          "scale. Pass 'vmin' and 'vmax' to fix the range.")
+        # Resolve the range before any frame is dropped below, so that the
+        # export rate cannot change how bright the movie comes out:
+        vmin, vmax = _resolve_clim(self.data, vmin, vmax,
+                                   auto_vmin=self.data.min())
+        span = vmax - vmin
+        if span > 0:
+            data = np.clip((self.data - vmin) / span, 0, 1)
+        else:
+            # A constant percept spans no range to stretch, and comes out
+            # uniformly black rather than dividing by zero:
+            data = np.zeros(self.data.shape, dtype=np.float64)
         data = img_as_ubyte(data)
 
         if shape is None:
@@ -501,10 +752,14 @@ class Percept(Data):
         # Rescale percept to desired shape:
         data = resize(data, (np.int32(height), np.int32(width)))
 
+        # Record the range in the file itself where the container has room
+        # for it, so that `load` can put the gray levels back on this scale:
+        meta_kwargs = _metadata_kwargs(fname, _range_tag(vmin, vmax))
         if self.time is None:
             # No time component, store as an image. imwrite will automatically
             # scale the gray levels:
-            imageio.imwrite(fname, img_as_ubyte(data).squeeze(2))
+            imageio.imwrite(fname, img_as_ubyte(data).squeeze(2),
+                            **meta_kwargs)
         else:
             # Throw error if we try to save as a static image
             for ext in ['.jpg','.jpeg','.bmp','.png','.tif','.tiff','.jif','.jfif']:
@@ -539,7 +794,119 @@ class Percept(Data):
                     data = resize(data, (out_h, out_w))
             data = img_as_ubyte(data)
             try:
-                imageio.mimwrite(fname, data.transpose((2, 0, 1)), fps=float(fps))
+                imageio.mimwrite(fname, data.transpose((2, 0, 1)),
+                                 fps=float(fps), **meta_kwargs)
             except TypeError:
-                imageio.mimwrite(fname, data.transpose((2, 0, 1)), duration=1000/fps)
+                imageio.mimwrite(fname, data.transpose((2, 0, 1)),
+                                 duration=1000/fps, **meta_kwargs)
         logging.getLogger(__name__).info(f'Created {fname}.')
+
+    @classmethod
+    def load(cls, fname, space=None, time=None, fps=None, vmin=None,
+             vmax=None):
+        """Load a percept from an image, GIF, or movie file
+
+        The counterpart to :py:meth:`~pulse2percept.percepts.Percept.save`,
+        for the image and video formats imageio can read. A static image
+        becomes a (Y, X, 1) percept with ``time=None``; a GIF or movie becomes
+        a (Y, X, T) one. Color input is converted to grayscale, because a
+        percept is a single perceived brightness per pixel.
+
+        .. versionadded:: 0.10.0
+
+        Parameters
+        ----------
+        fname : str
+            The file to read. The file type is inferred from its extension.
+        space : :py:class:`~pulse2percept.topography.Grid2D`, optional
+            The (x, y) coordinates the pixels sit at. A media file does not
+            record them; without a grid the percept is indexed in pixels.
+        time : 1D array, optional
+            The time points of the frames, in milliseconds or as a unitful
+            quantity. Overrides both ``fps`` and the file's own timing.
+        fps : float or None
+            The frame rate to read the file at, in Hz, overriding the rate the
+            file records. May be given as a unitful frequency.
+        vmin, vmax : float, optional
+            The brightness range the file's gray levels stand for. See the
+            notes below.
+
+        Returns
+        -------
+        percept : :py:class:`~pulse2percept.percepts.Percept`
+
+        Notes
+        -----
+        A media file holds quantized pixel values, not brightness, so the
+        scale the percept was saved on has to be recovered separately.
+        ``vmin`` and ``vmax`` are resolved independently, in this order:
+
+        1.  the arguments given here;
+        2.  the pulse2percept metadata
+            :py:meth:`~pulse2percept.percepts.Percept.save` writes into a PNG
+            or GIF;
+        3.  a ``'foo__p2p_vmin=0.0_vmax=20.0.png'`` file name.
+
+        With both bounds known, the decoded intensities are mapped back onto
+        that range. Otherwise the data is left normalized to [0, 1] and a
+        warning says so.
+
+        Recovering the range restores the brightness *scale* that was encoded,
+        not the original percept: clipping, quantization to 256 gray levels,
+        resizing, and lossy video compression all happened on the way out and
+        cannot be undone.
+
+        """
+        # `index=...` reads every format the same way, as a stack of frames,
+        # so a three-channel image is never mistaken for three frames:
+        frames = iio.imread(fname, index=...)
+        if frames.ndim == 4:
+            if frames.shape[-1] == 4:
+                # As elsewhere in p2p, alpha is blended against black:
+                frames = rgba2rgb(frames, background=(0, 0, 0))
+            if frames.shape[-1] == 3:
+                frames = rgb2gray(frames)
+            else:
+                frames = frames[..., 0]
+        if frames.ndim != 3:
+            raise ValueError(f"Expected a 2-D image or a stack of them in "
+                             f"'{fname}', not an array of shape "
+                             f"{frames.shape}.")
+        # Encoded pixels become floating-point data in [0, 1], and the frame
+        # axis moves to the back, where a percept keeps it:
+        data = np.moveaxis(img_as_float32(frames), 0, -1)
+
+        # STEP 1: WHEN THE FRAMES HAPPEN
+        if time is None:
+            fps = as_value(fps, Hz, 'fps')
+            if fps is None and data.shape[-1] > 1:
+                fps = _media_fps(fname)
+                if fps is None:
+                    raise ValueError(f"Cannot infer the frame rate of "
+                                     f"'{fname}'. Pass 'fps' or 'time'.")
+            if fps is not None:
+                if fps <= 0:
+                    raise ValueError(f"'fps' must be greater than zero, not "
+                                     f"{fps}.")
+                # Frames per second is a wall-clock rate; a percept counts
+                # milliseconds:
+                time = np.arange(data.shape[-1]) * 1000.0 / fps
+
+        # STEP 2: WHAT THE GRAY LEVELS MEAN
+        file_vmin, file_vmax = _media_range(fname)
+        name_vmin, name_vmax = _parse_range_tag(
+            os.path.splitext(os.path.basename(os.fspath(fname)))[0])
+        if vmin is None:
+            vmin = file_vmin if file_vmin is not None else name_vmin
+        if vmax is None:
+            vmax = file_vmax if file_vmax is not None else name_vmax
+        if vmin is None or vmax is None:
+            warnings.warn(f"The brightness range of '{fname}' is unknown, so "
+                          f"the data is left normalized to [0, 1]. Pass "
+                          f"'vmin' and 'vmax' if you know it.")
+        else:
+            _check_clim(vmin, vmax)
+            data = vmin + data * (vmax - vmin)
+        return cls(data, space=space, time=time,
+                   metadata={'source': os.fspath(fname), 'vmin': vmin,
+                             'vmax': vmax})
