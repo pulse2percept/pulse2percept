@@ -210,7 +210,7 @@ def test_Percept_save(dtype, tmp_path):
     # Save multiple frames as a gif or movie:
     for name in ['test.mp4', 'test.avi', 'test.mov', 'test.wmv', 'test.gif']:
         fname = str(tmp_path / name)
-        percept.save(fname)
+        percept.save(fname, vmin=0, vmax=255)
         npt.assert_equal(os.path.isfile(fname), True)
         # Normalized to [0, 255] with some loss of precision:
         for mov in mimread(fname):
@@ -220,13 +220,13 @@ def test_Percept_save(dtype, tmp_path):
     # Cannot save multiple frames image:
     fname = str(tmp_path / 'test.jpg')
     with pytest.raises(ValueError):
-        percept.save(fname)
+        percept.save(fname, vmin=0, vmax=255)
 
     # But, can save single frame as image:
     percept = Percept(ndarray[..., :1])
     for name in ['test.jpg', 'test.png', 'test.tif', 'test.gif']:
         fname = str(tmp_path / name)
-        percept.save(fname)
+        percept.save(fname, vmin=0, vmax=255)
         npt.assert_equal(os.path.isfile(fname), True)
         img = img_as_float(imread(fname))
         npt.assert_almost_equal(np.min(img), 0, decimal=3)
@@ -238,11 +238,11 @@ def test_Percept_save_single_frame(tmp_path):
     percept = Percept(np.random.rand(16, 16, 1), time=[3.5])
     for name in ['test.mp4', 'test.avi', 'test.gif']:
         fname = str(tmp_path / name)
-        percept.save(fname)
+        percept.save(fname, vmin=0, vmax=1)
         npt.assert_equal(len(mimread(fname)), 1)
     # An explicit frame rate is still honored:
     fname = str(tmp_path / 'fps.mp4')
-    percept.save(fname, fps=12)
+    percept.save(fname, fps=12, vmin=0, vmax=1)
     npt.assert_equal(len(mimread(fname)), 1)
 
 
@@ -267,9 +267,9 @@ def test_Percept_fps_units(tmp_path):
 
     # ... and the same on the way out to a file:
     fname = str(tmp_path / 'fps.mp4')
-    percept.save(fname, fps=30 * Hz)
+    percept.save(fname, fps=30 * Hz, vmin=0, vmax=1)
     npt.assert_equal(len(mimread(fname)), 30)
-    percept.save(fname, fps=0.03 * kHz)
+    percept.save(fname, fps=0.03 * kHz, vmin=0, vmax=1)
     npt.assert_equal(len(mimread(fname)), 30)
 
     # Nothing else is a frame rate:
@@ -363,7 +363,7 @@ def test_Percept_animates_in_wall_clock_time(tmp_path, monkeypatch):
     monkeypatch.setattr(imageio, 'mimwrite',
                         lambda fname, data, **kwargs: seen.append(kwargs))
     for percept in (milli, second):
-        percept.save(str(tmp_path / 'test.mp4'))
+        percept.save(str(tmp_path / 'test.mp4'), vmin=0, vmax=1)
     npt.assert_equal(len(seen), 2)
     npt.assert_almost_equal(seen[0]['fps'], 50)
     npt.assert_almost_equal(seen[1]['fps'], 50)
@@ -375,7 +375,7 @@ def test_Percept_animates_in_wall_clock_time(tmp_path, monkeypatch):
     npt.assert_almost_equal(player(ragged.play())['intervals'], [20, 30, 30])
     # A movie file runs at a single frame rate, so this one needs an `fps`:
     with pytest.raises(NotImplementedError):
-        ragged.save(str(tmp_path / 'ragged.mp4'))
+        ragged.save(str(tmp_path / 'ragged.mp4'), vmin=0, vmax=1)
 
 
 def pulse_train_percept(n_pulses=3, period=1000.0 / 6):
@@ -498,7 +498,7 @@ def test_Percept_save_fps_resamples(tmp_path, monkeypatch):
     # One second of percept, sampled at 100 Hz:
     percept = Percept(np.random.rand(16, 16, 100), time=np.arange(0, 1000, 10))
     for fps in (15, 30, 60, None):
-        percept.save(str(tmp_path / 'test.mp4'), fps=fps)
+        percept.save(str(tmp_path / 'test.mp4'), fps=fps, vmin=0, vmax=1)
     for (data, kwargs), fps in zip(seen, (15, 30, 60, 100)):
         n_frames = fps if fps != 100 else 100
         npt.assert_equal(len(data), n_frames)
@@ -511,7 +511,7 @@ def test_Percept_save_fps_resamples(tmp_path, monkeypatch):
     seen.clear()
     percept = pulse_train_percept(n_pulses=3, period=1000.0 / 6)
     duration = (percept.time[-1] - percept.time[0] + 0.45) / 1000.0
-    percept.save(str(tmp_path / 'pulses.mp4'), fps=30)
+    percept.save(str(tmp_path / 'pulses.mp4'), fps=30, vmin=0, vmax=1)
     npt.assert_equal(len(seen[0][0]), 10)
     npt.assert_array_less(abs(len(seen[0][0]) / 30.0 - duration), 1 / 30.0)
 
@@ -546,7 +546,7 @@ def test_Percept_play_rejects_unordered_time(tmp_path):
         with pytest.raises(ValueError):
             percept.play(fps=fps)
     with pytest.raises(ValueError):
-        percept.save(str(tmp_path / 'test.mp4'), fps=30)
+        percept.save(str(tmp_path / 'test.mp4'), fps=30, vmin=0, vmax=1)
 
 
 def test_Percept_play_save_do_not_mutate(tmp_path):
@@ -555,7 +555,7 @@ def test_Percept_play_save_do_not_mutate(tmp_path):
     data, time = percept.data.copy(), percept.time.copy()
     for fps in (None, 10, 1000):
         percept.play(fps=fps).to_jshtml()
-    percept.save(str(tmp_path / 'test.mp4'), fps=30)
+    percept.save(str(tmp_path / 'test.mp4'), fps=30, vmin=0, vmax=1)
     npt.assert_almost_equal(percept.data, data)
     npt.assert_almost_equal(percept.time, time)
 
@@ -578,21 +578,27 @@ def test_Percept_getitem_time():
     """A number on the time axis is a time, not a frame index"""
     data = np.arange(24, dtype=float).reshape((2, 3, 4))
     percept = Percept(data, time=[0.0, 10.0, 20.0, 30.0])
-    # A stored time point comes back verbatim ...
-    npt.assert_almost_equal(percept[..., 10.0].squeeze(), data[..., 1])
-    # ... one in between is interpolated between its neighbors:
-    npt.assert_almost_equal(percept[..., 5.0].squeeze(),
+    # One time point drops the time axis, the way a scalar index does on any
+    # other axis ...
+    npt.assert_equal(percept[..., 10.0].shape, (2, 3))
+    npt.assert_equal(percept[:, 0, 10.0].shape, (2,))
+    npt.assert_equal(np.isscalar(percept[0, 1, 10.0]), True)
+    # ... and a stored time point comes back verbatim:
+    npt.assert_almost_equal(percept[..., 10.0], data[..., 1])
+    # One in between is interpolated between its neighbors:
+    npt.assert_almost_equal(percept[..., 5.0],
                             (data[..., 0] + data[..., 1]) / 2)
-    # A fully specified index returns a scalar:
     npt.assert_almost_equal(percept[0, 1, 5.0],
                             (data[0, 1, 0] + data[0, 1, 1]) / 2)
     # Beyond the ends, the closest stored frame is held:
-    npt.assert_almost_equal(percept[..., -5.0].squeeze(), data[..., 0])
-    npt.assert_almost_equal(percept[..., 99.0].squeeze(), data[..., -1])
+    npt.assert_almost_equal(percept[..., -5.0], data[..., 0])
+    npt.assert_almost_equal(percept[..., 99.0], data[..., -1])
     # Space is indexed the NumPy way, and an index that stops short of the
     # time axis returns the whole time series:
     npt.assert_almost_equal(percept[0, 1], data[0, 1])
     npt.assert_almost_equal(percept[0], data[0])
+    # A float64 percept is not interpolated down to float32:
+    npt.assert_equal(percept[..., 5.0].dtype, np.float64)
 
 
 def test_Percept_getitem_multiple_times():
@@ -604,6 +610,9 @@ def test_Percept_getitem_multiple_times():
                             np.stack([(data[..., 0] + data[..., 1]) / 2,
                                       (data[..., 1] + data[..., 2]) / 2],
                                      axis=-1))
+    # One requested time point is still a time axis when asked for as a list:
+    npt.assert_equal(percept[..., [5.0]].shape, (2, 3, 1))
+    npt.assert_equal(percept[0, 0, [5.0]].shape, (1,))
     # A stepped slice is a time range, not a range of frame indices:
     npt.assert_equal(percept[..., 0:30:5].shape, (2, 3, 6))
     npt.assert_almost_equal(percept[0, 0, 0:30:10], data[0, 0, :3])
@@ -790,6 +799,19 @@ def test_Percept_load_timing(tmp_path):
                             [0, 1, 2, 3])
     npt.assert_almost_equal(
         Percept.load(fname, time=np.arange(4) / 1000 * s).time, [0, 1, 2, 3])
+
+
+def test_Percept_load_variable_frame_durations(tmp_path):
+    """A GIF that holds a different duration per frame has no frame rate"""
+    fname = str(tmp_path / 'ragged.gif')
+    frames = [np.full((16, 16), level, dtype=np.uint8) for level in range(4)]
+    imageio.mimwrite(fname, frames, duration=[100, 300, 50, 200])
+    with pytest.raises(ValueError):
+        Percept.load(fname)
+    # Saying when the frames happen is what the error asks for:
+    with pytest.warns(UserWarning):
+        loaded = Percept.load(fname, time=[0, 100, 400, 450])
+    npt.assert_almost_equal(loaded.time, [0, 100, 400, 450])
 
 
 def test_Percept_load_grayscale(tmp_path):

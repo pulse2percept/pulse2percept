@@ -78,17 +78,38 @@ def _media_range(fname):
     return None, None
 
 
-def _media_fps(fname):
+def _frame_durations(fname, n_frames):
+    """How long each frame of a Pillow-readable file stays up (in ms)"""
+    durations = []
+    for index in range(n_frames):
+        try:
+            meta = iio.immeta(fname, plugin='pillow', index=index)
+        except Exception:
+            return None
+        if 'duration' not in meta:
+            return None
+        durations.append(float(meta['duration']))
+    return durations
+
+
+def _media_fps(fname, n_frames):
     """The frame rate (in Hz) a media file records, or None"""
     for meta in _media_metadata(fname):
         if meta.get('fps'):
+            # FFMPEG reports the rate directly:
             return float(meta['fps'])
-        if 'fps' not in meta and meta.get('duration'):
-            # Pillow counts milliseconds per frame rather than frames per
-            # second. FFMPEG's 'duration' is the length of the whole movie
-            # instead, so only a backend that reports no 'fps' at all gets
-            # read this way:
+        if 'fps' in meta or not meta.get('duration'):
+            continue
+        # Pillow counts milliseconds per frame:
+        durations = _frame_durations(fname, n_frames)
+        if durations is None:
             return 1000.0 / float(meta['duration'])
+        if max(durations) - min(durations) > 1e-6:
+            raise ValueError(
+                f"The frames of '{fname}' are not all the same length "
+                f"({min(durations):g} to {max(durations):g} ms), so it "
+                f"has no one frame rate. Pass 'time' instead.")
+        return 1000.0 / durations[0]
     return None
 
 
@@ -184,7 +205,8 @@ class Percept(Data):
     *  ``percept[..., [0, 10]]``, ``percept[..., 0:50:10]``: several frames
     *  ``percept[..., percept.time < 20]``: the stored frames before t=20
 
-    The ``fps`` of :py:meth:`~pulse2percept.percepts.Percept.play` and
+    One time point selects a frame and drops the time axis; a list or slice of
+    them keeps it. The ``fps`` of :py:meth:`~pulse2percept.percepts.Percept.play` and
     :py:meth:`~pulse2percept.percepts.Percept.save` is a rendering clock
     rather than an interpolation: it chooses which stored frame to show when,
     and never invents one in between.
@@ -289,6 +311,9 @@ class Percept(Data):
         *  ``percept[..., percept.time < 20]``: the stored frames before t=20
         *  ``percept[0, 1, 12.5]``: one interpolated pixel, as a scalar
 
+        One time point selects a frame and drops the time axis, the way a
+        scalar index does on any other axis; a list or slice of them keeps it.
+
         With ``time=None`` there is no time axis to name, and indexing is
         ordinary NumPy indexing throughout.
 
@@ -304,10 +329,11 @@ class Percept(Data):
         space, time = item, None
         if self.time is not None and isinstance(item, tuple) and len(item) > 1:
             head = item[:-1]
-            if (any(idx is Ellipsis for idx in head)
-                    or len(head) == self.data.ndim - 1):
+            if (any(idx is Ellipsis for idx in head) or
+                    len(head) == self.data.ndim - 1):
                 space, time = head, item[-1]
         # STEP 2: AVOID CONFUSING TIME POINTS WITH FRAME INDICES
+        scalar_time = False
         if isinstance(time, slice):
             sliced = _slice_times(time, self.time, self.time_unit)
             if sliced is not None:
@@ -322,6 +348,7 @@ class Percept(Data):
             # boolean mask selects stored frames and must stay boolean):
             if np.asarray(time).dtype != bool:
                 time = np.float64(time)
+                scalar_time = time.ndim == 0
         # STEP 3: NUMPY HANDLES MOST INDEXING AND SLICING
         try:
             return self.data[space if time is None else (*space, time)]
@@ -332,15 +359,18 @@ class Percept(Data):
                 raise
         # STEP 4: INTERPOLATE TIME
         frames = self.data[space]
-        time = np.array([time], dtype=np.float64).ravel()
+        times = np.array([time], dtype=np.float64).ravel()
         # ``_interp_rows`` works on rows; a percept has one time series per
         # pixel rather than per electrode, so flatten space and put it back:
-        data = _interp_rows(time, self.time,
+        data = _interp_rows(times, self.time,
                             frames.reshape((-1, len(self.time))))
-        data = data.astype(np.float32).reshape(frames.shape[:-1] + time.shape)
-        if data.size == 1:
-            # Return a single element as a scalar:
-            return data.ravel()[0].item()
+        data = data.reshape(frames.shape[:-1] + times.shape)
+        if scalar_time:
+            # One time point picks a frame out rather than slicing a one-frame
+            # stack out, exactly as a scalar index does on any other axis:
+            data = data[..., 0]
+        if data.ndim == 0:
+            return data.item()
         return data
 
     @property
@@ -668,7 +698,7 @@ class Percept(Data):
                              fmt=fmt)
 
     def save(self, fname, shape=None, fps=None, vmin=None, vmax=None):
-        """Save the percept as an MP4 or GIF
+        """Save the percept to an image or video file
 
         Parameters
         ----------
@@ -723,7 +753,8 @@ class Percept(Data):
         if vmin is None and vmax is None:
             warnings.warn("Normalizing the percept to its own brightness "
                           "range, so percepts saved separately do not share a "
-                          "scale. Pass 'vmin' and 'vmax' to fix the range.")
+                          "scale. Pass 'vmin' and 'vmax' to fix the range.",
+                          stacklevel=2)
         # Resolve the range before any frame is dropped below, so that the
         # export rate cannot change how bright the movie comes out:
         vmin, vmax = _resolve_clim(self.data, vmin, vmax,
@@ -826,7 +857,9 @@ class Percept(Data):
             quantity. Overrides both ``fps`` and the file's own timing.
         fps : float or None
             The frame rate to read the file at, in Hz, overriding the rate the
-            file records. May be given as a unitful frequency.
+            file records. May be given as a unitful frequency. A GIF may hold
+            a different duration for every frame, and one that does has no
+            single rate to be read at: pass ``time`` for it.
         vmin, vmax : float, optional
             The brightness range the file's gray levels stand for. See the
             notes below.
@@ -880,7 +913,7 @@ class Percept(Data):
         if time is None:
             fps = as_value(fps, Hz, 'fps')
             if fps is None and data.shape[-1] > 1:
-                fps = _media_fps(fname)
+                fps = _media_fps(fname, data.shape[-1])
                 if fps is None:
                     raise ValueError(f"Cannot infer the frame rate of "
                                      f"'{fname}'. Pass 'fps' or 'time'.")
@@ -903,7 +936,7 @@ class Percept(Data):
         if vmin is None or vmax is None:
             warnings.warn(f"The brightness range of '{fname}' is unknown, so "
                           f"the data is left normalized to [0, 1]. Pass "
-                          f"'vmin' and 'vmax' if you know it.")
+                          f"'vmin' and 'vmax' if you know it.", stacklevel=2)
         else:
             _check_clim(vmin, vmax)
             data = vmin + data * (vmax - vmin)
