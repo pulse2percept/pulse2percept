@@ -53,6 +53,10 @@ API changes:
   ``raster`` and ``max_current``. A raster is bound to the implant it is
   assigned to (:py:meth:`~pulse2percept.implants.Raster.bind`).
 
+* New :py:meth:`~pulse2percept.stimuli.Stimulus.shift` and
+  :py:meth:`~pulse2percept.stimuli.Stimulus.pad` translate a stimulus in time
+  and embed it in a ``[0, duration]`` window.
+
 * :py:meth:`~pulse2percept.percepts.Percept.play` and
   :py:meth:`~pulse2percept.percepts.Percept.save` gained ``vmin`` and
   ``vmax``. ``play`` also gained a ``fmt`` argument (defaulting to JPEG in

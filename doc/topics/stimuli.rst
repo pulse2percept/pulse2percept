@@ -240,6 +240,28 @@ by wrapping it in a second Stimulus object:
     # Same goes for time points:
     Stimulus(stim, time=[0, 0.1, 0.2, 0.3, 0.4])
 
+Shifting and padding a stimulus
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:py:meth:`~pulse2percept.stimuli.Stimulus.shift` moves a stimulus along the
+time axis, and :py:meth:`~pulse2percept.stimuli.Stimulus.pad` embeds it in a
+window that starts at ``t=0`` and ends at a time you choose.
+Note that ``pad`` takes the time the padded stimulus should *end* at, not an
+amount of time to add:
+
+.. ipython:: python
+
+    # A pulse that starts 3 ms in, in a 10 ms window:
+    stim = Stimulus([[-20, 20]], time=[0, 1]).shift(3).pad(10)
+    stim.time
+
+    stim.data
+
+Shifts may be negative, which moves the stimulus into the past
+(``stim.shift(-3)``).
+``stim >> dt`` and ``stim << dt`` are supported shorthand for
+``stim.shift(dt)`` and ``stim.shift(-dt)``.
+
 Compressing a stimulus
 ^^^^^^^^^^^^^^^^^^^^^^
 
