@@ -616,7 +616,7 @@ class HTMLAnimation(FuncAnimation):
     Parameters
     ----------
     fig, func, frames, *args, **kwargs :
-        Passed to :py:class:`~matplotlib.animation.FuncAnimatgition`
+        Passed to :py:class:`~matplotlib.animation.FuncAnimation`
     image : matplotlib.image.AxesImage
         The image artist that is updated by ``func``. Its position, colormap,
         and normalization determine how the frames are drawn
