@@ -41,7 +41,7 @@
    developers/releases
 
 .. include:: ../README.rst
-   :end-before: Globally,
+   :end-before: .. intro-begin
 
 |
 
@@ -50,5 +50,5 @@ pulse2percept |version| documentation
 =====================================
 
 .. include:: ../README.rst
-   :start-at: Globally,
-   :end-before: Where to go from here
+   :start-after: .. intro-begin
+   :end-before: .. quickstart-end

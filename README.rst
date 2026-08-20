@@ -23,6 +23,8 @@
 pulse2percept: A Python-based simulation framework for bionic vision
 ====================================================================
 
+.. intro-begin
+
 Globally, an estimated 43 million people are blind, with limited treatment
 options available for many causes of vision loss. For certain conditions,
 visual neuroprostheses - such as retinal and cortical implants - may be the
@@ -74,7 +76,8 @@ To install the `stable release`_ of p2p, run:
 
 ``pip`` installs NumPy and the other dependencies for you, and will only select
 a release that supports the Python version you are running (see
-`Compatibility and Building from Source`_ below).
+`Compatibility and Building from Source
+<https://pulse2percept.readthedocs.io/en/stable/install.html#install-compatibility>`_).
 
 We publish prebuilt wheels on PyPI for 64-bit Linux (``manylinux``, x86-64),
 macOS 11 and later (both Apple silicon and Intel), and 64-bit Windows. These
