@@ -9,6 +9,7 @@ from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
 import numpy as np
 import multiprocessing
+from scipy.ndimage import gaussian_filter1d
 
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
@@ -322,6 +323,83 @@ def _delivered(implant):
     stand_in = copy(implant)
     stand_in._spatial_stim = None
     return stand_in
+
+
+def _blend_meridian(resp, grid, meridian, width):
+    """Soften the seam a model leaves along one meridian
+
+    Some models are built out of two half-fields that meet along a meridian --
+    an axon map's fibers do not cross the horizontal raphe, and a cortical map
+    sends the two hemifields to opposite hemispheres -- so the predicted
+    percept can step discontinuously from one side of that line to the other.
+    The step is an artifact of where the tissue-level model was cut, not
+    something a viewer would report, and this smooths it out downstream of the
+    model: the response is blurred *normal to the meridian only*, and the blur
+    is mixed back in with a weight that dies away with distance from the line.
+
+    Nothing else about the percept moves. Away from the meridian the weight is
+    zero and the original response is returned unchanged, and the blur is 1D,
+    so a vertical meridian never smooths along y and a horizontal one never
+    smooths along x.
+
+    Parameters
+    ----------
+    resp : np.ndarray
+        The spatial response, with time on the last axis and the axes before it
+        indexing ``grid`` (either flattened, as ``_predict_spatial`` returns
+        it, or already shaped like the grid). Returned with its shape and dtype
+        intact.
+    grid : :py:class:`~pulse2percept.topography.Grid2D`
+        The model's grid, whose ``x``/``y`` give each point's distance from the
+        meridian in degrees of visual angle.
+    meridian : {'vertical', 'horizontal'}
+        Which meridian to blend across: ``'vertical'`` is the line x=0 (blurred
+        along x), ``'horizontal'`` the line y=0 (blurred along y).
+    width : float
+        Standard deviation of the blend, in degrees of visual angle: both of
+        the Gaussian blurring normal to the meridian and of the weight that
+        confines it to the meridian. ``None`` or 0 means no blending, and the
+        input is returned as-is (the same object, so callers can detect it).
+
+    Returns
+    -------
+    blended : np.ndarray
+        The blended response, same shape and dtype as ``resp``.
+
+    """
+    if width is None or width == 0:
+        return resp
+    width = float(width)
+    if width < 0:
+        raise ValueError(f"Blend width must be non-negative, not {width}.")
+    if meridian == 'vertical':
+        # Normal to a vertical meridian is x, which varies along the grid's
+        # second axis (`Grid2D` is Cartesian-indexed: y first, then x):
+        dist, axis = grid.x, 1
+    elif meridian == 'horizontal':
+        dist, axis = grid.y, 0
+    else:
+        raise ValueError(f"Unknown meridian '{meridian}'; expected 'vertical' "
+                         f"or 'horizontal'.")
+    # The spacing normal to the meridian, read off the grid rather than from
+    # the model's `step`: `Grid2D` treats `step` as a target and settles on
+    # whatever spacing reaches both end points of the range. Taking it from
+    # the coordinates is what makes `width` a distance in dva rather than a
+    # number of pixels, so the same width behaves the same way at any
+    # resolution.
+    along = dist[:, 0] if axis == 0 else dist[0, :]
+    if along.size < 2:
+        # A single sample normal to the meridian: nothing to blur along.
+        return resp
+    spacing = float(np.abs(np.diff(along)).mean())
+    # Time is the last axis and `gaussian_filter1d` only touches `axis`, so
+    # every time point is blurred on its own:
+    work = np.asarray(resp, dtype=np.float64).reshape(dist.shape + (-1,))
+    blurred = gaussian_filter1d(work, width / spacing, axis=axis,
+                                mode='nearest')
+    weight = np.exp(-dist ** 2 / (2.0 * width ** 2))[..., np.newaxis]
+    blended = weight * blurred + (1.0 - weight) * work
+    return blended.reshape(resp.shape).astype(resp.dtype, copy=False)
 
 
 class NotBuiltError(ValueError, AttributeError):
@@ -845,6 +923,42 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
+    def _postprocess_spatial(self, resp):
+        """Adjust the spatial response before it is handed to a ``Percept``
+
+        A hook for anything that operates on the *predicted percept* rather
+        than on the tissue: it sees the response ``_predict_spatial`` produced,
+        at every requested time point, and returns one of the same shape and
+        dtype. Nothing here should need the stimulus or the electrode array --
+        if it does, it belongs in ``_predict_spatial``.
+
+        The base implementation returns the response untouched, and a model
+        that does not override this behaves exactly as if the hook did not
+        exist. :py:class:`~pulse2percept.models.AxonMapSpatial` and
+        :py:class:`~pulse2percept.models.cortex.CortexSpatial` use it to blend
+        across the meridian their tissue-level model is cut along; see
+        ``meridian_blend``.
+
+        .. versionadded:: 0.10.0
+
+        Parameters
+        ----------
+        resp : np.ndarray
+            The spatial response, with time on the last axis and the axes
+            before it indexing ``self.grid`` -- flattened, space x time, as
+            ``_predict_spatial`` returned it (reassembled across duplicate
+            time points first), though a model that overrides
+            ``predict_percept`` may call this with the grid-shaped array it
+            builds instead.
+
+        Returns
+        -------
+        resp : np.ndarray
+            The adjusted response, same shape and dtype.
+
+        """
+        return resp
+
     def predict_percept(self, implant, t_percept=None):
         """Predict the spatial response
 
@@ -980,6 +1094,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 resp = resp_unique[..., inverse].copy(order='C')
             else:
                 resp = self._predict_spatial(implant.earray, stim)
+        resp = self._postprocess_spatial(resp)
         return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
                        space=self.grid, time=t_percept,
                        time_unit=self.time_unit,

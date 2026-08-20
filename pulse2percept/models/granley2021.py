@@ -576,6 +576,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Response goes in first frame
             resp[:, :, 0] = self._predict_spatial(
                 implant.earray, stim).reshape(self.grid.x.shape)
+        # This method replaces `SpatialModel.predict_percept` rather than
+        # customizing `_predict_spatial`, so the postprocessing hook that one
+        # calls has to be called here too -- otherwise `meridian_blend`,
+        # inherited from `AxonMapSpatial`, would be silently ignored:
+        resp = self._postprocess_spatial(resp)
         return Percept(resp, space=self.grid, time=t_percept,
                        time_unit=self.time_unit,
                        metadata={'stim': stim.metadata})

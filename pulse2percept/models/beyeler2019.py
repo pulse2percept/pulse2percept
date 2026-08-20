@@ -16,6 +16,7 @@ from ..topography import Watson2014Map
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
+from .base import _blend_meridian
 from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
                            fast_find_closest_axon)        
 
@@ -349,6 +350,24 @@ class AxonMapSpatial(SpatialModel):
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
+    meridian_blend : float, optional
+        Width (in degrees of visual angle) over which to blend the percept
+        across the **horizontal meridian**, y=0. Nerve fiber bundles do not
+        cross the horizontal raphe, so the axon map ends at it and the
+        predicted percept can step discontinuously from the superior to the
+        inferior half of the visual field. That seam is a property of the
+        anatomy the model is built from, not of what a patient reports: later
+        stages of the visual system integrate across an anatomical boundary
+        that has no perceptual counterpart. Setting this to a positive number
+        smooths the percept along y near the raphe -- and only near it, and
+        only along y -- to stand in for that integration.
+
+        The default of 0 leaves the seam in place, because there is no
+        principled universal blend width yet; treat any nonzero value as a
+        parameter of your own to justify. It changes only the predicted
+        percept, never the axon map or the current spread that produced it.
+
+        .. versionadded:: 0.10.0
     axon_pickle : str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle : bool, optional
@@ -401,6 +420,9 @@ class AxonMapSpatial(SpatialModel):
             # Axon segments whose contribution to brightness is smaller than
             # this value will be pruned:
             'min_ax_sensitivity': 1e-3,
+            # Width (dva) over which to blend the percept across the
+            # horizontal meridian, where the axon map ends. 0: don't:
+            'meridian_blend': 0,
             # Precomputed axon maps stored in the following file:
             'axon_pickle': 'axons.pickle',
             # You can force a build by ignoring pickles:
@@ -416,7 +438,7 @@ class AxonMapSpatial(SpatialModel):
         # visual angle, and `ax_segments_range` a radial position in the
         # Jansonius model's own coordinates, so neither is declared here:
         return {**super().get_param_units(), 'rho': um, 'lam': um,
-                'loc_od': dva}
+                'loc_od': dva, 'meridian_blend': dva}
 
     def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
         """Grows a single axon bundle based on the model by Jansonius (2009)
@@ -979,6 +1001,24 @@ class AxonMapSpatial(SpatialModel):
                              self._cutoff_r2(self.rho),
                              self.n_threads)
 
+    def _postprocess_spatial(self, resp):
+        """Blend the percept across the horizontal meridian
+
+        Axons stop at the raphe, so the percept can step discontinuously
+        across y=0. See ``meridian_blend``, which is 0 (no blending) unless
+        the user asks for it.
+        """
+        blended = _blend_meridian(resp, self.grid, 'horizontal',
+                                  self.meridian_blend)
+        if blended is resp:
+            # No blending asked for; leave the response bit-for-bit alone.
+            return resp
+        # Blending pulls brightness across the raphe, which can lift a point
+        # `thresh_percept` had zeroed back off zero. Reapply it, on the same
+        # |value| < threshold rule `fast_axon_map` used:
+        blended[np.abs(blended) < self.thresh_percept] = 0
+        return blended
+
     def plot(self, use_dva=False, style='hull', annotate=True, autoscale=True,
              ax=None, figsize=None):
         """Plot the axon map
@@ -1185,6 +1225,24 @@ class AxonMapModel(Model):
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
+    meridian_blend : float, optional
+        Width (in degrees of visual angle) over which to blend the percept
+        across the **horizontal meridian**, y=0. Nerve fiber bundles do not
+        cross the horizontal raphe, so the axon map ends at it and the
+        predicted percept can step discontinuously from the superior to the
+        inferior half of the visual field. That seam is a property of the
+        anatomy the model is built from, not of what a patient reports: later
+        stages of the visual system integrate across an anatomical boundary
+        that has no perceptual counterpart. Setting this to a positive number
+        smooths the percept along y near the raphe -- and only near it, and
+        only along y -- to stand in for that integration.
+
+        The default of 0 leaves the seam in place, because there is no
+        principled universal blend width yet; treat any nonzero value as a
+        parameter of your own to justify. It changes only the predicted
+        percept, never the axon map or the current spread that produced it.
+
+        .. versionadded:: 0.10.0
     axon_pickle : str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle : bool, optional

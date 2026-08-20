@@ -2,10 +2,10 @@
    :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`, 
    :py:class:`~pulse2percept.models.cortex.ScoreboardModel`"""
 
-from ..base import Model, SpatialModel
+from ..base import Model, SpatialModel, _blend_meridian
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
-from ...units import DimensionMismatchError, um
+from ...units import DimensionMismatchError, dva, um
 from ...utils.constants import UM_PER_MM, ZORDER
 import numpy as np
 
@@ -56,6 +56,26 @@ class CortexSpatial(SpatialModel):
             deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
+    meridian_blend : float, optional
+        Width (in degrees of visual angle) over which to blend the percept
+        across the **vertical meridian**, x=0. The two hemifields are mapped
+        onto opposite hemispheres, so a cortical model is really two
+        half-field models meeting along x=0 and the predicted percept can step
+        discontinuously from the left half of the visual field to the right.
+        That seam is a property of the anatomy the model is built from, not of
+        what a patient reports: later stages of the visual system integrate
+        across an anatomical boundary that has no perceptual counterpart.
+        Setting this to a positive number smooths the percept along x near the
+        vertical meridian -- and only near it, and only along x -- to stand in
+        for that integration.
+
+        The default of 0 leaves the seam in place, because there is no
+        principled universal blend width yet; treat any nonzero value as a
+        parameter of your own to justify. It changes only the predicted
+        percept, never the cortical map or the current spread that produced
+        it.
+
+        .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
@@ -133,10 +153,35 @@ class CortexSpatial(SpatialModel):
                     'xrange' : (-5, 5),
                     'yrange' : (-5, 5),
                     'step' : 0.1,
+                    # Width (dva) over which to blend the percept across the
+                    # vertical meridian, where the hemifields meet. 0: don't:
+                    'meridian_blend' : 0,
                     # Visual field regions to simulate
                     'regions' : ['v1']
                  }
         return {**base_params, **params}
+
+    def get_param_units(self):
+        """Return a dict of the units that parameters are stored in"""
+        return {**super().get_param_units(), 'meridian_blend': dva}
+
+    def _postprocess_spatial(self, resp):
+        """Blend the percept across the vertical meridian
+
+        The hemifields are mapped onto opposite hemispheres, so the percept
+        can step discontinuously across x=0. See ``meridian_blend``, which is
+        0 (no blending) unless the user asks for it.
+        """
+        blended = _blend_meridian(resp, self.grid, 'vertical',
+                                  self.meridian_blend)
+        if blended is resp:
+            # No blending asked for; leave the response bit-for-bit alone.
+            return resp
+        # Blending pulls brightness across the meridian, which can lift a
+        # point `thresh_percept` had zeroed back off zero. Reapply it, on the
+        # same |value| < threshold rule the spatial kernel used:
+        blended[np.abs(blended) < self.thresh_percept] = 0
+        return blended
     
 
     def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
@@ -261,6 +306,13 @@ class ScoreboardSpatial(CortexSpatial):
             deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
+    meridian_blend : float, optional
+        Width (in degrees of visual angle) over which to blend the percept
+        across the vertical meridian, x=0, where the two hemifields meet. The
+        default of 0 leaves the seam the cortical map produces in place; see
+        :py:class:`~pulse2percept.models.cortex.CortexSpatial`.
+
+        .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
@@ -393,6 +445,13 @@ class ScoreboardModel(Model):
             deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
+    meridian_blend : float, optional
+        Width (in degrees of visual angle) over which to blend the percept
+        across the vertical meridian, x=0, where the two hemifields meet. The
+        default of 0 leaves the seam the cortical map produces in place; see
+        :py:class:`~pulse2percept.models.cortex.CortexSpatial`.
+
+        .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.

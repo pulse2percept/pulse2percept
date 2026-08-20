@@ -919,3 +919,85 @@ def test_AxonMapModel_build_rejects_pre_step_cache(tmp_path):
         params, payload = pickle.load(f)
     npt.assert_equal('xystep' in params, False)
     npt.assert_equal(payload[0], _AXON_CACHE_VERSION)
+
+
+@pytest.mark.parametrize('ModelClass', [AxonMapSpatial, AxonMapModel])
+def test_AxonMapSpatial_meridian_blend(ModelClass):
+    # The axon map is cut along the horizontal raphe, so this blends across
+    # y=0 -- and only there, and only along y.
+    def make(**params):
+        return ModelClass(xrange=(-6, 6), yrange=(-6, 6), step=0.25,
+                          rho=200, lam=400, n_axons=250, n_ax_segments=200,
+                          ignore_pickle=True, **params).build()
+
+    implant = ArgusII(stim={'C4': 1, 'C8': 1})
+    plain = make()
+    unblended = plain.predict_percept(implant).data
+
+    # The default is 0, and 0 has to be the model exactly as it was:
+    npt.assert_equal(plain.meridian_blend, 0)
+    npt.assert_array_equal(make(meridian_blend=0).predict_percept(implant).data,
+                           unblended)
+
+    width = 1
+    blended = make(meridian_blend=width).predict_percept(implant).data
+    npt.assert_equal(blended.shape, unblended.shape)
+    npt.assert_equal(blended.dtype, unblended.dtype)
+
+    y, x = plain.grid.y[:, 0], plain.grid.x[0, :]
+    # The raphe is where the two halves of the axon map meet, and the step
+    # across it is what the blend is for. Percept rows are ordered by the
+    # grid's y, so the seam is the pair of rows straddling y=0:
+    seam = np.argsort(np.abs(y))[:2]
+
+    def jump(data):
+        return np.abs(data[seam[0], :, 0] - data[seam[1], :, 0]).max()
+
+    npt.assert_array_less(jump(blended), jump(unblended))
+
+    # It is the *horizontal* meridian this model blends across, so the change
+    # is a band in y and not one in x. Which rows and columns moved:
+    # Count a row or column as having moved if it moved by at least a
+    # thousandth of the largest change anywhere, so the bound below is about
+    # where the blend acts rather than about float noise:
+    delta = np.abs(blended - unblended)
+    moved = delta.max() * 1e-3
+    rows = delta.max(axis=(1, 2)) > moved
+    cols = delta.max(axis=(0, 2)) > moved
+    npt.assert_equal(np.any(rows), True)
+    # Every row that moved is within a few widths of the raphe, so the far
+    # field is untouched...
+    npt.assert_array_less(np.abs(y[rows]).max(), 4 * width)
+    # ...while columns moved right across the grid, including far from x=0,
+    # which a blend across the vertical meridian would have left alone:
+    npt.assert_array_less(4 * width, np.abs(x[cols]).max())
+
+
+def test_AxonMapSpatial_meridian_blend_reapplies_threshold():
+    # Blending pulls brightness across the raphe, which could otherwise lift a
+    # point that `thresh_percept` had zeroed back off zero.
+    implant = ArgusII(stim={'C4': 1})
+    model = AxonMapSpatial(xrange=(-6, 6), yrange=(-6, 6), step=0.25, rho=200,
+                           lam=400, n_axons=250, n_ax_segments=200,
+                           ignore_pickle=True, meridian_blend=1,
+                           thresh_percept=0.1).build()
+    data = model.predict_percept(implant).data
+    npt.assert_equal(np.any(data > 0), True)
+    # Nothing survives strictly between zero and the threshold:
+    npt.assert_equal(np.any((np.abs(data) > 0) & (np.abs(data) < 0.1)), False)
+
+
+def test_AxonMapSpatial_meridian_blend_over_time():
+    # Every frame is blended, and each one on its own.
+    implant = ArgusII(stim=Stimulus({'C4': [0, 1, 2], 'C8': [2, 1, 0]}))
+    model = AxonMapSpatial(xrange=(-6, 6), yrange=(-6, 6), step=0.5, rho=200,
+                           lam=400, n_axons=250, n_ax_segments=200,
+                           ignore_pickle=True, meridian_blend=1).build()
+    percept = model.predict_percept(implant)
+    npt.assert_equal(percept.data.shape[-1], 3)
+    for t in range(3):
+        frame = ArgusII(encoder=None, stim=Stimulus(
+            {'C4': [0, 1, 2][t], 'C8': [2, 1, 0][t]}))
+        npt.assert_allclose(percept.data[..., t],
+                            model.predict_percept(frame).data[..., 0],
+                            atol=1e-6)

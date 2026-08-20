@@ -184,3 +184,76 @@ def test_poli_nlink():
     percept = model.predict_percept(implant)
     npt.assert_almost_equal(np.sum(percept.data), 32.494125, decimal=3)
     npt.assert_equal(np.sum(percept.data > .05), 4)
+
+
+@pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
+def test_CortexSpatial_meridian_blend(ModelClass):
+    # The hemifields are mapped onto opposite hemispheres, so a cortical model
+    # blends across x=0 -- and only there, and only along x.
+    def make(**params):
+        return ModelClass(xrange=(-5, 5), yrange=(-5, 5), step=0.2, rho=800,
+                          **params).build()
+
+    # Close to the midline, so the phosphenes land on the vertical meridian
+    # and are cut off by it -- which is the seam this blends across. An array
+    # further out produces a percept that never reaches x=0 and so has no seam
+    # to show:
+    implant = Cortivis(x=5000)
+    implant.stim = {e: 1 for e in implant.electrode_names}
+    plain = make()
+    unblended = plain.predict_percept(implant).data
+    npt.assert_array_less(0, unblended.max())
+
+    # The default is 0, and 0 has to be the model exactly as it was:
+    npt.assert_equal(plain.meridian_blend, 0)
+    npt.assert_array_equal(
+        make(meridian_blend=0).predict_percept(implant).data, unblended)
+
+    width = 0.5
+    blended = make(meridian_blend=width).predict_percept(implant).data
+    npt.assert_equal(blended.shape, unblended.shape)
+    npt.assert_equal(blended.dtype, unblended.dtype)
+
+    x = plain.grid.x[0, :]
+    # The vertical meridian is where the two half-field models meet, and the
+    # step across it is what the blend is for:
+    seam = np.argsort(np.abs(x))[:2]
+
+    def jump(data):
+        return np.abs(data[:, seam[0], 0] - data[:, seam[1], 0]).max()
+
+    npt.assert_array_less(0, jump(unblended))
+    npt.assert_array_less(jump(blended), jump(unblended) / 10)
+
+    # The change stays within a few widths of the meridian; the far field is
+    # untouched. A column counts as having moved if it moved by at least a
+    # thousandth of the largest change anywhere, so this is a bound on where
+    # the blend acts rather than on float noise:
+    delta = np.abs(blended - unblended)
+    cols = delta.max(axis=(0, 2)) > delta.max() * 1e-3
+    npt.assert_equal(np.any(cols), True)
+    npt.assert_array_less(np.abs(x[cols]).max(), 4 * width)
+
+    # It is the *vertical* meridian, so the blur runs along x and not along y:
+    # a row that was dark stays dark, because nothing is carried into it from
+    # the rows above and below...
+    dark_rows = unblended.max(axis=(1, 2)) == 0
+    npt.assert_equal(np.any(dark_rows), True)
+    npt.assert_array_equal(blended[dark_rows], 0)
+    # ...while a column that was dark does light up, from its neighbors along
+    # x, which is the smoothing this is supposed to do:
+    dark_cols = unblended.max(axis=(0, 2)) == 0
+    npt.assert_equal(np.any(blended[:, dark_cols] > 0), True)
+
+
+def test_CortexSpatial_meridian_blend_reapplies_threshold():
+    # Blending pulls brightness across the meridian, which could otherwise
+    # lift a point that `thresh_percept` had zeroed back off zero.
+    implant = Cortivis(x=5000)
+    implant.stim = {e: 1 for e in implant.electrode_names}
+    model = ScoreboardModel(xrange=(-5, 5), yrange=(-5, 5), step=0.2, rho=800,
+                            meridian_blend=0.5, thresh_percept=0.1).build()
+    data = model.predict_percept(implant).data
+    npt.assert_equal(np.any(data > 0), True)
+    # Nothing survives strictly between zero and the threshold:
+    npt.assert_equal(np.any((np.abs(data) > 0) & (np.abs(data) < 0.1)), False)

@@ -701,3 +701,34 @@ def test_BiphasicAxonMap_dimension_before_waveform():
         BiphasicAxonMapSpatial(step=2).build().predict_percept(
             ArgusII(stim={'A1': MonophasicPulse(-1, 0.45, stim_dur=100)}))
     npt.assert_equal('BiphasicPulseTrain' in str(excinfo.value), True)
+
+
+@pytest.mark.parametrize('ModelClass', [BiphasicAxonMapSpatial,
+                                        BiphasicAxonMapModel])
+def test_BiphasicAxonMapSpatial_meridian_blend(ModelClass):
+    # This model replaces `predict_percept` instead of customizing
+    # `_predict_spatial`, so it has to call the postprocessing hook itself --
+    # otherwise `meridian_blend`, inherited from `AxonMapSpatial`, would be
+    # accepted and then quietly ignored.
+    def make(**params):
+        return ModelClass(xrange=(-6, 6), yrange=(-6, 6), step=0.25, rho=200,
+                          lam=400, n_axons=250, n_ax_segments=200,
+                          ignore_pickle=True, **params).build()
+
+    implant = ArgusII(stim={'C4': BiphasicPulseTrain(20, 20, 0.45),
+                            'C8': BiphasicPulseTrain(20, 20, 0.45)})
+    plain = make()
+    unblended = plain.predict_percept(implant).data
+    npt.assert_array_equal(make(meridian_blend=0).predict_percept(implant).data,
+                           unblended)
+
+    width = 1
+    blended = make(meridian_blend=width).predict_percept(implant).data
+    npt.assert_equal(blended.shape, unblended.shape)
+    npt.assert_equal(blended.dtype, unblended.dtype)
+    npt.assert_equal(np.array_equal(blended, unblended), False)
+    # It is the horizontal meridian here, so the change is a band around y=0:
+    y = plain.grid.y[:, 0]
+    delta = np.abs(blended - unblended)
+    rows = delta.max(axis=(1, 2)) > delta.max() * 1e-3
+    npt.assert_array_less(np.abs(y[rows]).max(), 4 * width)

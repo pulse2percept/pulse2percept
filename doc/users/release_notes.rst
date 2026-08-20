@@ -59,6 +59,10 @@ API changes:
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` and PNG in
   :py:meth:`~pulse2percept.percepts.Percept.play`).
 
+* Spatial models gained a ``_postprocess_spatial`` hook, which sees the
+  predicted percept after ``_predict_spatial`` and before it becomes a
+  percept.
+
 * ``predict_percept`` now raises ``DimensionMismatchError`` when the stimulus
   is not the physical quantity the model reads. Assigning an
   :py:class:`~pulse2percept.stimuli.ImageStimulus` or
