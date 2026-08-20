@@ -12,14 +12,8 @@ from ..utils.constants import UM_PER_MM
 import matplotlib.pyplot as plt
 
 
-def _elementwise(dtype):
-    """Make a coordinate transform elementwise over scalars and arrays alike
-
-    The transforms below index with boolean masks and divide in place, neither
-    of which a scalar (or a 0-d, or an integer, array) supports. Coordinates
-    therefore enter as float arrays of at least one dimension; a call made
-    with two scalars gets scalars back.
-    """
+def _scalar_safe(dtype):
+    """Normalize transform inputs to arrays and restore scalar outputs."""
     def decorator(func):
         @wraps(func)
         def wrapper(self, x, y):
@@ -180,7 +174,7 @@ class Polimeni2006Map(CorticalMap):
         x[idx_nan], y[idx_nan] = np.nan, np.nan
         return x, y
 
-    @_elementwise('float32')
+    @_scalar_safe('float32')
     def dva_to_v1(self, x, y):
         if self.jitter_boundary:
             # remove and discontinuities across x axis
@@ -198,7 +192,7 @@ class Polimeni2006Map(CorticalMap):
         yV1 *= 1000
         return self._invert_left_cart(xV1, yV1, ~inverted)[:2]
 
-    @_elementwise('float32')
+    @_scalar_safe('float32')
     def dva_to_v2(self, x, y):
         if self.jitter_boundary:
             # remove and discontinuities across x and y axis
@@ -219,7 +213,7 @@ class Polimeni2006Map(CorticalMap):
         yV2 *= 1000
         return self._invert_left_cart(xV2, yV2, ~inverted)[:2]
 
-    @_elementwise('float32')
+    @_scalar_safe('float32')
     def dva_to_v3(self, x, y):
         if self.jitter_boundary:
             # remove and discontinuities across x and y axis
@@ -240,11 +234,11 @@ class Polimeni2006Map(CorticalMap):
         yV3 *= 1000
         return self._invert_left_cart(xV3, yV3, ~inverted)[:2]
 
-    @_elementwise('float64')
+    @_scalar_safe(None)
     def v1_to_dva(self, x, y):
         x, y, inverted = self._invert_left_cart(x, y, boundary=self.left_offset/2)
-        x /= 1000
-        y /= 1000
+        x = x / 1000
+        y = y / 1000
         w = x + y*1j
         z = (self.a - self.a * np.exp(w/self.k)) / (self.a/self.b * np.exp(w/self.k) - 1)
         z = z.astype('complex64')
@@ -255,11 +249,11 @@ class Polimeni2006Map(CorticalMap):
         theta = thetav1 / self.alpha1
         return pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
 
-    @_elementwise('float64')
+    @_scalar_safe(None)
     def v2_to_dva(self, x, y):
         x, y, inverted = self._invert_left_cart(x, y, boundary=self.left_offset/2)
-        x /= 1000
-        y /= 1000
+        x = x / 1000
+        y = y / 1000
         w = x + y * 1j
         z = (self.a - self.a*np.exp(w / self.k)) / (self.a/self.b * np.exp(w/self.k) - 1)
         z = z.astype('complex64')
@@ -273,11 +267,11 @@ class Polimeni2006Map(CorticalMap):
         theta = (thetav2 - (np.sign(y) * (phi1 + phi2))) / self.alpha2
         return pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
 
-    @_elementwise('float64')
+    @_scalar_safe(None)
     def v3_to_dva(self, x, y):
         x, y, inverted = self._invert_left_cart(x, y, boundary=self.left_offset/2)
-        x /= 1000
-        y /= 1000
+        x = x / 1000
+        y = y / 1000
         w = x + y * 1j
         z = (self.a - self.a * np.exp(w/self.k)) / (self.a/self.b * np.exp(w/self.k) - 1)
         z = z.astype('complex64')

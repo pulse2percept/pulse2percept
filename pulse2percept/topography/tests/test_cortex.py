@@ -210,10 +210,10 @@ def test_polimeni_scalars():
         npt.assert_equal(np.isscalar(x_um) or np.ndim(x_um) == 0, True)
         npt.assert_almost_equal([x_um, y_um], np.ravel(to_tissue([5.], [-2.])),
                                 err_msg=region)
-        # Integers must survive the inverse, too (it divides in place):
-        back = to_visual(int(x_um), int(y_um))
-        npt.assert_almost_equal(back, np.ravel(to_visual([float(x_um)],
-                                                         [float(y_um)])), 3,
+        # Integers must survive the inverse, too (it divides coordinates):
+        xi, yi = int(x_um), int(y_um)
+        npt.assert_almost_equal(to_visual(xi, yi),
+                                to_visual(float(xi), float(yi)),
                                 err_msg=region)
         # Points outside the mapped eccentricity are NaN, not an error:
         npt.assert_equal(np.isnan(to_tissue(100, 0)), True)
