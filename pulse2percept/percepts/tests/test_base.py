@@ -209,8 +209,7 @@ def test_Percept_save(dtype, tmp_path):
 
     # Save multiple frames as a gif or movie:
     for name in ['test.mp4', 'test.avi', 'test.mov', 'test.wmv', 'test.gif']:
-        fname = str(tmp_path / name)
-        percept.save(fname, vmin=0, vmax=255)
+        fname = percept.save(str(tmp_path / name), vmin=0, vmax=255)
         npt.assert_equal(os.path.isfile(fname), True)
         # Normalized to [0, 255] with some loss of precision:
         for mov in mimread(fname):
@@ -225,8 +224,7 @@ def test_Percept_save(dtype, tmp_path):
     # But, can save single frame as image:
     percept = Percept(ndarray[..., :1])
     for name in ['test.jpg', 'test.png', 'test.tif', 'test.gif']:
-        fname = str(tmp_path / name)
-        percept.save(fname, vmin=0, vmax=255)
+        fname = percept.save(str(tmp_path / name), vmin=0, vmax=255)
         npt.assert_equal(os.path.isfile(fname), True)
         img = img_as_float(imread(fname))
         npt.assert_almost_equal(np.min(img), 0, decimal=3)
@@ -237,12 +235,10 @@ def test_Percept_save_single_frame(tmp_path):
     """A percept with a single time point has no frame rate of its own"""
     percept = Percept(np.random.rand(16, 16, 1), time=[3.5])
     for name in ['test.mp4', 'test.avi', 'test.gif']:
-        fname = str(tmp_path / name)
-        percept.save(fname, vmin=0, vmax=1)
+        fname = percept.save(str(tmp_path / name), vmin=0, vmax=1)
         npt.assert_equal(len(mimread(fname)), 1)
     # An explicit frame rate is still honored:
-    fname = str(tmp_path / 'fps.mp4')
-    percept.save(fname, fps=12, vmin=0, vmax=1)
+    fname = percept.save(str(tmp_path / 'fps.mp4'), fps=12, vmin=0, vmax=1)
     npt.assert_equal(len(mimread(fname)), 1)
 
 
@@ -267,10 +263,10 @@ def test_Percept_fps_units(tmp_path):
 
     # ... and the same on the way out to a file:
     fname = str(tmp_path / 'fps.mp4')
-    percept.save(fname, fps=30 * Hz, vmin=0, vmax=1)
-    npt.assert_equal(len(mimread(fname)), 30)
-    percept.save(fname, fps=0.03 * kHz, vmin=0, vmax=1)
-    npt.assert_equal(len(mimread(fname)), 30)
+    npt.assert_equal(
+        len(mimread(percept.save(fname, fps=30 * Hz, vmin=0, vmax=1))), 30)
+    npt.assert_equal(
+        len(mimread(percept.save(fname, fps=0.03 * kHz, vmin=0, vmax=1))), 30)
 
     # Nothing else is a frame rate:
     for wrong in (30 * ms, 30 * uA):
@@ -759,6 +755,59 @@ def test_Percept_save_warns_without_clim(tmp_path):
                      vmax=1)
 
 
+def test_Percept_save_keeps_an_explicit_clim(tmp_path):
+    """A movie cannot hold the scale it was written on, but its name can
+
+    The round trip a fixed ``vmax`` promises: the file comes back on the
+    brightness scale the percept was on, not on the one it was encoded with.
+    """
+    data = np.zeros((16, 16, 5))
+    data[..., :] = np.linspace(0, 0.35, 5)
+    percept = Percept(data, time=np.arange(5) * 100.0)
+    fname = percept.save(str(tmp_path / 'percept.mp4'), shape=(32, 32),
+                         vmax=0.5)
+    # The range `save` resolved, both bounds of it, is in the name it returns:
+    npt.assert_equal(os.path.basename(fname),
+                     'percept__p2p_vmin=0.0_vmax=0.5.mp4')
+    npt.assert_equal(os.path.isfile(fname), True)
+    # Loading it needs no arguments and has nothing to warn about...
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        loaded = Percept.load(fname)
+    # ... and `vmax=0.5` was the scale the movie was encoded on, not the
+    # brightness the percept comes back with:
+    npt.assert_allclose(loaded.data.max(), 0.35, atol=0.02)
+    npt.assert_allclose([loaded.data[..., i].mean() for i in range(5)],
+                        np.linspace(0, 0.35, 5), atol=0.02)
+
+
+def test_Percept_save_range_tag(tmp_path):
+    """The file name records the range only where the file itself cannot"""
+    percept = Percept(np.linspace(0, 20, 256).reshape((16, 16, 1)))
+    # A PNG has metadata to hold the range, so its name is left alone:
+    fname = percept.save(str(tmp_path / 'p.png'), shape=(16, 16), vmin=0,
+                         vmax=20)
+    npt.assert_equal(os.path.basename(fname), 'p.png')
+    npt.assert_allclose(Percept.load(fname).data.max(), 20, atol=0.1)
+    # Automatic normalization claims no scale, so it renames nothing:
+    with pytest.warns(UserWarning):
+        auto = percept.save(str(tmp_path / 'auto.bmp'), shape=(16, 16))
+    npt.assert_equal(os.path.basename(auto), 'auto.bmp')
+    # A name that already claims a range has it rewritten, not appended to,
+    # so that it cannot end up naming a range the file was not written with:
+    stale = str(tmp_path / 'stale__p2p_vmin=0.0_vmax=1.0.bmp')
+    tagged = percept.save(stale, shape=(16, 16), vmin=0, vmax=20)
+    npt.assert_equal(os.path.basename(tagged),
+                     'stale__p2p_vmin=0.0_vmax=20.0.bmp')
+    npt.assert_equal(os.path.isfile(stale), False)
+    npt.assert_allclose(Percept.load(tagged).data.max(), 20, atol=0.1)
+    # ... including when the range was resolved rather than asked for:
+    with pytest.warns(UserWarning):
+        redone = percept.save(tagged, shape=(16, 16))
+    npt.assert_equal(os.path.basename(redone),
+                     'stale__p2p_vmin=0.0_vmax=20.0.bmp')
+
+
 def test_Percept_load_image(tmp_path):
     """A static image is a single-frame percept with no time axis"""
     fname = str(tmp_path / 'p.png')
@@ -777,11 +826,11 @@ def test_Percept_load_image(tmp_path):
 @pytest.mark.parametrize('ext', ('.gif', '.mp4'))
 def test_Percept_load_video(ext, tmp_path):
     """A GIF or movie is a multi-frame percept, timed by its frame rate"""
-    fname = str(tmp_path / f'p{ext}')
     data = np.zeros((16, 16, 5))
     data[..., :] = np.linspace(0, 20, 5)
     percept = Percept(data, time=np.arange(5) * 100.0)
-    percept.save(fname, shape=(32, 32), vmin=0, vmax=20)
+    fname = percept.save(str(tmp_path / f'p{ext}'), shape=(32, 32), vmin=0,
+                         vmax=20)
     loaded = Percept.load(fname, vmin=0, vmax=20)
     npt.assert_equal(loaded.shape[-1], 5)
     npt.assert_almost_equal(loaded.time, percept.time)
@@ -853,28 +902,52 @@ def test_Percept_load_grayscale(tmp_path):
 
 def test_Percept_load_range_precedence(tmp_path):
     """Explicit limits beat file metadata, which beats the file name"""
-    percept = Percept(np.linspace(0, 20, 256).reshape((16, 16, 1)))
-    # Metadata says [0, 20] and the file name says [0, 5]:
+    from PIL.PngImagePlugin import PngInfo
+    gray = np.linspace(0, 255, 256).astype(np.uint8).reshape((16, 16))
+    # `save` keeps a file's metadata and its name in step, so a file that
+    # disagrees with itself has to be written by hand. Metadata says [0, 20]
+    # and the name says [0, 5]:
+    info = PngInfo()
+    info.add_text('Comment', '__p2p_vmin=0.0_vmax=20.0')
     fname = str(tmp_path / 'p__p2p_vmin=0.0_vmax=5.0.png')
-    percept.save(fname, shape=(16, 16), vmin=0, vmax=20)
+    imageio.imwrite(fname, gray, pnginfo=info)
     npt.assert_allclose(Percept.load(fname).data.max(), 20, atol=0.1)
     npt.assert_allclose(Percept.load(fname, vmax=100).data.max(), 100,
                         atol=0.5)
     # A BMP has nowhere to record the range, so the file name is what is left:
     named = str(tmp_path / 'q__p2p_vmin=0.0_vmax=5.0.bmp')
-    percept.save(named, shape=(16, 16), vmin=0, vmax=20)
+    imageio.imwrite(named, gray)
     npt.assert_allclose(Percept.load(named).data.max(), 5, atol=0.05)
 
 
 def test_Percept_load_unknown_range_warns(tmp_path):
-    """An unrecoverable range leaves the data normalized, and says so"""
-    fname = str(tmp_path / 'plain.bmp')
+    """An unrecoverable range leaves the encoded values alone, and says so"""
     percept = Percept(np.linspace(0, 20, 256).reshape((16, 16, 1)))
-    percept.save(fname, shape=(16, 16), vmin=0, vmax=20)
-    with pytest.warns(UserWarning, match='brightness range'):
+    # Nothing was said about the scale, so nothing is recorded and the file
+    # keeps the name it was given:
+    with pytest.warns(UserWarning, match='Normalizing'):
+        fname = percept.save(str(tmp_path / 'plain.bmp'), shape=(16, 16))
+    npt.assert_equal(fname, str(tmp_path / 'plain.bmp'))
+    with pytest.warns(UserWarning, match='encoded'):
         loaded = Percept.load(fname)
     npt.assert_almost_equal([loaded.data.min(), loaded.data.max()], [0, 1])
     with warnings.catch_warnings():
         warnings.simplefilter('error')
         recovered = Percept.load(fname, vmin=0, vmax=20)
     npt.assert_allclose(recovered.data, percept.data, atol=20 / 255)
+
+
+def test_Percept_load_half_a_range_raises(tmp_path):
+    """One bound cannot place the other, and is not quietly dropped"""
+    percept = Percept(np.linspace(0, 20, 256).reshape((16, 16, 1)))
+    with pytest.warns(UserWarning):
+        fname = percept.save(str(tmp_path / 'plain.bmp'), shape=(16, 16))
+    with pytest.raises(ValueError, match="'vmin' is unknown"):
+        Percept.load(fname, vmax=20)
+    with pytest.raises(ValueError, match="'vmax' is unknown"):
+        Percept.load(fname, vmin=0)
+    # Saying what the other end is, is what the error asks for:
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        npt.assert_allclose(Percept.load(fname, vmin=0, vmax=20).data,
+                            percept.data, atol=20 / 255)
