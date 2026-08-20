@@ -14,9 +14,10 @@
    :hidden:
 
    topics/implants
-   topics/cortical
    topics/stimuli
    topics/models
+   topics/encoders
+   topics/rasters
    topics/units
    topics/datasets
 
@@ -40,7 +41,7 @@
    developers/releases
 
 .. include:: ../README.rst
-   :end-line: 24
+   :end-before: .. badges-end
 
 |
 
@@ -49,5 +50,5 @@ pulse2percept |version| documentation
 =====================================
 
 .. include:: ../README.rst
-   :start-line: 28
-   :end-line: 170
+   :start-after: .. intro-begin
+   :end-before: .. quickstart-end

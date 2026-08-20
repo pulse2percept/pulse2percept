@@ -42,6 +42,7 @@ extensions = [
     "sphinx.ext.extlinks",
     "sphinx.ext.mathjax",
     "sphinx.ext.doctest",
+    "matplotlib.sphinxext.plot_directive",
 ]
 
 autosummary_generate = True
