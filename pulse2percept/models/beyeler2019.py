@@ -355,17 +355,16 @@ class AxonMapSpatial(SpatialModel):
         across the **horizontal meridian**, y=0. Nerve fiber bundles do not
         cross the horizontal raphe, so the axon map ends at it and the
         predicted percept can step discontinuously from the superior to the
-        inferior half of the visual field. That seam is a property of the
-        anatomy the model is built from, not of what a patient reports: later
-        stages of the visual system integrate across an anatomical boundary
-        that has no perceptual counterpart. Setting this to a positive number
-        smooths the percept along y near the raphe -- and only near it, and
-        only along y -- to stand in for that integration.
+        inferior half of the visual field. Whether that step is visible is not
+        known: higher visual areas may integrate across an anatomical boundary
+        of this kind. Setting this to a positive number is an optional, coarse
+        approximation of such integration -- it smooths the percept along y
+        near the raphe, and only there.
 
-        The default of 0 leaves the seam in place, because there is no
-        principled universal blend width yet; treat any nonzero value as a
-        parameter of your own to justify. It changes only the predicted
-        percept, never the axon map or the current spread that produced it.
+        The default of 0 leaves the seam in place: there is no principled
+        blend width, so any nonzero value is a modeling choice of your own to
+        justify. It changes only the predicted percept, never the axon map or
+        the current spread that produced it.
 
         .. versionadded:: 0.10.0
     axon_pickle : str, optional
@@ -1230,17 +1229,16 @@ class AxonMapModel(Model):
         across the **horizontal meridian**, y=0. Nerve fiber bundles do not
         cross the horizontal raphe, so the axon map ends at it and the
         predicted percept can step discontinuously from the superior to the
-        inferior half of the visual field. That seam is a property of the
-        anatomy the model is built from, not of what a patient reports: later
-        stages of the visual system integrate across an anatomical boundary
-        that has no perceptual counterpart. Setting this to a positive number
-        smooths the percept along y near the raphe -- and only near it, and
-        only along y -- to stand in for that integration.
+        inferior half of the visual field. Whether that step is visible is not
+        known: higher visual areas may integrate across an anatomical boundary
+        of this kind. Setting this to a positive number is an optional, coarse
+        approximation of such integration -- it smooths the percept along y
+        near the raphe, and only there.
 
-        The default of 0 leaves the seam in place, because there is no
-        principled universal blend width yet; treat any nonzero value as a
-        parameter of your own to justify. It changes only the predicted
-        percept, never the axon map or the current spread that produced it.
+        The default of 0 leaves the seam in place: there is no principled
+        blend width, so any nonzero value is a modeling choice of your own to
+        justify. It changes only the predicted percept, never the axon map or
+        the current spread that produced it.
 
         .. versionadded:: 0.10.0
     axon_pickle : str, optional

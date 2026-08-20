@@ -62,18 +62,16 @@ class CortexSpatial(SpatialModel):
         onto opposite hemispheres, so a cortical model is really two
         half-field models meeting along x=0 and the predicted percept can step
         discontinuously from the left half of the visual field to the right.
-        That seam is a property of the anatomy the model is built from, not of
-        what a patient reports: later stages of the visual system integrate
-        across an anatomical boundary that has no perceptual counterpart.
-        Setting this to a positive number smooths the percept along x near the
-        vertical meridian -- and only near it, and only along x -- to stand in
-        for that integration.
+        Whether that step is visible is not known: higher visual areas may
+        integrate across an anatomical boundary of this kind. Setting this to
+        a positive number is an optional, coarse approximation of such
+        integration -- it smooths the percept along x near the vertical
+        meridian, and only there.
 
-        The default of 0 leaves the seam in place, because there is no
-        principled universal blend width yet; treat any nonzero value as a
-        parameter of your own to justify. It changes only the predicted
-        percept, never the cortical map or the current spread that produced
-        it.
+        The default of 0 leaves the seam in place: there is no principled
+        blend width, so any nonzero value is a modeling choice of your own to
+        justify. It changes only the predicted percept, never the cortical map
+        or the current spread that produced it.
 
         .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -308,9 +306,10 @@ class ScoreboardSpatial(CortexSpatial):
         Whether to simulate points on a rectangular or hexagonal grid
     meridian_blend : float, optional
         Width (in degrees of visual angle) over which to blend the percept
-        across the vertical meridian, x=0, where the two hemifields meet. The
-        default of 0 leaves the seam the cortical map produces in place; see
-        :py:class:`~pulse2percept.models.cortex.CortexSpatial`.
+        across the vertical meridian, x=0, where the two hemifields meet. An
+        optional approximation of downstream integration across that boundary;
+        the default of 0 leaves the seam the cortical map produces in place.
+        See :py:class:`~pulse2percept.models.cortex.CortexSpatial`.
 
         .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
@@ -447,9 +446,10 @@ class ScoreboardModel(Model):
         Whether to simulate points on a rectangular or hexagonal grid
     meridian_blend : float, optional
         Width (in degrees of visual angle) over which to blend the percept
-        across the vertical meridian, x=0, where the two hemifields meet. The
-        default of 0 leaves the seam the cortical map produces in place; see
-        :py:class:`~pulse2percept.models.cortex.CortexSpatial`.
+        across the vertical meridian, x=0, where the two hemifields meet. An
+        optional approximation of downstream integration across that boundary;
+        the default of 0 leaves the seam the cortical map produces in place.
+        See :py:class:`~pulse2percept.models.cortex.CortexSpatial`.
 
         .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional

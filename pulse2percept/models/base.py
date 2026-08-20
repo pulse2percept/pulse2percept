@@ -332,10 +332,11 @@ def _blend_meridian(resp, grid, meridian, width):
     an axon map's fibers do not cross the horizontal raphe, and a cortical map
     sends the two hemifields to opposite hemispheres -- so the predicted
     percept can step discontinuously from one side of that line to the other.
-    The step is an artifact of where the tissue-level model was cut, not
-    something a viewer would report, and this smooths it out downstream of the
-    model: the response is blurred *normal to the meridian only*, and the blur
-    is mixed back in with a weight that dies away with distance from the line.
+    Higher visual areas may integrate across a boundary of that kind; this is
+    a coarse stand-in for doing so, applied downstream of the model rather
+    than to the tissue. The response is blurred *normal to the meridian only*,
+    and the blur is mixed back in with a weight that dies away with distance
+    from the line.
 
     Nothing else about the percept moves. Away from the meridian the weight is
     zero and the original response is returned unchanged, and the blur is 1D,
@@ -358,8 +359,12 @@ def _blend_meridian(resp, grid, meridian, width):
     width : float
         Standard deviation of the blend, in degrees of visual angle: both of
         the Gaussian blurring normal to the meridian and of the weight that
-        confines it to the meridian. ``None`` or 0 means no blending, and the
-        input is returned as-is (the same object, so callers can detect it).
+        confines it to the meridian. ``None`` or 0 means no blending.
+
+        The input is returned as-is -- the same object, so callers can detect
+        it -- for a width of ``None`` or 0, and also for a grid with no seam
+        in view: one that samples only one side of the meridian, or only one
+        point normal to it.
 
     Returns
     -------
@@ -388,17 +393,24 @@ def _blend_meridian(resp, grid, meridian, width):
     # number of pixels, so the same width behaves the same way at any
     # resolution.
     along = dist[:, 0] if axis == 0 else dist[0, :]
-    if along.size < 2:
-        # A single sample normal to the meridian: nothing to blur along.
+    if along.size < 2 or not (np.any(along < 0) and np.any(along > 0)):
+        # Either a single sample normal to the meridian, or a grid that lies
+        # wholly on one side of it -- `xrange=(0, 5)` on a cortical model, say,
+        # which is ordinary usage. There is no seam in view either way, and
+        # blurring would mix samples from within one hemifield for a reason
+        # that has nothing to do with the meridian.
         return resp
     spacing = float(np.abs(np.diff(along)).mean())
     # Time is the last axis and `gaussian_filter1d` only touches `axis`, so
-    # every time point is blurred on its own:
-    work = np.asarray(resp, dtype=np.float64).reshape(dist.shape + (-1,))
+    # every time point is blurred on its own. In the response's own precision:
+    # a mix of two numbers needs no more of it than the numbers have, and a
+    # video percept is large enough that the temporaries matter.
+    work = np.asarray(resp).reshape(dist.shape + (-1,))
     blurred = gaussian_filter1d(work, width / spacing, axis=axis,
                                 mode='nearest')
     weight = np.exp(-dist ** 2 / (2.0 * width ** 2))[..., np.newaxis]
-    blended = weight * blurred + (1.0 - weight) * work
+    weight = weight.astype(work.dtype, copy=False)
+    blended = weight * blurred + (1 - weight) * work
     return blended.reshape(resp.shape).astype(resp.dtype, copy=False)
 
 
@@ -935,9 +947,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         The base implementation returns the response untouched, and a model
         that does not override this behaves exactly as if the hook did not
         exist. :py:class:`~pulse2percept.models.AxonMapSpatial` and
-        :py:class:`~pulse2percept.models.cortex.CortexSpatial` use it to blend
-        across the meridian their tissue-level model is cut along; see
-        ``meridian_blend``.
+        :py:class:`~pulse2percept.models.cortex.CortexSpatial` use it for
+        ``meridian_blend``, which optionally smooths the discontinuity their
+        tissue-level maps leave along a meridian.
 
         .. versionadded:: 0.10.0
 

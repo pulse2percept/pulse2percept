@@ -59,9 +59,9 @@ API changes:
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` and PNG in
   :py:meth:`~pulse2percept.percepts.Percept.play`).
 
-* Spatial models gained a ``_postprocess_spatial`` hook, which sees the
-  predicted percept after ``_predict_spatial`` and before it becomes a
-  percept.
+* :py:class:`~pulse2percept.models.AxonMapSpatial` and cortical spatial models
+  gained a ``meridian_blend`` parameter for optionally smoothing
+  discontinuities across anatomical meridians.
 
 * ``predict_percept`` now raises ``DimensionMismatchError`` when the stimulus
   is not the physical quantity the model reads. Assigning an

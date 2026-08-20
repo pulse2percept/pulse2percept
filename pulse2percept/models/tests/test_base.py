@@ -1869,6 +1869,46 @@ def test_blend_meridian_is_a_distance_not_a_pixel_count():
     npt.assert_allclose(profiles[0.25], profiles[0.125], atol=0.005)
 
 
+@pytest.mark.parametrize('meridian', ['vertical', 'horizontal'])
+@pytest.mark.parametrize('half', [(0, 6), (-6, 0)])
+def test_blend_meridian_needs_both_sides(meridian, half):
+    # A grid that samples only one side of the meridian has no seam in view:
+    # what sits next to x=0 there all comes from the same hemifield, and
+    # blurring it would change the percept for a reason unrelated to the
+    # meridian. One-sided ranges are ordinary usage -- a cortical model built
+    # with `xrange=(-5, 0)`, say -- so this is a no-op, not an error.
+    if meridian == 'vertical':
+        grid = Grid2D(half, (-6, 6), step=0.5)
+    else:
+        grid = Grid2D((-6, 6), half, step=0.5)
+    grid.build(Curcio1990Map())
+    rng = np.random.default_rng(7)
+    resp = rng.random((grid.x.size, 2)).astype(np.float32)
+    npt.assert_equal(_blend_meridian(resp, grid, meridian, 1.0) is resp, True)
+    # The same response on a grid that does straddle the meridian is blended,
+    # so it is the one-sidedness doing this and not the width or the data:
+    both = _blend_grid(step=0.5)
+    resp = rng.random((both.x.size, 2)).astype(np.float32)
+    npt.assert_equal(_blend_meridian(resp, both, meridian, 1.0) is resp, False)
+
+
+def test_blend_meridian_keeps_precision():
+    # The mix is done in the response's own dtype -- no float64 temporaries
+    # for a float32 percept, and no loss of precision for a float64 one.
+    grid = _blend_grid()
+    for dtype in (np.float32, np.float64):
+        resp = _step_across(grid, 'vertical').astype(dtype)
+        blended = _blend_meridian(resp, grid, 'vertical', 1.0)
+        npt.assert_equal(blended.dtype, np.dtype(dtype))
+    # Blending float32 and then widening agrees with blending in float64, so
+    # the narrower working precision costs nothing that float32 could hold:
+    resp = _step_across(grid, 'vertical')
+    npt.assert_allclose(
+        _blend_meridian(resp, grid, 'vertical', 1.0).astype(np.float64),
+        _blend_meridian(resp.astype(np.float64), grid, 'vertical', 1.0),
+        atol=1e-6)
+
+
 def test_blend_meridian_bad_input():
     grid = _blend_grid()
     resp = _step_across(grid, 'vertical')
