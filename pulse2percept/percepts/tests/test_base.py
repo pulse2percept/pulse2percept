@@ -622,6 +622,10 @@ def test_Percept_getitem_multiple_times():
         percept[..., 0:20]
     # A boolean mask selects stored frames without interpolating:
     npt.assert_almost_equal(percept[..., percept.time < 20], data[..., :2])
+    # One of the wrong length is a shape error. It must not be read as the
+    # times t=1 and t=0, which is what its True and False would interpolate to:
+    with pytest.raises(IndexError):
+        percept[..., np.array([True, False])]
 
 
 def test_Percept_getitem_irregular_time():
@@ -812,6 +816,20 @@ def test_Percept_load_variable_frame_durations(tmp_path):
     with pytest.warns(UserWarning):
         loaded = Percept.load(fname, time=[0, 100, 400, 450])
     npt.assert_almost_equal(loaded.time, [0, 100, 400, 450])
+
+
+@pytest.mark.parametrize('fps', (0, -30, np.nan, np.inf))
+def test_Percept_load_rejects_bad_fps(fps, tmp_path):
+    """A frame rate that is not a finite positive number is not a frame rate
+
+    ``nan`` would give the percept a nan time axis and ``inf`` an all-zero
+    one, neither of which announces itself later.
+    """
+    fname = str(tmp_path / 'p.gif')
+    percept = Percept(np.random.rand(16, 16, 4), time=np.arange(4) * 100.0)
+    percept.save(fname, shape=(16, 16), vmin=0, vmax=1)
+    with pytest.raises(ValueError):
+        Percept.load(fname, fps=fps)
 
 
 def test_Percept_load_grayscale(tmp_path):

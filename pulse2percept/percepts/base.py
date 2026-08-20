@@ -205,8 +205,14 @@ class Percept(Data):
     *  ``percept[..., [0, 10]]``, ``percept[..., 0:50:10]``: several frames
     *  ``percept[..., percept.time < 20]``: the stored frames before t=20
 
-    One time point selects a frame and drops the time axis; a list or slice of
-    them keeps it. The ``fps`` of :py:meth:`~pulse2percept.percepts.Percept.play` and
+    Bare numbers are read in the percept's
+    :py:attr:`~pulse2percept.percepts.Percept.time_unit`. One time point
+    selects a frame and drops the time axis, the way a scalar index does on
+    any other axis; a list, slice, or mask of them keeps it. With
+    ``time=None`` there is no time axis to name, and indexing is ordinary
+    NumPy indexing throughout.
+
+    The ``fps`` of :py:meth:`~pulse2percept.percepts.Percept.play` and
     :py:meth:`~pulse2percept.percepts.Percept.save` is a rendering clock
     rather than an interpolation: it chooses which stored frame to show when,
     and never invents one in between.
@@ -294,31 +300,10 @@ class Percept(Data):
     def __getitem__(self, item):
         """Return percept data, interpolated in time where necessary
 
-        Space is indexed the NumPy way, but -- as in
-        :py:class:`~pulse2percept.stimuli.Stimulus` -- a number that reaches
-        the time axis is a *time*, not a frame index, and is linearly
-        interpolated between the two frames on either side of it. Bare numbers
-        are read in the percept's
-        :py:attr:`~pulse2percept.percepts.Percept.time_unit`; unitful ones are
-        converted into it.
-
-        *  ``percept[0, 1]``: the time series of pixel (0, 1)
-        *  ``percept[..., 12.5]``: the frame at t=12.5, interpolated
-        *  ``percept[..., 20 * ms]``, ``percept[..., 0.02 * s]``: that same
-           frame, asked for in another unit
-        *  ``percept[:, :, [0, 10]]``: the frames at t=0 and t=10
-        *  ``percept[..., 0:50:10]``: every 10 time units from t=0 to t=50
-        *  ``percept[..., percept.time < 20]``: the stored frames before t=20
-        *  ``percept[0, 1, 12.5]``: one interpolated pixel, as a scalar
-
-        One time point selects a frame and drops the time axis, the way a
-        scalar index does on any other axis; a list or slice of them keeps it.
-
-        With ``time=None`` there is no time axis to name, and indexing is
-        ordinary NumPy indexing throughout.
-
-        Returns a NumPy array or a scalar, never a new
-        :py:class:`~pulse2percept.percepts.Percept`.
+        Space is indexed the NumPy way, but a number that reaches the time
+        axis is a *time* rather than a frame index; see the class docstring
+        for the forms that takes. Returns a NumPy array or a scalar, never a
+        new :py:class:`~pulse2percept.percepts.Percept`.
 
         .. versionadded:: 0.10.0
 
@@ -333,7 +318,7 @@ class Percept(Data):
                     len(head) == self.data.ndim - 1):
                 space, time = head, item[-1]
         # STEP 2: AVOID CONFUSING TIME POINTS WITH FRAME INDICES
-        scalar_time = False
+        scalar_time = mask_time = False
         if isinstance(time, slice):
             sliced = _slice_times(time, self.time, self.time_unit)
             if sliced is not None:
@@ -344,30 +329,33 @@ class Percept(Data):
             # A requested time point (or a list of them) may be unitful; after
             # this it is an ordinary number:
             time = as_value(time, self.time_unit, 'time')
-            # Convert to float so time is not mistaken for a frame index (a
-            # boolean mask selects stored frames and must stay boolean):
-            if np.asarray(time).dtype != bool:
+            if np.asarray(time).dtype == bool:
+                # A mask selects stored frames and is not a time at all:
+                mask_time = True
+            else:
+                # Convert to float so time is not mistaken for a frame index:
                 time = np.float64(time)
                 scalar_time = time.ndim == 0
         # STEP 3: NUMPY HANDLES MOST INDEXING AND SLICING
         try:
             return self.data[space if time is None else (*space, time)]
         except IndexError:
-            # An IndexError must still be thrown unless the index named a time
-            # point, in which case NumPy refused a float and we interpolate:
-            if time is None:
+            # NumPy refusing a float is how we find out that the index named a
+            # time point. A mask it refuses is the wrong length, and reading
+            # its True/False as times t=1 and t=0 would answer a broken
+            # question instead of raising:
+            if time is None or mask_time:
                 raise
         # STEP 4: INTERPOLATE TIME
         frames = self.data[space]
         times = np.array([time], dtype=np.float64).ravel()
-        # ``_interp_rows`` works on rows; a percept has one time series per
-        # pixel rather than per electrode, so flatten space and put it back:
+        # ``_interp_rows`` interpolates rows, and a percept's rows are its
+        # pixels rather than a stimulus's electrodes:
         data = _interp_rows(times, self.time,
                             frames.reshape((-1, len(self.time))))
         data = data.reshape(frames.shape[:-1] + times.shape)
         if scalar_time:
-            # One time point picks a frame out rather than slicing a one-frame
-            # stack out, exactly as a scalar index does on any other axis:
+            # A scalar index drops the axis it indexes:
             data = data[..., 0]
         if data.ndim == 0:
             return data.item()
@@ -918,9 +906,9 @@ class Percept(Data):
                     raise ValueError(f"Cannot infer the frame rate of "
                                      f"'{fname}'. Pass 'fps' or 'time'.")
             if fps is not None:
-                if fps <= 0:
-                    raise ValueError(f"'fps' must be greater than zero, not "
-                                     f"{fps}.")
+                if not np.isfinite(fps) or fps <= 0:
+                    raise ValueError(f"'fps' must be a finite number greater "
+                                     f"than zero, not {fps}.")
                 # Frames per second is a wall-clock rate; a percept counts
                 # milliseconds:
                 time = np.arange(data.shape[-1]) * 1000.0 / fps

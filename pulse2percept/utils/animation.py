@@ -629,8 +629,9 @@ class HTMLAnimation(FuncAnimation):
         Whether to encode the frames as JPEG or PNG. JPEG is typically an
         order of magnitude smaller, PNG is lossless
     intervals : array_like or None, optional
-        Duration of each frame in ms. If None, use ``interval`` for every
-        frame.
+        How long each frame stays up (in ms), one value per frame. If None,
+        every frame is shown for ``interval`` ms. Frames of unequal duration
+        are what lets an animation follow an irregular time axis.
 
         .. versionadded:: 0.10.0
 
