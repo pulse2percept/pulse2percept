@@ -997,10 +997,9 @@ class Stimulus(PrettyPrint):
 
         Notes
         -----
-        An endpoint can only be added next to a data point that is already
-        zero: the data is interpolated between time points, so a zero next to
-        a nonzero endpoint would be a ramp rather than padding. Padding never
-        truncates the stimulus. Existing negative time points are preserved.
+        Padding requires existing boundary values to be zero; otherwise
+        interpolation would create a ramp. It never truncates the stimulus or
+        removes negative time points.
         """
         if self.time is None:
             raise ValueError("Cannot pad a stimulus in time if time=None.")
@@ -1013,12 +1012,7 @@ class Stimulus(PrettyPrint):
         time = self.time
         pad_left = time[0] > 0
         pad_right = duration > time[-1]
-        # The data is interpolated between the stored time points, so a zero
-        # next to a nonzero endpoint is a ramp into that endpoint rather than
-        # padding around it. Inventing the DT-wide transition edge that would
-        # make it padding is more than this method should do, so refuse: the
-        # stimuli one pads in practice already start and end at zero. "Zero"
-        # here is exactly zero -- an electrode is either driven or it is not.
+        # Padding a nonzero endpoint would create a ramp under interpolation:
         if pad_left and np.any(data[:, 0] != 0):
             raise ValueError(f"Cannot pad before a nonzero stimulus endpoint "
                              f"(t={time[0]}).")
@@ -1033,10 +1027,7 @@ class Stimulus(PrettyPrint):
             data = np.hstack((data, zeros))
             time = np.hstack((time, [duration]))
         if not pad_left and not pad_right:
-            # Nothing was added, so nothing was allocated: copy explicitly, or
-            # the returned stimulus would write through to `self`. (`hstack`
-            # allocates, and the `_stim` setter only copies the data when it
-            # has to make it contiguous.)
+            # hstack allocates; the no-op path must copy explicitly
             data = data.copy()
             time = time.copy()
         stim = self._shallow_copy()
