@@ -60,8 +60,9 @@ API changes:
   :py:meth:`~pulse2percept.percepts.Percept.play`).
 
 * :py:class:`~pulse2percept.models.AxonMapSpatial` and cortical spatial models
-  gained a ``meridian_blend`` parameter for optionally smoothing
-  discontinuities across anatomical meridians.
+  gained a ``meridian_blend`` parameter for smoothing discontinuities across
+  anatomical meridians. It is nonzero by default. Pass ``meridian_blend=0``
+  for the previous behavior.
 
 * ``predict_percept`` now raises ``DimensionMismatchError`` when the stimulus
   is not the physical quantity the model reads. Assigning an

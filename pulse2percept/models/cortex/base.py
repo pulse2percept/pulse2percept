@@ -57,10 +57,12 @@ class CortexSpatial(SpatialModel):
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     meridian_blend : float, optional
-        Width (in degrees of visual angle) of optional smoothing across the
-        vertical meridian (x=0), as a coarse approximation of downstream
-        integration across hemispheres.
-        Nonzero values are a modeling assumption.
+        Gaussian standard deviation (in degrees of visual angle) for optional
+        smoothing across the vertical meridian (x=0), as a coarse
+        approximation of downstream integration across hemispheres. It sets
+        both the blur, which runs normal to the meridian, and the distance
+        over which that blur is mixed back in. 0 disables blending; nonzero
+        values are a modeling assumption.
 
         .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -286,11 +288,11 @@ class ScoreboardSpatial(CortexSpatial):
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     meridian_blend : float, optional
-        Width (in degrees of visual angle) over which to blend the percept
-        across the vertical meridian, x=0, where the two hemifields meet. An
-        optional approximation of downstream integration across that boundary;
-        the default of 0 leaves the seam the cortical map produces in place.
-        See :py:class:`~pulse2percept.models.cortex.CortexSpatial`.
+        Gaussian standard deviation (in degrees of visual angle) for optional
+        smoothing across the vertical meridian (x=0), as a coarse
+        approximation of downstream integration across hemispheres. 0 disables
+        blending; nonzero values are a modeling assumption. See
+        :py:class:`~pulse2percept.models.cortex.CortexSpatial`.
 
         .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
@@ -426,11 +428,11 @@ class ScoreboardModel(Model):
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     meridian_blend : float, optional
-        Width (in degrees of visual angle) over which to blend the percept
-        across the vertical meridian, x=0, where the two hemifields meet. An
-        optional approximation of downstream integration across that boundary;
-        the default of 0 leaves the seam the cortical map produces in place.
-        See :py:class:`~pulse2percept.models.cortex.CortexSpatial`.
+        Gaussian standard deviation (in degrees of visual angle) for optional
+        smoothing across the vertical meridian (x=0), as a coarse
+        approximation of downstream integration across hemispheres. 0 disables
+        blending; nonzero values are a modeling assumption. See
+        :py:class:`~pulse2percept.models.cortex.CortexSpatial`.
 
         .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional

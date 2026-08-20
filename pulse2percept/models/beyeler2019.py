@@ -351,10 +351,12 @@ class AxonMapSpatial(SpatialModel):
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
     meridian_blend : float, optional
-        Width (in degrees of visual angle) of optional smoothing across the
-        horizontal meridian (y=0), as a coarse approximation of downstream
-        integration across the raphe.
-        Nonzero values are a modeling assumption.
+        Gaussian standard deviation (in degrees of visual angle) for optional
+        smoothing across the horizontal meridian (y=0), as a coarse
+        approximation of downstream integration across the raphe. It sets both
+        the blur, which runs normal to the meridian, and the distance over
+        which that blur is mixed back in. 0 disables blending; nonzero values
+        are a modeling assumption.
 
         .. versionadded:: 0.10.0
     axon_pickle : str, optional
@@ -1207,10 +1209,12 @@ class AxonMapModel(Model):
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
     meridian_blend : float, optional
-        Width (in degrees of visual angle) of optional smoothing across the
-        horizontal meridian (y=0), as a coarse approximation of downstream
-        integration across the raphe. The default, 0, disables blending.
-        Nonzero values are a modeling assumption.
+        Gaussian standard deviation (in degrees of visual angle) for optional
+        smoothing across the horizontal meridian (y=0), as a coarse
+        approximation of downstream integration across the raphe. It sets both
+        the blur, which runs normal to the meridian, and the distance over
+        which that blur is mixed back in. 0 disables blending; nonzero values
+        are a modeling assumption.
 
         .. versionadded:: 0.10.0
     axon_pickle : str, optional

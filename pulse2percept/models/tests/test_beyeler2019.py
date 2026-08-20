@@ -647,18 +647,23 @@ def test_AxonMapModel_predict_percept():
     img_stim = np.zeros(60)
     img_stim[47] = 1
     percept = model.predict_percept(ArgusII(stim=img_stim))
-    # Single bright pixel, rest of arc is less bright:
-    npt.assert_equal(np.sum(percept.data > 0.8), 1)
+    # Single bright pixel, rest of arc is less bright. The default
+    # `meridian_blend` smooths the percept near the raphe, which brings the
+    # peak down to just under 0.8 and spreads a little brightness into the dim
+    # tail, so the thresholds and counts below differ from the unblended
+    # model's:
+    npt.assert_equal(np.sum(percept.data > 0.75), 1)
     npt.assert_equal(np.sum(percept.data > 0.6), 2)
     npt.assert_equal(np.sum(percept.data > 0.1), 7)
-    npt.assert_equal(np.sum(percept.data > 0.0001), 32)
+    npt.assert_equal(np.sum(percept.data > 0.0001), 53)
     # Overall only a few bright pixels:
-    npt.assert_almost_equal(np.sum(percept.data), 3.4062, decimal=3)
+    npt.assert_almost_equal(np.sum(percept.data), 3.5846, decimal=3)
     # Brightest pixel is in lower right:
     npt.assert_almost_equal(percept.data[33, 46, 0], np.max(percept.data))
-    # Top half is empty:
-    npt.assert_almost_equal(np.sum(percept.data[:27, :, 0]), 0)
-    # Same for lower band:
+    # Top half is all but empty: this electrode drives the inferior field, and
+    # the only thing above the raphe is what the blend carries across it.
+    npt.assert_array_less(np.sum(percept.data[:27, :, 0]), 1e-3)
+    # The lower band is untouched by the blend, and stays empty:
     npt.assert_almost_equal(np.sum(percept.data[39:, :, 0]), 0)
 
     # Full Argus II with small lambda: 60 bright spots
@@ -668,8 +673,8 @@ def test_AxonMapModel_predict_percept():
     percept = model.predict_percept(ArgusII(stim=np.ones(60)))
     # Most spots are pretty bright, but there are 2 dimmer ones (due to their
     # location on the retina):
-    npt.assert_equal(np.sum(percept.data > 0.5), 28)
-    npt.assert_equal(np.sum(percept.data > 0.275), 56)
+    npt.assert_equal(np.sum(percept.data > 0.5), 25)
+    npt.assert_equal(np.sum(percept.data > 0.275), 55)
 
     # Model gives same outcome as Spatial:
     spatial = AxonMapSpatial(step=1, rho=100, lam=40,
@@ -921,23 +926,35 @@ def test_AxonMapModel_build_rejects_pre_step_cache(tmp_path):
     npt.assert_equal(payload[0], _AXON_CACHE_VERSION)
 
 
+def _straddling_pair(coord):
+    """Indices of the samples nearest the meridian, one on each side of it
+
+    Not ``argsort(abs(coord))[:2]``: on a grid that samples the meridian
+    itself, that picks up the zero sample plus whichever neighbor the sort
+    happens to place first, and the two candidates are tied. A sample at
+    exactly 0 is not a neutral point to measure across either -- it belongs to
+    one side or the other, and Polimeni2006Map jitters it onto one hemisphere.
+    """
+    below = np.flatnonzero(coord < 0)
+    above = np.flatnonzero(coord > 0)
+    return below[np.argmax(coord[below])], above[np.argmin(coord[above])]
+
+
 @pytest.mark.parametrize('ModelClass', [AxonMapSpatial, AxonMapModel])
 def test_AxonMapSpatial_meridian_blend(ModelClass):
     # The axon map is cut along the horizontal raphe, so this blends across
     # y=0 -- and only there, and only along y.
     def make(**params):
-        return ModelClass(xrange=(-6, 6), yrange=(-6, 6), step=0.25,
+        # `yrange` is offset by half a step, so that no row sits exactly on
+        # the raphe and the two rows nearest it are adjacent as well as on
+        # opposite sides:
+        return ModelClass(xrange=(-6, 6), yrange=(-6.125, 5.875), step=0.25,
                           rho=200, lam=400, n_axons=250, n_ax_segments=200,
                           ignore_pickle=True, **params).build()
 
     implant = ArgusII(stim={'C4': 1, 'C8': 1})
-    plain = make()
+    plain = make(meridian_blend=0)
     unblended = plain.predict_percept(implant).data
-
-    # The default is 0, and 0 has to be the model exactly as it was:
-    npt.assert_equal(plain.meridian_blend, 0)
-    npt.assert_array_equal(make(meridian_blend=0).predict_percept(implant).data,
-                           unblended)
 
     width = 1
     blended = make(meridian_blend=width).predict_percept(implant).data
@@ -948,11 +965,12 @@ def test_AxonMapSpatial_meridian_blend(ModelClass):
     # The raphe is where the two halves of the axon map meet, and the step
     # across it is what the blend is for. Percept rows are ordered by the
     # grid's y, so the seam is the pair of rows straddling y=0:
-    seam = np.argsort(np.abs(y))[:2]
+    seam = _straddling_pair(y)
 
     def jump(data):
         return np.abs(data[seam[0], :, 0] - data[seam[1], :, 0]).max()
 
+    npt.assert_array_less(0, jump(unblended))
     npt.assert_array_less(jump(blended), jump(unblended))
 
     # It is the *horizontal* meridian this model blends across, so the change

@@ -717,10 +717,8 @@ def test_BiphasicAxonMapSpatial_meridian_blend(ModelClass):
 
     implant = ArgusII(stim={'C4': BiphasicPulseTrain(20, 20, 0.45),
                             'C8': BiphasicPulseTrain(20, 20, 0.45)})
-    plain = make()
+    plain = make(meridian_blend=0)
     unblended = plain.predict_percept(implant).data
-    npt.assert_array_equal(make(meridian_blend=0).predict_percept(implant).data,
-                           unblended)
 
     width = 1
     blended = make(meridian_blend=width).predict_percept(implant).data
