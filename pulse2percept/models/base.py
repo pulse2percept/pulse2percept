@@ -326,51 +326,32 @@ def _delivered(implant):
 
 
 def _blend_meridian(resp, grid, meridian, width):
-    """Soften the seam a model leaves along one meridian
+    """Blend a spatial response across a visual-field meridian.
 
-    Some models are built out of two half-fields that meet along a meridian --
-    an axon map's fibers do not cross the horizontal raphe, and a cortical map
-    sends the two hemifields to opposite hemispheres -- so the predicted
-    percept can step discontinuously from one side of that line to the other.
-    Higher visual areas may integrate across a boundary of that kind; this is
-    a coarse stand-in for doing so, applied downstream of the model rather
-    than to the tissue. The response is blurred *normal to the meridian only*,
-    and the blur is mixed back in with a weight that dies away with distance
-    from the line.
+    Applies a 1D Gaussian normal to the meridian, weighted by distance
+    from it. ``width`` is in degrees of visual angle. Time points are
+    processed independently.
 
-    Nothing else about the percept moves. Away from the meridian the weight is
-    zero and the original response is returned unchanged, and the blur is 1D,
-    so a vertical meridian never smooths along y and a horizontal one never
-    smooths along x.
+    Returns ``resp`` unchanged if blending is disabled or if the grid
+    does not straddle the requested meridian.
+
+    .. versionadded:: 0.10.0
 
     Parameters
     ----------
     resp : np.ndarray
-        The spatial response, with time on the last axis and the axes before it
-        indexing ``grid`` (either flattened, as ``_predict_spatial`` returns
-        it, or already shaped like the grid). Returned with its shape and dtype
-        intact.
-    grid : :py:class:`~pulse2percept.topography.Grid2D`
-        The model's grid, whose ``x``/``y`` give each point's distance from the
-        meridian in degrees of visual angle.
+        Spatial response, flattened or grid-shaped, with time last.
+    grid : Grid2D
+        Visual-field grid.
     meridian : {'vertical', 'horizontal'}
-        Which meridian to blend across: ``'vertical'`` is the line x=0 (blurred
-        along x), ``'horizontal'`` the line y=0 (blurred along y).
+        Meridian to blend across.
     width : float
-        Standard deviation of the blend, in degrees of visual angle: both of
-        the Gaussian blurring normal to the meridian and of the weight that
-        confines it to the meridian. ``None`` or 0 means no blending.
-
-        The input is returned as-is -- the same object, so callers can detect
-        it -- for a width of ``None`` or 0, and also for a grid with no seam
-        in view: one that samples only one side of the meridian, or only one
-        point normal to it.
+        Gaussian width in degrees of visual angle.
 
     Returns
     -------
-    blended : np.ndarray
-        The blended response, same shape and dtype as ``resp``.
-
+    np.ndarray
+        Blended response with the same shape and dtype as ``resp``.
     """
     if width is None or width == 0:
         return resp
@@ -378,33 +359,19 @@ def _blend_meridian(resp, grid, meridian, width):
     if width < 0:
         raise ValueError(f"Blend width must be non-negative, not {width}.")
     if meridian == 'vertical':
-        # Normal to a vertical meridian is x, which varies along the grid's
-        # second axis (`Grid2D` is Cartesian-indexed: y first, then x):
         dist, axis = grid.x, 1
     elif meridian == 'horizontal':
         dist, axis = grid.y, 0
     else:
         raise ValueError(f"Unknown meridian '{meridian}'; expected 'vertical' "
                          f"or 'horizontal'.")
-    # The spacing normal to the meridian, read off the grid rather than from
-    # the model's `step`: `Grid2D` treats `step` as a target and settles on
-    # whatever spacing reaches both end points of the range. Taking it from
-    # the coordinates is what makes `width` a distance in dva rather than a
-    # number of pixels, so the same width behaves the same way at any
-    # resolution.
+    # Convert width from dva to samples:
     along = dist[:, 0] if axis == 0 else dist[0, :]
     if along.size < 2 or not (np.any(along < 0) and np.any(along > 0)):
-        # Either a single sample normal to the meridian, or a grid that lies
-        # wholly on one side of it -- `xrange=(0, 5)` on a cortical model, say,
-        # which is ordinary usage. There is no seam in view either way, and
-        # blurring would mix samples from within one hemifield for a reason
-        # that has nothing to do with the meridian.
+        # Nothing to blend unless the grid straddles the meridian:
         return resp
     spacing = float(np.abs(np.diff(along)).mean())
-    # Time is the last axis and `gaussian_filter1d` only touches `axis`, so
-    # every time point is blurred on its own. In the response's own precision:
-    # a mix of two numbers needs no more of it than the numbers have, and a
-    # video percept is large enough that the temporaries matter.
+    # Filter each time point independently:
     work = np.asarray(resp).reshape(dist.shape + (-1,))
     blurred = gaussian_filter1d(work, width / spacing, axis=axis,
                                 mode='nearest')
@@ -936,38 +903,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         raise NotImplementedError
 
     def _postprocess_spatial(self, resp):
-        """Adjust the spatial response before it is handed to a ``Percept``
+        """Postprocess a spatial response before constructing the Percept.
 
-        A hook for anything that operates on the *predicted percept* rather
-        than on the tissue: it sees the response ``_predict_spatial`` produced,
-        at every requested time point, and returns one of the same shape and
-        dtype. Nothing here should need the stimulus or the electrode array --
-        if it does, it belongs in ``_predict_spatial``.
-
-        The base implementation returns the response untouched, and a model
-        that does not override this behaves exactly as if the hook did not
-        exist. :py:class:`~pulse2percept.models.AxonMapSpatial` and
-        :py:class:`~pulse2percept.models.cortex.CortexSpatial` use it for
-        ``meridian_blend``, which optionally smooths the discontinuity their
-        tissue-level maps leave along a meridian.
+        Subclasses may override this hook. The default is a no-op.
 
         .. versionadded:: 0.10.0
-
-        Parameters
-        ----------
-        resp : np.ndarray
-            The spatial response, with time on the last axis and the axes
-            before it indexing ``self.grid`` -- flattened, space x time, as
-            ``_predict_spatial`` returned it (reassembled across duplicate
-            time points first), though a model that overrides
-            ``predict_percept`` may call this with the grid-shaped array it
-            builds instead.
-
-        Returns
-        -------
-        resp : np.ndarray
-            The adjusted response, same shape and dtype.
-
         """
         return resp
 

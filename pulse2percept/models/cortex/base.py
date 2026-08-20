@@ -57,21 +57,10 @@ class CortexSpatial(SpatialModel):
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     meridian_blend : float, optional
-        Width (in degrees of visual angle) over which to blend the percept
-        across the **vertical meridian**, x=0. The two hemifields are mapped
-        onto opposite hemispheres, so a cortical model is really two
-        half-field models meeting along x=0 and the predicted percept can step
-        discontinuously from the left half of the visual field to the right.
-        Whether that step is visible is not known: higher visual areas may
-        integrate across an anatomical boundary of this kind. Setting this to
-        a positive number is an optional, coarse approximation of such
-        integration -- it smooths the percept along x near the vertical
-        meridian, and only there.
-
-        The default of 0 leaves the seam in place: there is no principled
-        blend width, so any nonzero value is a modeling choice of your own to
-        justify. It changes only the predicted percept, never the cortical map
-        or the current spread that produced it.
+        Width (in degrees of visual angle) of optional smoothing across the
+        vertical meridian (x=0), as a coarse approximation of downstream
+        integration across hemispheres. The default, 0, disables blending.
+        Nonzero values are a modeling assumption.
 
         .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -151,8 +140,7 @@ class CortexSpatial(SpatialModel):
                     'xrange' : (-5, 5),
                     'yrange' : (-5, 5),
                     'step' : 0.1,
-                    # Width (dva) over which to blend the percept across the
-                    # vertical meridian, where the hemifields meet. 0: don't:
+                    # Meridian blend width (dva); 0 disables:
                     'meridian_blend' : 0,
                     # Visual field regions to simulate
                     'regions' : ['v1']
@@ -164,20 +152,13 @@ class CortexSpatial(SpatialModel):
         return {**super().get_param_units(), 'meridian_blend': dva}
 
     def _postprocess_spatial(self, resp):
-        """Blend the percept across the vertical meridian
-
-        The hemifields are mapped onto opposite hemispheres, so the percept
-        can step discontinuously across x=0. See ``meridian_blend``, which is
-        0 (no blending) unless the user asks for it.
-        """
+        """Blend the percept across the vertical meridian"""
         blended = _blend_meridian(resp, self.grid, 'vertical',
                                   self.meridian_blend)
         if blended is resp:
             # No blending asked for; leave the response bit-for-bit alone.
             return resp
-        # Blending pulls brightness across the meridian, which can lift a
-        # point `thresh_percept` had zeroed back off zero. Reapply it, on the
-        # same |value| < threshold rule the spatial kernel used:
+        # Restore percept threshold after blending:
         blended[np.abs(blended) < self.thresh_percept] = 0
         return blended
     

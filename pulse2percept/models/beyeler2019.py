@@ -351,20 +351,10 @@ class AxonMapSpatial(SpatialModel):
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
     meridian_blend : float, optional
-        Width (in degrees of visual angle) over which to blend the percept
-        across the **horizontal meridian**, y=0. Nerve fiber bundles do not
-        cross the horizontal raphe, so the axon map ends at it and the
-        predicted percept can step discontinuously from the superior to the
-        inferior half of the visual field. Whether that step is visible is not
-        known: higher visual areas may integrate across an anatomical boundary
-        of this kind. Setting this to a positive number is an optional, coarse
-        approximation of such integration -- it smooths the percept along y
-        near the raphe, and only there.
-
-        The default of 0 leaves the seam in place: there is no principled
-        blend width, so any nonzero value is a modeling choice of your own to
-        justify. It changes only the predicted percept, never the axon map or
-        the current spread that produced it.
+        Width (in degrees of visual angle) of optional smoothing across the
+        horizontal meridian (y=0), as a coarse approximation of downstream
+        integration across the raphe. The default, 0, disables blending.
+        Nonzero values are a modeling assumption.
 
         .. versionadded:: 0.10.0
     axon_pickle : str, optional
@@ -419,8 +409,7 @@ class AxonMapSpatial(SpatialModel):
             # Axon segments whose contribution to brightness is smaller than
             # this value will be pruned:
             'min_ax_sensitivity': 1e-3,
-            # Width (dva) over which to blend the percept across the
-            # horizontal meridian, where the axon map ends. 0: don't:
+            # Meridian blend width (dva); 0 disables:
             'meridian_blend': 0,
             # Precomputed axon maps stored in the following file:
             'axon_pickle': 'axons.pickle',
@@ -1001,20 +990,13 @@ class AxonMapSpatial(SpatialModel):
                              self.n_threads)
 
     def _postprocess_spatial(self, resp):
-        """Blend the percept across the horizontal meridian
-
-        Axons stop at the raphe, so the percept can step discontinuously
-        across y=0. See ``meridian_blend``, which is 0 (no blending) unless
-        the user asks for it.
-        """
+        """Blend across the horizontal meridian"""
         blended = _blend_meridian(resp, self.grid, 'horizontal',
                                   self.meridian_blend)
         if blended is resp:
             # No blending asked for; leave the response bit-for-bit alone.
             return resp
-        # Blending pulls brightness across the raphe, which can lift a point
-        # `thresh_percept` had zeroed back off zero. Reapply it, on the same
-        # |value| < threshold rule `fast_axon_map` used:
+        # Restore percept threshold after blending:
         blended[np.abs(blended) < self.thresh_percept] = 0
         return blended
 

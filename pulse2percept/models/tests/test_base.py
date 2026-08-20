@@ -1769,9 +1769,7 @@ def _normal_profile(resp, grid, meridian):
 @pytest.mark.parametrize('meridian', ['vertical', 'horizontal'])
 @pytest.mark.parametrize('width', [None, 0])
 def test_blend_meridian_off(meridian, width):
-    # No width, no blending -- and not just numerically: the caller gets back
-    # the very object it passed in, which is what lets the models keep their
-    # unblended output bit-for-bit identical.
+    # Disabled blending returns the original object:
     grid = _blend_grid()
     resp = _step_across(grid, meridian)
     npt.assert_equal(_blend_meridian(resp, grid, meridian, width) is resp,
@@ -1789,8 +1787,6 @@ def test_blend_meridian_smooths_the_seam(meridian):
 
     _, was = _normal_profile(resp, grid, meridian)
     _, profile = _normal_profile(blended, grid, meridian)
-    # The step used to be the full height of the response in a single sample;
-    # now the largest jump between neighbors is a fraction of that:
     npt.assert_almost_equal(np.abs(np.diff(was)).max(), 1.0)
     npt.assert_array_less(np.abs(np.diff(profile)).max(), 0.5)
     # Still monotonic, so the seam was smoothed rather than rippled over:
@@ -1849,9 +1845,7 @@ def test_blend_meridian_time_points_are_independent():
 
 
 def test_blend_meridian_is_a_distance_not_a_pixel_count():
-    # The width is in dva, so the same width has to produce the same profile
-    # on grids of different resolution -- which is what reading the spacing
-    # off `grid.x`/`grid.y` rather than counting pixels buys.
+    # A fixed dva width should be resolution-independent:
     at = np.linspace(-3, 3, 25)
     profiles = {}
     for step in (0.5, 0.25, 0.125):
@@ -1872,11 +1866,7 @@ def test_blend_meridian_is_a_distance_not_a_pixel_count():
 @pytest.mark.parametrize('meridian', ['vertical', 'horizontal'])
 @pytest.mark.parametrize('half', [(0, 6), (-6, 0)])
 def test_blend_meridian_needs_both_sides(meridian, half):
-    # A grid that samples only one side of the meridian has no seam in view:
-    # what sits next to x=0 there all comes from the same hemifield, and
-    # blurring it would change the percept for a reason unrelated to the
-    # meridian. One-sided ranges are ordinary usage -- a cortical model built
-    # with `xrange=(-5, 0)`, say -- so this is a no-op, not an error.
+    # One-sided grids have no meridian seam and are left unchanged:
     if meridian == 'vertical':
         grid = Grid2D(half, (-6, 6), step=0.5)
     else:
@@ -1893,8 +1883,6 @@ def test_blend_meridian_needs_both_sides(meridian, half):
 
 
 def test_blend_meridian_keeps_precision():
-    # The mix is done in the response's own dtype -- no float64 temporaries
-    # for a float32 percept, and no loss of precision for a float64 one.
     grid = _blend_grid()
     for dtype in (np.float32, np.float64):
         resp = _step_across(grid, 'vertical').astype(dtype)
