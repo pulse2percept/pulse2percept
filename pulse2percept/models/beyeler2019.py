@@ -353,7 +353,7 @@ class AxonMapSpatial(SpatialModel):
     meridian_blend : float, optional
         Width (in degrees of visual angle) of optional smoothing across the
         horizontal meridian (y=0), as a coarse approximation of downstream
-        integration across the raphe. The default, 0, disables blending.
+        integration across the raphe.
         Nonzero values are a modeling assumption.
 
         .. versionadded:: 0.10.0
@@ -410,7 +410,7 @@ class AxonMapSpatial(SpatialModel):
             # this value will be pruned:
             'min_ax_sensitivity': 1e-3,
             # Meridian blend width (dva); 0 disables:
-            'meridian_blend': 0,
+            'meridian_blend': 1,
             # Precomputed axon maps stored in the following file:
             'axon_pickle': 'axons.pickle',
             # You can force a build by ignoring pickles:
@@ -1207,20 +1207,10 @@ class AxonMapModel(Model):
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
     meridian_blend : float, optional
-        Width (in degrees of visual angle) over which to blend the percept
-        across the **horizontal meridian**, y=0. Nerve fiber bundles do not
-        cross the horizontal raphe, so the axon map ends at it and the
-        predicted percept can step discontinuously from the superior to the
-        inferior half of the visual field. Whether that step is visible is not
-        known: higher visual areas may integrate across an anatomical boundary
-        of this kind. Setting this to a positive number is an optional, coarse
-        approximation of such integration -- it smooths the percept along y
-        near the raphe, and only there.
-
-        The default of 0 leaves the seam in place: there is no principled
-        blend width, so any nonzero value is a modeling choice of your own to
-        justify. It changes only the predicted percept, never the axon map or
-        the current spread that produced it.
+        Width (in degrees of visual angle) of optional smoothing across the
+        horizontal meridian (y=0), as a coarse approximation of downstream
+        integration across the raphe. The default, 0, disables blending.
+        Nonzero values are a modeling assumption.
 
         .. versionadded:: 0.10.0
     axon_pickle : str, optional

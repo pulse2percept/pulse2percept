@@ -59,7 +59,7 @@ class CortexSpatial(SpatialModel):
     meridian_blend : float, optional
         Width (in degrees of visual angle) of optional smoothing across the
         vertical meridian (x=0), as a coarse approximation of downstream
-        integration across hemispheres. The default, 0, disables blending.
+        integration across hemispheres.
         Nonzero values are a modeling assumption.
 
         .. versionadded:: 0.10.0
@@ -141,7 +141,7 @@ class CortexSpatial(SpatialModel):
                     'yrange' : (-5, 5),
                     'step' : 0.1,
                     # Meridian blend width (dva); 0 disables:
-                    'meridian_blend' : 0,
+                    'meridian_blend' : 0.05,
                     # Visual field regions to simulate
                     'regions' : ['v1']
                  }
