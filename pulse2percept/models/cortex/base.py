@@ -56,15 +56,6 @@ class CortexSpatial(SpatialModel):
             deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
-    meridian_blend : float, optional
-        Gaussian standard deviation (in degrees of visual angle) for optional
-        smoothing across the vertical meridian (x=0), as a coarse
-        approximation of downstream integration across hemispheres. It sets
-        both the blur, which runs normal to the meridian, and the distance
-        over which that blur is mixed back in. 0 disables blending; nonzero
-        values are a modeling assumption.
-
-        .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
@@ -142,28 +133,10 @@ class CortexSpatial(SpatialModel):
                     'xrange' : (-5, 5),
                     'yrange' : (-5, 5),
                     'step' : 0.1,
-                    # Meridian blend width (dva); 0 disables:
-                    'meridian_blend' : 0.05,
                     # Visual field regions to simulate
                     'regions' : ['v1']
                  }
         return {**base_params, **params}
-
-    def get_param_units(self):
-        """Return a dict of the units that parameters are stored in"""
-        return {**super().get_param_units(), 'meridian_blend': dva}
-
-    def _postprocess_spatial(self, resp):
-        """Blend the percept across the vertical meridian"""
-        blended = _blend_meridian(resp, self.grid, 'vertical',
-                                  self.meridian_blend)
-        if blended is resp:
-            # No blending asked for; leave the response bit-for-bit alone.
-            return resp
-        # Restore percept threshold after blending:
-        blended[np.abs(blended) < self.thresh_percept] = 0
-        return blended
-    
 
     def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
              figsize=None, fc=None, **kwargs):
@@ -288,11 +261,8 @@ class ScoreboardSpatial(CortexSpatial):
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     meridian_blend : float, optional
-        Gaussian standard deviation (in degrees of visual angle) for optional
-        smoothing across the vertical meridian (x=0), as a coarse
-        approximation of downstream integration across hemispheres. 0 disables
-        blending; nonzero values are a modeling assumption. See
-        :py:class:`~pulse2percept.models.cortex.CortexSpatial`.
+        Gaussian standard deviation (dva) for smoothing across the vertical
+        meridian. Default: 0.05. Set to 0 to disable.
 
         .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
@@ -331,7 +301,8 @@ class ScoreboardSpatial(CortexSpatial):
         params = {
                     # radial current spread
                     'rho': 200,  
-                    'ndim' : [2, 3]
+                    'ndim' : [2, 3],
+                    'meridian_blend' : 0.05
                  }
         return {**base_params, **params}
 
@@ -339,7 +310,23 @@ class ScoreboardSpatial(CortexSpatial):
         """Return a dict of the units that parameters are stored in"""
         # Cortical coordinates are stored in microns (see `CorticalMap`), and
         # the current spread is compared against them:
-        return {**super().get_param_units(), 'rho': um}
+        return {**super().get_param_units(), 'rho': um, 'meridian_blend': dva}
+
+    def _postprocess_spatial(self, resp):
+        """Blend the percept across the vertical meridian
+
+        On this model rather than on `CortexSpatial`: the seam is a property
+        of the split map this one is built on, not of being cortical, and a
+        future cortical model without one should not inherit a correction for
+        it.
+        """
+        blended = _blend_meridian(resp, self.grid, 'vertical',
+                                  self.meridian_blend)
+        if blended is resp:
+            return resp
+        # Restore percept threshold after blending:
+        blended[np.abs(blended) < self.thresh_percept] = 0
+        return blended
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
@@ -428,11 +415,8 @@ class ScoreboardModel(Model):
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     meridian_blend : float, optional
-        Gaussian standard deviation (in degrees of visual angle) for optional
-        smoothing across the vertical meridian (x=0), as a coarse
-        approximation of downstream integration across hemispheres. 0 disables
-        blending; nonzero values are a modeling assumption. See
-        :py:class:`~pulse2percept.models.cortex.CortexSpatial`.
+        Gaussian standard deviation (dva) for smoothing across the vertical
+        meridian. Default: 0.05. Set to 0 to disable.
 
         .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional

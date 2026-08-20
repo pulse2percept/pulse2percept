@@ -720,8 +720,12 @@ def test_BiphasicAxonMapSpatial_meridian_blend(ModelClass):
     plain = make(meridian_blend=0)
     unblended = plain.predict_percept(implant).data
 
+    # Exercises the width inherited from `AxonMapSpatial` rather than one of
+    # its own -- the point of the test is that the hook runs at all here:
     width = 1
-    blended = make(meridian_blend=width).predict_percept(implant).data
+    blended_model = make()
+    npt.assert_equal(blended_model.meridian_blend, width)
+    blended = blended_model.predict_percept(implant).data
     npt.assert_equal(blended.shape, unblended.shape)
     npt.assert_equal(blended.dtype, unblended.dtype)
     npt.assert_equal(np.array_equal(blended, unblended), False)

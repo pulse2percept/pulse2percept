@@ -319,10 +319,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             value will be pruned to improve computational efficiency. Set to a
             value between 0 and 1.
         meridian_blend : float, optional
-            Gaussian standard deviation (in degrees of visual angle) for
-            optional smoothing across the horizontal meridian (y=0), as a
-            coarse approximation of downstream integration across the raphe.
-            0 disables blending; nonzero values are a modeling assumption.
+            Gaussian standard deviation (dva) for smoothing across the horizontal
+            meridian. Default: 1. Set to 0 to disable.
 
             .. versionadded:: 0.10.0
         axon_pickle: str, optional
@@ -430,6 +428,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Callable model used to modulate percept streak length with amplitude,
             # frequency, and pulse duration
             'streak_model': None,
+            'blend_meridian': 1,
         }
         return {**base_params, **params}
 
@@ -728,10 +727,8 @@ class BiphasicAxonMapModel(Model):
             value will be pruned to improve computational efficiency. Set to a
             value between 0 and 1.
         meridian_blend : float, optional
-            Gaussian standard deviation (in degrees of visual angle) for
-            optional smoothing across the horizontal meridian (y=0), as a
-            coarse approximation of downstream integration across the raphe.
-            0 disables blending; nonzero values are a modeling assumption.
+            Gaussian standard deviation (dva) for smoothing across the horizontal
+            meridian. Default: 1. Set to 0 to disable.
 
             .. versionadded:: 0.10.0
         axon_pickle: str, optional

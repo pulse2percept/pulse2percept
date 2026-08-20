@@ -326,32 +326,11 @@ def _delivered(implant):
 
 
 def _blend_meridian(resp, grid, meridian, width):
-    """Blend a spatial response across a visual-field meridian.
+    """Blend a response across a visual-field meridian.
 
-    Applies a 1D Gaussian normal to the meridian, weighted by distance
-    from it. ``width`` is in degrees of visual angle. Time points are
-    processed independently.
-
-    Returns ``resp`` unchanged if blending is disabled or if the grid
-    does not straddle the requested meridian.
-
-    .. versionadded:: 0.10.0
-
-    Parameters
-    ----------
-    resp : np.ndarray
-        Spatial response, flattened or grid-shaped, with time last.
-    grid : Grid2D
-        Visual-field grid.
-    meridian : {'vertical', 'horizontal'}
-        Meridian to blend across.
-    width : float
-        Gaussian width in degrees of visual angle.
-
-    Returns
-    -------
-    np.ndarray
-        Blended response with the same shape and dtype as ``resp``.
+    ``width`` is the Gaussian standard deviation in dva. Blurring is 1D,
+    normal to the meridian, and tapered by distance from it. Time points are
+    processed independently. A zero width or one-sided grid is a no-op.
     """
     if width is None or width == 0:
         return resp
@@ -903,12 +882,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         raise NotImplementedError
 
     def _postprocess_spatial(self, resp):
-        """Postprocess a spatial response before constructing the Percept.
-
-        Subclasses may override this hook. The default is a no-op.
-
-        .. versionadded:: 0.10.0
-        """
+        """Hook for spatial-model postprocessing."""
         return resp
 
     def predict_percept(self, implant, t_percept=None):

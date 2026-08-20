@@ -59,10 +59,11 @@ API changes:
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` and PNG in
   :py:meth:`~pulse2percept.percepts.Percept.play`).
 
-* :py:class:`~pulse2percept.models.AxonMapSpatial` and cortical spatial models
-  gained a ``meridian_blend`` parameter for smoothing discontinuities across
-  anatomical meridians. It is nonzero by default. Pass ``meridian_blend=0``
-  for the previous behavior.
+* :py:class:`~pulse2percept.models.AxonMapSpatial` now smooths across the
+  horizontal meridian by default (``meridian_blend=1`` dva), and
+  :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial` smooths across
+  the vertical meridian (``meridian_blend=0.05`` dva). Set
+  ``meridian_blend=0`` to recover the previous behavior.
 
 * ``predict_percept`` now raises ``DimensionMismatchError`` when the stimulus
   is not the physical quantity the model reads. Assigning an
