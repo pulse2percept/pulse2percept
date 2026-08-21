@@ -138,9 +138,17 @@ def neuropythy():
     Addressing a point is neuropythy's job even when the mesh is a toy, so the
     forward direction needs the package imported -- but no subject, and no
     Benson & Winawer download.
+
+    Only an absent neuropythy skips. An ImportError from *inside* neuropythy
+    is a broken install, and must fail rather than quietly go green.
     """
-    return pytest.importorskip('neuropythy',
-                               reason="requires `pip install neuropythy`")
+    try:
+        import neuropythy as ny
+    except ModuleNotFoundError as err:
+        if err.name == 'neuropythy':
+            pytest.skip("requires `pip install neuropythy`")
+        raise
+    return ny
 
 
 @pytest.fixture(scope='module')
@@ -359,6 +367,15 @@ def test_NeuropythyMap_units(neuropythy):
     with pytest.raises(DimensionMismatchError):
         vfmap.v1_to_dva(xc * dva, yc, zc)
 
+    # `cort_nn_thresh` is a distance between mesh vertices, so it is stored in
+    # microns however it was handed over:
+    npt.assert_equal(ToyNeuropythyMap(cort_nn_thresh=1 * mm).cort_nn_thresh,
+                     1000)
+    npt.assert_equal(ToyNeuropythyMap(cort_nn_thresh=500 * um).cort_nn_thresh,
+                     500)
+    with pytest.raises(DimensionMismatchError):
+        ToyNeuropythyMap(cort_nn_thresh=1 * dva)
+
 
 def test_ndim_mixup():
     """A 3D cortical map cannot drive a model that only knows 2D grids."""
@@ -382,13 +399,19 @@ class DownloadOnAccess:
     """A stand-in for ``ny.data['benson_winawer_2018'].subjects``
 
     Looking a subject up here is what downloads it, and is the only reason p2p
-    reaches for the dataset at all.
+    reaches for the dataset at all. The real dataset is keyed by the subject
+    ids exactly as Benson & Winawer spell them, so a key it does not know is a
+    KeyError rather than a silent success.
     """
+    subject_ids = ('fsaverage', 'S1201', 'S1202', 'S1203', 'S1204', 'S1205',
+                   'S1206', 'S1207', 'S1208')
 
     def __init__(self, downloaded):
         self.downloaded = downloaded
 
     def __getitem__(self, name):
+        if name not in self.subject_ids:
+            raise KeyError(name)
         self.downloaded.append(name)
         return name
 
@@ -432,8 +455,7 @@ def test_parse_subject_configures_cache(neuropythy, tmp_path, monkeypatch):
     npt.assert_equal(len(config['freesurfer_subject_paths']), 1)
 
 
-@pytest.mark.parametrize('subject', ['S1201', 's1201'])
-def test_parse_subject_downloads_benson_winawer(subject, neuropythy, tmp_path,
+def test_parse_subject_downloads_benson_winawer(neuropythy, tmp_path,
                                                 monkeypatch):
     """Neuropythy only downloads the dataset for 'fsaverage' on its own
 
@@ -455,9 +477,9 @@ def test_parse_subject_downloads_benson_winawer(subject, neuropythy, tmp_path,
     monkeypatch.setattr(neuropythy, 'data', {'benson_winawer_2018': dataset})
 
     nmap = ToyNeuropythyMap(cache_dir=str(tmp_path))
-    npt.assert_equal(nmap.parse_subject(subject), f'loaded {subject}')
-    npt.assert_equal(downloaded, [subject])
-    npt.assert_equal(attempts, [subject, subject])
+    npt.assert_equal(nmap.parse_subject('S1201'), 'loaded S1201')
+    npt.assert_equal(downloaded, ['S1201'])
+    npt.assert_equal(attempts, ['S1201', 'S1201'])
 
 
 def test_parse_subject_reraises_unknown_subject(neuropythy, tmp_path,
