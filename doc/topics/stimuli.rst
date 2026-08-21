@@ -233,6 +233,108 @@ checks when ``safe_mode=True``. These checks are useful guardrails, but they
 are not a substitute for the safety limits of a particular experimental or
 clinical device.
 
+You can change the coordinates of an existing
+:py:class:`~pulse2percept.stimuli.Stimulus` object, but retain all its data,
+by wrapping it in a second Stimulus object:
+
+.. ipython:: python
+
+    import numpy as np
+    from pulse2percept.stimuli import Stimulus
+
+    # Say you have a Stimulus object with unlabeled axes:
+    stim = Stimulus(np.ones((2, 5)))
+    stim
+
+    # You can create a new object from it with named electrodes:
+    Stimulus(stim, electrodes=['A1', 'F10'])
+
+    # Same goes for time points:
+    Stimulus(stim, time=[0, 0.1, 0.2, 0.3, 0.4])
+
+Shifting and padding a stimulus
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:py:meth:`~pulse2percept.stimuli.Stimulus.shift` moves a stimulus along the
+time axis, and :py:meth:`~pulse2percept.stimuli.Stimulus.pad` adds
+zero-valued endpoints at ``t=0`` and ``t=duration`` as needed.
+Note that ``pad`` takes the time the padded stimulus should *end* at, not an
+amount of time to add:
+
+.. ipython:: python
+
+    from pulse2percept.stimuli import BiphasicPulse
+
+    # A pulse that starts 3 ms in, ending at 10 ms:
+    stim = BiphasicPulse(-20, 1).shift(3).pad(10)
+    stim.time
+
+    stim.data
+
+Because a stimulus is interpolated between its time points, an endpoint can
+only be added next to a data point that is already zero (as it is for all
+built-in pulses and pulse trains); otherwise ``pad`` raises a ``ValueError``
+rather than adding a ramp.
+
+Shifts may be negative, which moves the stimulus into the past
+(``stim.shift(-3)``).
+``stim >> dt`` and ``stim << dt`` are supported shorthand for
+``stim.shift(dt)`` and ``stim.shift(-dt)``.
+
+Compressing a stimulus
+^^^^^^^^^^^^^^^^^^^^^^
+
+The :py:meth:`~pulse2percept.stimuli.Stimulus.compress` method automatically
+compresses the data in two ways:
+
+* Removes electrodes with all-zero activation.
+* Retains only the time points at which the stimulus changes.
+
+For example, only the signal edges of a pulse train are saved.
+That is, rather than saving the current amplitude at every 0.1ms time step,
+only the non-redundant values are retained.
+This drastically reduces the memory footprint of the stimulus.
+You can convince yourself of that by inspecting the size of a Stimulus object
+before and after compression:
+
+.. ipython:: python
+
+    # An uncompressed stimulus:
+    stim = Stimulus([[0, 0, 0, 1, 2, 0, 0, 0]], time=[0, 1, 2, 3, 4, 5, 6, 7])
+    stim
+
+    # Now compress the data:
+    stim.compress()
+
+    # Notice how the time axis have changed:
+    stim
+
+Accessing stimulus metadata
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Stimuli can store additional relevant information in the ``metadata`` dictionary. 
+Users can also pass their own metadata, which will be stored in ``metadata["user"]``
+Stimuli built from a collection of sources store the metadata for each source 
+in ``metadata["electrodes"][electrode]["metadata"]``:
+
+.. ipython:: python
+
+    from pulse2percept.stimuli import BiphasicPulseTrain
+
+    # Accessing metadata
+    stim = Stimulus([[0, 1, 2, 3]], metadata='user_metadata')
+    stim.metadata
+
+    # Some objects store their own metadata
+    stim = BiphasicPulseTrain(1,1,1, metadata='user_metadata')
+    stim.metadata
+
+    # Multiple source metadata
+    stim = Stimulus({'A1' : BiphasicPulseTrain(1,1,1, metadata='A1 metadata'),
+                     'B2' : BiphasicPulseTrain(1,1,1, metadata='B2 metadata')},
+                    metadata='stimulus metadata')
+    stim.metadata
+    
 .. seealso::
 
     * :py:class:`pulse2percept.stimuli.Stimulus`
@@ -243,3 +345,7 @@ clinical device.
     * :ref:`Raster Strategies <topics-rasters>`
     * :ref:`Physical Units <topics-units>`
     * :ref:`Computational Models <topics-models>`
+
+.. .. minigallery:: pulse2percept.stimuli.Stimulus
+..     :add-heading: Examples using ``Stimulus``
+..     :heading-level: -

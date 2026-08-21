@@ -950,6 +950,92 @@ class Stimulus(PrettyPrint):
             'time': self.time,
         }
 
+    def shift(self, dt):
+        """Shift the stimulus in time.
+
+        .. versionadded:: 0.10.0
+
+        Parameters
+        ----------
+        dt : float or :py:class:`~pulse2percept.units.Quantity`
+            Time shift. May be positive or negative. Bare values are interpreted
+            in the stimulus' time unit.
+
+        Returns
+        -------
+        shifted : :py:class:`~pulse2percept.stimuli.Stimulus`
+            Shifted copy of the stimulus.
+
+        Notes
+        -----
+        ``stim >> dt`` and ``stim << dt`` are shorthand for ``stim.shift(dt)``
+        and ``stim.shift(-dt)``.
+        """
+        if self.time is None:
+            raise ValueError("Cannot shift a stimulus in time if time=None.")
+        return self._apply_operator(self.time, ops.add, self._as_time(dt),
+                                    field='time')
+
+    def pad(self, duration):
+        """Pad the stimulus with zeros up to a given time.
+
+        Adds zero-valued endpoints at ``t=0`` and ``t=duration`` as needed.
+        ``duration`` specifies the final time, not the amount of padding to add.
+
+        .. versionadded:: 0.10.0
+
+        Parameters
+        ----------
+        duration : float or :py:class:`~pulse2percept.units.Quantity`
+            Final time of the padded stimulus. Bare values are interpreted in the
+            stimulus' time unit.
+
+        Returns
+        -------
+        padded : :py:class:`~pulse2percept.stimuli.Stimulus`
+            Padded copy of the stimulus.
+
+        Notes
+        -----
+        Padding requires existing boundary values to be zero; otherwise
+        interpolation would create a ramp. It never truncates the stimulus or
+        removes negative time points.
+        """
+        if self.time is None:
+            raise ValueError("Cannot pad a stimulus in time if time=None.")
+        duration = self._as_time(duration)
+        if duration < self.time[-1]:
+            raise ValueError(
+                f"Cannot pad stimulus ending at {self.time[-1]} to {duration}."
+            )
+        data = self.data
+        time = self.time
+        pad_left = time[0] > 0
+        pad_right = duration > time[-1]
+        # Padding a nonzero endpoint would create a ramp under interpolation:
+        if pad_left and np.any(data[:, 0] != 0):
+            raise ValueError(f"Cannot pad before a nonzero stimulus endpoint "
+                             f"(t={time[0]}).")
+        if pad_right and np.any(data[:, -1] != 0):
+            raise ValueError(f"Cannot pad after a nonzero stimulus endpoint "
+                             f"(t={time[-1]}).")
+        zeros = np.zeros((data.shape[0], 1), dtype=data.dtype)
+        if pad_left:
+            data = np.hstack((zeros, data))
+            time = np.hstack(([0], time))
+        if pad_right:
+            data = np.hstack((data, zeros))
+            time = np.hstack((time, [duration]))
+        if not pad_left and not pad_right:
+            # hstack allocates; the no-op path must copy explicitly
+            data = data.copy()
+            time = time.copy()
+        stim = self._shallow_copy()
+        stim._stim = {'data': data,
+                      'electrodes': self.electrodes.copy(),
+                      'time': time}
+        return stim
+
     def plot(self, electrodes=None, time=None, fmt='k-', ax=None):
         """Plot the stimulus
 
@@ -1351,15 +1437,19 @@ class Stimulus(PrettyPrint):
         return self.__mul__(-1)
 
     def __rshift__(self, scalar):
-        """Shift every time point in the stimulus some ms into the future"""
-        if self.time is None:
-            raise ValueError("Cannot shift a stimulus in time if time=None.")
-        return self._apply_operator(self.time, ops.add,
-                                    self._as_time(scalar), field='time')
+        """Shift every time point in the stimulus some ms into the future
+
+        Shorthand for :py:meth:`~pulse2percept.stimuli.Stimulus.shift`.
+        """
+        return self.shift(scalar)
 
     def __lshift__(self, scalar):
-        """Shift every time point in the stimulus some ms into the past"""
-        return self.__rshift__(-self._as_time(scalar))
+        """Shift every time point in the stimulus some ms into the past
+
+        Shorthand for ``shift(-scalar)``; see
+        :py:meth:`~pulse2percept.stimuli.Stimulus.shift`.
+        """
+        return self.shift(-self._as_time(scalar))
 
     def _check_stim(self, stim):
         # Check stimulus data for consistency:

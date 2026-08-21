@@ -661,14 +661,135 @@ def test_Stimulus_shift_without_time():
     # not as a TypeError from adding a scalar to None:
     stim = Stimulus(3)
     npt.assert_equal(stim.time, None)
-    with pytest.raises(ValueError):
-        stim >> 1.0
-    with pytest.raises(ValueError):
-        stim << 1.0
+    for shift in (lambda: stim.shift(1.0), lambda: stim.pad(1.0),
+                  lambda: stim >> 1.0, lambda: stim << 1.0):
+        with pytest.raises(ValueError):
+            shift()
     # Stimuli that do have a time axis are unaffected:
     stim = Stimulus([[0, 1, 2]], time=[0, 1, 2])
     npt.assert_almost_equal((stim >> 1.5).time, [1.5, 2.5, 3.5])
     npt.assert_almost_equal((stim << 1.5).time, [-1.5, -0.5, 0.5])
+
+
+def test_Stimulus_shift():
+    stim = Stimulus([[0, 1, 2], [3, 4, 5]], time=[0, 1, 2],
+                    electrodes=['A1', 'B2'], metadata='meta')
+    # Forwards, nowhere, and backwards: a stimulus may live at negative times,
+    # so a negative shift is not an error:
+    npt.assert_almost_equal(stim.shift(10).time, [10, 11, 12])
+    npt.assert_almost_equal(stim.shift(0).time, [0, 1, 2])
+    npt.assert_almost_equal(stim.shift(-10).time, [-10, -9, -8])
+    # The operators are aliases for `shift`:
+    for dt in (-2.5, 0, 2.5):
+        npt.assert_almost_equal((stim >> dt).time, stim.shift(dt).time)
+        npt.assert_almost_equal((stim << dt).time, stim.shift(-dt).time)
+    # A unitful shift is converted into the stimulus' own time unit, in either
+    # direction; a quantity that is not a time is refused:
+    npt.assert_almost_equal(stim.shift(0.02 * sec).time, [20, 21, 22])
+    npt.assert_almost_equal(stim.shift(-1000 * us).time, [-1, 0, 1])
+    with pytest.raises(DimensionMismatchError):
+        stim.shift(5 * uA)
+    # Everything but the time axis survives, and the original stays put:
+    shifted = stim.shift(10)
+    npt.assert_almost_equal(shifted.data, stim.data)
+    npt.assert_equal(shifted.electrodes, stim.electrodes)
+    npt.assert_equal(shifted.unit, stim.unit)
+    npt.assert_equal(shifted.time_unit, stim.time_unit)
+    npt.assert_equal(shifted.metadata, stim.metadata)
+    npt.assert_almost_equal(stim.time, [0, 1, 2])
+    # Including the type of a subclass:
+    pulse = BiphasicPulse(-20, 1)
+    npt.assert_equal(isinstance(pulse.shift(5), BiphasicPulse), True)
+
+
+def test_Stimulus_pad():
+    # `duration` is the time the padded stimulus ends at, not an amount of
+    # time to add: a pulse shifted into the middle of a 10 s window keeps its
+    # shifted times and gains zero-valued endpoints at t=0 and t=10000:
+    pulse = BiphasicPulse(-20, 1)
+    padded = pulse.shift(3000).pad(10000)
+    npt.assert_almost_equal(padded.time[0], 0)
+    npt.assert_almost_equal(padded.time[-1], 10000)
+    npt.assert_almost_equal(padded.data[:, 0], 0)
+    npt.assert_almost_equal(padded.data[:, -1], 0)
+    npt.assert_almost_equal(padded.time[1:-1], pulse.time + 3000)
+    npt.assert_almost_equal(padded.data[:, 1:-1], pulse.data)
+    npt.assert_equal(isinstance(padded, BiphasicPulse), True)
+
+    # A stimulus that already starts at t=0 only gets trailing padding:
+    stim = Stimulus([[1, 0]], time=[0, 2])
+    npt.assert_almost_equal(stim.pad(4).time, [0, 2, 4])
+    npt.assert_almost_equal(stim.pad(4).data, [[1, 0, 0]])
+
+    # One that starts before t=0 keeps its beginning: padding must not crop or
+    # rewrite negative-time data:
+    neg = Stimulus([[1, 0]], time=[-3, 2])
+    npt.assert_almost_equal(neg.pad(4).time, [-3, 2, 4])
+    npt.assert_almost_equal(neg.pad(4).data, [[1, 0, 0]])
+
+    # Padding to the duration the stimulus already has adds only the missing
+    # leading zero, and does not duplicate the endpoint it already has:
+    stim = Stimulus([[0, 2]], time=[1, 2])
+    npt.assert_almost_equal(stim.pad(stim.duration).time, [0, 1, 2])
+    npt.assert_almost_equal(stim.pad(stim.duration).data, [[0, 0, 2]])
+
+    # `pad` never truncates:
+    with pytest.raises(ValueError):
+        stim.pad(1.5)
+
+    # A unitful duration is converted into the stimulus' own time unit:
+    stim = Stimulus([[0, 1, 0]], time=[1, 2, 3])
+    npt.assert_almost_equal(stim.pad(0.01 * sec).time, [0, 1, 2, 3, 10])
+    with pytest.raises(DimensionMismatchError):
+        stim.pad(5 * uA)
+
+    # An endpoint can only be added next to a data point that is already zero:
+    # the stimulus is interpolated between its time points, so a zero next to
+    # a nonzero endpoint would be a ramp rather than padding.
+    with pytest.raises(ValueError):
+        Stimulus([[1, 0]], time=[1, 2]).pad(4)
+    with pytest.raises(ValueError):
+        Stimulus([[0, 1]], time=[0, 2]).pad(4)
+    # Every electrode has to be zero there, not just the first one:
+    with pytest.raises(ValueError):
+        Stimulus([[0, 0], [0, 1]], time=[0, 2]).pad(4)
+    # ... and "zero" means exactly zero:
+    with pytest.raises(ValueError):
+        Stimulus([[0, 1e-9]], time=[0, 2]).pad(4)
+    # Padding that isn't needed at that end doesn't care what the data is:
+    npt.assert_almost_equal(Stimulus([[1, 0]], time=[0, 2]).pad(2).time, [0, 2])
+
+    # Every electrode gets a zero, not just the first one:
+    multi = Stimulus([[0, 1, 0], [0, 3, 0]], time=[1, 2, 3],
+                     electrodes=['A1', 'B2'], metadata='meta')
+    padded = multi.pad(5)
+    npt.assert_almost_equal(padded.time, [0, 1, 2, 3, 5])
+    npt.assert_almost_equal(padded.data,
+                            [[0, 0, 1, 0, 0], [0, 0, 3, 0, 0]])
+    # The original is untouched, and the copy keeps everything else:
+    npt.assert_almost_equal(multi.time, [1, 2, 3])
+    npt.assert_almost_equal(multi.data, [[0, 1, 0], [0, 3, 0]])
+    npt.assert_equal(padded.electrodes, multi.electrodes)
+    npt.assert_equal(padded.unit, multi.unit)
+    npt.assert_equal(padded.time_unit, multi.time_unit)
+    npt.assert_equal(padded.metadata, multi.metadata)
+
+    # A pad that has nothing to add still returns an independent copy, rather
+    # than a stimulus writing through to the buffers of the original:
+    noop = Stimulus([[0, 1, 0]], time=[0, 2, 4])
+    padded = noop.pad(noop.duration)
+    npt.assert_almost_equal(padded.time, noop.time)
+    npt.assert_almost_equal(padded.data, noop.data)
+    padded.data[:] = 0
+    padded.time[:] = 0
+    npt.assert_almost_equal(noop.data, [[0, 1, 0]])
+    npt.assert_almost_equal(noop.time, [0, 2, 4])
+
+    # Padding a compressed stimulus does not make it uncompressed:
+    compressed = Stimulus([[0, 1, 2, 0]], time=[0, 1, 2, 3], compress=True)
+    npt.assert_equal(compressed.is_compressed, True)
+    npt.assert_equal(compressed.pad(9).is_compressed, True)
+    npt.assert_equal(multi.pad(5).is_compressed, False)
 
 
 def test_Stimulus_no_global_side_effects():
