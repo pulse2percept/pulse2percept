@@ -318,6 +318,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             Axon segments whose contribution to brightness is smaller than this
             value will be pruned to improve computational efficiency. Set to a
             value between 0 and 1.
+        meridian_blend : float, optional
+            Gaussian standard deviation (dva) for smoothing across the
+            horizontal meridian. Default: 1. Set to 0 to disable.
+
+            .. versionadded:: 0.10.0
         axon_pickle: str, optional
             File name in which to store precomputed axon maps.
         ignore_pickle: bool, optional
@@ -576,6 +581,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             # Response goes in first frame
             resp[:, :, 0] = self._predict_spatial(
                 implant.earray, stim).reshape(self.grid.x.shape)
+        # This override bypasses SpatialModel.predict_percept:
+        resp = self._postprocess_spatial(resp)
         return Percept(resp, space=self.grid, time=t_percept,
                        time_unit=self.time_unit,
                        metadata={'stim': stim.metadata})
@@ -718,6 +725,11 @@ class BiphasicAxonMapModel(Model):
             Axon segments whose contribution to brightness is smaller than this
             value will be pruned to improve computational efficiency. Set to a
             value between 0 and 1.
+        meridian_blend : float, optional
+            Gaussian standard deviation (dva) for smoothing across the
+            horizontal meridian. Default: 1. Set to 0 to disable.
+
+            .. versionadded:: 0.10.0
         axon_pickle: str, optional
             File name in which to store precomputed axon maps.
         ignore_pickle: bool, optional

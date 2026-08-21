@@ -9,6 +9,7 @@ from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
 import numpy as np
 import multiprocessing
+from scipy.ndimage import gaussian_filter1d
 
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
@@ -322,6 +323,41 @@ def _delivered(implant):
     stand_in = copy(implant)
     stand_in._spatial_stim = None
     return stand_in
+
+
+def _blend_meridian(resp, grid, meridian, width):
+    """Blend a response across a visual-field meridian.
+
+    ``width`` is the Gaussian standard deviation in dva. Blurring is 1D,
+    normal to the meridian, and tapered by distance from it. Time points are
+    processed independently. A zero width or one-sided grid is a no-op.
+    """
+    if width is None or width == 0:
+        return resp
+    width = float(width)
+    if width < 0:
+        raise ValueError(f"Blend width must be non-negative, not {width}.")
+    if meridian == 'vertical':
+        dist, axis = grid.x, 1
+    elif meridian == 'horizontal':
+        dist, axis = grid.y, 0
+    else:
+        raise ValueError(f"Unknown meridian '{meridian}'; expected 'vertical' "
+                         f"or 'horizontal'.")
+    # Convert width from dva to samples:
+    along = dist[:, 0] if axis == 0 else dist[0, :]
+    if along.size < 2 or not (np.any(along < 0) and np.any(along > 0)):
+        # Nothing to blend unless the grid straddles the meridian:
+        return resp
+    spacing = float(np.abs(np.diff(along)).mean())
+    # Filter each time point independently:
+    work = np.asarray(resp).reshape(dist.shape + (-1,))
+    blurred = gaussian_filter1d(work, width / spacing, axis=axis,
+                                mode='nearest')
+    weight = np.exp(-dist ** 2 / (2.0 * width ** 2))[..., np.newaxis]
+    weight = weight.astype(work.dtype, copy=False)
+    blended = weight * blurred + (1 - weight) * work
+    return blended.reshape(resp.shape).astype(resp.dtype, copy=False)
 
 
 class NotBuiltError(ValueError, AttributeError):
@@ -845,6 +881,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
+    def _postprocess_spatial(self, resp):
+        """Hook for spatial-model postprocessing."""
+        return resp
+
     def predict_percept(self, implant, t_percept=None):
         """Predict the spatial response
 
@@ -980,6 +1020,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 resp = resp_unique[..., inverse].copy(order='C')
             else:
                 resp = self._predict_spatial(implant.earray, stim)
+        resp = self._postprocess_spatial(resp)
         return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
                        space=self.grid, time=t_percept,
                        time_unit=self.time_unit,

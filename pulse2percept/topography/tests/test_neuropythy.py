@@ -333,8 +333,12 @@ def test_ndim_mixup(neuropythy_available):
 
 @pytest.mark.slow
 def test_neuropythy_scoreboard(neuropythy_available):
+    # `meridian_blend=0` throughout: the sums below pin the neuropythy
+    # map, which the default postprocessing does not change. The blend
+    # itself is covered by `test_CortexSpatial_meridian_blend`.
     nmap = NeuropythyMap('fsaverage')
-    model = ScoreboardModel(rho=800, step=.25, vfmap=nmap).build()
+    model = ScoreboardModel(rho=800, step=.25, vfmap=nmap,
+                            meridian_blend=0).build()
     implant = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3))
     implant.stim = {e : 1 for e in implant.electrode_names}
     percept = model.predict_percept(implant)
@@ -342,7 +346,8 @@ def test_neuropythy_scoreboard(neuropythy_available):
     npt.assert_almost_equal(np.max(percept.data), 27.3698, decimal=3)
 
     nmap = NeuropythyMap('fsaverage', regions=['v2'])
-    model = ScoreboardModel(rho=800, step=.25, vfmap=nmap).build()
+    model = ScoreboardModel(rho=800, step=.25, vfmap=nmap,
+                            meridian_blend=0).build()
     implant = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v2')
     implant.stim = {e : 1 for e in implant.electrode_names}
     percept = model.predict_percept(implant)
@@ -351,7 +356,8 @@ def test_neuropythy_scoreboard(neuropythy_available):
 
     # mega implant
     nmap = NeuropythyMap('fsaverage', regions=['v1', 'v2', 'v3'])
-    model = ScoreboardModel(rho=800, step=.25, vfmap=nmap).build()
+    model = ScoreboardModel(rho=800, step=.25, vfmap=nmap,
+                            meridian_blend=0).build()
     i1 = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v1')
     i2 = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v2')
     i3 = Neuralink.from_neuropythy(nmap, xrange=(-3, 3), yrange=(-3, 3), region='v3')
