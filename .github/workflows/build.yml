@@ -52,9 +52,6 @@ jobs:
           sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
 
       # ---- Bootstrap build toolchain + NumPy headers ----
-      # NumPy 2.x is the only supported major, on every Python in the matrix,
-      # so there is nothing to choose per version and nothing to constrain:
-      # the resolver cannot pick a NumPy the package does not declare.
       - name: Upgrade pip and bootstrap build tools
         run: |
           python -m pip install --upgrade pip
@@ -84,17 +81,19 @@ jobs:
           pip freeze | sed -n '1,120p'
 
       # ---- Tests ----
-      - name: Run default test suite for push
-        if: github.event_name == 'push' && !github.event.pull_request
+      # Run from an empty directory so that `--pyargs` tests the installed
+      # package rather than the source tree next to it.
+      - name: Run test suite
         run: |
           mkdir -p test_dir && cd test_dir
           pytest --pyargs pulse2percept --cov=pulse2percept --cov-branch --cov-report=xml --doctest-modules -x
 
-      - name: Run slow tests for pull requests
-        if: github.event_name == 'pull_request'
+      # Run expensive integration tests once per PR and append their coverage:
+      - name: Run slow tests
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: |
-          mkdir -p test_dir && cd test_dir
-          pytest --pyargs pulse2percept --cov=pulse2percept --runslow --cov-branch --cov-report=xml --doctest-modules -x
+          cd test_dir
+          pytest --pyargs pulse2percept --cov=pulse2percept --cov-append --cov-branch --cov-report=xml --runslow -m slow -x
 
       # ---- Coverage upload ----
       - name: Upload coverage report to codecov.io
