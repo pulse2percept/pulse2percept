@@ -16,6 +16,7 @@ from ..topography import Watson2014Map
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
+from .base import _blend_meridian
 from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
                            fast_find_closest_axon)        
 
@@ -349,6 +350,11 @@ class AxonMapSpatial(SpatialModel):
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
+    meridian_blend : float, optional
+        Gaussian standard deviation (dva) for smoothing across the horizontal
+        meridian. Default: 1. Set to 0 to disable.
+
+        .. versionadded:: 0.10.0
     axon_pickle : str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle : bool, optional
@@ -401,6 +407,8 @@ class AxonMapSpatial(SpatialModel):
             # Axon segments whose contribution to brightness is smaller than
             # this value will be pruned:
             'min_ax_sensitivity': 1e-3,
+            # Meridian blend width (dva); 0 disables:
+            'meridian_blend': 1,
             # Precomputed axon maps stored in the following file:
             'axon_pickle': 'axons.pickle',
             # You can force a build by ignoring pickles:
@@ -416,7 +424,7 @@ class AxonMapSpatial(SpatialModel):
         # visual angle, and `ax_segments_range` a radial position in the
         # Jansonius model's own coordinates, so neither is declared here:
         return {**super().get_param_units(), 'rho': um, 'lam': um,
-                'loc_od': dva}
+                'loc_od': dva, 'meridian_blend': dva}
 
     def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
         """Grows a single axon bundle based on the model by Jansonius (2009)
@@ -979,6 +987,17 @@ class AxonMapSpatial(SpatialModel):
                              self._cutoff_r2(self.rho),
                              self.n_threads)
 
+    def _postprocess_spatial(self, resp):
+        """Blend across the horizontal meridian"""
+        blended = _blend_meridian(resp, self.grid, 'horizontal',
+                                  self.meridian_blend)
+        if blended is resp:
+            # No blending asked for; leave the response bit-for-bit alone.
+            return resp
+        # Restore percept threshold after blending:
+        blended[np.abs(blended) < self.thresh_percept] = 0
+        return blended
+
     def plot(self, use_dva=False, style='hull', annotate=True, autoscale=True,
              ax=None, figsize=None):
         """Plot the axon map
@@ -1185,6 +1204,11 @@ class AxonMapModel(Model):
         Axon segments whose contribution to brightness is smaller than this
         value will be pruned to improve computational efficiency. Set to a
         value between 0 and 1.
+    meridian_blend : float, optional
+        Gaussian standard deviation (dva) for smoothing across the horizontal
+        meridian. Default: 1. Set to 0 to disable.
+
+        .. versionadded:: 0.10.0
     axon_pickle : str, optional
         File name in which to store precomputed axon maps.
     ignore_pickle : bool, optional

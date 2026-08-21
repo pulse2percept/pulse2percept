@@ -558,7 +558,11 @@ def test_fsaverage_cortex_to_dva(region, fsaverage):
 @pytest.mark.slow
 def test_fsaverage_scoreboard(fsaverage):
     """Run one end-to-end real-map model integration."""
-    model = ScoreboardModel(rho=800, step=.25, vfmap=fsaverage).build()
+    # `meridian_blend=0`: the sums below pin the neuropythy map, not the
+    # default postprocessing. The blend is covered by
+    # `test_CortexSpatial_meridian_blend`.
+    model = ScoreboardModel(rho=800, step=.25, vfmap=fsaverage,
+                            meridian_blend=0).build()
     implants = [Neuralink.from_neuropythy(fsaverage, xrange=(-3, 3),
                                           yrange=(-3, 3), region=region)
                 for region in ['v1', 'v2', 'v3']]

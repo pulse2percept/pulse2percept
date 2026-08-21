@@ -17,6 +17,7 @@ from pulse2percept.models import (AxonMapModel, AxonMapSpatial, BaseModel,
                                   FadingTemporal, Model, NotBuiltError,
                                   ScoreboardModel, ScoreboardSpatial,
                                   SpatialModel, TemporalModel)
+from pulse2percept.models.base import _blend_meridian
 from pulse2percept.models.cortex import (ScoreboardSpatial as
                                          CortexScoreboardSpatial)
 from pulse2percept.units import (DimensionMismatchError, Quantity,
@@ -1729,3 +1730,208 @@ def test_find_threshold_scales_both_representations():
         electrodes=implant._spatial_stim.electrodes))
     npt.assert_allclose(model.predict_percept(scaled).data.max(), 50,
                         rtol=0.05)
+
+
+def _blend_grid(step=0.5, extent=6):
+    """A plain dva grid to hand `_blend_meridian`"""
+    grid = Grid2D((-extent, extent), (-extent, extent), step=step)
+    grid.build(Curcio1990Map())
+    return grid
+
+
+def _step_across(grid, meridian, n_time=1):
+    """A response that jumps from 0 to 1 across one meridian
+
+    Shaped the way `_predict_spatial` returns it: space x time, with the
+    spatial axes flattened in the grid's own C order.
+    """
+    coord = grid.x if meridian == 'vertical' else grid.y
+    resp = np.where(coord > 0, 1.0, 0.0).astype(np.float32)
+    return np.repeat(resp.reshape(-1, 1), n_time, axis=1)
+
+
+def _as_grid(resp, grid):
+    """Undo the flattening, for reading rows and columns back out"""
+    return resp.reshape(grid.x.shape + (-1,))
+
+
+def _normal_profile(resp, grid, meridian):
+    """The response normal to the meridian, sorted by distance"""
+    out = _as_grid(resp, grid)
+    if meridian == 'vertical':
+        coord, profile = grid.x[0, :], out[out.shape[0] // 2, :, 0]
+    else:
+        coord, profile = grid.y[:, 0], out[:, out.shape[1] // 2, 0]
+    order = np.argsort(coord)
+    return coord[order], profile[order]
+
+
+@pytest.mark.parametrize('meridian', ['vertical', 'horizontal'])
+@pytest.mark.parametrize('width', [None, 0])
+def test_blend_meridian_off(meridian, width):
+    # Disabled blending returns the original object:
+    grid = _blend_grid()
+    resp = _step_across(grid, meridian)
+    npt.assert_equal(_blend_meridian(resp, grid, meridian, width) is resp,
+                     True)
+
+
+@pytest.mark.parametrize('meridian', ['vertical', 'horizontal'])
+def test_blend_meridian_smooths_the_seam(meridian):
+    # A hard step across the meridian is what the blend exists to soften.
+    grid = _blend_grid()
+    resp = _step_across(grid, meridian)
+    blended = _blend_meridian(resp, grid, meridian, 1.0)
+    npt.assert_equal(blended.shape, resp.shape)
+    npt.assert_equal(blended.dtype, resp.dtype)
+
+    _, was = _normal_profile(resp, grid, meridian)
+    _, profile = _normal_profile(blended, grid, meridian)
+    npt.assert_almost_equal(np.abs(np.diff(was)).max(), 1.0)
+    npt.assert_array_less(np.abs(np.diff(profile)).max(), 0.5)
+    # Still monotonic, so the seam was smoothed rather than rippled over:
+    npt.assert_array_less(-1e-6, np.diff(profile))
+    # And the two ends are untouched, so nothing was globally blurred:
+    npt.assert_allclose(profile[0], was[0], atol=1e-6)
+    npt.assert_allclose(profile[-1], was[-1], atol=1e-6)
+
+
+@pytest.mark.parametrize('meridian', ['vertical', 'horizontal'])
+def test_blend_meridian_leaves_the_far_field_alone(meridian):
+    # The weight is a Gaussian centered on the meridian, so several widths
+    # away the response has to come back as it went in.
+    grid = _blend_grid()
+    rng = np.random.default_rng(42)
+    resp = rng.random((grid.x.size, 3)).astype(np.float32)
+    width = 0.5
+    blended = _blend_meridian(resp, grid, meridian, width)
+    dist = grid.x if meridian == 'vertical' else grid.y
+    far = np.abs(dist).ravel() > 5 * width
+    npt.assert_equal(np.any(far), True)
+    npt.assert_allclose(blended[far], resp[far], atol=1e-6)
+    # ...while the seam itself did move:
+    near = np.abs(dist).ravel() < width
+    npt.assert_array_less(1e-3, np.abs(blended[near] - resp[near]).max())
+
+
+def test_blend_meridian_is_one_dimensional():
+    # The blur runs normal to the meridian and nowhere else, so a step that
+    # runs the *other* way is invisible to it.
+    grid = _blend_grid()
+    # A vertical blend smooths along x, so a step across y survives it:
+    across_y = _step_across(grid, 'horizontal')
+    npt.assert_array_equal(_blend_meridian(across_y, grid, 'vertical', 1.0),
+                           across_y)
+    # ...and a horizontal blend smooths along y, so a step across x survives:
+    across_x = _step_across(grid, 'vertical')
+    npt.assert_array_equal(_blend_meridian(across_x, grid, 'horizontal', 1.0),
+                           across_x)
+
+
+def test_blend_meridian_time_points_are_independent():
+    # Each frame is blended on its own; nothing leaks along the time axis.
+    grid = _blend_grid()
+    rng = np.random.default_rng(0)
+    frames = [rng.random((grid.x.size, 1)).astype(np.float32)
+              for _ in range(4)]
+    together = _blend_meridian(np.hstack(frames), grid, 'vertical', 0.8)
+    for t, frame in enumerate(frames):
+        alone = _blend_meridian(frame, grid, 'vertical', 0.8)
+        npt.assert_allclose(together[:, [t]], alone, atol=1e-6)
+    # A frame of zeros stays zero even sitting between bright ones:
+    frames[2][:] = 0
+    mixed = _blend_meridian(np.hstack(frames), grid, 'vertical', 0.8)
+    npt.assert_array_equal(mixed[:, 2], 0)
+
+
+def test_blend_meridian_is_a_distance_not_a_pixel_count():
+    # A fixed dva width should be resolution-independent:
+    at = np.linspace(-3, 3, 25)
+    profiles = {}
+    for step in (0.5, 0.25, 0.125):
+        grid = _blend_grid(step=step)
+        # A step edge that sits at x=0 on every grid, rather than half a
+        # sample to one side of it: otherwise the three inputs differ before
+        # any blending happens and the comparison measures that instead.
+        resp = (0.5 * (np.sign(grid.x) + 1)).astype(np.float32).reshape(-1, 1)
+        blended = _blend_meridian(resp, grid, 'vertical', 1.0)
+        coord, profile = _normal_profile(blended, grid, 'vertical')
+        profiles[step] = np.interp(at, coord, profile)
+    # The coarsest grid samples the Gaussian with only two points per width,
+    # so it is allowed a little more slack than the two finer ones:
+    npt.assert_allclose(profiles[0.5], profiles[0.25], atol=0.02)
+    npt.assert_allclose(profiles[0.25], profiles[0.125], atol=0.005)
+
+
+@pytest.mark.parametrize('meridian', ['vertical', 'horizontal'])
+@pytest.mark.parametrize('half', [(0, 6), (-6, 0)])
+def test_blend_meridian_needs_both_sides(meridian, half):
+    # One-sided grids have no meridian seam and are left unchanged:
+    if meridian == 'vertical':
+        grid = Grid2D(half, (-6, 6), step=0.5)
+    else:
+        grid = Grid2D((-6, 6), half, step=0.5)
+    grid.build(Curcio1990Map())
+    rng = np.random.default_rng(7)
+    resp = rng.random((grid.x.size, 2)).astype(np.float32)
+    npt.assert_equal(_blend_meridian(resp, grid, meridian, 1.0) is resp, True)
+    # The same response on a grid that does straddle the meridian is blended,
+    # so it is the one-sidedness doing this and not the width or the data:
+    both = _blend_grid(step=0.5)
+    resp = rng.random((both.x.size, 2)).astype(np.float32)
+    npt.assert_equal(_blend_meridian(resp, both, meridian, 1.0) is resp, False)
+
+
+def test_blend_meridian_keeps_precision():
+    grid = _blend_grid()
+    for dtype in (np.float32, np.float64):
+        resp = _step_across(grid, 'vertical').astype(dtype)
+        blended = _blend_meridian(resp, grid, 'vertical', 1.0)
+        npt.assert_equal(blended.dtype, np.dtype(dtype))
+    # Blending float32 and then widening agrees with blending in float64, so
+    # the narrower working precision costs nothing that float32 could hold:
+    resp = _step_across(grid, 'vertical')
+    npt.assert_allclose(
+        _blend_meridian(resp, grid, 'vertical', 1.0).astype(np.float64),
+        _blend_meridian(resp.astype(np.float64), grid, 'vertical', 1.0),
+        atol=1e-6)
+
+
+def test_blend_meridian_bad_input():
+    grid = _blend_grid()
+    resp = _step_across(grid, 'vertical')
+    with pytest.raises(ValueError):
+        _blend_meridian(resp, grid, 'diagonal', 1.0)
+    with pytest.raises(ValueError):
+        _blend_meridian(resp, grid, 'vertical', -1.0)
+    # A grid with a single sample normal to the meridian has nothing to blur
+    # along, and says so by doing nothing:
+    flat = Grid2D((0, 0), (-3, 3), step=0.5)
+    flat.build(Curcio1990Map())
+    thin = np.ones((flat.x.size, 1), dtype=np.float32)
+    npt.assert_equal(_blend_meridian(thin, flat, 'vertical', 1.0) is thin,
+                     True)
+
+
+def test_postprocess_spatial_hook():
+    # The hook is a no-op by default, and a model that overrides it sees the
+    # finished response, at every requested time point.
+    plain = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2), step=1).build()
+    resp = np.arange(12, dtype=np.float32).reshape(4, 3)
+    npt.assert_equal(plain._postprocess_spatial(resp) is resp, True)
+
+    seen = []
+
+    class Doubling(ScoreboardSpatial):
+        def _postprocess_spatial(self, resp):
+            seen.append(resp.shape)
+            return 2 * resp
+
+    implant = ArgusII(encoder=None, stim=Stimulus(
+        {'A5': [1, 2, 3], 'F7': [3, 2, 1]}))
+    doubled = Doubling(xrange=(-2, 2), yrange=(-2, 2), step=1).build()
+    expected = plain.predict_percept(implant)
+    got = doubled.predict_percept(implant)
+    npt.assert_equal(len(seen), 1)
+    npt.assert_equal(seen[0], (plain.grid.x.size, expected.data.shape[-1]))
+    npt.assert_allclose(got.data, 2 * expected.data)

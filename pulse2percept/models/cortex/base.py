@@ -2,10 +2,10 @@
    :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`, 
    :py:class:`~pulse2percept.models.cortex.ScoreboardModel`"""
 
-from ..base import Model, SpatialModel
+from ..base import Model, SpatialModel, _blend_meridian
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
-from ...units import DimensionMismatchError, um
+from ...units import DimensionMismatchError, dva, um
 from ...utils.constants import UM_PER_MM, ZORDER
 import numpy as np
 
@@ -137,7 +137,6 @@ class CortexSpatial(SpatialModel):
                     'regions' : ['v1']
                  }
         return {**base_params, **params}
-    
 
     def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
              figsize=None, fc=None, **kwargs):
@@ -261,6 +260,11 @@ class ScoreboardSpatial(CortexSpatial):
             deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
+    meridian_blend : float, optional
+        Gaussian standard deviation (dva) for smoothing across the vertical
+        meridian. Default: 0.1. Set to 0 to disable.
+
+        .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
@@ -297,7 +301,8 @@ class ScoreboardSpatial(CortexSpatial):
         params = {
                     # radial current spread
                     'rho': 200,  
-                    'ndim' : [2, 3]
+                    'ndim' : [2, 3],
+                    'meridian_blend' : 0.1
                  }
         return {**base_params, **params}
 
@@ -305,7 +310,23 @@ class ScoreboardSpatial(CortexSpatial):
         """Return a dict of the units that parameters are stored in"""
         # Cortical coordinates are stored in microns (see `CorticalMap`), and
         # the current spread is compared against them:
-        return {**super().get_param_units(), 'rho': um}
+        return {**super().get_param_units(), 'rho': um, 'meridian_blend': dva}
+
+    def _postprocess_spatial(self, resp):
+        """Blend the percept across the vertical meridian
+
+        On this model rather than on `CortexSpatial`: the seam is a property
+        of the split map this one is built on, not of being cortical, and a
+        future cortical model without one should not inherit a correction for
+        it.
+        """
+        blended = _blend_meridian(resp, self.grid, 'vertical',
+                                  self.meridian_blend)
+        if blended is resp:
+            return resp
+        # Restore percept threshold after blending:
+        blended[np.abs(blended) < self.thresh_percept] = 0
+        return blended
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
@@ -393,6 +414,11 @@ class ScoreboardModel(Model):
             deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
+    meridian_blend : float, optional
+        Gaussian standard deviation (dva) for smoothing across the vertical
+        meridian. Default: 0.1. Set to 0 to disable.
+
+        .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
