@@ -4,225 +4,234 @@
 Electrical Stimuli
 ==================
 
-The :py:mod:`~pulse2percept.stimuli` module provides a number of common
-electrical stimulus types, which can be assigned to electrodes of a
-:py:class:`~pulse2percept.implants.ProsthesisSystem` object:
+A :py:class:`~pulse2percept.stimuli.Stimulus` describes what is delivered to
+one or more electrodes. For electrical stimulation, its rows are electrodes,
+its columns are points in time, and its values are current amplitudes:
 
-================================  ==========================================
-Stimulus                          Description
---------------------------------  ------------------------------------------
-`MonophasicPulse`                 single phase: cathodic or anodic
-`BiphasicPulse`                   biphasic: cathodic + anodic
-`AsymmetricBiphasicPulse`         biphasic with unequal amplitude/duration
-`PulseTrain`                      combine any Stimulus into a pulse train
-`BiphasicPulseTrain`              series of (symmetric) biphasic pulses
-`AsymmetricBiphasicPulseTrain`    series of asymmetric biphasic pulses
-`BiphasicTripletTrain`            series of biphasic pulse triplets
-================================  ==========================================
+::
 
-In addition, pulse2percept provides convenience functions to convert
-images and videos into :py:class:`~pulse2percept.stimuli.Stimulus` objects
-(see the :py:mod:`~pulse2percept.io` module).
+    electrical Stimulus -> implant -> model -> Percept
 
-.. important ::
+Most users do not need to build this array by hand. pulse2percept provides
+pulse and pulse-train classes for common stimulation waveforms, and
+:ref:`stimulus encoders <topics-encoders>` for turning images and videos into
+multi-electrode stimulation.
 
-    Stimuli specify electrical currents in microamps (uA) and time in
-    milliseconds (ms). When in doubt, check the docstring of the function or
-    class you are trying to use.
+The usual workflow
+------------------
 
-Understanding the Stimulus class
----------------------------------
+A :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` is a good place to
+start:
 
-The :py:class:`~pulse2percept.stimuli.Stimulus` object defines a common
-interface for all electrical stimuli, consisting of a 2D data array with 
-labeled axes, where rows denote electrodes and columns denote points in time.
+.. code-block:: python
 
-A stimulus can be created from a variety of source types.
-The number of electrodes and time points will be automatically extracted from
-the source type:
+    import pulse2percept as p2p
+    from pulse2percept.units import Hz, ms, uA
 
-================  ==========  ======
-Source type       electrodes  time
-----------------  ----------  ------
-Scalar value      1           None
-Nx1 NumPy array   N           None
-NxM NumPy array   N           M
-================  ==========  ======
+    implant = p2p.implants.ArgusII()
 
-In addition, you can also pass a collection of source types (e.g., list,
-dictionary).
+    pulse_train = p2p.stimuli.BiphasicPulseTrain(
+        freq=20 * Hz,
+        amp=50 * uA,
+        phase_dur=0.45 * ms,
+        stim_dur=500 * ms,
+    )
 
-.. note::
-   Depending on the source type, a stimulus might have a time component or not.
+    implant.stim = {'A5': pulse_train}
 
-.. ipython:: python
-    :suppress:
+    model = p2p.models.AxonMapModel().build()
+    percept = model.predict_percept(implant)
 
-    # Use defaults so we don't get gridlines in generated docs
-    import matplotlib as mpl
-    mpl.rcdefaults()
-    
-Single-electrode stimuli
-^^^^^^^^^^^^^^^^^^^^^^^^
+The dictionary key identifies the electrode. Electrodes not listed receive no
+stimulation.
 
-The easiest way to create a stimulus is to specify the current amplitude (uA)
-to be delivered to an electrode:
+Pulses and pulse trains
+-----------------------
 
-.. ipython:: python
+pulse2percept provides a small set of common electrical waveforms:
 
-    from pulse2percept.stimuli import Stimulus
+.. list-table::
+   :header-rows: 1
 
-    # Stimulate an unnamed electrode with -14uA:
-    Stimulus(-14)
+   * - Stimulus
+     - Description
+   * - :py:class:`~pulse2percept.stimuli.BiphasicPulse`
+     - One symmetric, charge-balanced biphasic pulse.
+   * - :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`
+     - Repeated symmetric biphasic pulses. The usual starting point.
+   * - :py:class:`~pulse2percept.stimuli.MonophasicPulse`
+     - One cathodic or anodic phase; generally not charge-balanced.
+   * - :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulse`
+     - A biphasic pulse whose two phases may differ in amplitude or duration.
+   * - :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`
+     - A train of asymmetric biphasic pulses.
+   * - :py:class:`~pulse2percept.stimuli.BiphasicTripletTrain`
+     - Repeated triplets of biphasic pulses.
+   * - :py:class:`~pulse2percept.stimuli.PulseTrain`
+     - Repeat an arbitrary single-pulse Stimulus.
 
-You can also specify the name of the electrode to be stimulated:
+For example, a single cathodic-first biphasic pulse is:
 
-.. ipython:: python
+.. code-block:: python
 
-    # Stimulate Electrode 'B7' with -14uA:
-    Stimulus(-14, electrodes='B7')
+    pulse = p2p.stimuli.BiphasicPulse(
+        amp=50 * uA,
+        phase_dur=0.45 * ms,
+        interphase_dur=0.1 * ms,
+    )
 
-By default, this stimulus will not have a time component
-(``stim.time`` is None).
-Some models, such as
-:py:class:`~pulse2percept.models.ScoreboardModel`, cannot handle stimuli in
-time.
+The amplitude specifies the magnitude; ``cathodic_first=True`` by default
+determines the sign of the first phase.
 
-To create stimuli in time, you can use one of the above mentioned stimulus
-types, such as :py:class:`~pulse2percept.stimuli.MonophasicPulse` or
-:py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`:
+A generic :py:class:`~pulse2percept.stimuli.PulseTrain` can repeat any
+single-pulse stimulus:
 
-.. ipython:: python
+.. code-block:: python
 
-    # Stimulate Electrode 'A001' with a 20Hz pulse train lasting 0.5s
-    # (pulses: cathodic-first, 10uA amplitude, 0.45ms phase duration):
-    from pulse2percept.stimuli import BiphasicPulseTrain
-    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=500)
-    stim = Stimulus(pt)
-    stim
+    train = p2p.stimuli.PulseTrain(
+        freq=20 * Hz,
+        pulse=pulse,
+        stim_dur=500 * ms,
+    )
 
-    # This stimulus has a time component:
-    stim.time
+Only whole pulses are delivered. If the final pulse would extend beyond
+``stim_dur``, it is omitted rather than cut in half.
 
-You can specify not only the name of the electrode but also the time steps to
-be used:
+Stimulating multiple electrodes
+-------------------------------
 
-.. ipython:: python
+The easiest way to specify different stimulation on different electrodes is a
+dictionary:
 
-   # Stimulate Electrode 'C7' with int time steps:
-   Stimulus(pt, electrodes='C7', time=np.arange(pt.shape[-1]))
+.. code-block:: python
 
-Creating multi-electrode stimuli
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    implant.stim = {
+        'A5': p2p.stimuli.BiphasicPulseTrain(
+            20 * Hz, 50 * uA, 0.45 * ms, stim_dur=500 * ms
+        ),
+        'B5': p2p.stimuli.BiphasicPulseTrain(
+            20 * Hz, 25 * uA, 0.45 * ms, stim_dur=500 * ms
+        ),
+    }
 
-Stimuli can also be created from a list or dictionary of source types:
+pulse2percept combines the individual waveforms into one
+:py:class:`~pulse2percept.stimuli.Stimulus`, merging their time axes as
+needed.
 
-.. ipython:: python
+You can also construct a Stimulus directly from scalar values, arrays, lists,
+or dictionaries:
 
-    # Stimulate three unnamed electrodes with -2uA, 14uA, and -100uA,
-    # respectively:
-    Stimulus([-2, 14, -100])
+.. code-block:: python
 
-Electrode names can be passed in a list:
+    stim = p2p.stimuli.Stimulus({
+        'A1': 10 * uA,
+        'A2': 20 * uA,
+        'A3': 30 * uA,
+    })
 
-.. ipython:: python
+A one-dimensional sequence means one value per electrode and has no time
+component. A two-dimensional array has shape ``(n_electrodes, n_times)``.
 
-    Stimulus([-2, 14, -100], electrodes=['A1', 'B1', 'C1'])
+The Stimulus container
+----------------------
 
-Alternatively, stimuli can be created from a dictionary:
+Every Stimulus exposes the same basic pieces:
 
-.. ipython:: python
+``stim.data``
+    A 2D NumPy array with shape ``(n_electrodes, n_times)``.
 
-    # Equivalent to the previous one:
-    Stimulus({'A1': -2, 'B1': 14, 'C1': -100})
+``stim.electrodes``
+    The electrode names corresponding to the rows.
 
-The same is true for a dictionary of pulse trains:
+``stim.time``
+    The time axis, or ``None`` for a stimulus without a time component.
 
-.. ipython:: python
+For a time-varying stimulus, the easiest way to see what is being delivered is
+often:
 
-    from pulse2percept.stimuli import BiphasicPulse
-    Stimulus({'A1': BiphasicPulse(10, 0.45, stim_dur=100),
-              'C9': BiphasicPulse(-30, 1, delay_dur=10, stim_dur=100)})
+.. code-block:: python
 
-Interacting with stimuli
-------------------------
+    stim.plot()
 
-Accessing individual data points
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Stimuli can also be indexed by electrode name and time:
 
-You can directly index into the :py:class:`~pulse2percept.stimuli.Stimulus`
-object to retrieve individual data points: ``stim[item]``.
-``item`` can be an integer, string, slice, or tuple.
+.. code-block:: python
 
-For example, to retrieve all data points of the first electrode in a
-multi-electrode stimulus, use the following:
+    stim['A5']
+    stim['A5', 10 * ms]
 
-.. ipython:: python
+The second index is a **time**, not a column number. If that exact time is not
+stored, pulse2percept interpolates the waveform there. Use ``stim.data`` when
+you want ordinary NumPy indexing by row and column.
 
-    stim = Stimulus(np.arange(10).reshape((2, 5)))
-    stim[0]
+The time axis does not need to be uniformly sampled. Pulse classes store the
+important transition points rather than a dense sample at every simulation
+step, which keeps long pulse trains compact.
 
-Here ``0`` is a valid electrode index, because we did not specify an electrode
-name. Analogously:
+Images and videos are different
+-------------------------------
 
-.. ipython:: python
+:py:class:`~pulse2percept.stimuli.ImageStimulus` and
+:py:class:`~pulse2percept.stimuli.VideoStimulus` are also Stimulus objects, but
+their values are **dimensionless gray levels, not electrical current**.
 
-    stim = Stimulus(np.arange(10).reshape((2, 5)), electrodes=['B1', 'C2'])
-    stim['B1']
+For example:
 
-Similarly, you can retrieve all data points at a particular time:
+.. code-block:: python
 
-.. ipython:: python
+    source = p2p.stimuli.BostonTrain()
 
-    stim = Stimulus(np.arange(10).reshape((2, 5)))
-    stim[:, 3]
+That object is a visual source. It should be passed through an
+:py:class:`~pulse2percept.stimuli.Encoder` before it is used as electrical
+stimulation:
 
-.. important ::
+.. code-block:: python
 
-    The second index or slice into ``stim`` is not a column index into
-    ``stim.data``, but an exact time specified in ms!
-    For example, ``stim[:, 3]`` translates to "retrieve all data points at
-    time = 3 ms", not "retrieve stim.data[:, 3]".
+    encoder = p2p.stimuli.AmplitudeEncoder(
+        implant,
+        amp_range=(0, 50 * uA),
+        freq=20 * Hz,
+    )
 
-This works even when the specified time is not explicitly provided in the
-stimulus!
-In that case, the value is automatically interpolated (using SciPy's 
-``interp1d``):
+    implant.stim = encoder.encode(source)
 
-.. ipython:: python
+This distinction matters. A gray level of 0.5 is not 0.5 uA; the encoder is
+what defines how image intensity maps onto stimulation. See
+:ref:`topics-encoders` for the full workflow.
 
-    # A single-electrode ramp stimulus:
-    stim = Stimulus(np.arange(10).reshape((1, -1)))
-    stim
+Physical units
+--------------
 
-    # Retrieve stimulus at t=3:
-    stim[0, 3]
+Electrical stimulus amplitudes are stored in microamps and time in
+milliseconds. Pulse-train frequency is measured in hertz. You can use those
+canonical units directly or pass compatible quantities:
 
-    # Time point 3.45 is not in the data provided above, but can be
-    # interpolated as follows:
-    stim[0, 3.45]
+.. code-block:: python
 
-    # This also works for multiple time points:
-    stim[0, [3.45, 6.78]]
-    
-    # Time points above the valid range will return the largest stored value:
-    stim[0, 123.45]
+    from pulse2percept.units import mA, us
 
-Accessing the raw data
-^^^^^^^^^^^^^^^^^^^^^^
+    pulse = p2p.stimuli.BiphasicPulse(
+        amp=0.05 * mA,
+        phase_dur=450 * us,
+    )
 
-The raw data is accessible as a 2D NumPy array (electrodes x time) stored in
-the ``data`` container of a Stimulus:
+This is equivalent to ``50 * uA`` and ``0.45 * ms``. Bare numbers continue to
+mean the documented canonical units. See :ref:`topics-units` for the full
+convention.
 
-.. ipython:: python
+Charge balance and safety
+-------------------------
 
-    stim = Stimulus(np.arange(10).reshape((2, 5)))
-    stim.data
+For implanted stimulation, charge balance matters. Symmetric
+:py:class:`~pulse2percept.stimuli.BiphasicPulse` and
+:py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects are
+charge-balanced by construction.
 
-You can index and slice the ``data`` container like any NumPy array.
-
-Assigning new coordinates to an existing stimulus
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The :py:class:`~pulse2percept.stimuli.Stimulus` API also exposes charge-balance
+information for arbitrary waveforms, and implants can apply additional safety
+checks when ``safe_mode=True``. These checks are useful guardrails, but they
+are not a substitute for the safety limits of a particular experimental or
+clinical device.
 
 You can change the coordinates of an existing
 :py:class:`~pulse2percept.stimuli.Stimulus` object, but retain all its data,
@@ -319,6 +328,17 @@ in ``metadata["electrodes"][electrode]["metadata"]``:
                     metadata='stimulus metadata')
     stim.metadata
     
+.. seealso::
+
+    * :py:class:`pulse2percept.stimuli.Stimulus`
+    * :py:class:`pulse2percept.stimuli.BiphasicPulse`
+    * :py:class:`pulse2percept.stimuli.BiphasicPulseTrain`
+    * :ref:`Stimulus Encoders <topics-encoders>`
+    * :ref:`Visual Prostheses <topics-implants>`
+    * :ref:`Raster Strategies <topics-rasters>`
+    * :ref:`Physical Units <topics-units>`
+    * :ref:`Computational Models <topics-models>`
+
 .. .. minigallery:: pulse2percept.stimuli.Stimulus
 ..     :add-heading: Examples using ``Stimulus``
 ..     :heading-level: -
