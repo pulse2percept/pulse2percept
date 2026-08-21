@@ -239,6 +239,9 @@ by wrapping it in a second Stimulus object:
 
 .. ipython:: python
 
+    import numpy as np
+    from pulse2percept.stimuli import Stimulus
+
     # Say you have a Stimulus object with unlabeled axes:
     stim = Stimulus(np.ones((2, 5)))
     stim
@@ -259,6 +262,8 @@ Note that ``pad`` takes the time the padded stimulus should *end* at, not an
 amount of time to add:
 
 .. ipython:: python
+
+    from pulse2percept.stimuli import BiphasicPulse
 
     # A pulse that starts 3 ms in, ending at 10 ms:
     stim = BiphasicPulse(-20, 1).shift(3).pad(10)
@@ -313,6 +318,8 @@ Stimuli built from a collection of sources store the metadata for each source
 in ``metadata["electrodes"][electrode]["metadata"]``:
 
 .. ipython:: python
+
+    from pulse2percept.stimuli import BiphasicPulseTrain
 
     # Accessing metadata
     stim = Stimulus([[0, 1, 2, 3]], metadata='user_metadata')

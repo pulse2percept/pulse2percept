@@ -341,7 +341,11 @@ start with**, rather than device manufacturer.
 
           import matplotlib.pyplot as plt
           import pulse2percept as p2p
-          p2p.implants.cortex.Neuralink().plot(annotate=False)
+          # Threads are placed by hand (or by ``from_neuropythy``) and run into
+          # cortex, so a top-down 2D plot would collapse each one to a dot:
+          threads = [p2p.implants.cortex.LinearEdgeThread(x, y)
+                     for x in (-500, 500) for y in (-500, 500)]
+          p2p.implants.cortex.Neuralink(threads).plot3D()
           plt.axis("off")
 
      - Cortical
