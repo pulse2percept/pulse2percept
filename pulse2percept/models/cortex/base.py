@@ -262,7 +262,7 @@ class ScoreboardSpatial(CortexSpatial):
         Whether to simulate points on a rectangular or hexagonal grid
     meridian_blend : float, optional
         Gaussian standard deviation (dva) for smoothing across the vertical
-        meridian. Default: 0.05. Set to 0 to disable.
+        meridian. Default: 0.1. Set to 0 to disable.
 
         .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
@@ -416,7 +416,7 @@ class ScoreboardModel(Model):
         Whether to simulate points on a rectangular or hexagonal grid
     meridian_blend : float, optional
         Gaussian standard deviation (dva) for smoothing across the vertical
-        meridian. Default: 0.05. Set to 0 to disable.
+        meridian. Default: 0.1. Set to 0 to disable.
 
         .. versionadded:: 0.10.0
     vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional

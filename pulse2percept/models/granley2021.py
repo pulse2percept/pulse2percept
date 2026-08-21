@@ -319,8 +319,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             value will be pruned to improve computational efficiency. Set to a
             value between 0 and 1.
         meridian_blend : float, optional
-            Gaussian standard deviation (dva) for smoothing across the horizontal
-            meridian. Default: 1. Set to 0 to disable.
+            Gaussian standard deviation (dva) for smoothing across the
+            horizontal meridian. Default: 1. Set to 0 to disable.
 
             .. versionadded:: 0.10.0
         axon_pickle: str, optional
@@ -726,8 +726,8 @@ class BiphasicAxonMapModel(Model):
             value will be pruned to improve computational efficiency. Set to a
             value between 0 and 1.
         meridian_blend : float, optional
-            Gaussian standard deviation (dva) for smoothing across the horizontal
-            meridian. Default: 1. Set to 0 to disable.
+            Gaussian standard deviation (dva) for smoothing across the
+            horizontal meridian. Default: 1. Set to 0 to disable.
 
             .. versionadded:: 0.10.0
         axon_pickle: str, optional

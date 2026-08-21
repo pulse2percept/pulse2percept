@@ -62,7 +62,7 @@ API changes:
 * :py:class:`~pulse2percept.models.AxonMapSpatial` now smooths across the
   horizontal meridian by default (``meridian_blend=1`` dva), and
   :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial` smooths across
-  the vertical meridian (``meridian_blend=0.05`` dva). Set
+  the vertical meridian (``meridian_blend=0.1`` dva). Set
   ``meridian_blend=0`` to recover the previous behavior.
 
 * ``predict_percept`` now raises ``DimensionMismatchError`` when the stimulus

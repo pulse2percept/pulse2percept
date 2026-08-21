@@ -1756,7 +1756,7 @@ def _as_grid(resp, grid):
 
 
 def _normal_profile(resp, grid, meridian):
-    """The response along the line normal to the meridian, sorted by distance"""
+    """The response normal to the meridian, sorted by distance"""
     out = _as_grid(resp, grid)
     if meridian == 'vertical':
         coord, profile = grid.x[0, :], out[out.shape[0] // 2, :, 0]
