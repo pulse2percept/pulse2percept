@@ -74,7 +74,7 @@ class ToySubject:
         self.hemis = {'lh': ToyHemisphere(), 'rh': ToyHemisphere()}
 
 
-cclass ToyNeuropythyMap(NeuropythyMap):
+class ToyNeuropythyMap(NeuropythyMap):
     """NeuropythyMap backed by deterministic toy meshes and surfaces."""
 
     def __init__(self, n=6, regions=('v1', 'v2', 'v3'), cache_dir=None,
@@ -110,6 +110,7 @@ def neuropythy():
 @pytest.fixture(scope='module')
 def fsaverage(neuropythy):
     """Shared real fsaverage map for slow integration tests."""
+    return NeuropythyMap('fsaverage', regions=['v1', 'v2', 'v3'])
 
 
 # -----------------------------------------------------------------------------
