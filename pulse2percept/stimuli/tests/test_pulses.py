@@ -477,27 +477,25 @@ def test_pulse_electrode_names():
 
 @pytest.mark.parametrize('cls, build, params', PULSES)
 @pytest.mark.parametrize('label, transform', [
-    ('scale', lambda p: p * 2),
-    ('rscale', lambda p: 2 * p),
-    ('divide', lambda p: p / 2),
-    ('negate', lambda p: -p),
     ('offset', lambda p: p + 1),
     ('subtract', lambda p: p - 1),
     ('rsubtract', lambda p: 1 - p),
     ('shift', lambda p: p >> 5),
     ('shift_method', lambda p: p.shift(5)),
     ('pad', lambda p: p.pad(p.duration + 10)),
-    ('append', lambda p: p.append(p >> DT)),
+    ('infinite', lambda p: p * np.inf),
+    ('divide_by_zero', lambda p: p / 0),
 ])
 def test_pulse_transformations_are_not_pulses(cls, build, params, label,
                                               transform):
     # A pulse's parameters describe the waveform it was built with. An
-    # operation that rewrites those samples would leave them describing
-    # nothing, so what comes back is an ordinary Stimulus. (Operations that
-    # *can* be expressed in the parameters may become structured later; until
-    # then, correctness beats structure.)
+    # operation that rewrites those samples in a way no parameter of this
+    # class expresses -- a DC offset, a shift in time, a second pulse laid
+    # after it -- would leave them describing nothing, so what comes back is
+    # an ordinary Stimulus. Scaling is the exception; see below.
     pulse = build()
-    out = transform(pulse)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        out = transform(pulse)
     npt.assert_equal(type(out), Stimulus)
     npt.assert_equal(out._is_parametric, False)
     # ...and it no longer answers questions only a pulse can answer:
@@ -507,6 +505,63 @@ def test_pulse_transformations_are_not_pulses(cls, build, params, label,
     for name, expected in params.items():
         npt.assert_almost_equal(getattr(pulse, name), expected)
     npt.assert_almost_equal(pulse.duration, pulse.time[-1])
+
+
+@pytest.mark.parametrize('cls, build, params', PULSES)
+@pytest.mark.parametrize('factor', [2, 0.5, -1, -2, 1, 0, 1e-3])
+def test_pulse_scaling_stays_a_pulse(cls, build, params, factor):
+    # Multiplying every amplitude by a finite factor is exactly what a
+    # different `amp` does, so the result is still described by the
+    # parameters this class is made of -- and is built from them rather than
+    # from the samples.
+    pulse = build()
+    reference = factor * np.asarray(pulse.data)
+    for scaled in (pulse * factor, factor * pulse):
+        npt.assert_equal(type(scaled), cls)
+        # Scaling is expressible without sampling anything:
+        npt.assert_equal(_rendered(scaled), False)
+        npt.assert_allclose(scaled.data, reference, rtol=1e-6, atol=1e-6)
+        # Timing is a property of the pulse, not of its amplitude:
+        for name in ('phase_dur', 'phase_dur1', 'phase_dur2',
+                     'interphase_dur', 'delay_dur', 'stim_dur'):
+            if name in params:
+                npt.assert_almost_equal(getattr(scaled, name), params[name])
+        for name in ('amp', 'amp1', 'amp2'):
+            if name in params:
+                # Only `MonophasicPulse` stores a signed amplitude:
+                signed = 'cathodic' in params
+                npt.assert_almost_equal(
+                    getattr(scaled, name),
+                    params[name] * (factor if signed else abs(factor)))
+        # A negative factor swaps which phase is cathodic. `MonophasicPulse`
+        # carries the polarity in `amp` instead, which the check above covers:
+        if 'cathodic_first' in params:
+            npt.assert_equal(scaled.cathodic_first,
+                             params['cathodic_first'] if factor >= 0
+                             else not params['cathodic_first'])
+    # The original is untouched:
+    for name, expected in params.items():
+        npt.assert_almost_equal(getattr(pulse, name), expected)
+
+
+@pytest.mark.parametrize('cls, build, params', PULSES)
+def test_pulse_append_keeps_both_pulses(cls, build, params):
+    # A pulse laid after another is two pulses, so the result keeps both
+    # rather than becoming an anonymous waveform -- but it is no longer one
+    # pulse, and does not answer as one.
+    pulse = build()
+    seq = pulse.append(pulse >> DT)
+    npt.assert_equal(type(seq).__name__, '_SequenceStimulus')
+    npt.assert_equal(len(seq.parts), 2)
+    npt.assert_equal(type(seq.parts[0]), cls)
+    for name in params:
+        npt.assert_equal(hasattr(seq, name), False)
+        npt.assert_almost_equal(getattr(seq.parts[0], name), params[name])
+    npt.assert_almost_equal(seq.duration, 2 * pulse.duration + DT)
+    # ...and it is the same waveform the plain concatenation produced:
+    plain = Stimulus(pulse.data, electrodes=pulse.electrodes, time=pulse.time)
+    npt.assert_array_equal(seq.data, plain.append(pulse >> DT).data)
+    npt.assert_array_equal(seq.time, plain.append(pulse >> DT).time)
 
 
 @pytest.mark.parametrize('cls, build, params', PULSES)

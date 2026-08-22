@@ -355,8 +355,7 @@ def test_BiphasicPulseTrain_metadata_polarity():
                                     lambda pt: (pt + 5) * 2,
                                     lambda pt: pt * np.inf,
                                     lambda pt: pt * np.nan,
-                                    lambda pt: pt / 0,
-                                    lambda pt: pt.append(pt >> 1)])
+                                    lambda pt: pt / 0])
 def test_BiphasicPulseTrain_metadata_invalidated(modify):
     # A DC offset is neither biphasic nor charge-balanced; a non-finite factor
     # leaves a waveform of infinities; an appended second train is no longer
@@ -787,7 +786,7 @@ def test_PulseTrain_snapshots_its_pulse():
 
 
 @pytest.mark.parametrize('factor', [2, 0.5, -1, -2, 1, 0, 1e-3])
-def test_BiphasicPulseTrain_scaling_stays_a_pulse_train(factor):
+def test_BiphasicPulseTrain_scaling_rebuilds_its_model_metadata(factor):
     # Scaling every amplitude by a finite factor is exactly what a different
     # `amp` does, so the result is built from the parameters rather than
     # degraded to a waveform. `amp` is canonical state now, so twice this
@@ -835,8 +834,7 @@ def test_BiphasicPulseTrain_scaling_matches_a_train_built_that_way():
                                     lambda pt: pt << 1,
                                     lambda pt: pt * np.inf,
                                     lambda pt: pt * np.nan,
-                                    lambda pt: pt / 0,
-                                    lambda pt: pt.append(pt >> 1)])
+                                    lambda pt: pt / 0])
 def test_BiphasicPulseTrain_inexact_operations_degrade(modify):
     # A DC offset, a shift in time, a non-finite factor and an appended second
     # train are none of them expressible in this class's parameters, so they
@@ -849,13 +847,127 @@ def test_BiphasicPulseTrain_inexact_operations_degrade(modify):
     npt.assert_equal(modified._is_parametric, False)
 
 
-@pytest.mark.parametrize('cls, build, params',
-                         [t for t in TRAINS if t[0] is not BiphasicPulseTrain])
-def test_other_trains_still_degrade_under_scaling(cls, build, params):
-    # Structured scaling is `BiphasicPulseTrain` only for now, because that is
-    # the class the models read their parameters off. The others fall back
-    # safely until exact transformations arrive for all of them.
+@pytest.mark.parametrize('cls, build, params', TRAINS)
+@pytest.mark.parametrize('factor', [2, 0.5, -1, -2, 1, 0, 1e-3])
+def test_train_scaling_stays_a_train(cls, build, params, factor):
+    # Every train class is defined by the pulse it repeats and the clock it
+    # repeats it on. Scaling touches only the amplitude of that pulse, so the
+    # result is still one of these -- and is built from the parameters rather
+    # than from the tiled samples.
     train = build()
-    npt.assert_equal(type(train * 2), Stimulus)
+    reference = factor * np.asarray(train.data)
+    for scaled in (train * factor, factor * train):
+        npt.assert_equal(type(scaled), cls)
+        npt.assert_equal(_rendered(scaled), False)
+        npt.assert_allclose(scaled.data, reference, rtol=1e-6, atol=1e-6)
+        # The train's own clock is untouched by its amplitude:
+        for name in ('freq', 'n_pulses', 'stim_dur', 'phase_dur',
+                     'phase_dur1', 'phase_dur2', 'interphase_dur',
+                     'interpulse_dur', 'delay_dur'):
+            if name in params:
+                npt.assert_almost_equal(getattr(scaled, name), params[name])
+        for name in ('amp', 'amp1', 'amp2'):
+            if name in params:
+                npt.assert_almost_equal(getattr(scaled, name),
+                                        params[name] * abs(factor))
+        if 'cathodic_first' in params:
+            npt.assert_equal(scaled.cathodic_first,
+                             params['cathodic_first'] if factor >= 0
+                             else not params['cathodic_first'])
+    # The original is untouched:
+    for name, expected in params.items():
+        npt.assert_equal(getattr(train, name), expected)
+
+
+def test_PulseTrain_scaling_keeps_the_pulse_it_repeats():
+    # A generic train scales the pulse it tiles rather than the tiled samples,
+    # so a train of biphasic pulses stays a train of biphasic pulses:
+    train = PulseTrain(20, BiphasicPulse(50, 0.45), stim_dur=200)
+    scaled = train * 2
+    npt.assert_equal(scaled.pulse_type, 'BiphasicPulse')
+    npt.assert_almost_equal(scaled.pulse.amp, 100)
+    npt.assert_almost_equal(train.pulse.amp, 50)
+
+
+def test_train_scaling_survives_a_partial_last_window():
+    # A 23 Hz train fits three whole pulses into 100 ms, which is more than
+    # the `n_pulses` guard's own estimate of 2.3 -- so rebuilding the train
+    # has to pass back the count that was *asked* for (None), not the one it
+    # resolved to.
+    train = BiphasicPulseTrain(23, 20, 0.45, stim_dur=100)
+    npt.assert_equal(train.n_pulses, 3)
+    npt.assert_equal((train * 2).n_pulses, 3)
     npt.assert_allclose((train * 2).data, 2 * train.data, rtol=1e-6,
                         atol=1e-6)
+    # An explicitly requested count still comes back unchanged:
+    asked = BiphasicPulseTrain(23, 20, 0.45, n_pulses=2, stim_dur=100)
+    npt.assert_equal((asked * 2).n_pulses, 2)
+
+
+def test_append_keeps_two_distinct_protocols():
+    # The case the sequence exists for: a 20 Hz train followed by a 50 Hz one
+    # is two protocols, and neither frequency describes the whole thing.
+    pt20 = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100, metadata='mine')
+    pt50 = BiphasicPulseTrain(50, 20, 0.45, stim_dur=100)
+    seq = pt20.append(pt50)
+    npt.assert_equal([p.freq for p in seq.parts], [20, 50])
+    npt.assert_equal([p.amp for p in seq.parts], [10, 20])
+    npt.assert_equal([type(p) for p in seq.parts],
+                     [BiphasicPulseTrain, BiphasicPulseTrain])
+    # No single `freq` is claimed, and the parameters a model reads are gone
+    # rather than stale -- what the user put in metadata is still theirs:
+    npt.assert_equal(hasattr(seq, 'freq'), False)
+    npt.assert_equal(seq.metadata, {'user': 'mine'})
+    # Appending again extends the sequence rather than nesting one in another:
+    npt.assert_equal(len(seq.append(pt20).parts), 3)
+    npt.assert_equal([p.freq for p in seq.append(pt20).parts], [20, 50, 20])
+
+
+def test_append_renders_what_the_waveform_append_did():
+    pt20 = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
+    pt50 = BiphasicPulseTrain(50, 20, 0.45, stim_dur=100)
+    plain20 = Stimulus(pt20.data, electrodes=pt20.electrodes, time=pt20.time)
+    plain50 = Stimulus(pt50.data, electrodes=pt50.electrodes, time=pt50.time)
+    expected = plain20.append(plain50)
+    seq = pt20.append(pt50)
+    npt.assert_array_equal(seq.data, expected.data)
+    npt.assert_array_equal(seq.time, expected.time)
+    npt.assert_almost_equal(seq.duration, 200)
+
+
+def test_append_scaling_scales_every_part():
+    pt20 = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
+    pt50 = BiphasicPulseTrain(50, 20, 0.45, stim_dur=100)
+    seq = pt20.append(pt50)
+    scaled = seq * 2
+    npt.assert_equal(type(scaled), type(seq))
+    npt.assert_equal([p.amp for p in scaled.parts], [20, 40])
+    npt.assert_allclose(scaled.data, 2 * seq.data, rtol=1e-6, atol=1e-6)
+    npt.assert_equal([p.amp for p in seq.parts], [10, 20])
+
+
+@pytest.mark.parametrize('modify', [lambda s: s + 5, lambda s: s >> 5,
+                                    lambda s: s.pad(s.duration + 10)])
+def test_append_inexact_operations_degrade(modify):
+    # A DC offset or a shift in time is not something the parts describe, so
+    # the sequence gives way to a plain waveform:
+    seq = (BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
+           .append(BiphasicPulseTrain(50, 20, 0.45, stim_dur=100)))
+    out = modify(seq)
+    npt.assert_equal(type(out), Stimulus)
+    npt.assert_equal(out._is_parametric, False)
+
+
+def test_append_still_rejects_what_it_always_did():
+    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
+    with pytest.raises(TypeError):
+        pt.append(5)
+    with pytest.raises(ValueError):
+        # Different electrodes:
+        pt.append(BiphasicPulseTrain(20, 10, 0.45, stim_dur=100,
+                                     electrode='A1'))
+    with pytest.raises(ValueError):
+        # `other` starts at t=0 with an amplitude this one does not end on:
+        pt.append(Stimulus([[5, 5]], electrodes=pt.electrodes, time=[0, 10]))
+    with pytest.raises(DimensionMismatchError):
+        pt.append(VideoStimulus(np.ones((1, 1, 3))))

@@ -7,7 +7,7 @@ from math import isclose
 
 # DT: Sampling time step (ms); defines the duration of the signal edge
 # transitions:
-from .base import Stimulus, _scale_factor
+from .base import Stimulus
 from .pulses import (AsymmetricBiphasicPulse, BiphasicPulse,
                      MonophasicPulse, _electrode_names)
 from ..units import Hz, as_value, ms, uA
@@ -117,7 +117,8 @@ class PulseTrain(Stimulus):
     #: (see `Stimulus._is_parametric`):
     _is_parametric = True
 
-    __slots__ = ('_freq', '_pulse', '_n_pulses', '_stim_dur')
+    __slots__ = ('_freq', '_pulse', '_n_pulses', '_n_pulses_asked',
+                 '_stim_dur')
 
     def __init__(self, freq, pulse, n_pulses=None, stim_dur=1000.0,
                  electrode=None, metadata=None):
@@ -146,6 +147,12 @@ class PulseTrain(Stimulus):
         # and `stim_dur` counts milliseconds, so this is the one place the two
         # clocks have to be reconciled:
         n_max_pulses = freq * stim_dur / MS_PER_S
+        # Kept as it was asked for, alongside the count it resolves to below.
+        # The two are not interchangeable: this guard measures a request
+        # against `n_max_pulses`, while the default counts whole pulses from
+        # t=0 and can legitimately come out one higher. Rebuilding a train
+        # (see `_scaled`) has to pass the request back, not the result.
+        self._n_pulses_asked = n_pulses
         # The requested number of pulses cannot be greater than max pulses:
         if n_pulses is not None:
             n_pulses = int(n_pulses)
@@ -259,6 +266,20 @@ class PulseTrain(Stimulus):
             data = np.hstack((data, np.zeros((data.shape[0], 1))))
             time = np.append(time, stim_dur)
         return {'data': data, 'electrodes': self.electrodes, 'time': time}
+
+    def _scaled(self, factor):
+        """This train, tiling a pulse whose amplitudes were scaled
+
+        Tiling copies the pulse without doing arithmetic on it, so scaling
+        every sample of the train is the same thing as scaling the pulse it
+        repeats -- and the train's own parameters (frequency, pulse count,
+        window) are untouched by either.
+        """
+        return PulseTrain(self.freq, self.pulse * factor,
+                          n_pulses=self._n_pulses_asked,
+                          stim_dur=self.stim_dur,
+                          electrode=self.electrodes,
+                          metadata=deepcopy(self.metadata.get('user')))
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print
@@ -419,7 +440,8 @@ class BiphasicPulseTrain(Stimulus):
         return BiphasicPulseTrain(
             self.freq, self.amp * abs(factor), self.phase_dur,
             interphase_dur=self.interphase_dur, delay_dur=self.delay_dur,
-            n_pulses=self.n_pulses, stim_dur=self.stim_dur,
+            n_pulses=self._train._n_pulses_asked,
+            stim_dur=self.stim_dur,
             # A negative factor swaps the two phases, which is exactly what
             # this flag says:
             cathodic_first=(self.cathodic_first if factor >= 0
@@ -429,22 +451,6 @@ class BiphasicPulseTrain(Stimulus):
             # the new amplitude. Only what the user put there is theirs to
             # carry across:
             metadata=deepcopy(self.metadata.get('user')))
-
-    def _apply_operator(self, a, op, b, field='data'):
-        """Scaling a biphasic pulse train leaves a biphasic pulse train
-
-        Multiplying every amplitude by a finite factor is exactly what a
-        different ``amp`` does, and a negative factor is exactly what swapping
-        the two phases does, so the result is still described by the
-        parameters this class is made of. Anything else -- a DC offset, a
-        shift in time, a factor that is not finite -- is not, and falls
-        through to the ordinary waveform operation, which hands back a plain
-        stimulus (see :py:meth:`~pulse2percept.stimuli.Stimulus._derived`).
-        """
-        factor = _scale_factor(a, op, b, field)
-        if field != 'data' or factor is None:
-            return super()._apply_operator(a, op, b, field=field)
-        return self._scaled(factor)
 
     @classmethod
     def _rescale_params(cls, metadata, factor):
@@ -620,6 +626,22 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
         return {'data': self._train.data, 'electrodes': self.electrodes,
                 'time': self._train.time}
 
+    def _scaled(self, factor):
+        """This train with both phase magnitudes multiplied by ``factor``
+
+        See :py:meth:`BiphasicPulseTrain._scaled`.
+        """
+        return AsymmetricBiphasicPulseTrain(
+            self.freq, self.amp1 * abs(factor), self.amp2 * abs(factor),
+            self.phase_dur1, self.phase_dur2,
+            interphase_dur=self.interphase_dur, delay_dur=self.delay_dur,
+            n_pulses=self._train._n_pulses_asked,
+            stim_dur=self.stim_dur,
+            cathodic_first=(self.cathodic_first if factor >= 0
+                            else not self.cathodic_first),
+            electrode=self.electrodes[0],
+            metadata=deepcopy(self.metadata.get('user')))
+
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print
 
@@ -721,8 +743,10 @@ class BiphasicTripletTrain(Stimulus):
             # electrode as `pulse`, or the two cannot be appended:
             delay_pulse = MonophasicPulse(0, interpulse_dur, electrode=electrode)
             pulse = pulse.append(delay_pulse)
-        # Create the pulse triplet:
-        triplet = pulse.append(pulse).append(pulse)
+        # Create the pulse triplet. Three copies of one pulse is not three
+        # protocols, so this keeps the waveform rather than the sequence
+        # `append` would otherwise hand back:
+        triplet = Stimulus(pulse.append(pulse).append(pulse))
         # Create the triplet train (see `BiphasicPulseTrain.__init__`):
         self._train = PulseTrain(freq, triplet, n_pulses=n_pulses,
                                  stim_dur=stim_dur)
@@ -778,6 +802,23 @@ class BiphasicTripletTrain(Stimulus):
         """The tiled train the parameters above describe"""
         return {'data': self._train.data, 'electrodes': self.electrodes,
                 'time': self._train.time}
+
+    def _scaled(self, factor):
+        """This train with every phase magnitude multiplied by ``factor``
+
+        See :py:meth:`BiphasicPulseTrain._scaled`. The triplet structure --
+        three pulses per window, ``interpulse_dur`` apart -- is untouched.
+        """
+        return BiphasicTripletTrain(
+            self.freq, self.amp * abs(factor), self.phase_dur,
+            interphase_dur=self.interphase_dur,
+            interpulse_dur=self.interpulse_dur, delay_dur=self.delay_dur,
+            n_pulses=self._train._n_pulses_asked,
+            stim_dur=self.stim_dur,
+            cathodic_first=(self.cathodic_first if factor >= 0
+                            else not self.cathodic_first),
+            electrode=self.electrodes[0],
+            metadata=deepcopy(self.metadata.get('user')))
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print

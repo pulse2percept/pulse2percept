@@ -180,6 +180,17 @@ class MonophasicPulse(Stimulus):
         data, time = _pad_to_stim_dur(time, data, self._stim_dur)
         return {'data': data, 'electrodes': self.electrodes, 'time': time}
 
+    def _scaled(self, factor):
+        """This pulse with its amplitude multiplied by ``factor``
+
+        ``amp`` carries the polarity here, so a negative factor needs nothing
+        else said about it.
+        """
+        return MonophasicPulse(self.amp * factor, self.phase_dur,
+                               delay_dur=self.delay_dur,
+                               stim_dur=self.stim_dur,
+                               electrode=self.electrodes[0])
+
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print
 
@@ -353,6 +364,22 @@ class BiphasicPulse(Stimulus):
         data += [-amp, -amp, 0]
         data, time = _pad_to_stim_dur(time, data, self._stim_dur)
         return {'data': data, 'electrodes': self.electrodes, 'time': time}
+
+    def _scaled(self, factor):
+        """This pulse with both phase magnitudes multiplied by ``factor``
+
+        Only the magnitude is stored, so a negative factor is expressed by
+        swapping the two phases -- which is exactly what ``cathodic_first``
+        says.
+        """
+        return BiphasicPulse(self.amp * abs(factor), self.phase_dur,
+                             interphase_dur=self.interphase_dur,
+                             delay_dur=self.delay_dur,
+                             stim_dur=self.stim_dur,
+                             cathodic_first=(self.cathodic_first
+                                             if factor >= 0
+                                             else not self.cathodic_first),
+                             electrode=self.electrodes[0])
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print
@@ -555,6 +582,21 @@ class AsymmetricBiphasicPulse(Stimulus):
         data += [amp2, amp2, 0]
         data, time = _pad_to_stim_dur(time, data, self._stim_dur)
         return {'data': data, 'electrodes': self.electrodes, 'time': time}
+
+    def _scaled(self, factor):
+        """This pulse with both phase magnitudes multiplied by ``factor``
+
+        See :py:meth:`BiphasicPulse._scaled`; the two phases keep their order,
+        and only which of them is cathodic changes.
+        """
+        return AsymmetricBiphasicPulse(
+            self.amp1 * abs(factor), self.amp2 * abs(factor),
+            self.phase_dur1, self.phase_dur2,
+            interphase_dur=self.interphase_dur, delay_dur=self.delay_dur,
+            stim_dur=self.stim_dur,
+            cathodic_first=(self.cathodic_first if factor >= 0
+                            else not self.cathodic_first),
+            electrode=self.electrodes[0])
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print

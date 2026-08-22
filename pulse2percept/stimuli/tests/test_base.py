@@ -1969,3 +1969,77 @@ def test_Stimulus_collection_removing_part_of_an_entry_materializes():
     npt.assert_equal(_lazy(stim), False)
     npt.assert_equal(list(stim.electrodes), ['y', 'B2'])
     npt.assert_equal(stim.data.shape, (2, 4))
+
+
+def test_Stimulus_rewriting_a_waveform_forgets_the_components():
+    # The components describe one waveform: the one they render to. An
+    # operation that installs a different one has to drop them, or a stimulus
+    # would go on carrying a structured source that says something else.
+    stim = Stimulus({'A1': CountingLazy(4, ['A1']),
+                     'B2': CountingLazy(4, ['B2'])})
+    npt.assert_equal(stim.data.shape, (2, 4))
+    # Rendering is the one install that keeps them -- it built that waveform:
+    npt.assert_equal(stim._components is None, False)
+    for rewrite in (lambda s: s + 5, lambda s: s * 2, lambda s: s >> 1,
+                    lambda s: -s):
+        npt.assert_equal(rewrite(stim)._components, None)
+    compressed = stim._shallow_copy()
+    compressed.compress()
+    npt.assert_equal(compressed._components, None)
+    # Removing an electrode from a collection that has already been rendered
+    # goes through the waveform, so it drops them too:
+    removed = stim._shallow_copy()
+    removed.remove('A1')
+    npt.assert_equal(removed._components, None)
+
+
+@pytest.mark.parametrize('factor', [2, 0.5, -1, 0])
+def test_Stimulus_collection_scaling_stays_deferred(factor):
+    # The Phase 6 target case: scaling a collection of pulse trains scales the
+    # trains, and the expensive part -- merging their time axes -- still has
+    # not happened.
+    def build():
+        return {'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
+                'B2': BiphasicPulseTrain(23, 20, 0.45, stim_dur=100)}
+    stim = Stimulus(build())
+    scaled = stim * factor
+    npt.assert_equal(_lazy(scaled), True)
+    npt.assert_equal(_lazy(stim), True)
+    # The entries are still pulse trains, at the scaled amplitude:
+    npt.assert_equal([type(c) for c, _ in scaled._components],
+                     [BiphasicPulseTrain, BiphasicPulseTrain])
+    npt.assert_almost_equal([c.amp for c, _ in scaled._components],
+                            [10 * abs(factor), 20 * abs(factor)])
+    # ...and so is what the models read off the metadata:
+    npt.assert_almost_equal(
+        [v['metadata']['amp'] for v in scaled.metadata['electrodes'].values()],
+        [10 * abs(factor), 20 * abs(factor)])
+    npt.assert_allclose(scaled.data, factor * Stimulus(build()).data,
+                        rtol=1e-6, atol=1e-6)
+    # The original is untouched, in both descriptions:
+    npt.assert_almost_equal([c.amp for c, _ in stim._components], [10, 20])
+    npt.assert_almost_equal(
+        [v['metadata']['amp'] for v in stim.metadata['electrodes'].values()],
+        [10, 20])
+
+
+def test_Stimulus_collection_scaling_needs_every_entry_to_be_a_stimulus():
+    # A raw entry would have to be sampled to be scaled, which is the work
+    # staying unmerged exists to avoid -- so the collection gives way instead:
+    stim = Stimulus({'A1': CountingLazy(4, ['A1']), 'B2': [1, 2, 3, 4]})
+    scaled = stim * 2
+    npt.assert_equal(scaled._components, None)
+    npt.assert_almost_equal(scaled.data[1], [2, 4, 6, 8])
+
+
+def test_Stimulus_collection_offset_materializes():
+    # A DC offset is not something an entry's parameters express, so the
+    # collection materializes and hands back a plain waveform with no
+    # structured source left behind it:
+    stim = Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
+                     'B2': BiphasicPulseTrain(23, 20, 0.45, stim_dur=100)})
+    out = stim + 5
+    npt.assert_equal(type(out), Stimulus)
+    npt.assert_equal(out._components, None)
+    npt.assert_almost_equal(out.data, stim.data + 5)
+    npt.assert_equal(_lazy(stim), False)

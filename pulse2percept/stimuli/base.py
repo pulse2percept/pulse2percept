@@ -311,7 +311,7 @@ def _strip_units(source, unit):
     return source
 
 
-def _scale_factor(a, op, b, field):
+def _scale_factor(op, scalar, reverse=False, field='data'):
     """The factor by which an arithmetic operator scales the stimulus data
 
     Returns 1 for an operator that leaves every amplitude where it is (a shift
@@ -319,17 +319,15 @@ def _scale_factor(a, op, b, field):
     same number, and None for one that does neither: a DC offset moves the
     waveform rather than resizing it, and no factor describes that.
 
-    Stimulus types that record the parameters of their waveform in their
-    metadata read this to keep those parameters in sync with the data. See
-    :py:meth:`~pulse2percept.stimuli.Stimulus._rescale_metadata`.
+    ``reverse`` says the stimulus is the operand on the right (``5 - stim``).
+    Deliberately answerable from the operator alone, so that a class which can
+    express a scaled version of itself is asked before anything is sampled;
+    see :py:meth:`~pulse2percept.stimuli.Stimulus._operate`.
     """
     if field == 'time':
         # Shifting in time moves the whole stimulus, but every amplitude in it
         # stays what it was:
         return 1.0
-    # `_apply_operator` has established that exactly one of the operands is a
-    # scalar; the other one is the data:
-    scalar = b if np.ndim(a) else a
     if op is ops.mul:
         # Multiplication is commutative, so the operand order is moot:
         factor = scalar
@@ -341,7 +339,7 @@ def _scale_factor(a, op, b, field):
             factor = np.divide(1.0, scalar)
     elif scalar == 0:
         # `stim + 0` and `stim - 0` change nothing; `0 - stim` flips the sign:
-        factor = -1.0 if np.ndim(b) else 1.0
+        factor = -1.0 if reverse else 1.0
     else:
         return None
     # `stim * np.inf`, `stim * np.nan` and `stim / 0` leave a waveform of
@@ -1125,23 +1123,48 @@ class Stimulus(PrettyPrint):
                 f"Cannot append a stimulus whose time is measured in "
                 f"{_describe_unit(other.time_unit)} to one whose time is "
                 f"measured in {_describe_unit(self.time_unit)}.")
-        if self.time is None or other.time is None:
+        if not _has_time_axis(self) or not _has_time_axis(other):
             raise ValueError("Cannot append another stimulus if time=None.")
         if not _names_equal(self.electrodes, other.electrodes):
             raise ValueError("Both stimuli must have the same electrodes.")
         if other.time[0] < 0:
             raise NotImplementedError("Appending a stimulus with a negative "
                                       "time axis is currently not supported.")
-        stim = self._derived()
         # Last time point of `self` can be merged with first point of `other`
         # but only if they have the same amplitude(s):
+        if isclose(other.time[0], 0, abs_tol=DT) and \
+                not np.allclose(other.data[:, 0], self._end_column()):
+            err_str = (f"Data mismatch: Cannot append other stimulus "
+                       f"because other[t=0] != this[t={self.time[-1]}ms]. You may need "
+                       f"to shift the other stimulus in time by at least "
+                       f"{DT:.1e} ms.")
+            raise ValueError(err_str)
+        if self._is_parametric or other._is_parametric:
+            # A stimulus described by something other than its samples keeps
+            # that description: a 20 Hz train followed by a 50 Hz train is two
+            # trains, and neither of their frequencies is the sequence's.
+            return _SequenceStimulus(_sequence_parts(self) +
+                                     _sequence_parts(other))
+        return self._append_waveform(other)
+
+    def _end_column(self):
+        """The last column of the waveform
+
+        All that matters about this stimulus when another is laid after it.
+        Split out so that a sequence can answer from its last part instead of
+        concatenating everything before it (see :py:class:`_SequenceStimulus`).
+        """
+        return self.data[:, -1]
+
+    def _append_waveform(self, other):
+        """Lay ``other``'s samples after this stimulus' own
+
+        The concatenation itself; :py:meth:`append` owns the validation, and
+        has already run it.
+        """
+        stim = self._derived()
         if isclose(other.time[0], 0, abs_tol=DT):
-            if not np.allclose(other.data[:, 0], self.data[:, -1]):
-                err_str = (f"Data mismatch: Cannot append other stimulus "
-                           f"because other[t=0] != this[t={self.time[-1]}ms]. You may need "
-                           f"to shift the other stimulus in time by at least "
-                           f"{DT:.1e} ms.")
-                raise ValueError(err_str)
+            # The shared endpoint is written once:
             time = np.hstack((self.time, other.time[1:] + self.time[-1]))
             data = np.hstack((self.data, other.data[:, 1:]))
         else:
@@ -1721,8 +1744,64 @@ class Stimulus(PrettyPrint):
         # Parameters that describe the waveform (a pulse train's amplitude,
         # say) have to follow the data, or a model reading them back predicts
         # from a stimulus that is no longer the one it was handed:
-        self._rescale_result(stim, _scale_factor(a, op, b, field))
+        reverse = bool(a_supported)
+        self._rescale_result(stim, _scale_factor(op, a if reverse else b,
+                                                 reverse, field))
         return stim
+
+    def _scaled(self, factor):
+        """This stimulus with every amplitude scaled by ``factor``
+
+        The seam for a class that can express a scaled version of itself
+        without rewriting any samples: a pulse train at twice the amplitude is
+        a pulse train, and a collection of them is that collection with every
+        entry scaled. Returning ``None`` -- which is what a stimulus that
+        *is* its waveform does -- runs the ordinary waveform operation
+        instead.
+
+        Only ever called with a finite factor, and only for operations that
+        scale every amplitude by the same number.
+        """
+        return self._scale_components(factor)
+
+    def _scale_components(self, factor):
+        """A collection that has not been merged scales its entries instead
+
+        Only when every entry is a stimulus in its own right: scaling a raw
+        entry would mean sampling it, which is the work staying unmerged
+        exists to avoid.
+        """
+        if self._components is None or _has_waveform(self):
+            return None
+        if not all(isinstance(src, Stimulus) for src, _ in self._components):
+            return None
+        stim = self._shallow_copy()
+        # A new list rather than a write: `_shallow_copy` hands out the same
+        # one. The entries scale themselves, structurally where they can:
+        stim._components = [(src * factor, n) for src, n in self._components]
+        # `metadata['electrodes']` describes those entries, and is what the
+        # models still read their pulse parameters off:
+        stim._rescale_metadata(factor)
+        return stim
+
+    def _operate(self, op, scalar, reverse=False):
+        """Apply an arithmetic operator to the stimulus
+
+        Asks :py:meth:`_scaled` first, so that a class which can express the
+        result in its own terms never has to sample itself to produce it.
+        ``reverse`` says the stimulus is the operand on the right.
+        """
+        if np.isscalar(scalar) and not isinstance(scalar, str):
+            factor = _scale_factor(op, scalar, reverse)
+            if factor is not None:
+                scaled = self._scaled(factor)
+                if scaled is not None:
+                    return scaled
+        # Nothing structured describes this, so the waveform is the answer.
+        # An unsupported operand also lands here, and is rejected there:
+        data = self.data
+        a, b = (scalar, data) if reverse else (data, scalar)
+        return self._apply_operator(a, op, b)
 
     def _as_amplitude(self, scalar):
         """Normalize an operand that is added to or subtracted from the data
@@ -1759,8 +1838,7 @@ class Stimulus(PrettyPrint):
 
     def __add__(self, scalar):
         """Add a scalar to every data point in the stimulus"""
-        return self._apply_operator(self.data, ops.add,
-                                    self._as_amplitude(scalar))
+        return self._operate(ops.add, self._as_amplitude(scalar))
 
     def __radd__(self, scalar):
         """Add a scalar to every data point in the stimulus"""
@@ -1768,18 +1846,16 @@ class Stimulus(PrettyPrint):
 
     def __sub__(self, scalar):
         """Subtract a scalar from every data point in the stimulus"""
-        return self._apply_operator(self.data, ops.sub,
-                                    self._as_amplitude(scalar))
+        return self._operate(ops.sub, self._as_amplitude(scalar))
 
     def __rsub__(self, scalar):
         """Subtract every data point in the stimulus from a scalar"""
-        return self._apply_operator(self._as_amplitude(scalar), ops.sub,
-                                    self.data)
+        return self._operate(ops.sub, self._as_amplitude(scalar),
+                             reverse=True)
 
     def __mul__(self, scalar):
         """Multiply every data point in the stimulus with a scalar"""
-        return self._apply_operator(self.data, ops.mul,
-                                    self._as_factor(scalar))
+        return self._operate(ops.mul, self._as_factor(scalar))
 
     def __rmul__(self, scalar):
         """Multiply every data point in the stimulus with a scalar"""
@@ -1787,8 +1863,7 @@ class Stimulus(PrettyPrint):
 
     def __truediv__(self, scalar):
         """Divide every data point in the stimulus by a scalar"""
-        return self._apply_operator(self.data, ops.truediv,
-                                    self._as_factor(scalar))
+        return self._operate(ops.truediv, self._as_factor(scalar))
 
     def __neg__(self):
         """Flip the sign of every data point in the stimulus"""
@@ -1902,8 +1977,12 @@ class Stimulus(PrettyPrint):
         """
         if self.__stim['data'] is None:
             promised = self.__stim['electrodes']
-            # The setter installs the rendered state, so `_render` runs once:
+            # The setter installs the rendered state, so `_render` runs once.
+            # It also clears the components, and this is the one waveform they
+            # do describe, so they are put back afterwards:
+            components = self._components
             self._stim = self._render()
+            self._components = components
             if not _names_equal(promised, self.__stim['electrodes']):
                 raise ValueError(
                     f"{type(self).__name__}._render() returned rows for "
@@ -1915,6 +1994,12 @@ class Stimulus(PrettyPrint):
     @_stim.setter
     def _stim(self, stim):
         self._check_stim(stim)
+        # A waveform that arrives from outside is not the one the components
+        # describe -- an operation that rewrote the samples would otherwise
+        # leave a stimulus whose structured source says something else. Only
+        # the render path in the getter above, which builds the waveform *from*
+        # the components, puts them back.
+        self._components = None
         # All checks passed. Take ownership of every array before storing it,
         # so that the scientific state of a stimulus cannot change once it
         # has one. `copy` hands out objects that share this dict, so replace
@@ -2128,3 +2213,79 @@ class Stimulus(PrettyPrint):
     def duration(self):
         """Stimulus duration (ms)"""
         return self.time[-1]
+
+
+def _has_time_axis(stim):
+    """Whether a stimulus has a time component, without sampling it"""
+    return _component_shape(stim)[2]
+
+
+def _sequence_parts(stim):
+    """The parts a stimulus contributes to a sequence, already flattened"""
+    if isinstance(stim, _SequenceStimulus):
+        # Already snapshots, and appending to a sequence extends it rather
+        # than nesting one inside another:
+        return list(stim.parts)
+    return [_snapshot(stim)]
+
+
+class _SequenceStimulus(Stimulus):
+    """Two or more stimuli delivered one after another
+
+    What :py:meth:`Stimulus.append` returns when either side is described by
+    something other than its samples. The parts are kept as they are, so a
+    20 Hz train followed by a 50 Hz train goes on being two trains; only the
+    concatenation waits for :py:meth:`_render`.
+
+    Private on purpose: this is a temporal sequence and nothing else. It is
+    not an expression tree, and it does not answer questions about pulse
+    parameters -- a sequence has no single frequency to report.
+    """
+    #: Described by its parts rather than by its samples:
+    _is_parametric = True
+
+    __slots__ = ('_parts',)
+
+    def __init__(self, parts):
+        self._parts = tuple(parts)
+        first = self._parts[0]
+        self._defer(first.electrodes, unit=first.unit,
+                    time_unit=first.time_unit)
+        self.metadata = deepcopy(first.metadata)
+        # A sequence has no one frequency or amplitude, so the parameters that
+        # described its first part are dropped here exactly as
+        # `_append_waveform` drops them: a model asking for them rejects the
+        # stimulus rather than predicting from the first part's numbers. The
+        # parts keep their own, and `parts` is where to read them.
+        first._rescale_result(self, None)
+
+    @property
+    def parts(self):
+        """The stimuli this one delivers, in order"""
+        return self._parts
+
+    @property
+    def duration(self):
+        """Duration of the stimulus (ms)"""
+        return self.time[-1]
+
+    def _end_column(self):
+        # Concatenation leaves the last part's last column where it was:
+        return self._parts[-1].data[:, -1]
+
+    def _render(self):
+        """Lay the parts end to end, on the terms `append` always used"""
+        stim = Stimulus(self._parts[0])
+        for part in self._parts[1:]:
+            stim = stim._append_waveform(part)
+        return {'data': stim.data, 'electrodes': self.electrodes,
+                'time': stim.time}
+
+    def _scaled(self, factor):
+        """Scaling a sequence scales each of its parts"""
+        return _SequenceStimulus([part * factor for part in self._parts])
+
+    def _pprint_params(self):
+        """Return a dict of class arguments to pretty-print"""
+        return {'parts': [type(p).__name__ for p in self._parts],
+                'electrodes': self.electrodes, 'metadata': self.metadata}
