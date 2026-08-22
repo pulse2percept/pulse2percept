@@ -1021,25 +1021,24 @@ def test_Stimulus_shallow_copy():
     # `append` and the arithmetic operators return a copy that shares nothing
     # mutable with the original, even though the data container is no longer
     # deep-copied first.
-    stim = BiphasicPulseTrain(20, 20, 0.45, stim_dur=100)
-    # Negating the train flips its polarity, which `BiphasicPulseTrain` records
-    # on `cathodic_first`; every other derivation leaves the flag alone:
-    for derive, flips in ((lambda s: s * 2, False), (lambda s: s + 1, False),
-                          (lambda s: -s, True), (lambda s: s >> 1.0, False),
-                          (lambda s: s.append(s >> 1.0), False)):
+    # A stimulus that is defined by its samples keeps its class; one defined
+    # by pulse parameters does not (see `Stimulus._derived` and
+    # test_pulse_trains.py):
+    stim = Stimulus([[0, 1, 0]], time=[0, 1, 2], metadata={'x': 1})
+    for derive in (lambda s: s * 2, lambda s: s + 1, lambda s: -s,
+                   lambda s: s >> 1.0, lambda s: s.append(s >> 1.0)):
         copied = derive(stim)
         # Same class and extra attributes:
         npt.assert_equal(type(copied), type(stim))
-        npt.assert_equal(copied.freq, stim.freq)
-        npt.assert_equal(copied.cathodic_first, stim.cathodic_first != flips)
+        npt.assert_equal(copied.unit, stim.unit)
         npt.assert_equal(copied.is_compressed, stim.is_compressed)
         # Metadata is independent. Its contents need not be identical: both
-        # `append` and the operators keep the pulse parameters in sync with the
-        # data, dropping them where they no longer describe it (see
+        # `append` and the operators keep any waveform parameters in sync with
+        # the data, dropping them where they no longer describe it (see
         # test_pulse_trains.py):
         npt.assert_equal(copied.metadata is stim.metadata, False)
-        copied.metadata['user'] = 'changed'
-        npt.assert_equal(stim.metadata['user'], None)
+        copied.metadata['mine'] = 'changed'
+        npt.assert_equal('mine' in stim.metadata, False)
         # The data container is independent, too:
         npt.assert_equal(copied._stim is stim._stim, False)
         npt.assert_equal(np.shares_memory(copied.data, stim.data), False)
@@ -1614,6 +1613,10 @@ def test_Stimulus_deepcopy():
     # deep-copy a read-only array into a writable one -- so the copy shares
     # the data container and only `metadata` is made independent:
     stim = BiphasicPulseTrain(20, 20, 0.45, stim_dur=100)
+    # Materialize first: a train that has not generated its waveform yet has
+    # no container to share, and the copy generates its own (see
+    # test_pulse_trains.py):
+    stim.data
     copied = deepcopy(stim)
     npt.assert_equal(copied is stim, False)
     npt.assert_equal(np.shares_memory(copied.data, stim.data), True)

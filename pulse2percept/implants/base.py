@@ -424,12 +424,20 @@ class ProsthesisSystem(PrettyPrint):
 
     def deactivate(self, electrodes):
         self.earray.deactivate(electrodes)
+        # Switching an electrode off rewrites the stimulus, so it is replaced
+        # rather than modified in place: it may be an object the caller still
+        # holds, and one defined by its pulse parameters cannot lose an
+        # electrode and remain one (see `Stimulus._derived`).
         if self.stim is not None:
-            self.stim.remove(electrodes)
+            stim = self.stim._derived()
+            stim.remove(electrodes)
+            self._stim = stim
         # An electrode switched off delivers nothing, whichever of the two
         # descriptions of the stimulus is being read:
         if getattr(self, '_spatial_stim', None) is not None:
-            self._spatial_stim.remove(electrodes)
+            spatial = self._spatial_stim._derived()
+            spatial.remove(electrodes)
+            self._spatial_stim = spatial
 
     @property
     def earray(self):
@@ -575,12 +583,19 @@ class ProsthesisSystem(PrettyPrint):
                 if not self.earray[electrode]:
                     raise ValueError(f'Electrode "{electrode}" not found in '
                                      f'implant.')
-            # Remove deactivated electrodes from the stimulus:
+            # Remove deactivated electrodes from the stimulus. Removal
+            # rewrites the stimulus, so it happens on a copy: the caller's
+            # object is theirs, and a stimulus defined by its pulse parameters
+            # (rather than by its samples) cannot lose an electrode and remain
+            # one -- `_derived` hands back a plain stimulus for those.
             off = [name for (name, e) in self.electrodes.items()
                    if not e.activated and name in stim.electrodes]
-            stim.remove(off)
-            if spatial is not None:
-                spatial.remove(off)
+            if off:
+                stim = stim._derived()
+                stim.remove(off)
+                if spatial is not None:
+                    spatial = spatial._derived()
+                    spatial.remove(off)
             # Perform safety checks, etc. These are all questions about what
             # gets delivered, so they are asked of the pulse train:
             self.check_stim(stim)

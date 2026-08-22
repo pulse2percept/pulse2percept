@@ -2,12 +2,14 @@
    :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`, 
    :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`"""
 import numpy as np
+from copy import deepcopy
 from math import isclose
 
 # DT: Sampling time step (ms); defines the duration of the signal edge
 # transitions:
 from .base import Stimulus
-from .pulses import BiphasicPulse, AsymmetricBiphasicPulse, MonophasicPulse
+from .pulses import (AsymmetricBiphasicPulse, BiphasicPulse,
+                     MonophasicPulse, _electrode_names)
 from ..units import Hz, as_value, ms, uA
 from ..utils.constants import DT, MS_PER_S
 
@@ -111,7 +113,11 @@ class PulseTrain(Stimulus):
        one gives a dimensionless train.
 
     """
-    __slots__ = ('freq', 'pulse_type')
+    #: Defined by the pulse it repeats rather than by its samples
+    #: (see `Stimulus._is_parametric`):
+    _is_parametric = True
+
+    __slots__ = ('_freq', '_pulse', '_n_pulses', '_stim_dur')
 
     def __init__(self, freq, pulse, n_pulses=None, stim_dur=1000.0,
                  electrode=None, metadata=None):
@@ -122,11 +128,19 @@ class PulseTrain(Stimulus):
         if not isinstance(pulse, Stimulus):
             raise TypeError(f"'pulse' must be a Stimulus object, not "
                             f"{type(pulse)}.")
-        if pulse.shape[0] == 0:
+        n_rows = len(pulse.electrodes)
+        if n_rows == 0:
             raise ValueError(f"'pulse' has invalid shape "
                              f"({pulse.shape[0]}, {pulse.shape[1]}).")
-        if pulse.time is None:
+        # Every parameter-backed stimulus in the library is a pulse, and a
+        # pulse always has a time axis. So this only has to ask a raw
+        # stimulus, whose waveform is already there to be asked:
+        if not pulse._is_parametric and pulse.time is None:
             raise ValueError("'pulse' does not have a time component.")
+        # `duration` rather than `time[-1]`: a parametric pulse knows how long
+        # it is from its parameters, so none of the arithmetic below has to
+        # generate a waveform to find out.
+        pulse_dur = pulse.duration
 
         # How many pulses fit into stim dur. `freq` counts cycles per second
         # and `stim_dur` counts milliseconds, so this is the one place the two
@@ -146,20 +160,85 @@ class PulseTrain(Stimulus):
             # short would leave the train with a net current -- a 30 Hz train
             # in a 33.37 ms window used to end on half a cathodic phase, and
             # so was not charge-balanced.
-            n_pulses = int(np.floor((stim_dur - pulse.time[-1]) /
+            n_pulses = int(np.floor((stim_dur - pulse_dur) /
                                     (MS_PER_S / freq) + 1e-9)) + 1
-        # 0 Hz is allowed, and so is a pulse too long to fit even once:
+        # 0 Hz is allowed, and so is a pulse too long to fit even once. A
+        # silent train is a single row of zeros, whatever the pulse looked
+        # like, which is what this class has always produced:
+        if n_pulses <= 0:
+            n_rows = 1
+        else:
+            # Window duration (ms) is the inverse of pulse train frequency.
+            # Asked here rather than in `_render`, so that a pulse too long to
+            # fit is refused where the caller can see why:
+            window_dur = MS_PER_S / freq
+            if pulse_dur > window_dur:
+                raise ValueError(f"Pulse (dur={pulse_dur:.2f} ms) does not fit into "
+                                 f"pulse train window (dur={window_dur:.2f} "
+                                 f"ms)")
+        if electrode is None:
+            names = np.arange(n_rows)
+        else:
+            names = np.array([electrode]).ravel()
+            if len(names) != n_rows:
+                raise ValueError(f"Number of electrodes provided "
+                                 f"({len(names)}) does not match the number "
+                                 f"of electrodes in the pulse ({n_rows}).")
+        self._freq = freq
+        # A snapshot, not the caller's object: tiling used to copy the pulse's
+        # values into the train there and then, so a pulse the caller goes on
+        # to replace must not change a train already built from it. Immutable
+        # waveform state makes this share arrays rather than duplicate them.
+        self._pulse = deepcopy(pulse)
+        self._n_pulses = n_pulses
+        self._stim_dur = stim_dur
+        # This class tiles whatever pulse it is handed, and the tiled numbers
+        # mean whatever that pulse's did -- including the zeros of a silent
+        # train. Without this the result would fall back to the default
+        # (current) reading of them:
+        self._defer(names, unit=pulse.unit, time_unit=pulse.time_unit)
+        self.metadata = {'user': metadata}
+
+    @property
+    def freq(self):
+        """Pulse train frequency (Hz)"""
+        return self._freq
+
+    @property
+    def pulse(self):
+        """The single pulse this train repeats"""
+        return self._pulse
+
+    @property
+    def n_pulses(self):
+        """Number of pulses delivered
+
+        Resolved at construction: ``n_pulses=None`` means as many whole
+        pulses as fit into ``stim_dur``.
+        """
+        return self._n_pulses
+
+    @property
+    def stim_dur(self):
+        """Total stimulus duration (ms)"""
+        return self._stim_dur
+
+    @property
+    def pulse_type(self):
+        """Name of the class the repeated pulse came from"""
+        return self._pulse.__class__.__name__
+
+    def _render(self):
+        """Tile the pulse into the train the parameters above describe"""
+        pulse, freq = self._pulse, self._freq
+        n_pulses, stim_dur = self._n_pulses, self._stim_dur
         if n_pulses <= 0:
             time = np.array([0, stim_dur], dtype=np.float64)
             data = np.array([[0, 0]], dtype=np.float32)
         else:
             # Window duration (ms) is the inverse of pulse train frequency:
             window_dur = MS_PER_S / freq
-            if pulse.time[-1] > window_dur:
-                raise ValueError(f"Pulse (dur={pulse.time[-1]:.2f} ms) does not fit into "
-                                 f"pulse train window (dur={window_dur:.2f} "
-                                 f"ms)")
-            shift = np.maximum(0, window_dur - pulse.time[-1])
+            shift = np.maximum(0, window_dur - pulse.duration)
             data, time = _tile_pulse(pulse, shift, n_pulses)
         if time[-1] > stim_dur + DT:
             # If stimulus is longer than the requested `stim_dur`, trim it.
@@ -177,25 +256,19 @@ class PulseTrain(Stimulus):
             time = np.append(time[t_idx], stim_dur)
         elif time[-1] < stim_dur - DT:
             # If stimulus is shorter than the requested `stim_dur`, add a zero:
-            data = np.hstack((data, np.zeros((pulse.data.shape[0], 1))))
+            data = np.hstack((data, np.zeros((data.shape[0], 1))))
             time = np.append(time, stim_dur)
-        super().__init__(data, time=time, electrodes=electrode, metadata=None,
-                         compress=False)
-        # This class tiles whatever pulse it is handed, and the tiled numbers
-        # mean whatever that pulse's did -- including the zeros of a silent
-        # train. Without this the result would fall back to the default
-        # (current) reading of them:
-        self._inherit_units(pulse)
-        self.freq = freq
-        self.pulse_type = pulse.__class__.__name__
-        self.metadata = {'user': metadata}
+        return {'data': data, 'electrodes': self.electrodes, 'time': time}
 
     def _pprint_params(self):
-        """Return a dict of class arguments to pretty-print"""
-        params = super()._pprint_params()
-        params.update({'freq': self.freq,
-                       'pulse_type': self.pulse_type})
-        return params
+        """Return a dict of class arguments to pretty-print
+
+        The parameters that define the train rather than the waveform they
+        describe, so that printing one does not generate it.
+        """
+        return {'freq': self.freq, 'pulse_type': self.pulse_type,
+                'n_pulses': self.n_pulses, 'stim_dur': self.stim_dur,
+                'electrodes': self.electrodes, 'metadata': self.metadata}
 
 
 class BiphasicPulseTrain(Stimulus):
@@ -248,7 +321,11 @@ class BiphasicPulseTrain(Stimulus):
        converted to those units. See :py:mod:`pulse2percept.units`.
 
     """
-    __slots__ = ('freq', 'cathodic_first')
+    #: Defined by the pulse it repeats rather than by its samples
+    #: (see `Stimulus._is_parametric`):
+    _is_parametric = True
+
+    __slots__ = ('_train',)
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
                  n_pulses=None, stim_dur=1000.0, cathodic_first=True,
@@ -267,12 +344,12 @@ class BiphasicPulseTrain(Stimulus):
                               interphase_dur=interphase_dur,
                               cathodic_first=cathodic_first,
                               electrode=electrode)
-        # Concatenate the pulses:
-        pt = PulseTrain(freq, pulse, n_pulses=n_pulses, stim_dur=stim_dur)
-        super().__init__(pt.data, time=pt.time, electrodes=electrode,
-                         compress=False)
-        self.freq = freq
-        self.cathodic_first = cathodic_first
+        # Concatenate the pulses. Built here rather than in `_render`, so that
+        # every argument is still checked at construction; neither object
+        # generates a waveform until one is asked for.
+        self._train = PulseTrain(freq, pulse, n_pulses=n_pulses,
+                                 stim_dur=stim_dur)
+        self._defer(_electrode_names(electrode))
 
         # Store metadata for BiphasicAxonMapModel. `amp` is stored as a
         # magnitude, because that is all of it that reaches the data:
@@ -285,6 +362,51 @@ class BiphasicPulseTrain(Stimulus):
                          'phase_dur': phase_dur,
                          'delay_dur': delay_dur,
                          'user': metadata}
+
+    @property
+    def freq(self):
+        """Pulse train frequency (Hz)"""
+        return self._train.freq
+
+    @property
+    def n_pulses(self):
+        """Number of pulses delivered"""
+        return self._train.n_pulses
+
+    @property
+    def stim_dur(self):
+        """Total stimulus duration (ms)"""
+        return self._train.stim_dur
+
+    @property
+    def amp(self):
+        """Magnitude (uA) of both phases of each pulse"""
+        return self._train.pulse.amp
+
+    @property
+    def phase_dur(self):
+        """Duration (ms) of the cathodic/anodic phase"""
+        return self._train.pulse.phase_dur
+
+    @property
+    def interphase_dur(self):
+        """Duration (ms) of the gap between the two phases"""
+        return self._train.pulse.interphase_dur
+
+    @property
+    def delay_dur(self):
+        """Delay (ms) before the first phase of each pulse"""
+        return self._train.pulse.delay_dur
+
+    @property
+    def cathodic_first(self):
+        """Whether the cathodic phase is delivered first"""
+        return self._train.pulse.cathodic_first
+
+    def _render(self):
+        """The tiled train the parameters above describe"""
+        return {'data': self._train.data, 'electrodes': self.electrodes,
+                'time': self._train.time}
 
     @classmethod
     def _rescale_params(cls, metadata, factor):
@@ -314,22 +436,18 @@ class BiphasicPulseTrain(Stimulus):
             return {'user': metadata.get('user')}
         return dict(metadata, amp=abs(metadata['amp'] * factor))
 
-    def _rescale_metadata(self, factor):
-        """Keep this train's own parameters, and its polarity, in sync"""
-        if factor == 1:
-            return
-        self.metadata = self._rescale_params(self.metadata, factor)
-        if factor is not None and factor < 0:
-            # The two phases swapped places. `BiphasicPulse` reads the polarity
-            # off this flag, so that is where the sign belongs:
-            self.cathodic_first = not self.cathodic_first
-
     def _pprint_params(self):
-        """Return a dict of class arguments to pretty-print"""
-        params = super()._pprint_params()
-        params.update({'cathodic_first': self.cathodic_first,
-                       'freq': self.freq})
-        return params
+        """Return a dict of class arguments to pretty-print
+
+        The parameters that define the train rather than the waveform they
+        describe, so that printing one does not generate it.
+        """
+        return {'freq': self.freq, 'amp': self.amp,
+                'phase_dur': self.phase_dur,
+                'interphase_dur': self.interphase_dur,
+                'delay_dur': self.delay_dur, 'stim_dur': self.stim_dur,
+                'cathodic_first': self.cathodic_first,
+                'electrodes': self.electrodes, 'metadata': self.metadata}
 
 
 class AsymmetricBiphasicPulseTrain(Stimulus):
@@ -379,7 +497,11 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
        converted to those units. See :py:mod:`pulse2percept.units`.
 
     """
-    __slots__ = ('freq', 'cathodic_first')
+    #: Defined by the pulse it repeats rather than by its samples
+    #: (see `Stimulus._is_parametric`):
+    _is_parametric = True
+
+    __slots__ = ('_train',)
 
     def __init__(self, freq, amp1, amp2, phase_dur1, phase_dur2,
                  interphase_dur=0, delay_dur=0, n_pulses=None, stim_dur=1000.0,
@@ -399,20 +521,80 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
                                         interphase_dur=interphase_dur,
                                         cathodic_first=cathodic_first,
                                         electrode=electrode)
-        # Concatenate the pulses:
-        pt = PulseTrain(freq, pulse, n_pulses=n_pulses, stim_dur=stim_dur)
-        super().__init__(pt.data, time=pt.time, electrodes=electrode,
-                         compress=False)
-        self.freq = freq
-        self.cathodic_first = cathodic_first
+        # Concatenate the pulses (see `BiphasicPulseTrain.__init__`):
+        self._train = PulseTrain(freq, pulse, n_pulses=n_pulses,
+                                 stim_dur=stim_dur)
+        self._defer(_electrode_names(electrode))
         self.metadata = {'user': metadata}
 
+    @property
+    def freq(self):
+        """Pulse train frequency (Hz)"""
+        return self._train.freq
+
+    @property
+    def n_pulses(self):
+        """Number of pulses delivered"""
+        return self._train.n_pulses
+
+    @property
+    def stim_dur(self):
+        """Total stimulus duration (ms)"""
+        return self._train.stim_dur
+
+    @property
+    def amp1(self):
+        """Magnitude (uA) of the first phase of each pulse"""
+        return self._train.pulse.amp1
+
+    @property
+    def amp2(self):
+        """Magnitude (uA) of the second phase of each pulse"""
+        return self._train.pulse.amp2
+
+    @property
+    def phase_dur1(self):
+        """Duration (ms) of the first pulse phase"""
+        return self._train.pulse.phase_dur1
+
+    @property
+    def phase_dur2(self):
+        """Duration (ms) of the second pulse phase"""
+        return self._train.pulse.phase_dur2
+
+    @property
+    def interphase_dur(self):
+        """Duration (ms) of the gap between the two phases"""
+        return self._train.pulse.interphase_dur
+
+    @property
+    def delay_dur(self):
+        """Delay (ms) before the first phase of each pulse"""
+        return self._train.pulse.delay_dur
+
+    @property
+    def cathodic_first(self):
+        """Whether the cathodic phase is delivered first"""
+        return self._train.pulse.cathodic_first
+
+    def _render(self):
+        """The tiled train the parameters above describe"""
+        return {'data': self._train.data, 'electrodes': self.electrodes,
+                'time': self._train.time}
+
     def _pprint_params(self):
-        """Return a dict of class arguments to pretty-print"""
-        params = super()._pprint_params()
-        params.update({'cathodic_first': self.cathodic_first,
-                       'freq': self.freq})
-        return params
+        """Return a dict of class arguments to pretty-print
+
+        The parameters that define the train rather than the waveform they
+        describe, so that printing one does not generate it.
+        """
+        return {'freq': self.freq, 'amp1': self.amp1, 'amp2': self.amp2,
+                'phase_dur1': self.phase_dur1,
+                'phase_dur2': self.phase_dur2,
+                'interphase_dur': self.interphase_dur,
+                'delay_dur': self.delay_dur, 'stim_dur': self.stim_dur,
+                'cathodic_first': self.cathodic_first,
+                'electrodes': self.electrodes, 'metadata': self.metadata}
 
 
 class BiphasicTripletTrain(Stimulus):
@@ -468,7 +650,11 @@ class BiphasicTripletTrain(Stimulus):
        converted to those units. See :py:mod:`pulse2percept.units`.
 
     """
-    __slots__ = ('freq', 'cathodic_first')
+    #: Defined by the pulse it repeats rather than by its samples
+    #: (see `Stimulus._is_parametric`):
+    _is_parametric = True
+
+    __slots__ = ('_train', '_pulse', '_interpulse_dur')
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, interpulse_dur=0,
                  delay_dur=0, n_pulses=None, stim_dur=1000.0, cathodic_first=True,
@@ -486,6 +672,12 @@ class BiphasicTripletTrain(Stimulus):
                               delay_dur=delay_dur,
                               cathodic_first=cathodic_first,
                               electrode=electrode)
+        # The pulse the triplet is made of, kept for the parameters below.
+        # The triplet itself is assembled once, here, rather than at render
+        # time: it is three copies of a handful of time points, and building
+        # it is what checks that they fit together at all.
+        self._pulse = pulse
+        self._interpulse_dur = interpulse_dur
         if interpulse_dur != 0:
             # Create an interpulse 'delay' pulse. It has to sit on the same
             # electrode as `pulse`, or the two cannot be appended:
@@ -493,18 +685,72 @@ class BiphasicTripletTrain(Stimulus):
             pulse = pulse.append(delay_pulse)
         # Create the pulse triplet:
         triplet = pulse.append(pulse).append(pulse)
-        # Create the triplet train:
-        pt = PulseTrain(freq, triplet, n_pulses=n_pulses, stim_dur=stim_dur)
-        # Set up the Stimulus object through the constructor:
-        super().__init__(pt.data, time=pt.time, electrodes=electrode,
-                         compress=False)
-        self.freq = freq
-        self.cathodic_first = cathodic_first
+        # Create the triplet train (see `BiphasicPulseTrain.__init__`):
+        self._train = PulseTrain(freq, triplet, n_pulses=n_pulses,
+                                 stim_dur=stim_dur)
+        self._defer(_electrode_names(electrode))
         self.metadata = {'user': metadata}
 
+    @property
+    def freq(self):
+        """Pulse train frequency (Hz)"""
+        return self._train.freq
+
+    @property
+    def n_pulses(self):
+        """Number of pulses delivered"""
+        return self._train.n_pulses
+
+    @property
+    def stim_dur(self):
+        """Total stimulus duration (ms)"""
+        return self._train.stim_dur
+
+    @property
+    def amp(self):
+        """Magnitude (uA) of both phases of each pulse"""
+        return self._pulse.amp
+
+    @property
+    def phase_dur(self):
+        """Duration (ms) of the cathodic/anodic phase"""
+        return self._pulse.phase_dur
+
+    @property
+    def interphase_dur(self):
+        """Duration (ms) of the gap between the two phases"""
+        return self._pulse.interphase_dur
+
+    @property
+    def interpulse_dur(self):
+        """Delay (ms) after each pulse of the triplet"""
+        return self._interpulse_dur
+
+    @property
+    def delay_dur(self):
+        """Delay (ms) before the first phase of each pulse"""
+        return self._pulse.delay_dur
+
+    @property
+    def cathodic_first(self):
+        """Whether the cathodic phase is delivered first"""
+        return self._pulse.cathodic_first
+
+    def _render(self):
+        """The tiled train the parameters above describe"""
+        return {'data': self._train.data, 'electrodes': self.electrodes,
+                'time': self._train.time}
+
     def _pprint_params(self):
-        """Return a dict of class arguments to pretty-print"""
-        params = super()._pprint_params()
-        params.update({'cathodic_first': self.cathodic_first,
-                       'freq': self.freq})
-        return params
+        """Return a dict of class arguments to pretty-print
+
+        The parameters that define the train rather than the waveform they
+        describe, so that printing one does not generate it.
+        """
+        return {'freq': self.freq, 'amp': self.amp,
+                'phase_dur': self.phase_dur,
+                'interphase_dur': self.interphase_dur,
+                'interpulse_dur': self.interpulse_dur,
+                'delay_dur': self.delay_dur, 'stim_dur': self.stim_dur,
+                'cathodic_first': self.cathodic_first,
+                'electrodes': self.electrodes, 'metadata': self.metadata}

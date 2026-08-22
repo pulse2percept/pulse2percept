@@ -825,9 +825,12 @@ class Stimulus(PrettyPrint):
         described by its samples and by nothing else, so it cannot claim an
         amplitude or a duration it does not deliver.
         """
-        return Stimulus(self.data, electrodes=self.electrodes,
-                        time=self.time,
-                        metadata=deepcopy(self.metadata))._inherit_units(self)
+        stim = Stimulus(self.data, electrodes=self.electrodes, time=self.time)
+        # Assigned rather than passed to the constructor: a class that keeps
+        # its waveform parameters in ``metadata`` (a pulse train's frequency,
+        # say) has a dict of a shape the constructor would file under 'user'.
+        stim.metadata = deepcopy(self.metadata)
+        return stim._inherit_units(self)
 
     def _derived(self):
         """The object a waveform-rewriting operation builds its result on
@@ -895,6 +898,20 @@ class Stimulus(PrettyPrint):
         metadata : dict
         """
         return metadata
+
+    def _rescale_result(self, stim, factor):
+        """Keep the metadata of a transformed copy in step with its data
+
+        ``stim`` is what an operation on ``self`` produced. Usually it is a
+        copy of ``self`` and knows how to read its own metadata. For a
+        parameter-backed stimulus it is a plain
+        :py:class:`~pulse2percept.stimuli.Stimulus` instead (see
+        :py:meth:`_derived`), which does not -- so the class that wrote those
+        parameters rewrites them from here, while it is still known.
+        """
+        stim._rescale_metadata(factor)
+        if self._is_parametric:
+            stim.metadata = type(self)._rescale_params(stim.metadata, factor)
 
     def _rescale_metadata(self, factor):
         """Keep the metadata in sync with data that was scaled by ``factor``
@@ -1021,7 +1038,7 @@ class Stimulus(PrettyPrint):
         # any parameters describing the first one no longer describe the
         # result -- a pulse train appended to another is not one pulse train
         # at one amplitude and frequency, whatever its type still says:
-        stim._rescale_metadata(None)
+        self._rescale_result(stim, None)
         return stim
 
     def remove(self, electrodes):
@@ -1553,7 +1570,7 @@ class Stimulus(PrettyPrint):
         # Parameters that describe the waveform (a pulse train's amplitude,
         # say) have to follow the data, or a model reading them back predicts
         # from a stimulus that is no longer the one it was handed:
-        stim._rescale_metadata(_scale_factor(a, op, b, field))
+        self._rescale_result(stim, _scale_factor(a, op, b, field))
         return stim
 
     def _as_amplitude(self, scalar):

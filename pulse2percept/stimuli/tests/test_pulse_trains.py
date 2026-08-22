@@ -339,9 +339,13 @@ def test_BiphasicPulseTrain_metadata_polarity():
     for flipped in (-pt, pt * -1, 0 - pt, pt / -1):
         npt.assert_almost_equal(flipped.data, -pt.data)
         npt.assert_equal(flipped.metadata['amp'], 10)
-        npt.assert_equal(flipped.cathodic_first, not pt.cathodic_first)
+        # A flipped train is not a BiphasicPulseTrain: its parameters would
+        # have to describe a waveform it no longer has (see
+        # `Stimulus._derived`), so the swapped phases live in the data rather
+        # than on a `cathodic_first` flag.
+        npt.assert_equal(type(flipped), Stimulus)
     # Flipping twice comes back to where it started:
-    npt.assert_equal((-(-pt)).cathodic_first, pt.cathodic_first)
+    npt.assert_almost_equal((-(-pt)).data, pt.data)
     # A flipped train is the train that was built the other way round:
     direct = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100,
                                 cathodic_first=False)
@@ -379,7 +383,9 @@ def test_BiphasicPulseTrain_metadata_shift():
     pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
     for shifted in (pt >> 5, pt << 5, pt + 0, pt - 0):
         npt.assert_equal(shifted.metadata, pt.metadata)
-        npt.assert_equal(shifted.cathodic_first, pt.cathodic_first)
+        # ...on a plain Stimulus, though: a shifted train no longer ends where
+        # its `stim_dur` says (see `Stimulus._derived`).
+        npt.assert_equal(type(shifted), Stimulus)
     npt.assert_almost_equal((pt >> 5).time, pt.time + 5)
 
 

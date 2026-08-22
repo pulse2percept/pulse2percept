@@ -644,3 +644,48 @@ def test_ProsthesisSystem_historical_stimuli_unchanged():
     implant.max_current = 0.2 * mA
     implant.stim = {name: 2 for name in ArgusII().electrode_names}
     npt.assert_equal(implant.stim.unit, uA)
+
+
+def test_ProsthesisSystem_deactivated_electrodes_do_not_mutate_the_source():
+    # Filtering out deactivated electrodes rewrites the stimulus, so it
+    # happens on a copy. A stimulus defined by its pulse parameters cannot
+    # lose an electrode and remain one, so what the implant stores for it is
+    # an ordinary Stimulus -- assigning a perfectly good pulse must not fail
+    # merely because the electrode it names happens to be switched off.
+    pulse = BiphasicPulse(20, 0.45, electrode='A1')
+    implant = ArgusII()
+    implant.deactivate('A1')
+    implant.stim = pulse
+    npt.assert_equal(type(implant.stim), Stimulus)
+    npt.assert_equal(implant.stim.shape[0], 0)
+    # The caller still holds their pulse, unchanged:
+    npt.assert_equal(type(pulse), BiphasicPulse)
+    npt.assert_equal(pulse.shape[0], 1)
+    npt.assert_almost_equal(pulse.amp, 20)
+
+    # Same for an electrode switched off after the fact:
+    implant = ArgusII(stim=BiphasicPulse(20, 0.45, electrode='A1'))
+    npt.assert_equal(type(implant.stim), BiphasicPulse)
+    implant.deactivate('A1')
+    npt.assert_equal(type(implant.stim), Stimulus)
+    npt.assert_equal(implant.stim.shape[0], 0)
+
+    # An ordinary stimulus is not mutated by either path, which it used to be:
+    for deactivate_first in (True, False):
+        stim = Stimulus({'A1': 10, 'B2': 20})
+        implant = ArgusII()
+        if deactivate_first:
+            implant.deactivate('A1')
+            implant.stim = stim
+        else:
+            implant.stim = stim
+            implant.deactivate('A1')
+        npt.assert_equal(sorted(str(e) for e in stim.electrodes),
+                         ['A1', 'B2'])
+        npt.assert_equal([str(e) for e in implant.stim.electrodes], ['B2'])
+
+    # Nothing deactivated means nothing is copied or removed:
+    stim = Stimulus({'A1': 10, 'B2': 20})
+    implant = ArgusII(stim=stim)
+    npt.assert_equal(sorted(str(e) for e in implant.stim.electrodes),
+                     ['A1', 'B2'])
