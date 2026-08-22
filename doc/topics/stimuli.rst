@@ -146,13 +146,6 @@ Every Stimulus exposes the same basic pieces:
 ``stim.time``
     The time axis, or ``None`` for a stimulus without a time component.
 
-For a time-varying stimulus, the easiest way to see what is being delivered is
-often:
-
-.. code-block:: python
-
-    stim.plot()
-
 Stimuli can also be indexed by electrode name and time:
 
 .. code-block:: python
@@ -167,6 +160,33 @@ you want ordinary NumPy indexing by row and column.
 The time axis does not need to be uniformly sampled. Pulse classes store the
 important transition points rather than a dense sample at every simulation
 step, which keeps long pulse trains compact.
+
+Looking at a stimulus
+---------------------
+
+:py:meth:`~pulse2percept.stimuli.Stimulus.plot` draws either an overview of
+the whole stimulus or the waveforms of the electrodes you name:
+
+.. code-block:: python
+
+    stim.plot()                          # compact overview
+    stim.plot(time=(0, 50 * ms))         # the same overview, zoomed in time
+    stim.plot(electrodes=['A1', 'A2'])   # inspect individual waveforms
+
+The overview is an electrode-by-time heatmap: one row per electrode, color for
+current, zero in the middle of a diverging colormap so that cathodic and
+anodic phases are told apart. An encoded Argus II stimulus drives 60
+electrodes, and 60 stacked waveforms show nothing useful; the heatmap shows
+which electrodes fire, how strongly, and in what order. Because it plots
+against the real time axis rather than against column number, the
+sub-millisecond phases of a pulse stay sub-millisecond next to the long gaps
+between pulses.
+
+Naming electrodes means "show me these signals in detail", so it draws
+waveforms instead, one subplot per electrode. So does a single-electrode
+stimulus such as a pulse or a pulse train.
+
+Pass ``kind='traces'`` or ``kind='heatmap'`` to overrule that choice.
 
 Images and videos are different
 -------------------------------

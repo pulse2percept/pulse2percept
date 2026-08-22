@@ -76,6 +76,11 @@ API changes:
   previously had its gray levels silently treated as microamps. The same check
   guards the ``safe_mode`` and ``max_current`` safety checks.
 
+* :py:meth:`~pulse2percept.stimuli.Stimulus.plot` draws a whole
+  multi-electrode stimulus as an electrode-by-time heatmap rather than as one
+  subplot per electrode. Name ``electrodes`` for waveforms, or pass
+  ``kind='traces'`` / ``kind='heatmap'`` to choose outright.
+
 * Minimum dependency versions were raised for NumPy 2 compatibility. NumPy 1.x
   users should remain on v0.9.1.
 

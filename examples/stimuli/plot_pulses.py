@@ -108,11 +108,15 @@ stim = Stimulus({
     'A1': MonophasicPulse(-20, 1, stim_dur=75),
     'C7': AsymmetricBiphasicPulse(-20, 2, 1, 10, delay_dur=25, stim_dur=100)
 })
-stim.plot()
+stim.plot(electrodes=['A1', 'C7'])
 
 ##############################################################################
 # Note how the different stimuli will be padded as necessary to bring all of
 # them to a common stimulus duration.
+#
+# Naming the electrodes asks for their waveforms. Leaving ``electrodes`` out
+# asks for an overview of the whole stimulus instead, which is what the next
+# section is about.
 #
 # Alternatively, you can also pass the stimuli as a list, in which case you
 # might want to specify the electrode names in a list as well:
@@ -121,4 +125,34 @@ stim = Stimulus([MonophasicPulse(-20, 1, stim_dur=100),
                  AsymmetricBiphasicPulse(-20, 2, 1, 10, delay_dur=25,
                                          stim_dur=100)],
                 electrodes=['A1', 'C7'])
-stim.plot()
+stim.plot(kind='traces')
+
+##############################################################################
+# Inspecting a whole implant
+# --------------------------
+#
+# Stacked waveforms stop being readable at more than a handful of electrodes,
+# so :py:meth:`~pulse2percept.stimuli.Stimulus.plot` draws a whole
+# multi-electrode stimulus as an electrode-by-time heatmap. Here are all 60
+# electrodes of an :py:class:`~pulse2percept.implants.ArgusII`, driven by an
+# amplitude-encoded eye chart:
+
+from pulse2percept.implants import ArgusII
+from pulse2percept.stimuli import AmplitudeEncoder, SnellenChart
+
+implant = ArgusII()
+encoder = AmplitudeEncoder(amp_range=(0, 50), freq=20)
+implant.stim = encoder.encode(SnellenChart().invert(), implant=implant)
+
+implant.stim.plot(time=(0, 100))
+
+##############################################################################
+# Color is current, centered on zero, so the cathodic and anodic phase of each
+# pulse are told apart. The time axis is the real one: the sub-millisecond
+# phases of a pulse are not stretched to the width of the 50 ms gaps between
+# them.
+#
+# Zoom in time with ``time=``, and drill down into individual waveforms by
+# naming electrodes:
+
+implant.stim.plot(electrodes=['A1', 'C7', 'F10'])
