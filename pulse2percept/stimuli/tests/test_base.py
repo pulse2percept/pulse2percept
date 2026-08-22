@@ -308,7 +308,7 @@ def test_Stimulus_plot():
         stim = Stimulus(np.random.rand(n_electrodes, 20),
                         electrodes=[f'E{i}' for i in range(n_electrodes)])
         fig, axes = plt.subplots(ncols=n_electrodes)
-        stim.plot(ax=axes, kind='traces')
+        stim.plot(ax=axes)
         npt.assert_equal(isinstance(axes, (list, np.ndarray)), True)
         for ax, electrode in zip(axes, stim.electrodes):
             npt.assert_equal(isinstance(ax, Subplot), True)
@@ -335,12 +335,12 @@ def test_Stimulus_plot():
     with pytest.raises(ValueError):
         stim = Stimulus(np.ones((3, 10)))
         _, axes = plt.subplots(nrows=4)
-        stim.plot(ax=axes, kind='traces')
+        stim.plot(ax=axes)
     with pytest.raises(TypeError):
         stim = Stimulus(np.ones((3, 10)))
         _, axes = plt.subplots(nrows=3)
         axes[1] = 0
-        stim.plot(ax=axes, kind='traces')
+        stim.plot(ax=axes)
     with pytest.raises(TypeError):
         # A heatmap has nowhere to put a second Axes:
         _, axes = plt.subplots(nrows=3)
@@ -365,12 +365,22 @@ def test_Stimulus_plot_kind_default():
     npt.assert_equal(len(axes), 3)
     npt.assert_equal([ax.get_ylabel() for ax in axes], ['E0', 'E1', 'E2'])
     plt.close('all')
-    # `kind` overrides both defaults:
+    # Handing over an Axes per electrode says the same thing:
+    _, axes = plt.subplots(nrows=4)
+    multi.plot(ax=axes)
+    npt.assert_equal([len(ax.lines) for ax in axes], [1, 1, 1, 1])
+    plt.close('all')
+    # `kind` overrides all of that:
     npt.assert_equal(len(multi.plot(kind='traces')), 4)
     plt.close('all')
     ax = multi.plot(electrodes=['E2', 'E0'], kind='heatmap')
     npt.assert_equal([t.get_text() for t in ax.get_yticklabels()],
                      ['E2', 'E0'])
+    plt.close('all')
+    with pytest.raises(TypeError):
+        # ... including into a request a heatmap cannot honor:
+        _, axes = plt.subplots(nrows=4)
+        multi.plot(ax=axes, kind='heatmap')
     plt.close('all')
 
 
@@ -456,7 +466,7 @@ def test_Stimulus_plot_heatmap_electrode_selection():
 
 
 def test_Stimulus_plot_leaves_the_callers_figure_alone():
-    """`plot` draws where it is told; it does not re-lay-out someone's figure
+    """A supplied Axes is the whole canvas `plot` gets
 
     Positions are only compared between Axes `plot` was not given, so this
     does not pin down what a plot looks like -- only that the rest of the
@@ -470,7 +480,18 @@ def test_Stimulus_plot_leaves_the_callers_figure_alone():
         npt.assert_almost_equal(theirs.get_position().bounds, before)
         # A figure-wide layout engine would move every Axes at draw time:
         npt.assert_equal(fig.get_layout_engine(), None)
+        # Nothing figure-level was added either: no shared label, and no
+        # colorbar Axes squeezing in next to the caller's own:
+        npt.assert_equal(fig.get_supylabel(), '')
+        npt.assert_equal(fig.texts, [])
+        npt.assert_equal(fig.axes, [mine, theirs])
         plt.close(fig)
+    # Owning the figure is what earns `plot` the decoration:
+    ax = stim.plot()
+    npt.assert_equal(ax.collections[0].colorbar is not None, True)
+    npt.assert_equal(stim.plot(kind='traces')[0].figure.get_supylabel(),
+                     r'Amplitude ($\mu$A)')
+    plt.close('all')
 
 
 def _unique_timepoints(stim, data):

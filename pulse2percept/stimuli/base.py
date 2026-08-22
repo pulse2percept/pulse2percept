@@ -1081,8 +1081,7 @@ class Stimulus(PrettyPrint):
                for a whole implant's worth of electrodes.
 
             If None, a whole stimulus of more than one electrode is drawn as a
-            heatmap and everything else as traces: naming electrodes means
-            "show me these signals in detail".
+            heatmap and everything else as traces.
 
         Returns
         -------
@@ -1095,8 +1094,12 @@ class Stimulus(PrettyPrint):
             # Cannot plot stimulus with single time point:
             raise NotImplementedError
         if kind is None:
-            overview = electrodes is None and len(self.electrodes) > 1
-            kind = 'heatmap' if overview else 'traces'
+            if isinstance(ax, (list, np.ndarray)):
+                kind = 'traces'
+            elif electrodes is None and len(self.electrodes) > 1:
+                kind = 'heatmap'
+            else:
+                kind = 'traces'
         elif kind not in ('traces', 'heatmap'):
             raise ValueError(f"Unknown kind '{kind}'. Choose from 'traces' or "
                              f"'heatmap'.")
@@ -1116,8 +1119,7 @@ class Stimulus(PrettyPrint):
         # The user can ask for a range, slice, or list of time points, which
         # are either interpolated or loaded directly.
         if time is None:
-            # Ask for a slice instead of `self.time` to avoid interpolation,
-            # which can be time-consuming for an uncompressed stimulus:
+            # Ask for a slice instead of `self.time` to avoid interpolation:
             time = slice(None)
         # A range, a list of time points, or the endpoints and step of a slice
         # may all be given as quantities:
@@ -1133,10 +1135,6 @@ class Stimulus(PrettyPrint):
             t_idx = time
             t_vals = time
         elif isinstance(time, slice):
-            # A stepped slice is a time range, and `__getitem__` will
-            # interpolate onto it. Resolve it to those time points here as
-            # well, or the curve would be drawn against the time points that
-            # happen to sit at those column *indices* instead:
             t_vals = self._slice_times(time)
             if t_vals is None:
                 # Every stored sample, taken by position:
@@ -1163,6 +1161,7 @@ class Stimulus(PrettyPrint):
 
     def _plot_traces(self, electrodes, t_idx, t_vals, fmt, ax):
         """Draw one waveform per electrode, each in its own Axes"""
+        owns_figure = ax is None
         axes = ax
         if axes is None:
             if len(electrodes) == 1:
@@ -1202,9 +1201,8 @@ class Stimulus(PrettyPrint):
         # Only the bottom subplot carries the shared time axis:
         axes[-1].set_xticks(np.linspace(t_vals[0], t_vals[-1], num=5))
         axes[-1].set_xlabel(f'Time ({self.time_unit})')
-        # Every Axes spends its y label on an electrode name, so the unit has
-        # to go where the whole stack can share it:
-        axes[-1].figure.supylabel(self._value_label())
+        if owns_figure:
+            axes[-1].figure.supylabel(self._value_label())
         if len(axes) == 1:
             return axes[0]
         return axes
@@ -1215,6 +1213,7 @@ class Stimulus(PrettyPrint):
             raise TypeError(f"A heatmap is drawn in a single Axes, but 'ax' "
                             f"is a sequence of {len(ax)}.")
         electrodes = list(electrodes)
+        owns_figure = ax is None
         if ax is None:
             # Give every electrode a readable row of its own:
             height = float(np.clip(0.18 * len(electrodes), 2.5, 12))
@@ -1238,7 +1237,8 @@ class Stimulus(PrettyPrint):
         ax.invert_yaxis()
         ax.set_xlabel(f'Time ({self.time_unit})')
         ax.set_ylabel('Electrode')
-        ax.figure.colorbar(mesh, ax=ax, label=self._value_label())
+        if owns_figure:
+            ax.figure.colorbar(mesh, ax=ax, label=self._value_label())
         return ax
 
     def __getitem__(self, item):
@@ -1265,12 +1265,8 @@ class Stimulus(PrettyPrint):
                 sliced = self._slice_times(time)
                 if sliced is not None:
                     time = sliced
-                # Otherwise the slice stays what it is, and NumPy takes the
-                # columns it names below.
             elif time is not Ellipsis:
-                # A requested time point (or a list of them) may be unitful;
-                # after this it is an ordinary number, which is what the
-                # indexing and interpolation below have always worked on:
+                # A requested time point (or a list of them) may be unitful
                 time = self._as_time(time)
                 # Convert to float so time is not mistaken for column index
                 if np.array(time).dtype != bool:
@@ -1281,8 +1277,6 @@ class Stimulus(PrettyPrint):
 
         # STEP 2: ELECTRODES COULD BE SPECIFIED AS INT OR STR
         if isinstance(electrodes, (list, np.ndarray)) or np.isscalar(electrodes):
-            # Electrodes cannot be interpolated, so convert from slice,
-            # ellipsis or indices into a list:
             parsed_electrodes = []
             for e in np.array([electrodes]).ravel():
                 if isinstance(e, str):
@@ -1312,15 +1306,12 @@ class Stimulus(PrettyPrint):
         try:
             return self._stim['data'][item]
         except IndexError as e:
-            # IndexErrors must still be thrown except when `item` is a tuple,
-            # in which case we might want to interpolate time:
             if not isinstance(item, tuple):
                 raise IndexError(e)
 
         # STEP 3: INTERPOLATE TIME
         # From here on out, we know that ``item`` is a tuple, otherwise we
         # would have raised an IndexError above.
-        # First of all, if time=None, we won't interp:
         if self.time is None:
             raise ValueError("Cannot interpolate time if time=None.")
         time = np.array([time]).flatten()
