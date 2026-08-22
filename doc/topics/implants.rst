@@ -63,10 +63,10 @@ For an epiretinal implant such as Argus II, a typical simulation looks like:
 
     implant = p2p.implants.ArgusII()
 
-    encoder = p2p.stimuli.AmplitudeEncoder(
-        implant, amp_range=(0, 50), freq=20
+    implant.encoder = p2p.stimuli.AmplitudeEncoder(
+        amp_range=(0, 50), freq=20
     )
-    implant.stim = encoder.encode(p2p.stimuli.BostonTrain())
+    implant.stim = p2p.stimuli.BostonTrain()
 
     model = p2p.models.AxonMapModel().build()
     percept = model.predict_percept(implant)
@@ -450,9 +450,7 @@ split an array into groups that take turns:
 
 .. code-block:: python
 
-    implant.raster = p2p.implants.CheckerboardRaster(
-        implant, n_groups=5
-    )
+    implant.raster = p2p.implants.CheckerboardRaster(n_groups=5)
 
 The encoder uses that schedule when constructing the electrical stimulus. See
 :ref:`topics-rasters` for the details.

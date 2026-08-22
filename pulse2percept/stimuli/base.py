@@ -355,10 +355,12 @@ class Stimulus(PrettyPrint):
     A stimulus can be created from a variety of source types (e.g., scalars,
     lists, NumPy arrays, and dictionaries).
 
-    A stimulus is immutable. For an arbitrary stimulus, the sampled waveform
-    *is* the stimulus. Pulse-based and encoded stimuli instead retain the
-    parameters or the schedule that define them, and generate their waveform
-    only when samples such as ``data`` are asked for.
+    A stimulus owns its scientific state: ``data``, ``time``, ``electrodes``
+    and the pulse parameters are read-only, so callers cannot mutate them in
+    place. For an arbitrary stimulus the sampled waveform *is* the stimulus;
+    pulse-based and encoded stimuli instead retain the parameters or the
+    schedule that define them, and generate their waveform only when samples
+    such as ``data`` are asked for.
 
     .. seealso ::
 
@@ -437,11 +439,13 @@ class Stimulus(PrettyPrint):
        the value of its closest end point will be returned.
     *  Pulse parameters such as ``amp``, ``freq`` and ``phase_dur`` are
        first-class and read-only, and reading them never generates a waveform.
-    *  Transformations return a new stimulus. One whose result the parameters
-       still describe keeps its structured form (``pulse_train * 2`` is a pulse
-       train at twice the amplitude); one they cannot -- a DC offset, a shift
-       in time, an appended second train -- falls back to a plain, waveform-
-       backed ``Stimulus``.
+    *  Most transformations return a new stimulus. One whose result the
+       parameters still describe keeps its structured form (``pulse_train * 2``
+       is a pulse train at twice the amplitude); one they cannot -- a DC
+       offset, a shift in time, an appended second train -- falls back to a
+       plain, waveform-backed ``Stimulus``.
+    *  :py:meth:`compress` and :py:meth:`remove` are the exceptions: they
+       replace the stimulus' own state rather than returning a new object.
 
     Examples
     --------
@@ -1112,9 +1116,7 @@ class Stimulus(PrettyPrint):
     def compress(self):
         """Compress the source data
 
-        Returns
-        -------
-        compressed : :py:class:`~pulse2percept.stimuli.Stimulus`
+        Modifies the stimulus in place; returns nothing.
         """
         data = self.data
         electrodes = self.electrodes

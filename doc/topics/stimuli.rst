@@ -161,12 +161,12 @@ The time axis does not need to be uniformly sampled. Pulse classes store the
 important transition points rather than a dense sample at every simulation
 step, which keeps long pulse trains compact.
 
-Immutable, and sampled when asked
+Read-only, and sampled when asked
 ---------------------------------
 
 .. versionchanged:: 0.10.0
 
-A Stimulus is an immutable scientific value. Its ``data``, ``time`` and
+A Stimulus owns its scientific state. Its ``data``, ``time`` and
 ``electrodes`` arrays are read-only, so a stimulus you hand to an implant or a
 model is the one you get back.
 
@@ -186,8 +186,8 @@ So pulse parameters are first-class and read-only, and reading them never
 costs a waveform. ``stim.data`` remains the public sampled waveform, and
 reading it may be what generates it.
 
-Operations return a **new** stimulus rather than modifying one. Where the
-result is still describable in the same terms, it keeps that form:
+Most operations return a **new** stimulus rather than modifying one. Where
+the result is still describable in the same terms, it keeps that form:
 
 .. code-block:: python
 
@@ -197,6 +197,10 @@ result is still describable in the same terms, it keeps that form:
 An operation that cannot be represented truthfully -- a DC offset, a shift in
 time, appending a second train -- falls back to an ordinary waveform-backed
 Stimulus rather than reporting parameters that no longer describe it.
+
+:py:meth:`~pulse2percept.stimuli.Stimulus.compress` and
+:py:meth:`~pulse2percept.stimuli.Stimulus.remove` are the exceptions. Both
+predate this and still replace the stimulus' own state in place.
 
 Looking at a stimulus
 ---------------------
@@ -244,13 +248,12 @@ stimulation:
 
 .. code-block:: python
 
-    encoder = p2p.stimuli.AmplitudeEncoder(
-        implant,
+    implant.encoder = p2p.stimuli.AmplitudeEncoder(
         amp_range=(0, 50 * uA),
         freq=20 * Hz,
     )
 
-    implant.stim = encoder.encode(source)
+    implant.stim = source
 
 This distinction matters. A gray level of 0.5 is not 0.5 uA; the encoder is
 what defines how image intensity maps onto stimulation. See
