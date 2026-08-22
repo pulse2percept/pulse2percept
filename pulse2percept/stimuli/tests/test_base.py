@@ -1767,3 +1767,205 @@ def test_Stimulus_render_is_not_implemented_by_default():
     # implementation exists only to name what a subclass forgot:
     with pytest.raises(NotImplementedError):
         Stimulus._render(Stimulus(3))
+
+
+def _n_renders(stim):
+    """How often the `CountingLazy` entries of a collection have rendered"""
+    return sum(getattr(c, 'n_renders', 0) for c, _ in stim._components)
+
+
+def _lazy(stim):
+    return stim._Stimulus__stim['data'] is None
+
+
+# The collections Phase 5 has to keep unmerged, each as (name, source). The
+# expensive one is the last: differing frequencies means every entry lands on
+# its own time axis, and merging them interpolates all of them onto the union.
+COLLECTIONS = [
+    ('same protocol', lambda: {'A1': CountingLazy(4, ['A1']),
+                               'B2': CountingLazy(4, ['B2'])}),
+    ('differing lengths', lambda: {'A1': CountingLazy(4, ['A1']),
+                                   'B2': CountingLazy(7, ['B2']),
+                                   'C3': CountingLazy(11, ['C3'])}),
+    ('mixed representation', lambda: {'A1': CountingLazy(4, ['A1']),
+                                      'B2': Stimulus([[1, 2, 3, 4]])}),
+    ('list', lambda: [CountingLazy(4, ['A1']), CountingLazy(5, ['B2'])]),
+    ('multi-electrode entry', lambda: [CountingLazy(4, ['x', 'y']),
+                                      CountingLazy(6, ['B2'])]),
+]
+
+
+@pytest.mark.parametrize('name, build', COLLECTIONS,
+                         ids=[c[0] for c in COLLECTIONS])
+def test_Stimulus_collection_defers_the_merge(name, build):
+    stim = Stimulus(build())
+    npt.assert_equal(_lazy(stim), True)
+    # Everything a collection knows before its entries have been sampled:
+    npt.assert_equal(_n_renders(stim), 0)
+    npt.assert_equal(len(stim.electrodes) > 1, True)
+    npt.assert_equal(stim.unit, uA)
+    npt.assert_equal(stim.time_unit, ms)
+    npt.assert_equal(sorted(stim.metadata['electrodes']) != [], True)
+    npt.assert_equal(stim.is_compressed, False)
+    copies = [copy(stim), deepcopy(stim)]
+    npt.assert_equal(_n_renders(stim), 0)
+    for copied in copies:
+        npt.assert_equal(_lazy(copied), True)
+    # ...and the first read of the waveform is what builds one, once:
+    n_lazy = sum(isinstance(c, CountingLazy) for c, _ in stim._components)
+    data = stim.data
+    npt.assert_equal(_n_renders(stim), n_lazy)
+    for _ in range(3):
+        npt.assert_equal(np.shares_memory(stim.data, data), True)
+        npt.assert_equal(stim.time.dtype, np.float64)
+    npt.assert_equal(_n_renders(stim), n_lazy)
+
+
+@pytest.mark.parametrize('name, build', COLLECTIONS,
+                         ids=[c[0] for c in COLLECTIONS])
+def test_Stimulus_collection_matches_the_eager_merge(name, build,
+                                                     monkeypatch):
+    lazy = Stimulus(build())
+    monkeypatch.setattr(Stimulus, '_defers_waveform',
+                        staticmethod(lambda *a, **kw: False))
+    eager = Stimulus(build())
+    npt.assert_equal(_lazy(eager), False)
+    npt.assert_array_equal(lazy.data, eager.data)
+    npt.assert_array_equal(lazy.time, eager.time)
+    npt.assert_array_equal(lazy.electrodes, eager.electrodes)
+
+
+@pytest.mark.parametrize('freqs', [(20, 20), (20, 23), (20, 23, 41)])
+def test_Stimulus_pulse_train_collection_merges_as_it_always_did(freqs,
+                                                                 monkeypatch):
+    # The case Phase 5 exists for: differing frequencies put every train on a
+    # time axis of its own, so the merge is the expensive part.
+    def build():
+        return {f'E{i}': BiphasicPulseTrain(f, 10 + i, 0.45, stim_dur=200)
+                for i, f in enumerate(freqs)}
+    lazy = Stimulus(build())
+    npt.assert_equal(_lazy(lazy), True)
+    monkeypatch.setattr(Stimulus, '_defers_waveform',
+                        staticmethod(lambda *a, **kw: False))
+    eager = Stimulus(build())
+    npt.assert_array_equal(lazy.data, eager.data)
+    npt.assert_array_equal(lazy.time, eager.time)
+
+
+@pytest.mark.parametrize('vary', ['freq', 'amp', 'phase_dur'])
+def test_Stimulus_heterogeneous_pulse_parameters_merge_unchanged(vary,
+                                                                 monkeypatch):
+    kwargs = {'freq': 20, 'amp': 10, 'phase_dur': 0.45, 'stim_dur': 200}
+    other = dict(kwargs, **{vary: {'freq': 23, 'amp': 25,
+                                   'phase_dur': 0.9}[vary]})
+
+    def build():
+        return {'A1': BiphasicPulseTrain(**kwargs),
+                'B2': BiphasicPulseTrain(**other)}
+    lazy = Stimulus(build())
+    monkeypatch.setattr(Stimulus, '_defers_waveform',
+                        staticmethod(lambda *a, **kw: False))
+    npt.assert_array_equal(lazy.data, Stimulus(build()).data)
+
+
+def test_Stimulus_collection_with_a_silent_child(monkeypatch):
+    # A 0 Hz train is a flat row, and it still has to end where the others do:
+    def build():
+        return {'A1': BiphasicPulseTrain(0, 10, 0.45, stim_dur=200),
+                'B2': BiphasicPulseTrain(20, 10, 0.45, stim_dur=200)}
+    lazy = Stimulus(build())
+    npt.assert_equal(_lazy(lazy), True)
+    npt.assert_almost_equal(lazy.time[-1], 200)
+    npt.assert_almost_equal(np.abs(lazy.data[0]).max(), 0)
+    monkeypatch.setattr(Stimulus, '_defers_waveform',
+                        staticmethod(lambda *a, **kw: False))
+    npt.assert_array_equal(lazy.data, Stimulus(build()).data)
+
+
+def test_Stimulus_collection_of_raw_sources_stays_eager():
+    # Nothing to save: these entries are already the numbers they describe.
+    for source in ({'A1': [1, 2, 3], 'B2': [4, 5, 6]}, [[1, 2], [3, 4]],
+                   {'A1': 1, 'B2': 2}):
+        npt.assert_equal(Stimulus(source)._components, None)
+    # An explicit time axis and `compress` both ask about the merged waveform:
+    stim = Stimulus({'A1': CountingLazy(3, ['A1'])}, time=[0, 1, 2])
+    npt.assert_equal(stim._components, None)
+    npt.assert_equal(Stimulus({'A1': CountingLazy(3, ['A1'])},
+                              compress=True)._components, None)
+
+
+def test_Stimulus_collection_snapshots_its_entries():
+    raw = [1.0, 2.0, 3.0, 4.0]
+    child = CountingLazy(4, ['A1'])
+    stim = Stimulus({'A1': child, 'B2': raw})
+    raw[0] = 99.0
+    npt.assert_equal(stim._components[0][0] is child, False)
+    npt.assert_almost_equal(stim.data[1], [1, 2, 3, 4])
+    # Rendering the caller's object is not what rendered the collection:
+    npt.assert_equal(child.n_renders, 0)
+
+
+def test_Stimulus_collection_validates_what_it_can_without_rendering():
+    child = CountingLazy(4, ['A1'])
+    with pytest.raises(ValueError):
+        # A scalar has no time component, the other entry does:
+        Stimulus({'A1': child, 'B2': 5})
+    with pytest.raises(ValueError):
+        Stimulus({'A1': child}, electrodes=['A1', 'B2'])
+    with pytest.raises(ValueError):
+        Stimulus({'A1': child, 'B2': CountingLazy(4, ['B2'])},
+                 electrodes=['only-one'])
+    assert_warns_msg(UserWarning,
+                     lambda: Stimulus([CountingLazy(4, ['A1']),
+                                       CountingLazy(4, ['A1'])]),
+                     'Duplicate electrode names detected')
+    npt.assert_equal(child.n_renders, 0)
+
+
+def test_Stimulus_collection_renames_without_rendering():
+    child = CountingLazy(4, ['A1'])
+    renamed = Stimulus({'A1': child, 'B2': CountingLazy(4, ['B2'])},
+                       electrodes=['X', 'Y'])
+    npt.assert_equal(_lazy(renamed), True)
+    npt.assert_equal(list(renamed.electrodes), ['X', 'Y'])
+    npt.assert_equal(sorted(renamed.metadata['electrodes']), ['X', 'Y'])
+    npt.assert_equal(child.n_renders, 0)
+    # Re-wrapping a single deferred stimulus is a rename too:
+    solo = Stimulus(CountingLazy(4, ['A1']), electrodes=['Z'])
+    npt.assert_equal(_lazy(solo), True)
+    npt.assert_equal(list(solo.electrodes), ['Z'])
+    npt.assert_equal(solo.data.shape, (1, 4))
+
+
+def test_Stimulus_collection_removes_whole_entries_without_rendering():
+    stim = Stimulus({'A1': CountingLazy(4, ['A1']),
+                     'B2': CountingLazy(7, ['B2']),
+                     'C3': CountingLazy(11, ['C3'])})
+    stim.remove(['A1', 'C3'])
+    npt.assert_equal(_lazy(stim), True)
+    npt.assert_equal(list(stim.electrodes), ['B2'])
+    npt.assert_equal(_n_renders(stim), 0)
+    # Only the entry that survived is ever generated:
+    npt.assert_equal(stim.data.shape, (1, 7))
+    npt.assert_equal(_n_renders(stim), 1)
+    empty = Stimulus({'A1': CountingLazy(4, ['A1'])})
+    empty.remove('all')
+    npt.assert_equal(_lazy(empty), True)
+    npt.assert_equal(len(empty.electrodes), 0)
+    # A copy taken before the removal keeps the entry it was built with:
+    stim = Stimulus({'A1': CountingLazy(4, ['A1']),
+                     'B2': CountingLazy(4, ['B2'])})
+    other = stim._derived()
+    other.remove('A1')
+    npt.assert_equal(list(stim.electrodes), ['A1', 'B2'])
+    npt.assert_equal(list(other.electrodes), ['B2'])
+
+
+def test_Stimulus_collection_removing_part_of_an_entry_materializes():
+    # 'x' and 'y' come from one entry, so dropping 'x' means generating it.
+    stim = Stimulus([CountingLazy(4, ['x', 'y']),
+                     CountingLazy(4, ['B2'])])
+    stim.remove('x')
+    npt.assert_equal(_lazy(stim), False)
+    npt.assert_equal(list(stim.electrodes), ['y', 'B2'])
+    npt.assert_equal(stim.data.shape, (2, 4))

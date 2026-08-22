@@ -245,6 +245,48 @@ def _stimulus_sources(source):
     return []
 
 
+def _has_waveform(stim):
+    """Whether a stimulus has already generated the samples it describes
+
+    Reads the private container, because every public attribute that could
+    answer the question would generate them first.
+    """
+    return stim._Stimulus__stim['data'] is not None
+
+
+def _snapshot(source):
+    """One entry of a collection, as it was when the collection was built
+
+    A collection that has not been merged yet keeps its entries instead of
+    their samples, so it has to keep them frozen: a stimulus built from a
+    pulse train describes that train as it was, not as its author went on to
+    change it. Deep-copying a stimulus is cheap -- its arrays are immutable
+    and shared -- and the raw entries are one electrode's worth of numbers.
+    """
+    if np.isscalar(source):
+        return source
+    return deepcopy(source)
+
+
+def _component_shape(source):
+    """What one entry of a collection contributes, without sampling it
+
+    Returns the electrode names the entry brings along (``None`` if it does
+    not name its own), how many rows it contributes, and whether it has a time
+    component. This is what lets a collection settle its electrodes, and
+    reject the mistakes that are about electrodes, before any waveform exists.
+    """
+    if isinstance(source, Stimulus):
+        # An unrendered stimulus is one of ours, and every parameter-backed
+        # class in the library is a pulse -- which has a time axis. Asking one
+        # that has already been rendered costs nothing.
+        has_time = not _has_waveform(source) or source.time is not None
+        return source.electrodes, len(source.electrodes), has_time
+    # Anything else is a single electrode; only a scalar has no time axis
+    # (`_parse_source` gives a nested sequence one point per element):
+    return None, 1, not (np.isscalar(source) and not isinstance(source, str))
+
+
 def _strip_units(source, unit):
     """Convert a source's quantities into plain numbers expressed in ``unit``
 
@@ -415,7 +457,8 @@ class Stimulus(PrettyPrint):
 
     """
     # Frozen class: Only the following class attributes are allowed
-    __slots__ = ('metadata', '_is_compressed', '__stim', '_unit', '_time_unit')
+    __slots__ = ('metadata', '_is_compressed', '__stim', '_unit',
+                 '_time_unit', '_components')
 
     #: The unit ``data`` is stored in. Electrical stimuli are microamps, which
     #: is what every model, pulse and safety check in the library assumes; a
@@ -440,6 +483,9 @@ class Stimulus(PrettyPrint):
         self.metadata = self._wrap_metadata(metadata)
         # Flag will be flipped in the compress method:
         self._is_compressed = False
+        # Set by `_factory` when this is a collection whose entries have not
+        # been merged into a waveform yet (see `_render`):
+        self._components = None
         # Settle what the numbers below mean before reading any of them, then
         # convert every quantity into that unit. From here on the source is
         # ordinary numbers, which is all `_factory` has ever had to handle:
@@ -482,6 +528,7 @@ class Stimulus(PrettyPrint):
         """
         self.metadata = self._wrap_metadata(metadata)
         self._is_compressed = False
+        self._components = None
         self._unit = self._default_unit if unit is None else unit
         self._time_unit = (self._default_time_unit if time_unit is None
                            else time_unit)
@@ -508,10 +555,18 @@ class Stimulus(PrettyPrint):
         is owned, immutable and validated on exactly the same terms as one
         that was passed in.
         """
-        raise NotImplementedError(
-            f"{type(self).__name__} has no stimulus data, and does not know "
-            f"how to generate any. A subclass that defers its waveform must "
-            f"override '_render'.")
+        if self._components is None:
+            raise NotImplementedError(
+                f"{type(self).__name__} has no stimulus data, and does not "
+                f"know how to generate any. A subclass that defers its "
+                f"waveform must override '_render'.")
+        _data, _time = [], []
+        for src, _ in self._components:
+            d, t, _e = self._parse_source(src, nested=True)
+            _data.append(d)
+            _time.append(t)
+        _data, _time = self._merge_sources(_data, _time)
+        return {'data': _data, 'electrodes': self.electrodes, 'time': _time}
 
     def _resolve_units(self, source):
         """Determine the units this stimulus stores its data and time in
@@ -557,6 +612,43 @@ class Stimulus(PrettyPrint):
                 'time': self.time, 'shape': self.shape, 'dt': self.dt,
                 'is_charge_balanced': self.is_charge_balanced,
                 'metadata': self.metadata}
+
+    @staticmethod
+    def _defers_waveform(source, electrodes, time, compress):
+        """Whether to keep this source's entries instead of merging them now
+
+        Worth doing when an entry is a stimulus that is defined by its
+        stimulation parameters, or that has not generated a waveform yet:
+        merging is what would force one into existence. A collection of raw
+        numbers has nothing to save and stays on the eager path.
+
+        An explicit ``time`` axis or ``compress=True`` both ask a question
+        about the merged waveform, so neither defers.
+        """
+        if time is not None or compress:
+            return False
+        return any(s._is_parametric or not _has_waveform(s)
+                   for s in _stimulus_sources(source))
+
+    @staticmethod
+    def _require_one_time_convention(no_time):
+        """Every entry of a collection has a time axis, or none of them does"""
+        if len(np.unique(no_time)) > 1:
+            raise ValueError("If one stimulus has time=None, all others "
+                             "must have time=None as well.")
+
+    @classmethod
+    def _merge_sources(cls, _data, _time):
+        """Stack the entries of a collection onto one common time axis"""
+        cls._require_one_time_convention([t is None for t in _time])
+        # When none of the stimuli have time=None, we need to merge the
+        # time axes (this is expensive because of interpolation):
+        if len(_time) > 1 and _time[0] is not None:
+            _data, _time = merge_time_axes(_data, _time)
+        # Now make `_data` a 2-D NumPy array, with `_electrodes` as rows
+        # and `_time` as columns (except sometimes `_time` is None).
+        return (np.vstack(_data) if _data else np.array([]),
+                _time[0] if _time else None)
 
     def _parse_source(self, source, nested=False):
         """Extract data, time and electrode names from a single source
@@ -626,6 +718,7 @@ class Stimulus(PrettyPrint):
             # time component. The collection path below would build a separate
             # 1x1 array (and time axis) for every single electrode:
             _data, _time, _electrodes = _flat, None, None
+            _n_rows = _data.shape[0]
         elif isinstance(source, (dict, list, tuple)):
             # A collection: every entry is itself a source, contributing one
             # electrode (or, for a Stimulus, however many it already has):
@@ -633,14 +726,26 @@ class Stimulus(PrettyPrint):
                 iterator = source.items()
             else:
                 iterator = enumerate(source)
+            if self._defers_waveform(source, electrodes, time, compress):
+                self._components = []
             _time = []
             _electrodes = []
             _data = []
+            _no_time = []
             for ele, src in iterator:
-                # Extract times and data from source:
-                d, t, e = self._parse_source(src, nested=True)
-                _time.append(t)
-                _data.append(d)
+                if self._components is None:
+                    # Extract times and data from source:
+                    d, t, e = self._parse_source(src, nested=True)
+                    _time.append(t)
+                    _data.append(d)
+                else:
+                    # Nothing is sampled yet. An entry already knows how many
+                    # electrodes it drives and what they are called, and a
+                    # snapshot of it is what `_render` will read later:
+                    src = _snapshot(src)
+                    e, n_rows, has_time = _component_shape(src)
+                    self._components.append((src, n_rows))
+                    _no_time.append(not has_time)
                 if isinstance(source, dict):
                     # Special case, electrode names are specified in a dict:
                     _electrodes.append(ele)
@@ -655,24 +760,30 @@ class Stimulus(PrettyPrint):
                     }
                 except AttributeError:
                     pass
-            # Make sure all stimuli have time=None or none of them do:
-            if len(np.unique([t is None for t in _time])) > 1:
-                raise ValueError("If one stimulus has time=None, all others "
-                                 "must have time=None as well.")
-            # When none of the stimuli have time=None, we need to merge the
-            # time axes (this is expensive because of interpolation):
-            if len(_time) > 1 and _time[0] is not None:
-                _data, _time = merge_time_axes(_data, _time)
-            # Now make `_data` a 2-D NumPy array, with `_electrodes` as rows
-            # and `_time` as columns (except sometimes `_time` is None).
-            _data = np.vstack(_data) if _data else np.array([])
-            _time = _time[0] if _time else None
+            if self._components is None:
+                _data, _time = self._merge_sources(_data, _time)
+                _n_rows = _data.shape[0]
+            else:
+                # Asked here as well as in `_merge_sources`, because a
+                # collection that mixes the two conventions is wrong when it
+                # is written, not when it is first read:
+                self._require_one_time_convention(_no_time)
+                _n_rows = sum(n for _, n in self._components)
         else:
             # A single source: a scalar, a NumPy array, or a Stimulus. The
             # latter might be handed to us by ProsthesisSystem if the user
             # built the stimulus themselves, and is also how a stimulus gets
             # new electrode names or a new time axis:
-            _data, _time, _electrodes = self._parse_source(source)
+            if self._defers_waveform(source, electrodes, time, compress):
+                # Renaming or re-wrapping a stimulus that has not generated
+                # its waveform must not be what generates it:
+                snapshot = _snapshot(source)
+                _electrodes, _n_rows, _ = _component_shape(snapshot)
+                self._components = [(snapshot, _n_rows)]
+                _data, _time = None, None
+            else:
+                _data, _time, _electrodes = self._parse_source(source)
+                _n_rows = _data.shape[0]
             if isinstance(source, Stimulus):
                 if 'electrodes' not in source.metadata.keys():
                     self.metadata['electrodes'][str(_electrodes[0])] = {
@@ -690,7 +801,7 @@ class Stimulus(PrettyPrint):
             # million-element arange off the path that builds one.
             _auto_electrodes = True
             if electrodes is None or self.metadata.get('electrodes'):
-                _electrodes = np.arange(_data.shape[0])
+                _electrodes = np.arange(_n_rows)
 
         # User can overwrite the names of the electrodes:
         if electrodes is not None:
@@ -723,10 +834,10 @@ class Stimulus(PrettyPrint):
                     _electrodes = np.concatenate(_electrodes)
                 except ValueError:
                     _electrodes = np.array(_electrodes)
-        if len(_electrodes) != _data.shape[0]:
+        if len(_electrodes) != _n_rows:
             raise ValueError(f"Number of electrodes provided ({len(_electrodes)}) does "
                              f"not match the number of electrodes in the data "
-                             f"({_data.shape[0]}).")
+                             f"({_n_rows}).")
         # Electrodes we numbered ourselves are 0..N-1 and therefore unique by
         # construction, so the sort that np.unique performs can be skipped
         # (it dominates the cost of building an image or video stimulus):
@@ -738,7 +849,7 @@ class Stimulus(PrettyPrint):
                 # actual names:
                 _electrodes = np.asarray(_electrodes)
             unq, nunq = np.unique(_electrodes, return_index=True)
-            if len(unq) != _data.shape[0]:
+            if len(unq) != _n_rows:
                 # We found duplicate names: replace them by integer index
                 idx = np.delete(np.arange(len(_electrodes)), nunq)
                 msg = (f"Duplicate electrode names detected "
@@ -787,6 +898,13 @@ class Stimulus(PrettyPrint):
                                  f"({_data.shape[1]}).")
             _time = time
 
+        if self._components is not None:
+            # The electrodes are settled, the waveform is not. `_defer` is not
+            # used here because everything else it sets up has already been
+            # set up by `__init__`:
+            self.__stim = {'data': None, 'time': None,
+                           'electrodes': self._own_names(_electrodes)}
+            return
         # Store the data in the private container. Setting all elements at once
         # enforces consistency; e.g., between shape of electrodes and time.
         # The setter is what settles dtype, layout and ownership, so nothing
@@ -1069,6 +1187,9 @@ class Stimulus(PrettyPrint):
                 f"pulse. Take the waveform first: "
                 f"Stimulus(stim).remove(...).")
         if np.isscalar(electrodes) and electrodes == 'all':
+            gone = np.zeros(len(self.electrodes), dtype=bool)
+            if self._drop_components(gone):
+                return
             self._stim = {
                 'data': self.data[[]],
                 # Keep `electrodes` an array (of the same dtype) so that it can
@@ -1091,11 +1212,41 @@ class Stimulus(PrettyPrint):
                     keep_el[_index_of_name(self.electrodes, electrode)] = False
                 except ValueError:
                     raise ValueError(f'Electrode "{electrode}" not found.')
+        if self._drop_components(keep_el):
+            return
         self._stim = {
             'data': self.data[keep_el],
             'electrodes': self.electrodes[keep_el],
             'time': self.time,
         }
+
+    def _drop_components(self, keep_el):
+        """Forget whole entries of a collection that has not been merged yet
+
+        Such a collection loses an electrode by forgetting the entry that
+        contributes it, which is how an implant takes a deactivated electrode
+        out of a stimulus without generating the waveform of the others.
+
+        Returns False -- leaving the caller to do it the ordinary way -- when
+        this is not that kind of collection, or when the electrodes to remove
+        cut through an entry that contributes several: there is no way to take
+        one row out of an entry that has not been sampled.
+        """
+        if self._components is None or _has_waveform(self):
+            return False
+        kept, start = [], 0
+        for component in self._components:
+            rows = keep_el[start:start + component[1]]
+            start += component[1]
+            if rows.all():
+                kept.append(component)
+            elif rows.any():
+                return False
+        # Never written into: `copy` hands out objects that share both:
+        self._components = kept
+        self.__stim = {**self.__stim,
+                       'electrodes': self._own_names(self.electrodes[keep_el])}
+        return True
 
     def shift(self, dt):
         """Shift the stimulus in time.

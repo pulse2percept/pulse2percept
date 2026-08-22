@@ -16,7 +16,8 @@ from pulse2percept.implants import (PointSource, ElectrodeArray, ElectrodeGrid,
 from pulse2percept.stimuli import (Stimulus, ImageStimulus, VideoStimulus,
                                    BostonTrain, LogoBVL)
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
-                                   FrequencyEncoder, MonophasicPulse)
+                                   BiphasicPulseTrain, FrequencyEncoder,
+                                   MonophasicPulse)
 from pulse2percept.implants import (ArgusII, DiskElectrode)
 from pulse2percept.models import ScoreboardModel
 
@@ -689,3 +690,33 @@ def test_ProsthesisSystem_deactivated_electrodes_do_not_mutate_the_source():
     implant = ArgusII(stim=stim)
     npt.assert_equal(sorted(str(e) for e in implant.stim.electrodes),
                      ['A1', 'B2'])
+
+
+def test_ProsthesisSystem_deactivated_electrode_does_not_render_the_others():
+    # An implant drops a deactivated electrode from a dict of pulse trains by
+    # forgetting the entry that drives it, so the trains on the electrodes
+    # that are still on never get sampled.
+    def unrendered(stim):
+        return sum(c._Stimulus__stim['data'] is None
+                   for c, _ in stim._components)
+
+    trains = {name: BiphasicPulseTrain(20 + i, 10, 0.45, stim_dur=200)
+              for i, name in enumerate(['A1', 'A2', 'A3'])}
+    implant = ArgusII()
+    implant.deactivate('A2')
+    implant.stim = trains
+    npt.assert_equal([str(e) for e in implant.stim.electrodes], ['A1', 'A3'])
+    npt.assert_equal(implant.stim._components is None, False)
+    npt.assert_equal(unrendered(implant.stim), 2)
+
+    # ...and deactivating one after the fact is the same story:
+    implant = ArgusII(stim={name: BiphasicPulseTrain(20 + i, 10, 0.45,
+                                                     stim_dur=200)
+                            for i, name in enumerate(['A1', 'A2', 'A3'])})
+    npt.assert_equal(unrendered(implant.stim), 3)
+    implant.deactivate('A2')
+    npt.assert_equal([str(e) for e in implant.stim.electrodes], ['A1', 'A3'])
+    npt.assert_equal(unrendered(implant.stim), 2)
+    # The waveform is still the one the trains describe:
+    npt.assert_equal(implant.stim.data.shape[0], 2)
+    npt.assert_almost_equal(implant.stim.time[-1], 200)
