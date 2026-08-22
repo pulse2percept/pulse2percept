@@ -566,3 +566,28 @@ def test_VideoStimulus_data_is_contiguous(tmp_path):
     for kwargs in ({}, {'as_gray': True}, {'resize': (16, 24)}):
         stim = VideoStimulus(fname, **kwargs)
         npt.assert_equal(stim.data.flags['C_CONTIGUOUS'], True)
+
+
+@pytest.mark.parametrize('dtype', [np.float32, np.float64, np.uint8])
+def test_VideoStimulus_owns_its_data(dtype):
+    # See `test_ImageStimulus_owns_its_data`: float32 is the dtype that
+    # `img_as_float32` passes through untouched.
+    arr = (np.linspace(0, 1, 60).reshape((4, 5, 3)) if dtype != np.uint8
+           else np.arange(60, dtype=np.uint8).reshape((4, 5, 3)))
+    arr = np.ascontiguousarray(arr, dtype=dtype)
+    stim = VideoStimulus(arr)
+    before = stim.data.copy()
+    arr[...] = 0
+    npt.assert_array_equal(stim.data, before)
+    npt.assert_equal(np.shares_memory(arr, stim.data), False)
+    npt.assert_equal(stim.data.flags.writeable, False)
+    # Freezing what the stimulus took must not reach back into what the
+    # caller kept:
+    npt.assert_equal(arr.flags.writeable, True)
+
+
+def test_VideoStimulus_does_not_alias_another_stimulus():
+    first = VideoStimulus(np.linspace(0, 1, 60, dtype=np.float32)
+                          .reshape((4, 5, 3)))
+    second = VideoStimulus(first)
+    npt.assert_equal(np.shares_memory(first.data, second.data), False)

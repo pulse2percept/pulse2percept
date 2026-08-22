@@ -17,10 +17,11 @@ from skimage.filters import (threshold_mean, threshold_minimum, threshold_otsu,
                              median)
 from skimage.feature import canny
 
-from .base import Stimulus
+from .base import Stimulus, _adoptable
 from .names import ElectrodeNames
 from ..units import dimensionless
 from ..utils import center_image, shift_image, scale_image, trim_image
+from ..utils.images import _as_writable
 
 
 class ImageStimulus(Stimulus):
@@ -73,9 +74,7 @@ class ImageStimulus(Stimulus):
     """
     __slots__ = ('img_shape',)
 
-    #: Pixel intensities are gray levels in [0, 1], not currents. An encoder
-    #: is what turns them into stimulation; see
-    #: :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`.
+    #: Pixel intensities are gray levels in [0, 1], not currents
     _default_unit = dimensionless
 
     def __init__(self, source, resize=None, as_gray=False,
@@ -84,6 +83,8 @@ class ImageStimulus(Stimulus):
             metadata = {}
         elif not isinstance(metadata, dict):
             metadata = {'user': metadata}
+        # The buffer the caller still holds, if any:
+        borrowed = None
         if isinstance(source, str):
             # Filename provided:
             img = imread(source)
@@ -91,11 +92,13 @@ class ImageStimulus(Stimulus):
             metadata['source_shape'] = img.shape
         elif isinstance(source, ImageStimulus):
             img = source.data.reshape(source.img_shape)
+            borrowed = source.data
             metadata.update(source.metadata)
             if electrodes is None:
                 electrodes = source.electrodes
         elif isinstance(source, np.ndarray):
             img = source
+            borrowed = source
         else:
             raise TypeError(f"Source must be a filename or another "
                             f"ImageStimulus, not {type(source)}.")
@@ -125,11 +128,12 @@ class ImageStimulus(Stimulus):
             # Name every pixel after its place in the image: 'A1' is the
             # top-left pixel, 'C12' sits in the third row and twelfth column,
             # and a color image suffixes the channel ('A1_R'). The names are
-            # generated on demand rather than stored, which is what keeps a
-            # megapixel image from paying for a million strings:
+            # generated on demand rather than stored:
             electrodes = ElectrodeNames(self.img_shape)
-        # Convert to float array in [0, 1] and call the Stimulus constructor:
-        super().__init__(img_as_float32(img).ravel(),
+        data = img_as_float32(img)
+        if borrowed is not None and np.may_share_memory(data, borrowed):
+            data = data.copy()
+        super().__init__(_adoptable(data.ravel()),
                                             time=None, electrodes=electrodes,
                                             metadata=metadata,
                                             compress=compress)
@@ -141,15 +145,7 @@ class ImageStimulus(Stimulus):
         return params
 
     def _names_for(self, img, electrodes):
-        """Electrode names for an image derived from this one
-
-        A pixel keeps its name across an operation that leaves the pixel grid
-        alone, which is what makes 'A1' refer to the same thing before and
-        after. An operation that resamples the grid (a resize, a rotation that
-        grows the canvas) has no such correspondence to preserve, so the result
-        is named afresh rather than inheriting names that no longer describe
-        it.
-        """
+        """Electrode names for an image derived from this one"""
         if electrodes is not None:
             return electrodes
         return self.electrodes if np.shape(img) == self.img_shape else None
@@ -189,7 +185,10 @@ class ImageStimulus(Stimulus):
         stim : `ImageStimulus`
             A copy of the stimulus object with the new image
         """
-        img = func(self.data.reshape(self.img_shape), *args, **kwargs)
+        # `func` gets a frame of its own: several of the scikit-image
+        # transforms this exists to reach cannot take a read-only one.
+        img = func(_as_writable(self.data.reshape(self.img_shape)),
+                   *args, **kwargs)
         return ImageStimulus(img, electrodes=self._names_for(img, electrodes),
                              metadata=self.metadata)
 
@@ -242,11 +241,7 @@ class ImageStimulus(Stimulus):
         """
         img = self.data.reshape(self.img_shape)
         if img.ndim == 3 and img.shape[2] == 4:
-            # Blend the background with black. Doing it in one pass rather
-            # than through ``rgba2rgb`` avoids materializing the intermediate
-            # three-channel image, which for a full-resolution photograph is
-            # the bulk of the work. The arithmetic is the same, so the result
-            # is identical:
+            # Blend the background with black in one pass:
             img = np.clip(img[..., :3] * img[..., 3:4], 0.0, 1.0)
         if img.ndim == 3:
             img = rgb2gray(img)
@@ -504,8 +499,8 @@ class ImageStimulus(Stimulus):
         # Rotating in place is the common case, and keeps the pixel names
         # meaningful; ``resize=True`` is available through kwargs:
         kwargs.setdefault('resize', False)
-        img = img_rotate(self.data.reshape(self.img_shape), angle, mode=mode,
-                         **kwargs)
+        img = img_rotate(_as_writable(self.data.reshape(self.img_shape)),
+                         angle, mode=mode, **kwargs)
         return ImageStimulus(img, electrodes=self._names_for(img, electrodes),
                              metadata=self.metadata)
 

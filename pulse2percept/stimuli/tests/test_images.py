@@ -546,3 +546,28 @@ def test_ImageStimulus_invert_preserves_alpha():
     npt.assert_array_equal(inverted[..., 3], rgba[..., 3])
     # The original is untouched:
     npt.assert_array_equal(stim.data, before)
+
+
+@pytest.mark.parametrize('dtype', [np.float32, np.float64, np.uint8])
+def test_ImageStimulus_owns_its_data(dtype):
+    # `img_as_float32` hands back an already-float32 image unchanged, so that
+    # is the dtype where an image could end up sharing the caller's buffer:
+    arr = (np.linspace(0, 1, 24).reshape((4, 6)) if dtype != np.uint8
+           else np.arange(24, dtype=np.uint8).reshape((4, 6)))
+    arr = np.ascontiguousarray(arr, dtype=dtype)
+    stim = ImageStimulus(arr)
+    before = stim.data.copy()
+    arr[...] = 0
+    npt.assert_array_equal(stim.data, before)
+    npt.assert_equal(np.shares_memory(arr, stim.data), False)
+    npt.assert_equal(stim.data.flags.writeable, False)
+    # Freezing what the stimulus took must not reach back into what the
+    # caller kept:
+    npt.assert_equal(arr.flags.writeable, True)
+
+
+def test_ImageStimulus_does_not_alias_another_stimulus():
+    first = ImageStimulus(np.linspace(0, 1, 24, dtype=np.float32)
+                          .reshape((4, 6)))
+    second = ImageStimulus(first)
+    npt.assert_equal(np.shares_memory(first.data, second.data), False)

@@ -1,4 +1,5 @@
 import warnings
+from copy import copy, deepcopy
 
 import numpy as np
 import numpy.testing as npt
@@ -14,6 +15,7 @@ from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    VideoStimulus)
 from pulse2percept.stimuli import encoders
 from pulse2percept.utils.constants import DT
+from pulse2percept.utils.testing import assert_warns_msg
 from pulse2percept.units import (DimensionMismatchError, Hz, Quantity,
                                  dimensionless, kHz, mA, ms, uA, us)
 from pulse2percept.units import s as sec
@@ -883,16 +885,16 @@ def test_StimulusEncoder_implant_reshape():
         npt.assert_equal(list(enc.electrodes), list(implant.electrode_names))
 
 
-def test_StimulusEncoder_encode_both():
+def test_StimulusEncoder_spatial_view():
     """The modulation half of encoding, with none of the device's timing in it
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     implant = pixel_implant((4, 4), SequentialRaster(4, interleave=True))
     enc = AmplitudeEncoder(amp_range=(0, 50), freq=100, frame_dur=100)
-    spatial, delivered = enc._encode_both(img, implant=implant)
-    # The delivered half is exactly what `encode` gives on its own:
-    npt.assert_array_equal(delivered.data, enc.encode(img,
-                                                      implant=implant).data)
+    delivered = enc.encode(img, implant=implant)
+    spatial = delivered._spatial_view()
+    # Asking for it does not expand the schedule into a waveform:
+    npt.assert_equal(_rendered(delivered), False)
 
     # One row per electrode, one column per frame of the source -- and an
     # image is one frame, so there is no time axis at all:
@@ -927,26 +929,27 @@ def test_StimulusEncoder_encode_both():
     # `encode`):
     vid = VideoStimulus(np.random.default_rng(0).random((4, 4, 5)),
                         metadata={'fps': 20})
-    spatial = enc._encode_both(vid, implant=implant)[0]
+    spatial = enc.encode(vid, implant=implant)._spatial_view()
     npt.assert_equal(spatial.shape, (16, 5))
     npt.assert_almost_equal(spatial.time, np.arange(5) * 100.0)
 
     # Encoding for no implant at all works the same way, at pixel resolution:
-    bare = enc._encode_both(img)[0]
+    bare = enc.encode(img)._spatial_view()
     npt.assert_equal(bare.shape, (16, 1))
     npt.assert_almost_equal(bare.data.ravel(), np.linspace(0, 1, 16) * 50,
                             decimal=4)
     # ... and a source that is not a picture is refused here too:
     with pytest.raises(DimensionMismatchError):
-        enc._encode_both(Stimulus([0.5]))
+        enc.encode(Stimulus([0.5]))
 
 
-def test_FrequencyEncoder_encode_both():
+def test_FrequencyEncoder_spatial_view():
     """A spatial reading of rate coding says what it can and no more"""
     grays = np.array([[0.0, 0.5], [0.75, 1.0]])
     img = ImageStimulus(grays)
     enc = FrequencyEncoder(freq_range=(0, 200), amp=30, frame_dur=100)
-    spatial, delivered = enc._encode_both(img)
+    delivered = enc.encode(img)
+    spatial = delivered._spatial_view()
     # Every electrode that pulses at all pulses at the same amplitude, which
     # is all a reader with no clock can be told, so rate collapses to on/off.
     # An electrode at 0 Hz never pulses, so it delivers no current -- that
@@ -1185,3 +1188,181 @@ def test_encoder_pulse_template_unit_agnostic():
     for out in outs:
         npt.assert_equal(out.unit, uA)
         npt.assert_almost_equal(np.abs(out.data).max(), 50)
+
+
+def _rendered(stim):
+    """Whether the encoded stimulus has expanded its schedule into samples"""
+    return stim._Stimulus__stim['data'] is not None
+
+
+# One case per thing the schedule can do: a still frame, several frames, a
+# per-electrode frequency, a device raster, a stimulator clock, a supplied
+# pulse, and a source that asks for nothing at all.
+ENCODED = [
+    ('amplitude', lambda: AmplitudeEncoder().encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))),
+    ('amplitude-video', lambda: AmplitudeEncoder().encode(
+        VideoStimulus(np.linspace(0, 1, 192).reshape(8, 8, 3),
+                      time=np.arange(3) * 40.0))),
+    ('frequency', lambda: FrequencyEncoder(freq_range=(0, 60)).encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))),
+    ('rastered', lambda: AmplitudeEncoder().encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)),
+        implant=ArgusII())),
+    ('clocked', lambda: AmplitudeEncoder(clock=1.0).encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))),
+    ('custom-pulse', lambda: AmplitudeEncoder(
+        pulse=BiphasicPulse(1, 0.2, interphase_dur=0.1)).encode(
+            ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))),
+    ('all-zero', lambda: FrequencyEncoder(freq_range=(0, 60)).encode(
+        ImageStimulus(np.zeros((6, 6))))),
+]
+
+
+@pytest.mark.parametrize('name, build', ENCODED, ids=[c[0] for c in ENCODED])
+def test_encoded_stimulus_defers_only_the_waveform(name, build):
+    stim = build()
+    npt.assert_equal(_rendered(stim), False)
+    # Everything the schedule already settled, without expanding it:
+    npt.assert_equal(len(stim.electrodes) > 0, True)
+    npt.assert_equal(stim.unit, uA)
+    npt.assert_equal(stim.time_unit, ms)
+    npt.assert_equal(sorted(stim.metadata['encoder']),
+                     ['cycle', 'frame_dur', 'frame_time'])
+    npt.assert_equal(stim.duration > 0, True)
+    repr(stim)
+    copies = [copy(stim), deepcopy(stim)]
+    npt.assert_equal(_rendered(stim), False)
+    for copied in copies:
+        npt.assert_equal(_rendered(copied), False)
+    # ...and the first read of the waveform is what expands it, once:
+    data = stim.data
+    npt.assert_equal(_rendered(stim), True)
+    for _ in range(3):
+        npt.assert_equal(np.shares_memory(stim.data, data), True)
+    npt.assert_equal(stim.data.dtype, np.float32)
+    npt.assert_equal(stim.time.dtype, np.float64)
+    npt.assert_almost_equal(stim.time[-1], stim.duration)
+
+
+@pytest.mark.parametrize('name, build', ENCODED, ids=[c[0] for c in ENCODED])
+def test_encoded_stimulus_holds_no_waveform_sized_array(name, build):
+    # The point of the phase: what is retained may scale with electrodes x
+    # frames, with the pulse onsets, or with the global time axis -- but not
+    # with electrodes x time, which is the array that gets large.
+    stim = build()
+    n_el, n_time = len(stim.electrodes), stim._ticks.size
+    retained = [stim._amp, stim._ticks, stim._sched, stim._pulse_ticks,
+                stim._pulse_vals, *stim._onsets, *stim._frames]
+    for array in retained:
+        npt.assert_equal(array.shape == (n_el, n_time), False)
+        # Frozen, like every other piece of a stimulus' scientific state:
+        npt.assert_equal(array.flags.writeable, False)
+    npt.assert_equal(stim._amp.shape[0], n_el)
+    # The matrix appears only when asked for:
+    npt.assert_equal(stim.data.shape, (n_el, n_time))
+
+
+def test_encoded_stimulus_is_independent_of_the_encoder():
+    # The schedule is resolved once, at `encode`. Whatever the encoder or its
+    # pulse template does afterwards describes some other encoding:
+    encoder = AmplitudeEncoder(amp_range=(0, 50), freq=20)
+    img = ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8))
+    stim = encoder.encode(img)
+    encoder.amp_range = (0, 500)
+    encoder.freq = 200
+    encoder.phase_dur = 4.0
+    npt.assert_array_equal(stim.data, encoder.__class__(
+        amp_range=(0, 50), freq=20).encode(img).data)
+
+
+@pytest.mark.parametrize('modify', [lambda s: s + 5, lambda s: s >> 5,
+                                    lambda s: s * np.inf,
+                                    lambda s: s.pad(s.duration + 10)])
+def test_encoded_stimulus_transformations_degrade(modify):
+    # A schedule describes when each electrode pulses and how hard on each
+    # frame. A DC offset or a shift in time leaves it describing nothing, so
+    # what comes back is an ordinary stimulus:
+    stim = AmplitudeEncoder().encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))
+    with np.errstate(divide='ignore', invalid='ignore'):
+        out = modify(stim)
+    npt.assert_equal(type(out), Stimulus)
+    npt.assert_equal(out._is_parametric, False)
+
+
+@pytest.mark.parametrize('factor', [2, 0.5, -1, 1, 0])
+def test_encoded_stimulus_scaling_scales_both_descriptions(factor):
+    # Scaling changes how hard each electrode is driven, not when. So the
+    # schedule survives -- and the waveform and the modulation behind it move
+    # together, which is what `find_threshold` varies from trial to trial.
+    stim = AmplitudeEncoder().encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))
+    view = stim._spatial_view()
+    scaled = stim * factor
+    npt.assert_equal(type(scaled), type(stim))
+    npt.assert_equal(_rendered(scaled), False)
+    npt.assert_allclose(scaled._spatial_view().data, factor * view.data,
+                        rtol=1e-6, atol=1e-6)
+    npt.assert_allclose(scaled.data, factor * stim.data, rtol=1e-6, atol=1e-6)
+    npt.assert_array_equal(scaled.time, stim.time)
+    # The frame clock is a fact about the source, and scaling is not:
+    npt.assert_equal(scaled.metadata['encoder'], stim.metadata['encoder'])
+    npt.assert_allclose(view.data, stim._spatial_view().data)
+
+
+def test_encoded_stimulus_drops_electrodes_structurally():
+    # An implant switching an electrode off must not cost the modulation view,
+    # which is the only thing a spatial model can read.
+    stim = AmplitudeEncoder().encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))
+    fewer = stim._without_electrodes([0, 3])
+    npt.assert_equal(type(fewer), type(stim))
+    npt.assert_equal(_rendered(fewer), False)
+    npt.assert_equal(len(fewer.electrodes), 62)
+    kept_rows = [i for i in range(len(stim.electrodes)) if i not in (0, 3)]
+    npt.assert_array_equal(np.asarray(fewer.electrodes),
+                           np.asarray(stim.electrodes)[kept_rows])
+    # The same rows are gone from both descriptions of it:
+    npt.assert_array_equal(fewer._spatial_view().data,
+                           stim._spatial_view().data[kept_rows])
+    npt.assert_array_equal(fewer.data, stim.data[kept_rows])
+    npt.assert_array_equal(fewer.time, stim.time)
+
+
+def test_encoded_stimulus_validates_while_it_schedules():
+    # Scheduling stays eager, so what is wrong with an encoding is still said
+    # when the encoding is asked for -- not when its waveform is:
+    img = ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8))
+    with pytest.raises(ValueError):
+        # A pulse longer than the source it has to fit into:
+        AmplitudeEncoder(phase_dur=400).encode(img)
+    with pytest.raises(ValueError):
+        # A raster that cannot get through in one pulse period:
+        FrequencyEncoder(freq_range=(0, 300)).encode(img, implant=ArgusII())
+    with pytest.raises(ValueError):
+        # A pulse whose time points DT cannot resolve:
+        AmplitudeEncoder(pulse=Stimulus([[0, 1, 0]],
+                                        time=[0, 1e-5, 2e-5])).encode(img)
+    # ...and so is the warning about frames that never reach an electrode:
+    assert_warns_msg(UserWarning,
+                     lambda: AmplitudeEncoder(freq=1).encode(
+                         VideoStimulus(np.ones((4, 4, 8)),
+                                       time=np.arange(8) * 40.0)),
+                     'deliver no pulse at all')
+
+
+def test_encoded_stimulus_survives_assignment_unrendered():
+    # An implant stores a copy of what it is given; that copy has no more
+    # reason to hold a waveform than the original did.
+    implant = ArgusII()
+    implant.stim = AmplitudeEncoder().encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)), implant=implant)
+    npt.assert_equal(_rendered(implant.stim), False)
+    npt.assert_equal(len(implant.stim.electrodes), 60)
+    # Assigning the picture itself goes through the implant's own encoder, and
+    # arrives just as unexpanded:
+    encoded = ArgusII(encoder=AmplitudeEncoder())
+    encoded.stim = ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8))
+    npt.assert_equal(_rendered(encoded.stim), False)
+    npt.assert_equal(encoded.stim.data.shape[0], 60)

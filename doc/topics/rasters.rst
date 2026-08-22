@@ -21,7 +21,7 @@ A raster is a **scheduling constraint**, not a stimulus by itself:
                        Raster
 
 The raster says **which electrodes may pulse together**. The
-:py:class:`~pulse2percept.stimuli.Encoder` decides when the pulses occur and
+:py:class:`~pulse2percept.stimuli.StimulusEncoder` decides when the pulses occur and
 what their amplitudes or frequencies are.
 
 The usual workflow
@@ -36,12 +36,16 @@ by an encoder:
     from pulse2percept.units import uA, Hz
 
     implant = p2p.implants.ArgusII()
-    implant.raster = p2p.implants.CheckerboardRaster(implant, n_groups=5)
+    implant.raster = p2p.implants.CheckerboardRaster(n_groups=5)
 
     encoder = p2p.stimuli.AmplitudeEncoder(
-        implant, amp_range=(0, 50 * uA), freq=20 * Hz
+        amp_range=(0, 50 * uA),
+        freq=20 * Hz,
     )
-    implant.stim = encoder.encode(p2p.stimuli.BostonTrain())
+    implant.stim = encoder.encode(
+        p2p.stimuli.BostonTrain(),
+        implant=implant,
+    )
 
 Here the 60 electrodes are split into five groups. Electrodes within one group
 may pulse together, while different groups receive different time slots.
@@ -50,7 +54,7 @@ You can inspect the grouping directly:
 
 .. code-block:: python
 
-    implant.raster.plot(implant)
+    implant.raster.plot()
     implant.raster.members(implant.electrode_names, 0)
 
 Built-in strategies
@@ -87,7 +91,7 @@ A checkerboard raster is usually more spatially distributed:
 
 .. code-block:: python
 
-    implant.raster = p2p.implants.CheckerboardRaster(implant, n_groups=5)
+    implant.raster = p2p.implants.CheckerboardRaster(n_groups=5)
 
 It derives the grouping from the electrode locations, so it works with square,
 rectangular, rotated, and hexagonal grids. The array must actually lie on a

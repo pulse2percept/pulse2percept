@@ -16,7 +16,8 @@ from pulse2percept.implants import (PointSource, ElectrodeArray, ElectrodeGrid,
 from pulse2percept.stimuli import (Stimulus, ImageStimulus, VideoStimulus,
                                    BostonTrain, LogoBVL)
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
-                                   FrequencyEncoder, MonophasicPulse)
+                                   BiphasicPulseTrain, FrequencyEncoder,
+                                   MonophasicPulse)
 from pulse2percept.implants import (ArgusII, DiskElectrode)
 from pulse2percept.models import ScoreboardModel
 
@@ -550,22 +551,24 @@ def test_ProsthesisSystem_encoder():
     npt.assert_equal(len(np.unique(np.abs(implant.stim.data) > 0, axis=0)), 6)
 
 
-def test_ProsthesisSystem_spatial_stim():
-    """An encoded stimulus keeps the modulation it was asked for, not just the
-    pulse train it was realized as
+def test_ProsthesisSystem_encoded_stim_is_one_object():
+    """An encoded stimulus knows both what it delivers and what it was asked
+    for, so the implant stores one of it
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     implant = ArgusII(stim=img)
+    npt.assert_equal(hasattr(implant, '_spatial_stim'), False)
     # `stim` is still the delivered pulse train -- that invariant is what makes
     # the safety checks and the temporal models meaningful:
     npt.assert_equal(implant.stim.time.size > 1, True)
-    # ... and beside it sits what the encoder actually asked each electrode
-    # for: one column, no waveform, no raster.
-    npt.assert_equal(implant._spatial_stim.shape, (60, 1))
-    npt.assert_equal(implant._spatial_stim.time, None)
-    npt.assert_equal(implant._spatial_stim.unit, uA)
+    # ... and the same object says what the encoder asked each electrode for:
+    # one column, no waveform, no raster.
+    spatial = implant.stim._spatial_view()
+    npt.assert_equal(spatial.shape, (60, 1))
+    npt.assert_equal(spatial.time, None)
+    npt.assert_equal(spatial.unit, uA)
     npt.assert_almost_equal(np.abs(implant.stim.data).max(axis=1),
-                            implant._spatial_stim.data.ravel(), decimal=4)
+                            spatial.data.ravel(), decimal=4)
 
     # A video keeps one column per video frame:
     vid = VideoStimulus(np.random.default_rng(0).random((6, 10, 4)),
@@ -574,26 +577,33 @@ def test_ProsthesisSystem_spatial_stim():
         # 6 Hz against 20 fps; irrelevant here, but it is not the modulation
         # that goes short of frames, only the train delivering it:
         implant.stim = vid
-    npt.assert_equal(implant._spatial_stim.shape, (60, 4))
-    npt.assert_almost_equal(implant._spatial_stim.time, np.arange(4) * 50.0)
+    npt.assert_equal(implant.stim._spatial_view().shape, (60, 4))
+    npt.assert_almost_equal(implant.stim._spatial_view().time,
+                            np.arange(4) * 50.0)
 
-    # Anything that did not come out of this implant's encoder has only the
-    # one description of itself, and assigning it clears the stale one:
-    for source in ({'A1': 20}, np.ones(60), None,
-                   AmplitudeEncoder(amp_range=(0, 50)).encode(img)):
+    # An encoded stimulus carries that description wherever it came from, so
+    # encoding by hand and assigning the result is the same thing as letting
+    # the implant do it:
+    by_hand = ArgusII(encoder=None,
+                      stim=AmplitudeEncoder(amp_range=(0, 50)).encode(
+                          img, implant=ArgusII()))
+    npt.assert_almost_equal(by_hand.stim._spatial_view().data,
+                            ArgusII(stim=img).stim._spatial_view().data)
+    # A stimulus assigned as current has only the one description of itself:
+    for source in ({'A1': 20}, np.ones(60)):
         implant.stim = source
-        npt.assert_equal(implant._spatial_stim, None)
-    # ... including an implant that never had an encoder:
-    npt.assert_equal(ArgusII(stim={'A1': 20})._spatial_stim, None)
-    npt.assert_equal(ProsthesisSystem(ArgusII().earray)._spatial_stim, None)
+        npt.assert_equal(implant.stim._spatial_view() is implant.stim, True)
+        npt.assert_equal(implant.stim._has_spatial_view, False)
 
     # Switching an electrode off reaches both descriptions, or a model reading
-    # one of them would go on stimulating through a dead electrode:
+    # one of them would go on stimulating through a dead electrode -- and it
+    # does not cost the schedule:
     implant = ArgusII(stim=img)
     implant.deactivate(['A1', 'B2'])
+    npt.assert_equal(implant.stim._has_spatial_view, True)
     npt.assert_equal(implant.stim.shape[0], 58)
-    npt.assert_equal(implant._spatial_stim.shape[0], 58)
-    npt.assert_equal('A1' in implant._spatial_stim.electrodes, False)
+    npt.assert_equal(implant.stim._spatial_view().shape[0], 58)
+    npt.assert_equal('A1' in implant.stim._spatial_view().electrodes, False)
 
 
 def test_ProsthesisSystem_preprocess_crosses_the_boundary():
@@ -644,3 +654,78 @@ def test_ProsthesisSystem_historical_stimuli_unchanged():
     implant.max_current = 0.2 * mA
     implant.stim = {name: 2 for name in ArgusII().electrode_names}
     npt.assert_equal(implant.stim.unit, uA)
+
+
+def test_ProsthesisSystem_deactivated_electrodes_do_not_mutate_the_source():
+    # Filtering out deactivated electrodes rewrites the stimulus, so it
+    # happens on a copy. A stimulus defined by its pulse parameters cannot
+    # lose an electrode and remain one, so what the implant stores for it is
+    # an ordinary Stimulus -- assigning a perfectly good pulse must not fail
+    # merely because the electrode it names happens to be switched off.
+    pulse = BiphasicPulse(20, 0.45, electrode='A1')
+    implant = ArgusII()
+    implant.deactivate('A1')
+    implant.stim = pulse
+    npt.assert_equal(type(implant.stim), Stimulus)
+    npt.assert_equal(implant.stim.shape[0], 0)
+    # The caller still holds their pulse, unchanged:
+    npt.assert_equal(type(pulse), BiphasicPulse)
+    npt.assert_equal(pulse.shape[0], 1)
+    npt.assert_almost_equal(pulse.amp, 20)
+
+    # Same for an electrode switched off after the fact:
+    implant = ArgusII(stim=BiphasicPulse(20, 0.45, electrode='A1'))
+    npt.assert_equal(type(implant.stim), BiphasicPulse)
+    implant.deactivate('A1')
+    npt.assert_equal(type(implant.stim), Stimulus)
+    npt.assert_equal(implant.stim.shape[0], 0)
+
+    # An ordinary stimulus is not mutated by either path, which it used to be:
+    for deactivate_first in (True, False):
+        stim = Stimulus({'A1': 10, 'B2': 20})
+        implant = ArgusII()
+        if deactivate_first:
+            implant.deactivate('A1')
+            implant.stim = stim
+        else:
+            implant.stim = stim
+            implant.deactivate('A1')
+        npt.assert_equal(sorted(str(e) for e in stim.electrodes),
+                         ['A1', 'B2'])
+        npt.assert_equal([str(e) for e in implant.stim.electrodes], ['B2'])
+
+    # Nothing deactivated means nothing is copied or removed:
+    stim = Stimulus({'A1': 10, 'B2': 20})
+    implant = ArgusII(stim=stim)
+    npt.assert_equal(sorted(str(e) for e in implant.stim.electrodes),
+                     ['A1', 'B2'])
+
+
+def test_ProsthesisSystem_deactivated_electrode_does_not_render_the_others():
+    # An implant drops a deactivated electrode from a dict of pulse trains by
+    # forgetting the entry that drives it, so the trains on the electrodes
+    # that are still on never get sampled.
+    def unrendered(stim):
+        return sum(c._Stimulus__stim['data'] is None
+                   for c, _ in stim._components)
+
+    trains = {name: BiphasicPulseTrain(20 + i, 10, 0.45, stim_dur=200)
+              for i, name in enumerate(['A1', 'A2', 'A3'])}
+    implant = ArgusII()
+    implant.deactivate('A2')
+    implant.stim = trains
+    npt.assert_equal([str(e) for e in implant.stim.electrodes], ['A1', 'A3'])
+    npt.assert_equal(implant.stim._components is None, False)
+    npt.assert_equal(unrendered(implant.stim), 2)
+
+    # ...and deactivating one after the fact is the same story:
+    implant = ArgusII(stim={name: BiphasicPulseTrain(20 + i, 10, 0.45,
+                                                     stim_dur=200)
+                            for i, name in enumerate(['A1', 'A2', 'A3'])})
+    npt.assert_equal(unrendered(implant.stim), 3)
+    implant.deactivate('A2')
+    npt.assert_equal([str(e) for e in implant.stim.electrodes], ['A1', 'A3'])
+    npt.assert_equal(unrendered(implant.stim), 2)
+    # The waveform is still the one the trains describe:
+    npt.assert_equal(implant.stim.data.shape[0], 2)
+    npt.assert_almost_equal(implant.stim.time[-1], 200)

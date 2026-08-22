@@ -24,7 +24,8 @@ from pulse2percept.implants import (ArgusII, CustomRaster, DiskElectrode,
                                     ElectrodeArray, ProsthesisSystem)
 from pulse2percept.models import FadingTemporal, Model, ScoreboardSpatial
 from pulse2percept.stimuli import (AmplitudeEncoder, BostonTrain,
-                                   FrequencyEncoder, ImageStimulus)
+                                   FrequencyEncoder, ImageStimulus,
+                                   Stimulus)
 from pulse2percept.utils.constants import DT
 
 # Electrode names in the order `ElectrodeArray` keeps them, and their positions
@@ -96,6 +97,13 @@ def test_endtoend_amplitude_modulation():
     npt.assert_almost_equal(net, 0, decimal=4)
 
     # --- what the model made of it --------------------------------------
+    # A spatial model reads what the encoder *asked* each electrode for, since
+    # a raster slot is a fact about time it has no way to express (see
+    # `models.base._spatial_input`). Wrapping the schedule in an ordinary
+    # `Stimulus` is what asks for the delivered pulses instead, which is what
+    # makes the raster visible below:
+    npt.assert_equal(implant.stim._spatial_view().shape, (4, 1))
+    implant.stim = Stimulus(stim)
     model = ScoreboardSpatial(xrange=(-4, 4), yrange=(-4, 4), step=0.2,
                               rho=200).build()
     percept = model.predict_percept(implant)
@@ -234,7 +242,9 @@ def test_endtoend_raster_order(order):
 
     # And the percept says the same: the electrodes light up one at a time, in
     # the order the raster puts them in, and each is as bright as its own gray
-    # level regardless of when its turn comes.
+    # level regardless of when its turn comes. Asked of the delivered pulses,
+    # because that is where a raster lives (see `_spatial_input`):
+    implant.stim = Stimulus(stim)
     model = ScoreboardSpatial(xrange=(-4, 4), yrange=(-4, 4), step=0.2,
                               rho=200).build()
     percept = model.predict_percept(implant)
