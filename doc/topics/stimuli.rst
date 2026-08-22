@@ -161,6 +161,43 @@ The time axis does not need to be uniformly sampled. Pulse classes store the
 important transition points rather than a dense sample at every simulation
 step, which keeps long pulse trains compact.
 
+Immutable, and sampled when asked
+---------------------------------
+
+.. versionchanged:: 0.10.0
+
+A Stimulus is an immutable scientific value. Its ``data``, ``time`` and
+``electrodes`` arrays are read-only, so a stimulus you hand to an implant or a
+model is the one you get back.
+
+For an arbitrary stimulus, that sampled waveform *is* the stimulus. Pulses,
+pulse trains and encoded images and videos are different: they retain the
+parameters or the schedule that define them, and only generate their waveform
+when samples are asked for.
+
+.. code-block:: python
+
+    pt = p2p.stimuli.BiphasicPulseTrain(20 * Hz, 50 * uA, 0.45 * ms)
+
+    pt.freq, pt.amp, pt.phase_dur   # free -- the parameters are the stimulus
+    pt.data                         # generates the waveform, then caches it
+
+So pulse parameters are first-class and read-only, and reading them never
+costs a waveform. ``stim.data`` remains the public sampled waveform, and
+reading it may be what generates it.
+
+Operations return a **new** stimulus rather than modifying one. Where the
+result is still describable in the same terms, it keeps that form:
+
+.. code-block:: python
+
+    pt * 2          # still a BiphasicPulseTrain, at twice the amplitude
+    pt + 5          # a plain Stimulus: a DC offset is not a pulse train
+
+An operation that cannot be represented truthfully -- a DC offset, a shift in
+time, appending a second train -- falls back to an ordinary waveform-backed
+Stimulus rather than reporting parameters that no longer describe it.
+
 Looking at a stimulus
 ---------------------
 
@@ -202,7 +239,7 @@ For example:
     source = p2p.stimuli.BostonTrain()
 
 That object is a visual source. It should be passed through an
-:py:class:`~pulse2percept.stimuli.Encoder` before it is used as electrical
+:py:class:`~pulse2percept.stimuli.StimulusEncoder` before it is used as electrical
 stimulation:
 
 .. code-block:: python

@@ -1720,6 +1720,7 @@ def test_Stimulus_lazy_state_is_immutable():
     with pytest.raises(ValueError):
         stim.electrodes[0] = 'X'
     # And it is validated on the same terms, too:
+
     class BadShape(CountingLazy):
         __slots__ = ()
 
@@ -1791,7 +1792,7 @@ COLLECTIONS = [
                                       'B2': Stimulus([[1, 2, 3, 4]])}),
     ('list', lambda: [CountingLazy(4, ['A1']), CountingLazy(5, ['B2'])]),
     ('multi-electrode entry', lambda: [CountingLazy(4, ['x', 'y']),
-                                      CountingLazy(6, ['B2'])]),
+                                       CountingLazy(6, ['B2'])]),
 ]
 
 

@@ -21,7 +21,7 @@ A raster is a **scheduling constraint**, not a stimulus by itself:
                        Raster
 
 The raster says **which electrodes may pulse together**. The
-:py:class:`~pulse2percept.stimuli.Encoder` decides when the pulses occur and
+:py:class:`~pulse2percept.stimuli.StimulusEncoder` decides when the pulses occur and
 what their amplitudes or frequencies are.
 
 The usual workflow

@@ -260,8 +260,8 @@ class VideoStimulus(Stimulus):
         """
         # `func` gets a frame of its own: several of the scikit-image
         # transforms this exists to reach cannot take a read-only one.
-        vid = np.array([func(_as_writable(
-                                 frame.reshape(self.vid_shape[:-1])),
+        shape = self.vid_shape[:-1]
+        vid = np.array([func(_as_writable(frame.reshape(shape)),
                              *args, **kwargs)
                         for frame in self])
         # Move first axis (frames) to last:

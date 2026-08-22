@@ -372,8 +372,9 @@ class BiphasicPulseTrain(Stimulus):
                                  stim_dur=stim_dur)
         self._defer(_electrode_names(electrode))
 
-        # Store metadata for BiphasicAxonMapModel. `amp` is stored as a
-        # magnitude, because that is all of it that reaches the data:
+        # Compatibility copy of the parameters this train owns outright
+        # (see `Stimulus._rescale_params`). `amp` is a magnitude, because that
+        # is all of it that reaches the data:
         # `BiphasicPulse` takes `np.abs(amp)` and reads the polarity off
         # `cathodic_first`. Storing the sign the caller happened to type would
         # have two identical waveforms predict two different percepts, since
@@ -454,25 +455,15 @@ class BiphasicPulseTrain(Stimulus):
 
     @classmethod
     def _rescale_params(cls, metadata, factor):
-        """Keep the pulse parameters in sync with the data
-
-        Compatibility only: the models read these numbers off the train
-        itself now (see
-        :py:meth:`~pulse2percept.stimuli.Stimulus._structured_sources`). The
-        copy under ``metadata`` is kept for anything that still reads it, and
-        has to stay in step for the same reason it always did: ``pt * 2``
-        delivers twice the current, and a reader left with the old ``amp``
-        would make of it the very same percept.
+        """Keep the compatibility copy of the pulse parameters in step
 
         Scaling is the one operation that leaves a biphasic pulse train a
         biphasic pulse train, so it scales ``amp`` (a negative factor only
         swaps the two phases, which does not change the magnitude). Anything
-        else -- a DC offset, an appended second train, a non-finite factor --
-        leaves something that is no longer one biphasic pulse train at one
-        amplitude and frequency, so the pulse parameters are dropped: a model
-        asking for them then rejects the stimulus rather than predicting from
-        numbers that no longer describe it. What the user put in ``metadata``
-        is theirs, and survives either way.
+        else leaves something no single amplitude and frequency describe, so
+        the parameters are dropped and a reader rejects the stimulus rather
+        than predicting from numbers that no longer fit it. What the user put
+        in ``metadata`` is theirs, and survives either way.
         """
         if 'amp' not in metadata:
             # Parameters an earlier operation has already dropped

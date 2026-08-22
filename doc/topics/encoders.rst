@@ -7,7 +7,7 @@ Stimulus Encoders
 .. versionadded:: 0.10.0
 
 A visual prosthesis does not stimulate with pixels. It stimulates with
-electrical pulses. An :py:class:`~pulse2percept.stimuli.Encoder` defines how
+electrical pulses. An :py:class:`~pulse2percept.stimuli.StimulusEncoder` defines how
 the gray levels of an image or video are turned into those pulses:
 
 ::
@@ -102,6 +102,40 @@ If the pulse rate is lower than the frame rate, some frames may never coincide
 with a pulse and therefore contribute no stimulation; the encoder warns when
 that happens.
 
+What the encoded stimulus is
+----------------------------
+
+:py:meth:`~pulse2percept.stimuli.StimulusEncoder.encode` returns the **delivered
+electrical stimulus**: the biphasic pulse trains the device would actually
+emit, on the device's own timing. Its waveform is generated only when
+something asks for samples, so encoding a video onto a large implant is cheap
+until a model needs the pulses.
+
+The stimulus also remembers what was *asked* of each electrode, which is what
+lets each kind of model read the half it can express:
+
+* A purely spatial model (:py:class:`~pulse2percept.models.ScoreboardModel`,
+  :py:class:`~pulse2percept.models.AxonMapModel`) has no clock, so it reads the
+  frame-level modulation: one amplitude per electrode per frame of the source.
+  It never sees the pulse timing, and never generates the waveform.
+* A temporal or combined model integrates the delivered pulses, because that
+  is what such a model is for.
+
+This does not depend on how the stimulus got to the implant. Encoding by hand
+and assigning the result is the same thing as letting the implant encode:
+
+.. code-block:: python
+
+    implant.stim = encoder.encode(source)      # these two
+
+    implant.encoder = encoder                  # ... behave identically
+    implant.stim = source
+
+.. versionchanged:: 0.10.0
+    A spatial model reads the frame-level modulation of any encoded stimulus.
+    Previously only stimuli encoded during assignment to an implant were read
+    that way, and a hand-encoded one came out as a sequence of raster slots.
+
 Hardware constraints, when you need them
 ----------------------------------------
 
@@ -144,7 +178,7 @@ full units convention.
 
 .. seealso::
 
-    * :py:class:`pulse2percept.stimuli.Encoder` for the common encoder options
+    * :py:class:`pulse2percept.stimuli.StimulusEncoder` for the common encoder options
     * :py:class:`pulse2percept.stimuli.AmplitudeEncoder`
     * :py:class:`pulse2percept.stimuli.FrequencyEncoder`
     * :ref:`Electrical Stimuli <topics-stimuli>`

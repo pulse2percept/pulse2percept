@@ -12,6 +12,7 @@ from ...utils import cart2pol, deprecated_alias
 from ...utils.constants import MS_PER_S, UM_PER_MM, ZORDER
 from ...topography import Polimeni2006Map
 
+
 def _pulse_train_clocks(stim):
     """``{electrode: (freq, phase_dur)}`` where the stimulus is pulse trains
 

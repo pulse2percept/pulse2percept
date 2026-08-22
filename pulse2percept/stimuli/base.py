@@ -355,11 +355,20 @@ class Stimulus(PrettyPrint):
     A stimulus can be created from a variety of source types (e.g., scalars,
     lists, NumPy arrays, and dictionaries).
 
+    A stimulus is immutable. For an arbitrary stimulus, the sampled waveform
+    *is* the stimulus. Pulse-based and encoded stimuli instead retain the
+    parameters or the schedule that define them, and generate their waveform
+    only when samples such as ``data`` are asked for.
+
     .. seealso ::
 
         *  `Basic Concepts > Electrical Stimuli <topics-stimuli>`
 
     .. versionadded:: 0.6
+
+    .. versionchanged:: 0.10.0
+        ``data``, ``time`` and ``electrodes`` are read-only, and pulse-based
+        and encoded stimuli generate their waveform lazily.
 
     Parameters
     ----------
@@ -426,6 +435,13 @@ class Stimulus(PrettyPrint):
        its value will be automatically interpolated from neighboring values.
     *  If a requested time point lies outside the range of stored data,
        the value of its closest end point will be returned.
+    *  Pulse parameters such as ``amp``, ``freq`` and ``phase_dur`` are
+       first-class and read-only, and reading them never generates a waveform.
+    *  Transformations return a new stimulus. One whose result the parameters
+       still describe keeps its structured form (``pulse_train * 2`` is a pulse
+       train at twice the amplitude); one they cannot -- a DC offset, a shift
+       in time, an appended second train -- falls back to a plain, waveform-
+       backed ``Stimulus``.
 
     Examples
     --------
@@ -757,6 +773,10 @@ class Stimulus(PrettyPrint):
                     # the source (unless they're None):
                     _electrodes.append(e if e is not None else ele)
                 try:
+                    # Compatibility channel: what described this electrode,
+                    # for a reader that ends up with only the samples (see
+                    # `_rescale_params`). `_structured_sources` is where the
+                    # sources themselves are read.
                     self.metadata['electrodes'][str(ele)] = {
                         'metadata': src.metadata,
                         'type': type(src)
@@ -1018,19 +1038,19 @@ class Stimulus(PrettyPrint):
     def _rescale_params(cls, metadata, factor):
         """Rewrite waveform parameters for a waveform scaled by ``factor``
 
-        Some stimulus types describe their waveform with parameters that a
-        model reads back instead of measuring the data itself: a
-        :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` records
-        amplitude, frequency and phase duration, and
-        :py:class:`~pulse2percept.models.BiphasicAxonMapModel` predicts from
-        those rather than from ``data``. Such a type overrides this method, so
-        that an operation on the data carries its parameters along.
+        Compatibility only. A pulse-based stimulus owns its parameters and
+        the models read them off it (see :py:meth:`_structured_sources`); this
+        files a copy under ``metadata`` for waveform-only containers, which is
+        what :py:class:`~pulse2percept.implants.EnsembleImplant` interpolates
+        its children into. There the copy is the only surviving description of
+        the pulse trains, and
+        :py:class:`~pulse2percept.models.cortex.DynaphosModel` still reads it.
 
         Returns the metadata a stimulus of this class would carry after its
         data was multiplied by ``factor``, or -- for ``factor=None`` -- after
-        an operation that leaves it no longer describable by those parameters
-        at all. A plain ``Stimulus`` has no such parameters, so there is
-        nothing to keep in sync.
+        an operation those parameters can no longer describe at all. A plain
+        ``Stimulus`` has no such parameters, so there is nothing to keep in
+        sync.
 
         Parameters
         ----------
@@ -2091,8 +2111,14 @@ class Stimulus(PrettyPrint):
     @property
     def data(self):
         """Stimulus data container
-        A 2-D NumPy array that contains the stimulus data, where the rows
-        denote electrodes and the columns denote points in time.
+
+        A read-only 2-D NumPy array that contains the sampled waveform, where
+        the rows denote electrodes and the columns denote points in time.
+
+        For a pulse-based or encoded stimulus the waveform is what the
+        parameters or the schedule describe rather than what the stimulus
+        stores, so reading this may be what generates it. It is cached
+        afterwards, and the parameters can be read without it.
         """
         return self._stim['data']
 

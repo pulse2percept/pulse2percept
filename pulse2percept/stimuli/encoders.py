@@ -256,6 +256,7 @@ class _EncodedStimulus(Stimulus):
                 'duration': self._total,
                 'metadata': self.metadata}
 
+
 class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
     """Abstract base class for all stimulus encoders
 

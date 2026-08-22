@@ -24,6 +24,12 @@ Highlights:
    keep working and keep their documented meaning everywhere.
    See :ref:`Physical Units <topics-units>`.
 
+*  :py:class:`~pulse2percept.stimuli.Stimulus` is now an immutable value with
+   a lazily generated waveform. Pulses, pulse trains, collections of them, and
+   encoder output retain the parameters or schedule that define them and sample
+   it only when asked, so encoding an image or video onto a large implant no
+   longer allocates a waveform up front.
+
 * :py:meth:`~pulse2percept.percepts.Percept.play` and
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` are roughly 100x faster
   and produce much smaller notebooks and documentation pages.
@@ -48,6 +54,28 @@ API changes:
   the output times itself (``t_percept=None``), ``reduce='peak'`` makes each
   point report the highest brightness reached over the interval leading up to
   it rather than the brightness at the instant it ends.
+
+* :py:attr:`~pulse2percept.stimuli.Stimulus.data`,
+  :py:attr:`~pulse2percept.stimuli.Stimulus.time` and
+  :py:attr:`~pulse2percept.stimuli.Stimulus.electrodes` are read-only; write to
+  a copy, or build a new stimulus.
+
+* Pulse and pulse-train parameters (``amp``, ``freq``, ``phase_dur``, ...) are
+  first-class read-only attributes and can be read without generating a
+  waveform. Scaling a parameter-backed stimulus keeps that form (``pt * 2`` is
+  a pulse train at twice the amplitude); an operation the parameters cannot
+  describe exactly returns a plain ``Stimulus``.
+
+* :py:class:`~pulse2percept.models.BiphasicAxonMapModel` and
+  :py:class:`~pulse2percept.models.cortex.DynaphosModel` read pulse parameters
+  off the pulse trains a stimulus is made of rather than out of its metadata.
+  Dynaphos still falls back to the metadata for stimuli merged by
+  :py:class:`~pulse2percept.implants.EnsembleImplant`, which does not preserve
+  the trains.
+
+* A spatial model reads the frame-level modulation of any encoded stimulus,
+  not only one encoded while being assigned to an implant. Wrap in
+  ``Stimulus(stim)`` to be handed the delivered pulses instead.
 
 * :py:class:`~pulse2percept.implants.ProsthesisSystem` now exposes ``encoder``,
   ``raster`` and ``max_current``. A raster is bound to the implant it is
@@ -91,6 +119,10 @@ Bug fixes:
   longer pulse trains and improving frequency-modulation accuracy.
 
 * Stimulus metadata now survives ``predict_percept`` and other transformations.
+
+* :py:class:`~pulse2percept.models.cortex.DynaphosModel` now uses the frequency
+  and phase duration of a pulse train assigned straight to ``implant.stim``,
+  instead of falling back to the model's defaults.
 
 * Various fixes for :py:class:`~pulse2percept.stimuli.ImageStimulus`:
   keyword arguments are passed on to scikit-image; inputs are no longer

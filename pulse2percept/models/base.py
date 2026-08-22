@@ -257,19 +257,12 @@ def _require_stim_dimension(model, stim):
 def _spatial_input(implant):
     """The stimulus a model with no temporal component reads off an implant
 
-    A pulse train is a description of *when* current flows, and a raster is a
-    description of which electrodes are allowed to flow at the same time. Both
-    are facts about time, and a model with no temporal component has no
-    machinery to express either: handed the delivered train, it reports the
-    stimulus one instant at a time, so an encoded image comes out as a
-    sequence of raster slots rather than as the image.
-
-    So a stimulus that knows what it was *asked* for, as well as what it
-    delivers, is read for the first: one amplitude per electrode per frame of
-    the source, which is exactly as much of it as such a model can say
-    anything about. Everything else -- a stimulus assigned as current, an
-    implant with no encoder -- has only the one description of itself and is
-    its own answer.
+    A pulse train says *when* current flows and a raster says which electrodes
+    may flow at once. Both are facts about time that such a model has no
+    machinery to express -- handed the delivered train, it would report an
+    encoded image as a sequence of raster slots. So an encoded stimulus is
+    read for the modulation it realizes instead: one amplitude per electrode
+    per frame of the source. Anything else is its own answer.
     """
     return implant.stim._spatial_view()
 
@@ -310,13 +303,11 @@ def _rescaled_implant(implant, amp):
 def _delivered(implant):
     """The same implant, made to hand a spatial model the pulse train
 
-    The other side of :py:func:`_spatial_input`. A spatial model that feeds a
-    temporal one is the case where the pulses are exactly what has to get
-    through, since integrating them is what the temporal model is for. A
-    shallow copy is enough to say so, with the stimulus wrapped in an ordinary
-    :py:class:`~pulse2percept.stimuli.Stimulus`: an ordinary stimulus is its
-    own spatial view, so the wrapper is what asks for the delivered pulses.
-    The wrapper stays unmaterialized until something reads them.
+    The other side of :py:func:`_spatial_input`: when a temporal stage follows,
+    integrating the pulses is the point, so they are what has to get through.
+    An ordinary :py:class:`~pulse2percept.stimuli.Stimulus` is its own spatial
+    view, so wrapping in one is how the delivered pulses are asked for -- and
+    the wrapper stays unmaterialized until something reads them.
     """
     if implant.stim is None or not implant.stim._has_spatial_view:
         return implant
