@@ -50,23 +50,17 @@ def _index_of_name(electrodes, name):
     return list(electrodes).index(name)
 
 
-class _Owned(np.ndarray):
-    """An array the library allocated for one stimulus"""
+class _AdoptableArray(np.ndarray):
+    """Internal marker for an array that may be installed without copying
+
+    Views keep the subclass, so the mark survives the reshaping on the way in.
+    """
     __slots__ = ()
 
 
-def _owned(arr):
-    """Promise that arr is the library's alone"""
-    return arr.view(_Owned)
-
-
-def _freeze(arr):
-    """Make ``arr``, and every array it is a view of, read-only"""
-    level = arr
-    while isinstance(level, np.ndarray):
-        level.flags.writeable = False
-        level = level.base
-    return arr
+def _adoptable(arr):
+    """Mark arr as safe for a stimulus to install without copying"""
+    return arr.view(_AdoptableArray)
 
 
 def _describe_unit(unit):
@@ -1329,9 +1323,10 @@ class Stimulus(PrettyPrint):
         """An immutable, C-contiguous array of dtype"""
         if arr is None:
             return None
-        if isinstance(arr, _Owned) and arr.dtype == dtype:
-            return _freeze(np.ascontiguousarray(arr))
-        owned = np.array(arr, dtype=dtype, order='C', copy=True)
+        if isinstance(arr, _AdoptableArray) and arr.dtype == dtype:
+            owned = np.ascontiguousarray(arr, dtype=dtype)
+        else:
+            owned = np.array(arr, dtype=dtype, order='C', copy=True)
         owned.flags.writeable = False
         return owned
 

@@ -17,7 +17,7 @@ from skimage.filters import (threshold_mean, threshold_minimum, threshold_otsu,
                              median)
 from skimage.feature import canny
 
-from .base import Stimulus, _owned
+from .base import Stimulus, _adoptable
 from .names import ElectrodeNames
 from ..units import dimensionless
 from ..utils import center_image, shift_image, scale_image, trim_image
@@ -133,7 +133,7 @@ class ImageStimulus(Stimulus):
         data = img_as_float32(img)
         if borrowed is not None and np.may_share_memory(data, borrowed):
             data = data.copy()
-        super().__init__(_owned(data.ravel()),
+        super().__init__(_adoptable(data.ravel()),
                                             time=None, electrodes=electrodes,
                                             metadata=metadata,
                                             compress=compress)

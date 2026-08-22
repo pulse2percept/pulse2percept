@@ -5,7 +5,7 @@ from abc import ABCMeta, abstractmethod
 import numpy as np
 from copy import deepcopy
 
-from .base import Stimulus, _owned
+from .base import Stimulus, _adoptable
 from .images import ImageStimulus
 from .pulses import BiphasicPulse
 from .videos import VideoStimulus
@@ -242,7 +242,7 @@ class _EncodedStimulus(Stimulus):
             data[rows] = self._amp[rows][:, frame[at]] * wave
         # Allocated here for this stimulus and returned straight to it, so
         # `Stimulus` need not copy it away from anyone:
-        return {'data': _owned(data), 'electrodes': self.electrodes,
+        return {'data': _adoptable(data), 'electrodes': self.electrodes,
                 'time': self.time}
 
     def _pprint_params(self):

@@ -13,7 +13,7 @@ from skimage.feature import canny
 from skimage import img_as_float32
 from imageio import get_reader as video_reader
 
-from .base import Stimulus, _owned
+from .base import Stimulus, _adoptable
 from ..units import dimensionless
 from .names import ElectrodeNames
 from ..utils import (center_image, shift_image, scale_image, trim_image,
@@ -164,7 +164,7 @@ class VideoStimulus(Stimulus):
             electrodes = ElectrodeNames(self.vid_shape[:-1])
         if borrowed is not None and np.may_share_memory(vid, borrowed):
             vid = vid.copy()
-        super().__init__(_owned(vid.reshape((-1, vid.shape[-1]))),
+        super().__init__(_adoptable(vid.reshape((-1, vid.shape[-1]))),
                                             time=time, electrodes=electrodes,
                                             metadata=metadata,
                                             compress=compress)
