@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import copy
 import multiprocessing
 import warnings
@@ -17,7 +18,7 @@ from pulse2percept.models import (AxonMapModel, AxonMapSpatial, BaseModel,
                                   FadingTemporal, Model, NotBuiltError,
                                   ScoreboardModel, ScoreboardSpatial,
                                   SpatialModel, TemporalModel)
-from pulse2percept.models.base import _blend_meridian
+from pulse2percept.models.base import _blend_meridian, _rescaled_implant
 from pulse2percept.models.cortex import (ScoreboardSpatial as
                                          CortexScoreboardSpatial)
 from pulse2percept.units import (DimensionMismatchError, Quantity,
@@ -1660,7 +1661,7 @@ def test_spatial_model_reads_modulation_not_pulses():
     npt.assert_equal(percept.data.shape[-1], 1)
     # ... and every electrode the image lights is lit in it, rather than the
     # one raster group that happened to be firing at the sampled instant:
-    lit = implant._spatial_stim.data.ravel() > 0
+    lit = implant.stim._spatial_view().data.ravel() > 0
     npt.assert_equal(lit.sum() > 10, True)
     groups = implant.raster.groups(implant.electrode_names)
     # No instant of the delivered train ever holds more than one group, so
@@ -1671,7 +1672,7 @@ def test_spatial_model_reads_modulation_not_pulses():
     # Which is what the percept says too: it is the same picture the
     # modulation asked for, run through the model.
     direct = spatial.predict_percept(
-        ArgusII(encoder=None, stim=implant._spatial_stim))
+        ArgusII(encoder=None, stim=implant.stim._spatial_view()))
     npt.assert_almost_equal(percept.data, direct.data)
 
     # A video reports one percept frame per *video* frame:
@@ -1697,7 +1698,7 @@ def test_spatial_model_reads_modulation_not_pulses():
     both.predict_percept(implant)
     npt.assert_array_less(seen[-1], 0)
     # ... and the implant it was handed is untouched by that:
-    npt.assert_equal(implant._spatial_stim is None, False)
+    npt.assert_equal(implant.stim._has_spatial_view, True)
     # Spatial-only, the same model class reads the modulation instead:
     seen.clear()
     Recording(xrange=(-12, 12), yrange=(-8, 8),
@@ -1708,7 +1709,7 @@ def test_spatial_model_reads_modulation_not_pulses():
     # modulation behind it, so there is nothing to prefer.
     plain = ArgusII(stim={'A1': BiphasicPulseTrain(20, 50, 0.45,
                                                    stim_dur=100)})
-    npt.assert_equal(plain._spatial_stim, None)
+    npt.assert_equal(plain.stim._has_spatial_view, False)
     npt.assert_equal(
         spatial.predict_percept(plain).data.shape[-1],
         plain.stim.time.size)
@@ -1725,9 +1726,10 @@ def test_find_threshold_scales_both_representations():
     npt.assert_equal(0 < amp_th < 500, True)
     # The answer is a threshold of what `predict_percept` reports, which is
     # only true if both descriptions were scaled together:
+    modulation = implant.stim._spatial_view()
     scaled = ArgusII(encoder=None, stim=Stimulus(
-        implant._spatial_stim.data * amp_th / implant.stim.data.max(),
-        electrodes=implant._spatial_stim.electrodes))
+        modulation.data * amp_th / implant.stim.data.max(),
+        electrodes=modulation.electrodes))
     npt.assert_allclose(model.predict_percept(scaled).data.max(), 50,
                         rtol=0.05)
 
@@ -1957,3 +1959,94 @@ def test_models_accept_read_only_stimulus_data():
         model = cls(xrange=(-1, 1), yrange=(-1, 1), step=1).build()
         npt.assert_equal(np.all(np.isfinite(
             model.predict_percept(implant).data)), True)
+
+
+@contextmanager
+def _no_schedule_expansion():
+    """Make expanding an encoder schedule into a waveform an error
+
+    The only way to state "this path never needs the pulses" as a test: if
+    anything reaches for them, it fails loudly.
+    """
+    from pulse2percept.stimuli.encoders import _EncodedStimulus
+    original = _EncodedStimulus._render
+
+    def refuse(self):
+        raise AssertionError('expanded an encoder schedule')
+    _EncodedStimulus._render = refuse
+    try:
+        yield
+    finally:
+        _EncodedStimulus._render = original
+
+
+@pytest.mark.parametrize('source', ['image', 'video'])
+def test_spatial_model_predicts_without_expanding_the_schedule(source):
+    # A spatial model reads one amplitude per electrode per frame. Nothing
+    # about that needs the pulse train the schedule would expand into.
+    spatial = ScoreboardSpatial(xrange=(-12, 12), yrange=(-8, 8),
+                                step=1).build()
+    picture = (LogoBVL() if source == 'image' else
+               VideoStimulus(np.random.default_rng(0).random((6, 10, 4)),
+                             metadata={'fps': 20}))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        implant = ArgusII(stim=picture)
+    with _no_schedule_expansion():
+        percept = spatial.predict_percept(implant)
+    npt.assert_equal(np.any(percept.data), True)
+    npt.assert_equal(percept.data.shape[-1], 1 if source == 'image' else 4)
+
+
+def test_combined_model_still_integrates_the_delivered_pulses():
+    # The opposite case: a temporal stage integrates pulses, so the spatial
+    # stage under it has to be handed them. That reading is unchanged, and the
+    # implant it was asked of keeps its own schedule.
+    implant = ArgusII(stim=LogoBVL())
+    seen = []
+
+    class Recording(ScoreboardSpatial):
+        def _predict_spatial(self, earray, stim):
+            # A pulse train has cathodic phases in it; modulation amplitudes
+            # never do. The sign says which one arrived:
+            seen.append(float(stim.data.min()))
+            return super()._predict_spatial(earray, stim)
+
+    both = Model(spatial=Recording(xrange=(-12, 12), yrange=(-8, 8), step=1),
+                 temporal=FadingTemporal(tau=100)).build()
+    both.predict_percept(implant)
+    npt.assert_array_less(seen[-1], 0)
+    # The stand-in did not take the schedule away from the implant:
+    npt.assert_equal(implant.stim._has_spatial_view, True)
+
+
+def test_find_threshold_scales_an_encoded_stimulus_structurally():
+    # Every trial scales the one schedule, so the modulation a spatial model
+    # reads and the waveform a temporal one would read move together -- and
+    # the search never has to expand either.
+    implant = ArgusII(stim=LogoBVL())
+    model = ScoreboardModel(xrange=(-12, 12), yrange=(-8, 8), step=1).build()
+    # The search reads the delivered peak once, to know what it is scaling
+    # to. From there on nothing needs the pulses:
+    peak = implant.stim.data.max()
+    with _no_schedule_expansion():
+        trial = _rescaled_implant(implant, 2 * peak)
+        npt.assert_equal(type(trial.stim), type(implant.stim))
+        npt.assert_allclose(trial.stim._spatial_view().data,
+                            2 * implant.stim._spatial_view().data, rtol=1e-6)
+        npt.assert_equal(np.any(model.predict_percept(trial).data), True)
+
+
+def test_deactivating_an_encoded_electrode_keeps_the_schedule():
+    implant = ArgusII(stim=LogoBVL())
+    before = implant.stim._spatial_view()
+    with _no_schedule_expansion():
+        implant.deactivate(['A1', 'B2'])
+        after = implant.stim._spatial_view()
+    npt.assert_equal(implant.stim._has_spatial_view, True)
+    npt.assert_equal(len(implant.stim.electrodes), 58)
+    keep = [i for i, e in enumerate(before.electrodes)
+            if str(e) not in ('A1', 'B2')]
+    npt.assert_array_equal(after.data, before.data[keep])
+    # The waveform is still there to be had, and matches too:
+    npt.assert_equal(implant.stim.data.shape[0], 58)

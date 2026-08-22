@@ -468,6 +468,11 @@ class Stimulus(PrettyPrint):
     #: The unit ``time`` is stored in.
     _default_time_unit = ms
 
+    #: Whether :py:meth:`_spatial_view` describes something other than this
+    #: stimulus. False for a stimulus that is its own spatial description,
+    #: which is every stimulus that was handed to the library as current.
+    _has_spatial_view = False
+
     #: Whether this class' canonical state is a set of stimulation parameters
     #: rather than the waveform itself. Such a stimulus cannot survive a
     #: change to its samples, because its parameters would go on describing a
@@ -948,6 +953,32 @@ class Stimulus(PrettyPrint):
         stim.metadata = deepcopy(self.metadata)
         return stim._inherit_units(self)
 
+    def _spatial_view(self):
+        """This stimulus as a reader with no clock of its own can read it
+
+        A pulse train says *when* current flows, and a raster says which
+        electrodes may flow at once. Both are facts about time, and a model
+        with no temporal component has no machinery to express either. A
+        stimulus that was handed to the library as current has only the one
+        description of itself and is its own answer, which is what this
+        returns. A class that knows what it was *asked* for, as well as what
+        it delivers, overrides this and says so (see ``_has_spatial_view``).
+        """
+        return self
+
+    def _without_electrodes(self, electrodes):
+        """A copy of this stimulus that no longer drives ``electrodes``
+
+        What an implant does with an electrode it has switched off. Taking the
+        waveform and dropping its rows is what any stimulus described by its
+        samples can do; a class that also describes what it was asked for
+        overrides this, so that switching an electrode off does not cost that
+        description.
+        """
+        stim = self._derived()
+        stim.remove(electrodes)
+        return stim
+
     def _derived(self):
         """The object a waveform-rewriting operation builds its result on
 
@@ -1221,8 +1252,27 @@ class Stimulus(PrettyPrint):
                 'time': self.time
             }
             return
+        keep_el = self._keep_mask(electrodes)
+        if self._drop_components(keep_el):
+            return
+        self._stim = {
+            'data': self.data[keep_el],
+            'electrodes': self.electrodes[keep_el],
+            'time': self.time,
+        }
+
+    def _keep_mask(self, electrodes):
+        """Which rows survive removing ``electrodes``
+
+        Indices and names both, on the terms :py:meth:`remove` has always
+        used. Shared with :py:meth:`_without_electrodes`, so that an implant
+        switching an electrode off selects exactly what removing it would.
+        """
         # Start with a list of True and set the removed electrodes to False:
         keep_el = np.ones(len(self.electrodes), dtype=bool)
+        if np.isscalar(electrodes) and electrodes == 'all':
+            keep_el[:] = False
+            return keep_el
         for electrode in np.array([electrodes]).ravel():
             try:
                 # Check if `electrode` is an index into the electrodes array:
@@ -1235,13 +1285,7 @@ class Stimulus(PrettyPrint):
                     keep_el[_index_of_name(self.electrodes, electrode)] = False
                 except ValueError:
                     raise ValueError(f'Electrode "{electrode}" not found.')
-        if self._drop_components(keep_el):
-            return
-        self._stim = {
-            'data': self.data[keep_el],
-            'electrodes': self.electrodes[keep_el],
-            'time': self.time,
-        }
+        return keep_el
 
     def _drop_components(self, keep_el):
         """Forget whole entries of a collection that has not been merged yet

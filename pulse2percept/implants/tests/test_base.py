@@ -551,22 +551,24 @@ def test_ProsthesisSystem_encoder():
     npt.assert_equal(len(np.unique(np.abs(implant.stim.data) > 0, axis=0)), 6)
 
 
-def test_ProsthesisSystem_spatial_stim():
-    """An encoded stimulus keeps the modulation it was asked for, not just the
-    pulse train it was realized as
+def test_ProsthesisSystem_encoded_stim_is_one_object():
+    """An encoded stimulus knows both what it delivers and what it was asked
+    for, so the implant stores one of it
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     implant = ArgusII(stim=img)
+    npt.assert_equal(hasattr(implant, '_spatial_stim'), False)
     # `stim` is still the delivered pulse train -- that invariant is what makes
     # the safety checks and the temporal models meaningful:
     npt.assert_equal(implant.stim.time.size > 1, True)
-    # ... and beside it sits what the encoder actually asked each electrode
-    # for: one column, no waveform, no raster.
-    npt.assert_equal(implant._spatial_stim.shape, (60, 1))
-    npt.assert_equal(implant._spatial_stim.time, None)
-    npt.assert_equal(implant._spatial_stim.unit, uA)
+    # ... and the same object says what the encoder asked each electrode for:
+    # one column, no waveform, no raster.
+    spatial = implant.stim._spatial_view()
+    npt.assert_equal(spatial.shape, (60, 1))
+    npt.assert_equal(spatial.time, None)
+    npt.assert_equal(spatial.unit, uA)
     npt.assert_almost_equal(np.abs(implant.stim.data).max(axis=1),
-                            implant._spatial_stim.data.ravel(), decimal=4)
+                            spatial.data.ravel(), decimal=4)
 
     # A video keeps one column per video frame:
     vid = VideoStimulus(np.random.default_rng(0).random((6, 10, 4)),
@@ -575,26 +577,33 @@ def test_ProsthesisSystem_spatial_stim():
         # 6 Hz against 20 fps; irrelevant here, but it is not the modulation
         # that goes short of frames, only the train delivering it:
         implant.stim = vid
-    npt.assert_equal(implant._spatial_stim.shape, (60, 4))
-    npt.assert_almost_equal(implant._spatial_stim.time, np.arange(4) * 50.0)
+    npt.assert_equal(implant.stim._spatial_view().shape, (60, 4))
+    npt.assert_almost_equal(implant.stim._spatial_view().time,
+                            np.arange(4) * 50.0)
 
-    # Anything that did not come out of this implant's encoder has only the
-    # one description of itself, and assigning it clears the stale one:
-    for source in ({'A1': 20}, np.ones(60), None,
-                   AmplitudeEncoder(amp_range=(0, 50)).encode(img)):
+    # An encoded stimulus carries that description wherever it came from, so
+    # encoding by hand and assigning the result is the same thing as letting
+    # the implant do it:
+    by_hand = ArgusII(encoder=None,
+                      stim=AmplitudeEncoder(amp_range=(0, 50)).encode(
+                          img, implant=ArgusII()))
+    npt.assert_almost_equal(by_hand.stim._spatial_view().data,
+                            ArgusII(stim=img).stim._spatial_view().data)
+    # A stimulus assigned as current has only the one description of itself:
+    for source in ({'A1': 20}, np.ones(60)):
         implant.stim = source
-        npt.assert_equal(implant._spatial_stim, None)
-    # ... including an implant that never had an encoder:
-    npt.assert_equal(ArgusII(stim={'A1': 20})._spatial_stim, None)
-    npt.assert_equal(ProsthesisSystem(ArgusII().earray)._spatial_stim, None)
+        npt.assert_equal(implant.stim._spatial_view() is implant.stim, True)
+        npt.assert_equal(implant.stim._has_spatial_view, False)
 
     # Switching an electrode off reaches both descriptions, or a model reading
-    # one of them would go on stimulating through a dead electrode:
+    # one of them would go on stimulating through a dead electrode -- and it
+    # does not cost the schedule:
     implant = ArgusII(stim=img)
     implant.deactivate(['A1', 'B2'])
+    npt.assert_equal(implant.stim._has_spatial_view, True)
     npt.assert_equal(implant.stim.shape[0], 58)
-    npt.assert_equal(implant._spatial_stim.shape[0], 58)
-    npt.assert_equal('A1' in implant._spatial_stim.electrodes, False)
+    npt.assert_equal(implant.stim._spatial_view().shape[0], 58)
+    npt.assert_equal('A1' in implant.stim._spatial_view().electrodes, False)
 
 
 def test_ProsthesisSystem_preprocess_crosses_the_boundary():

@@ -264,19 +264,23 @@ def _spatial_input(implant):
     stimulus one instant at a time, so an encoded image comes out as a
     sequence of raster slots rather than as the image.
 
-    So where the implant's encoder left the modulation behind the delivered
-    train (``_spatial_stim``), that is what a spatial model reads: one
-    amplitude per electrode per frame of the source, which is exactly as much
-    of the stimulus as such a model can say anything about. Everything else --
-    a stimulus assigned as current, an implant with no encoder -- has only the
-    one description of itself, and it is used unchanged.
+    So a stimulus that knows what it was *asked* for, as well as what it
+    delivers, is read for the first: one amplitude per electrode per frame of
+    the source, which is exactly as much of it as such a model can say
+    anything about. Everything else -- a stimulus assigned as current, an
+    implant with no encoder -- has only the one description of itself and is
+    its own answer.
     """
-    spatial = getattr(implant, '_spatial_stim', None)
-    return implant.stim if spatial is None else spatial
+    return implant.stim._spatial_view()
 
 
 def _rescale(stim, scale):
     """A copy of ``stim`` with every amplitude multiplied by ``scale``
+
+    Rebuilt from the data rather than scaled through the operator, because a
+    stimulus with no time component picks one up on the way through: that is
+    what lets a temporal model be handed one at all, and
+    :py:meth:`TemporalModel.find_threshold` has always relied on it.
 
     The metadata is carried across: it is what tells ``predict_percept`` which
     video the stimulus was encoded from, and hence when to report a percept.
@@ -291,20 +295,15 @@ def _rescale(stim, scale):
 def _rescaled_implant(implant, amp):
     """A copy of ``implant`` whose stimulus peaks at ``amp``
 
-    What ``find_threshold`` varies from trial to trial. *Both* descriptions of
-    the stimulus are scaled, because which one a model reads depends on
-    whether it has a temporal component (see :py:func:`_spatial_input`), and a
-    search run on one description would not be a search for the threshold of
-    what the caller's own ``predict_percept`` reports.
+    What ``find_threshold`` varies from trial to trial. Scaling the stimulus
+    scales every description of it at once: an encoded one is still the
+    schedule it was, delivering less current, and what a spatial model reads
+    off it moves with what a temporal one does. A search run on only one of
+    them would not be a search for the threshold of what the caller's own
+    ``predict_percept`` reports.
     """
     trial = deepcopy(implant)
-    scale = amp / implant.stim.data.max()
-    modulation = getattr(implant, '_spatial_stim', None)
-    trial.stim = _rescale(implant.stim, scale)
-    if modulation is not None:
-        # After the assignment above, which clears it -- an ordinary stimulus
-        # assigned to an implant has no modulation behind it:
-        trial._spatial_stim = _rescale(modulation, scale)
+    trial.stim = implant.stim * (amp / implant.stim.data.max())
     return trial
 
 
@@ -314,14 +313,15 @@ def _delivered(implant):
     The other side of :py:func:`_spatial_input`. A spatial model that feeds a
     temporal one is the case where the pulses are exactly what has to get
     through, since integrating them is what the temporal model is for. A
-    shallow copy is enough to say so: nothing but the stimulus attribute
-    differs, and neither the electrode array nor the stimulus itself is
-    duplicated.
+    shallow copy is enough to say so, with the stimulus wrapped in an ordinary
+    :py:class:`~pulse2percept.stimuli.Stimulus`: an ordinary stimulus is its
+    own spatial view, so the wrapper is what asks for the delivered pulses.
+    The wrapper stays unmaterialized until something reads them.
     """
-    if getattr(implant, '_spatial_stim', None) is None:
+    if implant.stim is None or not implant.stim._has_spatial_view:
         return implant
     stand_in = copy(implant)
-    stand_in._spatial_stim = None
+    stand_in._stim = Stimulus(implant.stim)
     return stand_in
 
 

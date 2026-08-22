@@ -94,7 +94,7 @@ class ProsthesisSystem(PrettyPrint):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('_earray', '_stim', '_spatial_stim', '_eye', 'safe_mode',
+    __slots__ = ('_earray', '_stim', '_eye', 'safe_mode',
                  'preprocess', '_encoder', '_raster', '_max_current')
 
     #: The physical quantity this system delivers, mirroring
@@ -426,18 +426,11 @@ class ProsthesisSystem(PrettyPrint):
         self.earray.deactivate(electrodes)
         # Switching an electrode off rewrites the stimulus, so it is replaced
         # rather than modified in place: it may be an object the caller still
-        # holds, and one defined by its pulse parameters cannot lose an
-        # electrode and remain one (see `Stimulus._derived`).
+        # holds, and one defined by more than its samples cannot lose an
+        # electrode and remain one unless it says how (see
+        # `Stimulus._without_electrodes`).
         if self.stim is not None:
-            stim = self.stim._derived()
-            stim.remove(electrodes)
-            self._stim = stim
-        # An electrode switched off delivers nothing, whichever of the two
-        # descriptions of the stimulus is being read:
-        if getattr(self, '_spatial_stim', None) is not None:
-            spatial = self._spatial_stim._derived()
-            spatial.remove(electrodes)
-            self._spatial_stim = spatial
+            self._stim = self.stim._without_electrodes(electrodes)
 
     @property
     def earray(self):
@@ -518,17 +511,6 @@ class ProsthesisSystem(PrettyPrint):
     @stim.setter
     def stim(self, data):
         """Stimulus setter (called upon ``self.stim = data``)"""
-        # `_spatial_stim` is the other description of an encoded stimulus: the
-        # modulation the encoder asked for, one amplitude per electrode per
-        # frame of the source, with no waveform, pulse clock or raster in it.
-        # `stim` stays the pulse train the device delivers; this is what a
-        # reader with no clock of its own can make sense of, and it is read by
-        # `pulse2percept.models.SpatialModel.predict_percept`. Cleared on every
-        # path through this setter and rebuilt below only where this implant's
-        # own encoder produced it, so that it can never be left describing the
-        # picture before last:
-        self._spatial_stim = None
-        spatial = None
         # if stim is empty or None
         if data is None:
             self._stim = None
@@ -557,13 +539,13 @@ class ProsthesisSystem(PrettyPrint):
             # where it becomes stimulation. Preprocessing goes first and may
             # have done the job already (a `preprocess` that encodes is exactly
             # as valid as an `encoder`), in which case there is nothing
-            # dimensionless left to encode. Both halves of the encoding are
-            # kept: what the device delivers, and the modulation it was asked
-            # for (see `_spatial_stim` above).
+            # dimensionless left to encode. What comes back knows both what
+            # the device delivers and what it was asked for, so there is one
+            # stimulus here and not two (see `Stimulus._spatial_view`).
             if (self.encoder is not None and
                     stim.unit.dimension.is_dimensionless and
                     stim.unit.dimension != self.stimulus_unit.dimension):
-                spatial, stim = self.encoder._encode_both(stim, implant=self)
+                stim = self.encoder.encode(stim, implant=self)
 
             # If the stim is larger than the number of electrodes, most commonly
             # we're dealing with an image or video stim. In this case, we might
@@ -585,23 +567,18 @@ class ProsthesisSystem(PrettyPrint):
                                      f'implant.')
             # Remove deactivated electrodes from the stimulus. Removal
             # rewrites the stimulus, so it happens on a copy: the caller's
-            # object is theirs, and a stimulus defined by its pulse parameters
-            # (rather than by its samples) cannot lose an electrode and remain
-            # one -- `_derived` hands back a plain stimulus for those.
+            # object is theirs, and a stimulus defined by more than its
+            # samples keeps that description only if it says how to drop an
+            # electrode (see `Stimulus._without_electrodes`).
             off = [name for (name, e) in self.electrodes.items()
                    if not e.activated and name in stim.electrodes]
             if off:
-                stim = stim._derived()
-                stim.remove(off)
-                if spatial is not None:
-                    spatial = spatial._derived()
-                    spatial.remove(off)
+                stim = stim._without_electrodes(off)
             # Perform safety checks, etc. These are all questions about what
             # gets delivered, so they are asked of the pulse train:
             self.check_stim(stim)
             # Store stimulus:
             self._stim = deepcopy(stim)
-            self._spatial_stim = None if spatial is None else deepcopy(spatial)
 
     @property
     def eye(self):

@@ -885,16 +885,16 @@ def test_StimulusEncoder_implant_reshape():
         npt.assert_equal(list(enc.electrodes), list(implant.electrode_names))
 
 
-def test_StimulusEncoder_encode_both():
+def test_StimulusEncoder_spatial_view():
     """The modulation half of encoding, with none of the device's timing in it
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     implant = pixel_implant((4, 4), SequentialRaster(4, interleave=True))
     enc = AmplitudeEncoder(amp_range=(0, 50), freq=100, frame_dur=100)
-    spatial, delivered = enc._encode_both(img, implant=implant)
-    # The delivered half is exactly what `encode` gives on its own:
-    npt.assert_array_equal(delivered.data, enc.encode(img,
-                                                      implant=implant).data)
+    delivered = enc.encode(img, implant=implant)
+    spatial = delivered._spatial_view()
+    # Asking for it does not expand the schedule into a waveform:
+    npt.assert_equal(_rendered(delivered), False)
 
     # One row per electrode, one column per frame of the source -- and an
     # image is one frame, so there is no time axis at all:
@@ -929,26 +929,27 @@ def test_StimulusEncoder_encode_both():
     # `encode`):
     vid = VideoStimulus(np.random.default_rng(0).random((4, 4, 5)),
                         metadata={'fps': 20})
-    spatial = enc._encode_both(vid, implant=implant)[0]
+    spatial = enc.encode(vid, implant=implant)._spatial_view()
     npt.assert_equal(spatial.shape, (16, 5))
     npt.assert_almost_equal(spatial.time, np.arange(5) * 100.0)
 
     # Encoding for no implant at all works the same way, at pixel resolution:
-    bare = enc._encode_both(img)[0]
+    bare = enc.encode(img)._spatial_view()
     npt.assert_equal(bare.shape, (16, 1))
     npt.assert_almost_equal(bare.data.ravel(), np.linspace(0, 1, 16) * 50,
                             decimal=4)
     # ... and a source that is not a picture is refused here too:
     with pytest.raises(DimensionMismatchError):
-        enc._encode_both(Stimulus([0.5]))
+        enc.encode(Stimulus([0.5]))
 
 
-def test_FrequencyEncoder_encode_both():
+def test_FrequencyEncoder_spatial_view():
     """A spatial reading of rate coding says what it can and no more"""
     grays = np.array([[0.0, 0.5], [0.75, 1.0]])
     img = ImageStimulus(grays)
     enc = FrequencyEncoder(freq_range=(0, 200), amp=30, frame_dur=100)
-    spatial, delivered = enc._encode_both(img)
+    delivered = enc.encode(img)
+    spatial = delivered._spatial_view()
     # Every electrode that pulses at all pulses at the same amplitude, which
     # is all a reader with no clock can be told, so rate collapses to on/off.
     # An electrode at 0 Hz never pulses, so it delivers no current -- that
@@ -1275,17 +1276,58 @@ def test_encoded_stimulus_is_independent_of_the_encoder():
         amp_range=(0, 50), freq=20).encode(img).data)
 
 
-@pytest.mark.parametrize('modify', [lambda s: s * 2, lambda s: s + 5,
-                                    lambda s: -s, lambda s: s >> 5])
+@pytest.mark.parametrize('modify', [lambda s: s + 5, lambda s: s >> 5,
+                                    lambda s: s * np.inf,
+                                    lambda s: s.pad(s.duration + 10)])
 def test_encoded_stimulus_transformations_degrade(modify):
     # A schedule describes when each electrode pulses and how hard on each
-    # frame. Rewriting the samples leaves it describing nothing, so what comes
-    # back is an ordinary stimulus:
+    # frame. A DC offset or a shift in time leaves it describing nothing, so
+    # what comes back is an ordinary stimulus:
     stim = AmplitudeEncoder().encode(
         ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))
-    out = modify(stim)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        out = modify(stim)
     npt.assert_equal(type(out), Stimulus)
     npt.assert_equal(out._is_parametric, False)
+
+
+@pytest.mark.parametrize('factor', [2, 0.5, -1, 1, 0])
+def test_encoded_stimulus_scaling_scales_both_descriptions(factor):
+    # Scaling changes how hard each electrode is driven, not when. So the
+    # schedule survives -- and the waveform and the modulation behind it move
+    # together, which is what `find_threshold` varies from trial to trial.
+    stim = AmplitudeEncoder().encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))
+    view = stim._spatial_view()
+    scaled = stim * factor
+    npt.assert_equal(type(scaled), type(stim))
+    npt.assert_equal(_rendered(scaled), False)
+    npt.assert_allclose(scaled._spatial_view().data, factor * view.data,
+                        rtol=1e-6, atol=1e-6)
+    npt.assert_allclose(scaled.data, factor * stim.data, rtol=1e-6, atol=1e-6)
+    npt.assert_array_equal(scaled.time, stim.time)
+    # The frame clock is a fact about the source, and scaling is not:
+    npt.assert_equal(scaled.metadata['encoder'], stim.metadata['encoder'])
+    npt.assert_allclose(view.data, stim._spatial_view().data)
+
+
+def test_encoded_stimulus_drops_electrodes_structurally():
+    # An implant switching an electrode off must not cost the modulation view,
+    # which is the only thing a spatial model can read.
+    stim = AmplitudeEncoder().encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))
+    fewer = stim._without_electrodes([0, 3])
+    npt.assert_equal(type(fewer), type(stim))
+    npt.assert_equal(_rendered(fewer), False)
+    npt.assert_equal(len(fewer.electrodes), 62)
+    kept_rows = [i for i in range(len(stim.electrodes)) if i not in (0, 3)]
+    npt.assert_array_equal(np.asarray(fewer.electrodes),
+                           np.asarray(stim.electrodes)[kept_rows])
+    # The same rows are gone from both descriptions of it:
+    npt.assert_array_equal(fewer._spatial_view().data,
+                           stim._spatial_view().data[kept_rows])
+    npt.assert_array_equal(fewer.data, stim.data[kept_rows])
+    npt.assert_array_equal(fewer.time, stim.time)
 
 
 def test_encoded_stimulus_validates_while_it_schedules():
