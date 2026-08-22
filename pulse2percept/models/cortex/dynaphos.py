@@ -15,21 +15,51 @@ from ...topography import Polimeni2006Map
 def _pulse_train_clocks(stim):
     """``{electrode: (freq, phase_dur)}`` where the stimulus is pulse trains
 
-    Read off the trains the stimulus is made of rather than off a copy of
-    their numbers in its metadata. ``None`` when it is not made of them, in
-    which case this model simulates on its own default clock, as it always
-    has.
+    Read off the trains the stimulus is made of. ``None`` when it is not made
+    of them, in which case this model simulates on its own default clock, as
+    it always has.
 
     Has to be asked *before* the stimulus is compressed: compression installs
     a new waveform, and that is exactly what says the trains no longer
     describe it.
     """
     sources = stim._structured_sources()
-    if sources is None:
+    if sources is not None:
+        if any(type(src) is not BiphasicPulseTrain for _, src in sources):
+            return None
+        return {str(e): (src.freq, src.phase_dur) for e, src in sources}
+    return _legacy_clocks(stim)
+
+
+def _legacy_clocks(stim):
+    """The same clocks, from a container that kept only a copy of them
+
+    Compatibility for the one thing that still builds a stimulus this way:
+    :py:meth:`~pulse2percept.implants.EnsembleImplant.merge_stimuli`
+    interpolates its members into a single raw array and records what each
+    electrode was driven by alongside it. That record is all that is left of
+    the pulse trains, and without it this model would silently drop each
+    member's clock for its own default.
+
+    Not the preferred representation, and deliberately strict: only entries
+    that say they came from a
+    :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` count, so that user
+    metadata which happens to have a ``freq`` key cannot change what this
+    model simulates. Anything short of a clock for every electrode falls back
+    to the model's own.
+    """
+    try:
+        entries = stim.metadata['electrodes']
+        clocks = {}
+        for electrode in stim.electrodes:
+            entry = entries[str(electrode)]
+            if entry['type'] is not BiphasicPulseTrain:
+                return None
+            params = entry['metadata']
+            clocks[str(electrode)] = (params['freq'], params['phase_dur'])
+        return clocks
+    except (KeyError, TypeError):
         return None
-    if any(type(src) is not BiphasicPulseTrain for _, src in sources):
-        return None
-    return {str(e): (src.freq, src.phase_dur) for e, src in sources}
 
 
 #: Amperes in a microamp (1e-6). The activation cascade below is the published
