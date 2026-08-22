@@ -6,10 +6,31 @@ from copy import deepcopy, copy
 from ..base import BaseModel, NotBuiltError, _require_stim_dimension
 from ...percepts import Percept
 from ...implants import ProsthesisSystem
+from ...stimuli import BiphasicPulseTrain
 from ...units import A, Quantity, as_value, dva, Hz, mm, ms, uA
 from ...utils import cart2pol, deprecated_alias
 from ...utils.constants import MS_PER_S, UM_PER_MM, ZORDER
 from ...topography import Polimeni2006Map
+
+def _pulse_train_clocks(stim):
+    """``{electrode: (freq, phase_dur)}`` where the stimulus is pulse trains
+
+    Read off the trains the stimulus is made of rather than off a copy of
+    their numbers in its metadata. ``None`` when it is not made of them, in
+    which case this model simulates on its own default clock, as it always
+    has.
+
+    Has to be asked *before* the stimulus is compressed: compression installs
+    a new waveform, and that is exactly what says the trains no longer
+    describe it.
+    """
+    sources = stim._structured_sources()
+    if sources is None:
+        return None
+    if any(type(src) is not BiphasicPulseTrain for _, src in sources):
+        return None
+    return {str(e): (src.freq, src.phase_dur) for e, src in sources}
+
 
 #: Amperes in a microamp (1e-6). The activation cascade below is the published
 #: one, which is written in SI units, while a p2p stimulus is in microamps.
@@ -230,7 +251,7 @@ class DynaphosModel(BaseModel):
         self.is_built = True
         return self
                     
-    def _predict_percept(self, earray, stim, t_percept):
+    def _predict_percept(self, earray, stim, t_percept, clocks=None):
         """Predicts the brightness at spatial locations over time"""
         x_el, y_el, _ = self._electrode_coords(earray, stim)
         # whether to allow current to spread between hemispheres
@@ -259,24 +280,17 @@ class DynaphosModel(BaseModel):
         n_time = len(t_percept)
         idx_percept = np.uint32(np.round(t_percept / self.dt))
 
-        # default values
+        # The model's own clock, unless the stimulus brought one per
+        # electrode. `clocks` is keyed by name because compression drops the
+        # electrodes that are driven at zero, and these have to line up with
+        # the ones that survived:
         freq = self.freq
         p_dur = self.p_dur
-        
-        # get from biphasic pulse train data if possible
-        try:
-            elec_params = []
-            for e in stim.electrodes:
-                amp = stim.metadata['electrodes'][str(e)]['metadata']['amp']
-                freq = stim.metadata['electrodes'][str(e)]['metadata']['freq']
-                pdur = stim.metadata['electrodes'][str(e)]['metadata']['phase_dur']
-                elec_params.append([freq, amp, pdur])
-            elec_params = np.array(elec_params)
-            freq = elec_params[:,0]
-            p_dur = elec_params[:,2]
-        except KeyError:
-            pass
-        
+        if clocks is not None:
+            per_electrode = np.array([clocks[str(e)] for e in stim.electrodes])
+            freq = per_electrode[:, 0]
+            p_dur = per_electrode[:, 1]
+
         # holds instantaneous current for each phosphene
         amp = np.zeros(len(x_el))
         # holds current activation for each phosphene
@@ -411,6 +425,10 @@ class DynaphosModel(BaseModel):
                              f"have a time component.")
         # Make sure we don't change the user's Stimulus object:
         stim = deepcopy(implant.stim)
+        # The pulse clock is a question about what the stimulus is made of,
+        # and compressing it answers "samples, and nothing else". So ask
+        # first; the waveform below is what the time evolution runs on:
+        clocks = _pulse_train_clocks(stim)
         # Make sure to operate on the compressed stim:
         if not stim.is_compressed:
             stim.compress()
@@ -440,7 +458,8 @@ class DynaphosModel(BaseModel):
             # Stimulus was compressed to zero:
             resp = np.zeros((self.grid.x.size, n_time), dtype=np.float32)
         else:
-            resp = self._predict_percept(implant.earray, stim, t_percept)
+            resp = self._predict_percept(implant.earray, stim, t_percept,
+                                         clocks)
         return Percept(resp.reshape(list(self.grid.x.shape) + [t_percept.size]),
                        space=self.grid, time=t_percept,
                        time_unit=self.time_unit,

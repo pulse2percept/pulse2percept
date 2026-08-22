@@ -456,12 +456,13 @@ class BiphasicPulseTrain(Stimulus):
     def _rescale_params(cls, metadata, factor):
         """Keep the pulse parameters in sync with the data
 
-        :py:class:`~pulse2percept.models.BiphasicAxonMapModel` and
-        :py:class:`~pulse2percept.models.cortex.DynaphosModel` read amplitude,
-        frequency and phase duration off the metadata rather than off the data.
-        An operation that rewrites the data but leaves the metadata behind
-        makes the two disagree: ``pt * 2`` delivers twice the current, and the
-        model would go on predicting the very same percept.
+        Compatibility only: the models read these numbers off the train
+        itself now (see
+        :py:meth:`~pulse2percept.stimuli.Stimulus._structured_sources`). The
+        copy under ``metadata`` is kept for anything that still reads it, and
+        has to stay in step for the same reason it always did: ``pt * 2``
+        delivers twice the current, and a reader left with the old ``amp``
+        would make of it the very same percept.
 
         Scaling is the one operation that leaves a biphasic pulse train a
         biphasic pulse train, so it scales ``amp`` (a negative factor only

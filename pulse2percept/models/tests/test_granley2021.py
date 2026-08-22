@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import copy
 import warnings
 
@@ -7,7 +8,8 @@ import numpy.testing as npt
 
 from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
-from pulse2percept.stimuli import (BiphasicPulseTrain, ImageStimulus,
+from pulse2percept.stimuli import (AsymmetricBiphasicPulseTrain,
+                                   BiphasicPulseTrain, ImageStimulus,
                                    MonophasicPulse, Stimulus)
 from pulse2percept.models import BiphasicAxonMapModel, BiphasicAxonMapSpatial, \
     AxonMapSpatial
@@ -439,10 +441,10 @@ def test_DefaultStreakModel_deprecated_axlambda():
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
 def test_find_threshold_not_supported(model_cls):
-    # This model takes amplitude as a multiple of threshold and reads it from
-    # the stimulus metadata, so the inherited `find_threshold` - which bisects
-    # on a scaled copy of the stimulus data - cannot converge. It has to say
-    # so rather than fail somewhere deeper with a confusing message.
+    # This model takes amplitude as a multiple of threshold and reads it off
+    # the pulse train, so the inherited `find_threshold` - which bisects on a
+    # scaled copy of the stimulus data - cannot converge. It has to say so
+    # rather than fail somewhere deeper with a confusing message.
     model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
                       n_ax_segments=30).build()
     implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 1, 0.45,
@@ -450,7 +452,7 @@ def test_find_threshold_not_supported(model_cls):
     with pytest.raises(NotImplementedError) as excinfo:
         model.find_threshold(implant, 0.5)
     npt.assert_equal(model_cls.__name__ in str(excinfo.value), True)
-    npt.assert_equal('metadata' in str(excinfo.value), True)
+    npt.assert_equal('pulse train' in str(excinfo.value), True)
     # predict_percept is unaffected:
     npt.assert_equal(model.predict_percept(implant) is not None, True)
 
@@ -734,3 +736,111 @@ def test_BiphasicAxonMapSpatial_meridian_blend(ModelClass):
     delta = np.abs(blended - unblended)
     rows = delta.max(axis=(1, 2)) > delta.max() * 1e-3
     npt.assert_array_less(np.abs(y[rows]).max(), 4 * width)
+
+
+@contextmanager
+def _no_pulse_train_rendering():
+    """Make generating a pulse train's waveform an error
+
+    The only way to state "this model never asks for samples" as a test: if
+    anything on the prediction path reaches for one, it fails loudly.
+    """
+    original = BiphasicPulseTrain._render
+
+    def refuse(self):
+        raise AssertionError('generated a pulse train waveform')
+    BiphasicPulseTrain._render = refuse
+    try:
+        yield
+    finally:
+        BiphasicPulseTrain._render = original
+
+
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+@pytest.mark.parametrize('build_stim', [
+    lambda: BiphasicPulseTrain(20, 1, 0.45, stim_dur=100, electrode='C5'),
+    lambda: {'C5': BiphasicPulseTrain(20, 1, 0.45, stim_dur=100),
+             'A2': BiphasicPulseTrain(30, 2, 0.45, stim_dur=100)},
+    lambda: Stimulus({'C5': BiphasicPulseTrain(20, 1, 0.45, stim_dur=100)}) * 2,
+])
+def test_BiphasicAxonMap_predicts_without_a_waveform(model_cls, build_stim):
+    # This model is a function of frequency, amplitude and phase duration, and
+    # it now takes them from the pulse trains themselves. None of them needs
+    # the train sampled, so predicting must not sample one.
+    model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
+                      n_ax_segments=30).build()
+    implant = ArgusII(stim=build_stim())
+    with _no_pulse_train_rendering():
+        percept = model.predict_percept(implant)
+    npt.assert_equal(np.any(percept.data), True)
+
+
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+@pytest.mark.parametrize('corrupt', [
+    lambda m: m.clear(),
+    lambda m: m['electrodes'].clear(),
+    lambda m: m['electrodes']['C5']['metadata'].update(amp=999, freq=1),
+    lambda m: m['electrodes']['C5'].update(type=object),
+])
+def test_BiphasicAxonMap_ignores_pulse_metadata(model_cls, corrupt):
+    # The metadata is a copy of what the trains say, kept for compatibility.
+    # Corrupting it must not move the percept, and must not change whether the
+    # stimulus is accepted:
+    model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
+                      n_ax_segments=30).build()
+    implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1, 0.45,
+                                                     stim_dur=100)})
+    expected = model.predict_percept(implant).data
+    corrupt(implant.stim.metadata)
+    npt.assert_array_equal(model.predict_percept(implant).data, expected)
+
+
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+@pytest.mark.parametrize('build_stim', [
+    lambda: {'C5': MonophasicPulse(-1, 0.45, stim_dur=100)},
+    lambda: {'C5': AsymmetricBiphasicPulseTrain(20, 1, 2, 0.45, 0.9,
+                                                stim_dur=100)},
+    lambda: {'C5': BiphasicPulseTrain(20, 1, 0.45, delay_dur=1,
+                                      stim_dur=100)},
+    lambda: (BiphasicPulseTrain(20, 1, 0.45, stim_dur=100, electrode='C5')
+             .append(BiphasicPulseTrain(50, 1, 0.45, stim_dur=100,
+                                        electrode='C5'))),
+    lambda: {'C5': Stimulus([[0, 1, 1, 0]], time=[0, 1, 99, 100])},
+])
+def test_BiphasicAxonMap_rejects_what_it_cannot_read(model_cls, build_stim):
+    # A sequence of two trains has no single frequency, an asymmetric train is
+    # not this model's protocol, a delayed one is outside what it was fit on,
+    # and a raw waveform has no parameters at all. Each is refused rather than
+    # predicted from whatever numbers happen to be lying around:
+    model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
+                      n_ax_segments=30).build()
+    implant = ArgusII(stim=build_stim())
+    with pytest.raises(TypeError):
+        model.predict_percept(implant)
+
+
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+def test_BiphasicAxonMap_zero_amplitude_is_inactive(model_cls):
+    # A train at zero amplitude drives nothing, which is a zero percept rather
+    # than an error -- and is read off `amp`, not off the waveform:
+    model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
+                      n_ax_segments=30).build()
+    implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 0, 0.45,
+                                                     stim_dur=100),
+                            'A2': BiphasicPulseTrain(20, 0, 0.45,
+                                                     stim_dur=100)})
+    with _no_pulse_train_rendering():
+        percept = model.predict_percept(implant)
+    npt.assert_almost_equal(percept.data, 0)
+    # One driven electrode among zeros still predicts from that one alone:
+    implant.stim = {'C5': BiphasicPulseTrain(20, 0, 0.45, stim_dur=100),
+                    'A2': BiphasicPulseTrain(20, 1, 0.45, stim_dur=100)}
+    with _no_pulse_train_rendering():
+        mixed = model.predict_percept(implant).data
+    only = model.predict_percept(ArgusII(
+        stim={'A2': BiphasicPulseTrain(20, 1, 0.45, stim_dur=100)})).data
+    npt.assert_array_almost_equal(mixed, only)

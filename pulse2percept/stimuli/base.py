@@ -1271,6 +1271,33 @@ class Stimulus(PrettyPrint):
                        'electrodes': self._own_names(self.electrodes[keep_el])}
         return True
 
+    def _structured_sources(self):
+        """The stimulus describing each electrode, where one is still retained
+
+        Returns ``[(electrode_name, source), ...]`` in row order, or ``None``
+        when this stimulus is only its samples -- because it always was, or
+        because an operation rewrote them and whatever described them before
+        no longer does.
+
+        This is what a model reads to find out that an electrode is driven by
+        a pulse train at 20 Hz, instead of taking a copy of that number from
+        the metadata and hoping it kept up. Read-only, and deliberately
+        shallow: an entry driving more than one electrode has no
+        one-source-per-electrode reading, and gets ``None`` rather than a
+        recursive one.
+        """
+        if self._components is not None:
+            if any(n_rows != 1 or not isinstance(src, Stimulus)
+                   for src, n_rows in self._components):
+                return None
+            return [(name, src) for name, (src, _)
+                    in zip(self.electrodes, self._components)]
+        if self._is_parametric and len(self.electrodes) == 1:
+            # The stimulus is the source: a pulse train assigned straight to
+            # an implant arrives here as itself.
+            return [(self.electrodes[0], self)]
+        return None
+
     def shift(self, dt):
         """Shift the stimulus in time.
 

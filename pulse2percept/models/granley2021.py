@@ -14,14 +14,14 @@ from .base import NotBuiltError, BaseModel, _require_stim_dimension
 from ._granley2021 import fast_biphasic_axon_map
 
 # `find_threshold` bisects on a scaled copy of the stimulus *data*. This model
-# reads amplitude from the stimulus metadata instead, where it means a
-# multiple of threshold rather than a current, so scaling the data leaves the
-# prediction untouched and the search cannot converge:
+# reads amplitude off the pulse train instead, where it means a multiple of
+# threshold rather than a current, so scaling the data leaves the prediction
+# untouched and the search cannot converge:
 _FIND_THRESHOLD_MSG = (
     "{cls} does not support find_threshold. It takes amplitude as a multiple "
-    "of threshold and reads it from the stimulus metadata, not from the "
-    "stimulus data, so scaling the data leaves the percept unchanged. Vary "
-    "`amp` when building the BiphasicPulseTrain instead."
+    "of threshold and reads it from the pulse train the stimulus is made of, "
+    "not from the stimulus data, so scaling the data leaves the percept "
+    "unchanged. Vary `amp` when building the BiphasicPulseTrain instead."
 )
 
 
@@ -202,6 +202,48 @@ class DefaultStreakModel(BaseModel):
         min_f_streak = self.min_lambda**2 / self.lam ** 2
         F_streak = self.a9 - self.a7 * pdur ** self.a8
         return np.maximum(F_streak, min_f_streak)
+
+
+def _pulse_train_params(stim):
+    """``(electrode, freq, amp, phase_dur)`` for every electrode driven
+
+    Read off the pulse trains the stimulus is made of rather than off a copy
+    of their numbers in its metadata: a stimulus whose samples were rewritten
+    has no train behind it any more, and this is what tells the two apart. No
+    waveform is generated to answer the question.
+
+    Electrodes driven at zero amplitude are left out, so an empty list means
+    the percept is zero.
+
+    Raises
+    ------
+    TypeError
+        If any electrode is driven by something other than a
+        :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` with
+        ``delay_dur=0``.
+    """
+    sources = stim._structured_sources()
+    if sources is None:
+        # No pulse train is retained anywhere. A stimulus of nothing but
+        # zeros is not one either, but it has always been answered with a
+        # zero percept rather than an error -- and it is the only case that
+        # costs a waveform this model otherwise never asks for:
+        if not np.any(stim.data):
+            return []
+        raise TypeError("All stimuli must be BiphasicPulseTrains with no "
+                        "delay dur")
+    params = []
+    for electrode, source in sources:
+        # The exact class, not a subclass: this model's parameters are the
+        # ones `BiphasicPulseTrain` is made of, and nothing else has been
+        # shown to mean the same thing to it.
+        if type(source) is not BiphasicPulseTrain or source.delay_dur != 0:
+            raise TypeError(f"All stimuli must be BiphasicPulseTrains with "
+                            f"no delay dur (Failing electrode: {electrode})")
+        if source.amp == 0:
+            continue
+        params.append((electrode, source.freq, source.amp, source.phase_dur))
+    return params
 
 
 class BiphasicAxonMapSpatial(AxonMapSpatial):
@@ -449,21 +491,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         if not isinstance(stim, Stimulus):
             raise TypeError(
                 "Stim must be of type Stimulus but it is " + str(type(stim)))
-        elec_params = []
-        active = []
-        try:
-            for e in stim.electrodes:
-                amp = stim.metadata['electrodes'][str(e)]['metadata']['amp']
-                if amp == 0:
-                    continue
-                freq = stim.metadata['electrodes'][str(e)]['metadata']['freq']
-                pdur = stim.metadata['electrodes'][str(e)]['metadata']['phase_dur']
-                elec_params.append([freq, amp, pdur])
-                active.append(e)
-        except KeyError:
-            raise TypeError(f"All stimuli must be BiphasicPulseTrains with no " +
-                            f"delay dur")
-        elec_params = np.array(elec_params, dtype=np.float32)
+        params = _pulse_train_params(stim)
+        active = [electrode for electrode, _, _, _ in params]
+        elec_params = np.array([p[1:] for p in params],
+                               dtype=np.float32).reshape((-1, 3))
         # Only the electrodes that are actually driven, in the order they were
         # collected above:
         xyz = earray.coordinates(self.space_unit, electrodes=active)
@@ -548,35 +579,21 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         # current at all, and saying so is more use than asking it for pulse
         # metadata it was never going to have.
         _require_stim_dimension(self, implant.stim)
-        # Make sure stimulus is a BiphasicPulseTrain:
-        if not isinstance(implant.stim, BiphasicPulseTrain):
-            # Could still be a stimulus where each electrode has a biphasic pulse train
-            # or a 0 stimulus
-            try:
-                for i, (ele, params) in enumerate(implant.stim.metadata
-                                                ['electrodes'].items()):
-                    if (params['type'] != BiphasicPulseTrain or
-                            params['metadata']['delay_dur'] != 0) and \
-                            np.any(implant.stim[i]):
-                        raise TypeError(
-                            f"All stimuli must be BiphasicPulseTrains with no " +
-                            f"delay dur (Failing electrode: {ele})")
-            except KeyError:
-                raise TypeError(f"All stimuli must be BiphasicPulseTrains with no " +
-                                f"delay dur")
+        # Which pulse trains this stimulus is made of, and whether it is made
+        # of pulse trains at all. Asked here so that an unreadable stimulus is
+        # refused before any of the work below:
+        params = _pulse_train_params(implant.stim)
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
         stim = implant.stim
         # `np.array([t]).size` rather than `len(t)`, so that the documented
         # scalar spelling `t_percept=20` counts as one time point instead
         # of raising -- the same idiom `SpatialModel.predict_percept` uses:
         n_time = 1 if t_percept is None else np.array([t_percept]).size
-        if not np.any(stim.data):
-            # Stimulus is 0
+        if not params:
+            # Nothing is driven above zero amplitude:
             resp = np.zeros(list(self.grid.x.shape) + [n_time],
                             dtype=np.float32)
         else:
-            # Make sure stimulus is in proper format
-            stim = Stimulus(stim)
             resp = np.zeros(list(self.grid.x.shape) + [n_time])
             # Response goes in first frame
             resp[:, :, 0] = self._predict_spatial(
@@ -621,12 +638,16 @@ class BiphasicAxonMapModel(Model):
         Stimuli should pass amplitude as a factor of threshold, NOT as raw
         amplitude in microamps.
 
-        This model interacts with `Stimulus` objects by reading the intended
-        amplitude, frequency, and pulse duration from their metadata, not
-        from the raw stimulus data. The arithmetic operators keep that
-        metadata in sync, so scaling a pulse train (``pt * 2``) or the
-        stimulus assembled from one (``implant.stim * 2``) does change the
-        percept, while editing the data array in place does not.
+        This model reads amplitude, frequency and pulse duration off the
+        :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects the
+        stimulus is made of, not off its samples. Scaling a pulse train
+        (``pt * 2``) or the stimulus assembled from one
+        (``implant.stim * 2``) gives a train at the new amplitude and does
+        change the percept, while editing the data array in place does not.
+        A stimulus that is only samples -- a raw waveform, an appended
+        sequence of two trains, anything whose amplitudes were rewritten --
+        is refused rather than predicted from numbers that no longer
+        describe it.
 
     Parameters
     ----------
@@ -761,10 +782,11 @@ class BiphasicAxonMapModel(Model):
             Stimuli should pass amplitude as a factor of threshold,
             NOT as raw amplitude in microamps.
 
-            The model interacts with `Stimulus` objects by reading the
-            intended amplitude, frequency, and pulse duration from their
-            metadata, not from the raw stimulus data. Editing the data
-            array in place will not change the predicted percept.
+            The model reads the intended amplitude, frequency and pulse
+            duration off the
+            :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects the
+            stimulus is made of, not off its samples. Editing the data array
+            in place will not change the predicted percept.
 
         Parameters
         ----------
