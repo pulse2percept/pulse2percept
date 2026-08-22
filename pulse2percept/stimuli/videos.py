@@ -18,6 +18,7 @@ from ..units import dimensionless
 from .names import ElectrodeNames
 from ..utils import (center_image, shift_image, scale_image, trim_image,
                      frame_interval, HTMLAnimation)
+from ..utils.images import _as_writable
 from ..utils.constants import MS_PER_S
 
 
@@ -257,8 +258,11 @@ class VideoStimulus(Stimulus):
         stim : `VideoStimulus`
             A copy of the stimulus object with the new video
         """
-        vid = np.array([func(frame.reshape(self.vid_shape[:-1]), *args,
-                             **kwargs)
+        # `func` gets a frame of its own: several of the scikit-image
+        # transforms this exists to reach cannot take a read-only one.
+        vid = np.array([func(_as_writable(
+                                 frame.reshape(self.vid_shape[:-1])),
+                             *args, **kwargs)
                         for frame in self])
         # Move first axis (frames) to last:
         vid = np.moveaxis(vid, 0, -1)
@@ -540,7 +544,8 @@ class VideoStimulus(Stimulus):
         if len(self.vid_shape) == 3:
             # A grayscale video can be fed to `rotate` in one go, with its
             # frames standing in for the color channels it expects:
-            data = vid_rotate(data, angle, mode=mode, **kwargs)
+            data = vid_rotate(_as_writable(data), angle, mode=mode,
+                              **kwargs)
             return VideoStimulus(data,
                                  electrodes=self._names_for(data, electrodes),
                                  metadata=self.metadata, time=self.time)

@@ -7,7 +7,9 @@ cnp.import_array()
 ctypedef cnp.float64_t float64
 ctypedef Py_ssize_t index_t
 
-cpdef bint fast_is_strictly_increasing(float64[::1] a, float64[::1] b, float64 tol) noexcept nogil:
+cpdef bint fast_is_strictly_increasing(const float64[::1] a,
+                                      const float64[::1] b,
+                                      float64 tol) noexcept nogil:
     """Check if b[i] - a[i] is strictly greater than tol for all i
 
     Takes float64 because it is used on stimulus time axes, which are stored

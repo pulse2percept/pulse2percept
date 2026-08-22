@@ -1935,3 +1935,25 @@ def test_postprocess_spatial_hook():
     npt.assert_equal(len(seen), 1)
     npt.assert_equal(seen[0], (plain.grid.x.size, expected.data.shape[-1]))
     npt.assert_allclose(got.data, 2 * expected.data)
+
+
+def test_models_accept_read_only_stimulus_data():
+    # Every Cython kernel receives `Stimulus.data` as it is stored, and a
+    # stimulus stores it read-only. A memoryview that is not declared `const`
+    # rejects such an array outright ("buffer source array is read-only"),
+    # which is a failure no numerical test would catch on its own.
+    from pulse2percept.models import Nanduri2012Spatial, Nanduri2012Temporal
+    implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 50, 0.45,
+                                                     stim_dur=20)})
+    npt.assert_equal(implant.stim.data.flags.writeable, False)
+    spatial = Nanduri2012Spatial(xrange=(-1, 1), yrange=(-1, 1),
+                                 step=1).build()
+    resp = spatial.predict_percept(implant)
+    npt.assert_equal(np.all(np.isfinite(resp.data)), True)
+    temporal = Nanduri2012Temporal().build()
+    npt.assert_equal(temporal.predict_percept(implant.stim) is not None, True)
+    # And the same for the axon map / scoreboard kernels:
+    for cls in (ScoreboardSpatial, AxonMapSpatial):
+        model = cls(xrange=(-1, 1), yrange=(-1, 1), step=1).build()
+        npt.assert_equal(np.all(np.isfinite(
+            model.predict_percept(implant).data)), True)

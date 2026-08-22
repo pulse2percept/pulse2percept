@@ -195,7 +195,9 @@ class BarStimulus(VideoStimulus):
                                   spatial_freq=spatial_freq,
                                   temporal_freq=temporal_freq)
 
-        bar = grating.data.reshape(grating.vid_shape)
+        # A copy, because the loop below rewrites the grating frame by frame
+        # and a stimulus does not hand out a buffer anyone can write into:
+        bar = grating.data.reshape(grating.vid_shape).copy()
         for i in range(bar.shape[-1]):
             frame = bar[..., i]
             # There are 3 regions:

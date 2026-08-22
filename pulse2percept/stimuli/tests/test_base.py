@@ -928,15 +928,13 @@ def test_Stimulus_pad():
     npt.assert_equal(padded.metadata, multi.metadata)
 
     # A pad that has nothing to add still returns an independent copy, rather
-    # than a stimulus writing through to the buffers of the original:
+    # than a stimulus sharing the buffers of the original:
     noop = Stimulus([[0, 1, 0]], time=[0, 2, 4])
     padded = noop.pad(noop.duration)
     npt.assert_almost_equal(padded.time, noop.time)
     npt.assert_almost_equal(padded.data, noop.data)
-    padded.data[:] = 0
-    padded.time[:] = 0
-    npt.assert_almost_equal(noop.data, [[0, 1, 0]])
-    npt.assert_almost_equal(noop.time, [0, 2, 4])
+    npt.assert_equal(np.shares_memory(padded.data, noop.data), False)
+    npt.assert_equal(np.shares_memory(padded.time, noop.time), False)
 
     # Padding a compressed stimulus does not make it uncompressed:
     compressed = Stimulus([[0, 1, 2, 0]], time=[0, 1, 2, 3], compress=True)
@@ -1039,9 +1037,7 @@ def test_Stimulus_shallow_copy():
         npt.assert_equal(stim.metadata['user'], None)
         # The data container is independent, too:
         npt.assert_equal(copied._stim is stim._stim, False)
-        before = stim.data.copy()
-        copied.data[:] = 0
-        npt.assert_array_equal(stim.data, before)
+        npt.assert_equal(np.shares_memory(copied.data, stim.data), False)
 
     # Subclass-specific attributes survive as well:
     img = ImageStimulus(np.ones((4, 5), dtype=np.float32))
@@ -1551,3 +1547,64 @@ def test_Stimulus_is_charge_balanced_needs_a_current():
     # picture:
     for stim in (img, vid):
         npt.assert_equal('is_charge_balanced' in str(stim), True)
+
+
+@pytest.mark.parametrize('build', [
+    lambda: Stimulus(np.arange(6, dtype=np.float32).reshape((2, 3))),
+    lambda: Stimulus({'A1': [0, 1, 0], 'B2': [0, 2, 0]}),
+    lambda: BiphasicPulseTrain(20, 50, 0.45, stim_dur=100),
+    lambda: ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4))),
+    lambda: VideoStimulus(np.ones((2, 2, 3)) * 0.5, time=[0, 20, 40]),
+])
+def test_Stimulus_is_immutable(build):
+    stim = build()
+    with pytest.raises(ValueError):
+        stim.data[0, 0] = 1
+    if stim.time is not None:
+        with pytest.raises(ValueError):
+            stim.time[0] = 1
+    # `ImageStimulus` names its pixels with an `ElectrodeNames`, which
+    # generates them from a grid instead of storing them and so has no way to
+    # set one at all:
+    with pytest.raises((ValueError, TypeError)):
+        stim.electrodes[0] = 'X'
+    # Metadata stays writable: it is the user's, and describes the stimulus
+    # rather than being it.
+    stim.metadata['user'] = 'mine'
+    npt.assert_equal(stim.metadata['user'], 'mine')
+
+
+def test_Stimulus_owns_its_arrays():
+    # Building a stimulus must neither take the caller's array away from them
+    # nor leave them a handle on the stimulus:
+    arr = np.ones((2, 3), dtype=np.float32)
+    stim = Stimulus(arr, time=[0, 1, 2])
+    npt.assert_equal(arr.flags.writeable, True)
+    npt.assert_equal(np.shares_memory(arr, stim.data), False)
+    arr[0, 0] = 99
+    npt.assert_almost_equal(stim.data, np.ones((2, 3)))
+    # Nor may one stimulus write through to another's buffers:
+    copied = Stimulus(stim)
+    npt.assert_equal(np.shares_memory(stim.data, copied.data), False)
+    npt.assert_equal(np.shares_memory(stim.time, copied.time), False)
+
+
+def test_Stimulus_immutable_operations():
+    # Everything that returns or rebuilds a stimulus still works, and hands
+    # back one that is immutable in its turn:
+    stim = Stimulus({'A1': [0, 1, 1, 0], 'B2': [0, 0, 0, 0]},
+                    time=[0, 1, 2, 3])
+    derived = [stim * 2, -stim, stim + 1, stim >> 1.0, stim / 2,
+               stim.append(stim >> 1.0), stim.pad(9)]
+    compressed = Stimulus(stim)
+    compressed.compress()
+    removed = Stimulus(stim)
+    removed.remove('A1')
+    derived += [compressed, removed]
+    for out in derived:
+        npt.assert_equal(out.data.flags.writeable, False)
+        npt.assert_equal(out.time.flags.writeable, False)
+        npt.assert_equal(out.data.flags['C_CONTIGUOUS'], True)
+    # The operations themselves are unaffected:
+    npt.assert_equal(compressed.shape, (1, 3))
+    npt.assert_equal(list(removed.electrodes), ['B2'])

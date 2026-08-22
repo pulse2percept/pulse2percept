@@ -21,6 +21,7 @@ from .base import Stimulus
 from .names import ElectrodeNames
 from ..units import dimensionless
 from ..utils import center_image, shift_image, scale_image, trim_image
+from ..utils.images import _as_writable
 
 
 class ImageStimulus(Stimulus):
@@ -189,7 +190,10 @@ class ImageStimulus(Stimulus):
         stim : `ImageStimulus`
             A copy of the stimulus object with the new image
         """
-        img = func(self.data.reshape(self.img_shape), *args, **kwargs)
+        # `func` gets a frame of its own: several of the scikit-image
+        # transforms this exists to reach cannot take a read-only one.
+        img = func(_as_writable(self.data.reshape(self.img_shape)),
+                   *args, **kwargs)
         return ImageStimulus(img, electrodes=self._names_for(img, electrodes),
                              metadata=self.metadata)
 
@@ -504,8 +508,8 @@ class ImageStimulus(Stimulus):
         # Rotating in place is the common case, and keeps the pixel names
         # meaningful; ``resize=True`` is available through kwargs:
         kwargs.setdefault('resize', False)
-        img = img_rotate(self.data.reshape(self.img_shape), angle, mode=mode,
-                         **kwargs)
+        img = img_rotate(_as_writable(self.data.reshape(self.img_shape)),
+                         angle, mode=mode, **kwargs)
         return ImageStimulus(img, electrodes=self._names_for(img, electrodes),
                              metadata=self.metadata)
 

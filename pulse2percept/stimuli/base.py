@@ -719,18 +719,13 @@ class Stimulus(PrettyPrint):
             _time = time
 
         # Store the data in the private container. Setting all elements at once
-        # enforces consistency; e.g., between shape of electrodes and time:
+        # enforces consistency; e.g., between shape of electrodes and time.
+        # The setter is what settles dtype, layout and ownership, so nothing
+        # here converts anything: doing it twice would copy twice.
         self._stim = {
-            'data': np.ascontiguousarray(_data, dtype=np.float32),
+            'data': _data,
             'electrodes': _electrodes,
-            # Time is float64 while data is float32. The asymmetry is
-            # deliberate: a time axis has one entry per column where the data
-            # has one per electrode per column, so widening it costs almost
-            # nothing, and float32 cannot carry a time axis at all. Its
-            # resolution reaches DT=1e-3 ms at t = 8.4 s, past which the
-            # DT-wide edges of a pulse collapse to zero width -- a 30 s pulse
-            # train lost 952 of its edges that way.
-            'time': _time if _time is None else _time.astype(np.float64),
+            'time': _time,
         }
         # Compress the data upon request:
         if compress:
@@ -751,6 +746,20 @@ class Stimulus(PrettyPrint):
         """
         stim = copy(self)
         stim.metadata = deepcopy(self.metadata)
+        return stim
+
+    def __deepcopy__(self, memo):
+        """A copy that shares the data container with the original
+
+        There is nothing to gain from duplicating arrays that nobody can write
+        into, and something to lose: NumPy deep-copies a read-only array into
+        a *writable* one, which would hand back a stimulus whose data can be
+        rewritten after all. What genuinely has to be independent is
+        ``metadata``, the one part of a stimulus that stays mutable, and
+        ``_shallow_copy`` is exactly that copy.
+        """
+        stim = self._shallow_copy()
+        memo[id(self)] = stim
         return stim
 
     @classmethod
@@ -1559,6 +1568,48 @@ class Stimulus(PrettyPrint):
                 raise ValueError("Number of columns in the data array must be "
                                  "1 if time=None.")
 
+    @staticmethod
+    def _own(arr, dtype):
+        """An immutable, C-contiguous array of ``dtype`` that nothing aliases
+
+        Ownership is what makes immutability mean anything. Marking whatever
+        buffer arrived read-only would take the caller's own array away from
+        them, and storing it as it came would let ``arr[0] = 99`` rewrite a
+        stimulus long after it was built. So the stimulus takes a copy, and
+        that copy is the only writable reference there ever was to it.
+
+        ``ascontiguousarray`` already returns a private array whenever it has
+        to convert one, so only the case where it hands its argument straight
+        back needs a copy of its own.
+
+        C-contiguity is not incidental: every Cython kernel in the library
+        takes the data as ``float32[:, ::1]``, and not everything that builds
+        a stimulus produces that (selecting columns, as ``compress`` does,
+        hands back an F-ordered array for a multi-electrode stimulus).
+        """
+        if arr is None:
+            return None
+        owned = np.ascontiguousarray(arr, dtype=dtype)
+        if owned is arr:
+            owned = owned.copy()
+        owned.flags.writeable = False
+        return owned
+
+    @staticmethod
+    def _own_names(electrodes):
+        """The electrode names, in a container nobody can write into
+
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames` generates its names
+        from a grid rather than storing them, and has no way to set one, so it
+        is already what this method promises -- and materializing it into an
+        array would cost a million strings for an image stimulus.
+        """
+        if isinstance(electrodes, ElectrodeNames):
+            return electrodes
+        owned = np.array(electrodes)
+        owned.flags.writeable = False
+        return owned
+
     @property
     def _stim(self):
         """A dictionary containing all the stimulus data"""
@@ -1567,22 +1618,22 @@ class Stimulus(PrettyPrint):
     @_stim.setter
     def _stim(self, stim):
         self._check_stim(stim)
-        # Every Cython kernel in the library takes the data as
-        # ``float32[:, ::1]``, so the container has to hold it C-contiguous.
-        # Not everything that builds a stimulus produces that: selecting
-        # columns, as ``compress`` does, hands back an F-ordered array for a
-        # multi-electrode stimulus. Left alone it would surface much later, as
-        # a "ndarray is not C-contiguous" from whichever kernel happened to
-        # receive it -- including ``fast_compress_space`` on a second
-        # ``compress``. Fixing it here rather than at each call site keeps the
-        # invariant in one place.
-        data = np.ascontiguousarray(stim['data'])
-        if data is not stim['data']:
-            # `copy` hands out objects that share this dict, so replace it
-            # rather than writing through:
-            stim = {**stim, 'data': data}
-        # All checks passed, store the data:
-        self.__stim = stim
+        # All checks passed. Take ownership of every array before storing it,
+        # so that the scientific state of a stimulus cannot change once it
+        # has one. `copy` hands out objects that share this dict, so replace
+        # it rather than writing through:
+        self.__stim = {**stim,
+                       'data': self._own(stim['data'], np.float32),
+                       # Time is float64 while data is float32. The asymmetry
+                       # is deliberate: a time axis has one entry per column
+                       # where the data has one per electrode per column, so
+                       # widening it costs almost nothing, and float32 cannot
+                       # carry a time axis at all. Its resolution reaches
+                       # DT=1e-3 ms at t = 8.4 s, past which the DT-wide edges
+                       # of a pulse collapse to zero width -- a 30 s pulse
+                       # train lost 952 of its edges that way.
+                       'time': self._own(stim['time'], np.float64),
+                       'electrodes': self._own_names(stim['electrodes'])}
 
     @property
     def data(self):
