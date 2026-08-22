@@ -1,4 +1,4 @@
-""":py:class:`~pulse2percept.stimuli.MonophasicPulse`, 
+""":py:class:`~pulse2percept.stimuli.MonophasicPulse`,
    :py:class:`~pulse2percept.stimuli.BiphasicPulse`,
    :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulse`"""
 import numpy as np
@@ -10,6 +10,43 @@ from ..units import as_value, ms, uA
 from ..utils.constants import DT
 
 
+def _electrode_names(electrode):
+    """The name a single-electrode pulse is filed under
+
+    ``Stimulus`` numbers electrodes 0..N-1 where the source did not name them,
+    so an unnamed pulse is electrode 0. A pulse drives exactly one electrode,
+    which is checked here rather than left to the waveform: the constructor
+    is where a caller finds out that they named two.
+    """
+    if electrode is None:
+        return [0]
+    names = np.array([electrode]).ravel()
+    if len(names) != 1:
+        raise ValueError(f"A pulse is delivered to a single electrode, but "
+                         f"{len(names)} names were given ({electrode}).")
+    return names
+
+
+def _pad_to_stim_dur(time, data, stim_dur):
+    """Close a pulse waveform off at ``stim_dur``
+
+    Either by adding a final zero, or -- where the pulse already ends within a
+    time step of it -- by moving its last point onto it, so that the stimulus
+    is exactly ``stim_dur`` long either way.
+    """
+    if stim_dur - time[-1] > DT:
+        # If the stimulus extends beyond the second pulse, add another data
+        # point:
+        time += [stim_dur]
+        data += [0]
+    else:
+        # But, if the end point is close enough to `stim_dur`, update the
+        # last time point so that the stimulus is exactly `stim_dur` long:
+        time[-1] = stim_dur
+    return (np.array(data, dtype=np.float32).reshape((1, -1)),
+            np.array(time, dtype=np.float64))
+
+
 class MonophasicPulse(Stimulus):
     """Monophasic pulse
 
@@ -17,6 +54,10 @@ class MonophasicPulse(Stimulus):
     cathodic/negative or anodic/positive).
 
     .. versionadded:: 0.6
+
+    .. versionchanged:: 0.10.0
+        The pulse retains the parameters that define it, and generates its
+        sampled waveform only when one is asked for.
 
     Parameters
     ----------
@@ -43,6 +84,8 @@ class MonophasicPulse(Stimulus):
     *  Arguments may be given as plain numbers in the units documented above,
        or as unitful quantities (e.g. ``0.05 * mA``, ``450 * us``), which are
        converted to those units. See :py:mod:`pulse2percept.units`.
+    *  The parameters above are read-only. A pulse with different parameters
+       is a different pulse; build another one.
 
     Examples
     --------
@@ -53,7 +96,7 @@ class MonophasicPulse(Stimulus):
     >>> pulse = MonophasicPulse(-20, 1, delay_dur=2, stim_dur=10)
 
     """
-    __slots__ = ('cathodic',)
+    __slots__ = ('_amp', '_phase_dur', '_delay_dur', '_stim_dur')
 
     def __init__(self, amp, phase_dur, delay_dur=0, stim_dur=None,
                  electrode=None):
@@ -75,6 +118,50 @@ class MonophasicPulse(Stimulus):
             if stim_dur < min_dur:
                 raise ValueError(f"'stim_dur' must be at least {min_dur:.3f} ms, not "
                                  f"{stim_dur:.3f} ms.")
+        self._amp = amp
+        self._phase_dur = phase_dur
+        self._delay_dur = delay_dur
+        self._stim_dur = stim_dur
+        self._defer(_electrode_names(electrode))
+
+    @property
+    def amp(self):
+        """Current amplitude (uA); negative is cathodic"""
+        return self._amp
+
+    @property
+    def phase_dur(self):
+        """Duration (ms) of the cathodic or anodic phase"""
+        return self._phase_dur
+
+    @property
+    def delay_dur(self):
+        """Delay (ms) before the pulse is delivered"""
+        return self._delay_dur
+
+    @property
+    def stim_dur(self):
+        """Total stimulus duration (ms)"""
+        return self._stim_dur
+
+    @property
+    def duration(self):
+        """Stimulus duration (ms)
+
+        The waveform is built to end exactly at ``stim_dur``, so this is
+        known without generating one.
+        """
+        return self._stim_dur
+
+    @property
+    def cathodic(self):
+        """Whether the pulse delivers a negative current"""
+        return self._amp <= 0
+
+    def _render(self):
+        """Build the waveform from the parameters above"""
+        amp, phase_dur = self._amp, self._phase_dur
+        delay_dur = self._delay_dur
         # We only need to store the time points at which the stimulus changes.
         time = [0]
         data = [0]
@@ -86,25 +173,19 @@ class MonophasicPulse(Stimulus):
         time += [delay_dur + DT, delay_dur + phase_dur - DT,
                  delay_dur + phase_dur]
         data += [amp, amp, 0]
-        if stim_dur - time[-1] > DT:
-            # If the stimulus extends beyond the second pulse, add another data
-            # point:
-            time += [stim_dur]
-            data += [0]
-        else:
-            # But, if the end point is close enough to `stim_dur`, update the
-            # last time point so that the stimulus is exactly `stim_dur` long:
-            time[-1] = stim_dur
-        data = np.array(data, dtype=np.float32).reshape((1, -1))
-        time = np.array(time, dtype=np.float64)
-        super().__init__(data, electrodes=electrode, time=time, compress=False)
-        self.cathodic = amp <= 0
+        data, time = _pad_to_stim_dur(time, data, self._stim_dur)
+        return {'data': data, 'electrodes': self.electrodes, 'time': time}
 
     def _pprint_params(self):
-        """Return a dict of class arguments to pretty-print"""
-        params = super()._pprint_params()
-        params.update({'cathodic': self.cathodic})
-        return params
+        """Return a dict of class arguments to pretty-print
+
+        The defining parameters rather than the waveform, so that printing a
+        pulse does not generate one.
+        """
+        return {'amp': self.amp, 'phase_dur': self.phase_dur,
+                'delay_dur': self.delay_dur, 'stim_dur': self.stim_dur,
+                'cathodic': self.cathodic, 'electrodes': self.electrodes,
+                'metadata': self.metadata}
 
 
 class BiphasicPulse(Stimulus):
@@ -115,6 +196,10 @@ class BiphasicPulse(Stimulus):
     Both cathodic and anodic phases have the same duration ("symmetric").
 
     .. versionadded:: 0.6
+
+    .. versionchanged:: 0.10.0
+        The pulse retains the parameters that define it, and generates its
+        sampled waveform only when one is asked for.
 
     Parameters
     ----------
@@ -146,6 +231,11 @@ class BiphasicPulse(Stimulus):
     *  Arguments may be given as plain numbers in the units documented above,
        or as unitful quantities (e.g. ``0.05 * mA``, ``450 * us``), which are
        converted to those units. See :py:mod:`pulse2percept.units`.
+    *  The parameters above are read-only. A pulse with different parameters
+       is a different pulse; build another one.
+    *  ``amp`` reads back as a magnitude, because that is all of it that
+       reaches the waveform: the constructor takes ``np.abs(amp)`` and gets
+       the polarity from ``cathodic_first``.
 
     Examples
     --------
@@ -156,7 +246,8 @@ class BiphasicPulse(Stimulus):
     >>> pulse = BiphasicPulse(-20, 1, delay_dur=2, stim_dur=10)
 
     """
-    __slots__ = ('cathodic_first',)
+    __slots__ = ('_amp', '_phase_dur', '_interphase_dur', '_delay_dur',
+                 '_stim_dur', '_cathodic_first')
 
     def __init__(self, amp, phase_dur, interphase_dur=0, delay_dur=0,
                  stim_dur=None, cathodic_first=True, electrode=None):
@@ -180,7 +271,60 @@ class BiphasicPulse(Stimulus):
             if stim_dur < min_dur:
                 raise ValueError(f"'stim_dur' must be at least {min_dur:.3f} ms, not "
                                  f"{stim_dur:.3f} ms.")
-        amp = -np.abs(amp) if cathodic_first else np.abs(amp)
+        # Only the magnitude is stored; `cathodic_first` is where the sign of
+        # each phase comes from (see `_render`):
+        self._amp = abs(amp)
+        self._phase_dur = phase_dur
+        self._interphase_dur = interphase_dur
+        self._delay_dur = delay_dur
+        self._stim_dur = stim_dur
+        self._cathodic_first = cathodic_first
+        self._defer(_electrode_names(electrode))
+
+    @property
+    def amp(self):
+        """Magnitude (uA) of both pulse phases"""
+        return self._amp
+
+    @property
+    def phase_dur(self):
+        """Duration (ms) of the cathodic/anodic phase"""
+        return self._phase_dur
+
+    @property
+    def interphase_dur(self):
+        """Duration (ms) of the gap between the two phases"""
+        return self._interphase_dur
+
+    @property
+    def delay_dur(self):
+        """Delay (ms) before the first phase is delivered"""
+        return self._delay_dur
+
+    @property
+    def stim_dur(self):
+        """Total stimulus duration (ms)"""
+        return self._stim_dur
+
+    @property
+    def duration(self):
+        """Stimulus duration (ms)
+
+        The waveform is built to end exactly at ``stim_dur``, so this is
+        known without generating one.
+        """
+        return self._stim_dur
+
+    @property
+    def cathodic_first(self):
+        """Whether the cathodic phase is delivered first"""
+        return self._cathodic_first
+
+    def _render(self):
+        """Build the waveform from the parameters above"""
+        amp = -self._amp if self._cathodic_first else self._amp
+        phase_dur, interphase_dur = self._phase_dur, self._interphase_dur
+        delay_dur = self._delay_dur
         # We only need to store the time points at which the stimulus changes.
         time = [0]
         data = [0]
@@ -199,25 +343,20 @@ class BiphasicPulse(Stimulus):
                  delay_dur + 2 * phase_dur + interphase_dur - DT,
                  delay_dur + 2 * phase_dur + interphase_dur]
         data += [-amp, -amp, 0]
-        if stim_dur - time[-1] > DT:
-            # If the stimulus extends beyond the second pulse, add another data
-            # point:
-            time += [stim_dur]
-            data += [0]
-        else:
-            # But, if the end point is close enough to `stim_dur`, update the
-            # last time point so that the stimulus is exactly `stim_dur` long:
-            time[-1] = stim_dur
-        data = np.array(data, dtype=np.float32).reshape((1, -1))
-        time = np.array(time, dtype=np.float64)
-        super().__init__(data, electrodes=electrode, time=time, compress=False)
-        self.cathodic_first = cathodic_first
+        data, time = _pad_to_stim_dur(time, data, self._stim_dur)
+        return {'data': data, 'electrodes': self.electrodes, 'time': time}
 
     def _pprint_params(self):
-        """Return a dict of class arguments to pretty-print"""
-        params = super()._pprint_params()
-        params.update({'cathodic_first': self.cathodic_first})
-        return params
+        """Return a dict of class arguments to pretty-print
+
+        The defining parameters rather than the waveform, so that printing a
+        pulse does not generate one.
+        """
+        return {'amp': self.amp, 'phase_dur': self.phase_dur,
+                'interphase_dur': self.interphase_dur,
+                'delay_dur': self.delay_dur, 'stim_dur': self.stim_dur,
+                'cathodic_first': self.cathodic_first,
+                'electrodes': self.electrodes, 'metadata': self.metadata}
 
 
 class AsymmetricBiphasicPulse(Stimulus):
@@ -229,6 +368,10 @@ class AsymmetricBiphasicPulse(Stimulus):
     ("asymmetric").
 
     .. versionadded:: 0.6
+
+    .. versionchanged:: 0.10.0
+        The pulse retains the parameters that define it, and generates its
+        sampled waveform only when one is asked for.
 
     Parameters
     ----------
@@ -263,6 +406,11 @@ class AsymmetricBiphasicPulse(Stimulus):
     *  Arguments may be given as plain numbers in the units documented above,
        or as unitful quantities (e.g. ``0.05 * mA``, ``450 * us``), which are
        converted to those units. See :py:mod:`pulse2percept.units`.
+    *  The parameters above are read-only. A pulse with different parameters
+       is a different pulse; build another one.
+    *  ``amp1`` and ``amp2`` read back as magnitudes, because that is all of
+       them that reaches the waveform: the constructor takes ``np.abs`` of
+       each and gets the polarity from ``cathodic_first``.
 
     Examples
     --------
@@ -275,7 +423,9 @@ class AsymmetricBiphasicPulse(Stimulus):
     ...                                 delay_dur=2, stim_dur=15)
 
     """
-    __slots__ = ('cathodic_first',)
+    __slots__ = ('_amp1', '_amp2', '_phase_dur1', '_phase_dur2',
+                 '_interphase_dur', '_delay_dur', '_stim_dur',
+                 '_cathodic_first')
 
     def __init__(self, amp1, amp2, phase_dur1, phase_dur2, interphase_dur=0,
                  delay_dur=0, stim_dur=None, cathodic_first=True,
@@ -304,12 +454,75 @@ class AsymmetricBiphasicPulse(Stimulus):
             if stim_dur < min_dur:
                 raise ValueError(f"'stim_dur' must be at least {min_dur:.3f} ms, not "
                                  f"{stim_dur:.3f} ms.")
-        if cathodic_first:
-            amp1 = -np.abs(amp1)
-            amp2 = np.abs(amp2)
+        # Only the magnitudes are stored; `cathodic_first` is where the sign
+        # of each phase comes from (see `_render`):
+        self._amp1 = abs(amp1)
+        self._amp2 = abs(amp2)
+        self._phase_dur1 = phase_dur1
+        self._phase_dur2 = phase_dur2
+        self._interphase_dur = interphase_dur
+        self._delay_dur = delay_dur
+        self._stim_dur = stim_dur
+        self._cathodic_first = cathodic_first
+        self._defer(_electrode_names(electrode))
+
+    @property
+    def amp1(self):
+        """Magnitude (uA) of the first pulse phase"""
+        return self._amp1
+
+    @property
+    def amp2(self):
+        """Magnitude (uA) of the second pulse phase"""
+        return self._amp2
+
+    @property
+    def phase_dur1(self):
+        """Duration (ms) of the first pulse phase"""
+        return self._phase_dur1
+
+    @property
+    def phase_dur2(self):
+        """Duration (ms) of the second pulse phase"""
+        return self._phase_dur2
+
+    @property
+    def interphase_dur(self):
+        """Duration (ms) of the gap between the two phases"""
+        return self._interphase_dur
+
+    @property
+    def delay_dur(self):
+        """Delay (ms) before the first phase is delivered"""
+        return self._delay_dur
+
+    @property
+    def stim_dur(self):
+        """Total stimulus duration (ms)"""
+        return self._stim_dur
+
+    @property
+    def duration(self):
+        """Stimulus duration (ms)
+
+        The waveform is built to end exactly at ``stim_dur``, so this is
+        known without generating one.
+        """
+        return self._stim_dur
+
+    @property
+    def cathodic_first(self):
+        """Whether the cathodic phase is delivered first"""
+        return self._cathodic_first
+
+    def _render(self):
+        """Build the waveform from the parameters above"""
+        if self._cathodic_first:
+            amp1, amp2 = -self._amp1, self._amp2
         else:
-            amp1 = np.abs(amp1)
-            amp2 = -np.abs(amp2)
+            amp1, amp2 = self._amp1, -self._amp2
+        phase_dur1, phase_dur2 = self._phase_dur1, self._phase_dur2
+        interphase_dur, delay_dur = self._interphase_dur, self._delay_dur
         # We only need to store the time points at which the stimulus changes.
         time = [0]
         data = [0]
@@ -328,22 +541,19 @@ class AsymmetricBiphasicPulse(Stimulus):
                  delay_dur + phase_dur1 + interphase_dur + phase_dur2 - DT,
                  delay_dur + phase_dur1 + interphase_dur + phase_dur2]
         data += [amp2, amp2, 0]
-        if stim_dur - time[-1] > DT:
-            # If the stimulus extends beyond the second pulse, add another data
-            # point:
-            time += [stim_dur]
-            data += [0]
-        else:
-            # But, if the end point is close enough to `stim_dur`, update the
-            # last time point so that the stimulus is exactly `stim_dur` long:
-            time[-1] = stim_dur
-        data = np.array(data, dtype=np.float32).reshape((1, -1))
-        time = np.array(time, dtype=np.float64)
-        super().__init__(data, electrodes=electrode, time=time, compress=False)
-        self.cathodic_first = cathodic_first
+        data, time = _pad_to_stim_dur(time, data, self._stim_dur)
+        return {'data': data, 'electrodes': self.electrodes, 'time': time}
 
     def _pprint_params(self):
-        """Return a dict of class arguments to pretty-print"""
-        params = super()._pprint_params()
-        params.update({'cathodic_first': self.cathodic_first})
-        return params
+        """Return a dict of class arguments to pretty-print
+
+        The defining parameters rather than the waveform, so that printing a
+        pulse does not generate one.
+        """
+        return {'amp1': self.amp1, 'amp2': self.amp2,
+                'phase_dur1': self.phase_dur1,
+                'phase_dur2': self.phase_dur2,
+                'interphase_dur': self.interphase_dur,
+                'delay_dur': self.delay_dur, 'stim_dur': self.stim_dur,
+                'cathodic_first': self.cathodic_first,
+                'electrodes': self.electrodes, 'metadata': self.metadata}

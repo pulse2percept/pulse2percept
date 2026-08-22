@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -338,3 +340,136 @@ def test_pulse_units():
         AsymmetricBiphasicPulse(-40 * ms, 10, 1, 4)
     with pytest.raises(DimensionMismatchError):
         AsymmetricBiphasicPulse(-40, 10, 1, 4, interphase_dur=1 * uA)
+
+
+@contextmanager
+def counting_renders(cls):
+    """Count how often ``cls`` generates a waveform inside the block"""
+    original = cls._render
+    counts = []
+
+    def counted(self):
+        counts.append(type(self).__name__)
+        return original(self)
+    cls._render = counted
+    try:
+        yield counts
+    finally:
+        cls._render = original
+
+
+def _rendered(stim):
+    """Whether the stimulus has generated its waveform yet
+
+    Reads the private container, because every public attribute that could
+    answer the question would generate one first.
+    """
+    return stim._Stimulus__stim['data'] is not None
+
+
+# One entry per (class, build, the parameters that define it):
+PULSES = [
+    (MonophasicPulse,
+     lambda: MonophasicPulse(-20, 1, delay_dur=2, stim_dur=10),
+     {'amp': -20, 'phase_dur': 1, 'delay_dur': 2, 'stim_dur': 10,
+      'cathodic': True}),
+    (MonophasicPulse,
+     lambda: MonophasicPulse(13, 0.45),
+     {'amp': 13, 'phase_dur': 0.45, 'delay_dur': 0, 'stim_dur': 0.45,
+      'cathodic': False}),
+    (BiphasicPulse,
+     lambda: BiphasicPulse(-20, 1, interphase_dur=0.5, delay_dur=2,
+                           stim_dur=10),
+     {'amp': 20, 'phase_dur': 1, 'interphase_dur': 0.5, 'delay_dur': 2,
+      'stim_dur': 10, 'cathodic_first': True}),
+    (BiphasicPulse,
+     lambda: BiphasicPulse(20, 0.45, cathodic_first=False),
+     {'amp': 20, 'phase_dur': 0.45, 'interphase_dur': 0, 'delay_dur': 0,
+      'stim_dur': 0.9, 'cathodic_first': False}),
+    (AsymmetricBiphasicPulse,
+     lambda: AsymmetricBiphasicPulse(-40, 10, 1, 4, interphase_dur=1,
+                                     delay_dur=2, stim_dur=15),
+     {'amp1': 40, 'amp2': 10, 'phase_dur1': 1, 'phase_dur2': 4,
+      'interphase_dur': 1, 'delay_dur': 2, 'stim_dur': 15,
+      'cathodic_first': True}),
+    (AsymmetricBiphasicPulse,
+     lambda: AsymmetricBiphasicPulse(40, 10, 0.45, 0.9, cathodic_first=False),
+     {'amp1': 40, 'amp2': 10, 'phase_dur1': 0.45, 'phase_dur2': 0.9,
+      'interphase_dur': 0, 'delay_dur': 0, 'stim_dur': 1.35,
+      'cathodic_first': False}),
+]
+
+
+@pytest.mark.parametrize('cls, build, params', PULSES)
+def test_pulse_parameters_are_canonical(cls, build, params):
+    # A pulse reads back the parameters it was built from. The two amplitude
+    # conventions differ on purpose: a monophasic pulse gets its polarity from
+    # the sign of `amp`, a biphasic one from `cathodic_first`, so the latter
+    # keeps only the magnitude (which is all of it that reaches the waveform).
+    pulse = build()
+    for name, expected in params.items():
+        npt.assert_almost_equal(getattr(pulse, name), expected)
+    # The asymmetric parameters stay distinct from one another:
+    if cls is AsymmetricBiphasicPulse:
+        npt.assert_equal(pulse.amp1 != pulse.amp2, True)
+        npt.assert_equal(pulse.phase_dur1 != pulse.phase_dur2, True)
+
+
+@pytest.mark.parametrize('cls, build, params', PULSES)
+def test_pulse_parameters_are_read_only(cls, build, params):
+    # Assigning one would leave a cached waveform contradicting the pulse it
+    # is supposed to describe. Build another pulse instead:
+    pulse = build()
+    for name in params:
+        with pytest.raises(AttributeError):
+            setattr(pulse, name, 1)
+
+
+@pytest.mark.parametrize('cls, build, params', PULSES)
+def test_pulse_renders_once_and_only_when_asked(cls, build, params):
+    with counting_renders(cls) as counts:
+        pulse = build()
+        npt.assert_equal(_rendered(pulse), False)
+        npt.assert_equal(counts, [])
+        # Everything a pulse knows from its parameters alone:
+        for name in params:
+            getattr(pulse, name)
+        npt.assert_equal(list(pulse.electrodes), [0])
+        npt.assert_almost_equal(pulse.duration, params['stim_dur'])
+        repr(pulse)
+        npt.assert_equal(counts, [])
+        npt.assert_equal(_rendered(pulse), False)
+        # ...and the waveform, which is generated exactly once:
+        npt.assert_equal(pulse.data.shape[0], 1)
+        npt.assert_equal(len(counts), 1)
+        npt.assert_equal(_rendered(pulse), True)
+        for _ in range(3):
+            pulse.data, pulse.time, pulse.shape, pulse[0, 0.001]
+        npt.assert_equal(len(counts), 1)
+        # `duration` is the same number the waveform ends on:
+        npt.assert_almost_equal(pulse.duration, pulse.time[-1])
+
+
+@pytest.mark.parametrize('cls, build, params', PULSES)
+def test_pulse_rendered_state_is_immutable(cls, build, params):
+    pulse = build()
+    npt.assert_equal(pulse.data.flags.writeable, False)
+    npt.assert_equal(pulse.time.flags.writeable, False)
+    npt.assert_equal(pulse.data.dtype, np.float32)
+    npt.assert_equal(pulse.time.dtype, np.float64)
+    npt.assert_equal(pulse.data.flags['C_CONTIGUOUS'], True)
+
+
+def test_pulse_electrode_names():
+    # An unnamed pulse is electrode 0, as `Stimulus` has always numbered it:
+    npt.assert_equal(list(MonophasicPulse(-20, 1).electrodes), [0])
+    npt.assert_equal(list(BiphasicPulse(-20, 1, electrode='C3').electrodes),
+                     ['C3'])
+    # A pulse drives one electrode, and says so at construction rather than
+    # leaving the mismatch to surface out of the waveform:
+    for build in (lambda e: MonophasicPulse(-20, 1, electrode=e),
+                  lambda e: BiphasicPulse(-20, 1, electrode=e),
+                  lambda e: AsymmetricBiphasicPulse(-40, 10, 1, 4,
+                                                    electrode=e)):
+        with pytest.raises(ValueError):
+            build(['A1', 'B2'])
