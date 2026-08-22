@@ -12,8 +12,10 @@ from pulse2percept.implants import (DiskElectrode, ElectrodeArray,
 from pulse2percept.implants.cortex import Cortivis, Orion
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.percepts import Percept
-from pulse2percept.stimuli import (AsymmetricBiphasicPulseTrain,
-                                   BiphasicPulseTrain, Stimulus)
+from pulse2percept.stimuli import (AmplitudeEncoder,
+                                   AsymmetricBiphasicPulseTrain,
+                                   BiphasicPulseTrain, ImageStimulus,
+                                   Stimulus)
 from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
                                  ms, s, uA, um)
 from pulse2percept.utils.testing import assert_warns_msg
@@ -370,3 +372,18 @@ def test_dynaphos_legacy_clocks_are_not_read_when_structure_says_otherwise():
     asym = Stimulus({'0': AsymmetricBiphasicPulseTrain(20, 100, 50, 0.45, 0.9,
                                                        stim_dur=100)})
     npt.assert_equal(_pulse_train_clocks(asym), None)
+
+
+def test_dynaphos_uses_its_defaults_for_an_encoded_stimulus():
+    # An encoder's schedule can change frequency from frame to frame, so there
+    # is no per-electrode clock to take from it. The model stays on its own,
+    # and does not fall through to whatever the metadata happens to hold:
+    implant = Cortivis(x=1000)
+    encoded = AmplitudeEncoder().encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)), implant=implant)
+    npt.assert_equal(_pulse_train_clocks(encoded), None)
+    # A single-electrode schedule is a structured source, and is refused on
+    # the same grounds rather than read as a pulse train:
+    solo = AmplitudeEncoder().encode(ImageStimulus(np.array([[0.7]])))
+    npt.assert_equal(len(solo._structured_sources()), 1)
+    npt.assert_equal(_pulse_train_clocks(solo), None)

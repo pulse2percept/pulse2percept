@@ -61,6 +61,88 @@ def _fps(metadata):
     return user.get('fps') if isinstance(user, dict) else None
 
 
+class _EncodedStimulus(Stimulus):
+    """A resolved encoder schedule, before it is a waveform
+
+    What :py:meth:`StimulusEncoder._assemble` produces once it has settled
+    *when* every electrode pulses and *how hard*: the pulse template, the
+    onsets of every distinct schedule, which frame each onset belongs to, and
+    the global time axis they all live on. Turning that into an
+    ``n_electrodes x n_time`` matrix is the expensive half, and the only half
+    that waits.
+
+    Deliberately not a scheduler abstraction. The schedule is resolved once,
+    eagerly, by the encoder -- including every validation and warning -- and
+    this class only carries the result of that work to whoever asks for the
+    samples.
+    """
+    #: Described by its schedule rather than by its samples. A frame-varying
+    #: amplitude and a raster realization are not something an operation on
+    #: the waveform could keep true, so one hands back a plain stimulus.
+    _is_parametric = True
+
+    __slots__ = ('_amp', '_ticks', '_sched', '_onsets', '_frames',
+                 '_pulse_ticks', '_pulse_vals', '_total')
+
+    def __init__(self, electrodes, amp, ticks, sched, onsets, frames,
+                 pulse_ticks, pulse_vals, total, encoder_metadata):
+        # `dtype=a.dtype` throughout: these are the scheduler's own numbers,
+        # and converting any of them would change the waveform below.
+        self._amp = self._own(amp, amp.dtype)
+        self._ticks = self._own(ticks, ticks.dtype)
+        self._sched = self._own(sched, sched.dtype)
+        self._onsets = tuple(self._own(o, o.dtype) for o in onsets)
+        self._frames = tuple(self._own(f, f.dtype) for f in frames)
+        self._pulse_ticks = self._own(pulse_ticks, pulse_ticks.dtype)
+        self._pulse_vals = self._own(pulse_vals, pulse_vals.dtype)
+        self._total = float(total)
+        self._defer(electrodes)
+        self.metadata['encoder'] = encoder_metadata
+
+    @property
+    def duration(self):
+        """Duration of the stimulus (ms)
+
+        Settled by the source the schedule was built from, so this does not
+        generate a waveform to find out.
+        """
+        return self._total
+
+    def _render(self):
+        """Expand the schedule into the pulse trains it describes
+
+        One unit-amplitude waveform per distinct schedule, scaled by the
+        amplitude of whichever frame each pulse belongs to.
+        """
+        data = np.zeros((len(self.electrodes), self._ticks.size),
+                        dtype=np.float32)
+        for s, (onset, frame) in enumerate(zip(self._onsets, self._frames)):
+            rows = np.flatnonzero(self._sched == s)
+            if rows.size == 0 or onset.size == 0:
+                continue
+            wave = StimulusEncoder._sample(onset, self._pulse_ticks,
+                                           self._pulse_vals, self._ticks)
+            # Which pulse each time point belongs to:
+            at = np.searchsorted(onset, self._ticks, side='right') - 1
+            np.clip(at, 0, onset.size - 1, out=at)
+            data[rows] = self._amp[rows][:, frame[at]] * wave
+        time = self._ticks * DT
+        time[-1] = self._total
+        return {'data': data, 'electrodes': self.electrodes, 'time': time}
+
+    def _pprint_params(self):
+        """Return a dict of class attributes to pretty-print
+
+        The schedule rather than the waveform it describes, so that printing
+        one does not generate it.
+        """
+        return {'electrodes': self.electrodes,
+                'n_frames': self._amp.shape[1],
+                'n_time': self._ticks.size,
+                'n_schedules': len(self._onsets),
+                'duration': self._total,
+                'metadata': self.metadata}
+
 class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
     """Abstract base class for all stimulus encoders
 
@@ -745,29 +827,17 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
                 f"to encode at electrode resolution instead.",
                 category=UserWarning)
 
-        # One unit-amplitude waveform per schedule, scaled by the amplitude of
-        # whichever frame each pulse belongs to:
-        data = np.zeros((n_el, n_time), dtype=np.float32)
-        for s, (onset, frame) in enumerate(zip(onsets, frames)):
-            rows = np.flatnonzero(sched == s)
-            if rows.size == 0 or onset.size == 0:
-                continue
-            wave = self._sample(onset, pulse_ticks, pulse_vals, ticks)
-            # Which pulse each time point belongs to:
-            at = np.searchsorted(onset, ticks, side='right') - 1
-            np.clip(at, 0, onset.size - 1, out=at)
-            data[rows] = amp[rows][:, frame[at]] * wave
-        time = ticks * DT
-        time[-1] = total
-        stim = Stimulus(data, electrodes=electrodes, time=time)
-        # The frame clock, which is what decides when a percept is worth
-        # reporting (see `pulse2percept.models.base._frame_clock`), and the
-        # raster sweep the schedule was actually realized on:
-        stim.metadata['encoder'] = {'frame_time': frame_time,
-                                    'frame_dur': frame_dur,
-                                    'cycle': None if cycle is None else
-                                    cycle * DT}
-        return stim
+        # The schedule is settled. Expanding it into an n_el x n_time matrix
+        # is the expensive half, and the half nothing needs until somebody
+        # asks for samples:
+        return _EncodedStimulus(
+            electrodes, amp, ticks, sched, onsets, frames, pulse_ticks,
+            pulse_vals, total,
+            # The frame clock, which is what decides when a percept is worth
+            # reporting (see `pulse2percept.models.base._frame_clock`), and
+            # the raster sweep the schedule was actually realized on:
+            {'frame_time': frame_time, 'frame_dur': frame_dur,
+             'cycle': None if cycle is None else cycle * DT})
 
     def _modulation(self, source, implant=None):
         """What the source asks each electrode for, frame by frame

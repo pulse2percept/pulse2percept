@@ -8,7 +8,8 @@ import numpy.testing as npt
 
 from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
-from pulse2percept.stimuli import (AsymmetricBiphasicPulseTrain,
+from pulse2percept.stimuli import (AmplitudeEncoder,
+                                   AsymmetricBiphasicPulseTrain,
                                    BiphasicPulseTrain, ImageStimulus,
                                    MonophasicPulse, Stimulus)
 from pulse2percept.models import BiphasicAxonMapModel, BiphasicAxonMapSpatial, \
@@ -844,3 +845,21 @@ def test_BiphasicAxonMap_zero_amplitude_is_inactive(model_cls):
     only = model.predict_percept(ArgusII(
         stim={'A2': BiphasicPulseTrain(20, 1, 0.45, stim_dur=100)})).data
     npt.assert_array_almost_equal(mixed, only)
+
+
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+def test_BiphasicAxonMap_rejects_an_encoded_stimulus(model_cls):
+    # An encoder's output is a schedule, not a pulse train: its amplitude and
+    # frequency may differ from frame to frame, so there is no one `freq` for
+    # this model to read. It stays refused, and refusing it does not expand
+    # the schedule into a waveform either.
+    model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
+                      n_ax_segments=30).build()
+    implant = ArgusII()
+    encoded = AmplitudeEncoder().encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)), implant=implant)
+    npt.assert_equal(encoded._structured_sources(), None)
+    implant.stim = encoded
+    with pytest.raises(TypeError):
+        model.predict_percept(implant)
