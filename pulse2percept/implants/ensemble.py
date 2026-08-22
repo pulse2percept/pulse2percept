@@ -3,7 +3,8 @@ import numpy as np
 from .base import ProsthesisSystem
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
-from ..stimuli.base import _describe_unit, unique_time_points
+from ..stimuli._merge import unique_time_points
+from ..stimuli.base import _describe_unit
 from ..units import DimensionMismatchError, as_value, dva, um
 from ..utils import rename_parameter
 

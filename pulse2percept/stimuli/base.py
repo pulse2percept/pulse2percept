@@ -8,10 +8,9 @@ from ..utils import PrettyPrint, is_strictly_increasing
 from ..utils.array import _interp_rows, _slice_times
 from ..utils.constants import DT, MIN_AMP
 from ._base import fast_compress_space, fast_compress_time
+from ._merge import merge_time_axes
 from .names import ElectrodeNames
 
-from matplotlib.axes import Axes
-import matplotlib.pyplot as plt
 from copy import copy, deepcopy
 import operator as ops
 from math import isclose
@@ -20,13 +19,7 @@ import numpy as np
 
 
 def _as_scalar_column(source):
-    """Convert a flat sequence of scalars into an (N, 1) data container
-
-    Returns None if ``source`` is not a non-empty list or tuple of scalars, in
-    which case the caller has to fall back to the generic per-element path.
-    An empty sequence is excluded on purpose: it must keep producing a 1-D
-    (empty) data container.
-    """
+    """Convert a flat sequence of scalars into an (N, 1) data container"""
     if not isinstance(source, (list, tuple)) or not source:
         return None
     if not np.isscalar(source[0]) or isinstance(source[0], str):
@@ -34,25 +27,16 @@ def _as_scalar_column(source):
     try:
         flat = np.asarray(source)
     except (TypeError, ValueError):
-        # Ragged (e.g. [1, [2, 3]]): let the generic path run, so that it
-        # raises the error it has always raised:
         return None
-    # Let the dtype NumPy infers decide. Forcing float32 here would quietly
-    # accept sequences the generic path rejects: `[1, None]` would become
-    # `[1.0, nan]` rather than a TypeError. Strings, None and complex values
-    # all infer to a non-numeric dtype and so fall through:
+    # Strings, None and complex values all infer to a non-numeric dtype and so
+    # fall through:
     if flat.ndim != 1 or flat.dtype.kind not in 'biuf':
         return None
     return flat.astype(np.float32).reshape((-1, 1))
 
 
 def _names_equal(a, b):
-    """Whether two containers hold the same electrode names
-
-    Two ``ElectrodeNames`` over the same grid hold the same names iff they
-    select the same indices, which compares a few million integers rather than
-    generating (and then comparing) a few million strings.
-    """
+    """Whether two containers hold the same electrode names"""
     if isinstance(a, ElectrodeNames) and isinstance(b, ElectrodeNames):
         if a.grid_shape == b.grid_shape:
             return np.array_equal(a.indices, b.indices)
@@ -60,182 +44,21 @@ def _names_equal(a, b):
 
 
 def _index_of_name(electrodes, name):
-    """Return the position of electrode ``name`` in ``electrodes``
-
-    ``ElectrodeNames`` can do this arithmetically, in constant time.
-    Everything else falls back to a linear scan, which is what looking up a
-    name in a plain array of names has always cost.
-    """
+    """Return the position of electrode ``name`` in ``electrodes``"""
     if isinstance(electrodes, ElectrodeNames):
         return electrodes.index(name)
     return list(electrodes).index(name)
 
 
-def _same_time_point(t, merge_tolerance):
-    """How close two time points have to be to count as the same point
-
-    Two stimuli that sample the very same instant hand us time points that
-    differ by a few ulps: pulse trains build their time axis by accumulating a
-    window duration, so the drift between two frequencies grows with t. Those
-    are too far apart to merge on an exact comparison, yet far closer than the
-    DT that the rest of the code expects to separate two distinct time points,
-    so the tolerance scales with the magnitude of ``t``. The cap keeps it below
-    DT no matter how large ``t`` gets, so that points which really are a time
-    step apart are never merged.
-
-    Parameters
-    ----------
-    t : np.ndarray
-        The time points whose magnitude sets the tolerance.
-    merge_tolerance : float
-        Lower bound on the tolerance, used where the accumulated drift is
-        smaller than it (i.e., for small ``t``).
-
-    Returns
-    -------
-    tol : np.ndarray
-        Element-wise tolerance, same shape as ``t``.
-    """
-    return np.minimum(0.5 * DT,
-                      np.maximum(merge_tolerance,
-                                 8 * np.spacing(np.abs(t))))
-
-
-def unique_time_points(time, merge_tolerance=1e-6):
-    """Sorted union of several time axes, merging points that coincide
-
-    Two stimuli that sample the same instant rarely agree on it to the last
-    bit, because each accumulated its own way there. An exact ``np.unique``
-    would keep both copies, leaving the merged axis with a pair of points far
-    closer together than the DT that separates two genuinely distinct ones.
-
-    Parameters
-    ----------
-    time : list of 1-D arrays
-        The time axes to merge.
-    merge_tolerance : float, optional
-        Two time points closer together than this (or than the accumulated
-        drift at their magnitude, whichever is coarser) are the same point.
-
-    Returns
-    -------
-    t_sorted : 1-D array
-        The sorted, concatenated time points.
-    starts_group : 1-D bool array
-        Which entries of ``t_sorted`` start a new group, i.e. which of them
-        survive the merge.
-    order : 1-D int array
-        The permutation that sorted the concatenated axes.
-
-    """
-    t_all = np.concatenate(time).astype(np.float64)
-    order = np.argsort(t_all, kind='stable')
-    t_sorted = t_all[order]
-    tol = _same_time_point(t_sorted[:-1], merge_tolerance)
-    starts_group = np.concatenate(([True], np.diff(t_sorted) > tol))
-    return t_sorted, starts_group, order
-
-
-def merge_time_axes(data, time, merge_tolerance=1e-6):
-    """
-    Merge time axes
-
-    When a collection of source types is passed, it is possible that they
-    have different time axes (e.g., different time steps, or a different
-    stimulus duration). In this case, we need to merge all time axes into a
-    single, coherent one. This is expensive, because of interpolation.
-
-    Parameters
-    ----------
-    data: list
-        List of numpy.ndarray's containing data points associated with time axes.
-    time: list
-        List of numpy.ndarray's containing time points to merge
-    merge_tolerance: float
-        Absolute tolerance used when collecting unique time points from the
-        time axes. Two time points that are closer together than this (or
-        closer than float32 can resolve at their own magnitude, whichever is
-        coarser) are treated as the same point.
-    Returns
-        Tuple of: list of new data points (linearly interpolated from merged time axis), list of new merged time axis.
-    -------
-
-    """
-    # We can skip the costly interpolation if all `time` vectors are
-    # identical:
-    t0 = time[0]
-    t0_tol = None
-    identical = True
-    for t in time:
-        # np.array_equal is a lot cheaper than the element-wise comparison
-        # (which builds several full-size temporaries) and, whenever it
-        # succeeds, implies it. Use it as a fast path for the common case
-        # where all stimuli share the very same time axis:
-        if len(t) != len(t0):
-            identical = False
-            break
-        if np.array_equal(t, t0):
-            continue
-        if t0_tol is None:
-            t0_tol = _same_time_point(t0, merge_tolerance)
-        # The axes may still be the same axis up to float32 noise. This used
-        # to be an `np.allclose`, whose relative tolerance is 0.01 ms at
-        # t = 1000 ms - ten time steps, which silently threw away time points
-        # that differ by much more than float32 noise:
-        if not np.all(np.abs(np.subtract(t, t0, dtype=np.float64)) <= t0_tol):
-            identical = False
-            break
-    if identical:
-        return data, [t0]
-    # Otherwise, we need to interpolate. Keep only the unique time points
-    # across stimuli. We need a higher tolerance to ensure interpolation is
-    # correct.
-    lengths = [len(t) for t in time]
-    t_sorted, starts_group, order = unique_time_points(time, merge_tolerance)
-    new_time = t_sorted[starts_group]
-    # Snap every time axis onto the merged one, so that interpolating below
-    # reproduces each stimulus exactly at its own sample points rather than an
-    # ulp before or after them:
-    snapped = np.empty_like(t_sorted)
-    snapped[order] = new_time[np.cumsum(starts_group) - 1]
-    # Now we need to interpolate the data values at each of these
-    # new time points.
-    new_data = []
-    for t, d in zip(np.split(snapped, np.cumsum(lengths)[:-1]), data):
-        # t is a 1D vector, d is a 2D data matrix and might have more than
-        # one row:
-        new_rows = [np.interp(new_time, t, row) for row in d]
-        new_rows = np.array(new_rows).reshape((-1, len(new_time)))
-        new_data.append(new_rows)
-    return new_data, [new_time]
-
-
 def _describe_unit(unit):
-    """Name a unit the way an error message wants to read
-
-    A dimensionless unit has no symbol to show, so saying "dimensionless ()"
-    is worse than saying nothing at all.
-    """
+    """Name a unit the way an error message wants to read"""
     if unit.dimension.is_dimensionless:
         return 'dimensionless units'
     return f'{unit.dimension.name} ({unit})'
 
 
-def _cell_edges(t):
-    """Turn sample times into the cell edges a heatmap colors between"""
-    t = np.asarray(t, dtype=float)
-    if t.size == 1:
-        # No neighbor to split an interval with; one sample is one time step:
-        return np.array([t[0] - DT / 2, t[0] + DT / 2])
-    return np.concatenate(([t[0]], 0.5 * (t[:-1] + t[1:]), [t[-1]]))
-
-
 def _stimulus_sources(source):
-    """The Stimulus objects a source is built from, if any
-
-    A source is either one stimulus, a collection of them, or something with
-    no unit of its own (a scalar, an array, a filename).
-    """
+    """The Stimulus objects a source is built from, if any"""
     if isinstance(source, Stimulus):
         return [source]
     if isinstance(source, dict):
@@ -246,60 +69,27 @@ def _stimulus_sources(source):
 
 
 def _has_waveform(stim):
-    """Whether a stimulus has already generated the samples it describes
-
-    Reads the private container, because every public attribute that could
-    answer the question would generate them first.
-    """
+    """Whether a stimulus has already generated the samples it describes"""
     return stim._Stimulus__stim['data'] is not None
 
 
 def _snapshot(source):
-    """One entry of a collection, as it was when the collection was built
-
-    A collection that has not been merged yet keeps its entries instead of
-    their samples, so it has to keep them frozen: a stimulus built from a
-    pulse train describes that train as it was, not as its author went on to
-    change it. Deep-copying a stimulus is cheap -- its arrays are immutable
-    and shared -- and the raw entries are one electrode's worth of numbers.
-    """
+    """One entry of a collection, as it was when the collection was built"""
     if np.isscalar(source):
         return source
     return deepcopy(source)
 
 
 def _component_shape(source):
-    """What one entry of a collection contributes, without sampling it
-
-    Returns the electrode names the entry brings along (``None`` if it does
-    not name its own), how many rows it contributes, and whether it has a time
-    component. This is what lets a collection settle its electrodes, and
-    reject the mistakes that are about electrodes, before any waveform exists.
-    """
+    """What one entry of a collection contributes, without sampling it"""
     if isinstance(source, Stimulus):
-        # An unrendered stimulus is one of ours, and every parameter-backed
-        # class in the library is a pulse -- which has a time axis. Asking one
-        # that has already been rendered costs nothing.
         has_time = not _has_waveform(source) or source.time is not None
         return source.electrodes, len(source.electrodes), has_time
-    # Anything else is a single electrode; only a scalar has no time axis
-    # (`_parse_source` gives a nested sequence one point per element):
     return None, 1, not (np.isscalar(source) and not isinstance(source, str))
 
 
 def _strip_units(source, unit):
-    """Convert a source's quantities into plain numbers expressed in ``unit``
-
-    Runs before the source-dispatch machinery in ``Stimulus._factory``, which
-    reads dicts, lists, tuples and arrays element by element. A
-    :py:class:`~pulse2percept.units.Quantity` deliberately has no sequence
-    protocol, so it cannot be read that way -- and normalizing here means the
-    dispatch, the interpolation and the compression below all keep seeing
-    ordinary numbers, exactly as they always have.
-
-    Anything without a unit is returned untouched, including the container it
-    came in.
-    """
+    """Convert a source's quantities into plain numbers expressed in unit"""
     if isinstance(source, (Quantity, Unit)):
         return as_value(source, unit, 'source')
     if isinstance(source, dict):
@@ -312,29 +102,14 @@ def _strip_units(source, unit):
 
 
 def _scale_factor(op, scalar, reverse=False, field='data'):
-    """The factor by which an arithmetic operator scales the stimulus data
-
-    Returns 1 for an operator that leaves every amplitude where it is (a shift
-    in time, or adding zero), the factor for one that scales them all by the
-    same number, and None for one that does neither: a DC offset moves the
-    waveform rather than resizing it, and no factor describes that.
-
-    ``reverse`` says the stimulus is the operand on the right (``5 - stim``).
-    Deliberately answerable from the operator alone, so that a class which can
-    express a scaled version of itself is asked before anything is sampled;
-    see :py:meth:`~pulse2percept.stimuli.Stimulus._operate`.
-    """
+    """The factor by which an arithmetic operator scales the stimulus data"""
     if field == 'time':
-        # Shifting in time moves the whole stimulus, but every amplitude in it
-        # stays what it was:
+        # Shifting in time moves the whole stim but amps remain:
         return 1.0
     if op is ops.mul:
-        # Multiplication is commutative, so the operand order is moot:
         factor = scalar
     elif op is ops.truediv:
         # `Stimulus` has no `__rtruediv__`, so this is always data/scalar.
-        # Dividing the data by zero fills it with inf rather than raising, so
-        # the factor must not raise either -- it comes out non-finite below:
         with np.errstate(divide='ignore', invalid='ignore'):
             factor = np.divide(1.0, scalar)
     elif scalar == 0:
@@ -342,8 +117,6 @@ def _scale_factor(op, scalar, reverse=False, field='data'):
         factor = -1.0 if reverse else 1.0
     else:
         return None
-    # `stim * np.inf`, `stim * np.nan` and `stim / 0` leave a waveform of
-    # infinities and NaNs, which is not a scaled version of anything:
     return factor if np.isfinite(factor) else None
 
 
@@ -355,12 +128,8 @@ class Stimulus(PrettyPrint):
     A stimulus can be created from a variety of source types (e.g., scalars,
     lists, NumPy arrays, and dictionaries).
 
-    A stimulus owns its scientific state: ``data``, ``time``, ``electrodes``
-    and the pulse parameters are read-only, so callers cannot mutate them in
-    place. For an arbitrary stimulus the sampled waveform *is* the stimulus;
-    pulse-based and encoded stimuli instead retain the parameters or the
-    schedule that define them, and generate their waveform only when samples
-    such as ``data`` are asked for.
+    Pulse parameters (``data``, ``time``, ``electrodes``) are read-only.
+    Arbitrary stimuli are kept as sampled waveforms only.
 
     .. seealso ::
 
@@ -369,8 +138,7 @@ class Stimulus(PrettyPrint):
     .. versionadded:: 0.6
 
     .. versionchanged:: 0.10.0
-        ``data``, ``time`` and ``electrodes`` are read-only, and pulse-based
-        and encoded stimuli generate their waveform lazily.
+        Pulse parameters are read-only, and waveform are generated lazily.
 
     Parameters
     ----------
@@ -437,15 +205,8 @@ class Stimulus(PrettyPrint):
        its value will be automatically interpolated from neighboring values.
     *  If a requested time point lies outside the range of stored data,
        the value of its closest end point will be returned.
-    *  Pulse parameters such as ``amp``, ``freq`` and ``phase_dur`` are
-       first-class and read-only, and reading them never generates a waveform.
-    *  Most transformations return a new stimulus. One whose result the
-       parameters still describe keeps its structured form (``pulse_train * 2``
-       is a pulse train at twice the amplitude); one they cannot -- a DC
-       offset, a shift in time, an appended second train -- falls back to a
-       plain, waveform-backed ``Stimulus``.
-    *  :py:meth:`compress` and :py:meth:`remove` are the exceptions: they
-       replace the stimulus' own state rather than returning a new object.
+    *  All transformations return a new stimulus, except for
+       :py:meth:`compress` and :py:meth:`remove`.
 
     Examples
     --------
@@ -478,27 +239,14 @@ class Stimulus(PrettyPrint):
     __slots__ = ('metadata', '_is_compressed', '__stim', '_unit',
                  '_time_unit', '_components')
 
-    #: The unit ``data`` is stored in. Electrical stimuli are microamps, which
-    #: is what every model, pulse and safety check in the library assumes; a
-    #: subclass whose data is not a current (an image's gray levels, say)
-    #: overrides this. A stimulus built from another stimulus inherits its
-    #: unit instead, so a copy of an image stimulus does not become a current.
+    # data is stored in microamps and millisecond
     _default_unit = uA
-
-    #: The unit ``time`` is stored in.
     _default_time_unit = ms
 
-    #: Whether :py:meth:`_spatial_view` describes something other than this
-    #: stimulus. False for a stimulus that is its own spatial description,
-    #: which is every stimulus that was handed to the library as current.
+    #: False for a stimulus that is its own spatial description
     _has_spatial_view = False
 
-    #: Whether this class' canonical state is a set of stimulation parameters
-    #: rather than the waveform itself. Such a stimulus cannot survive a
-    #: change to its samples, because its parameters would go on describing a
-    #: waveform it no longer has: operations that return a new stimulus hand
-    #: back a plain one (see :py:meth:`_derived`), and the in-place ones that
-    #: would drop electrodes refuse.
+    #: whether the canonical state is a set of stim params
     _is_parametric = False
 
     def __init__(self, source, electrodes=None, time=None, metadata=None,
@@ -509,9 +257,6 @@ class Stimulus(PrettyPrint):
         # Set by `_factory` when this is a collection whose entries have not
         # been merged into a waveform yet (see `_render`):
         self._components = None
-        # Settle what the numbers below mean before reading any of them, then
-        # convert every quantity into that unit. From here on the source is
-        # ordinary numbers, which is all `_factory` has ever had to handle:
         self._unit, self._time_unit = self._resolve_units(source)
         source = _strip_units(source, self._unit)
         time = as_value(time, self._time_unit, 'time')
@@ -520,35 +265,13 @@ class Stimulus(PrettyPrint):
 
     @staticmethod
     def _wrap_metadata(metadata):
-        """File the caller's metadata under 'user', unless it is already ours
-
-        A dict that already has an 'electrodes' key is a metadata container
-        this class built (when one stimulus is rebuilt from another), and is
-        taken as it is.
-        """
+        """File the caller's metadata under user, unless it is already ours"""
         if isinstance(metadata, dict) and 'electrodes' in metadata.keys():
             return metadata
         return {'electrodes': {}, 'user': metadata}
 
     def _defer(self, electrodes, unit=None, time_unit=None, metadata=None):
-        """Set this stimulus up to generate its waveform later
-
-        The constructor of a subclass whose canonical state is a set of
-        stimulation parameters rather than a set of samples calls this in
-        place of ``Stimulus.__init__``. It records everything such a stimulus
-        knows without sampling anything -- which electrodes it drives, what
-        its numbers mean, and its metadata -- and leaves the waveform to
-        :py:meth:`_render`, which runs the first time one is asked for.
-
-        Parameters
-        ----------
-        electrodes : array-like or ElectrodeNames
-            The electrodes this stimulus drives, in the order ``_render``
-            will return rows for.
-        unit, time_unit : :py:class:`~pulse2percept.units.Unit`, optional
-            What the rendered numbers will mean. Default to the class's own.
-        metadata : dict, optional
-        """
+        """Set this stimulus up to generate its waveform later"""
         self.metadata = self._wrap_metadata(metadata)
         self._is_compressed = False
         self._components = None
@@ -557,26 +280,21 @@ class Stimulus(PrettyPrint):
                            else time_unit)
         if not isinstance(electrodes, ElectrodeNames):
             electrodes = np.array([electrodes]).ravel()
-        # `data=None` is what says the waveform has not been generated yet.
-        # No state that has been through `_check_stim` can look like this:
-        # the check reads `data.shape` before anything else.
+        # `data=None` is what says the waveform has not been generated yet
         self.__stim = {'data': None, 'time': None,
                        'electrodes': self._own_names(electrodes)}
 
     def _render(self):
         """Generate the waveform this stimulus describes
 
-        The seam a parameter-backed stimulus is built on. An ordinary
-        ``Stimulus`` *is* its waveform and builds it in the constructor, so it
-        never gets here. A subclass that called :py:meth:`_defer` instead
-        overrides this and returns the state to install::
+        A subclass that called :py:meth:`_defer` overrides this and returns
+        the state to install::
 
             {'data': ..., 'electrodes': ..., 'time': ...}
 
-        It runs at most once per stimulus, and what it returns goes through
-        the ``_stim`` setter like any other state -- so the waveform it built
-        is owned, immutable and validated on exactly the same terms as one
-        that was passed in.
+        It runs at most once, and what it returns goes through the ``_stim``
+        setter like any other state, so the waveform it built is owned,
+        immutable and validated on the same terms as one that was passed in.
         """
         if self._components is None:
             raise NotImplementedError(
@@ -592,13 +310,7 @@ class Stimulus(PrettyPrint):
         return {'data': _data, 'electrodes': self.electrodes, 'time': _time}
 
     def _resolve_units(self, source):
-        """Determine the units this stimulus stores its data and time in
-
-        A stimulus built from other stimuli speaks their unit; anything else
-        speaks this class's default. Sources that disagree are an error rather
-        than a silent choice of one of them: an image stimulus and a pulse
-        train in the same collection have no common interpretation.
-        """
+        """Determine the units this stimulus stores its data and time in"""
         unit, time_unit = self._default_unit, self._default_time_unit
         sources = _stimulus_sources(source)
         if not sources:
@@ -618,13 +330,7 @@ class Stimulus(PrettyPrint):
         return unit, time_unit
 
     def _inherit_units(self, other):
-        """Adopt the units of another stimulus
-
-        For the handful of places that rebuild a stimulus out of raw arrays
-        (resampling it onto an implant's electrodes, evaluating it at
-        particular time points) and would otherwise fall back to the class
-        default. Returns ``self`` so it can be chained onto a constructor.
-        """
+        """Adopt the units of another stimulus"""
         self._unit = other.unit
         self._time_unit = other.time_unit
         return self
@@ -641,12 +347,7 @@ class Stimulus(PrettyPrint):
         """Whether to keep this source's entries instead of merging them now
 
         Worth doing when an entry is a stimulus that is defined by its
-        stimulation parameters, or that has not generated a waveform yet:
-        merging is what would force one into existence. A collection of raw
-        numbers has nothing to save and stays on the eager path.
-
-        An explicit ``time`` axis or ``compress=True`` both ask a question
-        about the merged waveform, so neither defers.
+        stimulation parameters, or that has not generated a waveform yet
         """
         if time is not None or compress:
             return False
@@ -691,14 +392,9 @@ class Stimulus(PrettyPrint):
 
         ``nested`` selects between the two readings. Only a collection can
         contain a nested source, so only a collection passes ``nested=True``.
-
-        Returns ``electrodes=None`` when the source does not name its own
-        electrodes; it is then up to the caller to number them. Likewise,
-        ``time=None`` means the source has no time component (e.g. a scalar).
         """
         if isinstance(source, Stimulus):
-            # e.g. a Stimulus being renamed, or a dict of Stimulus objects.
-            # Brings along its own electrode names and time axis:
+            # e.g. a Stimulus being renamed, or a dict of Stimulus objects
             return source.data, source.time, source.electrodes
         if np.isscalar(source) and not isinstance(source, str):
             # Scalar: 1 electrode, no time component - either way round
@@ -733,18 +429,14 @@ class Stimulus(PrettyPrint):
 
     def _factory(self, source, electrodes, time, compress):
         """Build the Stimulus object from the specified source type"""
-        # Whether we numbered the electrodes ourselves (0..N-1), in which case
-        # they cannot possibly contain duplicates:
+        # Whether we numbered the electrodes ourselves (0..N-1):
         _auto_electrodes = False
         if (_flat := _as_scalar_column(source)) is not None:
-            # A flat sequence of scalars is one electrode per element, with no
-            # time component. The collection path below would build a separate
-            # 1x1 array (and time axis) for every single electrode:
+            # one electrode per element, no time component
             _data, _time, _electrodes = _flat, None, None
             _n_rows = _data.shape[0]
         elif isinstance(source, (dict, list, tuple)):
-            # A collection: every entry is itself a source, contributing one
-            # electrode (or, for a Stimulus, however many it already has):
+            # A collection: every entry is itself a source
             if isinstance(source, dict):
                 iterator = source.items()
             else:
@@ -757,14 +449,11 @@ class Stimulus(PrettyPrint):
             _no_time = []
             for ele, src in iterator:
                 if self._components is None:
-                    # Extract times and data from source:
                     d, t, e = self._parse_source(src, nested=True)
                     _time.append(t)
                     _data.append(d)
                 else:
-                    # Nothing is sampled yet. An entry already knows how many
-                    # electrodes it drives and what they are called, and a
-                    # snapshot of it is what `_render` will read later:
+                    # Nothing is sampled yet:
                     src = _snapshot(src)
                     e, n_rows, has_time = _component_shape(src)
                     self._components.append((src, n_rows))
@@ -779,8 +468,7 @@ class Stimulus(PrettyPrint):
                 try:
                     # Compatibility channel: what described this electrode,
                     # for a reader that ends up with only the samples (see
-                    # `_rescale_params`). `_structured_sources` is where the
-                    # sources themselves are read.
+                    # `_rescale_params`)
                     self.metadata['electrodes'][str(ele)] = {
                         'metadata': src.metadata,
                         'type': type(src)
@@ -791,16 +479,11 @@ class Stimulus(PrettyPrint):
                 _data, _time = self._merge_sources(_data, _time)
                 _n_rows = _data.shape[0]
             else:
-                # Asked here as well as in `_merge_sources`, because a
-                # collection that mixes the two conventions is wrong when it
-                # is written, not when it is first read:
+                # Asked here as well as in `_merge_sources`:
                 self._require_one_time_convention(_no_time)
                 _n_rows = sum(n for _, n in self._components)
         else:
-            # A single source: a scalar, a NumPy array, or a Stimulus. The
-            # latter might be handed to us by ProsthesisSystem if the user
-            # built the stimulus themselves, and is also how a stimulus gets
-            # new electrode names or a new time axis:
+            # A single source: a scalar, a NumPy array, or a Stimulus
             if self._defers_waveform(source, electrodes, time, compress):
                 # Renaming or re-wrapping a stimulus that has not generated
                 # its waveform must not be what generates it:
@@ -821,27 +504,16 @@ class Stimulus(PrettyPrint):
         if _electrodes is None:
             # The source did not name its electrodes, so they are 0..N-1 --
             # unique by construction. Only build that array if something will
-            # read it: user-supplied `electrodes` replaces it immediately
-            # below, and the sole other reader is the metadata rename further
-            # down, which needs per-electrode metadata to do anything at all.
-            # An image or video stimulus has neither, so skipping this keeps a
-            # million-element arange off the path that builds one.
+            # read it
             _auto_electrodes = True
             if electrodes is None or self.metadata.get('electrodes'):
                 _electrodes = np.arange(_n_rows)
 
         # User can overwrite the names of the electrodes:
         if electrodes is not None:
-            # May still be None, when the block above declined to build it.
-            # The rename below already guards against that.
             _renamed_from = _electrodes
             if isinstance(electrodes, ElectrodeNames):
-                # Names generated from a grid pattern. Flattening one is a
-                # view, not a copy, and it already knows whether it can
-                # contain duplicates - so neither the copy below nor the
-                # `np.unique` further down is needed. This is the path taken
-                # by every image and video stimulus, where `electrodes` has
-                # one entry per pixel:
+                # Names generated from a grid pattern:
                 _electrodes = electrodes.ravel()
                 _auto_electrodes = _electrodes.check_unique()
             else:
@@ -850,9 +522,7 @@ class Stimulus(PrettyPrint):
         else:
             _renamed_from = None
             if isinstance(_electrodes, ElectrodeNames):
-                # The source brought its own generated names along (e.g.
-                # `Stimulus(image_stim)`). Keep them lazy rather than
-                # flattening them into actual strings below:
+                # The source brought its own generated names along:
                 _electrodes = _electrodes.ravel()
                 _auto_electrodes = _electrodes.check_unique()
             elif not isinstance(_electrodes, np.ndarray):
@@ -866,14 +536,9 @@ class Stimulus(PrettyPrint):
                              f"not match the number of electrodes in the data "
                              f"({_n_rows}).")
         # Electrodes we numbered ourselves are 0..N-1 and therefore unique by
-        # construction, so the sort that np.unique performs can be skipped
-        # (it dominates the cost of building an image or video stimulus):
+        # construction, so the sort that np.unique performs can be skipped:
         if not _auto_electrodes:
             if isinstance(_electrodes, ElectrodeNames):
-                # Only a repeated index can make grid names collide, and
-                # `check_unique` has just established that one does. The
-                # renaming below writes into the container, so it needs the
-                # actual names:
                 _electrodes = np.asarray(_electrodes)
             unq, nunq = np.unique(_electrodes, return_index=True)
             if len(unq) != _n_rows:
@@ -893,12 +558,7 @@ class Stimulus(PrettyPrint):
 
         # Per-electrode metadata is addressed by electrode name (that is how
         # BiphasicAxonMapModel finds its stimulus parameters), so renaming the
-        # electrodes has to rename those keys too. Only stimuli that carry
-        # such metadata need any of this, and they are the small ones: an
-        # image or video stimulus has one electrode per pixel and no
-        # per-electrode metadata at all. Testing that first keeps the
-        # pair-by-pair walk below off the path that renames a million
-        # electrodes:
+        # electrodes has to rename those keys too:
         elec_meta = self.metadata.get('electrodes')
         if (elec_meta and _renamed_from is not None and
                 len(_renamed_from) == len(_electrodes)):
@@ -926,113 +586,47 @@ class Stimulus(PrettyPrint):
             _time = time
 
         if self._components is not None:
-            # The electrodes are settled, the waveform is not. `_defer` is not
-            # used here because everything else it sets up has already been
-            # set up by `__init__`:
             self.__stim = {'data': None, 'time': None,
                            'electrodes': self._own_names(_electrodes)}
             return
-        # Store the data in the private container. Setting all elements at once
-        # enforces consistency; e.g., between shape of electrodes and time.
-        # The setter is what settles dtype, layout and ownership, so nothing
-        # here converts anything: doing it twice would copy twice.
         self._stim = {
             'data': _data,
             'electrodes': _electrodes,
             'time': _time,
         }
-        # Compress the data upon request:
         if compress:
             self.compress()
 
     def _shallow_copy(self):
-        """Copy the object without duplicating the data container
-
-        Methods that return a new stimulus (``append``, the arithmetic
-        operators) replace ``_stim`` wholesale, so there is no point in
-        deep-copying the (potentially large) data arrays first. Everything
-        else is preserved as it would be by ``deepcopy``: the subclass, its
-        additional attributes, and an independent copy of ``metadata``.
-
-        Note that the returned object shares its ``_stim`` dict with ``self``
-        until the caller assigns a new one, which the ``_stim`` setter always
-        does (it never mutates the dict in place).
-        """
+        """Copy the object without duplicating the data container"""
         stim = copy(self)
         stim.metadata = deepcopy(self.metadata)
         return stim
 
     def _waveform_copy(self):
-        """This stimulus' waveform, as an ordinary ``Stimulus``
-
-        The escape hatch for an operation that rewrites the waveform of a
-        stimulus which is defined by something else. What comes back is
-        described by its samples and by nothing else, so it cannot claim an
-        amplitude or a duration it does not deliver.
-        """
+        """This stimulus' waveform, as an ordinary ``Stimulus``"""
         stim = Stimulus(self.data, electrodes=self.electrodes, time=self.time)
-        # Assigned rather than passed to the constructor: a class that keeps
-        # its waveform parameters in ``metadata`` (a pulse train's frequency,
-        # say) has a dict of a shape the constructor would file under 'user'.
         stim.metadata = deepcopy(self.metadata)
         return stim._inherit_units(self)
 
     def _spatial_view(self):
-        """This stimulus as a reader with no clock of its own can read it
-
-        A pulse train says *when* current flows, and a raster says which
-        electrodes may flow at once. Both are facts about time, and a model
-        with no temporal component has no machinery to express either. A
-        stimulus that was handed to the library as current has only the one
-        description of itself and is its own answer, which is what this
-        returns. A class that knows what it was *asked* for, as well as what
-        it delivers, overrides this and says so (see ``_has_spatial_view``).
-        """
+        """This stimulus as a reader with no clock of its own can read it"""
         return self
 
     def _without_electrodes(self, electrodes):
-        """A copy of this stimulus that no longer drives ``electrodes``
-
-        What an implant does with an electrode it has switched off. Taking the
-        waveform and dropping its rows is what any stimulus described by its
-        samples can do; a class that also describes what it was asked for
-        overrides this, so that switching an electrode off does not cost that
-        description.
-        """
+        """A copy of this stimulus that no longer drives ``electrodes``"""
         stim = self._derived()
         stim.remove(electrodes)
         return stim
 
     def _derived(self):
-        """The object a waveform-rewriting operation builds its result on
-
-        An ordinary stimulus *is* its waveform, so a transformation of that
-        waveform is still one of these and keeps the subclass: an
-        :py:class:`~pulse2percept.stimuli.ImageStimulus` scaled by two is
-        still an image. A stimulus whose canonical state is a set of
-        stimulation parameters is a different matter -- those parameters
-        describe the waveform it was built with, and rewriting the samples
-        leaves them describing nothing. Such a class declares itself with
-        ``_is_parametric`` and gets a plain stimulus instead.
-        """
+        """The object a waveform-rewriting operation builds its result on"""
         if self._is_parametric:
             return self._waveform_copy()
         return self._shallow_copy()
 
     def __deepcopy__(self, memo):
-        """A copy that shares the data container with the original
-
-        There is nothing to gain from duplicating arrays that nobody can write
-        into, and something to lose: NumPy deep-copies a read-only array into
-        a *writable* one, which would hand back a stimulus whose data can be
-        rewritten after all. What genuinely has to be independent is
-        ``metadata``, the one part of a stimulus that stays mutable.
-
-        The new object goes into ``memo`` before its metadata is copied.
-        Metadata is arbitrary user data and may refer back to the stimulus it
-        describes; registering first is what makes such a cycle copy as one
-        object graph rather than recurse.
-        """
+        """A copy that shares the data container with the original"""
         stim = copy(self)
         memo[id(self)] = stim
         stim.metadata = deepcopy(self.metadata, memo)
@@ -1049,58 +643,18 @@ class Stimulus(PrettyPrint):
         its children into. There the copy is the only surviving description of
         the pulse trains, and
         :py:class:`~pulse2percept.models.cortex.DynaphosModel` still reads it.
-
-        Returns the metadata a stimulus of this class would carry after its
-        data was multiplied by ``factor``, or -- for ``factor=None`` -- after
-        an operation those parameters can no longer describe at all. A plain
-        ``Stimulus`` has no such parameters, so there is nothing to keep in
-        sync.
-
-        Parameters
-        ----------
-        metadata : dict
-            The metadata of a stimulus of this class. Never modified in place.
-        factor : float or None
-            The factor the data was scaled by, or None if the operation was
-            not a scaling (see ``_scale_factor``).
-
-        Returns
-        -------
-        metadata : dict
         """
         return metadata
 
     def _rescale_result(self, stim, factor):
-        """Keep the metadata of a transformed copy in step with its data
-
-        ``stim`` is what an operation on ``self`` produced. Usually it is a
-        copy of ``self`` and knows how to read its own metadata. For a
-        parameter-backed stimulus it is a plain
-        :py:class:`~pulse2percept.stimuli.Stimulus` instead (see
-        :py:meth:`_derived`), which does not -- so the class that wrote those
-        parameters rewrites them from here, while it is still known.
-        """
+        """Keep the metadata of a transformed copy in step with its data"""
         stim._rescale_metadata(factor)
         if self._is_parametric:
             stim.metadata = type(self)._rescale_params(stim.metadata, factor)
 
     def _rescale_metadata(self, factor):
-        """Keep the metadata in sync with data that was scaled by ``factor``
-
-        Called on the *copy* returned by ``append`` and by the arithmetic
-        operators, once its data container has been replaced. That copy owns
-        its metadata outright (``_shallow_copy`` deep-copies it), so this is
-        free to rewrite it in place.
-
-        A stimulus assembled from a collection carries the metadata of each
-        source under ``metadata['electrodes']``, filed by electrode name and
-        tagged with the class it came from. Dispatch to that class, which is
-        the one that knows what its own parameters mean -- otherwise
-        ``implant.stim * 2`` would scale the data and go on advertising the
-        amplitude the pulse trains were built with.
-        """
+        """Keep the metadata in sync with data that was scaled by ``factor``"""
         if factor == 1:
-            # Nothing about the waveform changed
             return
         elec_meta = self.metadata.get('electrodes')
         if not elec_meta:
@@ -1114,14 +668,10 @@ class Stimulus(PrettyPrint):
                 entry['metadata'] = src._rescale_params(meta, factor)
 
     def compress(self):
-        """Compress the source data
-
-        Modifies the stimulus in place; returns nothing.
-        """
+        """Compress the source data in place"""
         data = self.data
         electrodes = self.electrodes
         time = self.time
-        # Remove rows (electrodes) with all zeros:
         keep_el = fast_compress_space(data)
         data = data[keep_el]
         electrodes = electrodes[keep_el]
@@ -1163,9 +713,7 @@ class Stimulus(PrettyPrint):
             raise TypeError(f"Other object must be a Stimulus, not "
                             f"{type(other)}.")
         # The result is a copy of `self` with `other`'s data concatenated onto
-        # its own, so it would carry `self`'s unit over numbers that never
-        # meant that. Two stimuli can only be laid end to end if they measure
-        # the same thing:
+        # its own:
         if self.unit != other.unit:
             raise DimensionMismatchError(
                 f"Cannot append a stimulus measured in "
@@ -1193,28 +741,16 @@ class Stimulus(PrettyPrint):
                        f"{DT:.1e} ms.")
             raise ValueError(err_str)
         if self._is_parametric or other._is_parametric:
-            # A stimulus described by something other than its samples keeps
-            # that description: a 20 Hz train followed by a 50 Hz train is two
-            # trains, and neither of their frequencies is the sequence's.
             return _SequenceStimulus(_sequence_parts(self) +
                                      _sequence_parts(other))
         return self._append_waveform(other)
 
     def _end_column(self):
-        """The last column of the waveform
-
-        All that matters about this stimulus when another is laid after it.
-        Split out so that a sequence can answer from its last part instead of
-        concatenating everything before it (see :py:class:`_SequenceStimulus`).
-        """
+        """The last column of the waveform"""
         return self.data[:, -1]
 
     def _append_waveform(self, other):
-        """Lay ``other``'s samples after this stimulus' own
-
-        The concatenation itself; :py:meth:`append` owns the validation, and
-        has already run it.
-        """
+        """Lay ``other``'s samples after this stimulus' own"""
         stim = self._derived()
         if isclose(other.time[0], 0, abs_tol=DT):
             # The shared endpoint is written once:
@@ -1223,15 +759,9 @@ class Stimulus(PrettyPrint):
         else:
             time = np.hstack((self.time, other.time + self.time[-1]))
             data = np.hstack((self.data, other.data))
-        # Append the data points. If there's something wrong with the
-        # concatenated list of time points, the stim setter will catch it:
         stim._stim = {'data': data,
                       'electrodes': self.electrodes,
                       'time': time}
-        # Concatenating two waveforms in time is not a rescaling of either, so
-        # any parameters describing the first one no longer describe the
-        # result -- a pulse train appended to another is not one pulse train
-        # at one amplitude and frequency, whatever its type still says:
         self._rescale_result(stim, None)
         return stim
 
@@ -1248,13 +778,8 @@ class Stimulus(PrettyPrint):
             The item(s) to remove from the stimulus. Can either be an electrode
             index, electrode name, or a list thereof.
         """
-        # Nothing to remove. Note that ``electrodes`` must not be tested for
-        # falsiness here, because 0 is a perfectly valid electrode index:
         if electrodes is None or np.size(electrodes) == 0:
-            return
-        # Unlike the operators, an in-place method has no second object to
-        # hand back, so there is nowhere to put a stimulus that has lost the
-        # electrode its parameters describe:
+            return  # nothing to remove
         if self._is_parametric:
             raise NotImplementedError(
                 f"Cannot remove electrodes from a {type(self).__name__}, "
@@ -1284,12 +809,7 @@ class Stimulus(PrettyPrint):
         }
 
     def _keep_mask(self, electrodes):
-        """Which rows survive removing ``electrodes``
-
-        Indices and names both, on the terms :py:meth:`remove` has always
-        used. Shared with :py:meth:`_without_electrodes`, so that an implant
-        switching an electrode off selects exactly what removing it would.
-        """
+        """Which rows survive removing ``electrodes``"""
         # Start with a list of True and set the removed electrodes to False:
         keep_el = np.ones(len(self.electrodes), dtype=bool)
         if np.isscalar(electrodes) and electrodes == 'all':
@@ -1310,17 +830,7 @@ class Stimulus(PrettyPrint):
         return keep_el
 
     def _drop_components(self, keep_el):
-        """Forget whole entries of a collection that has not been merged yet
-
-        Such a collection loses an electrode by forgetting the entry that
-        contributes it, which is how an implant takes a deactivated electrode
-        out of a stimulus without generating the waveform of the others.
-
-        Returns False -- leaving the caller to do it the ordinary way -- when
-        this is not that kind of collection, or when the electrodes to remove
-        cut through an entry that contributes several: there is no way to take
-        one row out of an entry that has not been sampled.
-        """
+        """Forget whole entries of an unmerged collection"""
         if self._components is None or _has_waveform(self):
             return False
         kept, start = [], 0
@@ -1331,7 +841,6 @@ class Stimulus(PrettyPrint):
                 kept.append(component)
             elif rows.any():
                 return False
-        # Never written into: `copy` hands out objects that share both:
         self._components = kept
         self.__stim = {**self.__stim,
                        'electrodes': self._own_names(self.electrodes[keep_el])}
@@ -1345,12 +854,11 @@ class Stimulus(PrettyPrint):
         because an operation rewrote them and whatever described them before
         no longer does.
 
-        This is what a model reads to find out that an electrode is driven by
-        a pulse train at 20 Hz, instead of taking a copy of that number from
-        the metadata and hoping it kept up. Read-only, and deliberately
-        shallow: an entry driving more than one electrode has no
-        one-source-per-electrode reading, and gets ``None`` rather than a
-        recursive one.
+        What a model reads to find that an electrode is driven by a pulse
+        train at 20 Hz, rather than taking a copy of that number out of the
+        metadata and hoping it kept up. Deliberately shallow: an entry driving
+        several electrodes has no one-source-per-electrode reading, and gets
+        ``None`` rather than a recursive one.
         """
         if self._components is not None:
             if any(n_rows != 1 or not isinstance(src, Stimulus)
@@ -1359,8 +867,7 @@ class Stimulus(PrettyPrint):
             return [(name, src) for name, (src, _)
                     in zip(self.electrodes, self._components)]
         if self._is_parametric and len(self.electrodes) == 1:
-            # The stimulus is the source: a pulse train assigned straight to
-            # an implant arrives here as itself.
+            # The stimulus is the source:
             return [(self.electrodes[0], self)]
         return None
 
@@ -1495,156 +1002,9 @@ class Stimulus(PrettyPrint):
             ``kind='heatmap'``.
 
         """
-        if self.time is None:
-            # Cannot plot stimulus with single time point:
-            raise NotImplementedError
-        if kind is None:
-            if isinstance(ax, (list, np.ndarray)):
-                kind = 'traces'
-            elif electrodes is None and len(self.electrodes) > 1:
-                kind = 'heatmap'
-            else:
-                kind = 'traces'
-        elif kind not in ('traces', 'heatmap'):
-            raise ValueError(f"Unknown kind '{kind}'. Choose from 'traces' or "
-                             f"'heatmap'.")
-        if electrodes is None:
-            # Plot all electrodes:
-            electrodes = self.electrodes
-        elif isinstance(electrodes, (int, str)):
-            # Convert to list so we can iterate over it:
-            electrodes = [electrodes]
-        t_idx, t_vals = self._plot_times(time)
-        if kind == 'heatmap':
-            return self._plot_heatmap(electrodes, t_idx, t_vals, ax)
-        return self._plot_traces(electrodes, t_idx, t_vals, fmt, ax)
-
-    def _plot_times(self, time):
-        """Resolve a requested time range into an index and its x values"""
-        # The user can ask for a range, slice, or list of time points, which
-        # are either interpolated or loaded directly.
-        if time is None:
-            # Ask for a slice instead of `self.time` to avoid interpolation:
-            time = slice(None)
-        # A range, a list of time points, or the endpoints and step of a slice
-        # may all be given as quantities:
-        time = self._as_time(time)
-        if isinstance(time, tuple):
-            # Return a range of time points:
-            t_idx = (self.time > time[0]) & (self.time < time[1])
-            # Include the end points (might have to be interpolated):
-            t_vals = [time[0]] + list(self.time[t_idx]) + [time[1]]
-            t_idx = t_vals
-        elif isinstance(time, (list, np.ndarray)):
-            # Return list of exact time points:
-            t_idx = time
-            t_vals = time
-        elif isinstance(time, slice):
-            t_vals = self._slice_times(time)
-            if t_vals is None:
-                # Every stored sample, taken by position:
-                t_idx = time
-                t_vals = self.time[time]
-            else:
-                t_idx = t_vals
-        elif time == Ellipsis:
-            t_idx = time
-            t_vals = self.time[t_idx]
-        else:
-            raise TypeError(f'"time" must be a tuple, slice, list, or NumPy '
-                            f'array, not {type(time)}.')
-        return t_idx, t_vals
-
-    def _value_label(self):
-        """What the stimulus values are, as an axis or colorbar label"""
-        if self.unit.dimension.is_dimensionless:
-            return 'Value'
-        if self.unit == uA:
-            # Spelled the way Matplotlib renders it:
-            return r'Amplitude ($\mu$A)'
-        return f'Amplitude ({self.unit})'
-
-    def _plot_traces(self, electrodes, t_idx, t_vals, fmt, ax):
-        """Draw one waveform per electrode, each in its own Axes"""
-        owns_figure = ax is None
-        axes = ax
-        if axes is None:
-            if len(electrodes) == 1:
-                axes = plt.gca()
-            else:
-                _, axes = plt.subplots(nrows=len(electrodes),
-                                       figsize=(8, 1.2 * len(electrodes)),
-                                       layout='constrained')
-        if not isinstance(axes, (list, np.ndarray)):
-            # Convert to list so we can iterate over it:
-            axes = [axes]
-        for i, ax in enumerate(axes):
-            if not isinstance(ax, Axes):
-                raise TypeError(f"'ax' must be a list of subplots, but "
-                                f"ax[{i}] is {type(ax)}.")
-        if len(axes) != len(electrodes):
-            raise ValueError(f"Number of subplots ({len(axes)}) must be equal "
-                             f"to the number of electrodes "
-                             f"({len(electrodes)}).")
-        # Plot each electrode in its own subplot:
-        for ax, electrode in zip(axes, electrodes):
-            # Slice or interpolate stimulus:
-            slc = self.__getitem__((electrode, t_idx))
-            ax.plot(t_vals, np.squeeze(slc), fmt, linewidth=2)
-            # Turn off the ugly box spines:
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            ax.spines['bottom'].set_visible(False)
-            # Annotate the subplot:
-            ax.set_xticks([])
-            ax.set_yticks([slc.min(), 0, slc.max()])
-            x_pad = 0.02 * (t_vals[-1] - t_vals[0])
-            ax.set_xlim(t_vals[0] - x_pad, t_vals[-1] + x_pad)
-            y_pad = np.maximum(1, 0.02 * (slc.max() - slc.min()))
-            ax.set_ylim(slc.min() - y_pad, slc.max() + y_pad)
-            ax.set_ylabel(electrode)
-        # Only the bottom subplot carries the shared time axis:
-        axes[-1].set_xticks(np.linspace(t_vals[0], t_vals[-1], num=5))
-        axes[-1].set_xlabel(f'Time ({self.time_unit})')
-        if owns_figure:
-            axes[-1].figure.supylabel(self._value_label())
-        if len(axes) == 1:
-            return axes[0]
-        return axes
-
-    def _plot_heatmap(self, electrodes, t_idx, t_vals, ax):
-        """Draw the stimulus as a single electrode-by-time image"""
-        if isinstance(ax, (list, np.ndarray)):
-            raise TypeError(f"A heatmap is drawn in a single Axes, but 'ax' "
-                            f"is a sequence of {len(ax)}.")
-        electrodes = list(electrodes)
-        owns_figure = ax is None
-        if ax is None:
-            # Give every electrode a readable row of its own:
-            height = float(np.clip(0.18 * len(electrodes), 2.5, 12))
-            _, ax = plt.subplots(figsize=(8, height), layout='constrained')
-        elif not isinstance(ax, Axes):
-            raise TypeError(f"'ax' must be a Matplotlib Axes, not {type(ax)}.")
-        data = np.atleast_2d(self.__getitem__((electrodes, t_idx)))
-        t_vals = np.asarray(t_vals, dtype=float)
-        vmax = np.max(np.abs(data))
-        if not np.isfinite(vmax) or vmax == 0:
-            vmax = 1.0
-        if data.min() < 0:
-            cmap, vmin = 'RdBu_r', -vmax
-        else:
-            cmap, vmin = 'viridis', 0.0
-        mesh = ax.pcolormesh(_cell_edges(t_vals), np.arange(len(data) + 1),
-                             data, cmap=cmap, vmin=vmin, vmax=vmax)
-        ax.set_yticks(np.arange(len(data)) + 0.5,
-                      labels=[str(e) for e in electrodes])
-        # Read top to bottom, in the order the electrodes were asked for:
-        ax.invert_yaxis()
-        ax.set_xlabel(f'Time ({self.time_unit})')
-        ax.set_ylabel('Electrode')
-        if owns_figure:
-            ax.figure.colorbar(mesh, ax=ax, label=self._value_label())
-        return ax
+        # Imported here so that a stimulus does not depend on Matplotlib:
+        from ._plot import plot_stimulus
+        return plot_stimulus(self, electrodes, time, fmt, ax, kind)
 
     def __getitem__(self, item):
         """Returns an item from the data array, interpolated if necessary
@@ -1657,7 +1017,6 @@ class Stimulus(PrettyPrint):
         *  ``stim[:, 1]``: always interpreted as t=1.0, not index=1
         *  ``stim[:, 1.234]``: interpolated time
         *  ``stim[:, stim.time < 0.4]``, ``stim[:, 0.3:1.9:0.001]``
-
         """
         # STEP 1: AVOID CONFUSING TIME POINTS WITH COLUMN INDICES
         # NumPy handles most indexing and slicing. However, we need to prevent
@@ -1671,7 +1030,6 @@ class Stimulus(PrettyPrint):
                 if sliced is not None:
                     time = sliced
             elif time is not Ellipsis:
-                # A requested time point (or a list of them) may be unitful
                 time = self._as_time(time)
                 # Convert to float so time is not mistaken for column index
                 if np.array(time).dtype != bool:
@@ -1685,7 +1043,6 @@ class Stimulus(PrettyPrint):
             parsed_electrodes = []
             for e in np.array([electrodes]).ravel():
                 if isinstance(e, str):
-                    # Use string as index into the list of electrode names:
                     parsed_electrodes.append(_index_of_name(self.electrodes, e))
                 else:
                     # Most likely an integer index:
@@ -1696,7 +1053,6 @@ class Stimulus(PrettyPrint):
             else:
                 # Otherwise return an array:
                 electrodes = np.array(parsed_electrodes)
-        # Make sure electrode index is valid:
         try:
             self._stim['data'][electrodes]
         except IndexError:
@@ -1780,9 +1136,6 @@ class Stimulus(PrettyPrint):
             return False
         if self.shape != other.shape:
             return False
-        # np.allclose builds several full-size temporaries. np.array_equal is
-        # much cheaper and, whenever it succeeds, implies it - so use it as a
-        # fast path for the common case of comparing identical stimuli:
         if not (np.array_equal(self.data, other.data) or
                 np.allclose(self.data, other.data)):
             return False
@@ -1823,8 +1176,7 @@ class Stimulus(PrettyPrint):
                             f"{type(b)}")
         # Return a copy of the current object with the new data. The operator
         # produces a new array for `field`; the other fields must be copied
-        # explicitly, so that the returned stimulus shares no buffer with the
-        # original (`_shallow_copy` does not duplicate the data container):
+        # explicitly:
         stim = self._derived()
         time = stim.time
         if field == 'time':
@@ -1835,86 +1187,45 @@ class Stimulus(PrettyPrint):
                       'electrodes': stim.electrodes.copy(),
                       'time': time}
         # Parameters that describe the waveform (a pulse train's amplitude,
-        # say) have to follow the data, or a model reading them back predicts
-        # from a stimulus that is no longer the one it was handed:
+        # say) have to follow the data:
         reverse = bool(a_supported)
         self._rescale_result(stim, _scale_factor(op, a if reverse else b,
                                                  reverse, field))
         return stim
 
     def _scaled(self, factor):
-        """This stimulus with every amplitude scaled by ``factor``
-
-        The seam for a class that can express a scaled version of itself
-        without rewriting any samples: a pulse train at twice the amplitude is
-        a pulse train, and a collection of them is that collection with every
-        entry scaled. Returning ``None`` -- which is what a stimulus that
-        *is* its waveform does -- runs the ordinary waveform operation
-        instead.
-
-        Only ever called with a finite factor, and only for operations that
-        scale every amplitude by the same number.
-        """
+        """This stimulus with every amplitude scaled by ``factor``"""
         return self._scale_components(factor)
 
     def _scale_components(self, factor):
-        """A collection that has not been merged scales its entries instead
-
-        Only when every entry is a stimulus in its own right: scaling a raw
-        entry would mean sampling it, which is the work staying unmerged
-        exists to avoid.
-        """
+        """An unmerged collection scales its entries instead"""
         if self._components is None or _has_waveform(self):
             return None
         if not all(isinstance(src, Stimulus) for src, _ in self._components):
             return None
         stim = self._shallow_copy()
-        # A new list rather than a write: `_shallow_copy` hands out the same
-        # one. The entries scale themselves, structurally where they can:
         stim._components = [(src * factor, n) for src, n in self._components]
-        # `metadata['electrodes']` describes those entries, and is what the
-        # models still read their pulse parameters off:
         stim._rescale_metadata(factor)
         return stim
 
     def _operate(self, op, scalar, reverse=False):
-        """Apply an arithmetic operator to the stimulus
-
-        Asks :py:meth:`_scaled` first, so that a class which can express the
-        result in its own terms never has to sample itself to produce it.
-        ``reverse`` says the stimulus is the operand on the right.
-        """
+        """Apply an arithmetic operator to the stimulus"""
         if np.isscalar(scalar) and not isinstance(scalar, str):
             factor = _scale_factor(op, scalar, reverse)
             if factor is not None:
                 scaled = self._scaled(factor)
                 if scaled is not None:
                     return scaled
-        # Nothing structured describes this, so the waveform is the answer.
-        # An unsupported operand also lands here, and is rejected there:
         data = self.data
         a, b = (scalar, data) if reverse else (data, scalar)
         return self._apply_operator(a, op, b)
 
     def _as_amplitude(self, scalar):
-        """Normalize an operand that is added to or subtracted from the data
-
-        Adding to the data means adding an amplitude, so a quantity has to be
-        one: ``stim + 0.5 * mA`` is 500 uA more current everywhere, and
-        ``stim + 5 * ms`` is nothing at all. A bare number is taken to be in
-        the stimulus' own unit, as it always was.
-        """
+        """Normalize an operand that is added to or subtracted from the data"""
         return as_value(scalar, self.unit)
 
     def _as_factor(self, scalar):
-        """Normalize an operand that scales the data
-
-        Deliberately narrower than
-        :py:meth:`~pulse2percept.stimuli.Stimulus._as_amplitude`: a scale
-        factor is a plain number. Letting ``stim * ms`` through would turn a
-        stimulus into a charge, and a stimulus is a stimulus rather than a
-        general physical array.
-        """
+        """Normalize an operand that scales the data"""
         return as_value(scalar, dimensionless)
 
     def _as_time(self, scalar):
@@ -1922,11 +1233,7 @@ class Stimulus(PrettyPrint):
         return as_value(scalar, self.time_unit)
 
     def _slice_times(self, time):
-        """The time points a slice of the time axis asks for
-
-        See :py:func:`~pulse2percept.utils.array._slice_times`, which
-        :py:class:`~pulse2percept.percepts.Percept` indexing shares.
-        """
+        """The time points a slice of the time axis asks for"""
         return _slice_times(time, self.time, self.time_unit)
 
     def __add__(self, scalar):
@@ -1963,22 +1270,15 @@ class Stimulus(PrettyPrint):
         return self.__mul__(-1)
 
     def __rshift__(self, scalar):
-        """Shift every time point in the stimulus some ms into the future
-
-        Shorthand for :py:meth:`~pulse2percept.stimuli.Stimulus.shift`.
-        """
+        """Shift all times some ms into the future (shorthand for shift)"""
         return self.shift(scalar)
 
     def __lshift__(self, scalar):
-        """Shift every time point in the stimulus some ms into the past
-
-        Shorthand for ``shift(-scalar)``; see
-        :py:meth:`~pulse2percept.stimuli.Stimulus.shift`.
-        """
+        """Shift all times some ms into the past (shorthand for -shift)"""
         return self.shift(-self._as_time(scalar))
 
     def _check_stim(self, stim):
-        # Check stimulus data for consistency:
+        """Check stimulus data for consistency"""
         for field in ['data', 'electrodes', 'time']:
             if field not in stim:
                 raise AttributeError(f"Stimulus dict must contain a field "
@@ -1999,10 +1299,7 @@ class Stimulus(PrettyPrint):
                                  f"number of columns in the data array "
                                  f"({data_shape[1]}).")
             if not is_strictly_increasing(stim['time'], tol=0.95*DT):
-                # Report the offending points rather than the whole axis: a
-                # long pulse train has hundreds of thousands of time points,
-                # and printing all of them buries the handful that are wrong
-                # under megabytes of output.
+                # Report the offending points rather than the whole axis:
                 t = np.asarray(stim['time'])
                 bad = np.flatnonzero(np.diff(t) < 0.95 * DT)
                 shown = ', '.join(f"t[{i}]={t[i]:g} -> t[{i + 1}]={t[i + 1]:g}"
@@ -2018,25 +1315,7 @@ class Stimulus(PrettyPrint):
 
     @staticmethod
     def _own(arr, dtype):
-        """An immutable, C-contiguous array of ``dtype`` that nothing aliases
-
-        Ownership is what makes immutability mean anything. Marking whatever
-        buffer arrived read-only would take the caller's own array away from
-        them, and storing it as it came would let ``arr[0] = 99`` rewrite a
-        stimulus long after it was built. So the stimulus takes a copy, and
-        that copy is the only writable reference there ever was to it.
-
-        Copy unconditionally rather than only where a conversion is needed:
-        "returned a different object" is not the same claim as "shares no
-        memory with the input", and it is the second one this has to make.
-        Asking for a view of a subclass, for one, hands back a new ndarray
-        over the very same buffer.
-
-        C-contiguity is not incidental: every Cython kernel in the library
-        takes the data as ``float32[:, ::1]``, and not everything that builds
-        a stimulus produces that (selecting columns, as ``compress`` does,
-        hands back an F-ordered array for a multi-electrode stimulus).
-        """
+        """An immutable, C-contiguous array of dtype"""
         if arr is None:
             return None
         owned = np.array(arr, dtype=dtype, order='C', copy=True)
@@ -2045,13 +1324,7 @@ class Stimulus(PrettyPrint):
 
     @staticmethod
     def _own_names(electrodes):
-        """The electrode names, in a container nobody can write into
-
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames` generates its names
-        from a grid rather than storing them, and has no way to set one, so it
-        is already what this method promises -- and materializing it into an
-        array would cost a million strings for an image stimulus.
-        """
+        """The electrode names, in a container nobody can write into"""
         if isinstance(electrodes, ElectrodeNames):
             return electrodes
         owned = np.array(electrodes)
@@ -2064,15 +1337,11 @@ class Stimulus(PrettyPrint):
 
         Reading this is what materializes the waveform of a stimulus that
         deferred building one (see :py:meth:`_defer` and :py:meth:`_render`).
-        Everything that needs samples goes through here, so that is the one
-        place the waveform can come into existence; ``electrodes`` is the
-        exception, and reads the container directly.
         """
         if self.__stim['data'] is None:
             promised = self.__stim['electrodes']
             # The setter installs the rendered state, so `_render` runs once.
-            # It also clears the components, and this is the one waveform they
-            # do describe, so they are put back afterwards:
+            # It also clears the components:
             components = self._components
             self._stim = self._render()
             self._components = components
@@ -2087,26 +1356,10 @@ class Stimulus(PrettyPrint):
     @_stim.setter
     def _stim(self, stim):
         self._check_stim(stim)
-        # A waveform that arrives from outside is not the one the components
-        # describe -- an operation that rewrote the samples would otherwise
-        # leave a stimulus whose structured source says something else. Only
-        # the render path in the getter above, which builds the waveform *from*
-        # the components, puts them back.
         self._components = None
-        # All checks passed. Take ownership of every array before storing it,
-        # so that the scientific state of a stimulus cannot change once it
-        # has one. `copy` hands out objects that share this dict, so replace
-        # it rather than writing through:
         self.__stim = {**stim,
                        'data': self._own(stim['data'], np.float32),
-                       # Time is float64 while data is float32. The asymmetry
-                       # is deliberate: a time axis has one entry per column
-                       # where the data has one per electrode per column, so
-                       # widening it costs almost nothing, and float32 cannot
-                       # carry a time axis at all. Its resolution reaches
-                       # DT=1e-3 ms at t = 8.4 s, past which the DT-wide edges
-                       # of a pulse collapse to zero width -- a 30 s pulse
-                       # train lost 952 of its edges that way.
+                       # Time is deliberately float64 while data is float32:
                        'time': self._own(stim['time'], np.float64),
                        'electrodes': self._own_names(stim['electrodes'])}
 
@@ -2116,11 +1369,6 @@ class Stimulus(PrettyPrint):
 
         A read-only 2-D NumPy array that contains the sampled waveform, where
         the rows denote electrodes and the columns denote points in time.
-
-        For a pulse-based or encoded stimulus the waveform is what the
-        parameters or the schedule describe rather than what the stimulus
-        stores, so reading this may be what generates it. It is cached
-        afterwards, and the parameters can be read without it.
         """
         return self._stim['data']
 
@@ -2133,14 +1381,6 @@ class Stimulus(PrettyPrint):
     def unit(self):
         """The unit ``data`` is expressed in
 
-        Microamps for an electrical stimulus, dimensionless for the gray
-        levels of an :py:class:`~pulse2percept.stimuli.ImageStimulus` or
-        :py:class:`~pulse2percept.stimuli.VideoStimulus`.
-
-        Read-only. The canonical storage unit is fixed so that models, safety
-        checks and Cython kernels can rely on it; ask for another unit with
-        :py:meth:`~pulse2percept.stimuli.Stimulus.values`.
-
         .. versionadded:: 0.10.0
 
         """
@@ -2148,7 +1388,7 @@ class Stimulus(PrettyPrint):
 
     @property
     def time_unit(self):
-        """The unit ``time`` is expressed in (milliseconds)
+        """The unit ``time`` is expressed in
 
         .. versionadded:: 0.10.0
 
@@ -2200,8 +1440,7 @@ class Stimulus(PrettyPrint):
         -------
         values : np.ndarray
             An ordinary NumPy array, never a
-            :py:class:`~pulse2percept.units.Quantity`. This is the boundary a
-            numerical implementation should take its data across.
+            :py:class:`~pulse2percept.units.Quantity`.
 
         Examples
         --------
@@ -2246,33 +1485,21 @@ class Stimulus(PrettyPrint):
         A list of electrode names, corresponding to the rows in the data
         container.
         """
-        # Reads the container directly rather than through `_stim`: which
-        # electrodes a stimulus drives is known before its waveform is, and
-        # asking for them must not be what generates one.
         return self.__stim['electrodes']
 
     @property
     def time(self):
-        """Time steps
-        A list of time steps, corresponding to the columns in the data
-        container.
-        """
+        """A list of time steps (i.e., the columns in the data container)"""
         return self._stim['time']
 
     @property
     def is_compressed(self):
-        """Flag indicating whether the stimulus has been compressed
-
-        Read-only: the flag is maintained by ``compress``. Assigning to it
-        raises an ``AttributeError``.
-        """
+        """Flag indicating whether the stimulus has been compressed"""
         return self._is_compressed
 
     @property
     def dt(self):
-        """Sampling time step (ms)
-
-        Defines the duration of the signal edge transitions.
+        """Sampling time step (duration of signal edge transitions)
 
         .. versionadded:: 0.7
 
@@ -2288,18 +1515,9 @@ class Stimulus(PrettyPrint):
         For the whole stimulus to be charge-balanced, every electrode must be
         charge-balanced as well.
 
-        Returns None if the stimulus is not a current at all: the gray levels
-        of an :py:class:`~pulse2percept.stimuli.ImageStimulus` integrate to a
-        number like any others, but that number is not a charge and asking
-        whether it is zero answers nothing. Note that this is "not applicable",
-        not "unbalanced" -- it is
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.safe_mode` that
-        turns the question into an error, since a safety system genuinely
-        cannot do its job on a stimulus that is not electrical.
-
         .. versionchanged:: 0.10.0
             Returns None for a stimulus that is not measured in units of
-            current (was: integrated the values anyway).
+            current.
 
         """
         if self.unit.dimension != uA.dimension:
@@ -2322,8 +1540,6 @@ def _has_time_axis(stim):
 def _sequence_parts(stim):
     """The parts a stimulus contributes to a sequence, already flattened"""
     if isinstance(stim, _SequenceStimulus):
-        # Already snapshots, and appending to a sequence extends it rather
-        # than nesting one inside another:
         return list(stim.parts)
     return [_snapshot(stim)]
 
@@ -2336,9 +1552,7 @@ class _SequenceStimulus(Stimulus):
     20 Hz train followed by a 50 Hz train goes on being two trains; only the
     concatenation waits for :py:meth:`_render`.
 
-    Private on purpose: this is a temporal sequence and nothing else. It is
-    not an expression tree, and it does not answer questions about pulse
-    parameters -- a sequence has no single frequency to report.
+    Private on purpose.
     """
     #: Described by its parts rather than by its samples:
     _is_parametric = True
@@ -2351,11 +1565,6 @@ class _SequenceStimulus(Stimulus):
         self._defer(first.electrodes, unit=first.unit,
                     time_unit=first.time_unit)
         self.metadata = deepcopy(first.metadata)
-        # A sequence has no one frequency or amplitude, so the parameters that
-        # described its first part are dropped here exactly as
-        # `_append_waveform` drops them: a model asking for them rejects the
-        # stimulus rather than predicting from the first part's numbers. The
-        # parts keep their own, and `parts` is where to read them.
         first._rescale_result(self, None)
 
     @property

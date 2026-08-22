@@ -16,7 +16,8 @@ from pulse2percept.stimuli import (BiphasicPulse, BiphasicPulseTrain,
                                    MonophasicPulse)
 from pulse2percept.stimuli import ImageStimulus
 from pulse2percept.stimuli import VideoStimulus
-from pulse2percept.stimuli.base import _interp_rows, merge_time_axes
+from pulse2percept.stimuli._merge import merge_time_axes
+from pulse2percept.stimuli.base import _interp_rows
 from pulse2percept.units import (DimensionMismatchError, Quantity,
                                  dimensionless, mA, ms, uA, us)
 # `s` is a loop variable elsewhere in this module, so import the unit
