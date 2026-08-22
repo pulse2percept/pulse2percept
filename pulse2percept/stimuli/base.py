@@ -221,6 +221,15 @@ def _describe_unit(unit):
     return f'{unit.dimension.name} ({unit})'
 
 
+def _cell_edges(t):
+    """Turn sample times into the cell edges a heatmap colors between"""
+    t = np.asarray(t, dtype=float)
+    if t.size == 1:
+        # No neighbor to split an interval with; one sample is one time step:
+        return np.array([t[0] - DT / 2, t[0] + DT / 2])
+    return np.concatenate(([t[0]], 0.5 * (t[:-1] + t[1:]), [t[-1]]))
+
+
 def _stimulus_sources(source):
     """The Stimulus objects a source is built from, if any
 
@@ -1036,10 +1045,15 @@ class Stimulus(PrettyPrint):
                       'time': time}
         return stim
 
-    def plot(self, electrodes=None, time=None, fmt='k-', ax=None):
+    def plot(self, electrodes=None, time=None, fmt='k-', ax=None, kind=None):
         """Plot the stimulus
 
         .. versionadded:: 0.7
+
+        .. versionchanged:: 0.10.0
+            Added ``kind``: a whole multi-electrode stimulus is now drawn as
+            an electrode-by-time heatmap rather than as one subplot per
+            electrode.
 
         Parameters
         ----------
@@ -1052,25 +1066,53 @@ class Stimulus(PrettyPrint):
             points to interpolate.
             If None, all time points are plotted.
         fmt : str, optional, default: 'k-'
-            A Matplotlib format string; e.g., 'ro' for red circles.
+            A Matplotlib format string; e.g., 'ro' for red circles to use
+            when ``kind='traces'``.
         ax : matplotlib.axes.Axes or list thereof; optional, default: None
-            A Matplotlib Axes object or a list thereof (one per electrode to
-            plot). If None, a new Axes object will be created.
+            A Matplotlib Axes object. ``kind='traces'`` also accepts a list
+            thereof (one per electrode to plot); ``kind='heatmap'`` draws into
+            a single Axes. If None, a new Axes object will be created.
+        kind : {'traces', 'heatmap'}, optional, default: None
+            What to draw:
+
+            *  'traces': the waveform of each electrode, one Axes per
+               electrode. Good for a handful of electrodes.
+            *  'heatmap': an electrode-by-time image in a single Axes. Good
+               for a whole implant's worth of electrodes.
+
+            If None, a whole stimulus of more than one electrode is drawn as a
+            heatmap and everything else as traces: naming electrodes means
+            "show me these signals in detail".
 
         Returns
         -------
-        axes : matplotlib.axes.Axes or np.ndarray of them
-            Returns one matplotlib.axes.Axes per electrode
+        ax : matplotlib.axes.Axes or np.ndarray of them
+            One Axes per electrode for ``kind='traces'``, a single Axes for
+            ``kind='heatmap'``.
+
         """
         if self.time is None:
             # Cannot plot stimulus with single time point:
             raise NotImplementedError
+        if kind is None:
+            overview = electrodes is None and len(self.electrodes) > 1
+            kind = 'heatmap' if overview else 'traces'
+        elif kind not in ('traces', 'heatmap'):
+            raise ValueError(f"Unknown kind '{kind}'. Choose from 'traces' or "
+                             f"'heatmap'.")
         if electrodes is None:
             # Plot all electrodes:
             electrodes = self.electrodes
         elif isinstance(electrodes, (int, str)):
             # Convert to list so we can iterate over it:
             electrodes = [electrodes]
+        t_idx, t_vals = self._plot_times(time)
+        if kind == 'heatmap':
+            return self._plot_heatmap(electrodes, t_idx, t_vals, ax)
+        return self._plot_traces(electrodes, t_idx, t_vals, fmt, ax)
+
+    def _plot_times(self, time):
+        """Resolve a requested time range into an index and its x values"""
         # The user can ask for a range, slice, or list of time points, which
         # are either interpolated or loaded directly.
         if time is None:
@@ -1108,23 +1150,38 @@ class Stimulus(PrettyPrint):
         else:
             raise TypeError(f'"time" must be a tuple, slice, list, or NumPy '
                             f'array, not {type(time)}.')
+        return t_idx, t_vals
+
+    def _value_label(self):
+        """What the stimulus values are, as an axis or colorbar label"""
+        if self.unit.dimension.is_dimensionless:
+            return 'Value'
+        if self.unit == uA:
+            # Spelled the way Matplotlib renders it:
+            return r'Amplitude ($\mu$A)'
+        return f'Amplitude ({self.unit})'
+
+    def _plot_traces(self, electrodes, t_idx, t_vals, fmt, ax):
+        """Draw one waveform per electrode, each in its own Axes"""
         axes = ax
         if axes is None:
             if len(electrodes) == 1:
                 axes = plt.gca()
             else:
                 _, axes = plt.subplots(nrows=len(electrodes),
-                                       figsize=(8, 1.2 * len(electrodes)))
+                                       figsize=(8, 1.2 * len(electrodes)),
+                                       layout='constrained')
         if not isinstance(axes, (list, np.ndarray)):
-            # Convert to list so w can iterate over it:
+            # Convert to list so we can iterate over it:
             axes = [axes]
         for i, ax in enumerate(axes):
             if not isinstance(ax, Axes):
-                raise TypeError(f"'axes' must be a list of subplots, but "
-                                f"axes[{i}] is {type(ax)}.")
+                raise TypeError(f"'ax' must be a list of subplots, but "
+                                f"ax[{i}] is {type(ax)}.")
         if len(axes) != len(electrodes):
-            raise ValueError(f"Number of subplots ({len(axes)}) must be equal to the "
-                             f"number of electrodes ({len(electrodes)}).")
+            raise ValueError(f"Number of subplots ({len(axes)}) must be equal "
+                             f"to the number of electrodes "
+                             f"({len(electrodes)}).")
         # Plot each electrode in its own subplot:
         for ax, electrode in zip(axes, electrodes):
             # Slice or interpolate stimulus:
@@ -1142,26 +1199,47 @@ class Stimulus(PrettyPrint):
             y_pad = np.maximum(1, 0.02 * (slc.max() - slc.min()))
             ax.set_ylim(slc.min() - y_pad, slc.max() + y_pad)
             ax.set_ylabel(electrode)
-        # Show x-ticks only on last subplot:
+        # Only the bottom subplot carries the shared time axis:
         axes[-1].set_xticks(np.linspace(t_vals[0], t_vals[-1], num=5))
-        # Labels are common to all subplots. What the y axis shows depends on
-        # what the stimulus is made of: an image or video stimulus holds gray
-        # levels, and calling those an amplitude in microamps is simply wrong.
-        if self.unit.dimension.is_dimensionless:
-            ylabel = 'Value'
-        elif self.unit == uA:
-            # Spelled the way Matplotlib renders it:
-            ylabel = r'Amplitude ($\mu$A)'
-        else:
-            ylabel = f'Amplitude ({self.unit})'
-        axes[-1].figure.subplots_adjust(bottom=0.2)
-        axes[-1].figure.text(0.5, 0, f'Time ({self.time_unit})', va='top',
-                             ha='center')
-        axes[-1].figure.text(0, 0.5, ylabel, va='center', ha='center',
-                             rotation='vertical')
+        axes[-1].set_xlabel(f'Time ({self.time_unit})')
+        # Every Axes spends its y label on an electrode name, so the unit has
+        # to go where the whole stack can share it:
+        axes[-1].figure.supylabel(self._value_label())
         if len(axes) == 1:
             return axes[0]
         return axes
+
+    def _plot_heatmap(self, electrodes, t_idx, t_vals, ax):
+        """Draw the stimulus as a single electrode-by-time image"""
+        if isinstance(ax, (list, np.ndarray)):
+            raise TypeError(f"A heatmap is drawn in a single Axes, but 'ax' "
+                            f"is a sequence of {len(ax)}.")
+        electrodes = list(electrodes)
+        if ax is None:
+            # Give every electrode a readable row of its own:
+            height = float(np.clip(0.18 * len(electrodes), 2.5, 12))
+            _, ax = plt.subplots(figsize=(8, height), layout='constrained')
+        elif not isinstance(ax, Axes):
+            raise TypeError(f"'ax' must be a Matplotlib Axes, not {type(ax)}.")
+        data = np.atleast_2d(self.__getitem__((electrodes, t_idx)))
+        t_vals = np.asarray(t_vals, dtype=float)
+        vmax = np.max(np.abs(data))
+        if not np.isfinite(vmax) or vmax == 0:
+            vmax = 1.0
+        if data.min() < 0:
+            cmap, vmin = 'RdBu_r', -vmax
+        else:
+            cmap, vmin = 'viridis', 0.0
+        mesh = ax.pcolormesh(_cell_edges(t_vals), np.arange(len(data) + 1),
+                             data, cmap=cmap, vmin=vmin, vmax=vmax)
+        ax.set_yticks(np.arange(len(data)) + 0.5,
+                      labels=[str(e) for e in electrodes])
+        # Read top to bottom, in the order the electrodes were asked for:
+        ax.invert_yaxis()
+        ax.set_xlabel(f'Time ({self.time_unit})')
+        ax.set_ylabel('Electrode')
+        ax.figure.colorbar(mesh, ax=ax, label=self._value_label())
+        return ax
 
     def __getitem__(self, item):
         """Returns an item from the data array, interpolated if necessary

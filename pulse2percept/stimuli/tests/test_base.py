@@ -308,7 +308,7 @@ def test_Stimulus_plot():
         stim = Stimulus(np.random.rand(n_electrodes, 20),
                         electrodes=[f'E{i}' for i in range(n_electrodes)])
         fig, axes = plt.subplots(ncols=n_electrodes)
-        stim.plot(ax=axes)
+        stim.plot(ax=axes, kind='traces')
         npt.assert_equal(isinstance(axes, (list, np.ndarray)), True)
         for ax, electrode in zip(axes, stim.electrodes):
             npt.assert_equal(isinstance(ax, Subplot), True)
@@ -328,17 +328,149 @@ def test_Stimulus_plot():
         stim.plot(ax='as')
     with pytest.raises(TypeError):
         stim.plot(time='0 0.1')
+    with pytest.raises(ValueError):
+        stim.plot(kind='waterfall')
     with pytest.raises(NotImplementedError):
         Stimulus(np.ones(10)).plot()
     with pytest.raises(ValueError):
         stim = Stimulus(np.ones((3, 10)))
         _, axes = plt.subplots(nrows=4)
-        stim.plot(ax=axes)
+        stim.plot(ax=axes, kind='traces')
     with pytest.raises(TypeError):
         stim = Stimulus(np.ones((3, 10)))
         _, axes = plt.subplots(nrows=3)
         axes[1] = 0
-        stim.plot(ax=axes)
+        stim.plot(ax=axes, kind='traces')
+    with pytest.raises(TypeError):
+        # A heatmap has nowhere to put a second Axes:
+        _, axes = plt.subplots(nrows=3)
+        Stimulus(np.ones((3, 10))).plot(ax=axes, kind='heatmap')
+    plt.close('all')
+
+
+def test_Stimulus_plot_kind_default():
+    """A named electrode asks for detail, a whole implant for an overview"""
+    single = Stimulus([[0, -10, 10, 0]], time=[0, 1, 2, 3])
+    npt.assert_equal(len(single.plot().lines), 1)
+    plt.close('all')
+    multi = Stimulus(np.random.rand(4, 8),
+                     electrodes=[f'E{i}' for i in range(4)])
+    ax = multi.plot()
+    npt.assert_equal(isinstance(ax, Subplot), True)
+    npt.assert_equal(len(ax.lines), 0)
+    npt.assert_equal(len(ax.collections), 1)
+    plt.close('all')
+    # Naming electrodes means traces, however many are named:
+    axes = multi.plot(electrodes=['E0', 'E1', 'E2'])
+    npt.assert_equal(len(axes), 3)
+    npt.assert_equal([ax.get_ylabel() for ax in axes], ['E0', 'E1', 'E2'])
+    plt.close('all')
+    # `kind` overrides both defaults:
+    npt.assert_equal(len(multi.plot(kind='traces')), 4)
+    plt.close('all')
+    ax = multi.plot(electrodes=['E2', 'E0'], kind='heatmap')
+    npt.assert_equal([t.get_text() for t in ax.get_yticklabels()],
+                     ['E2', 'E0'])
+    plt.close('all')
+
+
+def test_Stimulus_plot_electrode_order():
+    """Electrodes are shown in the order they were asked for, not stored in"""
+    stim = Stimulus(np.arange(12, dtype=float).reshape((3, 4)),
+                    electrodes=['A1', 'A2', 'A3'], time=[0, 1, 2, 3])
+    axes = stim.plot(electrodes=['A3', 'A1'])
+    npt.assert_equal([ax.get_ylabel() for ax in axes], ['A3', 'A1'])
+    npt.assert_almost_equal(axes[0].lines[0].get_data()[1], stim['A3'])
+    plt.close('all')
+    # Electrodes may also be named by index:
+    axes = stim.plot(electrodes=[2, 0])
+    npt.assert_almost_equal(axes[0].lines[0].get_data()[1], stim['A3'])
+    npt.assert_almost_equal(axes[1].lines[0].get_data()[1], stim['A1'])
+    plt.close('all')
+    ax = stim.plot(electrodes=[2, 0], kind='heatmap')
+    npt.assert_almost_equal(np.asarray(ax.collections[0].get_array()),
+                            stim.data[[2, 0], :])
+    plt.close('all')
+
+
+def test_Stimulus_plot_heatmap_time_is_not_uniform():
+    """A compressed pulse train is not sampled at a constant rate
+
+    Drawing it with equal-width columns would stretch the DT-wide edges of a
+    pulse until they look as long as the gaps between pulses.
+    """
+    stim = Stimulus({'A1': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100),
+                     'A2': BiphasicPulseTrain(20, 25, 0.45, stim_dur=100)})
+    dt = np.diff(stim.time)
+    npt.assert_equal(dt.max() > 100 * dt.min(), True)
+    x = stim.plot().collections[0].get_coordinates()[0, :, 0]
+    # One cell per stored sample, spanning exactly the stimulus duration:
+    npt.assert_equal(len(x), len(stim.time) + 1)
+    npt.assert_almost_equal([x[0], x[-1]], [stim.time[0], stim.time[-1]])
+    # Cells are as wide as the intervals they stand for, so a pulse edge stays
+    # a pulse edge and the gaps stay long:
+    npt.assert_almost_equal(x[1:-1], (stim.time[:-1] + stim.time[1:]) / 2)
+    widths = np.diff(x)
+    npt.assert_equal(widths.min() < DT, True)
+    npt.assert_equal(widths.max() > 10, True)
+    plt.close('all')
+    # A time selection is drawn on the same footing:
+    x = stim.plot(time=(1 * ms, 3 * ms)).collections[0]
+    x = x.get_coordinates()[0, :, 0]
+    npt.assert_almost_equal([x[0], x[-1]], [1, 3])
+    plt.close('all')
+
+
+def test_Stimulus_plot_heatmap_color_scale():
+    # A signed stimulus is normalized symmetrically around zero, so that the
+    # middle of the colormap is "no current":
+    signed = Stimulus([[0, -30, 10, 0], [0, 5, -2, 0]], time=[0, 1, 2, 3])
+    mesh = signed.plot().collections[0]
+    npt.assert_almost_equal([mesh.norm.vmin, mesh.norm.vmax], [-30, 30])
+    plt.close('all')
+    # Nonnegative data has no sign to show and is not drawn as if it did:
+    unsigned = Stimulus([[0, 1, 2, 3], [0, 2, 4, 6]], time=[0, 1, 2, 3])
+    unsigned_mesh = unsigned.plot().collections[0]
+    npt.assert_almost_equal([unsigned_mesh.norm.vmin, unsigned_mesh.norm.vmax],
+                            [0, 6])
+    npt.assert_equal(unsigned_mesh.cmap.name == mesh.cmap.name, False)
+    plt.close('all')
+    # An all-zero stimulus has no magnitude to scale by, and must not blow up:
+    mesh = Stimulus(np.zeros((3, 4)), time=[0, 1, 2, 3]).plot().collections[0]
+    npt.assert_equal(mesh.norm.vmin < mesh.norm.vmax, True)
+    plt.close('all')
+
+
+def test_Stimulus_plot_heatmap_electrode_selection():
+    stim = Stimulus(np.arange(12, dtype=float).reshape((3, 4)),
+                    electrodes=['A1', 'A2', 'A3'], time=[0, 1, 2, 3])
+    ax = stim.plot(electrodes='A2', kind='heatmap')
+    npt.assert_equal([t.get_text() for t in ax.get_yticklabels()], ['A2'])
+    npt.assert_almost_equal(np.asarray(ax.collections[0].get_array()).ravel(),
+                            stim['A2'])
+    plt.close('all')
+    ax = stim.plot(electrodes=['A1', 'A3'], kind='heatmap')
+    npt.assert_almost_equal(np.asarray(ax.collections[0].get_array()),
+                            stim.data[[0, 2], :])
+    plt.close('all')
+
+
+def test_Stimulus_plot_leaves_the_callers_figure_alone():
+    """`plot` draws where it is told; it does not re-lay-out someone's figure
+
+    Positions are only compared between Axes `plot` was not given, so this
+    does not pin down what a plot looks like -- only that the rest of the
+    figure survives it.
+    """
+    stim = Stimulus(np.random.rand(3, 8), electrodes=['E0', 'E1', 'E2'])
+    for kwargs in ({'kind': 'heatmap'}, {'electrodes': ['E0']}):
+        fig, (mine, theirs) = plt.subplots(ncols=2)
+        before = theirs.get_position().bounds
+        stim.plot(ax=mine, **kwargs)
+        npt.assert_almost_equal(theirs.get_position().bounds, before)
+        # A figure-wide layout engine would move every Axes at draw time:
+        npt.assert_equal(fig.get_layout_engine(), None)
+        plt.close(fig)
 
 
 def _unique_timepoints(stim, data):
@@ -1319,12 +1451,20 @@ def test_Stimulus_plot_units():
     npt.assert_equal(isinstance(stim.plot(time=[1, 2] * ms), Subplot), True)
     with pytest.raises(DimensionMismatchError):
         stim.plot(time=(1 * uA, 3 * uA))
-    # The y axis says what the stimulus is actually made of:
-    npt.assert_equal(stim.plot().figure.texts[-1].get_text(),
-                     r'Amplitude ($\mu$A)')
-    npt.assert_equal(stim.plot().figure.texts[-2].get_text(), 'Time (ms)')
+    # The axes say what the stimulus is actually made of:
+    ax = stim.plot()
+    npt.assert_equal(ax.get_xlabel(), 'Time (ms)')
+    npt.assert_equal(ax.figure.get_supylabel(), r'Amplitude ($\mu$A)')
     dimless = Stimulus(VideoStimulus(np.ones((1, 1, 3)), time=[0, 1, 2]))
-    npt.assert_equal(dimless.plot().figure.texts[-1].get_text(), 'Value')
+    npt.assert_equal(dimless.plot().figure.get_supylabel(), 'Value')
+    plt.close('all')
+    # A heatmap says it on the colorbar instead:
+    two = Stimulus(np.ones((2, 3)), time=[0, 1, 2])
+    npt.assert_equal(two.plot().collections[0].colorbar.ax.get_ylabel(),
+                     r'Amplitude ($\mu$A)')
+    dimless = Stimulus(VideoStimulus(np.ones((1, 2, 3)), time=[0, 1, 2]))
+    npt.assert_equal(dimless.plot().collections[0].colorbar.ax.get_ylabel(),
+                     'Value')
     plt.close('all')
 
 
