@@ -7,7 +7,7 @@ from math import isclose
 
 # DT: Sampling time step (ms); defines the duration of the signal edge
 # transitions:
-from .base import Stimulus
+from .base import Stimulus, _scale_factor
 from .pulses import (AsymmetricBiphasicPulse, BiphasicPulse,
                      MonophasicPulse, _electrode_names)
 from ..units import Hz, as_value, ms, uA
@@ -407,6 +407,44 @@ class BiphasicPulseTrain(Stimulus):
         """The tiled train the parameters above describe"""
         return {'data': self._train.data, 'electrodes': self.electrodes,
                 'time': self._train.time}
+
+    def _scaled(self, factor):
+        """This train with every amplitude multiplied by ``factor``
+
+        Built from the parameters rather than from the samples: ``amp`` is
+        canonical state now, so twice this train is the train at twice its
+        amplitude -- not the float32 waveform cache doubled and its rounding
+        promoted to truth. The two agree to within a float32 ulp.
+        """
+        return BiphasicPulseTrain(
+            self.freq, self.amp * abs(factor), self.phase_dur,
+            interphase_dur=self.interphase_dur, delay_dur=self.delay_dur,
+            n_pulses=self.n_pulses, stim_dur=self.stim_dur,
+            # A negative factor swaps the two phases, which is exactly what
+            # this flag says:
+            cathodic_first=(self.cathodic_first if factor >= 0
+                            else not self.cathodic_first),
+            electrode=self.electrodes[0],
+            # The compatibility metadata is rebuilt by the constructor, from
+            # the new amplitude. Only what the user put there is theirs to
+            # carry across:
+            metadata=deepcopy(self.metadata.get('user')))
+
+    def _apply_operator(self, a, op, b, field='data'):
+        """Scaling a biphasic pulse train leaves a biphasic pulse train
+
+        Multiplying every amplitude by a finite factor is exactly what a
+        different ``amp`` does, and a negative factor is exactly what swapping
+        the two phases does, so the result is still described by the
+        parameters this class is made of. Anything else -- a DC offset, a
+        shift in time, a factor that is not finite -- is not, and falls
+        through to the ordinary waveform operation, which hands back a plain
+        stimulus (see :py:meth:`~pulse2percept.stimuli.Stimulus._derived`).
+        """
+        factor = _scale_factor(a, op, b, field)
+        if field != 'data' or factor is None:
+            return super()._apply_operator(a, op, b, field=field)
+        return self._scaled(factor)
 
     @classmethod
     def _rescale_params(cls, metadata, factor):
