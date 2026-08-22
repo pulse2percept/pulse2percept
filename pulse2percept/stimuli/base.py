@@ -50,6 +50,25 @@ def _index_of_name(electrodes, name):
     return list(electrodes).index(name)
 
 
+class _Owned(np.ndarray):
+    """An array the library allocated for one stimulus"""
+    __slots__ = ()
+
+
+def _owned(arr):
+    """Promise that arr is the library's alone"""
+    return arr.view(_Owned)
+
+
+def _freeze(arr):
+    """Make ``arr``, and every array it is a view of, read-only"""
+    level = arr
+    while isinstance(level, np.ndarray):
+        level.flags.writeable = False
+        level = level.base
+    return arr
+
+
 def _describe_unit(unit):
     """Name a unit the way an error message wants to read"""
     if unit.dimension.is_dimensionless:
@@ -243,7 +262,7 @@ class Stimulus(PrettyPrint):
     _default_unit = uA
     _default_time_unit = ms
 
-    #: False for a stimulus that is its own spatial description
+    #: Whether this stimulus provides a separate spatial-only view
     _has_spatial_view = False
 
     #: whether the canonical state is a set of stim params
@@ -847,18 +866,10 @@ class Stimulus(PrettyPrint):
         return True
 
     def _structured_sources(self):
-        """The stimulus describing each electrode, where one is still retained
+        """Return ``(electrode, source)`` pairs for retained structured sources.
 
-        Returns ``[(electrode_name, source), ...]`` in row order, or ``None``
-        when this stimulus is only its samples -- because it always was, or
-        because an operation rewrote them and whatever described them before
-        no longer does.
-
-        What a model reads to find that an electrode is driven by a pulse
-        train at 20 Hz, rather than taking a copy of that number out of the
-        metadata and hoping it kept up. Deliberately shallow: an entry driving
-        several electrodes has no one-source-per-electrode reading, and gets
-        ``None`` rather than a recursive one.
+        Returns ``None`` if the stimulus is waveform-only or cannot be mapped
+        one source per electrode.
         """
         if self._components is not None:
             if any(n_rows != 1 or not isinstance(src, Stimulus)
@@ -1318,6 +1329,8 @@ class Stimulus(PrettyPrint):
         """An immutable, C-contiguous array of dtype"""
         if arr is None:
             return None
+        if isinstance(arr, _Owned) and arr.dtype == dtype:
+            return _freeze(np.ascontiguousarray(arr))
         owned = np.array(arr, dtype=dtype, order='C', copy=True)
         owned.flags.writeable = False
         return owned

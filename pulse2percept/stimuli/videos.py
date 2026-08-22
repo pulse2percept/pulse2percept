@@ -13,7 +13,7 @@ from skimage.feature import canny
 from skimage import img_as_float32
 from imageio import get_reader as video_reader
 
-from .base import Stimulus
+from .base import Stimulus, _owned
 from ..units import dimensionless
 from .names import ElectrodeNames
 from ..utils import (center_image, shift_image, scale_image, trim_image,
@@ -95,6 +95,8 @@ class VideoStimulus(Stimulus):
             metadata = {}
         elif not isinstance(metadata, dict):
             metadata = {'user': metadata}
+        # The buffer the caller still holds, if any (see below):
+        borrowed = None
         if isinstance(source, str):
             # Filename provided, read the video:
             reader = video_reader(source, format=format)
@@ -119,6 +121,7 @@ class VideoStimulus(Stimulus):
             time = np.arange(vid.shape[-1]) * MS_PER_S / meta['fps']
         elif isinstance(source, VideoStimulus):
             vid = source.data.reshape(source.vid_shape)
+            borrowed = source.data
             metadata.update(source.metadata)
             if electrodes is None:
                 electrodes = source.electrodes
@@ -126,6 +129,7 @@ class VideoStimulus(Stimulus):
                 time = source.time
         elif isinstance(source, np.ndarray):
             vid = source
+            borrowed = source
             if time is None and 'fps' in metadata:
                 # Infer the time points from the video frame rate:
                 time = np.arange(vid.shape[-1]) * MS_PER_S / metadata['fps']
@@ -158,7 +162,9 @@ class VideoStimulus(Stimulus):
             # ('A1', 'C12', 'A1_R' for a color video). The last axis holds the
             # frames, which are the time component and not electrodes:
             electrodes = ElectrodeNames(self.vid_shape[:-1])
-        super().__init__(vid.reshape((-1, vid.shape[-1])),
+        if borrowed is not None and np.may_share_memory(vid, borrowed):
+            vid = vid.copy()
+        super().__init__(_owned(vid.reshape((-1, vid.shape[-1]))),
                                             time=time, electrodes=electrodes,
                                             metadata=metadata,
                                             compress=compress)
