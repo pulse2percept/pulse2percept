@@ -427,6 +427,14 @@ class Stimulus(PrettyPrint):
     #: The unit ``time`` is stored in.
     _default_time_unit = ms
 
+    #: Whether this class' canonical state is a set of stimulation parameters
+    #: rather than the waveform itself. Such a stimulus cannot survive a
+    #: change to its samples, because its parameters would go on describing a
+    #: waveform it no longer has: operations that return a new stimulus hand
+    #: back a plain one (see :py:meth:`_derived`), and the in-place ones that
+    #: would drop electrodes refuse.
+    _is_parametric = False
+
     def __init__(self, source, electrodes=None, time=None, metadata=None,
                  compress=False):
         self.metadata = self._wrap_metadata(metadata)
@@ -809,6 +817,34 @@ class Stimulus(PrettyPrint):
         stim.metadata = deepcopy(self.metadata)
         return stim
 
+    def _waveform_copy(self):
+        """This stimulus' waveform, as an ordinary ``Stimulus``
+
+        The escape hatch for an operation that rewrites the waveform of a
+        stimulus which is defined by something else. What comes back is
+        described by its samples and by nothing else, so it cannot claim an
+        amplitude or a duration it does not deliver.
+        """
+        return Stimulus(self.data, electrodes=self.electrodes,
+                        time=self.time,
+                        metadata=deepcopy(self.metadata))._inherit_units(self)
+
+    def _derived(self):
+        """The object a waveform-rewriting operation builds its result on
+
+        An ordinary stimulus *is* its waveform, so a transformation of that
+        waveform is still one of these and keeps the subclass: an
+        :py:class:`~pulse2percept.stimuli.ImageStimulus` scaled by two is
+        still an image. A stimulus whose canonical state is a set of
+        stimulation parameters is a different matter -- those parameters
+        describe the waveform it was built with, and rewriting the samples
+        leaves them describing nothing. Such a class declares itself with
+        ``_is_parametric`` and gets a plain stimulus instead.
+        """
+        if self._is_parametric:
+            return self._waveform_copy()
+        return self._shallow_copy()
+
     def __deepcopy__(self, memo):
         """A copy that shares the data container with the original
 
@@ -961,7 +997,7 @@ class Stimulus(PrettyPrint):
         if other.time[0] < 0:
             raise NotImplementedError("Appending a stimulus with a negative "
                                       "time axis is currently not supported.")
-        stim = self._shallow_copy()
+        stim = self._derived()
         # Last time point of `self` can be merged with first point of `other`
         # but only if they have the same amplitude(s):
         if isclose(other.time[0], 0, abs_tol=DT):
@@ -1005,6 +1041,16 @@ class Stimulus(PrettyPrint):
         # falsiness here, because 0 is a perfectly valid electrode index:
         if electrodes is None or np.size(electrodes) == 0:
             return
+        # Unlike the operators, an in-place method has no second object to
+        # hand back, so there is nowhere to put a stimulus that has lost the
+        # electrode its parameters describe:
+        if self._is_parametric:
+            raise NotImplementedError(
+                f"Cannot remove electrodes from a {type(self).__name__}, "
+                f"which is defined by the pulse it delivers rather than by "
+                f"its samples -- what was left would go on advertising that "
+                f"pulse. Take the waveform first: "
+                f"Stimulus(stim).remove(...).")
         if np.isscalar(electrodes) and electrodes == 'all':
             self._stim = {
                 'data': self.data[[]],
@@ -1114,7 +1160,7 @@ class Stimulus(PrettyPrint):
             # hstack allocates; the no-op path must copy explicitly
             data = data.copy()
             time = time.copy()
-        stim = self._shallow_copy()
+        stim = self._derived()
         stim._stim = {'data': data,
                       'electrodes': self.electrodes.copy(),
                       'time': time}
@@ -1495,7 +1541,7 @@ class Stimulus(PrettyPrint):
         # produces a new array for `field`; the other fields must be copied
         # explicitly, so that the returned stimulus shares no buffer with the
         # original (`_shallow_copy` does not duplicate the data container):
-        stim = self._shallow_copy()
+        stim = self._derived()
         time = stim.time
         if field == 'time':
             time = op(a, b)

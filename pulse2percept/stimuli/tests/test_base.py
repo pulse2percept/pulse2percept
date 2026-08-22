@@ -850,9 +850,14 @@ def test_Stimulus_shift():
     npt.assert_equal(shifted.time_unit, stim.time_unit)
     npt.assert_equal(shifted.metadata, stim.metadata)
     npt.assert_almost_equal(stim.time, [0, 1, 2])
-    # Including the type of a subclass:
+    # A pulse is defined by its parameters, so shifting one hands back a
+    # plain stimulus rather than a pulse whose `stim_dur` contradicts the
+    # time axis it now has (see test_pulses.py):
     pulse = BiphasicPulse(-20, 1)
-    npt.assert_equal(isinstance(pulse.shift(5), BiphasicPulse), True)
+    shifted = pulse.shift(5)
+    npt.assert_equal(type(shifted), Stimulus)
+    npt.assert_almost_equal(shifted.time, pulse.time + 5)
+    npt.assert_almost_equal(shifted.data, pulse.data)
 
 
 def test_Stimulus_pad():
@@ -867,7 +872,7 @@ def test_Stimulus_pad():
     npt.assert_almost_equal(padded.data[:, -1], 0)
     npt.assert_almost_equal(padded.time[1:-1], pulse.time + 3000)
     npt.assert_almost_equal(padded.data[:, 1:-1], pulse.data)
-    npt.assert_equal(isinstance(padded, BiphasicPulse), True)
+    npt.assert_equal(type(padded), Stimulus)
 
     # A stimulus that already starts at t=0 only gets trailing padding:
     stim = Stimulus([[1, 0]], time=[0, 2])

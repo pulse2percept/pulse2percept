@@ -96,6 +96,10 @@ class MonophasicPulse(Stimulus):
     >>> pulse = MonophasicPulse(-20, 1, delay_dur=2, stim_dur=10)
 
     """
+    #: Defined by the parameters above rather than by its samples
+    #: (see `Stimulus._is_parametric`):
+    _is_parametric = True
+
     __slots__ = ('_amp', '_phase_dur', '_delay_dur', '_stim_dur')
 
     def __init__(self, amp, phase_dur, delay_dur=0, stim_dur=None,
@@ -246,6 +250,10 @@ class BiphasicPulse(Stimulus):
     >>> pulse = BiphasicPulse(-20, 1, delay_dur=2, stim_dur=10)
 
     """
+    #: Defined by the parameters above rather than by its samples
+    #: (see `Stimulus._is_parametric`):
+    _is_parametric = True
+
     __slots__ = ('_amp', '_phase_dur', '_interphase_dur', '_delay_dur',
                  '_stim_dur', '_cathodic_first')
 
@@ -423,6 +431,10 @@ class AsymmetricBiphasicPulse(Stimulus):
     ...                                 delay_dur=2, stim_dur=15)
 
     """
+    #: Defined by the parameters above rather than by its samples
+    #: (see `Stimulus._is_parametric`):
+    _is_parametric = True
+
     __slots__ = ('_amp1', '_amp2', '_phase_dur1', '_phase_dur2',
                  '_interphase_dur', '_delay_dur', '_stim_dur',
                  '_cathodic_first')

@@ -473,3 +473,91 @@ def test_pulse_electrode_names():
                                                     electrode=e)):
         with pytest.raises(ValueError):
             build(['A1', 'B2'])
+
+
+@pytest.mark.parametrize('cls, build, params', PULSES)
+@pytest.mark.parametrize('label, transform', [
+    ('scale', lambda p: p * 2),
+    ('rscale', lambda p: 2 * p),
+    ('divide', lambda p: p / 2),
+    ('negate', lambda p: -p),
+    ('offset', lambda p: p + 1),
+    ('subtract', lambda p: p - 1),
+    ('rsubtract', lambda p: 1 - p),
+    ('shift', lambda p: p >> 5),
+    ('shift_method', lambda p: p.shift(5)),
+    ('pad', lambda p: p.pad(p.duration + 10)),
+    ('append', lambda p: p.append(p >> DT)),
+])
+def test_pulse_transformations_are_not_pulses(cls, build, params, label,
+                                              transform):
+    # A pulse's parameters describe the waveform it was built with. An
+    # operation that rewrites those samples would leave them describing
+    # nothing, so what comes back is an ordinary Stimulus. (Operations that
+    # *can* be expressed in the parameters may become structured later; until
+    # then, correctness beats structure.)
+    pulse = build()
+    out = transform(pulse)
+    npt.assert_equal(type(out), Stimulus)
+    npt.assert_equal(out._is_parametric, False)
+    # ...and it no longer answers questions only a pulse can answer:
+    for name in params:
+        npt.assert_equal(hasattr(out, name), False)
+    # The original is untouched:
+    for name, expected in params.items():
+        npt.assert_almost_equal(getattr(pulse, name), expected)
+    npt.assert_almost_equal(pulse.duration, pulse.time[-1])
+
+
+@pytest.mark.parametrize('cls, build, params', PULSES)
+def test_pulse_transformations_are_numerically_right(cls, build, params):
+    pulse = build()
+    npt.assert_almost_equal((pulse * 2).data, pulse.data * 2)
+    npt.assert_almost_equal((-pulse).data, -pulse.data)
+    npt.assert_almost_equal((pulse + 1).data, pulse.data + 1)
+    npt.assert_almost_equal((pulse / 2).data, pulse.data / 2)
+    shifted = pulse >> 5
+    npt.assert_almost_equal(shifted.time, pulse.time + 5)
+    npt.assert_almost_equal(shifted.data, pulse.data)
+    # Units survive the fall back to a plain stimulus:
+    npt.assert_equal((pulse * 2).unit, pulse.unit)
+    npt.assert_equal((pulse * 2).time_unit, pulse.time_unit)
+
+
+@pytest.mark.parametrize('cls, build, params', PULSES)
+def test_pulse_compress_keeps_its_parameters_true(cls, build, params):
+    # Compression only drops samples the waveform does not need, so a pulse
+    # survives it: every model's predict_percept compresses a copy of the
+    # stimulus it was handed, and a pulse assigned straight to an implant is
+    # what arrives there.
+    pulse = build()
+    peak = np.abs(pulse.data).max()
+    pulse.compress()
+    npt.assert_equal(pulse.is_compressed, True)
+    # Compression drops samples, but not the ones the parameters speak about:
+    # the pulse still ends where `stim_dur` says and still peaks where its
+    # amplitude says.
+    npt.assert_almost_equal(pulse.duration, pulse.time[-1])
+    npt.assert_almost_equal(np.abs(pulse.data).max(), peak)
+    for name, expected in params.items():
+        npt.assert_almost_equal(getattr(pulse, name), expected)
+
+
+@pytest.mark.parametrize('cls, build, params', PULSES)
+def test_pulse_remove_refuses_to_outdate_its_parameters(cls, build, params):
+    # Removing the electrode would leave a pulse advertising a pulse it no
+    # longer delivers, and an in-place method has no second object to hand
+    # back instead:
+    pulse = build()
+    with pytest.raises(NotImplementedError):
+        pulse.remove(pulse.electrodes[0])
+    with pytest.raises(NotImplementedError):
+        pulse.remove('all')
+    # Removing nothing is still a no-op, which ProsthesisSystem relies on:
+    for nothing in (None, [], (), np.array([])):
+        pulse.remove(nothing)
+    npt.assert_equal(pulse.shape[0], 1)
+    # And the documented way through is to take the waveform first:
+    plain = Stimulus(pulse)
+    plain.remove(plain.electrodes[0])
+    npt.assert_equal(plain.shape[0], 0)
