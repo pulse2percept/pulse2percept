@@ -123,7 +123,7 @@ or dictionaries:
 
 .. code-block:: python
 
-    stim = p2p.stimuli.Stimulus({
+    static = p2p.stimuli.Stimulus({
         'A1': 10 * uA,
         'A2': 20 * uA,
         'A3': 30 * uA,
@@ -149,6 +149,8 @@ Every Stimulus exposes the same basic pieces:
 Stimuli can also be indexed by electrode name and time:
 
 .. code-block:: python
+
+    stim = implant.stim
 
     stim['A5']
     stim['A5', 10 * ms]
@@ -212,7 +214,7 @@ the whole stimulus or the waveforms of the electrodes you name:
 
     stim.plot()                          # compact overview
     stim.plot(time=(0, 50 * ms))         # the same overview, zoomed in time
-    stim.plot(electrodes=['A1', 'A2'])   # inspect individual waveforms
+    stim.plot(electrodes=['A5', 'B5'])   # inspect individual waveforms
 
 The overview is an electrode-by-time heatmap: one row per electrode, color for
 current, zero in the middle of a diverging colormap so that cathodic and

@@ -429,7 +429,6 @@ For a custom array, you usually do not need a new implant class. An
     earray = ElectrodeGrid(
         shape=(10, 10),
         spacing=500,
-        r=100,
     )
     implant = ProsthesisSystem(earray=earray)
 
