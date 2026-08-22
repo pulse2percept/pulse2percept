@@ -6,7 +6,7 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from copy import deepcopy
+from copy import copy, deepcopy
 from collections import OrderedDict as ODict
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
@@ -1643,3 +1643,119 @@ def test_Stimulus_immutable_operations():
     # The operations themselves are unaffected:
     npt.assert_equal(compressed.shape, (1, 3))
     npt.assert_equal(list(removed.electrodes), ['B2'])
+
+
+class CountingLazy(Stimulus):
+    """A stimulus that counts how often it generates its waveform
+
+    Stands in for the parameter-backed stimuli that follow: it is defined by
+    ``n_time``, not by samples, and only ``_render`` ever builds any.
+    """
+    __slots__ = ('n_time', 'n_renders')
+
+    def __init__(self, n_time=4, electrodes=('A1', 'B2'), metadata=None):
+        self.n_time = n_time
+        self.n_renders = 0
+        self._defer(electrodes, metadata=metadata)
+
+    def _render(self):
+        self.n_renders += 1
+        n_el = len(self.electrodes)
+        data = np.arange(n_el * self.n_time,
+                         dtype=np.float32).reshape((n_el, self.n_time))
+        return {'data': data, 'electrodes': self.electrodes,
+                'time': np.arange(self.n_time, dtype=np.float64)}
+
+
+def test_Stimulus_lazy_construction_does_not_render():
+    stim = CountingLazy(metadata={'x': 1})
+    npt.assert_equal(stim.n_renders, 0)
+    # Everything a stimulus knows without sampling anything:
+    npt.assert_equal(list(stim.electrodes), ['A1', 'B2'])
+    npt.assert_equal(len(stim.electrodes), 2)
+    npt.assert_equal(stim.unit, uA)
+    npt.assert_equal(stim.time_unit, ms)
+    npt.assert_equal(stim.metadata['user'], {'x': 1})
+    npt.assert_equal(stim.is_compressed, False)
+    npt.assert_equal(stim.dt, DT)
+    npt.assert_equal(stim.n_renders, 0)
+
+
+def test_Stimulus_lazy_renders_once():
+    stim = CountingLazy()
+    npt.assert_almost_equal(stim.data, [[0, 1, 2, 3], [4, 5, 6, 7]])
+    npt.assert_equal(stim.n_renders, 1)
+    # The cache serves every later read, of either array:
+    for _ in range(3):
+        npt.assert_equal(stim.data.shape, (2, 4))
+        npt.assert_almost_equal(stim.time, [0, 1, 2, 3])
+        npt.assert_almost_equal(stim[0, 1.5], 1.5)
+        npt.assert_equal(stim.duration, 3)
+    npt.assert_equal(stim.n_renders, 1)
+    # Asking for `time` first renders just the same:
+    other = CountingLazy()
+    npt.assert_almost_equal(other.time, [0, 1, 2, 3])
+    npt.assert_equal(other.n_renders, 1)
+    npt.assert_almost_equal(other.data, stim.data)
+    npt.assert_equal(other.n_renders, 1)
+
+
+def test_Stimulus_lazy_state_is_immutable():
+    # A rendered waveform is installed through the same setter as any other,
+    # so it is owned, immutable and C-contiguous on the same terms:
+    stim = CountingLazy()
+    npt.assert_equal(stim.data.flags.writeable, False)
+    npt.assert_equal(stim.time.flags.writeable, False)
+    npt.assert_equal(stim.data.flags['C_CONTIGUOUS'], True)
+    npt.assert_equal(stim.data.dtype, np.float32)
+    npt.assert_equal(stim.time.dtype, np.float64)
+    with pytest.raises(ValueError):
+        stim.electrodes[0] = 'X'
+    # And it is validated on the same terms, too:
+    class BadShape(CountingLazy):
+        __slots__ = ()
+
+        def _render(self):
+            return {'data': np.ones((5, 2), dtype=np.float32),
+                    'electrodes': self.electrodes,
+                    'time': np.arange(2, dtype=np.float64)}
+    with pytest.raises(ValueError):
+        BadShape().data
+
+
+def test_Stimulus_lazy_electrodes_must_match_render():
+    # Naming the electrodes up front is what lets them be read without
+    # generating a waveform, so a render that disagrees with them would make
+    # the answer depend on when it was asked for:
+    class Renamer(CountingLazy):
+        __slots__ = ()
+
+        def _render(self):
+            state = super()._render()
+            return dict(state, electrodes=np.array(['C3', 'D4']))
+    stim = Renamer()
+    npt.assert_equal(list(stim.electrodes), ['A1', 'B2'])
+    with pytest.raises(ValueError):
+        stim.data
+
+
+def test_Stimulus_lazy_copy_does_not_render():
+    stim = CountingLazy()
+    for copied in (copy(stim), deepcopy(stim)):
+        npt.assert_equal(copied.n_renders, 0)
+        npt.assert_equal(stim.n_renders, 0)
+        npt.assert_equal(list(copied.electrodes), ['A1', 'B2'])
+        npt.assert_equal(copied.n_renders, 0)
+    # A copy taken after materialization shares the cached waveform, which is
+    # immutable and so has nothing to gain from being duplicated:
+    npt.assert_equal(stim.data.shape, (2, 4))
+    shared = deepcopy(stim)
+    npt.assert_equal(np.shares_memory(shared.data, stim.data), True)
+    npt.assert_equal(stim.n_renders, 1)
+
+
+def test_Stimulus_render_is_not_implemented_by_default():
+    # A plain `Stimulus` is its waveform and never renders, so the base
+    # implementation exists only to name what a subclass forgot:
+    with pytest.raises(NotImplementedError):
+        Stimulus._render(Stimulus(3))

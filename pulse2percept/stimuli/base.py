@@ -429,10 +429,7 @@ class Stimulus(PrettyPrint):
 
     def __init__(self, source, electrodes=None, time=None, metadata=None,
                  compress=False):
-        if isinstance(metadata, dict) and 'electrodes' in metadata.keys():
-            self.metadata = metadata
-        else:
-            self.metadata = {'electrodes': {}, 'user': metadata}
+        self.metadata = self._wrap_metadata(metadata)
         # Flag will be flipped in the compress method:
         self._is_compressed = False
         # Settle what the numbers below mean before reading any of them, then
@@ -443,6 +440,70 @@ class Stimulus(PrettyPrint):
         time = as_value(time, self._time_unit, 'time')
         # Extract the data and coordinates (electrodes, time) from the source:
         self._factory(source, electrodes, time, compress)
+
+    @staticmethod
+    def _wrap_metadata(metadata):
+        """File the caller's metadata under 'user', unless it is already ours
+
+        A dict that already has an 'electrodes' key is a metadata container
+        this class built (when one stimulus is rebuilt from another), and is
+        taken as it is.
+        """
+        if isinstance(metadata, dict) and 'electrodes' in metadata.keys():
+            return metadata
+        return {'electrodes': {}, 'user': metadata}
+
+    def _defer(self, electrodes, unit=None, time_unit=None, metadata=None):
+        """Set this stimulus up to generate its waveform later
+
+        The constructor of a subclass whose canonical state is a set of
+        stimulation parameters rather than a set of samples calls this in
+        place of ``Stimulus.__init__``. It records everything such a stimulus
+        knows without sampling anything -- which electrodes it drives, what
+        its numbers mean, and its metadata -- and leaves the waveform to
+        :py:meth:`_render`, which runs the first time one is asked for.
+
+        Parameters
+        ----------
+        electrodes : array-like or ElectrodeNames
+            The electrodes this stimulus drives, in the order ``_render``
+            will return rows for.
+        unit, time_unit : :py:class:`~pulse2percept.units.Unit`, optional
+            What the rendered numbers will mean. Default to the class's own.
+        metadata : dict, optional
+        """
+        self.metadata = self._wrap_metadata(metadata)
+        self._is_compressed = False
+        self._unit = self._default_unit if unit is None else unit
+        self._time_unit = (self._default_time_unit if time_unit is None
+                           else time_unit)
+        if not isinstance(electrodes, ElectrodeNames):
+            electrodes = np.array([electrodes]).ravel()
+        # `data=None` is what says the waveform has not been generated yet.
+        # No state that has been through `_check_stim` can look like this:
+        # the check reads `data.shape` before anything else.
+        self.__stim = {'data': None, 'time': None,
+                       'electrodes': self._own_names(electrodes)}
+
+    def _render(self):
+        """Generate the waveform this stimulus describes
+
+        The seam a parameter-backed stimulus is built on. An ordinary
+        ``Stimulus`` *is* its waveform and builds it in the constructor, so it
+        never gets here. A subclass that called :py:meth:`_defer` instead
+        overrides this and returns the state to install::
+
+            {'data': ..., 'electrodes': ..., 'time': ...}
+
+        It runs at most once per stimulus, and what it returns goes through
+        the ``_stim`` setter like any other state -- so the waveform it built
+        is owned, immutable and validated on exactly the same terms as one
+        that was passed in.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} has no stimulus data, and does not know "
+            f"how to generate any. A subclass that defers its waveform must "
+            f"override '_render'.")
 
     def _resolve_units(self, source):
         """Determine the units this stimulus stores its data and time in
@@ -1617,7 +1678,24 @@ class Stimulus(PrettyPrint):
 
     @property
     def _stim(self):
-        """A dictionary containing all the stimulus data"""
+        """A dictionary containing all the stimulus data
+
+        Reading this is what materializes the waveform of a stimulus that
+        deferred building one (see :py:meth:`_defer` and :py:meth:`_render`).
+        Everything that needs samples goes through here, so that is the one
+        place the waveform can come into existence; ``electrodes`` is the
+        exception, and reads the container directly.
+        """
+        if self.__stim['data'] is None:
+            promised = self.__stim['electrodes']
+            # The setter installs the rendered state, so `_render` runs once:
+            self._stim = self._render()
+            if not _names_equal(promised, self.__stim['electrodes']):
+                raise ValueError(
+                    f"{type(self).__name__}._render() returned rows for "
+                    f"different electrodes than the stimulus said it drives. "
+                    f"Naming them is what lets 'electrodes' be read without "
+                    f"generating a waveform, so the two cannot disagree.")
         return self.__stim
 
     @_stim.setter
@@ -1770,7 +1848,10 @@ class Stimulus(PrettyPrint):
         A list of electrode names, corresponding to the rows in the data
         container.
         """
-        return self._stim['electrodes']
+        # Reads the container directly rather than through `_stim`: which
+        # electrodes a stimulus drives is known before its waveform is, and
+        # asking for them must not be what generates one.
+        return self.__stim['electrodes']
 
     @property
     def time(self):
