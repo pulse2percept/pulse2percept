@@ -755,11 +755,16 @@ class Stimulus(PrettyPrint):
         into, and something to lose: NumPy deep-copies a read-only array into
         a *writable* one, which would hand back a stimulus whose data can be
         rewritten after all. What genuinely has to be independent is
-        ``metadata``, the one part of a stimulus that stays mutable, and
-        ``_shallow_copy`` is exactly that copy.
+        ``metadata``, the one part of a stimulus that stays mutable.
+
+        The new object goes into ``memo`` before its metadata is copied.
+        Metadata is arbitrary user data and may refer back to the stimulus it
+        describes; registering first is what makes such a cycle copy as one
+        object graph rather than recurse.
         """
-        stim = self._shallow_copy()
+        stim = copy(self)
         memo[id(self)] = stim
+        stim.metadata = deepcopy(self.metadata, memo)
         return stim
 
     @classmethod
@@ -1578,9 +1583,11 @@ class Stimulus(PrettyPrint):
         stimulus long after it was built. So the stimulus takes a copy, and
         that copy is the only writable reference there ever was to it.
 
-        ``ascontiguousarray`` already returns a private array whenever it has
-        to convert one, so only the case where it hands its argument straight
-        back needs a copy of its own.
+        Copy unconditionally rather than only where a conversion is needed:
+        "returned a different object" is not the same claim as "shares no
+        memory with the input", and it is the second one this has to make.
+        Asking for a view of a subclass, for one, hands back a new ndarray
+        over the very same buffer.
 
         C-contiguity is not incidental: every Cython kernel in the library
         takes the data as ``float32[:, ::1]``, and not everything that builds
@@ -1589,9 +1596,7 @@ class Stimulus(PrettyPrint):
         """
         if arr is None:
             return None
-        owned = np.ascontiguousarray(arr, dtype=dtype)
-        if owned is arr:
-            owned = owned.copy()
+        owned = np.array(arr, dtype=dtype, order='C', copy=True)
         owned.flags.writeable = False
         return owned
 

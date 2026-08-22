@@ -1588,6 +1588,41 @@ def test_Stimulus_owns_its_arrays():
     npt.assert_equal(np.shares_memory(stim.data, copied.data), False)
     npt.assert_equal(np.shares_memory(stim.time, copied.time), False)
 
+    # A contiguous view of a larger buffer needs no dtype or layout
+    # conversion, and an ndarray subclass is handed back as a *different*
+    # ndarray over the very same memory. Neither is a private array, so
+    # neither may be stored as it came:
+    class Tagged(np.ndarray):
+        """A minimal ndarray subclass; only its type matters here"""
+
+    big = np.arange(12, dtype=np.float32).reshape((4, 3))
+    for source in (big[:2], big[:2].view(Tagged)):
+        stim = Stimulus(source, time=[0, 1, 2])
+        npt.assert_equal(np.shares_memory(big, stim.data), False)
+        npt.assert_equal(big.flags.writeable, True)
+        # ...and what comes out is an ordinary array, whatever went in:
+        npt.assert_equal(type(stim.data), np.ndarray)
+
+
+def test_Stimulus_deepcopy():
+    # Duplicating arrays nobody can write into buys nothing, and NumPy would
+    # deep-copy a read-only array into a writable one -- so the copy shares
+    # the data container and only `metadata` is made independent:
+    stim = BiphasicPulseTrain(20, 20, 0.45, stim_dur=100)
+    copied = deepcopy(stim)
+    npt.assert_equal(copied is stim, False)
+    npt.assert_equal(np.shares_memory(copied.data, stim.data), True)
+    npt.assert_equal(copied.metadata is stim.metadata, False)
+    copied.metadata['user'] = 'changed'
+    npt.assert_equal(stim.metadata['user'], None)
+    npt.assert_equal(copied.freq, stim.freq)
+    npt.assert_equal(type(copied), type(stim))
+    # Metadata is arbitrary user data and may point back at the stimulus it
+    # describes. The copy has to resolve that as one object graph:
+    stim.metadata['self'] = stim
+    copied = deepcopy(stim)
+    npt.assert_equal(copied.metadata['self'] is copied, True)
+
 
 def test_Stimulus_immutable_operations():
     # Everything that returns or rebuilds a stimulus still works, and hands
