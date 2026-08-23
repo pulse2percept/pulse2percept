@@ -10,6 +10,22 @@ from skimage.measure import moments
 from skimage.transform import warp, SimilarityTransform
 
 
+def _as_writable(img):
+    """A buffer scikit-image's warping kernels will accept
+
+    ``skimage.transform.warp`` and ``rotate`` pass the image straight into a
+    Cython kernel that declares a *writable* memoryview, so they reject a
+    read-only array outright even though neither of them writes into it. The
+    data of a :py:class:`~pulse2percept.stimuli.Stimulus` is read-only, so
+    every call into those two has to go through here.
+
+    Keep this at the scikit-image boundary. Handing out writable stimulus
+    data anywhere else would give up the guarantee that a stimulus cannot
+    change once it has been built.
+    """
+    return img if img.flags.writeable else np.array(img)
+
+
 def shift_image(img, shift_cols, shift_rows):
     """Shift the image foreground
 
@@ -41,7 +57,7 @@ def shift_image(img, shift_cols, shift_rows):
         raise ValueError(f"Only 2D and 3D images are allowed, not "
                          f"{img.ndim}D.")
     tf = SimilarityTransform(translation=[shift_cols, shift_rows])
-    img_warped = warp(img, tf.inverse)
+    img_warped = warp(_as_writable(img), tf.inverse)
     # Warp automatically converts to double, so we need to convert the image
     # back to its original format:
     if img.dtype == bool:
@@ -135,7 +151,7 @@ def scale_image(img, scaling_factor):
     tf_shift_inv = SimilarityTransform(translation=center_mass)
     # Combine all three transforms:
     tf = tf_shift + tf_scale + tf_shift_inv
-    img_warped = warp(img, tf.inverse)
+    img_warped = warp(_as_writable(img), tf.inverse)
     # Warp automatically converts to double, so we need to convert the image
     # back to its original format:
     if img.dtype == bool:

@@ -123,7 +123,7 @@ or dictionaries:
 
 .. code-block:: python
 
-    stim = p2p.stimuli.Stimulus({
+    static = p2p.stimuli.Stimulus({
         'A1': 10 * uA,
         'A2': 20 * uA,
         'A3': 30 * uA,
@@ -150,6 +150,8 @@ Stimuli can also be indexed by electrode name and time:
 
 .. code-block:: python
 
+    stim = implant.stim
+
     stim['A5']
     stim['A5', 10 * ms]
 
@@ -161,6 +163,47 @@ The time axis does not need to be uniformly sampled. Pulse classes store the
 important transition points rather than a dense sample at every simulation
 step, which keeps long pulse trains compact.
 
+Read-only, and sampled when asked
+---------------------------------
+
+.. versionchanged:: 0.10.0
+
+A Stimulus owns its scientific state. Its ``data``, ``time`` and
+``electrodes`` arrays are read-only, so a stimulus you hand to an implant or a
+model is the one you get back.
+
+For an arbitrary stimulus, that sampled waveform *is* the stimulus. Pulses,
+pulse trains and encoded images and videos are different: they retain the
+parameters or the schedule that define them, and only generate their waveform
+when samples are asked for.
+
+.. code-block:: python
+
+    pt = p2p.stimuli.BiphasicPulseTrain(20 * Hz, 50 * uA, 0.45 * ms)
+
+    pt.freq, pt.amp, pt.phase_dur   # free -- the parameters are the stimulus
+    pt.data                         # generates the waveform, then caches it
+
+So pulse parameters are first-class and read-only, and reading them never
+costs a waveform. ``stim.data`` remains the public sampled waveform, and
+reading it may be what generates it.
+
+Most operations return a **new** stimulus rather than modifying one. Where
+the result is still describable in the same terms, it keeps that form:
+
+.. code-block:: python
+
+    pt * 2          # still a BiphasicPulseTrain, at twice the amplitude
+    pt + 5          # a plain Stimulus: a DC offset is not a pulse train
+
+An operation that cannot be represented truthfully -- a DC offset, a shift in
+time, appending a second train -- falls back to an ordinary waveform-backed
+Stimulus rather than reporting parameters that no longer describe it.
+
+:py:meth:`~pulse2percept.stimuli.Stimulus.compress` and
+:py:meth:`~pulse2percept.stimuli.Stimulus.remove` are the exceptions. Both
+predate this and still replace the stimulus' own state in place.
+
 Looking at a stimulus
 ---------------------
 
@@ -171,7 +214,7 @@ the whole stimulus or the waveforms of the electrodes you name:
 
     stim.plot()                          # compact overview
     stim.plot(time=(0, 50 * ms))         # the same overview, zoomed in time
-    stim.plot(electrodes=['A1', 'A2'])   # inspect individual waveforms
+    stim.plot(electrodes=['A5', 'B5'])   # inspect individual waveforms
 
 The overview is an electrode-by-time heatmap: one row per electrode, color for
 current, zero in the middle of a diverging colormap so that cathodic and
@@ -202,18 +245,17 @@ For example:
     source = p2p.stimuli.BostonTrain()
 
 That object is a visual source. It should be passed through an
-:py:class:`~pulse2percept.stimuli.Encoder` before it is used as electrical
+:py:class:`~pulse2percept.stimuli.StimulusEncoder` before it is used as electrical
 stimulation:
 
 .. code-block:: python
 
-    encoder = p2p.stimuli.AmplitudeEncoder(
-        implant,
+    implant.encoder = p2p.stimuli.AmplitudeEncoder(
         amp_range=(0, 50 * uA),
         freq=20 * Hz,
     )
 
-    implant.stim = encoder.encode(source)
+    implant.stim = source
 
 This distinction matters. A gray level of 0.5 is not 0.5 uA; the encoder is
 what defines how image intensity maps onto stimulation. See

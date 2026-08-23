@@ -6,11 +6,16 @@ import warnings
 import matplotlib.pyplot as plt
 
 from pulse2percept.models.cortex import DynaphosModel
-from pulse2percept.implants import ProsthesisSystem, ElectrodeArray, DiskElectrode
+from pulse2percept.models.cortex.dynaphos import _pulse_train_clocks
+from pulse2percept.implants import (DiskElectrode, ElectrodeArray,
+                                    EnsembleImplant, ProsthesisSystem)
 from pulse2percept.implants.cortex import Cortivis, Orion
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.percepts import Percept
-from pulse2percept.stimuli import BiphasicPulseTrain
+from pulse2percept.stimuli import (AmplitudeEncoder,
+                                   AsymmetricBiphasicPulseTrain,
+                                   BiphasicPulseTrain, ImageStimulus,
+                                   Stimulus)
 from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
                                  ms, s, uA, um)
 from pulse2percept.utils.testing import assert_warns_msg
@@ -65,20 +70,26 @@ def test_temporal_predict():
         implant.stim = np.ones((96, 100))
         model.predict_percept(implant, t_percept=[0.2, 0.2])
 
-    # Brightness scales with amplitude:
+    # Brightness scales with amplitude. The train is built on the model's own
+    # clock, so that the duty cycle driving the activation is the one that
+    # produced the waveform. It used not to be: a train assigned on its own
+    # (rather than as {electrode: train}) carried no per-electrode metadata,
+    # so this model silently simulated it at `self.freq`/`self.p_dur` however
+    # it was actually built. It now reads the train itself.
     model.dt = 20
     sdur = 1000.0  # stimulus duration (ms)
-    pdur = 0.45  # (ms)
+    pdur = model.p_dur  # (ms)
     t_percept = np.arange(0, sdur, 20)
     implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
     bright_amp = []
     for amp in np.linspace(20, 70, 5):
-        implant.stim = BiphasicPulseTrain(20, amp, pdur, interphase_dur=pdur,
-                                          stim_dur=sdur)
+        implant.stim = BiphasicPulseTrain(model.freq, amp, pdur,
+                                          interphase_dur=pdur, stim_dur=sdur)
         percept = model.predict_percept(implant, t_percept=t_percept)
         bright_amp.append(percept.data.max())
-    bright_amp_ref = np.array([0.0, 0.0, 0.0, 0.66, 0.841])
+    bright_amp_ref = np.array([0.0, 0.0, 0.4636, 0.7247, 0.8891])
     npt.assert_almost_equal(bright_amp, bright_amp_ref, decimal=3)
+    npt.assert_equal(np.all(np.diff(bright_amp) >= 0), True)
 
     # Test that default models give expected values
     implant = Orion(x=15000, stim={'55': BiphasicPulseTrain(freq=300, amp=100, phase_dur=0.17)})
@@ -217,3 +228,162 @@ def test_DynaphosModel_deprecated_xystep():
         model = DynaphosModel(step=1)
         model.step = 2
         npt.assert_almost_equal(model.step, 2)
+
+
+def test_dynaphos_reads_the_pulse_train_not_its_metadata():
+    # The same train has to predict the same percept however it is assigned,
+    # and whatever its metadata says. Both used to be false: a bare train
+    # carried no per-electrode metadata and was simulated on the model's
+    # default clock instead of its own.
+    model = DynaphosModel(step=0.5, xrange=(-2, 2), yrange=(-2, 2)).build()
+    model.dt = 20
+    t_percept = np.arange(0, 200, 20)
+
+    def predict(stim):
+        implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
+        implant.stim = stim
+        return model.predict_percept(implant, t_percept=t_percept).data
+
+    def train():
+        return BiphasicPulseTrain(300, 100, 0.17, interphase_dur=0.17,
+                                  stim_dur=200)
+    bare = predict(train())
+    npt.assert_array_equal(bare, predict({0: train()}))
+    npt.assert_equal(np.any(bare), True)
+
+    # Corrupting the compatibility metadata changes nothing:
+    corrupt = train()
+    corrupt.metadata.update(freq=1, amp=0, phase_dur=99)
+    npt.assert_array_equal(bare, predict(corrupt))
+    wiped = train()
+    wiped.metadata.clear()
+    npt.assert_array_equal(bare, predict(wiped))
+
+
+def test_dynaphos_uses_its_defaults_for_an_arbitrary_waveform():
+    # No pulse train behind the samples, so there is no clock to read and the
+    # model simulates on its own -- which is what it has always done:
+    model = DynaphosModel(step=0.5, xrange=(-2, 2), yrange=(-2, 2)).build()
+    model.dt = 20
+    implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
+    implant.stim = Stimulus([[0, 100, 100, 0]], time=[0, 1, 199, 200])
+    percept = model.predict_percept(implant, t_percept=np.arange(0, 200, 20))
+    npt.assert_equal(np.any(percept.data), True)
+    # A train whose own clock happens to be the model's gives the same answer
+    # as the defaults do, which is what says the defaults were used:
+    model.freq, model.p_dur = 111, 0.29
+    other = model.predict_percept(implant,
+                                  t_percept=np.arange(0, 200, 20)).data
+    npt.assert_equal(np.allclose(percept.data, other), False)
+
+
+def test_dynaphos_reads_the_clock_before_compression():
+    # `compress` installs a new waveform, which is what says the trains behind
+    # it no longer describe it. The parameters have to be taken first -- and
+    # compression drops the electrodes driven at zero, so what is left has to
+    # still line up with the right train.
+    model = DynaphosModel(step=0.5, xrange=(-2, 2), yrange=(-2, 2)).build()
+    model.dt = 20
+    implant = ProsthesisSystem(ElectrodeArray([
+        DiskElectrode(0, 0, 0, 260), DiskElectrode(1000, 0, 0, 260)]))
+    implant.stim = {0: BiphasicPulseTrain(300, 0, 0.17, stim_dur=200),
+                    1: BiphasicPulseTrain(300, 100, 0.17, stim_dur=200)}
+    both = model.predict_percept(implant, t_percept=np.arange(0, 200, 20))
+    # Only the second electrode survives compression, and it is the second
+    # train's clock that has to reach the simulation:
+    implant.stim = {1: BiphasicPulseTrain(300, 100, 0.17, stim_dur=200)}
+    npt.assert_allclose(both.data,
+                        model.predict_percept(
+                            implant, t_percept=np.arange(0, 200, 20)).data)
+
+
+def _ensemble_of_two_clocks():
+    """Two implants driven at different frequencies, merged into one
+
+    `merge_stimuli` interpolates its members into a single raw array, so the
+    trains themselves do not survive -- only the record of them that this
+    model's legacy fallback reads.
+    """
+    fast = Orion(stim={e: BiphasicPulseTrain(50, 300, 0.45, stim_dur=100)
+                       for e in Orion().electrode_names})
+    slow = Orion(x=-35000,
+                 stim={e: BiphasicPulseTrain(20, 300, 0.85, stim_dur=100)
+                       for e in Orion().electrode_names})
+    return EnsembleImplant([fast, slow])
+
+
+def test_dynaphos_recovers_ensemble_clocks():
+    # An ensemble keeps no pulse trains, so without the compatibility path
+    # every member would silently be simulated at the model's own default
+    # clock instead of the one it was built with.
+    ensemble = _ensemble_of_two_clocks()
+    npt.assert_equal(ensemble.stim._structured_sources(), None)
+    clocks = _pulse_train_clocks(ensemble.stim)
+    npt.assert_equal(len(clocks), len(ensemble.stim.electrodes))
+    npt.assert_equal(sorted(set(clocks.values())), [(20, 0.85), (50, 0.45)])
+    # ...and the members keep their own, rather than sharing one:
+    npt.assert_equal(clocks['0-96'], (50, 0.45))
+    npt.assert_equal(clocks['1-96'], (20, 0.85))
+
+
+def test_dynaphos_ensemble_prediction_uses_those_clocks():
+    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), step=1).build()
+    ensemble = _ensemble_of_two_clocks()
+    with_clocks = model.predict_percept(ensemble).data
+    npt.assert_equal(np.any(with_clocks), True)
+    # Take the record away and the model is back on its own default clock.
+    # That the answer moves is what says the recovered clocks reached the
+    # simulation rather than merely being collected:
+    ensemble.stim.metadata['electrodes'].clear()
+    npt.assert_equal(_pulse_train_clocks(ensemble.stim), None)
+    npt.assert_equal(np.allclose(with_clocks,
+                                 model.predict_percept(ensemble).data), False)
+
+
+@pytest.mark.parametrize('build_stim', [
+    # No record of a pulse train at all:
+    lambda: Stimulus([[0, 100, 100, 0]], time=[0, 1, 99, 100]),
+    # A record that says the source was something else:
+    lambda: Stimulus([[0, 100, 100, 0]], time=[0, 1, 99, 100],
+                     metadata={'electrodes': {'0': {'type': Stimulus,
+                                                    'metadata': {}}},
+                               'user': None}),
+    # User metadata that merely happens to have the right keys:
+    lambda: Stimulus([[0, 100, 100, 0]], time=[0, 1, 99, 100],
+                     metadata={'electrodes': {'0': {'type': dict,
+                                                    'metadata': {
+                                                        'freq': 1,
+                                                        'phase_dur': 9}}},
+                               'user': None}),
+])
+def test_dynaphos_legacy_clocks_are_strict(build_stim):
+    # The fallback exists for containers that really did hold pulse trains.
+    # Anything else leaves the model on its own clock:
+    npt.assert_equal(_pulse_train_clocks(build_stim()), None)
+
+
+def test_dynaphos_legacy_clocks_are_not_read_when_structure_says_otherwise():
+    # A DC offset leaves no train behind, and drops the parameters with it --
+    # the fallback must not resurrect them from a leftover record:
+    stim = Stimulus({'0': BiphasicPulseTrain(20, 100, 0.45, stim_dur=100)})
+    npt.assert_equal(_pulse_train_clocks(stim + 5), None)
+    # A stimulus made of something other than biphasic trains stays on the
+    # defaults too, rather than falling through to whatever was recorded:
+    asym = Stimulus({'0': AsymmetricBiphasicPulseTrain(20, 100, 50, 0.45, 0.9,
+                                                       stim_dur=100)})
+    npt.assert_equal(_pulse_train_clocks(asym), None)
+
+
+def test_dynaphos_uses_its_defaults_for_an_encoded_stimulus():
+    # An encoder's schedule can change frequency from frame to frame, so there
+    # is no per-electrode clock to take from it. The model stays on its own,
+    # and does not fall through to whatever the metadata happens to hold:
+    implant = Cortivis(x=1000)
+    encoded = AmplitudeEncoder().encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)), implant=implant)
+    npt.assert_equal(_pulse_train_clocks(encoded), None)
+    # A single-electrode schedule is a structured source, and is refused on
+    # the same grounds rather than read as a pulse train:
+    solo = AmplitudeEncoder().encode(ImageStimulus(np.array([[0.7]])))
+    npt.assert_equal(len(solo._structured_sources()), 1)
+    npt.assert_equal(_pulse_train_clocks(solo), None)

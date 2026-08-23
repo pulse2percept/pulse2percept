@@ -10,7 +10,7 @@ cnp.import_array()
 ctypedef Py_ssize_t index_t
 
 
-cpdef bool[::1] fast_compress_space(float32[:, ::1] data):
+cpdef bool[::1] fast_compress_space(const float32[:, ::1] data):
     """Compress a stimulus in space"""
     # In space, we only keep electrodes with nonzero activation values.
     # Note that `c_isclose(x, 0)` is an exact test, not a tolerant one: its
@@ -33,7 +33,7 @@ cpdef bool[::1] fast_compress_space(float32[:, ::1] data):
 
     return np.asarray(idx_space)
 
-cpdef bool[::1] fast_compress_time(float32[:, ::1] data):
+cpdef bool[::1] fast_compress_time(const float32[:, ::1] data):
     """Compress a stimulus in time"""
     # In time, we can't just remove empty columns. We need to walk
     # through each column and save all the "state transitions" along
