@@ -76,7 +76,6 @@ API changes:
   including multi-electrode stimulus heatmaps and ``vmin``/``vmax`` controls
   for percept playback and saving.
 
-
 Bug fixes:
 
 * Stimulus timing, metadata propagation, and pulse-train handling are more

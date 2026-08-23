@@ -14,12 +14,65 @@ from skimage import img_as_float32
 from imageio import get_reader as video_reader
 
 from .base import Stimulus, _adoptable
-from ..units import dimensionless
+from ..units import as_value, dimensionless, ms
 from .names import ElectrodeNames
 from ..utils import (center_image, shift_image, scale_image, trim_image,
                      frame_interval, HTMLAnimation)
 from ..utils.images import _as_writable
 from ..utils.constants import MS_PER_S
+
+
+#: Anything this close to a frame boundary is treated as being on it
+_FRAME_TOL = 1e-6
+
+
+def _read_video(source, format, start_time, stop_time):
+    """Decode the frames of a video file that start in [start, stop) ms"""
+    start_time = as_value(start_time, ms, 'start_time')
+    stop_time = as_value(stop_time, ms, 'stop_time')
+    clipped = start_time is not None or stop_time is not None
+    for name, t in (('start_time', start_time), ('stop_time', stop_time)):
+        if t is not None and not np.isfinite(t):
+            raise ValueError(f'"{name}" must be a finite time in ms, not {t}.')
+    if start_time is not None and start_time < 0:
+        raise ValueError(f'"start_time" cannot be negative, but is '
+                         f'{start_time} ms.')
+    if (start_time is not None and stop_time is not None and
+            stop_time <= start_time):
+        raise ValueError(f'"stop_time" ({stop_time} ms) must be greater than '
+                         f'"start_time" ({start_time} ms).')
+    with video_reader(source, format=format) as reader:
+        meta = reader.get_meta_data()
+        fps = meta.get('fps') if meta is not None else None
+        if clipped:
+            if not fps:
+                raise ValueError(f'"{source}" does not report a frame rate, '
+                                 f'so "start_time"/"stop_time" cannot be '
+                                 f'mapped onto frames.')
+            first = 0 if start_time is None else _frame_index(start_time, fps)
+            last = None if stop_time is None else _frame_index(stop_time, fps)
+        else:
+            first, last = 0, None
+        if last is not None and last <= first:
+            raise ValueError(f'No video frame starts in [{start_time}, '
+                             f'{stop_time}) ms.')
+        if first:
+            reader.set_image_index(first)
+        frames = []
+        while last is None or first + len(frames) < last:
+            try:
+                frames.append(reader.get_next_data())
+            except (IndexError, StopIteration, EOFError):
+                break  # End of file
+    if clipped and not frames:
+        raise ValueError(f'No video frame starts in [{start_time}, '
+                         f'{stop_time}) ms.')
+    return np.array(frames), meta
+
+
+def _frame_index(t, fps):
+    """Index of the first frame that starts at or after ``t`` ms"""
+    return int(np.ceil(t * fps / MS_PER_S - _FRAME_TOL))
 
 
 class VideoStimulus(Stimulus):
@@ -82,6 +135,19 @@ class VideoStimulus(Stimulus):
         * Remove electrodes with all-zero activation.
         * Retain only the time points at which the stimulus changes.
 
+    start_time, stop_time : float or Quantity, optional, default: None
+        Load only the frames that start in the half-open interval
+        ``[start_time, stop_time)`` of the source video, in milliseconds.
+        Time-based clipping requires the video reader to report a frame rate.
+
+        .. note::
+           The clip starts at ``time[0] == 0`` no matter where it was cut
+           from. To shorten a video that is already in memory, and keep its
+           original time stamps, use
+           :py:meth:`~pulse2percept.stimuli.VideoStimulus.crop` instead.
+
+        .. versionadded:: 0.10.0
+
     """
     __slots__ = ('vid_shape', '_next_frame')
 
@@ -90,7 +156,8 @@ class VideoStimulus(Stimulus):
     _default_unit = dimensionless
 
     def __init__(self, source, format=None, resize=None, as_gray=False,
-                 electrodes=None, time=None, metadata=None, compress=False):
+                 electrodes=None, time=None, metadata=None, compress=False,
+                 start_time=None, stop_time=None):
         if metadata is None:
             metadata = {}
         elif not isinstance(metadata, dict):
@@ -98,26 +165,18 @@ class VideoStimulus(Stimulus):
         # The buffer the caller still holds, if any (see below):
         borrowed = None
         if isinstance(source, str):
-            # Filename provided, read the video:
-            reader = video_reader(source, format=format)
-            vid = np.array([frame for frame in reader])
-            # Move frame index to the last dimension. Take the copy here,
-            # while the frames are still 8-bit: a transposed view stays
-            # non-contiguous through the conversion to float below, and the
-            # Stimulus constructor would then have to make the same copy at
-            # four times the size.
+            vid, meta = _read_video(source, format, start_time, stop_time)
+            # Move frame index to the last dimension:
             if vid.ndim == 4:
                 vid = np.ascontiguousarray(vid.transpose((1, 2, 3, 0)))
             elif vid.ndim == 3:
                 vid = np.ascontiguousarray(vid.transpose((1, 2, 0)))
             # Combine video metadata with user-specified metadata:
-            meta = reader.get_meta_data()
             if meta is not None:
                 metadata.update(meta)
             metadata['source'] = source
             metadata['source_shape'] = vid.shape
-            # Infer the time points from the video frame rate. `fps` counts
-            # frames per second and a stimulus counts milliseconds:
+            # Infer the time points from the video frame rate:
             time = np.arange(vid.shape[-1]) * MS_PER_S / meta['fps']
         elif isinstance(source, VideoStimulus):
             vid = source.data.reshape(source.vid_shape)
@@ -136,6 +195,11 @@ class VideoStimulus(Stimulus):
         else:
             raise TypeError(f"Source must be a filename, a 3D NumPy array or "
                             f"another VideoStimulus, not {type(source)}.")
+        if not isinstance(source, str) and (start_time is not None or
+                                            stop_time is not None):
+            raise ValueError('"start_time"/"stop_time" only apply to a video '
+                             'read from a file. Use crop(idx_time=...) to '
+                             'shorten an array or another VideoStimulus.')
         if vid.ndim < 3 or vid.ndim > 4:
             raise ValueError(f"Videos must have 3 or 4 dimensions, not "
                              f"{vid.ndim}.")

@@ -308,6 +308,18 @@ def test_ProsthesisSystem_reshape_stim_frames_independent():
     npt.assert_equal(np.all(sampled.data[:, 2] == 0), True)
 
 
+def test_ProsthesisSystem_rgb_video_stim():
+    """An RGB video can be assigned to an implant directly (Issue #802)"""
+    n_frames = 4
+    vid = VideoStimulus(np.random.default_rng(0).random((6, 10, 3, n_frames)),
+                        metadata={'fps': 20})
+    implant = ArgusII(encoder=AmplitudeEncoder(amp_range=(0, 20)))
+    implant.stim = vid
+    npt.assert_equal(len(implant.stim.electrodes), implant.n_electrodes)
+    npt.assert_equal(implant.stim._spatial_view().shape,
+                     (implant.n_electrodes, n_frames))
+
+
 def test_implant_geometry_units():
     """Every implant places itself the same way, however its x/y/z is spelled
 

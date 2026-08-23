@@ -1,6 +1,8 @@
 from pulse2percept.stimuli import (AmplitudeEncoder, VideoStimulus,
                                    BostonTrain, GirlPool)
-from pulse2percept.units import DimensionMismatchError, Hz, kHz, ms, uA
+from pulse2percept.stimuli.videos import _frame_index
+from pulse2percept.units import (DimensionMismatchError, Hz, kHz, ms, s,
+                                 uA)
 from skimage.color import rgb2gray
 from skimage.io import imsave
 from skimage.transform import resize as vid_resize
@@ -115,6 +117,145 @@ def test_VideoStimulus_resize_kwargs():
     # An unknown keyword argument is scikit-image's to reject, not ours:
     with pytest.raises(TypeError):
         stim.resize((4, 4), not_a_skimage_kwarg=0)
+
+
+@pytest.fixture
+def clip_source(tmp_path):
+    """A 20-frame RGB movie at 10 fps (100 ms per frame), plus its frames"""
+    fname = str(tmp_path / 'clip.mp4')
+    # 16x16 keeps ffmpeg from resizing to its macro block size, which would
+    # make the file's frames a different shape than the ones written here:
+    frames = (255 * np.random.default_rng(0).random((20, 16, 16, 3)))
+    frames = frames.astype(np.uint8)
+    mimwrite(fname, frames, fps=10)
+    return fname, frames
+
+
+def test_VideoStimulus_stop_time(clip_source):
+    fname, _ = clip_source
+    full = VideoStimulus(fname)
+    clip = VideoStimulus(fname, stop_time=500)
+    npt.assert_equal(clip.vid_shape, (*full.vid_shape[:-1], 5))
+    npt.assert_almost_equal(clip.data, full.data[:, :5])
+    # The interval is half-open, so the frame starting at 500 ms is not in it:
+    npt.assert_almost_equal(clip.time, np.arange(5) * 100.0)
+
+
+def test_VideoStimulus_start_and_stop_time(clip_source):
+    fname, _ = clip_source
+    full = VideoStimulus(fname)
+    clip = VideoStimulus(fname, start_time=500, stop_time=1000)
+    npt.assert_almost_equal(clip.data, full.data[:, 5:10])
+    # A clip starts at t=0 wherever it was cut from, but keeps the frame
+    # interval of the source:
+    npt.assert_almost_equal(clip.time, np.arange(5) * 100.0)
+
+
+def test_VideoStimulus_clip_units(clip_source):
+    """Bare milliseconds and unitful times name the same frames"""
+    fname, _ = clip_source
+    bare = VideoStimulus(fname, start_time=500, stop_time=1500)
+    unitful = VideoStimulus(fname, start_time=0.5 * s, stop_time=1.5 * s)
+    npt.assert_almost_equal(unitful.data, bare.data)
+    npt.assert_almost_equal(unitful.time, bare.time)
+
+
+def test_VideoStimulus_clip_rgb2gray_and_resize(clip_source):
+    fname, frames = clip_source
+    clip = VideoStimulus(fname, start_time=300, stop_time=600, as_gray=True,
+                         resize=(8, 8))
+    npt.assert_equal(clip.vid_shape, (8, 8, 3))
+    npt.assert_equal(clip.shape, (64, 3))
+    expected = vid_resize(rgb2gray(frames[3:6] / 255.0), (3, 8, 8))
+    npt.assert_almost_equal(clip.data, expected.reshape((3, -1)).transpose(),
+                            decimal=1)
+
+
+def test_VideoStimulus_stop_time_past_eof(clip_source):
+    """A stop time past the end of the file yields what is there"""
+    fname, _ = clip_source
+    npt.assert_almost_equal(VideoStimulus(fname, stop_time=60 * s).data,
+                            VideoStimulus(fname).data)
+
+
+@pytest.mark.parametrize('kwargs, err', [
+    ({'start_time': -100}, ValueError),
+    ({'start_time': np.inf}, ValueError),
+    ({'stop_time': np.nan}, ValueError),
+    ({'start_time': 500, 'stop_time': 500}, ValueError),
+    ({'start_time': 500, 'stop_time': 200}, ValueError),
+    ({'stop_time': 1 * uA}, DimensionMismatchError),
+    # Past the end of the file, so nothing was loaded:
+    ({'start_time': 60 * s}, ValueError),
+    # Falls between two frame starts (100 and 200 ms), so it names no frame:
+    ({'start_time': 110, 'stop_time': 150}, ValueError),
+])
+def test_VideoStimulus_clip_invalid(clip_source, kwargs, err):
+    fname, _ = clip_source
+    with pytest.raises(err):
+        VideoStimulus(fname, **kwargs)
+
+
+@pytest.mark.parametrize('source', ['array', 'stimulus'])
+def test_VideoStimulus_clip_rejects_in_memory_source(clip_source, source):
+    """An in-memory video is shortened by crop(), not while decoding"""
+    fname, _ = clip_source
+    src = VideoStimulus(fname)
+    if source == 'array':
+        src = src.data.reshape(src.vid_shape)
+    with pytest.raises(ValueError):
+        VideoStimulus(src, stop_time=500)
+
+
+def test_frame_index_on_frame_boundaries():
+    """A frame's own start time names that frame, not the one after it
+
+    29.97 fps makes ``i * 1000 / fps * fps / 1000`` land just off ``i``, which
+    is what the tolerance in ``_frame_index`` is for. Every other clipping test
+    here runs at 10 fps, where the arithmetic happens to be exact.
+    """
+    fps = 29.97
+    for i in (1, 10, 100, 1000):
+        npt.assert_equal(_frame_index(i * 1000 / fps, fps), i)
+
+
+def test_VideoStimulus_clip_does_not_decode_the_whole_file(monkeypatch):
+    """Clipping must bound the read, not slice a fully decoded movie"""
+    requested = []
+
+    class FakeReader:
+        """Hands out 1000 frames of a 10 fps movie, recording each request"""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            self.closed = True
+            return False
+
+        def get_meta_data(self):
+            return {'fps': 10, 'source_size': (4, 4)}
+
+        def set_image_index(self, index):
+            self.index = index
+
+        def get_next_data(self):
+            if self.index >= 1000:
+                raise IndexError(self.index)
+            requested.append(self.index)
+            self.index += 1
+            return np.full((4, 4, 3), self.index - 1, dtype=np.uint8)
+
+    reader = FakeReader()
+    reader.index = 0
+    reader.closed = False
+    monkeypatch.setattr('pulse2percept.stimuli.videos.video_reader',
+                        lambda *args, **kwargs: reader)
+
+    stim = VideoStimulus('fake.mp4', start_time=2 * s, stop_time=2.5 * s)
+    npt.assert_equal(requested, list(range(20, 25)))
+    npt.assert_equal(stim.vid_shape, (4, 4, 3, 5))
+    npt.assert_equal(reader.closed, True)
 
 
 def test_VideoStimulus_crop(tmp_path):
