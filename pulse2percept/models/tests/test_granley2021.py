@@ -1025,3 +1025,25 @@ def test_BiphasicAxonMapSpatial_composite_rejects_unequal_stim_dur(
                                                      stim_dur=1000)})
     with pytest.raises(NotImplementedError):
         composite.predict_percept(implant)
+
+
+def test_BiphasicAxonMapSpatial_composite_normalizes_a_delayed_peak():
+    # This one peaks ~226 ms after a 50 ms drive, several windows past the
+    # first one searched. Normalizing by a value found before the peak would
+    # let the percept outshine the Granley frame it is supposed to peak at:
+    temporal = Horsager2009Temporal(tau3=100)
+    composite, granley = _composite(temporal)
+    implant = _composite_implant()
+    granley_frame = granley.predict_percept(implant).data[..., 0]
+    percept = composite.predict_percept(implant,
+                                        t_percept=_every_dt(temporal, 400))
+    npt.assert_equal(percept.data.max() <= granley_frame.max(), True)
+    npt.assert_array_almost_equal(percept.max(axis='frames'), granley_frame)
+
+
+def test_BiphasicAxonMapSpatial_composite_rejects_an_unlocatable_peak():
+    # Still rising where the search gives up (~624 ms for a 50 ms drive):
+    # saying so beats normalizing by a value known not to be the peak.
+    composite, _ = _composite(Horsager2009Temporal(tau3=300))
+    with pytest.raises(ValueError):
+        composite.predict_percept(_composite_implant())

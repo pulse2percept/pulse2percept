@@ -1203,42 +1203,23 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
     #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
     n_jobs = _n_jobs_alias()
 
-    #: Sign of the stimulus current that drives brightness in this model: -1 if
-    #: cathodic (negative) current does, +1 if anodic (positive) current does.
-    #: The two conventions are both in use -- ``FadingTemporal`` and
-    #: ``Horsager2009Temporal`` are cathodic-driven, ``Nanduri2012Temporal`` is
-    #: anodic-driven -- and a stimulus of the wrong polarity produces a blank
-    #: percept rather than an error. This is what lets ``predict_percept`` say
-    #: so; nothing else reads it.
+    #: Polarity that drives brightness: -1 for cathodic, +1 for anodic.
+    #: Used when checking stimulus polarity and constructing canonical drives.
     _drive_sign = -1
 
-    #: Whether ``_predict_temporal`` accepts a ``reduce`` argument and honors it
-    #: itself, tracking the peak across every ``dt`` step of the interval. That
-    #: is exact and costs one compare per step. Models that leave this False
-    #: fall back to sampling each interval ``_FRAME_SUBSAMPLES`` times, which
-    #: costs memory proportional to the sample count and still misses
-    #: transients shorter than the resulting step.
+    #: Whether ``_predict_temporal`` can return an exact peak over each interval
+    #: instead of relying on subsampling in ``predict_percept``.
     _reduces_intervals = False
 
     def get_default_params(self):
-        """Return a dictionary of default values for all model parameters"""
+        """Return default model parameters."""
         params = {
-            # Simulation time step (ms):
-            'dt': 0.005,
-            # Below threshold, percept has brightness zero:
+            'dt': 0.005,  # Simulation time step (ms)
             'thresh_percept': 0,
-            # How to summarize an output interval when `predict_percept` picks
-            # the output times itself; see `predict_percept`. The published
-            # models default to 'last', which is what they have always
-            # reported; a model is free to override it, as `FadingTemporal`
-            # does:
-            'reduce': 'last',
-            # True: print status messages, False: silent
+            'reduce': 'last',  # How automatically chosen intervals are summarized
             'verbose': True,
-            # `n_jobs` is an alias that writes through to `n_threads`, so it
-            # has to be applied *after* it:
             'n_threads': multiprocessing.cpu_count(),
-            'n_jobs': None,
+            'n_jobs': None,  # Alias for n_threads; must be applied last
         }
         return params
 

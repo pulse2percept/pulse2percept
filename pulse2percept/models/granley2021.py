@@ -14,10 +14,7 @@ from ..utils.base import has_own_attr
 from .base import NotBuiltError, BaseModel, _require_stim_dimension
 from ._granley2021 import fast_biphasic_axon_map
 
-#: How many times the window searched for the peak of the canonical temporal
-#: response may be doubled before the largest sample seen is accepted as the
-#: peak. A response still rising after this much silence is not one a finite
-#: drive can produce; see ``BiphasicAxonMapSpatial._envelope_peak``.
+# Safety limit for locating delayed temporal peaks.
 _PEAK_SEARCH_DOUBLINGS = 4
 
 # `find_threshold` bisects on a scaled copy of the stimulus *data*. This model
@@ -276,7 +273,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         When combined with a temporal model, the Granley prediction is treated
         as the peak spatial percept. The temporal model supplies a normalized
         brightness time course, yielding a space-time-separable percept
-        ``P(x, y, t) = G(x, y) k(t)``.
+        ``P(x, y, t) = G(x, y) k(t)``. ``thresh_percept`` of the temporal
+        model is ignored, because its response is normalized before being
+        applied to the Granley percept.
 
     Parameters
     ----------
@@ -631,23 +630,26 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         """Return the peak response to the canonical temporal drive."""
         dt = temporal.dt
         episode = envelope.times(temporal.time_unit)[-1]
+
         for _ in range(_PEAK_SEARCH_DOUBLINGS):
-            # Find the peak independently of t_percept, since different
-            # temporal models may peak before, at, or after stimulus
-            # offset.
             t = np.arange(int(round(episode / dt)) + 1) * dt
             resp = temporal.predict_percept(envelope, t_percept=t).data
             if np.argmax(resp) < resp.size - 1:
                 break
             episode *= 2
+        else:
+            raise ValueError(
+                f"Could not locate the peak response of "
+                f"{type(temporal).__name__} within {t[-1]:g} "
+                f"{temporal.time_unit}."
+            )
+
         peak = resp.max()
         if not np.isfinite(peak) or peak <= 0:
             raise ValueError(
-                f"{type(temporal).__name__} answers a unit drive with no "
-                f"finite positive peak ({peak}), so there is no envelope to "
-                f"normalize. A temporal model can only scale this model's "
-                f"percept over time, and one that never responds leaves "
-                f"nothing to scale.")
+                f"{type(temporal).__name__} produced no finite positive "
+                f"response to the canonical drive."
+            )
         return peak
 
     def _envelope_dur(self, stim):
