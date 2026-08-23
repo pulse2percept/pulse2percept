@@ -886,8 +886,7 @@ def test_ProsthesisSystem_thresholds_preserve_metadata():
 
 
 def test_ProsthesisSystem_thresholds_recalibrate_from_the_current_stimulus():
-    # The second threshold applies to the amplitude the user gave, not to the
-    # current the first one worked out:
+    # Recalibration preserves the original 2xTh basis.
     implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45)})
     implant.thresholds = 80 * uA
     implant.thresholds = 50 * uA

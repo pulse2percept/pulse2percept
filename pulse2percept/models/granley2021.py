@@ -218,19 +218,13 @@ _NO_THRESHOLD_MSG = (
 
 
 def _pulse_train_params(stim):
-    """``(electrode, freq, amp_factor, phase_dur, stim_dur)`` per electrode
+    """Return Granley pulse parameters for each driven electrode.
 
-    Read off the pulse trains the stimulus is made of rather than off a copy
-    of their numbers in its metadata: a stimulus whose samples were rewritten
-    has no train behind it any more, and this is what tells the two apart. No
-    waveform is generated to answer the question.
+    Parameters are read from retained ``BiphasicPulseTrain`` sources without
+    rendering the waveform. Amplitude is returned in multiples of threshold.
 
     Electrodes driven at zero amplitude are left out, so an empty list means
     the percept is zero.
-
-    Amplitude comes back as a multiple of threshold
-    (:py:attr:`~pulse2percept.stimuli.BiphasicPulseTrain.amp_factor`), which is
-    what the effect models are fit in; the waveform itself stays a current.
 
     Raises
     ------
@@ -404,9 +398,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         n_jobs : int, optional
             Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
     """
-    #: Amplitude reaches this model as a multiple of threshold, which a
-    #: current-valued train derives from its threshold and an `xTh` one
-    #: carries directly.
     extra_stimulus_units = (xTh,)
 
     def __init__(self, **params):
@@ -725,12 +716,11 @@ class BiphasicAxonMapModel(Model):
         :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds` and
         give it in microamps.
 
-        Threshold here means the current at which a train of *this* frequency
-        and 0.45 ms phase duration is detected half the time [Granley2021]_.
-        A threshold measured at another frequency is a different number, so
-        changing ``freq`` may mean changing the threshold with it; the model
-        applies its own pulse-duration correction on top, and must not be
-        given a threshold that already includes one.
+        Threshold is the 50%-detection current for a train at the same
+        frequency and 0.45 ms phase duration [Granley2021]_. If frequency
+        changes, the threshold may change too. The model applies the
+        phase-duration correction itself; do not pre-correct the supplied
+        threshold.
 
         This model reads amplitude, frequency and pulse duration off the
         :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects the
@@ -877,9 +867,9 @@ class BiphasicAxonMapModel(Model):
             amplitude in :py:data:`~pulse2percept.units.xTh` (``2 * xTh``),
             or calibrate the electrode with ``threshold_amp`` or
             :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`
-            and give it in microamps. Threshold means the current at which a
-            train of *this* frequency and 0.45 ms phase duration is detected
-            half the time [Granley2021]_.
+            and give it in microamps. See
+            :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` for what
+            counts as threshold here.
 
             The model reads the intended amplitude, frequency and pulse
             duration off the

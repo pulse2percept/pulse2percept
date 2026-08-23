@@ -190,11 +190,9 @@ calibrated.stim = {'A4': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
 print(f"{calibrated.stim.data.max():.0f} uA")
 
 #################################################################################
-# ``BiphasicPulseTrain(..., threshold_amp=80 * uA)`` does the same for one
-# train. Either way it works in both directions: a train given in microamps on
-# a calibrated electrode knows what multiple of threshold it is, and only a
-# calibrated stimulus is one an implant can check against ``max_current`` or
-# hand to a current-based model.
+# ``threshold_amp=80 * uA`` instead calibrates a single train. Calibration
+# also lets a current-valued train report its threshold multiple. Electrical
+# safety checks and current-based models require current units.
 
 ################################################################################
 #

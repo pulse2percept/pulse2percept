@@ -405,12 +405,10 @@ class BiphasicPulseTrain(Stimulus):
         # to `BiphasicPulse` is what keeps the properties below in the units a
         # model reading them back expects:
         freq = as_value(freq, Hz, 'freq')
-        # Which of the two numbers the caller knew is remembered, not just the
-        # current it works out to: rescaling and recalibration both have to
-        # keep the one they were given (see `_scaled`).
+        # Preserve whether amp was specified as current or threshold
+        # multiple.
         self._explicit_threshold_amp = _as_threshold_amp(threshold_amp)
-        # Set only by `_with_threshold`; kept apart from the caller's
-        # threshold so that clearing a calibration restores theirs.
+        # Keep an implant override separate so it can be cleared later.
         self._threshold_override = None
         self._amp_relative = _is_threshold_relative(amp)
         if self._amp_relative:
@@ -419,7 +417,6 @@ class BiphasicPulseTrain(Stimulus):
                 amp = amp * self.threshold_amp
         else:
             amp = as_value(amp, uA, 'amp')
-        # Which of the two numbers the train ends up holding:
         unit = xTh if self._amp_relative and self.threshold_amp is None else uA
         phase_dur = as_value(phase_dur, ms, 'phase_dur')
         interphase_dur = as_value(interphase_dur, ms, 'interphase_dur')
@@ -536,11 +533,10 @@ class BiphasicPulseTrain(Stimulus):
         return train
 
     def _with_threshold(self, override):
-        """This train, calibrated to an implant's threshold (None to clear)
+        """Return this train with an implant threshold override.
 
-        Whichever number the user specified survives: an ``xTh`` train keeps
-        its multiple and changes current, a current-valued train keeps its
-        current and changes multiple.
+        Threshold-relative trains preserve ``amp_factor``; current-valued
+        trains preserve ``amp``.
         """
         if override == self._threshold_override:
             return self
@@ -568,14 +564,15 @@ class BiphasicPulseTrain(Stimulus):
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        params = {'freq': self.freq, 'amp': self.amp,
+        # The amplitude as given, not as resolved: two trains that deliver the
+        # same current recalibrate differently (see `_with_threshold`).
+        amp = self.amp_factor * xTh if self._amp_relative else self.amp
+        params = {'freq': self.freq, 'amp': amp,
                   'phase_dur': self.phase_dur,
                   'interphase_dur': self.interphase_dur,
                   'delay_dur': self.delay_dur, 'stim_dur': self.stim_dur,
                   'cathodic_first': self.cathodic_first,
                   'electrodes': self.electrodes, 'metadata': self.metadata}
-        if self.amp_factor is not None:
-            params['amp_factor'] = self.amp_factor
         if self.threshold_amp is not None:
             params['threshold_amp'] = self.threshold_amp
         return params

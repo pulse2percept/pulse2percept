@@ -882,3 +882,19 @@ def test_BiphasicPulseTrain_xTh_amp_is_not_a_current():
     npt.assert_equal(calibrated.unit, uA)
     npt.assert_almost_equal(calibrated.amp, 160)
     npt.assert_almost_equal(calibrated.amp_factor, 2)
+
+
+def test_BiphasicPulseTrain_repr_keeps_the_amp_basis():
+    # Same current, different basis, so different behavior under
+    # recalibration -- the repr has to tell them apart:
+    relative = repr(BiphasicPulseTrain(20, 2 * xTh, 0.45,
+                                       threshold_amp=80 * uA))
+    current = repr(BiphasicPulseTrain(20, 160 * uA, 0.45,
+                                      threshold_amp=80 * uA))
+    npt.assert_equal(relative == current, False)
+    npt.assert_equal('xTh' in relative, True)
+    npt.assert_equal('xTh' in current, False)
+    for shown in (relative, current):
+        npt.assert_equal('threshold_amp' in shown, True)
+    npt.assert_equal('threshold_amp' in repr(BiphasicPulseTrain(20, 50, 0.45)),
+                     False)

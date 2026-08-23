@@ -247,12 +247,10 @@ def _require_stim_dimension(model, stim):
     accepted = (model.stimulus_unit,) + tuple(model.extra_stimulus_units)
     if stim.unit.dimension in {unit.dimension for unit in accepted}:
         return
+    expected = ' or '.join(_describe_unit(unit) for unit in accepted)
     raise DimensionMismatchError(
-        f"{type(model).__name__} reads its stimulus as "
-        f"{_describe_unit(model.stimulus_unit)}, and this one is measured in "
-        f"{_describe_unit(stim.unit)}. Encode it with "
-        f"pulse2percept.stimuli.AmplitudeEncoder or FrequencyEncoder, which "
-        f"is what says how much current a gray level stands for.")
+        f"{type(model).__name__} expects {expected}, got "
+        f"{_describe_unit(stim.unit)}.")
 
 
 def _spatial_input(implant):
@@ -389,9 +387,7 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
 
     #: The unit stimulus values are expressed in
     stimulus_unit = uA
-    #: Further units this model reads, for a model that reads more than one
-    #: physical quantity (see
-    #: :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial`)
+    #: Additional stimulus units accepted by this model
     extra_stimulus_units = ()
     #: The unit spatial coordinates are expressed in
     space_unit = um
@@ -1583,11 +1579,7 @@ class Model(PrettyPrint):
 
     @property
     def extra_stimulus_units(self):
-        """Further units this model reads
-
-        Follows :py:attr:`stimulus_unit` to whichever component the stimulus
-        goes to.
-        """
+        """Additional stimulus units accepted by the active component"""
         if self.has_space:
             return self.spatial.extra_stimulus_units
         if self.has_time:

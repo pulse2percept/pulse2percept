@@ -282,12 +282,9 @@ class ProsthesisSystem(PrettyPrint):
         self._stim = calibrated
 
     def _calibrated(self, stim):
-        """``stim`` with this implant's thresholds applied to its pulse trains
+        """Apply implant thresholds to retained BiphasicPulseTrain sources.
 
-        Rebuilds the pulse trains the stimulus retains rather than rewriting
-        its samples, generating no waveform, and returns ``stim`` itself when
-        nothing needs rebuilding. An electrode the thresholds leave out gets
-        None, so this clears a calibration as readily as it applies one.
+        Returns ``stim`` unchanged if no source needs recalibration.
         """
         thresholds = getattr(self, '_thresholds', None) or {}
         sources = stim._structured_sources()
@@ -301,8 +298,7 @@ class ProsthesisSystem(PrettyPrint):
             rebuilt[name] = train
         if not changed:
             return stim
-        # Said here rather than left to `Stimulus`, which cannot know that a
-        # threshold is what the mismatched units are missing:
+        # Give a threshold-specific error for mixed xTh/uA sources.
         units = {train.unit for train in rebuilt.values()}
         if len(units) > 1:
             missing = sorted(name for name, train in rebuilt.items()
@@ -335,9 +331,8 @@ class ProsthesisSystem(PrettyPrint):
         """
         if stim.unit.dimension == self.stimulus_unit.dimension:
             return
-        # Stimulation in the terms the electrode is calibrated in, which
-        # assigning is what applies a threshold to (see `thresholds`). The
-        # electrical safety checks refuse it until one has been:
+        # Threshold-relative pulse trains may be assigned before
+        # calibration.
         if stim.unit.dimension == xTh.dimension:
             return
         raise DimensionMismatchError(
@@ -706,8 +701,7 @@ class ProsthesisSystem(PrettyPrint):
                    if not e.activated and name in stim.electrodes]
             if off:
                 stim = stim._without_electrodes(off)
-            # Copied before calibration rewrites it: the caller's object is
-            # theirs.
+            # Calibrate a copy; do not mutate the caller's stimulus.
             stim = self._calibrated(deepcopy(stim))
             # Perform safety checks, etc. These are all questions about what
             # gets delivered, so they are asked of the calibrated pulse train:

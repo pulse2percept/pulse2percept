@@ -186,10 +186,8 @@ has one it stays measured in ``xTh``:
     implant.thresholds = {'A4': 80 * uA}
     implant.stim = {'A4': BiphasicPulseTrain(20, 2 * xTh, 0.45)}  # 160 uA
 
-A train without a threshold is not a current, so an implant will hold it but
-the electrical safety checks refuse to answer questions about it, and a
-current-based model refuses it outright. Calibrating is what makes it
-answerable.
+Until a threshold is supplied, the train remains in ``xTh``. Electrical
+safety checks and current-based models require calibration to ``uA``.
 
 Shorthands that are not conversions
 -----------------------------------

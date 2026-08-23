@@ -702,7 +702,10 @@ def test_BiphasicAxonMap_dimension_before_waveform():
                   BiphasicAxonMapModel(step=2).build()):
         with pytest.raises(DimensionMismatchError) as excinfo:
             model.predict_percept(implant)
-        npt.assert_equal('AmplitudeEncoder' in str(excinfo.value), True)
+        # Both dimensions this model reads are named, not just the one:
+        for accepted in ('electric current', 'threshold ratio'):
+            npt.assert_equal(accepted in str(excinfo.value), True)
+        npt.assert_equal('dimensionless' in str(excinfo.value), True)
     # A current-valued stimulus of the wrong waveform still gets the
     # model-specific message:
     with pytest.raises(TypeError) as excinfo:
@@ -1115,8 +1118,7 @@ def test_BiphasicAxonMap_uncalibrated_current_raises(model_cls):
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
 def test_BiphasicAxonMap_zero_current_needs_no_threshold(model_cls):
-    # An electrode that is not driven has no threshold multiple either, but
-    # asking for one would turn a zero percept into an error:
+    # Zero-current electrodes need no threshold.
     model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
                       n_ax_segments=30).build()
     implant = ArgusII(stim={'A2': BiphasicPulseTrain(20, 0 * uA, 0.45,
