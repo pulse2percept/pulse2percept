@@ -878,7 +878,10 @@ def test_BiphasicAxonMapSpatial_with_FadingTemporal_runs():
     # Issue #565: the spatial model collapses time, so the percept it hands
     # over has no time axis for a temporal model to integrate.
     composite, _ = _fading_models()
-    percept = composite.predict_percept(_fading_implant())
+    # Fading is driven by an envelope built from the retained pulse-train
+    # parameters, so pairing the two still asks for no waveform:
+    with _no_pulse_train_rendering():
+        percept = composite.predict_percept(_fading_implant())
     npt.assert_equal(percept.data.ndim, 3)
     npt.assert_equal(percept.data.shape[-1] > 1, True)
     npt.assert_equal(np.all(np.isfinite(percept.data)), True)
@@ -964,3 +967,31 @@ def test_BiphasicAxonMapSpatial_fading_rejects_thresh_percept():
     composite, _ = _fading_models(thresh_percept=0.1)
     with pytest.raises(ValueError):
         composite.predict_percept(_fading_implant())
+
+
+def test_BiphasicAxonMapSpatial_fading_ignores_inactive_stim_dur():
+    # A train at zero amplitude is inactive everywhere, so it must not stretch
+    # the envelope the active one rides on either:
+    composite, _ = _fading_models(tau=100)
+    short = ArgusII(stim={'A5': BiphasicPulseTrain(20, 1, 0.45,
+                                                   stim_dur=100)})
+    padded = ArgusII(stim={'A5': BiphasicPulseTrain(20, 1, 0.45,
+                                                    stim_dur=100),
+                           'A2': BiphasicPulseTrain(20, 0, 0.45,
+                                                    stim_dur=1000)})
+    t_percept = [40, 80, 100]
+    npt.assert_array_almost_equal(
+        composite.predict_percept(padded, t_percept=t_percept).data,
+        composite.predict_percept(short, t_percept=t_percept).data)
+
+
+def test_BiphasicAxonMapSpatial_fading_rejects_unequal_stim_dur():
+    # One separable envelope cannot have one electrode's contribution stop at
+    # 100 ms and another's at 1000 ms:
+    composite, _ = _fading_models()
+    implant = ArgusII(stim={'A5': BiphasicPulseTrain(20, 1, 0.45,
+                                                     stim_dur=100),
+                            'A2': BiphasicPulseTrain(20, 1, 0.45,
+                                                     stim_dur=1000)})
+    with pytest.raises(NotImplementedError):
+        composite.predict_percept(implant)

@@ -13,7 +13,7 @@ from scipy.ndimage import gaussian_filter1d
 
 from ..implants import ProsthesisSystem
 from ..stimuli import Stimulus
-from ..stimuli.base import _describe_unit
+from ..stimuli.base import _describe_unit, _has_time_axis
 from ..percepts import Percept
 from ..topography import Curcio1990Map, Grid2D, RetinalMap
 from ..units import (DimensionMismatchError, Quantity, Unit, as_value, dva, ms,
@@ -1902,7 +1902,11 @@ class Model(PrettyPrint):
             # Nothing to see here:
             return None
         _require_stim_dimension(self, implant.stim)
-        if implant.stim.time is None and t_percept is not None:
+        # `_has_time_axis`, not `stim.time`: whether there is a time axis is a
+        # question a stimulus can answer from its structure, and asking it for
+        # the axis itself would generate the waveform behind it.
+        has_time_axis = _has_time_axis(implant.stim)
+        if not has_time_axis and t_percept is not None:
             raise ValueError(f"Cannot calculate temporal response at times "
                              f"t_percept={t_percept}, because stimulus/percept does not "
                              f"have a time component.")
@@ -1912,7 +1916,7 @@ class Model(PrettyPrint):
             # (i.e., whenever the stimulus changes)
             resp = self.spatial.predict_percept(_delivered(implant),
                                                 t_percept=None)
-            if implant.stim.time is not None:
+            if has_time_axis:
                 combine = getattr(self.spatial, '_combine_temporal', None)
                 if resp.time is None and combine is not None:
                     # A spatial model hands over a percept with no time axis,
