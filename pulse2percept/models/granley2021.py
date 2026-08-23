@@ -208,8 +208,19 @@ class DefaultStreakModel(BaseModel):
         return np.maximum(F_streak, min_f_streak)
 
 
+#: What to do about a pulse whose amplitude is a current of unknown
+#: threshold. Formatted with the failing electrode.
+_NO_THRESHOLD_MSG = (
+    "This model takes amplitude as a multiple of perceptual threshold, and "
+    "electrode {electrode} is driven at {amp:.1f} uA with no threshold to "
+    "measure that against. Either give `amp` in threshold units (e.g. "
+    "`2 * xTh`), pass `threshold_amp` to the BiphasicPulseTrain, or set "
+    "`implant.thresholds`."
+)
+
+
 def _pulse_train_params(stim):
-    """``(electrode, freq, amp, phase_dur, stim_dur)`` per driven electrode
+    """``(electrode, freq, amp_factor, phase_dur, stim_dur)`` per electrode
 
     Read off the pulse trains the stimulus is made of rather than off a copy
     of their numbers in its metadata: a stimulus whose samples were rewritten
@@ -219,12 +230,20 @@ def _pulse_train_params(stim):
     Electrodes driven at zero amplitude are left out, so an empty list means
     the percept is zero.
 
+    Amplitude comes back as a multiple of threshold
+    (:py:attr:`~pulse2percept.stimuli.BiphasicPulseTrain.amp_factor`), which
+    is what this model's effect models are fit in; the waveform itself stays
+    a current.
+
     Raises
     ------
     TypeError
         If any electrode is driven by something other than a
         :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` with
         ``delay_dur=0``.
+    ValueError
+        If a driven electrode's amplitude is a current whose threshold is
+        unknown.
     """
     sources = stim._structured_sources()
     if sources is None:
@@ -246,7 +265,10 @@ def _pulse_train_params(stim):
                             f"no delay dur (Failing electrode: {electrode})")
         if source.amp == 0:
             continue
-        params.append((electrode, source.freq, source.amp,
+        if source.amp_factor is None:
+            raise ValueError(_NO_THRESHOLD_MSG.format(electrode=electrode,
+                                                      amp=source.amp))
+        params.append((electrode, source.freq, source.amp_factor,
                        source.phase_dur, source.stim_dur))
     return params
 
