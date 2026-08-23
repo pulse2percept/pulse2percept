@@ -244,7 +244,8 @@ def _require_stim_dimension(model, stim):
     """
     if not isinstance(stim, Stimulus):
         return
-    if stim.unit.dimension == model.stimulus_unit.dimension:
+    accepted = (model.stimulus_unit,) + tuple(model.extra_stimulus_units)
+    if stim.unit.dimension in {unit.dimension for unit in accepted}:
         return
     raise DimensionMismatchError(
         f"{type(model).__name__} reads its stimulus as "
@@ -388,6 +389,10 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
 
     #: The unit stimulus values are expressed in
     stimulus_unit = uA
+    #: Further units this model reads, for a model that reads more than one
+    #: physical quantity (see
+    #: :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial`)
+    extra_stimulus_units = ()
     #: The unit spatial coordinates are expressed in
     space_unit = um
     #: The unit time is expressed in
@@ -1575,6 +1580,19 @@ class Model(PrettyPrint):
         if self.has_time:
             return self.temporal.stimulus_unit
         return BaseModel.stimulus_unit
+
+    @property
+    def extra_stimulus_units(self):
+        """Further units this model reads
+
+        Follows :py:attr:`stimulus_unit` to whichever component the stimulus
+        goes to.
+        """
+        if self.has_space:
+            return self.spatial.extra_stimulus_units
+        if self.has_time:
+            return self.temporal.extra_stimulus_units
+        return BaseModel.extra_stimulus_units
 
     @property
     def space_unit(self):

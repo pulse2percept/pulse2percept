@@ -785,11 +785,10 @@ def test_ProsthesisSystem_thresholds_calibrate_pulse_trains():
     implant = ArgusII()
     implant.stim = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45),
                     'A2': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
-    # Uncalibrated, both fall back on the nominal reference:
-    npt.assert_almost_equal([src.amp for _, src
-                             in implant.stim._structured_sources()],
-                            [200, 200])
+    # Uncalibrated, the stimulus is not a current at all:
+    npt.assert_equal(implant.stim.unit, xTh)
     implant.thresholds = {'A1': 80 * uA, 'A2': 120 * uA}
+    npt.assert_equal(implant.stim.unit, uA)
     for _, src in implant.stim._structured_sources():
         npt.assert_almost_equal(src.amp_factor, 2)
     npt.assert_almost_equal([src.amp for _, src
@@ -809,7 +808,7 @@ def test_ProsthesisSystem_thresholds_hold_current_stimuli_fixed():
 
 
 @pytest.mark.parametrize('amp, cleared_amp',
-                         [(2 * xTh, 200), (160 * uA, 160)])
+                         [(2 * xTh, 2), (160 * uA, 160)])
 def test_ProsthesisSystem_clearing_thresholds_restores_the_train(amp,
                                                                  cleared_amp):
     implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, amp, 0.45)})
@@ -895,3 +894,34 @@ def test_ProsthesisSystem_thresholds_recalibrate_from_the_current_stimulus():
     source = implant.stim._structured_sources()[0][1]
     npt.assert_almost_equal(source.amp, 100)
     npt.assert_almost_equal(source.amp_factor, 2)
+
+
+def test_ProsthesisSystem_uncalibrated_xTh_is_not_yet_a_current():
+    implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45)})
+    npt.assert_equal(implant.stim.unit, xTh)
+    npt.assert_almost_equal(np.abs(implant.stim.data).max(), 2, decimal=3)
+    implant.max_current = 250
+    with pytest.raises(DimensionMismatchError):
+        implant.check_stim(implant.stim)
+    implant.safe_mode = True
+    with pytest.raises(DimensionMismatchError):
+        implant.check_stim(implant.stim)
+    implant.thresholds = 80 * uA
+    implant.check_stim(implant.stim)
+    npt.assert_almost_equal(np.abs(implant.stim.data).max(), 160, decimal=3)
+
+
+def test_ProsthesisSystem_partial_calibration_of_xTh_is_refused():
+    implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45),
+                            'A2': BiphasicPulseTrain(20, 2 * xTh, 0.45)})
+    with pytest.raises(DimensionMismatchError) as err:
+        implant.thresholds = {'A1': 80 * uA}
+    npt.assert_equal('A2' in str(err.value), True)
+    npt.assert_equal(implant.thresholds, {})
+    npt.assert_equal(implant.stim.unit, xTh)
+    # A current-valued train is already a current, threshold or no threshold:
+    implant.stim = {'A1': BiphasicPulseTrain(20, 160 * uA, 0.45),
+                    'A2': BiphasicPulseTrain(20, 160 * uA, 0.45)}
+    implant.thresholds = {'A1': 80 * uA}
+    factors = [src.amp_factor for _, src in implant.stim._structured_sources()]
+    npt.assert_equal(factors, [2, None])

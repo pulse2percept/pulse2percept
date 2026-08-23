@@ -783,12 +783,12 @@ def test_append_still_rejects_what_it_always_did():
 
 
 @pytest.mark.parametrize('amp, threshold_amp, expected',
-                         [(50, None, (50, None, None)),
-                          (0.05 * mA, None, (50, None, None)),
-                          (2 * xTh, None, (200, 100, 2)),
-                          (2 * xTh, 80 * uA, (160, 80, 2)),
-                          (160 * uA, 80 * uA, (160, 80, 2)),
-                          (2 * xTh, 80, (160, 80, 2))])
+                         [(50, None, (50, None, None, uA)),
+                          (0.05 * mA, None, (50, None, None, uA)),
+                          (2 * xTh, None, (2, None, 2, xTh)),
+                          (2 * xTh, 80 * uA, (160, 80, 2, uA)),
+                          (160 * uA, 80 * uA, (160, 80, 2, uA)),
+                          (2 * xTh, 80, (160, 80, 2, uA))])
 def test_BiphasicPulseTrain_threshold_relative_amp(amp, threshold_amp,
                                                    expected):
     pt = BiphasicPulseTrain(20, amp, 0.45, stim_dur=100,
@@ -796,7 +796,8 @@ def test_BiphasicPulseTrain_threshold_relative_amp(amp, threshold_amp,
     npt.assert_almost_equal(pt.amp, expected[0])
     npt.assert_equal(pt.threshold_amp, expected[1])
     npt.assert_equal(pt.amp_factor, expected[2])
-    npt.assert_equal(pt.unit, uA)
+    # A threshold multiple only becomes a current once a threshold says so:
+    npt.assert_equal(pt.unit, expected[3])
     npt.assert_almost_equal(np.abs(pt.data).max(), expected[0], decimal=3)
 
 
@@ -834,7 +835,7 @@ def test_BiphasicPulseTrain_amp_basis_survives_a_round_trip():
 
 
 @pytest.mark.parametrize('amp, threshold_amp, overridden, restored',
-                         [(2 * xTh, None, (200, 2), (200, 2)),
+                         [(2 * xTh, None, (200, 2), (2, 2)),
                           (2 * xTh, 50 * uA, (200, 2), (100, 2)),
                           (160 * uA, None, (160, 1.6), (160, None)),
                           (160 * uA, 50 * uA, (160, 1.6), (160, 3.2))])
@@ -867,3 +868,17 @@ def test_BiphasicPulseTrain_scaling_keeps_the_override():
     npt.assert_almost_equal((current * 2).amp, 320)
     npt.assert_almost_equal((current * 2).amp_factor, 4)
     npt.assert_equal((current * 2)._with_threshold(None).amp_factor, None)
+
+
+def test_BiphasicPulseTrain_xTh_amp_is_not_a_current():
+    # No threshold, no current: the train must not invent one.
+    pt = BiphasicPulseTrain(20, 2 * xTh, 0.45, stim_dur=100)
+    npt.assert_equal(pt.unit, xTh)
+    npt.assert_almost_equal(pt.amp, 2)
+    npt.assert_almost_equal(pt.amp_factor, 2)
+    npt.assert_equal(pt.threshold_amp, None)
+    npt.assert_almost_equal(np.abs(pt.data).max(), 2, decimal=3)
+    calibrated = pt._with_threshold(80)
+    npt.assert_equal(calibrated.unit, uA)
+    npt.assert_almost_equal(calibrated.amp, 160)
+    npt.assert_almost_equal(calibrated.amp_factor, 2)

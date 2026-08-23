@@ -111,9 +111,8 @@ implant.stim = {'A4' : BiphasicPulseTrain(20, 1 * xTh, 0.45)}
 implant.stim.plot()
 
 ##############################################################################
-# The plot is in microamps: the waveform an implant delivers is always a
-# current, and ``xTh`` only says which current. With no threshold measured,
-# ``1 * xTh`` falls back on a nominal 100 uA reference.
+# The plot is in ``xTh``, not microamps: how much current 1xTh is depends on
+# the electrode, and no threshold has been given yet. See below.
 
 ##############################################################################
 # Finally, you can predict the percept resulting from stimulation
@@ -180,9 +179,10 @@ plt.show()
 #################################################################################
 # Using measured thresholds
 # -------------------------
-# The 100 uA reference above is a stand-in. If you know an electrode's
-# reference threshold at 0.45ms phase duration, give it to the implant: 2xTh
-# on an 80 uA electrode then delivers 160 uA.
+# Give the implant the electrode's threshold and ``xTh`` becomes a current:
+# 2xTh on an 80 uA electrode delivers 160 uA. Threshold here is the current at
+# which a train of the same frequency and 0.45ms phase duration is detected
+# half the time, so a different frequency may call for a different threshold.
 
 calibrated = ArgusII()
 calibrated.thresholds = {'A4': 80 * uA}
@@ -192,7 +192,9 @@ print(f"{calibrated.stim.data.max():.0f} uA")
 #################################################################################
 # ``BiphasicPulseTrain(..., threshold_amp=80 * uA)`` does the same for one
 # train. Either way it works in both directions: a train given in microamps on
-# a calibrated electrode knows what multiple of threshold it is.
+# a calibrated electrode knows what multiple of threshold it is, and only a
+# calibrated stimulus is one an implant can check against ``max_current`` or
+# hand to a current-based model.
 
 ################################################################################
 #

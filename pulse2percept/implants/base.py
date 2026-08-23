@@ -12,7 +12,7 @@ from ..stimuli import (BiphasicPulseTrain, Stimulus, ImageStimulus,
                        StimulusEncoder, VideoStimulus)
 from ..stimuli.base import _describe_unit
 from ..stimuli.pulse_trains import _as_threshold_amp
-from ..units import DimensionMismatchError, as_value, uA, um
+from ..units import DimensionMismatchError, as_value, uA, um, xTh
 from ..utils import PrettyPrint
 
 
@@ -301,6 +301,17 @@ class ProsthesisSystem(PrettyPrint):
             rebuilt[name] = train
         if not changed:
             return stim
+        # Said here rather than left to `Stimulus`, which cannot know that a
+        # threshold is what the mismatched units are missing:
+        units = {train.unit for train in rebuilt.values()}
+        if len(units) > 1:
+            missing = sorted(name for name, train in rebuilt.items()
+                             if train.unit == xTh)
+            raise DimensionMismatchError(
+                f"Calibrating only some electrodes would leave "
+                f"{', '.join(missing)} measured in threshold multiples and "
+                f"the rest in uA. Give every driven electrode a threshold, or "
+                f"none of them.")
         if len(sources) == 1 and sources[0][1] is stim:
             # The stimulus *is* the pulse train, and must stay that kind of
             # object rather than become a collection of one:
@@ -324,6 +335,11 @@ class ProsthesisSystem(PrettyPrint):
         """
         if stim.unit.dimension == self.stimulus_unit.dimension:
             return
+        # Stimulation in the terms the electrode is calibrated in, which
+        # assigning is what applies a threshold to (see `thresholds`). The
+        # electrical safety checks refuse it until one has been:
+        if stim.unit.dimension == xTh.dimension:
+            return
         raise DimensionMismatchError(
             f"{type(self).__name__} delivers "
             f"{_describe_unit(self.stimulus_unit)}, but this stimulus is "
@@ -342,13 +358,20 @@ class ProsthesisSystem(PrettyPrint):
         itself: ``check_stim`` is public, and is called directly by tests and
         by subclasses on stimuli that never went through the setter.
         """
-        if stim.unit.dimension != uA.dimension:
+        if stim.unit.dimension == uA.dimension:
+            return
+        if stim.unit.dimension == xTh.dimension:
             raise DimensionMismatchError(
                 f"Safety check '{check}' needs an electrical stimulus to "
-                f"check, and this one is measured in "
-                f"{_describe_unit(stim.unit)}. Encode it into current first "
-                f"(see pulse2percept.stimuli.StimulusEncoder), or give the "
-                f"implant a 'preprocess' function that does.")
+                f"check, and this one is a multiple of threshold. Set "
+                f"'thresholds' on the implant, or 'threshold_amp' on the "
+                f"pulse train, so that it names a current.")
+        raise DimensionMismatchError(
+            f"Safety check '{check}' needs an electrical stimulus to "
+            f"check, and this one is measured in "
+            f"{_describe_unit(stim.unit)}. Encode it into current first "
+            f"(see pulse2percept.stimuli.StimulusEncoder), or give the "
+            f"implant a 'preprocess' function that does.")
 
     @classmethod
     def _require_charge_balanced(cls, stim):

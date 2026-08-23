@@ -69,7 +69,9 @@ API changes:
   :py:class:`~pulse2percept.models.BiphasicAxonMapModel` amplitudes, which used
   to be read as multiples of threshold, must now say so with the new ``xTh``
   unit (``2 * xTh``) or supply a threshold via ``threshold_amp`` or
-  :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`.
+  :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`. A train given
+  in ``xTh`` with no threshold stays measured in ``xTh`` rather than being
+  turned into an invented current.
 
 * :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` can now be paired
   with a temporal model, in a space-time-separable approximation: Granley

@@ -170,11 +170,11 @@ current a gray level stands for, and choosing one is what an encoder is for.
 
 **Threshold multiples are not currents.** ``xTh`` ("times threshold") has its
 own dimension too. How much current ``2 * xTh`` represents depends on the
-reference threshold. A
-:py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` can get that threshold
-from its ``threshold_amp`` or from
-:py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`; otherwise it
-uses a nominal 100 uA reference:
+reference threshold, which varies by electrode and by subject. A
+:py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` gets that threshold from
+its ``threshold_amp`` or from
+:py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`, and until it
+has one it stays measured in ``xTh``:
 
 .. code-block:: python
 
@@ -186,7 +186,10 @@ uses a nominal 100 uA reference:
     implant.thresholds = {'A4': 80 * uA}
     implant.stim = {'A4': BiphasicPulseTrain(20, 2 * xTh, 0.45)}  # 160 uA
 
-The waveform stored is still a current; ``xTh`` only says which one.
+A train without a threshold is not a current, so an implant will hold it but
+the electrical safety checks refuse to answer questions about it, and a
+current-based model refuses it outright. Calibrating is what makes it
+answerable.
 
 Shorthands that are not conversions
 -----------------------------------

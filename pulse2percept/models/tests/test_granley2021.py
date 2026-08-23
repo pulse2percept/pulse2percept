@@ -1067,25 +1067,24 @@ def _percept_at(model, train, thresholds=None):
 
 def test_BiphasicAxonMap_reads_threshold_multiples_not_current():
     model = _threshold_model()
-    # 200 uA against the nominal reference and 160 uA against an 80 uA
-    # threshold are both 2xTh, so they are the same stimulation to this model:
-    nominal = _percept_at(model, BiphasicPulseTrain(20, 2 * xTh, 0.45,
-                                                    stim_dur=100))
+    # Uncalibrated 2xTh and 160 uA on an 80 uA electrode are the same
+    # stimulation to this model, though only the second is a current:
+    relative = _percept_at(model, BiphasicPulseTrain(20, 2 * xTh, 0.45,
+                                                     stim_dur=100))
+    npt.assert_equal(np.any(relative), True)
     calibrated = _percept_at(model, BiphasicPulseTrain(20, 2 * xTh, 0.45,
                                                        stim_dur=100),
                              thresholds=80 * uA)
-    npt.assert_array_equal(nominal, calibrated)
-    npt.assert_equal(np.any(nominal), True)
-    # ...and so is 160 uA once the same 80 uA threshold is known:
+    npt.assert_array_equal(calibrated, relative)
     as_current = _percept_at(model, BiphasicPulseTrain(20, 160 * uA, 0.45,
                                                        stim_dur=100),
                              thresholds=80 * uA)
-    npt.assert_array_equal(as_current, nominal)
+    npt.assert_array_equal(as_current, relative)
     on_the_train = _percept_at(model,
                                BiphasicPulseTrain(20, 160 * uA, 0.45,
                                                   stim_dur=100,
                                                   threshold_amp=80 * uA))
-    npt.assert_array_equal(on_the_train, nominal)
+    npt.assert_array_equal(on_the_train, relative)
 
 
 def test_BiphasicAxonMap_same_current_differs_by_threshold():
