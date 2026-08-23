@@ -12,8 +12,8 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
 from pulse2percept.stimuli import Stimulus
-from pulse2percept.stimuli import (BiphasicPulse, BiphasicPulseTrain,
-                                   MonophasicPulse)
+from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
+                                   BiphasicPulseTrain, MonophasicPulse)
 from pulse2percept.stimuli import ImageStimulus
 from pulse2percept.stimuli import VideoStimulus
 from pulse2percept.stimuli._merge import merge_time_axes
@@ -1190,6 +1190,33 @@ def test_Stimulus___eq___tolerance():
                      False)
     npt.assert_equal(Stimulus([[np.inf, 1.0]]) == Stimulus([[np.inf, 1.0]]),
                      True)
+
+
+def test_Stimulus_user_metadata_is_never_unpacked():
+    # `metadata` is the caller's, whatever it holds
+    for metadata in ({'user': 'Michael'}, {'user': None},
+                     {'user': 'Michael', 'encoder': 'not ours'}):
+        npt.assert_equal(Stimulus(1, metadata=metadata).metadata,
+                         {'user': metadata})
+
+
+def test_Stimulus_rewrap_keeps_the_metadata_structure():
+    # Re-wrapping a stimulus carries its metadata dict across as it stands
+    plain = Stimulus([[1, 2, 3]], time=[0, 1, 2], metadata='mine')
+    npt.assert_equal(Stimulus(plain).metadata, {'user': 'mine'})
+    npt.assert_equal(Stimulus(plain, electrodes=['Z']).metadata,
+                     {'user': 'mine'})
+    # An encoder records its frame clock at the top level, next to `user`:
+    encoded = AmplitudeEncoder().encode(
+        ImageStimulus(np.linspace(0, 1, 4).reshape(2, 2), metadata='mine'))
+    npt.assert_equal('encoder' in encoded.metadata, True)
+    rewrapped = Stimulus(encoded)
+    npt.assert_equal(rewrapped.metadata['encoder'],
+                     encoded.metadata['encoder'])
+    npt.assert_equal(rewrapped.metadata['user'], encoded.metadata['user'])
+    # ...and a video's own `fps` is not the caller's metadata either:
+    video = VideoStimulus(np.ones((2, 2, 3)), metadata={'fps': 10})
+    npt.assert_equal(Stimulus(video).metadata['fps'], 10)
 
 
 def test_Stimulus_rename_keeps_the_sources_with_their_electrodes():

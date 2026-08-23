@@ -277,10 +277,13 @@ class Stimulus(PrettyPrint):
 
     @staticmethod
     def _wrap_metadata(metadata):
-        """File the caller's metadata under user, unless it is already ours"""
-        if isinstance(metadata, dict) and set(metadata) == {'user'}:
-            return metadata
+        """File the caller's metadata under ``user``"""
         return {'user': metadata}
+
+    def _inherit_metadata(self, other):
+        """Take on another stimulus' metadata dict, as it stands"""
+        self.metadata = other.metadata
+        return self
 
     def _defer(self, electrodes, unit=None, time_unit=None, metadata=None):
         """Set this stimulus up to generate its waveform later"""
@@ -504,7 +507,7 @@ class Stimulus(PrettyPrint):
             if isinstance(source, Stimulus):
                 # Re-wrapping or renaming a stimulus keeps the metadata it
                 # came with:
-                self.metadata = self._wrap_metadata(source.metadata)
+                self._inherit_metadata(source)
 
         if _electrodes is None:
             # The source did not name its electrodes, so they are 0..N-1 --
