@@ -4,8 +4,9 @@ import warnings
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.models import FadingTemporal, Nanduri2012Temporal
-from pulse2percept.models._temporal import fading_fast
+from pulse2percept.models import (AlphaTemporal, FadingTemporal,
+                                  Nanduri2012Temporal)
+from pulse2percept.models._temporal import alpha_fast, fading_fast
 from pulse2percept.stimuli import (Stimulus, MonophasicPulse, BiphasicPulse,
                                    BiphasicPulseTrain)
 from pulse2percept.percepts import Percept
@@ -56,19 +57,23 @@ def test_FadingTemporal():
     percept = model.predict_percept(stim, np.arange(stim.duration))
     npt.assert_almost_equal(percept.data, 0)
 
+
+@pytest.mark.parametrize('model_cls', (FadingTemporal, AlphaTemporal))
+def test_generic_temporal_tau_at_least_one_step(model_cls):
     # tau has to be at least one simulation step. Zero and negatives divide the
     # integrator by zero; anything under `dt` makes it overshoot its drive by
     # dt/tau and then oscillate, so at tau=dt/2 brightness alternates between
     # twice the drive and nothing. All of these used to build happily:
     for tau in (-1, 0, 0.005 / 2, 0.004):
         with pytest.raises(ValueError):
-            FadingTemporal(tau=tau, dt=0.005).build()
-    # ... and exactly one step is fine, being the rectifier limit:
-    FadingTemporal(tau=0.005, dt=0.005).build()
+            model_cls(tau=tau, dt=0.005).build()
+    # ... and exactly one step is fine, being the fastest stable setting:
+    model_cls(tau=0.005, dt=0.005).build()
 
 
-def test_deepcopy_FadingTemporal():
-    original = FadingTemporal()
+@pytest.mark.parametrize('model_cls', (FadingTemporal, AlphaTemporal))
+def test_deepcopy_generic_temporal(model_cls):
+    original = model_cls()
     copied = copy.deepcopy(original)
 
     # Assert they are different objects
@@ -91,6 +96,7 @@ def test_deepcopy_FadingTemporal():
     # Assert "destroying" the original doesn't affect the copied
     original = None
     npt.assert_equal(copied is not None, True)
+
 
 def test_FadingTemporal_matches_reference_integrator():
     """Pin the leaky integrator against a plain Python reference.
@@ -488,3 +494,229 @@ def test_FadingTemporal_reduce_limits():
         train)
     npt.assert_equal(np.any(peak.data != last.data), True)
     npt.assert_array_less(last.data - 1e-9, peak.data)
+
+
+def test_AlphaTemporal():
+    model = AlphaTemporal()
+    npt.assert_equal(model.tau, 100)
+    npt.assert_equal(model.reduce, 'peak')
+    model.dt = 0.1
+    npt.assert_equal(model.dt, 0.1)
+    model.build(dt=1e-3)
+    npt.assert_equal(model.dt, 1e-3)
+    with pytest.raises(FreezeError):
+        model.rho = 100
+
+    # Nothing in, None out:
+    npt.assert_equal(model.predict_percept(None), None)
+
+    # Zero in = zero out. Both stages start empty, so there is nothing to
+    # release either:
+    percept = model.predict_percept(BiphasicPulse(0, 1), t_percept=[0, 1, 2])
+    npt.assert_equal(isinstance(percept, Percept), True)
+    npt.assert_equal(percept.shape, (1, 1, 3))
+    npt.assert_almost_equal(percept.data, 0)
+
+    with pytest.raises(ValueError):
+        model.predict_percept(Stimulus(np.ones((1, 100))),
+                              t_percept=[0.2, 0.2])
+
+
+def test_AlphaTemporal_rectifies_the_drive():
+    """Only the cathodic half of the stimulus drives the cascade."""
+    model = AlphaTemporal(tau=20, thresh_percept=0).build()
+    t = np.round(np.arange(0, 100, 0.5), 5)
+
+    anodic = model.predict_percept(MonophasicPulse(1, 1, stim_dur=100),
+                                   t_percept=t)
+    npt.assert_array_equal(anodic.data, 0)
+
+    cathodic = model.predict_percept(MonophasicPulse(-1, 1, stim_dur=100),
+                                     t_percept=t)
+    npt.assert_equal(cathodic.data.max() > 0, True)
+
+
+def _alpha_reference(data, t_stim, idx_percept, dt, tau):
+    """Two-state explicit Euler, one location at a time, in float32.
+
+    Stage 2 reads stage 1 as it was at the *start* of the step, which is what
+    gives the cascade its rise delay.
+    """
+    dt, tau = np.float32(dt), np.float32(tau)
+    dt_tau = np.float32(dt / tau)
+    n_stim = len(t_stim)
+    out = np.zeros((data.shape[0], len(idx_percept)), dtype=np.float32)
+    for s in range(data.shape[0]):
+        x = y = np.float32(0.0)
+        idx_stim, frame = 0, 0
+        for i in range(int(idx_percept[-1]) + 1):
+            while (idx_stim + 1 < n_stim and
+                   np.float32(i) * dt >= t_stim[idx_stim + 1]):
+                idx_stim += 1
+            drive = np.float32(max(-data[s, idx_stim], 0.0))
+            x_old = x
+            x = np.float32(x + dt_tau * (drive - x))
+            y = np.float32(y + dt_tau * (x_old - y))
+            if i == idx_percept[frame]:
+                out[s, frame] = y
+                frame += 1
+    return out
+
+
+def test_AlphaTemporal_matches_reference_recurrence():
+    """Pin the two-state cascade against a plain Python reference.
+
+    The stimulus straddles zero, so this also pins the half-wave
+    rectification, and the reference stages the update the way the kernel
+    does: feeding stage 2 the already-updated stage 1 would pass a drive
+    through in a single step and remove the rise the model exists for.
+    """
+    model = AlphaTemporal(dt=0.01, tau=50, thresh_percept=0).build()
+    n_space, n_stim = 3, 5
+    rng = np.random.default_rng(0)
+    data = (rng.random((n_space, n_stim)) - 0.5).astype(np.float32)
+    npt.assert_equal(np.any(data > 0) and np.any(data < 0), True)
+    t_stim = np.arange(n_stim, dtype=np.float32) * 2.0
+    t_percept = np.array([0.0, 2.0, 4.0, 8.0])
+    got = model.predict_percept(Stimulus(data, time=t_stim),
+                                t_percept=t_percept).data.reshape(n_space, -1)
+
+    idx_p = np.uint32(np.round(t_percept / model.dt))
+    want = _alpha_reference(data, t_stim, idx_p, model.dt, model.tau)
+    # Close, not equal: `x + dt_tau * d` may be contracted into one fused
+    # multiply-add by the C compiler but never is by NumPy here. See
+    # `test_FadingTemporal_matches_reference_integrator`.
+    npt.assert_allclose(got, want, rtol=1e-6)
+
+    # Wiring stage 2 to the *new* stage 1 is the mistake this test exists to
+    # catch. Switch a cathodic drive on at t=0 and the first step settles it:
+    # stage 2 saw stage 1 at zero, so brightness is still exactly zero, where
+    # the other wiring would already report `(dt/tau)**2` of it.
+    dt, tau = 0.01, 50.0
+    step = alpha_fast(np.array([[-1.0]], dtype=np.float32),
+                      np.array([0.0], dtype=np.float32),
+                      np.arange(3, dtype=np.uint32), dt, tau, 0.0, 1, 0)
+    npt.assert_array_equal(step[0, 0], 0)
+    npt.assert_allclose(step[0, 1], (dt / tau) ** 2, rtol=1e-6)
+
+
+def test_AlphaTemporal_impulse_is_alpha_shaped():
+    """A brief pulse produces a delayed hump, not an instant jump.
+
+    `dt` is 200x shorter than `tau`, so the pulse is effectively an impulse
+    and the continuous-time response `t/tau**2 exp(-t/tau)` applies: zero at
+    onset, a single interior maximum at `t = tau`, monotone either side.
+    """
+    tau, dt = 20.0, 0.1
+    model = AlphaTemporal(tau=tau, dt=dt, thresh_percept=0).build()
+    # One `dt` step of cathodic current, on the simulation grid:
+    stim = Stimulus(np.array([[0.0, -1.0, 0.0]]), time=[0.0, dt, 2 * dt])
+    t = np.round(np.arange(0, 6 * tau, dt), 5)
+    y = model.predict_percept(stim, t_percept=t).data.ravel()
+
+    # Zero at onset, and zero one step later too: stage 2 only ever sees
+    # stage 1 as it was at the start of the step.
+    npt.assert_array_equal(y[:2], 0)
+    npt.assert_array_less(0, y[2:].min())
+    peak = int(np.argmax(y))
+    # An interior maximum, not the first or last sample -- that is the whole
+    # difference from an exponential fade. Discretization may move it a step
+    # or two off `tau`:
+    npt.assert_equal(0 < peak < len(y) - 1, True)
+    npt.assert_allclose(t[peak], tau, rtol=0.05)
+    npt.assert_equal(np.all(np.diff(y[1:peak + 1]) > 0), True)
+    # Not strict on the way down: float32 leaves the top of the hump flat for
+    # a step or two, and `argmax` reports the first of them.
+    npt.assert_equal(np.all(np.diff(y[peak:]) <= 0), True)
+    npt.assert_array_less(y[-1], y[peak])
+    # Its shape is the alpha function scaled by the impulse area (`dt` here),
+    # which is what unit DC gain leaves the impulse peak at:
+    npt.assert_allclose(y[peak], dt / (np.e * tau), rtol=0.02)
+
+
+def test_AlphaTemporal_dc_gain_is_unity():
+    """Sustained drive approaches the drive amplitude, not a multiple of it.
+
+    Both stages are unit-gain leaky integrators; normalizing the impulse
+    response to peak at 1 would multiply this by `e * tau` instead.
+    """
+    for tau in (10.0, 100.0):
+        model = AlphaTemporal(tau=tau, thresh_percept=0).build()
+        drive = 3.0
+        stim = Stimulus(np.array([[-drive, -drive]]), time=[0.0, 40 * tau])
+        t = np.round(np.arange(0, 30 * tau, tau / 10), 5)
+        # Loose enough for float32 to accumulate 3000 steps in, tight
+        # enough that a gain of `e * tau` could not hide in it:
+        npt.assert_allclose(
+            model.predict_percept(stim, t_percept=t).data.ravel()[-1], drive,
+            rtol=5e-3)
+
+
+def test_AlphaTemporal_peak_is_exact():
+    """The in-kernel peak must equal a dense scan of the same interval."""
+    rng = np.random.default_rng(3)
+    data = (rng.random((5, 12)) - 0.5).astype(np.float32) * 40
+    t_stim = (np.arange(12) * 4.0).astype(np.float32)
+    dt, tau = 0.05, 20.0
+    n_sim = int(round(44 / dt)) + 1
+    dense = alpha_fast(data, t_stim, np.arange(n_sim, dtype=np.uint32), dt,
+                       tau, 0.0, 1, 0)
+    out = np.array([37, 210, 400, 601, 880], dtype=np.uint32)
+    peak = alpha_fast(data, t_stim, out, dt, tau, 0.0, 1, 1)
+    last = alpha_fast(data, t_stim, out, dt, tau, 0.0, 1, 0)
+    # The interval a percept point summarizes runs from the previous one up to
+    # and including it; brightness is continuous, so the value carried across
+    # the boundary is a floor on what the next interval reaches:
+    lo = np.r_[0, out[:-1]]
+    brute = np.stack([dense[:, a:b + 1].max(axis=1)
+                      for a, b in zip(lo, out)], axis=1)
+    npt.assert_array_equal(peak, brute)
+    npt.assert_array_equal(last, dense[:, out])
+    npt.assert_equal(np.any(peak > last), True)
+
+
+def test_AlphaTemporal_reduce():
+    """`reduce` governs the times the model picks, not the ones you name."""
+    stim = BiphasicPulseTrain(20, -50, 0.46, stim_dur=200)
+    # Short enough that the cascade still ripples between pulses of a 20 Hz
+    # train; at `tau=100` the second stage smooths them into one ramp and the
+    # two settings have nothing to disagree about:
+    peak_model = AlphaTemporal(tau=10).build()
+    last_model = AlphaTemporal(tau=10, reduce='last').build()
+
+    t = [0, 50, 100, 150]
+    npt.assert_array_equal(peak_model.predict_percept(stim, t_percept=t).data,
+                           last_model.predict_percept(stim, t_percept=t).data)
+
+    got = last_model.predict_percept(stim)
+    peaked = peak_model.predict_percept(stim)
+    npt.assert_almost_equal(peaked.time, got.time)
+    npt.assert_equal(np.all(peaked.data >= got.data), True)
+    npt.assert_equal(np.any(peaked.data > got.data), True)
+
+
+@pytest.mark.parametrize('n_space', (1, 63, 64, 65, 130))
+def test_AlphaTemporal_block_boundaries(n_space):
+    """Locations are integrated in fixed-size blocks; the last one is partial.
+
+    `alpha_fast` carries two states per location, so it has its own block
+    bookkeeping to get wrong.
+    """
+    model = AlphaTemporal(dt=0.05, tau=30).build()
+    rng = np.random.default_rng(n_space)
+    data = (rng.random((n_space, 4)) - 0.7).astype(np.float32)
+    stim = Stimulus(data, time=np.arange(4, dtype=float) * 5)
+    t = [0, 5, 10, 15]
+    percept = model.predict_percept(stim, t_percept=t)
+    npt.assert_equal(percept.data.shape, (n_space, 1, 4))
+    single = np.stack([
+        model.predict_percept(Stimulus(data[i:i + 1], time=stim.time),
+                              t_percept=t).data.ravel()
+        for i in range(n_space)])
+    npt.assert_array_equal(percept.data.reshape(n_space, -1), single)
+    # Threads take a block of locations each; the result must not depend on
+    # how many of them there are:
+    for n_threads in (2, 3, 8):
+        parallel = AlphaTemporal(dt=0.05, tau=30, n_threads=n_threads).build(
+        ).predict_percept(stim, t_percept=t).data
+        npt.assert_array_equal(parallel, percept.data)

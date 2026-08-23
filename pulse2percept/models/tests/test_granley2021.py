@@ -12,7 +12,8 @@ from pulse2percept.stimuli import (AmplitudeEncoder,
                                    AsymmetricBiphasicPulseTrain,
                                    BiphasicPulseTrain, ImageStimulus,
                                    MonophasicPulse, Stimulus)
-from pulse2percept.models import (AxonMapSpatial, BiphasicAxonMapModel,
+from pulse2percept.models import (AlphaTemporal, AxonMapSpatial,
+                                  BiphasicAxonMapModel,
                                   BiphasicAxonMapSpatial, FadingTemporal,
                                   Horsager2009Temporal, Model,
                                   Nanduri2012Temporal)
@@ -1032,6 +1033,40 @@ def test_BiphasicAxonMapSpatial_composite_rejects_unequal_stim_dur(
                                                      stim_dur=1000)})
     with pytest.raises(NotImplementedError):
         composite.predict_percept(implant)
+
+
+def test_BiphasicAxonMapSpatial_composite_rides_an_alpha_envelope():
+    """`AlphaTemporal` gives the Granley percept a rise, not just a fade.
+
+    Sampled at every `dt`, so the peak the model normalizes by is one of the
+    samples rather than something between two of them.
+    """
+    temporal = AlphaTemporal(tau=20)
+    composite, granley = _composite(temporal)
+    implant = _composite_implant()
+    t = _every_dt(temporal)
+    percept = composite.predict_percept(implant, t_percept=t)
+
+    # Time-varying, and still peaking at the Granley frame:
+    granley_frame = granley.predict_percept(implant).data[..., 0]
+    npt.assert_equal(percept.data.shape[-1], len(t))
+    npt.assert_array_almost_equal(percept.max(axis='frames'), granley_frame)
+
+    trace = percept.data[np.unravel_index(np.argmax(granley_frame),
+                                          granley_frame.shape)]
+    # An alpha envelope, not an exponential fade: it starts at zero and peaks
+    # well after onset, where `FadingTemporal` is already at its brightest one
+    # step in.
+    npt.assert_equal(trace[0], 0)
+    peak = int(np.argmax(trace))
+    npt.assert_equal(0 < peak < len(trace) - 1, True)
+    npt.assert_array_less(_STIM_DUR, t[peak])
+    npt.assert_array_less(trace[-1], trace[peak])
+
+    fading, _ = _composite(FadingTemporal(tau=20))
+    fade = fading.predict_percept(implant, t_percept=t).data[
+        np.unravel_index(np.argmax(granley_frame), granley_frame.shape)]
+    npt.assert_array_less(np.argmax(fade), peak)
 
 
 def test_BiphasicAxonMapSpatial_composite_normalizes_a_delayed_peak():

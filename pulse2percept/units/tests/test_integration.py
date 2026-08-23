@@ -15,8 +15,8 @@ import pytest
 from pulse2percept.implants import (ArgusII, DiskElectrode, ElectrodeGrid,
                                     EnsembleImplant, ProsthesisSystem)
 from pulse2percept.implants.cortex import Cortivis
-from pulse2percept.models import (AxonMapSpatial, FadingTemporal, Model,
-                                  ScoreboardSpatial)
+from pulse2percept.models import (AlphaTemporal, AxonMapSpatial,
+                                  FadingTemporal, Model, ScoreboardSpatial)
 from pulse2percept.models.cortex import (ScoreboardSpatial as
                                          CortexScoreboardSpatial)
 from pulse2percept.percepts import Percept
@@ -143,6 +143,8 @@ def test_every_spelling_builds_the_same_object():
           lambda p: p.time, 'Percept.time')
     _same(lambda t: FadingTemporal(tau=t).build(), dur, durs,
           lambda m: m.tau, 'FadingTemporal.tau')
+    _same(lambda t: AlphaTemporal(tau=t).build(), dur, durs,
+          lambda m: m.tau, 'AlphaTemporal.tau')
     pulse = BiphasicPulseTrain(20, 41.7, 0.45, stim_dur=100)
     temporal = FadingTemporal().build()
     _same(lambda t: temporal.predict_percept(pulse, t_percept=[0, t]),

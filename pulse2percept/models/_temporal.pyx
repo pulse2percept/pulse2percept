@@ -193,3 +193,138 @@ cpdef fading_fast(const float32[:, ::1] stim,
         c_fpmode_restore(fpmode)
 
     return np.asarray(percept)  # Py overhead
+
+
+@cdivision(True)
+cpdef alpha_fast(const float32[:, ::1] stim,
+                 const float32[::1] t_stim,
+                 const uint32[::1] idx_t_percept,
+                 float32 dt,
+                 float32 tau,
+                 float32 thresh_percept,
+                 uint32 n_threads,
+                 uint32 reduce=REDUCE_LAST):
+    """Cython implementation of the generic alpha model
+
+    Two leaky integrators in series, both with time constant ``tau`` and unit
+    DC gain, driven by the cathodic half of the stimulus. The cascade's
+    impulse response is ``t / tau**2 * exp(-t / tau)``, which starts at zero,
+    peaks at ``t = tau`` and decays afterwards.
+
+    Loop structure, sparse stimulus advancement, blocking, denormal handling
+    and interval peak tracking all work exactly as in ``fading_fast``; see
+    there. The only difference is that each location carries two states.
+
+    Parameters
+    ----------
+    stim : 2D float32 array
+        A ``Stimulus.data`` container that contains spatial locations as rows
+        and time points as columns. This is the output of the spatial model.
+        The time points are specified in ``t_stim``.
+    t_stim : 1D float32 array
+        The time points for ``stim`` above.
+    dt : float32
+        Sampling time step (ms)
+    tau : float32
+        Time constant of both leaky stages (ms).
+    thresh_percept : float32
+        Spatial responses smaller than ``thresh_percept`` will be set to zero
+    n_threads : uint32
+        Number of CPU threads to use during parallelization using OpenMP.
+        Defaults to maximum number of cores on user CPU
+    reduce : uint32
+        How each percept time point summarizes the interval since the previous
+        one: 0 reports the brightness at that instant, 1 reports the peak
+        brightness reached over the interval. The second stage is what is
+        reported and what the peak is tracked on.
+
+    Returns
+    -------
+    percept : 2D float32 array
+        space x time
+
+    """
+    cdef:
+        float32 t_sim, amp, drive, stage1, stage1_old, bright, dt_tau
+        float32[:, ::1] percept
+        float32[:, ::1] stim_t
+        float32[:, ::1] first
+        float32[:, ::1] second
+        float32[:, ::1] running
+        index_t idx_space, idx_sim, idx_stim, idx_frame, idx_block
+        index_t n_space, n_stim, n_percept, n_sim, n_blocks, lo, hi, tid
+        unsigned long long fpmode
+
+    n_percept = len(idx_t_percept)  # Py overhead
+    n_stim = len(t_stim)  # Py overhead
+    n_sim = idx_t_percept[n_percept - 1] + 1  # no negative indices
+    n_space = stim.shape[0]
+    if n_threads < 1:  # `num_threads(0)` is not conforming OpenMP
+        n_threads = 1
+
+    percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
+    dt_tau = dt / tau
+    stim_t = np.ascontiguousarray(np.asarray(stim).T)  # Py overhead
+    n_blocks = (n_space + BLOCK - 1) // BLOCK
+    # One row per thread for each of the two stages and for the running peak,
+    # so no two threads share a cache line:
+    first = np.empty((n_threads, BLOCK), dtype=np.float32)  # Py overhead
+    second = np.empty((n_threads, BLOCK), dtype=np.float32)  # Py overhead
+    running = np.empty((n_threads, BLOCK), dtype=np.float32)  # Py overhead
+
+    for idx_block in prange(n_blocks, schedule='static', nogil=True,
+                            num_threads=n_threads):
+        fpmode = c_denormals_off()
+        tid = threadid()
+        lo = idx_block * BLOCK
+        hi = lo + BLOCK
+        if hi > n_space:
+            hi = n_space
+        for idx_space in range(hi - lo):
+            first[tid, idx_space] = <float32>0.0
+            second[tid, idx_space] = <float32>0.0
+            running[tid, idx_space] = <float32>0.0
+        idx_stim = 0
+        idx_frame = 0
+        for idx_sim in range(n_sim):
+            t_sim = idx_sim * dt
+            while idx_stim + 1 < n_stim and t_sim >= t_stim[idx_stim + 1]:
+                idx_stim = idx_stim + 1
+            for idx_space in range(hi - lo):
+                amp = stim_t[idx_stim, lo + idx_space]
+                stage1 = first[tid, idx_space]
+                bright = second[tid, idx_space]
+                # Half-wave rectify: only cathodic (negative) current drives
+                # the cascade.
+                drive = -amp
+                if drive < 0.0:
+                    drive = 0.0
+                # The second stage reads the first stage as it was at the
+                # start of the step. Feeding it the already-updated value
+                # would let a drive reach the output within a single step and
+                # remove the rise delay the cascade exists for:
+                stage1_old = stage1
+                stage1 = stage1 + dt_tau * (drive - stage1)
+                bright = bright + dt_tau * (stage1_old - bright)
+                # Brightness is bounded in [0, \inf[
+                if bright < 0.0:
+                    bright = 0.0
+                first[tid, idx_space] = stage1
+                second[tid, idx_space] = bright
+                if bright > running[tid, idx_space]:
+                    running[tid, idx_space] = bright
+            if idx_sim == idx_t_percept[idx_frame]:
+                for idx_space in range(hi - lo):
+                    if reduce == REDUCE_PEAK:
+                        bright = running[tid, idx_space]
+                    else:
+                        bright = second[tid, idx_space]
+                    if c_abs(bright) >= thresh_percept:
+                        percept[lo + idx_space, idx_frame] = bright
+                    # Brightness is continuous, so the value carried across
+                    # the boundary is a floor on the next interval's peak:
+                    running[tid, idx_space] = second[tid, idx_space]
+                idx_frame = idx_frame + 1
+        c_fpmode_restore(fpmode)
+
+    return np.asarray(percept)  # Py overhead

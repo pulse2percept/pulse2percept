@@ -21,7 +21,7 @@ Computational models of the prosthetic vision, such as phosphene and neural resp
 """
 from .base import (BaseModel, Model, NotBuiltError, SpatialModel,
                    TemporalModel)
-from .temporal import FadingTemporal
+from .temporal import AlphaTemporal, FadingTemporal
 from .beyeler2019 import (ScoreboardModel, ScoreboardSpatial, AxonMapSpatial,
                           AxonMapModel)
 from .horsager2009 import Horsager2009Model, Horsager2009Temporal
@@ -33,6 +33,7 @@ from .thompson2003 import Thompson2003Model, Thompson2003Spatial
 from . import cortex
 
 __all__ = [
+    'AlphaTemporal',
     'AxonMapModel',
     'AxonMapSpatial',
     'BaseModel',

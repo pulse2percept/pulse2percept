@@ -64,6 +64,10 @@ API changes:
   :py:class:`~pulse2percept.models.FadingTemporal` now ignores anodic current
   rather than treating it as negative brightness, and enforces ``tau >= dt``.
 
+* New :py:class:`~pulse2percept.models.AlphaTemporal` provides a one-time-constant
+  alpha-shaped temporal response, rising to a peak at ``tau`` rather than
+  fading from stimulus onset.
+
 * A bare :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` amplitude now
   consistently means microamps.
   :py:class:`~pulse2percept.models.BiphasicAxonMapModel` amplitudes, which used
