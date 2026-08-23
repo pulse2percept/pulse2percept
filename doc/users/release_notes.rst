@@ -81,7 +81,7 @@ Bug fixes:
 * Stimulus timing, metadata propagation, and pulse-train handling are more
   robust. Time axes now use float64 precision, metadata survives model
   prediction and transformations, and Dynaphos uses the actual frequency and
-  phase duration of directly assigned biphasic pulse trains.
+  phase duration of the biphasic pulse trains a stimulus is made of.
 
 * Fixed several image/video issues, including accidental input mutation,
   argument forwarding to scikit-image, image centering, single-frame playback,
@@ -90,10 +90,6 @@ Bug fixes:
 * Fixed several visual-field-map issues, including equality and hashing,
   array-shaped inverse cortical mappings, exact mesh-vertex mappings, and
   incorrect cortical-coordinate units in the documentation.
-
-* :py:class:`~pulse2percept.implants.EnsembleImplant` now handles nearly
-  coincident stimulus time points consistently with
-  :py:class:`~pulse2percept.stimuli.Stimulus`.
 
 * Various smaller correctness, compatibility, and documentation fixes.
 

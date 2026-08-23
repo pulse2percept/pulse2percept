@@ -347,9 +347,9 @@ class BiphasicPulseTrain(Stimulus):
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
                  n_pulses=None, stim_dur=1000.0, cathodic_first=True,
                  electrode=None, metadata=None):
-        # See `PulseTrain.__init__`. Normalizing here rather than leaving it to
-        # `BiphasicPulse` is what keeps the metadata below in the units a model
-        # reading it back expects:
+        # See `PulseTrain.__init__`. Normalizing here rather than leaving it
+        # to `BiphasicPulse` is what keeps the properties below in the units a
+        # model reading them back expects:
         freq = as_value(freq, Hz, 'freq')
         amp = as_value(amp, uA, 'amp')
         phase_dur = as_value(phase_dur, ms, 'phase_dur')
@@ -367,19 +367,7 @@ class BiphasicPulseTrain(Stimulus):
         self._train = PulseTrain(freq, pulse, n_pulses=n_pulses,
                                  stim_dur=stim_dur)
         self._defer(_electrode_names(electrode))
-
-        # Compatibility copy of the parameters this train owns outright
-        # (see `Stimulus._rescale_params`). `amp` is a magnitude, because that
-        # is all of it that reaches the data:
-        # `BiphasicPulse` takes `np.abs(amp)` and reads the polarity off
-        # `cathodic_first`. Storing the sign the caller happened to type would
-        # have two identical waveforms predict two different percepts, since
-        # the models are functions of `amp` and not of `abs(amp)`.
-        self.metadata = {'freq': freq,
-                         'amp': abs(amp),
-                         'phase_dur': phase_dur,
-                         'delay_dur': delay_dur,
-                         'user': metadata}
+        self.metadata = {'user': metadata}
 
     @property
     def freq(self):
@@ -443,19 +431,7 @@ class BiphasicPulseTrain(Stimulus):
             cathodic_first=(self.cathodic_first if factor >= 0
                             else not self.cathodic_first),
             electrode=self.electrodes[0],
-            # The compatibility metadata is rebuilt by the constructor, from
-            # the new amplitude. Only what the user put there is theirs to
-            # carry across:
             metadata=deepcopy(self.metadata.get('user')))
-
-    @classmethod
-    def _rescale_params(cls, metadata, factor):
-        """Return a scaled copy of the meta parameters"""
-        if 'amp' not in metadata:
-            return metadata
-        if factor is None:
-            return {'user': metadata.get('user')}
-        return dict(metadata, amp=abs(metadata['amp'] * factor))
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""

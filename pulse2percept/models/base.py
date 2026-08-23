@@ -972,9 +972,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 # np.asarray: indexing a single-electrode stimulus returns a
                 # scalar, which has no `reshape`:
                 at = self._to_stim_time(t_percept, stim)
-                stim = Stimulus(np.asarray(stim[:, at]).reshape((-1, n_time)),
-                                electrodes=stim.electrodes, time=at,
-                                metadata=stim.metadata)._inherit_units(stim)
+                stim = Stimulus(
+                    np.asarray(stim[:, at]).reshape((-1, n_time)),
+                    electrodes=stim.electrodes, time=at
+                )._inherit_units(stim)._inherit_metadata(stim)
                 # find unique stimulus points
                 _, t_unique, inverse = np.unique(stim.data.T, axis=0,
                                                  return_index=True,
@@ -998,14 +999,12 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 uniq_time = stim.time[t_unique]
                 if len(uniq_time) == 1:
                     uniq_time = None
-                # Carry the metadata across: `_predict_spatial` is where
-                # BiphasicAxonMapSpatial and DynaphosModel look up amplitude,
-                # frequency and phase duration, and they only ever see this
-                # de-duplicated copy:
+                # `_predict_spatial` only ever sees this de-duplicated
+                # copy, so the stimulus' metadata has to come along:
                 stim_unique = Stimulus(
                     stim[:, stim.time[t_unique]], electrodes=stim.electrodes,
-                    time=uniq_time,
-                    metadata=stim.metadata)._inherit_units(stim)
+                    time=uniq_time
+                )._inherit_units(stim)._inherit_metadata(stim)
                 resp_unique = self._predict_spatial(implant.earray, stim_unique)
                 # reconstruct original time points, making sure to preserve C ordering
                 resp = resp_unique[..., inverse].copy(order='C')

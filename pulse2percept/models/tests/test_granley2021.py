@@ -779,22 +779,16 @@ def test_BiphasicAxonMap_predicts_without_a_waveform(model_cls, build_stim):
 
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
-@pytest.mark.parametrize('corrupt', [
-    lambda m: m.clear(),
-    lambda m: m['electrodes'].clear(),
-    lambda m: m['electrodes']['C5']['metadata'].update(amp=999, freq=1),
-    lambda m: m['electrodes']['C5'].update(type=object),
-])
-def test_BiphasicAxonMap_ignores_pulse_metadata(model_cls, corrupt):
-    # The metadata is a copy of what the trains say, kept for compatibility.
-    # Corrupting it must not move the percept, and must not change whether the
-    # stimulus is accepted:
+def test_BiphasicAxonMap_ignores_user_metadata(model_cls):
+    # The model is a function of the trains the stimulus is made of, and of
+    # nothing the user filed alongside them -- even metadata that happens to
+    # name pulse parameters:
     model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
                       n_ax_segments=30).build()
     implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1, 0.45,
                                                      stim_dur=100)})
     expected = model.predict_percept(implant).data
-    corrupt(implant.stim.metadata)
+    implant.stim.metadata['user'] = {'amp': 999, 'freq': 1}
     npt.assert_array_equal(model.predict_percept(implant).data, expected)
 
 

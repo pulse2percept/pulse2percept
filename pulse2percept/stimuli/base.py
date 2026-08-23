@@ -114,11 +114,8 @@ def _strip_units(source, unit):
     return source
 
 
-def _scale_factor(op, scalar, reverse=False, field='data'):
+def _scale_factor(op, scalar, reverse=False):
     """The factor by which an arithmetic operator scales the stimulus data"""
-    if field == 'time':
-        # Shifting in time moves the whole stim but amps remain:
-        return 1.0
     if op is ops.mul:
         factor = scalar
     elif op is ops.truediv:
@@ -280,10 +277,13 @@ class Stimulus(PrettyPrint):
 
     @staticmethod
     def _wrap_metadata(metadata):
-        """File the caller's metadata under user, unless it is already ours"""
-        if isinstance(metadata, dict) and 'electrodes' in metadata.keys():
-            return metadata
-        return {'electrodes': {}, 'user': metadata}
+        """File the caller's metadata under ``user``"""
+        return {'user': metadata}
+
+    def _inherit_metadata(self, other):
+        """Take on another stimulus' metadata dict, as it stands"""
+        self.metadata = other.metadata
+        return self
 
     def _defer(self, electrodes, unit=None, time_unit=None, metadata=None):
         """Set this stimulus up to generate its waveform later"""
@@ -485,16 +485,6 @@ class Stimulus(PrettyPrint):
                     # In all other cases, use the electrode names specified by
                     # the source (unless they're None):
                     _electrodes.append(e if e is not None else ele)
-                try:
-                    # Compatibility channel: what described this electrode,
-                    # for a reader that ends up with only the samples (see
-                    # `_rescale_params`)
-                    self.metadata['electrodes'][str(ele)] = {
-                        'metadata': src.metadata,
-                        'type': type(src)
-                    }
-                except AttributeError:
-                    pass
             if self._components is None:
                 _data, _time = self._merge_sources(_data, _time)
                 _n_rows = _data.shape[0]
@@ -515,23 +505,20 @@ class Stimulus(PrettyPrint):
                 _data, _time, _electrodes = self._parse_source(source)
                 _n_rows = _data.shape[0]
             if isinstance(source, Stimulus):
-                if 'electrodes' not in source.metadata.keys():
-                    self.metadata['electrodes'][str(_electrodes[0])] = {
-                        'metadata': source.metadata, 'type': type(source)}
-                else:
-                    self.metadata = source.metadata
+                # Re-wrapping or renaming a stimulus keeps the metadata it
+                # came with:
+                self._inherit_metadata(source)
 
         if _electrodes is None:
             # The source did not name its electrodes, so they are 0..N-1 --
             # unique by construction. Only build that array if something will
             # read it
             _auto_electrodes = True
-            if electrodes is None or self.metadata.get('electrodes'):
+            if electrodes is None:
                 _electrodes = np.arange(_n_rows)
 
         # User can overwrite the names of the electrodes:
         if electrodes is not None:
-            _renamed_from = _electrodes
             if isinstance(electrodes, ElectrodeNames):
                 # Names generated from a grid pattern:
                 _electrodes = electrodes.ravel()
@@ -540,7 +527,6 @@ class Stimulus(PrettyPrint):
                 _electrodes = np.array([electrodes]).flatten()
                 _auto_electrodes = False
         else:
-            _renamed_from = None
             if isinstance(_electrodes, ElectrodeNames):
                 # The source brought its own generated names along:
                 _electrodes = _electrodes.ravel()
@@ -575,23 +561,6 @@ class Stimulus(PrettyPrint):
                     _electrodes = _electrodes.astype(
                         np.result_type(_electrodes.dtype, f'U{n_digits}'))
                 _electrodes[idx] = idx
-
-        # Per-electrode metadata is addressed by electrode name (that is how
-        # BiphasicAxonMapModel finds its stimulus parameters), so renaming the
-        # electrodes has to rename those keys too:
-        elec_meta = self.metadata.get('electrodes')
-        if (elec_meta and _renamed_from is not None and
-                len(_renamed_from) == len(_electrodes)):
-            # Keys that do not belong to any electrode are left alone, and
-            # `metadata` may be shared with the source stimulus, so never
-            # rename in place:
-            rename = {str(old): str(new)
-                      for old, new in zip(_renamed_from, _electrodes)
-                      if str(old) != str(new)}
-            if rename:
-                self.metadata = dict(self.metadata)
-                self.metadata['electrodes'] = {rename.get(k, k): v
-                                               for k, v in elec_meta.items()}
 
         # User can overwrite time:
         if time is not None:
@@ -651,41 +620,6 @@ class Stimulus(PrettyPrint):
         memo[id(self)] = stim
         stim.metadata = deepcopy(self.metadata, memo)
         return stim
-
-    @classmethod
-    def _rescale_params(cls, metadata, factor):
-        """Rewrite waveform parameters for a waveform scaled by ``factor``
-
-        Compatibility only. A pulse-based stimulus owns its parameters and
-        the models read them off it (see :py:meth:`_structured_sources`); this
-        files a copy under ``metadata`` for waveform-only containers, which is
-        what :py:class:`~pulse2percept.implants.EnsembleImplant` interpolates
-        its children into. There the copy is the only surviving description of
-        the pulse trains, and
-        :py:class:`~pulse2percept.models.cortex.DynaphosModel` still reads it.
-        """
-        return metadata
-
-    def _rescale_result(self, stim, factor):
-        """Keep the metadata of a transformed copy in step with its data"""
-        stim._rescale_metadata(factor)
-        if self._is_parametric:
-            stim.metadata = type(self)._rescale_params(stim.metadata, factor)
-
-    def _rescale_metadata(self, factor):
-        """Keep the metadata in sync with data that was scaled by ``factor``"""
-        if factor == 1:
-            return
-        elec_meta = self.metadata.get('electrodes')
-        if not elec_meta:
-            return
-        for entry in elec_meta.values():
-            if not isinstance(entry, dict):
-                continue
-            src, meta = entry.get('type'), entry.get('metadata')
-            if isinstance(meta, dict) and isinstance(src, type) and \
-                    issubclass(src, Stimulus):
-                entry['metadata'] = src._rescale_params(meta, factor)
 
     def compress(self):
         """Compress the source data in place"""
@@ -779,7 +713,6 @@ class Stimulus(PrettyPrint):
         stim._stim = {'data': data,
                       'electrodes': self.electrodes,
                       'time': time}
-        self._rescale_result(stim, None)
         return stim
 
     def remove(self, electrodes):
@@ -1194,11 +1127,6 @@ class Stimulus(PrettyPrint):
         stim._stim = {'data': op(a, b) if field == 'data' else stim.data.copy(),
                       'electrodes': stim.electrodes.copy(),
                       'time': time}
-        # Parameters that describe the waveform (a pulse train's amplitude,
-        # say) have to follow the data:
-        reverse = bool(a_supported)
-        self._rescale_result(stim, _scale_factor(op, a if reverse else b,
-                                                 reverse, field))
         return stim
 
     def _scaled(self, factor):
@@ -1214,7 +1142,6 @@ class Stimulus(PrettyPrint):
         stim = self._shallow_copy()
         stim._components = [(src * factor, n) for src, n in self._components]
         stim._forget_waveform(self.electrodes)
-        stim._rescale_metadata(factor)
         return stim
 
     def _operate(self, op, scalar, reverse=False):

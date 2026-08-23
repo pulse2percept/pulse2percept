@@ -12,8 +12,8 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
 from pulse2percept.stimuli import Stimulus
-from pulse2percept.stimuli import (BiphasicPulse, BiphasicPulseTrain,
-                                   MonophasicPulse)
+from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
+                                   BiphasicPulseTrain, MonophasicPulse)
 from pulse2percept.stimuli import ImageStimulus
 from pulse2percept.stimuli import VideoStimulus
 from pulse2percept.stimuli._merge import merge_time_axes
@@ -1192,35 +1192,51 @@ def test_Stimulus___eq___tolerance():
                      True)
 
 
-def test_Stimulus_rename_electrodes_metadata():
-    # Per-electrode metadata is keyed by electrode name (BiphasicAxonMapModel
-    # reads its stimulus parameters from there), so renaming the electrodes
-    # has to rename those keys as well.
-    stim = Stimulus({'A1': BiphasicPulseTrain(20, 30, 0.45, stim_dur=100),
-                     'B3': BiphasicPulseTrain(40, 20, 0.45, stim_dur=100)})
-    npt.assert_equal(sorted(stim.metadata['electrodes'].keys()), ['A1', 'B3'])
+def test_Stimulus_user_metadata_is_never_unpacked():
+    # `metadata` is the caller's, whatever it holds
+    for metadata in ({'user': 'Michael'}, {'user': None},
+                     {'user': 'Michael', 'encoder': 'not ours'}):
+        npt.assert_equal(Stimulus(1, metadata=metadata).metadata,
+                         {'user': metadata})
 
-    renamed = Stimulus(stim, electrodes=['Z9', 'Y8'])
-    npt.assert_equal(sorted(renamed.metadata['electrodes'].keys()), ['Y8', 'Z9'])
-    for old, new in [('A1', 'Z9'), ('B3', 'Y8')]:
-        npt.assert_equal(renamed.metadata['electrodes'][new],
-                         stim.metadata['electrodes'][old])
-    # The source must not be touched (its metadata may be shared):
-    npt.assert_equal(sorted(stim.metadata['electrodes'].keys()), ['A1', 'B3'])
 
-    # Swapping two names is a simultaneous remap, not two sequential ones:
-    swapped = Stimulus(stim, electrodes=['B3', 'A1'])
-    npt.assert_equal(swapped.metadata['electrodes']['B3'],
-                     stim.metadata['electrodes']['A1'])
-    npt.assert_equal(swapped.metadata['electrodes']['A1'],
-                     stim.metadata['electrodes']['B3'])
+def test_Stimulus_rewrap_keeps_the_metadata_structure():
+    # Re-wrapping a stimulus carries its metadata dict across as it stands
+    plain = Stimulus([[1, 2, 3]], time=[0, 1, 2], metadata='mine')
+    npt.assert_equal(Stimulus(plain).metadata, {'user': 'mine'})
+    npt.assert_equal(Stimulus(plain, electrodes=['Z']).metadata,
+                     {'user': 'mine'})
+    # An encoder records its frame clock at the top level, next to `user`:
+    encoded = AmplitudeEncoder().encode(
+        ImageStimulus(np.linspace(0, 1, 4).reshape(2, 2), metadata='mine'))
+    npt.assert_equal('encoder' in encoded.metadata, True)
+    rewrapped = Stimulus(encoded)
+    npt.assert_equal(rewrapped.metadata['encoder'],
+                     encoded.metadata['encoder'])
+    npt.assert_equal(rewrapped.metadata['user'], encoded.metadata['user'])
+    # ...and a video's own `fps` is not the caller's metadata either:
+    video = VideoStimulus(np.ones((2, 2, 3)), metadata={'fps': 10})
+    npt.assert_equal(Stimulus(video).metadata['fps'], 10)
 
-    # Renaming a stimulus that has no per-electrode metadata is a no-op:
+
+def test_Stimulus_rename_keeps_the_sources_with_their_electrodes():
+    # Renaming addresses the sources by position, so it must not shuffle which
+    # train drives which electrode:
+    def build():
+        return {'A1': BiphasicPulseTrain(20, 30, 0.45, stim_dur=100),
+                'B3': BiphasicPulseTrain(40, 20, 0.45, stim_dur=100)}
+    renamed = dict(Stimulus(build(), electrodes=['Z9', 'Y8'])
+                   ._structured_sources())
+    npt.assert_equal(renamed['Z9'].freq, 20)
+    npt.assert_equal(renamed['Y8'].freq, 40)
+    swapped = dict(Stimulus(build(), electrodes=['B3', 'A1'])
+                   ._structured_sources())
+    npt.assert_equal(swapped['B3'].freq, 20)
+    npt.assert_equal(swapped['A1'].freq, 40)
+    # A waveform-only stimulus has no sources to keep, and renames anyway:
     plain = Stimulus(np.ones((2, 3)))
     npt.assert_equal(Stimulus(plain, electrodes=['P1', 'P2']).electrodes,
                      ['P1', 'P2'])
-    npt.assert_equal(Stimulus(plain, electrodes=['P1', 'P2'])
-                     .metadata['electrodes'], {})
 
 
 def test_Stimulus_data_is_contiguous():
@@ -1807,7 +1823,6 @@ def test_Stimulus_collection_defers_the_merge(name, build):
     npt.assert_equal(len(stim.electrodes) > 1, True)
     npt.assert_equal(stim.unit, uA)
     npt.assert_equal(stim.time_unit, ms)
-    npt.assert_equal(sorted(stim.metadata['electrodes']) != [], True)
     npt.assert_equal(stim.is_compressed, False)
     copies = [copy(stim), deepcopy(stim)]
     npt.assert_equal(_n_renders(stim), 0)
@@ -1930,7 +1945,6 @@ def test_Stimulus_collection_renames_without_rendering():
                        electrodes=['X', 'Y'])
     npt.assert_equal(_lazy(renamed), True)
     npt.assert_equal(list(renamed.electrodes), ['X', 'Y'])
-    npt.assert_equal(sorted(renamed.metadata['electrodes']), ['X', 'Y'])
     npt.assert_equal(child.n_renders, 0)
     # Re-wrapping a single deferred stimulus is a rename too:
     solo = Stimulus(CountingLazy(4, ['A1']), electrodes=['Z'])
@@ -2049,17 +2063,10 @@ def test_Stimulus_collection_scaling_stays_deferred(factor):
                      [BiphasicPulseTrain, BiphasicPulseTrain])
     npt.assert_almost_equal([c.amp for c, _ in scaled._components],
                             [10 * abs(factor), 20 * abs(factor)])
-    # ...and so is what the models read off the metadata:
-    npt.assert_almost_equal(
-        [v['metadata']['amp'] for v in scaled.metadata['electrodes'].values()],
-        [10 * abs(factor), 20 * abs(factor)])
     npt.assert_allclose(scaled.data, factor * Stimulus(build()).data,
                         rtol=1e-6, atol=1e-6)
-    # The original is untouched, in both descriptions:
+    # The original is untouched:
     npt.assert_almost_equal([c.amp for c, _ in stim._components], [10, 20])
-    npt.assert_almost_equal(
-        [v['metadata']['amp'] for v in stim.metadata['electrodes'].values()],
-        [10, 20])
 
 
 def test_Stimulus_collection_scaling_needs_every_entry_to_be_a_stimulus():

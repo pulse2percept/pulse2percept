@@ -275,71 +275,60 @@ def test_BiphasicTripletTrain(amp, interphase_dur, interpulse_dur, delay_dur, ca
 
 
 def test_metadata():
+    # A train stores what the user put there and nothing else:
     stim = BiphasicPulseTrain(10, 10, 1, metadata='userdata')
-    npt.assert_equal(stim.metadata['user'], 'userdata')
-    npt.assert_equal(stim.metadata['freq'], 10)
-    npt.assert_equal(stim.metadata['amp'], 10)
-    npt.assert_equal(stim.metadata['phase_dur'], 1)
-    npt.assert_equal(stim.metadata['delay_dur'], 0)
+    npt.assert_equal(stim.metadata, {'user': 'userdata'})
 
     stim = Stimulus({'A2': BiphasicPulseTrain(10, 10, 1, metadata='userdataA2'),
                      'B1': BiphasicPulseTrain(11, 9, 2, metadata='userdataB1'),
                      'C3': BiphasicPulseTrain(12, 8, 3, metadata='userdataC3')}, metadata='stimulus_userdata')
     npt.assert_equal(stim.metadata['user'], 'stimulus_userdata')
-    npt.assert_equal(stim.metadata['electrodes']
-                     ['A2']['type'], BiphasicPulseTrain)
-    npt.assert_equal(stim.metadata['electrodes']['B1']['metadata']['freq'], 11)
-    npt.assert_equal(stim.metadata['electrodes']
-                     ['C3']['metadata']['user'], 'userdataC3')
+    sources = dict(stim._structured_sources())
+    npt.assert_equal(type(sources['A2']), BiphasicPulseTrain)
+    npt.assert_equal(sources['B1'].freq, 11)
+    npt.assert_equal(sources['C3'].metadata['user'], 'userdataC3')
 
 
 @pytest.mark.parametrize('scale', [2, 0.5, 1, 0])
-def test_BiphasicPulseTrain_metadata_scaling(scale):
-    # BiphasicAxonMapModel reads amp/freq/phase_dur off the metadata rather
-    # than off the data, so scaling the data has to scale `amp` with it.
-    # Otherwise `pt * 2` delivers twice the current and predicts the very same
-    # percept:
+def test_BiphasicPulseTrain_scaling(scale):
+    # A model reads `amp` off the train, so scaling the data has to scale the
+    # parameter with it:
     pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
     scaled = pt * scale
-    npt.assert_almost_equal(scaled.metadata['amp'], 10 * scale)
+    npt.assert_almost_equal(scaled.amp, 10 * scale)
     npt.assert_almost_equal(scaled.data, scale * pt.data)
-    # Same data and same metadata as the pulse train built that way directly:
+    # Same data as the pulse train built that way directly:
     direct = BiphasicPulseTrain(20, 10 * scale, 0.45, stim_dur=100)
     npt.assert_almost_equal(scaled.data, direct.data)
-    npt.assert_equal(scaled.metadata, direct.metadata)
     # Every route to a scaled train agrees, and none of them touches the
     # original:
-    npt.assert_almost_equal((scale * pt).metadata['amp'], 10 * scale)
+    npt.assert_almost_equal((scale * pt).amp, 10 * scale)
     if scale != 0:
-        npt.assert_almost_equal((pt / (1 / scale)).metadata['amp'], 10 * scale)
-    npt.assert_equal(pt.metadata['amp'], 10)
+        npt.assert_almost_equal((pt / (1 / scale)).amp, 10 * scale)
+    npt.assert_equal(pt.amp, 10)
     # The other pulse parameters are untouched:
-    for key in ('freq', 'phase_dur', 'delay_dur', 'user'):
-        npt.assert_equal(scaled.metadata[key], pt.metadata[key])
+    for name in ('freq', 'phase_dur', 'delay_dur'):
+        npt.assert_equal(getattr(scaled, name), getattr(pt, name))
 
 
-def test_BiphasicPulseTrain_metadata_amp_is_a_magnitude():
+def test_BiphasicPulseTrain_amp_is_a_magnitude():
     # `BiphasicPulse` takes the magnitude of `amp` and reads the polarity off
-    # `cathodic_first`, so the sign of `amp` never reaches the data. The
-    # metadata has to record it the same way: the models are functions of
-    # `amp`, not of `abs(amp)`, so a stored sign would have two identical
-    # waveforms predict two different percepts.
+    # `cathodic_first`, so the sign of `amp` never reaches the data
     pos = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
     neg = BiphasicPulseTrain(20, -10, 0.45, stim_dur=100)
     npt.assert_almost_equal(pos.data, neg.data)
-    npt.assert_equal(pos.metadata, neg.metadata)
-    npt.assert_equal(pos.metadata['amp'], 10)
-    # ...and it stays a magnitude under scaling:
-    npt.assert_equal((neg * 2).metadata['amp'], 20)
+    npt.assert_equal(pos.amp, neg.amp)
+    npt.assert_equal(pos.amp, 10)
+    npt.assert_equal((neg * 2).amp, 20)
 
 
-def test_BiphasicPulseTrain_metadata_polarity():
+def test_BiphasicPulseTrain_polarity():
     # A negative factor swaps the two phases, which is what `cathodic_first`
     # records; the amplitude keeps its magnitude:
     pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
     for flipped in (-pt, pt * -1, 0 - pt, pt / -1):
         npt.assert_almost_equal(flipped.data, -pt.data)
-        npt.assert_equal(flipped.metadata['amp'], 10)
+        npt.assert_equal(flipped.amp, 10)
         npt.assert_equal(type(flipped), BiphasicPulseTrain)
         npt.assert_equal(flipped.cathodic_first, not pt.cathodic_first)
     # Flipping twice comes back to where it started:
@@ -348,7 +337,7 @@ def test_BiphasicPulseTrain_metadata_polarity():
     direct = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100,
                                 cathodic_first=False)
     npt.assert_almost_equal((-pt).data, direct.data)
-    npt.assert_equal((-pt).metadata, direct.metadata)
+    npt.assert_equal((-pt).cathodic_first, direct.cathodic_first)
 
 
 @pytest.mark.parametrize('modify', [lambda pt: pt + 5, lambda pt: pt - 5,
@@ -357,153 +346,57 @@ def test_BiphasicPulseTrain_metadata_polarity():
                                     lambda pt: pt * np.inf,
                                     lambda pt: pt * np.nan,
                                     lambda pt: pt / 0])
-def test_BiphasicPulseTrain_metadata_invalidated(modify):
+def test_BiphasicPulseTrain_stops_being_a_train(modify):
     # A DC offset is neither biphasic nor charge-balanced, and a non-finite
-    # factor leaves a waveform of infinities
+    # factor leaves a waveform of infinities. Neither is a pulse train, so
+    # neither may go on advertising one to a model:
     pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100, metadata='userdata')
     with np.errstate(divide='ignore', invalid='ignore'):
         modified = modify(pt)
-    for key in ('amp', 'freq', 'phase_dur', 'delay_dur'):
-        npt.assert_equal(key in modified.metadata, False)
+    npt.assert_equal(type(modified), Stimulus)
+    npt.assert_equal(modified._structured_sources(), None)
     # The user's own metadata is theirs, and survives:
     npt.assert_equal(modified.metadata['user'], 'userdata')
-    npt.assert_equal(pt.metadata['amp'], 10)
+    npt.assert_equal(pt.amp, 10)
 
 
-def test_BiphasicPulseTrain_metadata_shift():
-    # A shift moves the whole train, but every pulse in it keeps its
-    # amplitude, frequency and duration:
-    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
+def test_BiphasicPulseTrain_shift():
+    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100, metadata='userdata')
     for shifted in (pt >> 5, pt << 5):
-        npt.assert_equal(shifted.metadata, pt.metadata)
-        # ...on a plain Stimulus, though: a shifted train no longer ends where
-        # its `stim_dur` says (see `Stimulus._derived`).
+        npt.assert_equal(shifted.metadata['user'], 'userdata')
+        # A shifted train no longer ends where its `stim_dur` says, so what
+        # comes back is a plain Stimulus (see `Stimulus._derived`):
         npt.assert_equal(type(shifted), Stimulus)
     # Adding zero changes nothing at all, so what comes back is still a train:
     for same in (pt + 0, pt - 0):
-        npt.assert_equal(same.metadata, pt.metadata)
+        npt.assert_equal(same.metadata['user'], 'userdata')
         npt.assert_equal(type(same), BiphasicPulseTrain)
+        npt.assert_equal(same.amp, pt.amp)
         npt.assert_equal(same.cathodic_first, pt.cathodic_first)
     npt.assert_almost_equal((pt >> 5).time, pt.time + 5)
 
 
-@pytest.mark.parametrize('modify, expected', [
-    (lambda s: s * 2, 20), (lambda s: 2 * s, 20), (lambda s: s / 2, 5),
-    (lambda s: -s, 10), (lambda s: s >> 5, 10), (lambda s: s + 0, 10),
-    (lambda s: s * -2, 20), (lambda s: -2 * s, 20), (lambda s: s / -0.5, 20)])
-def test_Stimulus_rescales_electrode_metadata(modify, expected):
-    # A pulse train handed to an implant becomes one row of a plain Stimulus
-    stim = Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
-                     'B2': BiphasicPulseTrain(20, 4, 0.45, stim_dur=100)})
-    modified = modify(stim)
-    npt.assert_almost_equal(
-        modified.metadata['electrodes']['A1']['metadata']['amp'], expected)
-    # Every electrode is scaled, not just the first:
-    npt.assert_almost_equal(
-        modified.metadata['electrodes']['B2']['metadata']['amp'],
-        expected * 0.4)
-    # The source class is still recorded, and the original is untouched:
-    npt.assert_equal(modified.metadata['electrodes']['A1']['type'],
-                     BiphasicPulseTrain)
-    npt.assert_equal(stim.metadata['electrodes']['A1']['metadata']['amp'], 10)
-    # Scaling leaves the entry describable
-    for key, value in (('freq', 20), ('phase_dur', 0.45), ('delay_dur', 0)):
-        npt.assert_equal(
-            modified.metadata['electrodes']['A1']['metadata'][key], value)
-
-
-@pytest.mark.parametrize('modify', [lambda s: s + 5, lambda s: 5 - s,
-                                    lambda s: s * np.inf,
-                                    lambda s: s.append(s >> 1)])
-def test_Stimulus_invalidates_electrode_metadata(modify):
-    stim = Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)})
-    with np.errstate(divide='ignore', invalid='ignore'):
-        modified = modify(stim)
-    npt.assert_equal(
-        'amp' in modified.metadata['electrodes']['A1']['metadata'], False)
-    npt.assert_equal(stim.metadata['electrodes']['A1']['metadata']['amp'], 10)
-
-
-def test_Stimulus_rescale_metadata_leaves_the_source_alone():
-    # A composed stimulus files the very dict its source carries
-    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
-    composed = Stimulus({'A1': pt})
-    scaled = composed * 2
-    npt.assert_almost_equal(
-        scaled.metadata['electrodes']['A1']['metadata']['amp'], 20)
-    # Neither the composition nor the train it was built from moved:
-    npt.assert_equal(
-        composed.metadata['electrodes']['A1']['metadata']['amp'], 10)
-    npt.assert_equal(pt.metadata['amp'], 10)
-    # Invalidation is the other way to rewrite the entry, and it must not
-    # reach back either:
-    dropped = composed + 5
-    npt.assert_equal(
-        'amp' in dropped.metadata['electrodes']['A1']['metadata'], False)
-    npt.assert_equal(pt.metadata['amp'], 10)
-    npt.assert_equal(
-        composed.metadata['electrodes']['A1']['metadata']['amp'], 10)
-
-
-@pytest.mark.parametrize('factor', [2, -2, None])
-def test_BiphasicPulseTrain_metadata_rescale_params_does_not_mutate(factor):
-    # `_rescale_params` returns the rewritten metadata
-    meta = {'freq': 20, 'amp': 10, 'phase_dur': 0.45, 'delay_dur': 0,
-            'user': None}
-    before = dict(meta)
-    BiphasicPulseTrain._rescale_params(meta, factor)
-    npt.assert_equal(meta, before)
-
-
-def test_Stimulus_rescale_metadata_mixed_sources():
-    # An implant's stimulus need not be all pulse trains
-    plain = {'electrodes': {}, 'user': {'note': 'mine'}}
-    stim = Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
-                     'B2': Stimulus([[1, 2, 3]], time=[0, 1, 2],
-                                    metadata={'note': 'mine'})})
-    npt.assert_equal(stim.metadata['electrodes']['A1']['type'],
-                     BiphasicPulseTrain)
-    npt.assert_equal(stim.metadata['electrodes']['B2']['type'], Stimulus)
-    npt.assert_equal(stim.metadata['electrodes']['B2']['metadata'], plain)
-
-    # Scaling transforms the train's parameters and leaves the plain entry:
-    scaled = (stim * 3).metadata['electrodes']
-    npt.assert_almost_equal(scaled['A1']['metadata']['amp'], 30)
-    npt.assert_equal(scaled['B2']['metadata'], plain)
-
-    # ...and so does an operation that invalidates instead of rescaling:
-    offset = (stim + 5).metadata['electrodes']
-    npt.assert_equal('amp' in offset['A1']['metadata'], False)
-    npt.assert_equal(offset['B2']['metadata'], plain)
-
-
-@pytest.mark.parametrize('entry', [
-    # A type that is not a class, and so has no hook to call:
-    {'metadata': {'amp': 3}, 'type': 'BiphasicPulseTrain'},
-    # A class that is not a Stimulus, whose `_rescale_params` means something
-    # else entirely (or does not exist):
-    {'metadata': {'amp': 3}, 'type': dict},
-    {'metadata': {'amp': 3}},                            # no type recorded
-    {'metadata': 'not-a-dict', 'type': BiphasicPulseTrain},
-    {'type': BiphasicPulseTrain},                        # no metadata recorded
-    'not-an-entry-at-all'])
-def test_Stimulus_rescale_metadata_tolerates_odd_entries(entry):
-    stim = Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)})
-    stim.metadata['electrodes']['A1'] = entry
-    for modified in (stim * 2, stim * -2, stim + 5, stim.append(stim >> 1)):
-        npt.assert_equal(modified.metadata['electrodes']['A1'], entry)
-
-
-def test_Stimulus_rescale_metadata_leaves_plain_metadata_alone():
-    # A stimulus that describes no pulse parameters has nothing to keep in
-    # sync, and its metadata must survive the operators untouched:
+def test_Stimulus_operators_leave_user_metadata_alone():
+    # What the user filed is theirs, whatever the operator does to the data:
     stim = Stimulus(np.ones((2, 3)), metadata={'note': 'mine'})
     for modified in (stim * 2, stim + 5, -stim, stim >> 1):
         npt.assert_equal(modified.metadata['user'], {'note': 'mine'})
-    # Same for a source type that records no parameters of its own:
-    pulse = Stimulus({'A1': BiphasicPulse(10, 0.45)})
-    npt.assert_equal((pulse * 2).metadata['electrodes']['A1']['type'],
-                     BiphasicPulse)
+
+
+def test_Stimulus_collection_of_mixed_sources():
+    # An implant's stimulus need not be all pulse trains, and the entries that
+    # are keep their identity next to the ones that are not:
+    stim = Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
+                     'B2': Stimulus([[1, 2, 3]], time=[0, 1, 2],
+                                    metadata={'note': 'mine'})})
+    sources = dict(stim._structured_sources())
+    npt.assert_equal(type(sources['A1']), BiphasicPulseTrain)
+    npt.assert_equal(type(sources['B2']), Stimulus)
+    npt.assert_equal(sources['B2'].metadata['user'], {'note': 'mine'})
+    # Scaling scales the train and leaves the plain entry describing itself:
+    scaled = dict((stim * 3)._structured_sources())
+    npt.assert_almost_equal(scaled['A1'].amp, 30)
+    npt.assert_equal(scaled['B2'].metadata['user'], {'note': 'mine'})
 
 
 @pytest.mark.parametrize('freq, phase_dur, interphase_dur',
@@ -564,7 +457,6 @@ def test_PulseTrain_electrode_name(cls, args, kwargs):
     # And the name has to survive the trip through Stimulus():
     stim = Stimulus(cls(*args, stim_dur=100, electrode='A1', **kwargs))
     npt.assert_equal(stim.electrodes, ['A1'])
-    npt.assert_equal('A1' in stim.metadata['electrodes'], True)
 
 
 def test_pulse_train_units():
@@ -607,30 +499,25 @@ def test_pulse_train_units():
         PulseTrain(20 * uA, pulse)
 
 
-def test_pulse_train_metadata_units():
-    """Metadata keeps storing plain numbers in its historical units
+def test_pulse_train_parameter_units():
+    """A train reports plain numbers in its historical units
 
     BiphasicAxonMapModel and DynaphosModel read amplitude, frequency and phase
-    duration back off the metadata and feed them straight into their
-    equations, so a Quantity landing there would break them.
+    duration off the train and feed them straight into their equations, so a
+    Quantity coming back would break them.
     """
     train = BiphasicPulseTrain(0.02 * kHz, 0.05 * mA, 450 * us,
                                delay_dur=100 * us, stim_dur=0.2 * sec)
-    npt.assert_almost_equal(train.metadata['freq'], 20)
-    npt.assert_almost_equal(train.metadata['amp'], 50)
-    npt.assert_almost_equal(train.metadata['phase_dur'], 0.45)
-    npt.assert_almost_equal(train.metadata['delay_dur'], 0.1)
-    for key in ('freq', 'amp', 'phase_dur', 'delay_dur'):
-        npt.assert_equal(isinstance(train.metadata[key], Quantity), False)
-        npt.assert_equal(np.isscalar(train.metadata[key]), True)
-    # The same goes for the attributes a model or a plot might read:
-    npt.assert_equal(isinstance(train.freq, Quantity), False)
-    npt.assert_almost_equal(train.freq, 20)
+    for name, value in (('freq', 20), ('amp', 50), ('phase_dur', 0.45),
+                        ('delay_dur', 0.1)):
+        npt.assert_almost_equal(getattr(train, name), value)
+        npt.assert_equal(isinstance(getattr(train, name), Quantity), False)
+        npt.assert_equal(np.isscalar(getattr(train, name)), True)
     npt.assert_equal(isinstance(PulseTrain(0.02 * kHz,
                                            BiphasicPulse(50, 0.45)).freq,
                                 Quantity), False)
     # And scaling still rewrites the amplitude it advertises:
-    npt.assert_almost_equal((train * 2).metadata['amp'], 100)
+    npt.assert_almost_equal((train * 2).amp, 100)
 
 
 def test_PulseTrain_unit_provenance():
@@ -764,7 +651,7 @@ def test_PulseTrain_pulse_is_not_a_way_into_the_train():
 
 
 @pytest.mark.parametrize('factor', [2, 0.5, -1, -2, 1, 0, 1e-3])
-def test_BiphasicPulseTrain_scaling_rebuilds_its_model_metadata(factor):
+def test_BiphasicPulseTrain_scaling_rebuilds_the_train(factor):
     pt = BiphasicPulseTrain(20, 10, 0.45, interphase_dur=0.2, delay_dur=1,
                             stim_dur=100, metadata='userdata')
     routes = [pt * factor, factor * pt]
@@ -780,10 +667,8 @@ def test_BiphasicPulseTrain_scaling_rebuilds_its_model_metadata(factor):
         for name in ('freq', 'phase_dur', 'interphase_dur', 'delay_dur',
                      'n_pulses', 'stim_dur'):
             npt.assert_almost_equal(getattr(scaled, name), getattr(pt, name))
-        # What the user put in the metadata is theirs; the compatibility keys
-        # are rebuilt by the constructor, from the new amplitude:
+        # What the user put in the metadata is theirs, and comes along:
         npt.assert_equal(scaled.metadata['user'], 'userdata')
-        npt.assert_almost_equal(scaled.metadata['amp'], pt.amp * abs(factor))
         # ...and the waveform is the scaled one, to within float32 rounding:
         npt.assert_allclose(scaled.data, factor * pt.data, rtol=1e-6,
                             atol=1e-6)
