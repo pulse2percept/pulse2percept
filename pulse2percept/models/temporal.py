@@ -148,8 +148,9 @@ class AlphaTemporal(TemporalModel):
     where :math:`A` is the stimulus amplitude, :math:`x` is the (hidden) first
     stage, and :math:`y` is the perceived brightness.
 
-    Whereas :py:class:`~pulse2percept.models.FadingTemporal` jumps at stimulus
-    onset and decays from there, this cascade starts at zero, rises, peaks and
+    :py:class:`~pulse2percept.models.FadingTemporal` has an exponentially
+    decaying impulse response. Here, cascading two identical leaky integrators
+    adds a finite rise time: the impulse response starts at zero, peaks, and
     then decays. Its impulse response is
 
     .. math::
@@ -180,7 +181,7 @@ class AlphaTemporal(TemporalModel):
         Sampling time step of the simulation (ms)
     tau : float, optional
         Time constant of both leaky stages (ms). The impulse response peaks
-        approximately ``tau`` milliseconds after the stimulus, and decays with
+        approximately ``tau`` milliseconds after an impulse, and decays with
         the same constant afterwards.
 
         It cannot be shorter than ``dt``, for the same reason as in

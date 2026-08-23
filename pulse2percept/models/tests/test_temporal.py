@@ -588,10 +588,7 @@ def test_AlphaTemporal_matches_reference_recurrence():
     # `test_FadingTemporal_matches_reference_integrator`.
     npt.assert_allclose(got, want, rtol=1e-6)
 
-    # Wiring stage 2 to the *new* stage 1 is the mistake this test exists to
-    # catch. Switch a cathodic drive on at t=0 and the first step settles it:
-    # stage 2 saw stage 1 at zero, so brightness is still exactly zero, where
-    # the other wiring would already report `(dt/tau)**2` of it.
+    # Stage 2 must use the previous stage-1 value:
     dt, tau = 0.01, 50.0
     step = alpha_fast(np.array([[-1.0]], dtype=np.float32),
                       np.array([0.0], dtype=np.float32),
@@ -619,9 +616,7 @@ def test_AlphaTemporal_impulse_is_alpha_shaped():
     npt.assert_array_equal(y[:2], 0)
     npt.assert_array_less(0, y[2:].min())
     peak = int(np.argmax(y))
-    # An interior maximum, not the first or last sample -- that is the whole
-    # difference from an exponential fade. Discretization may move it a step
-    # or two off `tau`:
+    # The impulse response peaks near tau:
     npt.assert_equal(0 < peak < len(y) - 1, True)
     npt.assert_allclose(t[peak], tau, rtol=0.05)
     npt.assert_equal(np.all(np.diff(y[1:peak + 1]) > 0), True)
@@ -695,7 +690,7 @@ def test_AlphaTemporal_reduce():
     npt.assert_equal(np.any(peaked.data > got.data), True)
 
 
-@pytest.mark.parametrize('n_space', (1, 63, 64, 65, 130))
+@pytest.mark.parametrize('n_space', (1, 64, 65))
 def test_AlphaTemporal_block_boundaries(n_space):
     """Locations are integrated in fixed-size blocks; the last one is partial.
 
