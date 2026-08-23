@@ -104,8 +104,8 @@ plt.show()
 # this model cannot interpret without a threshold to measure it against.
 #
 # You can easily assign BiphasicPulseTrains to electrodes with a dictionary
-# The following creates a train with 20Hz frequency, 1xTh amplitude, and 0.45ms
-# pulse / phase duration.
+# The following creates a train with 20Hz frequency, 1xTh amplitude, and
+# 0.45ms phase duration.
 
 implant.stim = {'A4' : BiphasicPulseTrain(20, 1 * xTh, 0.45)}
 implant.stim.plot()
@@ -130,7 +130,7 @@ new_percept = model.predict_percept(implant)
 new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
 axes[0].set_title("20 Hz")
-axes[1].set_title("40 Hz")
+axes[1].set_title("50 Hz")
 plt.show()
 ##############################################################################
 # Note that without setting vmax, matplotlib automatically rescales images to
@@ -148,8 +148,8 @@ axes[1].set_title("3xTh")
 plt.show()
 
 ##############################################################################
-# Increasing pulse duration decreases threshold, thus indirectly causing an 
-# increase in size and brightness (amp factor is increased)
+# Increasing phase duration lowers threshold in the Granley model, so a fixed
+# ``xTh`` amplitude produces a larger and brighter percept
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
 implant.stim = {'A4' : BiphasicPulseTrain(20, 1 * xTh, 4)}
 new_percept = model.predict_percept(implant)
@@ -160,8 +160,8 @@ axes[1].set_title("4ms")
 plt.show()
 
 ##############################################################################
-# If you account for the change in threshold by decreasing amplitude, then 
-# the only affect of increasing pulse duration is the streak length decreasing
+# If you compensate for this threshold change by decreasing amplitude, the
+# remaining effect of increasing phase duration is a shorter streak
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
 implant.stim = {'A4' : BiphasicPulseTrain(20, 0.023835 * xTh, 20)}
 new_percept = model.predict_percept(implant)
@@ -173,16 +173,16 @@ plt.show()
 
 #################################################################################
 # This illustrates another important point: ``xTh`` here is relative to the
-# threshold current at 0.45ms pulse duration. Since larger pulse durations have
+# threshold current at 0.45ms phase duration. Since larger phase durations have
 # been shown to reduce the threshold amplitude needed, the 0.02xTh amplitude
 # used in the previous plot still is able to produce a phosphene.
 
 #################################################################################
 # Using measured thresholds
 # -------------------------
-# The 100 uA reference above is a stand-in. If you have measured an electrode's
-# threshold, give it to the implant and ``xTh`` is realized against the real
-# thing -- 2xTh on an 80 uA electrode delivers 160 uA:
+# The 100 uA reference above is a stand-in. If you know an electrode's
+# reference threshold at 0.45ms phase duration, give it to the implant: 2xTh
+# on an 80 uA electrode then delivers 160 uA.
 
 calibrated = ArgusII()
 calibrated.thresholds = {'A4': 80 * uA}
@@ -190,10 +190,9 @@ calibrated.stim = {'A4': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
 print(f"{calibrated.stim.data.max():.0f} uA")
 
 #################################################################################
-# The same works per pulse train (``BiphasicPulseTrain(..., threshold_amp=80 *
-# uA)``), and it runs the other way too: a train given in microamps on a
-# calibrated electrode knows what multiple of threshold it is, so the model can
-# use it.
+# ``BiphasicPulseTrain(..., threshold_amp=80 * uA)`` does the same for one
+# train. Either way it works in both directions: a train given in microamps on
+# a calibrated electrode knows what multiple of threshold it is.
 
 ################################################################################
 #
