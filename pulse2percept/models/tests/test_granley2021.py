@@ -12,8 +12,10 @@ from pulse2percept.stimuli import (AmplitudeEncoder,
                                    AsymmetricBiphasicPulseTrain,
                                    BiphasicPulseTrain, ImageStimulus,
                                    MonophasicPulse, Stimulus)
-from pulse2percept.models import BiphasicAxonMapModel, BiphasicAxonMapSpatial, \
-    AxonMapSpatial
+from pulse2percept.models import (AxonMapSpatial, BiphasicAxonMapModel,
+                                  BiphasicAxonMapSpatial, FadingTemporal,
+                                  Horsager2009Temporal, Model,
+                                  Nanduri2012Temporal)
 from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
 from pulse2percept.units import (DimensionMismatchError, Quantity,
@@ -857,3 +859,191 @@ def test_BiphasicAxonMap_rejects_an_encoded_stimulus(model_cls):
     implant.stim = encoded
     with pytest.raises(TypeError):
         model.predict_percept(implant)
+
+
+# The temporal models a Granley composite is expected to work with. Their
+# responses to one canonical drive peak at quite different moments, which is
+# what most of these tests are about.
+_TEMPORALS = [FadingTemporal, Nanduri2012Temporal, Horsager2009Temporal]
+
+# Stimulation lasts this long, and the whole episode -- including the tail in
+# which a lagging cascade can still be rising -- fits in this window (ms):
+_STIM_DUR = 50
+_EPISODE = 200
+
+
+def _composite(temporal):
+    """A Granley spatial model paired with ``temporal``, and Granley alone"""
+    grid = dict(xrange=(-3, 3), yrange=(-2, 2), step=1, n_ax_segments=30)
+    composite = Model(spatial=BiphasicAxonMapSpatial(**grid),
+                      temporal=temporal)
+    return composite.build(), BiphasicAxonMapModel(**grid).build()
+
+
+def _composite_implant(stim_dur=_STIM_DUR):
+    return ArgusII(stim={'A5': BiphasicPulseTrain(20, 1, 0.45,
+                                                  stim_dur=stim_dur)})
+
+
+def _every_dt(temporal, until=_EPISODE):
+    """Every instant ``temporal`` integrates, up to ``until`` (ms)
+
+    Anything coarser reports the peak of the samples rather than the peak.
+    """
+    return np.arange(int(round(until / temporal.dt)) + 1) * temporal.dt
+
+
+@pytest.mark.parametrize('temporal_cls', _TEMPORALS)
+def test_BiphasicAxonMapSpatial_with_temporal_model_runs(temporal_cls):
+    # Issue #565: the spatial model collapses time, so the percept it hands
+    # over has no time axis for a temporal model to integrate.
+    composite, _ = _composite(temporal_cls())
+    # The drive is built from the retained pulse-train parameters, so pairing
+    # the two still asks for no waveform:
+    with _no_pulse_train_rendering():
+        percept = composite.predict_percept(_composite_implant())
+    npt.assert_equal(percept.data.ndim, 3)
+    npt.assert_equal(percept.data.shape[-1] > 1, True)
+    npt.assert_equal(np.all(np.isfinite(percept.data)), True)
+
+
+@pytest.mark.parametrize('temporal_cls', _TEMPORALS)
+def test_BiphasicAxonMapSpatial_composite_peaks_at_the_granley_percept(
+        temporal_cls):
+    temporal = temporal_cls()
+    composite, granley = _composite(temporal)
+    implant = _composite_implant()
+    percept = composite.predict_percept(implant,
+                                        t_percept=_every_dt(temporal))
+    npt.assert_array_almost_equal(
+        percept.max(axis='frames'),
+        granley.predict_percept(implant).data[..., 0])
+
+
+@pytest.mark.parametrize('temporal_cls', _TEMPORALS)
+def test_BiphasicAxonMapSpatial_composite_is_space_time_separable(
+        temporal_cls):
+    composite, _ = _composite(temporal_cls())
+    percept = composite.predict_percept(_composite_implant(),
+                                        t_percept=[10, 20, 40, 80, 160])
+    lit = percept.data[percept.data.max(axis=-1) > 0]
+    npt.assert_equal(len(lit) > 1, True)
+    # Every pixel rides the same envelope, so the spatial scale is all that
+    # told the pixels apart:
+    shapes = lit / lit.max(axis=-1, keepdims=True)
+    npt.assert_array_almost_equal(shapes - shapes[0], 0)
+
+
+@pytest.mark.parametrize('temporal_cls', _TEMPORALS)
+def test_BiphasicAxonMapSpatial_composite_peak_ignores_requested_sampling(
+        temporal_cls):
+    composite, granley = _composite(temporal_cls())
+    implant = _composite_implant()
+    granley_max = granley.predict_percept(implant).data.max()
+    # Asked only for instants that fall well before the peak, the percept must
+    # stay below the Granley maximum rather than renormalizing onto it:
+    early = composite.predict_percept(implant, t_percept=[10, 20])
+    npt.assert_equal(early.data.max() < 0.9 * granley_max, True)
+    # And those samples are the ones a longer run reports at the same times:
+    longer = composite.predict_percept(implant, t_percept=[10, 20, 40, 80])
+    npt.assert_array_almost_equal(early.data, longer.data[..., :2])
+
+
+@pytest.mark.parametrize('temporal_cls', _TEMPORALS)
+def test_BiphasicAxonMapSpatial_composite_decays_after_stimulation(
+        temporal_cls):
+    composite, _ = _composite(temporal_cls())
+    percept = composite.predict_percept(_composite_implant(),
+                                        t_percept=[100, 150, 200])
+    frame_max = percept.data.max(axis=(0, 1))
+    npt.assert_equal(np.all(np.diff(frame_max) < 0), True)
+    npt.assert_equal(frame_max[-1] > 0, True)
+
+
+@pytest.mark.parametrize('temporal_cls, param', [(FadingTemporal, 'tau'),
+                                                 (Nanduri2012Temporal, 'tau3'),
+                                                 (Horsager2009Temporal,
+                                                  'tau3')])
+def test_BiphasicAxonMapSpatial_composite_temporal_params_only_move_time(
+        temporal_cls, param):
+    implant = _composite_implant()
+    traces = []
+    for value in (10, 60):
+        temporal = temporal_cls(**{param: value})
+        composite, granley = _composite(temporal)
+        percept = composite.predict_percept(implant,
+                                            t_percept=_every_dt(temporal))
+        peak_frame = percept.max(axis='frames')
+        npt.assert_array_almost_equal(
+            peak_frame, granley.predict_percept(implant).data[..., 0])
+        brightest = np.unravel_index(np.argmax(peak_frame), peak_frame.shape)
+        traces.append(percept.data[brightest])
+    npt.assert_equal(np.allclose(traces[0], traces[1]), False)
+
+
+@pytest.mark.parametrize('temporal_cls', _TEMPORALS)
+def test_BiphasicAxonMapSpatial_composite_ignores_temporal_thresh_percept(
+        temporal_cls):
+    # The envelope is normalized, so a floor in the temporal model's own
+    # brightness units would apply to the wrong quantity. Brightness is
+    # Granley's to set, and the caller's own model is left alone:
+    temporal = temporal_cls(thresh_percept=0.1)
+    composite, _ = _composite(temporal)
+    plain, _ = _composite(temporal_cls())
+    implant = _composite_implant()
+    npt.assert_array_almost_equal(
+        composite.predict_percept(implant, t_percept=[10, 20, 40]).data,
+        plain.predict_percept(implant, t_percept=[10, 20, 40]).data)
+    npt.assert_almost_equal(temporal.thresh_percept, 0.1)
+
+
+def test_BiphasicAxonMapSpatial_composite_ignores_inactive_stim_dur():
+    # A train at zero amplitude is inactive everywhere, so it must not stretch
+    # the envelope the active one rides on either:
+    composite, _ = _composite(FadingTemporal())
+    short = ArgusII(stim={'A5': BiphasicPulseTrain(20, 1, 0.45,
+                                                   stim_dur=100)})
+    padded = ArgusII(stim={'A5': BiphasicPulseTrain(20, 1, 0.45,
+                                                    stim_dur=100),
+                           'A2': BiphasicPulseTrain(20, 0, 0.45,
+                                                    stim_dur=1000)})
+    t_percept = [40, 80, 100]
+    npt.assert_array_almost_equal(
+        composite.predict_percept(padded, t_percept=t_percept).data,
+        composite.predict_percept(short, t_percept=t_percept).data)
+
+
+@pytest.mark.parametrize('temporal_cls', _TEMPORALS)
+def test_BiphasicAxonMapSpatial_composite_rejects_unequal_stim_dur(
+        temporal_cls):
+    # One separable envelope cannot have one electrode's contribution stop at
+    # 100 ms and another's at 1000 ms:
+    composite, _ = _composite(temporal_cls())
+    implant = ArgusII(stim={'A5': BiphasicPulseTrain(20, 1, 0.45,
+                                                     stim_dur=100),
+                            'A2': BiphasicPulseTrain(20, 1, 0.45,
+                                                     stim_dur=1000)})
+    with pytest.raises(NotImplementedError):
+        composite.predict_percept(implant)
+
+
+def test_BiphasicAxonMapSpatial_composite_normalizes_a_delayed_peak():
+    # This one peaks ~226 ms after a 50 ms drive, several windows past the
+    # first one searched. Normalizing by a value found before the peak would
+    # let the percept outshine the Granley frame it is supposed to peak at:
+    temporal = Horsager2009Temporal(tau3=100)
+    composite, granley = _composite(temporal)
+    implant = _composite_implant()
+    granley_frame = granley.predict_percept(implant).data[..., 0]
+    percept = composite.predict_percept(implant,
+                                        t_percept=_every_dt(temporal, 400))
+    npt.assert_equal(percept.data.max() <= granley_frame.max(), True)
+    npt.assert_array_almost_equal(percept.max(axis='frames'), granley_frame)
+
+
+def test_BiphasicAxonMapSpatial_composite_rejects_an_unlocatable_peak():
+    # Still rising where the search gives up (~624 ms for a 50 ms drive):
+    # saying so beats normalizing by a value known not to be the peak.
+    composite, _ = _composite(Horsager2009Temporal(tau3=300))
+    with pytest.raises(ValueError):
+        composite.predict_percept(_composite_implant())

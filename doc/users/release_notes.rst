@@ -64,6 +64,11 @@ API changes:
   :py:class:`~pulse2percept.models.FadingTemporal` now ignores anodic current
   rather than treating it as negative brightness, and enforces ``tau >= dt``.
 
+* :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` can now be paired
+  with a temporal model, in a space-time-separable approximation: Granley
+  determines the peak spatial percept, the temporal model supplies a
+  normalized envelope for it to evolve along (:issue:`565`).
+
 * Spatial-model APIs were cleaned up: ``xystep`` was renamed to ``step`` and
   ``axlambda`` to ``lam``. Axon-map and cortical scoreboard models also gained
   configurable smoothing across their relevant visual-field meridians.

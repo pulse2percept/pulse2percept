@@ -2,6 +2,7 @@
    :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` [Granley2021]_"""
 import numpy as np
 import sys
+from copy import deepcopy
 
 from . import AxonMapSpatial, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
@@ -12,6 +13,9 @@ from ..utils import FreezeError, rename_parameter
 from ..utils.base import has_own_attr
 from .base import NotBuiltError, BaseModel, _require_stim_dimension
 from ._granley2021 import fast_biphasic_axon_map
+
+# Safety limit for locating delayed temporal peaks.
+_PEAK_SEARCH_DOUBLINGS = 4
 
 # `find_threshold` bisects on a scaled copy of the stimulus *data*. This model
 # reads amplitude off the pulse train instead, where it means a multiple of
@@ -205,7 +209,7 @@ class DefaultStreakModel(BaseModel):
 
 
 def _pulse_train_params(stim):
-    """``(electrode, freq, amp, phase_dur)`` for every electrode driven
+    """``(electrode, freq, amp, phase_dur, stim_dur)`` per driven electrode
 
     Read off the pulse trains the stimulus is made of rather than off a copy
     of their numbers in its metadata: a stimulus whose samples were rewritten
@@ -242,7 +246,8 @@ def _pulse_train_params(stim):
                             f"no delay dur (Failing electrode: {electrode})")
         if source.amp == 0:
             continue
-        params.append((electrode, source.freq, source.amp, source.phase_dur))
+        params.append((electrode, source.freq, source.amp,
+                       source.phase_dur, source.stim_dur))
     return params
 
 
@@ -263,10 +268,14 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     individually customized by setting the bright_model, size_model, or streak_model
     to any python callable with signature f(freq, amp, pdur)
 
-    .. important::
-    
-        Using this model in combination with a temporal model is not currently
-        supported and will give unexpected results
+    .. note::
+
+        When combined with a temporal model, the Granley prediction is treated
+        as the peak spatial percept. The temporal model supplies a normalized
+        brightness time course, yielding a space-time-separable percept
+        ``P(x, y, t) = G(x, y) k(t)``. ``thresh_percept`` of the temporal
+        model is ignored, because its response is normalized before being
+        applied to the Granley percept.
 
     Parameters
     ----------
@@ -492,8 +501,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             raise TypeError(
                 "Stim must be of type Stimulus but it is " + str(type(stim)))
         params = _pulse_train_params(stim)
-        active = [electrode for electrode, _, _, _ in params]
-        elec_params = np.array([p[1:] for p in params],
+        active = [p[0] for p in params]
+        elec_params = np.array([p[1:4] for p in params],
                                dtype=np.float32).reshape((-1, 3))
         # Only the electrodes that are actually driven, in the order they were
         # collected above:
@@ -574,20 +583,12 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                              f"was built for {self.eye}.")
         if implant.stim is None:
             return None
-        # What physical quantity the stimulus is comes before what waveform
-        # it is: a picture is not an unsuitable pulse train, it is not a
-        # current at all, and saying so is more use than asking it for pulse
-        # metadata it was never going to have.
+        # Determine what physical quantity the stimulus is:
         _require_stim_dimension(self, implant.stim)
-        # Which pulse trains this stimulus is made of, and whether it is made
-        # of pulse trains at all. Asked here so that an unreadable stimulus is
-        # refused before any of the work below:
+        # Determine which pulse trains the stimulus is made of:
         params = _pulse_train_params(implant.stim)
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
         stim = implant.stim
-        # `np.array([t]).size` rather than `len(t)`, so that the documented
-        # scalar spelling `t_percept=20` counts as one time point instead
-        # of raising -- the same idiom `SpatialModel.predict_percept` uses:
         n_time = 1 if t_percept is None else np.array([t_percept]).size
         if not params:
             # Nothing is driven above zero amplitude:
@@ -604,14 +605,73 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                        time_unit=self.time_unit,
                        metadata={'stim': stim.metadata})
 
+    def _combine_temporal(self, percept, temporal, stim, t_percept):
+        """Apply a normalized temporal response to the spatial percept."""
+        dur = self._envelope_dur(stim)
+        # A unit drive of the polarity this temporal model responds to (see
+        # `TemporalModel._drive_sign`), held for exactly the stimulation
+        # duration:
+        envelope = Stimulus(np.array([[float(temporal._drive_sign), 0.0]]),
+                            electrodes=['envelope'], time=[0, dur],
+                            metadata=stim.metadata.get('user'))
+        # Leave the caller's own model untouched:
+        probe = deepcopy(temporal)
+        probe.thresh_percept = 0
+        peak = self._envelope_peak(probe, envelope)
+        resp = probe.predict_percept(envelope, t_percept=t_percept)
+        fade = resp.data.reshape(-1) / peak
+        return Percept(percept.data[..., 0][..., np.newaxis] * fade,
+                       space=self.grid, time=resp.time,
+                       time_unit=probe.time_unit,
+                       metadata={'stim': stim.metadata})
+
+    @staticmethod
+    def _envelope_peak(temporal, envelope):
+        """Return the peak response to the canonical temporal drive."""
+        dt = temporal.dt
+        episode = envelope.times(temporal.time_unit)[-1]
+
+        for _ in range(_PEAK_SEARCH_DOUBLINGS):
+            t = np.arange(int(round(episode / dt)) + 1) * dt
+            resp = temporal.predict_percept(envelope, t_percept=t).data
+            if np.argmax(resp) < resp.size - 1:
+                break
+            episode *= 2
+        else:
+            raise ValueError(
+                f"Could not locate the peak response of "
+                f"{type(temporal).__name__} within {t[-1]:g} "
+                f"{temporal.time_unit}."
+            )
+
+        peak = resp.max()
+        if not np.isfinite(peak) or peak <= 0:
+            raise ValueError(
+                f"{type(temporal).__name__} produced no finite positive "
+                f"response to the canonical drive."
+            )
+        return peak
+
+    def _envelope_dur(self, stim):
+        """Return the common duration of the active pulse trains."""
+        durs = {p[4] for p in _pulse_train_params(stim)}
+        if len(durs) > 1:
+            raise NotImplementedError(
+                f"{type(self).__name__} requires active electrodes to share "
+                f"one stim_dur, not {sorted(durs)}."
+            )
+        if durs:
+            return float(durs.pop())
+
+        # No active electrodes; duration only determines the output time axis.
+        sources = stim._structured_sources()
+        if sources:
+            return float(max(src.stim_dur for _, src in sources))
+        return float(stim.time[-1])
+
     def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
                        bright_tol=0.1, max_iter=100):
-        """Not supported by this model
-
-        Raises
-        ------
-        NotImplementedError
-        """
+        """Not supported by this model"""
         raise NotImplementedError(_FIND_THRESHOLD_MSG.format(
             cls=type(self).__name__))
 
@@ -627,11 +687,12 @@ class BiphasicAxonMapModel(Model):
     This model is different than other spatial models in that it calculates
     one representative percept from all time steps of the stimulus.
 
-    Brightness, size, and streak length scaling are controlled by the parameters
-    bright_model, size_model, and streak model respectively. By default, these are
-    set to classes that implement Eqs 3-6 from Granley 2021. These models can be
-    individually customized by setting the bright_model, size_model, or streak_model
-    to any python callable with signature f(freq, amp, pdur).
+    Brightness, size, and streak length scaling are controlled by the
+    parameters bright_model, size_model, and streak model respectively. 
+    By default, these are set to classes that implement Eqs 3-6 from 
+    [Granley2021]_. These models can be individually customized by setting
+    the bright_model, size_model, or streak_model to any python callable
+    with signature ``f(freq, amp, pdur)``.
 
     .. important::
 
