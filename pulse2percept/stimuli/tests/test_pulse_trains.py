@@ -358,12 +358,8 @@ def test_BiphasicPulseTrain_metadata_polarity():
                                     lambda pt: pt * np.nan,
                                     lambda pt: pt / 0])
 def test_BiphasicPulseTrain_metadata_invalidated(modify):
-    # A DC offset is neither biphasic nor charge-balanced; a non-finite factor
-    # leaves a waveform of infinities; an appended second train is no longer
-    # one train at one amplitude and frequency. Keeping the pulse parameters
-    # would have BiphasicAxonMapModel predict from numbers that no longer
-    # describe the stimulus, so they are dropped instead - the model rejects a
-    # stimulus whose parameters it cannot find:
+    # A DC offset is neither biphasic nor charge-balanced, and a non-finite
+    # factor leaves a waveform of infinities
     pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100, metadata='userdata')
     with np.errstate(divide='ignore', invalid='ignore'):
         modified = modify(pt)
@@ -394,18 +390,9 @@ def test_BiphasicPulseTrain_metadata_shift():
 @pytest.mark.parametrize('modify, expected', [
     (lambda s: s * 2, 20), (lambda s: 2 * s, 20), (lambda s: s / 2, 5),
     (lambda s: -s, 10), (lambda s: s >> 5, 10), (lambda s: s + 0, 10),
-    # A negative factor that also resizes: the composed path dispatches to
-    # `_rescale_params`, not to the pulse train's own `_rescale_metadata`, so
-    # there is no `cathodic_first` to carry the sign and `amp` has to come
-    # back as a magnitude. The direct-BPT polarity tests all use factor -1,
-    # where the magnitude cannot tell the two apart:
     (lambda s: s * -2, 20), (lambda s: -2 * s, 20), (lambda s: s / -0.5, 20)])
 def test_Stimulus_rescales_electrode_metadata(modify, expected):
-    # A pulse train handed to an implant becomes one row of a plain Stimulus,
-    # and its parameters move to `metadata['electrodes']` - which is where
-    # BiphasicAxonMapModel reads them from. Scaling the composed stimulus has
-    # to reach them there too, or `implant.stim * 2` delivers twice the current
-    # and predicts the very same percept:
+    # A pulse train handed to an implant becomes one row of a plain Stimulus
     stim = Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
                      'B2': BiphasicPulseTrain(20, 4, 0.45, stim_dur=100)})
     modified = modify(stim)
@@ -419,8 +406,7 @@ def test_Stimulus_rescales_electrode_metadata(modify, expected):
     npt.assert_equal(modified.metadata['electrodes']['A1']['type'],
                      BiphasicPulseTrain)
     npt.assert_equal(stim.metadata['electrodes']['A1']['metadata']['amp'], 10)
-    # Scaling leaves the entry describable, so only `amp` moves - the entry is
-    # rescaled, not invalidated:
+    # Scaling leaves the entry describable
     for key, value in (('freq', 20), ('phase_dur', 0.45), ('delay_dur', 0)):
         npt.assert_equal(
             modified.metadata['electrodes']['A1']['metadata'][key], value)
@@ -430,9 +416,6 @@ def test_Stimulus_rescales_electrode_metadata(modify, expected):
                                     lambda s: s * np.inf,
                                     lambda s: s.append(s >> 1)])
 def test_Stimulus_invalidates_electrode_metadata(modify):
-    # ...and an operation that leaves the electrodes carrying something other
-    # than a biphasic pulse train has to drop their parameters, exactly as it
-    # would on the pulse train itself:
     stim = Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)})
     with np.errstate(divide='ignore', invalid='ignore'):
         modified = modify(stim)
@@ -442,10 +425,7 @@ def test_Stimulus_invalidates_electrode_metadata(modify):
 
 
 def test_Stimulus_rescale_metadata_leaves_the_source_alone():
-    # A composed stimulus files the very dict its source carries, not a copy
-    # of it, so `composed.metadata[...]['metadata'] is pt.metadata`. Rescaling
-    # the composition must still not reach back into the pulse train the
-    # caller is holding.
+    # A composed stimulus files the very dict its source carries
     pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
     composed = Stimulus({'A1': pt})
     scaled = composed * 2
@@ -467,10 +447,7 @@ def test_Stimulus_rescale_metadata_leaves_the_source_alone():
 
 @pytest.mark.parametrize('factor', [2, -2, None])
 def test_BiphasicPulseTrain_metadata_rescale_params_does_not_mutate(factor):
-    # `_rescale_params` returns the rewritten metadata and never modifies
-    # the dict it was given. No caller depends on that today -- every one of
-    # them hands it a dict `_shallow_copy` already deep-copied -- so only the
-    # contract holds a subclass author to it:
+    # `_rescale_params` returns the rewritten metadata
     meta = {'freq': 20, 'amp': 10, 'phase_dur': 0.45, 'delay_dur': 0,
             'user': None}
     before = dict(meta)
@@ -479,10 +456,7 @@ def test_BiphasicPulseTrain_metadata_rescale_params_does_not_mutate(factor):
 
 
 def test_Stimulus_rescale_metadata_mixed_sources():
-    # An implant's stimulus need not be all pulse trains. Each electrode's
-    # parameters go to the class that recorded them, so a train is
-    # transformed and an ordinary stimulus - which describes no waveform
-    # parameters at all - comes through exactly as it was:
+    # An implant's stimulus need not be all pulse trains
     plain = {'electrodes': {}, 'user': {'note': 'mine'}}
     stim = Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
                      'B2': Stimulus([[1, 2, 3]], time=[0, 1, 2],
@@ -514,10 +488,6 @@ def test_Stimulus_rescale_metadata_mixed_sources():
     {'type': BiphasicPulseTrain},                        # no metadata recorded
     'not-an-entry-at-all'])
 def test_Stimulus_rescale_metadata_tolerates_odd_entries(entry):
-    # `_rescale_metadata` calls a hook off the type it finds recorded in the
-    # entry, so an entry it cannot recognize has to come through unchanged: a
-    # user who hand-edited `metadata` gets their entry back, not an
-    # AttributeError from inside an arithmetic operator.
     stim = Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)})
     stim.metadata['electrodes']['A1'] = entry
     for modified in (stim * 2, stim * -2, stim + 5, stim.append(stim >> 1)):
@@ -541,9 +511,7 @@ def test_Stimulus_rescale_metadata_leaves_plain_metadata_alone():
                           (225, 0.075, 0.075), (2000, 0.1, 0)])
 def test_PulseTrain_tiling(freq, phase_dur, interphase_dur):
     # The pulse train is assembled by tiling rather than by repeatedly calling
-    # `append`. The two must agree bit-for-bit: temporal models resolve
-    # stimulus edges on a fixed simulation grid, so even a sub-nanosecond
-    # difference in the time axis can change model output.
+    # `append`
     pulse = BiphasicPulse(20, phase_dur, interphase_dur=interphase_dur)
     n_pulses = 7
     window_dur = 1000.0 / freq
@@ -588,10 +556,6 @@ def test_PulseTrain_tiling_errors():
     (BiphasicTripletTrain, (20, 30, 0.45), {'interpulse_dur': 0.5}),
 ])
 def test_PulseTrain_electrode_name(cls, args, kwargs):
-    # The `electrode` argument is documented on every pulse train, so it must
-    # actually reach the Stimulus constructor. It also decides the key under
-    # which per-electrode metadata is filed, which is how BiphasicAxonMapModel
-    # looks up freq/amp/phase_dur.
     stim = cls(*args, stim_dur=100, electrode='A1', **kwargs)
     npt.assert_equal(stim.electrodes, ['A1'])
     # Without a name, electrodes are still numbered from 0:
@@ -777,7 +741,7 @@ def test_pulse_train_renders_once_and_only_when_asked(cls, build, params):
 def test_PulseTrain_snapshots_its_pulse():
     # Tiling used to copy the pulse values into the train there and then, so a
     # train must not change when the caller replaces the pulse it was built
-    # from. Immutable waveform state makes the snapshot share arrays.
+    # from
     pulse = BiphasicPulse(50, 0.45)
     train = PulseTrain(20, pulse, stim_dur=100)
     npt.assert_equal(train.pulse is pulse, False)
@@ -786,10 +750,7 @@ def test_PulseTrain_snapshots_its_pulse():
 
 
 def test_PulseTrain_pulse_is_not_a_way_into_the_train():
-    # `remove` and `compress` rewrite a stimulus in place, so handing out the
-    # retained pulse itself would let a caller rewrite what the train renders
-    # from -- and leave it driving electrodes its own name list does not
-    # mention. A plain Stimulus is the pulse that has those methods.
+    # `remove` and `compress` rewrite a stimulus in place
     pulse = Stimulus([[0, -50, 50, 0]], electrodes=['A1'],
                      time=[0, 0.1, 0.2, 0.3])
     train = PulseTrain(20, pulse, stim_dur=100)
@@ -804,9 +765,6 @@ def test_PulseTrain_pulse_is_not_a_way_into_the_train():
 
 @pytest.mark.parametrize('factor', [2, 0.5, -1, -2, 1, 0, 1e-3])
 def test_BiphasicPulseTrain_scaling_rebuilds_its_model_metadata(factor):
-    # Scaling every amplitude by a finite factor is exactly what a different
-    # `amp` does, so twice this train is the train at twice its amplitude,
-    # built from the parameters rather than degraded to a waveform.
     pt = BiphasicPulseTrain(20, 10, 0.45, interphase_dur=0.2, delay_dur=1,
                             stim_dur=100, metadata='userdata')
     routes = [pt * factor, factor * pt]
@@ -852,10 +810,6 @@ def test_BiphasicPulseTrain_scaling_matches_a_train_built_that_way():
                                     lambda pt: pt * np.nan,
                                     lambda pt: pt / 0])
 def test_BiphasicPulseTrain_inexact_operations_degrade(modify):
-    # A DC offset, a shift in time, a non-finite factor and an appended second
-    # train are none of them expressible in this class's parameters, so they
-    # hand back a plain stimulus rather than a train advertising numbers it no
-    # longer delivers:
     pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
     with np.errstate(divide='ignore', invalid='ignore'):
         modified = modify(pt)
@@ -866,10 +820,6 @@ def test_BiphasicPulseTrain_inexact_operations_degrade(modify):
 @pytest.mark.parametrize('cls, build, params', TRAINS)
 @pytest.mark.parametrize('factor', [2, 0.5, -1, -2, 1, 0, 1e-3])
 def test_train_scaling_stays_a_train(cls, build, params, factor):
-    # Every train class is defined by the pulse it repeats and the clock it
-    # repeats it on. Scaling touches only the amplitude of that pulse, so the
-    # result is still one of these -- and is built from the parameters rather
-    # than from the tiled samples.
     train = build()
     reference = factor * np.asarray(train.data)
     for scaled in (train * factor, factor * train):
@@ -896,8 +846,7 @@ def test_train_scaling_stays_a_train(cls, build, params, factor):
 
 
 def test_PulseTrain_scaling_keeps_the_pulse_it_repeats():
-    # A generic train scales the pulse it tiles rather than the tiled samples,
-    # so a train of biphasic pulses stays a train of biphasic pulses:
+    # A generic train scales the pulse it tiles rather than the tiled samples
     train = PulseTrain(20, BiphasicPulse(50, 0.45), stim_dur=200)
     scaled = train * 2
     npt.assert_equal(scaled.pulse_type, 'BiphasicPulse')
@@ -906,10 +855,6 @@ def test_PulseTrain_scaling_keeps_the_pulse_it_repeats():
 
 
 def test_train_scaling_survives_a_partial_last_window():
-    # A 23 Hz train fits three whole pulses into 100 ms, which is more than
-    # the `n_pulses` guard's own estimate of 2.3 -- so rebuilding the train
-    # has to pass back the count that was *asked* for (None), not the one it
-    # resolved to.
     train = BiphasicPulseTrain(23, 20, 0.45, stim_dur=100)
     npt.assert_equal(train.n_pulses, 3)
     npt.assert_equal((train * 2).n_pulses, 3)

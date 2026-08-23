@@ -1950,10 +1950,13 @@ def test_Stimulus_collection_removes_whole_entries_without_rendering():
     # Only the entry that survived is ever generated:
     npt.assert_equal(stim.data.shape, (1, 7))
     npt.assert_equal(_n_renders(stim), 1)
+    # Dropping every entry is the exception: an emptied stimulus keeps the
+    # time axis it ran on, which only the merged waveform knows.
     empty = Stimulus({'A1': CountingLazy(4, ['A1'])})
     empty.remove('all')
-    npt.assert_equal(_lazy(empty), True)
+    npt.assert_equal(_lazy(empty), False)
     npt.assert_equal(len(empty.electrodes), 0)
+    npt.assert_equal(empty.data.shape, (0, 4))
     # A copy taken before the removal keeps the entry it was built with:
     stim = Stimulus({'A1': CountingLazy(4, ['A1']),
                      'B2': CountingLazy(4, ['B2'])})
@@ -1989,13 +1992,33 @@ def test_Stimulus_rewriting_a_waveform_forgets_the_components():
     npt.assert_equal(compressed._components, None)
 
 
+@pytest.mark.parametrize('render', [False, True])
+def test_Stimulus_collection_emptied_keeps_its_time_axis(render, monkeypatch):
+    # `remove('all')` leaves zero rows on the axis the stimulus ran on, so an
+    # emptied collection still has a duration
+    def build():
+        return Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
+                         'B2': BiphasicPulseTrain(23, 20, 0.45,
+                                                  stim_dur=100)})
+    lazy = build()
+    if render:
+        lazy.data
+    monkeypatch.setattr(Stimulus, '_defers_waveform',
+                        staticmethod(lambda *a, **kw: False))
+    eager = build()
+    for stim in (lazy, eager):
+        stim.remove('all')
+    npt.assert_equal(lazy.data.shape, eager.data.shape)
+    npt.assert_equal(lazy.data.shape[0], 0)
+    npt.assert_array_equal(lazy.time, eager.time)
+    npt.assert_almost_equal(lazy.duration, eager.duration)
+
+
 @pytest.mark.parametrize('operate', [
     lambda s: s * 2, lambda s: -s, lambda s: s._without_electrodes('A1')])
 def test_Stimulus_collection_exact_operations_ignore_a_cached_waveform(
         operate):
-    # Reading `.data` caches a waveform, it does not rewrite one, so the
-    # components stay canonical and an exact operation still works on them.
-    # Whether anybody looked first must not change the outcome.
+    # Reading `.data` caches a waveform, it does not rewrite one
     def build():
         return Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
                          'B2': BiphasicPulseTrain(23, 20, 0.45,
@@ -2014,8 +2037,6 @@ def test_Stimulus_collection_exact_operations_ignore_a_cached_waveform(
 
 @pytest.mark.parametrize('factor', [2, 0.5, -1, 0])
 def test_Stimulus_collection_scaling_stays_deferred(factor):
-    # Scaling a collection of pulse trains scales the trains, and the
-    # expensive part -- merging their time axes -- still has not happened.
     def build():
         return {'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
                 'B2': BiphasicPulseTrain(23, 20, 0.45, stim_dur=100)}

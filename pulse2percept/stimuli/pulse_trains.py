@@ -698,27 +698,16 @@ class BiphasicTripletTrain(Stimulus):
         interpulse_dur = as_value(interpulse_dur, ms, 'interpulse_dur')
         delay_dur = as_value(delay_dur, ms, 'delay_dur')
         stim_dur = as_value(stim_dur, ms, 'stim_dur')
-        # Create the pulse:
         pulse = BiphasicPulse(amp, phase_dur, interphase_dur=interphase_dur,
                               delay_dur=delay_dur,
                               cathodic_first=cathodic_first,
                               electrode=electrode)
-        # The pulse the triplet is made of, kept for the parameters below.
-        # The triplet itself is assembled once, here, rather than at render
-        # time: it is three copies of a handful of time points, and building
-        # it is what checks that they fit together at all.
         self._pulse = pulse
         self._interpulse_dur = interpulse_dur
         if interpulse_dur != 0:
-            # Create an interpulse 'delay' pulse. It has to sit on the same
-            # electrode as `pulse`, or the two cannot be appended:
             delay_pulse = MonophasicPulse(0, interpulse_dur, electrode=electrode)
             pulse = pulse.append(delay_pulse)
-        # Create the pulse triplet. Three copies of one pulse is not three
-        # protocols, so this keeps the waveform rather than the sequence
-        # `append` would otherwise hand back:
-        triplet = Stimulus(pulse.append(pulse).append(pulse))
-        # Create the triplet train (see `BiphasicPulseTrain.__init__`):
+        triplet = pulse.append(pulse).append(pulse)
         self._train = PulseTrain(freq, triplet, n_pulses=n_pulses,
                                  stim_dur=stim_dur)
         self._defer(_electrode_names(electrode))

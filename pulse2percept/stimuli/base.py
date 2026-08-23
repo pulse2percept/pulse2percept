@@ -848,7 +848,7 @@ class Stimulus(PrettyPrint):
 
     def _drop_components(self, keep_el):
         """Forget whole entries of an unmerged collection"""
-        if self._components is None:
+        if self._components is None or not keep_el.any():
             return False
         kept, start = [], 0
         for component in self._components:
