@@ -876,9 +876,9 @@ nC = Unit(CHARGE, 1e-9, 'nC')
 #: on the retina or cortex requires a visual field map, not a scale factor.
 dva = Unit(VISUAL_ANGLE, 1, 'dva')
 
-#: Multiple of perceptual threshold ("times threshold"). Not a plain number:
-#: ``2 * xTh`` becomes a current only once a threshold is known, either from
-#: the pulse train itself or from the implant it is delivered on.
+#: Multiple of perceptual threshold ("times threshold"). Becomes a current
+#: only once a threshold is known; see
+#: :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`.
 xTh = Unit(THRESHOLD_RATIO, 1, 'xTh')
 
 

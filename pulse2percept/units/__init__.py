@@ -41,10 +41,9 @@ threshold ratio   ``xTh``
 dimensionless     ``dimensionless``
 ================  ==========================
 
-``xTh`` ("times threshold") is a p2p-specific dimension, not a dimensionless
-alias: ``2 * xTh`` is a stimulation strength relative to a subject's
-perceptual threshold, and becomes a current only once that threshold is known
-(see :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`).
+``xTh`` ("times threshold") has its own dimension rather than being a
+dimensionless alias, because turning ``2 * xTh`` into a current takes a
+calibration (see :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`).
 
 .. autosummary::
     :toctree: _api

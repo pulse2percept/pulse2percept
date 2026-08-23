@@ -796,7 +796,6 @@ def test_BiphasicPulseTrain_threshold_relative_amp(amp, threshold_amp,
     npt.assert_almost_equal(pt.amp, expected[0])
     npt.assert_equal(pt.threshold_amp, expected[1])
     npt.assert_equal(pt.amp_factor, expected[2])
-    # Whichever way the amplitude was given, the waveform is a current:
     npt.assert_equal(pt.unit, uA)
     npt.assert_almost_equal(np.abs(pt.data).max(), expected[0], decimal=3)
 
@@ -805,25 +804,21 @@ def test_BiphasicPulseTrain_threshold_amp_is_validated():
     for bad in (0, -80, np.nan, np.inf):
         with pytest.raises(ValueError):
             BiphasicPulseTrain(20, 2 * xTh, 0.45, threshold_amp=bad)
-    # A threshold is a current, not a threshold multiple or a time:
     for bad in (2 * xTh, 5 * ms):
         with pytest.raises(DimensionMismatchError):
             BiphasicPulseTrain(20, 50, 0.45, threshold_amp=bad)
 
 
 def test_BiphasicPulseTrain_scaling_preserves_amp_basis():
-    # Doubling a 2xTh train gives 4xTh at the same threshold...
     relative = BiphasicPulseTrain(20, 2 * xTh, 0.45, stim_dur=100,
                                   threshold_amp=80 * uA)
     npt.assert_almost_equal((relative * 2).amp_factor, 4)
     npt.assert_almost_equal((relative * 2).amp, 320)
     npt.assert_equal((relative * 2)._amp_relative, True)
-    # ...while doubling a 160 uA train gives 320 uA:
     current = BiphasicPulseTrain(20, 160 * uA, 0.45, stim_dur=100)
     npt.assert_almost_equal((current * 2).amp, 320)
     npt.assert_equal((current * 2).amp_factor, None)
     npt.assert_equal((current * 2)._amp_relative, False)
-    # Negative scaling still swaps the phases, whichever basis is in force:
     npt.assert_equal((-relative).cathodic_first, not relative.cathodic_first)
     npt.assert_almost_equal((-relative).amp_factor, 2)
     npt.assert_almost_equal((-current).amp, 160)
@@ -836,3 +831,39 @@ def test_BiphasicPulseTrain_amp_basis_survives_a_round_trip():
         npt.assert_equal(copied._amp_relative, True)
         npt.assert_almost_equal(copied.threshold_amp, 80)
         npt.assert_almost_equal(copied.amp_factor, 2)
+
+
+@pytest.mark.parametrize('amp, threshold_amp, overridden, restored',
+                         [(2 * xTh, None, (200, 2), (200, 2)),
+                          (2 * xTh, 50 * uA, (200, 2), (100, 2)),
+                          (160 * uA, None, (160, 1.6), (160, None)),
+                          (160 * uA, 50 * uA, (160, 1.6), (160, 3.2))])
+def test_BiphasicPulseTrain_threshold_override(amp, threshold_amp, overridden,
+                                               restored):
+    pt = BiphasicPulseTrain(20, amp, 0.45, stim_dur=100,
+                            threshold_amp=threshold_amp)
+    calibrated = pt._with_threshold(100)
+    npt.assert_almost_equal(calibrated.amp, overridden[0])
+    npt.assert_almost_equal(calibrated.amp_factor, overridden[1])
+    npt.assert_almost_equal(calibrated.threshold_amp, 100)
+    cleared = calibrated._with_threshold(None)
+    npt.assert_almost_equal(cleared.amp, restored[0])
+    npt.assert_equal(cleared.amp_factor, restored[1])
+    npt.assert_almost_equal(pt.amp, restored[0])
+    # A no-op override hands back the same object rather than a rebuild:
+    npt.assert_equal(pt._with_threshold(None) is pt, True)
+
+
+def test_BiphasicPulseTrain_scaling_keeps_the_override():
+    pt = BiphasicPulseTrain(20, 2 * xTh, 0.45, stim_dur=100,
+                            threshold_amp=50 * uA)._with_threshold(100)
+    scaled = pt * 2
+    npt.assert_almost_equal(scaled.amp, 400)
+    npt.assert_almost_equal(scaled.amp_factor, 4)
+    # Clearing after scaling still restores the train's own threshold:
+    npt.assert_almost_equal(scaled._with_threshold(None).amp, 200)
+    current = BiphasicPulseTrain(20, 160 * uA, 0.45,
+                                 stim_dur=100)._with_threshold(80)
+    npt.assert_almost_equal((current * 2).amp, 320)
+    npt.assert_almost_equal((current * 2).amp_factor, 4)
+    npt.assert_equal((current * 2)._with_threshold(None).amp_factor, None)

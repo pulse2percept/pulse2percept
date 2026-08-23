@@ -13,9 +13,7 @@ from .pulses import (AsymmetricBiphasicPulse, BiphasicPulse,
 from ..units import Hz, as_value, ms, uA, xTh
 from ..utils.constants import DT, MS_PER_S
 
-# Nominal threshold (uA) an `xTh` amplitude falls back on when nothing better
-# is known. A stand-in for a measurement, not one: real thresholds vary by
-# electrode and by subject, so pass `threshold_amp` as soon as they are known.
+# Nominal threshold (uA) an `xTh` amplitude falls back on when none is known.
 _XTH_REFERENCE_AMP = 100.0
 
 
@@ -349,9 +347,8 @@ class BiphasicPulseTrain(Stimulus):
     metadata : dict
         A dictionary of meta-data
     threshold_amp : float, optional
-        The perceptual threshold (uA) of the electrode this train drives. It
-        is what relates the current in the waveform to
-        :py:attr:`amp_factor`; it never appears in the waveform itself.
+        Perceptual threshold (uA) of the electrode this train drives, relating
+        the current in the waveform to :py:attr:`amp_factor`.
 
         .. versionadded:: 0.10.0
 
@@ -368,15 +365,11 @@ class BiphasicPulseTrain(Stimulus):
     *  Arguments may be given as plain numbers in the units documented above,
        or as unitful quantities (e.g. ``0.05 * mA``, ``450 * us``), which are
        converted to those units. See :py:mod:`pulse2percept.units`.
-    *  The waveform is always a current, whichever way ``amp`` was given: a
-       train built from ``2 * xTh`` has ``unit == uA`` and plots in
-       microamps. What ``xTh`` changes is *which* number the user knew, and
-       that is what is preserved when the train is rescaled or recalibrated.
-    *  An ``xTh`` amplitude with no threshold in sight is realized against a
-       nominal 100 uA reference, so that the train still has a waveform. A
-       current amplitude does not get the same treatment: an uncalibrated
-       current has no threshold multiple at all, and :py:attr:`amp_factor`
-       answers None rather than guessing one.
+    *  The waveform is always a current, whichever way ``amp`` was given, so
+       ``unit`` is ``uA`` and :py:meth:`plot` shows microamps either way.
+    *  An ``xTh`` amplitude with no threshold known is realized against a
+       nominal 100 uA reference. A current amplitude gets no such fallback:
+       :py:attr:`amp_factor` is None until a threshold is supplied.
 
     Examples
     --------
@@ -399,7 +392,8 @@ class BiphasicPulseTrain(Stimulus):
     #: (see `Stimulus._is_parametric`):
     _is_parametric = True
 
-    __slots__ = ('_train', '_amp_relative', '_explicit_threshold_amp')
+    __slots__ = ('_train', '_amp_relative', '_explicit_threshold_amp',
+                 '_threshold_override')
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
                  n_pulses=None, stim_dur=1000.0, cathodic_first=True,
@@ -412,6 +406,9 @@ class BiphasicPulseTrain(Stimulus):
         # current it works out to: rescaling and recalibration both have to
         # keep the one they were given (see `_scaled`).
         self._explicit_threshold_amp = _as_threshold_amp(threshold_amp)
+        # Set only by `_with_threshold`; kept apart from the caller's
+        # threshold so that clearing a calibration restores theirs.
+        self._threshold_override = None
         self._amp_relative = _is_threshold_relative(amp)
         if self._amp_relative:
             amp = as_value(amp, xTh, 'amp') * self.threshold_amp
@@ -463,11 +460,14 @@ class BiphasicPulseTrain(Stimulus):
     def threshold_amp(self):
         """Perceptual threshold (uA) this train's amplitude is relative to
 
-        None when no threshold is known, which can only happen for a train
-        whose amplitude was given as a current.
+        The implant calibration in force, else the threshold this train was
+        built with, else the nominal reference for an ``xTh`` amplitude. None
+        if the amplitude was a current and no threshold is known.
 
         .. versionadded:: 0.10.0
         """
+        if self._threshold_override is not None:
+            return self._threshold_override
         if self._explicit_threshold_amp is not None:
             return self._explicit_threshold_amp
         return _XTH_REFERENCE_AMP if self._amp_relative else None
@@ -476,9 +476,7 @@ class BiphasicPulseTrain(Stimulus):
     def amp_factor(self):
         """Amplitude as a multiple of :py:attr:`threshold_amp`
 
-        None for a train whose amplitude was given as a current and whose
-        threshold is unknown: how far above threshold such a train is
-        stimulating is simply not known.
+        None when :py:attr:`threshold_amp` is unknown.
 
         .. versionadded:: 0.10.0
         """
@@ -511,10 +509,14 @@ class BiphasicPulseTrain(Stimulus):
                 'time': self._train.time}
 
     def _rebuilt(self, amp, threshold_amp, cathodic_first=None):
-        """This train, with a different amplitude and/or threshold"""
+        """This train, with a different amplitude and/or threshold
+
+        ``threshold_amp`` is only what ``amp`` is resolved against; the
+        caller's threshold and any implant calibration carry across unchanged.
+        """
         if cathodic_first is None:
             cathodic_first = self.cathodic_first
-        return BiphasicPulseTrain(
+        train = BiphasicPulseTrain(
             self.freq, amp, self.phase_dur,
             interphase_dur=self.interphase_dur, delay_dur=self.delay_dur,
             n_pulses=self._train._n_pulses_asked,
@@ -522,21 +524,38 @@ class BiphasicPulseTrain(Stimulus):
             electrode=self.electrodes[0],
             metadata=deepcopy(self.metadata.get('user')),
             threshold_amp=threshold_amp)
+        train._explicit_threshold_amp = self._explicit_threshold_amp
+        train._threshold_override = self._threshold_override
+        return train
+
+    def _with_threshold(self, override):
+        """This train, calibrated to an implant's threshold (None to clear)
+
+        Whichever number the user specified survives: an ``xTh`` train keeps
+        its multiple and changes current, a current-valued train keeps its
+        current and changes multiple.
+        """
+        if override == self._threshold_override:
+            return self
+        amp = self.amp_factor * xTh if self._amp_relative else self.amp
+        resolved = (override if override is not None
+                    else self._explicit_threshold_amp)
+        train = self._rebuilt(amp, resolved)
+        train._threshold_override = override
+        return train
 
     def _scaled(self, factor):
         """This train with every amplitude multiplied by ``factor``
 
         Scaling keeps the amplitude in the terms it was given in: doubling a
-        ``2 * xTh`` train gives ``4 * xTh`` at the same threshold, not 400 uA
-        pinned to whatever threshold happened to be in force.
+        ``2 * xTh`` train gives ``4 * xTh``, not a pinned current.
         """
         if self._amp_relative:
             amp = self.amp_factor * abs(factor) * xTh
         else:
             amp = self.amp * abs(factor)
-        # A negative factor swaps the two phases, which is exactly what the
-        # `cathodic_first` flag says:
-        return self._rebuilt(amp, self._explicit_threshold_amp,
+        # A negative factor swaps the two phases:
+        return self._rebuilt(amp, self.threshold_amp,
                              cathodic_first=(self.cathodic_first if factor >= 0
                                              else not self.cathodic_first))
 

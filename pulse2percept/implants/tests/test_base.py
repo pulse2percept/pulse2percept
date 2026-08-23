@@ -747,18 +747,15 @@ def test_ProsthesisSystem_deactivated_electrode_does_not_render_the_others():
 def test_ProsthesisSystem_thresholds():
     implant = ArgusII()
     npt.assert_equal(implant.thresholds, {})
-    # One current calibrates the whole array:
     implant.thresholds = 100 * uA
     npt.assert_equal(len(implant.thresholds), implant.n_electrodes)
     npt.assert_almost_equal(implant.thresholds['A1'], 100)
-    # A partial dict leaves the rest uncalibrated:
     implant.thresholds = {'A1': 83 * uA, 'A2': 107 * uA}
     npt.assert_equal(sorted(implant.thresholds), ['A1', 'A2'])
     npt.assert_almost_equal(implant.thresholds['A2'], 107)
     # The getter hands out a copy, not the dict the implant works from:
     implant.thresholds['A1'] = 999
     npt.assert_almost_equal(implant.thresholds['A1'], 83)
-    # None clears:
     implant.thresholds = None
     npt.assert_equal(implant.thresholds, {})
 
@@ -779,30 +776,29 @@ def test_ProsthesisSystem_thresholds_are_validated():
             implant.thresholds = bad
     # A rejected assignment leaves the implant as it was:
     npt.assert_equal(implant.thresholds, {})
+    # None is normalized away rather than stored:
+    implant.thresholds = {'A1': 80 * uA, 'A2': None}
+    npt.assert_equal(sorted(implant.thresholds), ['A1'])
 
 
 def test_ProsthesisSystem_thresholds_calibrate_pulse_trains():
     implant = ArgusII()
     implant.stim = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45),
                     'A2': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
-    # Without calibration, both fall back on the nominal reference:
+    # Uncalibrated, both fall back on the nominal reference:
     npt.assert_almost_equal([src.amp for _, src
                              in implant.stim._structured_sources()],
                             [200, 200])
     implant.thresholds = {'A1': 80 * uA, 'A2': 120 * uA}
-    # Same multiple of threshold, different currents:
     for _, src in implant.stim._structured_sources():
         npt.assert_almost_equal(src.amp_factor, 2)
     npt.assert_almost_equal([src.amp for _, src
                              in implant.stim._structured_sources()],
                             [160, 240])
-    # ...and the waveform really is the recalibrated current:
     npt.assert_almost_equal(np.abs(implant.stim['A1']).max(), 160, decimal=3)
 
 
 def test_ProsthesisSystem_thresholds_hold_current_stimuli_fixed():
-    # A current-valued train keeps its current and learns its threshold
-    # multiple, which is the opposite of what an xTh train does:
     implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 160 * uA, 0.45)})
     source = implant.stim._structured_sources()[0][1]
     npt.assert_equal(source.amp_factor, None)
@@ -825,15 +821,12 @@ def test_ProsthesisSystem_clearing_thresholds_restores_the_train(amp,
 
 
 def test_ProsthesisSystem_thresholds_beat_the_pulse_trains_own():
-    # Precedence: an implant that has been calibrated knows better than the
-    # threshold the pulse train was built with.
     implant = ArgusII()
     implant.thresholds = 100 * uA
     implant.stim = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45,
                                              threshold_amp=50 * uA)}
     npt.assert_almost_equal(implant.stim._structured_sources()[0][1].amp, 200)
-    # Clearing falls back to the train's own explicit threshold, not to the
-    # nominal reference:
+    # Clearing falls back to the train's own threshold, not the reference:
     implant.thresholds = None
     source = implant.stim._structured_sources()[0][1]
     npt.assert_almost_equal(source.amp, 100)
@@ -864,6 +857,41 @@ def test_ProsthesisSystem_thresholds_do_not_render_the_stimulus():
     implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45)})
     implant.thresholds = 80 * uA
     source = implant.stim._structured_sources()[0][1]
-    # Recalibration rebuilds the train from its parameters; nothing along the
-    # way asks it for samples:
+    # `data is None` is what says no waveform has been generated:
     npt.assert_equal(source._Stimulus__stim['data'], None)
+
+
+def test_ProsthesisSystem_thresholds_do_not_revive_deactivated_electrodes():
+    implant = ArgusII()
+    implant.stim = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45),
+                    'A2': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
+    implant.deactivate('A1')
+    npt.assert_equal(list(implant.stim.electrodes), ['A2'])
+    implant.thresholds = 80 * uA
+    npt.assert_equal(list(implant.stim.electrodes), ['A2'])
+    npt.assert_almost_equal(implant.stim._structured_sources()[0][1].amp, 160)
+    implant.thresholds = None
+    npt.assert_equal(list(implant.stim.electrodes), ['A2'])
+
+
+def test_ProsthesisSystem_thresholds_preserve_metadata():
+    implant = ArgusII()
+    implant.stim = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45,
+                                             metadata='train'),
+                    'A2': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
+    implant.stim.metadata['user'] = 'collection'
+    implant.thresholds = 80 * uA
+    npt.assert_equal(implant.stim.metadata['user'], 'collection')
+    npt.assert_equal(implant.stim._structured_sources()[0][1].metadata['user'],
+                     'train')
+
+
+def test_ProsthesisSystem_thresholds_recalibrate_from_the_current_stimulus():
+    # The second threshold applies to the amplitude the user gave, not to the
+    # current the first one worked out:
+    implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45)})
+    implant.thresholds = 80 * uA
+    implant.thresholds = 50 * uA
+    source = implant.stim._structured_sources()[0][1]
+    npt.assert_almost_equal(source.amp, 100)
+    npt.assert_almost_equal(source.amp_factor, 2)
