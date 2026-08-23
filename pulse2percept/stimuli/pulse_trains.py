@@ -13,14 +13,10 @@ from .pulses import (AsymmetricBiphasicPulse, BiphasicPulse,
 from ..units import Hz, as_value, ms, uA, xTh
 from ..utils.constants import DT, MS_PER_S
 
-#: Threshold (uA) assumed for an amplitude given in
-#: :py:data:`~pulse2percept.units.xTh` when nothing better is known. It is a
-#: stand-in for a measurement, not one: real thresholds vary by electrode and
-#: subject, so pass ``threshold_amp`` (or calibrate the implant) as soon as
-#: they are known.
-#:
-#: .. versionadded:: 0.10.0
-REFERENCE_THRESHOLD_AMP = 100.0
+# Nominal threshold (uA) an `xTh` amplitude falls back on when nothing better
+# is known. A stand-in for a measurement, not one: real thresholds vary by
+# electrode and by subject, so pass `threshold_amp` as soon as they are known.
+_XTH_REFERENCE_AMP = 100.0
 
 
 def _as_threshold_amp(threshold_amp):
@@ -376,11 +372,11 @@ class BiphasicPulseTrain(Stimulus):
        train built from ``2 * xTh`` has ``unit == uA`` and plots in
        microamps. What ``xTh`` changes is *which* number the user knew, and
        that is what is preserved when the train is rescaled or recalibrated.
-    *  An ``xTh`` amplitude with no threshold in sight falls back to
-       :py:data:`REFERENCE_THRESHOLD_AMP` (100 uA). A current amplitude does
-       not get the same treatment: an uncalibrated current has no threshold
-       multiple at all, and :py:attr:`amp_factor` answers None rather than
-       guessing.
+    *  An ``xTh`` amplitude with no threshold in sight is realized against a
+       nominal 100 uA reference, so that the train still has a waveform. A
+       current amplitude does not get the same treatment: an uncalibrated
+       current has no threshold multiple at all, and :py:attr:`amp_factor`
+       answers None rather than guessing one.
 
     Examples
     --------
@@ -474,7 +470,7 @@ class BiphasicPulseTrain(Stimulus):
         """
         if self._explicit_threshold_amp is not None:
             return self._explicit_threshold_amp
-        return REFERENCE_THRESHOLD_AMP if self._amp_relative else None
+        return _XTH_REFERENCE_AMP if self._amp_relative else None
 
     @property
     def amp_factor(self):
