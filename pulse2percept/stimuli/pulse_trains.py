@@ -10,8 +10,34 @@ from math import isclose
 from .base import Stimulus
 from .pulses import (AsymmetricBiphasicPulse, BiphasicPulse,
                      MonophasicPulse, _electrode_names)
-from ..units import Hz, as_value, ms, uA
+from ..units import Hz, as_value, ms, uA, xTh
 from ..utils.constants import DT, MS_PER_S
+
+#: Threshold (uA) assumed for an amplitude given in
+#: :py:data:`~pulse2percept.units.xTh` when nothing better is known. It is a
+#: stand-in for a measurement, not one: real thresholds vary by electrode and
+#: subject, so pass ``threshold_amp`` (or calibrate the implant) as soon as
+#: they are known.
+#:
+#: .. versionadded:: 0.10.0
+REFERENCE_THRESHOLD_AMP = 100.0
+
+
+def _as_threshold_amp(threshold_amp):
+    """Normalize a threshold to a plain, strictly positive value in uA"""
+    threshold_amp = as_value(threshold_amp, uA, 'threshold_amp')
+    if threshold_amp is None:
+        return None
+    threshold_amp = float(threshold_amp)
+    if not np.isfinite(threshold_amp) or threshold_amp <= 0:
+        raise ValueError(f"'threshold_amp' must be a positive, finite "
+                         f"current, not {threshold_amp}.")
+    return threshold_amp
+
+
+def _is_threshold_relative(amp):
+    """Whether an amplitude was expressed as a multiple of threshold"""
+    return getattr(amp, 'dimension', None) == xTh.dimension
 
 
 def _tile_pulse(pulse, shift, n_pulses):
@@ -303,6 +329,10 @@ class BiphasicPulseTrain(Stimulus):
         Current amplitude (uA). Negative currents: cathodic, positive: anodic.
         The sign will be converted automatically depending on
         ``cathodic_first``.
+
+        May also be given as a multiple of perceptual threshold, e.g.
+        ``2 * xTh`` (see :py:data:`~pulse2percept.units.xTh`), in which case
+        the current delivered is ``amp * threshold_amp``.
     phase_dur : float
         Duration (ms) of the cathodic/anodic phase.
     interphase_dur : float, optional, default: 0
@@ -322,6 +352,12 @@ class BiphasicPulseTrain(Stimulus):
         Optionally, you can provide your own electrode name.
     metadata : dict
         A dictionary of meta-data
+    threshold_amp : float, optional
+        The perceptual threshold (uA) of the electrode this train drives. It
+        is what relates the current in the waveform to
+        :py:attr:`amp_factor`; it never appears in the waveform itself.
+
+        .. versionadded:: 0.10.0
 
     Notes
     -----
@@ -336,22 +372,55 @@ class BiphasicPulseTrain(Stimulus):
     *  Arguments may be given as plain numbers in the units documented above,
        or as unitful quantities (e.g. ``0.05 * mA``, ``450 * us``), which are
        converted to those units. See :py:mod:`pulse2percept.units`.
+    *  The waveform is always a current, whichever way ``amp`` was given: a
+       train built from ``2 * xTh`` has ``unit == uA`` and plots in
+       microamps. What ``xTh`` changes is *which* number the user knew, and
+       that is what is preserved when the train is rescaled or recalibrated.
+    *  An ``xTh`` amplitude with no threshold in sight falls back to
+       :py:data:`REFERENCE_THRESHOLD_AMP` (100 uA). A current amplitude does
+       not get the same treatment: an uncalibrated current has no threshold
+       multiple at all, and :py:attr:`amp_factor` answers None rather than
+       guessing.
+
+    Examples
+    --------
+    Twice threshold, on an electrode whose threshold has been measured:
+
+    >>> from pulse2percept.stimuli import BiphasicPulseTrain
+    >>> from pulse2percept.units import uA, xTh
+    >>> pt = BiphasicPulseTrain(20, 2 * xTh, 0.45, threshold_amp=80 * uA)
+    >>> pt.amp, pt.amp_factor
+    (160.0, 2.0)
+
+    The same stimulation, expressed as the current it delivers:
+
+    >>> pt = BiphasicPulseTrain(20, 160.0 * uA, 0.45, threshold_amp=80 * uA)
+    >>> pt.amp, pt.amp_factor
+    (160.0, 2.0)
 
     """
     #: Defined by the pulse it repeats rather than by its samples
     #: (see `Stimulus._is_parametric`):
     _is_parametric = True
 
-    __slots__ = ('_train',)
+    __slots__ = ('_train', '_amp_relative', '_explicit_threshold_amp')
 
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
                  n_pulses=None, stim_dur=1000.0, cathodic_first=True,
-                 electrode=None, metadata=None):
+                 electrode=None, metadata=None, threshold_amp=None):
         # See `PulseTrain.__init__`. Normalizing here rather than leaving it
         # to `BiphasicPulse` is what keeps the properties below in the units a
         # model reading them back expects:
         freq = as_value(freq, Hz, 'freq')
-        amp = as_value(amp, uA, 'amp')
+        # Which of the two numbers the caller knew is remembered, not just the
+        # current it works out to: rescaling and recalibration both have to
+        # keep the one they were given (see `_scaled`).
+        self._explicit_threshold_amp = _as_threshold_amp(threshold_amp)
+        self._amp_relative = _is_threshold_relative(amp)
+        if self._amp_relative:
+            amp = as_value(amp, xTh, 'amp') * self.threshold_amp
+        else:
+            amp = as_value(amp, uA, 'amp')
         phase_dur = as_value(phase_dur, ms, 'phase_dur')
         interphase_dur = as_value(interphase_dur, ms, 'interphase_dur')
         delay_dur = as_value(delay_dur, ms, 'delay_dur')
@@ -395,6 +464,32 @@ class BiphasicPulseTrain(Stimulus):
         return self._train._pulse.amp
 
     @property
+    def threshold_amp(self):
+        """Perceptual threshold (uA) this train's amplitude is relative to
+
+        None when no threshold is known, which can only happen for a train
+        whose amplitude was given as a current.
+
+        .. versionadded:: 0.10.0
+        """
+        if self._explicit_threshold_amp is not None:
+            return self._explicit_threshold_amp
+        return REFERENCE_THRESHOLD_AMP if self._amp_relative else None
+
+    @property
+    def amp_factor(self):
+        """Amplitude as a multiple of :py:attr:`threshold_amp`
+
+        None for a train whose amplitude was given as a current and whose
+        threshold is unknown: how far above threshold such a train is
+        stimulating is simply not known.
+
+        .. versionadded:: 0.10.0
+        """
+        threshold_amp = self.threshold_amp
+        return None if threshold_amp is None else self.amp / threshold_amp
+
+    @property
     def phase_dur(self):
         """Duration (ms) of the cathodic/anodic phase"""
         return self._train._pulse.phase_dur
@@ -419,28 +514,48 @@ class BiphasicPulseTrain(Stimulus):
         return {'data': self._train.data, 'electrodes': self.electrodes,
                 'time': self._train.time}
 
-    def _scaled(self, factor):
-        """This train with every amplitude multiplied by ``factor``"""
+    def _rebuilt(self, amp, threshold_amp, cathodic_first=None):
+        """This train, with a different amplitude and/or threshold"""
+        if cathodic_first is None:
+            cathodic_first = self.cathodic_first
         return BiphasicPulseTrain(
-            self.freq, self.amp * abs(factor), self.phase_dur,
+            self.freq, amp, self.phase_dur,
             interphase_dur=self.interphase_dur, delay_dur=self.delay_dur,
             n_pulses=self._train._n_pulses_asked,
-            stim_dur=self.stim_dur,
-            # A negative factor swaps the two phases, which is exactly what
-            # this flag says:
-            cathodic_first=(self.cathodic_first if factor >= 0
-                            else not self.cathodic_first),
+            stim_dur=self.stim_dur, cathodic_first=cathodic_first,
             electrode=self.electrodes[0],
-            metadata=deepcopy(self.metadata.get('user')))
+            metadata=deepcopy(self.metadata.get('user')),
+            threshold_amp=threshold_amp)
+
+    def _scaled(self, factor):
+        """This train with every amplitude multiplied by ``factor``
+
+        Scaling keeps the amplitude in the terms it was given in: doubling a
+        ``2 * xTh`` train gives ``4 * xTh`` at the same threshold, not 400 uA
+        pinned to whatever threshold happened to be in force.
+        """
+        if self._amp_relative:
+            amp = self.amp_factor * abs(factor) * xTh
+        else:
+            amp = self.amp * abs(factor)
+        # A negative factor swaps the two phases, which is exactly what the
+        # `cathodic_first` flag says:
+        return self._rebuilt(amp, self._explicit_threshold_amp,
+                             cathodic_first=(self.cathodic_first if factor >= 0
+                                             else not self.cathodic_first))
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        return {'freq': self.freq, 'amp': self.amp,
-                'phase_dur': self.phase_dur,
-                'interphase_dur': self.interphase_dur,
-                'delay_dur': self.delay_dur, 'stim_dur': self.stim_dur,
-                'cathodic_first': self.cathodic_first,
-                'electrodes': self.electrodes, 'metadata': self.metadata}
+        params = {'freq': self.freq, 'amp': self.amp,
+                  'phase_dur': self.phase_dur,
+                  'interphase_dur': self.interphase_dur,
+                  'delay_dur': self.delay_dur, 'stim_dur': self.stim_dur,
+                  'cathodic_first': self.cathodic_first,
+                  'electrodes': self.electrodes, 'metadata': self.metadata}
+        if self.amp_factor is not None:
+            params['amp_factor'] = self.amp_factor
+            params['threshold_amp'] = self.threshold_amp
+        return params
 
 
 class AsymmetricBiphasicPulseTrain(Stimulus):

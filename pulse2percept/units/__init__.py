@@ -37,8 +37,14 @@ current           ``A``, ``mA``, ``uA``, ``nA``
 voltage           ``V``, ``mV``, ``uV``
 charge            ``C``, ``mC``, ``uC``, ``nC``
 visual angle      ``dva``
+threshold ratio   ``xTh``
 dimensionless     ``dimensionless``
 ================  ==========================
+
+``xTh`` ("times threshold") is a p2p-specific dimension, not a dimensionless
+alias: ``2 * xTh`` is a stimulation strength relative to a subject's
+perceptual threshold, and becomes a current only once that threshold is known
+(see :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`).
 
 .. autosummary::
     :toctree: _api
@@ -60,7 +66,9 @@ from .base import (Dimension, Unit, Quantity, DimensionMismatchError, as_value,
                    # charge
                    C, mC, uC, nC,
                    # visual angle
-                   dva)
+                   dva,
+                   # threshold ratio
+                   xTh)
 
 __all__ = [
     'as_value',
@@ -76,4 +84,5 @@ __all__ = [
     'V', 'mV', 'uV',
     'C', 'mC', 'uC', 'nC',
     'dva',
+    'xTh',
 ]

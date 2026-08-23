@@ -8,7 +8,7 @@ from copy import deepcopy
 import numpy as np
 
 # Primitive dimensions. This is deliberately *not* the seven-dimensional SI
-# system: p2p only ever needs these five, and every other dimension we care
+# system: p2p only ever needs these six, and every other dimension we care
 # about is derived from them (frequency = time^-1, charge = current * time,
 # current density = current / length^2).
 #
@@ -16,7 +16,14 @@ import numpy as np
 # physical angle: converting degrees of visual angle to retinal or cortical
 # distance is a coordinate transformation owned by a visual field map, not a
 # unit conversion.
-BASE_DIMENSIONS = ('time', 'length', 'current', 'voltage', 'visual_angle')
+#
+# ``threshold`` is p2p-specific too, and primitive for the same reason: a
+# multiple of perceptual threshold is not a plain number. Threshold varies by
+# electrode and by subject, so turning ``2 * xTh`` into a current takes a
+# calibration, not a scale factor -- and a dimensionless ``2`` must not be
+# mistaken for it.
+BASE_DIMENSIONS = ('time', 'length', 'current', 'voltage', 'visual_angle',
+                   'threshold')
 
 # How the primitive dimensions are spelled in error messages:
 _BASE_LABELS = {
@@ -25,6 +32,7 @@ _BASE_LABELS = {
     'current': 'electric current',
     'voltage': 'voltage',
     'visual_angle': 'visual angle',
+    'threshold': 'threshold ratio',
 }
 
 # Names for the handful of derived dimensions that have one. A dimension earns
@@ -34,11 +42,11 @@ _BASE_LABELS = {
 # energy are deliberately absent: the algebra derives them from voltage and
 # current already, but no p2p API takes them yet.
 _DERIVED_LABELS = {
-    (0, 0, 0, 0, 0): 'dimensionless',
-    (-1, 0, 0, 0, 0): 'frequency',
-    (1, 0, 1, 0, 0): 'charge',
-    (0, -2, 1, 0, 0): 'current density',
-    (1, -2, 1, 0, 0): 'charge density',
+    (0, 0, 0, 0, 0, 0): 'dimensionless',
+    (-1, 0, 0, 0, 0, 0): 'frequency',
+    (1, 0, 1, 0, 0, 0): 'charge',
+    (0, -2, 1, 0, 0, 0): 'current density',
+    (1, -2, 1, 0, 0, 0): 'charge density',
 }
 
 
@@ -835,6 +843,7 @@ LENGTH = Dimension(length=1)
 CURRENT = Dimension(current=1)
 VOLTAGE = Dimension(voltage=1)
 VISUAL_ANGLE = Dimension(visual_angle=1)
+THRESHOLD = Dimension(threshold=1)
 FREQUENCY = TIME ** -1
 CHARGE = CURRENT * TIME
 
@@ -896,6 +905,11 @@ nC = Unit(CHARGE, 1e-9, 'nC')
 #: on the retina or cortex requires a visual field map, not a scale factor.
 dva = Unit(VISUAL_ANGLE, 1, 'dva')
 
+#: Multiple of perceptual threshold ("times threshold"). Not a plain number:
+#: ``2 * xTh`` becomes a current only once a threshold is known, either from
+#: the pulse train itself or from the implant it is delivered on.
+xTh = Unit(THRESHOLD, 1, 'xTh')
+
 
 # The canonical spelling of each predefined unit, for `Unit._display_symbol`.
 # Written out here rather than harvested from this module's namespace: should
@@ -911,7 +925,7 @@ _CANONICAL_UNITS = (dimensionless,
                     A, mA, uA, nA,
                     V, mV, uV,
                     C, mC, uC, nC,
-                    dva)
+                    dva, xTh)
 
 for _unit in _CANONICAL_UNITS:
     _key = (_unit.dimension, _unit.scale)

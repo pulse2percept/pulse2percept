@@ -9,7 +9,8 @@ from pulse2percept.units import (Dimension, Unit, Quantity,
                                  DimensionMismatchError, as_value,
                                  dimensionless,
                                  s, ms, us, ns, Hz, kHz, m, cm, mm, um, nm,
-                                 A, mA, uA, nA, V, mV, uV, C, mC, uC, nC, dva)
+                                 A, mA, uA, nA, V, mV, uV, C, mC, uC, nC, dva,
+                                 xTh)
 from pulse2percept.units.base import (TIME, _CANONICAL_SYMBOLS,
                                       _CANONICAL_UNITS)
 
@@ -159,7 +160,8 @@ def test_unit_vocabulary():
                              (uV, 1e-6, 'voltage'),
                              (C, 1, 'charge'), (mC, 1e-3, 'charge'),
                              (uC, 1e-6, 'charge'), (nC, 1e-9, 'charge'),
-                             (dva, 1, 'visual angle')]:
+                             (dva, 1, 'visual angle'),
+                             (xTh, 1, 'threshold ratio')]:
         npt.assert_almost_equal(unit.scale, scale)
         npt.assert_equal(unit.dimension.name, dim)
     npt.assert_equal(dimensionless.dimension, Dimension())
@@ -376,6 +378,23 @@ def test_dva_is_not_a_length():
     # dva is still a perfectly good unit on its own:
     npt.assert_equal((5 * dva).to_value(dva), 5)
     npt.assert_equal(dva.dimension.name, 'visual angle')
+
+
+def test_xTh_is_not_dimensionless():
+    # A multiple of threshold is not a plain number: turning it into a current
+    # takes a calibration, so nothing may convert between the two silently.
+    npt.assert_equal(xTh == dimensionless, False)
+    npt.assert_equal(2 * xTh == 2, False)
+    with pytest.raises(DimensionMismatchError):
+        (2 * xTh).to_value(uA)
+    with pytest.raises(DimensionMismatchError):
+        as_value(2 * xTh, dimensionless)
+    with pytest.raises(DimensionMismatchError):
+        (2 * xTh) + (2 * uA)
+    # It is still a perfectly good unit on its own:
+    npt.assert_equal((2 * xTh).to_value(xTh), 2)
+    npt.assert_equal(str(2 * xTh), '2 xTh')
+    npt.assert_equal(xTh.dimension.name, 'threshold ratio')
 
 
 def test_as_value():

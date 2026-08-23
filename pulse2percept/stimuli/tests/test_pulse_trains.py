@@ -15,7 +15,7 @@ from pulse2percept.stimuli import (Stimulus, PulseTrain, BiphasicPulse,
 from pulse2percept.stimuli.pulse_trains import _tile_pulse
 from pulse2percept.utils.constants import DT
 from pulse2percept.units import (DimensionMismatchError, Hz, Quantity,
-                                 kHz, mA, ms, uA, us)
+                                 kHz, mA, ms, uA, us, xTh)
 from pulse2percept.units import s as sec
 
 
@@ -780,3 +780,59 @@ def test_append_still_rejects_what_it_always_did():
         pt.append(Stimulus([[5, 5]], electrodes=pt.electrodes, time=[0, 10]))
     with pytest.raises(DimensionMismatchError):
         pt.append(VideoStimulus(np.ones((1, 1, 3))))
+
+
+@pytest.mark.parametrize('amp, threshold_amp, expected',
+                         [(50, None, (50, None, None)),
+                          (0.05 * mA, None, (50, None, None)),
+                          (2 * xTh, None, (200, 100, 2)),
+                          (2 * xTh, 80 * uA, (160, 80, 2)),
+                          (160 * uA, 80 * uA, (160, 80, 2)),
+                          (2 * xTh, 80, (160, 80, 2))])
+def test_BiphasicPulseTrain_threshold_relative_amp(amp, threshold_amp,
+                                                   expected):
+    pt = BiphasicPulseTrain(20, amp, 0.45, stim_dur=100,
+                            threshold_amp=threshold_amp)
+    npt.assert_almost_equal(pt.amp, expected[0])
+    npt.assert_equal(pt.threshold_amp, expected[1])
+    npt.assert_equal(pt.amp_factor, expected[2])
+    # Whichever way the amplitude was given, the waveform is a current:
+    npt.assert_equal(pt.unit, uA)
+    npt.assert_almost_equal(np.abs(pt.data).max(), expected[0], decimal=3)
+
+
+def test_BiphasicPulseTrain_threshold_amp_is_validated():
+    for bad in (0, -80, np.nan, np.inf):
+        with pytest.raises(ValueError):
+            BiphasicPulseTrain(20, 2 * xTh, 0.45, threshold_amp=bad)
+    # A threshold is a current, not a threshold multiple or a time:
+    for bad in (2 * xTh, 5 * ms):
+        with pytest.raises(DimensionMismatchError):
+            BiphasicPulseTrain(20, 50, 0.45, threshold_amp=bad)
+
+
+def test_BiphasicPulseTrain_scaling_preserves_amp_basis():
+    # Doubling a 2xTh train gives 4xTh at the same threshold...
+    relative = BiphasicPulseTrain(20, 2 * xTh, 0.45, stim_dur=100,
+                                  threshold_amp=80 * uA)
+    npt.assert_almost_equal((relative * 2).amp_factor, 4)
+    npt.assert_almost_equal((relative * 2).amp, 320)
+    npt.assert_equal((relative * 2)._amp_relative, True)
+    # ...while doubling a 160 uA train gives 320 uA:
+    current = BiphasicPulseTrain(20, 160 * uA, 0.45, stim_dur=100)
+    npt.assert_almost_equal((current * 2).amp, 320)
+    npt.assert_equal((current * 2).amp_factor, None)
+    npt.assert_equal((current * 2)._amp_relative, False)
+    # Negative scaling still swaps the phases, whichever basis is in force:
+    npt.assert_equal((-relative).cathodic_first, not relative.cathodic_first)
+    npt.assert_almost_equal((-relative).amp_factor, 2)
+    npt.assert_almost_equal((-current).amp, 160)
+
+
+def test_BiphasicPulseTrain_amp_basis_survives_a_round_trip():
+    pt = BiphasicPulseTrain(20, 2 * xTh, 0.45, stim_dur=100,
+                            threshold_amp=80 * uA)
+    for copied in (deepcopy(pt), pt * 1):
+        npt.assert_equal(copied._amp_relative, True)
+        npt.assert_almost_equal(copied.threshold_amp, 80)
+        npt.assert_almost_equal(copied.amp_factor, 2)
