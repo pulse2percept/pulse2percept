@@ -1,5 +1,6 @@
 from pulse2percept.stimuli import (AmplitudeEncoder, VideoStimulus,
                                    BostonTrain, GirlPool)
+from pulse2percept.stimuli.videos import _frame_index
 from pulse2percept.units import (DimensionMismatchError, Hz, kHz, ms, s,
                                  uA)
 from skimage.color import rgb2gray
@@ -104,7 +105,9 @@ def test_VideoStimulus_resize(tmp_path):
 
 def test_VideoStimulus_resize_kwargs():
     """Keyword arguments reach scikit-image (Issue #501)"""
-    # A white square on black
+    # A white square on black. Nearest-neighbor interpolation keeps the video
+    # binary; the default (bilinear, with anti-aliasing on the way down) does
+    # not, which is what makes the two distinguishable:
     ndarray = np.zeros((8, 8, 3), dtype=np.float32)
     ndarray[2:6, 2:6] = 1
     stim = VideoStimulus(ndarray)
@@ -202,6 +205,18 @@ def test_VideoStimulus_clip_rejects_in_memory_source(clip_source, source):
         src = src.data.reshape(src.vid_shape)
     with pytest.raises(ValueError):
         VideoStimulus(src, stop_time=500)
+
+
+def test_frame_index_on_frame_boundaries():
+    """A frame's own start time names that frame, not the one after it
+
+    29.97 fps makes ``i * 1000 / fps * fps / 1000`` land just off ``i``, which
+    is what the tolerance in ``_frame_index`` is for. Every other clipping test
+    here runs at 10 fps, where the arithmetic happens to be exact.
+    """
+    fps = 29.97
+    for i in (1, 10, 100, 1000):
+        npt.assert_equal(_frame_index(i * 1000 / fps, fps), i)
 
 
 def test_VideoStimulus_clip_does_not_decode_the_whole_file(monkeypatch):

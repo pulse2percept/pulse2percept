@@ -137,7 +137,8 @@ class VideoStimulus(Stimulus):
 
     start_time, stop_time : float or Quantity, optional, default: None
         Load only the frames that start in the half-open interval
-        ``[start_time, stop_time)`` of the source video, in milliseconds
+        ``[start_time, stop_time)`` of the source video, in milliseconds.
+        Time-based clipping requires the video reader to report a frame rate.
 
         .. note::
            The clip starts at ``time[0] == 0`` no matter where it was cut
@@ -145,7 +146,7 @@ class VideoStimulus(Stimulus):
            original time stamps, use
            :py:meth:`~pulse2percept.stimuli.VideoStimulus.crop` instead.
 
-        .. versionadded:: 0.10
+        .. versionadded:: 0.10.0
 
     """
     __slots__ = ('vid_shape', '_next_frame')
@@ -255,7 +256,12 @@ class VideoStimulus(Stimulus):
         self.vid_shape = (*self.vid_shape[:-1], self.data.shape[-1])
 
     def _frames(self):
-        """The stim as a dense <rows x columns [x channels] x frames> array"""
+        """The stimulus as a dense <rows x columns [x channels] x frames> array
+
+        Raises a ``ValueError`` if the video has been compressed in space,
+        which removes all-zero pixels and therefore leaves nothing that can be
+        reshaped back into a frame.
+        """
         n_px = int(np.prod(self.vid_shape[:-1]))
         if self.data.shape[0] != n_px:
             raise ValueError(
@@ -271,7 +277,16 @@ class VideoStimulus(Stimulus):
         return params
 
     def _names_for(self, vid, electrodes):
-        """Electrode names for a video derived from this one"""
+        """Electrode names for a video derived from this one
+
+        A pixel keeps its name across an operation that leaves the pixel grid
+        alone, which is what makes 'A1' refer to the same thing before and
+        after. An operation that resamples the grid (a resize, a rotation that
+        grows the canvas) has no such correspondence to preserve, so the result
+        is named afresh rather than inheriting names that no longer describe
+        it. Only the frame layout is compared; the number of frames is the time
+        axis, not an electrode count.
+        """
         if electrodes is not None:
             return electrodes
         same = np.shape(vid)[:-1] == self.vid_shape[:-1]

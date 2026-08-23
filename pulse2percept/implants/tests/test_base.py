@@ -321,7 +321,13 @@ def test_ProsthesisSystem_rgb_video_stim():
 
 
 def test_implant_geometry_units():
-    """Every implant places itself the same way, however its xyz is spelled"""
+    """Every implant places itself the same way, however its x/y/z is spelled
+
+    Some device constructors inspect or adjust the geometry themselves before
+    handing it to an ElectrodeGrid (Orion checks `z`, PRIMA writes a
+    per-electrode `z` list onto the electrodes afterwards), so it is not enough
+    to normalize inside the grid.
+    """
     cases = [
         (implants.ArgusI, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 100 * um},
          {'x': 1000, 'y': -500, 'z': 100}),
