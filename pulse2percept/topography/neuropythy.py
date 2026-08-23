@@ -97,12 +97,21 @@ class NeuropythyMap(CorticalMap):
         except ValueError as ve:
             # For some reason, neuropythy won't download the dataset if the subject 
             # id isn't fsaverage. Download it manually in this case
-            if subject in benson_winawer_subjs or subject.upper() in benson_winawer_subjs:
-                # force the download (will go to cache_dir)
-                _ = ny.data['benson_winawer_2018'].subjects[subject]
-                return ny.freesurfer_subject(subject)
+            if subject in benson_winawer_subjs:
+                subject_id = subject
+            elif isinstance(subject, str) and subject.upper() in benson_winawer_subjs:
+                subject_id = subject.upper()
             else:
                 raise ve
+            if subject in benson_winawer_subjs:
+                subject_id = subject
+            elif isinstance(subject, str) and subject.upper() in benson_winawer_subjs:
+                subject_id = subject.upper()
+            else:
+                raise ve
+            # force the download (will go to cache_dir)
+            _ = ny.data['benson_winawer_2018'].subjects[subject_id]
+            return ny.freesurfer_subject(subject_id)
         
     def load_meshes(self, subject):
         """

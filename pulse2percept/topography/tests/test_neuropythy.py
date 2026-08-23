@@ -395,13 +395,15 @@ def test_parse_subject_configures_cache(neuropythy, tmp_path, monkeypatch):
     npt.assert_equal(len(config['freesurfer_subject_paths']), 1)
 
 
+@pytest.mark.parametrize(
+    ('subject', 'subject_id'),
+    [('S1201', 'S1201'),
+     ('s1201', 'S1201')],
+)
 def test_parse_subject_downloads_benson_winawer(neuropythy, tmp_path,
-                                                monkeypatch):
-    """Neuropythy only downloads the dataset for 'fsaverage' on its own
-
-    Every other Benson & Winawer subject comes back as a ValueError until the
-    dataset is on disk, so p2p asks for it and tries again.
-    """
+                                                monkeypatch, subject,
+                                                subject_id):
+    """Benson-Winawer subjects are downloaded using their canonical ID."""
     downloaded = []
     attempts = []
 
@@ -414,12 +416,13 @@ def test_parse_subject_downloads_benson_winawer(neuropythy, tmp_path,
     dataset = SimpleNamespace(subjects=DownloadOnAccess(downloaded))
     monkeypatch.setattr(neuropythy, 'config', fake_config())
     monkeypatch.setattr(neuropythy, 'freesurfer_subject', freesurfer_subject)
-    monkeypatch.setattr(neuropythy, 'data', {'benson_winawer_2018': dataset})
+    monkeypatch.setattr(neuropythy, 'data',
+                        {'benson_winawer_2018': dataset})
 
     nmap = ToyNeuropythyMap(cache_dir=str(tmp_path))
-    npt.assert_equal(nmap.parse_subject('S1201'), 'loaded S1201')
-    npt.assert_equal(downloaded, ['S1201'])
-    npt.assert_equal(attempts, ['S1201', 'S1201'])
+    npt.assert_equal(nmap.parse_subject(subject), f'loaded {subject_id}')
+    npt.assert_equal(downloaded, [subject_id])
+    npt.assert_equal(attempts, [subject, subject_id])
 
 
 def test_parse_subject_reraises_unknown_subject(neuropythy, tmp_path,
