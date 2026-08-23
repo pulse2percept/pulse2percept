@@ -1909,16 +1909,21 @@ class Model(PrettyPrint):
 
         if self.has_space and self.has_time:
             # Need to calculate the spatial response at all stimulus points
-            # (i.e., whenever the stimulus changes). Of the delivered pulse
-            # train, not of the modulation behind it: the pulses are what the
-            # temporal model integrates, and dropping them here would leave it
-            # nothing to do (see `_delivered`).
+            # (i.e., whenever the stimulus changes)
             resp = self.spatial.predict_percept(_delivered(implant),
                                                 t_percept=None)
             if implant.stim.time is not None:
-                # Then pass that to the temporal model, which will output at
-                # all `t_percept` time steps:
-                resp = self.temporal.predict_percept(resp, t_percept=t_percept)
+                combine = getattr(self.spatial, '_combine_temporal', None)
+                if resp.time is None and combine is not None:
+                    # A spatial model hands over a percept with no time axis,
+                    # so the spatial model decides what to do with it:
+                    resp = combine(resp, self.temporal, implant.stim,
+                                   t_percept)
+                else:
+                    # Then pass that to the temporal model, which will output
+                    # at all `t_percept` time steps:
+                    resp = self.temporal.predict_percept(resp,
+                                                         t_percept=t_percept)
         elif self.has_space:
             resp = self.spatial.predict_percept(implant, t_percept=t_percept)
         elif self.has_time:

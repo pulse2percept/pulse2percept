@@ -11,6 +11,7 @@ from ..units import as_value, um
 from ..utils import FreezeError, rename_parameter
 from ..utils.base import has_own_attr
 from .base import NotBuiltError, BaseModel, _require_stim_dimension
+from .temporal import FadingTemporal
 from ._granley2021 import fast_biphasic_axon_map
 
 # `find_threshold` bisects on a scaled copy of the stimulus *data*. This model
@@ -263,10 +264,17 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     individually customized by setting the bright_model, size_model, or streak_model
     to any python callable with signature f(freq, amp, pdur)
 
-    .. important::
-    
-        Using this model in combination with a temporal model is not currently
-        supported and will give unexpected results
+    .. note::
+
+        Of the temporal models, only
+        :py:class:`~pulse2percept.models.FadingTemporal` can be combined with
+        this one, and it is combined in a space-time-separable approximation:
+        Granley supplies the peak spatial percept :math:`G(x, y)` and fading
+        supplies a normalized envelope, so that
+        :math:`P(x, y, t) = G(x, y) k(t) / \\max_t k(t)`. The pulse train is
+        not integrated; :math:`k` is the response to a unit cathodic envelope
+        lasting as long as the stimulus does. Any other temporal model is
+        refused.
 
     Parameters
     ----------
@@ -601,6 +609,57 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         # This override bypasses SpatialModel.predict_percept:
         resp = self._postprocess_spatial(resp)
         return Percept(resp, space=self.grid, time=t_percept,
+                       time_unit=self.time_unit,
+                       metadata={'stim': stim.metadata})
+
+    def _combine_temporal(self, percept, temporal, stim, t_percept):
+        """Fade this model's one representative frame over time
+
+        What ``Model.predict_percept`` delegates to when this model is paired
+        with a temporal one (see there). This model reports a single frame
+        computed from amplitude, frequency and phase duration, so there is no
+        time course left for a temporal model to integrate. Offered instead is
+        the space-time-separable approximation
+
+        .. math::
+
+            P(x, y, t) = G(x, y) \\frac{k(t)}{\\max_t k(t)},
+
+        where :math:`G` is the percept this model predicts on its own and
+        :math:`k` is :py:class:`~pulse2percept.models.FadingTemporal`'s
+        response to a unit cathodic envelope that is on for as long as the
+        stimulus lasts. The stimulus waveform is deliberately not passed
+        through: :math:`G` already accounts for amplitude, frequency and phase
+        duration, and integrating the pulses again would count them twice.
+        """
+        if not isinstance(temporal, FadingTemporal):
+            raise NotImplementedError(
+                f"{type(self).__name__} can only be combined with "
+                f"FadingTemporal, not {type(temporal).__name__}. It predicts "
+                f"a single frame from amplitude, frequency and phase "
+                f"duration, so a temporal model can only supply a normalized "
+                f"brightness envelope, not integrate the pulse train.")
+        if temporal.thresh_percept != 0:
+            raise ValueError(
+                f"FadingTemporal.thresh_percept must be 0 when combined with "
+                f"{type(self).__name__}, not {temporal.thresh_percept}. The "
+                f"envelope it is applied to is normalized to a peak of 1, so "
+                f"a threshold in brightness units has no meaning there.")
+        dur = float(stim.time[-1])
+        # A unit cathodic step: `fading_fast` holds each sample until the next
+        # one, so amplitude -1 at t=0 and 0 at t=dur is "on" for exactly the
+        # stimulation duration.
+        envelope = Stimulus(np.array([[-1.0, 0.0]]), electrodes=['envelope'],
+                            time=[0, dur], metadata=stim.metadata.get('user'))
+        # The drive is constant while it is on, so brightness rises
+        # monotonically until it stops and decays from there: the peak is the
+        # last simulation step before `dur`.
+        t_peak = max(0.0, (np.ceil(dur / temporal.dt) - 1.0) * temporal.dt)
+        peak = temporal.predict_percept(envelope, t_percept=t_peak).data.max()
+        resp = temporal.predict_percept(envelope, t_percept=t_percept)
+        fade = resp.data.reshape(-1) / peak
+        return Percept(percept.data[..., 0][..., np.newaxis] * fade,
+                       space=self.grid, time=resp.time,
                        time_unit=self.time_unit,
                        metadata={'stim': stim.metadata})
 

@@ -12,8 +12,10 @@ from pulse2percept.stimuli import (AmplitudeEncoder,
                                    AsymmetricBiphasicPulseTrain,
                                    BiphasicPulseTrain, ImageStimulus,
                                    MonophasicPulse, Stimulus)
-from pulse2percept.models import BiphasicAxonMapModel, BiphasicAxonMapSpatial, \
-    AxonMapSpatial
+from pulse2percept.models import (AxonMapSpatial, BiphasicAxonMapModel,
+                                  BiphasicAxonMapSpatial, FadingTemporal,
+                                  Horsager2009Temporal, Model,
+                                  Nanduri2012Temporal)
 from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
 from pulse2percept.units import (DimensionMismatchError, Quantity,
@@ -857,3 +859,108 @@ def test_BiphasicAxonMap_rejects_an_encoded_stimulus(model_cls):
     implant.stim = encoded
     with pytest.raises(TypeError):
         model.predict_percept(implant)
+
+
+def _fading_models(tau=100, **temporal_params):
+    """A Granley+fading composite and the standalone Granley model beside it"""
+    grid = dict(xrange=(-3, 3), yrange=(-2, 2), step=1, n_ax_segments=30)
+    composite = Model(spatial=BiphasicAxonMapSpatial(**grid),
+                      temporal=FadingTemporal(tau=tau, **temporal_params))
+    return composite.build(), BiphasicAxonMapModel(**grid).build()
+
+
+def _fading_implant(stim_dur=200):
+    return ArgusII(stim={'A5': BiphasicPulseTrain(20, 1, 0.45,
+                                                  stim_dur=stim_dur)})
+
+
+def test_BiphasicAxonMapSpatial_with_FadingTemporal_runs():
+    # Issue #565: the spatial model collapses time, so the percept it hands
+    # over has no time axis for a temporal model to integrate.
+    composite, _ = _fading_models()
+    percept = composite.predict_percept(_fading_implant())
+    npt.assert_equal(percept.data.ndim, 3)
+    npt.assert_equal(percept.data.shape[-1] > 1, True)
+    npt.assert_equal(np.all(np.isfinite(percept.data)), True)
+
+
+def test_BiphasicAxonMapSpatial_fading_peak_frame_is_the_granley_percept():
+    composite, granley = _fading_models()
+    implant = _fading_implant()
+    peak = composite.predict_percept(implant).max(axis='frames')
+    npt.assert_array_almost_equal(
+        peak, granley.predict_percept(implant).data[..., 0])
+
+
+def test_BiphasicAxonMapSpatial_fading_is_space_time_separable():
+    composite, _ = _fading_models()
+    percept = composite.predict_percept(_fading_implant())
+    lit = percept.data[percept.data.max(axis=-1) > 0]
+    npt.assert_equal(len(lit) > 1, True)
+    # Every pixel rides the same envelope, so the spatial scale is all that
+    # told the pixels apart:
+    shapes = lit / lit.max(axis=-1, keepdims=True)
+    npt.assert_array_almost_equal(shapes - shapes[0], 0)
+
+
+def test_BiphasicAxonMapSpatial_fading_tau_changes_only_the_time_course():
+    implant = _fading_implant()
+    fast, granley = _fading_models(tau=50)
+    slow, _ = _fading_models(tau=400)
+    fast_percept = fast.predict_percept(implant)
+    slow_percept = slow.predict_percept(implant)
+    granley_percept = granley.predict_percept(implant).data[..., 0]
+    npt.assert_array_almost_equal(fast_percept.max(axis='frames'),
+                                  granley_percept)
+    npt.assert_array_almost_equal(slow_percept.max(axis='frames'),
+                                  granley_percept)
+    brightest = np.unravel_index(np.argmax(granley_percept),
+                                 granley_percept.shape)
+    fast_trace = fast_percept.data[brightest]
+    slow_trace = slow_percept.data[brightest]
+    npt.assert_equal(np.allclose(fast_trace, slow_trace), False)
+    # A shorter time constant fills in sooner, so it is brighter throughout
+    # the rise:
+    npt.assert_equal(np.all(fast_trace[1:-1] > slow_trace[1:-1]), True)
+
+
+def test_BiphasicAxonMapSpatial_fading_peak_ignores_requested_sampling():
+    composite, granley = _fading_models(tau=100)
+    implant = _fading_implant()
+    granley_max = granley.predict_percept(implant).data.max()
+    # Asked for instants that all fall during the rise, the percept must stay
+    # below the Granley maximum rather than renormalizing onto it:
+    early = composite.predict_percept(implant, t_percept=[20, 40])
+    npt.assert_equal(early.data.max() < 0.9 * granley_max, True)
+    # And the samples it does report are the same ones the full run reports:
+    full = composite.predict_percept(implant)
+    npt.assert_array_almost_equal(early.data[..., 0], full.data[..., 1])
+    npt.assert_array_almost_equal(early.data[..., 1], full.data[..., 2])
+
+
+def test_BiphasicAxonMapSpatial_fading_decays_after_stimulation():
+    composite, _ = _fading_models(tau=100)
+    percept = composite.predict_percept(_fading_implant(stim_dur=200),
+                                        t_percept=[200, 400, 600])
+    frame_max = percept.data.max(axis=(0, 1))
+    npt.assert_equal(np.all(np.diff(frame_max) < 0), True)
+    npt.assert_equal(frame_max[-1] > 0, True)
+
+
+@pytest.mark.parametrize('temporal', [Nanduri2012Temporal(),
+                                      Horsager2009Temporal()])
+def test_BiphasicAxonMapSpatial_rejects_other_temporal_models(temporal):
+    model = Model(spatial=BiphasicAxonMapSpatial(xrange=(-2, 2),
+                                                 yrange=(-2, 2), step=1,
+                                                 n_ax_segments=30),
+                  temporal=temporal).build()
+    with pytest.raises(NotImplementedError):
+        model.predict_percept(_fading_implant())
+
+
+def test_BiphasicAxonMapSpatial_fading_rejects_thresh_percept():
+    # The envelope is normalized to a peak of 1, so a threshold in brightness
+    # units would be applied to the wrong quantity:
+    composite, _ = _fading_models(thresh_percept=0.1)
+    with pytest.raises(ValueError):
+        composite.predict_percept(_fading_implant())
