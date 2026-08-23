@@ -22,6 +22,7 @@ pulse2percept provides the following computational models:
 Reference         Model                      Type
 ----------------  -------------------------  -------------------
 generic           `FadingTemporal`           temporal
+generic           `AlphaTemporal`            temporal
 [Thompson2003]_   `Thompson2003Model`        spatial
 [Thompson2003]_   `Thompson2003Spatial`      spatial
 [Horsager2009]_   `Horsager2009Model`        temporal

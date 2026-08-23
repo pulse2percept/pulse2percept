@@ -290,6 +290,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         model is ignored, because its response is normalized before being
         applied to the Granley percept.
 
+        :py:class:`~pulse2percept.models.FadingTemporal` and
+        :py:class:`~pulse2percept.models.AlphaTemporal` are the generic
+        envelopes to reach for: the first fades from stimulus onset, the
+        second rises to a peak first.
+
     Parameters
     ----------
     bright_model: callable, optional
