@@ -186,10 +186,8 @@ def test_SpatialModel_predict_percept_deduplicates_frames():
 
 
 def test_SpatialModel_predict_percept_keeps_metadata():
-    # `_predict_spatial` only ever sees the de-duplicated copy of the stimulus,
-    # and that copy is where BiphasicAxonMapSpatial and DynaphosModel look up
-    # amplitude, frequency and phase duration. The per-electrode metadata has
-    # to survive the trip:
+    # `_predict_spatial` only ever sees the de-duplicated copy of the
+    # stimulus, so the caller's metadata has to survive the trip:
     seen_metadata = []
 
     class RecordingSpatialModel(ValidSpatialModel):
@@ -200,17 +198,16 @@ def test_SpatialModel_predict_percept_keeps_metadata():
                             dtype=np.float32)
 
     model = RecordingSpatialModel(step=2).build()
-    implant = ArgusI(stim={'A1': BiphasicPulseTrain(20, 10, 0.45,
-                                                    stim_dur=20)})
+    implant = ArgusI(stim=Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45,
+                                                             stim_dur=20)},
+                                   metadata='mine'))
     model.predict_percept(implant)
     npt.assert_equal(len(seen_metadata), 1)
-    npt.assert_equal(list(seen_metadata[0]['electrodes'].keys()), ['A1'])
-    npt.assert_equal(seen_metadata[0]['electrodes']['A1']['metadata']['amp'],
-                     10)
+    npt.assert_equal(seen_metadata[0]['user'], 'mine')
     # ...also when the caller asks for time points of their own:
     seen_metadata.clear()
     model.predict_percept(implant, t_percept=[0, 5, 10])
-    npt.assert_equal(list(seen_metadata[0]['electrodes'].keys()), ['A1'])
+    npt.assert_equal(seen_metadata[0]['user'], 'mine')
 
 
 @pytest.mark.parametrize('param, value', [('engine', 'serial'),

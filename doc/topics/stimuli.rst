@@ -374,10 +374,9 @@ before and after compression:
 Accessing stimulus metadata
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Stimuli can store additional relevant information in the ``metadata`` dictionary. 
-Users can also pass their own metadata, which will be stored in ``metadata["user"]``
-Stimuli built from a collection of sources store the metadata for each source 
-in ``metadata["electrodes"][electrode]["metadata"]``:
+Stimuli can store additional relevant information in the ``metadata``
+dictionary. What the user passes is stored in ``metadata["user"]``; each source
+of a multi-source stimulus keeps its own:
 
 .. ipython:: python
 
@@ -387,11 +386,11 @@ in ``metadata["electrodes"][electrode]["metadata"]``:
     stim = Stimulus([[0, 1, 2, 3]], metadata='user_metadata')
     stim.metadata
 
-    # Some objects store their own metadata
+    # Sources carry their own metadata
     stim = BiphasicPulseTrain(1,1,1, metadata='user_metadata')
     stim.metadata
 
-    # Multiple source metadata
+    # A collection keeps the metadata the whole stimulus was given
     stim = Stimulus({'A1' : BiphasicPulseTrain(1,1,1, metadata='A1 metadata'),
                      'B2' : BiphasicPulseTrain(1,1,1, metadata='B2 metadata')},
                     metadata='stimulus metadata')

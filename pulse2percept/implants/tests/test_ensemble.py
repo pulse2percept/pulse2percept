@@ -131,13 +131,15 @@ def test_merge_stimuli():
     npt.assert_equal(implant.stim.data[:60], 1)
     npt.assert_equal(implant.stim.data[60:], 2)
 
-    # with time 
+    # with time
     implant = EnsembleImplant([Orion(stim=np.ones((60, 5))),
                                Orion(x=-35000, stim=np.ones((60, 2))*2)])
     npt.assert_equal(implant.stim.data.shape, (120, 5))
-    npt.assert_equal(implant.stim.data[:60], 1)  
+    npt.assert_equal(implant.stim.data[:60], 1)
     npt.assert_equal(implant.stim.data[60:, :2], 2)
     npt.assert_equal(implant.stim.data[60:, 2:], 0)
+    # A merge of sampled waveforms has no structure to keep:
+    npt.assert_equal(implant.stim._structured_sources(), None)
 
     # biphasic pulse trains
     implant1 = Orion()
@@ -145,16 +147,20 @@ def test_merge_stimuli():
     implant2 = Orion(x=-35000)
     implant2.stim = {e : BiphasicPulseTrain(20, 2, .85) for e in implant2.electrode_names}
     implant = EnsembleImplant([implant1, implant2])
+    # Asked before `.data`: reading the waveform must not be what builds it.
+    # Each child electrode keeps the train that drives it, under the name the
+    # ensemble gives it, so a model still sees two clocks and not one array:
+    sources = implant.stim._structured_sources()
+    npt.assert_equal([e for e, _ in sources], implant.electrode_names)
+    sources = dict(sources)
+    npt.assert_equal((sources['0-96'].freq, sources['0-96'].phase_dur),
+                     (50, .45))
+    npt.assert_equal((sources['1-96'].freq, sources['1-96'].phase_dur),
+                     (20, .85))
     npt.assert_equal(implant.stim.data.shape, (120, 471))
     # Two implants that pulse at the same instant get there by accumulating
-    # their own way, so merging their time axes needs a tolerance. An exact
-    # union would keep both copies and leave the merged axis with pairs of
-    # points closer together than a time step:
+    # their own way, so merging their time axes needs a tolerance:
     npt.assert_equal(np.all(np.diff(implant.stim.time) > 0.95 * DT), True)
-    # make sure that implant.metadata['electrodes'] is also merged
-    npt.assert_equal(list(implant.stim.metadata['electrodes'].keys()), implant.electrode_names)
-    npt.assert_equal(implant.stim.metadata['electrodes']['0-96'], implant1.stim.metadata['electrodes']['96'])
-    npt.assert_equal(implant.stim.metadata['electrodes']['1-96'], implant2.stim.metadata['electrodes']['96'])
 
     # with cortivis and orion
     implant = EnsembleImplant([Orion(stim=np.ones(60)),

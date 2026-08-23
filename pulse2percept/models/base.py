@@ -998,10 +998,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 uniq_time = stim.time[t_unique]
                 if len(uniq_time) == 1:
                     uniq_time = None
-                # Carry the metadata across: `_predict_spatial` is where
-                # BiphasicAxonMapSpatial and DynaphosModel look up amplitude,
-                # frequency and phase duration, and they only ever see this
-                # de-duplicated copy:
+                # `_predict_spatial` only ever sees this de-duplicated
+                # copy, so the caller's metadata has to come along:
                 stim_unique = Stimulus(
                     stim[:, stim.time[t_unique]], electrodes=stim.electrodes,
                     time=uniq_time,

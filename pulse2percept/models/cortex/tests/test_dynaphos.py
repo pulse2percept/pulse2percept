@@ -230,11 +230,10 @@ def test_DynaphosModel_deprecated_xystep():
         npt.assert_almost_equal(model.step, 2)
 
 
-def test_dynaphos_reads_the_pulse_train_not_its_metadata():
-    # The same train has to predict the same percept however it is assigned,
-    # and whatever its metadata says. Both used to be false: a bare train
-    # carried no per-electrode metadata and was simulated on the model's
-    # default clock instead of its own.
+def test_dynaphos_reads_the_pulse_train_itself():
+    # The same train has to predict the same percept however it is assigned.
+    # That used to be false: a bare train carried no per-electrode metadata
+    # and was simulated on the model's default clock instead of its own.
     model = DynaphosModel(step=0.5, xrange=(-2, 2), yrange=(-2, 2)).build()
     model.dt = 20
     t_percept = np.arange(0, 200, 20)
@@ -251,13 +250,10 @@ def test_dynaphos_reads_the_pulse_train_not_its_metadata():
     npt.assert_array_equal(bare, predict({0: train()}))
     npt.assert_equal(np.any(bare), True)
 
-    # Corrupting the compatibility metadata changes nothing:
+    # User metadata says nothing about the clock, however it is written:
     corrupt = train()
-    corrupt.metadata.update(freq=1, amp=0, phase_dur=99)
+    corrupt.metadata['user'] = {'freq': 1, 'amp': 0, 'phase_dur': 99}
     npt.assert_array_equal(bare, predict(corrupt))
-    wiped = train()
-    wiped.metadata.clear()
-    npt.assert_array_equal(bare, predict(wiped))
 
 
 def test_dynaphos_uses_its_defaults_for_an_arbitrary_waveform():
@@ -298,12 +294,7 @@ def test_dynaphos_reads_the_clock_before_compression():
 
 
 def _ensemble_of_two_clocks():
-    """Two implants driven at different frequencies, merged into one
-
-    `merge_stimuli` interpolates its members into a single raw array, so the
-    trains themselves do not survive -- only the record of them that this
-    model's legacy fallback reads.
-    """
+    """Two implants driven at different frequencies, merged into one"""
     fast = Orion(stim={e: BiphasicPulseTrain(50, 300, 0.45, stim_dur=100)
                        for e in Orion().electrode_names})
     slow = Orion(x=-35000,
@@ -312,12 +303,11 @@ def _ensemble_of_two_clocks():
     return EnsembleImplant([fast, slow])
 
 
-def test_dynaphos_recovers_ensemble_clocks():
-    # An ensemble keeps no pulse trains, so without the compatibility path
-    # every member would silently be simulated at the model's own default
-    # clock instead of the one it was built with.
+def test_dynaphos_reads_ensemble_clocks():
+    # An ensemble keeps its members' trains rather than sampling them away,
+    # so every member is simulated at the clock it was built with instead of
+    # the model's own default.
     ensemble = _ensemble_of_two_clocks()
-    npt.assert_equal(ensemble.stim._structured_sources(), None)
     clocks = _pulse_train_clocks(ensemble.stim)
     npt.assert_equal(len(clocks), len(ensemble.stim.electrodes))
     npt.assert_equal(sorted(set(clocks.values())), [(20, 0.85), (50, 0.45)])
@@ -331,44 +321,28 @@ def test_dynaphos_ensemble_prediction_uses_those_clocks():
     ensemble = _ensemble_of_two_clocks()
     with_clocks = model.predict_percept(ensemble).data
     npt.assert_equal(np.any(with_clocks), True)
-    # Take the record away and the model is back on its own default clock.
-    # That the answer moves is what says the recovered clocks reached the
-    # simulation rather than merely being collected:
-    ensemble.stim.metadata['electrodes'].clear()
-    npt.assert_equal(_pulse_train_clocks(ensemble.stim), None)
-    npt.assert_equal(np.allclose(with_clocks,
-                                 model.predict_percept(ensemble).data), False)
+    # The same waveform with the trains behind it taken away is back on the
+    # model's default clock
+    waveform_only = _ensemble_of_two_clocks()
+    waveform_only.stim = Stimulus(ensemble.stim.data,
+                                  electrodes=ensemble.stim.electrodes,
+                                  time=ensemble.stim.time)
+    npt.assert_equal(_pulse_train_clocks(waveform_only.stim), None)
+    npt.assert_equal(
+        np.allclose(with_clocks,
+                    model.predict_percept(waveform_only).data), False)
 
 
-@pytest.mark.parametrize('build_stim', [
-    # No record of a pulse train at all:
-    lambda: Stimulus([[0, 100, 100, 0]], time=[0, 1, 99, 100]),
-    # A record that says the source was something else:
-    lambda: Stimulus([[0, 100, 100, 0]], time=[0, 1, 99, 100],
-                     metadata={'electrodes': {'0': {'type': Stimulus,
-                                                    'metadata': {}}},
-                               'user': None}),
-    # User metadata that merely happens to have the right keys:
-    lambda: Stimulus([[0, 100, 100, 0]], time=[0, 1, 99, 100],
-                     metadata={'electrodes': {'0': {'type': dict,
-                                                    'metadata': {
-                                                        'freq': 1,
-                                                        'phase_dur': 9}}},
-                               'user': None}),
-])
-def test_dynaphos_legacy_clocks_are_strict(build_stim):
-    # The fallback exists for containers that really did hold pulse trains.
-    # Anything else leaves the model on its own clock:
-    npt.assert_equal(_pulse_train_clocks(build_stim()), None)
-
-
-def test_dynaphos_legacy_clocks_are_not_read_when_structure_says_otherwise():
-    # A DC offset leaves no train behind, and drops the parameters with it --
-    # the fallback must not resurrect them from a leftover record:
+def test_dynaphos_clocks_are_not_read_when_structure_says_otherwise():
+    # Samples with nothing behind them leave the model on its own clock:
+    npt.assert_equal(
+        _pulse_train_clocks(Stimulus([[0, 100, 100, 0]],
+                                     time=[0, 1, 99, 100])), None)
+    # A DC offset leaves no train behind, and drops the parameters with it:
     stim = Stimulus({'0': BiphasicPulseTrain(20, 100, 0.45, stim_dur=100)})
     npt.assert_equal(_pulse_train_clocks(stim + 5), None)
     # A stimulus made of something other than biphasic trains stays on the
-    # defaults too, rather than falling through to whatever was recorded:
+    # defaults too:
     asym = Stimulus({'0': AsymmetricBiphasicPulseTrain(20, 100, 50, 0.45, 0.9,
                                                        stim_dur=100)})
     npt.assert_equal(_pulse_train_clocks(asym), None)
@@ -376,8 +350,7 @@ def test_dynaphos_legacy_clocks_are_not_read_when_structure_says_otherwise():
 
 def test_dynaphos_uses_its_defaults_for_an_encoded_stimulus():
     # An encoder's schedule can change frequency from frame to frame, so there
-    # is no per-electrode clock to take from it. The model stays on its own,
-    # and does not fall through to whatever the metadata happens to hold:
+    # is no per-electrode clock to take from it. The model stays on its own:
     implant = Cortivis(x=1000)
     encoded = AmplitudeEncoder().encode(
         ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)), implant=implant)

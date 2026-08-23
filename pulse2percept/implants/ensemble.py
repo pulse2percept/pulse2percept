@@ -245,9 +245,59 @@ class EnsembleImplant(ProsthesisSystem):
         self._earray = ElectrodeArray(electrodes)
         self.merge_stimuli()
         
+    def _structured_children(self):
+        """One source per ensemble electrode, or ``None``"""
+        sources = {}
+        for i, implant in self._implants.items():
+            if implant.stim is None:
+                return None
+            child = implant.stim._structured_sources()
+            if child is None:
+                return None
+            child = {str(e): src for e, src in child}
+            names = [str(e) for e in implant.electrode_names]
+            if len(child) != len(names) or any(e not in child for e in names):
+                return None
+            for name in names:
+                sources[f"{i}-{name}"] = child[name]
+        if sorted(sources) != sorted(self.electrode_names):
+            return None
+        # Ensemble order, not the order the children happened to be built in:
+        return {name: sources[name] for name in self.electrode_names}
+
     def merge_stimuli(self):
         """Constructs the combined stimulus for all implants in self._implants"""
         if any([i.stim for i in self._implants.values()]):
+            # An implant with no stimulus contributes zeros and no
+            # interpretation of them, so only the ones that have a stimulus
+            # decide what the merged numbers mean:
+            present = [i.stim for i in self._implants.values()
+                       if i.stim is not None]
+            if len({(s.unit, s.time_unit) for s in present}) > 1:
+                names = ', '.join(sorted({_describe_unit(s.unit)
+                                          for s in present}))
+                raise DimensionMismatchError(
+                    f"Cannot merge stimuli measured in different units "
+                    f"({names}). Convert them to a common unit first.")
+
+            # The metadata of each implant is stored under 'user'; concatenate
+            # those, keyed by which implant they came from:
+            user_metadata = {str(i): implant.stim.metadata['user']
+                             for i, implant in self._implants.items()
+                             if implant.stim is not None}
+
+            # runtime import to avoid circular import
+            from ..stimuli import Stimulus
+
+            sources = self._structured_children()
+            if sources is not None:
+                # Every electrode has a source of its own, so the ensemble is
+                # that collection
+                merged = Stimulus(sources, electrodes=self.electrode_names,
+                                  metadata=user_metadata)
+                self.stim = merged._inherit_units(present[0])
+                return
+
             # Need to combine all stimuli
             # The ith stim is a np array of shape (implant[i].n_electrodes, len(times[i]))
             # i.e. the amplitude of each electrode at each time point in times[i]
@@ -303,42 +353,10 @@ class EnsembleImplant(ProsthesisSystem):
                 
                 new_stims.append(new_stim)
             
-            # The metadata for each implant is stored in implant.metadata, and has 'electrodes' and 'user' keys
-            # We need to merge the 'electrodes' key across all implants, and simply concatenate the 'user' keys
-            metadata = {}
-            electrode_metadata = {}
-            user_metadata = {}
-            for i_name, implant in self._implants.items():
-                if implant.stim is None:
-                    continue
-                # in the new implant, the the electrode names are i_name + "-" + electrode_name
-                for e_name, e_metadata in implant.stim.metadata['electrodes'].items():
-                    electrode_metadata[str(i_name) + "-" + e_name] = e_metadata
-                user_metadata[str(i_name)] = implant.stim.metadata['user']
-            metadata['electrodes'] = electrode_metadata
-            metadata['user'] = user_metadata
-
             # Combine all new_stims into a final array (stack along a new axis if needed)
-            # runtime import to avoid circular import
-            from ..stimuli import Stimulus
             merged = Stimulus(np.concatenate(new_stims), time=new_times,
                               electrodes=self.electrode_names,
-                              metadata=metadata)
+                              metadata=user_metadata)
             # The merge concatenates raw data arrays, so the result would
-            # otherwise fall back to the default (current) reading of them.
-            # An implant with no stimulus contributes zeros and no
-            # interpretation of them, so only the ones that have a stimulus
-            # decide what the merged numbers mean -- and they have to agree,
-            # because a mix of image intensities and currents has no common
-            # reading to fall back on:
-            present = [s for s in stims if s is not None]
-            units = {(s.unit, s.time_unit) for s in present}
-            if len(units) > 1:
-                names = ', '.join(sorted({_describe_unit(s.unit)
-                                          for s in present}))
-                raise DimensionMismatchError(
-                    f"Cannot merge stimuli measured in different units "
-                    f"({names}). Convert them to a common unit first.")
-            if present:
-                merged._inherit_units(present[0])
-            self.stim = merged
+            # otherwise fall back to the default (current) reading of them:
+            self.stim = merged._inherit_units(present[0])
