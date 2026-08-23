@@ -466,15 +466,12 @@ def test_find_threshold_not_supported(model_cls):
 
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
-# Scaling the train itself, and scaling the stimulus the implant made of it -
-# the second is what a user reaches for, and it goes through the per-electrode
-# metadata rather than the train's own:
+# Scaling the train itself, and scaling the stimulus the implant made of it;
+# the second is what a user reaches for:
 @pytest.mark.parametrize('compose', [False, True])
 def test_scaled_pulse_train_changes_percept(model_cls, compose):
-    # This model reads amplitude off the stimulus metadata, so a scaled pulse
-    # train used to deliver twice the current and predict the very same
-    # percept. Scaling now updates the metadata, and has to give what building
-    # the train at that amplitude in the first place gives:
+    # Scaling has to give what building the train at that amplitude in the
+    # first place gives:
     model = model_cls(xrange=(-12, 12), yrange=(-8, 8), step=1,
                       n_ax_segments=30).build()
     implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
@@ -513,9 +510,7 @@ def test_modified_pulse_train_rejected(model_cls, modify):
 
 def test_pulse_train_amp_sign_does_not_change_percept():
     # `BiphasicPulse` takes the magnitude of `amp`, so these two trains have
-    # the very same waveform. The model reads `amp` back from the metadata and
-    # is a function of it rather than of its magnitude, so the metadata has to
-    # store the magnitude - otherwise identical stimuli predict differently:
+    # the very same waveform, and must therefore predict the same percept:
     model = BiphasicAxonMapModel(xrange=(-12, 12), yrange=(-8, 8), step=1,
                                  n_ax_segments=30).build()
     pos = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
@@ -792,9 +787,7 @@ def test_BiphasicAxonMap_predicts_without_a_waveform(model_cls, build_stim):
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
 def test_BiphasicAxonMap_ignores_user_metadata(model_cls):
-    # The model is a function of the trains the stimulus is made of, and of
-    # nothing the user filed alongside them -- even metadata that happens to
-    # name pulse parameters:
+    # Metadata that happens to name pulse parameters is still just metadata:
     model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
                       n_ax_segments=30).build()
     implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1 * xTh, 0.45,

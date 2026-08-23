@@ -168,6 +168,26 @@ Assigning the image to an implant *without* an encoder raises, rather than
 reading its gray levels as microamps. There is no default answer to *how much*
 current a gray level stands for, and choosing one is what an encoder is for.
 
+**Threshold multiples are not currents.** ``xTh`` ("times threshold") has its
+own dimension too. How much current ``2 * xTh`` is depends on the electrode
+and the subject, so a
+:py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` accepts it only
+alongside a threshold -- its own ``threshold_amp``, or the implant's
+:py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`:
+
+.. code-block:: python
+
+    from pulse2percept.implants import ArgusII
+    from pulse2percept.stimuli import BiphasicPulseTrain
+    from pulse2percept.units import uA, xTh
+
+    implant = ArgusII()
+    implant.thresholds = {'A4': 80 * uA}
+    implant.stim = {'A4': BiphasicPulseTrain(20, 2 * xTh, 0.45)}  # 160 uA
+
+The waveform stored is still a current; ``xTh`` only says which one. Without
+any threshold, ``xTh`` falls back on a nominal 100 uA reference.
+
 Shorthands that are not conversions
 -----------------------------------
 

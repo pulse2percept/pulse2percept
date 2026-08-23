@@ -48,6 +48,7 @@ import numpy as np
 from pulse2percept.implants import ArgusII
 from pulse2percept.models import BiphasicAxonMapModel
 from pulse2percept.stimuli import BiphasicPulseTrain
+from pulse2percept.units import uA, xTh
 model = BiphasicAxonMapModel(rho=200, lam=800)
 
 ##############################################################################
@@ -96,17 +97,23 @@ plt.show()
 ##############################################################################
 # As mentioned above, the Biphasic Axon Map Model only accepts 
 # :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`
-# stimuli with no :py:attr:`~pulse2percept.stimuli.BiphasicPulseTrain.delay_dur`. 
-# The amplitude given to the BiphasicPulseTrain
-# is interpreted as amplitude as a factor of threshold (i.e. an amp of 1 means 
-# 1xTh)
+# stimuli with no :py:attr:`~pulse2percept.stimuli.BiphasicPulseTrain.delay_dur`.
+# This model works in multiples of perceptual threshold, so amplitude is given
+# in :py:data:`~pulse2percept.units.xTh` ("times threshold"): ``1 * xTh`` is
+# threshold, ``3 * xTh`` is three times it. A bare number is microamps, which
+# this model cannot interpret without a threshold to measure it against.
 #
 # You can easily assign BiphasicPulseTrains to electrodes with a dictionary
 # The following creates a train with 20Hz frequency, 1xTh amplitude, and 0.45ms
 # pulse / phase duration.
 
-implant.stim = {'A4' : BiphasicPulseTrain(20, 1, 0.45)}
+implant.stim = {'A4' : BiphasicPulseTrain(20, 1 * xTh, 0.45)}
 implant.stim.plot()
+
+##############################################################################
+# The plot is in microamps: the waveform an implant delivers is always a
+# current, and ``xTh`` only says which current. With no threshold measured,
+# ``1 * xTh`` falls back on a nominal 100 uA reference.
 
 ##############################################################################
 # Finally, you can predict the percept resulting from stimulation
@@ -118,7 +125,7 @@ plt.show()
 ##############################################################################
 # Increasing the frequency will make phosphenes brighter
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-implant.stim = {'A4' : BiphasicPulseTrain(50, 1, 0.45)}
+implant.stim = {'A4' : BiphasicPulseTrain(50, 1 * xTh, 0.45)}
 new_percept = model.predict_percept(implant)
 new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
@@ -132,7 +139,7 @@ plt.show()
 ##############################################################################
 # Increasing amplitude increases both size and brightness
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-implant.stim = {'A4' : BiphasicPulseTrain(20, 3, 0.45)}
+implant.stim = {'A4' : BiphasicPulseTrain(20, 3 * xTh, 0.45)}
 new_percept = model.predict_percept(implant)
 new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
@@ -144,7 +151,7 @@ plt.show()
 # Increasing pulse duration decreases threshold, thus indirectly causing an 
 # increase in size and brightness (amp factor is increased)
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-implant.stim = {'A4' : BiphasicPulseTrain(20, 1, 4)}
+implant.stim = {'A4' : BiphasicPulseTrain(20, 1 * xTh, 4)}
 new_percept = model.predict_percept(implant)
 new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
@@ -156,7 +163,7 @@ plt.show()
 # If you account for the change in threshold by decreasing amplitude, then 
 # the only affect of increasing pulse duration is the streak length decreasing
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-implant.stim = {'A4' : BiphasicPulseTrain(20, 0.023835, 20)}
+implant.stim = {'A4' : BiphasicPulseTrain(20, 0.023835 * xTh, 20)}
 new_percept = model.predict_percept(implant)
 new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
@@ -165,10 +172,28 @@ axes[1].set_title("20ms, 0.02xTh")
 plt.show()
 
 #################################################################################
-# This illustrates another important point: The amplitude used for the Biphasic
-# model is relative to the threshold current at 0.45ms pulse duration. Since larger 
-# pulse durations have been shown to reduce the threshold amplitude needed, the 
-# 0.02xTh amplitude used in the previous plot still is able to produce a phosphene.
+# This illustrates another important point: ``xTh`` here is relative to the
+# threshold current at 0.45ms pulse duration. Since larger pulse durations have
+# been shown to reduce the threshold amplitude needed, the 0.02xTh amplitude
+# used in the previous plot still is able to produce a phosphene.
+
+#################################################################################
+# Using measured thresholds
+# -------------------------
+# The 100 uA reference above is a stand-in. If you have measured an electrode's
+# threshold, give it to the implant and ``xTh`` is realized against the real
+# thing -- 2xTh on an 80 uA electrode delivers 160 uA:
+
+calibrated = ArgusII()
+calibrated.thresholds = {'A4': 80 * uA}
+calibrated.stim = {'A4': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
+print(f"{calibrated.stim.data.max():.0f} uA")
+
+#################################################################################
+# The same works per pulse train (``BiphasicPulseTrain(..., threshold_amp=80 *
+# uA)``), and it runs the other way too: a train given in microamps on a
+# calibrated electrode knows what multiple of threshold it is, so the model can
+# use it.
 
 ################################################################################
 #
@@ -205,9 +230,9 @@ model.a0 = 0
 model.a1 = 1
 model.build()
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-implant.stim = {'A4' : BiphasicPulseTrain(20, 1, 0.45)}
+implant.stim = {'A4' : BiphasicPulseTrain(20, 1 * xTh, 0.45)}
 percept = model.predict_percept(implant)
-implant.stim = {'A4' : BiphasicPulseTrain(20, 1, 20)}
+implant.stim = {'A4' : BiphasicPulseTrain(20, 1 * xTh, 20)}
 new_percept = model.predict_percept(implant)
 new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
@@ -236,9 +261,9 @@ model.size_model = size_modulation
 model.build()
 
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-implant.stim = {'A4' : BiphasicPulseTrain(20, 1, 0.45)}
+implant.stim = {'A4' : BiphasicPulseTrain(20, 1 * xTh, 0.45)}
 percept = model.predict_percept(implant)
-implant.stim = {'A4' : BiphasicPulseTrain(20, 3, 0.45)}
+implant.stim = {'A4' : BiphasicPulseTrain(20, 3 * xTh, 0.45)}
 new_percept = model.predict_percept(implant)
 new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())

@@ -17,10 +17,8 @@ from ._granley2021 import fast_biphasic_axon_map
 # Safety limit for locating delayed temporal peaks.
 _PEAK_SEARCH_DOUBLINGS = 4
 
-# `find_threshold` bisects on a scaled copy of the stimulus *data*. This model
-# reads amplitude off the pulse train instead, where it means a multiple of
-# threshold rather than a current, so scaling the data leaves the prediction
-# untouched and the search cannot converge:
+# `find_threshold` bisects on a scaled copy of the stimulus *data*, which this
+# model does not read, so the search cannot converge:
 _FIND_THRESHOLD_MSG = (
     "{cls} does not support find_threshold. It takes amplitude as a multiple "
     "of threshold and reads it from the pulse train the stimulus is made of, "
@@ -231,9 +229,8 @@ def _pulse_train_params(stim):
     the percept is zero.
 
     Amplitude comes back as a multiple of threshold
-    (:py:attr:`~pulse2percept.stimuli.BiphasicPulseTrain.amp_factor`), which
-    is what this model's effect models are fit in; the waveform itself stays
-    a current.
+    (:py:attr:`~pulse2percept.stimuli.BiphasicPulseTrain.amp_factor`), which is
+    what the effect models are fit in; the waveform itself stays a current.
 
     Raises
     ------
@@ -718,8 +715,12 @@ class BiphasicAxonMapModel(Model):
 
     .. important::
 
-        Stimuli should pass amplitude as a factor of threshold, NOT as raw
-        amplitude in microamps.
+        This model works in multiples of perceptual threshold at 0.45 ms pulse
+        duration, so give amplitude in
+        :py:data:`~pulse2percept.units.xTh` (``2 * xTh``), or calibrate the
+        electrode with ``threshold_amp`` or
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds` and give
+        it in microamps. The waveform stays a current either way.
 
         This model reads amplitude, frequency and pulse duration off the
         :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects the
@@ -862,8 +863,12 @@ class BiphasicAxonMapModel(Model):
 
         .. important::
 
-            Stimuli should pass amplitude as a factor of threshold,
-            NOT as raw amplitude in microamps.
+            This model works in multiples of perceptual threshold at 0.45 ms
+            pulse duration, so give amplitude in
+            :py:data:`~pulse2percept.units.xTh` (``2 * xTh``), or calibrate
+            the electrode with ``threshold_amp`` or
+            :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`
+            and give it in microamps.
 
             The model reads the intended amplitude, frequency and pulse
             duration off the
